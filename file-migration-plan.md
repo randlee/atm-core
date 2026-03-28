@@ -1,0 +1,950 @@
+# File Migration Plan
+
+This is the authoritative implementation plan.
+
+Format:
+- `copy <source> -> <destination>` means reuse the existing file as the starting point
+- `do not copy <source>` means the file was reviewed and intentionally excluded
+
+Every file listed below is either:
+- necessary for retained functionality
+- directly usable as a starting point
+- or explicitly reviewed and rejected
+
+## 1. CLI Shell
+
+### 1.1 `copy crates/atm/src/main.rs -> crates/atm/src/main.rs`
+
+Keep:
+- process entrypoint shape
+- clap bootstrap
+- one-time logging bootstrap pattern
+- command dispatch handoff
+
+Change:
+- remove event-log observer hook logic
+- remove GH teardown hooks
+- remove daemon logging-health reads
+- initialize only the retained `sc-observability` adapter
+- emit only retained command lifecycle events
+- keep only the startup and exit behavior needed for `send` and `read`
+
+### 1.2 `copy crates/atm/src/commands/mod.rs -> crates/atm/src/commands/mod.rs`
+
+Keep:
+- clap `Cli`
+- subcommand dispatch structure
+- `command_name()`
+- `execute()`
+
+Change:
+- keep only `Send` and `Read`
+- remove every other module import
+- remove every other command variant
+- remove dispatch for every non-retained command
+
+### 1.3 `copy crates/atm/src/commands/send.rs -> crates/atm/src/commands/send.rs`
+
+Keep:
+- `SendArgs`
+- current CLI flag names that remain in scope
+- recipient resolution flow
+- team existence and membership checks
+- human and JSON output intent
+
+Change:
+- replace command-local business logic with `atm_core::send::send_mail`
+- keep `--file`, `--stdin`, `--dry-run`, `--json`, and `--from`
+- retire daemon-backed `--offline-action`
+- preserve current non-daemon send behavior
+- keep the existing file-reference body shape
+
+Move helpers out:
+- `get_message_text` -> `crates/atm-core/src/send/input.rs`
+- `process_file_reference` -> `crates/atm-core/src/send/file_policy.rs`
+- `generate_summary` -> `crates/atm-core/src/send/summary.rs`
+- `build_inbox_message` -> `crates/atm-core/src/send/mod.rs`
+
+Delete in place:
+- `register_sender_hint`
+- `recipient_has_dead_session*`
+- `resolve_offline_action`
+- `should_warn_self_send*`
+- `touch_sender_session_heartbeat*`
+- runtime/backend detection helpers
+- daemon state enrichment in output
+
+### 1.4 `copy crates/atm/src/commands/read.rs -> crates/atm/src/commands/read.rs`
+
+Keep:
+- `ReadArgs`
+- current read flag surface
+- own-inbox default behavior
+- queue-oriented output intent
+- bucket-oriented human and JSON rendering
+
+Change:
+- replace command-local business logic with `atm_core::read::read_mail`
+- preserve four-state workflow classification
+- preserve three display buckets
+- preserve `--history` as “actionable queue plus history”
+- preserve `--all` as “show all and bypass seen-state filtering”
+- preserve origin-inbox visibility
+
+Move helpers out:
+- selection/filter helpers -> `crates/atm-core/src/read/filters.rs`
+- workflow-state helpers -> `crates/atm-core/src/read/state.rs`
+- seen-state helpers -> `crates/atm-core/src/read/seen_state.rs`
+- wait logic -> `crates/atm-core/src/read/wait.rs`
+- relative-time formatting -> `crates/atm/src/output.rs`
+- hostname-registry merge setup -> `crates/atm-core/src/read/mod.rs`
+
+Delete in place:
+- daemon session lookup
+- daemon-oriented event-log emission
+
+Behavior notes:
+- keep default queue buckets and hidden-history line
+- keep `bucket_counts` and `history_collapsed` JSON fields
+- keep the current read-triggered `Unread -> PendingAck` mutation
+
+### 1.5 `copy crates/atm/src/commands/wait.rs -> crates/atm-core/src/read/wait.rs`
+
+Keep:
+- timeout-based file watching
+- polling fallback
+- message-count comparison logic
+
+Change:
+- keep origin-inbox counting because merged inbox visibility is retained
+- return core read-layer errors instead of command-local errors
+
+### 1.6 `do not copy crates/atm/src/commands/ack.rs`
+
+Decision:
+- not part of the first retained command surface
+
+Notes:
+- its workflow semantics still inform the canonical message-state model
+- `PendingAck -> Acknowledged` remains part of the architecture
+- `acknowledgesMessageId` remains part of the persisted message model because existing data may already contain it
+
+### 1.7 `do not copy crates/atm/src/commands/bridge.rs`
+
+Decision:
+- bridge management CLI is out of scope
+
+### 1.8 `do not copy crates/atm/src/commands/broadcast.rs`
+
+Decision:
+- not part of retained MVP
+
+### 1.9 `do not copy crates/atm/src/commands/cleanup.rs`
+
+Decision:
+- not part of retained MVP
+
+### 1.10 `do not copy crates/atm/src/commands/config_cmd.rs`
+
+Decision:
+- no dedicated config command in retained MVP
+
+### 1.11 `do not copy crates/atm/src/commands/daemon.rs`
+
+Decision:
+- daemon removed
+
+### 1.12 `do not copy crates/atm/src/commands/doctor.rs`
+
+Decision:
+- not part of retained MVP
+
+### 1.13 `do not copy crates/atm/src/commands/gh.rs`
+
+Decision:
+- GH monitoring removed from MVP
+
+### 1.14 `do not copy crates/atm/src/commands/inbox.rs`
+
+Decision:
+- inbox maintenance command not retained in MVP
+
+### 1.15 `do not copy crates/atm/src/commands/init.rs`
+
+Decision:
+- onboarding/init command not retained in MVP
+
+### 1.16 `do not copy crates/atm/src/commands/launch.rs`
+
+Decision:
+- runtime launch removed
+
+### 1.17 `do not copy crates/atm/src/commands/logging_health.rs`
+
+Decision:
+- daemon logging-health surface removed
+
+### 1.18 `do not copy crates/atm/src/commands/logs.rs`
+
+Decision:
+- log reading command not retained in MVP
+
+### 1.19 `do not copy crates/atm/src/commands/mcp.rs`
+
+Decision:
+- MCP surface removed
+
+### 1.20 `do not copy crates/atm/src/commands/members.rs`
+
+Decision:
+- member management command not retained in MVP
+
+### 1.21 `do not copy crates/atm/src/commands/monitor.rs`
+
+Decision:
+- monitor command not retained in MVP
+
+### 1.22 `do not copy crates/atm/src/commands/register.rs`
+
+Decision:
+- registration command not retained in MVP
+
+### 1.23 `do not copy crates/atm/src/commands/request.rs`
+
+Decision:
+- not part of retained MVP
+
+### 1.24 `do not copy crates/atm/src/commands/runtime_adapter.rs`
+
+Decision:
+- runtime adapter surface removed
+
+### 1.25 `do not copy crates/atm/src/commands/spawn.rs`
+
+Decision:
+- runtime spawn removed
+
+### 1.26 `do not copy crates/atm/src/commands/status.rs`
+
+Decision:
+- daemon/status surface removed
+
+### 1.27 `do not copy crates/atm/src/commands/subscribe.rs`
+
+Decision:
+- subscription surface removed
+
+### 1.28 `do not copy crates/atm/src/commands/tail.rs`
+
+Decision:
+- log tailing surface removed
+
+### 1.29 `do not copy crates/atm/src/commands/teams.rs`
+
+Decision:
+- team management command not retained in MVP
+
+### 1.30 `do not copy crates/atm/src/consts.rs`
+
+Decision:
+- fold `MESSAGE_MAX_LEN` into `crates/atm-core/src/send/summary.rs`
+
+## 2. CLI Utilities
+
+### 2.1 `copy crates/atm/src/util/addressing.rs -> crates/atm-core/src/address.rs`
+
+Keep:
+- parsing of `agent`
+- parsing of `agent@team`
+- empty-token validation
+
+Change:
+- explicit `@team` suffix must win over `--team`
+- return semantic types instead of raw strings where practical
+- surface structured address errors
+
+### 2.2 `do not copy crates/atm/src/util/settings.rs`
+
+Decision:
+- wrapper file is unnecessary
+
+Replacement:
+- use `crates/atm-core/src/home.rs` directly
+
+### 2.3 `copy crates/atm/src/util/file_policy.rs -> crates/atm-core/src/send/file_policy.rs`
+
+Keep:
+- repo-root detection
+- Claude settings permission checks
+- share-copy fallback behavior
+
+Change:
+- convert to core error types
+- remove direct dependence on CLI-local utilities
+- keep behavior aligned with current `send --file`
+
+### 2.4 `copy crates/atm/src/util/hook_identity.rs -> crates/atm-core/src/identity/hook.rs`
+
+Keep:
+- hook file schema
+- parent-pid lookup
+- `read_hook_file`
+- `read_hook_file_identity`
+
+Change:
+- keep only hook identity resolution needed by `send` and `read`
+- delete session-file scanning logic
+- delete daemon/runtime ambiguity helpers
+
+### 2.5 `copy crates/atm/src/util/state.rs -> crates/atm-core/src/read/seen_state.rs`
+
+Keep:
+- seen-state file schema
+- load/save helpers
+- update/get helpers
+
+Change:
+- convert to core error model
+- make path resolution use core home helpers only
+
+### 2.6 `do not copy crates/atm/src/util/caller_identity.rs`
+
+Decision:
+- daemon/runtime ambiguity resolver
+- not needed in a daemon-free rewrite
+
+### 2.7 `do not copy crates/atm/src/util/member_labels.rs`
+
+Decision:
+- not required by retained `send` or `read`
+
+### 2.8 `do not copy crates/atm/src/util/mod.rs`
+
+Decision:
+- utility module index will be replaced by the smaller core module tree
+
+### 2.9 `copy crates/atm/src/commands/send.rs -> crates/atm-core/src/send/input.rs`
+
+Keep:
+- `get_message_text`
+
+Change:
+- convert from CLI-local `SendArgs` handling to a core request-source parser
+- return `AtmError`
+
+### 2.10 `copy crates/atm/src/commands/send.rs -> crates/atm-core/src/send/summary.rs`
+
+Keep:
+- `generate_summary`
+
+Change:
+- move summary-length constants here
+- keep current summary behavior stable for send output
+
+### 2.11 `copy crates/atm/src/commands/send.rs -> crates/atm-core/src/send/mod.rs`
+
+Keep:
+- `build_inbox_message`
+- overall send flow shape
+
+Change:
+- build `SendRequest` / `SendOutcome`
+- own the send service orchestration
+- call mailbox append and observability adapters directly
+
+### 2.12 `copy crates/atm/src/commands/read.rs -> crates/atm-core/src/read/state.rs`
+
+Keep:
+- current bucket-classification knowledge
+
+Change:
+- convert bucket rules into canonical workflow-state classification
+- add display-bucket mapping
+- define typestate transitions
+
+### 2.13 `copy crates/atm/src/commands/read.rs -> crates/atm-core/src/read/filters.rs`
+
+Keep:
+- sender filter behavior
+- timestamp filter behavior
+- selection-mode behavior
+- limit behavior
+
+Change:
+- separate canonical state filtering from display bucket selection
+- encode `--history` and `--all` semantics explicitly
+
+### 2.14 `copy crates/atm/src/commands/read.rs -> crates/atm-core/src/read/mod.rs`
+
+Keep:
+- overall read flow shape
+
+Change:
+- build `ReadQuery` / `ReadOutcome`
+- own merged inbox loading, selection, mutation, and seen-state update sequencing
+- remove CLI formatting concerns
+
+### 2.15 `copy crates/atm/src/commands/read.rs -> crates/atm/src/output.rs`
+
+Keep:
+- relative-time formatting
+- bucket rendering
+- queue header and hidden-history rendering
+
+Change:
+- consume `ReadOutcome` instead of raw inbox messages
+- keep human output text stable
+
+## 3. Core Home And Text
+
+### 3.1 `copy crates/atm-core/src/home.rs -> crates/atm-core/src/home.rs`
+
+Keep:
+- `get_home_dir`
+- `claude_root_dir_for`
+- `teams_root_dir_for`
+- `team_dir_for`
+- `team_config_path_for`
+- `inbox_path_for`
+- `atm_config_dir_for`
+
+Change:
+- remove helper paths that only exist for daemon/runtime surfaces
+
+### 3.2 `copy crates/atm-core/src/text.rs -> crates/atm-core/src/text.rs`
+
+Keep:
+- message validation
+- Unicode-safe truncation helpers
+- max message byte constant
+
+Change:
+- keep error strings aligned with the retained `send` UX
+
+## 4. Config And Settings
+
+### 4.1 `copy crates/atm-core/src/config/mod.rs -> crates/atm-core/src/config/mod.rs`
+
+Keep:
+- config module exports
+
+Change:
+- retain `bridge.rs`
+- remove exports for daemon/plugin features
+
+### 4.2 `copy crates/atm-core/src/config/bridge.rs -> crates/atm-core/src/config/bridge.rs`
+
+Keep:
+- `BridgeConfig`
+- `RemoteConfig`
+- `HostnameRegistry`
+- alias resolution for origin hostnames
+
+Change:
+- keep only the parts required to discover and merge origin inbox files
+- remove any framing that implies plugin hosting is retained
+
+### 4.3 `copy crates/atm-core/src/config/discovery.rs -> crates/atm-core/src/config/discovery.rs`
+
+Keep:
+- config file discovery
+- merge order
+- env overrides
+- repo-local config lookup
+- `resolve_settings`
+- repo-local Claude settings lookup
+
+Change:
+- delete plugin-config location support
+- delete daemon-oriented config discovery
+- keep only what `send`, `read`, bridge origin merge, and file policy need
+
+### 4.4 `copy crates/atm-core/src/config/types.rs -> crates/atm-core/src/config/types.rs`
+
+Keep:
+- `Config`
+- `CoreConfig`
+- `DisplayConfig`
+- `OutputFormat`
+- aliases and roles maps
+
+Change:
+- retain bridge config
+- delete plugin config tables
+- delete retention and daemon-only config
+- keep only settings needed for retained send/read behavior
+
+### 4.5 `copy crates/atm-core/src/config/aliases.rs -> crates/atm-core/src/config/aliases.rs`
+
+Keep:
+- `resolve_alias`
+- `resolve_identity`
+
+Change:
+- apply semantic newtypes internally without changing external alias-resolution behavior
+
+## 5. Schema
+
+### 5.1 `copy crates/atm-core/src/schema/mod.rs -> crates/atm-core/src/schema/mod.rs`
+
+Keep:
+- re-exports required by retained modules
+
+Change:
+- remove unrelated schema exports
+
+### 5.2 `copy crates/atm-core/src/schema/inbox_message.rs -> crates/atm-core/src/schema/inbox_message.rs`
+
+Keep:
+- persisted message fields
+- unknown-field preservation
+- workflow helper accessors for `pendingAckAt` and `acknowledgedAt`
+- `mark_pending_ack`
+- `mark_acknowledged`
+
+Change:
+- add an accessor for `acknowledgesMessageId`
+- keep schema focused on persisted representation, not command policy
+- move canonical workflow-state classification into `read/state.rs`
+
+### 5.3 `copy crates/atm-core/src/schema/team_config.rs -> crates/atm-core/src/schema/team_config.rs`
+
+Keep:
+- team config structure
+- unknown-field preservation
+
+Change:
+- none beyond trimming unused docs or exports
+
+### 5.4 `copy crates/atm-core/src/schema/agent_member.rs -> crates/atm-core/src/schema/agent_member.rs`
+
+Keep:
+- member structure used by `TeamConfig`
+- member-name compatibility
+
+Change:
+- keep round-trip compatibility even for fields not used by MVP
+- strip daemon-oriented documentation text only; do not remove persisted fields from the schema
+
+Dependency:
+- copy `crates/atm-core/src/model_registry.rs` unchanged enough for `external_model` round-trips
+
+### 5.5 `copy crates/atm-core/src/schema/settings.rs -> crates/atm-core/src/schema/settings.rs`
+
+Keep:
+- Claude settings schema
+
+Change:
+- none
+
+### 5.6 `copy crates/atm-core/src/schema/permissions.rs -> crates/atm-core/src/schema/permissions.rs`
+
+Keep:
+- permissions schema used by file policy
+
+Change:
+- none
+
+### 5.7 `do not copy crates/atm-core/src/schema/task.rs`
+
+Decision:
+- not required by retained `send` or `read`
+
+### 5.8 `do not copy crates/atm-core/src/schema/version.rs`
+
+Decision:
+- not required by retained `send` or `read`
+
+## 6. Mailbox I/O
+
+### 6.1 `copy crates/atm-core/src/io/mod.rs -> crates/atm-core/src/mailbox/mod.rs`
+
+Keep:
+- mailbox module organization
+
+Change:
+- export only retained mailbox primitives
+
+### 6.2 `copy crates/atm-core/src/io/inbox.rs -> crates/atm-core/src/mailbox/store.rs`
+
+Keep:
+- atomic append logic
+- tolerant file parsing
+- conflict merge
+- duplicate suppression
+- merged inbox reads
+- in-place update helper
+
+Change:
+- remove spool fallback
+- fail explicitly on lock timeout instead of queueing
+- keep origin-inbox merge behavior
+- convert errors and logging to new core boundaries
+- add workflow-aware read update helpers
+
+### 6.3 `copy crates/atm-core/src/io/error.rs -> crates/atm-core/src/error.rs`
+
+Keep:
+- inbox error cases that still apply
+
+Change:
+- fold into the root `AtmError` model
+- remove spool-only errors
+
+### 6.4 `copy crates/atm-core/src/io/atomic.rs -> crates/atm-core/src/mailbox/atomic.rs`
+
+Keep:
+- atomic swap helper
+
+### 6.5 `copy crates/atm-core/src/io/hash.rs -> crates/atm-core/src/mailbox/hash.rs`
+
+Keep:
+- conflict-detection hashing
+
+### 6.6 `copy crates/atm-core/src/io/lock.rs -> crates/atm-core/src/mailbox/lock.rs`
+
+Keep:
+- lock acquisition and lock guard types
+
+### 6.7 `do not copy crates/atm-core/src/io/spool.rs`
+
+Decision:
+- spool behavior existed to compensate for deferred/background delivery
+- not required in the daemon-free rewrite
+
+## 7. Core Exports And Supporting Files
+
+### 7.1 `copy crates/atm-core/src/lib.rs -> crates/atm-core/src/lib.rs`
+
+Keep:
+- core module export structure
+
+Change:
+- remove daemon, control, retention, spawn, context, log-reader, and GH exports
+- export only retained modules
+
+### 7.2 `copy crates/atm-core/src/model_registry.rs -> crates/atm-core/src/model_registry.rs`
+
+Keep:
+- `ModelId`
+- parser and serde support
+
+Change:
+- none
+
+### 7.3 `copy crates/atm-core/src/observability.rs -> crates/atm-core/src/observability.rs`
+
+Keep:
+- reusable `sc-observability`-neutral types that back the retained command lifecycle adapter
+
+Change:
+- shrink the surface to retained command lifecycle and mailbox-skip events
+- remove daemon-specific health assumptions
+
+### 7.4 `do not copy crates/atm-core/src/consts.rs`
+
+Decision:
+- constants file is daemon-heavy
+- retain only values that survive via narrower modules
+
+### 7.5 `do not copy crates/atm-core/src/context/mod.rs`
+
+Decision:
+- not required by retained send/read flow
+
+### 7.6 `do not copy crates/atm-core/src/context/*`
+
+Decision:
+- not required by retained send/read flow
+
+### 7.7 `do not copy crates/atm-core/src/control.rs`
+
+Decision:
+- daemon/control surface not retained
+
+### 7.8 `do not copy crates/atm-core/src/daemon_client.rs`
+
+Decision:
+- daemon-only
+
+### 7.9 `do not copy crates/atm-core/src/daemon_stream.rs`
+
+Decision:
+- daemon-only
+
+### 7.10 `do not copy crates/atm-core/src/event_log.rs`
+
+Decision:
+- replace direct event-log API with the retained observability adapter
+
+### 7.11 `do not copy crates/atm-core/src/gh_command.rs`
+
+Decision:
+- not part of retained surface
+
+### 7.12 `do not copy crates/atm-core/src/log_reader.rs`
+
+Decision:
+- daemon/log viewing surface not retained
+
+### 7.13 `do not copy crates/atm-core/src/logging.rs`
+
+Decision:
+- replace via retained observability adapter
+
+### 7.14 `do not copy crates/atm-core/src/logging_event.rs`
+
+Decision:
+- replace via retained observability adapter
+
+### 7.15 `do not copy crates/atm-core/src/pid.rs`
+
+Decision:
+- only needed by session-file scanning, which is not retained
+
+### 7.16 `do not copy crates/atm-core/src/retention.rs`
+
+Decision:
+- not part of retained surface
+
+### 7.17 `do not copy crates/atm-core/src/spawn.rs`
+
+Decision:
+- runtime launch not retained
+
+### 7.18 `do not copy crates/atm-core/src/team_config_store.rs`
+
+Decision:
+- direct team-config loading is sufficient for MVP
+
+## 8. Test Files
+
+### 8.1 `copy crates/atm/tests/integration_send.rs -> crates/atm/tests/integration_send.rs`
+
+Keep:
+- retained send command coverage
+
+Change:
+- delete daemon-related assertions
+- preserve file-policy and inbox-write expectations
+
+### 8.2 `copy crates/atm/tests/integration_read.rs -> crates/atm/tests/integration_read.rs`
+
+Keep:
+- retained read command coverage
+- bucket behavior expectations
+- seen-state expectations
+- pending-ack lifecycle expectations
+
+Change:
+- delete daemon-related assertions
+- keep output-contract expectations aligned with the documented rewrite
+
+### 8.3 `copy crates/atm/tests/integration_read_timeout.rs -> crates/atm/tests/integration_read_timeout.rs`
+
+Keep:
+- timeout wait coverage
+
+Change:
+- keep origin-inbox visibility because the retained read timeout path watches the same merged inbox surface
+
+### 8.4 `copy crates/atm/tests/integration_auto_identity.rs -> crates/atm/tests/integration_auto_identity.rs`
+
+Keep:
+- hook identity resolution coverage for send/read
+
+Change:
+- delete cases that depend on daemon-era session ambiguity resolution
+
+### 8.5 `copy crates/atm/tests/integration_discovery.rs -> crates/atm/tests/integration_discovery.rs`
+
+Keep:
+- config discovery coverage relevant to send/read
+
+Change:
+- delete GH, daemon, plugin, or CI-specific coverage
+
+### 8.6 `copy crates/atm/tests/integration_conflict_tests.rs -> crates/atm/tests/integration_conflict_tests.rs`
+
+Keep:
+- mailbox append and merge behavior relevant to send/read
+
+Change:
+- delete spool fallback expectations
+
+### 8.7 `copy crates/atm/tests/hook-scripts/test_atm_identity_cleanup.py -> crates/atm/tests/hook-scripts/test_atm_identity_cleanup.py`
+
+Keep:
+- retained hook identity support test
+
+### 8.8 `copy crates/atm/tests/hook-scripts/test_atm_identity_write.py -> crates/atm/tests/hook-scripts/test_atm_identity_write.py`
+
+Keep:
+- retained hook identity support test
+
+### 8.9 `do not copy crates/atm/tests/hook-scripts/test_gate_agent_spawns.py`
+
+Decision:
+- spawn/runtime behavior not retained
+
+### 8.10 `copy crates/atm/tests/support/env_guard.rs -> crates/atm/tests/support/env_guard.rs`
+
+Keep:
+- test env isolation helper
+
+### 8.11 `do not copy crates/atm/tests/support/daemon_process_guard.rs`
+
+Decision:
+- daemon-only
+
+### 8.12 `do not copy crates/atm/tests/support/daemon_test_registry.rs`
+
+Decision:
+- daemon-only
+
+### 8.13 `copy crates/atm-core/tests/home_dir_audit.rs -> crates/atm-core/tests/home_dir_audit.rs`
+
+Keep:
+- retained home/path contract tests
+
+### 8.14 `do not copy crates/atm-core/tests/daemon_writer_fan_in.rs`
+
+Decision:
+- daemon logging path removed
+
+### 8.15 `do not copy crates/atm-core/tests/logging_identity_contract.rs`
+
+Decision:
+- current contract is daemon-era logging-specific and will be replaced by retained observability tests
+
+### 8.16 `do not copy crates/atm-core/tests/retention_tests.rs`
+
+Decision:
+- retention surface removed
+
+### 8.17 `do not copy crates/atm/tests/integration_backup_restore.rs`
+
+Decision:
+- not part of retained MVP
+
+### 8.18 `do not copy crates/atm/tests/integration_broadcast.rs`
+
+Decision:
+- broadcast removed from MVP
+
+### 8.19 `do not copy crates/atm/tests/integration_daemon_autostart.rs`
+
+Decision:
+- daemon removed
+
+### 8.20 `do not copy crates/atm/tests/integration_daemon_autostart_observability.rs`
+
+Decision:
+- daemon removed
+
+### 8.21 `do not copy crates/atm/tests/integration_daemon_autostart_windows.rs`
+
+Decision:
+- daemon removed
+
+### 8.22 `do not copy crates/atm/tests/integration_e2e_workflows.rs`
+
+Decision:
+- broad workflow suite must be replaced by smaller send/read-focused coverage
+
+### 8.23 `do not copy crates/atm/tests/integration_external_member.rs`
+
+Decision:
+- external member management not retained in MVP
+
+### 8.24 `do not copy crates/atm/tests/integration_gh.rs`
+
+Decision:
+- GH surface removed from MVP
+
+### 8.25 `do not copy crates/atm/tests/integration_inbox.rs`
+
+Decision:
+- inbox maintenance command not retained in MVP
+
+### 8.26 `do not copy crates/atm/tests/integration_init_onboarding.rs`
+
+Decision:
+- init/onboarding command not retained in MVP
+
+### 8.27 `do not copy crates/atm/tests/integration_logging_health_schema.rs`
+
+Decision:
+- daemon logging-health surface removed
+
+### 8.28 `do not copy crates/atm/tests/integration_mcp.rs`
+
+Decision:
+- MCP removed from MVP
+
+### 8.29 `do not copy crates/atm/tests/integration_monitor.rs`
+
+Decision:
+- monitoring surface removed
+
+### 8.30 `do not copy crates/atm/tests/integration_multiteam_isolation.rs`
+
+Decision:
+- not required for first retained send/read MVP
+
+### 8.31 `do not copy crates/atm/tests/integration_otel_traces.rs`
+
+Decision:
+- replace with smaller retained observability coverage
+
+### 8.32 `do not copy crates/atm/tests/integration_register.rs`
+
+Decision:
+- registration surface removed
+
+### 8.33 `do not copy crates/atm/tests/integration_spawn_folder.rs`
+
+Decision:
+- spawn/runtime surface removed
+
+### 8.34 `do not copy crates/atm/tests/integration_team_join.rs`
+
+Decision:
+- team join/management not retained in MVP
+
+### 8.35 `do not copy crates/atm/tests/integration_teams_cleanup_dry_run.rs`
+
+Decision:
+- team cleanup surface removed
+
+### 8.36 `do not copy crates/atm/tests/integration_transient_registration.rs`
+
+Decision:
+- transient registration surface removed
+
+## 9. Implementation Order
+
+Use this order:
+1. `home.rs`
+2. `text.rs`
+3. config files
+4. settings and permissions schema
+5. addressing
+6. hook identity
+7. file policy
+8. schema files
+9. mailbox files
+10. send helpers
+11. read helpers
+12. CLI command files
+13. retained tests
+14. core `lib.rs`
+15. observability integration
+
+## 10. Review Standard
+
+This file is ready to implement from when:
+- every retained file has a `copy source -> dest` entry
+- every reviewed non-retained file has an explicit `do not copy` entry
+- no retained behavior is removed without a specific note
+- workflow-state behavior is described consistently with `requirements.md`, `architecture.md`, and `read-behavior.md`
