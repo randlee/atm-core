@@ -12,12 +12,12 @@ Current target:
 - no agent-state integration in MVP
 
 Docs:
-- `requirements.md`
-- `architecture.md`
-- `project-plan.md`
-- `migration-map.md`
-- `file-migration-plan.md`
-- `read-behavior.md`
+- `docs/requirements.md`
+- `docs/architecture.md`
+- `docs/project-plan.md`
+- `docs/migration-map.md`
+- `docs/file-migration-plan.md`
+- `docs/read-behavior.md`
 
 Crates planned for MVP:
 - `crates/atm-core`: library for config, addressing, mailbox I/O, command services, and observability integration
