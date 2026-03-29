@@ -335,6 +335,12 @@ If seen-state updates are enabled:
 - update the watermark using the latest displayed message timestamp
 - do not use non-displayed messages when computing the watermark
 
+`--no-update-seen`: when this flag is set, messages are read and displayed normally but the seen-state watermark is not updated after the operation. The watermark is left unchanged regardless of which messages were displayed.
+
+`--since <iso8601>`: filters to messages whose `timestamp` field is greater than or equal to the given ISO 8601 datetime. It filters by message timestamp, not by the seen-state watermark. It may be combined with seen-state filtering; both constraints apply independently.
+
+`--from <name>` in read context is a sender filter: it restricts displayed messages to those sent by the named agent. It does not override the caller's identity.
+
 ### 7.7 Mutation Rules
 
 Read-triggered mutation happens only when:
@@ -356,7 +362,7 @@ No read-triggered mutation happens when:
 ### 7.8 Processing Order
 
 1. resolve actor and target inbox
-2. load messages from the merged inbox surface
+2. load messages from the merged inbox surface (including building the hostname registry for configured origin inboxes, to resolve which origin files belong to each remote)
 3. classify canonical state
 4. apply sender filter
 5. apply timestamp filter
