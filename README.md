@@ -6,9 +6,12 @@ Current target:
 - `atm` CLI
 - `send`
 - `read`
+- `ack`
+- `clear`
 - `log`
 - `doctor`
 - `sc-observability` logging
+- task-linked mail metadata with mandatory ack
 - no daemon
 - no CI monitoring
 - no agent-state integration in MVP

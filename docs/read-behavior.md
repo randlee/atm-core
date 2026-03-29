@@ -6,7 +6,7 @@ This document defines the canonical read behavior for the rewrite and records wh
 
 The current read path mixes several concerns:
 - mail visibility
-- workflow state
+- workflow axes
 - display buckets
 - watermark tracking
 - wait-mode behavior
@@ -14,7 +14,7 @@ The current read path mixes several concerns:
 That makes the command hard to reason about and easy to regress.
 
 The rewrite keeps the useful read behavior but makes the model explicit:
-- canonical message state
+- canonical message axes
 - display bucket mapping
 - selection policy
 - legal state transitions
@@ -24,11 +24,11 @@ The rewrite keeps the useful read behavior but makes the model explicit:
 The current command already has useful queue behavior that should survive the rewrite:
 - default view shows actionable work only
 - pending-ack messages stay visible until they are acknowledged
+- task-linked ack-required messages arrive already actionable
 - history can be expanded without hiding actionable work
 - `--all` shows everything
 - older unread messages remain visible even when the seen-state watermark is newer
 - last-seen updates from the latest displayed message, not the latest message in the inbox
-- reading another agent’s inbox does not mutate it
 
 The rewrite should preserve those behaviors while removing daemon coupling and making the workflow explicit in code.
 
@@ -65,38 +65,57 @@ Current tests establish these rules:
 
 ### 3.3 Current Mutation Behavior
 
-Current behavior when reading your own inbox with marking enabled:
-- displayed unread messages are marked `read = true`
-- displayed unread messages also receive `pendingAckAt`
+Current behavior when reading a message should become:
+- displayed messages are always written back with `read = true`
+- displayed unread messages in your own inbox also receive `pendingAckAt` when marking is enabled and the message did not already require acknowledgement
+- displayed unread messages that already require acknowledgement remain pending-ack after display
 
 Current ack behavior:
 - an acknowledged message receives `acknowledgedAt`
 - `pendingAckAt` is removed
 - a reply message is emitted and references the original message id
 
+Current clear behavior that must survive:
+- clear removes acknowledged messages
+- pending-ack messages are not clearable
+
 This behavior is messy in the current code because the state machine is implicit. The rewrite keeps the behavior but makes the state model explicit.
 
-## 4. Canonical Workflow State Model
+## 4. Canonical Two-Axis Model
 
-The retained workflow has four canonical states:
+The retained workflow has two canonical axes.
+
+Read axis:
 - `Unread`
-- `PendingAck`
-- `Acknowledged`
 - `Read`
 
+Ack axis:
+- `NoAckRequired`
+- `PendingAck`
+- `Acknowledged`
+
 Classification rule:
-- `acknowledgedAt` present => `Acknowledged`
-- else `pendingAckAt` present => `PendingAck`
-- else `read = false` => `Unread`
-- else `read = true` => `Read`
+- read axis:
+  - `read = false` => `Unread`
+  - `read = true` => `Read`
+- ack axis:
+  - `acknowledgedAt` present => `Acknowledged`
+  - else `pendingAckAt` present => `PendingAck`
+  - else => `NoAckRequired`
+
+Derived message class:
+- `PendingAck` when the ack axis is pending
+- `Acknowledged` when the ack axis is acknowledged
+- `Unread` when the read axis is unread and the ack axis is not pending or acknowledged
+- `Read` otherwise
 
 Important distinction:
-- canonical workflow state is the domain model
+- canonical read axis plus ack axis is the domain model
 - display buckets are the CLI presentation model
 
 ## 5. Display Bucket Mapping
 
-Display bucket mapping from canonical state:
+Display bucket mapping from the derived message class:
 - `Unread` => `unread`
 - `PendingAck` => `pending_ack`
 - `Acknowledged` => `history`
@@ -104,40 +123,55 @@ Display bucket mapping from canonical state:
 
 That means:
 - history is a bucket, not a state
-- `Acknowledged` and `Read` must remain distinct in the state model even though both render into history
+- `Acknowledged` and `Read` must remain distinct in the model even though both render into history
 
 ## 6. Legal Workflow Transitions
 
 ```text
-New message persisted
-  -> Unread
+Send normal message
+  -> (Unread, NoAckRequired)
+
+Send ack-required message
+  -> (Unread, PendingAck)
+
+Send task-linked message
+  -> persist taskId
+  -> (Unread, PendingAck)
 
 Read own inbox, marking enabled
-  Unread -> PendingAck
+  (Unread, NoAckRequired) -> (Read, PendingAck)
+  (Unread, PendingAck) -> (Read, PendingAck)
 
 Read own inbox, --no-mark
-  Unread -> Unread
+  (Unread, NoAckRequired) -> (Read, NoAckRequired)
+  (Unread, PendingAck) -> (Read, PendingAck)
 
 Read other inbox
-  Unread -> Unread
-  PendingAck -> PendingAck
-  Acknowledged -> Acknowledged
-  Read -> Read
+  (Unread, NoAckRequired) -> (Read, NoAckRequired)
+  (Unread, PendingAck) -> (Read, PendingAck)
+  (Read, PendingAck) -> (Read, PendingAck)
+  (Read, Acknowledged) -> (Read, Acknowledged)
+  (Read, NoAckRequired) -> (Read, NoAckRequired)
 
 Ack workflow
-  PendingAck -> Acknowledged
+  (Read, PendingAck) -> (Read, Acknowledged)
   and emit a reply message referencing the original message id
+
+Clear workflow
+  remove only (Read, NoAckRequired) and (Read, Acknowledged)
 ```
 
 Disallowed transitions:
-- `Read -> Unread`
+- any transition that makes the read axis move from `Read` back to `Unread`
 - `Acknowledged -> PendingAck`
-- `Acknowledged -> Read`
+- `Acknowledged -> NoAckRequired`
+- clearing a pending-ack message
+- clearing an unread message
 - any transition that skips the legal graph
 
 Notes:
-- the normal read path does not create `Read` directly
-- `Read` still exists as a canonical state because legacy data and informational messages may already be `read = true` without pending-ack fields
+- `read = true` is the base mutation on display
+- task-linked messages are required-ack messages and remain in the pending-ack queue until acknowledged
 
 ## 7. Seen-State Rules
 
@@ -182,7 +216,18 @@ The core read pipeline must encode the transition rules in types.
 Minimum shape:
 
 ```rust
-pub enum MessageState {
+pub enum ReadState {
+    Unread,
+    Read,
+}
+
+pub enum AckState {
+    NoAckRequired,
+    PendingAck,
+    Acknowledged,
+}
+
+pub enum MessageClass {
     Unread,
     PendingAck,
     Acknowledged,
@@ -195,27 +240,38 @@ pub enum DisplayBucket {
     History,
 }
 
-pub struct StoredMessage<S> {
+pub enum AckActivationMode {
+    PromoteDisplayedUnread,
+    ReadOnly,
+}
+
+pub struct StoredMessage<R, A> {
     // persisted fields
-    // state marker
+    // state markers
 }
 
-pub struct UnreadState;
+pub struct UnreadReadState;
+pub struct ReadReadState;
+pub struct NoAckState;
 pub struct PendingAckState;
-pub struct AcknowledgedState;
-pub struct ReadState;
+pub struct AcknowledgedAckState;
 
-impl StoredMessage<UnreadState> {
-    pub fn mark_pending_ack(self, at: IsoTimestamp) -> StoredMessage<PendingAckState>;
+impl StoredMessage<UnreadReadState, NoAckState> {
+    pub fn display_without_ack(self) -> StoredMessage<ReadReadState, NoAckState>;
+    pub fn display_and_require_ack(self, at: IsoTimestamp) -> StoredMessage<ReadReadState, PendingAckState>;
 }
 
-impl StoredMessage<PendingAckState> {
-    pub fn acknowledge(self, at: IsoTimestamp) -> StoredMessage<AcknowledgedState>;
+impl StoredMessage<UnreadReadState, PendingAckState> {
+    pub fn mark_read(self) -> StoredMessage<ReadReadState, PendingAckState>;
+}
+
+impl StoredMessage<ReadReadState, PendingAckState> {
+    pub fn acknowledge(self, at: IsoTimestamp) -> StoredMessage<ReadReadState, AcknowledgedAckState>;
 }
 ```
 
 Classification boundary:
-- wire schema -> stateful core model
+- wire schema -> read axis + ack axis + derived class
 
 Rendering boundary:
 - stateful core model -> CLI display buckets and rows
@@ -225,13 +281,13 @@ Rendering boundary:
 1. Resolve actor identity and target inbox.
 2. Build the hostname registry for configured origin inboxes.
 3. Load the merged inbox surface.
-4. Convert wire records into canonical stateful messages.
+4. Convert wire records into canonical axis-typed messages and derive the display class.
 5. Apply sender and timestamp filters (`--from`, `--since`).
 6. Apply seen-state filtering unless selection is `All`.
-7. Map canonical states to display buckets and apply selection mode.
+7. Map derived message classes to display buckets and apply selection mode.
 8. If `--timeout` is set and the current selection is empty, wait for a newly eligible message.
 9. Sort newest-first and apply limit.
-10. Apply legal workflow transitions for displayed unread messages if allowed.
+10. Apply legal read-axis and ack-axis transitions for displayed messages if allowed.
 11. Persist state changes atomically.
 12. Update seen-state from the displayed set when enabled.
 13. Return `ReadOutcome`.
@@ -242,6 +298,7 @@ In particular:
 - selection must happen before mutation
 - mutation must happen before final output is returned
 - seen-state updates must use the displayed set, not the full inbox
+- when the merged inbox surface includes origin inbox files, each displayed-message mutation must be written back to the physical source file for that record
 
 ## 11. Output Contract
 
@@ -257,10 +314,17 @@ JSON output:
 - `action = "read"`
 - `team`
 - `agent`
-- selected messages only
+- `messages` (selected messages only)
 - `count`
 - `bucket_counts`
 - `history_collapsed`
+
+Cross-document invariants:
+- displayed messages always persist `read = true`
+- task-linked messages are ack-required from send time
+- pending-ack messages remain actionable until acknowledged
+- `atm clear` never removes unread or pending-ack messages
+- `--timeout` returns immediately when the requested selection is already non-empty
 
 `bucket_counts` fields:
 - `unread`
@@ -270,9 +334,10 @@ JSON output:
 ## 12. Review Standard
 
 An implementation of `atm read` is acceptable only if:
-- it uses the canonical four-state workflow model
-- it keeps display buckets separate from workflow state
+- it uses the canonical two-axis workflow model
+- it keeps display buckets separate from the canonical axes
 - it preserves default actionable-queue behavior
 - it preserves the current pending-ack lifecycle
+- it preserves task-linked pending-ack visibility until acknowledgement
 - no daemon-only logic survives in core read behavior
-- unread-to-pending-ack transitions are enforced by API shape, not only by tests
+- read-axis and ack-axis transitions are enforced by API shape, not only by tests

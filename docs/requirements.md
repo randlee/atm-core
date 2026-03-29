@@ -9,6 +9,8 @@ This rewrite removes daemon architecture. It does not intentionally remove core 
 The retained product surface is:
 - `atm send`
 - `atm read`
+- `atm ack`
+- `atm clear`
 - `atm log`
 - `atm doctor`
 
@@ -24,6 +26,8 @@ The system uses structured logging through `sc-observability`.
 - one primary library: `atm-core`
 - file-based mail delivery
 - file-based inbox reads
+- file-based acknowledgement workflow
+- file-based inbox clearing
 - configuration resolution
 - hook-based identity fallback
 - file-reference policy handling for `send --file`
@@ -33,6 +37,7 @@ The system uses structured logging through `sc-observability`.
 - structured logging through `sc-observability`
 - log query and follow through `sc-observability`
 - local diagnostics through `atm doctor`
+- task metadata carried in the mail envelope
 - JSON output mode
 - human-readable output mode
 
@@ -178,6 +183,8 @@ Write one message into one target inbox.
 - `--json`
 - `--dry-run`
 - `--from <name>`
+- `--requires-ack`
+- `--task-id <id>`
 
 Retired from the current implementation:
 - `--offline-action`
@@ -197,6 +204,8 @@ Retired from the current implementation:
 - preserve duplicate-suppression behavior for message ids inside the atomic append boundary
 - append atomically to the inbox file
 - support dry-run without mutation
+- support sender-controlled ack-required messages
+- support optional task metadata on sent messages
 
 ### 6.4 Message Source Semantics
 
@@ -219,7 +228,27 @@ If positional message text is combined with `--file`, preserve the current two-p
 File reference: <path or share copy>
 ```
 
-### 6.5 Output Contract
+### 6.5 Ack-Required And Task Metadata
+
+`--requires-ack` means the message must enter the pending-ack queue at write time.
+
+Required behavior:
+- write the message with `read = false`
+- set `pendingAckAt` to the send timestamp inside the atomic append boundary
+- do not wait for a later read to create the ack obligation
+
+`--task-id <id>` attaches task metadata to the message envelope.
+
+Required behavior:
+- persist `taskId`
+- require acknowledgement for any task-linked message
+- reject blank task ids
+
+If `--task-id` is present:
+- treat the message as task-linked mail
+- imply `--requires-ack`
+
+### 6.6 Output Contract
 
 Human output must include:
 - recipient
@@ -232,6 +261,8 @@ JSON output must include:
 - `agent`
 - `outcome`
 - `message_id`
+- `requires_ack`
+- `task_id`
 
 Dry-run JSON output must include:
 - `action = "send"`
@@ -239,6 +270,8 @@ Dry-run JSON output must include:
 - `team`
 - `message`
 - `dry_run = true`
+- `requires_ack`
+- `task_id`
 
 ## 7. `atm read`
 
@@ -272,13 +305,14 @@ Read messages from one inbox.
 - verify target team exists
 - verify explicit target agent exists in team config
 - load messages from the merged inbox surface
-- classify each message into a canonical workflow state
-- map canonical states into display buckets
+- classify each message into the read axis, the ack axis, and a derived message class
+- map the derived message class into display buckets
 - support filtering by sender and timestamp
 - support selection by queue mode
 - preserve origin-inbox visibility when bridge remotes are configured
 - sort newest-first before limiting
-- mutate only the caller’s own displayed unread messages when marking is enabled
+- write displayed messages back through the read-axis mutation rules
+- persist read-triggered state changes back to the physical inbox file that owns each displayed message when origin inbox files are present in the merged surface
 - support optional wait mode with timeout
 - support optional seen-state filtering and updates
 
@@ -291,13 +325,13 @@ The CLI exposes three display buckets:
 - `pending_ack`
 - `history`
 
-Bucket mapping from canonical message state:
+Bucket mapping from the derived message class:
 - `Unread` -> `unread`
 - `PendingAck` -> `pending_ack`
 - `Read` -> `history`
 - `Acknowledged` -> `history`
 
-The display buckets are a presentation contract. They are not the canonical state machine.
+The display buckets are a presentation contract. They are not the canonical two-axis model.
 
 ### 7.5 Selection Modes
 
@@ -362,18 +396,26 @@ Timeout failure condition:
 
 ### 7.8 Mutation Rules
 
-Read-triggered mutation happens only when:
+Base display mutation:
+- any displayed message is written back with `read = true`
+
+Ack-axis activation on display happens only when:
 - the caller is reading their own inbox
 - `--no-mark` is not set
 - the message is displayed
 - the message is currently `Unread`
+- the message does not already require acknowledgement
 
-Required transition on read:
-- `Unread -> PendingAck`
+Required transition on read of a normal unread message:
+- `(Unread, NoAckRequired) -> (Read, PendingAck)`
 
-No read-triggered mutation happens when:
-- reading another agent’s inbox
-- `--no-mark` is set
+Required transition on read of an ack-required unread message:
+- `(Unread, PendingAck) -> (Read, PendingAck)`
+
+Required transition on read with `--no-mark` or when reading another inbox:
+- `(Unread, NoAckRequired) -> (Read, NoAckRequired)`
+
+No additional ack-axis mutation happens when:
 - the message is already `PendingAck`
 - the message is already `Acknowledged`
 - the message is already `Read`
@@ -389,7 +431,7 @@ No read-triggered mutation happens when:
 7. map canonical state to display buckets and apply selection mode
 8. if `--timeout` is set and the current selection is empty, block until a newly eligible message arrives or the timeout expires
 9. sort newest-first and apply limit
-10. if enabled, mutate displayed unread messages through the workflow state machine
+10. apply read-axis and ack-axis transitions to displayed messages
 11. persist read-triggered state changes atomically
 12. update seen-state when enabled
 13. render output
@@ -416,15 +458,100 @@ JSON output must include:
 - `pending_ack`
 - `history`
 
-## 8. `atm log`
+## 8. `atm ack`
 
 ### 8.1 Purpose
+
+Acknowledge a pending-ack message in the caller's own inbox and send a visible reply to the original sender.
+
+### 8.2 Supported Flags And Inputs
+
+- positional `message-id`
+- positional reply text
+- `--team <name>`
+- `--as <name>`
+- `--json`
+
+### 8.3 Required Behavior
+
+- resolve the caller's own inbox using the retained identity rules
+- locate the target message in the merged inbox surface
+- require the target message to be in the pending-ack ack state
+- persist the ack transition back to the physical inbox file that owns the source message when the merged inbox surface includes origin inbox files
+- atomically:
+  - set `read = true`
+  - remove `pendingAckAt`
+  - set `acknowledgedAt`
+  - append a reply message to the original sender's inbox
+- preserve `acknowledgesMessageId` on the emitted reply
+- reject duplicate acknowledgement of an already acknowledged message
+
+### 8.4 Output Contract
+
+JSON output must include:
+- `action = "ack"`
+- `team`
+- `agent`
+- `message_id`
+- `reply_sent`
+- `reply_target`
+
+## 9. `atm clear`
+
+### 9.1 Purpose
+
+Remove non-actionable messages from one inbox without touching actionable work.
+
+### 9.2 Supported Flags
+
+- optional target agent: `agent` or `agent@team`
+- `--team <name>`
+- `--older-than <duration>`
+- `--idle-only`
+- `--dry-run`
+- `--json`
+
+### 9.3 Required Behavior
+
+- default to the caller's own inbox when no target agent is provided
+- resolve the target inbox using the retained address and identity rules
+- compute clear eligibility from the merged inbox surface
+- persist removals back to the physical inbox file that owns each removed message when origin inbox files are present in the merged surface
+
+Default clear behavior removes only clearable messages:
+- `(Read, NoAckRequired)`
+- `(Read, Acknowledged)`
+
+Clear must never remove:
+- `(Unread, NoAckRequired)`
+- `(Unread, PendingAck)`
+- `(Read, PendingAck)`
+
+Additional rules:
+- `--idle-only` narrows removal to idle-notification messages only
+- `--older-than` further filters the clearable set by message timestamp age
+- dry-run returns the computed removal set without mutation
+- clearing must preserve unknown fields on messages that remain
+
+### 9.4 Output Contract
+
+JSON output must include:
+- `action = "clear"`
+- `team`
+- `agent`
+- `removed_total`
+- `remaining_total`
+- removal counters by class
+
+## 10. `atm log`
+
+### 10.1 Purpose
 
 Inspect ATM observability records through shared `sc-observability` query/follow APIs.
 
 `atm log` replaces the old daemon-log viewing model. It must not depend on daemon-owned log files, daemon status, or tmux fallback behavior.
 
-### 8.2 Supported Flags
+### 10.2 Supported Flags
 
 - `--tail`
 - `--level <trace|debug|info|warn|error>`
@@ -437,7 +564,7 @@ Deferred from the current source repo:
 - direct `--file` selection of arbitrary ATM log files
 - separate `atm tail` command
 
-### 8.3 Required Behavior
+### 10.3 Required Behavior
 
 - query existing ATM records through the injected observability port over `sc-observability`
 - support follow mode through the same adapter
@@ -449,7 +576,7 @@ Deferred from the current source repo:
 - return snapshot results newest-first before applying output limits
 - return followed records in arrival order while `--tail` is active
 
-### 8.4 ATM Log Fields
+### 10.4 ATM Log Fields
 
 The retained ATM event vocabulary must include enough structure to filter on:
 - command
@@ -461,7 +588,7 @@ The retained ATM event vocabulary must include enough structure to filter on:
 
 This ATM field set is ATM-owned even when the underlying query/follow/filter mechanics are shared in `sc-observability`.
 
-### 8.5 Output Contract
+### 10.5 Output Contract
 
 Human output must show one record per line with enough information to understand:
 - timestamp
@@ -479,20 +606,20 @@ Each JSON record must expose at least:
 - event name
 - ATM structured fields map
 
-## 9. `atm doctor`
+## 11. `atm doctor`
 
-### 9.1 Purpose
+### 11.1 Purpose
 
 Run local ATM diagnostics for the retained daemon-free system.
 
 `atm doctor` in the rewrite is a local diagnostics command. It is not a daemon-health report.
 
-### 9.2 Supported Flags
+### 11.2 Supported Flags
 
 - `--team <name>`
 - `--json`
 
-### 9.3 Required Checks
+### 11.3 Required Checks
 
 The initial doctor implementation must cover:
 - config file discovery and parse health
@@ -506,7 +633,7 @@ The initial doctor implementation must cover:
 - `sc-observability` initialization health
 - `sc-observability` query-health readiness for `atm log`
 
-### 9.4 Output Contract
+### 11.4 Output Contract
 
 Human output must provide:
 - overall status summary
@@ -528,9 +655,9 @@ Each doctor finding must expose at least:
 
 Critical findings must cause a non-zero exit status.
 
-## 10. Message And Workflow Model
+## 12. Message And Workflow Model
 
-### 10.1 Persisted Message Fields
+### 12.1 Persisted Message Fields
 
 Required fields:
 - `from`
@@ -542,60 +669,101 @@ Optional fields:
 - `source_team`
 - `summary`
 - `message_id`
+- `taskId`
 - `pendingAckAt`
 - `acknowledgedAt`
 - `acknowledgesMessageId`
 
 Unknown fields must be preserved.
 
-### 10.2 Canonical Workflow States
+### 12.2 Two-Axis Canonical Model
 
-Canonical states:
+The canonical model has two independent axes.
+
+Read axis:
 - `Unread`
-- `PendingAck`
-- `Acknowledged`
 - `Read`
 
-Classification order:
-1. `acknowledgedAt` present => `Acknowledged`
-2. else `pendingAckAt` present => `PendingAck`
-3. else `read = false` => `Unread`
-4. else `read = true` => `Read`
+Ack axis:
+- `NoAckRequired`
+- `PendingAck`
+- `Acknowledged`
 
-The canonical state machine is distinct from the read command’s display buckets.
+Persisted-field classification:
+- read axis:
+  - `read = false` => `Unread`
+  - `read = true` => `Read`
+- ack axis:
+  - `acknowledgedAt` present => `Acknowledged`
+  - else `pendingAckAt` present => `PendingAck`
+  - else => `NoAckRequired`
 
-### 10.3 Required State Transitions
+Derived message class for queue logic:
+1. ack axis `PendingAck` => `PendingAck`
+2. else ack axis `Acknowledged` => `Acknowledged`
+3. else read axis `Unread` => `Unread`
+4. else => `Read`
+
+The canonical two-axis model is distinct from the read command’s display buckets.
+
+### 12.3 Required State Transitions
 
 ```text
-Send
-  -> Unread
+Send normal message
+  -> (Unread, NoAckRequired)
 
-Read own inbox with marking enabled
-  Unread -> PendingAck
+Send ack-required message
+  -> (Unread, PendingAck)
+
+Send task-linked message
+  -> persist taskId
+  -> (Unread, PendingAck)
+
+Read own inbox with marking enabled, normal unread message
+  (Unread, NoAckRequired) -> (Read, PendingAck)
+
+Read own inbox with marking enabled, ack-required unread message
+  (Unread, PendingAck) -> (Read, PendingAck)
 
 Read own inbox with --no-mark
-  Unread -> Unread
+  (Unread, NoAckRequired) -> (Read, NoAckRequired)
+  (Unread, PendingAck) -> (Read, PendingAck)
 
-Read other inbox
-  Unread -> Unread
-  PendingAck -> PendingAck
-  Acknowledged -> Acknowledged
-  Read -> Read
+Read another inbox
+  (Unread, NoAckRequired) -> (Read, NoAckRequired)
+  (Unread, PendingAck) -> (Read, PendingAck)
+  (Read, PendingAck) -> (Read, PendingAck)
+  (Read, Acknowledged) -> (Read, Acknowledged)
+  (Read, NoAckRequired) -> (Read, NoAckRequired)
 
 Ack workflow
-  PendingAck -> Acknowledged
+  (Read, PendingAck) -> (Read, Acknowledged)
   and emit a reply message that references the original message id
+
+Clear workflow
+  remove only (Read, NoAckRequired) and (Read, Acknowledged)
 ```
 
 Disallowed transitions:
-- `Read -> Unread`
+- any transition that makes the read axis move from `Read` back to `Unread`
 - `Acknowledged -> PendingAck`
-- `Acknowledged -> Read`
-- any transition that skips the legal workflow graph
+- `Acknowledged -> NoAckRequired`
+- clearing a message in `PendingAck`
+- clearing a message with read axis `Unread`
 
 The implementation must encode legal transitions in code structure, not only in comments or tests.
 
-## 11. Observability Requirements
+### 12.4 Task Metadata Rule
+
+Messages with `taskId` are task-linked messages.
+
+Required rules:
+- every task-linked message must require acknowledgement
+- a task-linked message remains actionable until acknowledged
+- a task-linked message must continue to appear in `atm read` until acknowledged
+- a task-linked message must never be removed by `atm clear` before acknowledgement
+
+## 13. Observability Requirements
 
 ATM must emit structured records through `sc-observability`.
 
@@ -610,6 +778,7 @@ Required ATM event fields:
 - team when known
 - actor identity when known
 - target identity when known
+- task id when known
 - result
 - error class on failure
 - count when applicable
@@ -623,7 +792,7 @@ Emission is best-effort:
 - they are explicit observability consumers
 - if shared query/health APIs are unavailable, they must fail with clear structured errors
 
-## 12. Error Requirements
+## 14. Error Requirements
 
 All user-visible failures must use structured errors with recovery guidance.
 
@@ -648,7 +817,7 @@ Mutation failures must be fail-safe:
 - no partial read-mark updates
 - no illegal state transitions after failed persistence
 
-## 13. Reliability Requirements
+## 15. Reliability Requirements
 
 - mailbox writes must be atomic
 - concurrent appends must not silently lose messages
@@ -658,32 +827,48 @@ Mutation failures must be fail-safe:
 - seen-state races must not corrupt mailbox data
 - observability emission failures must not corrupt command behavior
 
-## 14. Testing Requirements
+## 16. Testing Requirements
 
 Because `sc-observability` is newly introduced into ATM, the rewrite must add explicit test coverage for:
 - ATM event emission through the observability port boundary
 - best-effort emission failure behavior
+- two-axis state classification
+- two-axis state transition enforcement
+- task-linked ack-required transition behavior
 - log query by severity
 - log query by structured field match
 - log follow/tail behavior
 - doctor observability-health reporting
 - retained mail-command correctness when observability emission fails
+- clear eligibility behavior
 
 The implementation must include:
 - `atm-core` tests for observability port behavior using test doubles
 - CLI integration tests for `atm log`
 - CLI integration tests for `atm doctor`
+- CLI integration tests for `atm ack`
+- CLI integration tests for `atm clear`
 
-## 15. Acceptance Criteria
+## 17. Acceptance Criteria
 
 The rewrite is ready when:
 - `atm send` works without daemon support
 - `atm read` works without daemon support
+- `atm ack` works without daemon support
+- `atm clear` works without daemon support
 - `atm log` works through shared `sc-observability` APIs
 - `atm doctor` works as a local diagnostics command
 - retained commands preserve documented non-daemon behavior
-- workflow state classification is correct
-- workflow state transitions are encoded in implementation structure
-- display buckets are derived consistently from canonical state
+- workflow-axis classification is correct
+- workflow-axis transitions are encoded in implementation structure
+- display buckets are derived consistently from the two-axis model
+- task-linked messages remain pending until acknowledged and cannot be cleared early
 - observability integration is exercised by automated tests
 - the file-by-file migration plan is complete enough to implement directly
+
+Cross-document invariants that must remain true:
+- `taskId` implies ack-required behavior at send time
+- displayed messages always persist `read = true`
+- pending-ack messages remain actionable until acknowledged
+- `atm clear` never removes unread or pending-ack messages
+- `atm read --timeout` returns immediately when the requested selection is already non-empty

@@ -13,6 +13,8 @@ The CLI stays thin. Product logic moves into `atm-core`.
 The retained command surface is:
 - `send`
 - `read`
+- `ack`
+- `clear`
 - `log`
 - `doctor`
 
@@ -29,9 +31,9 @@ The retained command surface is:
 - file policy enforcement for `send --file`
 - team config loading
 - mailbox read and write logic
-- canonical workflow state classification
-- legal workflow state transitions
-- send and read service functions
+- canonical two-axis workflow classification
+- legal workflow-axis transitions
+- send, read, ack, and clear service functions
 - log query/follow service functions over an injected observability port
 - local doctor/diagnostic service functions
 - structured error types
@@ -83,6 +85,10 @@ Planned `atm-core` layout:
 crates/atm-core/src/
   lib.rs
   address.rs
+  ack/
+    mod.rs
+  clear/
+    mod.rs
   config/
     aliases.rs
     bridge.rs
@@ -137,6 +143,8 @@ Planned `atm` layout:
 crates/atm/src/
   main.rs
   commands/
+    ack.rs
+    clear.rs
     doctor.rs
     log.rs
     mod.rs
@@ -168,6 +176,7 @@ Required public newtypes:
 - `MessageSummary`
 - `IsoTimestamp`
 - `MailAddress`
+- `TaskId`
 - `HomeDir`
 - `AbsolutePath`
 - `LogFieldKey`
@@ -177,10 +186,21 @@ These are required to reduce repeated validation and remove stringly typed comma
 
 ### 4.2 Workflow State And Display Types
 
-Canonical workflow enum:
+Canonical axis enums:
 
 ```rust
-pub enum MessageState {
+pub enum ReadState {
+    Unread,
+    Read,
+}
+
+pub enum AckState {
+    NoAckRequired,
+    PendingAck,
+    Acknowledged,
+}
+
+pub enum MessageClass {
     Unread,
     PendingAck,
     Acknowledged,
@@ -210,20 +230,20 @@ pub enum ReadSelection {
 }
 ```
 
-Marking mode:
+Ack activation mode:
 
 ```rust
-pub enum MarkMode {
-    ApplyReadTransitions,
-    NoMutation,
+pub enum AckActivationMode {
+    PromoteDisplayedUnread,
+    ReadOnly,
 }
 ```
 
 Display mapping is fixed:
-- `Unread` -> `DisplayBucket::Unread`
-- `PendingAck` -> `DisplayBucket::PendingAck`
-- `Acknowledged` -> `DisplayBucket::History`
-- `Read` -> `DisplayBucket::History`
+- `MessageClass::Unread` -> `DisplayBucket::Unread`
+- `MessageClass::PendingAck` -> `DisplayBucket::PendingAck`
+- `MessageClass::Acknowledged` -> `DisplayBucket::History`
+- `MessageClass::Read` -> `DisplayBucket::History`
 
 ### 4.3 Typestate Transition Model
 
@@ -232,29 +252,33 @@ Per `rust-best-practices`, legal workflow transitions should be encoded in the t
 Private marker states:
 
 ```rust
-pub struct UnreadState;
+pub struct UnreadReadState;
+pub struct ReadReadState;
+pub struct NoAckState;
 pub struct PendingAckState;
-pub struct AcknowledgedState;
-pub struct ReadState;
+pub struct AcknowledgedAckState;
 
-pub struct StoredMessage<S> {
-    // persisted fields + state marker
+pub struct StoredMessage<R, A> {
+    // persisted fields + read-state marker + ack-state marker
 }
 
-impl StoredMessage<UnreadState> {
-    pub fn mark_pending_ack(self, at: IsoTimestamp) -> StoredMessage<PendingAckState>;
+impl StoredMessage<UnreadReadState, NoAckState> {
+    pub fn display_without_ack(self) -> StoredMessage<ReadReadState, NoAckState>;
+    pub fn display_and_require_ack(self, at: IsoTimestamp) -> StoredMessage<ReadReadState, PendingAckState>;
 }
 
-impl StoredMessage<PendingAckState> {
-    pub fn acknowledge(self, at: IsoTimestamp) -> StoredMessage<AcknowledgedState>;
+impl StoredMessage<UnreadReadState, PendingAckState> {
+    pub fn mark_read(self) -> StoredMessage<ReadReadState, PendingAckState>;
+}
+
+impl StoredMessage<ReadReadState, PendingAckState> {
+    pub fn acknowledge(self, at: IsoTimestamp) -> StoredMessage<ReadReadState, AcknowledgedAckState>;
 }
 ```
 
-There is no inverse transition.
+There is no inverse transition on either axis.
 
-`ReadState` remains a canonical classification target for legacy and informational messages, even though the normal retained read path does not create it.
-
-The public `MessageState` enum is for reporting and filtering. The typestate markers enforce legal transitions inside `atm-core`.
+The public axis enums and `MessageClass` are for reporting and filtering. The typestate markers enforce legal transitions inside `atm-core`.
 
 ### 4.4 Log Query Types
 
@@ -304,12 +328,13 @@ Persisted fields used by the rewrite:
 - `read`
 - `summary`
 - `message_id`
+- `taskId`
 - `pendingAckAt`
 - `acknowledgedAt`
 - `acknowledgesMessageId`
 - unknown fields
 
-Canonical workflow state is derived from persisted fields and not serialized separately.
+Canonical read and ack axes are derived from persisted fields and not serialized separately.
 
 ## 6. Public Service APIs
 
@@ -327,6 +352,8 @@ Public entrypoint:
 - team override
 - message source
 - summary override
+- requires-ack flag
+- optional task id
 - dry-run flag
 
 `SendMessageSource` variants:
@@ -340,6 +367,8 @@ Public entrypoint:
 - resolved recipient
 - resolved sender
 - generated message id
+- task id
+- requires-ack flag
 - summary
 - rendered message body
 - delivery result
@@ -364,13 +393,13 @@ Public entrypoint:
 - actor override
 - optional target address
 - team override
-- selection mode
+- selection_mode
 - seen_state_filter
 - seen_state_update
-- mark mode
+- ack_activation_mode
 - limit
-- sender filter
-- timestamp filter
+- sender_filter
+- timestamp_filter
 - optional timeout
 
 `seen_state_filter` is false when `--no-since-last-seen` is set. `--all` bypasses this filter regardless of the stored value.
@@ -385,16 +414,20 @@ Timeout rule:
 - action
 - resolved team
 - resolved agent
-- selection mode
-- whether history is collapsed
-- whether any mutation was applied
-- displayed messages
-- bucket counts
+- selection_mode
+- history_collapsed
+- mutation_applied
+- messages
+- bucket_counts
 
 `ReadOutcome.bucket_counts` exposes:
 - unread
 - pending_ack
 - history
+
+The read service derives `MessageClass` from `(ReadState, AckState)` and applies display-bucket selection to the derived class, not to raw persisted fields.
+
+For merged inbox surfaces, any displayed-message mutation must be written back to the physical inbox file that contributed the displayed record. The merged view is a read projection, not a synthetic write target.
 
 The CLI JSON output mirrors the current contract:
 - `action`
@@ -405,7 +438,61 @@ The CLI JSON output mirrors the current contract:
 - `bucket_counts`
 - `history_collapsed`
 
-### 6.3 Observability Boundary
+### 6.3 Ack Service
+
+Public entrypoint:
+
+`ack::ack_mail(request: AckRequest, observability: &dyn ObservabilityPort) -> Result<AckOutcome, AtmError>`
+
+`AckRequest` contains:
+- home directory
+- current directory
+- actor override
+- team override
+- source message id
+- reply body
+
+`AckOutcome` contains:
+- action
+- resolved team
+- resolved agent
+- source message id
+- reply target
+- reply message id
+
+The ack service is responsible for the legal transition from `(Read, PendingAck)` to `(Read, Acknowledged)` plus the reply append.
+
+When the source message came from an origin inbox file in the merged surface, the acknowledgement writeback must update that source file atomically rather than projecting the change onto a different inbox file.
+
+### 6.4 Clear Service
+
+Public entrypoint:
+
+`clear::clear_mail(query: ClearQuery, observability: &dyn ObservabilityPort) -> Result<ClearOutcome, AtmError>`
+
+`ClearQuery` contains:
+- home directory
+- current directory
+- actor override
+- optional target address
+- team override
+- optional age filter
+- idle-only flag
+- dry-run flag
+
+`ClearOutcome` contains:
+- action
+- resolved team
+- resolved agent
+- removed total
+- remaining total
+- removal counters by class
+
+Clear eligibility is computed from the two-axis model:
+- clearable: `(Read, NoAckRequired)` and `(Read, Acknowledged)`
+- non-clearable: every other combination
+
+### 6.5 Observability Boundary
 
 The observability boundary is a sealed `ObservabilityPort` (or equivalent injected interface) defined in `atm-core` and implemented in `atm`.
 
@@ -419,7 +506,7 @@ It is responsible for:
 
 `atm` owns the concrete `sc-observability` integration.
 
-### 6.4 Log Service
+### 6.6 Log Service
 
 Public entrypoints:
 
@@ -446,7 +533,7 @@ Ordering rules:
 
 ATM must not parse daemon log files directly in this service.
 
-### 6.5 Doctor Service
+### 6.7 Doctor Service
 
 Public entrypoint:
 
@@ -478,20 +565,44 @@ The read pipeline stages are:
 1. resolve actor and target inbox
 2. build the hostname registry for configured origin inboxes
 3. load mailbox records from the merged inbox surface
-4. classify workflow state
+4. classify read axis, ack axis, and derived message class
 5. apply sender and timestamp filters
 6. apply seen-state filter unless selection is `All`
-7. map workflow state to display bucket and apply selection mode
+7. map derived message class to display bucket and apply selection mode
 8. wait if `timeout` is set and the current selection is empty
 9. sort newest-first and apply limit
-10. apply legal read transitions for displayed unread messages
+10. apply legal read-axis and ack-axis transitions for displayed messages
 11. persist state changes atomically
 12. update seen-state when enabled
 13. return outcome
 
 This ordering is part of the architecture contract.
 
-## 8. Log Pipeline
+## 8. Ack Pipeline
+
+The ack pipeline stages are:
+1. resolve actor identity and own inbox
+2. load the merged inbox surface and locate the source message
+3. classify the source message into read and ack axes
+4. require pending acknowledgement before mutation
+5. resolve the reply target inbox from the source envelope
+6. atomically apply the ack transition and append the reply
+7. emit command lifecycle records
+8. return outcome
+
+## 9. Clear Pipeline
+
+The clear pipeline stages are:
+1. resolve actor identity and target inbox
+2. load the persisted inbox surface
+3. classify each message into read axis and ack axis
+4. compute clear eligibility from the two-axis model
+5. apply optional age and idle-only filters
+6. atomically persist the kept set when not in dry-run mode
+7. emit command lifecycle records
+8. return outcome
+
+## 10. Log Pipeline
 
 The log pipeline stages are:
 1. resolve the injected observability port implementation
@@ -502,7 +613,7 @@ The log pipeline stages are:
 
 Shared `sc-observability` should own record storage, filtering, and follow mechanics. ATM should own only ATM-specific query defaults and field projections.
 
-## 9. Doctor Pipeline
+## 11. Doctor Pipeline
 
 The doctor pipeline stages are:
 1. resolve config and environment overrides
@@ -514,7 +625,7 @@ The doctor pipeline stages are:
 7. assemble findings and recommendations
 8. render report
 
-## 10. Mailbox Storage
+## 12. Mailbox Storage
 
 The mailbox layer owns:
 - tolerant reads
@@ -523,25 +634,26 @@ The mailbox layer owns:
 - conflict merge
 - origin-inbox merge
 - atomic workflow-state updates
+- atomic clear-set replacement
 
 The mailbox layer does not own selection policy, display buckets, output formatting, log query behavior, or doctor diagnostics.
 
-## 11. Identity And File Policy
+## 13. Identity And File Policy
 
-### 11.1 Hook Identity
+### 13.1 Hook Identity
 
 Hook-file identity is retained because it is a current non-daemon convenience path for send/read identity resolution.
 
 Only hook identity resolution is required for the rewrite. Session-resolution paths that exist only to bridge runtime/daemon ambiguity are not required.
 
-### 11.2 File Policy
+### 13.2 File Policy
 
 The current `send --file` behavior is retained:
 - inspect Claude settings permissions when available
 - if the referenced file is allowed, send a direct file reference
 - otherwise copy to ATM share storage and rewrite the message body accordingly
 
-## 12. Observability
+## 14. Observability
 
 `atm-core::observability` defines ATM event/query models plus the sealed `ObservabilityPort` boundary.
 
@@ -550,7 +662,7 @@ The current `send --file` behavior is retained:
 Initialization:
 - `atm` initializes logging once at process startup
 - `atm` constructs the concrete observability port after startup initialization
-- logging failures degrade to no-op behavior for explicit mail commands
+- logging failures degrade to best-effort behavior for explicit mail commands
 
 Required ATM event classes:
 - command start
@@ -563,6 +675,7 @@ Required ATM event fields:
 - team
 - actor
 - target
+- task id
 - outcome
 - error class when applicable
 - message count when applicable
@@ -573,7 +686,7 @@ For explicit observability consumer commands:
 - `atm doctor` depends on shared health APIs
 - failures in those consumer paths are command errors, not silently dropped events
 
-## 13. Error Model
+## 15. Error Model
 
 Root public error:
 
@@ -607,7 +720,7 @@ Every public error must include:
 - human-readable cause
 - recovery guidance when the user can act
 
-## 14. Trait Policy
+## 16. Trait Policy
 
 The initial rewrite should avoid public extension traits.
 
@@ -615,7 +728,7 @@ If a trait becomes necessary:
 - prefer a sealed trait
 - verify object safety before stabilization
 
-## 15. Testing Strategy
+## 17. Testing Strategy
 
 `atm-core` tests:
 - address parsing
@@ -629,10 +742,13 @@ If a trait becomes necessary:
 - origin-inbox merge
 - atomic append behavior
 - duplicate suppression
-- workflow state classification
-- workflow state transitions
+- workflow axis classification
+- workflow axis transitions
+- task-linked ack-required classification
 - seen-state behavior
 - timeout behavior
+- ack transition behavior
+- clear eligibility behavior
 - observability port emission behavior
 - observability port query/filter behavior
 - observability port failure behavior
@@ -642,6 +758,6 @@ If a trait becomes necessary:
 - clap parsing
 - JSON output shape
 - human-readable output snapshots
-- send/read integration behavior
+- send/read/ack/clear integration behavior
 - `atm log` integration behavior
 - `atm doctor` integration behavior
