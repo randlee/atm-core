@@ -375,6 +375,27 @@ Public entrypoint:
 
 The file-reference path may be rewritten through the file policy layer.
 
+The CLI JSON output mirrors the current contract.
+
+Normal send JSON output includes:
+- `action = "send"`
+- `team`
+- `agent`
+- `outcome`
+- `message_id`
+- `requires_ack`
+- `task_id`
+
+Dry-run send JSON output includes:
+- `action = "send"`
+- `agent`
+- `team`
+- `message`
+- `dry_run = true`
+- `requires_ack`
+- `task_id`
+- `task_id`
+
 Send ordering rules:
 - resolve target address, team existence, and agent membership as one address-resolution stage before mailbox path selection
 - enter the atomic append boundary before final inbox mutation
