@@ -2,7 +2,7 @@
 
 ## 1. Goal
 
-Implement a daemon-free ATM rewrite in this repo that preserves retained `send` and `read` functionality.
+Implement a daemon-free ATM rewrite in this repo that preserves retained `send`, `read`, `log`, and `doctor` functionality.
 
 The authoritative migration document is:
 - `file-migration-plan.md`
@@ -12,12 +12,12 @@ This plan sequences the work. File-level migration decisions live in `file-migra
 ## 2. Deliverables
 
 - Rust workspace with `crates/atm-core` and `crates/atm`
-- daemon-free implementation of `send` and `read`
+- daemon-free implementation of `send`, `read`, `log`, and `doctor`
 - preserved non-daemon send/read functionality from the current codebase
 - explicit four-state workflow model with three display buckets
 - structured errors with recovery guidance
 - structured logs through `sc-observability`
-- retained integration tests for the send/read surface
+- retained and new integration tests for the retained command surface
 
 ## 3. Crates
 
@@ -31,6 +31,8 @@ Implements:
 - mailbox I/O and origin merge
 - workflow state model and transitions
 - send and read services
+- log query/follow service over the ATM observability adapter
+- doctor diagnostics service
 - observability adapter
 - error model
 
@@ -40,6 +42,8 @@ Implements:
 - clap parser
 - `send`
 - `read`
+- `log`
+- `doctor`
 - output formatting
 - observability bootstrap
 
@@ -54,10 +58,25 @@ Finish and freeze:
 - `file-migration-plan.md`
 
 Acceptance:
-- workflow state, display buckets, and read selection semantics are consistent across all docs
-- every retained or excluded source file needed for send/read is explicitly listed in `file-migration-plan.md`
+- workflow state, display buckets, retained command surface, and observability boundary are consistent across all docs
+- every retained or excluded source file needed for the retained commands is explicitly listed in `file-migration-plan.md`
 
-### Phase A: Core Skeleton
+### Phase A: `OBS-GAP-1`
+
+Goal:
+- verify and close the shared `sc-observability` API gap before ATM depends on it for `atm log` and `atm doctor`
+
+Deliverables:
+- ATM-side required capability list
+- gap list against current `sc-observability`
+- concrete API requests for `arch-obs`
+- decision on ATM-owned adapter responsibilities versus shared observability responsibilities
+
+Acceptance:
+- shared plan exists for emit/query/follow/filter/health support
+- no ATM-local ad hoc log query engine is needed
+
+### Phase B: Core Skeleton
 
 Create:
 - workspace manifests
@@ -67,9 +86,9 @@ Create:
 
 Acceptance:
 - workspace builds
-- CLI help shows `send` and `read`
+- CLI help shows `send`, `read`, `log`, and `doctor`
 
-### Phase B: Low-Level Reuse
+### Phase C: Low-Level Reuse
 
 Port retained foundational files first:
 - home/path helpers
@@ -84,7 +103,7 @@ Acceptance:
 - foundational unit tests pass
 - no daemon references remain in foundational modules
 
-### Phase C: Send Path
+### Phase D: Send Path
 
 Port send command and support files:
 - identity resolution
@@ -92,13 +111,13 @@ Port send command and support files:
 - summary generation
 - mailbox append
 - command output
-- observability events
+- observability emission
 
 Acceptance:
 - `atm send` feature set works without daemon support
 - send JSON and human output match the documented contract
 
-### Phase D: Read Path
+### Phase E: Read Path
 
 Port read command and support files:
 - workflow state classification
@@ -114,7 +133,35 @@ Acceptance:
 - workflow states and display buckets match the requirements
 - seen-state semantics match the documented contract
 
-### Phase E: Cleanup And Hardening
+### Phase F: Log Path
+
+Port and redesign the log command:
+- shared observability adapter
+- log query/filter/tail behavior
+- command output
+- integration tests
+
+Acceptance:
+- `atm log` works through shared `sc-observability` APIs
+- level and field filtering work
+- tail mode works
+- emit failures remain best-effort for mail commands
+
+### Phase G: Doctor Path
+
+Port and redesign the doctor command:
+- local config/path checks
+- hook identity checks
+- mailbox readiness checks
+- observability health and query-readiness checks
+- command output
+
+Acceptance:
+- `atm doctor` works without daemon support
+- doctor findings reflect the local daemon-free system
+- observability readiness is visible in doctor output
+
+### Phase H: Cleanup And Hardening
 
 Delete:
 - daemon-dependent crates and helpers not retained
@@ -136,12 +183,15 @@ Acceptance:
 - Every reviewed non-retained file must also appear there with a `do not copy` decision.
 - Workflow state transitions must be enforced by code structure, not only by tests.
 - Display bucket behavior must remain separate from canonical workflow state.
+- Generic logging query/follow/filter behavior should live in `sc-observability` where possible, not in ATM-specific code.
 
 ## 6. Done Definition
 
 The rewrite is ready when:
 - `atm send` works without daemon support
 - `atm read` works without daemon support
+- `atm log` works through shared observability APIs
+- `atm doctor` works as a local diagnostics command
 - retained non-daemon functionality is preserved or intentionally documented as changed
 - the file-by-file migration plan is complete enough to implement directly
-- the retained send/read tests pass against the new crate layout
+- the retained command tests pass against the new crate layout

@@ -10,6 +10,12 @@ The workspace remains intentionally small:
 
 The CLI stays thin. Product logic moves into `atm-core`.
 
+The retained command surface is:
+- `send`
+- `read`
+- `log`
+- `doctor`
+
 ## 2. Crate Boundaries
 
 ### 2.1 `atm-core`
@@ -26,6 +32,8 @@ The CLI stays thin. Product logic moves into `atm-core`.
 - canonical workflow state classification
 - legal workflow state transitions
 - send and read service functions
+- log query/follow service functions over the ATM observability adapter
+- local doctor/diagnostic service functions
 - structured error types
 - observability integration
 
@@ -40,7 +48,26 @@ The CLI stays thin. Product logic moves into `atm-core`.
 - process exit behavior
 - one-time observability initialization
 
-`atm` must not implement mailbox, config, or workflow business logic directly.
+`atm` must not implement mailbox, config, workflow, logging-query, or doctor business logic directly.
+
+### 2.3 Shared Observability Boundary
+
+ATM depends on shared `sc-observability` capabilities, but ATM still owns:
+- ATM-specific event naming
+- ATM-specific structured fields
+- mapping CLI filters to shared query/follow APIs
+- ATM doctor projections over shared health models
+
+`sc-observability` should own as much generic functionality as possible:
+- emission
+- record storage and retention policy
+- historical query
+- follow/tail
+- severity filtering
+- structured field filtering
+- runtime health reporting
+
+An early ATM planning/coordination sprint, `OBS-GAP-1`, must verify and close this shared API surface before ATM log/doctor implementation proceeds.
 
 ## 3. Module Layout
 
@@ -56,10 +83,17 @@ crates/atm-core/src/
     discovery.rs
     mod.rs
     types.rs
+  doctor/
+    health.rs
+    mod.rs
+    report.rs
   error.rs
   home.rs
   identity/
     hook.rs
+    mod.rs
+  log/
+    filters.rs
     mod.rs
   mailbox/
     atomic.rs
@@ -97,6 +131,8 @@ Planned `atm` layout:
 crates/atm/src/
   main.rs
   commands/
+    doctor.rs
+    log.rs
     mod.rs
     read.rs
     send.rs
@@ -107,7 +143,8 @@ Notes:
 - no plugin framework
 - no daemon client
 - no runtime spawning layer
-- no separate team store module in the MVP; direct team config loading is enough
+- no separate `tail` command
+- no separate `status` command in the initial rewrite
 
 ## 4. Core Types
 
@@ -126,6 +163,8 @@ Required public newtypes:
 - `MailAddress`
 - `HomeDir`
 - `AbsolutePath`
+- `LogFieldKey`
+- `LogFieldValue`
 
 These are required to reduce repeated validation and remove stringly typed command paths.
 
@@ -206,9 +245,35 @@ impl StoredMessage<PendingAckState> {
 
 There is no inverse transition.
 
-`ReadState` remains a canonical classification target for legacy and informational messages, even though the normal MVP read path does not create it.
+`ReadState` remains a canonical classification target for legacy and informational messages, even though the normal retained read path does not create it.
 
 The public `MessageState` enum is for reporting and filtering. The typestate markers enforce legal transitions inside `atm-core`.
+
+### 4.4 Log Query Types
+
+Log query types should remain generic enough to map onto shared `sc-observability` APIs.
+
+Required public types:
+
+```rust
+pub enum LogMode {
+    Snapshot,
+    Tail,
+}
+
+pub enum LogLevelFilter {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+pub struct LogFieldMatch {
+    pub key: LogFieldKey,
+    pub value: LogFieldValue,
+}
+```
 
 ## 5. Persisted Schema
 
@@ -216,7 +281,7 @@ The public `MessageState` enum is for reporting and filtering. The typestate mar
 
 The rewrite reuses the existing team config schema where feasible.
 
-Only a small subset is required by send/read:
+Only a small subset is required by the retained surface:
 - team name
 - member names
 - enough member metadata to preserve round-trips
@@ -313,6 +378,59 @@ The CLI JSON output mirrors the current contract:
 - `bucket_counts`
 - `history_collapsed`
 
+### 6.3 Log Service
+
+Public entrypoints:
+
+- `log::query_logs(query: LogQuery) -> Result<LogSnapshot, AtmError>`
+- `log::tail_logs(query: LogQuery) -> Result<LogTailSession, AtmError>`
+
+`LogQuery` contains:
+- mode
+- level filter
+- field matches
+- time window
+- limit
+
+`LogSnapshot` contains:
+- resolved query
+- snapshot ordering metadata
+- returned records
+
+`LogTailSession` is an owning stateful object that yields matching records from the shared observability follow API without exposing a public callback trait.
+
+Ordering rules:
+- snapshot queries return newest-first records before CLI output limits are rendered
+- tail sessions yield records in follow arrival order
+
+ATM must not parse daemon log files directly in this service.
+
+### 6.4 Doctor Service
+
+Public entrypoint:
+
+`doctor::run_doctor(query: DoctorQuery) -> Result<DoctorReport, AtmError>`
+
+`DoctorQuery` contains:
+- home directory
+- current directory
+- team override
+
+`DoctorReport` contains:
+- summary
+- findings
+- recommendations
+- environment override visibility
+- observability health
+
+`DoctorFinding` contains:
+- severity
+- code
+- message
+- remediation
+
+The report model should reuse the current doctor command’s severity/finding structure where useful, but local checks replace daemon checks.
+
 ## 7. Read Pipeline
 
 The read pipeline stages are:
@@ -333,7 +451,30 @@ The read pipeline stages are:
 
 This ordering is part of the architecture contract.
 
-## 8. Mailbox Storage
+## 8. Log Pipeline
+
+The log pipeline stages are:
+1. initialize or resolve the ATM observability adapter
+2. map CLI filters into shared query/follow filters
+3. query or follow records through `sc-observability`
+4. project ATM-owned record fields for CLI rendering
+5. return records to the CLI layer
+
+Shared `sc-observability` should own record storage, filtering, and follow mechanics. ATM should own only ATM-specific query defaults and field projections.
+
+## 9. Doctor Pipeline
+
+The doctor pipeline stages are:
+1. resolve config and environment overrides
+2. resolve effective team and identity inputs
+3. verify local team/mailbox/config paths
+4. verify hook identity availability
+5. verify observability initialization and health
+6. verify observability query readiness for `atm log`
+7. assemble findings and recommendations
+8. render report
+
+## 10. Mailbox Storage
 
 The mailbox layer owns:
 - tolerant reads
@@ -343,39 +484,39 @@ The mailbox layer owns:
 - origin-inbox merge
 - atomic workflow-state updates
 
-The mailbox layer does not own selection policy, display buckets, or output formatting.
+The mailbox layer does not own selection policy, display buckets, output formatting, log query behavior, or doctor diagnostics.
 
-## 9. Identity And File Policy
+## 11. Identity And File Policy
 
-### 9.1 Hook Identity
+### 11.1 Hook Identity
 
 Hook-file identity is retained because it is a current non-daemon convenience path for send/read identity resolution.
 
 Only hook identity resolution is required for the rewrite. Session-resolution paths that exist only to bridge runtime/daemon ambiguity are not required.
 
-### 9.2 File Policy
+### 11.2 File Policy
 
 The current `send --file` behavior is retained:
 - inspect Claude settings permissions when available
 - if the referenced file is allowed, send a direct file reference
 - otherwise copy to ATM share storage and rewrite the message body accordingly
 
-## 10. Observability
+## 12. Observability
 
 `atm-core::observability` adapts ATM domain events into `sc-observability`.
 
 Initialization:
 - `atm` initializes logging once at process startup
 - `atm-core` exposes a small emit API for command lifecycle and mailbox skip events
-- logging failures degrade to no-op behavior
+- logging failures degrade to no-op behavior for explicit mail commands
 
-Required event classes:
+Required ATM event classes:
 - command start
 - command success
 - command failure
 - mailbox record skipped
 
-Required event fields:
+Required ATM event fields:
 - command
 - team
 - actor
@@ -385,7 +526,12 @@ Required event fields:
 - message count when applicable
 - transition count when applicable
 
-## 11. Error Model
+For explicit observability consumer commands:
+- `atm log` depends on shared query/follow APIs
+- `atm doctor` depends on shared health APIs
+- failures in those consumer paths are command errors, not silently dropped events
+
+## 13. Error Model
 
 Root public error:
 
@@ -410,21 +556,24 @@ Required families:
 - validation
 - serialization
 - timeout
+- observability emit
+- observability query
+- observability health
 
 Every public error must include:
 - a stable class
 - human-readable cause
 - recovery guidance when the user can act
 
-## 12. Trait Policy
+## 14. Trait Policy
 
-The MVP should avoid public extension traits.
+The initial rewrite should avoid public extension traits.
 
 If a trait becomes necessary:
 - prefer a sealed trait
 - verify object safety before stabilization
 
-## 13. Testing Strategy
+## 15. Testing Strategy
 
 `atm-core` tests:
 - address parsing
@@ -442,9 +591,15 @@ If a trait becomes necessary:
 - workflow state transitions
 - seen-state behavior
 - timeout behavior
+- observability adapter emission behavior
+- observability adapter query/filter behavior
+- observability adapter failure behavior
+- doctor health projection behavior
 
 `atm` tests:
 - clap parsing
 - JSON output shape
 - human-readable output snapshots
 - send/read integration behavior
+- `atm log` integration behavior
+- `atm doctor` integration behavior

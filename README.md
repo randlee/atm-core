@@ -6,6 +6,8 @@ Current target:
 - `atm` CLI
 - `send`
 - `read`
+- `log`
+- `doctor`
 - `sc-observability` logging
 - no daemon
 - no CI monitoring
@@ -20,7 +22,7 @@ Docs:
 - `docs/read-behavior.md`
 
 Crates planned for MVP:
-- `crates/atm-core`: library for config, addressing, mailbox I/O, command services, and observability integration
+- `crates/atm-core`: library for config, addressing, mailbox I/O, command services, diagnostics, and observability integration
 - `crates/atm`: CLI binary only
 
-No third first-party crate is planned for MVP. Add one only if a second non-CLI consumer appears or `sc-observability` integration proves large enough to justify a separate boundary.
+No third first-party crate is planned for MVP. The first implementation dependency is an early `sc-observability` gap-analysis sprint to verify and close the shared query/follow/filter/health APIs needed by `atm log` and `atm doctor`.

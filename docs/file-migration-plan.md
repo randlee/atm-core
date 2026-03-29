@@ -27,7 +27,7 @@ Change:
 - remove daemon logging-health reads
 - initialize only the retained `sc-observability` adapter
 - emit only retained command lifecycle events
-- keep only the startup and exit behavior needed for `send` and `read`
+- keep only the startup and exit behavior needed for `send`, `read`, `log`, and `doctor`
 
 ### 1.2 `copy crates/atm/src/commands/mod.rs -> crates/atm/src/commands/mod.rs`
 
@@ -38,7 +38,7 @@ Keep:
 - `execute()`
 
 Change:
-- keep only `Send` and `Read`
+- keep only `Send`, `Read`, `Log`, and `Doctor`
 - remove every other module import
 - remove every other command variant
 - remove dispatch for every non-retained command
@@ -108,7 +108,37 @@ Behavior notes:
 - keep `bucket_counts` and `history_collapsed` JSON fields
 - keep the current read-triggered `Unread -> PendingAck` mutation
 
-### 1.5 `copy crates/atm/src/commands/wait.rs -> crates/atm-core/src/read/wait.rs`
+### 1.5 `copy crates/atm/src/commands/logs.rs -> crates/atm/src/commands/log.rs`
+
+Keep:
+- historical log query shape
+- `--level`
+- `--since`
+- `--limit`
+- `--json`
+
+Change:
+- rename the command surface from `logs` to `log`
+- replace `--follow` with `--tail`
+- add repeatable `--match key=value` filters
+- delete direct log-file path resolution from the CLI
+- replace `agent_team_mail_core::log_reader::*` with `atm_core::log::*`
+- treat human output as ATM-owned rendering over shared log records
+
+### 1.6 `copy crates/atm/src/commands/doctor.rs -> crates/atm/src/commands/doctor.rs`
+
+Keep:
+- CLI report/rendering shape
+- summary/finding/recommendation presentation intent
+- JSON report output pattern
+
+Change:
+- replace command-local business logic with `atm_core::doctor::run_doctor`
+- simplify the retained CLI surface to local daemon-free diagnostics
+- delete daemon/session/plugin/GH-specific checks
+- keep severity-based reporting and remediation output
+
+### 1.7 `copy crates/atm/src/commands/wait.rs -> crates/atm-core/src/read/wait.rs`
 
 Keep:
 - timeout-based file watching
@@ -119,7 +149,7 @@ Change:
 - keep origin-inbox counting because merged inbox visibility is retained
 - return core read-layer errors instead of command-local errors
 
-### 1.6 `do not copy crates/atm/src/commands/ack.rs`
+### 1.8 `do not copy crates/atm/src/commands/ack.rs`
 
 Decision:
 - not part of the first retained command surface
@@ -129,65 +159,55 @@ Notes:
 - `PendingAck -> Acknowledged` remains part of the architecture
 - `acknowledgesMessageId` remains part of the persisted message model because existing data may already contain it
 
-### 1.7 `do not copy crates/atm/src/commands/bridge.rs`
+### 1.9 `do not copy crates/atm/src/commands/bridge.rs`
 
 Decision:
 - bridge management CLI is out of scope
 
-### 1.8 `do not copy crates/atm/src/commands/broadcast.rs`
+### 1.10 `do not copy crates/atm/src/commands/broadcast.rs`
 
 Decision:
-- not part of retained MVP
+- not part of the initial retained command surface
 
-### 1.9 `do not copy crates/atm/src/commands/cleanup.rs`
-
-Decision:
-- not part of retained MVP
-
-### 1.10 `do not copy crates/atm/src/commands/config_cmd.rs`
+### 1.11 `do not copy crates/atm/src/commands/cleanup.rs`
 
 Decision:
-- no dedicated config command in retained MVP
+- not part of the initial retained command surface
 
-### 1.11 `do not copy crates/atm/src/commands/daemon.rs`
+### 1.12 `do not copy crates/atm/src/commands/config_cmd.rs`
+
+Decision:
+- no dedicated config command in the initial retained command surface
+
+### 1.13 `do not copy crates/atm/src/commands/daemon.rs`
 
 Decision:
 - daemon removed
 
-### 1.12 `do not copy crates/atm/src/commands/doctor.rs`
+### 1.14 `do not copy crates/atm/src/commands/gh.rs`
 
 Decision:
-- not part of retained MVP
+- GH monitoring removed from the initial retained command surface
 
-### 1.13 `do not copy crates/atm/src/commands/gh.rs`
-
-Decision:
-- GH monitoring removed from MVP
-
-### 1.14 `do not copy crates/atm/src/commands/inbox.rs`
+### 1.15 `do not copy crates/atm/src/commands/inbox.rs`
 
 Decision:
-- inbox maintenance command not retained in MVP
+- inbox maintenance command not retained in the initial retained command surface
 
-### 1.15 `do not copy crates/atm/src/commands/init.rs`
+### 1.16 `do not copy crates/atm/src/commands/init.rs`
 
 Decision:
-- onboarding/init command not retained in MVP
+- onboarding/init command not retained in the initial retained command surface
 
-### 1.16 `do not copy crates/atm/src/commands/launch.rs`
+### 1.17 `do not copy crates/atm/src/commands/launch.rs`
 
 Decision:
 - runtime launch removed
 
-### 1.17 `do not copy crates/atm/src/commands/logging_health.rs`
+### 1.18 `do not copy crates/atm/src/commands/logging_health.rs`
 
 Decision:
 - daemon logging-health surface removed
-
-### 1.18 `do not copy crates/atm/src/commands/logs.rs`
-
-Decision:
-- log reading command not retained in MVP
 
 ### 1.19 `do not copy crates/atm/src/commands/mcp.rs`
 
@@ -197,22 +217,22 @@ Decision:
 ### 1.20 `do not copy crates/atm/src/commands/members.rs`
 
 Decision:
-- member management command not retained in MVP
+- member management command not retained in the initial retained command surface
 
 ### 1.21 `do not copy crates/atm/src/commands/monitor.rs`
 
 Decision:
-- monitor command not retained in MVP
+- monitor command not retained in the initial retained command surface
 
 ### 1.22 `do not copy crates/atm/src/commands/register.rs`
 
 Decision:
-- registration command not retained in MVP
+- registration command not retained in the initial retained command surface
 
 ### 1.23 `do not copy crates/atm/src/commands/request.rs`
 
 Decision:
-- not part of retained MVP
+- not part of the initial retained command surface
 
 ### 1.24 `do not copy crates/atm/src/commands/runtime_adapter.rs`
 
@@ -237,12 +257,12 @@ Decision:
 ### 1.28 `do not copy crates/atm/src/commands/tail.rs`
 
 Decision:
-- log tailing surface removed
+- replaced by `atm log --tail` over shared observability follow APIs
 
 ### 1.29 `do not copy crates/atm/src/commands/teams.rs`
 
 Decision:
-- team management command not retained in MVP
+- team management command not retained in the initial retained command surface
 
 ### 1.30 `do not copy crates/atm/src/consts.rs`
 
@@ -316,7 +336,7 @@ Decision:
 ### 2.7 `do not copy crates/atm/src/util/member_labels.rs`
 
 Decision:
-- not required by retained `send` or `read`
+- not required by the retained command surface
 
 ### 2.8 `do not copy crates/atm/src/util/mod.rs`
 
@@ -395,6 +415,49 @@ Change:
 - consume `ReadOutcome` instead of raw inbox messages
 - keep human output text stable
 
+### 2.16 `copy crates/atm/src/commands/logs.rs -> crates/atm-core/src/log/mod.rs`
+
+Keep:
+- historical query concepts
+- time-window parsing concepts
+- level filtering concepts
+- human-versus-JSON rendering boundary
+
+Change:
+- replace file-based log reading with the shared observability adapter
+- define `LogQuery`, `LogSnapshot`, and `LogTailSession`
+- move ATM-specific field filtering into core log query translation
+
+### 2.17 `copy crates/atm/src/commands/logs.rs -> crates/atm-core/src/log/filters.rs`
+
+Keep:
+- level parsing
+- since/limit filter concepts
+
+Change:
+- add structured `key=value` match parsing
+- normalize ATM-owned structured-field filters before handing them to `sc-observability`
+
+### 2.18 `copy crates/atm/src/commands/doctor.rs -> crates/atm-core/src/doctor/mod.rs`
+
+Keep:
+- report/finding/recommendation structure
+- severity model
+
+Change:
+- replace daemon/session/plugin/GH diagnostics with local ATM checks
+- own `DoctorQuery` and `DoctorReport`
+- project shared observability health into ATM doctor output
+
+### 2.19 `copy crates/atm/src/commands/doctor.rs -> crates/atm-core/src/doctor/report.rs`
+
+Keep:
+- summary and finding report shapes that remain useful in a daemon-free diagnostic report
+
+Change:
+- strip daemon-only fields
+- keep local env/config/path and observability health findings
+
 ## 3. Core Home And Text
 
 ### 3.1 `copy crates/atm-core/src/home.rs -> crates/atm-core/src/home.rs`
@@ -472,7 +535,7 @@ Change:
 - retain bridge config
 - delete plugin config tables
 - delete retention and daemon-only config
-- keep only settings needed for retained send/read behavior
+- keep only settings needed for the retained command surface
 
 ### 4.5 `copy crates/atm-core/src/config/aliases.rs -> crates/atm-core/src/config/aliases.rs`
 
@@ -523,7 +586,7 @@ Keep:
 - member-name compatibility
 
 Change:
-- keep round-trip compatibility even for fields not used by MVP
+- keep round-trip compatibility even for fields not used by the initial retained command surface
 - strip daemon-oriented documentation text only; do not remove persisted fields from the schema
 
 Dependency:
@@ -548,12 +611,12 @@ Change:
 ### 5.7 `do not copy crates/atm-core/src/schema/task.rs`
 
 Decision:
-- not required by retained `send` or `read`
+- not required by the retained command surface
 
 ### 5.8 `do not copy crates/atm-core/src/schema/version.rs`
 
 Decision:
-- not required by retained `send` or `read`
+- not required by the retained command surface
 
 ## 6. Mailbox I/O
 
@@ -638,7 +701,11 @@ Keep:
 - reusable `sc-observability`-neutral types that back the retained command lifecycle adapter
 
 Change:
-- shrink the surface to retained command lifecycle and mailbox-skip events
+- expand the surface from emit-only support to the retained ATM adapter boundary:
+  - command lifecycle emission
+  - record query/filter translation
+  - follow/tail translation
+  - health projection for `atm doctor`
 - remove daemon-specific health assumptions
 
 ### 7.4 `do not copy crates/atm-core/src/consts.rs`
@@ -650,12 +717,12 @@ Decision:
 ### 7.5 `do not copy crates/atm-core/src/context/mod.rs`
 
 Decision:
-- not required by retained send/read flow
+- not required by the retained command surface
 
 ### 7.6 `do not copy crates/atm-core/src/context/*`
 
 Decision:
-- not required by retained send/read flow
+- not required by the retained command surface
 
 ### 7.7 `do not copy crates/atm-core/src/control.rs`
 
@@ -685,7 +752,7 @@ Decision:
 ### 7.12 `do not copy crates/atm-core/src/log_reader.rs`
 
 Decision:
-- daemon/log viewing surface not retained
+- replace daemon/log file scanning with shared observability query/follow APIs
 
 ### 7.13 `do not copy crates/atm-core/src/logging.rs`
 
@@ -715,7 +782,7 @@ Decision:
 ### 7.18 `do not copy crates/atm-core/src/team_config_store.rs`
 
 Decision:
-- direct team-config loading is sufficient for MVP
+- direct team-config loading is sufficient for the initial retained command surface
 
 ## 8. Test Files
 
@@ -759,7 +826,7 @@ Change:
 ### 8.5 `copy crates/atm/tests/integration_discovery.rs -> crates/atm/tests/integration_discovery.rs`
 
 Keep:
-- config discovery coverage relevant to send/read
+- config discovery coverage relevant to the retained command surface
 
 Change:
 - delete GH, daemon, plugin, or CI-specific coverage
@@ -767,7 +834,7 @@ Change:
 ### 8.6 `copy crates/atm/tests/integration_conflict_tests.rs -> crates/atm/tests/integration_conflict_tests.rs`
 
 Keep:
-- mailbox append and merge behavior relevant to send/read
+- mailbox append and merge behavior relevant to the retained command surface
 
 Change:
 - delete spool fallback expectations
@@ -825,12 +892,12 @@ Decision:
 ### 8.17 `do not copy crates/atm/tests/integration_backup_restore.rs`
 
 Decision:
-- not part of retained MVP
+- not part of the initial retained command surface
 
 ### 8.18 `do not copy crates/atm/tests/integration_broadcast.rs`
 
 Decision:
-- broadcast removed from MVP
+- broadcast removed from the initial retained command surface
 
 ### 8.19 `do not copy crates/atm/tests/integration_daemon_autostart.rs`
 
@@ -850,27 +917,27 @@ Decision:
 ### 8.22 `do not copy crates/atm/tests/integration_e2e_workflows.rs`
 
 Decision:
-- broad workflow suite must be replaced by smaller send/read-focused coverage
+- broad workflow suite must be replaced by smaller retained-command coverage
 
 ### 8.23 `do not copy crates/atm/tests/integration_external_member.rs`
 
 Decision:
-- external member management not retained in MVP
+- external member management not retained in the initial retained command surface
 
 ### 8.24 `do not copy crates/atm/tests/integration_gh.rs`
 
 Decision:
-- GH surface removed from MVP
+- GH surface removed from the initial retained command surface
 
 ### 8.25 `do not copy crates/atm/tests/integration_inbox.rs`
 
 Decision:
-- inbox maintenance command not retained in MVP
+- inbox maintenance command not retained in the initial retained command surface
 
 ### 8.26 `do not copy crates/atm/tests/integration_init_onboarding.rs`
 
 Decision:
-- init/onboarding command not retained in MVP
+- init/onboarding command not retained in the initial retained command surface
 
 ### 8.27 `do not copy crates/atm/tests/integration_logging_health_schema.rs`
 
@@ -880,7 +947,7 @@ Decision:
 ### 8.28 `do not copy crates/atm/tests/integration_mcp.rs`
 
 Decision:
-- MCP removed from MVP
+- MCP removed from the initial retained command surface
 
 ### 8.29 `do not copy crates/atm/tests/integration_monitor.rs`
 
@@ -890,7 +957,7 @@ Decision:
 ### 8.30 `do not copy crates/atm/tests/integration_multiteam_isolation.rs`
 
 Decision:
-- not required for first retained send/read MVP
+- not required for the initial retained command surface
 
 ### 8.31 `do not copy crates/atm/tests/integration_otel_traces.rs`
 
@@ -910,14 +977,42 @@ Decision:
 ### 8.34 `do not copy crates/atm/tests/integration_team_join.rs`
 
 Decision:
-- team join/management not retained in MVP
+- team join/management not retained in the initial retained command surface
 
-### 8.35 `do not copy crates/atm/tests/integration_teams_cleanup_dry_run.rs`
+### 8.35 `create crates/atm-core/tests/observability_adapter.rs`
+
+Purpose:
+- verify ATM event emission through the retained observability adapter
+- verify level, field, and time-window query translation
+- verify follow/tail translation behavior
+- verify best-effort emit failures do not become retained mail-command correctness failures
+- verify explicit query or health failures return structured observability errors
+
+### 8.36 `create crates/atm/tests/integration_log.rs`
+
+Purpose:
+- verify `atm log` clap parsing
+- verify snapshot output order and `--limit` behavior
+- verify `--level` filtering
+- verify repeatable `--match key=value` filtering
+- verify `--tail` follow behavior
+- verify JSON output shape
+
+### 8.37 `create crates/atm/tests/integration_doctor.rs`
+
+Purpose:
+- verify `atm doctor` clap parsing
+- verify config/path/identity findings in human output
+- verify JSON report shape
+- verify critical findings produce non-zero exit status
+- verify observability readiness appears in the report
+
+### 8.38 `do not copy crates/atm/tests/integration_teams_cleanup_dry_run.rs`
 
 Decision:
 - team cleanup surface removed
 
-### 8.36 `do not copy crates/atm/tests/integration_transient_registration.rs`
+### 8.39 `do not copy crates/atm/tests/integration_transient_registration.rs`
 
 Decision:
 - transient registration surface removed
@@ -936,10 +1031,12 @@ Use this order:
 9. mailbox files
 10. send helpers
 11. read helpers
-12. CLI command files
-13. retained tests
-14. core `lib.rs`
-15. observability integration
+12. observability adapter
+13. log helpers
+14. doctor helpers
+15. CLI command files
+16. retained and new tests
+17. core `lib.rs`
 
 ## 10. Review Standard
 

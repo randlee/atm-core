@@ -4,13 +4,15 @@
 
 The product is a local command-line tool named `atm`.
 
-This rewrite removes daemon architecture. It does not intentionally remove core mail functionality.
+This rewrite removes daemon architecture. It does not intentionally remove core non-daemon ATM functionality.
 
 The retained product surface is:
 - `atm send`
 - `atm read`
+- `atm log`
+- `atm doctor`
 
-The rewritten system must preserve usable non-daemon behavior already present in those commands unless these requirements explicitly retire or change it.
+The rewritten system must preserve usable non-daemon behavior already present in the retained commands unless these requirements explicitly retire or change it.
 
 The system uses structured logging through `sc-observability`.
 
@@ -29,6 +31,8 @@ The system uses structured logging through `sc-observability`.
 - seen-state tracking for `read`
 - timeout-based waiting for `read --timeout`
 - structured logging through `sc-observability`
+- log query and follow through `sc-observability`
+- local diagnostics through `atm doctor`
 - JSON output mode
 - human-readable output mode
 
@@ -41,7 +45,9 @@ The system uses structured logging through `sc-observability`.
 - CI monitoring
 - TUI and MCP features
 - runtime spawning and launch commands
-- team lifecycle management outside what `send` and `read` need
+- `atm status` in the initial rewrite
+- separate `atm tail` command in the initial rewrite
+- team lifecycle management outside what the retained commands need
 
 ## 3. External Contracts
 
@@ -101,6 +107,23 @@ Resolution order:
 3. repo-local `.claude/settings.json`
 4. global `{ATM_HOME}/.claude/settings.json`
 
+### 3.5 Observability Shared API Prerequisite
+
+ATM depends on `sc-observability` providing a shared logging surface that supports:
+- structured log emission
+- historical query of retained records
+- follow/tail of new matching records
+- filtering by severity
+- filtering by structured key/value fields
+- filtering by time window
+- limit/order controls
+- health reporting for the logging runtime
+
+This prerequisite is handled by an early ATM planning/coordination sprint:
+- `OBS-GAP-1`
+
+ATM must not implement a parallel ad hoc log-query engine when shared `sc-observability` APIs can own the behavior.
+
 ## 4. Identity Resolution
 
 ### 4.1 Send Identity Resolution Order
@@ -117,7 +140,11 @@ Resolution order:
 3. `ATM_IDENTITY`
 4. config identity
 
-If identity cannot be determined, the command must fail with a structured recovery-oriented error.
+### 4.3 Doctor Identity Resolution
+
+`atm doctor` uses the same config and hook-resolution paths as the retained mail commands, but it must not fail immediately only because hook identity is absent. Missing hook identity is a diagnostic finding unless identity resolution is explicitly required for a requested check.
+
+If command identity cannot be determined where required, the command must fail with a structured recovery-oriented error.
 
 ## 5. Address Resolution
 
@@ -364,9 +391,121 @@ JSON output must include:
 - `pending_ack`
 - `history`
 
-## 8. Message And Workflow Model
+## 8. `atm log`
 
-### 8.1 Persisted Message Fields
+### 8.1 Purpose
+
+Inspect ATM observability records through shared `sc-observability` query/follow APIs.
+
+`atm log` replaces the old daemon-log viewing model. It must not depend on daemon-owned log files, daemon status, or tmux fallback behavior.
+
+### 8.2 Supported Flags
+
+- `--tail`
+- `--level <trace|debug|info|warn|error>`
+- `--match <key=value>` repeatable
+- `--since <iso8601|duration>`
+- `--limit <n>`
+- `--json`
+
+Deferred from the current source repo:
+- direct `--file` selection of arbitrary ATM log files
+- separate `atm tail` command
+
+### 8.3 Required Behavior
+
+- query existing ATM records through an `atm-core` observability adapter over `sc-observability`
+- support follow mode through the same adapter
+- support filtering by level
+- support filtering by structured key/value fields
+- support filtering by time window
+- support limit/order controls for non-tail mode
+- default to snapshot mode when `--tail` is not set
+- return snapshot results newest-first before applying output limits
+- return followed records in arrival order while `--tail` is active
+
+### 8.4 ATM Log Fields
+
+The retained ATM event vocabulary must include enough structure to filter on:
+- command
+- team
+- actor
+- target
+- outcome
+- error class
+
+This ATM field set is ATM-owned even when the underlying query/follow/filter mechanics are shared in `sc-observability`.
+
+### 8.5 Output Contract
+
+Human output must show one record per line with enough information to understand:
+- timestamp
+- severity
+- source/service
+- event name or message
+- important ATM fields when present
+
+JSON output must emit structured records suitable for machine filtering and test assertions.
+
+Each JSON record must expose at least:
+- timestamp
+- severity
+- source or service
+- event name
+- ATM structured fields map
+
+## 9. `atm doctor`
+
+### 9.1 Purpose
+
+Run local ATM diagnostics for the retained daemon-free system.
+
+`atm doctor` in the rewrite is a local diagnostics command. It is not a daemon-health report.
+
+### 9.2 Supported Flags
+
+- `--team <name>`
+- `--json`
+
+### 9.3 Required Checks
+
+The initial doctor implementation must cover:
+- config file discovery and parse health
+- effective team resolution
+- identity resolution inputs and fallbacks
+- team directory existence
+- team config existence and parse health
+- inbox directory existence and writability
+- hook identity availability
+- `ATM_HOME`, `ATM_TEAM`, and `ATM_IDENTITY` override visibility
+- `sc-observability` initialization health
+- `sc-observability` query-health readiness for `atm log`
+
+### 9.4 Output Contract
+
+Human output must provide:
+- overall status summary
+- findings grouped by severity
+- concrete remediation guidance when the user can act
+
+JSON output must provide:
+- summary
+- findings
+- recommendations
+- environment override visibility
+- observability health snapshot
+
+Each doctor finding must expose at least:
+- severity
+- code
+- message
+- remediation when available
+
+Critical findings must cause a non-zero exit status.
+
+## 10. Message And Workflow Model
+
+### 10.1 Persisted Message Fields
 
 Required fields:
 - `from`
@@ -384,7 +523,7 @@ Optional fields:
 
 Unknown fields must be preserved.
 
-### 8.2 Canonical Workflow States
+### 10.2 Canonical Workflow States
 
 Canonical states:
 - `Unread`
@@ -400,7 +539,7 @@ Classification order:
 
 The canonical state machine is distinct from the read command’s display buckets.
 
-### 8.3 Required State Transitions
+### 10.3 Required State Transitions
 
 ```text
 Send
@@ -431,17 +570,17 @@ Disallowed transitions:
 
 The implementation must encode legal transitions in code structure, not only in comments or tests.
 
-## 9. Logging Requirements
+## 11. Observability Requirements
 
-The system must emit structured logs through `sc-observability`.
+ATM must emit structured records through `sc-observability`.
 
-Required events:
+Required ATM event classes:
 - command started
 - command succeeded
 - command failed
 - mailbox record skipped
 
-Required fields:
+Required ATM event fields:
 - command name
 - team when known
 - actor identity when known
@@ -451,11 +590,15 @@ Required fields:
 - count when applicable
 - transition count when applicable
 
-Logging is best-effort:
-- logging failures must never block send or read
+Emission is best-effort:
+- logging failures must never block retained command behavior
 - command correctness takes priority over observability delivery
 
-## 10. Error Requirements
+`atm log` and `atm doctor` are not best-effort features in the same sense:
+- they are explicit observability consumers
+- if shared query/health APIs are unavailable, they must fail with clear structured errors
+
+## 12. Error Requirements
 
 All user-visible failures must use structured errors with recovery guidance.
 
@@ -471,13 +614,16 @@ Minimum error categories:
 - serialization
 - file policy
 - wait timeout
+- observability emit
+- observability query
+- observability health
 
 Mutation failures must be fail-safe:
 - no partial send writes
 - no partial read-mark updates
 - no illegal state transitions after failed persistence
 
-## 11. Reliability Requirements
+## 13. Reliability Requirements
 
 - mailbox writes must be atomic
 - concurrent appends must not silently lose messages
@@ -485,14 +631,34 @@ Mutation failures must be fail-safe:
 - corrupt records should be skipped individually when possible
 - missing inbox files are treated as empty inboxes
 - seen-state races must not corrupt mailbox data
+- observability emission failures must not corrupt command behavior
 
-## 12. Acceptance Criteria
+## 14. Testing Requirements
+
+Because `sc-observability` is newly introduced into ATM, the rewrite must add explicit test coverage for:
+- ATM event emission through the observability adapter
+- best-effort emission failure behavior
+- log query by severity
+- log query by structured field match
+- log follow/tail behavior
+- doctor observability-health reporting
+- retained mail-command correctness when observability emission fails
+
+The implementation must include:
+- `atm-core` tests for observability adapter behavior
+- CLI integration tests for `atm log`
+- CLI integration tests for `atm doctor`
+
+## 15. Acceptance Criteria
 
 The rewrite is ready when:
 - `atm send` works without daemon support
 - `atm read` works without daemon support
-- send and read preserve retained non-daemon functionality already present
+- `atm log` works through shared `sc-observability` APIs
+- `atm doctor` works as a local diagnostics command
+- retained commands preserve documented non-daemon behavior
 - workflow state classification is correct
 - workflow state transitions are encoded in implementation structure
 - display buckets are derived consistently from canonical state
+- observability integration is exercised by automated tests
 - the file-by-file migration plan is complete enough to implement directly
