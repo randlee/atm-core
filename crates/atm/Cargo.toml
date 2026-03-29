@@ -1,0 +1,12 @@
+[package]
+name = "atm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+atm-core = { path = "../atm-core" }
+anyhow.workspace = true
+tracing.workspace = true
