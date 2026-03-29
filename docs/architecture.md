@@ -394,7 +394,6 @@ Dry-run send JSON output includes:
 - `dry_run = true`
 - `requires_ack`
 - `task_id`
-- `task_id`
 
 Send ordering rules:
 - resolve target address, team existence, and agent membership as one address-resolution stage before mailbox path selection
