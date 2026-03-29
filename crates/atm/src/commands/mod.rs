@@ -16,7 +16,12 @@ pub use read::ReadCommand;
 pub use send::SendCommand;
 
 #[derive(Debug, Parser)]
-#[command(name = "atm", about = "ATM CLI", version)]
+#[command(
+    name = "atm",
+    about = "ATM CLI",
+    version,
+    disable_help_subcommand = true
+)]
 pub struct Cli {
     #[command(subcommand)]
     command: Command,
