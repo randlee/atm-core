@@ -9,4 +9,5 @@ license.workspace = true
 [dependencies]
 atm-core = { path = "../atm-core" }
 anyhow.workspace = true
+clap = { version = "4", features = ["derive"] }
 tracing.workspace = true
