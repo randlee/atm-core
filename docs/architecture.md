@@ -32,10 +32,10 @@ The retained command surface is:
 - canonical workflow state classification
 - legal workflow state transitions
 - send and read service functions
-- log query/follow service functions over the ATM observability adapter
+- log query/follow service functions over an injected observability port
 - local doctor/diagnostic service functions
 - structured error types
-- observability integration
+- observability event/query models and the injected observability boundary
 
 `atm-core` must not depend on clap or terminal formatting concerns.
 
@@ -47,12 +47,18 @@ The retained command surface is:
 - output rendering
 - process exit behavior
 - one-time observability initialization
+- the concrete `sc-observability` implementation of the observability port
+- injection of that implementation into `atm-core` services at startup
 
 `atm` must not implement mailbox, config, workflow, logging-query, or doctor business logic directly.
 
 ### 2.3 Shared Observability Boundary
 
-ATM depends on shared `sc-observability` capabilities, but ATM still owns:
+`atm-core` must not import `sc-observability` directly.
+
+Instead, `atm-core` defines a sealed `ObservabilityPort` boundary plus ATM-owned event and query models. `atm` implements that port using `sc-observability`.
+
+ATM still owns:
 - ATM-specific event naming
 - ATM-specific structured fields
 - mapping CLI filters to shared query/follow APIs
@@ -136,6 +142,7 @@ crates/atm/src/
     mod.rs
     read.rs
     send.rs
+  observability.rs
   output.rs
 ```
 
@@ -310,7 +317,7 @@ Canonical workflow state is derived from persisted fields and not serialized sep
 
 Public entrypoint:
 
-`send::send_mail(request: SendRequest) -> Result<SendOutcome, AtmError>`
+`send::send_mail(request: SendRequest, observability: &dyn ObservabilityPort) -> Result<SendOutcome, AtmError>`
 
 `SendRequest` contains:
 - home directory
@@ -328,6 +335,7 @@ Public entrypoint:
 - file reference
 
 `SendOutcome` contains:
+- action
 - resolved team
 - resolved recipient
 - resolved sender
@@ -338,11 +346,17 @@ Public entrypoint:
 
 The file-reference path may be rewritten through the file policy layer.
 
+Send ordering rules:
+- resolve target address, team existence, and agent membership as one address-resolution stage before mailbox path selection
+- enter the atomic append boundary before final inbox mutation
+- validate message text inside the atomic append boundary
+- perform duplicate suppression and final append inside the same atomic append boundary
+
 ### 6.2 Read Service
 
 Public entrypoint:
 
-`read::read_mail(query: ReadQuery) -> Result<ReadOutcome, AtmError>`
+`read::read_mail(query: ReadQuery, observability: &dyn ObservabilityPort) -> Result<ReadOutcome, AtmError>`
 
 `ReadQuery` contains:
 - home directory
@@ -358,7 +372,12 @@ Public entrypoint:
 - timestamp filter
 - optional timeout
 
+Timeout rule:
+- if the requested selection is already non-empty after filtering and selection-mode application, return immediately
+- otherwise wait for a newly eligible message until the timeout expires
+
 `ReadOutcome` contains:
+- action
 - resolved team
 - resolved agent
 - selection mode
@@ -373,17 +392,32 @@ Public entrypoint:
 - history
 
 The CLI JSON output mirrors the current contract:
+- `action`
 - `messages`
 - `count`
 - `bucket_counts`
 - `history_collapsed`
 
-### 6.3 Log Service
+### 6.3 Observability Boundary
+
+The observability boundary is a sealed `ObservabilityPort` (or equivalent injected interface) defined in `atm-core` and implemented in `atm`.
+
+It is responsible for:
+- command lifecycle emission
+- log query
+- log tail/follow
+- observability health projection
+
+`atm-core` owns the ATM-specific event and query vocabulary.
+
+`atm` owns the concrete `sc-observability` integration.
+
+### 6.4 Log Service
 
 Public entrypoints:
 
-- `log::query_logs(query: LogQuery) -> Result<LogSnapshot, AtmError>`
-- `log::tail_logs(query: LogQuery) -> Result<LogTailSession, AtmError>`
+- `log::query_logs(query: LogQuery, observability: &dyn ObservabilityPort) -> Result<LogSnapshot, AtmError>`
+- `log::tail_logs(query: LogQuery, observability: &dyn ObservabilityPort) -> Result<LogTailSession, AtmError>`
 
 `LogQuery` contains:
 - mode
@@ -405,11 +439,11 @@ Ordering rules:
 
 ATM must not parse daemon log files directly in this service.
 
-### 6.4 Doctor Service
+### 6.5 Doctor Service
 
 Public entrypoint:
 
-`doctor::run_doctor(query: DoctorQuery) -> Result<DoctorReport, AtmError>`
+`doctor::run_doctor(query: DoctorQuery, observability: &dyn ObservabilityPort) -> Result<DoctorReport, AtmError>`
 
 `DoctorQuery` contains:
 - home directory
@@ -434,29 +468,28 @@ The report model should reuse the current doctor command’s severity/finding st
 ## 7. Read Pipeline
 
 The read pipeline stages are:
-1. resolve actor
-2. resolve target inbox
-3. build the hostname registry for configured origin inboxes
-4. load mailbox records from the merged inbox surface
-5. classify workflow state
-6. apply sender and timestamp filters
-7. apply seen-state filter unless selection is `All`
-8. map workflow state to display bucket and apply selection mode
-9. sort newest-first
-10. apply limit
-11. apply legal read transitions for displayed unread messages
-12. persist state changes atomically
-13. update seen-state when enabled
-14. return outcome
+1. resolve actor and target inbox
+2. build the hostname registry for configured origin inboxes
+3. load mailbox records from the merged inbox surface
+4. classify workflow state
+5. apply sender and timestamp filters
+6. apply seen-state filter unless selection is `All`
+7. map workflow state to display bucket and apply selection mode
+8. wait if `timeout` is set and the current selection is empty
+9. sort newest-first and apply limit
+10. apply legal read transitions for displayed unread messages
+11. persist state changes atomically
+12. update seen-state when enabled
+13. return outcome
 
 This ordering is part of the architecture contract.
 
 ## 8. Log Pipeline
 
 The log pipeline stages are:
-1. initialize or resolve the ATM observability adapter
+1. resolve the injected observability port implementation
 2. map CLI filters into shared query/follow filters
-3. query or follow records through `sc-observability`
+3. query or follow records through the observability port
 4. project ATM-owned record fields for CLI rendering
 5. return records to the CLI layer
 
@@ -503,11 +536,13 @@ The current `send --file` behavior is retained:
 
 ## 12. Observability
 
-`atm-core::observability` adapts ATM domain events into `sc-observability`.
+`atm-core::observability` defines ATM event/query models plus the sealed `ObservabilityPort` boundary.
+
+`atm` provides the concrete `sc-observability` implementation and injects it into core services.
 
 Initialization:
 - `atm` initializes logging once at process startup
-- `atm-core` exposes a small emit API for command lifecycle and mailbox skip events
+- `atm` constructs the concrete observability port after startup initialization
 - logging failures degrade to no-op behavior for explicit mail commands
 
 Required ATM event classes:
@@ -591,9 +626,9 @@ If a trait becomes necessary:
 - workflow state transitions
 - seen-state behavior
 - timeout behavior
-- observability adapter emission behavior
-- observability adapter query/filter behavior
-- observability adapter failure behavior
+- observability port emission behavior
+- observability port query/filter behavior
+- observability port failure behavior
 - doctor health projection behavior
 
 `atm` tests:

@@ -126,6 +126,7 @@ Read other inbox
 
 Ack workflow
   PendingAck -> Acknowledged
+  and emit a reply message referencing the original message id
 ```
 
 Disallowed transitions:
@@ -144,17 +145,37 @@ Seen-state is a selection policy, not a state transition.
 
 Rules:
 - enable it by default
+- `--since-last-seen` explicitly re-enables the default watermark filter
 - disable it with `--no-since-last-seen`
 - bypass it with `--all`
 - keep older unread messages visible
 - keep older pending-ack messages visible
 - allow the watermark to hide only history items
 
+If both `--since-last-seen` and `--no-since-last-seen` appear, `--no-since-last-seen` wins.
+
 Watermark update rule:
 - update from the latest displayed message only
 - do not include filtered-out messages
 
-## 8. Required API Shape
+`--no-update-seen` leaves the watermark unchanged after the read, even when messages were displayed.
+
+`--since <iso8601>` filters by message timestamp greater than or equal to the given value.
+
+`--from <name>` filters by sender name.
+
+## 8. Wait-Mode Rules
+
+`--timeout` preserves the current queue-first behavior:
+- if the requested selection already contains unread or pending-ack messages at command start, return immediately
+- block only when the requested selection is empty at command start
+- while blocked, wake only when a newly arrived message becomes eligible for the requested selection
+- preserve the same sender, timestamp, seen-state, and selection filters during the wait
+- use native file watching with a 100ms safety poll while the watcher is active
+- fall back to 2-second polling if the native watcher cannot be initialized
+- apply read-triggered marking only after the wait completes and the final displayed selection is chosen
+
+## 9. Required API Shape
 
 The core read pipeline must encode the transition rules in types.
 
@@ -199,20 +220,21 @@ Classification boundary:
 Rendering boundary:
 - stateful core model -> CLI display buckets and rows
 
-## 9. Recommended Read Algorithm
+## 10. Recommended Read Algorithm
 
-1. Resolve actor identity.
-2. Resolve target inbox.
+1. Resolve actor identity and target inbox.
+2. Build the hostname registry for configured origin inboxes.
 3. Load the merged inbox surface.
 4. Convert wire records into canonical stateful messages.
-5. Apply sender and timestamp filters.
+5. Apply sender and timestamp filters (`--from`, `--since`).
 6. Apply seen-state filtering unless selection is `All`.
-7. Apply selection mode.
-8. Sort newest-first.
-9. Apply limit.
-10. Persist legal workflow transitions for displayed unread messages if allowed.
-11. Update seen-state from the displayed set when enabled.
-12. Return `ReadOutcome`.
+7. Map canonical states to display buckets and apply selection mode.
+8. If `--timeout` is set and the current selection is empty, wait for a newly eligible message.
+9. Sort newest-first and apply limit.
+10. Apply legal workflow transitions for displayed unread messages if allowed.
+11. Persist state changes atomically.
+12. Update seen-state from the displayed set when enabled.
+13. Return `ReadOutcome`.
 
 This order matters.
 
@@ -221,7 +243,7 @@ In particular:
 - mutation must happen before final output is returned
 - seen-state updates must use the displayed set, not the full inbox
 
-## 10. Output Contract
+## 11. Output Contract
 
 Human output:
 - queue heading
@@ -232,6 +254,7 @@ Human output:
 - hidden-history line when history is collapsed
 
 JSON output:
+- `action = "read"`
 - selected messages only
 - `count`
 - `bucket_counts`
@@ -242,7 +265,7 @@ JSON output:
 - `pending_ack`
 - `history`
 
-## 11. Review Standard
+## 12. Review Standard
 
 An implementation of `atm read` is acceptable only if:
 - it uses the canonical four-state workflow model

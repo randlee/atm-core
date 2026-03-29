@@ -188,14 +188,14 @@ Retired from the current implementation:
 - resolve sender identity using the defined precedence
 - resolve recipient address using the defined precedence
 - resolve roles and aliases before mailbox lookup
-- verify target team exists
-- verify target agent exists in team config
-- validate message text before write
+- verify target team existence and target agent membership as part of address resolution before mailbox path selection
 - generate summary when not explicitly provided
-- generate message id for ATM-authored messages
+- enter the atomic append boundary before final inbox mutation
+- validate message text inside the atomic append boundary
+- generate message id for ATM-authored messages inside the atomic append boundary
+- create inbox file if absent inside the atomic append boundary
+- preserve duplicate-suppression behavior for message ids inside the atomic append boundary
 - append atomically to the inbox file
-- create inbox file if absent
-- preserve duplicate-suppression behavior for message ids
 - support dry-run without mutation
 
 ### 6.4 Message Source Semantics
@@ -282,6 +282,8 @@ Read messages from one inbox.
 - support optional wait mode with timeout
 - support optional seen-state filtering and updates
 
+`--timeout` preserves the current queue-first behavior: if the requested read selection already contains unread or pending-ack messages at command start, the command returns immediately with those messages. It blocks only when the requested selection is empty at command start.
+
 ### 7.4 Display Buckets
 
 The CLI exposes three display buckets:
@@ -320,6 +322,8 @@ Mutual exclusion:
 
 Seen-state is enabled by default unless `--no-since-last-seen` is set.
 
+`--since-last-seen` explicitly enables the default watermark filter. When set explicitly, it behaves the same as the default. If both `--since-last-seen` and `--no-since-last-seen` appear, `--no-since-last-seen` wins.
+
 When seen-state is enabled and a watermark exists:
 - unread messages remain eligible even when older than the watermark
 - pending-ack messages remain eligible even when older than the watermark
@@ -341,7 +345,22 @@ If seen-state updates are enabled:
 
 `--from <name>` in read context is a sender filter: it restricts displayed messages to those sent by the named agent. It does not override the caller's identity.
 
-### 7.7 Mutation Rules
+### 7.7 Wait Mode Rules
+
+When `--timeout <seconds>` is set:
+- establish the read selection baseline after actor resolution, inbox loading, workflow classification, and filter application
+- if the requested selection already contains eligible messages at wait start, return immediately without blocking
+- otherwise block until a newly arrived message becomes eligible for the requested read selection, or until the timeout expires
+- re-run the normal read selection over the updated merged inbox surface once a new eligible message arrives
+- preserve the same sender, timestamp, seen-state, and selection filters during the wait
+
+Timeout success condition:
+- either the initial selection is already non-empty, or at least one message that was not eligible at wait start becomes eligible before the timeout expires
+
+Timeout failure condition:
+- the initial selection is empty and no newly eligible message arrives before the timeout expires
+
+### 7.8 Mutation Rules
 
 Read-triggered mutation happens only when:
 - the caller is reading their own inbox
@@ -359,23 +378,23 @@ No read-triggered mutation happens when:
 - the message is already `Acknowledged`
 - the message is already `Read`
 
-### 7.8 Processing Order
+### 7.9 Processing Order
 
 1. resolve actor and target inbox
-2. load messages from the merged inbox surface (including building the hostname registry for configured origin inboxes, to resolve which origin files belong to each remote)
-3. classify canonical state
-4. apply sender filter
-5. apply timestamp filter
+2. build the hostname registry for configured origin inboxes
+3. load messages from the merged inbox surface
+4. classify canonical state
+5. apply sender and timestamp filters (`--from`, `--since`)
 6. apply seen-state filter when enabled and selection is not `--all`
-7. apply selection mode
-8. sort newest-first
-9. apply limit
+7. map canonical state to display buckets and apply selection mode
+8. if `--timeout` is set and the current selection is empty, block until a newly eligible message arrives or the timeout expires
+9. sort newest-first and apply limit
 10. if enabled, mutate displayed unread messages through the workflow state machine
 11. persist read-triggered state changes atomically
 12. update seen-state when enabled
 13. render output
 
-### 7.9 Output Contract
+### 7.10 Output Contract
 
 Human output must preserve the current queue-oriented shape:
 - queue heading
@@ -420,7 +439,7 @@ Deferred from the current source repo:
 
 ### 8.3 Required Behavior
 
-- query existing ATM records through an `atm-core` observability adapter over `sc-observability`
+- query existing ATM records through the injected observability port over `sc-observability`
 - support follow mode through the same adapter
 - support filtering by level
 - support filtering by structured key/value fields
@@ -642,7 +661,7 @@ Mutation failures must be fail-safe:
 ## 14. Testing Requirements
 
 Because `sc-observability` is newly introduced into ATM, the rewrite must add explicit test coverage for:
-- ATM event emission through the observability adapter
+- ATM event emission through the observability port boundary
 - best-effort emission failure behavior
 - log query by severity
 - log query by structured field match
@@ -651,7 +670,7 @@ Because `sc-observability` is newly introduced into ATM, the rewrite must add ex
 - retained mail-command correctness when observability emission fails
 
 The implementation must include:
-- `atm-core` tests for observability adapter behavior
+- `atm-core` tests for observability port behavior using test doubles
 - CLI integration tests for `atm log`
 - CLI integration tests for `atm doctor`
 

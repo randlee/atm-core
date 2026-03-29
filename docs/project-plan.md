@@ -31,9 +31,9 @@ Implements:
 - mailbox I/O and origin merge
 - workflow state model and transitions
 - send and read services
-- log query/follow service over the ATM observability adapter
+- log query/follow service over the injected observability port
 - doctor diagnostics service
-- observability adapter
+- observability event/query models and the observability port boundary
 - error model
 
 ### 3.2 `crates/atm`
@@ -46,6 +46,7 @@ Implements:
 - `doctor`
 - output formatting
 - observability bootstrap
+- concrete `sc-observability` port implementation and injection
 
 ## 4. Work Sequence
 
@@ -70,7 +71,7 @@ Deliverables:
 - ATM-side required capability list
 - gap list against current `sc-observability`
 - concrete API requests for `arch-obs`
-- decision on ATM-owned adapter responsibilities versus shared observability responsibilities
+- decision on ATM-owned port-boundary responsibilities versus shared observability responsibilities
 
 Acceptance:
 - shared plan exists for emit/query/follow/filter/health support
@@ -136,7 +137,7 @@ Acceptance:
 ### Phase F: Log Path
 
 Port and redesign the log command:
-- shared observability adapter
+- injected observability port usage
 - log query/filter/tail behavior
 - command output
 - integration tests

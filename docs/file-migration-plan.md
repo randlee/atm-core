@@ -25,7 +25,8 @@ Change:
 - remove event-log observer hook logic
 - remove GH teardown hooks
 - remove daemon logging-health reads
-- initialize only the retained `sc-observability` adapter
+- initialize the concrete `sc-observability` implementation of the injected observability port
+- inject that implementation into retained command execution
 - emit only retained command lifecycle events
 - keep only the startup and exit behavior needed for `send`, `read`, `log`, and `doctor`
 
@@ -53,7 +54,7 @@ Keep:
 - human and JSON output intent
 
 Change:
-- replace command-local business logic with `atm_core::send::send_mail`
+- replace command-local business logic with `atm_core::send::send_mail` plus the injected observability port
 - keep `--file`, `--stdin`, `--dry-run`, `--json`, and `--from`
 - retire daemon-backed `--offline-action`
 - preserve current non-daemon send behavior
@@ -84,7 +85,7 @@ Keep:
 - bucket-oriented human and JSON rendering
 
 Change:
-- replace command-local business logic with `atm_core::read::read_mail`
+- replace command-local business logic with `atm_core::read::read_mail` plus the injected observability port
 - preserve four-state workflow classification
 - preserve three display buckets
 - preserve `--history` as “actionable queue plus history”
@@ -147,6 +148,7 @@ Keep:
 
 Change:
 - keep origin-inbox counting because merged inbox visibility is retained
+- preserve current queue-first timeout semantics: return immediately when the current selection already contains actionable messages, and wait only when the selection is empty
 - return core read-layer errors instead of command-local errors
 
 ### 1.8 `do not copy crates/atm/src/commands/ack.rs`
@@ -370,7 +372,9 @@ Keep:
 Change:
 - build `SendRequest` / `SendOutcome`
 - own the send service orchestration
-- call mailbox append and observability adapters directly
+- keep team/agent membership checks inside address resolution before mailbox path selection
+- validate message text inside the atomic append boundary
+- call mailbox append and the injected observability port directly
 
 ### 2.12 `copy crates/atm/src/commands/read.rs -> crates/atm-core/src/read/state.rs`
 
@@ -424,9 +428,9 @@ Keep:
 - human-versus-JSON rendering boundary
 
 Change:
-- replace file-based log reading with the shared observability adapter
+- replace file-based log reading with the injected observability port
 - define `LogQuery`, `LogSnapshot`, and `LogTailSession`
-- move ATM-specific field filtering into core log query translation
+- move ATM-specific field filtering into core log query translation over the injected observability port
 
 ### 2.17 `copy crates/atm/src/commands/logs.rs -> crates/atm-core/src/log/filters.rs`
 
@@ -436,7 +440,7 @@ Keep:
 
 Change:
 - add structured `key=value` match parsing
-- normalize ATM-owned structured-field filters before handing them to `sc-observability`
+- normalize ATM-owned structured-field filters before handing them to the observability port
 
 ### 2.18 `copy crates/atm/src/commands/doctor.rs -> crates/atm-core/src/doctor/mod.rs`
 
@@ -447,7 +451,7 @@ Keep:
 Change:
 - replace daemon/session/plugin/GH diagnostics with local ATM checks
 - own `DoctorQuery` and `DoctorReport`
-- project shared observability health into ATM doctor output
+- project shared observability health from the injected observability port into ATM doctor output
 
 ### 2.19 `copy crates/atm/src/commands/doctor.rs -> crates/atm-core/src/doctor/report.rs`
 
@@ -698,88 +702,95 @@ Change:
 ### 7.3 `copy crates/atm-core/src/observability.rs -> crates/atm-core/src/observability.rs`
 
 Keep:
-- reusable `sc-observability`-neutral types that back the retained command lifecycle adapter
+- reusable `sc-observability`-neutral ATM event and query types
 
 Change:
-- expand the surface from emit-only support to the retained ATM adapter boundary:
-  - command lifecycle emission
-  - record query/filter translation
-  - follow/tail translation
-  - health projection for `atm doctor`
+- replace direct library-owned integration with the sealed `ObservabilityPort` boundary:
+  - command lifecycle emission methods
+  - record query/filter methods
+  - follow/tail methods
+  - health projection methods for `atm doctor`
+- do not import `sc-observability` in `atm-core`
 - remove daemon-specific health assumptions
 
-### 7.4 `do not copy crates/atm-core/src/consts.rs`
+### 7.4 `create crates/atm/src/observability.rs`
+
+Purpose:
+- implement the injected observability port using `sc-observability`
+- translate ATM event/query models into shared observability calls
+- keep the concrete backend dependency in `atm`, not `atm-core`
+### 7.5 `do not copy crates/atm-core/src/consts.rs`
 
 Decision:
 - constants file is daemon-heavy
 - retain only values that survive via narrower modules
 
-### 7.5 `do not copy crates/atm-core/src/context/mod.rs`
+### 7.6 `do not copy crates/atm-core/src/context/mod.rs`
 
 Decision:
 - not required by the retained command surface
 
-### 7.6 `do not copy crates/atm-core/src/context/*`
+### 7.7 `do not copy crates/atm-core/src/context/*`
 
 Decision:
 - not required by the retained command surface
 
-### 7.7 `do not copy crates/atm-core/src/control.rs`
+### 7.8 `do not copy crates/atm-core/src/control.rs`
 
 Decision:
 - daemon/control surface not retained
 
-### 7.8 `do not copy crates/atm-core/src/daemon_client.rs`
+### 7.9 `do not copy crates/atm-core/src/daemon_client.rs`
 
 Decision:
 - daemon-only
 
-### 7.9 `do not copy crates/atm-core/src/daemon_stream.rs`
+### 7.10 `do not copy crates/atm-core/src/daemon_stream.rs`
 
 Decision:
 - daemon-only
 
-### 7.10 `do not copy crates/atm-core/src/event_log.rs`
+### 7.11 `do not copy crates/atm-core/src/event_log.rs`
 
 Decision:
-- replace direct event-log API with the retained observability adapter
+- replace direct event-log API with the retained observability port boundary
 
-### 7.11 `do not copy crates/atm-core/src/gh_command.rs`
+### 7.12 `do not copy crates/atm-core/src/gh_command.rs`
 
 Decision:
 - not part of retained surface
 
-### 7.12 `do not copy crates/atm-core/src/log_reader.rs`
+### 7.13 `do not copy crates/atm-core/src/log_reader.rs`
 
 Decision:
 - replace daemon/log file scanning with shared observability query/follow APIs
 
-### 7.13 `do not copy crates/atm-core/src/logging.rs`
+### 7.14 `do not copy crates/atm-core/src/logging.rs`
 
 Decision:
-- replace via retained observability adapter
+- replace via the retained observability port boundary
 
-### 7.14 `do not copy crates/atm-core/src/logging_event.rs`
+### 7.15 `do not copy crates/atm-core/src/logging_event.rs`
 
 Decision:
-- replace via retained observability adapter
+- replace via the retained observability port boundary
 
-### 7.15 `do not copy crates/atm-core/src/pid.rs`
+### 7.16 `do not copy crates/atm-core/src/pid.rs`
 
 Decision:
 - only needed by session-file scanning, which is not retained
 
-### 7.16 `do not copy crates/atm-core/src/retention.rs`
+### 7.17 `do not copy crates/atm-core/src/retention.rs`
 
 Decision:
 - not part of retained surface
 
-### 7.17 `do not copy crates/atm-core/src/spawn.rs`
+### 7.18 `do not copy crates/atm-core/src/spawn.rs`
 
 Decision:
 - runtime launch not retained
 
-### 7.18 `do not copy crates/atm-core/src/team_config_store.rs`
+### 7.19 `do not copy crates/atm-core/src/team_config_store.rs`
 
 Decision:
 - direct team-config loading is sufficient for the initial retained command surface
@@ -814,6 +825,7 @@ Keep:
 
 Change:
 - keep origin-inbox visibility because the retained read timeout path watches the same merged inbox surface
+- keep queue-first timeout behavior: existing actionable messages satisfy the read immediately; only an empty initial selection should block
 
 ### 8.4 `copy crates/atm/tests/integration_auto_identity.rs -> crates/atm/tests/integration_auto_identity.rs`
 
@@ -979,10 +991,10 @@ Decision:
 Decision:
 - team join/management not retained in the initial retained command surface
 
-### 8.35 `create crates/atm-core/tests/observability_adapter.rs`
+### 8.35 `create crates/atm-core/tests/observability_port.rs`
 
 Purpose:
-- verify ATM event emission through the retained observability adapter
+- verify ATM event emission through the retained observability port boundary
 - verify level, field, and time-window query translation
 - verify follow/tail translation behavior
 - verify best-effort emit failures do not become retained mail-command correctness failures
@@ -1031,7 +1043,7 @@ Use this order:
 9. mailbox files
 10. send helpers
 11. read helpers
-12. observability adapter
+12. observability port boundary
 13. log helpers
 14. doctor helpers
 15. CLI command files
