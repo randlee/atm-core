@@ -365,12 +365,17 @@ Public entrypoint:
 - optional target address
 - team override
 - selection mode
-- seen-state mode
+- seen_state_filter
+- seen_state_update
 - mark mode
 - limit
 - sender filter
 - timestamp filter
 - optional timeout
+
+`seen_state_filter` is false when `--no-since-last-seen` is set. `--all` bypasses this filter regardless of the stored value.
+
+`seen_state_update` is false when `--no-update-seen` is set.
 
 Timeout rule:
 - if the requested selection is already non-empty after filtering and selection-mode application, return immediately
@@ -393,6 +398,8 @@ Timeout rule:
 
 The CLI JSON output mirrors the current contract:
 - `action`
+- `team`
+- `agent`
 - `messages`
 - `count`
 - `bucket_counts`

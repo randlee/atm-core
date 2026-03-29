@@ -255,6 +255,8 @@ Human output:
 
 JSON output:
 - `action = "read"`
+- `team`
+- `agent`
 - selected messages only
 - `count`
 - `bucket_counts`
