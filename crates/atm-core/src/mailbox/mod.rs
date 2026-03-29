@@ -3,4 +3,139 @@ pub mod hash;
 pub mod lock;
 pub mod store;
 
-// TODO: implement mailbox read and write services.
+use std::collections::HashMap;
+use std::fs;
+use std::io::BufRead;
+use std::path::Path;
+
+use tracing::warn;
+
+use crate::error::Error;
+use crate::schema::MessageEnvelope;
+
+pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), Error> {
+    let mut messages = read_messages(path)?;
+    messages.push(envelope.clone());
+    atomic::write_messages(path, &messages)
+}
+
+pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, Error> {
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let file = fs::File::open(path)?;
+    let reader = std::io::BufReader::new(file);
+    let mut messages = Vec::new();
+
+    for (index, line) in reader.lines().enumerate() {
+        let line = line?;
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        match serde_json::from_str::<MessageEnvelope>(&line) {
+            Ok(message) => messages.push(message),
+            Err(error) => warn!(
+                line = index + 1,
+                %error,
+                "skipping malformed mailbox record"
+            ),
+        }
+    }
+
+    let mut last_indices = HashMap::new();
+    for (index, message) in messages.iter().enumerate() {
+        last_indices.insert(message.message_id, index);
+    }
+
+    Ok(messages
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, message)| {
+            (last_indices.get(&message.message_id) == Some(&index)).then_some(message)
+        })
+        .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::env;
+    use std::fs;
+
+    use chrono::{TimeZone, Utc};
+    use uuid::Uuid;
+
+    use crate::schema::MessageEnvelope;
+
+    use super::{append_message, read_messages};
+
+    #[test]
+    fn append_message_persists_one_jsonl_record() {
+        let path = unique_path("append-message.jsonl");
+        let envelope = sample_message(Uuid::new_v4(), "first");
+
+        append_message(&path, &envelope).expect("append");
+
+        let raw = fs::read_to_string(&path).expect("raw contents");
+        assert!(raw.contains("\"body\":\"first\""));
+        let read_back = read_messages(&path).expect("read back");
+        assert_eq!(read_back, vec![envelope]);
+    }
+
+    #[test]
+    fn read_messages_skips_malformed_lines() {
+        let path = unique_path("skip-malformed.jsonl");
+        let valid =
+            serde_json::to_string(&sample_message(Uuid::new_v4(), "valid")).expect("valid json");
+        fs::write(&path, format!("{valid}\n{{not-json}}\n")).expect("write");
+
+        let messages = read_messages(&path).expect("read");
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].body, "valid");
+    }
+
+    #[test]
+    fn read_messages_deduplicates_by_message_id_last_wins() {
+        let path = unique_path("dedupe.jsonl");
+        let message_id = Uuid::new_v4();
+        let first = sample_message(message_id, "first");
+        let mut second = sample_message(message_id, "second");
+        second.sent_at = Utc
+            .with_ymd_and_hms(2026, 3, 30, 0, 0, 1)
+            .single()
+            .expect("timestamp");
+
+        let contents = format!(
+            "{}\n{}\n",
+            serde_json::to_string(&first).expect("json"),
+            serde_json::to_string(&second).expect("json")
+        );
+        fs::write(&path, contents).expect("write");
+
+        let messages = read_messages(&path).expect("read");
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].body, "second");
+    }
+
+    fn unique_path(name: &str) -> std::path::PathBuf {
+        let dir = env::temp_dir().join(format!("atm-mailbox-{}", Uuid::new_v4()));
+        fs::create_dir_all(&dir).expect("temp dir");
+        dir.join(name)
+    }
+
+    fn sample_message(message_id: Uuid, body: &str) -> MessageEnvelope {
+        MessageEnvelope {
+            message_id,
+            from: "arch-ctm".into(),
+            team: "atm-dev".into(),
+            body: body.into(),
+            requires_ack: false,
+            task_id: None,
+            sent_at: Utc
+                .with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
+                .single()
+                .expect("timestamp"),
+        }
+    }
+}
