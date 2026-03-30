@@ -23,9 +23,8 @@ impl StoredMessage<UnreadReadState, NoAckState> {
         }
     }
 
-    pub fn display_without_ack(mut self) -> StoredMessage<ReadReadState, NoAckState> {
-        self.envelope.read = true;
-        StoredMessage::read_no_ack(self.envelope)
+    pub fn display_without_ack(self) -> StoredMessage<ReadReadState, NoAckState> {
+        self.mark_read()
     }
 
     pub fn display_and_require_ack(

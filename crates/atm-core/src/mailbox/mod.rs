@@ -1,7 +1,7 @@
-pub mod atomic;
-pub mod hash;
-pub mod lock;
-pub mod store;
+pub(crate) mod atomic;
+pub(crate) mod hash;
+pub(crate) mod lock;
+pub(crate) mod store;
 
 use std::collections::HashMap;
 use std::fs;
@@ -124,7 +124,7 @@ mod tests {
         let message_id = Uuid::new_v4();
         let first = sample_message(message_id, "first");
         let mut second = sample_message(message_id, "second");
-        second.timestamp = IsoTimestamp(
+        second.timestamp = IsoTimestamp::from_datetime(
             Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 1)
                 .single()
                 .expect("timestamp"),
@@ -146,7 +146,7 @@ mod tests {
         MessageEnvelope {
             from: "arch-ctm".into(),
             text: body.into(),
-            timestamp: IsoTimestamp(
+            timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
                     .single()
                     .expect("timestamp"),

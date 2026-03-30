@@ -262,8 +262,10 @@ impl Fixture {
             source_team: Some("atm-dev".into()),
             summary: None,
             message_id: Some(message_id),
-            pending_ack_at: pending_offset.map(|offset| IsoTimestamp(timestamp + offset)),
-            acknowledged_at: acknowledged_offset.map(|offset| IsoTimestamp(timestamp + offset)),
+            pending_ack_at: pending_offset
+                .map(|offset| IsoTimestamp::from_datetime(timestamp + offset)),
+            acknowledged_at: acknowledged_offset
+                .map(|offset| IsoTimestamp::from_datetime(timestamp + offset)),
             acknowledges_message_id: None,
             task_id: None,
             extra: serde_json::Map::new(),

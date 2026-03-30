@@ -3,11 +3,15 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct IsoTimestamp(pub DateTime<Utc>);
+pub struct IsoTimestamp(DateTime<Utc>);
 
 impl IsoTimestamp {
     pub fn now() -> Self {
         Self(Utc::now())
+    }
+
+    pub fn from_datetime(datetime: DateTime<Utc>) -> Self {
+        Self(datetime)
     }
 
     pub fn into_inner(self) -> DateTime<Utc> {

@@ -1,12 +1,18 @@
 use std::io::Read;
 
-use crate::error::AtmError;
+use crate::error::{AtmError, AtmErrorKind};
 
 pub fn read_message_from_stdin() -> Result<String, AtmError> {
     let mut buffer = String::new();
     std::io::stdin()
         .read_to_string(&mut buffer)
-        .map_err(|error| AtmError::validation(format!("failed to read stdin: {error}")))?;
+        .map_err(|error| {
+            AtmError::new(
+                AtmErrorKind::MailboxRead,
+                format!("failed to read stdin: {error}"),
+            )
+            .with_source(error)
+        })?;
     validate_message_text(buffer)
 }
 

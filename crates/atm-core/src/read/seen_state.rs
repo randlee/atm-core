@@ -119,7 +119,7 @@ mod tests {
     #[test]
     fn save_and_load_seen_state_round_trips() {
         let tempdir = TempDir::new().expect("tempdir");
-        let timestamp = IsoTimestamp(
+        let timestamp = IsoTimestamp::from_datetime(
             chrono::Utc
                 .with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
                 .single()

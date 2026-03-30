@@ -15,9 +15,9 @@ use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::{MessageEnvelope, TeamConfig};
 use crate::types::IsoTimestamp;
 
-pub mod file_policy;
-pub mod input;
-pub mod summary;
+pub(crate) mod file_policy;
+pub(crate) mod input;
+pub(crate) mod summary;
 
 #[derive(Debug, Clone)]
 pub enum SendMessageSource {

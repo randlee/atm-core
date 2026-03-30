@@ -61,7 +61,7 @@ mod tests {
         let envelope = MessageEnvelope {
             from: "arch-ctm".into(),
             text: "hello".into(),
-            timestamp: IsoTimestamp(
+            timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
                     .single()
                     .expect("timestamp"),
@@ -70,7 +70,7 @@ mod tests {
             source_team: Some("atm-dev".into()),
             summary: Some("hello".into()),
             message_id: Some(Uuid::new_v4()),
-            pending_ack_at: Some(IsoTimestamp(
+            pending_ack_at: Some(IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 1)
                     .single()
                     .expect("timestamp"),
@@ -124,7 +124,7 @@ mod tests {
             message_id: Uuid::new_v4(),
             from: "team-lead".into(),
             acked: true,
-            acked_at: Some(IsoTimestamp(
+            acked_at: Some(IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 1)
                     .single()
                     .expect("timestamp"),

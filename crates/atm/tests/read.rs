@@ -466,13 +466,15 @@ impl Fixture {
         MessageEnvelope {
             from: from.to_string(),
             text: text.to_string(),
-            timestamp: IsoTimestamp(self.timestamp(timestamp_offset)),
+            timestamp: IsoTimestamp::from_datetime(self.timestamp(timestamp_offset)),
             read,
             source_team: Some("atm-dev".into()),
             summary: None,
             message_id: Some(Uuid::new_v4()),
-            pending_ack_at: pending_ack_offset.map(|offset| IsoTimestamp(self.timestamp(offset))),
-            acknowledged_at: acknowledged_offset.map(|offset| IsoTimestamp(self.timestamp(offset))),
+            pending_ack_at: pending_ack_offset
+                .map(|offset| IsoTimestamp::from_datetime(self.timestamp(offset))),
+            acknowledged_at: acknowledged_offset
+                .map(|offset| IsoTimestamp::from_datetime(self.timestamp(offset))),
             acknowledges_message_id: None,
             task_id: None,
             extra: serde_json::Map::new(),

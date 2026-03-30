@@ -1,7 +1,7 @@
-pub mod filters;
-pub mod seen_state;
-pub mod state;
-pub mod wait;
+pub(crate) mod filters;
+pub(crate) mod seen_state;
+pub(crate) mod state;
+pub(crate) mod wait;
 
 use std::collections::HashMap;
 use std::fs;
@@ -77,7 +77,7 @@ struct SourceFile {
 }
 
 #[derive(Debug, Clone)]
-struct SourcedMessage {
+pub(crate) struct SourcedMessage {
     pub envelope: MessageEnvelope,
     pub source_path: PathBuf,
     pub source_index: usize,
