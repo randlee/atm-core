@@ -206,6 +206,16 @@ Retired from the current implementation:
 - support dry-run without mutation
 - support sender-controlled ack-required messages
 - support optional task metadata on sent messages
+- `atm send` MUST generate and write a non-null UUID v4 as `message_id` for every sent message. `message_id` is optional in the persisted schema (§12.1) to support legacy messages written by older clients, but `atm send` never omits it.
+- write a non-null `message_id` on every ATM-authored message
+- generate `message_id` as a UUID v4 at send time
+
+`message_id` is required on every message written by `atm send`.
+
+Recipients use `message_id` for:
+- duplicate suppression
+- read-time duplicate collapse
+- acknowledgement targeting
 
 ### 6.4 Message Source Semantics
 
@@ -305,6 +315,7 @@ Read messages from one inbox.
 - verify target team exists
 - verify explicit target agent exists in team config
 - load messages from the merged inbox surface
+- deduplicate entries by `message_id` before bucket selection and output rendering
 - classify each message into the read axis, the ack axis, and a derived message class
 - map the derived message class into display buckets
 - support filtering by sender and timestamp
@@ -315,6 +326,16 @@ Read messages from one inbox.
 - persist read-triggered state changes back to the physical inbox file that owns each displayed message when origin inbox files are present in the merged surface
 - support optional wait mode with timeout
 - support optional seen-state filtering and updates
+
+When multiple inbox entries share the same non-null `message_id`, `atm read`
+must display only the most recent entry. Earlier duplicates are silently
+suppressed.
+
+Deduplication order:
+- compare entries by `message_id`
+- keep the newest entry by message timestamp
+- when timestamps are equal, keep the later record encountered in inbox order
+- do not emit suppressed duplicates in either human or JSON output
 
 `--timeout` preserves the current queue-first behavior: if the requested read selection already contains unread or pending-ack messages at command start, the command returns immediately with those messages. It blocks only when the requested selection is empty at command start.
 
@@ -493,7 +514,9 @@ JSON output must include:
 - `team`
 - `agent`
 - `message_id`
-- `reply_sent`
+- `reply_message_id` (Uuid of the reply message sent)
+- `reply_text` (String body of the reply message sent)
+- `task_id` (optional String, present when the source message has `taskId`)
 - `reply_target`
 
 ## 9. `atm clear`
@@ -505,6 +528,7 @@ Remove non-actionable messages from one inbox without touching actionable work.
 ### 9.2 Supported Flags
 
 - optional target agent: `agent` or `agent@team`
+- `--as <name>` override actor identity for this clear operation
 - `--team <name>`
 - `--older-than <duration>`
 - `--idle-only`
@@ -676,6 +700,14 @@ Optional fields:
 
 Unknown fields must be preserved.
 
+For ATM-authored messages:
+- `message_id` is mandatory
+- `message_id` must be UUID v4
+- `message_id` must not be null or blank
+
+Legacy or externally imported records may still omit `message_id`; the rewrite
+must preserve such records without inventing synthetic ids during read.
+
 ### 12.2 Two-Axis Canonical Model
 
 The canonical model has two independent axes.
@@ -822,6 +854,7 @@ Mutation failures must be fail-safe:
 - mailbox writes must be atomic
 - concurrent appends must not silently lose messages
 - duplicate message ids must not be appended twice
+- read-time duplicate message ids collapse to the newest visible entry
 - corrupt records should be skipped individually when possible
 - missing inbox files are treated as empty inboxes
 - seen-state races must not corrupt mailbox data
@@ -862,7 +895,8 @@ The rewrite is ready when:
 - workflow-axis classification is correct
 - workflow-axis transitions are encoded in implementation structure
 - display buckets are derived consistently from the two-axis model
-- task-linked messages remain pending until acknowledged and cannot be cleared early
+- task-linked messages remain pending until acknowledged unless the operator
+  explicitly invokes `--all-pending-ack`
 - observability integration is exercised by automated tests
 - the file-by-file migration plan is complete enough to implement directly
 
@@ -870,5 +904,7 @@ Cross-document invariants that must remain true:
 - `taskId` implies ack-required behavior at send time
 - displayed messages always persist `read = true`
 - pending-ack messages remain actionable until acknowledged
-- `atm clear` never removes unread or pending-ack messages
+- `atm clear` never removes unread messages
+- `atm clear` removes pending-ack messages only when `--all-pending-ack` is
+  explicitly set
 - `atm read --timeout` returns immediately when the requested selection is already non-empty
