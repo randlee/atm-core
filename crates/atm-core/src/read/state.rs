@@ -1,11 +1,9 @@
 use std::marker::PhantomData;
 
-use chrono::{DateTime, Utc};
-
 use crate::schema::MessageEnvelope;
 use crate::types::{
-    AckState, AcknowledgedAckState, DisplayBucket, MessageClass, NoAckState, PendingAckState,
-    ReadReadState, ReadState, UnreadReadState,
+    AckState, AcknowledgedAckState, DisplayBucket, IsoTimestamp, MessageClass, NoAckState,
+    PendingAckState, ReadReadState, ReadState, UnreadReadState,
 };
 
 #[derive(Debug, Clone)]
@@ -33,10 +31,10 @@ impl StoredMessage<UnreadReadState, NoAckState> {
 
     pub fn display_and_require_ack(
         mut self,
-        at: DateTime<Utc>,
+        at: IsoTimestamp,
     ) -> StoredMessage<ReadReadState, PendingAckState> {
         self.envelope.read = true;
-        self.envelope.pending_ack_at = Some(at);
+        self.envelope.pending_ack_at = Some(at.into_inner());
         StoredMessage::from_envelope(self.envelope)
     }
 }
@@ -51,9 +49,9 @@ impl StoredMessage<UnreadReadState, PendingAckState> {
 impl StoredMessage<ReadReadState, PendingAckState> {
     pub fn acknowledge(
         mut self,
-        at: DateTime<Utc>,
+        at: IsoTimestamp,
     ) -> StoredMessage<ReadReadState, AcknowledgedAckState> {
-        self.envelope.acknowledged_at = Some(at);
+        self.envelope.acknowledged_at = Some(at.into_inner());
         self.envelope.pending_ack_at = None;
         StoredMessage::from_envelope(self.envelope)
     }

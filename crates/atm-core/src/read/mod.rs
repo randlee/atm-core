@@ -19,7 +19,7 @@ use crate::identity;
 use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::{MessageEnvelope, TeamConfig};
-use crate::types::{AckActivationMode, DisplayBucket, MessageClass, ReadSelection};
+use crate::types::{AckActivationMode, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection};
 
 #[derive(Debug, Clone)]
 pub struct ReadQuery {
@@ -517,7 +517,7 @@ fn apply_display_mutations(
     let mut mutation_applied = false;
     let promote_unread =
         own_inbox && ack_activation_mode == AckActivationMode::PromoteDisplayedUnread;
-    let now = Utc::now();
+    let now = IsoTimestamp::now();
 
     for message in displayed_messages {
         let transitioned = transition_displayed_message(message, promote_unread, now);
@@ -541,7 +541,7 @@ fn apply_display_mutations(
 fn transition_displayed_message(
     message: &ClassifiedMessage,
     promote_unread: bool,
-    now: DateTime<Utc>,
+    now: IsoTimestamp,
 ) -> state::TransitionedMessage {
     let read_state = state::derive_read_state(&message.envelope);
     let ack_state = state::derive_ack_state(&message.envelope);

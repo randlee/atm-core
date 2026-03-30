@@ -1,4 +1,24 @@
+use chrono::{DateTime, Utc};
 use serde::Serialize;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IsoTimestamp(pub DateTime<Utc>);
+
+impl IsoTimestamp {
+    pub fn now() -> Self {
+        Self(Utc::now())
+    }
+
+    pub fn into_inner(self) -> DateTime<Utc> {
+        self.0
+    }
+}
+
+impl From<DateTime<Utc>> for IsoTimestamp {
+    fn from(datetime: DateTime<Utc>) -> Self {
+        Self(datetime)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UnreadReadState;
