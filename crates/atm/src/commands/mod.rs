@@ -50,8 +50,8 @@ impl Command {
         match self {
             Self::Send(command) => command.run(observability),
             Self::Read(command) => command.run(observability),
-            Self::Ack(command) => command.run(),
-            Self::Clear(command) => command.run(),
+            Self::Ack(command) => command.run(observability),
+            Self::Clear(command) => command.run(observability),
             Self::Log(command) => command.run(),
             Self::Doctor(command) => command.run(),
         }

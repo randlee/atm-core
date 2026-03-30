@@ -1,4 +1,6 @@
 use anyhow::Result;
+use atm_core::ack::AckOutcome;
+use atm_core::clear::ClearOutcome;
 use atm_core::read::ReadOutcome;
 use atm_core::send::SendOutcome;
 use atm_core::types::DisplayBucket;
@@ -42,6 +44,53 @@ pub fn print_read_result(outcome: &ReadOutcome, json: bool) -> Result<()> {
             outcome.bucket_counts.history
         );
     }
+
+    Ok(())
+}
+
+pub fn print_ack_result(outcome: &AckOutcome, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(outcome)?);
+    } else {
+        println!(
+            "Acknowledged {} for {}@{} and sent reply {} to {}",
+            outcome.message_id,
+            outcome.agent,
+            outcome.team,
+            outcome.reply_message_id,
+            outcome.reply_target
+        );
+    }
+
+    Ok(())
+}
+
+pub fn print_clear_result(outcome: &ClearOutcome, dry_run: bool, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(outcome)?);
+        return Ok(());
+    }
+
+    if dry_run {
+        println!(
+            "Dry run: would remove {} message(s) from {}@{}",
+            outcome.removed_total, outcome.agent, outcome.team
+        );
+    } else {
+        println!(
+            "Cleared {} message(s) from {}@{}",
+            outcome.removed_total, outcome.agent, outcome.team
+        );
+    }
+
+    println!(
+        "Unread: {} | Pending-Ack: {} | Acknowledged: {} | Read: {} | Remaining: {}",
+        outcome.removed_by_class.unread,
+        outcome.removed_by_class.pending_ack,
+        outcome.removed_by_class.acknowledged,
+        outcome.removed_by_class.read,
+        outcome.remaining_total
+    );
 
     Ok(())
 }
