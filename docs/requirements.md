@@ -514,9 +514,9 @@ JSON output must include:
 - `team`
 - `agent`
 - `message_id`
-- `reply_message_id`
-- `reply_text`
-- `task_id` when the source message has `taskId`
+- `reply_message_id` (Uuid of the reply message sent)
+- `reply_text` (String body of the reply message sent)
+- `task_id` (optional String, present when the source message has `taskId`)
 - `reply_target`
 
 ## 9. `atm clear`
@@ -528,7 +528,7 @@ Remove non-actionable messages from one inbox without touching actionable work.
 ### 9.2 Supported Flags
 
 - optional target agent: `agent` or `agent@team`
-- `--as <name>`
+- `--as <name>` override actor identity for this clear operation
 - `--team <name>`
 - `--older-than <duration>`
 - `--idle-only`
