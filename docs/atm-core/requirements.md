@@ -44,6 +44,26 @@ Initial allocation:
 - `REQ-CORE-DOCTOR-*`
 - `REQ-CORE-OBS-*`
 
+Initial crate requirement IDs:
+
+- `REQ-CORE-MAILBOX-001` `atm-core` owns daemon-free mailbox/store behavior.
+  Satisfies:
+  `REQ-P-CONTRACT-001`, `REQ-P-SEND-001`, `REQ-P-READ-001`,
+  `REQ-P-ACK-001`, `REQ-P-CLEAR-001`, `REQ-P-RELIABILITY-001`.
+- `REQ-CORE-WORKFLOW-001` `atm-core` owns the two-axis workflow model and legal
+  transitions. Satisfies:
+  `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-CLEAR-001`,
+  `REQ-P-WORKFLOW-001`.
+- `REQ-CORE-LOG-001` `atm-core` owns ATM log query/follow service behavior over
+  the injected observability boundary. Satisfies:
+  `REQ-P-LOG-001`, `REQ-P-OBS-001`.
+- `REQ-CORE-DOCTOR-001` `atm-core` owns local doctor diagnostics and readiness
+  evaluation. Satisfies:
+  `REQ-P-DOCTOR-001`, `REQ-P-OBS-001`.
+- `REQ-CORE-OBS-001` `atm-core` owns the abstract observability boundary and
+  ATM-owned event/query models above shared crates. Satisfies:
+  `REQ-P-OBS-001`.
+
 ## 4. Module Ownership
 
 Per-module documentation lives under:

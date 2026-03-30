@@ -1,5 +1,11 @@
 # File Migration Plan
 
+**Lifecycle**: Temporary migration artifact
+
+This document is authoritative only for the rewrite/migration program. Once the
+rewrite is complete and the retained source layout is stable, this document
+should be retired rather than maintained as permanent product documentation.
+
 This is the authoritative implementation plan.
 
 Format:

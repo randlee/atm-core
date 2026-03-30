@@ -1,5 +1,11 @@
 # Migration Summary
 
+**Lifecycle**: Temporary migration artifact
+
+This document exists only to summarize the rewrite strategy while the migration
+program is active. It should be retired once the permanent docs fully describe
+the post-migration system.
+
 `file-migration-plan.md` is the authoritative migration document.
 
 This file is only a summary of the rewrite strategy:

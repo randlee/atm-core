@@ -2,6 +2,10 @@
 
 ## 1. Product Definition
 
+Product requirement ID:
+- `REQ-P-PRODUCT-001` The retained daemon-free ATM product surface consists of
+  `send`, `read`, `ack`, `clear`, `log`, and `doctor`.
+
 The product is a local command-line tool named `atm`.
 
 This rewrite removes daemon architecture. It does not intentionally remove core non-daemon ATM functionality.
@@ -35,6 +39,11 @@ During the cleanup/restructure phase, product requirements stay here while
 crate-local ownership is moved out of this file into the crate directories.
 
 ## 2. Scope
+
+Product requirement ID:
+- `REQ-P-SCOPE-001` The rewrite retains the documented command surface and
+  removes daemon architecture without intentionally removing retained
+  functionality.
 
 ### 2.1 In Scope
 
@@ -71,6 +80,10 @@ crate-local ownership is moved out of this file into the crate directories.
 - team lifecycle management outside what the retained commands need
 
 ## 3. External Contracts
+
+Product requirement ID:
+- `REQ-P-CONTRACT-001` External path/config/store/observability contracts must
+  match the documented daemon-free behavior.
 
 ### 3.1 Home And Path Resolution
 
@@ -147,6 +160,10 @@ ATM must not implement a parallel ad hoc log-query engine when shared `sc-observ
 
 ## 4. Identity Resolution
 
+Product requirement ID:
+- `REQ-P-IDENTITY-001` Identity resolution must follow the documented command
+  precedence rules.
+
 ### 4.1 Send Identity Resolution Order
 
 1. `--from`
@@ -169,6 +186,10 @@ If command identity cannot be determined where required, the command must fail w
 
 ## 5. Address Resolution
 
+Product requirement ID:
+- `REQ-P-ADDRESS-001` Address resolution must support the documented
+  `agent`/`agent@team` forms and precedence rules.
+
 Supported address forms:
 - `agent`
 - `agent@team`
@@ -183,6 +204,9 @@ An explicit `@team` suffix takes precedence over `--team`.
 Roles and aliases are resolved after splitting `agent@team`, so only the agent token is rewritten.
 
 ## 6. `atm send`
+
+Product requirement ID:
+- `REQ-P-SEND-001` `atm send` must satisfy the documented send contract.
 
 ### 6.1 Purpose
 
@@ -291,6 +315,10 @@ Dry-run JSON output must include:
 - `task_id`
 
 ## 7. `atm read`
+
+Product requirement ID:
+- `REQ-P-READ-001` `atm read` must satisfy the documented read/selection/wait
+  contract.
 
 ### 7.1 Purpose
 
@@ -477,6 +505,10 @@ JSON output must include:
 
 ## 8. `atm ack`
 
+Product requirement ID:
+- `REQ-P-ACK-001` `atm ack` must satisfy the documented acknowledgement
+  contract.
+
 ### 8.1 Purpose
 
 Acknowledge a pending-ack message in the caller's own inbox and send a visible reply to the original sender.
@@ -514,6 +546,10 @@ JSON output must include:
 - `reply_target`
 
 ## 9. `atm clear`
+
+Product requirement ID:
+- `REQ-P-CLEAR-001` `atm clear` must satisfy the documented clear contract and
+  preserve pending-ack protection.
 
 ### 9.1 Purpose
 
@@ -561,6 +597,10 @@ JSON output must include:
 - removal counters by class
 
 ## 10. `atm log`
+
+Product requirement ID:
+- `REQ-P-LOG-001` `atm log` must satisfy the documented shared-observability
+  query/follow contract.
 
 ### 10.1 Purpose
 
@@ -625,6 +665,10 @@ Each JSON record must expose at least:
 
 ## 11. `atm doctor`
 
+Product requirement ID:
+- `REQ-P-DOCTOR-001` `atm doctor` must satisfy the documented local diagnostics
+  contract.
+
 ### 11.1 Purpose
 
 Run local ATM diagnostics for the retained daemon-free system.
@@ -673,6 +717,10 @@ Each doctor finding must expose at least:
 Critical findings must cause a non-zero exit status.
 
 ## 12. Message And Workflow Model
+
+Product requirement ID:
+- `REQ-P-WORKFLOW-001` The message/workflow model must satisfy the documented
+  persisted-field, two-axis, and legal-transition rules.
 
 ### 12.1 Persisted Message Fields
 
@@ -782,6 +830,10 @@ Required rules:
 
 ## 13. Observability Requirements
 
+Product requirement ID:
+- `REQ-P-OBS-001` ATM observability must satisfy the documented best-effort
+  emit behavior and shared query/follow/health expectations.
+
 ATM must emit structured records through `sc-observability`.
 
 Required ATM event classes:
@@ -811,6 +863,10 @@ Emission is best-effort:
 
 ## 14. Error Requirements
 
+Product requirement ID:
+- `REQ-P-ERROR-001` Public command failures must satisfy the documented
+  structured error requirements.
+
 All user-visible failures must use structured errors with recovery guidance.
 
 Minimum error categories:
@@ -836,6 +892,10 @@ Mutation failures must be fail-safe:
 
 ## 15. Reliability Requirements
 
+Product requirement ID:
+- `REQ-P-RELIABILITY-001` The retained command surface must satisfy the
+  documented durability and consistency constraints.
+
 - mailbox writes must be atomic
 - concurrent appends must not silently lose messages
 - duplicate message ids must not be appended twice
@@ -845,6 +905,9 @@ Mutation failures must be fail-safe:
 - observability emission failures must not corrupt command behavior
 
 ## 16. Testing Requirements
+
+Product requirement ID:
+- `REQ-P-TEST-001` The rewrite must satisfy the documented testing obligations.
 
 Because `sc-observability` is newly introduced into ATM, the rewrite must add explicit test coverage for:
 - ATM event emission through the observability port boundary
@@ -867,6 +930,10 @@ The implementation must include:
 - CLI integration tests for `atm clear`
 
 ## 17. Acceptance Criteria
+
+Product requirement ID:
+- `REQ-P-ACCEPTANCE-001` The rewrite is complete only when the documented
+  acceptance criteria are met.
 
 The rewrite is ready when:
 - `atm send` works without daemon support

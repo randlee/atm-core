@@ -37,6 +37,20 @@ Initial allocation:
 - `REQ-ATM-OUT-*` for output/rendering requirements
 - `REQ-ATM-OBS-*` for observability-bootstrap requirements
 
+Initial crate requirement IDs:
+
+- `REQ-ATM-CMD-001` `atm` owns clap parsing and command dispatch for the
+  retained command surface. Satisfies:
+  `REQ-P-SEND-001`, `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-CLEAR-001`,
+  `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`.
+- `REQ-ATM-OUT-001` `atm` owns human-readable and JSON rendering for retained
+  commands. Satisfies:
+  `REQ-P-SEND-001`, `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-CLEAR-001`,
+  `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`.
+- `REQ-ATM-OBS-001` `atm` owns concrete observability bootstrap and injection
+  into `atm-core`. Satisfies:
+  `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-OBS-001`.
+
 ## 4. Command Ownership
 
 Per-command documentation lives under:
