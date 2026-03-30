@@ -75,10 +75,10 @@ pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
 
 #[cfg(test)]
 mod tests {
-    use std::env;
     use std::fs;
 
     use chrono::{TimeZone, Utc};
+    use tempfile::TempDir;
     use uuid::Uuid;
 
     use crate::schema::MessageEnvelope;
@@ -87,7 +87,8 @@ mod tests {
 
     #[test]
     fn append_message_persists_one_jsonl_record() {
-        let path = unique_path("append-message.jsonl");
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("append-message.jsonl");
         let envelope = sample_message(Uuid::new_v4(), "first");
 
         append_message(&path, &envelope).expect("append");
@@ -100,7 +101,8 @@ mod tests {
 
     #[test]
     fn read_messages_skips_malformed_lines() {
-        let path = unique_path("skip-malformed.jsonl");
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("skip-malformed.jsonl");
         let valid =
             serde_json::to_string(&sample_message(Uuid::new_v4(), "valid")).expect("valid json");
         fs::write(&path, format!("{valid}\n{{not-json}}\n")).expect("write");
@@ -112,7 +114,8 @@ mod tests {
 
     #[test]
     fn read_messages_deduplicates_by_message_id_last_wins() {
-        let path = unique_path("dedupe.jsonl");
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("dedupe.jsonl");
         let message_id = Uuid::new_v4();
         let first = sample_message(message_id, "first");
         let mut second = sample_message(message_id, "second");
@@ -131,12 +134,6 @@ mod tests {
         let messages = read_messages(&path).expect("read");
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].text, "second");
-    }
-
-    fn unique_path(name: &str) -> std::path::PathBuf {
-        let dir = env::temp_dir().join(format!("atm-mailbox-{}", Uuid::new_v4()));
-        fs::create_dir_all(&dir).expect("temp dir");
-        dir.join(name)
     }
 
     fn sample_message(message_id: Uuid, body: &str) -> MessageEnvelope {

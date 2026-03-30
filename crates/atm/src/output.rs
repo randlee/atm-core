@@ -62,15 +62,15 @@ fn print_bucket(outcome: &ReadOutcome, bucket: DisplayBucket, label: &str) {
     for message in messages {
         println!(
             "- {} {}: {}",
-            message.message.timestamp.to_rfc3339(),
-            message.message.from,
+            message.envelope.timestamp.to_rfc3339(),
+            message.envelope.from,
             message
-                .message
+                .envelope
                 .summary
                 .as_deref()
-                .unwrap_or(message.message.text.as_str())
+                .unwrap_or(message.envelope.text.as_str())
         );
-        if let Some(message_id) = message.message.message_id {
+        if let Some(message_id) = message.envelope.message_id {
             println!("  message_id: {message_id}");
         }
     }
