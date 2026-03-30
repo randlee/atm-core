@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, Utc};
 use serde::Serialize;
 use serde_json::Map;
+use tracing::{trace, warn};
 use uuid::Uuid;
 
 use crate::address::AgentAddress;
@@ -17,7 +17,7 @@ use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
 use crate::schema::{MessageEnvelope, TeamConfig};
 use crate::send::{input, summary};
-use crate::types::{IsoTimestamp, MessageClass};
+use crate::types::IsoTimestamp;
 
 #[derive(Debug, Clone)]
 pub struct AckRequest {
@@ -80,6 +80,17 @@ pub fn ack_mail(
     let mut source_files = load_source_files(&request.home_dir, &team, &actor)?;
     let source_message = dedupe_sourced_messages(merged_surface(&source_files))
         .into_iter()
+        .filter_map(|message| match message.envelope.message_id {
+            Some(_) => Some(message),
+            None => {
+                trace!(
+                    source_path = %message.source_path.display(),
+                    source_index = message.source_index,
+                    "skipping source message without message_id during ack lookup"
+                );
+                None
+            }
+        })
         .find(|message| message.envelope.message_id == Some(request.message_id))
         .ok_or_else(|| {
             AtmError::validation(format!(
@@ -88,9 +99,12 @@ pub fn ack_mail(
             ))
         })?;
 
-    match state::classify_message(&source_message.envelope) {
-        MessageClass::PendingAck => {}
-        MessageClass::Acknowledged => {
+    match (
+        state::derive_read_state(&source_message.envelope),
+        state::derive_ack_state(&source_message.envelope),
+    ) {
+        (crate::types::ReadState::Read, crate::types::AckState::PendingAck) => {}
+        (_, crate::types::AckState::Acknowledged) => {
             return Err(AtmError::validation(format!(
                 "message {} is already acknowledged",
                 request.message_id
@@ -98,7 +112,7 @@ pub fn ack_mail(
         }
         _ => {
             return Err(AtmError::validation(format!(
-                "message {} is not pending acknowledgement",
+                "message {} is not in the (read, pending_ack) state",
                 request.message_id
             )));
         }
@@ -126,7 +140,7 @@ pub fn ack_mail(
     let reply_message = MessageEnvelope {
         from: actor.clone(),
         text: reply_text.clone(),
-        timestamp: ack_timestamp.into_inner(),
+        timestamp: ack_timestamp,
         read: false,
         source_team: Some(team.clone()),
         summary: Some(summary::build_summary(&reply_text, None)),
@@ -138,11 +152,7 @@ pub fn ack_mail(
         extra: Map::new(),
     };
 
-    update_source_message(
-        &mut source_files,
-        &source_message,
-        ack_timestamp.into_inner(),
-    )?;
+    update_source_message(&mut source_files, &source_message, ack_timestamp)?;
 
     let reply_inbox_path =
         home::inbox_path_from_home(&request.home_dir, &reply_team, &reply_agent)?;
@@ -167,7 +177,7 @@ pub fn ack_mail(
         team,
         agent: actor.clone(),
         sender: actor,
-        message_id: request.message_id.to_string(),
+        message_id: Some(request.message_id),
         requires_ack: false,
         dry_run: false,
         task_id: source_task_id,
@@ -267,6 +277,7 @@ fn discover_origin_inboxes(inboxes_dir: &Path, agent: &str) -> Result<Vec<PathBu
     }
 
     let prefix = format!("{agent}.");
+    let primary = format!("{agent}.json");
     let mut paths = fs::read_dir(inboxes_dir)
         .map_err(|error| {
             AtmError::new(
@@ -278,15 +289,22 @@ fn discover_origin_inboxes(inboxes_dir: &Path, agent: &str) -> Result<Vec<PathBu
             )
             .with_source(error)
         })?
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter_map(|entry| match entry {
+            Ok(entry) => Some(entry.path()),
+            Err(error) => {
+                warn!(
+                    inbox_dir = %inboxes_dir.display(),
+                    agent,
+                    %error,
+                    "skipping unreadable origin inbox entry"
+                );
+                None
+            }
+        })
         .filter(|path| {
             path.file_name()
                 .and_then(|value| value.to_str())
-                .map(|name| {
-                    name.starts_with(&prefix)
-                        && name.ends_with(".json")
-                        && name != format!("{agent}.json")
-                })
+                .map(|name| name.starts_with(&prefix) && name.ends_with(".json") && name != primary)
                 .unwrap_or(false)
         })
         .collect::<Vec<_>>();
@@ -309,13 +327,12 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
                     source_path: source.path.clone(),
                     source_index,
                 })
-                .collect::<Vec<_>>()
         })
         .collect()
 }
 
 fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
-    let mut latest_for_id: HashMap<Uuid, (DateTime<Utc>, usize)> = HashMap::new();
+    let mut latest_for_id: HashMap<Uuid, (IsoTimestamp, usize)> = HashMap::new();
     for (index, message) in messages.iter().enumerate() {
         if let Some(message_id) = message.envelope.message_id {
             latest_for_id
@@ -346,7 +363,7 @@ fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage>
 fn update_source_message(
     source_files: &mut [SourceFile],
     source_message: &SourcedMessage,
-    acknowledged_at: DateTime<Utc>,
+    acknowledged_at: IsoTimestamp,
 ) -> Result<(), AtmError> {
     let source_file = source_files
         .iter_mut()
@@ -368,9 +385,13 @@ fn update_source_message(
             ))
         })?;
 
-    stored.read = true;
-    stored.pending_ack_at = None;
-    stored.acknowledged_at = Some(acknowledged_at);
+    let transitioned = state::StoredMessage::<
+        crate::types::ReadReadState,
+        crate::types::PendingAckState,
+    >::read_pending_ack(stored.clone())
+    .acknowledge(acknowledged_at)
+    .envelope;
+    *stored = transitioned;
     Ok(())
 }
 

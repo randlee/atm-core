@@ -1,7 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use chrono::Utc;
 use serde::Serialize;
 use serde_json::Map;
 use uuid::Uuid;
@@ -14,10 +13,11 @@ use crate::identity;
 use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::{MessageEnvelope, TeamConfig};
+use crate::types::IsoTimestamp;
 
-pub mod file_policy;
-pub mod input;
-pub mod summary;
+pub(crate) mod file_policy;
+pub(crate) mod input;
+pub(crate) mod summary;
 
 #[derive(Debug, Clone)]
 pub enum SendMessageSource {
@@ -98,7 +98,7 @@ pub fn send_mail(
     )?;
     let summary = summary::build_summary(&body, request.summary_override);
     let message_id = Uuid::new_v4();
-    let timestamp = Utc::now();
+    let timestamp = IsoTimestamp::now();
 
     if !request.dry_run {
         let envelope = MessageEnvelope {
@@ -141,7 +141,7 @@ pub fn send_mail(
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
         sender,
-        message_id: outcome.message_id.to_string(),
+        message_id: Some(outcome.message_id),
         requires_ack: outcome.requires_ack,
         dry_run: outcome.dry_run,
         task_id,
@@ -191,11 +191,12 @@ fn resolve_recipient(
 fn load_team_config(team_dir: &Path) -> Result<TeamConfig, AtmError> {
     let config_path = team_dir.join("config.json");
     let raw = fs::read_to_string(&config_path).map_err(|error| {
-        AtmError::team_not_found(
-            team_dir
-                .file_name()
-                .and_then(|value| value.to_str())
-                .unwrap_or("unknown"),
+        AtmError::new(
+            AtmErrorKind::Config,
+            format!(
+                "failed to read team config at {}: {error}",
+                config_path.display()
+            ),
         )
         .with_source(error)
     })?;

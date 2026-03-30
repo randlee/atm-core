@@ -2,15 +2,14 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, Utc};
-
 use crate::error::{AtmError, AtmErrorKind};
+use crate::types::IsoTimestamp;
 
 pub fn load_seen_watermark(
     home_dir: &Path,
     team: &str,
     agent: &str,
-) -> Result<Option<DateTime<Utc>>, AtmError> {
+) -> Result<Option<IsoTimestamp>, AtmError> {
     let path = seen_state_path(home_dir, team, agent);
     if !path.exists() {
         return Ok(None);
@@ -29,7 +28,7 @@ pub fn load_seen_watermark(
         return Ok(None);
     }
 
-    let parsed = DateTime::parse_from_rfc3339(trimmed).map_err(|error| {
+    let parsed = chrono::DateTime::parse_from_rfc3339(trimmed).map_err(|error| {
         AtmError::new(
             AtmErrorKind::Serialization,
             format!("invalid seen-state watermark: {error}"),
@@ -37,14 +36,14 @@ pub fn load_seen_watermark(
         .with_source(error)
     })?;
 
-    Ok(Some(parsed.with_timezone(&Utc)))
+    Ok(Some(parsed.with_timezone(&chrono::Utc).into()))
 }
 
 pub fn save_seen_watermark(
     home_dir: &Path,
     team: &str,
     agent: &str,
-    timestamp: DateTime<Utc>,
+    timestamp: IsoTimestamp,
 ) -> Result<(), AtmError> {
     let path = seen_state_path(home_dir, team, agent);
     if let Some(parent) = path.parent() {
@@ -66,7 +65,7 @@ pub fn save_seen_watermark(
             )
             .with_source(error)
         })?;
-        file.write_all(timestamp.to_rfc3339().as_bytes())
+        file.write_all(timestamp.into_inner().to_rfc3339().as_bytes())
             .map_err(|error| {
                 AtmError::new(
                     AtmErrorKind::MailboxWrite,
@@ -108,6 +107,7 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{load_seen_watermark, save_seen_watermark};
+    use crate::types::IsoTimestamp;
 
     #[test]
     fn load_missing_seen_state_returns_none() {
@@ -119,10 +119,12 @@ mod tests {
     #[test]
     fn save_and_load_seen_state_round_trips() {
         let tempdir = TempDir::new().expect("tempdir");
-        let timestamp = chrono::Utc
-            .with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
-            .single()
-            .expect("timestamp");
+        let timestamp = IsoTimestamp::from_datetime(
+            chrono::Utc
+                .with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
+                .single()
+                .expect("timestamp"),
+        );
 
         save_seen_watermark(tempdir.path(), "atm-dev", "arch-ctm", timestamp).expect("save");
         let loaded = load_seen_watermark(tempdir.path(), "atm-dev", "arch-ctm").expect("load");

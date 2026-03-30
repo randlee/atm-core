@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::error::AtmError;
+use crate::error::{AtmError, AtmErrorKind};
 
 pub fn process_file_reference(
     file_path: &Path,
@@ -26,7 +26,16 @@ pub fn process_file_reference(
         .join("atm")
         .join("share")
         .join(team_name);
-    fs::create_dir_all(&share_dir)?;
+    fs::create_dir_all(&share_dir).map_err(|error| {
+        AtmError::new(
+            AtmErrorKind::FilePolicy,
+            format!(
+                "failed to create share directory {}: {error}",
+                share_dir.display()
+            ),
+        )
+        .with_source(error)
+    })?;
 
     let file_name = file_path
         .file_name()

@@ -84,9 +84,7 @@ pub fn print_clear_result(outcome: &ClearOutcome, dry_run: bool, json: bool) -> 
     }
 
     println!(
-        "Unread: {} | Pending-Ack: {} | Acknowledged: {} | Read: {} | Remaining: {}",
-        outcome.removed_by_class.unread,
-        outcome.removed_by_class.pending_ack,
+        "Acknowledged: {} | Read: {} | Remaining: {}",
         outcome.removed_by_class.acknowledged,
         outcome.removed_by_class.read,
         outcome.remaining_total
@@ -111,7 +109,7 @@ fn print_bucket(outcome: &ReadOutcome, bucket: DisplayBucket, label: &str) {
     for message in messages {
         println!(
             "- {} {}: {}",
-            message.envelope.timestamp.to_rfc3339(),
+            message.envelope.timestamp.into_inner().to_rfc3339(),
             message.envelope.from,
             message
                 .envelope

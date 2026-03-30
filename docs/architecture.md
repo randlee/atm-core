@@ -268,7 +268,7 @@ impl StoredMessage<UnreadReadState, NoAckState> {
 }
 
 impl StoredMessage<UnreadReadState, PendingAckState> {
-    pub fn mark_read(self) -> StoredMessage<ReadReadState, PendingAckState>;
+    pub fn mark_read_pending_ack(self) -> StoredMessage<ReadReadState, PendingAckState>;
 }
 
 impl StoredMessage<ReadReadState, PendingAckState> {

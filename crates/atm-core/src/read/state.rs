@@ -9,12 +9,55 @@ use crate::types::{
 #[derive(Debug, Clone)]
 pub struct StoredMessage<R, A> {
     pub envelope: MessageEnvelope,
-    _read: PhantomData<R>,
-    _ack: PhantomData<A>,
+    _read: PhantomData<R>, // covariant in R; the typestate marker is never mutably borrowed.
+    _ack: PhantomData<A>,  // covariant in A; the typestate marker is never mutably borrowed.
 }
 
-impl<R, A> StoredMessage<R, A> {
-    pub(crate) fn from_envelope(envelope: MessageEnvelope) -> Self {
+impl StoredMessage<UnreadReadState, NoAckState> {
+    pub(crate) fn unread_no_ack(envelope: MessageEnvelope) -> Self {
+        Self {
+            envelope,
+            _read: PhantomData,
+            _ack: PhantomData,
+        }
+    }
+
+    pub fn display_without_ack(self) -> StoredMessage<ReadReadState, NoAckState> {
+        self.mark_read()
+    }
+
+    pub fn display_and_require_ack(
+        mut self,
+        at: IsoTimestamp,
+    ) -> StoredMessage<ReadReadState, PendingAckState> {
+        self.envelope.read = true;
+        self.envelope.pending_ack_at = Some(at);
+        StoredMessage::read_pending_ack(self.envelope)
+    }
+
+    pub fn mark_read(mut self) -> StoredMessage<ReadReadState, NoAckState> {
+        self.envelope.read = true;
+        StoredMessage::read_no_ack(self.envelope)
+    }
+}
+
+impl StoredMessage<UnreadReadState, PendingAckState> {
+    pub(crate) fn unread_pending_ack(envelope: MessageEnvelope) -> Self {
+        Self {
+            envelope,
+            _read: PhantomData,
+            _ack: PhantomData,
+        }
+    }
+
+    pub fn mark_read_pending_ack(mut self) -> StoredMessage<ReadReadState, PendingAckState> {
+        self.envelope.read = true;
+        StoredMessage::read_pending_ack(self.envelope)
+    }
+}
+
+impl StoredMessage<ReadReadState, NoAckState> {
+    pub(crate) fn read_no_ack(envelope: MessageEnvelope) -> Self {
         Self {
             envelope,
             _read: PhantomData,
@@ -23,37 +66,32 @@ impl<R, A> StoredMessage<R, A> {
     }
 }
 
-impl StoredMessage<UnreadReadState, NoAckState> {
-    pub fn display_without_ack(mut self) -> StoredMessage<ReadReadState, NoAckState> {
-        self.envelope.read = true;
-        StoredMessage::from_envelope(self.envelope)
-    }
-
-    pub fn display_and_require_ack(
-        mut self,
-        at: IsoTimestamp,
-    ) -> StoredMessage<ReadReadState, PendingAckState> {
-        self.envelope.read = true;
-        self.envelope.pending_ack_at = Some(at.into_inner());
-        StoredMessage::from_envelope(self.envelope)
-    }
-}
-
-impl StoredMessage<UnreadReadState, PendingAckState> {
-    pub fn mark_read(mut self) -> StoredMessage<ReadReadState, PendingAckState> {
-        self.envelope.read = true;
-        StoredMessage::from_envelope(self.envelope)
-    }
-}
-
 impl StoredMessage<ReadReadState, PendingAckState> {
+    pub(crate) fn read_pending_ack(envelope: MessageEnvelope) -> Self {
+        Self {
+            envelope,
+            _read: PhantomData,
+            _ack: PhantomData,
+        }
+    }
+
     pub fn acknowledge(
         mut self,
         at: IsoTimestamp,
     ) -> StoredMessage<ReadReadState, AcknowledgedAckState> {
-        self.envelope.acknowledged_at = Some(at.into_inner());
+        self.envelope.acknowledged_at = Some(at);
         self.envelope.pending_ack_at = None;
-        StoredMessage::from_envelope(self.envelope)
+        StoredMessage::read_acknowledged(self.envelope)
+    }
+}
+
+impl StoredMessage<ReadReadState, AcknowledgedAckState> {
+    pub(crate) fn read_acknowledged(envelope: MessageEnvelope) -> Self {
+        Self {
+            envelope,
+            _read: PhantomData,
+            _ack: PhantomData,
+        }
     }
 }
 
@@ -95,6 +133,14 @@ pub fn derive_ack_state(message: &MessageEnvelope) -> AckState {
 pub fn classify_message(message: &MessageEnvelope) -> MessageClass {
     let read_state = derive_read_state(message);
     let ack_state = derive_ack_state(message);
+
+    debug_assert!(
+        !matches!(
+            (read_state, ack_state),
+            (ReadState::Unread, AckState::Acknowledged)
+        ),
+        "inconsistent message state: unread message cannot already be acknowledged"
+    );
 
     match (read_state, ack_state) {
         (ReadState::Unread, AckState::NoAckRequired) => MessageClass::Unread,

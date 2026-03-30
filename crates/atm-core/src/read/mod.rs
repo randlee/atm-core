@@ -1,14 +1,14 @@
-pub mod filters;
-pub mod seen_state;
-pub mod state;
-pub mod wait;
+pub(crate) mod filters;
+pub(crate) mod seen_state;
+pub(crate) mod state;
+pub(crate) mod wait;
 
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, Utc};
 use serde::Serialize;
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::address::AgentAddress;
@@ -34,7 +34,7 @@ pub struct ReadQuery {
     pub ack_activation_mode: AckActivationMode,
     pub limit: Option<usize>,
     pub sender_filter: Option<String>,
-    pub timestamp_filter: Option<DateTime<Utc>>,
+    pub timestamp_filter: Option<IsoTimestamp>,
     pub timeout_secs: Option<u64>,
 }
 
@@ -77,7 +77,7 @@ struct SourceFile {
 }
 
 #[derive(Debug, Clone)]
-pub struct SourcedMessage {
+pub(crate) struct SourcedMessage {
     pub envelope: MessageEnvelope,
     pub source_path: PathBuf,
     pub source_index: usize,
@@ -243,7 +243,7 @@ pub fn read_mail(
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
         sender: actor,
-        message_id: String::new(),
+        message_id: None,
         requires_ack: false,
         dry_run: false,
         task_id: None,
@@ -357,6 +357,7 @@ fn discover_origin_inboxes(inboxes_dir: &Path, agent: &str) -> Result<Vec<PathBu
     }
 
     let prefix = format!("{agent}.");
+    let primary = format!("{agent}.json");
     let mut paths = fs::read_dir(inboxes_dir)
         .map_err(|error| {
             AtmError::new(
@@ -368,15 +369,22 @@ fn discover_origin_inboxes(inboxes_dir: &Path, agent: &str) -> Result<Vec<PathBu
             )
             .with_source(error)
         })?
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter_map(|entry| match entry {
+            Ok(entry) => Some(entry.path()),
+            Err(error) => {
+                warn!(
+                    inbox_dir = %inboxes_dir.display(),
+                    agent,
+                    %error,
+                    "skipping unreadable origin inbox entry"
+                );
+                None
+            }
+        })
         .filter(|path| {
             path.file_name()
                 .and_then(|value| value.to_str())
-                .map(|name| {
-                    name.starts_with(&prefix)
-                        && name.ends_with(".json")
-                        && name != format!("{agent}.json")
-                })
+                .map(|name| name.starts_with(&prefix) && name.ends_with(".json") && name != primary)
                 .unwrap_or(false)
         })
         .collect::<Vec<_>>();
@@ -399,13 +407,12 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
                     source_path: source.path.clone(),
                     source_index,
                 })
-                .collect::<Vec<_>>()
         })
         .collect()
 }
 
 fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
-    let mut latest_for_id: HashMap<Uuid, (DateTime<Utc>, usize)> = HashMap::new();
+    let mut latest_for_id: HashMap<Uuid, (IsoTimestamp, usize)> = HashMap::new();
     for (index, message) in messages.iter().enumerate() {
         if let Some(message_id) = message.envelope.message_id {
             latest_for_id
@@ -454,7 +461,7 @@ fn classify_all(messages: Vec<SourcedMessage>) -> Vec<ClassifiedMessage> {
 fn apply_filters(
     messages: Vec<ClassifiedMessage>,
     sender_filter: Option<&str>,
-    timestamp_filter: Option<DateTime<Utc>>,
+    timestamp_filter: Option<IsoTimestamp>,
 ) -> Vec<ClassifiedMessage> {
     filters::apply_timestamp_filter(
         filters::apply_sender_filter(messages, sender_filter),
@@ -483,7 +490,7 @@ fn bucket_counts_for(messages: &[ClassifiedMessage]) -> BucketCounts {
 fn select_messages(
     messages: &[ClassifiedMessage],
     selection_mode: ReadSelection,
-    seen_watermark: Option<DateTime<Utc>>,
+    seen_watermark: Option<IsoTimestamp>,
 ) -> Vec<ClassifiedMessage> {
     let watermark = if selection_mode == ReadSelection::All {
         None
@@ -497,7 +504,7 @@ fn select_messages(
 fn selected_after_filters(
     messages: &[SourcedMessage],
     query: &ReadQuery,
-    seen_watermark: Option<DateTime<Utc>>,
+    seen_watermark: Option<IsoTimestamp>,
 ) -> Vec<ClassifiedMessage> {
     let classified = classify_all(messages.to_vec());
     let filtered = apply_filters(
@@ -549,7 +556,7 @@ fn transition_displayed_message(
     match (read_state, ack_state) {
         (crate::types::ReadState::Unread, crate::types::AckState::NoAckRequired) if promote_unread => {
             state::TransitionedMessage::ReadPendingAck(
-                state::StoredMessage::<crate::types::UnreadReadState, crate::types::NoAckState>::from_envelope(
+                state::StoredMessage::<crate::types::UnreadReadState, crate::types::NoAckState>::unread_no_ack(
                     message.envelope.clone(),
                 )
                 .display_and_require_ack(now),
@@ -557,7 +564,7 @@ fn transition_displayed_message(
         }
         (crate::types::ReadState::Unread, crate::types::AckState::NoAckRequired) => {
             state::TransitionedMessage::ReadNoAck(
-                state::StoredMessage::<crate::types::UnreadReadState, crate::types::NoAckState>::from_envelope(
+                state::StoredMessage::<crate::types::UnreadReadState, crate::types::NoAckState>::unread_no_ack(
                     message.envelope.clone(),
                 )
                 .display_without_ack(),
@@ -568,8 +575,8 @@ fn transition_displayed_message(
                 state::StoredMessage::<
                     crate::types::UnreadReadState,
                     crate::types::PendingAckState,
-                >::from_envelope(message.envelope.clone())
-                .mark_read(),
+                >::unread_pending_ack(message.envelope.clone())
+                .mark_read_pending_ack(),
             )
         }
         (crate::types::ReadState::Unread, crate::types::AckState::Acknowledged)

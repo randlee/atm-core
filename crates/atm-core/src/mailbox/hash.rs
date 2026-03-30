@@ -1,1 +1,1 @@
-// TODO: implement mailbox hashing helpers.
+//! Internal mailbox hashing helpers reserved for future implementation.

@@ -15,6 +15,7 @@ pub fn init() -> Result<CliObservability> {
 
 impl ObservabilityPort for CliObservability {
     fn emit_command_event(&self, event: CommandEvent) -> Result<(), AtmError> {
+        let message_id = event.message_id.map(|value| value.to_string());
         info!(
             command = event.command,
             action = event.action,
@@ -22,10 +23,10 @@ impl ObservabilityPort for CliObservability {
             team = event.team,
             agent = event.agent,
             sender = event.sender,
-            message_id = event.message_id,
+            message_id = message_id.as_deref().unwrap_or(""),
             requires_ack = event.requires_ack,
             dry_run = event.dry_run,
-            task_id = event.task_id,
+            task_id = event.task_id.as_deref().unwrap_or(""),
             "atm command event"
         );
         Ok(())

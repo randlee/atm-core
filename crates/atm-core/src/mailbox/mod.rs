@@ -1,7 +1,7 @@
-pub mod atomic;
-pub mod hash;
-pub mod lock;
-pub mod store;
+pub(crate) mod atomic;
+pub(crate) mod hash;
+pub(crate) mod lock;
+pub(crate) mod store;
 
 use std::collections::HashMap;
 use std::fs;
@@ -27,7 +27,7 @@ pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
     let file = fs::File::open(path).map_err(|error| {
         AtmError::new(
             AtmErrorKind::MailboxRead,
-            format!("failed to open mailbox file: {error}"),
+            format!("failed to open mailbox file {}: {error}", path.display()),
         )
         .with_source(error)
     })?;
@@ -38,7 +38,11 @@ pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
         let line = line.map_err(|error| {
             AtmError::new(
                 AtmErrorKind::MailboxRead,
-                format!("failed to read mailbox line: {error}"),
+                format!(
+                    "failed to read mailbox line {} from {}: {error}",
+                    index + 1,
+                    path.display()
+                ),
             )
             .with_source(error)
         })?;
@@ -82,6 +86,7 @@ mod tests {
     use uuid::Uuid;
 
     use crate::schema::MessageEnvelope;
+    use crate::types::IsoTimestamp;
 
     use super::{append_message, read_messages};
 
@@ -119,10 +124,11 @@ mod tests {
         let message_id = Uuid::new_v4();
         let first = sample_message(message_id, "first");
         let mut second = sample_message(message_id, "second");
-        second.timestamp = Utc
-            .with_ymd_and_hms(2026, 3, 30, 0, 0, 1)
-            .single()
-            .expect("timestamp");
+        second.timestamp = IsoTimestamp::from_datetime(
+            Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 1)
+                .single()
+                .expect("timestamp"),
+        );
 
         let contents = format!(
             "{}\n{}\n",
@@ -140,10 +146,11 @@ mod tests {
         MessageEnvelope {
             from: "arch-ctm".into(),
             text: body.into(),
-            timestamp: Utc
-                .with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
-                .single()
-                .expect("timestamp"),
+            timestamp: IsoTimestamp::from_datetime(
+                Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
+                    .single()
+                    .expect("timestamp"),
+            ),
             read: false,
             source_team: Some("atm-dev".into()),
             summary: None,

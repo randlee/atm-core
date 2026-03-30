@@ -6,6 +6,7 @@ use std::time::Duration;
 use chrono::{DateTime, TimeDelta, Utc};
 use serde::Serialize;
 use serde_json::Value;
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::address::AgentAddress;
@@ -33,8 +34,6 @@ pub struct ClearQuery {
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct RemovedByClass {
-    pub unread: usize,
-    pub pending_ack: usize,
     pub acknowledged: usize,
     pub read: usize,
 }
@@ -134,7 +133,7 @@ pub fn clear_mail(
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
         sender: actor,
-        message_id: String::new(),
+        message_id: None,
         requires_ack: false,
         dry_run: query.dry_run,
         task_id: None,
@@ -250,6 +249,7 @@ fn discover_origin_inboxes(inboxes_dir: &Path, agent: &str) -> Result<Vec<PathBu
     }
 
     let prefix = format!("{agent}.");
+    let primary = format!("{agent}.json");
     let mut paths = fs::read_dir(inboxes_dir)
         .map_err(|error| {
             AtmError::new(
@@ -261,15 +261,22 @@ fn discover_origin_inboxes(inboxes_dir: &Path, agent: &str) -> Result<Vec<PathBu
             )
             .with_source(error)
         })?
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter_map(|entry| match entry {
+            Ok(entry) => Some(entry.path()),
+            Err(error) => {
+                warn!(
+                    inbox_dir = %inboxes_dir.display(),
+                    agent,
+                    %error,
+                    "skipping unreadable origin inbox entry"
+                );
+                None
+            }
+        })
         .filter(|path| {
             path.file_name()
                 .and_then(|value| value.to_str())
-                .map(|name| {
-                    name.starts_with(&prefix)
-                        && name.ends_with(".json")
-                        && name != format!("{agent}.json")
-                })
+                .map(|name| name.starts_with(&prefix) && name.ends_with(".json") && name != primary)
                 .unwrap_or(false)
         })
         .collect::<Vec<_>>();
@@ -292,13 +299,12 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
                     source_path: source.path.clone(),
                     source_index,
                 })
-                .collect::<Vec<_>>()
         })
         .collect()
 }
 
 fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
-    let mut latest_for_id: HashMap<Uuid, (DateTime<Utc>, usize)> = HashMap::new();
+    let mut latest_for_id: HashMap<Uuid, (crate::types::IsoTimestamp, usize)> = HashMap::new();
     for (index, message) in messages.iter().enumerate() {
         if let Some(message_id) = message.envelope.message_id {
             latest_for_id
@@ -342,7 +348,7 @@ fn is_clearable(message: &SourcedMessage, cutoff: Option<DateTime<Utc>>, idle_on
     let class = state::classify_message(&message.envelope);
     matches!(class, MessageClass::Read | MessageClass::Acknowledged)
         && cutoff
-            .map(|cutoff| message.envelope.timestamp <= cutoff)
+            .map(|cutoff| message.envelope.timestamp.into_inner() <= cutoff)
             .unwrap_or(true)
         && (!idle_only || is_idle_notification(&message.envelope))
 }
@@ -350,15 +356,14 @@ fn is_clearable(message: &SourcedMessage, cutoff: Option<DateTime<Utc>>, idle_on
 fn is_idle_notification(message: &MessageEnvelope) -> bool {
     serde_json::from_str::<Value>(&message.text)
         .ok()
-        .and_then(|value| value.get("type").and_then(Value::as_str).map(str::to_owned))
-        .as_deref()
-        == Some("idle_notification")
+        .map(|value| value.get("type").and_then(Value::as_str) == Some("idle_notification"))
+        .unwrap_or(false)
 }
 
 fn count_removed(counts: &mut RemovedByClass, class: MessageClass) {
     match class {
-        MessageClass::Unread => counts.unread += 1,
-        MessageClass::PendingAck => counts.pending_ack += 1,
+        MessageClass::Unread => unreachable!("unread messages are never clearable"),
+        MessageClass::PendingAck => unreachable!("pending-ack messages are never clearable"),
         MessageClass::Acknowledged => counts.acknowledged += 1,
         MessageClass::Read => counts.read += 1,
     }

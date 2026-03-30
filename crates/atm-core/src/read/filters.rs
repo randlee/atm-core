@@ -1,7 +1,5 @@
-use chrono::{DateTime, Utc};
-
 use crate::read::ClassifiedMessage;
-use crate::types::{DisplayBucket, ReadSelection};
+use crate::types::{DisplayBucket, IsoTimestamp, ReadSelection};
 
 pub fn apply_sender_filter(
     messages: Vec<ClassifiedMessage>,
@@ -18,7 +16,7 @@ pub fn apply_sender_filter(
 
 pub fn apply_timestamp_filter(
     messages: Vec<ClassifiedMessage>,
-    since: Option<DateTime<Utc>>,
+    since: Option<IsoTimestamp>,
 ) -> Vec<ClassifiedMessage> {
     match since {
         Some(since) => messages
@@ -32,7 +30,7 @@ pub fn apply_timestamp_filter(
 pub fn apply_selection_mode(
     messages: Vec<ClassifiedMessage>,
     mode: ReadSelection,
-    seen_watermark: Option<DateTime<Utc>>,
+    seen_watermark: Option<IsoTimestamp>,
 ) -> Vec<ClassifiedMessage> {
     messages
         .into_iter()
@@ -52,7 +50,7 @@ pub fn apply_selection_mode(
         .collect()
 }
 
-fn history_visible(message: &ClassifiedMessage, seen_watermark: Option<DateTime<Utc>>) -> bool {
+fn history_visible(message: &ClassifiedMessage, seen_watermark: Option<IsoTimestamp>) -> bool {
     match seen_watermark {
         Some(watermark) => message.envelope.timestamp > watermark,
         None => true,

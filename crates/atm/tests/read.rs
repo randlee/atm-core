@@ -2,6 +2,7 @@ use std::fs;
 use std::process::Command;
 
 use atm_core::schema::{AgentMember, MessageEnvelope, TeamConfig};
+use atm_core::types::IsoTimestamp;
 use chrono::{TimeZone, Utc};
 use serde_json::Value;
 use uuid::Uuid;
@@ -365,6 +366,7 @@ impl Fixture {
             .args(args)
             .env("ATM_HOME", self.tempdir.path())
             .env("ATM_IDENTITY", "arch-ctm")
+            .env("ATM_TEAM", "atm-dev")
             .current_dir(self.tempdir.path())
             .output()
             .expect("run atm")
@@ -465,13 +467,15 @@ impl Fixture {
         MessageEnvelope {
             from: from.to_string(),
             text: text.to_string(),
-            timestamp: self.timestamp(timestamp_offset),
+            timestamp: IsoTimestamp::from_datetime(self.timestamp(timestamp_offset)),
             read,
             source_team: Some("atm-dev".into()),
             summary: None,
             message_id: Some(Uuid::new_v4()),
-            pending_ack_at: pending_ack_offset.map(|offset| self.timestamp(offset)),
-            acknowledged_at: acknowledged_offset.map(|offset| self.timestamp(offset)),
+            pending_ack_at: pending_ack_offset
+                .map(|offset| IsoTimestamp::from_datetime(self.timestamp(offset))),
+            acknowledged_at: acknowledged_offset
+                .map(|offset| IsoTimestamp::from_datetime(self.timestamp(offset))),
             acknowledges_message_id: None,
             task_id: None,
             extra: serde_json::Map::new(),
