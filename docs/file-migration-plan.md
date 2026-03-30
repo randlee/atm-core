@@ -138,7 +138,7 @@ Change:
 - expose retained command surface as `atm clear`
 - replace command-local business logic with `atm_core::clear::clear_mail` plus the injected observability port
 - make the default clear set exactly the two-axis clearable set
-- never clear pending-ack messages
+- clear pending-ack messages only behind the explicit override flag
 - never clear unread messages
 - keep only the clear subcommand behavior; drop inbox summary/watch behavior
 
@@ -465,7 +465,8 @@ Change:
 - reduce the source to clear-only behavior
 - compute clear eligibility from the two-axis model instead of ad hoc flags
 - preserve idle-only filtering as an optional narrower mode
-- never remove pending-ack or unread messages
+- never remove unread messages
+- remove pending-ack messages only when the explicit override flag is set
 
 ### 2.18 `copy crates/atm/src/commands/logs.rs -> crates/atm-core/src/log/mod.rs`
 
@@ -920,6 +921,7 @@ Change:
 - narrow the source suite to clear-only behavior
 - align expected removals with the two-axis clearable set
 - add negative tests for pending-ack and unread messages
+- add override coverage for stale pending-ack clearing
 
 ### 8.6 `copy crates/atm/tests/integration_auto_identity.rs -> crates/atm/tests/integration_auto_identity.rs`
 
