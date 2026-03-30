@@ -339,6 +339,7 @@ impl Fixture {
             .args(args)
             .env("ATM_HOME", self.tempdir.path())
             .env("ATM_IDENTITY", "arch-ctm")
+            .env("ATM_TEAM", "atm-dev")
             .current_dir(self.tempdir.path())
             .output()
             .expect("run atm")
