@@ -27,34 +27,17 @@ restructured, product docs remain in `docs/` and crate-local detail moves into
 
 ## 3. Crates
 
-### 3.1 `crates/atm-core`
+The implementation remains split across:
 
-Implements:
-- path and home resolution
-- config, bridge, and settings resolution
-- hook identity resolution
-- file policy
-- mailbox I/O and origin merge
-- workflow axis model and transitions
-- send, read, ack, and clear services
-- log query/follow service over the injected observability port
-- doctor diagnostics service
-- observability event/query models and the observability port boundary
-- error model
+- `crates/atm-core`
+- `crates/atm`
 
-### 3.2 `crates/atm`
+Crate-local scope detail is owned by:
 
-Implements:
-- clap parser
-- `send`
-- `read`
-- `ack`
-- `clear`
-- `log`
-- `doctor`
-- output formatting
-- observability bootstrap
-- concrete `sc-observability` port implementation and injection
+- [`docs/atm-core/requirements.md`](./atm-core/requirements.md)
+- [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
+- [`docs/atm/requirements.md`](./atm/requirements.md)
+- [`docs/atm/architecture.md`](./atm/architecture.md)
 
 ## 4. Work Sequence
 

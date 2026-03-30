@@ -174,6 +174,9 @@ Examples:
 If a supporting document becomes crate-specific, move it under the owning crate
 directory.
 
+If a supporting document exists only for the migration program, mark it
+explicitly as migration-phase/temporary and remove it once its role is complete.
+
 ## 5. Crate-Level Document Responsibilities
 
 ### 5.1 `docs/atm/`
@@ -287,6 +290,15 @@ Required migration order:
 3. move crate-local detail out of top-level docs into owning crate docs
 4. replace duplicated prose with references
 5. keep top-level product docs concise and cross-cutting
+
+Migration-phase supporting docs such as `read-behavior.md`,
+`file-migration-plan.md`, and `migration-map.md` must be explicitly classified
+as either:
+
+- permanent cross-cutting documents
+- or temporary migration artifacts
+
+Do not leave their lifecycle implicit.
 
 During migration:
 
