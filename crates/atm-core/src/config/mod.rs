@@ -16,14 +16,21 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
         return Ok(None);
     };
 
-    let contents = fs::read_to_string(path).map_err(|error| {
+    let contents = fs::read_to_string(&path).map_err(|error| {
         AtmError::new(
             AtmErrorKind::Config,
-            format!("failed to read config: {error}"),
+            format!("failed to read config at {}: {error}", path.display()),
         )
         .with_source(error)
     })?;
-    Ok(Some(toml::from_str(&contents)?))
+    let parsed = toml::from_str(&contents).map_err(|error| {
+        AtmError::new(
+            AtmErrorKind::Config,
+            format!("failed to parse config at {}: {error}", path.display()),
+        )
+        .with_source(error)
+    })?;
+    Ok(Some(parsed))
 }
 
 pub fn resolve_identity(config: Option<&AtmConfig>) -> Option<String> {

@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::address::AgentAddress;
@@ -368,7 +369,18 @@ fn discover_origin_inboxes(inboxes_dir: &Path, agent: &str) -> Result<Vec<PathBu
             )
             .with_source(error)
         })?
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter_map(|entry| match entry {
+            Ok(entry) => Some(entry.path()),
+            Err(error) => {
+                warn!(
+                    inbox_dir = %inboxes_dir.display(),
+                    agent,
+                    %error,
+                    "skipping unreadable origin inbox entry"
+                );
+                None
+            }
+        })
         .filter(|path| {
             path.file_name()
                 .and_then(|value| value.to_str())

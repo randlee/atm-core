@@ -191,11 +191,12 @@ fn resolve_recipient(
 fn load_team_config(team_dir: &Path) -> Result<TeamConfig, AtmError> {
     let config_path = team_dir.join("config.json");
     let raw = fs::read_to_string(&config_path).map_err(|error| {
-        AtmError::team_not_found(
-            team_dir
-                .file_name()
-                .and_then(|value| value.to_str())
-                .unwrap_or("unknown"),
+        AtmError::new(
+            AtmErrorKind::Config,
+            format!(
+                "failed to read team config at {}: {error}",
+                config_path.display()
+            ),
         )
         .with_source(error)
     })?;

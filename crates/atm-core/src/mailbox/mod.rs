@@ -27,7 +27,7 @@ pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
     let file = fs::File::open(path).map_err(|error| {
         AtmError::new(
             AtmErrorKind::MailboxRead,
-            format!("failed to open mailbox file: {error}"),
+            format!("failed to open mailbox file {}: {error}", path.display()),
         )
         .with_source(error)
     })?;
@@ -38,7 +38,11 @@ pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
         let line = line.map_err(|error| {
             AtmError::new(
                 AtmErrorKind::MailboxRead,
-                format!("failed to read mailbox line: {error}"),
+                format!(
+                    "failed to read mailbox line {} from {}: {error}",
+                    index + 1,
+                    path.display()
+                ),
             )
             .with_source(error)
         })?;
