@@ -1,7 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use chrono::Utc;
 use serde::Serialize;
 use serde_json::Map;
 use uuid::Uuid;
@@ -16,7 +15,7 @@ use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
 use crate::schema::{MessageEnvelope, TeamConfig};
 use crate::send::{input, summary};
-use crate::types::MessageClass;
+use crate::types::{IsoTimestamp, MessageClass};
 
 #[derive(Debug, Clone)]
 pub struct AckRequest {
@@ -105,13 +104,13 @@ pub fn ack_mail(
         return Err(AtmError::agent_not_found(&reply_agent, &reply_team));
     }
 
-    let ack_timestamp = Utc::now();
+    let ack_timestamp = IsoTimestamp::now();
     let reply_text = input::validate_message_text(request.reply_body)?;
     let reply_message_id = Uuid::new_v4();
     let reply_message = MessageEnvelope {
         from: actor.clone(),
         text: reply_text.clone(),
-        timestamp: ack_timestamp,
+        timestamp: ack_timestamp.into_inner(),
         read: false,
         source_team: Some(team.clone()),
         summary: Some(summary::build_summary(&reply_text, None)),
@@ -119,6 +118,7 @@ pub fn ack_mail(
         pending_ack_at: None,
         acknowledged_at: None,
         acknowledges_message_id: Some(request.message_id),
+        task_id: None,
         extra: Map::new(),
     };
 
@@ -126,7 +126,7 @@ pub fn ack_mail(
         let source = &mut source_messages[source_index];
         source.read = true;
         source.pending_ack_at = None;
-        source.acknowledged_at = Some(ack_timestamp);
+        source.acknowledged_at = Some(ack_timestamp.into_inner());
     }
 
     let reply_inbox_path =

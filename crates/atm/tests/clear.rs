@@ -282,6 +282,7 @@ impl Fixture {
             pending_ack_at,
             acknowledged_at,
             acknowledges_message_id: None,
+            task_id: None,
             extra: serde_json::Map::new(),
         }
     }
