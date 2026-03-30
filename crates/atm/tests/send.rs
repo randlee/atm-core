@@ -7,7 +7,7 @@ use atm_core::schema::{AgentMember, MessageEnvelope, TeamConfig};
 fn test_send_creates_inbox_file() {
     let fixture = Fixture::new("recipient");
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "--message", "hello from test"]);
+    let output = fixture.run(&["send", "recipient@atm-dev", "hello from test"]);
 
     assert!(
         output.status.success(),
@@ -36,7 +36,6 @@ fn test_send_dry_run_no_file() {
     let output = fixture.run(&[
         "send",
         "recipient@atm-dev",
-        "--message",
         "hello from test",
         "--dry-run",
         "--json",
@@ -64,13 +63,7 @@ fn test_send_dry_run_no_file() {
 fn test_send_json_output() {
     let fixture = Fixture::new("recipient");
 
-    let output = fixture.run(&[
-        "send",
-        "recipient@atm-dev",
-        "--message",
-        "hello json",
-        "--json",
-    ]);
+    let output = fixture.run(&["send", "recipient@atm-dev", "hello json", "--json"]);
 
     assert!(
         output.status.success(),
@@ -92,13 +85,7 @@ fn test_send_json_output() {
 fn test_send_requires_ack() {
     let fixture = Fixture::new("recipient");
 
-    let output = fixture.run(&[
-        "send",
-        "recipient@atm-dev",
-        "--message",
-        "please ack",
-        "--requires-ack",
-    ]);
+    let output = fixture.run(&["send", "recipient@atm-dev", "please ack", "--requires-ack"]);
 
     assert!(
         output.status.success(),
@@ -118,7 +105,6 @@ fn test_send_persists_task_id() {
     let output = fixture.run(&[
         "send",
         "recipient@atm-dev",
-        "--message",
         "task assignment",
         "--task-id",
         "TASK-123",
@@ -133,6 +119,33 @@ fn test_send_persists_task_id() {
     let inbox = fixture.inbox_contents("recipient");
     assert_eq!(inbox.len(), 1);
     assert_eq!(inbox[0].task_id.as_deref(), Some("TASK-123"));
+}
+
+#[test]
+fn test_send_supports_positional_message_with_file() {
+    let fixture = Fixture::new("recipient");
+    let attachment = fixture.tempdir.path().join("notes.txt");
+    fs::write(&attachment, "attachment body").expect("attachment");
+
+    let output = fixture.run(&[
+        "send",
+        "recipient@atm-dev",
+        "context first",
+        "--file",
+        attachment.to_str().expect("attachment path"),
+    ]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+
+    let inbox = fixture.inbox_contents("recipient");
+    assert_eq!(inbox.len(), 1);
+    assert!(inbox[0]
+        .text
+        .starts_with("context first\n\nFile reference:"));
 }
 
 struct Fixture {
