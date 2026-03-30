@@ -12,3 +12,11 @@ serde_json.workspace = true
 thiserror.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
+libc = "0.2"
+chrono = { version = "0.4", features = ["serde"] }
+toml = "0.8"
+uuid = { version = "1", features = ["serde", "v4"] }
+
+[dev-dependencies]
+serial_test = "3"
+tempfile = "3"

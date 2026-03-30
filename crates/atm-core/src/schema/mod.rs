@@ -4,4 +4,6 @@ pub mod permissions;
 pub mod settings;
 pub mod team_config;
 
-// TODO: define ATM mailbox and config schema modules.
+pub use agent_member::AgentMember;
+pub use inbox_message::{MessageEnvelope, PendingAck};
+pub use team_config::TeamConfig;

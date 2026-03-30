@@ -25,6 +25,8 @@ The current command already has useful queue behavior that should survive the re
 - default view shows actionable work only
 - pending-ack messages stay visible until they are acknowledged
 - task-linked ack-required messages arrive already actionable
+- duplicate deliveries should collapse by `message_id` instead of showing the
+  same message repeatedly
 - history can be expanded without hiding actionable work
 - `--all` shows everything
 - older unread messages remain visible even when the seen-state watermark is newer
@@ -77,7 +79,8 @@ Current ack behavior:
 
 Current clear behavior that must survive:
 - clear removes acknowledged messages
-- pending-ack messages are not clearable
+- pending-ack messages are not clearable by default
+- an explicit override may clear stale pending-ack entries
 
 This behavior is messy in the current code because the state machine is implicit. The rewrite keeps the behavior but makes the state model explicit.
 
@@ -159,13 +162,14 @@ Ack workflow
 
 Clear workflow
   remove only (Read, NoAckRequired) and (Read, Acknowledged)
+  with explicit pending-ack override, also allow removal of pending-ack entries
 ```
 
 Disallowed transitions:
 - any transition that makes the read axis move from `Read` back to `Unread`
 - `Acknowledged -> PendingAck`
 - `Acknowledged -> NoAckRequired`
-- clearing a pending-ack message
+- clearing a pending-ack message without the explicit override
 - clearing an unread message
 - any transition that skips the legal graph
 
@@ -197,6 +201,12 @@ Watermark update rule:
 `--since <iso8601>` filters by message timestamp greater than or equal to the given value.
 
 `--from <name>` filters by sender name.
+
+Duplicate-collapse rule:
+- if multiple entries share the same non-null `message_id`, show only the most
+  recent entry
+- suppress earlier duplicates silently
+- if a record lacks `message_id`, do not merge it with any other record
 
 ## 8. Wait-Mode Rules
 
@@ -262,7 +272,7 @@ impl StoredMessage<UnreadReadState, NoAckState> {
 }
 
 impl StoredMessage<UnreadReadState, PendingAckState> {
-    pub fn mark_read(self) -> StoredMessage<ReadReadState, PendingAckState>;
+    pub fn mark_read_pending_ack(self) -> StoredMessage<ReadReadState, PendingAckState>;
 }
 
 impl StoredMessage<ReadReadState, PendingAckState> {
@@ -323,7 +333,9 @@ Cross-document invariants:
 - displayed messages always persist `read = true`
 - task-linked messages are ack-required from send time
 - pending-ack messages remain actionable until acknowledged
-- `atm clear` never removes unread or pending-ack messages
+- `atm clear` never removes unread messages
+- `atm clear` removes pending-ack messages only when the explicit override is
+  set
 - `--timeout` returns immediately when the requested selection is already non-empty
 
 `bucket_counts` fields:
@@ -338,6 +350,7 @@ An implementation of `atm read` is acceptable only if:
 - it keeps display buckets separate from the canonical axes
 - it preserves default actionable-queue behavior
 - it preserves the current pending-ack lifecycle
-- it preserves task-linked pending-ack visibility until acknowledgement
+- it preserves task-linked pending-ack visibility until acknowledgement unless
+  the operator explicitly invokes the pending-ack clear override
 - no daemon-only logic survives in core read behavior
 - read-axis and ack-axis transitions are enforced by API shape, not only by tests
