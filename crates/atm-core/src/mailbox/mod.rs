@@ -82,6 +82,7 @@ mod tests {
     use uuid::Uuid;
 
     use crate::schema::MessageEnvelope;
+    use crate::types::IsoTimestamp;
 
     use super::{append_message, read_messages};
 
@@ -119,10 +120,11 @@ mod tests {
         let message_id = Uuid::new_v4();
         let first = sample_message(message_id, "first");
         let mut second = sample_message(message_id, "second");
-        second.timestamp = Utc
-            .with_ymd_and_hms(2026, 3, 30, 0, 0, 1)
-            .single()
-            .expect("timestamp");
+        second.timestamp = IsoTimestamp(
+            Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 1)
+                .single()
+                .expect("timestamp"),
+        );
 
         let contents = format!(
             "{}\n{}\n",
@@ -140,10 +142,11 @@ mod tests {
         MessageEnvelope {
             from: "arch-ctm".into(),
             text: body.into(),
-            timestamp: Utc
-                .with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
-                .single()
-                .expect("timestamp"),
+            timestamp: IsoTimestamp(
+                Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
+                    .single()
+                    .expect("timestamp"),
+            ),
             read: false,
             source_team: Some("atm-dev".into()),
             summary: None,

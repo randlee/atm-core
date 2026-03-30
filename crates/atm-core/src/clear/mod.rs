@@ -33,8 +33,6 @@ pub struct ClearQuery {
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct RemovedByClass {
-    pub unread: usize,
-    pub pending_ack: usize,
     pub acknowledged: usize,
     pub read: usize,
 }
@@ -298,7 +296,7 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
 }
 
 fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
-    let mut latest_for_id: HashMap<Uuid, (DateTime<Utc>, usize)> = HashMap::new();
+    let mut latest_for_id: HashMap<Uuid, (crate::types::IsoTimestamp, usize)> = HashMap::new();
     for (index, message) in messages.iter().enumerate() {
         if let Some(message_id) = message.envelope.message_id {
             latest_for_id
@@ -342,7 +340,7 @@ fn is_clearable(message: &SourcedMessage, cutoff: Option<DateTime<Utc>>, idle_on
     let class = state::classify_message(&message.envelope);
     matches!(class, MessageClass::Read | MessageClass::Acknowledged)
         && cutoff
-            .map(|cutoff| message.envelope.timestamp <= cutoff)
+            .map(|cutoff| message.envelope.timestamp.into_inner() <= cutoff)
             .unwrap_or(true)
         && (!idle_only || is_idle_notification(&message.envelope))
 }
@@ -357,8 +355,8 @@ fn is_idle_notification(message: &MessageEnvelope) -> bool {
 
 fn count_removed(counts: &mut RemovedByClass, class: MessageClass) {
     match class {
-        MessageClass::Unread => counts.unread += 1,
-        MessageClass::PendingAck => counts.pending_ack += 1,
+        MessageClass::Unread => unreachable!("unread messages are never clearable"),
+        MessageClass::PendingAck => unreachable!("pending-ack messages are never clearable"),
         MessageClass::Acknowledged => counts.acknowledged += 1,
         MessageClass::Read => counts.read += 1,
     }

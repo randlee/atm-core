@@ -2,6 +2,7 @@ use std::fs;
 use std::process::Command;
 
 use atm_core::schema::{AgentMember, MessageEnvelope, TeamConfig};
+use atm_core::types::IsoTimestamp;
 use chrono::{Duration, Utc};
 use serde_json::Value;
 use uuid::Uuid;
@@ -128,7 +129,7 @@ fn test_ack_rejects_message_that_is_not_pending() {
     assert!(
         fixture
             .stderr(&output)
-            .contains("is not pending acknowledgement"),
+            .contains("is not in the (read, pending_ack) state"),
         "stderr: {}",
         fixture.stderr(&output)
     );
@@ -256,13 +257,13 @@ impl Fixture {
         MessageEnvelope {
             from: from.to_string(),
             text: text.to_string(),
-            timestamp,
+            timestamp: timestamp.into(),
             read,
             source_team: Some("atm-dev".into()),
             summary: None,
             message_id: Some(message_id),
-            pending_ack_at: pending_offset.map(|offset| timestamp + offset),
-            acknowledged_at: acknowledged_offset.map(|offset| timestamp + offset),
+            pending_ack_at: pending_offset.map(|offset| IsoTimestamp(timestamp + offset)),
+            acknowledged_at: acknowledged_offset.map(|offset| IsoTimestamp(timestamp + offset)),
             acknowledges_message_id: None,
             task_id: None,
             extra: serde_json::Map::new(),

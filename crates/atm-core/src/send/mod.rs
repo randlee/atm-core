@@ -1,7 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use chrono::Utc;
 use serde::Serialize;
 use serde_json::Map;
 use uuid::Uuid;
@@ -14,6 +13,7 @@ use crate::identity;
 use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::{MessageEnvelope, TeamConfig};
+use crate::types::IsoTimestamp;
 
 pub mod file_policy;
 pub mod input;
@@ -98,7 +98,7 @@ pub fn send_mail(
     )?;
     let summary = summary::build_summary(&body, request.summary_override);
     let message_id = Uuid::new_v4();
-    let timestamp = Utc::now();
+    let timestamp = IsoTimestamp::now();
 
     if !request.dry_run {
         let envelope = MessageEnvelope {

@@ -2,6 +2,7 @@ use std::fs;
 use std::process::Command;
 
 use atm_core::schema::{AgentMember, MessageEnvelope, TeamConfig};
+use atm_core::types::IsoTimestamp;
 use chrono::{TimeZone, Utc};
 use serde_json::Value;
 use uuid::Uuid;
@@ -465,13 +466,13 @@ impl Fixture {
         MessageEnvelope {
             from: from.to_string(),
             text: text.to_string(),
-            timestamp: self.timestamp(timestamp_offset),
+            timestamp: IsoTimestamp(self.timestamp(timestamp_offset)),
             read,
             source_team: Some("atm-dev".into()),
             summary: None,
             message_id: Some(Uuid::new_v4()),
-            pending_ack_at: pending_ack_offset.map(|offset| self.timestamp(offset)),
-            acknowledged_at: acknowledged_offset.map(|offset| self.timestamp(offset)),
+            pending_ack_at: pending_ack_offset.map(|offset| IsoTimestamp(self.timestamp(offset))),
+            acknowledged_at: acknowledged_offset.map(|offset| IsoTimestamp(self.timestamp(offset))),
             acknowledges_message_id: None,
             task_id: None,
             extra: serde_json::Map::new(),

@@ -2,6 +2,7 @@ use std::fs;
 use std::process::Command;
 
 use atm_core::schema::{AgentMember, MessageEnvelope, TeamConfig};
+use atm_core::types::IsoTimestamp;
 use chrono::{Duration, Utc};
 use serde_json::Value;
 use uuid::Uuid;
@@ -60,8 +61,8 @@ fn test_clear_default_removes_only_read_and_acknowledged() {
     assert_eq!(parsed["remaining_total"], 2);
     assert_eq!(parsed["removed_by_class"]["read"], 1);
     assert_eq!(parsed["removed_by_class"]["acknowledged"], 1);
-    assert_eq!(parsed["removed_by_class"]["unread"], 0);
-    assert_eq!(parsed["removed_by_class"]["pending_ack"], 0);
+    assert!(parsed["removed_by_class"]["unread"].is_null());
+    assert!(parsed["removed_by_class"]["pending_ack"].is_null());
 
     let inbox = fixture.inbox_contents("arch-ctm");
     assert_eq!(inbox.len(), 2);
@@ -442,13 +443,13 @@ impl Fixture {
         MessageEnvelope {
             from: from.to_string(),
             text: text.to_string(),
-            timestamp,
+            timestamp: timestamp.into(),
             read,
             source_team: Some("atm-dev".into()),
             summary: None,
             message_id: Some(Uuid::new_v4()),
-            pending_ack_at,
-            acknowledged_at,
+            pending_ack_at: pending_ack_at.map(Into::into),
+            acknowledged_at: acknowledged_at.map(Into::into),
             acknowledges_message_id: None,
             task_id: None,
             extra: serde_json::Map::new(),
@@ -460,7 +461,7 @@ fn idle_notification_text(from: &str) -> String {
     serde_json::json!({
         "type": "idle_notification",
         "from": from,
-        "timestamp": Utc::now().to_rfc3339(),
+        "timestamp": IsoTimestamp::now().into_inner().to_rfc3339(),
         "idleReason": "available"
     })
     .to_string()

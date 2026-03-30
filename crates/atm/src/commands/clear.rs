@@ -57,7 +57,10 @@ impl ClearCommand {
 
 fn parse_duration(raw: &str) -> Result<Duration> {
     let value = raw.trim();
-    let (amount, unit) = value.split_at(value.len().saturating_sub(1));
+    let Some((unit_index, unit_char)) = value.char_indices().last() else {
+        anyhow::bail!("invalid duration: {value}");
+    };
+    let amount = &value[..unit_index];
     if amount.is_empty() {
         anyhow::bail!("invalid duration: {value}");
     }
@@ -66,11 +69,22 @@ fn parse_duration(raw: &str) -> Result<Duration> {
         .parse::<u64>()
         .with_context(|| format!("invalid duration: {value}"))?;
 
-    match unit {
-        "s" => Ok(Duration::from_secs(amount)),
-        "m" => Ok(Duration::from_secs(amount * 60)),
-        "h" => Ok(Duration::from_secs(amount * 60 * 60)),
-        "d" => Ok(Duration::from_secs(amount * 60 * 60 * 24)),
+    let secs = match unit_char {
+        's' => amount,
+        'm' => amount
+            .checked_mul(60)
+            .ok_or_else(|| anyhow::anyhow!("duration overflow: {value}"))?,
+        'h' => amount
+            .checked_mul(60)
+            .and_then(|value| value.checked_mul(60))
+            .ok_or_else(|| anyhow::anyhow!("duration overflow: {value}"))?,
+        'd' => amount
+            .checked_mul(60)
+            .and_then(|value| value.checked_mul(60))
+            .and_then(|value| value.checked_mul(24))
+            .ok_or_else(|| anyhow::anyhow!("duration overflow: {value}"))?,
         _ => anyhow::bail!("invalid duration unit in {value}; use s, m, h, or d"),
-    }
+    };
+
+    Ok(Duration::from_secs(secs))
 }

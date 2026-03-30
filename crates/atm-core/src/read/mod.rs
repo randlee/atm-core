@@ -199,7 +199,7 @@ pub fn read_mail(
                 &query.home_dir,
                 &target.team,
                 &target.agent,
-                latest_timestamp,
+                latest_timestamp.into_inner(),
             )?;
         }
     }
@@ -405,7 +405,7 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
 }
 
 fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
-    let mut latest_for_id: HashMap<Uuid, (DateTime<Utc>, usize)> = HashMap::new();
+    let mut latest_for_id: HashMap<Uuid, (IsoTimestamp, usize)> = HashMap::new();
     for (index, message) in messages.iter().enumerate() {
         if let Some(message_id) = message.envelope.message_id {
             latest_for_id
@@ -569,7 +569,7 @@ fn transition_displayed_message(
                     crate::types::UnreadReadState,
                     crate::types::PendingAckState,
                 >::from_envelope(message.envelope.clone())
-                .mark_read(),
+                .mark_read_pending_ack(),
             )
         }
         (crate::types::ReadState::Unread, crate::types::AckState::Acknowledged)

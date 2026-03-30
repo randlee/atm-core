@@ -34,13 +34,18 @@ impl StoredMessage<UnreadReadState, NoAckState> {
         at: IsoTimestamp,
     ) -> StoredMessage<ReadReadState, PendingAckState> {
         self.envelope.read = true;
-        self.envelope.pending_ack_at = Some(at.into_inner());
+        self.envelope.pending_ack_at = Some(at);
+        StoredMessage::from_envelope(self.envelope)
+    }
+
+    pub fn mark_read(mut self) -> StoredMessage<ReadReadState, NoAckState> {
+        self.envelope.read = true;
         StoredMessage::from_envelope(self.envelope)
     }
 }
 
 impl StoredMessage<UnreadReadState, PendingAckState> {
-    pub fn mark_read(mut self) -> StoredMessage<ReadReadState, PendingAckState> {
+    pub fn mark_read_pending_ack(mut self) -> StoredMessage<ReadReadState, PendingAckState> {
         self.envelope.read = true;
         StoredMessage::from_envelope(self.envelope)
     }
@@ -51,7 +56,7 @@ impl StoredMessage<ReadReadState, PendingAckState> {
         mut self,
         at: IsoTimestamp,
     ) -> StoredMessage<ReadReadState, AcknowledgedAckState> {
-        self.envelope.acknowledged_at = Some(at.into_inner());
+        self.envelope.acknowledged_at = Some(at);
         self.envelope.pending_ack_at = None;
         StoredMessage::from_envelope(self.envelope)
     }

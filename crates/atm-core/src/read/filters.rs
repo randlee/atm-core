@@ -23,7 +23,7 @@ pub fn apply_timestamp_filter(
     match since {
         Some(since) => messages
             .into_iter()
-            .filter(|message| message.envelope.timestamp >= since)
+            .filter(|message| message.envelope.timestamp.into_inner() >= since)
             .collect(),
         None => messages,
     }
@@ -54,7 +54,7 @@ pub fn apply_selection_mode(
 
 fn history_visible(message: &ClassifiedMessage, seen_watermark: Option<DateTime<Utc>>) -> bool {
     match seen_watermark {
-        Some(watermark) => message.envelope.timestamp > watermark,
+        Some(watermark) => message.envelope.timestamp.into_inner() > watermark,
         None => true,
     }
 }

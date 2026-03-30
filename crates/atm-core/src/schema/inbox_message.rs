@@ -1,13 +1,14 @@
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use uuid::Uuid;
+
+use crate::types::IsoTimestamp;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MessageEnvelope {
     pub from: String,
     pub text: String,
-    pub timestamp: DateTime<Utc>,
+    pub timestamp: IsoTimestamp,
     pub read: bool,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -20,10 +21,10 @@ pub struct MessageEnvelope {
     pub message_id: Option<Uuid>,
 
     #[serde(rename = "pendingAckAt", skip_serializing_if = "Option::is_none")]
-    pub pending_ack_at: Option<DateTime<Utc>>,
+    pub pending_ack_at: Option<IsoTimestamp>,
 
     #[serde(rename = "acknowledgedAt", skip_serializing_if = "Option::is_none")]
-    pub acknowledged_at: Option<DateTime<Utc>>,
+    pub acknowledged_at: Option<IsoTimestamp>,
 
     #[serde(
         rename = "acknowledgesMessageId",
@@ -43,7 +44,7 @@ pub struct PendingAck {
     pub message_id: Uuid,
     pub from: String,
     pub acked: bool,
-    pub acked_at: Option<DateTime<Utc>>,
+    pub acked_at: Option<IsoTimestamp>,
 }
 
 #[cfg(test)]
@@ -51,26 +52,29 @@ mod tests {
     use chrono::TimeZone;
     use serde_json::{json, Map};
 
-    use super::{MessageEnvelope, PendingAck, Utc, Uuid};
+    use chrono::Utc;
+
+    use super::{IsoTimestamp, MessageEnvelope, PendingAck, Uuid};
 
     #[test]
     fn message_envelope_round_trips_with_current_inbox_shape() {
         let envelope = MessageEnvelope {
             from: "arch-ctm".into(),
             text: "hello".into(),
-            timestamp: Utc
-                .with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
-                .single()
-                .expect("timestamp"),
+            timestamp: IsoTimestamp(
+                Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
+                    .single()
+                    .expect("timestamp"),
+            ),
             read: false,
             source_team: Some("atm-dev".into()),
             summary: Some("hello".into()),
             message_id: Some(Uuid::new_v4()),
-            pending_ack_at: Some(
+            pending_ack_at: Some(IsoTimestamp(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 1)
                     .single()
                     .expect("timestamp"),
-            ),
+            )),
             acknowledged_at: None,
             acknowledges_message_id: None,
             task_id: Some("TASK-123".into()),
@@ -120,11 +124,11 @@ mod tests {
             message_id: Uuid::new_v4(),
             from: "team-lead".into(),
             acked: true,
-            acked_at: Some(
+            acked_at: Some(IsoTimestamp(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 1)
                     .single()
                     .expect("timestamp"),
-            ),
+            )),
         };
 
         let encoded = serde_json::to_string(&pending_ack).expect("encode");
