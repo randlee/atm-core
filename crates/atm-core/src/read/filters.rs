@@ -1,1 +1,62 @@
-// TODO: define read filtering and selection helpers.
+use chrono::{DateTime, Utc};
+
+use crate::read::ClassifiedMessage;
+use crate::types::{DisplayBucket, ReadSelection};
+
+use crate::schema::MessageEnvelope;
+
+pub fn apply_sender_filter(
+    messages: Vec<MessageEnvelope>,
+    sender: Option<&str>,
+) -> Vec<MessageEnvelope> {
+    match sender {
+        Some(sender) => messages
+            .into_iter()
+            .filter(|message| message.from == sender)
+            .collect(),
+        None => messages,
+    }
+}
+
+pub fn apply_timestamp_filter(
+    messages: Vec<MessageEnvelope>,
+    since: Option<DateTime<Utc>>,
+) -> Vec<MessageEnvelope> {
+    match since {
+        Some(since) => messages
+            .into_iter()
+            .filter(|message| message.timestamp >= since)
+            .collect(),
+        None => messages,
+    }
+}
+
+pub fn apply_selection_mode(
+    messages: Vec<ClassifiedMessage>,
+    mode: ReadSelection,
+    seen_watermark: Option<DateTime<Utc>>,
+) -> Vec<ClassifiedMessage> {
+    messages
+        .into_iter()
+        .filter(|message| match mode {
+            ReadSelection::Actionable => matches!(
+                message.bucket,
+                DisplayBucket::Unread | DisplayBucket::PendingAck
+            ),
+            ReadSelection::UnreadOnly => message.bucket == DisplayBucket::Unread,
+            ReadSelection::PendingAckOnly => message.bucket == DisplayBucket::PendingAck,
+            ReadSelection::ActionableWithHistory => match message.bucket {
+                DisplayBucket::Unread | DisplayBucket::PendingAck => true,
+                DisplayBucket::History => history_visible(message, seen_watermark),
+            },
+            ReadSelection::All => true,
+        })
+        .collect()
+}
+
+fn history_visible(message: &ClassifiedMessage, seen_watermark: Option<DateTime<Utc>>) -> bool {
+    match seen_watermark {
+        Some(watermark) => message.message.timestamp > watermark,
+        None => true,
+    }
+}

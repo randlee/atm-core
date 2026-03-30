@@ -49,7 +49,7 @@ impl Command {
     fn run(self, observability: &CliObservability) -> Result<()> {
         match self {
             Self::Send(command) => command.run(observability),
-            Self::Read(command) => command.run(),
+            Self::Read(command) => command.run(observability),
             Self::Ack(command) => command.run(),
             Self::Clear(command) => command.run(),
             Self::Log(command) => command.run(),
