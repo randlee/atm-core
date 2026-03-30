@@ -18,6 +18,17 @@ The retained command surface is:
 - `log`
 - `doctor`
 
+## 1.1 Documentation Structure
+
+Documentation structure is governed by
+[`documentation-guidelines.md`](./documentation-guidelines.md).
+
+This file owns product architecture. Crate-local architectural detail is being
+moved into:
+
+- [`docs/atm/architecture.md`](./atm/architecture.md)
+- [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
+
 ## 2. Crate Boundaries
 
 ### 2.1 `atm-core`

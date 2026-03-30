@@ -18,6 +18,22 @@ The rewritten system must preserve usable non-daemon behavior already present in
 
 The system uses structured logging through `sc-observability`.
 
+## 1.1 Documentation Structure
+
+Documentation organization is defined in
+[`documentation-guidelines.md`](./documentation-guidelines.md).
+
+Top-level product docs in `docs/` remain the product source of truth.
+Crate-local ownership docs live under:
+
+- [`docs/atm/requirements.md`](./atm/requirements.md)
+- [`docs/atm/architecture.md`](./atm/architecture.md)
+- [`docs/atm-core/requirements.md`](./atm-core/requirements.md)
+- [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
+
+During the cleanup/restructure phase, product requirements stay here while
+crate-local ownership is moved out of this file into the crate directories.
+
 ## 2. Scope
 
 ### 2.1 In Scope
@@ -206,6 +222,7 @@ Retired from the current implementation:
 - support dry-run without mutation
 - support sender-controlled ack-required messages
 - support optional task metadata on sent messages
+- `atm send` MUST generate and write a non-null UUID v4 as `message_id` for every sent message. `message_id` is optional in the persisted schema (§12.1) to support legacy messages written by older clients, but `atm send` never omits it.
 
 ### 6.4 Message Source Semantics
 

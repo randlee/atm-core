@@ -9,6 +9,11 @@ The authoritative migration document is:
 
 This plan sequences the work. File-level migration decisions live in `file-migration-plan.md`.
 
+Documentation organization and cleanup are governed by
+[`documentation-guidelines.md`](./documentation-guidelines.md). As the docs are
+restructured, product docs remain in `docs/` and crate-local detail moves into
+`docs/atm/` and `docs/atm-core/`.
+
 ## 2. Deliverables
 
 - Rust workspace with `crates/atm-core` and `crates/atm`
