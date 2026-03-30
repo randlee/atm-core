@@ -15,6 +15,8 @@ pub use log::LogCommand;
 pub use read::ReadCommand;
 pub use send::SendCommand;
 
+use crate::observability::CliObservability;
+
 #[derive(Debug, Parser)]
 #[command(
     name = "atm",
@@ -28,8 +30,8 @@ pub struct Cli {
 }
 
 impl Cli {
-    pub fn run(self) -> Result<()> {
-        self.command.run()
+    pub fn run(self, observability: &CliObservability) -> Result<()> {
+        self.command.run(observability)
     }
 }
 
@@ -44,9 +46,9 @@ enum Command {
 }
 
 impl Command {
-    fn run(self) -> Result<()> {
+    fn run(self, observability: &CliObservability) -> Result<()> {
         match self {
-            Self::Send(command) => command.run(),
+            Self::Send(command) => command.run(observability),
             Self::Read(command) => command.run(),
             Self::Ack(command) => command.run(),
             Self::Clear(command) => command.run(),

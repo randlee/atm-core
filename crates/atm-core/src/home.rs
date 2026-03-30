@@ -28,7 +28,7 @@ fn resolve_user_home() -> Result<PathBuf, Error> {
                 .filter(|value| !value.is_empty())
                 .map(PathBuf::from)
         })
-        .ok_or(Error::HomeDirectoryUnavailable)
+        .ok_or_else(Error::home_directory_unavailable)
 }
 
 #[cfg(test)]

@@ -6,7 +6,7 @@ use crate::config::AtmConfig;
 use crate::error::Error;
 
 pub fn resolve_sender_identity(config: Option<&AtmConfig>) -> Result<String, Error> {
-    crate::config::resolve_identity(config).ok_or(Error::IdentityUnavailable)
+    crate::config::resolve_identity(config).ok_or_else(Error::identity_unavailable)
 }
 
 pub fn resolve_hook_identity(
@@ -14,7 +14,8 @@ pub fn resolve_hook_identity(
     config: Option<&AtmConfig>,
 ) -> Result<HookIdentity, Error> {
     let agent = resolve_sender_identity(config)?;
-    let team = crate::config::resolve_team(team_override, config).ok_or(Error::TeamUnavailable)?;
+    let team =
+        crate::config::resolve_team(team_override, config).ok_or_else(Error::team_unavailable)?;
     Ok(HookIdentity { agent, team })
 }
 
