@@ -323,6 +323,7 @@ impl Fixture {
             pending_ack_at: pending_ack_offset.map(|offset| self.timestamp(offset)),
             acknowledged_at: acknowledged_offset.map(|offset| self.timestamp(offset)),
             acknowledges_message_id: None,
+            task_id: None,
             extra: serde_json::Map::new(),
         }
     }
