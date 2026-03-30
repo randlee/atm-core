@@ -133,6 +133,10 @@ fn test_read_json_output() {
     assert_eq!(parsed["action"], "read");
     assert_eq!(parsed["team"], "atm-dev");
     assert_eq!(parsed["history_collapsed"], false);
+    assert_eq!(parsed["count"].as_u64(), Some(1));
+    assert!(parsed["bucket_counts"]["unread"].as_u64().is_some());
+    assert!(parsed["bucket_counts"]["pending_ack"].as_u64().is_some());
+    assert!(parsed["bucket_counts"]["history"].as_u64().is_some());
     assert_eq!(parsed["messages"][0]["from"], "team-lead");
 }
 
@@ -158,7 +162,7 @@ fn test_read_seen_state() {
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["count"], 1);
     assert_eq!(parsed["messages"][0]["text"], "new unread");
-    assert_eq!(parsed["bucket_counts"]["history"], 0);
+    assert_eq!(parsed["bucket_counts"]["history"], 1);
 }
 
 #[test]
@@ -204,6 +208,144 @@ fn test_read_timeout_with_existing_pending_ack_returns_immediately() {
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["count"], 1);
     assert_eq!(parsed["messages"][0]["bucket"], "pending_ack");
+}
+
+#[test]
+fn test_read_pending_ack_only() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[fixture.message("team-lead", "pending", true, Some(0), None, 0)],
+    );
+
+    let output = fixture.run(&["read", "--pending-ack-only", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["count"], 1);
+    assert_eq!(parsed["messages"][0]["bucket"], "pending_ack");
+}
+
+#[test]
+fn test_read_all_flag() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[
+            fixture.message("sender-a", "unread", false, None, None, 0),
+            fixture.message("sender-b", "pending", true, Some(1), None, 1),
+            fixture.message("sender-c", "history", true, None, None, 2),
+        ],
+    );
+
+    let output = fixture.run(&["read", "--all", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["count"], 3);
+}
+
+#[test]
+fn test_read_no_update_seen() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[fixture.message("team-lead", "history", true, None, None, 10)],
+    );
+    let initial = fixture.timestamp(0);
+    fixture.write_seen_state("arch-ctm", initial);
+
+    let output = fixture.run(&["read", "--history", "--no-update-seen", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    assert_eq!(fixture.read_seen_state("arch-ctm"), Some(initial));
+}
+
+#[test]
+fn test_read_from_filter() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[
+            fixture.message("sender-a", "alpha", false, None, None, 0),
+            fixture.message("sender-b", "beta", false, None, None, 1),
+        ],
+    );
+
+    let output = fixture.run(&["read", "--from", "sender-a", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["count"], 1);
+    assert_eq!(parsed["messages"][0]["from"], "sender-a");
+    assert_eq!(parsed["bucket_counts"]["unread"], 2);
+}
+
+#[test]
+fn test_read_mutual_exclusion() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+
+    let output = fixture.run(&["read", "--all", "--unread-only"]);
+
+    assert!(!output.status.success());
+}
+
+#[test]
+fn test_read_timeout_expiry() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+
+    let output = fixture.run(&["read", "--timeout", "0", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["count"], 0);
+}
+
+#[test]
+fn test_read_no_since_last_seen_wins() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[fixture.message("team-lead", "history", true, None, None, 0)],
+    );
+    fixture.write_seen_state("arch-ctm", fixture.timestamp(10));
+
+    let output = fixture.run(&[
+        "read",
+        "--history",
+        "--since-last-seen",
+        "--no-since-last-seen",
+        "--json",
+    ]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["count"], 1);
+    assert_eq!(parsed["messages"][0]["bucket"], "history");
 }
 
 struct Fixture {
@@ -267,6 +409,14 @@ impl Fixture {
         fs::write(path, timestamp.to_rfc3339()).expect("write seen state");
     }
 
+    fn read_seen_state(&self, agent: &str) -> Option<chrono::DateTime<Utc>> {
+        let path = self.team_dir().join(".seen").join(agent);
+        let raw = fs::read_to_string(path).ok()?;
+        chrono::DateTime::parse_from_rfc3339(raw.trim())
+            .ok()
+            .map(|timestamp| timestamp.with_timezone(&Utc))
+    }
+
     fn inbox_path(&self, agent: &str) -> std::path::PathBuf {
         self.team_dir()
             .join("inboxes")
@@ -323,6 +473,7 @@ impl Fixture {
             pending_ack_at: pending_ack_offset.map(|offset| self.timestamp(offset)),
             acknowledged_at: acknowledged_offset.map(|offset| self.timestamp(offset)),
             acknowledges_message_id: None,
+            task_id: None,
             extra: serde_json::Map::new(),
         }
     }

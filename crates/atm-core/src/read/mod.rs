@@ -19,7 +19,7 @@ use crate::identity;
 use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::{MessageEnvelope, TeamConfig};
-use crate::types::{AckActivationMode, DisplayBucket, MessageClass, ReadSelection};
+use crate::types::{AckActivationMode, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection};
 
 #[derive(Debug, Clone)]
 pub struct ReadQuery {
@@ -49,10 +49,12 @@ pub struct BucketCounts {
 pub struct ClassifiedMessage {
     #[serde(skip)]
     source_index: usize,
+    #[serde(skip)]
+    source_path: PathBuf,
     pub bucket: DisplayBucket,
     pub class: MessageClass,
     #[serde(flatten)]
-    pub message: MessageEnvelope,
+    pub envelope: MessageEnvelope,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -66,6 +68,19 @@ pub struct ReadOutcome {
     pub count: usize,
     pub messages: Vec<ClassifiedMessage>,
     pub bucket_counts: BucketCounts,
+}
+
+#[derive(Debug, Clone)]
+struct SourceFile {
+    path: PathBuf,
+    messages: Vec<MessageEnvelope>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SourcedMessage {
+    pub envelope: MessageEnvelope,
+    pub source_path: PathBuf,
+    pub source_index: usize,
 }
 
 pub fn read_mail(
@@ -104,45 +119,42 @@ pub fn read_mail(
         None
     };
 
-    let mut mailbox_messages = load_inbox_messages(&query.home_dir, &target.team, &target.agent)?;
-    let mut derived = build_derived_messages(
-        mailbox_messages.clone(),
+    let mut source_files = load_source_files(&query.home_dir, &target.team, &target.agent)?;
+    let mut classified_all = classify_all(dedupe_sourced_messages(merged_surface(&source_files)));
+    let mut bucket_counts = bucket_counts_for(&classified_all);
+    let mut filtered = apply_filters(
+        classified_all.clone(),
         query.sender_filter.as_deref(),
         query.timestamp_filter,
     );
-
-    let mut bucket_counts = bucket_counts_for(&derived, query.selection_mode, seen_watermark);
-    let mut selected = select_messages(&derived, query.selection_mode, seen_watermark);
+    let mut selected = select_messages(&filtered, query.selection_mode, seen_watermark);
     let mut timed_out = false;
 
     if selected.is_empty() {
         if let Some(timeout_secs) = query.timeout_secs {
             let wait_satisfied = wait::wait_for_eligible_message(
-                &query.home_dir,
-                &target.team,
-                &target.agent,
                 timeout_secs,
-                |message| {
-                    message_matches_filters(
-                        message,
-                        query.sender_filter.as_deref(),
-                        query.timestamp_filter,
-                        query.selection_mode,
-                        seen_watermark,
-                    )
+                || {
+                    Ok(dedupe_sourced_messages(merged_surface(&load_source_files(
+                        &query.home_dir,
+                        &target.team,
+                        &target.agent,
+                    )?)))
                 },
+                |messages| !selected_after_filters(messages, &query, seen_watermark).is_empty(),
             )?;
 
             if wait_satisfied {
-                mailbox_messages =
-                    load_inbox_messages(&query.home_dir, &target.team, &target.agent)?;
-                derived = build_derived_messages(
-                    mailbox_messages.clone(),
+                source_files = load_source_files(&query.home_dir, &target.team, &target.agent)?;
+                classified_all =
+                    classify_all(dedupe_sourced_messages(merged_surface(&source_files)));
+                bucket_counts = bucket_counts_for(&classified_all);
+                filtered = apply_filters(
+                    classified_all.clone(),
                     query.sender_filter.as_deref(),
                     query.timestamp_filter,
                 );
-                bucket_counts = bucket_counts_for(&derived, query.selection_mode, seen_watermark);
-                selected = select_messages(&derived, query.selection_mode, seen_watermark);
+                selected = select_messages(&filtered, query.selection_mode, seen_watermark);
             } else {
                 timed_out = true;
             }
@@ -151,10 +163,10 @@ pub fn read_mail(
 
     selected.sort_by(|left, right| {
         right
-            .message
+            .envelope
             .timestamp
-            .cmp(&left.message.timestamp)
-            .then_with(|| right.message.message_id.cmp(&left.message.message_id))
+            .cmp(&left.envelope.timestamp)
+            .then_with(|| right.envelope.message_id.cmp(&left.envelope.message_id))
             .then_with(|| right.source_index.cmp(&left.source_index))
     });
 
@@ -166,7 +178,7 @@ pub fn read_mail(
         false
     } else {
         apply_display_mutations(
-            &mut mailbox_messages,
+            &mut source_files,
             &selected,
             query.ack_activation_mode,
             own_inbox,
@@ -174,14 +186,13 @@ pub fn read_mail(
     };
 
     if mutation_applied {
-        let inbox_path = home::inbox_path_from_home(&query.home_dir, &target.team, &target.agent)?;
-        mailbox::atomic::write_messages(&inbox_path, &mailbox_messages)?;
+        persist_source_files(&source_files)?;
     }
 
     if query.seen_state_update && !selected.is_empty() {
         if let Some(latest_timestamp) = selected
             .iter()
-            .map(|message| message.message.timestamp)
+            .map(|message| message.envelope.timestamp)
             .max()
         {
             seen_state::save_seen_watermark(
@@ -197,9 +208,15 @@ pub fn read_mail(
         .into_iter()
         .map(|selected_message| ClassifiedMessage {
             source_index: selected_message.source_index,
+            source_path: selected_message.source_path.clone(),
             bucket: selected_message.bucket,
             class: selected_message.class,
-            message: mailbox_messages[selected_message.source_index].clone(),
+            envelope: source_files
+                .iter()
+                .find(|source| source.path == selected_message.source_path)
+                .and_then(|source| source.messages.get(selected_message.source_index))
+                .cloned()
+                .unwrap_or(selected_message.envelope),
         })
         .collect::<Vec<_>>();
 
@@ -311,37 +328,103 @@ fn load_team_config(team_dir: &Path) -> Result<TeamConfig, AtmError> {
     })
 }
 
-fn load_inbox_messages(
+fn load_source_files(
     home_dir: &Path,
     team: &str,
     agent: &str,
-) -> Result<Vec<MessageEnvelope>, AtmError> {
+) -> Result<Vec<SourceFile>, AtmError> {
     let inbox_path = home::inbox_path_from_home(home_dir, team, agent)?;
-    let messages = mailbox::read_messages(&inbox_path)?;
-    Ok(dedupe_messages(messages))
+    let inboxes_dir = inbox_path
+        .parent()
+        .ok_or_else(|| AtmError::mailbox_read("inbox path has no parent directory"))?;
+    let inboxes_dir = inboxes_dir.to_path_buf();
+
+    let mut paths = vec![inbox_path];
+    paths.extend(discover_origin_inboxes(&inboxes_dir, agent)?);
+
+    let mut sources = Vec::with_capacity(paths.len());
+    for path in paths {
+        let messages = mailbox::read_messages(&path)?;
+        sources.push(SourceFile { path, messages });
+    }
+
+    Ok(sources)
 }
 
-fn dedupe_messages(messages: Vec<MessageEnvelope>) -> Vec<MessageEnvelope> {
+fn discover_origin_inboxes(inboxes_dir: &Path, agent: &str) -> Result<Vec<PathBuf>, AtmError> {
+    if !inboxes_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let prefix = format!("{agent}.");
+    let mut paths = fs::read_dir(inboxes_dir)
+        .map_err(|error| {
+            AtmError::new(
+                AtmErrorKind::MailboxRead,
+                format!(
+                    "failed to read inbox directory {}: {error}",
+                    inboxes_dir.display()
+                ),
+            )
+            .with_source(error)
+        })?
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| {
+            path.file_name()
+                .and_then(|value| value.to_str())
+                .map(|name| {
+                    name.starts_with(&prefix)
+                        && name.ends_with(".json")
+                        && name != format!("{agent}.json")
+                })
+                .unwrap_or(false)
+        })
+        .collect::<Vec<_>>();
+
+    paths.sort();
+    Ok(paths)
+}
+
+fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
+    source_files
+        .iter()
+        .flat_map(|source| {
+            source
+                .messages
+                .iter()
+                .cloned()
+                .enumerate()
+                .map(|(source_index, envelope)| SourcedMessage {
+                    envelope,
+                    source_path: source.path.clone(),
+                    source_index,
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
     let mut latest_for_id: HashMap<Uuid, (DateTime<Utc>, usize)> = HashMap::new();
     for (index, message) in messages.iter().enumerate() {
-        if let Some(message_id) = message.message_id {
+        if let Some(message_id) = message.envelope.message_id {
             latest_for_id
                 .entry(message_id)
                 .and_modify(|entry| {
-                    if message.timestamp > entry.0
-                        || (message.timestamp == entry.0 && index > entry.1)
+                    if message.envelope.timestamp > entry.0
+                        || (message.envelope.timestamp == entry.0 && index > entry.1)
                     {
-                        *entry = (message.timestamp, index);
+                        *entry = (message.envelope.timestamp, index);
                     }
                 })
-                .or_insert((message.timestamp, index));
+                .or_insert((message.envelope.timestamp, index));
         }
     }
 
     messages
         .into_iter()
         .enumerate()
-        .filter_map(|(index, message)| match message.message_id {
+        .filter_map(|(index, message)| match message.envelope.message_id {
             Some(message_id) => latest_for_id
                 .get(&message_id)
                 .and_then(|(_, keep_index)| (*keep_index == index).then_some(message)),
@@ -350,52 +433,37 @@ fn dedupe_messages(messages: Vec<MessageEnvelope>) -> Vec<MessageEnvelope> {
         .collect()
 }
 
-fn build_derived_messages(
-    messages: Vec<MessageEnvelope>,
-    sender_filter: Option<&str>,
-    timestamp_filter: Option<DateTime<Utc>>,
-) -> Vec<ClassifiedMessage> {
+fn classify_all(messages: Vec<SourcedMessage>) -> Vec<ClassifiedMessage> {
     messages
         .into_iter()
-        .enumerate()
-        .filter(|(_, message)| {
-            sender_filter
-                .map(|sender| message.from == sender)
-                .unwrap_or(true)
-                && timestamp_filter
-                    .map(|since| message.timestamp >= since)
-                    .unwrap_or(true)
-        })
-        .map(|(source_index, message)| {
-            let class = state::classify_message(&message);
+        .map(|message| {
+            let class = state::classify_message(&message.envelope);
             let bucket = state::display_bucket_for_class(class);
 
             ClassifiedMessage {
-                source_index,
+                source_index: message.source_index,
+                source_path: message.source_path,
                 bucket,
                 class,
-                message,
+                envelope: message.envelope,
             }
         })
         .collect()
 }
 
-fn bucket_counts_for(
-    messages: &[ClassifiedMessage],
-    selection_mode: ReadSelection,
-    seen_watermark: Option<DateTime<Utc>>,
-) -> BucketCounts {
-    let count_source = if selection_mode == ReadSelection::All {
-        filters::apply_selection_mode(messages.to_vec(), ReadSelection::All, None)
-    } else {
-        filters::apply_selection_mode(
-            messages.to_vec(),
-            ReadSelection::ActionableWithHistory,
-            seen_watermark,
-        )
-    };
+fn apply_filters(
+    messages: Vec<ClassifiedMessage>,
+    sender_filter: Option<&str>,
+    timestamp_filter: Option<DateTime<Utc>>,
+) -> Vec<ClassifiedMessage> {
+    filters::apply_timestamp_filter(
+        filters::apply_sender_filter(messages, sender_filter),
+        timestamp_filter,
+    )
+}
 
-    count_source.into_iter().fold(
+fn bucket_counts_for(messages: &[ClassifiedMessage]) -> BucketCounts {
+    messages.iter().fold(
         BucketCounts {
             unread: 0,
             pending_ack: 0,
@@ -426,37 +494,22 @@ fn select_messages(
     filters::apply_selection_mode(messages.to_vec(), selection_mode, watermark)
 }
 
-fn message_matches_filters(
-    message: &MessageEnvelope,
-    sender_filter: Option<&str>,
-    timestamp_filter: Option<DateTime<Utc>>,
-    selection_mode: ReadSelection,
+fn selected_after_filters(
+    messages: &[SourcedMessage],
+    query: &ReadQuery,
     seen_watermark: Option<DateTime<Utc>>,
-) -> bool {
-    if let Some(sender) = sender_filter {
-        if message.from != sender {
-            return false;
-        }
-    }
-
-    if let Some(since) = timestamp_filter {
-        if message.timestamp < since {
-            return false;
-        }
-    }
-
-    let classified = ClassifiedMessage {
-        source_index: 0,
-        class: state::classify_message(message),
-        bucket: state::display_bucket_for_class(state::classify_message(message)),
-        message: message.clone(),
-    };
-
-    !select_messages(&[classified], selection_mode, seen_watermark).is_empty()
+) -> Vec<ClassifiedMessage> {
+    let classified = classify_all(messages.to_vec());
+    let filtered = apply_filters(
+        classified,
+        query.sender_filter.as_deref(),
+        query.timestamp_filter,
+    );
+    select_messages(&filtered, query.selection_mode, seen_watermark)
 }
 
 fn apply_display_mutations(
-    mailbox_messages: &mut [MessageEnvelope],
+    source_files: &mut [SourceFile],
     displayed_messages: &[ClassifiedMessage],
     ack_activation_mode: AckActivationMode,
     own_inbox: bool,
@@ -464,24 +517,99 @@ fn apply_display_mutations(
     let mut mutation_applied = false;
     let promote_unread =
         own_inbox && ack_activation_mode == AckActivationMode::PromoteDisplayedUnread;
-    let now = Utc::now();
+    let now = IsoTimestamp::now();
 
     for message in displayed_messages {
-        let stored = &mut mailbox_messages[message.source_index];
-        let was_read = stored.read;
-        let had_pending_ack = stored.pending_ack_at.is_some();
-        let had_acknowledged = stored.acknowledged_at.is_some();
-
-        stored.read = true;
-        if !was_read {
-            mutation_applied = true;
-        }
-
-        if promote_unread && !was_read && !had_pending_ack && !had_acknowledged {
-            stored.pending_ack_at = Some(now);
-            mutation_applied = true;
+        let transitioned = transition_displayed_message(message, promote_unread, now);
+        let updated = transitioned.into_envelope();
+        if updated != message.envelope {
+            if let Some(source_file) = source_files
+                .iter_mut()
+                .find(|source| source.path == message.source_path)
+            {
+                if let Some(stored) = source_file.messages.get_mut(message.source_index) {
+                    *stored = updated;
+                    mutation_applied = true;
+                }
+            }
         }
     }
 
     mutation_applied
+}
+
+fn transition_displayed_message(
+    message: &ClassifiedMessage,
+    promote_unread: bool,
+    now: IsoTimestamp,
+) -> state::TransitionedMessage {
+    let read_state = state::derive_read_state(&message.envelope);
+    let ack_state = state::derive_ack_state(&message.envelope);
+
+    match (read_state, ack_state) {
+        (crate::types::ReadState::Unread, crate::types::AckState::NoAckRequired) if promote_unread => {
+            state::TransitionedMessage::ReadPendingAck(
+                state::StoredMessage::<crate::types::UnreadReadState, crate::types::NoAckState>::from_envelope(
+                    message.envelope.clone(),
+                )
+                .display_and_require_ack(now),
+            )
+        }
+        (crate::types::ReadState::Unread, crate::types::AckState::NoAckRequired) => {
+            state::TransitionedMessage::ReadNoAck(
+                state::StoredMessage::<crate::types::UnreadReadState, crate::types::NoAckState>::from_envelope(
+                    message.envelope.clone(),
+                )
+                .display_without_ack(),
+            )
+        }
+        (crate::types::ReadState::Unread, crate::types::AckState::PendingAck) => {
+            state::TransitionedMessage::ReadPendingAck(
+                state::StoredMessage::<
+                    crate::types::UnreadReadState,
+                    crate::types::PendingAckState,
+                >::from_envelope(message.envelope.clone())
+                .mark_read(),
+            )
+        }
+        (crate::types::ReadState::Unread, crate::types::AckState::Acknowledged)
+        | (crate::types::ReadState::Read, crate::types::AckState::NoAckRequired)
+        | (crate::types::ReadState::Read, crate::types::AckState::PendingAck)
+        | (crate::types::ReadState::Read, crate::types::AckState::Acknowledged) => {
+            let mut unchanged = message.envelope.clone();
+            if !unchanged.read {
+                unchanged.read = true;
+            }
+            state::TransitionedMessage::Unchanged(unchanged)
+        }
+    }
+}
+
+fn persist_source_files(source_files: &[SourceFile]) -> Result<(), AtmError> {
+    for source in source_files {
+        mailbox::atomic::write_messages(&source.path, &source.messages)?;
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::discover_origin_inboxes;
+
+    #[test]
+    fn discover_origin_inboxes_ignores_primary_and_sorts_matches() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let inboxes = tempdir.path();
+        std::fs::write(inboxes.join("arch-ctm.json"), "").expect("primary");
+        std::fs::write(inboxes.join("arch-ctm.host-b.json"), "").expect("host b");
+        std::fs::write(inboxes.join("arch-ctm.host-a.json"), "").expect("host a");
+        std::fs::write(inboxes.join("other.json"), "").expect("other");
+
+        let discovered = discover_origin_inboxes(inboxes, "arch-ctm").expect("discover");
+
+        assert_eq!(discovered.len(), 2);
+        assert!(discovered[0].ends_with("arch-ctm.host-a.json"));
+        assert!(discovered[1].ends_with("arch-ctm.host-b.json"));
+    }
 }

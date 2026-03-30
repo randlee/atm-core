@@ -3,29 +3,27 @@ use chrono::{DateTime, Utc};
 use crate::read::ClassifiedMessage;
 use crate::types::{DisplayBucket, ReadSelection};
 
-use crate::schema::MessageEnvelope;
-
 pub fn apply_sender_filter(
-    messages: Vec<MessageEnvelope>,
+    messages: Vec<ClassifiedMessage>,
     sender: Option<&str>,
-) -> Vec<MessageEnvelope> {
+) -> Vec<ClassifiedMessage> {
     match sender {
         Some(sender) => messages
             .into_iter()
-            .filter(|message| message.from == sender)
+            .filter(|message| message.envelope.from == sender)
             .collect(),
         None => messages,
     }
 }
 
 pub fn apply_timestamp_filter(
-    messages: Vec<MessageEnvelope>,
+    messages: Vec<ClassifiedMessage>,
     since: Option<DateTime<Utc>>,
-) -> Vec<MessageEnvelope> {
+) -> Vec<ClassifiedMessage> {
     match since {
         Some(since) => messages
             .into_iter()
-            .filter(|message| message.timestamp >= since)
+            .filter(|message| message.envelope.timestamp >= since)
             .collect(),
         None => messages,
     }
@@ -56,7 +54,7 @@ pub fn apply_selection_mode(
 
 fn history_visible(message: &ClassifiedMessage, seen_watermark: Option<DateTime<Utc>>) -> bool {
     match seen_watermark {
-        Some(watermark) => message.message.timestamp > watermark,
+        Some(watermark) => message.envelope.timestamp > watermark,
         None => true,
     }
 }

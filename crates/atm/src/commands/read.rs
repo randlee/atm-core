@@ -61,6 +61,8 @@ impl ReadCommand {
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
+        // --since-last-seen is the default; explicitly setting it has the same effect.
+        let _ = self.since_last_seen;
         let selection_mode = self.selection_mode();
         let timestamp_filter = self.since.as_deref().map(parse_timestamp).transpose()?;
 
