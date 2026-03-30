@@ -10,26 +10,38 @@ use std::path::Path;
 
 use tracing::warn;
 
-use crate::error::Error;
+use crate::error::{AtmError, AtmErrorKind};
 use crate::schema::MessageEnvelope;
 
-pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), Error> {
+pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), AtmError> {
     let mut messages = read_messages(path)?;
     messages.push(envelope.clone());
     atomic::write_messages(path, &messages)
 }
 
-pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, Error> {
+pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
     if !path.exists() {
         return Ok(Vec::new());
     }
 
-    let file = fs::File::open(path)?;
+    let file = fs::File::open(path).map_err(|error| {
+        AtmError::new(
+            AtmErrorKind::MailboxRead,
+            format!("failed to open mailbox file: {error}"),
+        )
+        .with_source(error)
+    })?;
     let reader = std::io::BufReader::new(file);
     let mut messages = Vec::new();
 
     for (index, line) in reader.lines().enumerate() {
-        let line = line?;
+        let line = line.map_err(|error| {
+            AtmError::new(
+                AtmErrorKind::MailboxRead,
+                format!("failed to read mailbox line: {error}"),
+            )
+            .with_source(error)
+        })?;
         if line.trim().is_empty() {
             continue;
         }

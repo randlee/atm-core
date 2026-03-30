@@ -9,14 +9,20 @@ use std::path::{Path, PathBuf};
 
 pub use types::AtmConfig;
 
-use crate::error::Error;
+use crate::error::{AtmError, AtmErrorKind};
 
-pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, Error> {
+pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
     let Some(path) = find_config_path(start_dir) else {
         return Ok(None);
     };
 
-    let contents = fs::read_to_string(path)?;
+    let contents = fs::read_to_string(path).map_err(|error| {
+        AtmError::new(
+            AtmErrorKind::Config,
+            format!("failed to read config: {error}"),
+        )
+        .with_source(error)
+    })?;
     Ok(Some(toml::from_str(&contents)?))
 }
 

@@ -1,9 +1,9 @@
 use std::env;
 use std::path::PathBuf;
 
-use crate::error::Error;
+use crate::error::AtmError;
 
-pub fn atm_home() -> Result<PathBuf, Error> {
+pub fn atm_home() -> Result<PathBuf, AtmError> {
     if let Some(home) = env::var_os("ATM_HOME").filter(|value| !value.is_empty()) {
         return Ok(PathBuf::from(home));
     }
@@ -11,15 +11,15 @@ pub fn atm_home() -> Result<PathBuf, Error> {
     resolve_user_home().map(|home| home.join(".local").join("share").join("atm"))
 }
 
-pub fn team_dir(team: &str) -> Result<PathBuf, Error> {
+pub fn team_dir(team: &str) -> Result<PathBuf, AtmError> {
     Ok(atm_home()?.join("teams").join(team))
 }
 
-pub fn inbox_path(team: &str, agent: &str) -> Result<PathBuf, Error> {
+pub fn inbox_path(team: &str, agent: &str) -> Result<PathBuf, AtmError> {
     Ok(team_dir(team)?.join("inbox").join(format!("{agent}.jsonl")))
 }
 
-fn resolve_user_home() -> Result<PathBuf, Error> {
+fn resolve_user_home() -> Result<PathBuf, AtmError> {
     env::var_os("HOME")
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)
@@ -28,7 +28,7 @@ fn resolve_user_home() -> Result<PathBuf, Error> {
                 .filter(|value| !value.is_empty())
                 .map(PathBuf::from)
         })
-        .ok_or(Error::HomeDirectoryUnavailable)
+        .ok_or_else(AtmError::home_directory_unavailable)
 }
 
 #[cfg(test)]

@@ -3,18 +3,19 @@ pub mod hook;
 pub use hook::HookIdentity;
 
 use crate::config::AtmConfig;
-use crate::error::Error;
+use crate::error::AtmError;
 
-pub fn resolve_sender_identity(config: Option<&AtmConfig>) -> Result<String, Error> {
-    crate::config::resolve_identity(config).ok_or(Error::IdentityUnavailable)
+pub fn resolve_sender_identity(config: Option<&AtmConfig>) -> Result<String, AtmError> {
+    crate::config::resolve_identity(config).ok_or_else(AtmError::identity_unavailable)
 }
 
 pub fn resolve_hook_identity(
     team_override: Option<&str>,
     config: Option<&AtmConfig>,
-) -> Result<HookIdentity, Error> {
+) -> Result<HookIdentity, AtmError> {
     let agent = resolve_sender_identity(config)?;
-    let team = crate::config::resolve_team(team_override, config).ok_or(Error::TeamUnavailable)?;
+    let team = crate::config::resolve_team(team_override, config)
+        .ok_or_else(AtmError::team_unavailable)?;
     Ok(HookIdentity { agent, team })
 }
 

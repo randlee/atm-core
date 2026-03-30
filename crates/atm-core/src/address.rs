@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use crate::error::Error;
+use crate::error::AtmError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentAddress {
@@ -9,25 +9,25 @@ pub struct AgentAddress {
 }
 
 impl FromStr for AgentAddress {
-    type Err = Error;
+    type Err = AtmError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let trimmed = value.trim();
         if trimmed.is_empty() {
-            return Err(Error::AddressParse("agent name must not be empty".into()));
+            return Err(AtmError::address_parse("agent name must not be empty"));
         }
 
         match trimmed.split_once('@') {
             Some((agent, team)) => {
                 if agent.is_empty() {
-                    return Err(Error::AddressParse("agent name must not be empty".into()));
+                    return Err(AtmError::address_parse("agent name must not be empty"));
                 }
                 if team.is_empty() {
-                    return Err(Error::AddressParse("team name must not be empty".into()));
+                    return Err(AtmError::address_parse("team name must not be empty"));
                 }
                 if team.contains('@') {
-                    return Err(Error::AddressParse(
-                        "address must contain at most one @ separator".into(),
+                    return Err(AtmError::address_parse(
+                        "address must contain at most one @ separator",
                     ));
                 }
 
