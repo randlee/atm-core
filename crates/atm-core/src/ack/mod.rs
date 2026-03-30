@@ -1,6 +1,8 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use chrono::{DateTime, Utc};
 use serde::Serialize;
 use serde_json::Map;
 use uuid::Uuid;
@@ -33,8 +35,24 @@ pub struct AckOutcome {
     pub team: String,
     pub agent: String,
     pub message_id: Uuid,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_id: Option<String>,
     pub reply_target: String,
     pub reply_message_id: Uuid,
+    pub reply_text: String,
+}
+
+#[derive(Debug, Clone)]
+struct SourceFile {
+    path: PathBuf,
+    messages: Vec<MessageEnvelope>,
+}
+
+#[derive(Debug, Clone)]
+struct SourcedMessage {
+    envelope: MessageEnvelope,
+    source_path: PathBuf,
+    source_index: usize,
 }
 
 pub fn ack_mail(
@@ -59,12 +77,10 @@ pub fn ack_mail(
         return Err(AtmError::agent_not_found(&actor, &team));
     }
 
-    let inbox_path = home::inbox_path_from_home(&request.home_dir, &team, &actor)?;
-    let mut source_messages = mailbox::read_messages(&inbox_path)?;
-    let source_messages_original = source_messages.clone();
-    let source_index = source_messages
-        .iter()
-        .position(|message| message.message_id == Some(request.message_id))
+    let mut source_files = load_source_files(&request.home_dir, &team, &actor)?;
+    let source_message = dedupe_sourced_messages(merged_surface(&source_files))
+        .into_iter()
+        .find(|message| message.envelope.message_id == Some(request.message_id))
         .ok_or_else(|| {
             AtmError::validation(format!(
                 "message {} was not found in {}@{}",
@@ -72,8 +88,7 @@ pub fn ack_mail(
             ))
         })?;
 
-    let source_message = &source_messages[source_index];
-    match state::classify_message(source_message) {
+    match state::classify_message(&source_message.envelope) {
         MessageClass::PendingAck => {}
         MessageClass::Acknowledged => {
             return Err(AtmError::validation(format!(
@@ -89,7 +104,7 @@ pub fn ack_mail(
         }
     }
 
-    let (reply_agent, reply_team) = resolve_reply_target(source_message, &team)?;
+    let (reply_agent, reply_team) = resolve_reply_target(&source_message.envelope, &team)?;
     let reply_team_dir = home::team_dir_from_home(&request.home_dir, &reply_team)?;
     if !reply_team_dir.exists() {
         return Err(AtmError::team_not_found(&reply_team));
@@ -107,6 +122,7 @@ pub fn ack_mail(
     let ack_timestamp = IsoTimestamp::now();
     let reply_text = input::validate_message_text(request.reply_body)?;
     let reply_message_id = Uuid::new_v4();
+    let source_task_id = source_message.envelope.task_id.clone();
     let reply_message = MessageEnvelope {
         from: actor.clone(),
         text: reply_text.clone(),
@@ -122,38 +138,26 @@ pub fn ack_mail(
         extra: Map::new(),
     };
 
-    {
-        let source = &mut source_messages[source_index];
-        source.read = true;
-        source.pending_ack_at = None;
-        source.acknowledged_at = Some(ack_timestamp.into_inner());
-    }
+    update_source_message(
+        &mut source_files,
+        &source_message,
+        ack_timestamp.into_inner(),
+    )?;
 
     let reply_inbox_path =
         home::inbox_path_from_home(&request.home_dir, &reply_team, &reply_agent)?;
-    if reply_inbox_path == inbox_path {
-        source_messages.push(reply_message);
-        mailbox::atomic::write_messages(&inbox_path, &source_messages)?;
-    } else {
-        let reply_messages_original = mailbox::read_messages(&reply_inbox_path)?;
-        let mut reply_messages = reply_messages_original.clone();
-        reply_messages.push(reply_message);
-
-        mailbox::atomic::write_messages(&inbox_path, &source_messages)?;
-        if let Err(error) = mailbox::atomic::write_messages(&reply_inbox_path, &reply_messages) {
-            let _ = mailbox::atomic::write_messages(&inbox_path, &source_messages_original);
-            let _ = mailbox::atomic::write_messages(&reply_inbox_path, &reply_messages_original);
-            return Err(error);
-        }
-    }
+    append_reply_message(&mut source_files, &reply_inbox_path, reply_message)?;
+    persist_source_files(&source_files)?;
 
     let outcome = AckOutcome {
         action: "ack",
         team: team.clone(),
         agent: actor.clone(),
         message_id: request.message_id,
+        task_id: source_task_id.clone(),
         reply_target: format!("{reply_agent}@{reply_team}"),
         reply_message_id,
+        reply_text: reply_text.clone(),
     };
 
     let _ = observability.emit_command_event(CommandEvent {
@@ -166,7 +170,7 @@ pub fn ack_mail(
         message_id: request.message_id.to_string(),
         requires_ack: false,
         dry_run: false,
-        task_id: None,
+        task_id: source_task_id,
     });
 
     Ok(outcome)
@@ -230,4 +234,170 @@ fn load_team_config(team_dir: &Path) -> Result<TeamConfig, AtmError> {
         )
         .with_source(error)
     })
+}
+
+fn load_source_files(
+    home_dir: &Path,
+    team: &str,
+    agent: &str,
+) -> Result<Vec<SourceFile>, AtmError> {
+    let inbox_path = home::inbox_path_from_home(home_dir, team, agent)?;
+    let inboxes_dir = inbox_path
+        .parent()
+        .ok_or_else(|| AtmError::mailbox_read("inbox path has no parent directory"))?;
+    let inboxes_dir = inboxes_dir.to_path_buf();
+
+    let mut paths = vec![inbox_path];
+    paths.extend(discover_origin_inboxes(&inboxes_dir, agent)?);
+
+    let mut sources = Vec::with_capacity(paths.len());
+    for path in paths {
+        sources.push(SourceFile {
+            messages: mailbox::read_messages(&path)?,
+            path,
+        });
+    }
+
+    Ok(sources)
+}
+
+fn discover_origin_inboxes(inboxes_dir: &Path, agent: &str) -> Result<Vec<PathBuf>, AtmError> {
+    if !inboxes_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let prefix = format!("{agent}.");
+    let mut paths = fs::read_dir(inboxes_dir)
+        .map_err(|error| {
+            AtmError::new(
+                AtmErrorKind::MailboxRead,
+                format!(
+                    "failed to read inbox directory {}: {error}",
+                    inboxes_dir.display()
+                ),
+            )
+            .with_source(error)
+        })?
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| {
+            path.file_name()
+                .and_then(|value| value.to_str())
+                .map(|name| {
+                    name.starts_with(&prefix)
+                        && name.ends_with(".json")
+                        && name != format!("{agent}.json")
+                })
+                .unwrap_or(false)
+        })
+        .collect::<Vec<_>>();
+
+    paths.sort();
+    Ok(paths)
+}
+
+fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
+    source_files
+        .iter()
+        .flat_map(|source| {
+            source
+                .messages
+                .iter()
+                .cloned()
+                .enumerate()
+                .map(|(source_index, envelope)| SourcedMessage {
+                    envelope,
+                    source_path: source.path.clone(),
+                    source_index,
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
+    let mut latest_for_id: HashMap<Uuid, (DateTime<Utc>, usize)> = HashMap::new();
+    for (index, message) in messages.iter().enumerate() {
+        if let Some(message_id) = message.envelope.message_id {
+            latest_for_id
+                .entry(message_id)
+                .and_modify(|entry| {
+                    if message.envelope.timestamp > entry.0
+                        || (message.envelope.timestamp == entry.0 && index > entry.1)
+                    {
+                        *entry = (message.envelope.timestamp, index);
+                    }
+                })
+                .or_insert((message.envelope.timestamp, index));
+        }
+    }
+
+    messages
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, message)| match message.envelope.message_id {
+            Some(message_id) => latest_for_id
+                .get(&message_id)
+                .and_then(|(_, keep_index)| (*keep_index == index).then_some(message)),
+            None => Some(message),
+        })
+        .collect()
+}
+
+fn update_source_message(
+    source_files: &mut [SourceFile],
+    source_message: &SourcedMessage,
+    acknowledged_at: DateTime<Utc>,
+) -> Result<(), AtmError> {
+    let source_file = source_files
+        .iter_mut()
+        .find(|source| source.path == source_message.source_path)
+        .ok_or_else(|| {
+            AtmError::mailbox_write(format!(
+                "source inbox disappeared during acknowledgement: {}",
+                source_message.source_path.display()
+            ))
+        })?;
+
+    let stored = source_file
+        .messages
+        .get_mut(source_message.source_index)
+        .ok_or_else(|| {
+            AtmError::mailbox_write(format!(
+                "source message index {} disappeared during acknowledgement",
+                source_message.source_index
+            ))
+        })?;
+
+    stored.read = true;
+    stored.pending_ack_at = None;
+    stored.acknowledged_at = Some(acknowledged_at);
+    Ok(())
+}
+
+fn append_reply_message(
+    source_files: &mut Vec<SourceFile>,
+    reply_inbox_path: &Path,
+    reply_message: MessageEnvelope,
+) -> Result<(), AtmError> {
+    if let Some(source_file) = source_files
+        .iter_mut()
+        .find(|source| source.path == reply_inbox_path)
+    {
+        source_file.messages.push(reply_message);
+        return Ok(());
+    }
+
+    source_files.push(SourceFile {
+        path: reply_inbox_path.to_path_buf(),
+        messages: vec![reply_message],
+    });
+    source_files.sort_by(|left, right| left.path.cmp(&right.path));
+    Ok(())
+}
+
+fn persist_source_files(source_files: &[SourceFile]) -> Result<(), AtmError> {
+    for source in source_files {
+        mailbox::atomic::write_messages(&source.path, &source.messages)?;
+    }
+    Ok(())
 }

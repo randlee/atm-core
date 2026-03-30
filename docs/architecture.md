@@ -489,8 +489,10 @@ Public entrypoint:
 - resolved team
 - resolved agent
 - source message id
+- optional task id from the acknowledged message
 - reply target
 - reply message id
+- reply text
 
 The ack service is responsible for the legal transition from `(Read, PendingAck)` to `(Read, Acknowledged)` plus the reply append.
 
@@ -509,7 +511,6 @@ Public entrypoint:
 - optional target address
 - team override
 - optional age filter
-- include pending-ack flag
 - idle-only flag
 - dry-run flag
 
@@ -524,10 +525,6 @@ Public entrypoint:
 Clear eligibility is computed from the two-axis model:
 - clearable: `(Read, NoAckRequired)` and `(Read, Acknowledged)`
 - non-clearable: every other combination
-
-If `include pending-ack flag` is enabled, the clearable set expands to include:
-- `(Unread, PendingAck)`
-- `(Read, PendingAck)`
 
 ### 6.5 Observability Boundary
 

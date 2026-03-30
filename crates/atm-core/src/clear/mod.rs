@@ -1,10 +1,12 @@
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use chrono::{TimeDelta, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use serde::Serialize;
 use serde_json::Value;
+use uuid::Uuid;
 
 use crate::address::AgentAddress;
 use crate::config;
@@ -47,6 +49,19 @@ pub struct ClearOutcome {
     pub removed_by_class: RemovedByClass,
 }
 
+#[derive(Debug, Clone)]
+struct SourceFile {
+    path: PathBuf,
+    messages: Vec<MessageEnvelope>,
+}
+
+#[derive(Debug, Clone)]
+struct SourcedMessage {
+    envelope: MessageEnvelope,
+    source_path: PathBuf,
+    source_index: usize,
+}
+
 pub fn clear_mail(
     query: ClearQuery,
     observability: &dyn ObservabilityPort,
@@ -75,38 +90,40 @@ pub fn clear_mail(
         return Err(AtmError::agent_not_found(&target.agent, &target.team));
     }
 
-    let inbox_path = home::inbox_path_from_home(&query.home_dir, &target.team, &target.agent)?;
-    let messages = mailbox::read_messages(&inbox_path)?;
+    let mut source_files = load_source_files(&query.home_dir, &target.team, &target.agent)?;
+    let merged = dedupe_sourced_messages(merged_surface(&source_files));
     let cutoff = cutoff_timestamp(query.older_than)?;
 
-    let mut kept = Vec::with_capacity(messages.len());
     let mut removed_by_class = RemovedByClass::default();
-
-    for message in messages {
-        let class = state::classify_message(&message);
-        let clearable = matches!(class, MessageClass::Read | MessageClass::Acknowledged)
-            && cutoff
-                .map(|cutoff| message.timestamp <= cutoff)
-                .unwrap_or(true)
-            && (!query.idle_only || is_idle_notification(&message));
-
-        if clearable {
-            count_removed(&mut removed_by_class, class);
-        } else {
-            kept.push(message);
-        }
-    }
+    let removable = merged
+        .iter()
+        .filter(|message| is_clearable(message, cutoff, query.idle_only))
+        .inspect(|message| {
+            count_removed(
+                &mut removed_by_class,
+                state::classify_message(&message.envelope),
+            )
+        })
+        .map(|message| (message.source_path.clone(), message.source_index))
+        .collect::<HashSet<_>>();
 
     if !query.dry_run {
-        mailbox::atomic::write_messages(&inbox_path, &kept)?;
+        apply_removals(&mut source_files, &removable);
+        persist_source_files(&source_files)?;
     }
+
+    let remaining_total = if query.dry_run {
+        merged.len().saturating_sub(removable.len())
+    } else {
+        dedupe_sourced_messages(merged_surface(&source_files)).len()
+    };
 
     let outcome = ClearOutcome {
         action: "clear",
         team: target.team,
         agent: target.agent,
-        removed_total: removed_total(&removed_by_class),
-        remaining_total: kept.len(),
+        removed_total: removable.len(),
+        remaining_total,
         removed_by_class,
     };
 
@@ -202,6 +219,113 @@ fn load_team_config(team_dir: &Path) -> Result<TeamConfig, AtmError> {
     })
 }
 
+fn load_source_files(
+    home_dir: &Path,
+    team: &str,
+    agent: &str,
+) -> Result<Vec<SourceFile>, AtmError> {
+    let inbox_path = home::inbox_path_from_home(home_dir, team, agent)?;
+    let inboxes_dir = inbox_path
+        .parent()
+        .ok_or_else(|| AtmError::mailbox_read("inbox path has no parent directory"))?;
+    let inboxes_dir = inboxes_dir.to_path_buf();
+
+    let mut paths = vec![inbox_path];
+    paths.extend(discover_origin_inboxes(&inboxes_dir, agent)?);
+
+    let mut sources = Vec::with_capacity(paths.len());
+    for path in paths {
+        sources.push(SourceFile {
+            messages: mailbox::read_messages(&path)?,
+            path,
+        });
+    }
+
+    Ok(sources)
+}
+
+fn discover_origin_inboxes(inboxes_dir: &Path, agent: &str) -> Result<Vec<PathBuf>, AtmError> {
+    if !inboxes_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let prefix = format!("{agent}.");
+    let mut paths = fs::read_dir(inboxes_dir)
+        .map_err(|error| {
+            AtmError::new(
+                AtmErrorKind::MailboxRead,
+                format!(
+                    "failed to read inbox directory {}: {error}",
+                    inboxes_dir.display()
+                ),
+            )
+            .with_source(error)
+        })?
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| {
+            path.file_name()
+                .and_then(|value| value.to_str())
+                .map(|name| {
+                    name.starts_with(&prefix)
+                        && name.ends_with(".json")
+                        && name != format!("{agent}.json")
+                })
+                .unwrap_or(false)
+        })
+        .collect::<Vec<_>>();
+
+    paths.sort();
+    Ok(paths)
+}
+
+fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
+    source_files
+        .iter()
+        .flat_map(|source| {
+            source
+                .messages
+                .iter()
+                .cloned()
+                .enumerate()
+                .map(|(source_index, envelope)| SourcedMessage {
+                    envelope,
+                    source_path: source.path.clone(),
+                    source_index,
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
+    let mut latest_for_id: HashMap<Uuid, (DateTime<Utc>, usize)> = HashMap::new();
+    for (index, message) in messages.iter().enumerate() {
+        if let Some(message_id) = message.envelope.message_id {
+            latest_for_id
+                .entry(message_id)
+                .and_modify(|entry| {
+                    if message.envelope.timestamp > entry.0
+                        || (message.envelope.timestamp == entry.0 && index > entry.1)
+                    {
+                        *entry = (message.envelope.timestamp, index);
+                    }
+                })
+                .or_insert((message.envelope.timestamp, index));
+        }
+    }
+
+    messages
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, message)| match message.envelope.message_id {
+            Some(message_id) => latest_for_id
+                .get(&message_id)
+                .and_then(|(_, keep_index)| (*keep_index == index).then_some(message)),
+            None => Some(message),
+        })
+        .collect()
+}
+
 fn cutoff_timestamp(
     older_than: Option<Duration>,
 ) -> Result<Option<chrono::DateTime<Utc>>, AtmError> {
@@ -212,6 +336,15 @@ fn cutoff_timestamp(
         })
         .transpose()
         .map(|delta| delta.map(|delta| Utc::now() - delta))
+}
+
+fn is_clearable(message: &SourcedMessage, cutoff: Option<DateTime<Utc>>, idle_only: bool) -> bool {
+    let class = state::classify_message(&message.envelope);
+    matches!(class, MessageClass::Read | MessageClass::Acknowledged)
+        && cutoff
+            .map(|cutoff| message.envelope.timestamp <= cutoff)
+            .unwrap_or(true)
+        && (!idle_only || is_idle_notification(&message.envelope))
 }
 
 fn is_idle_notification(message: &MessageEnvelope) -> bool {
@@ -231,6 +364,23 @@ fn count_removed(counts: &mut RemovedByClass, class: MessageClass) {
     }
 }
 
-fn removed_total(counts: &RemovedByClass) -> usize {
-    counts.unread + counts.pending_ack + counts.acknowledged + counts.read
+fn apply_removals(source_files: &mut [SourceFile], removable: &HashSet<(PathBuf, usize)>) {
+    for source in source_files {
+        source.messages = source
+            .messages
+            .iter()
+            .cloned()
+            .enumerate()
+            .filter_map(|(index, message)| {
+                (!removable.contains(&(source.path.clone(), index))).then_some(message)
+            })
+            .collect();
+    }
+}
+
+fn persist_source_files(source_files: &[SourceFile]) -> Result<(), AtmError> {
+    for source in source_files {
+        mailbox::atomic::write_messages(&source.path, &source.messages)?;
+    }
+    Ok(())
 }

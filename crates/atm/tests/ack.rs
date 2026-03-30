@@ -10,17 +10,16 @@ use uuid::Uuid;
 fn test_ack_transitions_pending_ack_and_appends_reply() {
     let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
     let message_id = Uuid::new_v4();
-    fixture.write_inbox(
-        "arch-ctm",
-        &[fixture.message(
-            "team-lead",
-            "please ack",
-            true,
-            Some(Duration::minutes(5)),
-            None,
-            message_id,
-        )],
+    let mut message = fixture.message(
+        "team-lead",
+        "please ack",
+        true,
+        Some(Duration::minutes(5)),
+        None,
+        message_id,
     );
+    message.task_id = Some("TASK-123".into());
+    fixture.write_inbox("arch-ctm", &[message]);
 
     let output = fixture.run(&[
         "ack",
@@ -40,7 +39,9 @@ fn test_ack_transitions_pending_ack_and_appends_reply() {
     assert_eq!(parsed["team"], "atm-dev");
     assert_eq!(parsed["agent"], "arch-ctm");
     assert_eq!(parsed["message_id"], message_id.to_string());
+    assert_eq!(parsed["task_id"], "TASK-123");
     assert_eq!(parsed["reply_target"], "team-lead@atm-dev");
+    assert_eq!(parsed["reply_text"], "received and starting");
     assert!(parsed["reply_message_id"].as_str().is_some());
 
     let inbox = fixture.inbox_contents("arch-ctm");
@@ -54,6 +55,36 @@ fn test_ack_transitions_pending_ack_and_appends_reply() {
     assert_eq!(replies[0].text, "received and starting");
     assert_eq!(replies[0].from, "arch-ctm");
     assert_eq!(replies[0].acknowledges_message_id, Some(message_id));
+}
+
+#[test]
+fn test_ack_updates_origin_inbox_file() {
+    let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
+    let message_id = Uuid::new_v4();
+    fixture.write_origin_inbox(
+        "arch-ctm",
+        "host-a",
+        &[fixture.message(
+            "team-lead",
+            "origin pending",
+            true,
+            Some(Duration::minutes(5)),
+            None,
+            message_id,
+        )],
+    );
+
+    let output = fixture.run(&["ack", &message_id.to_string(), "got it", "--json"]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+
+    let origin = fixture.origin_inbox_contents("arch-ctm", "host-a");
+    assert_eq!(origin.len(), 1);
+    assert!(origin[0].pending_ack_at.is_none());
+    assert!(origin[0].acknowledged_at.is_some());
 }
 
 #[test]
@@ -164,6 +195,33 @@ impl Fixture {
 
     fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {
         let raw = fs::read_to_string(self.inbox_path(agent)).expect("inbox contents");
+        raw.lines()
+            .map(|line| serde_json::from_str(line).expect("json line"))
+            .collect()
+    }
+
+    fn write_origin_inbox(&self, agent: &str, origin: &str, messages: &[MessageEnvelope]) {
+        let inbox_path = self.origin_inbox_path(agent, origin);
+        if let Some(parent) = inbox_path.parent() {
+            fs::create_dir_all(parent).expect("origin inbox dir");
+        }
+        let raw = messages
+            .iter()
+            .map(|message| serde_json::to_string(message).expect("json line"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(inbox_path, format!("{raw}\n")).expect("write origin inbox");
+    }
+
+    fn origin_inbox_path(&self, agent: &str, origin: &str) -> std::path::PathBuf {
+        self.team_dir()
+            .join("inboxes")
+            .join(format!("{agent}.{origin}.json"))
+    }
+
+    fn origin_inbox_contents(&self, agent: &str, origin: &str) -> Vec<MessageEnvelope> {
+        let raw = fs::read_to_string(self.origin_inbox_path(agent, origin))
+            .expect("origin inbox contents");
         raw.lines()
             .map(|line| serde_json::from_str(line).expect("json line"))
             .collect()

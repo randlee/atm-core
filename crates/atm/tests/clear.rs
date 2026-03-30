@@ -100,6 +100,36 @@ fn test_clear_dry_run_does_not_mutate() {
 }
 
 #[test]
+fn test_clear_never_removes_pending_ack() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[fixture.message(
+            "team-lead",
+            "pending",
+            true,
+            Some(Utc::now() - Duration::days(2)),
+            None,
+            Utc::now() - Duration::days(2),
+        )],
+    );
+
+    let output = fixture.run(&["clear", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["removed_total"], 0);
+    assert_eq!(fixture.inbox_contents("arch-ctm").len(), 1);
+    assert!(fixture.inbox_contents("arch-ctm")[0]
+        .pending_ack_at
+        .is_some());
+}
+
+#[test]
 fn test_clear_idle_only_removes_only_idle_notifications() {
     let fixture = Fixture::new(&["arch-ctm"]);
     fixture.write_inbox(
@@ -141,6 +171,51 @@ fn test_clear_idle_only_removes_only_idle_notifications() {
 }
 
 #[test]
+fn test_clear_preserves_unknown_fields_on_retained_messages() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    let mut retained = fixture.message(
+        "team-lead",
+        "pending",
+        true,
+        Some(Utc::now() - Duration::days(2)),
+        None,
+        Utc::now() - Duration::days(2),
+    );
+    retained
+        .extra
+        .insert("futureField".into(), serde_json::json!({"nested": true}));
+
+    fixture.write_inbox(
+        "arch-ctm",
+        &[
+            fixture.message(
+                "team-lead",
+                "clearable",
+                true,
+                None,
+                None,
+                Utc::now() - Duration::days(3),
+            ),
+            retained,
+        ],
+    );
+
+    let output = fixture.run(&["clear", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let inbox = fixture.inbox_contents("arch-ctm");
+    assert_eq!(inbox.len(), 1);
+    assert_eq!(
+        inbox[0].extra["futureField"],
+        serde_json::json!({"nested": true})
+    );
+}
+
+#[test]
 fn test_clear_older_than_filters_candidates() {
     let fixture = Fixture::new(&["arch-ctm"]);
     fixture.write_inbox(
@@ -178,6 +253,72 @@ fn test_clear_older_than_filters_candidates() {
     let inbox = fixture.inbox_contents("arch-ctm");
     assert_eq!(inbox.len(), 1);
     assert_eq!(inbox[0].text, "newer");
+}
+
+#[test]
+fn test_clear_explicit_target() {
+    let fixture = Fixture::new(&["arch-ctm", "agent-b"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[fixture.message(
+            "team-lead",
+            "keep mine",
+            true,
+            None,
+            None,
+            Utc::now() - Duration::days(10),
+        )],
+    );
+    fixture.write_inbox(
+        "agent-b",
+        &[fixture.message(
+            "team-lead",
+            "clear agent b",
+            true,
+            None,
+            None,
+            Utc::now() - Duration::days(10),
+        )],
+    );
+
+    let output = fixture.run(&["clear", "agent-b", "--as", "arch-ctm", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["agent"], "agent-b");
+    assert_eq!(parsed["removed_total"], 1);
+    assert_eq!(fixture.inbox_contents("agent-b").len(), 0);
+    assert_eq!(fixture.inbox_contents("arch-ctm").len(), 1);
+}
+
+#[test]
+fn test_clear_removes_from_origin_inbox_file() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_origin_inbox(
+        "arch-ctm",
+        "host-a",
+        &[fixture.message(
+            "team-lead",
+            "origin read",
+            true,
+            None,
+            None,
+            Utc::now() - Duration::days(8),
+        )],
+    );
+
+    let output = fixture.run(&["clear", "--json"]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+
+    assert_eq!(fixture.origin_inbox_contents("arch-ctm", "host-a").len(), 0);
 }
 
 struct Fixture {
@@ -241,6 +382,33 @@ impl Fixture {
 
     fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {
         let raw = fs::read_to_string(self.inbox_path(agent)).expect("inbox contents");
+        raw.lines()
+            .map(|line| serde_json::from_str(line).expect("json line"))
+            .collect()
+    }
+
+    fn write_origin_inbox(&self, agent: &str, origin: &str, messages: &[MessageEnvelope]) {
+        let inbox_path = self.origin_inbox_path(agent, origin);
+        if let Some(parent) = inbox_path.parent() {
+            fs::create_dir_all(parent).expect("origin inbox dir");
+        }
+        let raw = messages
+            .iter()
+            .map(|message| serde_json::to_string(message).expect("json line"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(inbox_path, format!("{raw}\n")).expect("write origin inbox");
+    }
+
+    fn origin_inbox_path(&self, agent: &str, origin: &str) -> std::path::PathBuf {
+        self.team_dir()
+            .join("inboxes")
+            .join(format!("{agent}.{origin}.json"))
+    }
+
+    fn origin_inbox_contents(&self, agent: &str, origin: &str) -> Vec<MessageEnvelope> {
+        let raw = fs::read_to_string(self.origin_inbox_path(agent, origin))
+            .expect("origin inbox contents");
         raw.lines()
             .map(|line| serde_json::from_str(line).expect("json line"))
             .collect()

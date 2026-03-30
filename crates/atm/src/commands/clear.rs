@@ -12,6 +12,9 @@ use crate::output;
 pub struct ClearCommand {
     target: Option<String>,
 
+    #[arg(long = "as")]
+    actor_override: Option<String>,
+
     #[arg(long)]
     team: Option<String>,
 
@@ -38,7 +41,7 @@ impl ClearCommand {
             ClearQuery {
                 home_dir,
                 current_dir,
-                actor_override: None,
+                actor_override: self.actor_override,
                 target_address: self.target,
                 team_override: self.team,
                 older_than,

@@ -514,7 +514,9 @@ JSON output must include:
 - `team`
 - `agent`
 - `message_id`
-- `reply_sent`
+- `reply_message_id`
+- `reply_text`
+- `task_id` when the source message has `taskId`
 - `reply_target`
 
 ## 9. `atm clear`
@@ -526,9 +528,9 @@ Remove non-actionable messages from one inbox without touching actionable work.
 ### 9.2 Supported Flags
 
 - optional target agent: `agent` or `agent@team`
+- `--as <name>`
 - `--team <name>`
 - `--older-than <duration>`
-- `--all-pending-ack`
 - `--idle-only`
 - `--dry-run`
 - `--json`
@@ -544,7 +546,7 @@ Default clear behavior removes only clearable messages:
 - `(Read, NoAckRequired)`
 - `(Read, Acknowledged)`
 
-Without `--all-pending-ack`, clear must never remove:
+Clear must never remove:
 - `(Unread, NoAckRequired)`
 - `(Unread, PendingAck)`
 - `(Read, PendingAck)`
@@ -552,14 +554,8 @@ Without `--all-pending-ack`, clear must never remove:
 Additional rules:
 - `--idle-only` narrows removal to idle-notification messages only
 - `--older-than` further filters the clearable set by message timestamp age
-- `--all-pending-ack` expands the clearable set to include entries with ack
-  axis `PendingAck`
-- combining `--older-than 7d --all-pending-ack` clears stale pending-ack items
 - dry-run returns the computed removal set without mutation
 - clearing must preserve unknown fields on messages that remain
-
-`--all-pending-ack` does not make unread non-ack mail clearable. It only adds
-pending-ack entries to the otherwise clearable set.
 
 ### 9.4 Output Contract
 
