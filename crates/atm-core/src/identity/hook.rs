@@ -6,6 +6,7 @@ use crate::error::AtmError;
 
 const HOOK_FILE_TTL_SECS: f64 = 5.0;
 
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HookIdentity {
     pub agent: String,
