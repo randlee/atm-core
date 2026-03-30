@@ -141,7 +141,7 @@ pub fn send_mail(
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
         sender,
-        message_id: outcome.message_id.to_string(),
+        message_id: Some(outcome.message_id),
         requires_ack: outcome.requires_ack,
         dry_run: outcome.dry_run,
         task_id,

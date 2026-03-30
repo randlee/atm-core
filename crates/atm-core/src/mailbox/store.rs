@@ -1,1 +1,1 @@
-// TODO: implement mailbox storage access.
+//! Internal mailbox storage helpers reserved for future implementation.

@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, Utc};
 use serde::Serialize;
 use tracing::warn;
 use uuid::Uuid;
@@ -35,7 +34,7 @@ pub struct ReadQuery {
     pub ack_activation_mode: AckActivationMode,
     pub limit: Option<usize>,
     pub sender_filter: Option<String>,
-    pub timestamp_filter: Option<DateTime<Utc>>,
+    pub timestamp_filter: Option<IsoTimestamp>,
     pub timeout_secs: Option<u64>,
 }
 
@@ -78,7 +77,7 @@ struct SourceFile {
 }
 
 #[derive(Debug, Clone)]
-pub struct SourcedMessage {
+struct SourcedMessage {
     pub envelope: MessageEnvelope,
     pub source_path: PathBuf,
     pub source_index: usize,
@@ -200,7 +199,7 @@ pub fn read_mail(
                 &query.home_dir,
                 &target.team,
                 &target.agent,
-                latest_timestamp.into_inner(),
+                latest_timestamp,
             )?;
         }
     }
@@ -244,7 +243,7 @@ pub fn read_mail(
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
         sender: actor,
-        message_id: String::new(),
+        message_id: None,
         requires_ack: false,
         dry_run: false,
         task_id: None,
@@ -358,6 +357,7 @@ fn discover_origin_inboxes(inboxes_dir: &Path, agent: &str) -> Result<Vec<PathBu
     }
 
     let prefix = format!("{agent}.");
+    let primary = format!("{agent}.json");
     let mut paths = fs::read_dir(inboxes_dir)
         .map_err(|error| {
             AtmError::new(
@@ -384,11 +384,7 @@ fn discover_origin_inboxes(inboxes_dir: &Path, agent: &str) -> Result<Vec<PathBu
         .filter(|path| {
             path.file_name()
                 .and_then(|value| value.to_str())
-                .map(|name| {
-                    name.starts_with(&prefix)
-                        && name.ends_with(".json")
-                        && name != format!("{agent}.json")
-                })
+                .map(|name| name.starts_with(&prefix) && name.ends_with(".json") && name != primary)
                 .unwrap_or(false)
         })
         .collect::<Vec<_>>();
@@ -411,7 +407,6 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
                     source_path: source.path.clone(),
                     source_index,
                 })
-                .collect::<Vec<_>>()
         })
         .collect()
 }
@@ -466,7 +461,7 @@ fn classify_all(messages: Vec<SourcedMessage>) -> Vec<ClassifiedMessage> {
 fn apply_filters(
     messages: Vec<ClassifiedMessage>,
     sender_filter: Option<&str>,
-    timestamp_filter: Option<DateTime<Utc>>,
+    timestamp_filter: Option<IsoTimestamp>,
 ) -> Vec<ClassifiedMessage> {
     filters::apply_timestamp_filter(
         filters::apply_sender_filter(messages, sender_filter),
@@ -495,7 +490,7 @@ fn bucket_counts_for(messages: &[ClassifiedMessage]) -> BucketCounts {
 fn select_messages(
     messages: &[ClassifiedMessage],
     selection_mode: ReadSelection,
-    seen_watermark: Option<DateTime<Utc>>,
+    seen_watermark: Option<IsoTimestamp>,
 ) -> Vec<ClassifiedMessage> {
     let watermark = if selection_mode == ReadSelection::All {
         None
@@ -509,7 +504,7 @@ fn select_messages(
 fn selected_after_filters(
     messages: &[SourcedMessage],
     query: &ReadQuery,
-    seen_watermark: Option<DateTime<Utc>>,
+    seen_watermark: Option<IsoTimestamp>,
 ) -> Vec<ClassifiedMessage> {
     let classified = classify_all(messages.to_vec());
     let filtered = apply_filters(
@@ -561,7 +556,7 @@ fn transition_displayed_message(
     match (read_state, ack_state) {
         (crate::types::ReadState::Unread, crate::types::AckState::NoAckRequired) if promote_unread => {
             state::TransitionedMessage::ReadPendingAck(
-                state::StoredMessage::<crate::types::UnreadReadState, crate::types::NoAckState>::from_envelope(
+                state::StoredMessage::<crate::types::UnreadReadState, crate::types::NoAckState>::unread_no_ack(
                     message.envelope.clone(),
                 )
                 .display_and_require_ack(now),
@@ -569,7 +564,7 @@ fn transition_displayed_message(
         }
         (crate::types::ReadState::Unread, crate::types::AckState::NoAckRequired) => {
             state::TransitionedMessage::ReadNoAck(
-                state::StoredMessage::<crate::types::UnreadReadState, crate::types::NoAckState>::from_envelope(
+                state::StoredMessage::<crate::types::UnreadReadState, crate::types::NoAckState>::unread_no_ack(
                     message.envelope.clone(),
                 )
                 .display_without_ack(),
@@ -580,7 +575,7 @@ fn transition_displayed_message(
                 state::StoredMessage::<
                     crate::types::UnreadReadState,
                     crate::types::PendingAckState,
-                >::from_envelope(message.envelope.clone())
+                >::unread_pending_ack(message.envelope.clone())
                 .mark_read_pending_ack(),
             )
         }

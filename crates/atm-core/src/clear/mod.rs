@@ -133,7 +133,7 @@ pub fn clear_mail(
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
         sender: actor,
-        message_id: String::new(),
+        message_id: None,
         requires_ack: false,
         dry_run: query.dry_run,
         task_id: None,
@@ -249,6 +249,7 @@ fn discover_origin_inboxes(inboxes_dir: &Path, agent: &str) -> Result<Vec<PathBu
     }
 
     let prefix = format!("{agent}.");
+    let primary = format!("{agent}.json");
     let mut paths = fs::read_dir(inboxes_dir)
         .map_err(|error| {
             AtmError::new(
@@ -275,11 +276,7 @@ fn discover_origin_inboxes(inboxes_dir: &Path, agent: &str) -> Result<Vec<PathBu
         .filter(|path| {
             path.file_name()
                 .and_then(|value| value.to_str())
-                .map(|name| {
-                    name.starts_with(&prefix)
-                        && name.ends_with(".json")
-                        && name != format!("{agent}.json")
-                })
+                .map(|name| name.starts_with(&prefix) && name.ends_with(".json") && name != primary)
                 .unwrap_or(false)
         })
         .collect::<Vec<_>>();
@@ -302,7 +299,6 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
                     source_path: source.path.clone(),
                     source_index,
                 })
-                .collect::<Vec<_>>()
         })
         .collect()
 }

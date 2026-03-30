@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use serde_json::Map;
-use tracing::warn;
+use tracing::{trace, warn};
 use uuid::Uuid;
 
 use crate::address::AgentAddress;
@@ -80,6 +80,17 @@ pub fn ack_mail(
     let mut source_files = load_source_files(&request.home_dir, &team, &actor)?;
     let source_message = dedupe_sourced_messages(merged_surface(&source_files))
         .into_iter()
+        .filter_map(|message| match message.envelope.message_id {
+            Some(_) => Some(message),
+            None => {
+                trace!(
+                    source_path = %message.source_path.display(),
+                    source_index = message.source_index,
+                    "skipping source message without message_id during ack lookup"
+                );
+                None
+            }
+        })
         .find(|message| message.envelope.message_id == Some(request.message_id))
         .ok_or_else(|| {
             AtmError::validation(format!(
@@ -166,7 +177,7 @@ pub fn ack_mail(
         team,
         agent: actor.clone(),
         sender: actor,
-        message_id: request.message_id.to_string(),
+        message_id: Some(request.message_id),
         requires_ack: false,
         dry_run: false,
         task_id: source_task_id,
@@ -266,6 +277,7 @@ fn discover_origin_inboxes(inboxes_dir: &Path, agent: &str) -> Result<Vec<PathBu
     }
 
     let prefix = format!("{agent}.");
+    let primary = format!("{agent}.json");
     let mut paths = fs::read_dir(inboxes_dir)
         .map_err(|error| {
             AtmError::new(
@@ -292,11 +304,7 @@ fn discover_origin_inboxes(inboxes_dir: &Path, agent: &str) -> Result<Vec<PathBu
         .filter(|path| {
             path.file_name()
                 .and_then(|value| value.to_str())
-                .map(|name| {
-                    name.starts_with(&prefix)
-                        && name.ends_with(".json")
-                        && name != format!("{agent}.json")
-                })
+                .map(|name| name.starts_with(&prefix) && name.ends_with(".json") && name != primary)
                 .unwrap_or(false)
         })
         .collect::<Vec<_>>();
@@ -319,7 +327,6 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
                     source_path: source.path.clone(),
                     source_index,
                 })
-                .collect::<Vec<_>>()
         })
         .collect()
 }
@@ -381,7 +388,7 @@ fn update_source_message(
     let transitioned = state::StoredMessage::<
         crate::types::ReadReadState,
         crate::types::PendingAckState,
-    >::from_envelope(stored.clone())
+    >::read_pending_ack(stored.clone())
     .acknowledge(acknowledged_at)
     .envelope;
     *stored = transitioned;
