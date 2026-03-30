@@ -1,16 +1,38 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MessageEnvelope {
-    pub message_id: Uuid,
     pub from: String,
-    pub team: String,
-    pub body: String,
-    pub requires_ack: bool,
-    pub task_id: Option<String>,
-    pub sent_at: DateTime<Utc>,
+    pub text: String,
+    pub timestamp: DateTime<Utc>,
+    pub read: bool,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_team: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message_id: Option<Uuid>,
+
+    #[serde(rename = "pendingAckAt", skip_serializing_if = "Option::is_none")]
+    pub pending_ack_at: Option<DateTime<Utc>>,
+
+    #[serde(rename = "acknowledgedAt", skip_serializing_if = "Option::is_none")]
+    pub acknowledged_at: Option<DateTime<Utc>>,
+
+    #[serde(
+        rename = "acknowledgesMessageId",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub acknowledges_message_id: Option<Uuid>,
+
+    #[serde(flatten)]
+    pub extra: Map<String, Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -23,30 +45,68 @@ pub struct PendingAck {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{TimeZone, Utc};
-    use uuid::Uuid;
+    use chrono::TimeZone;
+    use serde_json::{json, Map};
 
-    use super::{MessageEnvelope, PendingAck};
+    use super::{MessageEnvelope, PendingAck, Utc, Uuid};
 
     #[test]
-    fn message_envelope_round_trips_with_uuid_message_id() {
+    fn message_envelope_round_trips_with_current_inbox_shape() {
         let envelope = MessageEnvelope {
-            message_id: Uuid::new_v4(),
             from: "arch-ctm".into(),
-            team: "atm-dev".into(),
-            body: "hello".into(),
-            requires_ack: true,
-            task_id: Some("TASK-1".into()),
-            sent_at: Utc
+            text: "hello".into(),
+            timestamp: Utc
                 .with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
                 .single()
                 .expect("timestamp"),
+            read: false,
+            source_team: Some("atm-dev".into()),
+            summary: Some("hello".into()),
+            message_id: Some(Uuid::new_v4()),
+            pending_ack_at: Some(
+                Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 1)
+                    .single()
+                    .expect("timestamp"),
+            ),
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            extra: Map::new(),
         };
 
         let encoded = serde_json::to_string(&envelope).expect("encode");
         let decoded: MessageEnvelope = serde_json::from_str(&encoded).expect("decode");
 
         assert_eq!(decoded, envelope);
+    }
+
+    #[test]
+    fn unknown_fields_are_preserved() {
+        let json = json!({
+            "from": "team-lead",
+            "text": "hello",
+            "timestamp": "2026-03-30T00:00:00Z",
+            "read": false,
+            "futureField": {"nested": true}
+        });
+
+        let decoded: MessageEnvelope = serde_json::from_value(json).expect("decode");
+        assert_eq!(decoded.extra["futureField"], json!({"nested": true}));
+
+        let reencoded = serde_json::to_value(&decoded).expect("encode");
+        assert_eq!(reencoded["futureField"], json!({"nested": true}));
+    }
+
+    #[test]
+    fn message_id_is_optional() {
+        let json = json!({
+            "from": "team-lead",
+            "text": "hello",
+            "timestamp": "2026-03-30T00:00:00Z",
+            "read": false
+        });
+
+        let decoded: MessageEnvelope = serde_json::from_value(json).expect("decode");
+        assert!(decoded.message_id.is_none());
     }
 
     #[test]

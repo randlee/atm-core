@@ -206,6 +206,7 @@ Retired from the current implementation:
 - support dry-run without mutation
 - support sender-controlled ack-required messages
 - support optional task metadata on sent messages
+- `atm send` MUST generate and write a non-null UUID v4 as `message_id` for every sent message. `message_id` is optional in the persisted schema (§12.1) to support legacy messages written by older clients, but `atm send` never omits it.
 - write a non-null `message_id` on every ATM-authored message
 - generate `message_id` as a UUID v4 at send time
 

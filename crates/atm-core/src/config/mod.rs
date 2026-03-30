@@ -61,14 +61,8 @@ mod tests {
     use std::env;
     use std::fs;
     use std::path::PathBuf;
-    use std::sync::{Mutex, OnceLock};
 
     use super::{load_config, resolve_identity, resolve_team, AtmConfig};
-
-    fn env_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-    }
 
     #[test]
     fn load_config_walks_upward_for_dot_atm_toml() {
@@ -87,8 +81,8 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn identity_prefers_environment_over_config() {
-        let _guard = env_lock().lock().expect("env lock");
         let original_identity = env::var_os("ATM_IDENTITY");
         env::set_var("ATM_IDENTITY", "env-identity");
 
@@ -105,8 +99,8 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn team_resolution_prefers_flag_then_env_then_config() {
-        let _guard = env_lock().lock().expect("env lock");
         let original_team = env::var_os("ATM_TEAM");
         env::set_var("ATM_TEAM", "env-team");
 

@@ -8,15 +8,17 @@ pub fn atm_home() -> Result<PathBuf, AtmError> {
         return Ok(PathBuf::from(home));
     }
 
-    resolve_user_home().map(|home| home.join(".local").join("share").join("atm"))
+    resolve_user_home()
 }
 
 pub fn team_dir(team: &str) -> Result<PathBuf, AtmError> {
-    Ok(atm_home()?.join("teams").join(team))
+    Ok(atm_home()?.join(".claude").join("teams").join(team))
 }
 
 pub fn inbox_path(team: &str, agent: &str) -> Result<PathBuf, AtmError> {
-    Ok(team_dir(team)?.join("inbox").join(format!("{agent}.jsonl")))
+    Ok(team_dir(team)?
+        .join("inboxes")
+        .join(format!("{agent}.json")))
 }
 
 fn resolve_user_home() -> Result<PathBuf, AtmError> {
@@ -33,9 +35,10 @@ fn resolve_user_home() -> Result<PathBuf, AtmError> {
 
 #[cfg(test)]
 mod tests {
-    use std::env;
-    use std::path::PathBuf;
+    use std::ffi::OsString;
     use std::sync::{Mutex, OnceLock};
+
+    use tempfile::TempDir;
 
     use super::{atm_home, inbox_path, team_dir};
 
@@ -44,64 +47,83 @@ mod tests {
         LOCK.get_or_init(|| Mutex::new(()))
     }
 
+    struct EnvGuard {
+        key: &'static str,
+        original: Option<OsString>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &'static str, value: &std::path::Path) -> Self {
+            let original = std::env::var_os(key);
+            std::env::set_var(key, value);
+            Self { key, original }
+        }
+
+        #[cfg(unix)]
+        fn set_raw(key: &'static str, value: &str) -> Self {
+            let original = std::env::var_os(key);
+            std::env::set_var(key, value);
+            Self { key, original }
+        }
+
+        #[cfg(unix)]
+        fn remove(key: &'static str) -> Self {
+            let original = std::env::var_os(key);
+            std::env::remove_var(key);
+            Self { key, original }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match self.original.take() {
+                Some(value) => std::env::set_var(self.key, value),
+                None => std::env::remove_var(self.key),
+            }
+        }
+    }
+
     #[test]
     fn atm_home_prefers_atm_home_env() {
         let _guard = env_lock().lock().expect("env lock");
-        let original_atm_home = env::var_os("ATM_HOME");
-        let original_home = env::var_os("HOME");
-
-        env::set_var("ATM_HOME", "/tmp/atm-home");
-        env::set_var("HOME", "/tmp/user-home");
+        let tempdir = TempDir::new().expect("tempdir");
+        let _atm_home = EnvGuard::set("ATM_HOME", tempdir.path());
 
         let resolved = atm_home().expect("atm home");
-        assert_eq!(resolved, PathBuf::from("/tmp/atm-home"));
+        assert_eq!(resolved, tempdir.path());
+    }
 
-        restore("ATM_HOME", original_atm_home);
-        restore("HOME", original_home);
+    #[cfg(unix)]
+    #[test]
+    fn atm_home_falls_back_to_home_dir() {
+        let _guard = env_lock().lock().expect("env lock");
+        let tempdir = TempDir::new().expect("tempdir");
+        let _atm_home = EnvGuard::remove("ATM_HOME");
+        let _home = EnvGuard::set_raw("HOME", tempdir.path().to_str().expect("utf8 path"));
+
+        let resolved = atm_home().expect("atm home");
+        assert_eq!(resolved, tempdir.path());
     }
 
     #[test]
-    fn atm_home_falls_back_to_local_share_atm() {
+    fn team_and_inbox_paths_use_claude_team_layout() {
         let _guard = env_lock().lock().expect("env lock");
-        let original_atm_home = env::var_os("ATM_HOME");
-        let original_home = env::var_os("HOME");
-
-        env::remove_var("ATM_HOME");
-        env::set_var("HOME", "/tmp/fallback-home");
-
-        let resolved = atm_home().expect("atm home");
-        assert_eq!(
-            resolved,
-            PathBuf::from("/tmp/fallback-home/.local/share/atm")
-        );
-
-        restore("ATM_HOME", original_atm_home);
-        restore("HOME", original_home);
-    }
-
-    #[test]
-    fn team_and_inbox_paths_use_atm_home_layout() {
-        let _guard = env_lock().lock().expect("env lock");
-        let original_atm_home = env::var_os("ATM_HOME");
-
-        env::set_var("ATM_HOME", "/tmp/atm-home");
+        let tempdir = TempDir::new().expect("tempdir");
+        let _atm_home = EnvGuard::set("ATM_HOME", tempdir.path());
 
         assert_eq!(
             team_dir("atm-dev").expect("team dir"),
-            PathBuf::from("/tmp/atm-home/teams/atm-dev")
+            tempdir.path().join(".claude").join("teams").join("atm-dev")
         );
         assert_eq!(
             inbox_path("atm-dev", "arch-ctm").expect("inbox path"),
-            PathBuf::from("/tmp/atm-home/teams/atm-dev/inbox/arch-ctm.jsonl")
+            tempdir
+                .path()
+                .join(".claude")
+                .join("teams")
+                .join("atm-dev")
+                .join("inboxes")
+                .join("arch-ctm.json")
         );
-
-        restore("ATM_HOME", original_atm_home);
-    }
-
-    fn restore(key: &str, value: Option<std::ffi::OsString>) {
-        match value {
-            Some(value) => env::set_var(key, value),
-            None => env::remove_var(key),
-        }
     }
 }
