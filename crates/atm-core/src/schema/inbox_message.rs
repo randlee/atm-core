@@ -31,6 +31,9 @@ pub struct MessageEnvelope {
     )]
     pub acknowledges_message_id: Option<Uuid>,
 
+    #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]
+    pub task_id: Option<String>,
+
     #[serde(flatten)]
     pub extra: Map<String, Value>,
 }
@@ -70,6 +73,7 @@ mod tests {
             ),
             acknowledged_at: None,
             acknowledges_message_id: None,
+            task_id: Some("TASK-123".into()),
             extra: Map::new(),
         };
 
@@ -107,6 +111,7 @@ mod tests {
 
         let decoded: MessageEnvelope = serde_json::from_value(json).expect("decode");
         assert!(decoded.message_id.is_none());
+        assert!(decoded.task_id.is_none());
     }
 
     #[test]

@@ -10,7 +10,7 @@ use crate::output;
 
 #[derive(Debug, Args)]
 pub struct SendCommand {
-    #[arg(long = "to")]
+    #[arg()]
     to: String,
 
     #[arg(long = "message", short = 'm')]

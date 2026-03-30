@@ -154,6 +154,7 @@ mod tests {
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
+            task_id: None,
             extra: serde_json::Map::new(),
         }
     }
