@@ -13,7 +13,7 @@ pub struct SendCommand {
     #[arg()]
     to: String,
 
-    #[arg(long = "message", short = 'm')]
+    #[arg(index = 2)]
     message: Option<String>,
 
     #[arg(long)]
@@ -75,7 +75,7 @@ impl SendCommand {
         }
 
         if self.stdin && self.message.is_some() {
-            anyhow::bail!("--stdin and --message are mutually exclusive");
+            anyhow::bail!("--stdin and positional message text are mutually exclusive");
         }
 
         match (&self.file, self.stdin, &self.message) {
@@ -86,7 +86,7 @@ impl SendCommand {
             (None, true, None) => Ok(SendMessageSource::Stdin),
             (None, false, Some(message)) => Ok(SendMessageSource::Inline(message.clone())),
             (None, false, None) => {
-                anyhow::bail!("provide exactly one of --message, --file, or --stdin")
+                anyhow::bail!("provide message text, --file, or --stdin")
             }
             (Some(_), true, _) => unreachable!("validated above"),
             (None, true, Some(_)) => unreachable!("validated above"),
