@@ -9,6 +9,7 @@ pub fn truncate(s: &str, max_chars: usize) -> &str {
     }
 }
 
+#[cfg(test)]
 pub fn wrap_lines(s: &str, width: usize) -> String {
     if width == 0 {
         return s.to_string();

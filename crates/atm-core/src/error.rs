@@ -3,7 +3,7 @@ use std::error::Error as StdError;
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AtmErrorKind {
+pub(crate) enum AtmErrorKind {
     Config,
     Address,
     Identity,
@@ -30,7 +30,7 @@ pub struct AtmError {
 }
 
 impl AtmError {
-    pub fn new(kind: AtmErrorKind, message: impl Into<String>) -> Self {
+    pub(crate) fn new(kind: AtmErrorKind, message: impl Into<String>) -> Self {
         Self {
             kind,
             message: message.into(),

@@ -1,6 +1,7 @@
 pub mod hook;
 
-pub use hook::HookIdentity;
+#[cfg(test)]
+use hook::HookIdentity;
 
 use crate::config::AtmConfig;
 use crate::error::AtmError;
@@ -9,6 +10,7 @@ pub fn resolve_sender_identity(config: Option<&AtmConfig>) -> Result<String, Atm
     crate::config::resolve_identity(config).ok_or_else(AtmError::identity_unavailable)
 }
 
+#[cfg(test)]
 pub fn resolve_hook_identity(
     team_override: Option<&str>,
     config: Option<&AtmConfig>,

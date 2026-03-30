@@ -9,9 +9,8 @@ use crate::types::{
 #[derive(Debug, Clone)]
 pub struct StoredMessage<R, A> {
     pub envelope: MessageEnvelope,
-    // Phantom typestate markers keep legal transitions on the type without storing runtime data.
-    _read: PhantomData<R>,
-    _ack: PhantomData<A>,
+    _read: PhantomData<R>, // covariant in R; the typestate marker is never mutably borrowed.
+    _ack: PhantomData<A>,  // covariant in A; the typestate marker is never mutably borrowed.
 }
 
 impl StoredMessage<UnreadReadState, NoAckState> {

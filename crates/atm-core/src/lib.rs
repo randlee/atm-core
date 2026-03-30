@@ -1,17 +1,34 @@
+/// Acknowledgement workflows for ack-required mailbox messages.
 pub mod ack;
-pub mod address;
+/// Internal agent-address parsing and normalization helpers.
+pub(crate) mod address;
+/// Mailbox cleanup workflows for read and acknowledged messages.
 pub mod clear;
-pub mod config;
+/// Internal configuration discovery and resolution helpers.
+pub(crate) mod config;
+/// Doctor-report types and health checks for the CLI surface.
 pub mod doctor;
+/// Shared ATM error types and recovery-oriented error helpers.
 pub mod error;
+/// Public ATM home and team-path resolution helpers.
 pub mod home;
-pub mod identity;
+/// Internal identity resolution and hook lookup helpers.
+pub(crate) mod identity;
+/// Log query and filtering types for the CLI log surface.
 pub mod log;
-pub mod mailbox;
-pub mod model_registry;
+/// Internal mailbox persistence and parsing helpers.
+pub(crate) mod mailbox;
+/// Internal model-registry plumbing reserved for follow-on work.
+pub(crate) mod model_registry;
+/// Observability adapter traits and event payload types.
 pub mod observability;
+/// Mailbox read/query workflows and output models.
 pub mod read;
+/// Public mailbox and team schema types shared with CLI tests and adapters.
 pub mod schema;
+/// Mailbox send workflows and request/response models.
 pub mod send;
-pub mod text;
+/// Internal text-formatting helpers used by ATM core surfaces.
+pub(crate) mod text;
+/// Shared enums and semantic newtypes used across ATM core workflows.
 pub mod types;
