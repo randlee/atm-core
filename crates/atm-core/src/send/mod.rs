@@ -112,6 +112,7 @@ pub fn send_mail(
             pending_ack_at: requires_ack.then_some(timestamp),
             acknowledged_at: None,
             acknowledges_message_id: None,
+            task_id: task_id.clone(),
             extra: Map::new(),
         };
         let inbox_path =

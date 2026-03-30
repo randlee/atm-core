@@ -7,13 +7,7 @@ use atm_core::schema::{AgentMember, MessageEnvelope, TeamConfig};
 fn test_send_creates_inbox_file() {
     let fixture = Fixture::new("recipient");
 
-    let output = fixture.run(&[
-        "send",
-        "--to",
-        "recipient@atm-dev",
-        "--message",
-        "hello from test",
-    ]);
+    let output = fixture.run(&["send", "recipient@atm-dev", "--message", "hello from test"]);
 
     assert!(
         output.status.success(),
@@ -41,7 +35,6 @@ fn test_send_dry_run_no_file() {
 
     let output = fixture.run(&[
         "send",
-        "--to",
         "recipient@atm-dev",
         "--message",
         "hello from test",
@@ -73,7 +66,6 @@ fn test_send_json_output() {
 
     let output = fixture.run(&[
         "send",
-        "--to",
         "recipient@atm-dev",
         "--message",
         "hello json",
@@ -102,7 +94,6 @@ fn test_send_requires_ack() {
 
     let output = fixture.run(&[
         "send",
-        "--to",
         "recipient@atm-dev",
         "--message",
         "please ack",
@@ -118,6 +109,30 @@ fn test_send_requires_ack() {
     let inbox = fixture.inbox_contents("recipient");
     assert_eq!(inbox.len(), 1);
     assert!(inbox[0].pending_ack_at.is_some());
+}
+
+#[test]
+fn test_send_persists_task_id() {
+    let fixture = Fixture::new("recipient");
+
+    let output = fixture.run(&[
+        "send",
+        "recipient@atm-dev",
+        "--message",
+        "task assignment",
+        "--task-id",
+        "TASK-123",
+    ]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+
+    let inbox = fixture.inbox_contents("recipient");
+    assert_eq!(inbox.len(), 1);
+    assert_eq!(inbox[0].task_id.as_deref(), Some("TASK-123"));
 }
 
 struct Fixture {
