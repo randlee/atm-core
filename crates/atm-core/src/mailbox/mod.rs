@@ -10,26 +10,38 @@ use std::path::Path;
 
 use tracing::warn;
 
-use crate::error::Error;
+use crate::error::{AtmError, AtmErrorKind};
 use crate::schema::MessageEnvelope;
 
-pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), Error> {
+pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), AtmError> {
     let mut messages = read_messages(path)?;
     messages.push(envelope.clone());
     atomic::write_messages(path, &messages)
 }
 
-pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, Error> {
+pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
     if !path.exists() {
         return Ok(Vec::new());
     }
 
-    let file = fs::File::open(path)?;
+    let file = fs::File::open(path).map_err(|error| {
+        AtmError::new(
+            AtmErrorKind::MailboxRead,
+            format!("failed to open mailbox file: {error}"),
+        )
+        .with_source(error)
+    })?;
     let reader = std::io::BufReader::new(file);
     let mut messages = Vec::new();
 
     for (index, line) in reader.lines().enumerate() {
-        let line = line?;
+        let line = line.map_err(|error| {
+            AtmError::new(
+                AtmErrorKind::MailboxRead,
+                format!("failed to read mailbox line: {error}"),
+            )
+            .with_source(error)
+        })?;
         if line.trim().is_empty() {
             continue;
         }
@@ -46,14 +58,17 @@ pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, Error> {
 
     let mut last_indices = HashMap::new();
     for (index, message) in messages.iter().enumerate() {
-        last_indices.insert(message.message_id, index);
+        if let Some(message_id) = message.message_id {
+            last_indices.insert(message_id, index);
+        }
     }
 
     Ok(messages
         .into_iter()
         .enumerate()
-        .filter_map(|(index, message)| {
-            (last_indices.get(&message.message_id) == Some(&index)).then_some(message)
+        .filter_map(|(index, message)| match message.message_id {
+            Some(message_id) => (last_indices.get(&message_id) == Some(&index)).then_some(message),
+            None => Some(message),
         })
         .collect())
 }
@@ -78,7 +93,7 @@ mod tests {
         append_message(&path, &envelope).expect("append");
 
         let raw = fs::read_to_string(&path).expect("raw contents");
-        assert!(raw.contains("\"body\":\"first\""));
+        assert!(raw.contains("\"text\":\"first\""));
         let read_back = read_messages(&path).expect("read back");
         assert_eq!(read_back, vec![envelope]);
     }
@@ -92,7 +107,7 @@ mod tests {
 
         let messages = read_messages(&path).expect("read");
         assert_eq!(messages.len(), 1);
-        assert_eq!(messages[0].body, "valid");
+        assert_eq!(messages[0].text, "valid");
     }
 
     #[test]
@@ -101,7 +116,7 @@ mod tests {
         let message_id = Uuid::new_v4();
         let first = sample_message(message_id, "first");
         let mut second = sample_message(message_id, "second");
-        second.sent_at = Utc
+        second.timestamp = Utc
             .with_ymd_and_hms(2026, 3, 30, 0, 0, 1)
             .single()
             .expect("timestamp");
@@ -115,7 +130,7 @@ mod tests {
 
         let messages = read_messages(&path).expect("read");
         assert_eq!(messages.len(), 1);
-        assert_eq!(messages[0].body, "second");
+        assert_eq!(messages[0].text, "second");
     }
 
     fn unique_path(name: &str) -> std::path::PathBuf {
@@ -126,16 +141,20 @@ mod tests {
 
     fn sample_message(message_id: Uuid, body: &str) -> MessageEnvelope {
         MessageEnvelope {
-            message_id,
             from: "arch-ctm".into(),
-            team: "atm-dev".into(),
-            body: body.into(),
-            requires_ack: false,
-            task_id: None,
-            sent_at: Utc
+            text: body.into(),
+            timestamp: Utc
                 .with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
                 .single()
                 .expect("timestamp"),
+            read: false,
+            source_team: Some("atm-dev".into()),
+            summary: None,
+            message_id: Some(message_id),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            extra: serde_json::Map::new(),
         }
     }
 }

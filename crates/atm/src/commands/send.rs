@@ -1,4 +1,7 @@
+use std::path::PathBuf;
+
 use anyhow::Result;
+use atm_core::home;
 use atm_core::send::{self, SendMessageSource, SendRequest};
 use clap::Args;
 
@@ -14,10 +17,25 @@ pub struct SendCommand {
     message: Option<String>,
 
     #[arg(long)]
-    ack: bool,
+    from: Option<String>,
 
     #[arg(long)]
-    task: Option<String>,
+    team: Option<String>,
+
+    #[arg(long)]
+    file: Option<PathBuf>,
+
+    #[arg(long)]
+    stdin: bool,
+
+    #[arg(long)]
+    summary: Option<String>,
+
+    #[arg(long = "requires-ack")]
+    requires_ack: bool,
+
+    #[arg(long = "task-id")]
+    task_id: Option<String>,
 
     #[arg(long)]
     dry_run: bool,
@@ -29,26 +47,49 @@ pub struct SendCommand {
 impl SendCommand {
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         let current_dir = std::env::current_dir()?;
-        let message_source = match self.message {
-            Some(message) => SendMessageSource::InlineText(message),
-            None => SendMessageSource::StdinText(send::input::read_message_from_stdin()?),
-        };
+        let home_dir = home::atm_home()?;
+        let message_source = self.build_message_source()?;
 
-        let outcome = send::execute(
+        let outcome = send::send_mail(
             SendRequest {
+                home_dir,
                 current_dir,
-                sender_override: None,
-                target_address: self.to,
-                team_override: None,
+                sender_override: self.from,
+                to: self.to,
+                team_override: self.team,
                 message_source,
-                summary_override: None,
-                requires_ack: self.ack,
-                task_id: self.task,
+                summary_override: self.summary,
+                requires_ack: self.requires_ack,
+                task_id: self.task_id,
                 dry_run: self.dry_run,
             },
             observability,
         )?;
 
         output::print_send_result(&outcome, self.json)
+    }
+
+    fn build_message_source(&self) -> Result<SendMessageSource> {
+        if self.stdin && self.file.is_some() {
+            anyhow::bail!("--stdin and --file are mutually exclusive");
+        }
+
+        if self.stdin && self.message.is_some() {
+            anyhow::bail!("--stdin and --message are mutually exclusive");
+        }
+
+        match (&self.file, self.stdin, &self.message) {
+            (Some(path), false, message) => Ok(SendMessageSource::File {
+                path: path.clone(),
+                message: message.clone(),
+            }),
+            (None, true, None) => Ok(SendMessageSource::Stdin),
+            (None, false, Some(message)) => Ok(SendMessageSource::Inline(message.clone())),
+            (None, false, None) => {
+                anyhow::bail!("provide exactly one of --message, --file, or --stdin")
+            }
+            (Some(_), true, _) => unreachable!("validated above"),
+            (None, true, Some(_)) => unreachable!("validated above"),
+        }
     }
 }

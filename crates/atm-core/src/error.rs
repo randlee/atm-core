@@ -1,3 +1,4 @@
+use std::error::Error as StdError;
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -23,10 +24,8 @@ pub struct AtmError {
     pub kind: AtmErrorKind,
     pub message: String,
     pub recovery: Option<String>,
-    pub source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    pub source: Option<Box<dyn StdError + Send + Sync>>,
 }
-
-pub type Error = AtmError;
 
 impl AtmError {
     pub fn new(kind: AtmErrorKind, message: impl Into<String>) -> Self {
@@ -45,7 +44,7 @@ impl AtmError {
 
     pub fn with_source<E>(mut self, source: E) -> Self
     where
-        E: std::error::Error + Send + Sync + 'static,
+        E: StdError + Send + Sync + 'static,
     {
         self.source = Some(Box::new(source));
         self
@@ -64,8 +63,9 @@ impl AtmError {
     }
 
     pub fn identity_unavailable() -> Self {
-        Self::new(AtmErrorKind::Identity, "identity is not configured")
-            .with_recovery("Set ATM_IDENTITY, configure identity in .atm.toml, or pass --from once that flag is available.")
+        Self::new(AtmErrorKind::Identity, "identity is not configured").with_recovery(
+            "Set ATM_IDENTITY, configure identity in .atm.toml, or pass --from once that flag is available.",
+        )
     }
 
     pub fn team_unavailable() -> Self {
@@ -120,11 +120,11 @@ impl fmt::Display for AtmError {
     }
 }
 
-impl std::error::Error for AtmError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl StdError for AtmError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
         self.source
             .as_deref()
-            .map(|error| error as &(dyn std::error::Error + 'static))
+            .map(|source| source as &(dyn StdError + 'static))
     }
 }
 

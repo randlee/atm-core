@@ -2,13 +2,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::error::AtmError;
-use crate::home::atm_home;
 
 pub fn process_file_reference(
     file_path: &Path,
     message_text: Option<&str>,
     team_name: &str,
     current_dir: &Path,
+    home_dir: &Path,
 ) -> Result<String, AtmError> {
     if !file_path.is_file() {
         return Err(AtmError::file_policy(format!(
@@ -21,7 +21,7 @@ pub fn process_file_reference(
         return Ok(render_reference_message(message_text, file_path));
     }
 
-    let share_dir = atm_home()?
+    let share_dir = home_dir
         .join(".config")
         .join("atm")
         .join("share")

@@ -3,11 +3,12 @@ use std::path::{Path, PathBuf};
 
 use chrono::Utc;
 use serde::Serialize;
+use serde_json::Map;
 use uuid::Uuid;
 
 use crate::address::AgentAddress;
 use crate::config;
-use crate::error::AtmError;
+use crate::error::{AtmError, AtmErrorKind};
 use crate::home;
 use crate::identity;
 use crate::mailbox;
@@ -20,16 +21,20 @@ pub mod summary;
 
 #[derive(Debug, Clone)]
 pub enum SendMessageSource {
-    InlineText(String),
-    StdinText(String),
-    FileReference(PathBuf),
+    Inline(String),
+    Stdin,
+    File {
+        path: PathBuf,
+        message: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone)]
 pub struct SendRequest {
+    pub home_dir: PathBuf,
     pub current_dir: PathBuf,
     pub sender_override: Option<String>,
-    pub target_address: String,
+    pub to: String,
     pub team_override: Option<String>,
     pub message_source: SendMessageSource,
     pub summary_override: Option<String>,
@@ -57,19 +62,19 @@ pub struct SendOutcome {
     pub dry_run: bool,
 }
 
-pub fn execute(
+pub fn send_mail(
     request: SendRequest,
     observability: &dyn ObservabilityPort,
 ) -> Result<SendOutcome, AtmError> {
     let config = config::load_config(&request.current_dir)?;
     let sender = resolve_sender_identity(request.sender_override.as_deref(), config.as_ref())?;
     let recipient = resolve_recipient(
-        &request.target_address,
+        &request.to,
         request.team_override.as_deref(),
         config.as_ref(),
     )?;
 
-    let team_dir = home::team_dir(&recipient.team)?;
+    let team_dir = home::team_dir_from_home(&request.home_dir, &recipient.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&recipient.team));
     }
@@ -88,22 +93,29 @@ pub fn execute(
     let body = resolve_message_body(
         &request.message_source,
         &request.current_dir,
+        &request.home_dir,
         &recipient.team,
     )?;
     let summary = summary::build_summary(&body, request.summary_override);
     let message_id = Uuid::new_v4();
+    let timestamp = Utc::now();
 
     if !request.dry_run {
         let envelope = MessageEnvelope {
-            message_id,
             from: sender.clone(),
-            team: recipient.team.clone(),
-            body: body.clone(),
-            requires_ack,
-            task_id: task_id.clone(),
-            sent_at: Utc::now(),
+            text: body.clone(),
+            timestamp,
+            read: false,
+            source_team: Some(recipient.team.clone()),
+            summary: Some(summary.clone()),
+            message_id: Some(message_id),
+            pending_ack_at: requires_ack.then_some(timestamp),
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            extra: Map::new(),
         };
-        let inbox_path = home::inbox_path(&recipient.team, &recipient.agent)?;
+        let inbox_path =
+            home::inbox_path_from_home(&request.home_dir, &recipient.team, &recipient.agent)?;
         mailbox::append_message(&inbox_path, &envelope)?;
     }
 
@@ -147,10 +159,15 @@ fn resolve_sender_identity(
     sender_override: Option<&str>,
     config: Option<&config::AtmConfig>,
 ) -> Result<String, AtmError> {
-    match sender_override.filter(|value| !value.trim().is_empty()) {
-        Some(sender) => Ok(sender.to_string()),
-        None => identity::resolve_sender_identity(config),
+    if let Some(sender) = sender_override.filter(|value| !value.trim().is_empty()) {
+        return Ok(sender.to_string());
     }
+
+    if let Some(identity) = identity::hook::read_hook_identity()? {
+        return Ok(identity);
+    }
+
+    identity::resolve_sender_identity(config)
 }
 
 fn resolve_recipient(
@@ -184,7 +201,7 @@ fn load_team_config(team_dir: &Path) -> Result<TeamConfig, AtmError> {
 
     serde_json::from_str(&raw).map_err(|error| {
         AtmError::new(
-            crate::error::AtmErrorKind::Config,
+            AtmErrorKind::Config,
             format!(
                 "failed to parse team config at {}: {error}",
                 config_path.display()
@@ -197,15 +214,19 @@ fn load_team_config(team_dir: &Path) -> Result<TeamConfig, AtmError> {
 fn resolve_message_body(
     source: &SendMessageSource,
     current_dir: &Path,
+    home_dir: &Path,
     team_name: &str,
 ) -> Result<String, AtmError> {
     match source {
-        SendMessageSource::InlineText(message) | SendMessageSource::StdinText(message) => {
-            input::validate_message_text(message.clone())
-        }
-        SendMessageSource::FileReference(path) => {
-            file_policy::process_file_reference(path, None, team_name, current_dir)
-        }
+        SendMessageSource::Inline(message) => input::validate_message_text(message.clone()),
+        SendMessageSource::Stdin => input::read_message_from_stdin(),
+        SendMessageSource::File { path, message } => file_policy::process_file_reference(
+            path,
+            message.as_deref(),
+            team_name,
+            current_dir,
+            home_dir,
+        ),
     }
 }
 

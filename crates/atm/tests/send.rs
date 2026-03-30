@@ -30,8 +30,9 @@ fn test_send_creates_inbox_file() {
 
     let inbox = fixture.inbox_contents("recipient");
     assert_eq!(inbox.len(), 1);
-    assert_eq!(inbox[0].body, "hello from test");
+    assert_eq!(inbox[0].text, "hello from test");
     assert_eq!(inbox[0].from, "arch-ctm");
+    assert!(inbox[0].message_id.is_some());
 }
 
 #[test]
@@ -105,7 +106,7 @@ fn test_send_requires_ack() {
         "recipient@atm-dev",
         "--message",
         "please ack",
-        "--ack",
+        "--requires-ack",
     ]);
 
     assert!(
@@ -116,7 +117,7 @@ fn test_send_requires_ack() {
 
     let inbox = fixture.inbox_contents("recipient");
     assert_eq!(inbox.len(), 1);
-    assert!(inbox[0].requires_ack);
+    assert!(inbox[0].pending_ack_at.is_some());
 }
 
 struct Fixture {
@@ -142,7 +143,12 @@ impl Fixture {
     }
 
     fn write_team_config(&self, recipient: &str) {
-        let team_dir = self.tempdir.path().join("teams").join("atm-dev");
+        let team_dir = self
+            .tempdir
+            .path()
+            .join(".claude")
+            .join("teams")
+            .join("atm-dev");
         fs::create_dir_all(&team_dir).expect("team dir");
         let config = TeamConfig {
             members: vec![AgentMember {
@@ -159,10 +165,11 @@ impl Fixture {
     fn inbox_path(&self, recipient: &str) -> std::path::PathBuf {
         self.tempdir
             .path()
+            .join(".claude")
             .join("teams")
             .join("atm-dev")
-            .join("inbox")
-            .join(format!("{recipient}.jsonl"))
+            .join("inboxes")
+            .join(format!("{recipient}.json"))
     }
 
     fn inbox_contents(&self, recipient: &str) -> Vec<MessageEnvelope> {

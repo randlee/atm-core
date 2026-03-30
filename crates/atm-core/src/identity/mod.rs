@@ -3,41 +3,33 @@ pub mod hook;
 pub use hook::HookIdentity;
 
 use crate::config::AtmConfig;
-use crate::error::Error;
+use crate::error::AtmError;
 
-pub fn resolve_sender_identity(config: Option<&AtmConfig>) -> Result<String, Error> {
-    crate::config::resolve_identity(config).ok_or_else(Error::identity_unavailable)
+pub fn resolve_sender_identity(config: Option<&AtmConfig>) -> Result<String, AtmError> {
+    crate::config::resolve_identity(config).ok_or_else(AtmError::identity_unavailable)
 }
 
 pub fn resolve_hook_identity(
     team_override: Option<&str>,
     config: Option<&AtmConfig>,
-) -> Result<HookIdentity, Error> {
+) -> Result<HookIdentity, AtmError> {
     let agent = resolve_sender_identity(config)?;
-    let team =
-        crate::config::resolve_team(team_override, config).ok_or_else(Error::team_unavailable)?;
+    let team = crate::config::resolve_team(team_override, config)
+        .ok_or_else(AtmError::team_unavailable)?;
     Ok(HookIdentity { agent, team })
 }
 
 #[cfg(test)]
 mod tests {
     use std::env;
-    use std::sync::{Mutex, OnceLock};
 
     use crate::config::AtmConfig;
 
     use super::{resolve_hook_identity, resolve_sender_identity};
 
-    fn env_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-    }
-
     #[test]
+    #[serial_test::serial]
     fn resolves_sender_identity_from_environment() {
-        let _guard = env_lock()
-            .lock()
-            .unwrap_or_else(|poison| poison.into_inner());
         let original_identity = env::var_os("ATM_IDENTITY");
         env::set_var("ATM_IDENTITY", "arch-ctm");
 
@@ -54,10 +46,8 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn resolves_sender_identity_from_config_when_env_missing() {
-        let _guard = env_lock()
-            .lock()
-            .unwrap_or_else(|poison| poison.into_inner());
         let original_identity = env::var_os("ATM_IDENTITY");
         env::set_var("ATM_IDENTITY", "");
 
@@ -74,10 +64,8 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn resolves_hook_identity_from_environment() {
-        let _guard = env_lock()
-            .lock()
-            .unwrap_or_else(|poison| poison.into_inner());
         let original_identity = env::var_os("ATM_IDENTITY");
         let original_team = env::var_os("ATM_TEAM");
         env::set_var("ATM_IDENTITY", "arch-ctm");
@@ -92,10 +80,8 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn resolves_hook_identity_from_config_when_env_missing() {
-        let _guard = env_lock()
-            .lock()
-            .unwrap_or_else(|poison| poison.into_inner());
         let original_identity = env::var_os("ATM_IDENTITY");
         let original_team = env::var_os("ATM_TEAM");
         env::set_var("ATM_IDENTITY", "");
