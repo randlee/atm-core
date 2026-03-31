@@ -216,8 +216,15 @@ Status summary:
   read-behavior cleanup for idle-notification lifecycle rules.
 - Sprint PG.2 completed the architecture, mailbox-module ownership, and Phase
   PH planning updates.
-- PR #18 is open targeting `develop`, and QA-2 findings were assigned as
-  fix-r2 on this branch before the final QA-3 pass and merge.
+- PR #18 is open targeting `develop`. QA-3 PASSED at 22a956f. Merge is
+  gated on user approval (user is not merging until Phase PH is ready to start).
+- Non-blocking findings from QA-3 tracked for follow-on work:
+  - architecture.md §Clear Pipeline stale "pending-ack override" references
+    (pre-existing, recommend a cleanup sprint — see atm-core issue #20)
+  - `dedupe_sourced_messages` copy-pasted into read/clear/ack modules; drift
+    detected (recommend extraction to mailbox/mod.rs in PH or later — issue #21)
+  - Coverage gaps in error.rs, mailbox/atomic.rs, observability.rs, output.rs
+    (74.2% overall vs 80% guideline; pre-existing)
 
 Sprints:
 - Sprint PG.1 [COMPLETE]
