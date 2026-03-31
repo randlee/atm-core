@@ -18,6 +18,8 @@ restructured, product docs remain in `docs/` and crate-local detail moves into
 Status:
 - Phases 0 through F are complete.
 - Phase G is in progress and is the next delivery focus.
+- Phase PH is planned as the idle-notification send-path follow-on once the
+  PG docs branch is merged.
 
 ## 2. Deliverables
 
@@ -206,6 +208,48 @@ Acceptance:
 - level and field filtering work
 - tail mode works
 - emit failures remain best-effort for mail commands
+
+### Phase PH: Idle-Notification Send-Path Dedup [PLANNED]
+
+Status summary:
+- PG documentation now defines sender-scoped idle-notification dedup, and the
+  next implementation sprint is to land that behavior in the mailbox append
+  boundary after the PG branch merges to `develop`.
+
+Sprint PH.1 goal:
+- implement send-path idle-notification dedup in the mailbox append boundary
+
+Sprint PH.1 deliverables:
+- add a `MessageKind` classification helper that parses message `text` as JSON
+  and returns `Idle`, `TaskAssignment`, or `Normal`
+- classify idle notifications when the parsed text JSON has
+  `type == "idle_notification"`
+- classify task assignments when the parsed text JSON has
+  `type == "task_assignment"`
+- populate `extra["task_id"]` and `extra["priority"]` from task-assignment
+  text JSON instead of extending the top-level envelope schema
+- implement mailbox append dedup logic that scans the target inbox for an older
+  unread idle notification from the same sender, removes it atomically, and
+  then appends the new idle notification
+- add integration tests covering:
+  - a new idle notification dedups an older unread idle notification from the
+    same sender
+  - a second idle notification from a different sender is not removed
+  - an already-read idle notification is not removed
+  - a non-idle message is unaffected
+
+Sprint PH.1 acceptance criteria:
+- all existing tests pass
+- new idle-dedup integration tests pass
+- no measurable regression is introduced on the normal send path
+
+Dependencies:
+- the PG branch must merge to `develop` first
+
+Deferred to a separate follow-on phase:
+- read-time auto-purge
+- daemon-side idle-notification removal
+- task-assignment extraction beyond `extra[...]` map population
 
 ### Phase H: Doctor Path
 
