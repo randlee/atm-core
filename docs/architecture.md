@@ -18,41 +18,35 @@ The retained command surface is:
 - `log`
 - `doctor`
 
+## 1.1 Documentation Structure
+
+Documentation structure is governed by
+[`documentation-guidelines.md`](./documentation-guidelines.md).
+
+This file owns product architecture. Crate-local architectural detail is being
+moved into:
+
+- [`docs/atm/architecture.md`](./atm/architecture.md)
+- [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
+
 ## 2. Crate Boundaries
 
-### 2.1 `atm-core`
+The product is implemented by two crates:
 
-`atm-core` owns:
-- path and home resolution
-- config and Claude settings resolution
-- bridge-hostname resolution for origin inbox merge
-- hook-based identity resolution
-- address parsing
-- file policy enforcement for `send --file`
-- team config loading
-- mailbox read and write logic
-- canonical two-axis workflow classification
-- legal workflow-axis transitions
-- send, read, ack, and clear service functions
-- log query/follow service functions over an injected observability port
-- local doctor/diagnostic service functions
-- structured error types
-- observability event/query models and the injected observability boundary
+- `atm-core`
+- `atm`
 
-`atm-core` must not depend on clap or terminal formatting concerns.
+Product-level boundary rules:
 
-### 2.2 `atm`
+- `atm-core` owns daemon-free ATM business logic.
+- `atm` owns CLI parsing, dispatch, rendering, and bootstrap.
+- `atm-core` must not own clap or terminal-formatting concerns.
+- `atm` must not own mailbox, workflow, log-query, or doctor business logic.
 
-`atm` owns:
-- clap argument parsing
-- command dispatch
-- output rendering
-- process exit behavior
-- one-time observability initialization
-- the concrete `sc-observability` implementation of the observability port
-- injection of that implementation into `atm-core` services at startup
+Crate-local boundary detail is owned by:
 
-`atm` must not implement mailbox, config, workflow, logging-query, or doctor business logic directly.
+- [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
+- [`docs/atm/architecture.md`](./atm/architecture.md)
 
 ### 2.3 Shared Observability Boundary
 
@@ -79,86 +73,17 @@ An early ATM planning/coordination sprint, `OBS-GAP-1`, must verify and close th
 
 ## 3. Module Layout
 
-Planned `atm-core` layout:
+Detailed crate/module layout is owned by the crate-level docs:
 
-```text
-crates/atm-core/src/
-  lib.rs
-  address.rs
-  ack/
-    mod.rs
-  clear/
-    mod.rs
-  config/
-    aliases.rs
-    bridge.rs
-    discovery.rs
-    mod.rs
-    types.rs
-  doctor/
-    health.rs
-    mod.rs
-    report.rs
-  error.rs
-  home.rs
-  identity/
-    hook.rs
-    mod.rs
-  log/
-    filters.rs
-    mod.rs
-  mailbox/
-    atomic.rs
-    hash.rs
-    lock.rs
-    mod.rs
-    store.rs
-  model_registry.rs
-  observability.rs
-  read/
-    filters.rs
-    mod.rs
-    seen_state.rs
-    state.rs
-    wait.rs
-  schema/
-    agent_member.rs
-    inbox_message.rs
-    mod.rs
-    permissions.rs
-    settings.rs
-    team_config.rs
-  send/
-    file_policy.rs
-    input.rs
-    mod.rs
-    summary.rs
-  text.rs
-  types.rs
-```
+- [`docs/atm-core/modules/`](./atm-core/modules/)
+- [`docs/atm/commands/`](./atm/commands/)
 
-Planned `atm` layout:
+Product-level constraints that remain relevant here:
 
-```text
-crates/atm/src/
-  main.rs
-  commands/
-    ack.rs
-    clear.rs
-    doctor.rs
-    log.rs
-    mod.rs
-    read.rs
-    send.rs
-  observability.rs
-  output.rs
-```
-
-Notes:
 - no plugin framework
 - no daemon client
 - no runtime spawning layer
-- no separate `tail` command
+- no separate `tail` command in the initial rewrite
 - no separate `status` command in the initial rewrite
 
 ## 4. Core Types

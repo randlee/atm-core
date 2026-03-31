@@ -1,5 +1,11 @@
 # ATM Read Behavior Review
 
+**Lifecycle**: Permanent cross-cutting document
+
+This document remains part of the durable documentation set because read
+selection, bucket behavior, seen-state rules, and wait semantics are
+cross-cutting product behavior rather than crate-local implementation detail.
+
 This document defines the canonical read behavior for the rewrite and records which parts of current ATM behavior are preserved.
 
 ## 1. Why This Document Exists
