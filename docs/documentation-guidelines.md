@@ -88,8 +88,10 @@ docs/
   architecture.md
   project-plan.md
   read-behavior.md
-  file-migration-plan.md  # temporary migration artifact
-  migration-map.md        # temporary migration artifact
+  archive/
+    file-migration-plan.md
+    migration-map.md
+    obs-gap-analysis.md
   atm/
     requirements.md
     architecture.md
@@ -175,8 +177,12 @@ Top-level supporting docs are allowed only when they remain cross-cutting.
 Examples:
 
 - `read-behavior.md`
-- `file-migration-plan.md`
-- `migration-map.md`
+
+Migration-only supporting documents now live under `docs/archive/`:
+
+- `archive/file-migration-plan.md`
+- `archive/migration-map.md`
+- `archive/obs-gap-analysis.md`
 
 If a supporting document becomes crate-specific, move it under the owning crate
 directory.
