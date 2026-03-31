@@ -70,6 +70,13 @@ The documentation structure should make these failures easy to detect:
 - product behavior duplicated in multiple files
 - two crates both claiming the same responsibility
 
+Concrete example:
+
+- if `docs/atm-core/` starts defining clap flag semantics such as the exact
+  meaning of `atm read --history`, that is a boundary leak; flag parsing and
+  command-surface ownership belong in `docs/atm/`, while `docs/atm-core/`
+  should own only the underlying selection/state behavior
+
 ## 3. Directory Layout
 
 The required documentation layout is:
@@ -81,8 +88,8 @@ docs/
   architecture.md
   project-plan.md
   read-behavior.md
-  file-migration-plan.md
-  migration-map.md
+  file-migration-plan.md  # temporary migration artifact
+  migration-map.md        # temporary migration artifact
   atm/
     requirements.md
     architecture.md
@@ -314,6 +321,7 @@ Before a documentation change is review-ready, verify:
 - every new requirement has exactly one owning file
 - every product requirement has crate-level ownership references where needed
 - no crate doc restates the full product requirement text
+- file references use exact repo-relative paths rather than ambiguous prose
 - command docs live under `docs/atm/commands/`
 - core module docs live under `docs/atm-core/modules/`
 - boundary ownership between `atm` and `atm-core` is explicit
