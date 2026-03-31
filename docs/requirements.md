@@ -247,6 +247,7 @@ Required behavior:
   inbox `I` before appending the new record
 - idle notifications are non-actionable and are not part of the unread or
   pending-ack work queues
+- idle-notification lifecycle rules shall not apply to non-idle message kinds
 
 Deferred from this sprint:
 - read-time auto-purge of displayed idle notifications
