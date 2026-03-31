@@ -333,7 +333,8 @@ Send ordering rules:
 - generate UUID v4 `message_id` inside the atomic append boundary
 - perform duplicate suppression and final append inside the same atomic append boundary
 
-Idle-notification lifecycle:
+#### 6.1.1 Idle-Notification Lifecycle
+
 - message classification first attempts to parse the persisted `text` field as
   JSON and treat the message as an idle notification when the parsed object has
   `type == "idle_notification"`
@@ -349,7 +350,8 @@ Deferred follow-on work:
 - read-time auto-purge of displayed idle notifications
 - daemon-side idle-notification removal behavior
 
-Task-assignment classification:
+#### 6.1.2 Task-Assignment Classification
+
 - classification uses the same text-field JSON detection pattern and treats a
   message as a task assignment when the parsed object has
   `type == "task_assignment"`

@@ -17,9 +17,9 @@ restructured, product docs remain in `docs/` and crate-local detail moves into
 
 Status:
 - Phases 0 through F are complete.
-- Phase G is in progress and is the next delivery focus.
-- Phase PH is planned as the idle-notification send-path follow-on once the
-  PG docs branch is merged.
+- Phase PG is complete (PR #18 open, pending QA-3 pass and merge).
+- Phase PH is the idle-notification send-path follow-on and will begin after
+  Phase PG merges.
 
 ## 2. Deliverables
 
@@ -208,6 +208,27 @@ Acceptance:
 - level and field filtering work
 - tail mode works
 - emit failures remain best-effort for mail commands
+
+### Phase PG: Idle-Notification Planning [COMPLETE]
+
+Status summary:
+- Sprint PG.1 completed the gap analysis, requirements updates, and
+  read-behavior cleanup for idle-notification lifecycle rules.
+- Sprint PG.2 completed the architecture, mailbox-module ownership, and Phase
+  PH planning updates.
+- PR #18 is open targeting `develop`, and QA-2 findings were assigned as
+  fix-r2 on this branch before the final QA-3 pass and merge.
+
+Sprints:
+- Sprint PG.1 [COMPLETE]
+  - gap analysis for idle-notification dedup and cleanup behavior
+  - `REQ-P-IDLE-001` plus sender-scoped send-path dedup requirements
+  - stale pending-ack clear-override removal from `read-behavior.md`
+- Sprint PG.2 [COMPLETE]
+  - architecture ownership for idle-notification lifecycle and task-assignment
+    classification
+  - mailbox-module ownership for atomic sender-scoped dedup
+  - Phase PH / Sprint PH.1 implementation plan for send-path dedup
 
 ### Phase PH: Idle-Notification Send-Path Dedup [PLANNED]
 

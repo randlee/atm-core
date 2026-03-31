@@ -258,6 +258,10 @@ Deferred from this sprint:
 Product requirement ID:
 - `REQ-P-SEND-001` `atm send` must satisfy the documented send contract.
 
+<!-- Editorial note: subsections within REQ-P-SEND-001 use a local numbering
+sequence that does not match the top-level requirement IDs. This is
+intentional — do not renumber. -->
+
 Satisfied by:
 - `REQ-ATM-CMD-001` for CLI entry, parsing, and dispatch aspects
 - `REQ-ATM-OUT-001` for human-readable and JSON output aspects
