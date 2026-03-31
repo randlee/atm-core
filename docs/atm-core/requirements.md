@@ -46,22 +46,33 @@ Initial allocation:
 
 Initial crate requirement IDs:
 
+- `REQ-CORE-CONFIG-001` `atm-core` owns daemon-free home/path/config/identity
+  resolution policy. Satisfies the path/config/identity aspects of:
+  `REQ-P-CONTRACT-001`, `REQ-P-IDENTITY-001`, `REQ-P-DOCTOR-001`.
+- `REQ-CORE-CONFIG-002` `atm-core` owns daemon-free address parsing,
+  alias/role rewrite, and team/member validation policy. Satisfies the address
+  resolution and target-validation aspects of:
+  `REQ-P-ADDRESS-001`, `REQ-P-SEND-001`, `REQ-P-READ-001`,
+  `REQ-P-CLEAR-001`.
 - `REQ-CORE-MAILBOX-001` `atm-core` owns daemon-free mailbox/store behavior.
-  Satisfies:
+  Satisfies the persisted mailbox I/O and mutation aspects of:
   `REQ-P-CONTRACT-001`, `REQ-P-SEND-001`, `REQ-P-READ-001`,
   `REQ-P-ACK-001`, `REQ-P-CLEAR-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-WORKFLOW-001` `atm-core` owns the two-axis workflow model and legal
-  transitions. Satisfies:
+  transitions. Satisfies the state-classification and legal-transition aspects
+  of:
   `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-CLEAR-001`,
   `REQ-P-WORKFLOW-001`.
 - `REQ-CORE-LOG-001` `atm-core` owns ATM log query/follow service behavior over
-  the injected observability boundary. Satisfies:
+  the injected observability boundary. Satisfies the core
+  query/follow/filtering aspects of:
   `REQ-P-LOG-001`, `REQ-P-OBS-001`.
 - `REQ-CORE-DOCTOR-001` `atm-core` owns local doctor diagnostics and readiness
-  evaluation. Satisfies:
+  evaluation. Satisfies the diagnostic evaluation aspects of:
   `REQ-P-DOCTOR-001`, `REQ-P-OBS-001`.
 - `REQ-CORE-OBS-001` `atm-core` owns the abstract observability boundary and
-  ATM-owned event/query models above shared crates. Satisfies:
+  ATM-owned event/query models above shared crates. Satisfies the ATM event,
+  query-model, and health-contract aspects of:
   `REQ-P-OBS-001`.
 
 ## 4. Module Ownership

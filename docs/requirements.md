@@ -6,6 +6,10 @@ Product requirement ID:
 - `REQ-P-PRODUCT-001` The retained daemon-free ATM product surface consists of
   `send`, `read`, `ack`, `clear`, `log`, and `doctor`.
 
+Satisfied by:
+- intentionally undecomposed product requirement; this governs overall retained
+  product scope rather than a single crate-local obligation
+
 The product is a local command-line tool named `atm`.
 
 This rewrite removes daemon architecture. It does not intentionally remove core non-daemon ATM functionality.
@@ -44,6 +48,10 @@ Product requirement ID:
 - `REQ-P-SCOPE-001` The rewrite retains the documented command surface and
   removes daemon architecture without intentionally removing retained
   functionality.
+
+Satisfied by:
+- intentionally undecomposed product requirement; this governs overall rewrite
+  scope and is enforced across the workspace rather than by one crate-local ID
 
 ### 2.1 In Scope
 
@@ -84,6 +92,12 @@ Product requirement ID:
 Product requirement ID:
 - `REQ-P-CONTRACT-001` External path/config/store/observability contracts must
   match the documented daemon-free behavior.
+
+Satisfied by:
+- `REQ-CORE-CONFIG-001` for daemon-free home/path/config resolution aspects
+- `REQ-CORE-MAILBOX-001` for daemon-free mail-store persistence aspects
+- `REQ-ATM-OBS-001` for CLI observability bootstrap/integration aspects
+- `REQ-CORE-OBS-001` for ATM observability boundary/query-model aspects
 
 ### 3.1 Home And Path Resolution
 
@@ -164,6 +178,9 @@ Product requirement ID:
 - `REQ-P-IDENTITY-001` Identity resolution must follow the documented command
   precedence rules.
 
+Satisfied by:
+- `REQ-CORE-CONFIG-001` for daemon-free identity resolution policy
+
 ### 4.1 Send Identity Resolution Order
 
 1. `--from`
@@ -190,6 +207,10 @@ Product requirement ID:
 - `REQ-P-ADDRESS-001` Address resolution must support the documented
   `agent`/`agent@team` forms and precedence rules.
 
+Satisfied by:
+- `REQ-CORE-CONFIG-002` for address parsing, alias/role rewrite, and
+  team/member validation policy
+
 Supported address forms:
 - `agent`
 - `agent@team`
@@ -207,6 +228,13 @@ Roles and aliases are resolved after splitting `agent@team`, so only the agent t
 
 Product requirement ID:
 - `REQ-P-SEND-001` `atm send` must satisfy the documented send contract.
+
+Satisfied by:
+- `REQ-ATM-CMD-001` for CLI entry, parsing, and dispatch aspects
+- `REQ-ATM-OUT-001` for human-readable and JSON output aspects
+- `REQ-CORE-CONFIG-002` for address resolution and target-validation aspects
+- `REQ-CORE-MAILBOX-001` for message creation, duplicate suppression, and
+  atomic mailbox mutation aspects
 
 ### 6.1 Purpose
 
@@ -330,6 +358,14 @@ Dry-run JSON output must include:
 Product requirement ID:
 - `REQ-P-READ-001` `atm read` must satisfy the documented read/selection/wait
   contract.
+
+Satisfied by:
+- `REQ-ATM-CMD-001` for CLI entry, parsing, and dispatch aspects
+- `REQ-ATM-OUT-001` for human-readable and JSON output aspects
+- `REQ-CORE-CONFIG-002` for target-validation aspects
+- `REQ-CORE-MAILBOX-001` for merged inbox load/persist aspects
+- `REQ-CORE-WORKFLOW-001` for classification, queue selection, and legal
+  transition aspects
 
 ### 7.1 Purpose
 
@@ -531,6 +567,13 @@ Product requirement ID:
 - `REQ-P-ACK-001` `atm ack` must satisfy the documented acknowledgement
   contract.
 
+Satisfied by:
+- `REQ-ATM-CMD-001` for CLI entry, parsing, and dispatch aspects
+- `REQ-ATM-OUT-001` for human-readable and JSON output aspects
+- `REQ-CORE-MAILBOX-001` for atomic ack persistence and reply append aspects
+- `REQ-CORE-WORKFLOW-001` for pending-ack eligibility and acknowledgement
+  transition aspects
+
 ### 8.1 Purpose
 
 Acknowledge a pending-ack message in the caller's own inbox and send a visible reply to the original sender.
@@ -574,6 +617,14 @@ JSON output must include:
 Product requirement ID:
 - `REQ-P-CLEAR-001` `atm clear` must satisfy the documented clear contract and
   preserve pending-ack protection.
+
+Satisfied by:
+- `REQ-ATM-CMD-001` for CLI entry, parsing, and dispatch aspects
+- `REQ-ATM-OUT-001` for human-readable and JSON output aspects
+- `REQ-CORE-CONFIG-002` for target-validation aspects
+- `REQ-CORE-MAILBOX-001` for clear-set persistence aspects
+- `REQ-CORE-WORKFLOW-001` for clear-eligibility and pending-ack protection
+  aspects
 
 ### 9.1 Purpose
 
@@ -626,6 +677,13 @@ JSON output must include:
 Product requirement ID:
 - `REQ-P-LOG-001` `atm log` must satisfy the documented shared-observability
   query/follow contract.
+
+Satisfied by:
+- `REQ-ATM-CMD-001` for CLI entry, parsing, and dispatch aspects
+- `REQ-ATM-OUT-001` for record rendering/output aspects
+- `REQ-ATM-OBS-001` for CLI observability bootstrap/injection aspects
+- `REQ-CORE-LOG-001` for core query/follow/filter behavior aspects
+- `REQ-CORE-OBS-001` for ATM event/query-model aspects
 
 ### 10.1 Purpose
 
@@ -694,6 +752,13 @@ Product requirement ID:
 - `REQ-P-DOCTOR-001` `atm doctor` must satisfy the documented local diagnostics
   contract.
 
+Satisfied by:
+- `REQ-ATM-CMD-001` for CLI entry, parsing, and dispatch aspects
+- `REQ-ATM-OUT-001` for report rendering/output aspects
+- `REQ-ATM-OBS-001` for CLI observability bootstrap/injection aspects
+- `REQ-CORE-CONFIG-001` for config and identity inspection aspects
+- `REQ-CORE-DOCTOR-001` for diagnostic evaluation aspects
+
 ### 11.1 Purpose
 
 Run local ATM diagnostics for the retained daemon-free system.
@@ -746,6 +811,10 @@ Critical findings must cause a non-zero exit status.
 Product requirement ID:
 - `REQ-P-WORKFLOW-001` The message/workflow model must satisfy the documented
   persisted-field, two-axis, and legal-transition rules.
+
+Satisfied by:
+- `REQ-CORE-WORKFLOW-001` for the canonical two-axis model and legal
+  transitions
 
 ### 12.1 Persisted Message Fields
 
@@ -867,6 +936,12 @@ Product requirement ID:
 - `REQ-P-OBS-001` ATM observability must satisfy the documented best-effort
   emit behavior and shared query/follow/health expectations.
 
+Satisfied by:
+- `REQ-ATM-OBS-001` for CLI bootstrap/injection aspects
+- `REQ-CORE-LOG-001` for ATM log query/follow service aspects
+- `REQ-CORE-DOCTOR-001` for observability health reporting aspects
+- `REQ-CORE-OBS-001` for ATM event and query-model boundary aspects
+
 ATM must emit structured records through `sc-observability`.
 
 Required ATM event classes:
@@ -900,6 +975,11 @@ Product requirement ID:
 - `REQ-P-ERROR-001` Public command failures must satisfy the documented
   structured error requirements.
 
+Satisfied by:
+- intentionally undecomposed product requirement; crate-local error ownership
+  remains derived from command and service requirements rather than a dedicated
+  crate requirement ID in this pass
+
 All user-visible failures must use structured errors with recovery guidance.
 
 Minimum error categories:
@@ -929,6 +1009,10 @@ Product requirement ID:
 - `REQ-P-RELIABILITY-001` The retained command surface must satisfy the
   documented durability and consistency constraints.
 
+Satisfied by:
+- `REQ-CORE-MAILBOX-001` for atomicity, duplicate suppression, and mailbox
+  consistency aspects
+
 - mailbox writes must be atomic
 - concurrent appends must not silently lose messages
 - duplicate message ids must not be appended twice
@@ -942,6 +1026,10 @@ Product requirement ID:
 
 Product requirement ID:
 - `REQ-P-TEST-001` The rewrite must satisfy the documented testing obligations.
+
+Satisfied by:
+- intentionally undecomposed product requirement; this governs workspace-level
+  test coverage expectations rather than a single crate-local requirement ID
 
 Because `sc-observability` is newly introduced into ATM, the rewrite must add explicit test coverage for:
 - ATM event emission through the observability port boundary
@@ -969,6 +1057,10 @@ Product requirement ID:
 - `REQ-P-ACCEPTANCE-001` The rewrite is complete only when the documented
   acceptance criteria are met.
 
+Satisfied by:
+- intentionally undecomposed product requirement; this defines overall product
+  completion gates rather than a single crate-local obligation
+
 The rewrite is ready when:
 - `atm send` works without daemon support
 - `atm read` works without daemon support
@@ -981,7 +1073,7 @@ The rewrite is ready when:
 - workflow-axis transitions are encoded in implementation structure
 - display buckets are derived consistently from the two-axis model
 - task-linked messages remain pending until acknowledged unless the operator
-  explicitly invokes `--all-pending-ack`
+  explicitly acknowledges them through `atm ack`
 - observability integration is exercised by automated tests
 - the file-by-file migration plan is complete enough to implement directly
 
@@ -990,6 +1082,5 @@ Cross-document invariants that must remain true:
 - displayed messages always persist `read = true`
 - pending-ack messages remain actionable until acknowledged
 - `atm clear` never removes unread messages
-- `atm clear` removes pending-ack messages only when `--all-pending-ack` is
-  explicitly set
+- `atm clear` never removes pending-ack messages
 - `atm read --timeout` returns immediately when the requested selection is already non-empty
