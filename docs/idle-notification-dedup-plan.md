@@ -11,8 +11,11 @@ Requested behavior from `team-lead`:
 - when a new `idle_notification` arrives from the same sender, replace/remove
   the previous unread idle notification from that sender instead of appending a
   second retained copy
-- when `atm read` marks an `idle_notification` as read, remove it immediately
-  from the inbox file instead of preserving it in history
+
+Current PG.1 sprint scope:
+- define sender-scoped dedup in product requirements
+- record the resolved idle-notification detection rule
+- defer read-time auto-purge and daemon-side removal behavior
 
 This is a planning-only document. It does not authorize implementation on its
 own.
@@ -68,16 +71,20 @@ clear semantics.
 The current spec supports only manual cleanup of idle notifications through
 `atm clear --idle-only`.
 
-The requested behavior needs two new capabilities that are not documented yet:
+The broader requested behavior needs two new capabilities that are not
+documented yet:
 
 1. sender-scoped dedup/replacement on arrival
 2. read-time auto-purge instead of preserving idle notifications in history
 
+PG.1 closes only the first item. Read-time auto-purge remains a follow-on.
+
 That means the existing docs are inadequate in four places:
-- requirements: no functional requirement for idle-notification replacement or
-  read-time purge
+- requirements: no functional requirement for idle-notification replacement and
+  the auto-purge behavior remains deferred
 - architecture: no service ownership for idle-notification lifecycle rules
-- read behavior: no classification/writeback rule for auto-purge-on-read
+- read behavior: no classification/writeback rule for the deferred
+  auto-purge-on-read follow-on
 - schema/workflow notes: no explicit way to identify an idle notification as a
   first-class mailbox concept
 
@@ -120,6 +127,9 @@ Why this belongs here:
 - the requested behavior is specifically tied to `atm read`
 - the purge must follow display/selection rules rather than happen as a later
   independent cleanup task
+
+Status:
+- deferred after PG.1
 
 ### 4.3 Clear Path
 
@@ -170,10 +180,11 @@ Draft language:
 - When a new idle notification from sender `S` is delivered to inbox `I`, ATM
   shall atomically remove any older unread idle notification from sender `S` in
   inbox `I` before appending the new record.
-- When `atm read` displays an idle notification and marking is enabled, ATM
-  shall remove that idle notification from its owning inbox file during the
-  same atomic writeback rather than retain it in history.
 - Idle-notification lifecycle rules shall not apply to non-idle message kinds.
+
+Deferred from PG.1:
+- read-time auto-purge on `atm read`
+- daemon-side idle-notification removal behavior
 
 ### 5.2 Send Requirement Changes
 
@@ -187,11 +198,10 @@ Draft language:
 
 `REQ-P-READ-001` should be extended to state:
 - idle notifications are non-actionable and do not belong in the pending-ack
-  or durable history queues
-- displayed idle notifications are auto-purged during read writeback when
-  marking is enabled
+  queues
+- read-time auto-purge remains deferred after PG.1
 - `--no-mark` leaves the message untouched and therefore does not auto-purge it
-  unless product explicitly chooses otherwise
+  when that behavior is implemented later
 
 ### 5.4 Clear Requirement Changes
 
@@ -237,11 +247,12 @@ Question:
 - if a user reads with `--no-mark`, should the idle notification still be
   auto-purged?
 
-Recommended answer:
+Resolved ruling:
 - no
 - `--no-mark` should preserve current "display without mutation" semantics,
-  which implies no auto-purge
-- this keeps the purge rule aligned with writeback rather than display alone
+  which implies no auto-purge when that behavior is implemented later
+- this keeps the deferred purge rule aligned with writeback rather than display
+  alone
 
 ### 7.3 Reading Another Agent's Inbox
 
@@ -273,23 +284,30 @@ Recommended answer:
 Question:
 - what exact field identifies an idle notification today?
 
-Status:
-- this is not clear enough in the current ATM-core docs
-- implementation should not proceed until the product docs define the durable
-  marker explicitly
+Resolved detection rule:
+- ATM detects an idle notification by parsing the persisted message `text`
+  field as JSON and checking for `type == "idle_notification"`
+- if parsing fails, or the parsed object has a different `type`, ATM treats the
+  message as a normal message
+- the idle-notification marker is therefore observable from existing mailbox
+  data and does not require a new schema field
 
 ## 8. Recommended Next Doc Changes Before Implementation
 
 1. Add `REQ-P-IDLE-001` to `docs/requirements.md`.
-2. Update `REQ-P-SEND-001`, `REQ-P-READ-001`, and `REQ-P-CLEAR-001` with the
-   idle-notification lifecycle rules.
-3. Update `docs/architecture.md` to assign send/read/mailbox ownership for
-   dedup and auto-purge.
-4. Update `docs/read-behavior.md` to explain how idle notifications interact
-   with display, marking, `--no-mark`, and history.
-5. Correct the stale pending-ack clear-override text in `docs/read-behavior.md`
+2. Update `REQ-P-SEND-001` with the sender-scoped idle-notification
+   deduplication rule.
+3. Record the resolved text-field JSON detection rule in the product docs.
+4. Keep read-time auto-purge deferred until a later sprint defines the exact
+   read/writeback semantics.
+5. Update `docs/architecture.md` to assign send/read/mailbox ownership for
+   dedup and the deferred auto-purge follow-on.
+6. Update `docs/read-behavior.md` to explain how idle notifications interact
+   with display, marking, `--no-mark`, and history when the deferred read-time
+   purge work is scheduled.
+7. Correct the stale pending-ack clear-override text in `docs/read-behavior.md`
    so cleanup semantics remain internally consistent.
-6. After the doc update, create the follow-on implementation sprint that owns:
+8. After the doc update, create the follow-on implementation sprint that owns:
    - mailbox append dedup
    - read writeback auto-purge
    - compatibility cleanup behavior for legacy duplicate idle notifications

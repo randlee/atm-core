@@ -224,6 +224,34 @@ An explicit `@team` suffix takes precedence over `--team`.
 
 Roles and aliases are resolved after splitting `agent@team`, so only the agent token is rewritten.
 
+## 5A. Idle Notification Lifecycle
+
+Product requirement ID:
+- `REQ-P-IDLE-001` ATM must treat idle notifications as a non-actionable
+  notification class and retain at most one unread idle notification per
+  sender in any inbox.
+
+Satisfied by:
+- `REQ-CORE-MAILBOX-001` for sender-scoped idle-notification deduplication in
+  the atomic mailbox append boundary
+- `REQ-CORE-SEND-001` for send-path classification and delivery behavior once
+  the envelope is identified as an idle notification
+
+Required behavior:
+- detect an idle notification by parsing the persisted message `text` field as
+  JSON and checking for `type == "idle_notification"`
+- if parsing fails or the parsed `type` differs, treat the record as a normal
+  message
+- when a new idle notification from sender `S` arrives at inbox `I`, ATM must
+  atomically remove any older unread idle notification from sender `S` in
+  inbox `I` before appending the new record
+- idle notifications are non-actionable and are not part of the unread or
+  pending-ack work queues
+
+Deferred from this sprint:
+- read-time auto-purge of displayed idle notifications
+- daemon-side idle-notification removal behavior
+
 ## 6. `atm send`
 
 Product requirement ID:
@@ -233,6 +261,8 @@ Satisfied by:
 - `REQ-ATM-CMD-001` for CLI entry, parsing, and dispatch aspects
 - `REQ-ATM-OUT-001` for human-readable and JSON output aspects
 - `REQ-CORE-CONFIG-002` for address resolution and target-validation aspects
+- `REQ-CORE-SEND-001` for send-path message construction and classification
+  aspects
 - `REQ-CORE-MAILBOX-001` for message creation, duplicate suppression, and
   atomic mailbox mutation aspects
 
@@ -276,6 +306,9 @@ Retired from the current implementation:
 - support optional task metadata on sent messages
 - write a non-null `message_id` on every ATM-authored message
 - generate `message_id` as a UUID v4 at send time
+- when the outgoing envelope is classified as an idle notification, apply the
+  sender-scoped idle-notification deduplication rule inside the same atomic
+  mailbox append boundary before appending the new record
 
 `message_id` is required on every message written by `atm send`.
 
