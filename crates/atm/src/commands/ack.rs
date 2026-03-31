@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
 use atm_core::ack::{self, AckRequest};
 use atm_core::home;
+use atm_core::observability::ObservabilityPort;
 use clap::Args;
 use uuid::Uuid;
 
-use crate::observability::CliObservability;
 use crate::output;
 
 #[derive(Debug, Args)]
@@ -23,7 +23,7 @@ pub struct AckCommand {
 }
 
 impl AckCommand {
-    pub fn run(self, observability: &CliObservability) -> Result<()> {
+    pub fn run(self, observability: &dyn ObservabilityPort) -> Result<()> {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
         let message_id = Uuid::parse_str(&self.message_id)

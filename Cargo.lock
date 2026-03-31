@@ -75,6 +75,7 @@ dependencies = [
  "atm-core",
  "chrono",
  "clap",
+ "serde",
  "serde_json",
  "tempfile",
  "tracing",

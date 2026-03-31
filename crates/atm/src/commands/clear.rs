@@ -3,9 +3,9 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use atm_core::clear::{self, ClearQuery};
 use atm_core::home;
+use atm_core::observability::ObservabilityPort;
 use clap::Args;
 
-use crate::observability::CliObservability;
 use crate::output;
 
 #[derive(Debug, Args)]
@@ -32,7 +32,7 @@ pub struct ClearCommand {
 }
 
 impl ClearCommand {
-    pub fn run(self, observability: &CliObservability) -> Result<()> {
+    pub fn run(self, observability: &dyn ObservabilityPort) -> Result<()> {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
         let older_than = self.older_than.as_deref().map(parse_duration).transpose()?;

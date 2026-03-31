@@ -2,10 +2,10 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use atm_core::home;
+use atm_core::observability::ObservabilityPort;
 use atm_core::send::{self, SendMessageSource, SendRequest};
 use clap::Args;
 
-use crate::observability::CliObservability;
 use crate::output;
 
 #[derive(Debug, Args)]
@@ -45,7 +45,7 @@ pub struct SendCommand {
 }
 
 impl SendCommand {
-    pub fn run(self, observability: &CliObservability) -> Result<()> {
+    pub fn run(self, observability: &dyn ObservabilityPort) -> Result<()> {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
         let message_source = self.build_message_source()?;

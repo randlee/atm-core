@@ -167,6 +167,14 @@ impl AtmError {
     pub fn observability_emit(message: impl Into<String>) -> Self {
         Self::new(AtmErrorKind::ObservabilityEmit, message)
     }
+
+    pub fn observability_query(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorKind::ObservabilityQuery, message)
+    }
+
+    pub fn observability_health(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorKind::ObservabilityHealth, message)
+    }
 }
 
 impl fmt::Display for AtmError {

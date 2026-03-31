@@ -1,4 +1,5 @@
 use anyhow::Result;
+use atm_core::observability::ObservabilityPort;
 use clap::{Parser, Subcommand};
 
 pub mod ack;
@@ -46,13 +47,13 @@ enum Command {
 }
 
 impl Command {
-    fn run(self, observability: &CliObservability) -> Result<()> {
+    fn run(self, observability: &dyn ObservabilityPort) -> Result<()> {
         match self {
             Self::Send(command) => command.run(observability),
             Self::Read(command) => command.run(observability),
             Self::Ack(command) => command.run(observability),
             Self::Clear(command) => command.run(observability),
-            Self::Log(command) => command.run(),
+            Self::Log(command) => command.run(observability),
             Self::Doctor(command) => command.run(),
         }
     }

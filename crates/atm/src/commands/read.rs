@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
 use atm_core::home;
+use atm_core::observability::ObservabilityPort;
 use atm_core::read::{self, ReadQuery};
 use atm_core::types::{AckActivationMode, IsoTimestamp, ReadSelection};
 use clap::Args;
 
-use crate::observability::CliObservability;
 use crate::output;
 
 #[derive(Debug, Args)]
@@ -58,7 +58,7 @@ pub struct ReadCommand {
 }
 
 impl ReadCommand {
-    pub fn run(self, observability: &CliObservability) -> Result<()> {
+    pub fn run(self, observability: &dyn ObservabilityPort) -> Result<()> {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
         // --since-last-seen is the default; explicitly setting it has the same effect.

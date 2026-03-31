@@ -1,6 +1,7 @@
 use anyhow::Result;
 use atm_core::ack::AckOutcome;
 use atm_core::clear::ClearOutcome;
+use atm_core::log::{LogQueryResult, LogRecord};
 use atm_core::read::ReadOutcome;
 use atm_core::send::SendOutcome;
 use atm_core::types::DisplayBucket;
@@ -93,6 +94,29 @@ pub fn print_clear_result(outcome: &ClearOutcome, dry_run: bool, json: bool) -> 
     Ok(())
 }
 
+pub fn print_log_result(outcome: &LogQueryResult, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(outcome)?);
+        return Ok(());
+    }
+
+    for record in &outcome.records {
+        print_log_human(record);
+    }
+
+    Ok(())
+}
+
+pub fn print_log_record(record: &LogRecord, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string(record)?);
+    } else {
+        print_log_human(record);
+    }
+
+    Ok(())
+}
+
 fn print_bucket(outcome: &ReadOutcome, bucket: DisplayBucket, label: &str) {
     let messages = outcome
         .messages
@@ -120,5 +144,44 @@ fn print_bucket(outcome: &ReadOutcome, bucket: DisplayBucket, label: &str) {
         if let Some(message_id) = message.envelope.message_id {
             println!("  message_id: {message_id}");
         }
+    }
+}
+
+fn print_log_human(record: &LogRecord) {
+    let message = record.message.as_deref().unwrap_or(record.event.as_str());
+    let mut field_pairs = record
+        .fields
+        .iter()
+        .map(|(key, value)| format!("{key}={}", render_value(value)))
+        .collect::<Vec<_>>();
+    field_pairs.sort();
+
+    if field_pairs.is_empty() {
+        println!(
+            "{} {:?} {} {}",
+            record.timestamp.into_inner().to_rfc3339(),
+            record.level,
+            record.service,
+            message
+        );
+    } else {
+        println!(
+            "{} {:?} {} {} {}",
+            record.timestamp.into_inner().to_rfc3339(),
+            record.level,
+            record.service,
+            message,
+            field_pairs.join(" ")
+        );
+    }
+}
+
+fn render_value(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::Null => "null".into(),
+        serde_json::Value::Bool(value) => value.to_string(),
+        serde_json::Value::Number(value) => value.to_string(),
+        serde_json::Value::String(value) => value.clone(),
+        serde_json::Value::Array(_) | serde_json::Value::Object(_) => value.to_string(),
     }
 }
