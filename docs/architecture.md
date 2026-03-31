@@ -193,7 +193,7 @@ impl StoredMessage<UnreadReadState, NoAckState> {
 }
 
 impl StoredMessage<UnreadReadState, PendingAckState> {
-    pub fn mark_read(self) -> StoredMessage<ReadReadState, PendingAckState>;
+    pub fn mark_read_pending_ack(self) -> StoredMessage<ReadReadState, PendingAckState>;
 }
 
 impl StoredMessage<ReadReadState, PendingAckState> {
@@ -261,6 +261,12 @@ Persisted fields used by the rewrite:
 
 Canonical read and ack axes are derived from persisted fields and not serialized separately.
 
+Invariant:
+- every ATM-authored message written by `send::send_mail` carries a non-null
+  UUID v4 `message_id`
+- legacy or externally imported records may still lack `message_id` and must be
+  preserved as-is
+
 ## 6. Public Service APIs
 
 ### 6.1 Send Service
@@ -324,6 +330,7 @@ Send ordering rules:
 - resolve target address, team existence, and agent membership as one address-resolution stage before mailbox path selection
 - enter the atomic append boundary before final inbox mutation
 - validate message text inside the atomic append boundary
+- generate UUID v4 `message_id` inside the atomic append boundary
 - perform duplicate suppression and final append inside the same atomic append boundary
 
 ### 6.2 Read Service
@@ -370,6 +377,11 @@ Timeout rule:
 - pending_ack
 - history
 
+Read deduplication rule:
+- collapse multiple entries with the same non-null `message_id` to the most
+  recent entry before bucket selection and output rendering
+- when timestamps tie, keep the later encountered inbox record
+
 The read service derives `MessageClass` from `(ReadState, AckState)` and applies display-bucket selection to the derived class, not to raw persisted fields.
 
 For merged inbox surfaces, any displayed-message mutation must be written back to the physical inbox file that contributed the displayed record. The merged view is a read projection, not a synthetic write target.
@@ -402,8 +414,10 @@ Public entrypoint:
 - resolved team
 - resolved agent
 - source message id
+- optional task id from the acknowledged message
 - reply target
 - reply message id
+- reply text
 
 The ack service is responsible for the legal transition from `(Read, PendingAck)` to `(Read, Acknowledged)` plus the reply append.
 
@@ -510,16 +524,17 @@ The read pipeline stages are:
 1. resolve actor and target inbox
 2. build the hostname registry for configured origin inboxes
 3. load mailbox records from the merged inbox surface
-4. classify read axis, ack axis, and derived message class
-5. apply sender and timestamp filters
-6. apply seen-state filter unless selection is `All`
-7. map derived message class to display bucket and apply selection mode
-8. wait if `timeout` is set and the current selection is empty
-9. sort newest-first and apply limit
-10. apply legal read-axis and ack-axis transitions for displayed messages
-11. persist state changes atomically
-12. update seen-state when enabled
-13. return outcome
+4. collapse duplicate `message_id` entries to the newest visible record
+5. classify read axis, ack axis, and derived message class
+6. apply sender and timestamp filters
+7. apply seen-state filter unless selection is `All`
+8. map derived message class to display bucket and apply selection mode
+9. wait if `timeout` is set and the current selection is empty
+10. sort newest-first and apply limit
+11. apply legal read-axis and ack-axis transitions for displayed messages
+12. persist state changes atomically
+13. update seen-state when enabled
+14. return outcome
 
 This ordering is part of the architecture contract.
 
@@ -541,7 +556,7 @@ The clear pipeline stages are:
 1. resolve actor identity and target inbox
 2. load the persisted inbox surface
 3. classify each message into read axis and ack axis
-4. compute clear eligibility from the two-axis model
+4. compute clear eligibility from the two-axis model plus pending-ack override
 5. apply optional age and idle-only filters
 6. atomically persist the kept set when not in dry-run mode
 7. emit command lifecycle records
@@ -687,6 +702,7 @@ If a trait becomes necessary:
 - origin-inbox merge
 - atomic append behavior
 - duplicate suppression
+- read-time duplicate collapse by `message_id`
 - workflow axis classification
 - workflow axis transitions
 - task-linked ack-required classification
@@ -694,6 +710,7 @@ If a trait becomes necessary:
 - timeout behavior
 - ack transition behavior
 - clear eligibility behavior
+- pending-ack clear override behavior
 - observability port emission behavior
 - observability port query/filter behavior
 - observability port failure behavior

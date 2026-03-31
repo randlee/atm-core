@@ -1,1 +1,1 @@
-// TODO: implement mailbox locking helpers.
+//! Internal mailbox locking helpers reserved for future implementation.

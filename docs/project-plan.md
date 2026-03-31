@@ -70,6 +70,11 @@ Acceptance:
 
 ### Phase B: Core Skeleton
 
+| Sprint | Scope | Required outcome |
+| --- | --- | --- |
+| B.1 | CLI skeleton | `atm` exposes exactly `send`, `read`, `ack`, `clear`, `log`, `doctor` as clap subcommands and all CI gates pass |
+| B.2 | Documentation gap closure | lock the remaining send/read/clear requirements and architecture details before Phase C begins |
+
 Create:
 - workspace manifests
 - `atm-core`
@@ -79,6 +84,9 @@ Create:
 Acceptance:
 - workspace builds
 - CLI help shows `send`, `read`, `ack`, `clear`, `log`, and `doctor`
+- B.1 and B.2 are both complete before Phase C starts
+- requirements and architecture lock the message id, read dedupe, and clear
+  override semantics needed for implementation
 
 ### Phase C: Low-Level Reuse
 
@@ -197,7 +205,8 @@ Cross-document invariants that must stay locked during implementation:
 - `taskId` implies ack-required send behavior
 - displayed messages always persist `read = true`
 - pending-ack messages remain actionable until acknowledged
-- `atm clear` never removes unread or pending-ack messages
+- `atm clear` never removes unread messages
+- `atm clear` removes pending-ack messages only with explicit override
 - `atm read --timeout` returns immediately when the requested selection is already non-empty
 
 ## 6. Done Definition
@@ -210,7 +219,8 @@ The rewrite is ready when:
 - `atm log` works through shared observability APIs
 - `atm doctor` works as a local diagnostics command
 - retained non-daemon functionality is preserved or intentionally documented as changed
-- task-linked mail remains pending until acknowledged and cannot be cleared early
+- task-linked mail remains pending until acknowledged unless the operator uses
+  the explicit pending-ack clear override
 - the file-by-file migration plan is complete enough to implement directly
 - the retained command tests pass against the new crate layout
 
