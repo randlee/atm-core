@@ -224,7 +224,7 @@ An explicit `@team` suffix takes precedence over `--team`.
 
 Roles and aliases are resolved after splitting `agent@team`, so only the agent token is rewritten.
 
-## 5A. Idle Notification Lifecycle
+## 6. Idle Notification Lifecycle
 
 Product requirement ID:
 - `REQ-P-IDLE-001` ATM must treat idle notifications as a non-actionable
@@ -252,7 +252,7 @@ Deferred from this sprint:
 - read-time auto-purge of displayed idle notifications
 - daemon-side idle-notification removal behavior
 
-## 6. `atm send`
+## 7. `atm send`
 
 Product requirement ID:
 - `REQ-P-SEND-001` `atm send` must satisfy the documented send contract.
@@ -386,7 +386,7 @@ Dry-run JSON output must include:
 - `requires_ack`
 - `task_id`
 
-## 7. `atm read`
+## 8. `atm read`
 
 Product requirement ID:
 - `REQ-P-READ-001` `atm read` must satisfy the documented read/selection/wait
@@ -594,7 +594,7 @@ JSON output must include:
 - `pending_ack`
 - `history`
 
-## 8. `atm ack`
+## 9. `atm ack`
 
 Product requirement ID:
 - `REQ-P-ACK-001` `atm ack` must satisfy the documented acknowledgement
@@ -645,7 +645,7 @@ JSON output must include:
 - `task_id` (optional String, present when the source message has `taskId`)
 - `reply_target`
 
-## 9. `atm clear`
+## 10. `atm clear`
 
 Product requirement ID:
 - `REQ-P-CLEAR-001` `atm clear` must satisfy the documented clear contract and
@@ -705,7 +705,7 @@ JSON output must include:
 - `remaining_total`
 - removal counters by class
 
-## 10. `atm log`
+## 11. `atm log`
 
 Product requirement ID:
 - `REQ-P-LOG-001` `atm log` must satisfy the documented shared-observability
@@ -779,7 +779,7 @@ Each JSON record must expose at least:
 - event name
 - ATM structured fields map
 
-## 11. `atm doctor`
+## 12. `atm doctor`
 
 Product requirement ID:
 - `REQ-P-DOCTOR-001` `atm doctor` must satisfy the documented local diagnostics
@@ -839,7 +839,7 @@ Each doctor finding must expose at least:
 
 Critical findings must cause a non-zero exit status.
 
-## 12. Message And Workflow Model
+## 13. Message And Workflow Model
 
 Product requirement ID:
 - `REQ-P-WORKFLOW-001` The message/workflow model must satisfy the documented
@@ -963,7 +963,7 @@ Required rules:
 - a task-linked message must continue to appear in `atm read` until acknowledged
 - a task-linked message must never be removed by `atm clear` before acknowledgement
 
-## 13. Observability Requirements
+## 14. Observability Requirements
 
 Product requirement ID:
 - `REQ-P-OBS-001` ATM observability must satisfy the documented best-effort
@@ -1002,7 +1002,7 @@ Emission is best-effort:
 - they are explicit observability consumers
 - if shared query/health APIs are unavailable, they must fail with clear structured errors
 
-## 14. Error Requirements
+## 15. Error Requirements
 
 Product requirement ID:
 - `REQ-P-ERROR-001` Public command failures must satisfy the documented
@@ -1036,7 +1036,7 @@ Mutation failures must be fail-safe:
 - no partial read-mark updates
 - no illegal state transitions after failed persistence
 
-## 15. Reliability Requirements
+## 16. Reliability Requirements
 
 Product requirement ID:
 - `REQ-P-RELIABILITY-001` The retained command surface must satisfy the
@@ -1055,7 +1055,7 @@ Satisfied by:
 - seen-state races must not corrupt mailbox data
 - observability emission failures must not corrupt command behavior
 
-## 16. Testing Requirements
+## 17. Testing Requirements
 
 Product requirement ID:
 - `REQ-P-TEST-001` The rewrite must satisfy the documented testing obligations.
@@ -1084,7 +1084,7 @@ The implementation must include:
 - CLI integration tests for `atm ack`
 - CLI integration tests for `atm clear`
 
-## 17. Acceptance Criteria
+## 18. Acceptance Criteria
 
 Product requirement ID:
 - `REQ-P-ACCEPTANCE-001` The rewrite is complete only when the documented

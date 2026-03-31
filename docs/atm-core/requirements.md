@@ -57,7 +57,8 @@ Initial crate requirement IDs:
 - `REQ-CORE-MAILBOX-001` `atm-core` owns daemon-free mailbox/store behavior.
   Satisfies the persisted mailbox I/O and mutation aspects of:
   `REQ-P-CONTRACT-001`, `REQ-P-SEND-001`, `REQ-P-READ-001`,
-  `REQ-P-ACK-001`, `REQ-P-CLEAR-001`, `REQ-P-RELIABILITY-001`.
+  `REQ-P-ACK-001`, `REQ-P-CLEAR-001`, `REQ-P-RELIABILITY-001`,
+  `REQ-P-IDLE-001`.
 - `REQ-CORE-WORKFLOW-001` `atm-core` owns the two-axis workflow model and legal
   transitions. Satisfies the state-classification and legal-transition aspects
   of:

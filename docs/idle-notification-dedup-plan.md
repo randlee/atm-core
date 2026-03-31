@@ -58,13 +58,13 @@ There is no architectural ownership yet for:
 
 It also still carries one stale statement that conflicts with current product
 requirements:
-- section 6 says clear may remove pending-ack with an explicit override
+- the `Legal Workflow Transitions` section used to say clear may remove
+  pending-ack with an explicit override
 - `docs/requirements.md:655-664` no longer allows any pending-ack clear
   override
 
-That stale statement should be corrected as part of any future read-behavior
-cleanup so the idle-notification plan is not layered on top of contradictory
-clear semantics.
+That stale statement was corrected in PG.1 so the idle-notification plan is no
+longer layered on top of contradictory clear semantics.
 
 ## 3. Gap Summary
 
@@ -279,7 +279,7 @@ Recommended answer:
   sender instead of deleting all idle notifications, if that is operationally
   preferred
 
-### 7.5 Idle Notification Identification
+### 7.5 Idle Notification Identification [RESOLVED]
 
 Question:
 - what exact field identifies an idle notification today?
