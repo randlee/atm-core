@@ -7,7 +7,6 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[allow(unused_imports)]
 pub use types::{AgentConfig, AtmConfig};
 
 use crate::error::{AtmError, AtmErrorKind};
