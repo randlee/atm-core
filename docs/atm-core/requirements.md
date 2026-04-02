@@ -75,7 +75,32 @@ Initial crate requirement IDs:
   query-model, and health-contract aspects of:
   `REQ-P-OBS-001`.
 
-## 4. Module Ownership
+## 4. Post-Send Hook Requirements
+
+The post-send hook is an `atm-core` extension on top of the retained send path.
+It remains daemon-free, optional, and per-recipient-agent.
+
+- `REQ-POST-SEND-001` `atm-core` must support an optional per-agent
+  `post_send` bash command in `.atm.toml` under `[agents.<name>]`. This
+  extends the config ownership of `REQ-CORE-CONFIG-001` without changing the
+  existing identity and default-team precedence rules.
+- `REQ-POST-SEND-002` `atm-core` must evaluate the `post_send` hook only after
+  the send path has durably written the outbound message to the recipient inbox.
+  The hook is a post-success side effect and must not run for dry-run sends or
+  failed writes. In the planned send-path refactor, this boundary is the
+  `WriteOutcome::Success` point.
+- `REQ-POST-SEND-003` `atm-core` must execute the configured `post_send` hook
+  as a fire-and-forget child process. Hook spawn, launch, and process errors
+  must not convert a successful send into a send failure and must not roll back
+  the already-written mailbox message.
+- `REQ-POST-SEND-004` `atm-core` must execute the hook with `sh -c` and expose
+  the send context through environment variables set on the spawned command:
+  `ATM_SENDER`, `ATM_RECIPIENT`, and `ATM_MESSAGE_BODY`.
+- `REQ-POST-SEND-005` `atm-core` must resolve `post_send` from the recipient's
+  agent config entry. A missing `[agents.<name>]` table or missing `post_send`
+  field means no hook is executed for that recipient.
+
+## 5. Module Ownership
 
 Per-module documentation lives under:
 
@@ -96,7 +121,7 @@ Each module document defines:
 - inputs and outputs
 - references to the product requirements it implements
 
-## 5. Required References
+## 6. Required References
 
 The `atm-core` crate docs must remain aligned with:
 
