@@ -92,6 +92,7 @@ std::process::Command::new("sh")
     .env("ATM_SENDER", &sender)
     .env("ATM_RECIPIENT", &recipient.agent)
     .env("ATM_MESSAGE_BODY", &body)
+    .env("ATM_MESSAGE_ID", message_id.to_string())
     .spawn()
 ```
 
@@ -101,6 +102,17 @@ The hook environment is intentionally self-describing:
 - `ATM_RECIPIENT` identifies which agent's hook is being triggered
 - `ATM_MESSAGE_BODY` carries the full persisted message text so helper scripts
   can extract embedded task metadata
+- `ATM_MESSAGE_ID` distinguishes this delivery from other messages and gives
+  the hook a stable identifier for user-facing nudges
+
+Example wording patterns for hook-driven nudges:
+
+- plain message: `Message [$ATM_MESSAGE_ID] received on ATM`
+- task assignment: `Task [$TASK_ID] assigned in message [$ATM_MESSAGE_ID] on ATM`
+
+The hook can derive `TASK_ID` from `ATM_MESSAGE_BODY`, for example by
+extracting the first `id="..."` attribute from the message body before
+rendering the task-assignment wording.
 
 Spawn failures stay on the best-effort side of the boundary. The send service
 must preserve the successful mailbox write result even when the hook command is

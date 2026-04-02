@@ -17,6 +17,8 @@ restructured, product docs remain in `docs/` and crate-local detail moves into
 
 Status:
 - Phases 0 through F are complete.
+- Phase PG is planned as a send-path extensibility follow-on sequenced after
+  Phase D.
 - Phase G is in progress and is the next delivery focus.
 
 ## 2. Deliverables
@@ -148,6 +150,35 @@ Port send command and support files:
 Acceptance:
 - `atm send` feature set works without daemon support
 - send JSON and human output match the documented contract
+
+### Phase PG: Post-Send Hook Extensibility [PLANNED]
+
+Status summary:
+- Phase PG is the planned follow-on for send-path extensibility after the
+  retained send contract landed in Phase D.
+- It adds an optional per-agent `post_send` hook without changing successful
+  mailbox-write semantics.
+
+| Sprint | Scope | Required outcome |
+| --- | --- | --- |
+| PG.1 | Config schema + types | `.atm.toml` supports `[agents.<name>]`, `AtmConfig` gains `agents: HashMap<String, AgentConfig>`, and `AgentConfig` gains `post_send: Option<String>` |
+| PG.2 | Send-path hook integration + tests | `send` launches the recipient-scoped hook after `WriteOutcome::Success` with `sh -c`, injecting `ATM_SENDER`, `ATM_RECIPIENT`, `ATM_MESSAGE_BODY`, and `ATM_MESSAGE_ID`, while preserving send success on hook errors |
+| PG.3 | Integration test with mock hook | end-to-end coverage proves the mailbox write succeeds, the hook sees the expected env vars, and hook failure does not fail the send |
+
+Port and add:
+- per-agent config schema for `[agents.<name>]`
+- typed config support in `atm-core`
+- post-success hook lookup in the send path
+- fire-and-forget hook spawn behavior
+- unit and integration coverage for hook success and error non-propagation
+
+Acceptance:
+- product and crate docs agree on the `post_send` contract
+- `atm-core` parses optional per-agent hook config
+- the hook runs only after a successful mailbox write
+- the spawned hook receives `ATM_SENDER`, `ATM_RECIPIENT`,
+  `ATM_MESSAGE_BODY`, and `ATM_MESSAGE_ID`
+- hook spawn failures remain best-effort and do not fail `atm send`
 
 ### Phase E: Read Path [COMPLETE]
 

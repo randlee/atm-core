@@ -144,6 +144,8 @@ Supported optional config fields:
 - output format
 - color
 - bridge remotes and hostname aliases used by origin-inbox merge
+- per-agent `[agents.<name>]` tables for optional agent-scoped settings such as
+  `post_send`
 
 ### 3.4 Claude Settings Resolution
 
@@ -258,7 +260,28 @@ Retired from the current implementation:
 - `--offline-action`
   - this flag exists only to cooperate with daemon-backed liveness checks and is not retained
 
-### 6.3 Required Behavior
+### 6.3 Post-Send Hook Extensibility
+
+Product requirement ID:
+- `REQ-P-POST-SEND-001` `atm send` may trigger an optional per-recipient
+  post-send hook after a successful mailbox write. The hook is configured in
+  `.atm.toml` under `[agents.<name>]`, is fire-and-forget, and must not convert
+  a successful send into a send failure when hook spawn or runtime errors
+  occur.
+
+Satisfied by:
+- `REQ-CORE-CONFIG-001` for config discovery and per-agent hook lookup inputs
+- `REQ-CORE-MAILBOX-001` for mailbox-write ordering
+- `REQ-POST-SEND-001`, `REQ-POST-SEND-002`, `REQ-POST-SEND-003`,
+  `REQ-POST-SEND-004`, `REQ-POST-SEND-005`
+
+Required hook environment:
+- `ATM_SENDER`
+- `ATM_RECIPIENT`
+- `ATM_MESSAGE_BODY`
+- `ATM_MESSAGE_ID`
+
+### 6.4 Required Behavior
 
 - resolve sender identity using the defined precedence
 - resolve recipient address using the defined precedence
@@ -287,7 +310,7 @@ Recipients use `message_id` for:
 - read-time duplicate collapse
 - acknowledgement targeting
 
-### 6.4 Message Source Semantics
+### 6.5 Message Source Semantics
 
 Exactly one message source must be used:
 - positional message text
@@ -308,7 +331,7 @@ If positional message text is combined with `--file`, preserve the current two-p
 File reference: <path or share copy>
 ```
 
-### 6.5 Ack-Required And Task Metadata
+### 6.6 Ack-Required And Task Metadata
 
 `--requires-ack` means the message must enter the pending-ack queue at write time.
 
@@ -328,7 +351,7 @@ If `--task-id` is present:
 - treat the message as task-linked mail
 - imply `--requires-ack`
 
-### 6.6 Output Contract
+### 6.7 Output Contract
 
 Human output must include:
 - recipient

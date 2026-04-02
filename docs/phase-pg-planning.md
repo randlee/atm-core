@@ -63,7 +63,7 @@ Required outcome:
 - dry-run sends do not spawn hooks
 - hook launch uses `Command::new("sh").arg("-c").arg(hook).spawn()`
 - spawned command receives `ATM_SENDER`, `ATM_RECIPIENT`, and
-  `ATM_MESSAGE_BODY`
+  `ATM_MESSAGE_BODY`, plus `ATM_MESSAGE_ID`
 - hook errors do not change the successful send result
 
 ### PG.3: Integration Test With Mock Hook
@@ -78,6 +78,8 @@ Primary files:
 Required outcome:
 - successful send writes the message and triggers exactly one hook invocation
 - the mock hook observes the expected env vars
+- the mock hook can distinguish plain-message and task-assignment wording using
+  `ATM_MESSAGE_ID` plus task-id extraction from `ATM_MESSAGE_BODY`
 - failed hook execution does not fail `send_mail`
 - no-hook recipients still send successfully without extra side effects
 
