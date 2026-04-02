@@ -174,7 +174,10 @@ fn test_send_invokes_post_send_hook_after_successful_write() {
 
     let inbox = fixture.inbox_contents("recipient");
     assert_eq!(inbox.len(), 1);
-    assert_eq!(inbox[0].message_id.map(|id| id.to_string()), Some(lines[3].clone()));
+    assert_eq!(
+        inbox[0].message_id.map(|id| id.to_string()),
+        Some(lines[3].clone())
+    );
 }
 
 #[test]
