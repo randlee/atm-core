@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use serde::Serialize;
 use serde_json::Map;
@@ -118,6 +119,13 @@ pub fn send_mail(
         let inbox_path =
             home::inbox_path_from_home(&request.home_dir, &recipient.team, &recipient.agent)?;
         mailbox::append_message(&inbox_path, &envelope)?;
+        trigger_post_send_hook(
+            config.as_ref(),
+            &recipient.agent,
+            &sender,
+            &body,
+            message_id,
+        );
     }
 
     let outcome = SendOutcome {
@@ -230,6 +238,31 @@ fn resolve_message_body(
             home_dir,
         ),
     }
+}
+
+fn trigger_post_send_hook(
+    config: Option<&config::AtmConfig>,
+    recipient: &str,
+    sender: &str,
+    body: &str,
+    message_id: Uuid,
+) {
+    let Some(hook) = config
+        .and_then(|cfg| cfg.agents.get(recipient))
+        .and_then(|agent| agent.post_send.as_deref())
+        .filter(|hook| !hook.trim().is_empty())
+    else {
+        return;
+    };
+
+    let _ = Command::new("sh")
+        .arg("-c")
+        .arg(hook)
+        .env("ATM_SENDER", sender)
+        .env("ATM_RECIPIENT", recipient)
+        .env("ATM_MESSAGE_BODY", body)
+        .env("ATM_MESSAGE_ID", message_id.to_string())
+        .spawn();
 }
 
 fn is_false(value: &bool) -> bool {

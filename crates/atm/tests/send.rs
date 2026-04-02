@@ -1,5 +1,6 @@
 use std::fs;
 use std::process::Command;
+use std::time::{Duration, Instant};
 
 use atm_core::schema::{AgentMember, MessageEnvelope, TeamConfig};
 
@@ -148,6 +149,77 @@ fn test_send_supports_positional_message_with_file() {
         .starts_with("context first\n\nFile reference:"));
 }
 
+#[test]
+fn test_send_invokes_post_send_hook_after_successful_write() {
+    let fixture = Fixture::new("recipient");
+    let hook_output = fixture.tempdir.path().join("hook-output.txt");
+    fixture.write_repo_config(&format!(
+        "identity = \"arch-ctm\"\ndefault_team = \"atm-dev\"\n\n[agents.recipient]\npost_send = \"printf '%s\\n%s\\n%s\\n%s\\n' \\\"$ATM_SENDER\\\" \\\"$ATM_RECIPIENT\\\" \\\"$ATM_MESSAGE_BODY\\\" \\\"$ATM_MESSAGE_ID\\\" > '{}'\"\n",
+        shell_escape_path(&hook_output),
+    ));
+
+    let output = fixture.run(&["send", "recipient@atm-dev", "hello hook"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+
+    let lines = wait_for_lines(&hook_output, 4);
+    assert_eq!(lines[0], "arch-ctm");
+    assert_eq!(lines[1], "recipient");
+    assert_eq!(lines[2], "hello hook");
+    assert!(!lines[3].is_empty());
+
+    let inbox = fixture.inbox_contents("recipient");
+    assert_eq!(inbox.len(), 1);
+    assert_eq!(inbox[0].message_id.map(|id| id.to_string()), Some(lines[3].clone()));
+}
+
+#[test]
+fn test_send_dry_run_skips_post_send_hook() {
+    let fixture = Fixture::new("recipient");
+    let hook_output = fixture.tempdir.path().join("hook-dry-run.txt");
+    fixture.write_repo_config(&format!(
+        "identity = \"arch-ctm\"\ndefault_team = \"atm-dev\"\n\n[agents.recipient]\npost_send = \"printf 'hook-ran' > '{}'\"\n",
+        shell_escape_path(&hook_output),
+    ));
+
+    let output = fixture.run(&["send", "recipient@atm-dev", "hello hook", "--dry-run"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    assert!(!hook_output.exists(), "hook output should not exist");
+    assert!(!fixture.inbox_path("recipient").exists());
+}
+
+#[test]
+fn test_send_ignores_post_send_spawn_errors() {
+    let fixture = Fixture::new("recipient");
+    fixture.write_repo_config(
+        "identity = \"arch-ctm\"\ndefault_team = \"atm-dev\"\n\n[agents.recipient]\npost_send = \"echo should-not-run\"\n",
+    );
+
+    let output = fixture.run_with_env(
+        &["send", "recipient@atm-dev", "hello hook"],
+        &[("PATH", "")],
+    );
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+
+    let inbox = fixture.inbox_contents("recipient");
+    assert_eq!(inbox.len(), 1);
+    assert_eq!(inbox[0].text, "hello hook");
+}
+
 struct Fixture {
     tempdir: tempfile::TempDir,
 }
@@ -161,14 +233,27 @@ impl Fixture {
     }
 
     fn run(&self, args: &[&str]) -> std::process::Output {
-        Command::new(env!("CARGO_BIN_EXE_atm"))
+        self.run_with_env(args, &[])
+    }
+
+    fn run_with_env(&self, args: &[&str], envs: &[(&str, &str)]) -> std::process::Output {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
+        command
             .args(args)
             .env("ATM_HOME", self.tempdir.path())
             .env("ATM_IDENTITY", "arch-ctm")
             .env("ATM_TEAM", "atm-dev")
-            .current_dir(self.tempdir.path())
-            .output()
-            .expect("run atm")
+            .current_dir(self.tempdir.path());
+
+        for (key, value) in envs {
+            command.env(key, value);
+        }
+
+        command.output().expect("run atm")
+    }
+
+    fn write_repo_config(&self, contents: &str) {
+        fs::write(self.tempdir.path().join(".atm.toml"), contents).expect("repo config");
     }
 
     fn write_team_config(&self, recipient: &str) {
@@ -216,4 +301,23 @@ impl Fixture {
     fn stderr(&self, output: &std::process::Output) -> String {
         String::from_utf8(output.stderr.clone()).expect("stderr utf8")
     }
+}
+
+fn wait_for_lines(path: &std::path::Path, expected_lines: usize) -> Vec<String> {
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while Instant::now() < deadline {
+        if let Ok(contents) = fs::read_to_string(path) {
+            let lines: Vec<String> = contents.lines().map(ToOwned::to_owned).collect();
+            if lines.len() >= expected_lines {
+                return lines;
+            }
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+
+    panic!("timed out waiting for hook output at {}", path.display());
+}
+
+fn shell_escape_path(path: &std::path::Path) -> String {
+    path.to_string_lossy().replace('\'', "'\"'\"'")
 }
