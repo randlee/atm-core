@@ -23,6 +23,7 @@ pub fn resolve_hook_identity(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::env;
 
     use crate::config::AtmConfig;
@@ -38,6 +39,7 @@ mod tests {
         let config = AtmConfig {
             identity: Some("config-agent".into()),
             default_team: None,
+            agents: HashMap::new(),
         };
         assert_eq!(
             resolve_sender_identity(Some(&config)).expect("identity"),
@@ -56,6 +58,7 @@ mod tests {
         let config = AtmConfig {
             identity: Some("config-agent".into()),
             default_team: None,
+            agents: HashMap::new(),
         };
         assert_eq!(
             resolve_sender_identity(Some(&config)).expect("identity"),
@@ -92,6 +95,7 @@ mod tests {
         let config = AtmConfig {
             identity: Some("config-agent".into()),
             default_team: Some("config-team".into()),
+            agents: HashMap::new(),
         };
 
         let identity = resolve_hook_identity(None, Some(&config)).expect("hook identity");
