@@ -7,7 +7,8 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub use types::AtmConfig;
+#[allow(unused_imports)]
+pub use types::{AgentConfig, AtmConfig};
 
 use crate::error::{AtmError, AtmErrorKind};
 
@@ -65,11 +66,12 @@ fn find_config_path(start_dir: &Path) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::env;
     use std::fs;
     use std::path::PathBuf;
 
-    use super::{load_config, resolve_identity, resolve_team, AtmConfig};
+    use super::{load_config, resolve_identity, resolve_team, AgentConfig, AtmConfig};
 
     #[test]
     fn load_config_walks_upward_for_dot_atm_toml() {
@@ -85,6 +87,45 @@ mod tests {
         let config = load_config(&nested).expect("config").expect("present");
         assert_eq!(config.identity.as_deref(), Some("arch-ctm"));
         assert_eq!(config.default_team.as_deref(), Some("atm-dev"));
+        assert!(config.agents.is_empty());
+    }
+
+    #[test]
+    fn load_config_deserializes_agent_post_send_hooks() {
+        let root = unique_temp_dir("config-agents");
+        let nested = root.join("workspace").join("nested");
+        fs::create_dir_all(&nested).expect("nested dir");
+        fs::write(
+            root.join(".atm.toml"),
+            concat!(
+                "identity = \"arch-ctm\"\n",
+                "default_team = \"atm-dev\"\n\n",
+                "[agents.arch-ctm]\n",
+                "post_send = \"echo hello\"\n",
+            ),
+        )
+        .expect("config");
+
+        let config = load_config(&nested).expect("config").expect("present");
+        assert_eq!(config.identity.as_deref(), Some("arch-ctm"));
+        assert_eq!(config.default_team.as_deref(), Some("atm-dev"));
+        assert_eq!(
+            config.agents.get("arch-ctm"),
+            Some(&AgentConfig {
+                post_send: Some("echo hello".into()),
+            })
+        );
+    }
+
+    #[test]
+    fn atm_config_deserializes_missing_agents_section_as_empty_map() {
+        let config: AtmConfig =
+            toml::from_str("identity = \"arch-ctm\"\ndefault_team = \"atm-dev\"\n")
+                .expect("config");
+
+        assert_eq!(config.identity.as_deref(), Some("arch-ctm"));
+        assert_eq!(config.default_team.as_deref(), Some("atm-dev"));
+        assert!(config.agents.is_empty());
     }
 
     #[test]
@@ -96,6 +137,7 @@ mod tests {
         let config = AtmConfig {
             identity: Some("config-identity".into()),
             default_team: None,
+            agents: HashMap::new(),
         };
 
         assert_eq!(
@@ -114,6 +156,7 @@ mod tests {
         let config = AtmConfig {
             identity: None,
             default_team: Some("config-team".into()),
+            agents: HashMap::new(),
         };
 
         assert_eq!(
