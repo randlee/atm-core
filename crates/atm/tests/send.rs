@@ -322,5 +322,7 @@ fn wait_for_lines(path: &std::path::Path, expected_lines: usize) -> Vec<String> 
 }
 
 fn shell_escape_path(path: &std::path::Path) -> String {
-    path.to_string_lossy().replace('\'', "'\"'\"'")
+    path.to_string_lossy()
+        .replace('\\', "/")
+        .replace('\'', "'\"'\"'")
 }
