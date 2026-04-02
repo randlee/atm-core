@@ -255,14 +255,23 @@ fn trigger_post_send_hook(
         return;
     };
 
-    let _ = Command::new("sh")
+    // Intentionally fire-and-forget: the send path must not block on hook
+    // completion or retain a Child handle whose lifecycle changes send result
+    // semantics. Forgetting the handle makes the detached best-effort behavior
+    // explicit.
+    let Ok(child) = Command::new("sh")
         .arg("-c")
         .arg(hook)
         .env("ATM_SENDER", sender)
         .env("ATM_RECIPIENT", recipient)
         .env("ATM_MESSAGE_BODY", body)
         .env("ATM_MESSAGE_ID", message_id.to_string())
-        .spawn();
+        .spawn()
+    else {
+        return;
+    };
+
+    std::mem::forget(child);
 }
 
 fn is_false(value: &bool) -> bool {
