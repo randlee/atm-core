@@ -4,8 +4,8 @@ pub mod ack;
 pub(crate) mod address;
 /// Mailbox cleanup workflows for read and acknowledged messages.
 pub mod clear;
-/// Internal configuration discovery and resolution helpers.
-pub(crate) mod config;
+/// Configuration discovery, resolution, and typed config models.
+pub mod config;
 /// Doctor-report types and health checks for the CLI surface.
 pub mod doctor;
 /// Shared ATM error types and recovery-oriented error helpers.

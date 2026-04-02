@@ -21,6 +21,10 @@ Status:
   Phase D.
 - Phase G is in progress and is the next delivery focus.
 
+| Phase | Goal | Status | Depends on |
+| --- | --- | --- | --- |
+| PG | post_send hook implementation | in-progress | Phase D (send path) |
+
 ## 2. Deliverables
 
 - Rust workspace with `crates/atm-core` and `crates/atm`
