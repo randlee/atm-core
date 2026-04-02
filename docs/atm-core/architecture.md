@@ -117,3 +117,9 @@ rendering the task-assignment wording.
 Spawn failures stay on the best-effort side of the boundary. The send service
 must preserve the successful mailbox write result even when the hook command is
 missing, exits immediately, or cannot be spawned.
+
+Accepted risk:
+
+- fire-and-forget hooks are reaped by a detached thread after spawn so the send
+  path stays non-blocking while long-lived daemon or CLI sessions avoid zombie
+  child accumulation

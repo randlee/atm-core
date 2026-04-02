@@ -255,23 +255,31 @@ fn trigger_post_send_hook(
         return;
     };
 
+    let sanitized_body = sanitize_env_value(body);
+
     // Intentionally fire-and-forget: the send path must not block on hook
-    // completion or retain a Child handle whose lifecycle changes send result
-    // semantics. Forgetting the handle makes the detached best-effort behavior
-    // explicit.
+    // completion, but it still must reap the child so long-running daemon/CLI
+    // contexts do not accumulate zombies.
     let Ok(child) = Command::new("sh")
         .arg("-c")
         .arg(hook)
         .env("ATM_SENDER", sender)
         .env("ATM_RECIPIENT", recipient)
-        .env("ATM_MESSAGE_BODY", body)
+        .env("ATM_MESSAGE_BODY", sanitized_body)
         .env("ATM_MESSAGE_ID", message_id.to_string())
         .spawn()
     else {
         return;
     };
 
-    std::mem::forget(child);
+    std::thread::spawn(move || {
+        let mut child = child;
+        let _ = child.wait();
+    });
+}
+
+fn sanitize_env_value(value: &str) -> String {
+    value.replace('\0', "\u{FFFD}")
 }
 
 fn is_false(value: &bool) -> bool {
