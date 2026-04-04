@@ -427,7 +427,14 @@ fn save_send_alert_state(path: &Path, state: &SendAlertState) -> Result<(), AtmE
         })?;
     }
 
-    let temp_path = path.with_extension("tmp");
+    let temp_path = path.with_file_name(format!(
+        "{}.{}.{}.tmp",
+        path.file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("state"),
+        std::process::id(),
+        Uuid::new_v4()
+    ));
     let data = serde_json::to_vec(state)?;
     fs::write(&temp_path, data).map_err(|error| {
         AtmError::new(
@@ -516,7 +523,7 @@ fn evict_stale_send_alert_lock(path: &Path) -> bool {
 
 #[cfg(unix)]
 fn process_is_alive(pid: u32) -> bool {
-    let pid = match i32::try_from(pid) {
+    let pid: libc::pid_t = match pid.try_into() {
         Ok(pid) => pid,
         Err(_) => return false,
     };
@@ -532,14 +539,17 @@ fn process_is_alive(pid: u32) -> bool {
 
 #[cfg(windows)]
 fn process_is_alive(pid: u32) -> bool {
+    use std::ptr;
+
     use windows_sys::Win32::Foundation::{CloseHandle, STILL_ACTIVE};
     use windows_sys::Win32::System::Threading::{
         GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
     };
 
     // SAFETY: OpenProcess is called read-only for process liveness inspection.
-    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
-    if handle == 0 {
+    let process_id: u32 = pid;
+    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, process_id) };
+    if handle == ptr::null_mut() {
         return false;
     }
 
@@ -548,7 +558,7 @@ fn process_is_alive(pid: u32) -> bool {
     let ok = unsafe { GetExitCodeProcess(handle, &mut exit_code) };
     // SAFETY: handle was opened successfully above and must be closed once.
     unsafe { CloseHandle(handle) };
-    ok != 0 && exit_code == STILL_ACTIVE
+    ok != 0 && exit_code == STILL_ACTIVE as u32
 }
 
 struct SendAlertLock {
