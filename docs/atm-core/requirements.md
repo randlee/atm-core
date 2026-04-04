@@ -64,6 +64,11 @@ Initial crate requirement IDs:
   loader. Satisfies the missing-config send-path aspects of:
   `REQ-P-SEND-001`, `REQ-P-CONFIG-HEALTH-001`,
   `REQ-P-RELIABILITY-001`.
+- `REQ-CORE-SEND-002` `atm-core` owns ATM-authored alert metadata placement,
+  compatibility reads, and degradation rules across write/read paths. Satisfies
+  the alert-metadata schema and sender-side dedup aspects of:
+  `REQ-P-SCHEMA-001`, `REQ-P-CONFIG-HEALTH-001`,
+  `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-MAILBOX-001` `atm-core` owns daemon-free mailbox/store behavior.
   Satisfies the persisted mailbox I/O and mutation aspects of:
   `REQ-P-CONTRACT-001`, `REQ-P-SEND-001`, `REQ-P-READ-001`,
@@ -114,3 +119,32 @@ The `atm-core` crate docs must remain aligned with:
 - [`../architecture.md`](../architecture.md)
 - [`../project-plan.md`](../project-plan.md)
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
+- [`../atm-message-schema.md`](../atm-message-schema.md)
+- [`../legacy-atm-message-schema.md`](../legacy-atm-message-schema.md)
+- [`./design/dedup-metadata-schema.md`](./design/dedup-metadata-schema.md)
+
+## 6. Send Alert Metadata
+
+Requirement ID:
+- `REQ-CORE-SEND-002`
+
+Required write-path rules:
+- ATM-authored alert field writes must use ATM-owned `metadata.atm` fields
+- forward alert writes must target `metadata.atm.alertKind` and
+  `metadata.atm.missingConfigPath` or a later explicitly documented
+  `metadata.atm` field
+- new ATM-only alert top-level fields must be rejected with a descriptive
+  validation error on the write path
+
+Required read-path rules:
+- ATM read must accept legacy top-level alert fields such as `atmAlertKind` and
+  `missingConfigPath`
+- ATM read must also accept forward `metadata.atm` alert fields
+- malformed ATM-owned alert metadata must degrade gracefully, emit warning
+  diagnostics, and never cause the message to be dropped when the
+  Claude-native envelope remains usable
+
+Forward migration rule:
+- legacy top-level `atmAlertKind` migrates to `metadata.atm.alertKind`
+- legacy top-level `missingConfigPath` migrates to
+  `metadata.atm.missingConfigPath`

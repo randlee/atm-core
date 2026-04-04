@@ -308,6 +308,9 @@ Planned sprints:
 - `J.4` ATM Alert Metadata Migration Plan
   - migrate the design for ATM-authored repair notices from ad hoc top-level
     fields toward `metadata.atm`
+  - explicitly preserve legacy top-level `atmAlertKind` and
+    `missingConfigPath` as read-compatible until the runtime migration sprint
+    lands
   - keep current alert writes/read-compat behavior stable until the migration
     sprint lands
   - acceptance: requirements and architecture specify the forward metadata

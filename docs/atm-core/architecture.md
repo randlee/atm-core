@@ -56,6 +56,17 @@ Current `AgentMember` persisted schema:
 - `extra: serde_json::Map<String, serde_json::Value>` via `#[serde(flatten)]`
   for forward-compatible Claude Code fields
 
+## 3.1 Send Alert Metadata Boundary
+
+ATM-authored alert metadata belongs to the send/schema boundary in `atm-core`.
+
+Architectural rule:
+- forward ATM-authored alert metadata lives under `metadata.atm`
+- legacy top-level alert fields such as `atmAlertKind` and
+  `missingConfigPath` remain read-compatible only
+- the current runtime send path may continue emitting the legacy top-level
+  fields until the migration implementation sprint lands
+
 ## 4. ADR Namespace
 
 The `atm-core` crate uses the `ADR-CORE-*` namespace.
