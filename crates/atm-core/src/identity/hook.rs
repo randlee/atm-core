@@ -63,6 +63,8 @@ fn hook_file_path() -> Option<std::path::PathBuf> {
 fn parent_pid() -> Option<u32> {
     #[cfg(unix)]
     {
+        // SAFETY: libc::getppid reads the calling process metadata and takes no
+        // pointers or borrowed memory from Rust. It is safe to call here.
         let pid = unsafe { libc::getppid() };
         (pid > 0).then_some(pid as u32)
     }
