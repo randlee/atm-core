@@ -4,13 +4,26 @@ use uuid::Uuid;
 
 use crate::types::IsoTimestamp;
 
+/// Persisted inbox superset used by ATM.
+///
+/// Native Claude Code message shape is owned externally and documented in
+/// `docs/claude-code-message-schema.md`. Do not repurpose or rename Claude-owned
+/// fields in this struct. Historical top-level ATM additions are documented in
+/// `docs/legacy-atm-message-schema.md`, and forward ATM machine metadata is
+/// documented in `docs/atm-message-schema.md`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MessageEnvelope {
+    // Claude Code-native fields. Do not change these as if ATM owned the
+    // native schema; update the owning schema docs first if the external
+    // contract changes.
     pub from: String,
     pub text: String,
     pub timestamp: IsoTimestamp,
     pub read: bool,
 
+    // Legacy ATM additive fields layered on top of the native Claude Code
+    // message schema. Historical provenance analysis in this design sprint
+    // confirmed these persisted fields are ATM-added rather than Claude-native.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_team: Option<String>,
 
@@ -35,6 +48,8 @@ pub struct MessageEnvelope {
     #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]
     pub task_id: Option<String>,
 
+    // Preserve unknown producer-owned fields so ATM does not accidentally
+    // redefine external schemas by dropping or rewriting them.
     #[serde(flatten)]
     pub extra: Map<String, Value>,
 }
@@ -58,6 +73,9 @@ mod tests {
 
     #[test]
     fn message_envelope_round_trips_with_current_inbox_shape() {
+        // Validates the current ATM superset storage shape, not the
+        // Claude-native schema. Ownership is documented in
+        // docs/legacy-atm-message-schema.md and docs/atm-message-schema.md.
         let envelope = MessageEnvelope {
             from: "arch-ctm".into(),
             text: "hello".into(),
@@ -89,6 +107,9 @@ mod tests {
 
     #[test]
     fn unknown_fields_are_preserved() {
+        // Preserving producer-owned fields prevents ATM from silently
+        // redefining external schemas documented in
+        // docs/claude-code-message-schema.md.
         let json = json!({
             "from": "team-lead",
             "text": "hello",

@@ -329,6 +329,9 @@ fn is_clearable(message: &SourcedMessage, cutoff: Option<DateTime<Utc>>, idle_on
 }
 
 fn is_idle_notification(message: &MessageEnvelope) -> bool {
+    // Claude Code currently defines idle notifications as JSON encoded in the
+    // native `text` field. Do not replace this with an ATM-local schema here;
+    // any ownership change must be documented in docs/claude-code-message-schema.md.
     serde_json::from_str::<Value>(&message.text)
         .ok()
         .map(|value| value.get("type").and_then(Value::as_str) == Some("idle_notification"))
