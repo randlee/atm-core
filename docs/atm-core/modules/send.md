@@ -8,6 +8,11 @@ Also owns send-time resilience behavior that is not generic config parsing:
 - actionable sender warnings for degraded send behavior
 - best-effort deduplicated repair notifications to `team-lead`
 
+`SendOutcome.warnings` is part of the stable send API contract:
+- empty during normal sends
+- populated only when send succeeds in a degraded but permitted mode
+- contains actionable human-readable warning text for the caller to surface
+
 References:
 
 - Product requirements: `docs/requirements.md` §6 and §12

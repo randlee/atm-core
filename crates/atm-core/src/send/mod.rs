@@ -1,6 +1,9 @@
 use std::collections::BTreeSet;
 use std::fs;
+use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
+use std::thread;
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Map;
@@ -329,6 +332,15 @@ fn missing_team_config_alert_key(team_dir: &Path) -> String {
 
 fn register_missing_team_config_alert(home_dir: &Path, key: &str) -> bool {
     let state_path = send_alert_state_path(home_dir);
+    let lock_path = send_alert_lock_path(home_dir);
+    let Some(_guard) = acquire_send_alert_lock(&lock_path) else {
+        warn!(
+            path = %lock_path.display(),
+            "failed to acquire send alert lock; skipping team-lead notification"
+        );
+        return false;
+    };
+
     let mut state = load_send_alert_state(&state_path).unwrap_or_default();
     if state.missing_team_config_keys.contains(key) {
         return false;
@@ -343,6 +355,15 @@ fn register_missing_team_config_alert(home_dir: &Path, key: &str) -> bool {
 
 fn clear_missing_team_config_alert(home_dir: &Path, team_dir: &Path) {
     let state_path = send_alert_state_path(home_dir);
+    let lock_path = send_alert_lock_path(home_dir);
+    let Some(_guard) = acquire_send_alert_lock(&lock_path) else {
+        warn!(
+            path = %lock_path.display(),
+            "failed to acquire send alert lock while clearing dedup state"
+        );
+        return;
+    };
+
     let Ok(mut state) = load_send_alert_state(&state_path) else {
         return;
     };
@@ -361,23 +382,33 @@ fn send_alert_state_path(home_dir: &Path) -> PathBuf {
     home_dir.join(".config").join("atm").join("state.json")
 }
 
+fn send_alert_lock_path(home_dir: &Path) -> PathBuf {
+    home_dir.join(".config").join("atm").join("state.lock")
+}
+
 fn load_send_alert_state(path: &Path) -> Result<SendAlertState, AtmError> {
     if !path.exists() {
         return Ok(SendAlertState::default());
     }
 
     let raw = fs::read_to_string(path).map_err(|error| {
-        AtmError::file_policy(format!(
-            "failed to read send alert state at {}: {error}",
-            path.display()
-        ))
+        AtmError::new(
+            crate::error::AtmErrorKind::Config,
+            format!(
+                "failed to read send alert state at {}: {error}",
+                path.display()
+            ),
+        )
         .with_source(error)
     })?;
     serde_json::from_str(&raw).map_err(|error| {
-        AtmError::file_policy(format!(
-            "failed to parse send alert state at {}: {error}",
-            path.display()
-        ))
+        AtmError::new(
+            crate::error::AtmErrorKind::Config,
+            format!(
+                "failed to parse send alert state at {}: {error}",
+                path.display()
+            ),
+        )
         .with_source(error)
     })
 }
@@ -385,10 +416,13 @@ fn load_send_alert_state(path: &Path) -> Result<SendAlertState, AtmError> {
 fn save_send_alert_state(path: &Path, state: &SendAlertState) -> Result<(), AtmError> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| {
-            AtmError::file_policy(format!(
-                "failed to create send alert state directory {}: {error}",
-                parent.display()
-            ))
+            AtmError::new(
+                crate::error::AtmErrorKind::Config,
+                format!(
+                    "failed to create send alert state directory {}: {error}",
+                    parent.display()
+                ),
+            )
             .with_source(error)
         })?;
     }
@@ -396,18 +430,115 @@ fn save_send_alert_state(path: &Path, state: &SendAlertState) -> Result<(), AtmE
     let temp_path = path.with_extension("tmp");
     let data = serde_json::to_vec(state)?;
     fs::write(&temp_path, data).map_err(|error| {
-        AtmError::file_policy(format!(
-            "failed to write send alert state temp file {}: {error}",
-            temp_path.display()
-        ))
+        AtmError::new(
+            crate::error::AtmErrorKind::Config,
+            format!(
+                "failed to write send alert state temp file {}: {error}",
+                temp_path.display()
+            ),
+        )
         .with_source(error)
     })?;
     fs::rename(&temp_path, path).map_err(|error| {
-        AtmError::file_policy(format!(
-            "failed to replace send alert state at {}: {error}",
-            path.display()
-        ))
+        AtmError::new(
+            crate::error::AtmErrorKind::Config,
+            format!(
+                "failed to replace send alert state at {}: {error}",
+                path.display()
+            ),
+        )
         .with_source(error)
     })?;
     Ok(())
+}
+
+fn acquire_send_alert_lock(path: &Path) -> Option<SendAlertLock> {
+    if let Some(parent) = path.parent() {
+        if let Err(error) = fs::create_dir_all(parent) {
+            warn!(
+                %error,
+                path = %parent.display(),
+                "failed to create send alert lock directory"
+            );
+            return None;
+        }
+    }
+
+    for _ in 0..100 {
+        match OpenOptions::new().write(true).create_new(true).open(path) {
+            Ok(_) => {
+                return Some(SendAlertLock {
+                    path: path.to_path_buf(),
+                });
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                thread::sleep(Duration::from_millis(10));
+            }
+            Err(error) => {
+                warn!(%error, path = %path.display(), "failed to create send alert lock");
+                return None;
+            }
+        }
+    }
+
+    None
+}
+
+struct SendAlertLock {
+    path: PathBuf,
+}
+
+impl Drop for SendAlertLock {
+    fn drop(&mut self) {
+        if let Err(error) = fs::remove_file(&self.path) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                warn!(
+                    %error,
+                    path = %self.path.display(),
+                    "failed to remove send alert lock"
+                );
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use tempfile::tempdir;
+
+    use super::{
+        load_send_alert_state, save_send_alert_state, send_alert_state_path, SendAlertState,
+    };
+
+    #[test]
+    fn load_send_alert_state_parse_errors_are_config_errors() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = send_alert_state_path(tempdir.path());
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("state dir");
+        }
+        fs::write(&path, "{not-json").expect("state file");
+
+        let error = load_send_alert_state(&path).expect_err("malformed state");
+        assert!(error.is_config());
+    }
+
+    #[test]
+    fn save_send_alert_state_round_trips() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = send_alert_state_path(tempdir.path());
+        let mut state = SendAlertState::default();
+        state
+            .missing_team_config_keys
+            .insert("teams/atm-dev/config.json".to_string());
+
+        save_send_alert_state(&path, &state).expect("save");
+        let loaded = load_send_alert_state(&path).expect("load");
+        assert_eq!(
+            loaded.missing_team_config_keys,
+            state.missing_team_config_keys
+        );
+    }
 }

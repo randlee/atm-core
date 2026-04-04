@@ -255,6 +255,32 @@ fn test_send_missing_config_deduplicates_team_lead_notice() {
 }
 
 #[test]
+fn test_send_missing_config_deduplicates_team_lead_notice_under_concurrency() {
+    let fixture = Fixture::new("recipient");
+    fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
+    fixture.write_inbox("recipient", &[]);
+    fixture.write_inbox("team-lead", &[]);
+
+    let (first, second) = std::thread::scope(|scope| {
+        let first = scope.spawn(|| fixture.run(&["send", "recipient@atm-dev", "first"]));
+        let second = scope.spawn(|| fixture.run(&["send", "recipient@atm-dev", "second"]));
+        (
+            first.join().expect("first send"),
+            second.join().expect("second send"),
+        )
+    });
+
+    assert!(first.status.success(), "stderr: {}", fixture.stderr(&first));
+    assert!(
+        second.status.success(),
+        "stderr: {}",
+        fixture.stderr(&second)
+    );
+    let notices = fixture.inbox_contents("team-lead");
+    assert_eq!(notices.len(), 1);
+}
+
+#[test]
 fn test_send_missing_config_notice_resets_after_config_is_restored() {
     let fixture = Fixture::new("recipient");
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
@@ -345,6 +371,7 @@ impl Fixture {
         let config = TeamConfig {
             members: vec![AgentMember {
                 name: recipient.to_string(),
+                ..Default::default()
             }],
         };
         fs::write(

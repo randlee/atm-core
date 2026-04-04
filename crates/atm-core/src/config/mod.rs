@@ -145,7 +145,10 @@ fn parse_team_config(config_path: &Path, raw: &str) -> Result<TeamConfig, AtmErr
 
 fn parse_team_member(config_path: &Path, index: usize, entry: &Value) -> Option<AgentMember> {
     match entry {
-        Value::String(name) => Some(AgentMember { name: name.clone() }),
+        Value::String(name) => Some(AgentMember {
+            name: name.clone(),
+            ..Default::default()
+        }),
         _ => match serde_json::from_value::<AgentMember>(entry.clone()) {
             Ok(member) => Some(member),
             Err(error) => {
@@ -172,7 +175,7 @@ fn parse_team_member(config_path: &Path, index: usize, entry: &Value) -> Option<
 mod tests {
     use std::env;
     use std::fs;
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
 
     use super::{load_config, parse_team_config, resolve_identity, resolve_team, AtmConfig};
 
@@ -194,8 +197,9 @@ mod tests {
 
     #[test]
     fn parse_team_config_accepts_object_members() {
+        let config_path = temp_config_path();
         let config = parse_team_config(
-            Path::new("/tmp/config.json"),
+            &config_path,
             r#"{"members":[{"name":"arch-ctm"},{"name":"team-lead"}]}"#,
         )
         .expect("team config");
@@ -207,8 +211,9 @@ mod tests {
 
     #[test]
     fn parse_team_config_accepts_string_member_compatibility() {
+        let config_path = temp_config_path();
         let config = parse_team_config(
-            Path::new("/tmp/config.json"),
+            &config_path,
             r#"{"members":["arch-ctm",{"name":"team-lead"}]}"#,
         )
         .expect("team config");
@@ -220,8 +225,9 @@ mod tests {
 
     #[test]
     fn parse_team_config_skips_invalid_member_records() {
+        let config_path = temp_config_path();
         let config = parse_team_config(
-            Path::new("/tmp/config.json"),
+            &config_path,
             r#"{"members":[{"name":"arch-ctm"},{"broken":true},17,{"name":"team-lead"}]}"#,
         )
         .expect("team config");
@@ -233,30 +239,29 @@ mod tests {
 
     #[test]
     fn parse_team_config_defaults_missing_members_to_empty() {
-        let config =
-            parse_team_config(Path::new("/tmp/config.json"), r#"{}"#).expect("team config");
+        let config_path = temp_config_path();
+        let config = parse_team_config(&config_path, r#"{}"#).expect("team config");
 
         assert!(config.members.is_empty());
     }
 
     #[test]
     fn parse_team_config_reports_json_syntax_errors_with_detail() {
-        let error = parse_team_config(
-            Path::new("/tmp/config.json"),
-            r#"{"members":[{"name":"arch-ctm"}"#,
-        )
-        .expect_err("syntax error");
+        let config_path = temp_config_path();
+        let error = parse_team_config(&config_path, r#"{"members":[{"name":"arch-ctm"}"#)
+            .expect_err("syntax error");
 
         assert!(error.is_config());
-        assert!(error.message.contains("/tmp/config.json"));
+        assert!(error.message.contains("config.json"));
         assert!(error.message.contains("EOF while parsing"));
         assert!(error.recovery.as_deref().is_some());
     }
 
     #[test]
     fn parse_team_config_rejects_non_object_root() {
-        let error = parse_team_config(Path::new("/tmp/config.json"), r#"["arch-ctm"]"#)
-            .expect_err("root shape error");
+        let config_path = temp_config_path();
+        let error =
+            parse_team_config(&config_path, r#"["arch-ctm"]"#).expect_err("root shape error");
 
         assert!(error.is_config());
         assert!(error.message.contains("root value must be a JSON object"));
@@ -265,11 +270,9 @@ mod tests {
 
     #[test]
     fn parse_team_config_rejects_non_array_members() {
-        let error = parse_team_config(
-            Path::new("/tmp/config.json"),
-            r#"{"members":{"name":"arch-ctm"}}"#,
-        )
-        .expect_err("members shape error");
+        let config_path = temp_config_path();
+        let error = parse_team_config(&config_path, r#"{"members":{"name":"arch-ctm"}}"#)
+            .expect_err("members shape error");
 
         assert!(error.is_config());
         assert!(error
@@ -342,6 +345,10 @@ mod tests {
         let path = env::temp_dir().join(format!("{label}-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&path).expect("temp dir");
         path
+    }
+
+    fn temp_config_path() -> PathBuf {
+        env::temp_dir().join("config.json")
     }
 
     fn restore(key: &str, value: Option<std::ffi::OsString>) {

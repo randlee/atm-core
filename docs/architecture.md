@@ -321,6 +321,7 @@ Public entrypoint:
 - requires-ack flag
 - summary
 - rendered message body
+- warnings
 - delivery result
 
 The file-reference path may be rewritten through the file policy layer.
@@ -335,6 +336,7 @@ Normal send JSON output includes:
 - `message_id`
 - `requires_ack`
 - `task_id`
+- `warnings` when send completed in a degraded but permitted mode
 
 Dry-run send JSON output includes:
 - `action = "send"`
@@ -344,6 +346,7 @@ Dry-run send JSON output includes:
 - `dry_run = true`
 - `requires_ack`
 - `task_id`
+- `warnings` when dry-run surfaces degraded send conditions
 
 Send ordering rules:
 - resolve target address, team existence, and agent membership as one address-resolution stage before mailbox path selection
