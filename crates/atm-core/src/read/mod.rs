@@ -17,8 +17,9 @@ use crate::error::{AtmError, AtmErrorKind};
 use crate::home;
 use crate::identity;
 use crate::mailbox;
+use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
-use crate::schema::{LegacyMessageId, MessageEnvelope};
+use crate::schema::MessageEnvelope;
 use crate::types::{AckActivationMode, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection};
 
 #[derive(Debug, Clone)]
@@ -387,32 +388,11 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
 }
 
 fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
-    let mut latest_for_id: HashMap<LegacyMessageId, (IsoTimestamp, usize)> = HashMap::new();
-    for (index, message) in messages.iter().enumerate() {
-        if let Some(message_id) = message.envelope.message_id {
-            latest_for_id
-                .entry(message_id)
-                .and_modify(|entry| {
-                    if message.envelope.timestamp > entry.0
-                        || (message.envelope.timestamp == entry.0 && index > entry.1)
-                    {
-                        *entry = (message.envelope.timestamp, index);
-                    }
-                })
-                .or_insert((message.envelope.timestamp, index));
-        }
-    }
-
-    let deduped = messages
-        .into_iter()
-        .enumerate()
-        .filter_map(|(index, message)| match message.envelope.message_id {
-            Some(message_id) => latest_for_id
-                .get(&message_id)
-                .and_then(|(_, keep_index)| (*keep_index == index).then_some(message)),
-            None => Some(message),
-        })
-        .collect::<Vec<_>>();
+    let deduped = dedupe_legacy_message_id_surface(
+        messages,
+        |message| message.envelope.message_id,
+        |message| message.envelope.timestamp,
+    );
 
     let latest_idle_for_sender = messages_from_idle_sender(&deduped);
 

@@ -303,8 +303,11 @@ Expected usage:
 
 Current implementation:
 
-- read/ack/clear deduplicate merged surfaces by `message_id` with last-wins
-  behavior
+- `crates/atm-core/src/mailbox/surface.rs::dedupe_legacy_message_id_surface`
+  is the single implementation used by read/ack/clear
+- the key is the legacy ATM-authored top-level `message_id`
+- collision handling keeps the newest message by timestamp; equal timestamps
+  fall back to the later merged-surface position
 
 Purpose:
 
