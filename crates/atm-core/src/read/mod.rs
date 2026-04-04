@@ -470,7 +470,12 @@ fn is_unread_idle_notification(message: &MessageEnvelope) -> bool {
 fn idle_sender(message: &MessageEnvelope) -> Option<String> {
     serde_json::from_str::<Value>(&message.text)
         .ok()
-        .and_then(|value| value.get("from").and_then(Value::as_str).map(str::to_string))
+        .and_then(|value| {
+            value
+                .get("from")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
 }
 
 fn classify_all(messages: Vec<SourcedMessage>) -> Vec<ClassifiedMessage> {

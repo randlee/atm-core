@@ -258,7 +258,7 @@ fn test_read_all_flag() {
         ],
     );
 
-    let output = fixture.run(&["read", "--all", "--json"]);
+    let output = fixture.run(&["read", "--all", "--no-mark", "--json"]);
 
     assert!(
         output.status.success(),
@@ -450,6 +450,14 @@ fn test_read_keeps_read_idle_notifications_visible() {
                 None,
                 1,
             ),
+            fixture.message(
+                "daemon",
+                &idle_notification_text("team-lead", "available"),
+                false,
+                None,
+                None,
+                2,
+            ),
         ],
     );
 
@@ -462,12 +470,15 @@ fn test_read_keeps_read_idle_notifications_visible() {
     );
     let parsed = fixture.stdout_json(&output);
     let messages = parsed["messages"].as_array().expect("messages array");
+    assert_eq!(parsed["count"], 3);
+    assert_eq!(parsed["bucket_counts"]["unread"], 1);
+    assert_eq!(parsed["bucket_counts"]["history"], 2);
     assert_eq!(
         messages
             .iter()
             .filter(|message| message["text"] == idle_notification_text("team-lead", "available"))
             .count(),
-        2
+        3
     );
 }
 
