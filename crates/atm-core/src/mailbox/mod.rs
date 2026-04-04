@@ -11,7 +11,7 @@ use std::path::Path;
 use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorKind};
-use crate::schema::MessageEnvelope;
+use crate::schema::{LegacyMessageId, MessageEnvelope};
 
 pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), AtmError> {
     let mut messages = read_messages(path)?;
@@ -60,7 +60,7 @@ pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
         }
     }
 
-    let mut last_indices = HashMap::new();
+    let mut last_indices: HashMap<LegacyMessageId, usize> = HashMap::new();
     for (index, message) in messages.iter().enumerate() {
         if let Some(message_id) = message.message_id {
             last_indices.insert(message_id, index);
@@ -154,7 +154,7 @@ mod tests {
             read: false,
             source_team: Some("atm-dev".into()),
             summary: None,
-            message_id: Some(message_id),
+            message_id: Some(message_id.into()),
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,

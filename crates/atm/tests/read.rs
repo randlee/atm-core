@@ -1,11 +1,13 @@
 use std::fs;
 use std::process::Command;
 
-use atm_core::schema::{AgentMember, MessageEnvelope, TeamConfig};
+use atm_core::schema::{
+    AgentMember, AtmMessageId, AtmMetadataFields, ForwardMetadataEnvelope, LegacyMessageId,
+    MessageEnvelope, MessageMetadata, TeamConfig,
+};
 use atm_core::types::IsoTimestamp;
 use chrono::{TimeZone, Utc};
 use serde_json::Value;
-use uuid::Uuid;
 
 #[test]
 fn test_read_own_inbox_default() {
@@ -312,6 +314,84 @@ fn test_read_from_filter() {
 }
 
 #[test]
+fn test_read_deduplicates_unread_idle_notifications_per_sender() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[
+            fixture.message(
+                "daemon",
+                &idle_notification_text("team-lead", "available"),
+                false,
+                None,
+                None,
+                0,
+            ),
+            fixture.message(
+                "daemon",
+                &idle_notification_text("team-lead", "available"),
+                false,
+                None,
+                None,
+                1,
+            ),
+            fixture.message("team-lead", "normal unread", false, None, None, 2),
+        ],
+    );
+
+    let output = fixture.run(&["read", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["count"], 2);
+    assert_eq!(parsed["bucket_counts"]["unread"], 2);
+    let messages = parsed["messages"].as_array().expect("messages array");
+    assert_eq!(messages[0]["text"], "normal unread");
+    assert!(
+        messages
+            .iter()
+            .filter(|message| message["text"] == idle_notification_text("team-lead", "available"))
+            .count()
+            == 1
+    );
+}
+
+#[test]
+fn test_forward_metadata_message_id_timestamp_matches_persisted_timestamp() {
+    let (message_id, timestamp) = AtmMessageId::new_with_timestamp();
+    let envelope = ForwardMetadataEnvelope {
+        timestamp,
+        metadata: MessageMetadata {
+            atm: Some(AtmMetadataFields {
+                message_id: Some(message_id),
+                source_team: Some("atm-dev".into()),
+                pending_ack_at: None,
+                acknowledged_at: None,
+                acknowledges_message_id: None,
+                alert_kind: None,
+                extra: serde_json::Map::new(),
+            }),
+            extra: serde_json::Map::new(),
+        },
+    };
+
+    assert_eq!(
+        envelope
+            .metadata
+            .atm
+            .expect("atm metadata")
+            .message_id
+            .expect("message id")
+            .timestamp(),
+        envelope.timestamp
+    );
+}
+
+#[test]
 fn test_read_mutual_exclusion() {
     let fixture = Fixture::new(&["arch-ctm"]);
 
@@ -485,7 +565,7 @@ impl Fixture {
             read,
             source_team: Some("atm-dev".into()),
             summary: None,
-            message_id: Some(Uuid::new_v4()),
+            message_id: Some(LegacyMessageId::new()),
             pending_ack_at: pending_ack_offset
                 .map(|offset| IsoTimestamp::from_datetime(self.timestamp(offset))),
             acknowledged_at: acknowledged_offset
@@ -495,4 +575,16 @@ impl Fixture {
             extra: serde_json::Map::new(),
         }
     }
+}
+
+fn idle_notification_text(from: &str, idle_reason: &str) -> String {
+    // Claude Code owns the idle-notification payload shape in the text field.
+    // Keep this fixture aligned with docs/claude-code-message-schema.md.
+    serde_json::json!({
+        "type": "idle_notification",
+        "from": from,
+        "timestamp": "2026-03-30T00:00:00Z",
+        "idleReason": idle_reason,
+    })
+    .to_string()
 }

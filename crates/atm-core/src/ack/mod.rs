@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use serde_json::Map;
 use tracing::{trace, warn};
-use uuid::Uuid;
 
 use crate::address::AgentAddress;
 use crate::config;
@@ -15,7 +14,7 @@ use crate::identity;
 use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
-use crate::schema::MessageEnvelope;
+use crate::schema::{LegacyMessageId, MessageEnvelope};
 use crate::send::{input, summary};
 use crate::types::IsoTimestamp;
 
@@ -25,7 +24,7 @@ pub struct AckRequest {
     pub current_dir: PathBuf,
     pub actor_override: Option<String>,
     pub team_override: Option<String>,
-    pub message_id: Uuid,
+    pub message_id: LegacyMessageId,
     pub reply_body: String,
 }
 
@@ -34,11 +33,11 @@ pub struct AckOutcome {
     pub action: &'static str,
     pub team: String,
     pub agent: String,
-    pub message_id: Uuid,
+    pub message_id: LegacyMessageId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<String>,
     pub reply_target: String,
-    pub reply_message_id: Uuid,
+    pub reply_message_id: LegacyMessageId,
     pub reply_text: String,
 }
 
@@ -135,7 +134,7 @@ pub fn ack_mail(
 
     let ack_timestamp = IsoTimestamp::now();
     let reply_text = input::validate_message_text(request.reply_body)?;
-    let reply_message_id = Uuid::new_v4();
+    let reply_message_id = LegacyMessageId::new();
     let source_task_id = source_message.envelope.task_id.clone();
     let reply_message = MessageEnvelope {
         from: actor.clone(),
@@ -177,7 +176,7 @@ pub fn ack_mail(
         team,
         agent: actor.clone(),
         sender: actor,
-        message_id: Some(request.message_id),
+        message_id: Some(request.message_id.into()),
         requires_ack: false,
         dry_run: false,
         task_id: source_task_id,
@@ -307,7 +306,7 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
 }
 
 fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
-    let mut latest_for_id: HashMap<Uuid, (IsoTimestamp, usize)> = HashMap::new();
+    let mut latest_for_id: HashMap<LegacyMessageId, (IsoTimestamp, usize)> = HashMap::new();
     for (index, message) in messages.iter().enumerate() {
         if let Some(message_id) = message.envelope.message_id {
             latest_for_id

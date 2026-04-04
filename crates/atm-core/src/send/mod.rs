@@ -17,7 +17,7 @@ use crate::home;
 use crate::identity;
 use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
-use crate::schema::MessageEnvelope;
+use crate::schema::{LegacyMessageId, MessageEnvelope};
 use crate::types::IsoTimestamp;
 
 pub(crate) mod file_policy;
@@ -55,7 +55,7 @@ pub struct SendOutcome {
     pub agent: String,
     pub sender: String,
     pub outcome: &'static str,
-    pub message_id: Uuid,
+    pub message_id: LegacyMessageId,
     pub requires_ack: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<String>,
@@ -148,7 +148,7 @@ pub fn send_mail(
         &recipient.team,
     )?;
     let summary = summary::build_summary(&body, request.summary_override);
-    let message_id = Uuid::new_v4();
+    let message_id = LegacyMessageId::new();
     let timestamp = IsoTimestamp::now();
 
     if !request.dry_run {
@@ -191,7 +191,7 @@ pub fn send_mail(
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
         sender,
-        message_id: Some(outcome.message_id),
+        message_id: Some(outcome.message_id.into()),
         requires_ack: outcome.requires_ack,
         dry_run: outcome.dry_run,
         task_id,
@@ -309,7 +309,7 @@ fn notify_team_lead_missing_config(
         summary: Some(format!(
             "ATM warning: missing team config fallback used for {recipient}@{team}"
         )),
-        message_id: Some(Uuid::new_v4()),
+        message_id: Some(LegacyMessageId::new()),
         pending_ack_at: None,
         acknowledged_at: None,
         acknowledges_message_id: None,

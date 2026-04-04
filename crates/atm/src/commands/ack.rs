@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use atm_core::ack::{self, AckRequest};
 use atm_core::home;
+use atm_core::schema::LegacyMessageId;
 use clap::Args;
 use uuid::Uuid;
 
@@ -35,7 +36,7 @@ impl AckCommand {
                 current_dir,
                 actor_override: self.actor,
                 team_override: self.team,
-                message_id,
+                message_id: LegacyMessageId::from(message_id),
                 reply_body: self.reply,
             },
             observability,
