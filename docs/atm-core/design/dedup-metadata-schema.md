@@ -390,10 +390,14 @@ Conforms:
 - provenance analysis confirms `message_id` itself is ATM-added, which makes
   this dedup family unambiguously ATM-owned
 
-Needs update:
+Resolved (J.3):
 
-- the duplicated `dedupe_sourced_messages` helpers in read/ack/clear should be
-  centralized later to keep the dedup contract consistent
+- sprint J.3 centralized legacy `message_id` surface canonicalization in
+  `crates/atm-core/src/mailbox/surface.rs::dedupe_legacy_message_id_surface`
+- the owning contract remains §3.1 Surface Canonicalization
+- read-layer idle-notification collapse is now an explicit follow-on policy
+  step on top of the shared surface canonicalization path rather than a second
+  private message-id dedup implementation
 
 ## 5. Design Answers
 

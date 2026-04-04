@@ -258,7 +258,7 @@ fn test_read_all_flag() {
         ],
     );
 
-    let output = fixture.run(&["read", "--all", "--json"]);
+    let output = fixture.run(&["read", "--all", "--no-mark", "--json"]);
 
     assert!(
         output.status.success(),
@@ -357,6 +357,128 @@ fn test_read_deduplicates_unread_idle_notifications_per_sender() {
             .filter(|message| message["text"] == idle_notification_text("team-lead", "available"))
             .count()
             == 1
+    );
+}
+
+#[test]
+fn test_read_deduplicates_idle_notifications_per_sender_only() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[
+            fixture.message(
+                "daemon",
+                &idle_notification_text("sender-a", "available"),
+                false,
+                None,
+                None,
+                0,
+            ),
+            fixture.message(
+                "daemon",
+                &idle_notification_text("sender-a", "available"),
+                false,
+                None,
+                None,
+                1,
+            ),
+            fixture.message(
+                "daemon",
+                &idle_notification_text("sender-b", "available"),
+                false,
+                None,
+                None,
+                2,
+            ),
+            fixture.message(
+                "daemon",
+                &idle_notification_text("sender-b", "available"),
+                false,
+                None,
+                None,
+                3,
+            ),
+        ],
+    );
+
+    let output = fixture.run(&["read", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    let messages = parsed["messages"].as_array().expect("messages array");
+    assert_eq!(messages.len(), 2);
+    assert_eq!(parsed["bucket_counts"]["unread"], 2);
+    assert_eq!(
+        messages
+            .iter()
+            .filter(|message| message["text"] == idle_notification_text("sender-a", "available"))
+            .count(),
+        1
+    );
+    assert_eq!(
+        messages
+            .iter()
+            .filter(|message| message["text"] == idle_notification_text("sender-b", "available"))
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn test_read_keeps_read_idle_notifications_visible() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[
+            fixture.message(
+                "daemon",
+                &idle_notification_text("team-lead", "available"),
+                true,
+                None,
+                None,
+                0,
+            ),
+            fixture.message(
+                "daemon",
+                &idle_notification_text("team-lead", "available"),
+                true,
+                None,
+                None,
+                1,
+            ),
+            fixture.message(
+                "daemon",
+                &idle_notification_text("team-lead", "available"),
+                false,
+                None,
+                None,
+                2,
+            ),
+        ],
+    );
+
+    let output = fixture.run(&["read", "--all", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    let messages = parsed["messages"].as_array().expect("messages array");
+    assert_eq!(parsed["count"], 3);
+    assert_eq!(parsed["bucket_counts"]["unread"], 1);
+    assert_eq!(parsed["bucket_counts"]["history"], 2);
+    assert_eq!(
+        messages
+            .iter()
+            .filter(|message| message["text"] == idle_notification_text("team-lead", "available"))
+            .count(),
+        3
     );
 }
 

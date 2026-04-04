@@ -4,9 +4,10 @@ use crate::schema::LegacyMessageId;
 use crate::types::IsoTimestamp;
 
 /// Canonicalize a merged mailbox surface by the legacy top-level `message_id`
-/// owned by docs/atm-message-schema.md §2. For read/ack/clear, the newest
-/// message for a given LegacyMessageId wins; equal timestamps fall back to the
-/// later merged-surface position.
+/// owned by docs/atm-message-schema.md §2 and
+/// docs/atm-core/design/dedup-metadata-schema.md §3.1. For read/ack/clear, the
+/// newest message for a given LegacyMessageId wins; equal timestamps fall back
+/// to the later merged-surface position.
 pub(crate) fn dedupe_legacy_message_id_surface<T, FId, FTs>(
     messages: Vec<T>,
     mut legacy_message_id: FId,
@@ -112,6 +113,38 @@ mod tests {
 
         assert_eq!(deduped.len(), 1);
         assert_eq!(deduped[0].body, "second");
+    }
+
+    #[test]
+    fn dedupe_legacy_message_id_surface_preserves_records_without_message_id() {
+        let message_id = LegacyMessageId::new();
+        let messages = vec![
+            SurfaceRecord {
+                message_id: None,
+                timestamp: iso("2026-04-04T10:00:00Z"),
+                body: "no-id",
+            },
+            SurfaceRecord {
+                message_id: Some(message_id),
+                timestamp: iso("2026-04-04T10:00:01Z"),
+                body: "first",
+            },
+            SurfaceRecord {
+                message_id: Some(message_id),
+                timestamp: iso("2026-04-04T10:00:02Z"),
+                body: "second",
+            },
+        ];
+
+        let deduped = dedupe_legacy_message_id_surface(
+            messages,
+            |message| message.message_id,
+            |message| message.timestamp,
+        );
+
+        assert_eq!(deduped.len(), 2);
+        assert_eq!(deduped[0].body, "no-id");
+        assert_eq!(deduped[1].body, "second");
     }
 
     fn iso(value: &str) -> IsoTimestamp {

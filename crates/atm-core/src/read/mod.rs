@@ -121,7 +121,13 @@ pub fn read_mail(
     };
 
     let mut source_files = load_source_files(&query.home_dir, &target.team, &target.agent)?;
-    let mut classified_all = classify_all(dedupe_sourced_messages(merged_surface(&source_files)));
+    let mut classified_all = classify_all(apply_idle_notification_dedup(
+        dedupe_legacy_message_id_surface(
+            merged_surface(&source_files),
+            |message: &SourcedMessage| message.envelope.message_id,
+            |message: &SourcedMessage| message.envelope.timestamp,
+        ),
+    ));
     let mut bucket_counts = bucket_counts_for(&classified_all);
     let mut filtered = apply_filters(
         classified_all.clone(),
@@ -136,19 +142,30 @@ pub fn read_mail(
             let wait_satisfied = wait::wait_for_eligible_message(
                 timeout_secs,
                 || {
-                    Ok(dedupe_sourced_messages(merged_surface(&load_source_files(
-                        &query.home_dir,
-                        &target.team,
-                        &target.agent,
-                    )?)))
+                    Ok(apply_idle_notification_dedup(
+                        dedupe_legacy_message_id_surface(
+                            merged_surface(&load_source_files(
+                                &query.home_dir,
+                                &target.team,
+                                &target.agent,
+                            )?),
+                            |message: &SourcedMessage| message.envelope.message_id,
+                            |message: &SourcedMessage| message.envelope.timestamp,
+                        ),
+                    ))
                 },
                 |messages| !selected_after_filters(messages, &query, seen_watermark).is_empty(),
             )?;
 
             if wait_satisfied {
                 source_files = load_source_files(&query.home_dir, &target.team, &target.agent)?;
-                classified_all =
-                    classify_all(dedupe_sourced_messages(merged_surface(&source_files)));
+                classified_all = classify_all(apply_idle_notification_dedup(
+                    dedupe_legacy_message_id_surface(
+                        merged_surface(&source_files),
+                        |message: &SourcedMessage| message.envelope.message_id,
+                        |message: &SourcedMessage| message.envelope.timestamp,
+                    ),
+                ));
                 bucket_counts = bucket_counts_for(&classified_all);
                 filtered = apply_filters(
                     classified_all.clone(),
@@ -387,13 +404,7 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
         .collect()
 }
 
-fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
-    let deduped = dedupe_legacy_message_id_surface(
-        messages,
-        |message| message.envelope.message_id,
-        |message| message.envelope.timestamp,
-    );
-
+fn apply_idle_notification_dedup(deduped: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
     let latest_idle_for_sender = messages_from_idle_sender(&deduped);
 
     deduped
@@ -450,7 +461,12 @@ fn is_unread_idle_notification(message: &MessageEnvelope) -> bool {
 fn idle_sender(message: &MessageEnvelope) -> Option<String> {
     serde_json::from_str::<Value>(&message.text)
         .ok()
-        .and_then(|value| value.get("from").and_then(Value::as_str).map(str::to_string))
+        .and_then(|value| {
+            value
+                .get("from")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
 }
 
 fn classify_all(messages: Vec<SourcedMessage>) -> Vec<ClassifiedMessage> {

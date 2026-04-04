@@ -77,26 +77,34 @@ pub fn ack_mail(
     }
 
     let mut source_files = load_source_files(&request.home_dir, &team, &actor)?;
-    let source_message = dedupe_sourced_messages(merged_surface(&source_files))
-        .into_iter()
-        .filter_map(|message| match message.envelope.message_id {
-            Some(_) => Some(message),
-            None => {
-                trace!(
-                    source_path = %message.source_path.display(),
-                    source_index = message.source_index,
-                    "skipping source message without message_id during ack lookup"
-                );
-                None
-            }
-        })
-        .find(|message| message.envelope.message_id == Some(request.message_id))
-        .ok_or_else(|| {
-            AtmError::validation(format!(
-                "message {} was not found in {}@{}",
-                request.message_id, actor, team
-            ))
-        })?;
+    // Ack intentionally does not apply read-surface idle-notification dedup.
+    // It must preserve the raw merged surface after legacy message_id
+    // canonicalization so acknowledgement lookup does not depend on read-only
+    // inbox clutter policy.
+    let source_message = dedupe_legacy_message_id_surface(
+        merged_surface(&source_files),
+        |message: &SourcedMessage| message.envelope.message_id,
+        |message: &SourcedMessage| message.envelope.timestamp,
+    )
+    .into_iter()
+    .filter_map(|message| match message.envelope.message_id {
+        Some(_) => Some(message),
+        None => {
+            trace!(
+                source_path = %message.source_path.display(),
+                source_index = message.source_index,
+                "skipping source message without message_id during ack lookup"
+            );
+            None
+        }
+    })
+    .find(|message| message.envelope.message_id == Some(request.message_id))
+    .ok_or_else(|| {
+        AtmError::validation(format!(
+            "message {} was not found in {}@{}",
+            request.message_id, actor, team
+        ))
+    })?;
 
     match (
         state::derive_read_state(&source_message.envelope),
@@ -176,7 +184,7 @@ pub fn ack_mail(
         team,
         agent: actor.clone(),
         sender: actor,
-        message_id: Some(request.message_id.into()),
+        message_id: Some(request.message_id),
         requires_ack: false,
         dry_run: false,
         task_id: source_task_id,
@@ -303,14 +311,6 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
                 })
         })
         .collect()
-}
-
-fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
-    dedupe_legacy_message_id_surface(
-        messages,
-        |message| message.envelope.message_id,
-        |message| message.envelope.timestamp,
-    )
 }
 
 fn update_source_message(
