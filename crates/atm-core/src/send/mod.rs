@@ -466,12 +466,21 @@ fn acquire_send_alert_lock(path: &Path) -> Option<SendAlertLock> {
 
     for _ in 0..100 {
         match OpenOptions::new().write(true).create_new(true).open(path) {
-            Ok(_) => {
+            Ok(mut file) => {
+                let pid = std::process::id().to_string();
+                if let Err(error) = std::io::Write::write_all(&mut file, pid.as_bytes()) {
+                    warn!(%error, path = %path.display(), "failed to write send alert lock pid");
+                    let _ = fs::remove_file(path);
+                    return None;
+                }
                 return Some(SendAlertLock {
                     path: path.to_path_buf(),
                 });
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                if evict_stale_send_alert_lock(path) {
+                    continue;
+                }
                 thread::sleep(Duration::from_millis(10));
             }
             Err(error) => {
@@ -482,6 +491,64 @@ fn acquire_send_alert_lock(path: &Path) -> Option<SendAlertLock> {
     }
 
     None
+}
+
+fn evict_stale_send_alert_lock(path: &Path) -> bool {
+    let Ok(raw) = fs::read_to_string(path) else {
+        return false;
+    };
+    let Ok(pid) = raw.trim().parse::<u32>() else {
+        return false;
+    };
+    if process_is_alive(pid) {
+        return false;
+    }
+
+    match fs::remove_file(path) {
+        Ok(()) => true,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+        Err(error) => {
+            warn!(%error, path = %path.display(), pid, "failed to evict stale send alert lock");
+            false
+        }
+    }
+}
+
+#[cfg(unix)]
+fn process_is_alive(pid: u32) -> bool {
+    let pid = match i32::try_from(pid) {
+        Ok(pid) => pid,
+        Err(_) => return false,
+    };
+    // SAFETY: libc::kill with signal 0 performs an existence/permission check
+    // only and does not deliver a signal.
+    let result = unsafe { libc::kill(pid, 0) };
+    if result == 0 {
+        return true;
+    }
+
+    std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+}
+
+#[cfg(windows)]
+fn process_is_alive(pid: u32) -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, STILL_ACTIVE};
+    use windows_sys::Win32::System::Threading::{
+        GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+
+    // SAFETY: OpenProcess is called read-only for process liveness inspection.
+    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if handle == 0 {
+        return false;
+    }
+
+    let mut exit_code = 0u32;
+    // SAFETY: handle was returned by OpenProcess and remains valid until CloseHandle below.
+    let ok = unsafe { GetExitCodeProcess(handle, &mut exit_code) };
+    // SAFETY: handle was opened successfully above and must be closed once.
+    unsafe { CloseHandle(handle) };
+    ok != 0 && exit_code == STILL_ACTIVE
 }
 
 struct SendAlertLock {
@@ -509,7 +576,8 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        load_send_alert_state, save_send_alert_state, send_alert_state_path, SendAlertState,
+        acquire_send_alert_lock, load_send_alert_state, process_is_alive, save_send_alert_state,
+        send_alert_lock_path, send_alert_state_path, SendAlertState,
     };
 
     #[test]
@@ -540,5 +608,26 @@ mod tests {
             loaded.missing_team_config_keys,
             state.missing_team_config_keys
         );
+    }
+
+    #[test]
+    fn process_is_alive_reports_current_process() {
+        assert!(process_is_alive(std::process::id()));
+    }
+
+    #[test]
+    fn acquire_send_alert_lock_evicts_stale_pid_lock() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = send_alert_lock_path(tempdir.path());
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("lock dir");
+        }
+        fs::write(&path, u32::MAX.to_string()).expect("stale lock");
+
+        let guard = acquire_send_alert_lock(&path).expect("acquire lock");
+        let pid = fs::read_to_string(&path).expect("lock contents");
+        assert_eq!(pid.trim(), std::process::id().to_string());
+        drop(guard);
+        assert!(!path.exists());
     }
 }

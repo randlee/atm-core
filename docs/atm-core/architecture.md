@@ -45,6 +45,17 @@ Send-specific policy remains layered above the loader:
 - deduplicated repair notifications belong to the send orchestration boundary,
   not to generic config parsing
 
+Current `AgentMember` persisted schema:
+- `name: String` required for roster membership checks
+- `agent_id: String` stored as `agentId`, default empty string
+- `agent_type: String` stored as `agentType`, default empty string
+- `model: String`, default empty string
+- `joined_at: Option<u64>` stored as `joinedAt`
+- `tmux_pane_id: String` stored as `tmuxPaneId`, default empty string
+- `cwd: String`, default empty string
+- `extra: serde_json::Map<String, serde_json::Value>` via `#[serde(flatten)]`
+  for forward-compatible Claude Code fields
+
 ## 4. ADR Namespace
 
 The `atm-core` crate uses the `ADR-CORE-*` namespace.

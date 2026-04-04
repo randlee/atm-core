@@ -311,18 +311,22 @@ Public entrypoint:
 - stdin text
 - file reference
 
-`SendOutcome` contains:
-- action
-- resolved team
-- resolved recipient
-- resolved sender
-- generated message id
-- task id
-- requires-ack flag
-- summary
-- rendered message body
-- warnings
-- delivery result
+`SendOutcome` fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `action` | `&'static str` | Stable send action marker. |
+| `team` | `String` | Resolved target team. |
+| `agent` | `String` | Resolved target recipient. |
+| `sender` | `String` | Resolved sender identity. |
+| `outcome` | `&'static str` | Delivery result such as `sent` or `dry_run`. |
+| `message_id` | `Uuid` | ATM-authored UUID v4 for the send operation. |
+| `requires_ack` | `bool` | Whether the message requires acknowledgement. |
+| `task_id` | `Option<String>` | Optional task identifier persisted on the message. |
+| `summary` | `Option<String>` | Generated or caller-supplied summary text. |
+| `message` | `Option<String>` | Rendered message body for dry-run output. |
+| `warnings` | `Vec<String>` | Actionable degraded-mode warnings surfaced when send succeeds under a permitted fallback condition. |
+| `dry_run` | `bool` | Whether the send was executed as a dry run. |
 
 The file-reference path may be rewritten through the file policy layer.
 
