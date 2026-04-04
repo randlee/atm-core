@@ -145,6 +145,34 @@ Supported optional config fields:
 - color
 - bridge remotes and hostname aliases used by origin-inbox merge
 
+### 3.3.1 Config And Schema Recovery
+
+Product requirement ID:
+- `REQ-P-CONFIG-HEALTH-001` Persisted ATM config and team JSON loading must
+  recover at the narrowest safe scope and report precise diagnostics when
+  recovery is not safe.
+
+Satisfied by:
+- `REQ-CORE-CONFIG-003` for config/team schema recovery and diagnostic policy
+- `REQ-CORE-MAILBOX-001` for mailbox record skip behavior
+
+Required recovery policy:
+- compatibility-only schema drift may be recovered with documented,
+  deterministic defaults
+- malformed records inside a larger persisted collection should be skipped or
+  quarantined individually when the rest of the document remains trustworthy
+- malformed root documents or invalid root structure must fail with structured
+  errors rather than guessed repairs
+- identity and routing semantics must never be fabricated to keep a command
+  running
+
+Required diagnostics:
+- file path
+- entity scope when known, such as member name or collection entry
+- field name when known
+- parser detail, including line and column when available
+- recovery guidance when operator action is required
+
 ### 3.4 Claude Settings Resolution
 
 The system must resolve Claude settings for file-reference policy checks.
@@ -982,6 +1010,8 @@ Satisfied by:
 
 All user-visible failures must use structured errors with recovery guidance.
 
+Persisted-data failures must preserve parser and entity context when available.
+
 Minimum error categories:
 - configuration
 - address
@@ -1018,6 +1048,10 @@ Satisfied by:
 - duplicate message ids must not be appended twice
 - read-time duplicate message ids collapse to the newest visible entry
 - corrupt records should be skipped individually when possible
+- persisted config/team schema drift should recover with deterministic defaults
+  when safe
+- persisted config/team records with missing identity or routing-critical fields
+  must fail or be isolated rather than guessed
 - missing inbox files are treated as empty inboxes
 - seen-state races must not corrupt mailbox data
 - observability emission failures must not corrupt command behavior

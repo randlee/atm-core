@@ -54,6 +54,11 @@ Initial crate requirement IDs:
   resolution and target-validation aspects of:
   `REQ-P-ADDRESS-001`, `REQ-P-SEND-001`, `REQ-P-READ-001`,
   `REQ-P-CLEAR-001`.
+- `REQ-CORE-CONFIG-003` `atm-core` owns persisted config/team schema recovery
+  and diagnostic policy. Satisfies the compatibility-recovery and
+  persisted-data error aspects of:
+  `REQ-P-CONFIG-HEALTH-001`, `REQ-P-ERROR-001`,
+  `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-MAILBOX-001` `atm-core` owns daemon-free mailbox/store behavior.
   Satisfies the persisted mailbox I/O and mutation aspects of:
   `REQ-P-CONTRACT-001`, `REQ-P-SEND-001`, `REQ-P-READ-001`,

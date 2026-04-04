@@ -243,6 +243,20 @@ Only a small subset is required by the retained surface:
 - enough member metadata to preserve round-trips
 - bridge remote host configuration needed for origin-file merge
 
+Team config loading must follow a narrow-scope recovery policy:
+- compatibility-only field additions may use deterministic defaults at the
+  schema boundary
+- malformed member records should be isolated at member scope only when the
+  remaining roster is still trustworthy
+- root-document corruption or invalid root structure remains a command error
+- identity and routing fields must never be guessed to keep commands running
+
+Diagnostics for team config failures must preserve:
+- file path
+- member or collection scope when known
+- parser line and column when available
+- original parser cause for operator repair
+
 ### 5.2 Inbox Message
 
 Persisted fields used by the rewrite:
@@ -680,6 +694,9 @@ Every public error must include:
 - human-readable cause
 - recovery guidance when the user can act
 
+Persisted-data errors should additionally carry file/entity/parser context so
+CLI surfaces can report the exact failing document and scope.
+
 ## 16. Trait Policy
 
 The initial rewrite should avoid public extension traits.
@@ -693,6 +710,8 @@ If a trait becomes necessary:
 `atm-core` tests:
 - address parsing
 - config precedence
+- tolerant team-config parsing for compatibility-only schema drift
+- precise persisted-data diagnostics for non-recoverable config failures
 - bridge hostname resolution for merged inbox reads
 - settings resolution
 - hook identity resolution

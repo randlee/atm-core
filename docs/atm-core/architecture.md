@@ -17,8 +17,27 @@ service boundaries.
   dependency on `sc-observability`.
 - `atm-core` must keep mailbox/config/workflow/log/doctor logic reusable across
   CLI contexts.
+- `atm-core` owns persisted config/team loading policy, including compatibility
+  defaults, recovery boundaries, and precise parse diagnostics.
 
-## 3. ADR Namespace
+## 3. Config Loading Boundary
+
+Persisted config and team-document handling belongs at the `atm-core` loading
+boundary rather than in scattered command call sites.
+
+Required loading policy:
+- classify persisted-data failures as compatibility-only schema drift,
+  record-level invalid data, or document-level invalid data
+- apply defaults only for deterministic compatibility recovery
+- keep identity and routing-critical fields required unless the product docs
+  explicitly define a safe fallback
+- preserve file, entity, and parser context when converting loader failures
+  into `AtmError`
+
+This keeps tolerant parsing centralized and prevents commands from inventing
+ad hoc recovery behavior.
+
+## 4. ADR Namespace
 
 The `atm-core` crate uses the `ADR-CORE-*` namespace.
 
