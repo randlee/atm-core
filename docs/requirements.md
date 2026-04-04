@@ -167,6 +167,10 @@ Required rules:
   without rewriting native Claude fields
 - locally owned schema enforcement must distinguish legacy top-level UUID-based
   ATM identifiers from forward metadata-based ULID identifiers
+- write-path validation may reject wrong-format ATM-owned identifiers with
+  descriptive errors
+- read-path validation failure for ATM-owned fields must trigger warning +
+  degradation logic rather than failing the overall message read
 - a separate ATM-native inbox is explicitly deferred and must not be assumed by
   the current live design
 

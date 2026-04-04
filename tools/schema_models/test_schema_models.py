@@ -19,7 +19,7 @@ from tools.schema_models.legacy_atm_message_schema import LegacyAtmInboxMessage
 
 class SchemaModelTests(unittest.TestCase):
     def test_claude_native_message_validates(self) -> None:
-        """Validates docs/claude-code-message-schema.md native envelope rules."""
+        """Write-path: validates docs/claude-code-message-schema.md native envelope rules."""
 
         message = ClaudeCodeInboxMessage.model_validate(
             {
@@ -35,7 +35,7 @@ class SchemaModelTests(unittest.TestCase):
         self.assertEqual(message.color, "#00ff88")
 
     def test_claude_native_idle_payload_validates(self) -> None:
-        """Validates docs/claude-code-message-schema.md idle payload rules."""
+        """Write-path: validates docs/claude-code-message-schema.md idle payload rules."""
 
         payload = ClaudeCodeIdleNotificationText.model_validate_json(
             json.dumps(
@@ -50,7 +50,7 @@ class SchemaModelTests(unittest.TestCase):
         self.assertEqual(payload.type, "idle_notification")
 
     def test_atm_superset_message_validates(self) -> None:
-        """Validates docs/atm-message-schema.md legacy top-level ATM fields."""
+        """Write-path: validates docs/atm-message-schema.md legacy top-level ATM fields."""
 
         message = AtmInboxMessage.model_validate(
             {
@@ -70,7 +70,7 @@ class SchemaModelTests(unittest.TestCase):
         )
 
     def test_atm_missing_config_alert_validates(self) -> None:
-        """Validates current ATM-owned alert additions during migration."""
+        """Write-path: validates current ATM-owned alert additions during migration."""
 
         message = AtmMissingTeamConfigAlertMessage.model_validate(
             {
@@ -88,7 +88,7 @@ class SchemaModelTests(unittest.TestCase):
         self.assertEqual(message.atmAlertKind, "missing_team_config")
 
     def test_legacy_atm_top_level_alert_fields_validate(self) -> None:
-        """Validates docs/legacy-atm-message-schema.md read compatibility."""
+        """Write-path: validates docs/legacy-atm-message-schema.md read compatibility."""
 
         message = LegacyAtmInboxMessage.model_validate(
             {
@@ -106,7 +106,7 @@ class SchemaModelTests(unittest.TestCase):
         self.assertEqual(message.source_team, "atm-dev")
 
     def test_forward_atm_metadata_fields_validate(self) -> None:
-        """Validates docs/atm-message-schema.md forward metadata.atm rules."""
+        """Write-path: validates docs/atm-message-schema.md forward metadata.atm rules."""
 
         metadata = AtmMetadataFields.model_validate(
             {
@@ -136,7 +136,7 @@ class SchemaModelTests(unittest.TestCase):
         self.assertEqual(envelope.metadata.atm.sourceTeam, "atm-dev")
 
     def test_legacy_top_level_message_id_rejects_ulid(self) -> None:
-        """Guards docs/atm-message-schema.md legacy top-level UUID placement."""
+        """Write-path: guards docs/atm-message-schema.md legacy top-level UUID placement."""
 
         with self.assertRaises(Exception):
             AtmInboxMessage.model_validate(
@@ -150,7 +150,7 @@ class SchemaModelTests(unittest.TestCase):
             )
 
     def test_forward_metadata_message_id_rejects_uuid(self) -> None:
-        """Guards docs/atm-message-schema.md forward metadata.atm ULID placement."""
+        """Write-path: guards docs/atm-message-schema.md forward metadata.atm ULID placement."""
 
         with self.assertRaises(Exception):
             AtmMetadataFields.model_validate(
@@ -158,6 +158,34 @@ class SchemaModelTests(unittest.TestCase):
                     "messageId": "81286baa-e783-4f0c-bfea-82d070750fae",
                 }
             )
+
+    def test_read_path_malformed_atm_field_warns_and_degrades(self) -> None:
+        """Read-path: malformed ATM-owned fields warn and degrade without dropping the message."""
+
+        raw_message = {
+            "from": "team-lead",
+            "text": "ping",
+            "timestamp": "2026-04-04T18:49:59.525805+00:00",
+            "read": True,
+            "summary": "ping",
+            "message_id": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
+        }
+
+        warnings: list[str] = []
+
+        try:
+            AtmInboxMessage.model_validate(raw_message)
+            self.fail("write-path validator should reject ULID in legacy top-level message_id")
+        except Exception as exc:
+            warnings.append(f"format warning: {exc}")
+
+        degraded_message = dict(raw_message)
+        degraded_message.pop("message_id", None)
+        recovered = ClaudeCodeInboxMessage.model_validate(degraded_message)
+
+        self.assertTrue(warnings)
+        self.assertEqual(recovered.from_, "team-lead")
+        self.assertEqual(recovered.text, "ping")
 
 
 if __name__ == "__main__":

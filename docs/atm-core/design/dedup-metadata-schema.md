@@ -86,10 +86,46 @@ Implementation guardrails:
 - new ATM-only fields must not be introduced at top-level
 - code and tests must reference the owning schema file when parsing or
   serializing message data
-- Pydantic enforcement must reject UUID values in forward
-  `metadata.atm.messageId`
-- Pydantic enforcement must reject ULID values in legacy top-level
-  `message_id`
+
+### 2.2.1 Write-Path Enforcement
+
+Write-path rule:
+
+- ATM-authored writes and explicit normalization/writer code paths may enforce
+  strict ATM-owned identifier formats
+- Pydantic validation or equivalent write-path schema enforcement must reject
+  wrong-format ATM-owned identifiers with descriptive validation errors
+- write-path rejection is acceptable because the writer is attempting to author
+  or normalize an ATM-owned field, not merely preserve an incoming message
+
+Write-path examples:
+
+- legacy top-level `message_id` write compatibility accepts UUID and rejects
+  ULID
+- forward `metadata.atm.messageId` accepts ULID and rejects UUID
+- forward `metadata.atm.acknowledgesMessageId` accepts the forward ATM message
+  identity format for that schema revision and rejects other formats
+
+### 2.2.2 Read-Path Enforcement
+
+Read-path rule:
+
+- read-path validation failure is not itself a message-read failure
+- strict Pydantic validation may still be attempted first on the read path
+- if read-path validation of ATM-owned identifier fields fails, ATM must log a
+  format warning, treat the malformed ATM-owned field as absent for ATM
+  semantics, and continue processing the message
+- the message must not be dropped solely because an ATM-owned identifier field
+  is malformed
+
+Read-path examples:
+
+- malformed legacy top-level `message_id` is preserved as raw stored data when
+  possible, but ATM dedup/ack semantics treat it as absent
+- malformed `metadata.atm.messageId` is preserved as raw stored data when
+  possible, but ATM metadata semantics treat it as absent
+- if the message otherwise satisfies the Claude-native schema, the message still
+  appears in the read surface
 
 Rationale:
 
@@ -156,6 +192,78 @@ Upgrade rule:
 - ATM workflow data such as ack state or ATM message identity attaches to that
   original stored message rather than moving the message into a different
   envelope format
+
+### 2.7 Read-Path Degradation Rules
+
+Read-path degradation contract:
+
+- validation failure on the read path triggers recovery/degradation logic and
+  observability warnings; it does not automatically fail the overall message
+  read
+- a validation pass may short-circuit recovery and warning logic because the
+  message already conforms to the expected schema
+
+#### 2.7.1 Claude-Native Fields Correct, ATM Fields Malformed
+
+Required outcome:
+
+- the message goes through
+- malformed ATM-owned fields are treated as absent for ATM semantics
+- observability emits a warning describing the field, expected format, and raw
+  validation failure
+
+Repair meaning:
+
+- preserve the raw stored value when possible
+- remove the malformed ATM-owned field from the interpreted ATM workflow view
+- do not rewrite the Claude-native message content during read
+
+#### 2.7.2 Claude System-Payload Interpretation Fails
+
+Required outcome:
+
+- the message goes through as a normal message when the underlying
+  Claude-native envelope is still valid
+- ATM-specific classification derived from that payload is treated as absent
+- observability emits a warning that system-payload interpretation failed
+
+Repair meaning:
+
+- preserve the original `text`
+- do not fabricate replacement idle/task/error metadata
+- fall back to normal message handling when classification cannot be trusted
+
+Example:
+
+- if ATM attempts to parse `text` as a Claude idle-notification payload and the
+  JSON parse fails, the message remains readable but is not treated as an idle
+  notification
+
+#### 2.7.3 Claude-Native Fields Unrecoverable
+
+Minimum acceptable outcome:
+
+- ATM must not invent missing Claude-native content
+- ATM must surface an observability warning or error with file/message context
+- ATM may preserve the raw stored record for diagnostics, but it must not
+  present that record as a normal usable message if the Claude-native envelope
+  itself cannot be trusted
+
+Repair meaning:
+
+- no semantic repair of missing or unrecoverable Claude-native fields
+- diagnostics and preservation are acceptable; fabrication is not
+
+#### 2.7.4 Read-Mode Enforcement Structure
+
+Implementation note:
+
+- strict Pydantic models may remain the write-path enforcement mechanism
+- read-path implementations may use the same strict models as a fast path, but
+  must catch validation failures and route them into warning-producing
+  degradation logic rather than treating them as hard read failures
+- separate read-mode adapter classes or recovery helpers are acceptable if they
+  preserve this contract
 
 ## 3. Dedup Taxonomy
 

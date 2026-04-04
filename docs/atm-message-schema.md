@@ -125,6 +125,11 @@ Identifier rules:
   ATM message identity for the acknowledged message
 - for ATM-authored forward records, ATM generates the ULID first and derives
   the persisted Claude-native `timestamp` from that ULID creation time
+- write-path enforcement may reject wrong-format ATM-owned identifiers for the
+  active schema revision
+- read-path validation failure for wrong-format ATM-owned identifiers must warn,
+  preserve the message when the Claude-native envelope is still usable, and
+  treat the malformed ATM-owned field as absent for ATM semantics
 
 ## 4. ATM-Interpreted Shared Or De Facto Fields
 
