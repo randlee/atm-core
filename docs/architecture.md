@@ -48,6 +48,15 @@ Crate-local boundary detail is owned by:
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm/architecture.md`](./atm/architecture.md)
 
+Schema ownership references:
+
+- Claude Code-native message schema:
+  [`claude-code-message-schema.md`](./claude-code-message-schema.md)
+- ATM additive/interpreted message schema:
+  [`atm-message-schema.md`](./atm-message-schema.md)
+- `sc-observability` schema ownership pointer:
+  [`sc-observability-schema.md`](./sc-observability-schema.md)
+
 ### 2.3 Shared Observability Boundary
 
 `atm-core` must not import `sc-observability` directly.

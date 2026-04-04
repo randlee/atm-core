@@ -86,6 +86,9 @@ docs/
   documentation-guidelines.md
   requirements.md
   architecture.md
+  claude-code-message-schema.md
+  atm-message-schema.md
+  sc-observability-schema.md
   project-plan.md
   read-behavior.md
   archive/
@@ -122,8 +125,21 @@ Notes:
 - Additional supporting docs may be added under `docs/atm/` or
   `docs/atm-core/` when justified.
 - Top-level docs remain the only product-level source of truth.
+- Cross-subsystem schema ownership docs that define who owns a wire/storage
+  schema belong at top level and must use explicit subsystem names in the file
+  name.
 - Command docs belong under `docs/atm/commands/`.
 - Core service and module ownership docs belong under `docs/atm-core/modules/`.
+
+Schema ownership file naming rules:
+
+- Claude Code-native schema docs must include `claude`, `code`, and `schema`
+  in the filename.
+- ATM additive/interpreted schema docs must include `atm` and `schema` in the
+  filename.
+- Shared subsystem schema pointers, such as `sc-observability`, should be
+  co-located with the ATM and Claude Code schema docs and should point to the
+  owning external repository instead of redefining that subsystem locally.
 
 ## 4. Top-Level Document Responsibilities
 

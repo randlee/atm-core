@@ -26,6 +26,15 @@ The rewritten system must preserve usable non-daemon behavior already present in
 
 The system uses structured logging through `sc-observability`.
 
+Schema ownership references:
+
+- Claude Code-native message schema:
+  [`claude-code-message-schema.md`](./claude-code-message-schema.md)
+- ATM additive/interpreted message schema:
+  [`atm-message-schema.md`](./atm-message-schema.md)
+- `sc-observability` schema ownership pointer:
+  [`sc-observability-schema.md`](./sc-observability-schema.md)
+
 ## 1.1 Documentation Structure
 
 Documentation organization is defined in
