@@ -33,7 +33,8 @@ Observed historical ATM-only fields used for alerts and repair notices:
 
 These fields are accepted for backward compatibility with historical inbox
 data. They are not the forward schema contract for newly-authored ATM machine
-metadata.
+metadata, which belongs under `metadata.atm` in
+[`atm-message-schema.md`](./atm-message-schema.md).
 
 ## 3. Read Compatibility Rule
 
@@ -53,3 +54,6 @@ This schema is deprecated for write:
 - existing historical fields remain readable
 - migration to metadata-based ATM machine fields is documented in
   [`atm-message-schema.md`](./atm-message-schema.md)
+- legacy top-level `atmAlertKind` and `missingConfigPath` remain read-compatible
+  during the migration period and must not be removed from compatibility docs
+  before the forward metadata migration is complete

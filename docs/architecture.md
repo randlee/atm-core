@@ -313,10 +313,24 @@ Forward architectural rules:
 - new ATM-only machine-readable data belongs in `metadata.atm`
 - legacy top-level ATM fields remain read-compatible but are deprecated for new
   write behavior
+- forward ATM-authored alert metadata, including legacy `atmAlertKind` and
+  `missingConfigPath`, belongs under `metadata.atm` as
+  `metadata.atm.alertKind` and `metadata.atm.missingConfigPath`
 - ATM may enrich a Claude-native stored message by adding `metadata.atm`
   without rewriting the native Claude fields
 - the current live design still uses a shared inbox surface; a separate
   ATM-native inbox is intentionally deferred to a later architecture phase
+
+Current-phase constraint:
+
+- the current runtime send/alert write path may continue writing legacy
+  top-level alert fields during the compatibility period
+- the metadata.atm alert placement defined above is the forward architectural
+  target and must not be partially implemented without the corresponding
+  migration sprint and tests
+- the owning design rationale for this migration remains
+  [`atm-core/design/dedup-metadata-schema.md`](./atm-core/design/dedup-metadata-schema.md)
+  §2.2 and §3.3
 
 Canonical read and ack axes are derived from persisted fields and not serialized separately.
 
