@@ -10,6 +10,7 @@ use crate::types::IsoTimestamp;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
+/// UUID-based compatibility identifier for legacy top-level ATM `message_id`.
 pub struct LegacyMessageId(Uuid);
 
 impl LegacyMessageId {
@@ -19,6 +20,12 @@ impl LegacyMessageId {
 
     pub fn into_uuid(self) -> Uuid {
         self.0
+    }
+}
+
+impl Default for LegacyMessageId {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -42,6 +49,7 @@ impl fmt::Display for LegacyMessageId {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
+/// ULID-based forward ATM identifier for `metadata.atm.messageId`.
 pub struct AtmMessageId(Ulid);
 
 impl AtmMessageId {
@@ -65,6 +73,12 @@ impl AtmMessageId {
     }
 }
 
+impl Default for AtmMessageId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl From<Ulid> for AtmMessageId {
     fn from(value: Ulid) -> Self {
         Self(value)
@@ -84,6 +98,7 @@ impl fmt::Display for AtmMessageId {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+/// ATM-owned machine metadata planned for the forward `metadata.atm` namespace.
 pub struct AtmMetadataFields {
     #[serde(rename = "messageId", skip_serializing_if = "Option::is_none")]
     pub message_id: Option<AtmMessageId>,
@@ -111,6 +126,7 @@ pub struct AtmMetadataFields {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+/// Top-level metadata container preserving ATM-owned and foreign metadata keys.
 pub struct MessageMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub atm: Option<AtmMetadataFields>,
@@ -120,6 +136,7 @@ pub struct MessageMetadata {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// Minimal forward-schema projection used to validate metadata/timestamp rules.
 pub struct ForwardMetadataEnvelope {
     pub timestamp: IsoTimestamp,
     pub metadata: MessageMetadata,

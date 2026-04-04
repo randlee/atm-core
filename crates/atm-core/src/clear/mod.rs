@@ -90,7 +90,14 @@ pub fn clear_mail(
     }
 
     let mut source_files = load_source_files(&query.home_dir, &target.team, &target.agent)?;
-    let merged = dedupe_sourced_messages(merged_surface(&source_files));
+    // Clear intentionally does not apply read-surface idle-notification dedup.
+    // Cleanup decisions must inspect the raw merged surface after legacy
+    // message_id canonicalization only.
+    let merged = dedupe_legacy_message_id_surface(
+        merged_surface(&source_files),
+        |message: &SourcedMessage| message.envelope.message_id,
+        |message: &SourcedMessage| message.envelope.timestamp,
+    );
     let cutoff = cutoff_timestamp(query.older_than)?;
 
     let mut removed_by_class = RemovedByClass::default();
@@ -114,7 +121,12 @@ pub fn clear_mail(
     let remaining_total = if query.dry_run {
         merged.len().saturating_sub(removable.len())
     } else {
-        dedupe_sourced_messages(merged_surface(&source_files)).len()
+        dedupe_legacy_message_id_surface(
+            merged_surface(&source_files),
+            |message: &SourcedMessage| message.envelope.message_id,
+            |message: &SourcedMessage| message.envelope.timestamp,
+        )
+        .len()
     };
 
     let outcome = ClearOutcome {
@@ -276,14 +288,6 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
                 })
         })
         .collect()
-}
-
-fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
-    dedupe_legacy_message_id_surface(
-        messages,
-        |message| message.envelope.message_id,
-        |message| message.envelope.timestamp,
-    )
 }
 
 fn cutoff_timestamp(
