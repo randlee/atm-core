@@ -245,9 +245,10 @@ Minimum acceptable outcome:
 
 - ATM must not invent missing Claude-native content
 - ATM must surface an observability warning or error with file/message context
-- ATM may preserve the raw stored record for diagnostics, but it must not
-  present that record as a normal usable message if the Claude-native envelope
-  itself cannot be trusted
+- ATM must preserve raw bytes in storage for diagnostics when preservation is
+  possible
+- ATM must not present that record as a normal usable message if the
+  Claude-native envelope itself cannot be trusted
 
 Repair meaning:
 
