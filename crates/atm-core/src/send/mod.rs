@@ -1,18 +1,20 @@
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Map;
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::address::AgentAddress;
 use crate::config;
-use crate::error::{AtmError, AtmErrorKind};
+use crate::error::AtmError;
 use crate::home;
 use crate::identity;
 use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
-use crate::schema::{MessageEnvelope, TeamConfig};
+use crate::schema::MessageEnvelope;
 use crate::types::IsoTimestamp;
 
 pub(crate) mod file_policy;
@@ -58,8 +60,16 @@ pub struct SendOutcome {
     pub summary: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub dry_run: bool,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct SendAlertState {
+    #[serde(default)]
+    missing_team_config_keys: BTreeSet<String>,
 }
 
 pub fn send_mail(
@@ -79,13 +89,51 @@ pub fn send_mail(
         return Err(AtmError::team_not_found(&recipient.team));
     }
 
-    let team_config = load_team_config(&team_dir)?;
-    if !team_config
-        .members
-        .iter()
-        .any(|member| member.name == recipient.agent)
-    {
-        return Err(AtmError::agent_not_found(&recipient.agent, &recipient.team));
+    let inbox_path =
+        home::inbox_path_from_home(&request.home_dir, &recipient.team, &recipient.agent)?;
+    let mut warnings = Vec::new();
+
+    match config::load_team_config(&team_dir) {
+        Ok(team_config) => {
+            clear_missing_team_config_alert(&request.home_dir, &team_dir);
+            if !team_config
+                .members
+                .iter()
+                .any(|member| member.name == recipient.agent)
+            {
+                return Err(AtmError::agent_not_found(&recipient.agent, &recipient.team));
+            }
+        }
+        Err(error) if error.is_missing_document() => {
+            if !inbox_path.exists() {
+                return Err(AtmError::missing_document(format!(
+                    "team config is missing at {} and inbox {} does not exist, so send cannot safely proceed",
+                    team_dir.join("config.json").display(),
+                    inbox_path.display()
+                ))
+                .with_recovery(
+                    "Restore config.json for the team or create the intended inbox by an approved workflow before retrying.",
+                ));
+            }
+
+            warnings.push(format!(
+                "warning: team config is missing at {}; send used existing inbox fallback for {}@{}. Restore the team config.",
+                team_dir.join("config.json").display(),
+                recipient.agent,
+                recipient.team
+            ));
+
+            if !request.dry_run {
+                notify_team_lead_missing_config(
+                    &request.home_dir,
+                    &team_dir,
+                    &sender,
+                    &recipient.team,
+                    &recipient.agent,
+                );
+            }
+        }
+        Err(error) => return Err(error),
     }
 
     let task_id = input::validate_task_id(request.task_id)?;
@@ -115,8 +163,6 @@ pub fn send_mail(
             task_id: task_id.clone(),
             extra: Map::new(),
         };
-        let inbox_path =
-            home::inbox_path_from_home(&request.home_dir, &recipient.team, &recipient.agent)?;
         mailbox::append_message(&inbox_path, &envelope)?;
     }
 
@@ -131,6 +177,7 @@ pub fn send_mail(
         task_id: task_id.clone(),
         summary: Some(summary),
         message: request.dry_run.then_some(body.clone()),
+        warnings,
         dry_run: request.dry_run,
     };
 
@@ -188,31 +235,6 @@ fn resolve_recipient(
     })
 }
 
-fn load_team_config(team_dir: &Path) -> Result<TeamConfig, AtmError> {
-    let config_path = team_dir.join("config.json");
-    let raw = fs::read_to_string(&config_path).map_err(|error| {
-        AtmError::new(
-            AtmErrorKind::Config,
-            format!(
-                "failed to read team config at {}: {error}",
-                config_path.display()
-            ),
-        )
-        .with_source(error)
-    })?;
-
-    serde_json::from_str(&raw).map_err(|error| {
-        AtmError::new(
-            AtmErrorKind::Config,
-            format!(
-                "failed to parse team config at {}: {error}",
-                config_path.display()
-            ),
-        )
-        .with_source(error)
-    })
-}
-
 fn resolve_message_body(
     source: &SendMessageSource,
     current_dir: &Path,
@@ -234,4 +256,158 @@ fn resolve_message_body(
 
 fn is_false(value: &bool) -> bool {
     !*value
+}
+
+fn notify_team_lead_missing_config(
+    home_dir: &Path,
+    team_dir: &Path,
+    sender: &str,
+    team: &str,
+    recipient: &str,
+) {
+    let alert_key = missing_team_config_alert_key(team_dir);
+    if !register_missing_team_config_alert(home_dir, &alert_key) {
+        return;
+    }
+
+    let team_lead_inbox = match home::inbox_path_from_home(home_dir, team, "team-lead") {
+        Ok(path) => path,
+        Err(error) => {
+            warn!(%error, team, "failed to resolve team-lead inbox for missing-config notice");
+            return;
+        }
+    };
+
+    if !team_lead_inbox.exists() {
+        return;
+    }
+
+    let config_path = team_dir.join("config.json");
+    let timestamp = IsoTimestamp::now();
+    let mut extra = Map::new();
+    extra.insert(
+        "atmAlertKind".into(),
+        serde_json::Value::String("missing_team_config".into()),
+    );
+    extra.insert(
+        "missingConfigPath".into(),
+        serde_json::Value::String(config_path.display().to_string()),
+    );
+
+    let notice = MessageEnvelope {
+        from: sender.to_string(),
+        text: format!(
+            "ATM warning: send used existing inbox fallback for {recipient}@{team} because team config is missing at {}. Please restore config.json.",
+            config_path.display()
+        ),
+        timestamp,
+        read: false,
+        source_team: Some(team.to_string()),
+        summary: Some(format!(
+            "ATM warning: missing team config fallback used for {recipient}@{team}"
+        )),
+        message_id: Some(Uuid::new_v4()),
+        pending_ack_at: None,
+        acknowledged_at: None,
+        acknowledges_message_id: None,
+        task_id: None,
+        extra,
+    };
+
+    if let Err(error) = mailbox::append_message(&team_lead_inbox, &notice) {
+        warn!(
+            %error,
+            path = %team_lead_inbox.display(),
+            "failed to append missing-config notice to team-lead inbox"
+        );
+    }
+}
+
+fn missing_team_config_alert_key(team_dir: &Path) -> String {
+    team_dir.join("config.json").display().to_string()
+}
+
+fn register_missing_team_config_alert(home_dir: &Path, key: &str) -> bool {
+    let state_path = send_alert_state_path(home_dir);
+    let mut state = load_send_alert_state(&state_path).unwrap_or_default();
+    if state.missing_team_config_keys.contains(key) {
+        return false;
+    }
+
+    state.missing_team_config_keys.insert(key.to_string());
+    if let Err(error) = save_send_alert_state(&state_path, &state) {
+        warn!(%error, path = %state_path.display(), "failed to save send alert dedup state");
+    }
+    true
+}
+
+fn clear_missing_team_config_alert(home_dir: &Path, team_dir: &Path) {
+    let state_path = send_alert_state_path(home_dir);
+    let Ok(mut state) = load_send_alert_state(&state_path) else {
+        return;
+    };
+
+    let key = missing_team_config_alert_key(team_dir);
+    if !state.missing_team_config_keys.remove(&key) {
+        return;
+    }
+
+    if let Err(error) = save_send_alert_state(&state_path, &state) {
+        warn!(%error, path = %state_path.display(), "failed to clear send alert dedup state");
+    }
+}
+
+fn send_alert_state_path(home_dir: &Path) -> PathBuf {
+    home_dir.join(".config").join("atm").join("state.json")
+}
+
+fn load_send_alert_state(path: &Path) -> Result<SendAlertState, AtmError> {
+    if !path.exists() {
+        return Ok(SendAlertState::default());
+    }
+
+    let raw = fs::read_to_string(path).map_err(|error| {
+        AtmError::file_policy(format!(
+            "failed to read send alert state at {}: {error}",
+            path.display()
+        ))
+        .with_source(error)
+    })?;
+    serde_json::from_str(&raw).map_err(|error| {
+        AtmError::file_policy(format!(
+            "failed to parse send alert state at {}: {error}",
+            path.display()
+        ))
+        .with_source(error)
+    })
+}
+
+fn save_send_alert_state(path: &Path, state: &SendAlertState) -> Result<(), AtmError> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            AtmError::file_policy(format!(
+                "failed to create send alert state directory {}: {error}",
+                parent.display()
+            ))
+            .with_source(error)
+        })?;
+    }
+
+    let temp_path = path.with_extension("tmp");
+    let data = serde_json::to_vec(state)?;
+    fs::write(&temp_path, data).map_err(|error| {
+        AtmError::file_policy(format!(
+            "failed to write send alert state temp file {}: {error}",
+            temp_path.display()
+        ))
+        .with_source(error)
+    })?;
+    fs::rename(&temp_path, path).map_err(|error| {
+        AtmError::file_policy(format!(
+            "failed to replace send alert state at {}: {error}",
+            path.display()
+        ))
+        .with_source(error)
+    })?;
+    Ok(())
 }

@@ -20,160 +20,101 @@ ATM reads persisted mailbox, team, and config data that may be:
 - partially hand-edited
 - externally generated
 - truncated or corrupted by interrupted writes
+- missing entirely
 
 The goal is not "always continue." The goal is:
 
 - continue when recovery is deterministic and low-risk
 - isolate damage at the narrowest safe scope
 - fail loudly when continuing would require guessing identity or routing data
+- notify the operator or `team-lead` when degraded behavior needs repair
 
 ## 2. Recovery Ladder
 
-ATM should treat persisted-data issues in this order:
+ATM should treat team-config issues in this order:
 
-1. Recover with a documented default when the missing data is compatibility-only
-   and the fallback does not change identity or routing semantics.
-2. Isolate or skip one invalid record when the surrounding collection is still
+1. Recover `compatibility-recoverable` forms with documented deterministic
+   rules.
+2. Isolate `record-invalid` entries when the surrounding document remains
    trustworthy.
-3. Fail the command when the root document is malformed or when recovery would
-   require guessing identity, membership, or routing data.
+3. Fail on `document-invalid` config with detailed repair guidance.
+4. Treat `missing-document` separately from parse failure. Only command paths
+   that explicitly support missing-document fallback may proceed.
 
 All non-recoverable cases should report:
 
+- failure class
 - file path
 - entity scope when known
-- field name when known
-- parser detail, including line and column when available
+- parser detail when available
 - a safe repair action
 
 ## 3. Common Cases
 
-### 3.1 Missing Compatibility Field
+### 3.1 Compatibility-Recoverable Member Form
 
 Example:
 
 ```json
 {
-  "agentId": "arch-ctm@atm-dev",
-  "name": "arch-ctm",
-  "model": "gpt5.3-codex",
-  "joinedAt": 1770765919076,
-  "cwd": "/workspace"
-}
-```
-
-Issue:
-- legacy `AgentMember` record omits `agentType`
-
-Expected ATM behavior:
-- recover with the documented default
-- continue loading the team config
-- preserve a warning or diagnostic that compatibility recovery was used
-
-Safe repair:
-- add `"agentType": "general-purpose"` to the member record
-
-Why this is recoverable:
-- `agentType` is descriptive capability metadata
-- defaulting it does not invent membership or routing identity
-
-### 3.2 Unknown Future Field
-
-Example:
-
-```json
-{
-  "agentId": "arch-ctm@atm-dev",
-  "name": "arch-ctm",
-  "agentType": "general-purpose",
-  "model": "gpt5.3-codex",
-  "joinedAt": 1770765919076,
-  "cwd": "/workspace",
-  "futureFeature": { "enabled": true }
-}
-```
-
-Issue:
-- newer writer added a field older ATM versions do not understand
-
-Expected ATM behavior:
-- preserve the field during round-trip when possible
-- continue without warning unless the field affects a feature this binary owns
-
-Safe repair:
-- none required
-
-Why this is recoverable:
-- the data is structurally valid and forward-compatible
-
-### 3.3 Missing Identity Or Routing Field
-
-Example:
-
-```json
-{
-  "name": "arch-ctm",
-  "agentType": "general-purpose",
-  "model": "gpt5.3-codex",
-  "joinedAt": 1770765919076,
-  "cwd": "/workspace"
-}
-```
-
-Issue:
-- required identity field such as `agentId` is missing
-
-Expected ATM behavior:
-- do not invent the missing value
-- isolate the invalid member only if the surrounding roster can still be used
-- otherwise fail with a precise config error
-
-Safe repair:
-- restore the missing `agentId` field using the canonical `agent@team` value
-
-Why this is not auto-recoverable:
-- fabricating `agentId` would guess membership and routing semantics
-
-### 3.4 Wrong Type In A Member Record
-
-Example:
-
-```json
-{
-  "agentId": "arch-ctm@atm-dev",
-  "name": "arch-ctm",
-  "agentType": "general-purpose",
-  "model": "gpt5.3-codex",
-  "joinedAt": "1770765919076",
-  "cwd": "/workspace"
-}
-```
-
-Issue:
-- field type does not match the schema
-
-Expected ATM behavior:
-- do not silently coerce the value unless the product contract explicitly
-  allows that coercion
-- isolate the member if the remaining collection is trustworthy
-- include the failing field and parser detail in the diagnostic
-
-Safe repair:
-- change `"joinedAt"` to a JSON number, not a string
-
-Why this is usually not auto-recoverable:
-- generic coercions hide malformed data and make future corruption harder to
-  detect
-
-### 3.5 Malformed Root JSON
-
-Example:
-
-```json
-{
-  "teamName": "atm-dev",
   "members": [
-    { "agentId": "arch-ctm@atm-dev", "name": "arch-ctm" }
+    "arch-ctm",
+    { "name": "team-lead" }
+  ]
+}
+```
+
+Issue:
+- the roster mixes a legacy string-member form with the canonical object form
+
+Expected ATM behavior:
+- accept both entries
+- continue loading the team config
+- avoid fabricating any extra identity or routing data
+
+Safe repair:
+- normalize the string entry to `{ "name": "arch-ctm" }`
+
+Why this is recoverable:
+- the member name is explicit and deterministic
+
+### 3.2 Invalid Member In An Otherwise Valid Team
+
+Example:
+
+```json
+{
+  "members": [
+    { "name": "arch-ctm" },
+    { "broken": true },
+    { "name": "team-lead" }
+  ]
+}
+```
+
+Issue:
+- one member record is invalid, but the root document is still structurally
+  trustworthy
+
+Expected ATM behavior:
+- isolate the invalid record
+- continue serving valid members
+- preserve a diagnostic that identifies the skipped member scope
+
+Safe repair:
+- repair the invalid entry or remove it
+
+Why this is recoverable:
+- the loader can identify the bad record without guessing hidden structure
+
+### 3.3 Malformed Root JSON
+
+Example:
+
+```json
+{
+  "members": [
+    { "name": "arch-ctm" }
 ```
 
 Issue:
@@ -181,81 +122,118 @@ Issue:
 
 Expected ATM behavior:
 - fail the command
-- report the file path and parser line/column
-- avoid guessing what the missing structure should have been
+- report the file path and parser line/column when available
+- avoid guessing missing structure
 
 Safe repair:
-- restore the file from a known-good copy or repair the JSON structure
+- restore the file from a known-good copy or repair the JSON syntax
 
 Why this is not recoverable:
 - the document boundary itself is untrustworthy
 
-### 3.6 Wrong Root Shape
+### 3.4 Wrong Root Shape
 
 Example:
 
 ```json
 [
-  {
-    "agentId": "arch-ctm@atm-dev",
-    "name": "arch-ctm",
-    "agentType": "general-purpose"
-  }
+  { "name": "arch-ctm" }
 ]
 ```
 
 Issue:
-- root shape is an array when ATM expects a team config object
+- the root value is an array when ATM expects a team config object
 
 Expected ATM behavior:
-- fail the command with a structured configuration error
-- report that the root shape is invalid rather than attempting schema
-  migration by guesswork
+- fail with a structured configuration error
+- report that the root shape is invalid
 
 Safe repair:
-- wrap the member list in the expected team config object shape
+- wrap the member list in the expected object shape:
+  `{ "members": [ ... ] }`
 
 Why this is not recoverable:
-- ATM cannot safely infer omitted root-level fields or semantics
+- ATM cannot safely infer omitted root-level semantics
 
-### 3.7 One Invalid Member In An Otherwise Valid Team
+### 3.5 Wrong `members` Type
 
 Example:
 
 ```json
 {
-  "teamName": "atm-dev",
-  "members": [
-    {
-      "agentId": "arch-ctm@atm-dev",
-      "name": "arch-ctm",
-      "agentType": "general-purpose",
-      "model": "gpt5.3-codex",
-      "joinedAt": 1770765919076,
-      "cwd": "/workspace"
-    },
-    {
-      "name": "broken-member"
-    }
-  ]
+  "members": {
+    "name": "arch-ctm"
+  }
 }
 ```
 
 Issue:
-- one record is invalid inside an otherwise valid roster
+- `members` is an object instead of an array
 
 Expected ATM behavior:
-- isolate the invalid member if the loader can still trust the containing
-  collection
-- continue serving unaffected members
-- fail commands that specifically target the invalid member
+- fail with a structured configuration error
+- include the field name in the repair guidance
 
 Safe repair:
-- repair or remove the invalid member entry
+- repair `members` so it is an array of member records
+
+Why this is not recoverable:
+- the collection boundary is wrong, so record-level isolation is not safe
+
+### 3.6 Missing Team Config During `send`
+
+Example:
+
+```text
+~/.claude/teams/atm-dev/
+  inboxes/
+    recipient.json
+```
+
+Issue:
+- `config.json` is missing entirely, but the recipient inbox already exists
+
+Expected ATM behavior:
+- treat this as `missing-document`, not as malformed JSON
+- allow `send` to proceed only because the inbox path already exists
+- surface an actionable warning to the sender
+- send a best-effort repair notification to `team-lead` when that target can be
+  resolved without guesswork
+- deduplicate repeated repair notifications while the same missing-config
+  condition remains unresolved
+
+Safe repair:
+- restore or recreate `config.json` for the team
 
 Why this is only conditionally recoverable:
-- collection-level recovery is safe only when the loader can identify a single
-  bad record without guessing hidden structure
+- delivery can proceed without guessing membership only because the inbox path
+  already exists
+
+### 3.7 Missing Team Config Without Safe Fallback
+
+Example:
+
+```text
+~/.claude/teams/atm-dev/
+  inboxes/
+    team-lead.json
+```
+
+Issue:
+- `config.json` is missing and the requested recipient inbox does not exist
+
+Expected ATM behavior:
+- fail the `send`
+- explain that the missing config could not be bypassed safely
+- tell the operator to restore team configuration or create the correct team
+  state
+
+Safe repair:
+- restore `config.json` and retry, or create the intended team/inbox state by
+  an approved workflow
+
+Why this is not recoverable:
+- creating or selecting a delivery target would require guesswork
 
 ## 4. Repair Principles
 
@@ -266,13 +244,16 @@ When repairing persisted data manually:
 - keep unknown fields unless the field is known to be corrupt
 - validate JSON syntax before retrying ATM commands
 - if the file may have been truncated, restore from backup before hand-editing
+- when ATM used missing-config fallback, repair the team config promptly so
+  future sends do not remain in degraded mode
 
 ## 5. Implementation Note
 
 This document intentionally makes operator outcomes concrete so tests can be
 written against the same cases:
 
-- compatibility-only schema drift should have positive tests
+- compatibility-recoverable forms should have positive tests
 - isolated invalid-record handling should have scoped recovery tests
-- non-recoverable document failures should have diagnostic tests that assert
-  file and parser context
+- non-recoverable document failures should assert file and parser context
+- missing-config send fallback should assert sender warning, best-effort
+  `team-lead` notification, and deduplication

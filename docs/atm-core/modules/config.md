@@ -5,8 +5,9 @@ resolution, and translation into validated core request inputs.
 
 Also owns persisted config/team loading policy:
 - deterministic compatibility defaults for documented schema drift
-- classification of record-level versus document-level parse failures
+- classification of missing-document, record-level, and document-level failures
 - recovery guidance and parser-context preservation for config errors
+- refusal to guess identity or routing data during recovery
 
 References:
 

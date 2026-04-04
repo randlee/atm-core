@@ -27,7 +27,7 @@ boundary rather than in scattered command call sites.
 
 Required loading policy:
 - classify persisted-data failures as compatibility-only schema drift,
-  record-level invalid data, or document-level invalid data
+  record-level invalid data, document-level invalid data, or missing-document
 - apply defaults only for deterministic compatibility recovery
 - keep identity and routing-critical fields required unless the product docs
   explicitly define a safe fallback
@@ -36,6 +36,14 @@ Required loading policy:
 
 This keeps tolerant parsing centralized and prevents commands from inventing
 ad hoc recovery behavior.
+
+Send-specific policy remains layered above the loader:
+- send may use a narrowly defined missing-document fallback when the product
+  docs explicitly allow it
+- malformed documents remain loader errors and do not automatically degrade into
+  send fallback
+- deduplicated repair notifications belong to the send orchestration boundary,
+  not to generic config parsing
 
 ## 4. ADR Namespace
 

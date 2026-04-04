@@ -59,6 +59,11 @@ Initial crate requirement IDs:
   persisted-data error aspects of:
   `REQ-P-CONFIG-HEALTH-001`, `REQ-P-ERROR-001`,
   `REQ-P-RELIABILITY-001`.
+- `REQ-CORE-SEND-001` `atm-core` owns send-time missing-config fallback,
+  sender-warning, and repair-notification behavior above the shared config
+  loader. Satisfies the missing-config send-path aspects of:
+  `REQ-P-SEND-001`, `REQ-P-CONFIG-HEALTH-001`,
+  `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-MAILBOX-001` `atm-core` owns daemon-free mailbox/store behavior.
   Satisfies the persisted mailbox I/O and mutation aspects of:
   `REQ-P-CONTRACT-001`, `REQ-P-SEND-001`, `REQ-P-READ-001`,

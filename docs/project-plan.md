@@ -251,6 +251,9 @@ Acceptance:
 - Generic logging query/follow/filter behavior should live in `sc-observability` where possible, not in ATM-specific code.
 - Persisted config/schema compatibility issues must recover at the narrowest
   safe scope, and identity/routing fields must never be guessed.
+- Missing team config remains distinct from malformed team config; only the
+  documented send fallback may bypass it, and repeated repair notifications
+  must be deduplicated by unresolved condition.
 
 Cross-document invariants that must stay locked during implementation:
 - `taskId` implies ack-required send behavior

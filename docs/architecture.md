@@ -238,20 +238,22 @@ pub struct LogFieldMatch {
 The rewrite reuses the existing team config schema where feasible.
 
 Only a small subset is required by the retained surface:
-- team name
-- member names
-- enough member metadata to preserve round-trips
-- bridge remote host configuration needed for origin-file merge
+- member roster
+- enough member metadata to preserve round-trips when present
+- bridge remote host configuration needed for origin-file merge when present
 
 Team config loading must follow a narrow-scope recovery policy:
-- compatibility-only field additions may use deterministic defaults at the
-  schema boundary
+- compatibility-only schema drift may use deterministic defaults at the schema
+  boundary
 - malformed member records should be isolated at member scope only when the
   remaining roster is still trustworthy
+- missing `config.json` is a distinct `missing-document` condition, not a parse
+  error
 - root-document corruption or invalid root structure remains a command error
 - identity and routing fields must never be guessed to keep commands running
 
 Diagnostics for team config failures must preserve:
+- failure class when known
 - file path
 - member or collection scope when known
 - parser line and column when available
@@ -349,6 +351,15 @@ Send ordering rules:
 - validate message text inside the atomic append boundary
 - generate UUID v4 `message_id` inside the atomic append boundary
 - perform duplicate suppression and final append inside the same atomic append boundary
+
+Missing-team-config fallback is limited to `send`:
+- fallback applies only when `config.json` is missing and the target inbox
+  already exists
+- malformed `config.json` remains a command error
+- fallback must surface an actionable sender warning
+- fallback may send a best-effort repair notice to `team-lead`
+- repair notices must be deduplicated by unresolved condition so repeated sends
+  do not flood inboxes
 
 ### 6.2 Read Service
 

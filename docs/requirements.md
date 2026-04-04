@@ -154,19 +154,30 @@ Product requirement ID:
 
 Satisfied by:
 - `REQ-CORE-CONFIG-003` for config/team schema recovery and diagnostic policy
+- `REQ-CORE-SEND-001` for send-time missing-config fallback and repair
+  notification policy
 - `REQ-CORE-MAILBOX-001` for mailbox record skip behavior
 
-Required recovery policy:
+Required persisted-data classes:
+- `compatibility-recoverable`
+- `record-invalid`
+- `document-invalid`
+- `missing-document`
+
+Required handling policy:
 - compatibility-only schema drift may be recovered with documented,
   deterministic defaults
 - malformed records inside a larger persisted collection should be skipped or
   quarantined individually when the rest of the document remains trustworthy
 - malformed root documents or invalid root structure must fail with structured
   errors rather than guessed repairs
+- missing persisted team config is a distinct `missing-document` condition and
+  must not be collapsed into generic parse corruption
 - identity and routing semantics must never be fabricated to keep a command
   running
 
 Required diagnostics:
+- failure class when known
 - file path
 - entity scope when known, such as member name or collection entry
 - field name when known
@@ -264,6 +275,8 @@ Satisfied by:
 - `REQ-ATM-CMD-001` for CLI entry, parsing, and dispatch aspects
 - `REQ-ATM-OUT-001` for human-readable and JSON output aspects
 - `REQ-CORE-CONFIG-002` for address resolution and target-validation aspects
+- `REQ-CORE-SEND-001` for send-time missing-config fallback and repair
+  notification behavior
 - `REQ-CORE-MAILBOX-001` for message creation, duplicate suppression, and
   atomic mailbox mutation aspects
 
@@ -294,7 +307,9 @@ Retired from the current implementation:
 - resolve sender identity using the defined precedence
 - resolve recipient address using the defined precedence
 - resolve roles and aliases before mailbox lookup
-- verify target team existence and target agent membership as part of address resolution before mailbox path selection
+- verify target team existence and target agent membership as part of address
+  resolution before mailbox path selection, except for the documented
+  `missing-document` fallback in §6.3.1
 - generate summary when not explicitly provided
 - enter the atomic append boundary before final inbox mutation
 - validate message text inside the atomic append boundary
@@ -317,6 +332,26 @@ Recipients use `message_id` for:
 - duplicate suppression
 - read-time duplicate collapse
 - acknowledgement targeting
+
+### 6.3.1 Missing Team Config Fallback
+
+When team `config.json` is missing, `atm send` may still proceed only when:
+- the resolved team directory exists
+- the target inbox path already exists
+- no team, agent, or routing identity must be guessed
+
+When `atm send` uses this fallback, it must:
+- surface an actionable warning to the sender that delivery used inbox fallback
+  because team config is missing
+- keep the original delivery path best-effort and non-interactive
+- send a best-effort repair notification to `team-lead` when that recipient can
+  be resolved without guesswork
+- deduplicate repeated repair notifications for the same unresolved missing-team
+  config condition so inboxes do not accumulate hundreds of identical messages
+
+When team `config.json` is malformed rather than missing:
+- `atm send` must fail with a structured configuration error
+- malformed config must not silently degrade into missing-config fallback
 
 ### 6.4 Message Source Semantics
 
@@ -1017,6 +1052,7 @@ Persisted-data failures must preserve parser and entity context when available.
 
 Minimum error categories:
 - configuration
+- missing document
 - address
 - identity resolution
 - team not found
@@ -1053,6 +1089,8 @@ Satisfied by:
 - corrupt records should be skipped individually when possible
 - persisted config/team schema drift should recover with deterministic defaults
   when safe
+- missing team config may use only the explicitly documented send fallback
+  behavior
 - persisted config/team records with missing identity or routing-critical fields
   must fail or be isolated rather than guessed
 - missing inbox files are treated as empty inboxes
