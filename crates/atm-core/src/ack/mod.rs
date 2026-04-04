@@ -176,7 +176,7 @@ pub fn ack_mail(
         team,
         agent: actor.clone(),
         sender: actor,
-        message_id: Some(request.message_id.into()),
+        message_id: Some(request.message_id),
         requires_ack: false,
         dry_run: false,
         task_id: source_task_id,
@@ -306,6 +306,9 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
 }
 
 fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
+    // Read is the only surface that applies receiver-side idle-notification
+    // collapse. Ack must preserve the full merged message surface and only
+    // canonicalize legacy top-level message_id collisions.
     let mut latest_for_id: HashMap<LegacyMessageId, (IsoTimestamp, usize)> = HashMap::new();
     for (index, message) in messages.iter().enumerate() {
         if let Some(message_id) = message.envelope.message_id {

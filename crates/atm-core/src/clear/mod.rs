@@ -278,6 +278,9 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
 }
 
 fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
+    // Clear intentionally does not apply read-surface idle-notification dedup.
+    // Cleanup decisions must inspect the raw merged surface after legacy
+    // message_id canonicalization only.
     let mut latest_for_id: HashMap<LegacyMessageId, (crate::types::IsoTimestamp, usize)> =
         HashMap::new();
     for (index, message) in messages.iter().enumerate() {
