@@ -2,6 +2,7 @@ pub(crate) mod atomic;
 pub(crate) mod hash;
 pub(crate) mod lock;
 pub(crate) mod store;
+pub(crate) mod surface;
 
 use std::fs;
 use std::io::BufRead;

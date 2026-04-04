@@ -17,8 +17,9 @@ use crate::error::{AtmError, AtmErrorKind};
 use crate::home;
 use crate::identity;
 use crate::mailbox;
+use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
-use crate::schema::{LegacyMessageId, MessageEnvelope};
+use crate::schema::MessageEnvelope;
 use crate::types::{AckActivationMode, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection};
 
 #[derive(Debug, Clone)]
@@ -120,7 +121,13 @@ pub fn read_mail(
     };
 
     let mut source_files = load_source_files(&query.home_dir, &target.team, &target.agent)?;
-    let mut classified_all = classify_all(dedupe_sourced_messages(merged_surface(&source_files)));
+    let mut classified_all = classify_all(apply_idle_notification_dedup(
+        dedupe_legacy_message_id_surface(
+            merged_surface(&source_files),
+            |message: &SourcedMessage| message.envelope.message_id,
+            |message: &SourcedMessage| message.envelope.timestamp,
+        ),
+    ));
     let mut bucket_counts = bucket_counts_for(&classified_all);
     let mut filtered = apply_filters(
         classified_all.clone(),
@@ -135,19 +142,30 @@ pub fn read_mail(
             let wait_satisfied = wait::wait_for_eligible_message(
                 timeout_secs,
                 || {
-                    Ok(dedupe_sourced_messages(merged_surface(&load_source_files(
-                        &query.home_dir,
-                        &target.team,
-                        &target.agent,
-                    )?)))
+                    Ok(apply_idle_notification_dedup(
+                        dedupe_legacy_message_id_surface(
+                            merged_surface(&load_source_files(
+                                &query.home_dir,
+                                &target.team,
+                                &target.agent,
+                            )?),
+                            |message: &SourcedMessage| message.envelope.message_id,
+                            |message: &SourcedMessage| message.envelope.timestamp,
+                        ),
+                    ))
                 },
                 |messages| !selected_after_filters(messages, &query, seen_watermark).is_empty(),
             )?;
 
             if wait_satisfied {
                 source_files = load_source_files(&query.home_dir, &target.team, &target.agent)?;
-                classified_all =
-                    classify_all(dedupe_sourced_messages(merged_surface(&source_files)));
+                classified_all = classify_all(apply_idle_notification_dedup(
+                    dedupe_legacy_message_id_surface(
+                        merged_surface(&source_files),
+                        |message: &SourcedMessage| message.envelope.message_id,
+                        |message: &SourcedMessage| message.envelope.timestamp,
+                    ),
+                ));
                 bucket_counts = bucket_counts_for(&classified_all);
                 filtered = apply_filters(
                     classified_all.clone(),
@@ -386,34 +404,7 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
         .collect()
 }
 
-fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
-    let mut latest_for_id: HashMap<LegacyMessageId, (IsoTimestamp, usize)> = HashMap::new();
-    for (index, message) in messages.iter().enumerate() {
-        if let Some(message_id) = message.envelope.message_id {
-            latest_for_id
-                .entry(message_id)
-                .and_modify(|entry| {
-                    if message.envelope.timestamp > entry.0
-                        || (message.envelope.timestamp == entry.0 && index > entry.1)
-                    {
-                        *entry = (message.envelope.timestamp, index);
-                    }
-                })
-                .or_insert((message.envelope.timestamp, index));
-        }
-    }
-
-    let deduped = messages
-        .into_iter()
-        .enumerate()
-        .filter_map(|(index, message)| match message.envelope.message_id {
-            Some(message_id) => latest_for_id
-                .get(&message_id)
-                .and_then(|(_, keep_index)| (*keep_index == index).then_some(message)),
-            None => Some(message),
-        })
-        .collect::<Vec<_>>();
-
+fn apply_idle_notification_dedup(deduped: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
     let latest_idle_for_sender = messages_from_idle_sender(&deduped);
 
     deduped

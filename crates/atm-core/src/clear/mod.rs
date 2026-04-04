@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -14,9 +14,10 @@ use crate::error::{AtmError, AtmErrorKind};
 use crate::home;
 use crate::identity;
 use crate::mailbox;
+use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
-use crate::schema::{LegacyMessageId, MessageEnvelope};
+use crate::schema::MessageEnvelope;
 use crate::types::MessageClass;
 
 #[derive(Debug, Clone)]
@@ -89,7 +90,14 @@ pub fn clear_mail(
     }
 
     let mut source_files = load_source_files(&query.home_dir, &target.team, &target.agent)?;
-    let merged = dedupe_sourced_messages(merged_surface(&source_files));
+    // Clear intentionally does not apply read-surface idle-notification dedup.
+    // Cleanup decisions must inspect the raw merged surface after legacy
+    // message_id canonicalization only.
+    let merged = dedupe_legacy_message_id_surface(
+        merged_surface(&source_files),
+        |message: &SourcedMessage| message.envelope.message_id,
+        |message: &SourcedMessage| message.envelope.timestamp,
+    );
     let cutoff = cutoff_timestamp(query.older_than)?;
 
     let mut removed_by_class = RemovedByClass::default();
@@ -113,7 +121,12 @@ pub fn clear_mail(
     let remaining_total = if query.dry_run {
         merged.len().saturating_sub(removable.len())
     } else {
-        dedupe_sourced_messages(merged_surface(&source_files)).len()
+        dedupe_legacy_message_id_surface(
+            merged_surface(&source_files),
+            |message: &SourcedMessage| message.envelope.message_id,
+            |message: &SourcedMessage| message.envelope.timestamp,
+        )
+        .len()
     };
 
     let outcome = ClearOutcome {
@@ -273,39 +286,6 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
                     source_path: source.path.clone(),
                     source_index,
                 })
-        })
-        .collect()
-}
-
-fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
-    // Clear intentionally does not apply read-surface idle-notification dedup.
-    // Cleanup decisions must inspect the raw merged surface after legacy
-    // message_id canonicalization only.
-    let mut latest_for_id: HashMap<LegacyMessageId, (crate::types::IsoTimestamp, usize)> =
-        HashMap::new();
-    for (index, message) in messages.iter().enumerate() {
-        if let Some(message_id) = message.envelope.message_id {
-            latest_for_id
-                .entry(message_id)
-                .and_modify(|entry| {
-                    if message.envelope.timestamp > entry.0
-                        || (message.envelope.timestamp == entry.0 && index > entry.1)
-                    {
-                        *entry = (message.envelope.timestamp, index);
-                    }
-                })
-                .or_insert((message.envelope.timestamp, index));
-        }
-    }
-
-    messages
-        .into_iter()
-        .enumerate()
-        .filter_map(|(index, message)| match message.envelope.message_id {
-            Some(message_id) => latest_for_id
-                .get(&message_id)
-                .and_then(|(_, keep_index)| (*keep_index == index).then_some(message)),
-            None => Some(message),
         })
         .collect()
 }
