@@ -173,6 +173,9 @@ Required diagnostics:
 - parser detail, including line and column when available
 - recovery guidance when operator action is required
 
+Operator examples and safe repair guidance live in
+[`persisted-data-repair.md`](./persisted-data-repair.md).
+
 ### 3.4 Claude Settings Resolution
 
 The system must resolve Claude settings for file-reference policy checks.

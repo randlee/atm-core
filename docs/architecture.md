@@ -257,6 +257,9 @@ Diagnostics for team config failures must preserve:
 - parser line and column when available
 - original parser cause for operator repair
 
+Sample operator-facing repair cases live in
+[`persisted-data-repair.md`](./persisted-data-repair.md).
+
 ### 5.2 Inbox Message
 
 Persisted fields used by the rewrite:
