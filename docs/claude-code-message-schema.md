@@ -10,6 +10,8 @@ Ownership:
 - ATM must not redefine the Claude Code-native message schema.
 - ATM may preserve unknown additive fields and may add ATM-authored fields only
   as documented in [`atm-message-schema.md`](./atm-message-schema.md).
+- ATM must not use this file to justify introducing new ATM-only top-level
+  fields into the shared inbox format.
 
 Primary source used by this repo:
 
@@ -57,6 +59,9 @@ Current ATM implication:
 - ATM should treat this text-field JSON form as the canonical Claude Code idle
   notice format.
 - ATM must not invent a replacement Claude-native idle schema.
+- ATM may enrich a Claude-native message only by adding ATM-owned metadata as
+  documented in [`atm-message-schema.md`](./atm-message-schema.md); it must not
+  rewrite the native Claude fields to do so.
 
 Validation rule:
 

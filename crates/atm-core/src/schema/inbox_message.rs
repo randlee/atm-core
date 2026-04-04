@@ -8,8 +8,9 @@ use crate::types::IsoTimestamp;
 ///
 /// Native Claude Code message shape is owned externally and documented in
 /// `docs/claude-code-message-schema.md`. Do not repurpose or rename Claude-owned
-/// fields in this struct. ATM may only add additive fields documented in
-/// `docs/atm-message-schema.md`.
+/// fields in this struct. Historical top-level ATM additions are documented in
+/// `docs/legacy-atm-message-schema.md`, and forward ATM machine metadata is
+/// documented in `docs/atm-message-schema.md`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MessageEnvelope {
     // Claude Code-native fields. Do not change these as if ATM owned the
@@ -20,9 +21,9 @@ pub struct MessageEnvelope {
     pub timestamp: IsoTimestamp,
     pub read: bool,
 
-    // ATM additive fields layered on top of the native Claude Code message
-    // schema. Historical provenance analysis in this design sprint confirmed
-    // these persisted fields are ATM-added rather than Claude-native.
+    // Legacy ATM additive fields layered on top of the native Claude Code
+    // message schema. Historical provenance analysis in this design sprint
+    // confirmed these persisted fields are ATM-added rather than Claude-native.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_team: Option<String>,
 

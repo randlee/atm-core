@@ -18,6 +18,8 @@ restructured, product docs remain in `docs/` and crate-local detail moves into
 Status:
 - Phases 0 through F are complete.
 - Phase G is in progress and is the next delivery focus.
+- Message schema ownership and metadata normalization are now a cross-cutting
+  design stream required for live adoption of the current shared inbox design.
 
 ## 2. Deliverables
 
@@ -29,6 +31,8 @@ Status:
 - structured errors with recovery guidance
 - structured logs through `sc-observability`
 - retained and new integration tests for the retained command surface
+- explicit schema ownership docs for Claude Code, legacy ATM compatibility, and
+  forward ATM metadata
 
 ## 3. Crates
 
@@ -218,6 +222,42 @@ Port and redesign the doctor command:
 
 Acceptance:
 - `atm doctor` works without daemon support
+
+### Phase I: Message Schema Normalization [PLANNED]
+
+Status summary:
+- schema ownership, compatibility, and forward metadata rules are now
+  documented
+- the current live design continues to use the shared Claude inbox surface
+- a separate ATM-native inbox is explicitly deferred until after the current
+  design is live and proven
+
+Goal:
+- make the shared inbox design safe to run live by clarifying schema ownership,
+  deprecating new ATM-only top-level fields, and defining the forward
+  metadata-based ATM schema
+
+Deliverables:
+- explicit schema ownership docs:
+  - Claude Code-native schema
+  - legacy ATM read-compatibility schema
+  - forward ATM metadata schema
+- enforcement models for locally owned schema docs
+- requirements and architecture rules for:
+  - legacy read compatibility
+  - metadata-only ATM machine fields going forward
+  - ULID-based ATM message identifiers
+  - timestamp derivation from ULID creation time
+  - additive enrichment of Claude-native messages with ATM metadata
+- next-version deferral note for a separate ATM-native inbox
+
+Acceptance:
+- schema ownership is explicit in requirements and architecture
+- legacy ATM top-level fields are documented as read-compatible but deprecated
+  for new writes
+- forward ATM metadata schema requires ULID-based ATM message identifiers
+- the current architecture explicitly defers a separate ATM-native inbox until
+  a later version
 - doctor findings reflect the local daemon-free system
 - observability readiness is visible in doctor output
 

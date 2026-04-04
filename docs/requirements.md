@@ -32,11 +32,14 @@ Schema ownership references:
   [`claude-code-message-schema.md`](./claude-code-message-schema.md)
 - ATM additive/interpreted message schema:
   [`atm-message-schema.md`](./atm-message-schema.md)
+- legacy ATM read-compatibility schema:
+  [`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)
 - `sc-observability` schema ownership pointer:
   [`sc-observability-schema.md`](./sc-observability-schema.md)
 - schema enforcement models:
   `tools/schema_models/claude_code_message_schema.py` and
-  `tools/schema_models/atm_message_schema.py`
+  `tools/schema_models/atm_message_schema.py` and
+  `tools/schema_models/legacy_atm_message_schema.py`
 
 ## 1.1 Documentation Structure
 
@@ -136,6 +139,40 @@ Per-team layout:
   - `{ATM_HOME}/.claude/teams/{team}/inboxes/{agent}.{origin}.json`
 
 The rewrite retains origin-file merge behavior for read and wait paths because it is part of the current file-based mail surface and does not require the daemon.
+
+### 3.2.1 Message Schema Ownership And Compatibility
+
+Product requirement ID:
+- `REQ-P-SCHEMA-001` ATM must preserve explicit ownership boundaries between
+  Claude Code-native message schema, legacy ATM compatibility schema, and
+  forward ATM metadata schema.
+
+Satisfied by:
+- `REQ-CORE-MAILBOX-001` for persisted inbox read/write compatibility
+- `REQ-CORE-WORKFLOW-001` for ATM workflow semantics layered onto compatible
+  message representations
+
+Required rules:
+
+- Claude Code-native message schema is owned by Claude Code
+- ATM must not redefine Claude-native fields as if ATM owned them
+- ATM read must accept:
+  - Claude Code-native messages
+  - legacy ATM top-level additive messages
+  - future ATM metadata-based messages
+- new ATM-only machine-readable fields must not be added as new top-level inbox
+  fields
+- forward ATM machine-readable fields must live in `metadata.atm`
+- ATM may enrich a Claude-native message in place by adding ATM-owned metadata
+  without rewriting native Claude fields
+- a separate ATM-native inbox is explicitly deferred and must not be assumed by
+  the current live design
+
+`REQ-P-SCHEMA-001` is owned by:
+
+- [`claude-code-message-schema.md`](./claude-code-message-schema.md)
+- [`atm-message-schema.md`](./atm-message-schema.md)
+- [`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)
 
 ### 3.3 Configuration Resolution
 
@@ -287,7 +324,16 @@ Retired from the current implementation:
 - support sender-controlled ack-required messages
 - support optional task metadata on sent messages
 - write a non-null `message_id` on every ATM-authored message
-- generate `message_id` as a UUID v4 at send time
+- current live write compatibility may generate top-level `message_id` values
+  using UUID while the metadata-based schema is not yet implemented
+
+Forward schema requirements:
+
+- once ATM writes `messageId` under `metadata.atm`, it must use ULID rather
+  than UUID for newly-authored values
+- ATM must generate the ULID first and derive the persisted Claude-native
+  `timestamp` from that ULID creation instant
+- legacy UUID `message_id` remains read-compatible
 
 `message_id` is required on every message written by `atm send`.
 
@@ -844,13 +890,15 @@ Optional fields:
 - `pendingAckAt`
 - `acknowledgedAt`
 - `acknowledgesMessageId`
+- `metadata`
 
 Unknown fields must be preserved.
 
 For ATM-authored messages:
-- `message_id` is mandatory
-- `message_id` must be UUID v4
-- `message_id` must not be null or blank
+- ATM machine-readable identity is mandatory
+- current legacy top-level `message_id` values may be UUID
+- forward metadata `messageId` values must be ULID
+- ATM-authored machine identifiers must not be null or blank
 
 Legacy or externally imported records may still omit `message_id`; the rewrite
 must preserve such records without inventing synthetic ids during read.

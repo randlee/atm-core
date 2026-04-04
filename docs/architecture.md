@@ -54,11 +54,14 @@ Schema ownership references:
   [`claude-code-message-schema.md`](./claude-code-message-schema.md)
 - ATM additive/interpreted message schema:
   [`atm-message-schema.md`](./atm-message-schema.md)
+- legacy ATM read-compatibility schema:
+  [`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)
 - `sc-observability` schema ownership pointer:
   [`sc-observability-schema.md`](./sc-observability-schema.md)
 - schema enforcement models:
   `tools/schema_models/claude_code_message_schema.py` and
-  `tools/schema_models/atm_message_schema.py`
+  `tools/schema_models/atm_message_schema.py` and
+  `tools/schema_models/legacy_atm_message_schema.py`
 
 ### 2.3 Shared Observability Boundary
 
@@ -257,27 +260,55 @@ Only a small subset is required by the retained surface:
 
 ### 5.2 Inbox Message
 
-Persisted fields used by the rewrite:
-- `from`
-- `source_team`
-- `text`
-- `timestamp`
-- `read`
-- `summary`
-- `message_id`
-- `taskId`
-- `pendingAckAt`
-- `acknowledgedAt`
-- `acknowledgesMessageId`
+Current persisted inbox superset may contain:
+- Claude-native baseline fields:
+  - `from`
+  - `text`
+  - `timestamp`
+  - `read`
+  - `summary`
+  - optional producer field `color`
+- legacy ATM top-level additive fields such as:
+  - `source_team`
+  - `message_id`
+  - `pendingAckAt`
+  - `acknowledgedAt`
+  - `acknowledgesMessageId`
+- shared/de facto interpreted fields such as:
+  - `taskId`
+- forward metadata container:
+  - `metadata`
 - unknown fields
+
+Schema ownership split:
+
+- Claude-native baseline fields are documented in
+  [`claude-code-message-schema.md`](./claude-code-message-schema.md)
+- legacy ATM top-level additive compatibility fields are documented in
+  [`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)
+- forward ATM machine-readable schema is documented in
+  [`atm-message-schema.md`](./atm-message-schema.md)
+
+Forward architectural rules:
+
+- new ATM-only machine-readable data belongs in `metadata.atm`
+- legacy top-level ATM fields remain read-compatible but are deprecated for new
+  write behavior
+- ATM may enrich a Claude-native stored message by adding `metadata.atm`
+  without rewriting the native Claude fields
+- the current live design still uses a shared inbox surface; a separate
+  ATM-native inbox is intentionally deferred to a later architecture phase
 
 Canonical read and ack axes are derived from persisted fields and not serialized separately.
 
 Invariant:
-- every ATM-authored message written by `send::send_mail` carries a non-null
-  UUID v4 `message_id`
-- legacy or externally imported records may still lack `message_id` and must be
-  preserved as-is
+- legacy top-level `message_id` values may be UUID or absent
+- forward ATM metadata `messageId` values must be ULID
+- when ATM authors a new ULID `messageId`, the persisted message `timestamp`
+  must be derived from that ULID creation time so identifier ordering and
+  timestamp ordering are aligned
+- legacy or externally imported records may still lack ATM machine identifiers
+- such records must be preserved as-is until enriched
 
 ## 6. Public Service APIs
 
@@ -342,7 +373,10 @@ Send ordering rules:
 - resolve target address, team existence, and agent membership as one address-resolution stage before mailbox path selection
 - enter the atomic append boundary before final inbox mutation
 - validate message text inside the atomic append boundary
-- generate UUID v4 `message_id` inside the atomic append boundary
+- current legacy top-level `message_id` generation remains supported for live
+  compatibility
+- forward metadata schema generation must create the ATM ULID `messageId`
+  first and derive the persisted message `timestamp` from it
 - perform duplicate suppression and final append inside the same atomic append boundary
 
 ### 6.2 Read Service
@@ -393,6 +427,11 @@ Read deduplication rule:
 - collapse multiple entries with the same non-null `message_id` to the most
   recent entry before bucket selection and output rendering
 - when timestamps tie, keep the later encountered inbox record
+
+Read/enrichment rule:
+- when a message needs ATM workflow semantics but lacks ATM-owned machine
+  metadata, ATM may enrich the original stored message additively
+- enrichment must be idempotent and must not rewrite native Claude fields
 
 The read service derives `MessageClass` from `(ReadState, AckState)` and applies display-bucket selection to the derived class, not to raw persisted fields.
 

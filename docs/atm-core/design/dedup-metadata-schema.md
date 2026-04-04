@@ -13,12 +13,14 @@ Schema ownership files introduced with this design:
 
 - [`../../claude-code-message-schema.md`](../../claude-code-message-schema.md)
 - [`../../atm-message-schema.md`](../../atm-message-schema.md)
+- [`../../legacy-atm-message-schema.md`](../../legacy-atm-message-schema.md)
 - [`../../sc-observability-schema.md`](../../sc-observability-schema.md)
 
 Enforcement models introduced with this design:
 
 - `tools/schema_models/claude_code_message_schema.py`
 - `tools/schema_models/atm_message_schema.py`
+- `tools/schema_models/legacy_atm_message_schema.py`
 
 ## 2. Concrete Recommendations
 
@@ -44,8 +46,15 @@ Recommendation:
 
 - `taskId` remains the only currently standardized ATM-interpreted shared field
 - ATM-specific alert metadata remains ATM-prefixed additive fields
+- legacy top-level ATM fields remain read-compatible but are not the forward
+  write target
 - do not standardize `priority`, `severity`, `error_code`, `repo`, `branch`,
   `ttl`, or `dedup_key` in the message schema in this sprint
+- if ATM later normalizes ATM-owned machine fields into metadata, the
+  ATM-defined `message_id` must use ULID for newly-authored values from day 1
+  of that metadata schema
+- the forward write target is `metadata.atm`, not additional top-level ATM-only
+  fields
 
 Rationale:
 
@@ -76,6 +85,8 @@ Recommendation:
   that are intentionally best-effort and potentially repetitive
 - do not add task-message dedup now, except a future exact-resend feature if
   explicitly designed later
+- future metadata-based dedup should treat ATM `message_id` as an ATM-owned
+  ULID identifier for new writes while preserving UUID read compatibility
 
 Current dedup families:
 
@@ -91,6 +102,17 @@ Recommendation:
 - ATM should allow future shared fields such as `repo` and `branch`
 - ATM should not claim ownership of those fields until a shared schema is
   explicitly documented
+
+### 2.6 Enrichment And Legacy Compatibility
+
+Recommendation:
+
+- ATM read must support Claude-native, legacy ATM top-level, and future
+  metadata-based messages
+- ATM may enrich a Claude-native message in place by adding `metadata.atm`
+- enrichment must be additive and idempotent
+- ATM-native inbox separation is explicitly deferred to a later version after
+  the current shared inbox design is used live
 
 ## 3. Dedup Taxonomy
 
@@ -169,8 +191,8 @@ Conforms:
 
 Needs update:
 
-- the ATM-owned alert metadata should be documented in
-  [`../../atm-message-schema.md`](../../atm-message-schema.md)
+- the ATM-owned alert metadata should be migrated from legacy top-level fields
+  to `metadata.atm` in the forward schema
 - future ATM alert fields should use explicit ATM-owned naming rather than
   unqualified shared names such as `error_code`
 
@@ -216,6 +238,9 @@ Answer:
   - `taskId` as a shared/de facto interpreted field
 - defer standardization of `priority`, `severity`, `error_code`, `repo`,
   `branch`, `ttl`, and `dedup_key`
+- require ULID for ATM-defined `message_id` in the next metadata-based schema
+  revision; legacy UUID remains read-compatible
+- require ATM metadata to live under `metadata.atm` in the forward schema
 
 ### 5.4 Dedup Key Strategy
 
@@ -246,3 +271,5 @@ Recommended follow-on doc cleanup after this design lands:
   producer contract
 - align idle-notification fixtures that use top-level idle markers with the
   canonical Claude Code-native text-field JSON format where possible
+- keep the deferred ATM-native inbox work out of the current live-schema branch
+  until the shared inbox design has been exercised in production

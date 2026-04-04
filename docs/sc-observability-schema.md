@@ -32,5 +32,6 @@ docs, those references should live alongside:
 
 - [`claude-code-message-schema.md`](./claude-code-message-schema.md)
 - [`atm-message-schema.md`](./atm-message-schema.md)
+- [`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)
 
 but should remain pointers and ownership notes, not copied schema definitions.

@@ -26,6 +26,35 @@ class AtmInboxMessage(ClaudeCodeInboxMessage):
     taskId: str | None = None
 
 
+class AtmMetadataFields(BaseModel):
+    """Forward ATM-owned metadata namespace."""
+
+    model_config = ConfigDict(extra="allow")
+
+    messageId: str | None = None
+    sourceTeam: str | None = None
+    pendingAckAt: str | None = None
+    acknowledgedAt: str | None = None
+    acknowledgesMessageId: str | None = None
+    alertKind: str | None = None
+
+
+class MessageMetadata(BaseModel):
+    """Top-level metadata object with an ATM-owned namespace."""
+
+    model_config = ConfigDict(extra="allow")
+
+    atm: AtmMetadataFields | None = None
+
+
+class AtmMetadataEnvelope(ClaudeCodeInboxMessage):
+    """Forward ATM message shape using metadata.atm instead of top-level ATM fields."""
+
+    model_config = ConfigDict(extra="allow")
+
+    metadata: MessageMetadata | None = None
+
+
 class AtmMissingTeamConfigAlertMessage(AtmInboxMessage):
     """Current ATM-authored back-channel alert notice."""
 

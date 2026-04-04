@@ -17,7 +17,7 @@ Enforcement model in this repo:
 
 - `tools/schema_models/atm_message_schema.py`
 
-## 2. ATM-Authored Additive Fields
+## 2. Current ATM-Authored Additive Fields
 
 Fields authored by ATM CLI messages and workflow mutations:
 
@@ -43,7 +43,60 @@ Historical provenance note:
   `pendingAckAt`, and `acknowledgesMessageId` as ATM-added fields rather than
   Claude Code-native envelope fields
 
-## 3. ATM-Interpreted Shared Or De Facto Fields
+Forward migration requirement:
+
+- if ATM moves its machine-readable fields into metadata rather than top-level
+  additive envelope fields, the ATM-defined `message_id` format must be ULID
+  from day 1 of that metadata schema
+- ATM read compatibility must continue to accept legacy UUID `message_id`
+  values and missing `message_id` values in historical inbox data
+
+Deprecation rule:
+
+- the fields in this section are legacy top-level ATM write behavior
+- they remain read-compatible, but new ATM-only semantics must not continue to
+  proliferate as new top-level additive fields
+## 3. Forward ATM Metadata Schema
+
+Forward write target for ATM-owned machine-readable fields:
+
+- top-level `metadata` object
+- ATM-owned namespace under `metadata.atm`
+
+`metadata.atm` fields planned for ATM-authored or ATM-enriched messages:
+
+- `messageId`
+- `sourceTeam`
+- `pendingAckAt`
+- `acknowledgedAt`
+- `acknowledgesMessageId`
+- ATM-owned alert metadata such as `alertKind`
+
+Ownership rule:
+
+- ATM owns `metadata.atm`
+- shared or producer-defined fields may coexist in `metadata`, but ATM must not
+  assume ownership of the full `metadata` object
+
+Forward-write requirements:
+
+- no new ATM-only top-level fields
+- ATM machine-readable data moves to `metadata.atm`
+- `messageId` must be ULID for newly-authored ATM metadata records
+- ATM must generate `messageId` first and derive the persisted Claude-native
+  `timestamp` from the ULID time component so both values represent the same
+  creation instant
+- legacy top-level ATM fields remain read-compatible only
+
+Enrichment rule:
+
+- ATM may upgrade a Claude-native message by adding `metadata.atm` to the
+  original stored message
+- enrichment must be additive and idempotent
+- ATM must not rewrite native Claude fields such as `from`, `text`,
+  `timestamp`, `read`, or `summary` in order to attach ATM metadata
+
+## 4. ATM-Interpreted Shared Or De Facto Fields
 
 ATM currently interprets the following field when present:
 
@@ -69,10 +122,10 @@ Current evidence note:
 - `taskId` is documented and interpreted by ATM, but it was not present in the
   current live `atm-dev` inbox data sampled during this design sprint
 
-## 4. ATM-Specific Alert Metadata
+## 5. ATM-Specific Alert Metadata
 
-The current missing-config fallback branch uses additive ATM-specific fields in
-the unknown-field map:
+The current missing-config fallback branch uses ATM-specific fields in the
+legacy top-level schema:
 
 - `atmAlertKind`
 - `missingConfigPath`
@@ -81,7 +134,9 @@ These are ATM-owned fields.
 
 Current design ruling:
 
-- ATM-authored back-channel alerts may use ATM-prefixed additive fields
+- ATM-authored back-channel alerts may use ATM-prefixed fields during the
+  legacy compatibility period
+- forward ATM alert metadata should move under `metadata.atm`
 - new ATM-only fields should remain clearly ATM-owned until a broader shared
   schema is explicitly approved
 

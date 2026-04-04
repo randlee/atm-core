@@ -88,6 +88,7 @@ docs/
   architecture.md
   claude-code-message-schema.md
   atm-message-schema.md
+  legacy-atm-message-schema.md
   sc-observability-schema.md
   project-plan.md
   read-behavior.md
@@ -137,6 +138,9 @@ Schema ownership file naming rules:
   in the filename.
 - ATM additive/interpreted schema docs must include `atm` and `schema` in the
   filename.
+- Legacy compatibility schema docs should include both the owning subsystem
+  name and `schema` in the filename so read-only compatibility contracts are
+  explicit rather than implied.
 - Shared subsystem schema pointers, such as `sc-observability`, should be
   co-located with the ATM and Claude Code schema docs and should point to the
   owning external repository instead of redefining that subsystem locally.
