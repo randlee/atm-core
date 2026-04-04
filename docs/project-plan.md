@@ -223,44 +223,6 @@ Port and redesign the doctor command:
 Acceptance:
 - `atm doctor` works without daemon support
 
-### Phase I: Message Schema Normalization [PLANNED]
-
-Status summary:
-- schema ownership, compatibility, and forward metadata rules are now
-  documented
-- the current live design continues to use the shared Claude inbox surface
-- a separate ATM-native inbox is explicitly deferred until after the current
-  design is live and proven
-
-Goal:
-- make the shared inbox design safe to run live by clarifying schema ownership,
-  deprecating new ATM-only top-level fields, and defining the forward
-  metadata-based ATM schema
-
-Deliverables:
-- explicit schema ownership docs:
-  - Claude Code-native schema
-  - legacy ATM read-compatibility schema
-  - forward ATM metadata schema
-- enforcement models for locally owned schema docs
-- requirements and architecture rules for:
-  - legacy read compatibility
-  - metadata-only ATM machine fields going forward
-  - ULID-based ATM message identifiers
-  - timestamp derivation from ULID creation time
-  - additive enrichment of Claude-native messages with ATM metadata
-- next-version deferral note for a separate ATM-native inbox
-
-Acceptance:
-- schema ownership is explicit in requirements and architecture
-- legacy ATM top-level fields are documented as read-compatible but deprecated
-  for new writes
-- forward ATM metadata schema requires ULID-based ATM message identifiers
-- the current architecture explicitly defers a separate ATM-native inbox until
-  a later version
-- doctor findings reflect the local daemon-free system
-- observability readiness is visible in doctor output
-
 ### Phase I: Cleanup And Hardening
 
 Delete:
@@ -275,6 +237,101 @@ Add:
 Acceptance:
 - implementation matches `requirements.md`, `architecture.md`,
   `read-behavior.md`, and `docs/archive/file-migration-plan.md`
+
+### Phase J: Message Schema Normalization [PLANNED]
+
+Status summary:
+- schema ownership, compatibility, and forward metadata rules are now
+  documented
+- the current live design continues to use the shared Claude inbox surface
+- a separate ATM-native inbox is explicitly deferred until after the current
+  design is live and proven
+
+Goal:
+- make the shared inbox design safe to run live by clarifying schema ownership,
+  deprecating new ATM-only top-level fields, and defining the forward
+  metadata-based ATM schema
+
+Execution model:
+- this phase is implemented as a coordinated multi-sprint stream owned by
+  `team-lead`
+- `team-lead` should orchestrate the sprint sequence, worktree assignments, and
+  review hand-offs using the `/codex-orchestration` skill
+- sprint execution should not assume a separate ATM-native inbox; all work in
+  this phase targets the current shared inbox design
+
+Deliverables:
+- explicit schema ownership docs:
+  - Claude Code-native schema
+  - legacy ATM read-compatibility schema
+  - forward ATM metadata schema
+- enforcement models for locally owned schema docs
+- requirements and architecture rules for:
+  - legacy read compatibility
+  - metadata-only ATM machine fields going forward
+  - ULID-based ATM message identifiers
+  - timestamp derivation from ULID creation time
+  - additive enrichment of Claude-native messages with ATM metadata
+- implementation plan for the initial dedup work:
+  - PR #18 idle-notification receiver-side dedup using the Claude-native idle
+    payload in `text`
+  - consolidation of ATM `message_id` surface canonicalization rules across
+    read, ack, and clear
+  - migration plan for ATM-authored repair/alert dedup toward `metadata.atm`
+- next-version deferral note for a separate ATM-native inbox
+
+Planned sprints:
+
+- `J.1` Schema Ownership Lock
+  - land the production schema docs and local enforcement models
+  - add source-code and unit-test references back to the owning schema docs
+  - acceptance: no ambiguity remains about Claude-native vs ATM-owned vs
+    legacy ATM read-compat fields
+
+- `J.2` Native Idle Dedup Implementation
+  - implement PR #18 receiver-side idle-notification dedup against the
+    Claude-native JSON payload stored in `text`
+  - remove or reject any implementation that tries to redefine idle notices as
+    an ATM-owned native top-level schema
+  - acceptance: at most one unread idle notification per sender remains visible
+    in an inbox, with fixtures and tests aligned to the Claude-native schema
+
+- `J.3` Surface Canonicalization Consolidation
+  - centralize `message_id` dedup logic used by read, ack, and clear
+  - keep current legacy top-level `message_id` behavior read-compatible while
+    documenting the later move to `metadata.atm.messageId`
+  - acceptance: one shared dedup contract is used across operator-facing
+    mailbox surfaces
+
+- `J.4` ATM Alert Metadata Migration Plan
+  - migrate the design for ATM-authored repair notices from ad hoc top-level
+    fields toward `metadata.atm`
+  - keep current alert writes/read-compat behavior stable until the migration
+    sprint lands
+  - acceptance: requirements and architecture specify the forward metadata
+    placement for ATM alert/dedup fields without breaking legacy reads
+
+- `J.5` Live Shared-Inbox Validation
+  - exercise the documented shared-inbox design in live/manual flows before any
+    ATM-native inbox redesign is considered
+  - confirm Claude-context projection limitations, enrichment expectations, and
+    ack/dedup operator workflows against real inbox files
+  - acceptance: the current shared-inbox design is proven usable enough to
+    defer ATM-native inbox work to a later version
+
+Acceptance:
+- schema ownership is explicit in requirements and architecture
+- legacy ATM top-level fields are documented as read-compatible but deprecated
+  for new writes
+- forward ATM metadata schema requires ULID-based ATM message identifiers
+- PR #18 idle-notification dedup is explicitly represented in the implementation
+  plan as a Claude-native schema-following sprint
+- the phase is organized into explicit sprints orchestrated by `team-lead`
+  using `/codex-orchestration`
+- the current architecture explicitly defers a separate ATM-native inbox until
+  a later version
+- doctor findings reflect the local daemon-free system
+- observability readiness is visible in doctor output
 
 ## 5. Hard Rules
 
