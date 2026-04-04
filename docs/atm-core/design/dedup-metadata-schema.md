@@ -348,6 +348,13 @@ Schema dependency:
 - ATM-owned `atmAlertKind`
 - ATM-owned `missingConfigPath`
 
+See also:
+
+- [`../../atm-message-schema.md`](../../atm-message-schema.md) §3 forward
+  placement map
+- [`../../atm-message-schema.md`](../../atm-message-schema.md) §5
+  ATM-Specific Alert Metadata
+
 ## 4. Existing Implementation Review
 
 ### 4.1 PR #18: idle-notification-dedup
@@ -381,6 +388,9 @@ Needs update:
   to `metadata.atm` in the forward schema
 - future ATM alert fields should use explicit ATM-owned naming rather than
   unqualified shared names such as `error_code`
+- see [`../../atm-message-schema.md`](../../atm-message-schema.md) §3 forward
+  placement map and §5 ATM-Specific Alert Metadata for the J.4 alert-field
+  migration specification
 
 ### 4.3 Current `atm-core` merge-surface dedup
 
