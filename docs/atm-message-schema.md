@@ -13,6 +13,10 @@ Ownership:
   replace it.
 - ATM must tolerate unknown additive fields from other producers.
 
+Enforcement model in this repo:
+
+- `tools/schema_models/atm_message_schema.py`
+
 ## 2. ATM-Authored Additive Fields
 
 Fields authored by ATM CLI messages and workflow mutations:
@@ -32,6 +36,12 @@ Current semantics:
 
 These fields are additive and must coexist with the Claude Code-native message
 shape without redefining it.
+
+Historical provenance note:
+
+- `quality-mgr` historical analysis identified `message_id`, `source_team`,
+  `pendingAckAt`, and `acknowledgesMessageId` as ATM-added fields rather than
+  Claude Code-native envelope fields
 
 ## 3. ATM-Interpreted Shared Or De Facto Fields
 
@@ -53,6 +63,11 @@ Current ATM semantics for `taskId`:
 - acknowledgement required
 - remains actionable until acknowledged
 - must not be cleared before acknowledgement
+
+Current evidence note:
+
+- `taskId` is documented and interpreted by ATM, but it was not present in the
+  current live `atm-dev` inbox data sampled during this design sprint
 
 ## 4. ATM-Specific Alert Metadata
 

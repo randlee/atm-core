@@ -15,6 +15,11 @@ Schema ownership files introduced with this design:
 - [`../../atm-message-schema.md`](../../atm-message-schema.md)
 - [`../../sc-observability-schema.md`](../../sc-observability-schema.md)
 
+Enforcement models introduced with this design:
+
+- `tools/schema_models/claude_code_message_schema.py`
+- `tools/schema_models/atm_message_schema.py`
+
 ## 2. Concrete Recommendations
 
 ### 2.1 Schema Ownership
@@ -48,6 +53,9 @@ Rationale:
 - the other fields do not yet have a stable producer contract for inbox
   messages
 - standardizing them now would risk ATM redefining external schema ownership
+- `quality-mgr` provenance analysis confirms `message_id`, `source_team`,
+  `pendingAckAt`, and `acknowledgesMessageId` are ATM-added fields rather than
+  native Claude envelope fields
 
 ### 2.3 Idle Notification Classification
 
@@ -171,6 +179,8 @@ Needs update:
 Conforms:
 
 - `message_id` dedup is an ATM-owned surface canonicalization rule
+- provenance analysis confirms `message_id` itself is ATM-added, which makes
+  this dedup family unambiguously ATM-owned
 
 Needs update:
 
@@ -231,6 +241,7 @@ Recommended follow-on doc cleanup after this design lands:
 
 - reference the schema ownership files from top-level requirements and
   architecture docs
+- keep the Pydantic enforcement models aligned with the schema ownership files
 - remove or revise any task-assignment schema claims that exceed the documented
   producer contract
 - align idle-notification fixtures that use top-level idle markers with the

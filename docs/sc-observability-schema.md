@@ -7,6 +7,12 @@
 ATM should reference those schemas but must not redefine them locally as if ATM
 owned them.
 
+Local enforcement note:
+
+- this repo does not define a local Pydantic model for `sc-observability`
+  because the schema is externally owned and this file is only an ownership
+  pointer
+
 ## 2. Repository Pointer
 
 The owning repository referenced by ATM planning docs is:

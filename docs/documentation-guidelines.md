@@ -141,6 +141,18 @@ Schema ownership file naming rules:
   co-located with the ATM and Claude Code schema docs and should point to the
   owning external repository instead of redefining that subsystem locally.
 
+Schema enforcement rules:
+
+- Every schema defined locally in `docs/` must have a corresponding enforcement
+  model in source control.
+- Python/Pydantic enforcement models for top-level schema docs live under
+  `tools/schema_models/`.
+- External schema pointer docs, such as `sc-observability`, may omit a local
+  Pydantic model when this repository does not own the schema definition.
+- Source files that parse or serialize a locally documented schema must include
+  comments pointing to the owning schema doc and must not silently redefine an
+  externally owned schema.
+
 ## 4. Top-Level Document Responsibilities
 
 ### 4.1 `docs/requirements.md`

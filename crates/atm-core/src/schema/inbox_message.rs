@@ -4,13 +4,25 @@ use uuid::Uuid;
 
 use crate::types::IsoTimestamp;
 
+/// Persisted inbox superset used by ATM.
+///
+/// Native Claude Code message shape is owned externally and documented in
+/// `docs/claude-code-message-schema.md`. Do not repurpose or rename Claude-owned
+/// fields in this struct. ATM may only add additive fields documented in
+/// `docs/atm-message-schema.md`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MessageEnvelope {
+    // Claude Code-native fields. Do not change these as if ATM owned the
+    // native schema; update the owning schema docs first if the external
+    // contract changes.
     pub from: String,
     pub text: String,
     pub timestamp: IsoTimestamp,
     pub read: bool,
 
+    // ATM additive fields layered on top of the native Claude Code message
+    // schema. Historical provenance analysis in this design sprint confirmed
+    // these persisted fields are ATM-added rather than Claude-native.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_team: Option<String>,
 
@@ -35,6 +47,8 @@ pub struct MessageEnvelope {
     #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]
     pub task_id: Option<String>,
 
+    // Preserve unknown producer-owned fields so ATM does not accidentally
+    // redefine external schemas by dropping or rewriting them.
     #[serde(flatten)]
     pub extra: Map<String, Value>,
 }

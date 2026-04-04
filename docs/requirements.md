@@ -34,6 +34,9 @@ Schema ownership references:
   [`atm-message-schema.md`](./atm-message-schema.md)
 - `sc-observability` schema ownership pointer:
   [`sc-observability-schema.md`](./sc-observability-schema.md)
+- schema enforcement models:
+  `tools/schema_models/claude_code_message_schema.py` and
+  `tools/schema_models/atm_message_schema.py`
 
 ## 1.1 Documentation Structure
 

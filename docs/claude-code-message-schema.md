@@ -15,15 +15,23 @@ Primary source used by this repo:
 
 - `agent-team-mail/docs/agent-team-api.md`
 
+Enforcement model in this repo:
+
+- `tools/schema_models/claude_code_message_schema.py`
+
 ## 2. Native Inbox Message Shape
 
-Documented inbox message fields observed by ATM:
+Claude Code-native baseline envelope used for native teammate delivery:
 
 - `from`
 - `text`
 - `timestamp`
 - `read`
 - `summary`
+
+Historically observed producer-owned optional field:
+
+- `color`
 
 Documented additive tolerance rule:
 
@@ -50,15 +58,32 @@ Current ATM implication:
   notice format.
 - ATM must not invent a replacement Claude-native idle schema.
 
+Validation rule:
+
+- the Pydantic model for the native Claude Code message schema intentionally
+  models only the Claude-owned fields and allows unknown additive fields, so
+  ATM extensions do not become retroactively "native" by accident
+
 ## 4. What This File Does Not Define
 
-This file does not define:
+This file does not define ATM-added persisted envelope fields such as:
 
-- ATM-authored fields such as `message_id`, `pendingAckAt`,
-  `acknowledgedAt`, `acknowledgesMessageId`, or `source_team`
+- `message_id`
+- `source_team`
+- `pendingAckAt`
+- `acknowledgedAt`
+- `acknowledgesMessageId`
 - ATM-specific alert metadata
 - task object schema in `~/.claude/tasks/...`
 
 `taskId` is intentionally not treated here as a Claude Code-native inbox
 message field. ATM may interpret `taskId` when present, but that ownership is
 documented in [`atm-message-schema.md`](./atm-message-schema.md), not here.
+
+Historical provenance note:
+
+- `quality-mgr` analysis over 7,297 persisted messages across 24 teams found
+  the earliest Claude Code baseline messages using only
+  `{from, text, timestamp, read, summary, color}`
+- `message_id` first appeared later as an ATM-added field
+- `source_team` appeared later still and always co-occurred with `message_id`
