@@ -41,6 +41,14 @@ impl From<LegacyMessageId> for Uuid {
     }
 }
 
+impl std::str::FromStr for LegacyMessageId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::parse_str(s).map(Self)
+    }
+}
+
 impl fmt::Display for LegacyMessageId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
@@ -91,6 +99,14 @@ impl From<AtmMessageId> for Ulid {
     }
 }
 
+impl std::str::FromStr for AtmMessageId {
+    type Err = ulid::DecodeError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ulid::from_string(s).map(Self)
+    }
+}
+
 impl fmt::Display for AtmMessageId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
@@ -121,6 +137,9 @@ pub struct AtmMetadataFields {
     #[serde(rename = "alertKind", skip_serializing_if = "Option::is_none")]
     pub alert_kind: Option<String>,
 
+    #[serde(rename = "missingConfigPath", skip_serializing_if = "Option::is_none")]
+    pub missing_config_path: Option<String>,
+
     #[serde(flatten)]
     pub extra: Map<String, Value>,
 }
@@ -131,6 +150,8 @@ pub struct MessageMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub atm: Option<AtmMetadataFields>,
 
+    // Preserve unknown producer-owned fields so ATM does not accidentally
+    // redefine external schemas by dropping or rewriting them.
     #[serde(flatten)]
     pub extra: Map<String, Value>,
 }
@@ -312,6 +333,7 @@ mod tests {
                     acknowledged_at: None,
                     acknowledges_message_id: None,
                     alert_kind: None,
+                    missing_config_path: None,
                     extra: Map::new(),
                 }),
                 extra: Map::new(),
@@ -327,5 +349,20 @@ mod tests {
     fn atm_message_id_timestamp_matches_derived_timestamp() {
         let (message_id, timestamp) = AtmMessageId::new_with_timestamp();
         assert_eq!(message_id.timestamp(), timestamp);
+    }
+
+    #[test]
+    fn legacy_message_id_parses_from_uuid_string() {
+        let parsed: LegacyMessageId = "11111111-1111-4111-8111-111111111111"
+            .parse()
+            .expect("parse legacy id");
+        assert_eq!(parsed.to_string(), "11111111-1111-4111-8111-111111111111");
+    }
+
+    #[test]
+    fn atm_message_id_parses_from_ulid_string() {
+        let (message_id, _) = AtmMessageId::new_with_timestamp();
+        let parsed: AtmMessageId = message_id.to_string().parse().expect("parse atm id");
+        assert_eq!(parsed, message_id);
     }
 }

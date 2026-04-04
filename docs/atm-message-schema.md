@@ -81,6 +81,7 @@ Forward write target for ATM-owned machine-readable fields:
 - `acknowledgedAt`
 - `acknowledgesMessageId`
 - ATM-owned alert metadata such as `alertKind`
+- ATM-owned alert metadata such as `missingConfigPath`
 
 Ownership rule:
 

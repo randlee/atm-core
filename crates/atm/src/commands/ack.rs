@@ -3,7 +3,6 @@ use atm_core::ack::{self, AckRequest};
 use atm_core::home;
 use atm_core::schema::LegacyMessageId;
 use clap::Args;
-use uuid::Uuid;
 
 use crate::observability::CliObservability;
 use crate::output;
@@ -27,7 +26,9 @@ impl AckCommand {
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
-        let message_id = Uuid::parse_str(&self.message_id)
+        let message_id = self
+            .message_id
+            .parse::<LegacyMessageId>()
             .with_context(|| format!("invalid message id: {}", self.message_id))?;
 
         let outcome = ack::ack_mail(
@@ -36,7 +37,7 @@ impl AckCommand {
                 current_dir,
                 actor_override: self.actor,
                 team_override: self.team,
-                message_id: LegacyMessageId::from(message_id),
+                message_id,
                 reply_body: self.reply,
             },
             observability,

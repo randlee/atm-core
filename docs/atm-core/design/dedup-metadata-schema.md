@@ -354,7 +354,6 @@ See also:
   placement map
 - [`../../atm-message-schema.md`](../../atm-message-schema.md) §5
   ATM-Specific Alert Metadata
-
 ## 4. Existing Implementation Review
 
 ### 4.1 PR #18: idle-notification-dedup

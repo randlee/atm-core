@@ -1,6 +1,7 @@
 pub(crate) mod atomic;
 pub(crate) mod hash;
 pub(crate) mod lock;
+pub(crate) mod source;
 pub(crate) mod store;
 pub(crate) mod surface;
 
@@ -13,6 +14,11 @@ use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorKind};
 use crate::schema::{LegacyMessageId, MessageEnvelope};
+use uuid::Uuid;
+
+pub(crate) fn temp_file_suffix() -> String {
+    format!("{}-{}", std::process::id(), Uuid::new_v4().simple())
+}
 
 pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), AtmError> {
     let mut messages = read_messages(path)?;
@@ -57,6 +63,7 @@ pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
             Err(error) => warn!(
                 line = index + 1,
                 mailbox_path = %path.display(),
+                raw_record = %line,
                 %error,
                 "skipping malformed mailbox record"
             ),

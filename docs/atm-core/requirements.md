@@ -135,6 +135,12 @@ Required write-path rules:
   `metadata.atm` field
 - new ATM-only alert top-level fields must be rejected with a descriptive
   validation error on the write path
+- exception: until the alert metadata migration sprint lands, the current
+  runtime send path may continue writing legacy top-level `atmAlertKind` and
+  `missingConfigPath` fields; this carve-out is bounded by
+  [`architecture.md` §3.1](./architecture.md)
+- the write-path rejection requirement applies to new ATM-only alert fields
+  introduced after Phase J
 
 Required read-path rules:
 - ATM read must accept legacy top-level alert fields such as `atmAlertKind` and
@@ -148,3 +154,5 @@ Forward migration rule:
 - legacy top-level `atmAlertKind` migrates to `metadata.atm.alertKind`
 - legacy top-level `missingConfigPath` migrates to
   `metadata.atm.missingConfigPath`
+- the forward architectural target and compatibility-period carve-out are
+  documented in [`architecture.md` §3.1](./architecture.md)

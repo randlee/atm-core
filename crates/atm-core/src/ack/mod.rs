@@ -1,16 +1,16 @@
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use serde_json::Map;
-use tracing::{trace, warn};
+use tracing::trace;
 
 use crate::address::AgentAddress;
 use crate::config;
-use crate::error::{AtmError, AtmErrorKind};
+use crate::error::AtmError;
 use crate::home;
 use crate::identity;
 use crate::mailbox;
+use crate::mailbox::source::{discover_origin_inboxes, SourceFile, SourcedMessage};
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
@@ -39,19 +39,6 @@ pub struct AckOutcome {
     pub reply_target: String,
     pub reply_message_id: LegacyMessageId,
     pub reply_text: String,
-}
-
-#[derive(Debug, Clone)]
-struct SourceFile {
-    path: PathBuf,
-    messages: Vec<MessageEnvelope>,
-}
-
-#[derive(Debug, Clone)]
-struct SourcedMessage {
-    envelope: MessageEnvelope,
-    source_path: PathBuf,
-    source_index: usize,
 }
 
 pub fn ack_mail(
@@ -251,48 +238,6 @@ fn load_source_files(
     }
 
     Ok(sources)
-}
-
-fn discover_origin_inboxes(inboxes_dir: &Path, agent: &str) -> Result<Vec<PathBuf>, AtmError> {
-    if !inboxes_dir.exists() {
-        return Ok(Vec::new());
-    }
-
-    let prefix = format!("{agent}.");
-    let primary = format!("{agent}.json");
-    let mut paths = fs::read_dir(inboxes_dir)
-        .map_err(|error| {
-            AtmError::new(
-                AtmErrorKind::MailboxRead,
-                format!(
-                    "failed to read inbox directory {}: {error}",
-                    inboxes_dir.display()
-                ),
-            )
-            .with_source(error)
-        })?
-        .filter_map(|entry| match entry {
-            Ok(entry) => Some(entry.path()),
-            Err(error) => {
-                warn!(
-                    inbox_dir = %inboxes_dir.display(),
-                    agent,
-                    %error,
-                    "skipping unreadable origin inbox entry"
-                );
-                None
-            }
-        })
-        .filter(|path| {
-            path.file_name()
-                .and_then(|value| value.to_str())
-                .map(|name| name.starts_with(&prefix) && name.ends_with(".json") && name != primary)
-                .unwrap_or(false)
-        })
-        .collect::<Vec<_>>();
-
-    paths.sort();
-    Ok(paths)
 }
 
 fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {

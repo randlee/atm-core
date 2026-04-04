@@ -483,6 +483,81 @@ fn test_read_keeps_read_idle_notifications_visible() {
 }
 
 #[test]
+fn test_read_preserves_none_message_id_records_in_output() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    let mut without_id = fixture.message("team-lead", "no id", false, None, None, 0);
+    without_id.message_id = None;
+    let duplicate_id = LegacyMessageId::new();
+    let mut older = fixture.message("team-lead", "older dup", false, None, None, 1);
+    older.message_id = Some(duplicate_id);
+    let mut newer = fixture.message("team-lead", "newer dup", false, None, None, 2);
+    newer.message_id = Some(duplicate_id);
+    fixture.write_inbox("arch-ctm", &[without_id, older, newer]);
+
+    let output = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    let messages = parsed["messages"].as_array().expect("messages array");
+    assert_eq!(messages.len(), 2);
+    assert!(messages.iter().any(|message| message["text"] == "no id"));
+    assert!(messages
+        .iter()
+        .any(|message| message["text"] == "newer dup"));
+}
+
+#[test]
+fn test_read_keeps_read_and_unread_idle_notifications_from_different_files() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[fixture.message(
+            "daemon",
+            &idle_notification_text("team-lead", "available"),
+            false,
+            None,
+            None,
+            1,
+        )],
+    );
+    fixture.write_origin_inbox(
+        "arch-ctm",
+        "host-a",
+        &[fixture.message(
+            "daemon",
+            &idle_notification_text("team-lead", "available"),
+            true,
+            None,
+            None,
+            0,
+        )],
+    );
+
+    let output = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    let messages = parsed["messages"].as_array().expect("messages array");
+    assert_eq!(
+        messages
+            .iter()
+            .filter(|message| message["text"] == idle_notification_text("team-lead", "available"))
+            .count(),
+        2
+    );
+    assert_eq!(parsed["bucket_counts"]["unread"], 1);
+    assert_eq!(parsed["bucket_counts"]["history"], 1);
+}
+
+#[test]
 fn test_forward_metadata_message_id_timestamp_matches_persisted_timestamp() {
     let (message_id, timestamp) = AtmMessageId::new_with_timestamp();
     let envelope = ForwardMetadataEnvelope {
@@ -495,6 +570,7 @@ fn test_forward_metadata_message_id_timestamp_matches_persisted_timestamp() {
                 acknowledged_at: None,
                 acknowledges_message_id: None,
                 alert_kind: None,
+                missing_config_path: None,
                 extra: serde_json::Map::new(),
             }),
             extra: serde_json::Map::new(),
@@ -627,6 +703,19 @@ impl Fixture {
         fs::write(path, timestamp.to_rfc3339()).expect("write seen state");
     }
 
+    fn write_origin_inbox(&self, agent: &str, origin: &str, messages: &[MessageEnvelope]) {
+        let inbox_path = self.origin_inbox_path(agent, origin);
+        if let Some(parent) = inbox_path.parent() {
+            fs::create_dir_all(parent).expect("origin inbox dir");
+        }
+        let raw = messages
+            .iter()
+            .map(|message| serde_json::to_string(message).expect("json line"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(inbox_path, format!("{raw}\n")).expect("write origin inbox");
+    }
+
     fn read_seen_state(&self, agent: &str) -> Option<chrono::DateTime<Utc>> {
         let path = self.team_dir().join(".seen").join(agent);
         let raw = fs::read_to_string(path).ok()?;
@@ -639,6 +728,12 @@ impl Fixture {
         self.team_dir()
             .join("inboxes")
             .join(format!("{agent}.json"))
+    }
+
+    fn origin_inbox_path(&self, agent: &str, origin: &str) -> std::path::PathBuf {
+        self.team_dir()
+            .join("inboxes")
+            .join(format!("{agent}.{origin}.json"))
     }
 
     fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {

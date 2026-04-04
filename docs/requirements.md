@@ -183,7 +183,6 @@ Current-phase migration constraint:
 - Phase J sprint J.4 is documentation and planning only
 - existing runtime write/read behavior for legacy top-level alert fields remains
   stable until a later implementation sprint performs the actual migration
-
 `REQ-P-SCHEMA-001` is owned by:
 
 - [`claude-code-message-schema.md`](./claude-code-message-schema.md)

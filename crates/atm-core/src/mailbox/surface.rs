@@ -147,6 +147,34 @@ mod tests {
         assert_eq!(deduped[1].body, "second");
     }
 
+    #[test]
+    fn dedupe_legacy_message_id_surface_keeps_distinct_ids() {
+        let first_id = LegacyMessageId::new();
+        let second_id = LegacyMessageId::new();
+        let messages = vec![
+            SurfaceRecord {
+                message_id: Some(first_id),
+                timestamp: iso("2026-04-04T10:00:00Z"),
+                body: "first-id",
+            },
+            SurfaceRecord {
+                message_id: Some(second_id),
+                timestamp: iso("2026-04-04T10:00:01Z"),
+                body: "second-id",
+            },
+        ];
+
+        let deduped = dedupe_legacy_message_id_surface(
+            messages,
+            |message| message.message_id,
+            |message| message.timestamp,
+        );
+
+        assert_eq!(deduped.len(), 2);
+        assert_eq!(deduped[0].body, "first-id");
+        assert_eq!(deduped[1].body, "second-id");
+    }
+
     fn iso(value: &str) -> IsoTimestamp {
         IsoTimestamp::from_datetime(
             chrono::DateTime::parse_from_rfc3339(value)

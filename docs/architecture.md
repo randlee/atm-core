@@ -331,7 +331,6 @@ Current-phase constraint:
 - the owning design rationale for this migration remains
   [`atm-core/design/dedup-metadata-schema.md`](./atm-core/design/dedup-metadata-schema.md)
   §2.2 and §3.3
-
 Canonical read and ack axes are derived from persisted fields and not serialized separately.
 
 Invariant:

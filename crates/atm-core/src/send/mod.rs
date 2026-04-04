@@ -8,7 +8,6 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use serde_json::Map;
 use tracing::warn;
-use uuid::Uuid;
 
 use crate::address::AgentAddress;
 use crate::config;
@@ -16,6 +15,7 @@ use crate::error::AtmError;
 use crate::home;
 use crate::identity;
 use crate::mailbox;
+use crate::mailbox::temp_file_suffix;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::{LegacyMessageId, MessageEnvelope};
 use crate::types::IsoTimestamp;
@@ -341,7 +341,17 @@ fn register_missing_team_config_alert(home_dir: &Path, key: &str) -> bool {
         return false;
     };
 
-    let mut state = load_send_alert_state(&state_path).unwrap_or_default();
+    let mut state = match load_send_alert_state(&state_path) {
+        Ok(state) => state,
+        Err(error) => {
+            warn!(
+                %error,
+                path = %state_path.display(),
+                "failed to read send state file - defaulting to empty state"
+            );
+            SendAlertState::default()
+        }
+    };
     if state.missing_team_config_keys.contains(key) {
         return false;
     }
@@ -428,12 +438,11 @@ fn save_send_alert_state(path: &Path, state: &SendAlertState) -> Result<(), AtmE
     }
 
     let temp_path = path.with_file_name(format!(
-        "{}.{}.{}.tmp",
+        "{}.{}.tmp",
         path.file_name()
             .and_then(|value| value.to_str())
             .unwrap_or("state"),
-        std::process::id(),
-        Uuid::new_v4()
+        temp_file_suffix()
     ));
     let data = serde_json::to_vec(state)?;
     fs::write(&temp_path, data).map_err(|error| {

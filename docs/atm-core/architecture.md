@@ -66,6 +66,8 @@ Architectural rule:
   `missingConfigPath` remain read-compatible only
 - the current runtime send path may continue emitting the legacy top-level
   fields until the migration implementation sprint lands
+- this compatibility-period carve-out is the bounded exception referenced by
+  [`requirements.md` `REQ-CORE-SEND-002`](./requirements.md#6-send-alert-metadata)
 
 ## 4. ADR Namespace
 
