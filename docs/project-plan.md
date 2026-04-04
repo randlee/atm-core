@@ -16,10 +16,11 @@ restructured, product docs remain in `docs/` and crate-local detail moves into
 `docs/atm/` and `docs/atm-core/`.
 
 Status:
-- Phases 0 through F are complete.
-- Phase G is in progress and is the next delivery focus.
-- Message schema ownership and metadata normalization are now a cross-cutting
-  design stream required for live adoption of the current shared inbox design.
+- Phases 0 through F and J are complete.
+- Phase G remains the next retained-command delivery focus.
+- Message schema ownership and metadata normalization are now implemented well
+  enough for live shared-inbox adoption, while a separate ATM-native inbox
+  remains deferred to a later version.
 
 ## 2. Deliverables
 
@@ -240,14 +241,16 @@ Acceptance:
 - implementation matches `requirements.md`, `architecture.md`,
   `read-behavior.md`, and `docs/archive/file-migration-plan.md`
 
-### Phase J: Message Schema Normalization [PLANNED]
+### Phase J: Message Schema Normalization [COMPLETE]
 
 Status summary:
 - schema ownership, compatibility, and forward metadata rules are now
   documented
-- the current live design continues to use the shared Claude inbox surface
+- the current live design continues to use the shared Claude inbox surface and
+  passed J.5 live validation
 - a separate ATM-native inbox is explicitly deferred until after the current
   design is live and proven
+- no J.5 runtime blocker was found that forces an immediate inbox split
 
 Goal:
 - make the shared inbox design safe to run live by clarifying schema ownership,
@@ -282,7 +285,7 @@ Deliverables:
   - migration plan for ATM-authored repair/alert dedup toward `metadata.atm`
 - next-version deferral note for a separate ATM-native inbox
 
-Planned sprints:
+Completed sprints:
 
 - `J.1` Schema Ownership Lock
   - land the production schema docs and local enforcement models
@@ -323,6 +326,8 @@ Planned sprints:
     ack/dedup operator workflows against real inbox files
   - acceptance: the current shared-inbox design is proven usable enough to
     defer ATM-native inbox work to a later version
+  - delivered in:
+    [`docs/atm-core/design/live-shared-inbox-validation.md`](./atm-core/design/live-shared-inbox-validation.md)
 
 Acceptance:
 - schema ownership is explicit in requirements and architecture
