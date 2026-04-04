@@ -8,8 +8,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
+use serde_json::Value;
 use tracing::warn;
-use uuid::Uuid;
 
 use crate::address::AgentAddress;
 use crate::config;
@@ -18,7 +18,7 @@ use crate::home;
 use crate::identity;
 use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
-use crate::schema::MessageEnvelope;
+use crate::schema::{LegacyMessageId, MessageEnvelope};
 use crate::types::{AckActivationMode, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection};
 
 #[derive(Debug, Clone)]
@@ -387,7 +387,7 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
 }
 
 fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
-    let mut latest_for_id: HashMap<Uuid, (IsoTimestamp, usize)> = HashMap::new();
+    let mut latest_for_id: HashMap<LegacyMessageId, (IsoTimestamp, usize)> = HashMap::new();
     for (index, message) in messages.iter().enumerate() {
         if let Some(message_id) = message.envelope.message_id {
             latest_for_id
@@ -403,7 +403,7 @@ fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage>
         }
     }
 
-    messages
+    let deduped = messages
         .into_iter()
         .enumerate()
         .filter_map(|(index, message)| match message.envelope.message_id {
@@ -412,7 +412,70 @@ fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage>
                 .and_then(|(_, keep_index)| (*keep_index == index).then_some(message)),
             None => Some(message),
         })
+        .collect::<Vec<_>>();
+
+    let latest_idle_for_sender = messages_from_idle_sender(&deduped);
+
+    deduped
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, message)| {
+            dedupe_idle_notifications(index, &message, &latest_idle_for_sender).then_some(message)
+        })
         .collect()
+}
+
+fn dedupe_idle_notifications(
+    index: usize,
+    message: &SourcedMessage,
+    latest_idle_for_sender: &HashMap<String, usize>,
+) -> bool {
+    if !is_unread_idle_notification(&message.envelope) {
+        return true;
+    }
+
+    idle_sender(&message.envelope)
+        .and_then(|sender| latest_idle_for_sender.get(&sender))
+        .map(|keep_index| *keep_index == index)
+        .unwrap_or(true)
+}
+
+fn messages_from_idle_sender(messages: &[SourcedMessage]) -> HashMap<String, usize> {
+    let mut latest_idle_for_sender = HashMap::new();
+
+    for (index, message) in messages.iter().enumerate() {
+        if !is_unread_idle_notification(&message.envelope) {
+            continue;
+        }
+
+        if let Some(sender) = idle_sender(&message.envelope) {
+            latest_idle_for_sender
+                .entry(sender)
+                .and_modify(|keep_index| *keep_index = index)
+                .or_insert(index);
+        }
+    }
+
+    latest_idle_for_sender
+}
+
+fn is_unread_idle_notification(message: &MessageEnvelope) -> bool {
+    !message.read
+        && serde_json::from_str::<Value>(&message.text)
+            .ok()
+            .map(|value| value.get("type").and_then(Value::as_str) == Some("idle_notification"))
+            .unwrap_or(false)
+}
+
+fn idle_sender(message: &MessageEnvelope) -> Option<String> {
+    serde_json::from_str::<Value>(&message.text)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("from")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
 }
 
 fn classify_all(messages: Vec<SourcedMessage>) -> Vec<ClassifiedMessage> {

@@ -1,7 +1,7 @@
 use serde::Serialize;
-use uuid::Uuid;
 
 use crate::error::AtmError;
+use crate::schema::LegacyMessageId;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct CommandEvent {
@@ -11,7 +11,7 @@ pub struct CommandEvent {
     pub team: String,
     pub agent: String,
     pub sender: String,
-    pub message_id: Option<Uuid>,
+    pub message_id: Option<LegacyMessageId>,
     pub requires_ack: bool,
     pub dry_run: bool,
     pub task_id: Option<String>,

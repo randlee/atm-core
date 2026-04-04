@@ -7,7 +7,6 @@ use chrono::{DateTime, TimeDelta, Utc};
 use serde::Serialize;
 use serde_json::Value;
 use tracing::warn;
-use uuid::Uuid;
 
 use crate::address::AgentAddress;
 use crate::config;
@@ -17,7 +16,7 @@ use crate::identity;
 use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
-use crate::schema::MessageEnvelope;
+use crate::schema::{LegacyMessageId, MessageEnvelope};
 use crate::types::MessageClass;
 
 #[derive(Debug, Clone)]
@@ -279,7 +278,11 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
 }
 
 fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
-    let mut latest_for_id: HashMap<Uuid, (crate::types::IsoTimestamp, usize)> = HashMap::new();
+    // Clear intentionally does not apply read-surface idle-notification dedup.
+    // Cleanup decisions must inspect the raw merged surface after legacy
+    // message_id canonicalization only.
+    let mut latest_for_id: HashMap<LegacyMessageId, (crate::types::IsoTimestamp, usize)> =
+        HashMap::new();
     for (index, message) in messages.iter().enumerate() {
         if let Some(message_id) = message.envelope.message_id {
             latest_for_id
