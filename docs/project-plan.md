@@ -332,8 +332,6 @@ Acceptance:
   using `/codex-orchestration`
 - the current architecture explicitly defers a separate ATM-native inbox until
   a later version
-- doctor findings reflect the local daemon-free system
-- observability readiness is visible in doctor output
 
 ## 5. Hard Rules
 

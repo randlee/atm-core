@@ -266,6 +266,37 @@ Implementation note:
 - separate read-mode adapter classes or recovery helpers are acceptable if they
   preserve this contract
 
+### 2.8 Rust Newtype Plan
+
+Implementation requirement for J.1/J.2:
+
+- Rust implementation must introduce distinct newtypes for the two ATM-owned
+  message identifier families before the J.1/J.2 identifier-handling work is
+  considered complete
+
+Required newtypes:
+
+- `AtmMessageId(Ulid)` for the forward ATM-owned metadata identifier
+- `LegacyMessageId(Uuid)` for legacy top-level ATM identifier compatibility
+
+Rationale:
+
+- the design intentionally distinguishes forward ULID-based ATM identifiers
+  from legacy UUID-based identifiers
+- raw `String`, `Ulid`, or `Uuid` usage at every call site makes it too easy to
+  assign one identifier family into the other by mistake
+- Rust newtypes make the distinction compile-time visible and prevent accidental
+  cross-assignment during J.1/J.2 implementation
+
+Expected usage:
+
+- write-path logic for `metadata.atm.messageId` should traffic in
+  `AtmMessageId`
+- legacy read-compatibility logic for top-level `message_id` should traffic in
+  `LegacyMessageId`
+- bridging code between the two schema eras must convert explicitly, never by
+  implicit assignment
+
 ## 3. Dedup Taxonomy
 
 ### 3.1 Surface Canonicalization
