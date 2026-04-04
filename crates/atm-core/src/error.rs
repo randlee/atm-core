@@ -5,6 +5,7 @@ use std::fmt;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AtmErrorKind {
     Config,
+    MissingDocument,
     Address,
     Identity,
     TeamNotFound,
@@ -46,6 +47,10 @@ impl AtmError {
 
     pub fn is_address(&self) -> bool {
         self.kind == AtmErrorKind::Address
+    }
+
+    pub fn is_missing_document(&self) -> bool {
+        self.kind == AtmErrorKind::MissingDocument
     }
 
     pub fn is_identity(&self) -> bool {
@@ -150,6 +155,10 @@ impl AtmError {
 
     pub fn validation(message: impl Into<String>) -> Self {
         Self::new(AtmErrorKind::Validation, message)
+    }
+
+    pub fn missing_document(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorKind::MissingDocument, message)
     }
 
     pub fn file_policy(message: impl Into<String>) -> Self {
