@@ -5,14 +5,19 @@
 Implement a daemon-free ATM rewrite in this repo that preserves retained `send`, `read`, `ack`, `clear`, `log`, and `doctor` functionality.
 
 The authoritative migration document is:
-- `file-migration-plan.md`
+- [`docs/archive/file-migration-plan.md`](./archive/file-migration-plan.md)
 
-This plan sequences the work. File-level migration decisions live in `file-migration-plan.md`.
+This plan sequences the work. File-level migration decisions live in
+[`docs/archive/file-migration-plan.md`](./archive/file-migration-plan.md).
 
 Documentation organization and cleanup are governed by
 [`documentation-guidelines.md`](./documentation-guidelines.md). As the docs are
 restructured, product docs remain in `docs/` and crate-local detail moves into
 `docs/atm/` and `docs/atm-core/`.
+
+Status:
+- Phases 0 through F are complete.
+- Phase G is in progress and is the next delivery focus.
 
 ## 2. Deliverables
 
@@ -41,19 +46,30 @@ Crate-local scope detail is owned by:
 
 ## 4. Work Sequence
 
-### Phase 0: Document Lock
+### Phase 0: Document Lock [COMPLETE]
+
+Status summary:
+- Requirements, architecture, and read-behavior documentation are locked, and
+  the migration plan now lives in `docs/archive/`.
+- This phase completed without a dedicated PR because it was finished before the
+  current atm-core PR sequence began.
 
 Finish and freeze:
 - `requirements.md`
 - `architecture.md`
 - `read-behavior.md`
-- `file-migration-plan.md`
+- `docs/archive/file-migration-plan.md`
 
 Acceptance:
 - workflow axes, display buckets, retained command surface, and observability boundary are consistent across all docs
-- every retained or excluded source file needed for the retained commands is explicitly listed in `file-migration-plan.md`
+- every retained or excluded source file needed for the retained commands is explicitly listed in `docs/archive/file-migration-plan.md`
 
-### Phase A: `OBS-GAP-1`
+### Phase A: `OBS-GAP-1` [COMPLETE]
+
+Status summary:
+- The `sc-observability` API gap was catalogued and closed before the ATM log
+  and doctor work depends on it.
+- Delivered in PR #1.
 
 Goal:
 - verify and close the shared `sc-observability` API gap before ATM depends on it for `atm log` and `atm doctor`
@@ -68,7 +84,12 @@ Acceptance:
 - shared plan exists for emit/query/follow/filter/health support
 - no ATM-local ad hoc log query engine is needed
 
-### Phase B: Core Skeleton
+### Phase B: Core Skeleton [COMPLETE]
+
+Status summary:
+- The workspace, crate scaffolding, CLI command surface, and documentation gap
+  closure were completed and merged.
+- Delivered in PRs #2 and #3.
 
 | Sprint | Scope | Required outcome |
 | --- | --- | --- |
@@ -86,9 +107,14 @@ Acceptance:
 - CLI help shows `send`, `read`, `ack`, `clear`, `log`, and `doctor`
 - B.1 and B.2 are both complete before Phase C starts
 - requirements and architecture lock the message id, read dedupe, and clear
-  override semantics needed for implementation
+  eligibility semantics needed for implementation
 
-### Phase C: Low-Level Reuse
+### Phase C: Low-Level Reuse [COMPLETE]
+
+Status summary:
+- Foundational reuse landed for mailbox schema alignment, config/path helpers,
+  and the shared `AtmError` / `AtmErrorKind` model.
+- Delivered in PRs #4 and #5.
 
 Port retained foundational files first:
 - home/path helpers
@@ -103,7 +129,12 @@ Acceptance:
 - foundational unit tests pass
 - no daemon references remain in foundational modules
 
-### Phase D: Send Path
+### Phase D: Send Path [COMPLETE]
+
+Status summary:
+- The send service, CLI wiring, observability port adapter, and team-config
+  validation are all implemented and merged.
+- Delivered in PR #6.
 
 Port send command and support files:
 - identity resolution
@@ -118,7 +149,12 @@ Acceptance:
 - `atm send` feature set works without daemon support
 - send JSON and human output match the documented contract
 
-### Phase E: Read Path
+### Phase E: Read Path [COMPLETE]
+
+Status summary:
+- The read service now includes `IsoTimestamp`, seen-state handling, queue
+  bucket filtering, and the required read-path transitions.
+- Delivered in PR #7.
 
 Port read command and support files:
 - workflow axis classification
@@ -134,7 +170,12 @@ Acceptance:
 - workflow axes and display buckets match the requirements
 - seen-state semantics match the documented contract
 
-### Phase F: Ack And Clear Path
+### Phase F: Ack And Clear Path [COMPLETE]
+
+Status summary:
+- Ack and clear flows are implemented, the remaining 30 RBP findings were
+  closed, and CI isolation hardening was completed for the phase.
+- Delivered in PRs #8, #9, and #10.
 
 Port ack and clear command support files:
 - acknowledgement transition handling
@@ -148,7 +189,11 @@ Acceptance:
 - `atm clear` removes only clearable messages
 - pending-ack messages remain visible until acknowledgement
 
-### Phase G: Log Path
+### Phase G: Log Path [IN PROGRESS / NEXT]
+
+Status summary:
+- Next active implementation branch: `feature/pg-s1-log-path` off
+  `integrate/phase-g`.
 
 Port and redesign the log command:
 - injected observability port usage
@@ -190,13 +235,15 @@ Add:
 - documentation polish
 
 Acceptance:
-- implementation matches `requirements.md`, `architecture.md`, `read-behavior.md`, and `file-migration-plan.md`
+- implementation matches `requirements.md`, `architecture.md`,
+  `read-behavior.md`, and `docs/archive/file-migration-plan.md`
 
 ## 5. Hard Rules
 
 - Removing the daemon does not authorize removing retained mail functionality.
 - File-level migration decisions must be explicit.
-- Every retained useful source file must appear in `file-migration-plan.md`.
+- Every retained useful source file must appear in
+  `docs/archive/file-migration-plan.md`.
 - Every reviewed non-retained file must also appear there with a `do not copy` decision.
 - Workflow-axis transitions must be enforced by code structure, not only by tests.
 - Display bucket behavior must remain separate from the canonical two-axis workflow model.
@@ -210,7 +257,7 @@ Cross-document invariants that must stay locked during implementation:
 - displayed messages always persist `read = true`
 - pending-ack messages remain actionable until acknowledged
 - `atm clear` never removes unread messages
-- `atm clear` removes pending-ack messages only with explicit override
+- `atm clear` never removes pending-ack messages
 - `atm read --timeout` returns immediately when the requested selection is already non-empty
 
 ## 6. Done Definition
@@ -223,15 +270,17 @@ The rewrite is ready when:
 - `atm log` works through shared observability APIs
 - `atm doctor` works as a local diagnostics command
 - retained non-daemon functionality is preserved or intentionally documented as changed
-- task-linked mail remains pending until acknowledged unless the operator uses
-  the explicit pending-ack clear override
+- task-linked mail remains pending until acknowledged
 - the file-by-file migration plan is complete enough to implement directly
 - the retained command tests pass against the new crate layout
 
 ## 7. Documentation Review Checks
 
 Before implementation starts, the docs should be reviewed with these checks:
-- every retained or rejected source file referenced by the retained command surface appears in `file-migration-plan.md`
+- every retained or rejected source file referenced by the retained command
+  surface appears in `docs/archive/file-migration-plan.md`
 - `requirements.md`, `architecture.md`, and `read-behavior.md` agree on the two-axis model, three display buckets, and legal transitions
 - `requirements.md`, `architecture.md`, and `read-behavior.md` agree on `--since`, `--since-last-seen`, `--no-since-last-seen`, `--no-update-seen`, and `--timeout`
-- `requirements.md`, `architecture.md`, and `file-migration-plan.md` agree on the retained command set: `send`, `read`, `ack`, `clear`, `log`, `doctor`
+- `requirements.md`, `architecture.md`, and
+  `docs/archive/file-migration-plan.md` agree on the retained command set:
+  `send`, `read`, `ack`, `clear`, `log`, `doctor`
