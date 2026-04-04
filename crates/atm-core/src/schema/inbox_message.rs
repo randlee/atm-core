@@ -73,6 +73,9 @@ mod tests {
 
     #[test]
     fn message_envelope_round_trips_with_current_inbox_shape() {
+        // Validates the current ATM superset storage shape, not the
+        // Claude-native schema. Ownership is documented in
+        // docs/legacy-atm-message-schema.md and docs/atm-message-schema.md.
         let envelope = MessageEnvelope {
             from: "arch-ctm".into(),
             text: "hello".into(),
@@ -104,6 +107,9 @@ mod tests {
 
     #[test]
     fn unknown_fields_are_preserved() {
+        // Preserving producer-owned fields prevents ATM from silently
+        // redefining external schemas documented in
+        // docs/claude-code-message-schema.md.
         let json = json!({
             "from": "team-lead",
             "text": "hello",

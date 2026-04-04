@@ -165,6 +165,8 @@ Required rules:
 - forward ATM machine-readable fields must live in `metadata.atm`
 - ATM may enrich a Claude-native message in place by adding ATM-owned metadata
   without rewriting native Claude fields
+- locally owned schema enforcement must distinguish legacy top-level UUID-based
+  ATM identifiers from forward metadata-based ULID identifiers
 - a separate ATM-native inbox is explicitly deferred and must not be assumed by
   the current live design
 

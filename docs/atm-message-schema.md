@@ -56,6 +56,16 @@ Deprecation rule:
 - the fields in this section are legacy top-level ATM write behavior
 - they remain read-compatible, but new ATM-only semantics must not continue to
   proliferate as new top-level additive fields
+
+Legacy top-level placement map:
+
+- legacy `message_id` is ATM-owned, top-level, and read-compatible only
+- legacy `source_team` is ATM-owned, top-level, and read-compatible only
+- legacy `pendingAckAt` is ATM-owned, top-level, and read-compatible only
+- legacy `acknowledgedAt` is ATM-owned, top-level, and read-compatible only
+- legacy `acknowledgesMessageId` is ATM-owned, top-level, and read-compatible
+  only
+
 ## 3. Forward ATM Metadata Schema
 
 Forward write target for ATM-owned machine-readable fields:
@@ -95,6 +105,26 @@ Enrichment rule:
 - enrichment must be additive and idempotent
 - ATM must not rewrite native Claude fields such as `from`, `text`,
   `timestamp`, `read`, or `summary` in order to attach ATM metadata
+
+Forward placement map:
+
+- legacy top-level `message_id` migrates to `metadata.atm.messageId`
+- legacy top-level `source_team` migrates to `metadata.atm.sourceTeam`
+- legacy top-level `pendingAckAt` remains `metadata.atm.pendingAckAt`
+- legacy top-level `acknowledgedAt` remains `metadata.atm.acknowledgedAt`
+- legacy top-level `acknowledgesMessageId` remains
+  `metadata.atm.acknowledgesMessageId`
+- legacy ATM alert fields such as `atmAlertKind` migrate to
+  `metadata.atm.alertKind` or a later explicitly documented ATM-owned field
+
+Identifier rules:
+
+- legacy top-level `message_id` remains UUID-based read compatibility
+- forward `metadata.atm.messageId` must be ULID
+- forward `metadata.atm.acknowledgesMessageId` must reference the ULID-based
+  ATM message identity for the acknowledged message
+- for ATM-authored forward records, ATM generates the ULID first and derives
+  the persisted Claude-native `timestamp` from that ULID creation time
 
 ## 4. ATM-Interpreted Shared Or De Facto Fields
 

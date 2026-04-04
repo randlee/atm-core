@@ -56,6 +56,41 @@ Recommendation:
 - the forward write target is `metadata.atm`, not additional top-level ATM-only
   fields
 
+Concrete placement and ownership map:
+
+- Claude-owned native fields remain top-level:
+  - `from`
+  - `text`
+  - `timestamp`
+  - `read`
+  - `summary`
+  - historically observed `color`
+- shared/de facto field preserved at top-level when present:
+  - `taskId`
+- legacy ATM read-compatible top-level fields:
+  - `message_id`
+  - `source_team`
+  - `pendingAckAt`
+  - `acknowledgedAt`
+  - `acknowledgesMessageId`
+- forward ATM-owned machine metadata:
+  - `metadata.atm.messageId`
+  - `metadata.atm.sourceTeam`
+  - `metadata.atm.pendingAckAt`
+  - `metadata.atm.acknowledgedAt`
+  - `metadata.atm.acknowledgesMessageId`
+  - `metadata.atm.alertKind`
+
+Implementation guardrails:
+
+- new ATM-only fields must not be introduced at top-level
+- code and tests must reference the owning schema file when parsing or
+  serializing message data
+- Pydantic enforcement must reject UUID values in forward
+  `metadata.atm.messageId`
+- Pydantic enforcement must reject ULID values in legacy top-level
+  `message_id`
+
 Rationale:
 
 - `taskId` already has documented ATM workflow semantics
@@ -113,6 +148,14 @@ Recommendation:
 - enrichment must be additive and idempotent
 - ATM-native inbox separation is explicitly deferred to a later version after
   the current shared inbox design is used live
+
+Upgrade rule:
+
+- a Claude-native message may be upgraded in place by adding `metadata.atm`
+- the original Claude-owned fields remain authoritative for message content
+- ATM workflow data such as ack state or ATM message identity attaches to that
+  original stored message rather than moving the message into a different
+  envelope format
 
 ## 3. Dedup Taxonomy
 

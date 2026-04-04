@@ -304,6 +304,9 @@ Canonical read and ack axes are derived from persisted fields and not serialized
 Invariant:
 - legacy top-level `message_id` values may be UUID or absent
 - forward ATM metadata `messageId` values must be ULID
+- locally owned schema enforcement must reject placing ULID identifiers in the
+  legacy top-level `message_id` slot and must reject placing UUID identifiers
+  in forward `metadata.atm.messageId`
 - when ATM authors a new ULID `messageId`, the persisted message `timestamp`
   must be derived from that ULID creation time so identifier ordering and
   timestamp ordering are aligned

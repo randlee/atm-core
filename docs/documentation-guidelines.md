@@ -156,6 +156,9 @@ Schema enforcement rules:
 - Source files that parse or serialize a locally documented schema must include
   comments pointing to the owning schema doc and must not silently redefine an
   externally owned schema.
+- Unit tests that validate a locally documented schema must import the
+  corresponding enforcement model and make the target schema file explicit in
+  the test name, docstring, or nearby comment.
 
 ## 4. Top-Level Document Responsibilities
 
