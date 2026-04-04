@@ -166,6 +166,7 @@ impl Fixture {
                 .iter()
                 .map(|member| AgentMember {
                     name: (*member).to_string(),
+                    ..Default::default()
                 })
                 .collect(),
         };

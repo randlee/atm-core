@@ -253,10 +253,29 @@ pub struct LogFieldMatch {
 The rewrite reuses the existing team config schema where feasible.
 
 Only a small subset is required by the retained surface:
-- team name
-- member names
-- enough member metadata to preserve round-trips
-- bridge remote host configuration needed for origin-file merge
+- member roster
+- enough member metadata to preserve round-trips when present
+- bridge remote host configuration needed for origin-file merge when present
+
+Team config loading must follow a narrow-scope recovery policy:
+- compatibility-only schema drift may use deterministic defaults at the schema
+  boundary
+- malformed member records should be isolated at member scope only when the
+  remaining roster is still trustworthy
+- missing `config.json` is a distinct `missing-document` condition, not a parse
+  error
+- root-document corruption or invalid root structure remains a command error
+- identity and routing fields must never be guessed to keep commands running
+
+Diagnostics for team config failures must preserve:
+- failure class when known
+- file path
+- member or collection scope when known
+- parser line and column when available
+- original parser cause for operator repair
+
+Sample operator-facing repair cases live in
+[`persisted-data-repair.md`](./persisted-data-repair.md).
 
 ### 5.2 Inbox Message
 
@@ -341,17 +360,22 @@ Public entrypoint:
 - stdin text
 - file reference
 
-`SendOutcome` contains:
-- action
-- resolved team
-- resolved recipient
-- resolved sender
-- generated message id
-- task id
-- requires-ack flag
-- summary
-- rendered message body
-- delivery result
+`SendOutcome` fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `action` | `&'static str` | Stable send action marker. |
+| `team` | `String` | Resolved target team. |
+| `agent` | `String` | Resolved target recipient. |
+| `sender` | `String` | Resolved sender identity. |
+| `outcome` | `&'static str` | Delivery result such as `sent` or `dry_run`. |
+| `message_id` | `Uuid` | ATM-authored UUID v4 for the send operation. |
+| `requires_ack` | `bool` | Whether the message requires acknowledgement. |
+| `task_id` | `Option<String>` | Optional task identifier persisted on the message. |
+| `summary` | `Option<String>` | Generated or caller-supplied summary text. |
+| `message` | `Option<String>` | Rendered message body for dry-run output. |
+| `warnings` | `Vec<String>` | Actionable degraded-mode warnings surfaced when send succeeds under a permitted fallback condition. |
+| `dry_run` | `bool` | Whether the send was executed as a dry run. |
 
 The file-reference path may be rewritten through the file policy layer.
 
@@ -365,6 +389,7 @@ Normal send JSON output includes:
 - `message_id`
 - `requires_ack`
 - `task_id`
+- `warnings` when send completed in a degraded but permitted mode
 
 Dry-run send JSON output includes:
 - `action = "send"`
@@ -374,6 +399,7 @@ Dry-run send JSON output includes:
 - `dry_run = true`
 - `requires_ack`
 - `task_id`
+- `warnings` when dry-run surfaces degraded send conditions
 
 Send ordering rules:
 - resolve target address, team existence, and agent membership as one address-resolution stage before mailbox path selection
@@ -384,6 +410,15 @@ Send ordering rules:
 - forward metadata schema generation must create the ATM ULID `messageId`
   first and derive the persisted message `timestamp` from it
 - perform duplicate suppression and final append inside the same atomic append boundary
+
+Missing-team-config fallback is limited to `send`:
+- fallback applies only when `config.json` is missing and the target inbox
+  already exists
+- malformed `config.json` remains a command error
+- fallback must surface an actionable sender warning
+- fallback may send a best-effort repair notice to `team-lead`
+- repair notices must be deduplicated by unresolved condition so repeated sends
+  do not flood inboxes
 
 ### 6.2 Read Service
 
@@ -737,6 +772,9 @@ Every public error must include:
 - human-readable cause
 - recovery guidance when the user can act
 
+Persisted-data errors should additionally carry file/entity/parser context so
+CLI surfaces can report the exact failing document and scope.
+
 ## 16. Trait Policy
 
 The initial rewrite should avoid public extension traits.
@@ -750,6 +788,8 @@ If a trait becomes necessary:
 `atm-core` tests:
 - address parsing
 - config precedence
+- tolerant team-config parsing for compatibility-only schema drift
+- precise persisted-data diagnostics for non-recoverable config failures
 - bridge hostname resolution for merged inbox reads
 - settings resolution
 - hook identity resolution

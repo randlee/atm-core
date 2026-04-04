@@ -142,6 +142,19 @@ fn test_read_json_output() {
 }
 
 #[test]
+fn test_read_missing_team_config_fails_with_actionable_error() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
+
+    let output = fixture.run(&["read", "--json"]);
+
+    assert!(!output.status.success());
+    let stderr = fixture.stderr(&output);
+    assert!(stderr.contains("team config is missing"));
+    assert!(stderr.contains("Restore config.json"));
+}
+
+#[test]
 fn test_read_seen_state() {
     let fixture = Fixture::new(&["arch-ctm"]);
     fixture.write_inbox(
@@ -380,6 +393,7 @@ impl Fixture {
                 .iter()
                 .map(|member| AgentMember {
                     name: (*member).to_string(),
+                    ..Default::default()
                 })
                 .collect(),
         };

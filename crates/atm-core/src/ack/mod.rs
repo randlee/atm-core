@@ -15,7 +15,7 @@ use crate::identity;
 use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
-use crate::schema::{MessageEnvelope, TeamConfig};
+use crate::schema::MessageEnvelope;
 use crate::send::{input, summary};
 use crate::types::IsoTimestamp;
 
@@ -68,7 +68,7 @@ pub fn ack_mail(
         return Err(AtmError::team_not_found(&team));
     }
 
-    let team_config = load_team_config(&team_dir)?;
+    let team_config = config::load_team_config(&team_dir)?;
     if !team_config
         .members
         .iter()
@@ -124,7 +124,7 @@ pub fn ack_mail(
         return Err(AtmError::team_not_found(&reply_team));
     }
 
-    let reply_team_config = load_team_config(&reply_team_dir)?;
+    let reply_team_config = config::load_team_config(&reply_team_dir)?;
     if !reply_team_config
         .members
         .iter()
@@ -219,31 +219,6 @@ fn resolve_reply_target(
 
     let team = parsed.team.ok_or_else(AtmError::team_unavailable)?;
     Ok((parsed.agent, team))
-}
-
-fn load_team_config(team_dir: &Path) -> Result<TeamConfig, AtmError> {
-    let config_path = team_dir.join("config.json");
-    let raw = fs::read_to_string(&config_path).map_err(|error| {
-        AtmError::new(
-            AtmErrorKind::Config,
-            format!(
-                "failed to read team config at {}: {error}",
-                config_path.display()
-            ),
-        )
-        .with_source(error)
-    })?;
-
-    serde_json::from_str(&raw).map_err(|error| {
-        AtmError::new(
-            AtmErrorKind::Config,
-            format!(
-                "failed to parse team config at {}: {error}",
-                config_path.display()
-            ),
-        )
-        .with_source(error)
-    })
 }
 
 fn load_source_files(
