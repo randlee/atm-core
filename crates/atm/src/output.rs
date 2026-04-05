@@ -1,6 +1,7 @@
 use anyhow::Result;
 use atm_core::ack::AckOutcome;
 use atm_core::clear::ClearOutcome;
+use atm_core::observability::{AtmLogRecord, AtmLogSnapshot};
 use atm_core::read::ReadOutcome;
 use atm_core::send::SendOutcome;
 use atm_core::types::DisplayBucket;
@@ -96,6 +97,34 @@ pub fn print_clear_result(outcome: &ClearOutcome, dry_run: bool, json: bool) -> 
     Ok(())
 }
 
+pub fn print_log_snapshot(snapshot: &AtmLogSnapshot, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(snapshot)?);
+        return Ok(());
+    }
+
+    for record in &snapshot.records {
+        print_log_record_line(record);
+    }
+
+    Ok(())
+}
+
+pub fn print_log_records<I>(records: I, json: bool) -> Result<()>
+where
+    I: IntoIterator<Item = AtmLogRecord>,
+{
+    for record in records {
+        if json {
+            println!("{}", serde_json::to_string(&record)?);
+        } else {
+            print_log_record_line(&record);
+        }
+    }
+
+    Ok(())
+}
+
 fn print_bucket(outcome: &ReadOutcome, bucket: DisplayBucket, label: &str) {
     let messages = outcome
         .messages
@@ -123,5 +152,31 @@ fn print_bucket(outcome: &ReadOutcome, bucket: DisplayBucket, label: &str) {
         if let Some(message_id) = message.envelope.message_id {
             println!("  message_id: {message_id}");
         }
+    }
+}
+
+fn print_log_record_line(record: &AtmLogRecord) {
+    let target = record.target.as_deref().unwrap_or("-");
+    let action = record.action.as_deref().unwrap_or("-");
+    let message = record.message.as_deref().unwrap_or("");
+
+    println!(
+        "{} {:?} {} {} {}",
+        record.timestamp.into_inner().to_rfc3339(),
+        record.severity,
+        record.service,
+        target,
+        action
+    );
+
+    if !message.is_empty() {
+        println!("  {message}");
+    }
+
+    if !record.fields.is_empty() {
+        println!(
+            "  fields: {}",
+            serde_json::to_string(&record.fields).unwrap_or_else(|_| "{}".to_string())
+        );
     }
 }
