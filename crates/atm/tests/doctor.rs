@@ -5,7 +5,31 @@ use atm_core::schema::{AgentMember, TeamConfig};
 use serde_json::Value;
 
 #[test]
-fn test_doctor_reports_healthy_observability() {
+fn test_doctor_reports_healthy_observability_with_real_adapter() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+
+    let output = fixture.run(&["doctor", "--json"], &[]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["summary"]["status"], "healthy");
+    assert_eq!(parsed["findings"][0]["severity"], "info");
+    assert_eq!(parsed["findings"][0]["code"], "ATM_OBSERVABILITY_HEALTH_OK");
+    assert_eq!(parsed["observability"]["logging_state"], "healthy");
+    assert_eq!(parsed["observability"]["query_state"], "healthy");
+    assert!(
+        parsed["observability"]["active_log_path"]
+            .as_str()
+            .is_some()
+    );
+}
+
+#[test]
+fn test_doctor_reports_healthy_observability_override() {
     let fixture = Fixture::new(&["arch-ctm"]);
 
     let output = fixture.run(

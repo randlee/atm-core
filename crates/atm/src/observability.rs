@@ -1,11 +1,12 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use atm_core::error::AtmError;
+use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::home;
 use atm_core::observability::{
-    AtmLogQuery, AtmLogRecord, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
-    CommandEvent, LogFieldMatch, LogLevelFilter, LogOrder, LogTailSession, ObservabilityPort,
+    self, AtmLogQuery, AtmLogRecord, AtmLogSnapshot, AtmObservabilityHealth,
+    AtmObservabilityHealthState, CommandEvent, LogFieldMatch, LogLevelFilter, LogOrder,
+    LogTailSession, ObservabilityPort,
 };
 use chrono::{DateTime, Utc};
 use sc_observability::Logger;
@@ -30,6 +31,38 @@ impl CliObservability {
         Ok(Self {
             inner: Box::new(adapter),
         })
+    }
+
+    pub fn fallback() -> Self {
+        Self::concrete_for_home(&std::env::temp_dir().join("atm-bootstrap-observability"))
+            .unwrap_or_else(|_| Self {
+                inner: Box::new(atm_core::observability::NullObservability),
+            })
+    }
+
+    pub fn emit_fatal_error(&self, stage: &'static str, error: &(dyn std::error::Error + 'static)) {
+        let (code, message) = if let Some(atm_error) = error.downcast_ref::<AtmError>() {
+            (atm_error.code, atm_error.to_string())
+        } else {
+            (AtmErrorCode::MessageValidationFailed, error.to_string())
+        };
+
+        let identity = std::env::var("ATM_IDENTITY").unwrap_or_else(|_| "unknown".to_string());
+        let team = std::env::var("ATM_TEAM").unwrap_or_else(|_| "unknown".to_string());
+        let _ = self.emit(CommandEvent {
+            command: "atm",
+            action: stage,
+            outcome: "error",
+            team,
+            agent: identity.clone(),
+            sender: identity,
+            message_id: None,
+            requires_ack: false,
+            dry_run: false,
+            task_id: None,
+            error_code: Some(code),
+            error_message: Some(message),
+        });
     }
 
     fn static_health(health: AtmObservabilityHealth) -> Self {
@@ -68,16 +101,25 @@ impl ObservabilityPort for CliObservability {
 struct ScObservabilityAdapter {
     logger: Logger,
     service_name: ServiceName,
+    target_category: TargetCategory,
 }
 
 struct StaticHealthObservability {
     health: AtmObservabilityHealth,
 }
 
+impl observability::sealed::Sealed for CliObservability {}
+impl observability::sealed::Sealed for ScObservabilityAdapter {}
+impl observability::sealed::Sealed for StaticHealthObservability {}
+
 impl ScObservabilityAdapter {
     fn new(home_dir: &Path) -> Result<Self, AtmError> {
         let service_name = ServiceName::new(ATM_SERVICE_NAME).map_err(|source| {
             AtmError::observability_bootstrap("failed to validate ATM service name")
+                .with_source(source)
+        })?;
+        let target_category = TargetCategory::new(ATM_COMMAND_TARGET).map_err(|source| {
+            AtmError::observability_bootstrap("failed to validate ATM observability target")
                 .with_source(source)
         })?;
         let mut config = LoggerConfig::default_for(service_name.clone(), log_root(home_dir));
@@ -92,13 +134,14 @@ impl ScObservabilityAdapter {
         Ok(Self {
             logger,
             service_name,
+            target_category,
         })
     }
 }
 
 impl ObservabilityPort for ScObservabilityAdapter {
     fn emit(&self, event: CommandEvent) -> Result<(), AtmError> {
-        let event = map_command_event(&self.service_name, event)?;
+        let event = map_command_event(&self.service_name, &self.target_category, event)?;
         self.logger.emit(event).map_err(|source| {
             let code = source.diagnostic().code.as_str().to_string();
             AtmError::observability_emit(format!("shared observability emit failed ({code})"))
@@ -107,13 +150,13 @@ impl ObservabilityPort for ScObservabilityAdapter {
     }
 
     fn query(&self, req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
-        let query = map_query(&self.service_name, req)?;
+        let query = map_query(&self.service_name, &self.target_category, req)?;
         let snapshot = self.logger.query(&query).map_err(map_query_error)?;
         map_snapshot(snapshot)
     }
 
     fn follow(&self, req: AtmLogQuery) -> Result<LogTailSession, AtmError> {
-        let query = map_query(&self.service_name, req)?;
+        let query = map_query(&self.service_name, &self.target_category, req)?;
         let mut session = self
             .logger
             .follow(query)
@@ -204,12 +247,9 @@ fn test_health_override(home_dir: &Path) -> Option<CliObservability> {
 
 fn map_command_event(
     service_name: &ServiceName,
+    target_category: &TargetCategory,
     event: CommandEvent,
 ) -> Result<LogEvent, AtmError> {
-    let target = TargetCategory::new(ATM_COMMAND_TARGET).map_err(|source| {
-        AtmError::observability_emit("failed to validate ATM observability target")
-            .with_source(source)
-    })?;
     let action = ActionName::new(event.action).map_err(|source| {
         AtmError::observability_emit("failed to validate ATM observability action")
             .with_source(source)
@@ -252,13 +292,25 @@ fn map_command_event(
             serde_json::Value::String(task_id.clone()),
         );
     }
+    if let Some(error_code) = event.error_code {
+        fields.insert(
+            "error_code".to_string(),
+            serde_json::Value::String(error_code.to_string()),
+        );
+    }
+    if let Some(error_message) = &event.error_message {
+        fields.insert(
+            "error_message".to_string(),
+            serde_json::Value::String(error_message.clone()),
+        );
+    }
 
     Ok(LogEvent {
         version: sc_observability_types::constants::OBSERVATION_ENVELOPE_VERSION.to_string(),
         timestamp: Timestamp::now_utc(),
         level: level_for_outcome(event.outcome),
         service: service_name.clone(),
-        target,
+        target: target_category.clone(),
         action,
         message: Some(format!(
             "ATM command {} completed with outcome {}",
@@ -275,7 +327,11 @@ fn map_command_event(
     })
 }
 
-fn map_query(service_name: &ServiceName, req: AtmLogQuery) -> Result<LogQuery, AtmError> {
+fn map_query(
+    service_name: &ServiceName,
+    target_category: &TargetCategory,
+    req: AtmLogQuery,
+) -> Result<LogQuery, AtmError> {
     let field_matches = req
         .field_matches
         .into_iter()
@@ -285,9 +341,7 @@ fn map_query(service_name: &ServiceName, req: AtmLogQuery) -> Result<LogQuery, A
     Ok(LogQuery {
         service: Some(service_name.clone()),
         levels: req.levels.into_iter().map(map_level).collect(),
-        target: Some(TargetCategory::new(ATM_COMMAND_TARGET).map_err(|source| {
-            AtmError::observability_query("failed to validate ATM query target").with_source(source)
-        })?),
+        target: Some(target_category.clone()),
         action: None,
         request_id: None,
         correlation_id: None,
@@ -492,6 +546,8 @@ mod tests {
             requires_ack: false,
             dry_run: false,
             task_id: Some("TASK-1".to_string()),
+            error_code: None,
+            error_message: None,
         }
     }
 

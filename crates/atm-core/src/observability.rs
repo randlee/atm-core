@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use crate::error::AtmErrorCode;
 use serde::Serialize;
 use serde_json::{Map, Value};
 
@@ -19,6 +20,8 @@ pub struct CommandEvent {
     pub requires_ack: bool,
     pub dry_run: bool,
     pub task_id: Option<String>,
+    pub error_code: Option<AtmErrorCode>,
+    pub error_message: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -95,6 +98,11 @@ pub struct AtmObservabilityHealth {
     pub detail: Option<String>,
 }
 
+#[doc(hidden)]
+pub mod sealed {
+    pub trait Sealed {}
+}
+
 trait LogFollowPort: Send {
     fn poll(&mut self) -> Result<AtmLogSnapshot, AtmError>;
 }
@@ -146,7 +154,7 @@ impl LogTailSession {
     }
 }
 
-pub trait ObservabilityPort {
+pub trait ObservabilityPort: sealed::Sealed {
     fn emit(&self, event: CommandEvent) -> Result<(), AtmError>;
     fn query(&self, req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError>;
     fn follow(&self, req: AtmLogQuery) -> Result<LogTailSession, AtmError>;
@@ -155,6 +163,8 @@ pub trait ObservabilityPort {
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct NullObservability;
+
+impl sealed::Sealed for NullObservability {}
 
 impl ObservabilityPort for NullObservability {
     fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {
