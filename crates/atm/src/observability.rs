@@ -31,10 +31,19 @@ impl CliObservability {
             inner: Box::new(adapter),
         })
     }
+
+    fn static_health(health: AtmObservabilityHealth) -> Self {
+        Self {
+            inner: Box::new(StaticHealthObservability { health }),
+        }
+    }
 }
 
 pub fn init() -> Result<CliObservability> {
     let home_dir = home::atm_home()?;
+    if let Some(override_health) = test_health_override(&home_dir) {
+        return Ok(override_health);
+    }
     Ok(CliObservability::concrete_for_home(&home_dir)?)
 }
 
@@ -59,6 +68,10 @@ impl ObservabilityPort for CliObservability {
 struct ScObservabilityAdapter {
     logger: Logger,
     service_name: ServiceName,
+}
+
+struct StaticHealthObservability {
+    health: AtmObservabilityHealth,
 }
 
 impl ScObservabilityAdapter {
@@ -137,8 +150,58 @@ impl ObservabilityPort for ScObservabilityAdapter {
     }
 }
 
+impl ObservabilityPort for StaticHealthObservability {
+    fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {
+        Ok(())
+    }
+
+    fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
+        Ok(AtmLogSnapshot::default())
+    }
+
+    fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, AtmError> {
+        Ok(LogTailSession::empty())
+    }
+
+    fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
+        Ok(self.health.clone())
+    }
+}
+
 fn log_root(home_dir: &Path) -> PathBuf {
     home_dir.join(".local").join("share")
+}
+
+fn test_health_override(home_dir: &Path) -> Option<CliObservability> {
+    // Keep the CLI integration harness deterministic for doctor/log surfaces
+    // without depending on induced file-sink failures inside sc-observability.
+    let state = std::env::var("ATM_TEST_OBSERVABILITY_HEALTH").ok()?;
+    let logging_state = match state.as_str() {
+        "healthy" => AtmObservabilityHealthState::Healthy,
+        "degraded" => AtmObservabilityHealthState::Degraded,
+        "unavailable" => AtmObservabilityHealthState::Unavailable,
+        _ => return None,
+    };
+    let query_state = std::env::var("ATM_TEST_OBSERVABILITY_QUERY_STATE")
+        .ok()
+        .as_deref()
+        .and_then(parse_health_state)
+        .unwrap_or(logging_state);
+    let detail = std::env::var("ATM_TEST_OBSERVABILITY_DETAIL")
+        .ok()
+        .filter(|value| !value.is_empty());
+
+    Some(CliObservability::static_health(AtmObservabilityHealth {
+        active_log_path: Some(
+            log_root(home_dir)
+                .join("atm")
+                .join("logs")
+                .join("atm.log.jsonl"),
+        ),
+        logging_state,
+        query_state: Some(query_state),
+        detail,
+    }))
 }
 
 fn map_command_event(
@@ -348,6 +411,15 @@ fn map_query_state(state: sc_observability_types::QueryHealthState) -> AtmObserv
         sc_observability_types::QueryHealthState::Unavailable => {
             AtmObservabilityHealthState::Unavailable
         }
+    }
+}
+
+fn parse_health_state(value: &str) -> Option<AtmObservabilityHealthState> {
+    match value {
+        "healthy" => Some(AtmObservabilityHealthState::Healthy),
+        "degraded" => Some(AtmObservabilityHealthState::Degraded),
+        "unavailable" => Some(AtmObservabilityHealthState::Unavailable),
+        _ => None,
     }
 }
 
