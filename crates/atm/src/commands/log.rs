@@ -205,7 +205,15 @@ fn parse_relative_duration(raw: &str) -> Result<IsoTimestamp> {
         bail!("invalid relative duration '{raw}'; expected forms like 30s, 15m, 2h, or 7d");
     }
 
-    let (amount, unit) = raw.split_at(raw.len() - 1);
+    let (amount, unit) = raw
+        .char_indices()
+        .next_back()
+        .map(|(index, _)| (&raw[..index], &raw[index..]))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "invalid relative duration '{raw}'; expected forms like 30s, 15m, 2h, or 7d"
+            )
+        })?;
     let amount: i64 = amount.parse().with_context(|| {
         format!("invalid relative duration '{raw}'; duration amount must be an integer")
     })?;
@@ -219,4 +227,18 @@ fn parse_relative_duration(raw: &str) -> Result<IsoTimestamp> {
     };
 
     Ok((chrono::Utc::now() - delta).into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_relative_duration;
+
+    #[test]
+    fn parse_relative_duration_rejects_multibyte_suffix_without_panicking() {
+        let error = parse_relative_duration("10µ").expect_err("invalid unit");
+        assert!(
+            error.to_string().contains("supported units are s, m, h, d"),
+            "error: {error}"
+        );
+    }
 }
