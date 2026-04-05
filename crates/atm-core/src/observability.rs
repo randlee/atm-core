@@ -239,7 +239,10 @@ mod tests {
 
     #[test]
     fn log_mode_serde_round_trips_using_snake_case_wire_format() {
-        assert_eq!(serde_json::to_value(LogMode::Snapshot).unwrap(), json!("snapshot"));
+        assert_eq!(
+            serde_json::to_value(LogMode::Snapshot).unwrap(),
+            json!("snapshot")
+        );
         assert_eq!(serde_json::to_value(LogMode::Tail).unwrap(), json!("tail"));
         assert_eq!(
             serde_json::from_value::<LogMode>(json!("snapshot")).unwrap(),
