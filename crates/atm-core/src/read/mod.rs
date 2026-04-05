@@ -239,7 +239,7 @@ pub fn read_mail(
         bucket_counts,
     };
 
-    let _ = observability.emit_command_event(CommandEvent {
+    let _ = observability.emit(CommandEvent {
         command: "read",
         action: "read",
         outcome: if timed_out { "timeout" } else { "ok" },
