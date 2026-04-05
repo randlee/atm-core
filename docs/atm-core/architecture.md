@@ -100,7 +100,7 @@ Required ATM-owned projected surfaces:
 - `AtmLogQuery`
 - `AtmLogRecord`
 - `AtmLogSnapshot`
-- `ObservabilityHealthSnapshot`
+- `AtmObservabilityHealth`
 - `LogTailSession`
 
 The exact design is owned by:

@@ -19,6 +19,7 @@ pub(crate) enum AtmErrorKind {
     Serialization,
     Timeout,
     ObservabilityEmit,
+    ObservabilityBootstrap,
     ObservabilityQuery,
     ObservabilityFollow,
     ObservabilityHealth,
@@ -104,6 +105,10 @@ impl AtmError {
 
     pub fn is_observability_emit(&self) -> bool {
         self.kind == AtmErrorKind::ObservabilityEmit
+    }
+
+    pub fn is_observability_bootstrap(&self) -> bool {
+        self.kind == AtmErrorKind::ObservabilityBootstrap
     }
 
     pub fn is_observability_query(&self) -> bool {
@@ -207,6 +212,10 @@ impl AtmError {
         Self::new(AtmErrorKind::ObservabilityEmit, message)
     }
 
+    pub fn observability_bootstrap(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorKind::ObservabilityBootstrap, message)
+    }
+
     pub fn observability_query(message: impl Into<String>) -> Self {
         Self::new(AtmErrorKind::ObservabilityQuery, message)
     }
@@ -266,6 +275,7 @@ impl AtmErrorKind {
             Self::Serialization => AtmErrorCode::SerializationFailed,
             Self::Timeout => AtmErrorCode::WaitTimeout,
             Self::ObservabilityEmit => AtmErrorCode::ObservabilityEmitFailed,
+            Self::ObservabilityBootstrap => AtmErrorCode::ObservabilityBootstrapFailed,
             Self::ObservabilityQuery => AtmErrorCode::ObservabilityQueryFailed,
             Self::ObservabilityFollow => AtmErrorCode::ObservabilityFollowFailed,
             Self::ObservabilityHealth => AtmErrorCode::ObservabilityHealthFailed,

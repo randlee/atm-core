@@ -14,7 +14,7 @@ remaining work is ATM-side integration, projection, testing, and rollout.
 Current ATM runtime state:
 
 - `atm-core::observability::ObservabilityPort` only supports
-  `emit_command_event(...)`
+  `emit(...)`
 - `atm` implements that emit path with local `tracing`
 - `atm log` is not implemented
 - `atm doctor` is still a stub
@@ -136,23 +136,17 @@ pub struct AtmLogSnapshot {
     pub truncated: bool,
 }
 
-pub enum AtmLoggingHealthState {
+pub enum AtmObservabilityHealthState {
     Healthy,
     Degraded,
     Unavailable,
 }
 
-pub enum AtmQueryHealthState {
-    Healthy,
-    Degraded,
-    Unavailable,
-}
-
-pub struct ObservabilityHealthSnapshot {
-    pub active_log_path: AbsolutePath,
-    pub logging_state: AtmLoggingHealthState,
-    pub query_state: Option<AtmQueryHealthState>,
-    pub last_error: Option<String>,
+pub struct AtmObservabilityHealth {
+    pub active_log_path: Option<PathBuf>,
+    pub logging_state: AtmObservabilityHealthState,
+    pub query_state: Option<AtmObservabilityHealthState>,
+    pub detail: Option<String>,
 }
 ```
 
@@ -169,7 +163,6 @@ Required private/object-safe session boundary:
 ```rust
 trait LogFollowPort: Send {
     fn poll(&mut self) -> Result<AtmLogSnapshot, AtmError>;
-    fn query_health(&self) -> Result<ObservabilityHealthSnapshot, AtmError>;
 }
 
 pub struct LogTailSession {
@@ -181,12 +174,21 @@ Required injected boundary:
 
 ```rust
 pub trait ObservabilityPort {
-    fn emit_command_event(&self, event: CommandEvent) -> Result<(), AtmError>;
-    fn query_logs(&self, query: &AtmLogQuery) -> Result<AtmLogSnapshot, AtmError>;
-    fn follow_logs(&self, query: AtmLogQuery) -> Result<LogTailSession, AtmError>;
-    fn health(&self) -> Result<ObservabilityHealthSnapshot, AtmError>;
+    fn emit(&self, event: CommandEvent) -> Result<(), AtmError>;
+    fn query(&self, query: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError>;
+    fn follow(&self, query: AtmLogQuery) -> Result<LogTailSession, AtmError>;
+    fn health(&self) -> Result<AtmObservabilityHealth, AtmError>;
 }
 ```
+
+Required method-to-error-code bindings:
+
+| Method | Stable ATM error code |
+| --- | --- |
+| `emit(...)` | `ATM_OBSERVABILITY_EMIT_FAILED` |
+| `query(...)` | `ATM_OBSERVABILITY_QUERY_FAILED` |
+| `follow(...)` | `ATM_OBSERVABILITY_FOLLOW_FAILED` |
+| `health()` | `ATM_OBSERVABILITY_HEALTH_FAILED` |
 
 Implementation rules:
 
@@ -194,6 +196,9 @@ Implementation rules:
 - `atm` maps them to and from shared `sc-observability` types
 - `atm-core` public APIs must not leak `sc-observability` crate types
 - `LogTailSession` stays ATM-owned and synchronous
+- health belongs on `ObservabilityPort::health()`, not on individual follow
+  sessions; `LogFollowPort` models synchronous follow polling only and should
+  not grow a second health surface
 
 ## 7. Shared-To-ATM Mapping Rules
 
@@ -248,8 +253,8 @@ from any shared console log sink behavior.
 ### 9.2 `atm log`
 
 - map CLI filters to `AtmLogQuery`
-- use `ObservabilityPort::query_logs(...)` for snapshot mode
-- use `ObservabilityPort::follow_logs(...)` for tail mode
+- use `ObservabilityPort::query(...)` for snapshot mode
+- use `ObservabilityPort::follow(...)` for tail mode
 - render ATM-owned projected records
 - return structured `AtmErrorKind::ObservabilityQuery` failures when shared
   query/follow APIs are unavailable or invalid
