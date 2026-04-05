@@ -108,6 +108,19 @@ impl LogFollowPort for EmptyFollowPort {
     }
 }
 
+struct ClosureFollowPort<F> {
+    poller: F,
+}
+
+impl<F> LogFollowPort for ClosureFollowPort<F>
+where
+    F: FnMut() -> Result<AtmLogSnapshot, AtmError> + Send,
+{
+    fn poll(&mut self) -> Result<AtmLogSnapshot, AtmError> {
+        (self.poller)()
+    }
+}
+
 pub struct LogTailSession {
     inner: Box<dyn LogFollowPort>,
 }
@@ -116,6 +129,15 @@ impl LogTailSession {
     pub fn empty() -> Self {
         Self {
             inner: Box::<EmptyFollowPort>::default(),
+        }
+    }
+
+    pub fn from_poller<F>(poller: F) -> Self
+    where
+        F: FnMut() -> Result<AtmLogSnapshot, AtmError> + Send + 'static,
+    {
+        Self {
+            inner: Box::new(ClosureFollowPort { poller }),
         }
     }
 
