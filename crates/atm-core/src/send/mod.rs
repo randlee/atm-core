@@ -184,7 +184,7 @@ pub fn send_mail(
         dry_run: request.dry_run,
     };
 
-    let _ = observability.emit_command_event(CommandEvent {
+    let _ = observability.emit(CommandEvent {
         command: "send",
         action: "send",
         outcome: outcome.outcome,

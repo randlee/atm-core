@@ -2,6 +2,8 @@ use std::backtrace::Backtrace;
 use std::error::Error as StdError;
 use std::fmt;
 
+pub use crate::error_codes::AtmErrorCode;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AtmErrorKind {
     Config,
@@ -17,12 +19,15 @@ pub(crate) enum AtmErrorKind {
     Serialization,
     Timeout,
     ObservabilityEmit,
+    ObservabilityBootstrap,
     ObservabilityQuery,
+    ObservabilityFollow,
     ObservabilityHealth,
 }
 
 #[derive(Debug)]
 pub struct AtmError {
+    pub code: AtmErrorCode,
     pub(crate) kind: AtmErrorKind,
     pub message: String,
     pub recovery: Option<String>,
@@ -32,7 +37,16 @@ pub struct AtmError {
 
 impl AtmError {
     pub(crate) fn new(kind: AtmErrorKind, message: impl Into<String>) -> Self {
+        Self::new_with_code(kind.default_code(), kind, message)
+    }
+
+    pub(crate) fn new_with_code(
+        code: AtmErrorCode,
+        kind: AtmErrorKind,
+        message: impl Into<String>,
+    ) -> Self {
         Self {
+            code,
             kind,
             message: message.into(),
             recovery: None,
@@ -93,8 +107,16 @@ impl AtmError {
         self.kind == AtmErrorKind::ObservabilityEmit
     }
 
+    pub fn is_observability_bootstrap(&self) -> bool {
+        self.kind == AtmErrorKind::ObservabilityBootstrap
+    }
+
     pub fn is_observability_query(&self) -> bool {
         self.kind == AtmErrorKind::ObservabilityQuery
+    }
+
+    pub fn is_observability_follow(&self) -> bool {
+        self.kind == AtmErrorKind::ObservabilityFollow
     }
 
     pub fn is_observability_health(&self) -> bool {
@@ -115,8 +137,12 @@ impl AtmError {
     }
 
     pub fn home_directory_unavailable() -> Self {
-        Self::new(AtmErrorKind::Config, "home directory is unavailable")
-            .with_recovery("Set ATM_HOME or ensure the OS home directory can be resolved.")
+        Self::new_with_code(
+            AtmErrorCode::ConfigHomeUnavailable,
+            AtmErrorKind::Config,
+            "home directory is unavailable",
+        )
+        .with_recovery("Set ATM_HOME or ensure the OS home directory can be resolved.")
     }
 
     pub fn address_parse(message: impl Into<String>) -> Self {
@@ -127,14 +153,23 @@ impl AtmError {
     }
 
     pub fn identity_unavailable() -> Self {
-        Self::new(AtmErrorKind::Identity, "identity is not configured").with_recovery(
+        Self::new_with_code(
+            AtmErrorCode::IdentityUnavailable,
+            AtmErrorKind::Identity,
+            "identity is not configured",
+        )
+        .with_recovery(
             "Set ATM_IDENTITY, configure identity in .atm.toml, or pass --from once that flag is available.",
         )
     }
 
     pub fn team_unavailable() -> Self {
-        Self::new(AtmErrorKind::TeamNotFound, "team is not configured")
-            .with_recovery("Pass an explicit team in the address or configure a default team.")
+        Self::new_with_code(
+            AtmErrorCode::TeamUnavailable,
+            AtmErrorKind::TeamNotFound,
+            "team is not configured",
+        )
+        .with_recovery("Pass an explicit team in the address or configure a default team.")
     }
 
     pub fn team_not_found(team: &str) -> Self {
@@ -176,6 +211,22 @@ impl AtmError {
     pub fn observability_emit(message: impl Into<String>) -> Self {
         Self::new(AtmErrorKind::ObservabilityEmit, message)
     }
+
+    pub fn observability_bootstrap(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorKind::ObservabilityBootstrap, message)
+    }
+
+    pub fn observability_query(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorKind::ObservabilityQuery, message)
+    }
+
+    pub fn observability_follow(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorKind::ObservabilityFollow, message)
+    }
+
+    pub fn observability_health(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorKind::ObservabilityHealth, message)
+    }
 }
 
 impl fmt::Display for AtmError {
@@ -205,5 +256,29 @@ impl From<serde_json::Error> for AtmError {
 impl From<toml::de::Error> for AtmError {
     fn from(source: toml::de::Error) -> Self {
         Self::new(AtmErrorKind::Config, format!("toml error: {source}")).with_source(source)
+    }
+}
+
+impl AtmErrorKind {
+    const fn default_code(self) -> AtmErrorCode {
+        match self {
+            Self::Config => AtmErrorCode::ConfigParseFailed,
+            Self::MissingDocument => AtmErrorCode::ConfigTeamMissing,
+            Self::Address => AtmErrorCode::AddressParseFailed,
+            Self::Identity => AtmErrorCode::IdentityUnavailable,
+            Self::TeamNotFound => AtmErrorCode::TeamNotFound,
+            Self::AgentNotFound => AtmErrorCode::AgentNotFound,
+            Self::MailboxRead => AtmErrorCode::MailboxReadFailed,
+            Self::MailboxWrite => AtmErrorCode::MailboxWriteFailed,
+            Self::FilePolicy => AtmErrorCode::FilePolicyRejected,
+            Self::Validation => AtmErrorCode::MessageValidationFailed,
+            Self::Serialization => AtmErrorCode::SerializationFailed,
+            Self::Timeout => AtmErrorCode::WaitTimeout,
+            Self::ObservabilityEmit => AtmErrorCode::ObservabilityEmitFailed,
+            Self::ObservabilityBootstrap => AtmErrorCode::ObservabilityBootstrapFailed,
+            Self::ObservabilityQuery => AtmErrorCode::ObservabilityQueryFailed,
+            Self::ObservabilityFollow => AtmErrorCode::ObservabilityFollowFailed,
+            Self::ObservabilityHealth => AtmErrorCode::ObservabilityHealthFailed,
+        }
     }
 }

@@ -10,6 +10,8 @@ pub(crate) mod config;
 pub mod doctor;
 /// Shared ATM error types and recovery-oriented error helpers.
 pub mod error;
+/// Stable ATM-owned error-code registry used by core and CLI layers.
+pub mod error_codes;
 /// Public ATM home and team-path resolution helpers.
 pub mod home;
 /// Internal identity resolution and hook lookup helpers.

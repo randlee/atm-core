@@ -164,7 +164,7 @@ pub fn ack_mail(
         reply_text: reply_text.clone(),
     };
 
-    let _ = observability.emit_command_event(CommandEvent {
+    let _ = observability.emit(CommandEvent {
         command: "ack",
         action: "ack",
         outcome: "ok",

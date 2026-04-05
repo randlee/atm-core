@@ -1,6 +1,9 @@
 use anyhow::Result;
 use atm_core::error::AtmError;
-use atm_core::observability::{CommandEvent, ObservabilityPort};
+use atm_core::observability::{
+    AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, CommandEvent, LogTailSession,
+    ObservabilityPort,
+};
 use tracing::info;
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -14,7 +17,7 @@ pub fn init() -> Result<CliObservability> {
 }
 
 impl ObservabilityPort for CliObservability {
-    fn emit_command_event(&self, event: CommandEvent) -> Result<(), AtmError> {
+    fn emit(&self, event: CommandEvent) -> Result<(), AtmError> {
         let message_id = event.message_id.map(|value| value.to_string());
         info!(
             command = event.command,
@@ -30,5 +33,23 @@ impl ObservabilityPort for CliObservability {
             "atm command event"
         );
         Ok(())
+    }
+
+    fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
+        Err(AtmError::observability_query(
+            "shared observability query adapter is not wired yet",
+        ))
+    }
+
+    fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, AtmError> {
+        Err(AtmError::observability_follow(
+            "shared observability follow adapter is not wired yet",
+        ))
+    }
+
+    fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
+        Err(AtmError::observability_health(
+            "shared observability health adapter is not wired yet",
+        ))
     }
 }

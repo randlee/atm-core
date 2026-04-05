@@ -591,17 +591,17 @@ The retained boundary must remain ATM-owned and must not leak shared
 
 Public entrypoints:
 
-- `log::query_logs(query: LogQuery, observability: &dyn ObservabilityPort) -> Result<LogSnapshot, AtmError>`
-- `log::tail_logs(query: LogQuery, observability: &dyn ObservabilityPort) -> Result<LogTailSession, AtmError>`
+- `log::query_logs(query: AtmLogQuery, observability: &dyn ObservabilityPort) -> Result<AtmLogSnapshot, AtmError>`
+- `log::tail_logs(query: AtmLogQuery, observability: &dyn ObservabilityPort) -> Result<LogTailSession, AtmError>`
 
-`LogQuery` contains:
+`AtmLogQuery` contains:
 - mode
 - level filter
 - field matches
 - time window
 - limit
 
-`LogSnapshot` contains:
+`AtmLogSnapshot` contains:
 - resolved query
 - snapshot ordering metadata
 - returned records
@@ -777,14 +777,14 @@ must expand to:
 - ATM-owned `AtmLogQuery`
 - ATM-owned `AtmLogRecord`
 - ATM-owned `AtmLogSnapshot`
-- ATM-owned `ObservabilityHealthSnapshot`
+- ATM-owned `AtmObservabilityHealth`
 - an ATM-owned synchronous `LogTailSession`
 
 Required boundary responsibilities:
 
-- `ObservabilityPort::emit_command_event(...)`
-- `ObservabilityPort::query_logs(...)`
-- `ObservabilityPort::follow_logs(...)`
+- `ObservabilityPort::emit(...)`
+- `ObservabilityPort::query(...)`
+- `ObservabilityPort::follow(...)`
 - `ObservabilityPort::health(...)`
 
 The exact ATM-owned projected types and object-safe follow-session split are

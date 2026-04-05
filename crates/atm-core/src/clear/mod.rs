@@ -123,7 +123,7 @@ pub fn clear_mail(
         removed_by_class,
     };
 
-    let _ = observability.emit_command_event(CommandEvent {
+    let _ = observability.emit(CommandEvent {
         command: "clear",
         action: "clear",
         outcome: if query.dry_run { "dry_run" } else { "ok" },
