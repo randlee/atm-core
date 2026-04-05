@@ -93,6 +93,10 @@ Required rules:
 - once `sc-observability` is published, ATM should switch to versioned crate
   dependencies with minimal code churn
 
+Operational detail for the pre-publish period is documented in:
+
+- [`../dev/pre-publish-deps.md`](../dev/pre-publish-deps.md)
+
 Toolchain rule:
 
 - this phase assumes the shared-repo toolchain floor is adopted across ATM and
