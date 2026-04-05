@@ -121,6 +121,7 @@ The `atm-core` crate docs must remain aligned with:
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
 - [`../atm-message-schema.md`](../atm-message-schema.md)
 - [`../legacy-atm-message-schema.md`](../legacy-atm-message-schema.md)
+- [`../atm-error-codes.md`](../atm-error-codes.md)
 - [`./design/dedup-metadata-schema.md`](./design/dedup-metadata-schema.md)
 - [`./design/sc-observability-integration.md`](./design/sc-observability-integration.md)
 
@@ -179,6 +180,8 @@ Required boundary rules:
   variants without leaking shared error enums into `atm-core`
 - `atm-core` command-service failures and degraded recovery warnings must expose
   stable ATM-owned error codes for the CLI observability adapter to log
+- the corresponding source-of-truth code registry must live in one source file
+  and match [`../atm-error-codes.md`](../atm-error-codes.md)
 
 Detailed design and implementation shape is owned by:
 - [`design/sc-observability-integration.md`](./design/sc-observability-integration.md)

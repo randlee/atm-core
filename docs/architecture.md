@@ -58,6 +58,8 @@ Schema ownership references:
   [`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)
 - `sc-observability` schema ownership pointer:
   [`sc-observability-schema.md`](./sc-observability-schema.md)
+- ATM-owned error-code registry:
+  [`atm-error-codes.md`](./atm-error-codes.md)
 - schema enforcement models:
   `tools/schema_models/claude_code_message_schema.py` and
   `tools/schema_models/atm_message_schema.py` and
@@ -822,6 +824,7 @@ Root public error:
 
 ```rust
 pub struct AtmError {
+    pub code: AtmErrorCode,
     pub kind: AtmErrorKind,
     pub message: String,
     pub recovery: Option<String>,
@@ -829,8 +832,15 @@ pub struct AtmError {
 }
 ```
 
+```rust
+pub enum AtmErrorCode {
+    // single central registry re-exported from crates/atm-core/src/error_codes.rs
+}
+```
+
 Required families:
 - config
+- missing document
 - address
 - identity
 - team not found
@@ -846,9 +856,13 @@ Required families:
 - observability health
 
 Every public error must include:
+- a stable ATM-owned error code
 - a stable class
 - human-readable cause
 - recovery guidance when the user can act
+
+The single source of truth for ATM-owned error codes is:
+- [`atm-error-codes.md`](./atm-error-codes.md)
 
 Persisted-data errors should additionally carry file/entity/parser context so
 CLI surfaces can report the exact failing document and scope.

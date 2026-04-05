@@ -105,3 +105,16 @@ Required ATM-owned projected surfaces:
 
 The exact design is owned by:
 - [`design/sc-observability-integration.md`](./design/sc-observability-integration.md)
+
+## 6. Error-Code Registry Boundary
+
+`atm-core` owns the single source registry of ATM-owned error codes in source.
+
+Architectural rules:
+
+- the source registry must live in `crates/atm-core/src/error_codes.rs`
+- `AtmError` must carry an `AtmErrorCode`
+- coarse `AtmErrorKind` classification must not replace the stable code
+- warning diagnostics emitted by `atm-core` must also select a registry code
+- the source registry must stay aligned with
+  [`../atm-error-codes.md`](../atm-error-codes.md)

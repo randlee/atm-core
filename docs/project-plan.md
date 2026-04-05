@@ -391,8 +391,11 @@ Planned sprints:
 - `K.2` Observability Port Expansion
   - expand the `atm-core` boundary from emit-only to emit/query/follow/health
   - keep `sc-observability` types out of `atm-core` public APIs
+  - introduce the single ATM-owned error-code registry in `atm-core` and wire
+    it into `AtmError`
   - acceptance: `atm-core` owns the projected ATM request/result types and a
-    synchronous tail session boundary
+    synchronous tail session boundary, and the error-code registry is centrally
+    defined
 
 - `K.3` Concrete Adapter Bootstrap
   - replace the local tracing-only `atm` implementation with a real

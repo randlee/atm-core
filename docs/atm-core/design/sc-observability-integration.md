@@ -152,6 +152,14 @@ pub struct ObservabilityHealthSnapshot {
 }
 ```
 
+Required ATM-owned error-code type:
+
+```rust
+pub enum AtmErrorCode {
+    // centrally defined in crates/atm-core/src/error_codes.rs
+}
+```
+
 Required private/object-safe session boundary:
 
 ```rust
@@ -199,6 +207,9 @@ Required mapping rules:
     `sender`, `message_id`, `task_id`, `outcome`, and `requires_ack`
 - ATM failure diagnostics must include a stable ATM-owned error code in shared
   structured fields
+- ATM must define those codes in one registry only:
+  `crates/atm-core/src/error_codes.rs`, aligned with
+  [`../../atm-error-codes.md`](../../atm-error-codes.md)
 - ATM-specific query filters map to the shared `LogQuery` surface rather than
   bypassing it with direct JSONL parsing
 - `atm log` projections must come from shared `LogEvent` results, not raw
@@ -266,6 +277,8 @@ Required coverage:
 
 - unit tests for `atm-core` request/result mapping above a test-double
   `ObservabilityPort`
+- unit tests for the central `AtmErrorCode` registry and its mapping from
+  `AtmError` / warning sites
 - CLI integration tests for `send`, `read`, `ack`, and `clear` that verify
   shared records are emitted into the retained log store
 - `atm log` integration tests for:

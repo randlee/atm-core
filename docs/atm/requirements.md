@@ -62,6 +62,9 @@ Initial crate requirement IDs:
   is released
 - logging CLI bootstrap, parse, and terminal command failures with stable
   ATM-owned error codes before exit
+- using the single ATM-owned code registry defined by
+  [`../atm-error-codes.md`](../atm-error-codes.md) rather than local ad hoc
+  code strings
 
 ## 4. Command Ownership
 
@@ -87,5 +90,6 @@ The `atm` crate docs must remain aligned with:
 
 - [`../requirements.md`](../requirements.md)
 - [`../architecture.md`](../architecture.md)
+- [`../atm-error-codes.md`](../atm-error-codes.md)
 - [`../project-plan.md`](../project-plan.md)
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)

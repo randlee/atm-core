@@ -36,6 +36,8 @@ Schema ownership references:
   [`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)
 - `sc-observability` schema ownership pointer:
   [`sc-observability-schema.md`](./sc-observability-schema.md)
+- ATM-owned error-code registry:
+  [`atm-error-codes.md`](./atm-error-codes.md)
 - schema enforcement models:
   `tools/schema_models/claude_code_message_schema.py` and
   `tools/schema_models/atm_message_schema.py` and
@@ -1181,6 +1183,8 @@ Stable error-code rule:
 - ATM warning and error logs must include that code
 - CLI bootstrap and argument-validation failures must also be logged with a
   stable error code before process exit
+- the single source of truth for ATM-owned error codes is
+  [`atm-error-codes.md`](./atm-error-codes.md)
 
 Minimum error categories:
 - configuration
