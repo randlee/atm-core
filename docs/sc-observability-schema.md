@@ -22,6 +22,7 @@ The owning repository referenced by ATM planning docs is:
 Related ATM references:
 
 - `docs/archive/obs-gap-analysis.md`
+- `docs/atm-core/design/sc-observability-integration.md`
 - `docs/requirements.md`
 - `docs/architecture.md`
 

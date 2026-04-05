@@ -1,4 +1,20 @@
-# OBS-GAP-1: `sc-observability` API Gap Analysis For ATM
+# OBS-GAP-1: Historical `sc-observability` API Gap Analysis For ATM
+
+## Status Note
+
+This document is historical.
+
+The shared `sc-observability` repo now ships the generic query, follow, and
+query-health surfaces that were missing when this analysis was first written.
+The active ATM-side work is no longer "request the missing shared API"; it is
+"integrate ATM with the current shared API".
+
+Current controlling ATM integration documents:
+
+- [`../project-plan.md`](../project-plan.md) Phase K
+- [`../requirements.md`](../requirements.md) §3.5 and §13
+- [`../architecture.md`](../architecture.md) §2.3 and §14
+- [`../atm-core/design/sc-observability-integration.md`](../atm-core/design/sc-observability-integration.md)
 
 ## 1. Purpose
 

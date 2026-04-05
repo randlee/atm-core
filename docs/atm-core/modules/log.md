@@ -18,3 +18,5 @@ References:
 - `REQ-CORE-LOG-001`
 - CLI surface: `docs/atm/commands/log.md`
 - Supporting boundary: `docs/atm-core/modules/observability.md`
+- Integration design:
+  `docs/atm-core/design/sc-observability-integration.md`

@@ -84,7 +84,19 @@ ATM still owns:
 - structured field filtering
 - runtime health reporting
 
-An early ATM planning/coordination sprint, `OBS-GAP-1`, must verify and close this shared API surface before ATM log/doctor implementation proceeds.
+The shared API gap is no longer the blocker. The current blocker is ATM-side
+integration.
+
+Initial retained-command integration scope:
+- `sc-observability-types`
+- `sc-observability`
+
+Deferred from the initial retained-command integration scope:
+- `sc-observe`
+- `sc-observability-otlp`
+
+The controlling ATM-side implementation design is:
+- [`docs/atm-core/design/sc-observability-integration.md`](./atm-core/design/sc-observability-integration.md)
 
 ## 3. Module Layout
 
@@ -566,6 +578,9 @@ It is responsible for:
 - log tail/follow
 - observability health projection
 
+The retained boundary must remain ATM-owned and must not leak shared
+`sc-observability` types directly into `atm-core` public APIs.
+
 `atm-core` owns the ATM-specific event and query vocabulary.
 
 `atm` owns the concrete `sc-observability` integration.
@@ -750,6 +765,42 @@ For explicit observability consumer commands:
 - `atm log` depends on shared query/follow APIs
 - `atm doctor` depends on shared health APIs
 - failures in those consumer paths are command errors, not silently dropped events
+
+### 14.1 Concrete Integration Shape
+
+The current tracing-only emit adapter is temporary. The retained implementation
+must expand to:
+
+- ATM-owned `AtmLogQuery`
+- ATM-owned `AtmLogRecord`
+- ATM-owned `AtmLogSnapshot`
+- ATM-owned `ObservabilityHealthSnapshot`
+- an ATM-owned synchronous `LogTailSession`
+
+Required boundary responsibilities:
+
+- `ObservabilityPort::emit_command_event(...)`
+- `ObservabilityPort::query_logs(...)`
+- `ObservabilityPort::follow_logs(...)`
+- `ObservabilityPort::health(...)`
+
+The exact ATM-owned projected types and object-safe follow-session split are
+defined in:
+- [`docs/atm-core/design/sc-observability-integration.md`](./atm-core/design/sc-observability-integration.md)
+
+### 14.2 Shared Crate Usage Rules
+
+Implementation rules:
+
+- `atm-core` remains concrete-crate-neutral and consumes only the injected
+  boundary
+- `atm` initializes the shared logger exactly once per process
+- the shared file sink is the authoritative retained log store for `atm log`
+- the shared console sink remains opt-in so it does not contaminate normal
+  command output
+- until `sc-observability` is published, developer and CI builds may use a
+  repo-local Cargo patch/path strategy against a sibling checkout; committed
+  ATM docs and scripts must not require a user-specific absolute path
 
 ## 15. Error Model
 

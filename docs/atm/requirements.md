@@ -52,6 +52,15 @@ Initial crate requirement IDs:
   into `atm-core`. Satisfies the CLI bootstrap/injection aspects of:
   `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-OBS-001`.
 
+`REQ-ATM-OBS-001` additionally requires:
+
+- initializing the concrete shared logger once per CLI process
+- mapping ATM env/config decisions into shared logger configuration
+- consuming `sc-observability` from a local checkout in developer/CI builds
+  until publish is complete, without hardcoding user-specific absolute paths
+- switching to versioned published crate dependencies once the shared workspace
+  is released
+
 ## 4. Command Ownership
 
 Per-command documentation lives under:

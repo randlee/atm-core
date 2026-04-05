@@ -17,3 +17,5 @@ References:
 - `REQ-CORE-DOCTOR-001`
 - CLI surface: `docs/atm/commands/doctor.md`
 - Supporting boundary: `docs/atm-core/modules/observability.md`
+- Integration design:
+  `docs/atm-core/design/sc-observability-integration.md`
