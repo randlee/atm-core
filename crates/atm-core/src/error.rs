@@ -209,23 +209,33 @@ impl AtmError {
     }
 
     pub fn observability_emit(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::ObservabilityEmit, message)
+        Self::new(AtmErrorKind::ObservabilityEmit, message).with_recovery(
+            "Verify the observability sink is writable or temporarily disable retained logging while investigating.",
+        )
     }
 
     pub fn observability_bootstrap(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::ObservabilityBootstrap, message)
+        Self::new(AtmErrorKind::ObservabilityBootstrap, message).with_recovery(
+            "Check the configured observability backend, log directory permissions, and any local path overrides before retrying ATM commands.",
+        )
     }
 
     pub fn observability_query(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::ObservabilityQuery, message)
+        Self::new(AtmErrorKind::ObservabilityQuery, message).with_recovery(
+            "Confirm retained logs exist and the observability backend supports queries for the selected sink and time range.",
+        )
     }
 
     pub fn observability_follow(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::ObservabilityFollow, message)
+        Self::new(AtmErrorKind::ObservabilityFollow, message).with_recovery(
+            "Check that follow/tail is enabled for the active sink and retry with a narrower query if the stream is unavailable.",
+        )
     }
 
     pub fn observability_health(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::ObservabilityHealth, message)
+        Self::new(AtmErrorKind::ObservabilityHealth, message).with_recovery(
+            "Inspect the observability backend health, file sink path, and query backend status, then rerun `atm doctor`.",
+        )
     }
 }
 

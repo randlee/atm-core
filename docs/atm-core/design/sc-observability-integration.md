@@ -113,6 +113,7 @@ Required ATM-owned projected types:
 
 ```rust
 pub struct AtmLogQuery {
+    pub mode: LogMode,
     pub levels: Vec<LogLevelFilter>,
     pub field_matches: Vec<LogFieldMatch>,
     pub since: Option<IsoTimestamp>,
