@@ -10,7 +10,7 @@ use crate::error::AtmError;
 use crate::home;
 use crate::identity;
 use crate::mailbox;
-use crate::mailbox::source::{discover_origin_inboxes, SourceFile, SourcedMessage};
+use crate::mailbox::source::{SourceFile, SourcedMessage, discover_origin_inboxes};
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;

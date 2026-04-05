@@ -469,15 +469,15 @@ fn save_send_alert_state(path: &Path, state: &SendAlertState) -> Result<(), AtmE
 }
 
 fn acquire_send_alert_lock(path: &Path) -> Option<SendAlertLock> {
-    if let Some(parent) = path.parent() {
-        if let Err(error) = fs::create_dir_all(parent) {
-            warn!(
-                %error,
-                path = %parent.display(),
-                "failed to create send alert lock directory"
-            );
-            return None;
-        }
+    if let Some(parent) = path.parent()
+        && let Err(error) = fs::create_dir_all(parent)
+    {
+        warn!(
+            %error,
+            path = %parent.display(),
+            "failed to create send alert lock directory"
+        );
+        return None;
     }
 
     for _ in 0..100 {
@@ -576,14 +576,14 @@ struct SendAlertLock {
 
 impl Drop for SendAlertLock {
     fn drop(&mut self) {
-        if let Err(error) = fs::remove_file(&self.path) {
-            if error.kind() != std::io::ErrorKind::NotFound {
-                warn!(
-                    %error,
-                    path = %self.path.display(),
-                    "failed to remove send alert lock"
-                );
-            }
+        if let Err(error) = fs::remove_file(&self.path)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            warn!(
+                %error,
+                path = %self.path.display(),
+                "failed to remove send alert lock"
+            );
         }
     }
 }
@@ -595,8 +595,8 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        acquire_send_alert_lock, load_send_alert_state, process_is_alive, save_send_alert_state,
-        send_alert_lock_path, send_alert_state_path, SendAlertState,
+        SendAlertState, acquire_send_alert_lock, load_send_alert_state, process_is_alive,
+        save_send_alert_state, send_alert_lock_path, send_alert_state_path,
     };
 
     #[test]

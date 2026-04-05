@@ -224,7 +224,7 @@ pub struct PendingAck {
 #[cfg(test)]
 mod tests {
     use chrono::TimeZone;
-    use serde_json::{json, Map};
+    use serde_json::{Map, json};
 
     use chrono::Utc;
 

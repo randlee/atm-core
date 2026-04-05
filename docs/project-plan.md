@@ -385,6 +385,8 @@ Planned sprints:
   - align ATM to the shared Rust toolchain floor and current stable pin
   - define the pre-publish local dependency strategy used in developer builds
     and CI
+  - land `rust-toolchain.toml`, repo/CI toolchain pinning, and
+    `docs/atm-core/dev/pre-publish-deps.md`
   - acceptance: ATM toolchain/docs/CI strategy is explicit and matches the
     shared repo dependency floor
 
