@@ -1,5 +1,7 @@
 use std::fmt;
 
+use serde::Serialize;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AtmErrorCode {
     ConfigHomeUnavailable,
@@ -26,9 +28,11 @@ pub enum AtmErrorCode {
     ObservabilityFollowFailed,
     ObservabilityHealthFailed,
     ObservabilityBootstrapFailed,
+    ObservabilityHealthOk,
     WarningInvalidTeamMemberSkipped,
     WarningMailboxRecordSkipped,
     WarningMalformedAtmFieldIgnored,
+    WarningObservabilityHealthDegraded,
     WarningOriginInboxEntrySkipped,
     WarningMissingTeamConfigFallback,
     WarningSendAlertStateDegraded,
@@ -61,9 +65,11 @@ impl AtmErrorCode {
             Self::ObservabilityFollowFailed => "ATM_OBSERVABILITY_FOLLOW_FAILED",
             Self::ObservabilityHealthFailed => "ATM_OBSERVABILITY_HEALTH_FAILED",
             Self::ObservabilityBootstrapFailed => "ATM_OBSERVABILITY_BOOTSTRAP_FAILED",
+            Self::ObservabilityHealthOk => "ATM_OBSERVABILITY_HEALTH_OK",
             Self::WarningInvalidTeamMemberSkipped => "ATM_WARNING_INVALID_TEAM_MEMBER_SKIPPED",
             Self::WarningMailboxRecordSkipped => "ATM_WARNING_MAILBOX_RECORD_SKIPPED",
             Self::WarningMalformedAtmFieldIgnored => "ATM_WARNING_MALFORMED_ATM_FIELD_IGNORED",
+            Self::WarningObservabilityHealthDegraded => "ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED",
             Self::WarningOriginInboxEntrySkipped => "ATM_WARNING_ORIGIN_INBOX_ENTRY_SKIPPED",
             Self::WarningMissingTeamConfigFallback => "ATM_WARNING_MISSING_TEAM_CONFIG_FALLBACK",
             Self::WarningSendAlertStateDegraded => "ATM_WARNING_SEND_ALERT_STATE_DEGRADED",
@@ -74,5 +80,14 @@ impl AtmErrorCode {
 impl fmt::Display for AtmErrorCode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
+    }
+}
+
+impl Serialize for AtmErrorCode {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(self.as_str())
     }
 }

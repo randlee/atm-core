@@ -1,6 +1,7 @@
 use anyhow::Result;
 use atm_core::ack::AckOutcome;
 use atm_core::clear::ClearOutcome;
+use atm_core::doctor::{DoctorReport, DoctorSeverity, DoctorStatus};
 use atm_core::observability::{AtmLogRecord, AtmLogSnapshot};
 use atm_core::read::ReadOutcome;
 use atm_core::send::SendOutcome;
@@ -125,6 +126,88 @@ where
     Ok(())
 }
 
+pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(report)?);
+        return Ok(());
+    }
+
+    println!(
+        "Doctor status: {}",
+        match report.summary.status {
+            DoctorStatus::Healthy => "healthy",
+            DoctorStatus::Warning => "warning",
+            DoctorStatus::Error => "error",
+        }
+    );
+    println!("{}", report.summary.message);
+    println!(
+        "Active log path: {}",
+        report
+            .observability
+            .active_log_path
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "<unavailable>".to_string())
+    );
+    println!(
+        "Logging health: {} | Query readiness: {}",
+        render_doctor_state(report.observability.logging_state),
+        report
+            .observability
+            .query_state
+            .map(render_doctor_state)
+            .unwrap_or("unknown")
+    );
+
+    if report.environment.atm_home.is_some()
+        || report.environment.atm_team.is_some()
+        || report.environment.atm_identity.is_some()
+        || report.environment.team_override.is_some()
+    {
+        println!();
+        println!("Environment:");
+        if let Some(path) = &report.environment.atm_home {
+            println!("  ATM_HOME={}", path.display());
+        }
+        if let Some(team) = &report.environment.atm_team {
+            println!("  ATM_TEAM={team}");
+        }
+        if let Some(identity) = &report.environment.atm_identity {
+            println!("  ATM_IDENTITY={identity}");
+        }
+        if let Some(team_override) = &report.environment.team_override {
+            println!("  --team={team_override}");
+        }
+    }
+
+    if !report.findings.is_empty() {
+        println!();
+        println!("Findings:");
+        for finding in &report.findings {
+            println!(
+                "  [{}] {} {}",
+                render_finding_severity(finding.severity),
+                finding.code,
+                finding.message
+            );
+            if let Some(remediation) = &finding.remediation {
+                println!("    remediation: {remediation}");
+            }
+        }
+    }
+
+    if !report.recommendations.is_empty() {
+        println!();
+        println!("Recommendations:");
+        for recommendation in &report.recommendations {
+            println!("  - {recommendation}");
+        }
+    }
+
+    Ok(())
+}
+
 fn print_bucket(outcome: &ReadOutcome, bucket: DisplayBucket, label: &str) {
     let messages = outcome
         .messages
@@ -178,5 +261,23 @@ fn print_log_record_line(record: &AtmLogRecord) {
             "  fields: {}",
             serde_json::to_string(&record.fields).unwrap_or_else(|_| "{}".to_string())
         );
+    }
+}
+
+fn render_doctor_state(
+    state: atm_core::observability::AtmObservabilityHealthState,
+) -> &'static str {
+    match state {
+        atm_core::observability::AtmObservabilityHealthState::Healthy => "healthy",
+        atm_core::observability::AtmObservabilityHealthState::Degraded => "degraded",
+        atm_core::observability::AtmObservabilityHealthState::Unavailable => "unavailable",
+    }
+}
+
+fn render_finding_severity(severity: DoctorSeverity) -> &'static str {
+    match severity {
+        DoctorSeverity::Info => "info",
+        DoctorSeverity::Warning => "warning",
+        DoctorSeverity::Error => "error",
     }
 }
