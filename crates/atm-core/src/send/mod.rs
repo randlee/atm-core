@@ -195,6 +195,8 @@ pub fn send_mail(
         requires_ack: outcome.requires_ack,
         dry_run: outcome.dry_run,
         task_id,
+        error_code: None,
+        error_message: None,
     });
 
     Ok(outcome)
