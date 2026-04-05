@@ -74,7 +74,7 @@ pub fn run_doctor(
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     use crate::doctor::{DoctorQuery, DoctorSeverity, DoctorStatus, run_doctor};
     use crate::error::AtmError;
@@ -86,6 +86,7 @@ mod tests {
 
     enum StubHealth {
         Ok(AtmObservabilityHealth),
+        Err(AtmError),
     }
 
     struct StubObservability {
@@ -108,14 +109,25 @@ mod tests {
         fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
             match &self.health {
                 StubHealth::Ok(health) => Ok(health.clone()),
+                StubHealth::Err(error) => Err(AtmError::new_with_code(
+                    error.code,
+                    error.kind,
+                    error.message.clone(),
+                )),
             }
         }
     }
 
+    fn temp_path(name: impl AsRef<Path>) -> PathBuf {
+        std::env::temp_dir()
+            .join("atm-doctor-tests")
+            .join(name.as_ref())
+    }
+
     fn query() -> DoctorQuery {
         DoctorQuery {
-            home_dir: PathBuf::from("/tmp/atm-home"),
-            current_dir: PathBuf::from("/tmp/workspace"),
+            home_dir: temp_path("atm-home"),
+            current_dir: temp_path("workspace"),
             team_override: Some("atm-dev".to_string()),
         }
     }
@@ -126,7 +138,7 @@ mod tests {
             query(),
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
-                    active_log_path: Some(PathBuf::from("/tmp/atm.log.jsonl")),
+                    active_log_path: Some(temp_path("atm.log.jsonl")),
                     logging_state: AtmObservabilityHealthState::Healthy,
                     query_state: Some(AtmObservabilityHealthState::Healthy),
                     detail: None,
@@ -146,7 +158,7 @@ mod tests {
             query(),
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
-                    active_log_path: Some(PathBuf::from("/tmp/atm.log.jsonl")),
+                    active_log_path: Some(temp_path("atm.log.jsonl")),
                     logging_state: AtmObservabilityHealthState::Degraded,
                     query_state: Some(AtmObservabilityHealthState::Degraded),
                     detail: Some("query backlog".to_string()),
@@ -183,6 +195,35 @@ mod tests {
         assert_eq!(
             report.findings[0].code,
             AtmErrorCode::ObservabilityHealthFailed
+        );
+    }
+
+    #[test]
+    fn run_doctor_reports_observability_health_errors() {
+        let report = run_doctor(
+            query(),
+            &StubObservability {
+                health: StubHealth::Err(AtmError::observability_health(
+                    "health check transport failed",
+                )),
+            },
+        )
+        .expect("doctor report");
+
+        assert_eq!(report.summary.status, DoctorStatus::Error);
+        assert_eq!(report.findings[0].severity, DoctorSeverity::Error);
+        assert_eq!(
+            report.findings[0].code,
+            AtmErrorCode::ObservabilityHealthFailed
+        );
+        assert_eq!(
+            report.observability.logging_state,
+            AtmObservabilityHealthState::Unavailable
+        );
+        assert!(
+            report.findings[0]
+                .message
+                .contains("health check transport failed")
         );
     }
 }

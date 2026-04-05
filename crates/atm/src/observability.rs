@@ -101,10 +101,8 @@ impl ObservabilityPort for ScObservabilityAdapter {
         let event = map_command_event(&self.service_name, event)?;
         self.logger.emit(event).map_err(|source| {
             let code = source.diagnostic().code.as_str().to_string();
-            AtmError::observability_emit(format!(
-                "shared observability emit failed ({code}): {source}"
-            ))
-            .with_source(source)
+            AtmError::observability_emit(format!("shared observability emit failed ({code})"))
+                .with_source(source)
         })
     }
 
@@ -425,23 +423,29 @@ fn parse_health_state(value: &str) -> Option<AtmObservabilityHealthState> {
 
 fn level_for_outcome(outcome: &str) -> Level {
     match outcome {
+        "ok" | "sent" | "dry_run" => Level::Info,
         "timeout" => Level::Warn,
-        _ => Level::Info,
+        "error" | "failed" => Level::Error,
+        other => {
+            tracing::warn!(
+                outcome = other,
+                "unknown ATM command outcome for observability level"
+            );
+            Level::Warn
+        }
     }
 }
 
 fn map_query_error(source: QueryError) -> AtmError {
     let code = source.code().as_str().to_string();
-    AtmError::observability_query(format!(
-        "shared observability query failed ({code}): {source}"
-    ))
-    .with_source(source)
+    AtmError::observability_query(format!("shared observability query failed ({code})"))
+        .with_source(source)
 }
 
 fn map_follow_error(phase: &str, source: QueryError) -> AtmError {
     let code = source.code().as_str().to_string();
     AtmError::observability_follow(format!(
-        "shared observability follow {phase} failed ({code}): {source}"
+        "shared observability follow {phase} failed ({code})"
     ))
     .with_source(source)
 }
@@ -458,10 +462,11 @@ mod tests {
     use atm_core::observability::{
         AtmLogQuery, LogLevelFilter, LogMode, LogOrder, ObservabilityPort,
     };
+    use sc_observability_types::Level;
     use serial_test::serial;
     use tempfile::TempDir;
 
-    use super::{CliObservability, log_root};
+    use super::{CliObservability, level_for_outcome, log_root};
 
     fn query(order: LogOrder) -> AtmLogQuery {
         AtmLogQuery {
@@ -548,5 +553,10 @@ mod tests {
             )
         );
         assert!(health.detail.is_none());
+    }
+
+    #[test]
+    fn unknown_outcome_maps_to_warn() {
+        assert_eq!(level_for_outcome("future-outcome"), Level::Warn);
     }
 }
