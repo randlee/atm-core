@@ -8,10 +8,10 @@ use crate::output;
 
 #[derive(Debug, Args)]
 pub struct DoctorCommand {
-    #[arg(long)]
+    #[arg(long, help = "Override the resolved team for the doctor check.")]
     team: Option<String>,
 
-    #[arg(long)]
+    #[arg(long, help = "Emit the doctor report as JSON.")]
     json: bool,
 }
 

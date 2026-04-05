@@ -134,6 +134,8 @@ pub fn clear_mail(
         requires_ack: false,
         dry_run: query.dry_run,
         task_id: None,
+        error_code: None,
+        error_message: None,
     });
 
     Ok(outcome)

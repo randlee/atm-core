@@ -175,6 +175,8 @@ pub fn ack_mail(
         requires_ack: false,
         dry_run: false,
         task_id: source_task_id,
+        error_code: None,
+        error_message: None,
     });
 
     Ok(outcome)

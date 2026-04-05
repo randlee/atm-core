@@ -250,6 +250,8 @@ pub fn read_mail(
         requires_ack: false,
         dry_run: false,
         task_id: None,
+        error_code: None,
+        error_message: None,
     });
 
     Ok(outcome)
