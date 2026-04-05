@@ -40,32 +40,31 @@ steps.
 
 ## 3. CI Strategy Before Publication
 
-CI must exercise the same pre-publish dependency shape without relying on a
-developer workstation path.
+Integration branches (`integrate/phase-K` and later) use a committed
+git-source `[patch.crates-io]` in the root `Cargo.toml` so that CI runners
+can resolve `sc-observability` without a local sibling checkout.
 
-The expected CI strategy is:
-
-1. check out `atm-core`
-2. check out `sc-observability` as a sibling repository
-3. generate or apply a CI-only overlay containing the same `[patch.crates-io]`
-   stanza with sibling-relative paths
-4. run cargo with the pinned repo toolchain
-
-An example CI-only overlay file is `Cargo.toml.ci`, which is intentionally
-ignored by this repo:
+Example (what is committed on `integrate/phase-K`):
 
 ```toml
 [patch.crates-io]
-sc-observability = { path = "../sc-observability/crates/sc-observability" }
-sc-observability-types = { path = "../sc-observability/crates/sc-observability-types" }
+sc-observability = { git = "https://github.com/randlee/sc-observability", rev = "<sha>" }
+sc-observability-types = { git = "https://github.com/randlee/sc-observability", rev = "<sha>" }
 ```
 
 Required rules:
 
-- the CI overlay may use sibling-relative paths only
-- the CI overlay must be generated or applied by CI and must not be committed
-- once `sc-observability` is published, this overlay strategy should be
-  removed in favor of versioned crate dependencies
+- use a pinned `rev` so builds are reproducible; update the rev when picking
+  up new upstream sc-observability commits (e.g. between Phase L sprints)
+- the git URL must be the public GitHub remote — no local paths
+- this committed patch is only appropriate on integration/feature branches;
+  it must not appear on `develop` or `main`
+- remove this section entirely in Sprint L.4 when switching to the published
+  crates.io `^1.0.0` release
+
+Local developer builds may still override the git source with a local sibling
+path for faster iteration (see §2 above); the local override takes precedence
+over the committed git source when both are present.
 
 ## 4. Toolchain Alignment
 

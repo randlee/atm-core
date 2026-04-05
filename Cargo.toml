@@ -17,3 +17,11 @@ anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 tokio = { version = "1", features = ["rt"] }
+
+# Pre-publish CI override: sc-observability 1.0 is not yet on crates.io.
+# This committed git-source patch lets CI resolve the dependency without a
+# local sibling checkout. Remove this section in Sprint L.4 when switching to
+# the published crates.io ^1.0.0 release. See docs/atm-core/dev/pre-publish-deps.md.
+[patch.crates-io]
+sc-observability = { git = "https://github.com/randlee/sc-observability", rev = "bcae027394e01b689bd8e38af720e76dda644931" }
+sc-observability-types = { git = "https://github.com/randlee/sc-observability", rev = "bcae027394e01b689bd8e38af720e76dda644931" }
