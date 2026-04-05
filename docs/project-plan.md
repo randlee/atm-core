@@ -416,16 +416,20 @@ Planned sprints:
 
 - `K.5` `atm doctor` Delivery On Shared Health
   - implement the retained `doctor` command over shared logging/query health
-  - acceptance: doctor reports active log path, logging health, and query
-    readiness with stable findings
+  - acceptance: doctor integration tests cover healthy, unavailable, and
+    degraded adapter states; each state produces a structured `DoctorReport`
+    with a stable ATM error code from `docs/atm-error-codes.md` when
+    applicable
 
 - `K.6` Integration And Live Validation
   - close the command-test gap for observability consumer paths and run one
     live/manual validation pass against a real ATM home
   - close the error-logging gap by verifying CLI/bootstrap/service failures and
     degraded recovery warnings all emit stable ATM-owned error codes
-  - acceptance: retained observability commands are proven on the shared stack
-    before phase close
+  - acceptance: `atm log` (snapshot, tail, filter) and `atm doctor` are tested
+    against the real `sc-observability` adapter in at least one live
+    validation pass, and the results are documented in
+    `docs/atm-core/design/live-observability-validation.md`
 
 Acceptance:
 - ATM no longer depends on a local tracing-only observability adapter

@@ -184,6 +184,15 @@ pub trait ObservabilityPort {
 }
 ```
 
+Required method-to-error-code bindings:
+
+| Method | Stable ATM error code |
+| --- | --- |
+| `emit_command_event(...)` | `ATM_OBSERVABILITY_EMIT_FAILED` |
+| `query_logs(...)` | `ATM_OBSERVABILITY_QUERY_FAILED` |
+| `follow_logs(...)` | `ATM_OBSERVABILITY_FOLLOW_FAILED` |
+| `health()` | `ATM_OBSERVABILITY_HEALTH_FAILED` |
+
 Implementation rules:
 
 - `atm-core` owns these projected request/result types

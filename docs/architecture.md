@@ -591,17 +591,17 @@ The retained boundary must remain ATM-owned and must not leak shared
 
 Public entrypoints:
 
-- `log::query_logs(query: LogQuery, observability: &dyn ObservabilityPort) -> Result<LogSnapshot, AtmError>`
-- `log::tail_logs(query: LogQuery, observability: &dyn ObservabilityPort) -> Result<LogTailSession, AtmError>`
+- `log::query_logs(query: AtmLogQuery, observability: &dyn ObservabilityPort) -> Result<AtmLogSnapshot, AtmError>`
+- `log::tail_logs(query: AtmLogQuery, observability: &dyn ObservabilityPort) -> Result<LogTailSession, AtmError>`
 
-`LogQuery` contains:
+`AtmLogQuery` contains:
 - mode
 - level filter
 - field matches
 - time window
 - limit
 
-`LogSnapshot` contains:
+`AtmLogSnapshot` contains:
 - resolved query
 - snapshot ordering metadata
 - returned records
