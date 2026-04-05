@@ -81,6 +81,7 @@ dependencies = [
  "serial_test",
  "tempfile",
  "time",
+ "tracing",
  "uuid",
 ]
 
