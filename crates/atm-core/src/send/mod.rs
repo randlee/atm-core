@@ -8,7 +8,6 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use serde_json::Map;
 use tracing::warn;
-use uuid::Uuid;
 
 use crate::address::AgentAddress;
 use crate::config;
@@ -16,8 +15,9 @@ use crate::error::AtmError;
 use crate::home;
 use crate::identity;
 use crate::mailbox;
+use crate::mailbox::temp_file_suffix;
 use crate::observability::{CommandEvent, ObservabilityPort};
-use crate::schema::MessageEnvelope;
+use crate::schema::{LegacyMessageId, MessageEnvelope};
 use crate::types::IsoTimestamp;
 
 pub(crate) mod file_policy;
@@ -55,7 +55,7 @@ pub struct SendOutcome {
     pub agent: String,
     pub sender: String,
     pub outcome: &'static str,
-    pub message_id: Uuid,
+    pub message_id: LegacyMessageId,
     pub requires_ack: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<String>,
@@ -148,7 +148,7 @@ pub fn send_mail(
         &recipient.team,
     )?;
     let summary = summary::build_summary(&body, request.summary_override);
-    let message_id = Uuid::new_v4();
+    let message_id = LegacyMessageId::new();
     let timestamp = IsoTimestamp::now();
 
     if !request.dry_run {
@@ -309,7 +309,7 @@ fn notify_team_lead_missing_config(
         summary: Some(format!(
             "ATM warning: missing team config fallback used for {recipient}@{team}"
         )),
-        message_id: Some(Uuid::new_v4()),
+        message_id: Some(LegacyMessageId::new()),
         pending_ack_at: None,
         acknowledged_at: None,
         acknowledges_message_id: None,
@@ -341,7 +341,17 @@ fn register_missing_team_config_alert(home_dir: &Path, key: &str) -> bool {
         return false;
     };
 
-    let mut state = load_send_alert_state(&state_path).unwrap_or_default();
+    let mut state = match load_send_alert_state(&state_path) {
+        Ok(state) => state,
+        Err(error) => {
+            warn!(
+                %error,
+                path = %state_path.display(),
+                "failed to read send state file - defaulting to empty state"
+            );
+            SendAlertState::default()
+        }
+    };
     if state.missing_team_config_keys.contains(key) {
         return false;
     }
@@ -428,12 +438,11 @@ fn save_send_alert_state(path: &Path, state: &SendAlertState) -> Result<(), AtmE
     }
 
     let temp_path = path.with_file_name(format!(
-        "{}.{}.{}.tmp",
+        "{}.{}.tmp",
         path.file_name()
             .and_then(|value| value.to_str())
             .unwrap_or("state"),
-        std::process::id(),
-        Uuid::new_v4()
+        temp_file_suffix()
     ));
     let data = serde_json::to_vec(state)?;
     fs::write(&temp_path, data).map_err(|error| {

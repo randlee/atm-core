@@ -1,17 +1,24 @@
 pub(crate) mod atomic;
 pub(crate) mod hash;
 pub(crate) mod lock;
+pub(crate) mod source;
 pub(crate) mod store;
+pub(crate) mod surface;
 
-use std::collections::HashMap;
 use std::fs;
 use std::io::BufRead;
 use std::path::Path;
 
+use serde_json::Value;
 use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorKind};
-use crate::schema::MessageEnvelope;
+use crate::schema::{LegacyMessageId, MessageEnvelope};
+use uuid::Uuid;
+
+pub(crate) fn temp_file_suffix() -> String {
+    format!("{}-{}", std::process::id(), Uuid::new_v4().simple())
+}
 
 pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), AtmError> {
     let mut messages = read_messages(path)?;
@@ -50,31 +57,56 @@ pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
             continue;
         }
 
-        match serde_json::from_str::<MessageEnvelope>(&line) {
-            Ok(message) => messages.push(message),
+        match parse_mailbox_record(&line, path, index + 1) {
+            Ok(Some(message)) => messages.push(message),
+            Ok(None) => {}
             Err(error) => warn!(
                 line = index + 1,
+                mailbox_path = %path.display(),
+                raw_record = %line,
                 %error,
                 "skipping malformed mailbox record"
             ),
         }
     }
 
-    let mut last_indices = HashMap::new();
-    for (index, message) in messages.iter().enumerate() {
-        if let Some(message_id) = message.message_id {
-            last_indices.insert(message_id, index);
-        }
+    Ok(messages)
+}
+
+fn parse_mailbox_record(
+    line: &str,
+    path: &Path,
+    line_number: usize,
+) -> Result<Option<MessageEnvelope>, serde_json::Error> {
+    let mut value = serde_json::from_str::<Value>(line)?;
+    sanitize_legacy_message_id(&mut value, path, line_number);
+    serde_json::from_value::<MessageEnvelope>(value).map(Some)
+}
+
+fn sanitize_legacy_message_id(value: &mut Value, path: &Path, line_number: usize) {
+    let Some(object) = value.as_object_mut() else {
+        return;
+    };
+
+    let Some(raw_message_id) = object.get("message_id").cloned() else {
+        return;
+    };
+
+    if raw_message_id.is_null() {
+        return;
     }
 
-    Ok(messages
-        .into_iter()
-        .enumerate()
-        .filter_map(|(index, message)| match message.message_id {
-            Some(message_id) => (last_indices.get(&message_id) == Some(&index)).then_some(message),
-            None => Some(message),
-        })
-        .collect())
+    if serde_json::from_value::<LegacyMessageId>(raw_message_id.clone()).is_err() {
+        warn!(
+            mailbox_path = %path.display(),
+            line = line_number,
+            field = "message_id",
+            expected_format = "UUID",
+            raw_value = %raw_message_id,
+            "treating malformed ATM-owned field as absent during mailbox read"
+        );
+        object.remove("message_id");
+    }
 }
 
 #[cfg(test)]
@@ -118,7 +150,7 @@ mod tests {
     }
 
     #[test]
-    fn read_messages_deduplicates_by_message_id_last_wins() {
+    fn read_messages_preserves_duplicate_message_ids_for_surface_canonicalization() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("dedupe.jsonl");
         let message_id = Uuid::new_v4();
@@ -138,8 +170,32 @@ mod tests {
         fs::write(&path, contents).expect("write");
 
         let messages = read_messages(&path).expect("read");
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].text, "first");
+        assert_eq!(messages[1].text, "second");
+    }
+
+    #[test]
+    fn read_messages_treats_malformed_legacy_message_id_as_absent() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("malformed-message-id.jsonl");
+        let contents = serde_json::json!({
+            "from": "team-lead",
+            "text": "valid body",
+            "timestamp": "2026-03-30T00:00:00Z",
+            "read": false,
+            "message_id": "01JABCDEF0123456789ABCDEF0"
+        });
+        fs::write(
+            &path,
+            format!("{}\n", serde_json::to_string(&contents).expect("json")),
+        )
+        .expect("write");
+
+        let messages = read_messages(&path).expect("read");
         assert_eq!(messages.len(), 1);
-        assert_eq!(messages[0].text, "second");
+        assert_eq!(messages[0].text, "valid body");
+        assert!(messages[0].message_id.is_none());
     }
 
     fn sample_message(message_id: Uuid, body: &str) -> MessageEnvelope {
@@ -154,7 +210,7 @@ mod tests {
             read: false,
             source_team: Some("atm-dev".into()),
             summary: None,
-            message_id: Some(message_id),
+            message_id: Some(message_id.into()),
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,

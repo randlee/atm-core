@@ -81,6 +81,7 @@ Forward write target for ATM-owned machine-readable fields:
 - `acknowledgedAt`
 - `acknowledgesMessageId`
 - ATM-owned alert metadata such as `alertKind`
+- ATM-owned alert metadata such as `missingConfigPath`
 
 Ownership rule:
 
@@ -115,7 +116,9 @@ Forward placement map:
 - legacy top-level `acknowledgesMessageId` remains
   `metadata.atm.acknowledgesMessageId`
 - legacy ATM alert fields such as `atmAlertKind` migrate to
-  `metadata.atm.alertKind` or a later explicitly documented ATM-owned field
+  `metadata.atm.alertKind`
+- legacy top-level `missingConfigPath` migrates to
+  `metadata.atm.missingConfigPath`
 
 Identifier rules:
 
@@ -172,6 +175,8 @@ Current design ruling:
 - ATM-authored back-channel alerts may use ATM-prefixed fields during the
   legacy compatibility period
 - forward ATM alert metadata should move under `metadata.atm`
+- `atmAlertKind` migrates to `metadata.atm.alertKind`
+- `missingConfigPath` migrates to `metadata.atm.missingConfigPath`
 - new ATM-only fields should remain clearly ATM-owned until a broader shared
   schema is explicitly approved
 

@@ -1,20 +1,18 @@
-use std::collections::{HashMap, HashSet};
-use std::fs;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use chrono::{DateTime, TimeDelta, Utc};
 use serde::Serialize;
 use serde_json::Value;
-use tracing::warn;
-use uuid::Uuid;
 
-use crate::address::AgentAddress;
 use crate::config;
-use crate::error::{AtmError, AtmErrorKind};
+use crate::error::AtmError;
 use crate::home;
 use crate::identity;
 use crate::mailbox;
+use crate::mailbox::source::{discover_origin_inboxes, resolve_target, SourceFile, SourcedMessage};
+use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
 use crate::schema::MessageEnvelope;
@@ -48,19 +46,6 @@ pub struct ClearOutcome {
     pub removed_by_class: RemovedByClass,
 }
 
-#[derive(Debug, Clone)]
-struct SourceFile {
-    path: PathBuf,
-    messages: Vec<MessageEnvelope>,
-}
-
-#[derive(Debug, Clone)]
-struct SourcedMessage {
-    envelope: MessageEnvelope,
-    source_path: PathBuf,
-    source_index: usize,
-}
-
 pub fn clear_mail(
     query: ClearQuery,
     observability: &dyn ObservabilityPort,
@@ -90,7 +75,14 @@ pub fn clear_mail(
     }
 
     let mut source_files = load_source_files(&query.home_dir, &target.team, &target.agent)?;
-    let merged = dedupe_sourced_messages(merged_surface(&source_files));
+    // Clear intentionally does not apply read-surface idle-notification dedup.
+    // Cleanup decisions must inspect the raw merged surface after legacy
+    // message_id canonicalization only.
+    let merged = dedupe_legacy_message_id_surface(
+        merged_surface(&source_files),
+        |message: &SourcedMessage| message.envelope.message_id,
+        |message: &SourcedMessage| message.envelope.timestamp,
+    );
     let cutoff = cutoff_timestamp(query.older_than)?;
 
     let mut removed_by_class = RemovedByClass::default();
@@ -114,7 +106,12 @@ pub fn clear_mail(
     let remaining_total = if query.dry_run {
         merged.len().saturating_sub(removable.len())
     } else {
-        dedupe_sourced_messages(merged_surface(&source_files)).len()
+        dedupe_legacy_message_id_surface(
+            merged_surface(&source_files),
+            |message: &SourcedMessage| message.envelope.message_id,
+            |message: &SourcedMessage| message.envelope.timestamp,
+        )
+        .len()
     };
 
     let outcome = ClearOutcome {
@@ -142,13 +139,6 @@ pub fn clear_mail(
     Ok(outcome)
 }
 
-#[derive(Debug)]
-struct ResolvedTarget {
-    agent: String,
-    team: String,
-    explicit: bool,
-}
-
 fn resolve_actor_identity(
     actor_override: Option<&str>,
     config: Option<&config::AtmConfig>,
@@ -162,35 +152,6 @@ fn resolve_actor_identity(
     }
 
     identity::resolve_sender_identity(config)
-}
-
-fn resolve_target(
-    target_address: Option<&str>,
-    actor: &str,
-    team_override: Option<&str>,
-    config: Option<&config::AtmConfig>,
-) -> Result<ResolvedTarget, AtmError> {
-    let Some(target_address) = target_address else {
-        let team =
-            config::resolve_team(team_override, config).ok_or_else(AtmError::team_unavailable)?;
-        return Ok(ResolvedTarget {
-            agent: actor.to_string(),
-            team,
-            explicit: false,
-        });
-    };
-
-    let parsed: AgentAddress = target_address.parse()?;
-    let team = parsed
-        .team
-        .or_else(|| config::resolve_team(team_override, config))
-        .ok_or_else(AtmError::team_unavailable)?;
-
-    Ok(ResolvedTarget {
-        agent: parsed.agent,
-        team,
-        explicit: true,
-    })
 }
 
 fn load_source_files(
@@ -218,48 +179,6 @@ fn load_source_files(
     Ok(sources)
 }
 
-fn discover_origin_inboxes(inboxes_dir: &Path, agent: &str) -> Result<Vec<PathBuf>, AtmError> {
-    if !inboxes_dir.exists() {
-        return Ok(Vec::new());
-    }
-
-    let prefix = format!("{agent}.");
-    let primary = format!("{agent}.json");
-    let mut paths = fs::read_dir(inboxes_dir)
-        .map_err(|error| {
-            AtmError::new(
-                AtmErrorKind::MailboxRead,
-                format!(
-                    "failed to read inbox directory {}: {error}",
-                    inboxes_dir.display()
-                ),
-            )
-            .with_source(error)
-        })?
-        .filter_map(|entry| match entry {
-            Ok(entry) => Some(entry.path()),
-            Err(error) => {
-                warn!(
-                    inbox_dir = %inboxes_dir.display(),
-                    agent,
-                    %error,
-                    "skipping unreadable origin inbox entry"
-                );
-                None
-            }
-        })
-        .filter(|path| {
-            path.file_name()
-                .and_then(|value| value.to_str())
-                .map(|name| name.starts_with(&prefix) && name.ends_with(".json") && name != primary)
-                .unwrap_or(false)
-        })
-        .collect::<Vec<_>>();
-
-    paths.sort();
-    Ok(paths)
-}
-
 fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
     source_files
         .iter()
@@ -274,35 +193,6 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
                     source_path: source.path.clone(),
                     source_index,
                 })
-        })
-        .collect()
-}
-
-fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
-    let mut latest_for_id: HashMap<Uuid, (crate::types::IsoTimestamp, usize)> = HashMap::new();
-    for (index, message) in messages.iter().enumerate() {
-        if let Some(message_id) = message.envelope.message_id {
-            latest_for_id
-                .entry(message_id)
-                .and_modify(|entry| {
-                    if message.envelope.timestamp > entry.0
-                        || (message.envelope.timestamp == entry.0 && index > entry.1)
-                    {
-                        *entry = (message.envelope.timestamp, index);
-                    }
-                })
-                .or_insert((message.envelope.timestamp, index));
-        }
-    }
-
-    messages
-        .into_iter()
-        .enumerate()
-        .filter_map(|(index, message)| match message.envelope.message_id {
-            Some(message_id) => latest_for_id
-                .get(&message_id)
-                .and_then(|(_, keep_index)| (*keep_index == index).then_some(message)),
-            None => Some(message),
         })
         .collect()
 }

@@ -5,5 +5,8 @@ pub mod settings;
 pub mod team_config;
 
 pub use agent_member::AgentMember;
-pub use inbox_message::{MessageEnvelope, PendingAck};
+pub use inbox_message::{
+    AtmMessageId, AtmMetadataFields, ForwardMetadataEnvelope, LegacyMessageId, MessageEnvelope,
+    MessageMetadata, PendingAck,
+};
 pub use team_config::TeamConfig;

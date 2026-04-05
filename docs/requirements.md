@@ -163,6 +163,10 @@ Required rules:
 - new ATM-only machine-readable fields must not be added as new top-level inbox
   fields
 - forward ATM machine-readable fields must live in `metadata.atm`
+- forward ATM-authored alert and repair metadata, including legacy
+  `atmAlertKind` and `missingConfigPath`, must migrate to `metadata.atm`
+  fields such as `metadata.atm.alertKind` and
+  `metadata.atm.missingConfigPath`
 - ATM may enrich a Claude-native message in place by adding ATM-owned metadata
   without rewriting native Claude fields
 - locally owned schema enforcement must distinguish legacy top-level UUID-based
@@ -174,11 +178,19 @@ Required rules:
 - a separate ATM-native inbox is explicitly deferred and must not be assumed by
   the current live design
 
+Current-phase migration constraint:
+
+- Phase J sprint J.4 is documentation and planning only
+- existing runtime write/read behavior for legacy top-level alert fields remains
+  stable until a later implementation sprint performs the actual migration
 `REQ-P-SCHEMA-001` is owned by:
 
 - [`claude-code-message-schema.md`](./claude-code-message-schema.md)
 - [`atm-message-schema.md`](./atm-message-schema.md)
 - [`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)
+- [`atm-core/design/dedup-metadata-schema.md`](./atm-core/design/dedup-metadata-schema.md)
+  §2.2 and §3.3 for forward ATM alert-field placement and sender-side dedup
+  semantics
 
 ### 3.3 Configuration Resolution
 
