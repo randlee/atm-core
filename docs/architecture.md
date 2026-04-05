@@ -597,7 +597,6 @@ Public entrypoints:
 ATM CLI surfaces such as `atm log snapshot`, `atm log filter`, and `atm log tail`
 consume those boundary methods directly rather than routing through a separate
 `log::query_logs(...)` or `log::tail_logs(...)` wrapper.
-
 `AtmLogQuery` contains:
 - mode
 - level filter
