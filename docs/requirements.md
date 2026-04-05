@@ -1146,6 +1146,17 @@ Sink policy:
 - console logging may be enabled later for explicit local debugging or
   integration testing
 
+Diagnostic logging rules:
+- command failures must emit structured failure diagnostics before the CLI
+  exits, even when the command fails before reaching a core service
+- degraded recovery paths that intentionally continue, such as malformed-record
+  skips or missing-config fallback warnings, must also emit structured warning
+  diagnostics
+- every ATM warning/error diagnostic must carry a stable ATM-owned error code in
+  addition to human-readable text
+- command lifecycle failure events must include the stable error code when one
+  is available
+
 `atm log` and `atm doctor` are not best-effort features in the same sense:
 - they are explicit observability consumers
 - if shared query/health APIs are unavailable, they must fail with clear structured errors
@@ -1164,6 +1175,12 @@ Satisfied by:
 All user-visible failures must use structured errors with recovery guidance.
 
 Persisted-data failures must preserve parser and entity context when available.
+
+Stable error-code rule:
+- every public `AtmError` must map to a stable ATM-owned error code
+- ATM warning and error logs must include that code
+- CLI bootstrap and argument-validation failures must also be logged with a
+  stable error code before process exit
 
 Minimum error categories:
 - configuration

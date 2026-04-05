@@ -197,6 +197,8 @@ Required mapping rules:
   - `action` for command lifecycle names
   - structured fields for ATM-owned dimensions such as `team`, `actor`,
     `sender`, `message_id`, `task_id`, `outcome`, and `requires_ack`
+- ATM failure diagnostics must include a stable ATM-owned error code in shared
+  structured fields
 - ATM-specific query filters map to the shared `LogQuery` surface rather than
   bypassing it with direct JSONL parsing
 - `atm log` projections must come from shared `LogEvent` results, not raw
@@ -223,6 +225,10 @@ from any shared console log sink behavior.
 - emit command lifecycle events through the injected boundary
 - keep emission best-effort
 - never fail the command only because log emission fails
+- emit structured failure diagnostics with stable ATM-owned error codes when
+  the command fails
+- emit structured warning diagnostics with stable ATM-owned error codes when
+  the command continues after degraded recovery
 
 ### 9.2 `atm log`
 
@@ -243,6 +249,13 @@ from any shared console log sink behavior.
   - query unavailable
   - query degraded
   - healthy
+
+### 9.4 CLI Bootstrap And Parse Failures
+
+- `atm` must log startup/config/bootstrap failures before returning a process
+  error
+- command-layer argument/validation failures that occur before core-service
+  invocation must also log stable ATM-owned error codes
 
 ## 10. Testing Obligations
 
@@ -265,6 +278,8 @@ Required coverage:
   - healthy logging/query state
   - unavailable file sink/query state
   - degraded query state
+- CLI failure-path tests that verify bootstrap, parse, and core-service errors
+  are logged with stable ATM-owned error codes
 - a live/manual validation pass against a real ATM home before the phase closes
 
 The integration test harness should prefer shared file-backed query/follow

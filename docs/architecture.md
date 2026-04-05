@@ -758,6 +758,7 @@ Required ATM event fields:
 - task id
 - outcome
 - error class when applicable
+- stable error code when applicable
 - message count when applicable
 - transition count when applicable
 
@@ -801,6 +802,19 @@ Implementation rules:
 - until `sc-observability` is published, developer and CI builds may use a
   repo-local Cargo patch/path strategy against a sibling checkout; committed
   ATM docs and scripts must not require a user-specific absolute path
+
+### 14.3 Failure Diagnostic Rules
+
+Required diagnostic behavior:
+
+- CLI bootstrap failures must be logged before process exit
+- CLI parse/validation failures that occur before a core service runs must be
+  logged before process exit
+- retained command-service failures must emit structured failure diagnostics
+  with stable ATM-owned error codes
+- degraded recovery warnings that continue the command must also log stable
+  error codes
+- command success-only logging is insufficient for the retained architecture
 
 ## 15. Error Model
 

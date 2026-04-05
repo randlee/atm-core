@@ -399,8 +399,11 @@ Planned sprints:
     `sc-observability` adapter
   - initialize the shared logger once per CLI process and inject it into
     `atm-core`
+  - add terminal failure logging for bootstrap, parse, and core-service error
+    paths
   - acceptance: retained mail commands emit through the shared logger and
-    preserve best-effort behavior
+    preserve best-effort behavior, and failure diagnostics carry stable ATM
+    error codes
 
 - `K.4` `atm log` Delivery On Shared Query/Follow
   - implement the retained `log` command over `Logger::query(...)` and
@@ -416,6 +419,8 @@ Planned sprints:
 - `K.6` Integration And Live Validation
   - close the command-test gap for observability consumer paths and run one
     live/manual validation pass against a real ATM home
+  - close the error-logging gap by verifying CLI/bootstrap/service failures and
+    degraded recovery warnings all emit stable ATM-owned error codes
   - acceptance: retained observability commands are proven on the shared stack
     before phase close
 

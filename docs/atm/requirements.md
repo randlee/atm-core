@@ -60,6 +60,8 @@ Initial crate requirement IDs:
   until publish is complete, without hardcoding user-specific absolute paths
 - switching to versioned published crate dependencies once the shared workspace
   is released
+- logging CLI bootstrap, parse, and terminal command failures with stable
+  ATM-owned error codes before exit
 
 ## 4. Command Ownership
 

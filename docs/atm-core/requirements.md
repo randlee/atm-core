@@ -177,6 +177,8 @@ Required boundary rules:
 - the boundary must remain synchronous and object-safe for service injection
 - shared query/follow and health failures must map to stable `AtmErrorKind`
   variants without leaking shared error enums into `atm-core`
+- `atm-core` command-service failures and degraded recovery warnings must expose
+  stable ATM-owned error codes for the CLI observability adapter to log
 
 Detailed design and implementation shape is owned by:
 - [`design/sc-observability-integration.md`](./design/sc-observability-integration.md)
