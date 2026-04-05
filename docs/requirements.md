@@ -36,6 +36,8 @@ Schema ownership references:
   [`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)
 - `sc-observability` schema ownership pointer:
   [`sc-observability-schema.md`](./sc-observability-schema.md)
+- ATM-owned error-code registry:
+  [`atm-error-codes.md`](./atm-error-codes.md)
 - schema enforcement models:
   `tools/schema_models/claude_code_message_schema.py` and
   `tools/schema_models/atm_message_schema.py` and
@@ -264,9 +266,11 @@ Resolution order:
 3. repo-local `.claude/settings.json`
 4. global `{ATM_HOME}/.claude/settings.json`
 
-### 3.5 Observability Shared API Prerequisite
+### 3.5 Observability Shared Integration Baseline
 
-ATM depends on `sc-observability` providing a shared logging surface that supports:
+ATM depends on `sc-observability` as the shared logging/query/health substrate.
+
+The shared surface ATM integrates against must support:
 - structured log emission
 - historical query of retained records
 - follow/tail of new matching records
@@ -276,10 +280,27 @@ ATM depends on `sc-observability` providing a shared logging surface that suppor
 - limit/order controls
 - health reporting for the logging runtime
 
-This prerequisite is handled by an early ATM planning/coordination sprint:
-- `OBS-GAP-1`
+The current shared repo now exposes those generic capabilities. ATM must
+integrate with them directly rather than preserving a local tracing-only
+adapter.
 
-ATM must not implement a parallel ad hoc log-query engine when shared `sc-observability` APIs can own the behavior.
+Required integration rules:
+
+- ATM must not implement a parallel ad hoc log-query engine when shared
+  `sc-observability` APIs can own the behavior
+- `atm-core` must keep the shared crates behind an ATM-owned injected boundary
+- `atm` owns the concrete shared-crate bootstrap and dependency wiring
+- until `sc-observability` is published, local and CI builds may consume the
+  shared crates from a local checkout, but committed ATM docs/scripts must not
+  hardcode user-specific absolute paths
+- the same pinned Rust toolchain must be used locally and in CI across ATM and
+  `sc-*` repos
+- the concrete integration work is planned in Phase K of
+  [`project-plan.md`](./project-plan.md)
+
+Historical note:
+- `OBS-GAP-1` is complete as a historical planning artifact and does not remain
+  the gating item for retained observability delivery
 
 ## 4. Identity Resolution
 
@@ -857,6 +878,8 @@ Deferred from the current source repo:
 - default to snapshot mode when `--tail` is not set
 - return snapshot results newest-first before applying output limits
 - return followed records in arrival order while `--tail` is active
+- use the built-in shared file-backed retained log store as the authoritative
+  query/follow source
 
 ### 10.4 ATM Log Fields
 
@@ -924,6 +947,7 @@ The initial doctor implementation must cover:
 - hook identity availability
 - `ATM_HOME`, `ATM_TEAM`, and `ATM_IDENTITY` override visibility
 - `sc-observability` initialization health
+- active shared log path visibility
 - `sc-observability` query-health readiness for `atm log`
 
 ### 11.4 Output Contract
@@ -1088,6 +1112,14 @@ Satisfied by:
 
 ATM must emit structured records through `sc-observability`.
 
+Initial shared integration scope:
+- `sc-observability-types`
+- `sc-observability`
+
+Deferred from the initial retained observability integration:
+- `sc-observe`
+- `sc-observability-otlp`
+
 Required ATM event classes:
 - command started
 - command succeeded
@@ -1109,6 +1141,24 @@ Emission is best-effort:
 - logging failures must never block retained command behavior
 - command correctness takes priority over observability delivery
 
+Sink policy:
+- the shared file sink is required for retained ATM observability
+- the shared console sink is optional and must remain off by default for normal
+  ATM CLI command execution so command output stays stable
+- console logging may be enabled later for explicit local debugging or
+  integration testing
+
+Diagnostic logging rules:
+- command failures must emit structured failure diagnostics before the CLI
+  exits, even when the command fails before reaching a core service
+- degraded recovery paths that intentionally continue, such as malformed-record
+  skips or missing-config fallback warnings, must also emit structured warning
+  diagnostics
+- every ATM warning/error diagnostic must carry a stable ATM-owned error code in
+  addition to human-readable text
+- command lifecycle failure events must include the stable error code when one
+  is available
+
 `atm log` and `atm doctor` are not best-effort features in the same sense:
 - they are explicit observability consumers
 - if shared query/health APIs are unavailable, they must fail with clear structured errors
@@ -1127,6 +1177,14 @@ Satisfied by:
 All user-visible failures must use structured errors with recovery guidance.
 
 Persisted-data failures must preserve parser and entity context when available.
+
+Stable error-code rule:
+- every public `AtmError` must map to a stable ATM-owned error code
+- ATM warning and error logs must include that code
+- CLI bootstrap and argument-validation failures must also be logged with a
+  stable error code before process exit
+- the single source of truth for ATM-owned error codes is
+  [`atm-error-codes.md`](./atm-error-codes.md)
 
 Minimum error categories:
 - configuration

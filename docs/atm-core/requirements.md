@@ -121,7 +121,9 @@ The `atm-core` crate docs must remain aligned with:
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
 - [`../atm-message-schema.md`](../atm-message-schema.md)
 - [`../legacy-atm-message-schema.md`](../legacy-atm-message-schema.md)
+- [`../atm-error-codes.md`](../atm-error-codes.md)
 - [`./design/dedup-metadata-schema.md`](./design/dedup-metadata-schema.md)
+- [`./design/sc-observability-integration.md`](./design/sc-observability-integration.md)
 
 ## 6. Send Alert Metadata
 
@@ -156,3 +158,30 @@ Forward migration rule:
   `metadata.atm.missingConfigPath`
 - the forward architectural target and compatibility-period carve-out are
   documented in [`architecture.md` §3.1](./architecture.md)
+
+## 7. Observability Integration Boundary
+
+Requirement ID:
+- `REQ-CORE-OBS-001`
+
+Required boundary rules:
+- `atm-core` owns the injected observability boundary used by retained command
+  services
+- `atm-core` must not depend on concrete `sc-observability` crate types
+- the boundary must cover emit, query, follow, and health rather than
+  remaining emit-only
+- ATM-owned projected request/result types must be defined in `atm-core` for:
+  - log query
+  - log record projection
+  - tail-session projection
+  - doctor health projection
+- the boundary must remain synchronous and object-safe for service injection
+- shared query/follow and health failures must map to stable `AtmErrorKind`
+  variants without leaking shared error enums into `atm-core`
+- `atm-core` command-service failures and degraded recovery warnings must expose
+  stable ATM-owned error codes for the CLI observability adapter to log
+- the corresponding source-of-truth code registry must live in one source file
+  and match [`../atm-error-codes.md`](../atm-error-codes.md)
+
+Detailed design and implementation shape is owned by:
+- [`design/sc-observability-integration.md`](./design/sc-observability-integration.md)

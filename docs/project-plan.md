@@ -17,7 +17,10 @@ restructured, product docs remain in `docs/` and crate-local detail moves into
 
 Status:
 - Phases 0 through F and J are complete.
-- Phase G remains the next retained-command delivery focus.
+- Phase K is now the latest observability-integration phase and the next active
+  delivery focus.
+- Phases G and H remain retained-command phases, but their implementation work
+  is blocked on Phase K completing the concrete `sc-observability` integration.
 - Message schema ownership and metadata normalization are now implemented well
   enough for live shared-inbox adoption, while a separate ATM-native inbox
   remains deferred to a later version.
@@ -74,6 +77,8 @@ Acceptance:
 Status summary:
 - The `sc-observability` API gap was catalogued and closed before the ATM log
   and doctor work depends on it.
+- This phase is historical context only; it is no longer the gating item for
+  retained observability delivery.
 - Delivered in PR #1.
 
 Goal:
@@ -194,11 +199,12 @@ Acceptance:
 - `atm clear` removes only clearable messages
 - pending-ack messages remain visible until acknowledgement
 
-### Phase G: Log Path [IN PROGRESS / NEXT]
+### Phase G: Log Path [BLOCKED ON PHASE K]
 
 Status summary:
-- Next active implementation branch: `feature/pg-s1-log-path` off
-  `integrate/phase-g`.
+- The retained `log` command remains a command-phase deliverable, but concrete
+  implementation is blocked until Phase K lands the real
+  `sc-observability` adapter and shared query/follow integration.
 
 Port and redesign the log command:
 - injected observability port usage
@@ -212,7 +218,12 @@ Acceptance:
 - tail mode works
 - emit failures remain best-effort for mail commands
 
-### Phase H: Doctor Path
+### Phase H: Doctor Path [BLOCKED ON PHASE K]
+
+Status summary:
+- The retained `doctor` command remains a command-phase deliverable, but
+  concrete implementation is blocked until Phase K lands the real
+  `sc-observability` health/query integration.
 
 Port and redesign the doctor command:
 - local config/path checks
@@ -340,6 +351,98 @@ Acceptance:
   using `/codex-orchestration`
 - the current architecture explicitly defers a separate ATM-native inbox until
   a later version
+
+### Phase K: `sc-observability` Integration [NEXT / LATEST]
+
+Status summary:
+- the shared `sc-observability` repo now provides the generic query, follow,
+  sink, and health surfaces ATM needs
+- ATM still uses a local tracing-based emit-only adapter, so retained
+  `atm log` and `atm doctor` are not yet delivered on the shared stack
+- this phase replaces the old "shared API gap" framing with concrete ATM-side
+  integration work
+
+Goal:
+- integrate ATM with the current shared `sc-observability` logging/query/health
+  surface in a production-ready way before resuming retained `log` and
+  `doctor` delivery
+
+Execution model:
+- this phase is implemented as a coordinated multi-sprint stream owned by
+  `team-lead`
+- `team-lead` should orchestrate the sprint sequence, worktree assignments, and
+  review hand-offs using the `/codex-orchestration` skill
+- the phase uses the ATM-owned adapter/boundary documented in:
+  [`docs/atm-core/design/sc-observability-integration.md`](./atm-core/design/sc-observability-integration.md)
+- until `sc-observability` is published, local and CI builds may consume the
+  shared crates from a sibling checkout using a repo-local Cargo patch/path
+  strategy; committed ATM docs and scripts must not require user-specific
+  absolute paths
+
+Planned sprints:
+
+- `K.1` Toolchain And Dependency Alignment
+  - align ATM to the shared Rust toolchain floor and current stable pin
+  - define the pre-publish local dependency strategy used in developer builds
+    and CI
+  - acceptance: ATM toolchain/docs/CI strategy is explicit and matches the
+    shared repo dependency floor
+
+- `K.2` Observability Port Expansion
+  - expand the `atm-core` boundary from emit-only to emit/query/follow/health
+  - keep `sc-observability` types out of `atm-core` public APIs
+  - introduce the single ATM-owned error-code registry in `atm-core` and wire
+    it into `AtmError`
+  - acceptance: `atm-core` owns the projected ATM request/result types and a
+    synchronous tail session boundary, and the error-code registry is centrally
+    defined
+
+- `K.3` Concrete Adapter Bootstrap
+  - replace the local tracing-only `atm` implementation with a real
+    `sc-observability` adapter
+  - initialize the shared logger once per CLI process and inject it into
+    `atm-core`
+  - add terminal failure logging for bootstrap, parse, and core-service error
+    paths
+  - acceptance: retained mail commands emit through the shared logger and
+    preserve best-effort behavior, and failure diagnostics carry stable ATM
+    error codes
+
+- `K.4` `atm log` Delivery On Shared Query/Follow
+  - implement the retained `log` command over `Logger::query(...)` and
+    `Logger::follow(...)`
+  - acceptance: snapshot/tail/filtering behavior works through the shared log
+    store with integration coverage
+
+- `K.5` `atm doctor` Delivery On Shared Health
+  - implement the retained `doctor` command over shared logging/query health
+  - acceptance: doctor integration tests cover healthy, unavailable, and
+    degraded adapter states; each state produces a structured `DoctorReport`
+    with a stable ATM error code from `docs/atm-error-codes.md` when
+    applicable
+
+- `K.6` Integration And Live Validation
+  - close the command-test gap for observability consumer paths and run one
+    live/manual validation pass against a real ATM home
+  - close the error-logging gap by verifying CLI/bootstrap/service failures and
+    degraded recovery warnings all emit stable ATM-owned error codes
+  - acceptance: `atm log` (snapshot, tail, filter) and `atm doctor` are tested
+    against the real `sc-observability` adapter in at least one live
+    validation pass, and the results are documented in
+    `docs/atm-core/design/live-observability-validation.md`
+
+Acceptance:
+- ATM no longer depends on a local tracing-only observability adapter
+- `atm-core` owns an explicit emit/query/follow/health boundary over shared
+  observability crates
+- local and CI builds use the same documented pre-publish shared-crate
+  dependency strategy
+- `atm log` and `atm doctor` are implemented on the shared logging/query/health
+  stack
+- observability command integration coverage exists for snapshot, tail, filter,
+  and doctor readiness flows
+- any generic shared-crate usability gaps discovered during implementation are
+  filed upstream in `sc-observability`
 
 ## 5. Hard Rules
 

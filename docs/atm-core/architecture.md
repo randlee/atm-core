@@ -80,3 +80,41 @@ Initial use cases:
 - config/loading decisions
 - observability port decisions
 - service/module boundary decisions
+
+## 5. `sc-observability` Integration Boundary
+
+The retained `atm-core` observability surface must expand from the current
+emit-only port to a full emit/query/follow/health boundary.
+
+Architectural rules:
+
+- `atm-core` owns the ATM-facing request/result models for log query, tail, and
+  doctor health
+- `atm-core` must not expose shared `sc-observability` types in its public API
+- follow/tail behavior must remain synchronous and ATM-owned at the
+  `atm-core` boundary even though it is backed by shared follow support
+- the concrete adapter implementation remains owned by `atm`
+
+Required ATM-owned projected surfaces:
+
+- `AtmLogQuery`
+- `AtmLogRecord`
+- `AtmLogSnapshot`
+- `ObservabilityHealthSnapshot`
+- `LogTailSession`
+
+The exact design is owned by:
+- [`design/sc-observability-integration.md`](./design/sc-observability-integration.md)
+
+## 6. Error-Code Registry Boundary
+
+`atm-core` owns the single source registry of ATM-owned error codes in source.
+
+Architectural rules:
+
+- the source registry must live in `crates/atm-core/src/error_codes.rs`
+- `AtmError` must carry an `AtmErrorCode`
+- coarse `AtmErrorKind` classification must not replace the stable code
+- warning diagnostics emitted by `atm-core` must also select a registry code
+- the source registry must stay aligned with
+  [`../atm-error-codes.md`](../atm-error-codes.md)

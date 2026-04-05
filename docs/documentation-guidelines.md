@@ -86,6 +86,7 @@ docs/
   documentation-guidelines.md
   requirements.md
   architecture.md
+  atm-error-codes.md
   claude-code-message-schema.md
   atm-message-schema.md
   legacy-atm-message-schema.md
@@ -212,6 +213,7 @@ Top-level supporting docs are allowed only when they remain cross-cutting.
 Examples:
 
 - `read-behavior.md`
+- `atm-error-codes.md`
 
 Migration-only supporting documents now live under `docs/archive/`:
 

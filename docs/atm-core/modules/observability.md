@@ -17,3 +17,5 @@ References:
 - `REQ-P-OBS-001`
 - `REQ-CORE-OBS-001`
 - Product architecture: `docs/architecture.md` §2.3
+- Integration design:
+  `docs/atm-core/design/sc-observability-integration.md`

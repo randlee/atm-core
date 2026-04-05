@@ -58,6 +58,8 @@ Schema ownership references:
   [`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)
 - `sc-observability` schema ownership pointer:
   [`sc-observability-schema.md`](./sc-observability-schema.md)
+- ATM-owned error-code registry:
+  [`atm-error-codes.md`](./atm-error-codes.md)
 - schema enforcement models:
   `tools/schema_models/claude_code_message_schema.py` and
   `tools/schema_models/atm_message_schema.py` and
@@ -84,7 +86,19 @@ ATM still owns:
 - structured field filtering
 - runtime health reporting
 
-An early ATM planning/coordination sprint, `OBS-GAP-1`, must verify and close this shared API surface before ATM log/doctor implementation proceeds.
+The shared API gap is no longer the blocker. The current blocker is ATM-side
+integration.
+
+Initial retained-command integration scope:
+- `sc-observability-types`
+- `sc-observability`
+
+Deferred from the initial retained-command integration scope:
+- `sc-observe`
+- `sc-observability-otlp`
+
+The controlling ATM-side implementation design is:
+- [`docs/atm-core/design/sc-observability-integration.md`](./atm-core/design/sc-observability-integration.md)
 
 ## 3. Module Layout
 
@@ -566,6 +580,9 @@ It is responsible for:
 - log tail/follow
 - observability health projection
 
+The retained boundary must remain ATM-owned and must not leak shared
+`sc-observability` types directly into `atm-core` public APIs.
+
 `atm-core` owns the ATM-specific event and query vocabulary.
 
 `atm` owns the concrete `sc-observability` integration.
@@ -574,17 +591,17 @@ It is responsible for:
 
 Public entrypoints:
 
-- `log::query_logs(query: LogQuery, observability: &dyn ObservabilityPort) -> Result<LogSnapshot, AtmError>`
-- `log::tail_logs(query: LogQuery, observability: &dyn ObservabilityPort) -> Result<LogTailSession, AtmError>`
+- `log::query_logs(query: AtmLogQuery, observability: &dyn ObservabilityPort) -> Result<AtmLogSnapshot, AtmError>`
+- `log::tail_logs(query: AtmLogQuery, observability: &dyn ObservabilityPort) -> Result<LogTailSession, AtmError>`
 
-`LogQuery` contains:
+`AtmLogQuery` contains:
 - mode
 - level filter
 - field matches
 - time window
 - limit
 
-`LogSnapshot` contains:
+`AtmLogSnapshot` contains:
 - resolved query
 - snapshot ordering metadata
 - returned records
@@ -743,6 +760,7 @@ Required ATM event fields:
 - task id
 - outcome
 - error class when applicable
+- stable error code when applicable
 - message count when applicable
 - transition count when applicable
 
@@ -751,12 +769,62 @@ For explicit observability consumer commands:
 - `atm doctor` depends on shared health APIs
 - failures in those consumer paths are command errors, not silently dropped events
 
+### 14.1 Concrete Integration Shape
+
+The current tracing-only emit adapter is temporary. The retained implementation
+must expand to:
+
+- ATM-owned `AtmLogQuery`
+- ATM-owned `AtmLogRecord`
+- ATM-owned `AtmLogSnapshot`
+- ATM-owned `ObservabilityHealthSnapshot`
+- an ATM-owned synchronous `LogTailSession`
+
+Required boundary responsibilities:
+
+- `ObservabilityPort::emit_command_event(...)`
+- `ObservabilityPort::query_logs(...)`
+- `ObservabilityPort::follow_logs(...)`
+- `ObservabilityPort::health(...)`
+
+The exact ATM-owned projected types and object-safe follow-session split are
+defined in:
+- [`docs/atm-core/design/sc-observability-integration.md`](./atm-core/design/sc-observability-integration.md)
+
+### 14.2 Shared Crate Usage Rules
+
+Implementation rules:
+
+- `atm-core` remains concrete-crate-neutral and consumes only the injected
+  boundary
+- `atm` initializes the shared logger exactly once per process
+- the shared file sink is the authoritative retained log store for `atm log`
+- the shared console sink remains opt-in so it does not contaminate normal
+  command output
+- until `sc-observability` is published, developer and CI builds may use a
+  repo-local Cargo patch/path strategy against a sibling checkout; committed
+  ATM docs and scripts must not require a user-specific absolute path
+
+### 14.3 Failure Diagnostic Rules
+
+Required diagnostic behavior:
+
+- CLI bootstrap failures must be logged before process exit
+- CLI parse/validation failures that occur before a core service runs must be
+  logged before process exit
+- retained command-service failures must emit structured failure diagnostics
+  with stable ATM-owned error codes
+- degraded recovery warnings that continue the command must also log stable
+  error codes
+- command success-only logging is insufficient for the retained architecture
+
 ## 15. Error Model
 
 Root public error:
 
 ```rust
 pub struct AtmError {
+    pub code: AtmErrorCode,
     pub kind: AtmErrorKind,
     pub message: String,
     pub recovery: Option<String>,
@@ -764,8 +832,15 @@ pub struct AtmError {
 }
 ```
 
+```rust
+pub enum AtmErrorCode {
+    // single central registry re-exported from crates/atm-core/src/error_codes.rs
+}
+```
+
 Required families:
 - config
+- missing document
 - address
 - identity
 - team not found
@@ -781,9 +856,13 @@ Required families:
 - observability health
 
 Every public error must include:
+- a stable ATM-owned error code
 - a stable class
 - human-readable cause
 - recovery guidance when the user can act
+
+The single source of truth for ATM-owned error codes is:
+- [`atm-error-codes.md`](./atm-error-codes.md)
 
 Persisted-data errors should additionally carry file/entity/parser context so
 CLI surfaces can report the exact failing document and scope.

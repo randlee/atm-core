@@ -17,11 +17,16 @@ Local enforcement note:
 
 The owning repository referenced by ATM planning docs is:
 
-- `/Users/randlee/Documents/github/sc-observability`
+- `https://github.com/randlee/sc-observability`
+
+Local developer and CI checkouts may use a sibling `sc-observability` clone for
+pre-publish integration work, but committed ATM docs and scripts must not
+require a user-specific absolute filesystem path.
 
 Related ATM references:
 
 - `docs/archive/obs-gap-analysis.md`
+- `docs/atm-core/design/sc-observability-integration.md`
 - `docs/requirements.md`
 - `docs/architecture.md`
 
