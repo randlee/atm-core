@@ -63,21 +63,21 @@ mod tests {
     impl EnvGuard {
         fn set(key: &'static str, value: &std::path::Path) -> Self {
             let original = std::env::var_os(key);
-            std::env::set_var(key, value);
+            set_env_var(key, value);
             Self { key, original }
         }
 
         #[cfg(unix)]
         fn set_raw(key: &'static str, value: &str) -> Self {
             let original = std::env::var_os(key);
-            std::env::set_var(key, value);
+            set_env_var(key, value);
             Self { key, original }
         }
 
         #[cfg(unix)]
         fn remove(key: &'static str) -> Self {
             let original = std::env::var_os(key);
-            std::env::remove_var(key);
+            remove_env_var(key);
             Self { key, original }
         }
     }
@@ -85,10 +85,22 @@ mod tests {
     impl Drop for EnvGuard {
         fn drop(&mut self) {
             match self.original.take() {
-                Some(value) => std::env::set_var(self.key, value),
-                None => std::env::remove_var(self.key),
+                Some(value) => set_env_var(self.key, value),
+                None => remove_env_var(self.key),
             }
         }
+    }
+
+    fn set_env_var<K: AsRef<std::ffi::OsStr>, V: AsRef<std::ffi::OsStr>>(key: K, value: V) {
+        // SAFETY: these tests take a process-wide mutex before mutating the
+        // environment, so the mutation is serialized within this process.
+        unsafe { std::env::set_var(key, value) }
+    }
+
+    fn remove_env_var<K: AsRef<std::ffi::OsStr>>(key: K) {
+        // SAFETY: these tests take a process-wide mutex before mutating the
+        // environment, so the mutation is serialized within this process.
+        unsafe { std::env::remove_var(key) }
     }
 
     #[test]

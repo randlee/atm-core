@@ -124,9 +124,11 @@ fn test_clear_never_removes_pending_ack() {
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["removed_total"], 0);
     assert_eq!(fixture.inbox_contents("arch-ctm").len(), 1);
-    assert!(fixture.inbox_contents("arch-ctm")[0]
-        .pending_ack_at
-        .is_some());
+    assert!(
+        fixture.inbox_contents("arch-ctm")[0]
+            .pending_ack_at
+            .is_some()
+    );
 }
 
 #[test]

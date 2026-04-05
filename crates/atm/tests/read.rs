@@ -505,9 +505,11 @@ fn test_read_preserves_none_message_id_records_in_output() {
     let messages = parsed["messages"].as_array().expect("messages array");
     assert_eq!(messages.len(), 2);
     assert!(messages.iter().any(|message| message["text"] == "no id"));
-    assert!(messages
-        .iter()
-        .any(|message| message["text"] == "newer dup"));
+    assert!(
+        messages
+            .iter()
+            .any(|message| message["text"] == "newer dup")
+    );
 }
 
 #[test]
