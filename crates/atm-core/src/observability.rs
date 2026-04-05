@@ -1,10 +1,9 @@
 use std::path::PathBuf;
 
-use crate::error::AtmErrorCode;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::error::AtmError;
+use crate::error::{AtmError, AtmErrorCode};
 use crate::schema::LegacyMessageId;
 use crate::types::IsoTimestamp;
 
@@ -24,7 +23,7 @@ pub struct CommandEvent {
     pub error_message: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum LogMode {
     Snapshot,
@@ -195,6 +194,7 @@ mod tests {
         AtmLogQuery, AtmObservabilityHealthState, LogLevelFilter, LogMode, LogOrder,
         NullObservability, ObservabilityPort,
     };
+    use serde_json::json;
 
     fn empty_query() -> AtmLogQuery {
         AtmLogQuery {
@@ -234,6 +234,20 @@ mod tests {
         assert_eq!(
             health.query_state,
             Some(AtmObservabilityHealthState::Unavailable)
+        );
+    }
+
+    #[test]
+    fn log_mode_serde_round_trips_using_snake_case_wire_format() {
+        assert_eq!(serde_json::to_value(LogMode::Snapshot).unwrap(), json!("snapshot"));
+        assert_eq!(serde_json::to_value(LogMode::Tail).unwrap(), json!("tail"));
+        assert_eq!(
+            serde_json::from_value::<LogMode>(json!("snapshot")).unwrap(),
+            LogMode::Snapshot
+        );
+        assert_eq!(
+            serde_json::from_value::<LogMode>(json!("tail")).unwrap(),
+            LogMode::Tail
         );
     }
 }
