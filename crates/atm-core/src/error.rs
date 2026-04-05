@@ -282,3 +282,32 @@ impl AtmErrorKind {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{AtmError, AtmErrorCode};
+
+    #[test]
+    fn observability_error_helpers_use_expected_codes() {
+        assert_eq!(
+            AtmError::observability_emit("emit failed").code,
+            AtmErrorCode::ObservabilityEmitFailed
+        );
+        assert_eq!(
+            AtmError::observability_bootstrap("bootstrap failed").code,
+            AtmErrorCode::ObservabilityBootstrapFailed
+        );
+        assert_eq!(
+            AtmError::observability_query("query failed").code,
+            AtmErrorCode::ObservabilityQueryFailed
+        );
+        assert_eq!(
+            AtmError::observability_follow("follow failed").code,
+            AtmErrorCode::ObservabilityFollowFailed
+        );
+        assert_eq!(
+            AtmError::observability_health("health failed").code,
+            AtmErrorCode::ObservabilityHealthFailed
+        );
+    }
+}

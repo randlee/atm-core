@@ -591,8 +591,12 @@ The retained boundary must remain ATM-owned and must not leak shared
 
 Public entrypoints:
 
-- `log::query_logs(query: AtmLogQuery, observability: &dyn ObservabilityPort) -> Result<AtmLogSnapshot, AtmError>`
-- `log::tail_logs(query: AtmLogQuery, observability: &dyn ObservabilityPort) -> Result<LogTailSession, AtmError>`
+- `ObservabilityPort::query(query: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError>`
+- `ObservabilityPort::follow(query: AtmLogQuery) -> Result<LogTailSession, AtmError>`
+
+ATM CLI surfaces such as `atm log snapshot`, `atm log filter`, and `atm log tail`
+consume those boundary methods directly rather than routing through a separate
+`log::query_logs(...)` or `log::tail_logs(...)` wrapper.
 
 `AtmLogQuery` contains:
 - mode
