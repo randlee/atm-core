@@ -21,22 +21,17 @@ use time::OffsetDateTime;
 const ATM_SERVICE_NAME: &str = "atm";
 const ATM_COMMAND_TARGET: &str = "atm.command";
 
-<<<<<<< ours
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ConsoleLogRoute {
     Disabled,
     Stderr,
 }
-
-||||||| base
-=======
 /// ATM CLI observability handle.
 ///
 /// Clone is intentionally not derived; see rationale below.
 ///
 /// `Clone` is intentionally not implemented because the concrete adapter owns a
 /// boxed trait object without a shared-clone contract.
->>>>>>> theirs
 pub struct CliObservability {
     inner: Box<dyn ObservabilityPort + Send + Sync>,
 }
