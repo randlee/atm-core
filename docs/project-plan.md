@@ -543,6 +543,107 @@ Planned sprints:
     via PR #45 at e4b8fcf
   - the `[patch.crates-io]` override is removed; ATM uses crates.io `"1.0.0"`
 
+Recovered Phase K carry-in work items:
+
+- `L.5` Carry-In — `RUST-QA-001` ATM-owned query/follow boundary decision
+  - severity: IMPORTANT
+  - location: atm-core crate structure / `crates/atm/src/observability.rs`
+  - finding: the effective query/follow boundary lives in the CLI crate adapter
+    rather than an `atm-core` public API surface, which contradicts the Phase K
+    acceptance wording that said `atm-core` owns the boundary
+  - required: make an architectural ruling before Phase L completes: either
+    promote the boundary types into `atm-core`, or formally document the
+    deviation and update the acceptance language
+
+- `L.6` Carry-In — `PRR-002` Observability health contract extensibility
+  - severity: IMPORTANT
+  - location: `ObservabilityPort::health()` return type
+  - finding: the current 3-state health model is closed; any additional health
+    nuance needed during Phase L would require a breaking public enum change
+  - required: decide whether the health contract remains deliberately closed or
+    needs an extension point before `L.2` fault-injection work is finalized
+
+- `L.7` Carry-In — `ATM-QA-K-001` command emission integration coverage gap
+  - severity: IMPORTANT
+  - location: `crates/atm/tests/send.rs`, `read.rs`, `ack.rs`, `clear.rs`
+  - finding: only `send` is exercised indirectly by the retained-log fixture in
+    `log.rs`; the command suites do not each assert that retained log records
+    are emitted for their primary workflows
+  - required: add integration coverage proving `send`, `read`, `ack`, and
+    `clear` all emit retained log records through the shared adapter
+
+- `L.8` Carry-In — `ATM-QA-K-002` degraded/unavailable live-validation gap
+  - severity: IMPORTANT
+  - location: `docs/atm-core/design/live-observability-validation.md`
+  - finding: live validation only exercised the healthy real-adapter path;
+    degraded and unavailable states were reasoned about but not induced in the
+    live validation pass
+  - required: keep this as the explicit driver for `L.2`; Phase L is not
+    complete until degraded and unavailable states are exercised through the
+    real adapter path
+
+- `L.9` Carry-In — `INTEROP-001` `serde_json::Value` leaking through atm-core
+  - severity: IMPORTANT
+  - location: `LogFieldMatch` and `AtmLogRecord` in
+    `crates/atm-core/src/observability.rs`
+  - finding: `serde_json::Value` and `Map<String, Value>` are exposed in the
+    public `atm-core` API, forcing serialization-format concerns onto library
+    consumers
+  - required: replace these fields with ATM-owned domain types or newtype
+    wrappers at the `atm-core` boundary
+
+- `L.10` Carry-In — `UX-001` `CliObservability` builder/constructor ergonomics
+  - severity: IMPORTANT
+  - location: `crates/atm/src/observability.rs`
+  - finding: `CliObservability` has no structured builder/new constructor for
+    ergonomic assembly in tests and callers
+  - required: add a builder or structured constructor surface that owns the
+    wiring explicitly; see also duplicate carry-in `L.15`
+
+- `L.11` Carry-In — `UX-002` dynamic dispatch where static dispatch may suffice
+  - severity: IMPORTANT
+  - location: `crates/atm/src/observability.rs` / `CliObservability`
+  - finding: `Box<dyn ObservabilityPort>` may be broader than required for the
+    bounded ATM adapter set, adding runtime indirection and weakening type
+    guarantees
+  - required: review whether `CliObservability` should move to static dispatch
+    or whether the current boxed trait object remains the intentional design
+
+- `L.12` Carry-In — `UNI-003` `DoctorCommand` injectability/testability
+  - severity: IMPORTANT
+  - location: `DoctorCommand::run()` in `crates/atm/src/commands/doctor.rs`
+  - finding: `DoctorCommand::run()` reads the live environment directly and is
+    not structured for injected environment/input state
+  - required: refactor doctor command execution to accept injectable inputs so
+    health diagnostics can be tested without depending on the live environment
+
+- `L.13` Carry-In — `BP-001` sealed-trait enforcement hardening
+  - severity: IMPORTANT
+  - location: `crates/atm-core/src/observability.rs` / `ObservabilityPort`
+  - finding: the current sealing pattern needs an explicit architectural review
+    to ensure the trait is enforced the way the boundary docs claim
+  - required: decide whether the current public hidden sealed module is
+    sufficient, or whether the seal needs to be tightened and the cross-crate
+    implementation pattern adjusted
+
+- `L.14` Carry-In — `BP-003` library-boundary serde leakage duplicate
+  - severity: IMPORTANT
+  - location: `crates/atm-core/src/observability.rs` /
+    `LogFieldMatch.value`, `AtmLogRecord.fields`
+  - finding: this is the Pragmatic Rust Guidelines duplicate of `INTEROP-001`;
+    it flags the same public `serde_json` leakage under library/interoperability
+    rules
+  - required: track together with `L.9`; do not close the Phase L boundary
+    cleanup until both findings are resolved by the same API refactor
+
+- `L.15` Carry-In — `BP-004` structured constructor duplicate
+  - severity: IMPORTANT
+  - location: `crates/atm/src/observability.rs` / `CliObservability`
+  - finding: this is the Pragmatic Rust Guidelines duplicate of `UX-001`; it
+    flags the same missing builder/constructor under the library UX category
+  - required: track together with `L.10`; one constructor/builder improvement
+    should close both findings explicitly
+
 Acceptance:
 - Phase L covers stderr console routing, fault-injected live validation, and
   file sink path migration — all against the published crates.io release
