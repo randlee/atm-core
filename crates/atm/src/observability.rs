@@ -591,12 +591,9 @@ mod tests {
     use serial_test::serial;
     use tempfile::TempDir;
 
-<<<<<<< ours
-    use super::{CliObservability, ConsoleLogRoute, level_for_outcome, log_root};
-||||||| base
-    use super::{CliObservability, level_for_outcome, log_root};
-=======
-    use super::{CliObservability, fatal_emit_failure_message, level_for_outcome, log_root};
+    use super::{
+        CliObservability, ConsoleLogRoute, fatal_emit_failure_message, level_for_outcome, log_root,
+    };
 
     struct FailingEmitObservability;
 
@@ -632,8 +629,6 @@ mod tests {
             })
         }
     }
->>>>>>> theirs
-
     fn query(order: LogOrder) -> AtmLogQuery {
         AtmLogQuery {
             mode: LogMode::Snapshot,
