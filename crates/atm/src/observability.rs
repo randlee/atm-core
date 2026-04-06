@@ -513,9 +513,6 @@ fn render_diagnostic_summary(summary: sc_observability_types::DiagnosticSummary)
 
 #[cfg(test)]
 mod tests {
-    use std::thread::sleep;
-    use std::time::Duration;
-
     use atm_core::observability::{
         AtmLogQuery, LogLevelFilter, LogMode, LogOrder, ObservabilityPort,
     };
@@ -524,23 +521,6 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{CliObservability, level_for_outcome, log_root};
-
-    fn wait_for_healthy(
-        observability: &CliObservability,
-    ) -> atm_core::observability::AtmObservabilityHealth {
-        for _ in 0..10 {
-            let health = observability.health().expect("health");
-            if health.logging_state == atm_core::observability::AtmObservabilityHealthState::Healthy
-                && health.query_state
-                    == Some(atm_core::observability::AtmObservabilityHealthState::Healthy)
-            {
-                return health;
-            }
-            sleep(Duration::from_millis(25));
-        }
-
-        observability.health().expect("health")
-    }
 
     fn query(order: LogOrder) -> AtmLogQuery {
         AtmLogQuery {
@@ -593,28 +573,7 @@ mod tests {
             serde_json::Value::String("send".to_string())
         );
 
-        let mut follow = observability
-            .follow(AtmLogQuery {
-                mode: LogMode::Tail,
-                ..query(LogOrder::OldestFirst)
-            })
-            .expect("follow");
-        observability
-            .emit(event(Some("550e8400-e29b-41d4-a716-446655440001")))
-            .expect("emit followed");
-
-        let followed = follow.poll().expect("follow poll");
-        assert!(
-            followed.records.iter().any(|record| {
-                record.fields.get("message_id")
-                    == Some(&serde_json::Value::String(
-                        "550e8400-e29b-41d4-a716-446655440001".to_string(),
-                    ))
-            }),
-            "follow poll should include the newly emitted record even if the shared tail surface also returns the prior backlog entry"
-        );
-
-        let health = wait_for_healthy(&observability);
+        let health = observability.health().expect("health");
         assert_eq!(
             health.logging_state,
             atm_core::observability::AtmObservabilityHealthState::Healthy
@@ -633,6 +592,27 @@ mod tests {
             )
         );
         assert!(health.detail.is_none());
+
+        let mut follow = observability
+            .follow(AtmLogQuery {
+                mode: LogMode::Tail,
+                ..query(LogOrder::OldestFirst)
+            })
+            .expect("follow");
+        observability
+            .emit(event(Some("550e8400-e29b-41d4-a716-446655440001")))
+            .expect("emit followed");
+
+        let followed = follow.poll().expect("follow poll");
+        assert!(
+            followed.records.iter().any(|record| {
+                record.fields.get("message_id")
+                    == Some(&serde_json::Value::String(
+                        "550e8400-e29b-41d4-a716-446655440001".to_string(),
+                    ))
+            }),
+                "follow poll should include the newly emitted record even if the shared tail surface also returns the prior backlog entry"
+        );
     }
 
     #[test]
