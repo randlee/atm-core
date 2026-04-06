@@ -513,6 +513,9 @@ fn render_diagnostic_summary(summary: sc_observability_types::DiagnosticSummary)
 
 #[cfg(test)]
 mod tests {
+    use std::thread::sleep;
+    use std::time::Duration;
+
     use atm_core::observability::{
         AtmLogQuery, LogLevelFilter, LogMode, LogOrder, ObservabilityPort,
     };
@@ -521,6 +524,23 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{CliObservability, level_for_outcome, log_root};
+
+    fn wait_for_healthy(
+        observability: &CliObservability,
+    ) -> atm_core::observability::AtmObservabilityHealth {
+        for _ in 0..10 {
+            let health = observability.health().expect("health");
+            if health.logging_state == atm_core::observability::AtmObservabilityHealthState::Healthy
+                && health.query_state
+                    == Some(atm_core::observability::AtmObservabilityHealthState::Healthy)
+            {
+                return health;
+            }
+            sleep(Duration::from_millis(25));
+        }
+
+        observability.health().expect("health")
+    }
 
     fn query(order: LogOrder) -> AtmLogQuery {
         AtmLogQuery {
@@ -594,7 +614,7 @@ mod tests {
             "follow poll should include the newly emitted record even if the shared tail surface also returns the prior backlog entry"
         );
 
-        let health = observability.health().expect("health");
+        let health = wait_for_healthy(&observability);
         assert_eq!(
             health.logging_state,
             atm_core::observability::AtmObservabilityHealthState::Healthy
