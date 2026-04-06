@@ -452,16 +452,20 @@ Acceptance:
 ### Phase L: `sc-observability` 1.0 Alignment [NEXT / LATEST]
 
 Status summary:
-- Phase K proved that ATM works against the current pre-publish
-  `sc-observability` API using a local `[patch.crates-io]` override
-- the remaining work is to adopt the last shared fixes, validate them in ATM,
-  and then switch from the local override to the published crates.io release
-- the upstream shared sprint is expected to close four issues before 1.0:
-  `#20`, `#21`, `#55`, and `#57`
+- Phase K delivered the full sc-observability integration against a pre-publish
+  local `[patch.crates-io]` override
+- Sprint K-CRATES-IO-1 (2026-04-06) removed the override and switched ATM to
+  the published `sc-observability = "1.0.0"` on crates.io; CI passed on all
+  platforms; this sprint completed what was originally scoped as `L.4`
+- sc-observability 1.0.0 ships issues #55 (ConsoleSink::stderr), #57 (fault
+  injection), and #21 (file sink path migration) — all confirmed shipped in
+  PR #58 of sc-observability
+- `L.4` is therefore COMPLETE; `L.1` through `L.3` proceed directly against
+  the published crates.io release with no local override required
 
 Goal:
-- keep ATM aligned with the final `sc-observability` 1.0 public API and remove
-  the temporary local-path dependency strategy once the crates are published
+- adopt the three sc-observability 1.0 surface improvements (#55, #57, #21)
+  into the ATM integration layer now that the published crates are available
 
 Execution model:
 - this phase is implemented as a coordinated multi-sprint stream owned by
@@ -473,11 +477,8 @@ Execution model:
   behavior rather than redefining crate ownership
 - the detailed ATM-side 1.0 follow-on decisions are documented in:
   [`docs/atm-core/design/sc-obs-1.0-integration.md`](./atm-core/design/sc-obs-1.0-integration.md)
-- implementation branches for `L.1` through `L.3` must continue to use the
-  local `[patch.crates-io]` override strategy until the 1.0 release is
-  published
-- `L.4` is the only sprint that switches ATM from the local path override to
-  crates.io `^1.0.0`
+- all sprints use `sc-observability = "1.0.0"` from crates.io directly; no
+  local `[patch.crates-io]` override is required or permitted
 
 Planned sprints:
 
@@ -496,11 +497,9 @@ Planned sprints:
     - verify stderr mode writes retained console output to stderr
     - verify the normal stdout path remains unchanged when stderr routing is
       not selected
-    - keep existing retained-log query/follow tests green under the local path
-      dependency strategy
+    - keep existing retained-log query/follow tests green
   - dependency note:
-    - uses local `[patch.crates-io]` overrides against a sibling
-      `sc-observability` checkout
+    - uses `sc-observability = "1.0.0"` from crates.io directly
 
 - `L.2` Fault Injection For Live Health Validation
   - goal: adopt upstream issue `#57` and close the real-adapter validation gap
@@ -519,8 +518,7 @@ Planned sprints:
     - live/manual validation is updated to record the induced degraded and
       unavailable runs explicitly
   - dependency note:
-    - uses local `[patch.crates-io]` overrides against a sibling
-      `sc-observability` checkout
+    - uses `sc-observability = "1.0.0"` from crates.io directly
 
 - `L.3` File Sink Path Migration
   - goal: align ATM with upstream issue `#21` so ATM stops assuming the older
@@ -537,37 +535,20 @@ Planned sprints:
     - live validation confirms the active log path and query behavior against
       the migrated sink location
   - dependency note:
-    - uses local `[patch.crates-io]` overrides against a sibling
-      `sc-observability` checkout
+    - uses `sc-observability = "1.0.0"` from crates.io directly
 
-- `L.4` Switch To Published crates.io Release [FINAL]
-  - goal: remove the temporary local override strategy and adopt the published
-    `sc-observability` 1.0 crates from crates.io
-  - key tasks:
-    - remove the local `[patch.crates-io]` override for `sc-observability` and
-      `sc-observability-types`
-    - update ATM dependency declarations to use crates.io `^1.0.0`
-    - run the full retained-command and observability validation suite without
-      local path overrides
-    - verify the published crates preserve the Phase K and Phase L behavior
-      already proven against the local pre-publish checkout
-  - tests:
-    - `cargo clippy --workspace --all-targets -- -D warnings` passes without
-      local patch overrides
-    - `cargo test` passes without local patch overrides
-    - live/manual validation passes against the published crate
-  - dependency note:
-    - this sprint only starts after `sc-observability` 1.0 is published on
-      crates.io
+- `L.4` Switch To Published crates.io Release [COMPLETE — done in K-CRATES-IO-1]
+  - completed 2026-04-06 via sprint K-CRATES-IO-1 on branch feature/pK-crates-io
+  - commit: 1ce2369f; merged to integrate/phase-K via PR #46, then to develop
+    via PR #45 at e4b8fcf
+  - the `[patch.crates-io]` override is removed; ATM uses crates.io `"1.0.0"`
 
 Acceptance:
-- Phase L is explicitly sequenced as `L.1` through `L.4`
-- `L.1` through `L.3` all state the local `[patch.crates-io]` dependency rule
-- `L.4` explicitly switches to published crates.io `^1.0.0`
-- the phase covers stderr console routing, fault-injected live validation, file
-  sink path migration, and final published-crate adoption
+- Phase L covers stderr console routing, fault-injected live validation, and
+  file sink path migration — all against the published crates.io release
 - the phase preserves the ATM-owned adapter boundary and does not redefine the
   shared crate ownership split established in Phase K
+- `L.4` is already complete; `L.1` through `L.3` are the remaining sprints
 
 ## 5. Hard Rules
 
