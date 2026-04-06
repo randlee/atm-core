@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use anyhow::Result;
 use atm_core::error::{AtmError, AtmErrorCode};
@@ -9,8 +10,7 @@ use atm_core::observability::{
     LogTailSession, ObservabilityPort,
 };
 use chrono::{DateTime, Utc};
-use sc_observability::Logger;
-use sc_observability::LoggerConfig;
+use sc_observability::{ConsoleSink, Logger, LoggerConfig, SinkRegistration};
 use sc_observability_types::{
     ActionName, CorrelationId, DiagnosticInfo, Level, LogEvent, LogQuery, OutcomeLabel,
     ProcessIdentity, QueryError, SchemaVersion, ServiceName, TargetCategory, Timestamp,
@@ -21,23 +21,35 @@ use time::OffsetDateTime;
 const ATM_SERVICE_NAME: &str = "atm";
 const ATM_COMMAND_TARGET: &str = "atm.command";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ConsoleLogRoute {
+    Disabled,
+    Stderr,
+}
+
 pub struct CliObservability {
     inner: Box<dyn ObservabilityPort + Send + Sync>,
 }
 
 impl CliObservability {
-    fn concrete_for_home(home_dir: &Path) -> Result<Self, AtmError> {
-        let adapter = ScObservabilityAdapter::new(home_dir)?;
+    fn concrete_for_home(
+        home_dir: &Path,
+        console_log_route: ConsoleLogRoute,
+    ) -> Result<Self, AtmError> {
+        let adapter = ScObservabilityAdapter::new(home_dir, console_log_route)?;
         Ok(Self {
             inner: Box::new(adapter),
         })
     }
 
     pub fn fallback() -> Self {
-        Self::concrete_for_home(&std::env::temp_dir().join("atm-bootstrap-observability"))
-            .unwrap_or_else(|_| Self {
-                inner: Box::new(atm_core::observability::NullObservability),
-            })
+        Self::concrete_for_home(
+            &std::env::temp_dir().join("atm-bootstrap-observability"),
+            ConsoleLogRoute::Disabled,
+        )
+        .unwrap_or_else(|_| Self {
+            inner: Box::new(atm_core::observability::NullObservability),
+        })
     }
 
     pub fn emit_fatal_error(&self, stage: &'static str, error: &(dyn std::error::Error + 'static)) {
@@ -72,12 +84,20 @@ impl CliObservability {
     }
 }
 
-pub fn init() -> Result<CliObservability> {
+pub fn init(stderr_logs: bool) -> Result<CliObservability> {
     let home_dir = home::atm_home()?;
     if let Some(override_health) = test_health_override(&home_dir) {
         return Ok(override_health);
     }
-    Ok(CliObservability::concrete_for_home(&home_dir)?)
+    let console_log_route = if stderr_logs {
+        ConsoleLogRoute::Stderr
+    } else {
+        ConsoleLogRoute::Disabled
+    };
+    Ok(CliObservability::concrete_for_home(
+        &home_dir,
+        console_log_route,
+    )?)
 }
 
 impl ObservabilityPort for CliObservability {
@@ -113,7 +133,7 @@ impl observability::sealed::Sealed for ScObservabilityAdapter {}
 impl observability::sealed::Sealed for StaticHealthObservability {}
 
 impl ScObservabilityAdapter {
-    fn new(home_dir: &Path) -> Result<Self, AtmError> {
+    fn new(home_dir: &Path, console_log_route: ConsoleLogRoute) -> Result<Self, AtmError> {
         let service_name = ServiceName::new(ATM_SERVICE_NAME).map_err(|source| {
             AtmError::observability_bootstrap("failed to validate ATM service name")
                 .with_source(source)
@@ -123,13 +143,17 @@ impl ScObservabilityAdapter {
                 .with_source(source)
         })?;
         let mut config = LoggerConfig::default_for(service_name.clone(), log_root(home_dir));
-        // ATM CLI owns stdout/stderr UX; retain logs via the shared file sink by default.
+        // ATM CLI owns stdout/stderr UX by default; only opt into a shared
+        // console sink when the CLI routing rule explicitly selects one.
         config.enable_console_sink = false;
-
-        let logger = Logger::new(config).map_err(|source| {
+        let mut builder = Logger::builder(config).map_err(|source| {
             AtmError::observability_bootstrap("failed to initialize shared observability logger")
                 .with_source(source)
         })?;
+        if console_log_route == ConsoleLogRoute::Stderr {
+            builder.register_sink(SinkRegistration::new(Arc::new(ConsoleSink::stderr())));
+        }
+        let logger = builder.build();
 
         Ok(Self {
             logger,
@@ -542,7 +566,7 @@ mod tests {
     use serial_test::serial;
     use tempfile::TempDir;
 
-    use super::{CliObservability, level_for_outcome, log_root};
+    use super::{CliObservability, ConsoleLogRoute, level_for_outcome, log_root};
 
     fn query(order: LogOrder) -> AtmLogQuery {
         AtmLogQuery {
@@ -578,7 +602,8 @@ mod tests {
     fn concrete_adapter_emits_queries_follows_and_reports_health() {
         let tempdir = TempDir::new().expect("tempdir");
         let observability =
-            CliObservability::concrete_for_home(tempdir.path()).expect("concrete adapter");
+            CliObservability::concrete_for_home(tempdir.path(), ConsoleLogRoute::Disabled)
+                .expect("concrete adapter");
 
         observability
             .emit(event(Some("550e8400-e29b-41d4-a716-446655440000")))

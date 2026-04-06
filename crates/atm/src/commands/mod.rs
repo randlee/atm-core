@@ -25,11 +25,22 @@ use crate::observability::CliObservability;
     disable_help_subcommand = true
 )]
 pub struct Cli {
+    /// Route retained observability console logs to stderr.
+    ///
+    /// ATM owns normal command stdout output; this flag opts the shared
+    /// console sink into stderr so retained diagnostics do not pollute stdout.
+    #[arg(long = "stderr-logs", global = true)]
+    stderr_logs: bool,
+
     #[command(subcommand)]
     command: Command,
 }
 
 impl Cli {
+    pub fn stderr_logs(&self) -> bool {
+        self.stderr_logs
+    }
+
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         self.command.run(observability)
     }

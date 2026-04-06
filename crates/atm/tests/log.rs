@@ -218,6 +218,55 @@ fn test_invalid_send_logs_error_code_and_exits_nonzero() {
     );
 }
 
+#[test]
+fn test_send_stdout_remains_clean_without_stderr_logs() {
+    let fixture = Fixture::new(&["arch-ctm", "recipient"]);
+
+    let output = fixture.run(&["send", "recipient@atm-dev", "hello stdout", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["agent"], "recipient");
+    assert_eq!(parsed["team"], "atm-dev");
+    assert!(
+        fixture.stderr(&output).trim().is_empty(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+}
+
+#[test]
+fn test_send_routes_retained_console_logs_to_stderr_when_requested() {
+    let fixture = Fixture::new(&["arch-ctm", "recipient"]);
+
+    let output = fixture.run(&[
+        "--stderr-logs",
+        "send",
+        "recipient@atm-dev",
+        "hello stderr",
+        "--json",
+    ]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["agent"], "recipient");
+    assert_eq!(parsed["team"], "atm-dev");
+
+    let stderr = fixture.stderr(&output);
+    assert!(
+        stderr.contains("atm.command send ATM command send completed with outcome sent"),
+        "stderr: {stderr}"
+    );
+}
+
 struct Fixture {
     tempdir: tempfile::TempDir,
 }

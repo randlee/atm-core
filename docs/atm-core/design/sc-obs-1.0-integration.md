@@ -31,26 +31,33 @@ shared 1.0 crate behavior.
 
 ## 3. Stderr Routing Strategy (`#55`)
 
-Current ATM behavior uses the shared console sink conservatively because normal
-CLI command output must remain under ATM control.
+`L.1` is complete.
 
-Required Phase L direction:
+ATM now keeps retained console logging disabled by default and exposes one
+explicit CLI routing switch:
 
-- `CliObservability` should support a retained-log console route that targets
-  stderr through `ConsoleSink::stderr()`
-- ATM must preserve the distinction between:
-  - normal command output rendered by ATM CLI code
-  - retained/shared console log output emitted by the observability adapter
-- stderr routing must not leak shared sink behavior into `atm-core`; it remains
-  an `atm` adapter concern
+- `--stderr-logs`
 
-Expected implementation shape:
+When present, the `atm` crate wires `ConsoleSink::stderr()` into the shared
+logger builder. When absent, ATM leaves the shared console sink disabled so
+normal command stdout output remains unchanged.
 
-- add a CLI-facing selection rule:
-  - explicit `--stderr`, or
-  - a documented TTY-aware routing policy
-- keep stdout behavior unchanged unless the routing rule selects stderr
-- verify both output paths in integration tests
+Rationale:
+
+- the routing decision stays entirely inside the `atm` crate
+- `atm-core` still exposes only the ATM-owned `ObservabilityPort` boundary
+- stderr is opt-in, so scripted stdout consumers keep the same behavior unless
+  they explicitly request retained console output
+- the switch is straightforward to test in integration coverage
+
+Implementation notes:
+
+- `CliObservability` now uses `Logger::builder(...)` so the CLI adapter can
+  register `ConsoleSink::stderr()` without changing `atm-core`
+- stdout command rendering remains owned by ATM output code
+- integration tests cover both:
+  - default mode: stdout command output stays clean and stderr remains empty
+  - `--stderr-logs`: retained console output is emitted on stderr
 
 This change is useful for:
 
@@ -98,15 +105,6 @@ Required Phase L direction:
 
 ## 6. Dependency Strategy
 
-Implementation sprints `L.1` through `L.3` continue to use the local
-`[patch.crates-io]` override strategy described in:
-
-- [`../dev/pre-publish-deps.md`](../dev/pre-publish-deps.md)
-
-Final adoption rule:
-
-- `L.4` is the only sprint that removes the local override and switches ATM to
-  crates.io `sc-observability = "^1.0.0"`
-
-This keeps all pre-publish testing aligned with the real shared code while
-making the final release-cut transition explicit and auditable.
+ATM now consumes the published `sc-observability = "^1.0.0"` release. Phase L
+continues from that published baseline rather than the earlier local
+`[patch.crates-io]` pre-publish strategy.
