@@ -236,3 +236,48 @@ Issues found during the K.6 closure work:
    - added an explicit `AtmError` observability-code mapping test
 
 No additional runtime issues were found in the healthy real-adapter live pass.
+
+## Production Diagnosis
+
+Current dependency assumptions:
+
+- ATM now consumes `sc-observability 1.0.0` and
+  `sc-observability-types 1.0.0` from crates.io
+- retained observability uses the shared JSONL file sink by default
+
+Standard log-file path:
+
+- inspect `atm doctor --json` first and use `observability.active_log_path` as
+  the source of truth
+- on a standard install, the retained file sink is expected under:
+  `$ATM_HOME/.local/share/atm/logs/atm.log.jsonl`
+
+How to interpret `atm doctor`:
+
+- `healthy`
+  - shared observability initialized successfully
+  - retained log writes are healthy
+  - retained query readiness is healthy
+- `degraded`
+  - retained logging or query readiness is impaired, but ATM can still produce
+    partial observability data
+  - look for warning-level findings and remediation text in the doctor report
+- `unavailable`
+  - ATM could not initialize or query the shared observability backend
+  - retained log and doctor/query surfaces should be treated as unavailable
+
+First-line remediation:
+
+- `healthy`
+  - confirm the active log path exists and that recent ATM commands append
+    records as expected
+- `degraded`
+  - inspect the active log path for write permission or file-store issues
+  - rerun `atm doctor --json` and `atm log snapshot --limit 10 --json`
+  - review the warning detail for the specific shared health issue
+- `unavailable`
+  - verify the active log directory is writable
+  - verify the installed `sc-observability` crates are available in the build
+    and that ATM was built against the published 1.0.0 release
+  - rerun `atm doctor --json`; if bootstrap still fails, inspect stderr for the
+    emitted fatal diagnostic and the doctor finding remediation

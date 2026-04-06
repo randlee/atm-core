@@ -1,3 +1,5 @@
+//! ATM-owned observability boundary and projected log/health types.
+
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -148,15 +150,45 @@ impl LogTailSession {
         }
     }
 
+    /// Poll the next batch of followed log records.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AtmError`] when the underlying follow session cannot
+    /// produce the next batch of retained records.
     pub fn poll(&mut self) -> Result<AtmLogSnapshot, AtmError> {
         self.inner.poll()
     }
 }
 
 pub trait ObservabilityPort: sealed::Sealed {
+    /// Emit one ATM command event into the configured observability sink.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AtmError`] when the shared observability backend rejects
+    /// or cannot persist the event.
     fn emit(&self, event: CommandEvent) -> Result<(), AtmError>;
+    /// Query retained ATM observability records.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AtmError`] when the shared backend cannot execute the
+    /// query or when ATM-specific query projection fails.
     fn query(&self, req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError>;
+    /// Start a retained follow/tail session for ATM observability records.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AtmError`] when the shared backend cannot start the follow
+    /// session or ATM-specific query projection fails.
     fn follow(&self, req: AtmLogQuery) -> Result<LogTailSession, AtmError>;
+    /// Report the current retained observability health state.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AtmError`] when the shared backend health surface cannot
+    /// be evaluated or projected into ATM-owned health types.
     fn health(&self) -> Result<AtmObservabilityHealth, AtmError>;
 }
 
