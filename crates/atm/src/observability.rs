@@ -12,8 +12,8 @@ use chrono::{DateTime, Utc};
 use sc_observability::Logger;
 use sc_observability::LoggerConfig;
 use sc_observability_types::{
-    ActionName, DiagnosticInfo, Level, LogEvent, LogQuery, ProcessIdentity, QueryError,
-    ServiceName, TargetCategory, Timestamp,
+    ActionName, CorrelationId, DiagnosticInfo, Level, LogEvent, LogQuery, OutcomeLabel,
+    ProcessIdentity, QueryError, SchemaVersion, ServiceName, TargetCategory, Timestamp,
 };
 use serde_json::Map;
 use time::OffsetDateTime;
@@ -233,12 +233,7 @@ fn test_health_override(home_dir: &Path) -> Option<CliObservability> {
         .filter(|value| !value.is_empty());
 
     Some(CliObservability::static_health(AtmObservabilityHealth {
-        active_log_path: Some(
-            log_root(home_dir)
-                .join("atm")
-                .join("logs")
-                .join("atm.log.jsonl"),
-        ),
+        active_log_path: Some(log_root(home_dir).join("logs").join("atm.log.jsonl")),
         logging_state,
         query_state: Some(query_state),
         detail,
@@ -250,8 +245,35 @@ fn map_command_event(
     target_category: &TargetCategory,
     event: CommandEvent,
 ) -> Result<LogEvent, AtmError> {
+    let schema_version =
+        SchemaVersion::new(sc_observability_types::constants::OBSERVATION_ENVELOPE_VERSION)
+            .map_err(|source| {
+                AtmError::observability_emit("failed to validate ATM observability schema version")
+                    .with_source(source)
+            })?;
     let action = ActionName::new(event.action).map_err(|source| {
         AtmError::observability_emit("failed to validate ATM observability action")
+            .with_source(source)
+    })?;
+    let request_id = event
+        .message_id
+        .map(|value| CorrelationId::new(value.to_string()))
+        .transpose()
+        .map_err(|source| {
+            AtmError::observability_emit("failed to validate ATM observability request id")
+                .with_source(source)
+        })?;
+    let correlation_id = event
+        .task_id
+        .as_deref()
+        .map(CorrelationId::new)
+        .transpose()
+        .map_err(|source| {
+            AtmError::observability_emit("failed to validate ATM observability correlation id")
+                .with_source(source)
+        })?;
+    let outcome = OutcomeLabel::new(event.outcome).map_err(|source| {
+        AtmError::observability_emit("failed to validate ATM observability outcome label")
             .with_source(source)
     })?;
 
@@ -306,7 +328,7 @@ fn map_command_event(
     }
 
     Ok(LogEvent {
-        version: sc_observability_types::constants::OBSERVATION_ENVELOPE_VERSION.to_string(),
+        version: schema_version,
         timestamp: Timestamp::now_utc(),
         level: level_for_outcome(event.outcome),
         service: service_name.clone(),
@@ -318,9 +340,9 @@ fn map_command_event(
         )),
         identity: ProcessIdentity::default(),
         trace: None,
-        request_id: event.message_id.map(|value| value.to_string()),
-        correlation_id: event.task_id.clone(),
-        outcome: Some(event.outcome.to_string()),
+        request_id,
+        correlation_id,
+        outcome: Some(outcome),
         diagnostic: None,
         state_transition: None,
         fields,
@@ -584,12 +606,7 @@ mod tests {
         );
         assert_eq!(
             health.active_log_path,
-            Some(
-                log_root(tempdir.path())
-                    .join("atm")
-                    .join("logs")
-                    .join("atm.log.jsonl"),
-            )
+            Some(log_root(tempdir.path()).join("logs").join("atm.log.jsonl"))
         );
         assert!(health.detail.is_none());
 
