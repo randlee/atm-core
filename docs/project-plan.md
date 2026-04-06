@@ -358,12 +358,12 @@ Acceptance:
 ### Phase K: `sc-observability` Integration [COMPLETE]
 
 Status summary:
-- the shared `sc-observability` repo now provides the generic query, follow,
-  sink, and health surfaces ATM needs
-- ATM still uses a local tracing-based emit-only adapter, so retained
-  `atm log` and `atm doctor` are not yet delivered on the shared stack
-- this phase replaces the old "shared API gap" framing with concrete ATM-side
-  integration work
+- ATM now uses the shared `sc-observability` stack for retained emit, query,
+  follow, and health behavior
+- `atm log` and `atm doctor` are delivered on the shared stack with ATM-owned
+  boundary types and error-code mapping
+- the remaining follow-on work is release-alignment and post-1.0 feature
+  adoption, tracked in Phase L
 
 Goal:
 - integrate ATM with the current shared `sc-observability` logging/query/health

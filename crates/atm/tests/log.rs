@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::Duration;
@@ -138,27 +139,16 @@ fn test_log_tail_streams_new_records() {
         "--json",
         "--poll-interval-ms",
         "25",
-        "--max-polls",
-        "20",
     ]);
 
     thread::sleep(Duration::from_millis(100));
     fixture.send("recipient@atm-dev", "hello tail");
 
-    let output = child.wait_with_output().expect("tail output");
+    let records = fixture.read_tail_records(child, 1);
     assert!(
-        output.status.success(),
-        "stderr: {}",
-        fixture.stderr(&output)
+        !records.is_empty(),
+        "tail should produce at least one record"
     );
-
-    let stdout = fixture.stdout(&output);
-    let records = stdout
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("json line"))
-        .collect::<Vec<_>>();
-    assert!(!records.is_empty(), "stdout: {stdout}");
     assert!(
         records
             .iter()
@@ -252,6 +242,32 @@ impl Fixture {
             .stderr(Stdio::piped())
             .spawn()
             .expect("spawn atm")
+    }
+
+    fn read_tail_records(
+        &self,
+        mut child: std::process::Child,
+        count: usize,
+    ) -> Vec<serde_json::Value> {
+        let stdout = child.stdout.take().expect("tail stdout");
+        let mut reader = BufReader::new(stdout);
+        let mut line = String::new();
+        let mut records = Vec::new();
+
+        while records.len() < count {
+            line.clear();
+            let bytes = reader.read_line(&mut line).expect("read line");
+            assert!(bytes > 0, "tail exited before producing enough output");
+            if line.trim().is_empty() {
+                continue;
+            }
+            records.push(serde_json::from_str(line.trim()).expect("json line"));
+        }
+
+        child.kill().expect("kill tail");
+        let _ = child.wait_with_output().expect("tail output");
+
+        records
     }
 
     fn send(&self, target: &str, body: &str) {
