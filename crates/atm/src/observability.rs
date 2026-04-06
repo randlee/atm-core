@@ -23,6 +23,8 @@ const ATM_COMMAND_TARGET: &str = "atm.command";
 
 /// ATM CLI observability handle.
 ///
+/// Clone is intentionally not derived; see rationale below.
+///
 /// `Clone` is intentionally not implemented because the concrete adapter owns a
 /// boxed trait object without a shared-clone contract.
 pub struct CliObservability {

@@ -202,7 +202,7 @@ Acceptance:
 - `atm clear` removes only clearable messages
 - pending-ack messages remain visible until acknowledgement
 
-### Phase G: Log Path [BLOCKED ON PHASE K]
+### Phase G: Log Path [UNBLOCKED - Phase K COMPLETE]
 
 Status summary:
 - The retained `log` command remains a command-phase deliverable, but concrete
@@ -221,7 +221,7 @@ Acceptance:
 - tail mode works
 - emit failures remain best-effort for mail commands
 
-### Phase H: Doctor Path [BLOCKED ON PHASE K]
+### Phase H: Doctor Path [UNBLOCKED - Phase K COMPLETE]
 
 Status summary:
 - The retained `doctor` command remains a command-phase deliverable, but
