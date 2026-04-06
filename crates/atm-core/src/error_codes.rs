@@ -1,40 +1,78 @@
+//! Stable ATM-owned error-code registry.
+//!
+//! These codes are the machine-readable contract for command failures and
+//! degraded-warning diagnostics emitted by ATM.
+
 use std::fmt;
 
 use serde::Serialize;
 
+/// Stable ATM error and warning codes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AtmErrorCode {
+    /// ATM home directory could not be resolved.
     ConfigHomeUnavailable,
+    /// A generic ATM config parse failed.
     ConfigParseFailed,
+    /// Team config parsing failed.
     ConfigTeamParseFailed,
+    /// Team config document is missing.
     ConfigTeamMissing,
+    /// Sender identity could not be resolved.
     IdentityUnavailable,
+    /// Address parsing failed.
     AddressParseFailed,
+    /// Team could not be resolved from config or input.
     TeamUnavailable,
+    /// The requested team does not exist.
     TeamNotFound,
+    /// The requested agent does not exist in the target team.
     AgentNotFound,
+    /// Reading a mailbox failed.
     MailboxReadFailed,
+    /// Writing a mailbox failed.
     MailboxWriteFailed,
+    /// A malformed mailbox record was skipped.
     MailboxRecordSkipped,
+    /// Message validation failed.
     MessageValidationFailed,
+    /// Serialization or deserialization failed.
     SerializationFailed,
+    /// File-policy enforcement rejected the operation.
     FilePolicyRejected,
+    /// Rewriting a file reference failed.
     FileReferenceRewriteFailed,
+    /// A wait/read timed out.
     WaitTimeout,
+    /// Ack was attempted from an invalid state.
     AckInvalidState,
+    /// Clear was attempted from an invalid state.
     ClearInvalidState,
+    /// Emitting an observability event failed.
     ObservabilityEmitFailed,
+    /// Querying retained observability records failed.
     ObservabilityQueryFailed,
+    /// Starting or polling an observability follow session failed.
     ObservabilityFollowFailed,
+    /// Observability health evaluation failed.
     ObservabilityHealthFailed,
+    /// Observability bootstrap/initialization failed.
     ObservabilityBootstrapFailed,
+    /// Observability health is healthy.
     ObservabilityHealthOk,
+    /// A malformed team member record was skipped.
     WarningInvalidTeamMemberSkipped,
+    /// A mailbox record was skipped during degraded recovery.
     WarningMailboxRecordSkipped,
+    /// A malformed ATM-owned field was ignored.
     WarningMalformedAtmFieldIgnored,
+    /// Observability health is degraded.
     WarningObservabilityHealthDegraded,
+    /// An origin inbox entry was skipped.
     WarningOriginInboxEntrySkipped,
+    /// Send fell back because the team config was missing.
     WarningMissingTeamConfigFallback,
+    /// Send alert state degraded but the command continued.
     WarningSendAlertStateDegraded,
 }
 

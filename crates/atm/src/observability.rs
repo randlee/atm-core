@@ -21,8 +21,20 @@ use time::OffsetDateTime;
 const ATM_SERVICE_NAME: &str = "atm";
 const ATM_COMMAND_TARGET: &str = "atm.command";
 
+/// ATM CLI observability handle.
+///
+/// Clone is intentionally not derived; see rationale below.
+///
+/// `Clone` is intentionally not implemented because the concrete adapter owns a
+/// boxed trait object without a shared-clone contract.
 pub struct CliObservability {
     inner: Box<dyn ObservabilityPort + Send + Sync>,
+}
+
+impl std::fmt::Debug for CliObservability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CliObservability").finish_non_exhaustive()
+    }
 }
 
 impl CliObservability {
@@ -49,7 +61,7 @@ impl CliObservability {
 
         let identity = std::env::var("ATM_IDENTITY").unwrap_or_else(|_| "unknown".to_string());
         let team = std::env::var("ATM_TEAM").unwrap_or_else(|_| "unknown".to_string());
-        let _ = self.emit(CommandEvent {
+        if let Err(emit_error) = self.emit(CommandEvent {
             command: "atm",
             action: stage,
             outcome: "error",
@@ -62,9 +74,12 @@ impl CliObservability {
             task_id: None,
             error_code: Some(code),
             error_message: Some(message),
-        });
+        }) {
+            eprintln!("{}", fatal_emit_failure_message(stage, &emit_error));
+        }
     }
 
+    #[cfg(any(test, feature = "test-util"))]
     fn static_health(health: AtmObservabilityHealth) -> Self {
         Self {
             inner: Box::new(StaticHealthObservability { health }),
@@ -74,6 +89,7 @@ impl CliObservability {
 
 pub fn init() -> Result<CliObservability> {
     let home_dir = home::atm_home()?;
+    #[cfg(any(test, feature = "test-util"))]
     if let Some(override_health) = test_health_override(&home_dir) {
         return Ok(override_health);
     }
@@ -104,12 +120,14 @@ struct ScObservabilityAdapter {
     target_category: TargetCategory,
 }
 
+#[cfg(any(test, feature = "test-util"))]
 struct StaticHealthObservability {
     health: AtmObservabilityHealth,
 }
 
 impl observability::sealed::Sealed for CliObservability {}
 impl observability::sealed::Sealed for ScObservabilityAdapter {}
+#[cfg(any(test, feature = "test-util"))]
 impl observability::sealed::Sealed for StaticHealthObservability {}
 
 impl ScObservabilityAdapter {
@@ -191,6 +209,7 @@ impl ObservabilityPort for ScObservabilityAdapter {
     }
 }
 
+#[cfg(any(test, feature = "test-util"))]
 impl ObservabilityPort for StaticHealthObservability {
     fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {
         Ok(())
@@ -213,6 +232,11 @@ fn log_root(home_dir: &Path) -> PathBuf {
     home_dir.join(".local").join("share")
 }
 
+fn fatal_emit_failure_message(stage: &str, emit_error: &AtmError) -> String {
+    format!("ATM fatal diagnostic emission failed during {stage}: {emit_error}")
+}
+
+#[cfg(any(test, feature = "test-util"))]
 fn test_health_override(home_dir: &Path) -> Option<CliObservability> {
     // Keep the CLI integration harness deterministic for doctor/log surfaces
     // without depending on induced file-sink failures inside sc-observability.
@@ -488,6 +512,7 @@ fn map_query_state(state: sc_observability_types::QueryHealthState) -> AtmObserv
     }
 }
 
+#[cfg(any(test, feature = "test-util"))]
 fn parse_health_state(value: &str) -> Option<AtmObservabilityHealthState> {
     match value {
         "healthy" => Some(AtmObservabilityHealthState::Healthy),
@@ -535,6 +560,7 @@ fn render_diagnostic_summary(summary: sc_observability_types::DiagnosticSummary)
 
 #[cfg(test)]
 mod tests {
+    use atm_core::error::AtmError;
     use atm_core::observability::{
         AtmLogQuery, LogLevelFilter, LogMode, LogOrder, ObservabilityPort,
     };
@@ -542,7 +568,42 @@ mod tests {
     use serial_test::serial;
     use tempfile::TempDir;
 
-    use super::{CliObservability, level_for_outcome, log_root};
+    use super::{CliObservability, fatal_emit_failure_message, level_for_outcome, log_root};
+
+    struct FailingEmitObservability;
+
+    impl atm_core::observability::sealed::Sealed for FailingEmitObservability {}
+
+    impl ObservabilityPort for FailingEmitObservability {
+        fn emit(&self, _event: atm_core::observability::CommandEvent) -> Result<(), AtmError> {
+            Err(AtmError::observability_emit("synthetic emit failure"))
+        }
+
+        fn query(
+            &self,
+            _req: AtmLogQuery,
+        ) -> Result<atm_core::observability::AtmLogSnapshot, AtmError> {
+            Ok(atm_core::observability::AtmLogSnapshot::default())
+        }
+
+        fn follow(
+            &self,
+            _req: AtmLogQuery,
+        ) -> Result<atm_core::observability::LogTailSession, AtmError> {
+            Ok(atm_core::observability::LogTailSession::empty())
+        }
+
+        fn health(&self) -> Result<atm_core::observability::AtmObservabilityHealth, AtmError> {
+            Ok(atm_core::observability::AtmObservabilityHealth {
+                active_log_path: None,
+                logging_state: atm_core::observability::AtmObservabilityHealthState::Unavailable,
+                query_state: Some(
+                    atm_core::observability::AtmObservabilityHealthState::Unavailable,
+                ),
+                detail: Some("synthetic".to_string()),
+            })
+        }
+    }
 
     fn query(order: LogOrder) -> AtmLogQuery {
         AtmLogQuery {
@@ -635,5 +696,48 @@ mod tests {
     #[test]
     fn unknown_outcome_maps_to_warn() {
         assert_eq!(level_for_outcome("future-outcome"), Level::Warn);
+    }
+
+    #[test]
+    fn level_for_outcome_matches_documented_outcomes() {
+        let cases = [
+            ("ok", Level::Info),
+            ("sent", Level::Info),
+            ("dry_run", Level::Info),
+            ("timeout", Level::Warn),
+            ("error", Level::Error),
+            ("failed", Level::Error),
+        ];
+
+        for (outcome, expected) in cases {
+            assert_eq!(level_for_outcome(outcome), expected, "outcome={outcome}");
+        }
+    }
+
+    #[test]
+    fn cli_observability_is_debuggable() {
+        let observability = CliObservability {
+            inner: Box::new(atm_core::observability::NullObservability),
+        };
+        let debug = format!("{observability:?}");
+        assert!(debug.contains("CliObservability"));
+    }
+
+    #[test]
+    fn fatal_emit_failure_message_mentions_stage_and_error() {
+        let message = fatal_emit_failure_message(
+            "service",
+            &AtmError::observability_emit("synthetic emit failure"),
+        );
+        assert!(message.contains("ATM fatal diagnostic emission failed during service"));
+        assert!(message.contains("synthetic emit failure"));
+    }
+
+    #[test]
+    fn emit_fatal_error_executes_secondary_failure_path_without_panicking() {
+        let observability = CliObservability {
+            inner: Box::new(FailingEmitObservability),
+        };
+        observability.emit_fatal_error("service", &AtmError::validation("boom"));
     }
 }

@@ -74,7 +74,7 @@ pub fn run_doctor(
 
 #[cfg(test)]
 mod tests {
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
 
     use crate::doctor::{DoctorQuery, DoctorSeverity, DoctorStatus, run_doctor};
     use crate::error::AtmError;
@@ -120,27 +120,42 @@ mod tests {
         }
     }
 
-    fn temp_path(name: impl AsRef<Path>) -> PathBuf {
-        std::env::temp_dir()
-            .join("atm-doctor-tests")
-            .join(name.as_ref())
+    struct TestPaths {
+        _tempdir: tempfile::TempDir,
+        home_dir: PathBuf,
+        current_dir: PathBuf,
+        active_log_path: PathBuf,
     }
 
-    fn query() -> DoctorQuery {
+    impl TestPaths {
+        fn new() -> Self {
+            let tempdir = tempfile::tempdir().expect("tempdir");
+            let root = tempdir.path().to_path_buf();
+            Self {
+                _tempdir: tempdir,
+                home_dir: root.join("atm-home"),
+                current_dir: root.join("workspace"),
+                active_log_path: root.join("atm.log.jsonl"),
+            }
+        }
+    }
+
+    fn query(paths: &TestPaths) -> DoctorQuery {
         DoctorQuery {
-            home_dir: temp_path("atm-home"),
-            current_dir: temp_path("workspace"),
+            home_dir: paths.home_dir.clone(),
+            current_dir: paths.current_dir.clone(),
             team_override: Some("atm-dev".to_string()),
         }
     }
 
     #[test]
     fn run_doctor_reports_healthy_observability() {
+        let paths = TestPaths::new();
         let report = run_doctor(
-            query(),
+            query(&paths),
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
-                    active_log_path: Some(temp_path("atm.log.jsonl")),
+                    active_log_path: Some(paths.active_log_path.clone()),
                     logging_state: AtmObservabilityHealthState::Healthy,
                     query_state: Some(AtmObservabilityHealthState::Healthy),
                     detail: None,
@@ -156,11 +171,12 @@ mod tests {
 
     #[test]
     fn run_doctor_reports_degraded_observability_as_warning() {
+        let paths = TestPaths::new();
         let report = run_doctor(
-            query(),
+            query(&paths),
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
-                    active_log_path: Some(temp_path("atm.log.jsonl")),
+                    active_log_path: Some(paths.active_log_path.clone()),
                     logging_state: AtmObservabilityHealthState::Degraded,
                     query_state: Some(AtmObservabilityHealthState::Degraded),
                     detail: Some("query backlog".to_string()),
@@ -179,8 +195,9 @@ mod tests {
 
     #[test]
     fn run_doctor_reports_unavailable_observability_as_error() {
+        let paths = TestPaths::new();
         let report = run_doctor(
-            query(),
+            query(&paths),
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
                     active_log_path: None,
@@ -202,8 +219,9 @@ mod tests {
 
     #[test]
     fn run_doctor_reports_observability_health_errors() {
+        let paths = TestPaths::new();
         let report = run_doctor(
-            query(),
+            query(&paths),
             &StubObservability {
                 health: StubHealth::Err(AtmError::observability_health(
                     "health check transport failed",

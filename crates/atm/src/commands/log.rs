@@ -12,6 +12,11 @@ use serde_json::Value;
 use crate::observability::CliObservability;
 use crate::output;
 
+// Keep retained log snapshot output bounded for interactive use.
+const DEFAULT_SNAPSHOT_LIMIT: usize = 50;
+// Tail mode polls the shared follow surface at a human-readable cadence.
+const DEFAULT_TAIL_POLL_INTERVAL_MS: u64 = 250;
+
 #[derive(Debug, Args)]
 pub struct LogCommand {
     #[command(subcommand)]
@@ -92,7 +97,7 @@ struct QueryArgs {
 impl QueryArgs {
     fn build_query(&self, mode: LogMode) -> Result<AtmLogQuery> {
         let limit = match mode {
-            LogMode::Snapshot => Some(self.limit.unwrap_or(50)),
+            LogMode::Snapshot => Some(self.limit.unwrap_or(DEFAULT_SNAPSHOT_LIMIT)),
             LogMode::Tail => self.limit,
         };
 
@@ -126,15 +131,28 @@ struct TailArgs {
     query: QueryArgs,
 
     /// Poll interval in milliseconds between follow polls.
-    #[arg(long, default_value_t = 250)]
+    #[arg(long, default_value_t = DEFAULT_TAIL_POLL_INTERVAL_MS)]
     poll_interval_ms: u64,
 
     /// Internal test seam to stop tail mode after a fixed number of polls.
+    #[cfg(test)]
     #[arg(long, hide = true)]
     max_polls: Option<usize>,
 }
 
 impl TailArgs {
+    #[cfg(not(test))]
+    fn run(self, observability: &CliObservability) -> Result<()> {
+        let mut session = observability.follow(self.query.build_query(LogMode::Tail)?)?;
+
+        loop {
+            let snapshot = session.poll()?;
+            output::print_log_records(snapshot.records, self.query.json)?;
+            thread::sleep(Duration::from_millis(self.poll_interval_ms));
+        }
+    }
+
+    #[cfg(test)]
     fn run(self, observability: &CliObservability) -> Result<()> {
         let mut session = observability.follow(self.query.build_query(LogMode::Tail)?)?;
         let mut polls = 0usize;
@@ -145,13 +163,11 @@ impl TailArgs {
             polls += 1;
 
             if self.max_polls.is_some_and(|limit| polls >= limit) {
-                break;
+                return Ok(());
             }
 
             thread::sleep(Duration::from_millis(self.poll_interval_ms));
         }
-
-        Ok(())
     }
 }
 
