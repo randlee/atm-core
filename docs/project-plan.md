@@ -17,10 +17,13 @@ restructured, product docs remain in `docs/` and crate-local detail moves into
 
 Status:
 - Phases 0 through F and J are complete.
-- Phase K is now the latest observability-integration phase and the next active
+- Phase K is complete and ready to roll forward into shared 1.0 release
+  alignment work.
+- Phase L is now the latest observability follow-on phase and the next active
   delivery focus.
 - Phases G and H remain retained-command phases, but their implementation work
-  is blocked on Phase K completing the concrete `sc-observability` integration.
+  depends on the concrete `sc-observability` integration delivered in Phase K
+  and the release-alignment work planned in Phase L.
 - Message schema ownership and metadata normalization are now implemented well
   enough for live shared-inbox adoption, while a separate ATM-native inbox
   remains deferred to a later version.
@@ -352,7 +355,7 @@ Acceptance:
 - the current architecture explicitly defers a separate ATM-native inbox until
   a later version
 
-### Phase K: `sc-observability` Integration [NEXT / LATEST]
+### Phase K: `sc-observability` Integration [COMPLETE]
 
 Status summary:
 - the shared `sc-observability` repo now provides the generic query, follow,
@@ -385,6 +388,8 @@ Planned sprints:
   - align ATM to the shared Rust toolchain floor and current stable pin
   - define the pre-publish local dependency strategy used in developer builds
     and CI
+  - land `rust-toolchain.toml`, repo/CI toolchain pinning, and
+    `docs/atm-core/dev/pre-publish-deps.md`
   - acceptance: ATM toolchain/docs/CI strategy is explicit and matches the
     shared repo dependency floor
 
@@ -443,6 +448,126 @@ Acceptance:
   and doctor readiness flows
 - any generic shared-crate usability gaps discovered during implementation are
   filed upstream in `sc-observability`
+
+### Phase L: `sc-observability` 1.0 Alignment [NEXT / LATEST]
+
+Status summary:
+- Phase K proved that ATM works against the current pre-publish
+  `sc-observability` API using a local `[patch.crates-io]` override
+- the remaining work is to adopt the last shared fixes, validate them in ATM,
+  and then switch from the local override to the published crates.io release
+- the upstream shared sprint is expected to close four issues before 1.0:
+  `#20`, `#21`, `#55`, and `#57`
+
+Goal:
+- keep ATM aligned with the final `sc-observability` 1.0 public API and remove
+  the temporary local-path dependency strategy once the crates are published
+
+Execution model:
+- this phase is implemented as a coordinated multi-sprint stream owned by
+  `team-lead`
+- `team-lead` should orchestrate the sprint sequence, worktree assignments, and
+  review hand-offs using the `/codex-orchestration` skill
+- the Phase K adapter boundary remains the governing implementation boundary;
+  Phase L refines the ATM-side integration against the final 1.0 shared crate
+  behavior rather than redefining crate ownership
+- the detailed ATM-side 1.0 follow-on decisions are documented in:
+  [`docs/atm-core/design/sc-obs-1.0-integration.md`](./atm-core/design/sc-obs-1.0-integration.md)
+- implementation branches for `L.1` through `L.3` must continue to use the
+  local `[patch.crates-io]` override strategy until the 1.0 release is
+  published
+- `L.4` is the only sprint that switches ATM from the local path override to
+  crates.io `^1.0.0`
+
+Planned sprints:
+
+- `L.1` `ConsoleSink::stderr()` Integration
+  - goal: adopt upstream issue `#55` so CLI-facing retained logs can target
+    stderr when appropriate without polluting normal stdout command output
+  - key tasks:
+    - wire `ConsoleSink::stderr()` into `CliObservability`
+    - add an explicit CLI routing switch such as `--stderr`, or a clearly
+      documented TTY-aware auto-routing rule, while preserving the current
+      stdout path as the default compatibility behavior unless the chosen
+      routing rule says otherwise
+    - keep the ATM-owned adapter boundary intact; no `sc-observability` types
+      leak into `atm-core`
+  - tests:
+    - verify stderr mode writes retained console output to stderr
+    - verify the normal stdout path remains unchanged when stderr routing is
+      not selected
+    - keep existing retained-log query/follow tests green under the local path
+      dependency strategy
+  - dependency note:
+    - uses local `[patch.crates-io]` overrides against a sibling
+      `sc-observability` checkout
+
+- `L.2` Fault Injection For Live Health Validation
+  - goal: adopt upstream issue `#57` and close the real-adapter validation gap
+    identified in `docs/atm-core/design/live-observability-validation.md`
+  - key tasks:
+    - use the new shared public fault-injection surface to induce degraded and
+      unavailable retained-sink states through the real adapter
+    - extend the live validation report so healthy, degraded, and unavailable
+      paths are all exercised against the shared crate rather than only through
+      ATM-local deterministic doubles
+    - keep deterministic ATM integration tests as the fast/stable regression
+      layer; the new fault-injected live path supplements them
+  - tests:
+    - end-to-end `atm doctor` coverage verifies degraded and unavailable states
+      through the real shared adapter path
+    - live/manual validation is updated to record the induced degraded and
+      unavailable runs explicitly
+  - dependency note:
+    - uses local `[patch.crates-io]` overrides against a sibling
+      `sc-observability` checkout
+
+- `L.3` File Sink Path Migration
+  - goal: align ATM with upstream issue `#21` so ATM stops assuming the older
+    retained-log file layout
+  - key tasks:
+    - update any ATM-side path assumptions to the new
+      `<log_root>/logs/<service_name>.log.jsonl` layout
+    - verify retained query/follow and doctor health behavior against the
+      updated shared file-sink location
+    - document any operator-facing path changes where they affect diagnostics
+      or manual validation
+  - tests:
+    - retained-log integration tests pass against the new path layout
+    - live validation confirms the active log path and query behavior against
+      the migrated sink location
+  - dependency note:
+    - uses local `[patch.crates-io]` overrides against a sibling
+      `sc-observability` checkout
+
+- `L.4` Switch To Published crates.io Release [FINAL]
+  - goal: remove the temporary local override strategy and adopt the published
+    `sc-observability` 1.0 crates from crates.io
+  - key tasks:
+    - remove the local `[patch.crates-io]` override for `sc-observability` and
+      `sc-observability-types`
+    - update ATM dependency declarations to use crates.io `^1.0.0`
+    - run the full retained-command and observability validation suite without
+      local path overrides
+    - verify the published crates preserve the Phase K and Phase L behavior
+      already proven against the local pre-publish checkout
+  - tests:
+    - `cargo clippy --workspace --all-targets -- -D warnings` passes without
+      local patch overrides
+    - `cargo test` passes without local patch overrides
+    - live/manual validation passes against the published crate
+  - dependency note:
+    - this sprint only starts after `sc-observability` 1.0 is published on
+      crates.io
+
+Acceptance:
+- Phase L is explicitly sequenced as `L.1` through `L.4`
+- `L.1` through `L.3` all state the local `[patch.crates-io]` dependency rule
+- `L.4` explicitly switches to published crates.io `^1.0.0`
+- the phase covers stderr console routing, fault-injected live validation, file
+  sink path migration, and final published-crate adoption
+- the phase preserves the ATM-owned adapter boundary and does not redefine the
+  shared crate ownership split established in Phase K
 
 ## 5. Hard Rules
 

@@ -177,7 +177,7 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
 
-    use super::{load_config, parse_team_config, resolve_identity, resolve_team, AtmConfig};
+    use super::{AtmConfig, load_config, parse_team_config, resolve_identity, resolve_team};
 
     #[test]
     fn load_config_walks_upward_for_dot_atm_toml() {
@@ -275,9 +275,11 @@ mod tests {
             .expect_err("members shape error");
 
         assert!(error.is_config());
-        assert!(error
-            .message
-            .contains("field 'members' must be a JSON array"));
+        assert!(
+            error
+                .message
+                .contains("field 'members' must be a JSON array")
+        );
         assert!(error.recovery.as_deref().is_some());
     }
 
@@ -298,7 +300,7 @@ mod tests {
     #[serial_test::serial]
     fn identity_prefers_environment_over_config() {
         let original_identity = env::var_os("ATM_IDENTITY");
-        env::set_var("ATM_IDENTITY", "env-identity");
+        set_env_var("ATM_IDENTITY", "env-identity");
 
         let config = AtmConfig {
             identity: Some("config-identity".into()),
@@ -316,7 +318,7 @@ mod tests {
     #[serial_test::serial]
     fn team_resolution_prefers_flag_then_env_then_config() {
         let original_team = env::var_os("ATM_TEAM");
-        env::set_var("ATM_TEAM", "env-team");
+        set_env_var("ATM_TEAM", "env-team");
 
         let config = AtmConfig {
             identity: None,
@@ -332,7 +334,7 @@ mod tests {
             Some("env-team")
         );
 
-        env::remove_var("ATM_TEAM");
+        remove_env_var("ATM_TEAM");
         assert_eq!(
             resolve_team(None, Some(&config)).as_deref(),
             Some("config-team")
@@ -353,8 +355,22 @@ mod tests {
 
     fn restore(key: &str, value: Option<std::ffi::OsString>) {
         match value {
-            Some(value) => env::set_var(key, value),
-            None => env::remove_var(key),
+            Some(value) => set_env_var(key, value),
+            None => remove_env_var(key),
         }
+    }
+
+    fn set_env_var<K: AsRef<std::ffi::OsStr>, V: AsRef<std::ffi::OsStr>>(key: K, value: V) {
+        // SAFETY: these tests use serial execution before mutating process
+        // environment variables, so there is no concurrent access in this
+        // process while the mutation is performed.
+        unsafe { env::set_var(key, value) }
+    }
+
+    fn remove_env_var<K: AsRef<std::ffi::OsStr>>(key: K) {
+        // SAFETY: these tests use serial execution before mutating process
+        // environment variables, so there is no concurrent access in this
+        // process while the mutation is performed.
+        unsafe { env::remove_var(key) }
     }
 }

@@ -124,6 +124,7 @@ The `atm-core` crate docs must remain aligned with:
 - [`../atm-error-codes.md`](../atm-error-codes.md)
 - [`./design/dedup-metadata-schema.md`](./design/dedup-metadata-schema.md)
 - [`./design/sc-observability-integration.md`](./design/sc-observability-integration.md)
+- [`./design/sc-obs-1.0-integration.md`](./design/sc-obs-1.0-integration.md)
 
 ## 6. Send Alert Metadata
 

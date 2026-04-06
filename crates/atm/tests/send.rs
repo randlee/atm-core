@@ -143,9 +143,11 @@ fn test_send_supports_positional_message_with_file() {
 
     let inbox = fixture.inbox_contents("recipient");
     assert_eq!(inbox.len(), 1);
-    assert!(inbox[0]
-        .text
-        .starts_with("context first\n\nFile reference:"));
+    assert!(
+        inbox[0]
+            .text
+            .starts_with("context first\n\nFile reference:")
+    );
 }
 
 #[test]
@@ -228,9 +230,11 @@ fn test_send_missing_config_uses_existing_inbox_fallback_and_warns_sender() {
 
     let notices = fixture.inbox_contents("team-lead");
     assert_eq!(notices.len(), 1);
-    assert!(notices[0]
-        .text
-        .contains("ATM warning: send used existing inbox fallback"));
+    assert!(
+        notices[0]
+            .text
+            .contains("ATM warning: send used existing inbox fallback")
+    );
 }
 
 #[test]

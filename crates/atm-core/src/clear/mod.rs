@@ -11,7 +11,7 @@ use crate::error::AtmError;
 use crate::home;
 use crate::identity;
 use crate::mailbox;
-use crate::mailbox::source::{discover_origin_inboxes, resolve_target, SourceFile, SourcedMessage};
+use crate::mailbox::source::{SourceFile, SourcedMessage, discover_origin_inboxes, resolve_target};
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
@@ -123,7 +123,7 @@ pub fn clear_mail(
         removed_by_class,
     };
 
-    let _ = observability.emit_command_event(CommandEvent {
+    let _ = observability.emit(CommandEvent {
         command: "clear",
         action: "clear",
         outcome: if query.dry_run { "dry_run" } else { "ok" },
@@ -134,6 +134,8 @@ pub fn clear_mail(
         requires_ack: false,
         dry_run: query.dry_run,
         task_id: None,
+        error_code: None,
+        error_message: None,
     });
 
     Ok(outcome)

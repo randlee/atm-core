@@ -14,7 +14,7 @@ use crate::error::AtmError;
 use crate::home;
 use crate::identity;
 use crate::mailbox;
-use crate::mailbox::source::{discover_origin_inboxes, resolve_target, SourceFile, SourcedMessage};
+use crate::mailbox::source::{SourceFile, SourcedMessage, discover_origin_inboxes, resolve_target};
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::MessageEnvelope;
@@ -122,45 +122,45 @@ pub fn read_mail(
     let mut selected = select_messages(&filtered, query.selection_mode, seen_watermark);
     let mut timed_out = false;
 
-    if selected.is_empty() {
-        if let Some(timeout_secs) = query.timeout_secs {
-            let wait_satisfied = wait::wait_for_eligible_message(
-                timeout_secs,
-                || {
-                    Ok(apply_idle_notification_dedup(
-                        dedupe_legacy_message_id_surface(
-                            merged_surface(&load_source_files(
-                                &query.home_dir,
-                                &target.team,
-                                &target.agent,
-                            )?),
-                            |message: &SourcedMessage| message.envelope.message_id,
-                            |message: &SourcedMessage| message.envelope.timestamp,
-                        ),
-                    ))
-                },
-                |messages| !selected_after_filters(messages, &query, seen_watermark).is_empty(),
-            )?;
-
-            if wait_satisfied {
-                source_files = load_source_files(&query.home_dir, &target.team, &target.agent)?;
-                classified_all = classify_all(apply_idle_notification_dedup(
+    if selected.is_empty()
+        && let Some(timeout_secs) = query.timeout_secs
+    {
+        let wait_satisfied = wait::wait_for_eligible_message(
+            timeout_secs,
+            || {
+                Ok(apply_idle_notification_dedup(
                     dedupe_legacy_message_id_surface(
-                        merged_surface(&source_files),
+                        merged_surface(&load_source_files(
+                            &query.home_dir,
+                            &target.team,
+                            &target.agent,
+                        )?),
                         |message: &SourcedMessage| message.envelope.message_id,
                         |message: &SourcedMessage| message.envelope.timestamp,
                     ),
-                ));
-                bucket_counts = bucket_counts_for(&classified_all);
-                filtered = apply_filters(
-                    classified_all.clone(),
-                    query.sender_filter.as_deref(),
-                    query.timestamp_filter,
-                );
-                selected = select_messages(&filtered, query.selection_mode, seen_watermark);
-            } else {
-                timed_out = true;
-            }
+                ))
+            },
+            |messages| !selected_after_filters(messages, &query, seen_watermark).is_empty(),
+        )?;
+
+        if wait_satisfied {
+            source_files = load_source_files(&query.home_dir, &target.team, &target.agent)?;
+            classified_all = classify_all(apply_idle_notification_dedup(
+                dedupe_legacy_message_id_surface(
+                    merged_surface(&source_files),
+                    |message: &SourcedMessage| message.envelope.message_id,
+                    |message: &SourcedMessage| message.envelope.timestamp,
+                ),
+            ));
+            bucket_counts = bucket_counts_for(&classified_all);
+            filtered = apply_filters(
+                classified_all.clone(),
+                query.sender_filter.as_deref(),
+                query.timestamp_filter,
+            );
+            selected = select_messages(&filtered, query.selection_mode, seen_watermark);
+        } else {
+            timed_out = true;
         }
     }
 
@@ -192,19 +192,19 @@ pub fn read_mail(
         persist_source_files(&source_files)?;
     }
 
-    if query.seen_state_update && !selected.is_empty() {
-        if let Some(latest_timestamp) = selected
+    if query.seen_state_update
+        && !selected.is_empty()
+        && let Some(latest_timestamp) = selected
             .iter()
             .map(|message| message.envelope.timestamp)
             .max()
-        {
-            seen_state::save_seen_watermark(
-                &query.home_dir,
-                &target.team,
-                &target.agent,
-                latest_timestamp,
-            )?;
-        }
+    {
+        seen_state::save_seen_watermark(
+            &query.home_dir,
+            &target.team,
+            &target.agent,
+            latest_timestamp,
+        )?;
     }
 
     let output_messages = selected
@@ -239,7 +239,7 @@ pub fn read_mail(
         bucket_counts,
     };
 
-    let _ = observability.emit_command_event(CommandEvent {
+    let _ = observability.emit(CommandEvent {
         command: "read",
         action: "read",
         outcome: if timed_out { "timeout" } else { "ok" },
@@ -250,6 +250,8 @@ pub fn read_mail(
         requires_ack: false,
         dry_run: false,
         task_id: None,
+        error_code: None,
+        error_message: None,
     });
 
     Ok(outcome)
@@ -469,16 +471,14 @@ fn apply_display_mutations(
     for message in displayed_messages {
         let transitioned = transition_displayed_message(message, promote_unread, now);
         let updated = transitioned.into_envelope();
-        if updated != message.envelope {
-            if let Some(source_file) = source_files
+        if updated != message.envelope
+            && let Some(source_file) = source_files
                 .iter_mut()
                 .find(|source| source.path == message.source_path)
-            {
-                if let Some(stored) = source_file.messages.get_mut(message.source_index) {
-                    *stored = updated;
-                    mutation_applied = true;
-                }
-            }
+            && let Some(stored) = source_file.messages.get_mut(message.source_index)
+        {
+            *stored = updated;
+            mutation_applied = true;
         }
     }
 

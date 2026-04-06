@@ -10,7 +10,7 @@ use crate::error::AtmError;
 use crate::home;
 use crate::identity;
 use crate::mailbox;
-use crate::mailbox::source::{discover_origin_inboxes, SourceFile, SourcedMessage};
+use crate::mailbox::source::{SourceFile, SourcedMessage, discover_origin_inboxes};
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
@@ -164,7 +164,7 @@ pub fn ack_mail(
         reply_text: reply_text.clone(),
     };
 
-    let _ = observability.emit_command_event(CommandEvent {
+    let _ = observability.emit(CommandEvent {
         command: "ack",
         action: "ack",
         outcome: "ok",
@@ -175,6 +175,8 @@ pub fn ack_mail(
         requires_ack: false,
         dry_run: false,
         task_id: source_task_id,
+        error_code: None,
+        error_message: None,
     });
 
     Ok(outcome)
