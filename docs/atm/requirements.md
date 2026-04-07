@@ -56,10 +56,12 @@ Initial crate requirement IDs:
 
 - initializing the concrete shared logger once per CLI process
 - mapping ATM env/config decisions into shared logger configuration
-- consuming `sc-observability` from a local checkout in developer/CI builds
-  until publish is complete, without hardcoding user-specific absolute paths
-- switching to versioned published crate dependencies once the shared workspace
-  is released
+- consuming the published crates.io dependency
+  `sc-observability = "1.0.0"` for initial release
+- owning CLI-facing console sink routing, including the explicit
+  `--stderr-logs` path
+- constructing `CliObservability` through a structured constructor surface
+  rather than ad hoc field wiring
 - logging CLI bootstrap, parse, and terminal command failures with stable
   ATM-owned error codes before exit
 - using the single ATM-owned code registry defined by

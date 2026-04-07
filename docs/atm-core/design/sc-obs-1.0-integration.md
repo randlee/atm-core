@@ -5,29 +5,30 @@
 This note defines the ATM-side follow-on work needed after Phase K so ATM can
 adopt the final `sc-observability` 1.0 release cleanly.
 
-Phase K proved that the current ATM adapter model works against the
-pre-publish shared crates. Phase L is narrower:
+Phase K proved the ATM adapter model and completed the crates.io cutover.
+Phase L is the release-hardening phase that:
 
-- adopt the last shared usability/features needed by ATM (`#55`, `#57`, `#21`)
-- depend on upstream shared consumer-doc cleanup from `#20` without creating a
-  separate ATM implementation sprint just for shared documentation work
-- keep all pre-publish implementation sprints on the local
-  `[patch.crates-io]` strategy
-- switch to crates.io `^1.0.0` only after the shared 1.0 release exists
+- adopts the remaining shared usability/features ATM needs (`#55`, `#57`,
+  `#21`)
+- closes the remaining validation and public-boundary cleanup items before
+  initial release
+- keeps ATM focused on messaging workflows rather than pre-owning future
+  hook/`schooks` orchestration
 
 ## 2. Scope
 
-Phase L is ATM-side integration work only.
+Phase L is ATM-side release-hardening work only.
 
 It does not redefine:
 
-- the ATM-owned `ObservabilityPort` boundary
+- the ATM-local `ObservabilityPort` boundary needed by retained ATM messaging,
+  `atm log`, and `atm doctor`
 - ATM-owned error codes
-- the `atm-core` rule that shared crate types must not leak through public ATM
-  APIs
+- the `atm-core` rule that shared crate types and raw `serde_json` value types
+  must not leak through public ATM APIs
 
-It refines the `atm` adapter and retained-command validation against the final
-shared 1.0 crate behavior.
+It refines the `atm` adapter, retained-command validation, and public API
+cleanup against the final shared 1.0 crate behavior.
 
 ## 3. Stderr Routing Strategy (`#55`)
 
@@ -46,9 +47,8 @@ Required Phase L direction:
 
 Expected implementation shape:
 
-- add a CLI-facing selection rule:
-  - explicit `--stderr`, or
-  - a documented TTY-aware routing policy
+- add a CLI-facing selection rule through the explicit global flag
+  `--stderr-logs`
 - keep stdout behavior unchanged unless the routing rule selects stderr
 - verify both output paths in integration tests
 
@@ -57,6 +57,13 @@ This change is useful for:
 - CLI usability
 - tests that need to distinguish retained log output from normal command output
 - reducing accidental stdout contamination in scripted ATM usage
+
+Implementation status:
+
+- complete in Phase `L.1`
+- shipped ATM-facing flag name: `--stderr-logs`
+- the final flag name is intentionally documented here to close the L.1 QA
+  traceability finding `ATM-QA-002`
 
 ## 4. Fault Injection Strategy (`#57`)
 
@@ -82,7 +89,13 @@ Expected implementation shape:
 - update the live validation report with the exact degraded/unavailable
   scenarios exercised
 
-This closes the pre-publish readiness gap that remained after Phase K.
+This closes the healthy-only live-validation gap that remained after Phase K.
+
+Phase-L release-hardening addition:
+
+- `L.2` also closes the retained command-emission coverage gap by proving
+  `send`, `read`, `ack`, and `clear` each emit retained records through the
+  shared adapter
 
 ## 5. File Sink Path Alignment (`#21`)
 
@@ -96,17 +109,51 @@ Required Phase L direction:
   the new location
 - operator-facing docs and validation notes must use the current shared layout
 
-## 6. Dependency Strategy
+Phase-L release-hardening addition:
 
-Implementation sprints `L.1` through `L.3` continue to use the local
-`[patch.crates-io]` override strategy described in:
+- file sink path alignment is part of final release closeout rather than a
+  standalone ownership refactor
 
-- [`../dev/pre-publish-deps.md`](../dev/pre-publish-deps.md)
+## 6. Initial-Release Boundary Rulings
 
-Final adoption rule:
+Phase L uses these architectural decisions:
 
-- `L.4` is the only sprint that removes the local override and switches ATM to
-  crates.io `sc-observability = "^1.0.0"`
+- ATM observability remains scoped to ATM’s messaging workflows, retained-log
+  query/follow, and doctor readiness checks
+- future hook- or `schooks`-driven observability orchestration is explicitly
+  out of scope for the initial release
+- the health contract remains intentionally closed at:
+  - `Healthy`
+  - `Degraded`
+  - `Unavailable`
+- public `atm-core` observability APIs must not expose raw
+  `serde_json::Value` / `Map<String, Value>` directly
+- JSON/JSONL parsing, validation, degradation, and repair remain centralized in
+  `atm-core` even after the public API cleanup
 
-This keeps all pre-publish testing aligned with the real shared code while
-making the final release-cut transition explicit and auditable.
+## 7. Dependency Strategy
+
+Phase L uses the published crates.io dependency directly:
+
+- `sc-observability = "1.0.0"`
+
+No local `[patch.crates-io]` strategy remains in scope for this phase.
+
+## 8. Remaining Phase L Sprint Mapping
+
+- `L.1` complete:
+  - stderr routing through `ConsoleSink::stderr()` and `--stderr-logs`
+- `L.2`:
+  - fault-injected degraded/unavailable live validation
+  - retained-log emission integration coverage for `send`, `read`, `ack`,
+    `clear`
+- `L.3`:
+  - ATM-local boundary wording and closed-health-contract rulings
+- `L.4`:
+  - public `serde_json` leakage cleanup at the `atm-core` observability
+    boundary
+- `L.5`:
+  - structured `CliObservability` construction and remaining boundary
+    ergonomics/disposition work
+- `L.6`:
+  - file sink path release closeout and final validation/signoff

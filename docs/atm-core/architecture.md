@@ -83,17 +83,26 @@ Initial use cases:
 
 ## 5. `sc-observability` Integration Boundary
 
-The retained `atm-core` observability surface must expand from the current
-emit-only port to a full emit/query/follow/health boundary.
+The retained `atm-core` observability surface is a full
+emit/query/follow/health boundary.
 
 Architectural rules:
 
-- `atm-core` owns the ATM-facing request/result models for log query, tail, and
-  doctor health
+- `atm-core` owns the ATM-facing request/result models needed for ATM messaging
+  workflows, log query/tail, and doctor health
 - `atm-core` must not expose shared `sc-observability` types in its public API
 - follow/tail behavior must remain synchronous and ATM-owned at the
   `atm-core` boundary even though it is backed by shared follow support
 - the concrete adapter implementation remains owned by `atm`
+- this boundary is intentionally ATM-local for the initial release; it does not
+  attempt to pre-own future hook- or `schooks`-orchestrated observability
+  concerns
+- the initial-release health contract remains intentionally closed at:
+  - `Healthy`
+  - `Degraded`
+  - `Unavailable`
+- public observability models must use ATM-owned value/container types rather
+  than exposing raw `serde_json::Value` / `Map<String, Value>` directly
 
 Required ATM-owned projected surfaces:
 
