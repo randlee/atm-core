@@ -22,6 +22,7 @@ fn test_teams_lists_discovered_teams_deterministically() {
     );
 
     let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["action"], "list");
     let teams = parsed["teams"].as_array().expect("teams array");
     assert_eq!(teams.len(), 2);
     assert_eq!(teams[0]["name"], "atm-dev");
@@ -94,6 +95,45 @@ fn test_add_member_rejects_duplicates_and_creates_inbox_state() {
 
     let config = fixture.read_team_config_value("atm-dev");
     assert_eq!(config["members"].as_array().expect("members").len(), 2);
+}
+
+#[test]
+fn test_add_member_rolls_back_inbox_when_config_write_fails() {
+    let fixture = Fixture::new();
+    fixture.write_team_config_value("atm-dev", json!({"members":[{"name":"team-lead"}]}));
+
+    let output = fixture.run_with_env(
+        &[
+            "teams",
+            "add-member",
+            "atm-dev",
+            "arch-ctm",
+            "--agent-type",
+            "general-purpose",
+            "--model",
+            "sonnet",
+            "--json",
+        ],
+        &[("ATM_TEST_FAIL_TEAM_CONFIG_WRITE", "1")],
+    );
+    assert!(
+        !output.status.success(),
+        "stdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    assert!(
+        fixture
+            .stderr(&output)
+            .contains("forced team config write failure"),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    assert!(!fixture.inbox_path("atm-dev", "arch-ctm").exists());
+
+    let config = fixture.read_team_config_value("atm-dev");
+    let members = config["members"].as_array().expect("members");
+    assert_eq!(members.len(), 1);
+    assert_eq!(members[0]["name"], "team-lead");
 }
 
 #[test]
@@ -290,12 +330,20 @@ impl Fixture {
     }
 
     fn run(&self, args: &[&str]) -> std::process::Output {
-        Command::new(env!("CARGO_BIN_EXE_atm"))
+        self.run_with_env(args, &[])
+    }
+
+    fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
+        command
             .args(args)
             .env("ATM_HOME", self.tempdir.path())
-            .current_dir(self.tempdir.path())
-            .output()
-            .expect("run atm")
+            .env("ATM_CONFIG_HOME", self.tempdir.path())
+            .current_dir(self.tempdir.path());
+        for (key, value) in extra_env {
+            command.env(key, value);
+        }
+        command.output().expect("run atm")
     }
 
     fn write_team_config_value(&self, team: &str, value: Value) {

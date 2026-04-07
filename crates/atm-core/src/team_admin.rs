@@ -19,6 +19,7 @@ pub struct TeamSummary {
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct TeamsList {
+    pub action: &'static str,
     pub teams: Vec<TeamSummary>,
 }
 
@@ -111,7 +112,10 @@ pub struct RestoreOutcome {
 pub fn list_teams(home_dir: PathBuf) -> Result<TeamsList, AtmError> {
     let teams_root = teams_root_from_home(&home_dir);
     if !teams_root.exists() {
-        return Ok(TeamsList { teams: Vec::new() });
+        return Ok(TeamsList {
+            action: "list",
+            teams: Vec::new(),
+        });
     }
 
     let mut teams = Vec::new();
@@ -154,7 +158,10 @@ pub fn list_teams(home_dir: PathBuf) -> Result<TeamsList, AtmError> {
     }
 
     teams.sort_by(|a, b| a.name.cmp(&b.name));
-    Ok(TeamsList { teams })
+    Ok(TeamsList {
+        action: "list",
+        teams,
+    })
 }
 
 pub fn list_members(query: MembersQuery) -> Result<MembersList, AtmError> {
@@ -453,6 +460,14 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), AtmError> {
             ))
             .with_source(error)
         })?;
+    }
+
+    // Test seam for deterministic rollback coverage in integration tests.
+    if std::env::var_os("ATM_TEST_FAIL_TEAM_CONFIG_WRITE").is_some() {
+        return Err(AtmError::file_policy(format!(
+            "forced team config write failure for {}",
+            path.display()
+        )));
     }
 
     let temp_path = path.with_file_name(format!(
