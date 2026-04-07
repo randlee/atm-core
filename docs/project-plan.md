@@ -529,7 +529,8 @@ Planned sprints:
   - closes:
     - `RUST-QA-001`
     - `PRR-002`
-    - the L.1 traceability concern tracked as `ATM-QA-002`
+    - (`ATM-QA-002`: traceability closed in L.1 — flag name
+      `--stderr-logs` confirmed)
 
 - `L.4` Public API Cleanup
   - goal: remove raw serialization-format leakage from the `atm-core` public

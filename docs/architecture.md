@@ -86,8 +86,9 @@ ATM still owns:
 - structured field filtering
 - runtime health reporting
 
-The shared API gap is no longer the blocker. The current blocker is ATM-side
-integration.
+Phase K delivered the ATM-side integration work. Phase L now governs the
+remaining release-hardening, boundary cleanup, and validation needed before
+initial release.
 
 Initial retained-command integration scope:
 - `sc-observability-types`

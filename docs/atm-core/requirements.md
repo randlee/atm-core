@@ -191,6 +191,9 @@ Required boundary rules:
   `serde_json::Value` / `Map<String, Value>` directly
 - the corresponding source-of-truth code registry must live in one source file
   and match [`../atm-error-codes.md`](../atm-error-codes.md)
+- the published shared-crate version pin and CLI bootstrap ownership for this
+  boundary are documented in [`../atm/requirements.md`](../atm/requirements.md)
+  under `REQ-ATM-OBS-001`
 
 Detailed design and implementation shape is owned by:
 - [`design/sc-observability-integration.md`](./design/sc-observability-integration.md)

@@ -1,5 +1,7 @@
 # Live Observability Validation
 
+Phase K Pre-Publish Validation Record — NOT Phase L release signoff.
+
 This document records the historical Phase K live validation run against the
 real `sc-observability` adapter on the ATM CLI binary built from that worktree.
 It predates the published-crates cutover and therefore must not be read as the

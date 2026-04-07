@@ -9,6 +9,13 @@ It replaces the older assumption that ATM is still waiting on a missing shared
 query/follow surface. That gap is closed in the current shared repo. The
 remaining work is ATM-side integration, projection, testing, and rollout.
 
+Historical status note:
+
+- this document records the Phase J/Phase K integration design and the stable
+  ATM-side boundary shape that came out of that work
+- for Phase L release-hardening design and sprint planning, see
+  [`sc-obs-1.0-integration.md`](./sc-obs-1.0-integration.md)
+
 ## 2. Current State
 
 Current ATM runtime state:
@@ -333,10 +340,10 @@ Examples of legitimate upstream asks:
 - additional sink/writer selection useful for CLI integration
 - query/follow helper methods that remain generic and ATM-free
 
-Current tracker opened during this planning pass:
+Tracker status:
 
-- `sc-observability` issue #55: expose console sink writer selection / stderr
-  support for downstream CLI integration and tests
+- `sc-observability` issue #55: closed — `ConsoleSink::stderr()` support and
+  ATM CLI `--stderr-logs` routing were delivered in Phase L.1
 
 ATM must not push ATM-specific payload, env, or durability semantics down into
 the shared repo as a substitute for the ATM adapter boundary.
