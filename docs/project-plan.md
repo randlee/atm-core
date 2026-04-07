@@ -538,6 +538,14 @@ Planned sprints:
       updated shared file-sink location
     - document any operator-facing path changes where they affect diagnostics
       or manual validation
+    - replace the unbounded tail-reader helper in `crates/atm/tests/log.rs`
+      with a wall-clock timeout so retained follow coverage cannot hang on
+      Windows or other slow CI environments
+    - close `PRR-002` by explicitly keeping the ATM observability health
+      contract closed at `healthy`, `degraded`, and `unavailable` for the
+      initial release
+    - close the L.1 traceability gap `ATM-QA-002` by making the final
+      `--stderr-logs` contract a canonical Phase L reference
   - tests:
     - retained-log integration tests pass against the new path layout
     - live validation confirms the active log path and query behavior against
