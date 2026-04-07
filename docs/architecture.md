@@ -17,6 +17,8 @@ The retained command surface is:
 - `clear`
 - `log`
 - `doctor`
+- `teams`
+- `members`
 
 ## 1.1 Documentation Structure
 
@@ -116,6 +118,13 @@ Product-level constraints that remain relevant here:
 - no runtime spawning layer
 - no separate `tail` command in the initial rewrite
 - no separate `status` command in the initial rewrite
+- the retained release-critical team recovery surface is limited to:
+  - `teams`
+  - `members`
+  - `teams add-member`
+  - `teams backup`
+  - `teams restore`
+- broader historical team lifecycle/orchestration commands remain out of scope
 
 ## 4. Core Types
 
@@ -692,6 +701,49 @@ Roster output rules:
 - show `team-lead` first among the baseline members when present
 - show extra runtime members after the baseline set
 
+### 6.8 Team Recovery Services
+
+The retained release-critical local team surface is intentionally narrow.
+
+ATM-owned public entrypoints should cover:
+- local team discovery
+- local member listing
+- local `add-member`
+- local team backup
+- local team restore
+
+Architectural rules:
+- these services are local file/config/inbox operations; they must not depend
+  on daemon orchestration or runtime spawning
+- `teams` list is discovery-oriented and should remain deterministic over the
+  ATM home directory
+- `add-member` is the retained local roster-repair path and must reject
+  duplicates before mutating config
+- `backup` snapshots current team config, inboxes, and the ATM team task
+  bucket into a timestamped snapshot directory
+- `restore` is a local recovery path and must:
+  - preserve the current team-lead entry and `leadSessionId`
+  - restore only missing non-lead members
+  - clear runtime-only restored-member state before persistence
+  - restore non-lead inboxes from the chosen snapshot
+  - recompute `.highwatermark` from the maximum restored task id
+  - support a dry-run path without making changes
+- Claude Code project task-list restoration remains separate from the retained
+  ATM team backup/restore surface
+
+### 6.9 Members Service
+
+The retained `members` surface is a local roster inspection service.
+
+Architectural rules:
+- it must succeed without daemon or hook-only state
+- it must load the roster from local team config
+- it should order members deterministically, with `team-lead` first when
+  present
+- it may surface persisted member metadata already present in config
+- later hook/session enrichment may be layered on without changing the base
+  local verification purpose of the command
+
 ## 7. Read Pipeline
 
 The read pipeline stages are:
@@ -786,6 +838,14 @@ Repo-local config identity is not retained as a runtime fallback. In the
 multi-agent model, runtime identity must come from explicit CLI override,
 hook identity, or `ATM_IDENTITY`. An obsolete `[atm].identity` field may be
 diagnosed by doctor, but it must not control sender/actor resolution.
+
+When `ATM_POST_SEND` is set for a configured post-send hook, the payload must
+contain:
+- `from`
+- `to`
+- `message_id`
+- `requires_ack`
+- optional `task_id`
 
 ### 13.2 File Policy
 
@@ -971,3 +1031,5 @@ If a trait becomes necessary:
 - send/read/ack/clear integration behavior
 - `atm log` integration behavior
 - `atm doctor` integration behavior
+- `atm teams` integration behavior
+- `atm members` integration behavior

@@ -43,11 +43,13 @@ Initial crate requirement IDs:
   dispatch for the retained command surface. Satisfies the CLI
   entry/parse/dispatch aspects of:
   `REQ-P-SEND-001`, `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-CLEAR-001`,
-  `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`.
+  `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-TEAMS-001`,
+  `REQ-P-MEMBERS-001`.
 - `REQ-ATM-OUT-001` `atm` owns human-readable and JSON rendering for retained
   commands. Satisfies the output-shaping and rendering aspects of:
   `REQ-P-SEND-001`, `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-CLEAR-001`,
-  `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`.
+  `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-TEAMS-001`,
+  `REQ-P-MEMBERS-001`.
 - `REQ-ATM-OBS-001` `atm` owns concrete observability bootstrap and injection
   into `atm-core`. Satisfies the CLI bootstrap/injection aspects of:
   `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-OBS-001`.
@@ -76,6 +78,8 @@ Per-command documentation lives under:
 - [`commands/clear.md`](./commands/clear.md)
 - [`commands/log.md`](./commands/log.md)
 - [`commands/doctor.md`](./commands/doctor.md)
+- [`commands/teams.md`](./commands/teams.md)
+- [`commands/members.md`](./commands/members.md)
 
 Each command document defines:
 

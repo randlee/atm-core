@@ -15,8 +15,8 @@ service boundaries.
   structure.
 - `atm-core` owns observability as an injected boundary, not as a concrete
   dependency on `sc-observability`.
-- `atm-core` must keep mailbox/config/workflow/log/doctor logic reusable across
-  CLI contexts.
+- `atm-core` must keep mailbox/config/workflow/log/doctor/team-recovery logic
+  reusable across CLI contexts.
 - `atm-core` owns persisted config/team loading policy, including compatibility
   defaults, recovery boundaries, and precise parse diagnostics.
 
@@ -75,6 +75,12 @@ Identity-specific policy:
   executes with that same directory as working directory
 - the hook inherits process environment and receives one ATM-owned JSON
   payload in `ATM_POST_SEND`
+- the `ATM_POST_SEND` payload contains:
+  - `from`
+  - `to`
+  - `message_id`
+  - `requires_ack`
+  - optional `task_id`
 - hook execution is gated by resolved sender identity membership in
   `[atm].post_send_hook_members`
 - hook failure or timeout is best-effort only and must not convert a
@@ -108,6 +114,29 @@ Architectural rule:
   fields until the migration implementation sprint lands
 - this compatibility-period carve-out is the bounded exception referenced by
   [`requirements.md` `REQ-CORE-SEND-002`](./requirements.md#6-send-alert-metadata)
+
+## 3.2 Retained Team Recovery Boundary
+
+`atm-core` owns the retained local team recovery boundary needed for initial
+release.
+
+Architectural rules:
+- the retained team surface is limited to:
+  - team discovery
+  - member listing
+  - `add-member`
+  - local team backup
+  - local team restore
+- historical orchestration-heavy team commands remain outside the retained
+  `atm-core` boundary for initial release
+- restore preserves the current team-lead record and current `leadSessionId`
+  rather than replaying stale lead-session state from backup
+- restored non-lead members must have runtime-only state cleared before they
+  are written back to local config
+- restored ATM task buckets must recompute `.highwatermark` from the maximum
+  restored task id
+- the local `members` view is config-first; richer hook/session state may be
+  layered later without changing the base recovery contract
 
 ## 4. ADR Namespace
 

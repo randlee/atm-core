@@ -5,7 +5,7 @@ behavior, and readable result shaping for the CLI layer to render.
 
 References:
 
-- Product requirements: `docs/requirements.md` §7 and §12
+- Product requirements: `docs/requirements.md` §7 and §14
 - `REQ-P-READ-001`
 - `REQ-P-WORKFLOW-001`
 - `REQ-CORE-WORKFLOW-001`

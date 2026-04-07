@@ -43,6 +43,7 @@ Initial allocation:
 - `REQ-CORE-LOG-*`
 - `REQ-CORE-DOCTOR-*`
 - `REQ-CORE-OBS-*`
+- `REQ-CORE-TEAM-*`
 
 Initial crate requirement IDs:
 
@@ -89,6 +90,10 @@ Initial crate requirement IDs:
   ATM-owned event/query models above shared crates. Satisfies the ATM event,
   query-model, and health-contract aspects of:
   `REQ-P-OBS-001`.
+- `REQ-CORE-TEAM-001` `atm-core` owns the retained local team discovery,
+  roster inspection, roster repair, and backup/restore behavior. Satisfies the
+  local team-surface aspects of:
+  `REQ-P-TEAMS-001`, `REQ-P-MEMBERS-001`.
 
 ## 4. Module Ownership
 
@@ -103,6 +108,7 @@ Per-module documentation lives under:
 - [`modules/mailbox.md`](./modules/mailbox.md)
 - [`modules/config.md`](./modules/config.md)
 - [`modules/observability.md`](./modules/observability.md)
+- [`modules/team_admin.md`](./modules/team_admin.md)
 
 Each module document defines:
 
@@ -250,3 +256,35 @@ Required doctor rules:
 - extra runtime members in `config.json` are allowed
 - doctor roster output must show all `config.json` members, with baseline
   members first and `team-lead` first among the baseline set
+
+## 9. Retained Team Recovery Surface
+
+Requirement ID:
+- `REQ-CORE-TEAM-001`
+
+Required service rules:
+- `atm-core` owns the retained local team recovery surface for:
+  - discovered-team listing
+  - local member listing
+  - `add-member`
+  - team backup
+  - team restore
+- these services remain local file/config/inbox operations and must not depend
+  on daemon orchestration or runtime spawning
+- `add-member` must validate team existence and reject duplicate member names
+  before mutating local team config
+- backup must snapshot:
+  - `config.json`
+  - team inbox files
+  - the ATM team task bucket
+- restore must:
+  - preserve the current team-lead entry and current `leadSessionId`
+  - add only missing non-lead members from the snapshot
+  - clear runtime-only restored-member fields such as session or pane state
+  - restore non-lead inboxes
+  - recompute `.highwatermark` from the maximum restored task id
+  - support a dry-run path without making changes
+- malformed or missing snapshot material must fail with structured errors
+  before partial restore is committed
+- `members` must remain useful as a local roster inspection command even when
+  daemon or hook state is unavailable

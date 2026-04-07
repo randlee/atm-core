@@ -12,7 +12,7 @@ It must not own:
 
 References:
 
-- Product requirements: `docs/requirements.md` §10 and §13
+- Product requirements: `docs/requirements.md` §10 and §15
 - `REQ-P-LOG-001`
 - `REQ-P-OBS-001`
 - `REQ-CORE-LOG-001`
