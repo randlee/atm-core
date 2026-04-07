@@ -281,7 +281,8 @@ Required identity rules:
   identity fallback
 
 Required doctor rules:
-- `atm doctor` must flag obsolete `[atm].identity` when present
+- `atm doctor` must flag obsolete `[atm].identity` when present with
+  `ATM_WARNING_IDENTITY_DRIFT`
 - `atm doctor` must compare `[atm].team_members` against `config.json.members`
 - missing baseline members are findings
 - extra runtime members in `config.json` are allowed

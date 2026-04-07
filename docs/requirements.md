@@ -1039,6 +1039,9 @@ Each doctor finding must expose at least:
 - message
 - remediation when available
 
+The obsolete config-identity finding must use:
+- `ATM_WARNING_IDENTITY_DRIFT`
+
 Critical findings must cause a non-zero exit status.
 
 ## 12. `atm teams`

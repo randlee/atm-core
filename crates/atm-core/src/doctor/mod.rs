@@ -3,6 +3,8 @@ pub mod report;
 
 use std::path::PathBuf;
 
+use crate::config;
+use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
 
 pub use report::{
@@ -21,7 +23,7 @@ pub fn run_doctor(
     query: DoctorQuery,
     observability: &dyn ObservabilityPort,
 ) -> Result<DoctorReport, crate::error::AtmError> {
-    let _ = &query.current_dir;
+    let config = config::load_config(&query.current_dir)?;
 
     let environment = health::environment_visibility(query.home_dir, query.team_override);
     let (observability_health, finding) = match observability.health() {
@@ -36,7 +38,22 @@ pub fn run_doctor(
         }
     };
 
-    let findings = vec![finding];
+    let mut findings = Vec::new();
+    if config
+        .as_ref()
+        .is_some_and(|config| config.obsolete_identity_present)
+    {
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::WarningIdentityDrift,
+            message: "obsolete [atm].identity is still present in .atm.toml; ATM no longer uses config identity as a runtime fallback.".to_string(),
+            remediation: Some(
+                "Remove [atm].identity from .atm.toml and set ATM_IDENTITY in the active agent environment instead."
+                    .to_string(),
+            ),
+        });
+    }
+    findings.push(finding);
     let recommendations = findings
         .iter()
         .filter_map(|finding| finding.remediation.clone())
@@ -131,10 +148,14 @@ mod tests {
         fn new() -> Self {
             let tempdir = tempfile::tempdir().expect("tempdir");
             let root = tempdir.path().to_path_buf();
+            let home_dir = root.join("atm-home");
+            let current_dir = root.join("workspace");
+            std::fs::create_dir_all(&home_dir).expect("home dir");
+            std::fs::create_dir_all(&current_dir).expect("workspace dir");
             Self {
                 _tempdir: tempdir,
-                home_dir: root.join("atm-home"),
-                current_dir: root.join("workspace"),
+                home_dir,
+                current_dir,
                 active_log_path: root.join("atm.log.jsonl"),
             }
         }
@@ -167,6 +188,38 @@ mod tests {
         assert_eq!(report.summary.status, DoctorStatus::Healthy);
         assert_eq!(report.findings[0].severity, DoctorSeverity::Info);
         assert_eq!(report.findings[0].code, AtmErrorCode::ObservabilityHealthOk);
+    }
+
+    #[test]
+    fn run_doctor_reports_obsolete_identity_drift_as_warning() {
+        let paths = TestPaths::new();
+        std::fs::write(
+            paths.current_dir.join(".atm.toml"),
+            "[atm]\nidentity = \"arch-ctm\"\n",
+        )
+        .expect("config");
+        let report = run_doctor(
+            query(&paths),
+            &StubObservability {
+                health: StubHealth::Ok(AtmObservabilityHealth {
+                    active_log_path: Some(paths.active_log_path.clone()),
+                    logging_state: AtmObservabilityHealthState::Healthy,
+                    query_state: Some(AtmObservabilityHealthState::Healthy),
+                    detail: None,
+                }),
+            },
+        )
+        .expect("doctor report");
+
+        assert_eq!(report.summary.status, DoctorStatus::Warning);
+        assert_eq!(report.findings[0].severity, DoctorSeverity::Warning);
+        assert_eq!(report.findings[0].code, AtmErrorCode::WarningIdentityDrift);
+        assert!(
+            report.findings[0]
+                .message
+                .contains("obsolete [atm].identity")
+        );
+        assert_eq!(report.findings[1].code, AtmErrorCode::ObservabilityHealthOk);
     }
 
     #[test]

@@ -265,6 +265,22 @@ fn test_send_missing_config_uses_existing_inbox_fallback_and_warns_sender() {
 }
 
 #[test]
+fn test_send_does_not_fall_back_to_obsolete_config_identity() {
+    let fixture = Fixture::new("recipient");
+    fixture.write_atm_config("[atm]\nidentity = \"config-agent\"\n");
+
+    let output = fixture.run_without_identity(&["send", "recipient@atm-dev", "hello"]);
+
+    assert!(!output.status.success());
+    let stderr = fixture.stderr(&output);
+    assert!(
+        stderr.contains("identity is not configured"),
+        "stderr: {stderr}"
+    );
+    assert!(stderr.contains("Set ATM_IDENTITY"), "stderr: {stderr}");
+}
+
+#[test]
 fn test_send_missing_config_deduplicates_team_lead_notice() {
     let fixture = Fixture::new("recipient");
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
@@ -392,6 +408,18 @@ impl Fixture {
             .expect("run atm")
     }
 
+    fn run_without_identity(&self, args: &[&str]) -> std::process::Output {
+        Command::new(env!("CARGO_BIN_EXE_atm"))
+            .args(args)
+            .env("ATM_HOME", self.tempdir.path())
+            .env("ATM_CONFIG_HOME", self.tempdir.path())
+            .env_remove("ATM_IDENTITY")
+            .env("ATM_TEAM", "atm-dev")
+            .current_dir(self.tempdir.path())
+            .output()
+            .expect("run atm without identity")
+    }
+
     fn write_team_config(&self, recipient: &str) {
         let team_dir = self
             .tempdir
@@ -423,6 +451,10 @@ impl Fixture {
             .join("atm-dev");
         fs::create_dir_all(&team_dir).expect("team dir");
         fs::write(team_dir.join("config.json"), raw).expect("write raw team config");
+    }
+
+    fn write_atm_config(&self, raw: &str) {
+        fs::write(self.tempdir.path().join(".atm.toml"), raw).expect("write .atm.toml");
     }
 
     fn inbox_path(&self, recipient: &str) -> std::path::PathBuf {

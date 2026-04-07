@@ -477,6 +477,12 @@ Status summary:
   - `L.3` complete on `feature/pL-s3-file-sink-migration` / PR #52 with the
     current branch tip carrying the final fix-r1 closure for the live
     validation and status-summary findings
+  - `L.4` complete on `feature/pL-s4-public-api-cleanup` at
+    `4304d825ff6dddc52ddc21e08f5d2bb3ead795dc`
+  - `L.5` complete on `feature/pL-s5-construction-ergonomics` at
+    `512dfa4d89ac71307ef7324f64dffb67d5189cc3`
+  - `L.6` complete on `feature/pL-s6-release-closeout` at the current branch
+    closeout head for this sprint
 
 Goal:
 - finish the published `sc-observability` 1.0 follow-on work and close the
@@ -630,6 +636,13 @@ Planned sprints:
   - goal: finish the remaining operator-facing and release-readiness validation
     against the published shared crate behavior
   - key tasks:
+    - close the two remaining release-critical identity carry-forward findings:
+      - `ATM-QA-001`
+        - remove obsolete config identity fallback from runtime identity
+          resolution
+      - `ATM-QA-002`
+        - add `atm doctor` drift reporting for obsolete `[atm].identity`
+          configuration
     - verify file sink path alignment against upstream issue `#21`
     - rerun full ATM observability validation on the published
       `sc-observability = "1.0.0"` release
@@ -640,8 +653,9 @@ Planned sprints:
   - dependency note:
     - depends on `L.1` through `L.5` being complete so release validation runs
       against the final observability surface
-    - distinct from `L.7`; config/identity cleanup is not part of the
-      release-closeout sprint
+    - the two release-critical identity items above were pulled forward from
+      earlier `L.7` planning because they block release signoff; the remaining
+      broader `.atm.toml` semantics work stays in `L.7`
 
 - `L.7` Team Baseline And Identity Source Cleanup
   - goal: align ATM config semantics with multi-agent team launches by moving
@@ -656,11 +670,11 @@ Planned sprints:
     - add ATM-owned `post_send_hook` and `post_send_hook_members` support under
       the `[atm]` config section for short-term sender-scoped post-send
       automation
-    - stop using `[atm].identity` as a runtime identity fallback; identity must
-      come from explicit CLI override, hook identity, or `ATM_IDENTITY`
-    - treat `[atm].identity` as an obsolete field: ignored by runtime identity
-      resolution and flagged by `atm doctor` as configuration drift that should
-      be removed
+    - historical note:
+      - the release-critical `[atm].identity` fallback removal and doctor drift
+        warning were pulled forward and closed in `L.6`
+      - the remaining `L.7` scope covers broader baseline-roster, alias, and
+        post-send-hook semantics
     - keep `[atm].default_team` as the shared team default and continue to
       ignore `[rmux]` and future `[scmux]` sections from `atm-core`
     - update `atm doctor` to compare `[atm].team_members` against

@@ -38,6 +38,7 @@ mod tests {
         let config = AtmConfig {
             identity: Some("config-agent".into()),
             default_team: None,
+            obsolete_identity_present: true,
         };
         assert_eq!(
             resolve_sender_identity(Some(&config)).expect("identity"),
@@ -49,18 +50,18 @@ mod tests {
 
     #[test]
     #[serial_test::serial]
-    fn resolves_sender_identity_from_config_when_env_missing() {
+    fn sender_identity_does_not_fall_back_to_config_when_env_missing() {
         let original_identity = env::var_os("ATM_IDENTITY");
-        set_env_var("ATM_IDENTITY", "");
+        remove_env_var("ATM_IDENTITY");
 
         let config = AtmConfig {
             identity: Some("config-agent".into()),
             default_team: None,
+            obsolete_identity_present: true,
         };
-        assert_eq!(
-            resolve_sender_identity(Some(&config)).expect("identity"),
-            "config-agent"
-        );
+
+        let error = resolve_sender_identity(Some(&config)).expect_err("identity error");
+        assert!(error.is_identity());
 
         restore("ATM_IDENTITY", original_identity);
     }
@@ -83,20 +84,20 @@ mod tests {
 
     #[test]
     #[serial_test::serial]
-    fn resolves_hook_identity_from_config_when_env_missing() {
+    fn hook_identity_requires_runtime_identity_when_env_missing() {
         let original_identity = env::var_os("ATM_IDENTITY");
         let original_team = env::var_os("ATM_TEAM");
-        set_env_var("ATM_IDENTITY", "");
+        remove_env_var("ATM_IDENTITY");
         set_env_var("ATM_TEAM", "");
 
         let config = AtmConfig {
             identity: Some("config-agent".into()),
             default_team: Some("config-team".into()),
+            obsolete_identity_present: true,
         };
 
-        let identity = resolve_hook_identity(None, Some(&config)).expect("hook identity");
-        assert_eq!(identity.agent, "config-agent");
-        assert_eq!(identity.team, "config-team");
+        let error = resolve_hook_identity(None, Some(&config)).expect_err("hook identity error");
+        assert!(error.is_identity());
 
         restore("ATM_IDENTITY", original_identity);
         restore("ATM_TEAM", original_team);

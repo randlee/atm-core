@@ -73,6 +73,30 @@ fn test_doctor_reports_unavailable_observability_with_real_fault_injection() {
     assert_eq!(parsed["observability"]["query_state"], "healthy");
 }
 
+#[test]
+fn test_doctor_reports_obsolete_identity_drift_warning() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_atm_config("[atm]\nidentity = \"arch-ctm\"\n");
+
+    let output = fixture.run(&["doctor", "--json"], &[]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["summary"]["status"], "warning");
+    let findings = parsed["findings"].as_array().expect("findings array");
+    assert!(
+        findings
+            .iter()
+            .any(|finding| finding["code"] == "ATM_WARNING_IDENTITY_DRIFT"),
+        "stdout: {}",
+        String::from_utf8(output.stdout.clone()).expect("stdout utf8")
+    );
+}
+
 struct Fixture {
     tempdir: tempfile::TempDir,
 }
@@ -118,6 +142,10 @@ impl Fixture {
             serde_json::to_vec(&config).expect("team config"),
         )
         .expect("write team config");
+    }
+
+    fn write_atm_config(&self, raw: &str) {
+        fs::write(self.tempdir.path().join(".atm.toml"), raw).expect("write .atm.toml");
     }
 
     fn stdout_json(&self, output: &std::process::Output) -> Value {
