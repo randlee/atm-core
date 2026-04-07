@@ -353,10 +353,43 @@ An explicit `@team` suffix takes precedence over `--team`.
 
 Roles and aliases are resolved after splitting `agent@team`, so only the agent token is rewritten.
 
-## 6. `atm send`
+## 6. Idle Notification Lifecycle
+
+Product requirement ID:
+- `REQ-P-IDLE-001` ATM must treat idle notifications as a non-actionable
+  notification class and retain at most one unread idle notification per
+  sender in any inbox.
+
+Satisfied by:
+- `REQ-CORE-MAILBOX-001` for sender-scoped idle-notification deduplication in
+  the atomic mailbox append boundary
+- `REQ-CORE-SEND-001` for send-path classification and delivery behavior once
+  the envelope is identified as an idle notification
+
+Required behavior:
+- detect an idle notification by parsing the persisted message `text` field as
+  JSON and checking for `type == "idle_notification"`
+- if parsing fails or the parsed `type` differs, treat the record as a normal
+  message
+- when a new idle notification from sender `S` arrives at inbox `I`, ATM must
+  atomically remove any older unread idle notification from sender `S` in
+  inbox `I` before appending the new record
+- idle notifications are non-actionable and are not part of the unread or
+  pending-ack work queues
+- idle-notification lifecycle rules shall not apply to non-idle message kinds
+
+Deferred from this sprint:
+- read-time auto-purge of displayed idle notifications
+- daemon-side idle-notification removal behavior
+
+## 7. `atm send`
 
 Product requirement ID:
 - `REQ-P-SEND-001` `atm send` must satisfy the documented send contract.
+
+<!-- Editorial note: subsections within REQ-P-SEND-001 use a local numbering
+sequence that does not match the top-level requirement IDs. This is
+intentional — do not renumber. -->
 
 Satisfied by:
 - `REQ-ATM-CMD-001` for CLI entry, parsing, and dispatch aspects
@@ -408,6 +441,10 @@ Retired from the current implementation:
 - support sender-controlled ack-required messages
 - support optional task metadata on sent messages
 - write a non-null `message_id` on every ATM-authored message
+- generate `message_id` as a UUID v4 at send time
+- when the outgoing envelope is classified as an idle notification, apply the
+  sender-scoped idle-notification deduplication rule inside the same atomic
+  mailbox append boundary before appending the new record
 - current live write compatibility may generate top-level `message_id` values
   using UUID while the metadata-based schema is not yet implemented
 
@@ -515,7 +552,7 @@ Dry-run JSON output must include:
 - `requires_ack`
 - `task_id`
 
-## 7. `atm read`
+## 8. `atm read`
 
 Product requirement ID:
 - `REQ-P-READ-001` `atm read` must satisfy the documented read/selection/wait
@@ -723,7 +760,7 @@ JSON output must include:
 - `pending_ack`
 - `history`
 
-## 8. `atm ack`
+## 9. `atm ack`
 
 Product requirement ID:
 - `REQ-P-ACK-001` `atm ack` must satisfy the documented acknowledgement
@@ -774,7 +811,7 @@ JSON output must include:
 - `task_id` (optional String, present when the source message has `taskId`)
 - `reply_target`
 
-## 9. `atm clear`
+## 10. `atm clear`
 
 Product requirement ID:
 - `REQ-P-CLEAR-001` `atm clear` must satisfy the documented clear contract and
@@ -834,7 +871,7 @@ JSON output must include:
 - `remaining_total`
 - removal counters by class
 
-## 10. `atm log`
+## 11. `atm log`
 
 Product requirement ID:
 - `REQ-P-LOG-001` `atm log` must satisfy the documented shared-observability
@@ -910,7 +947,7 @@ Each JSON record must expose at least:
 - event name
 - ATM structured fields map
 
-## 11. `atm doctor`
+## 12. `atm doctor`
 
 Product requirement ID:
 - `REQ-P-DOCTOR-001` `atm doctor` must satisfy the documented local diagnostics
@@ -971,7 +1008,7 @@ Each doctor finding must expose at least:
 
 Critical findings must cause a non-zero exit status.
 
-## 12. Message And Workflow Model
+## 13. Message And Workflow Model
 
 Product requirement ID:
 - `REQ-P-WORKFLOW-001` The message/workflow model must satisfy the documented
@@ -1097,7 +1134,7 @@ Required rules:
 - a task-linked message must continue to appear in `atm read` until acknowledged
 - a task-linked message must never be removed by `atm clear` before acknowledgement
 
-## 13. Observability Requirements
+## 14. Observability Requirements
 
 Product requirement ID:
 - `REQ-P-OBS-001` ATM observability must satisfy the documented best-effort
@@ -1177,7 +1214,7 @@ Diagnostic logging rules:
 - they are explicit observability consumers
 - if shared query/health APIs are unavailable, they must fail with clear structured errors
 
-## 14. Error Requirements
+## 15. Error Requirements
 
 Product requirement ID:
 - `REQ-P-ERROR-001` Public command failures must satisfy the documented
@@ -1222,7 +1259,7 @@ Mutation failures must be fail-safe:
 - no partial read-mark updates
 - no illegal state transitions after failed persistence
 
-## 15. Reliability Requirements
+## 16. Reliability Requirements
 
 Product requirement ID:
 - `REQ-P-RELIABILITY-001` The retained command surface must satisfy the
@@ -1247,7 +1284,7 @@ Satisfied by:
 - seen-state races must not corrupt mailbox data
 - observability emission failures must not corrupt command behavior
 
-## 16. Testing Requirements
+## 17. Testing Requirements
 
 Product requirement ID:
 - `REQ-P-TEST-001` The rewrite must satisfy the documented testing obligations.
@@ -1276,7 +1313,7 @@ The implementation must include:
 - CLI integration tests for `atm ack`
 - CLI integration tests for `atm clear`
 
-## 17. Acceptance Criteria
+## 18. Acceptance Criteria
 
 Product requirement ID:
 - `REQ-P-ACCEPTANCE-001` The rewrite is complete only when the documented
