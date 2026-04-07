@@ -38,8 +38,8 @@ fn run() -> anyhow::Result<()> {
         Ok(observability) => observability,
         Err(error) => {
             let fallback = observability::CliObservability::fallback();
-            fallback.emit_fatal_error("bootstrap", error.as_ref());
-            return Err(error);
+            fallback.emit_fatal_error("bootstrap", &error);
+            return Err(error.into());
         }
     };
 

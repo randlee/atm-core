@@ -1,7 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyhow::Result;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::home;
 use atm_core::observability::{
@@ -117,6 +116,8 @@ impl CliObservability {
         }
     }
 
+    /// Test-only helper for injecting a synthetic observability port without
+    /// exposing the boxed inner field to production callers.
     #[cfg(test)]
     fn from_port(port: impl ObservabilityPort + Send + Sync + 'static) -> Self {
         Self {
@@ -125,7 +126,7 @@ impl CliObservability {
     }
 }
 
-pub fn init(stderr_logs: bool) -> Result<CliObservability> {
+pub fn init(stderr_logs: bool) -> Result<CliObservability, AtmError> {
     let home_dir = home::atm_home()?;
     Ok(CliObservability::new(
         &home_dir,
@@ -158,11 +159,15 @@ struct ScObservabilityAdapter {
 }
 
 // L.5 dispositions:
-// - BP-001 / UX-002 retained: boxed trait-object dispatch remains acceptable
-//   for initial release because it keeps CLI bootstrap simple without forcing a
-//   wider enum or unified observer abstraction.
-// - the sealed boundary remains in place so external crates cannot bypass the
-//   intended ATM-owned adapter contract with arbitrary ObservabilityPort impls.
+// - UX-002 retained: boxed trait-object dispatch remains acceptable for
+//   initial release because it keeps CLI bootstrap simple without forcing a
+//   wider unified observer abstraction.
+// - BP-001 retained: the sealed boundary remains in place so external crates
+//   cannot bypass the intended ATM-owned adapter contract with arbitrary
+//   ObservabilityPort impls.
+// - UNI-003 / DoctorCommand injectability: deferred — DoctorCommand does not
+//   participate in the ObservabilityPort contract; defer injectability to a
+//   future sprint unless a concrete testing or feature need appears.
 impl observability::sealed::Sealed for CliObservability {}
 impl observability::sealed::Sealed for ScObservabilityAdapter {}
 
