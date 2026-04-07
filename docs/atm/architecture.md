@@ -16,6 +16,8 @@ The `atm` crate is responsible for:
 - output selection and rendering
 - process exit status mapping
 - constructing and injecting the concrete observability adapter
+- maintaining the retained CLI subcommand surface, including `teams` and
+  `members`
 
 The `atm` crate must remain thin.
 
@@ -26,12 +28,13 @@ The `atm` crate must remain thin.
 - `atm` owns mapping of CLI flags to `atm-core` request structs.
 - `atm` owns bootstrap of shared observability implementations used by
   `atm-core`.
-- `atm` owns the published shared-crate dependency wiring for
+- `atm` owns the concrete published-crate bootstrap against
   `sc-observability = "1.0.0"`.
-- `atm` owns CLI-facing console sink routing decisions such as
-  `--stderr-logs`.
-- `atm` should construct `CliObservability` through a structured constructor or
-  equivalent dedicated wiring surface rather than scattered ad hoc assembly.
+- `atm` owns the structured construction contract for the concrete adapter:
+  `CliObservability::new(home_dir, CliObservabilityOptions)`.
+- `atm` may retain `init(...)` only as a delegating helper.
+- `atm` owns the retained local recovery CLI shape for `teams` and `members`,
+  but not the underlying team/backup/restore business rules
 
 ## 4. ADR Namespace
 

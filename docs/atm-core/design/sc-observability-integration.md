@@ -1,5 +1,13 @@
 # `sc-observability` Integration Plan
 
+Status note:
+
+- this document is the historical Phase K integration baseline
+- current release-alignment decisions for the published 1.0 surface now live in
+  [`sc-obs-1.0-integration.md`](./sc-obs-1.0-integration.md)
+- when the two documents differ on current-state details, the Phase L 1.0 note
+  is authoritative
+
 ## 1. Purpose
 
 This document defines the production implementation plan for integrating
@@ -9,24 +17,15 @@ It replaces the older assumption that ATM is still waiting on a missing shared
 query/follow surface. That gap is closed in the current shared repo. The
 remaining work is ATM-side integration, projection, testing, and rollout.
 
-Historical status note:
-
-- this document records the Phase J/Phase K integration design and the stable
-  ATM-side boundary shape that came out of that work
-- for Phase L release-hardening design and sprint planning, see
-  [`sc-obs-1.0-integration.md`](./sc-obs-1.0-integration.md)
-
 ## 2. Current State
 
 Current ATM runtime state:
 
-- `atm-core::observability::ObservabilityPort` supports
-  `emit(...)`, `query(...)`, `follow(...)`, and `health()`
-- `atm` implements that boundary through the published shared
-  `sc-observability = "1.0.0"` crates
-- `atm log` and `atm doctor` are implemented on the shared query/follow/health
-  stack
-- the remaining work is release hardening, not basic feature bring-up
+- `atm-core::observability::ObservabilityPort` only supports
+  `emit(...)`
+- `atm` implements that emit path with local `tracing`
+- `atm log` is not implemented
+- `atm doctor` is still a stub
 
 Current shared `sc-observability` state:
 
@@ -86,15 +85,30 @@ Those higher layers remain available for future ATM telemetry or typed-routing
 work, but they are not required to deliver retained `send`, `read`, `ack`,
 `clear`, `log`, and `doctor`.
 
-## 5. Published Dependency And Toolchain Baseline
+## 5. Pre-Publish Dependency Strategy
+
+Until `sc-observability` is published, ATM integration may consume the shared
+crates from a local checkout in both developer builds and CI.
 
 Required rules:
 
-- ATM depends on the published crates.io release
-  `sc-observability = "1.0.0"`
-- no local `[patch.crates-io]` or user-specific absolute-path strategy remains
-  part of the initial-release design
-- the shared-repo toolchain floor is adopted across ATM and `sc-*` repos
+- the committed ATM design must target the real shared crate names and APIs
+- no ATM code may hardcode a user-specific absolute checkout path
+- local and CI builds may use a repo-local Cargo patch/path strategy that
+  points to a checked-out sibling `sc-observability` repo
+- the same dependency strategy must work in CI so production-readiness testing
+  is not a developer-only path
+- once `sc-observability` is published, ATM should switch to versioned crate
+  dependencies with minimal code churn
+
+Operational detail for the pre-publish period is documented in:
+
+- [`../dev/pre-publish-deps.md`](../dev/pre-publish-deps.md)
+
+Toolchain rule:
+
+- this phase assumes the shared-repo toolchain floor is adopted across ATM and
+  `sc-*` repos
 - the active target is Rust `1.94.1`
 - the same pinned toolchain must be used locally and in CI
 
@@ -123,25 +137,12 @@ pub struct AtmLogRecord {
     pub target: Option<String>,
     pub action: Option<String>,
     pub message: Option<String>,
-    pub fields: AtmLogFields,
+    pub fields: LogFieldMap,
 }
 
 pub struct AtmLogSnapshot {
     pub records: Vec<AtmLogRecord>,
     pub truncated: bool,
-}
-
-pub struct AtmLogFields {
-    pub entries: BTreeMap<String, AtmStructuredValue>,
-}
-
-pub enum AtmStructuredValue {
-    Null,
-    Bool(bool),
-    Number(String),
-    String(String),
-    Array(Vec<AtmStructuredValue>),
-    Object(BTreeMap<String, AtmStructuredValue>),
 }
 
 pub enum AtmObservabilityHealthState {
@@ -203,19 +204,10 @@ Implementation rules:
 - `atm-core` owns these projected request/result types
 - `atm` maps them to and from shared `sc-observability` types
 - `atm-core` public APIs must not leak `sc-observability` crate types
-- `atm-core` public APIs must not leak raw `serde_json::Value` /
-  `Map<String, Value>` directly; JSON parsing, validation, and degradation stay
-  centralized behind ATM-owned boundary types
 - `LogTailSession` stays ATM-owned and synchronous
 - health belongs on `ObservabilityPort::health()`, not on individual follow
   sessions; `LogFollowPort` models synchronous follow polling only and should
   not grow a second health surface
-- the health contract is intentionally closed for the initial release at:
-  - `Healthy`
-  - `Degraded`
-  - `Unavailable`
-- this boundary is intentionally ATM-local and must not be broadened to cover
-  future hook- or `schooks`-orchestrated observability concerns in this phase
 
 ## 7. Shared-To-ATM Mapping Rules
 
@@ -340,10 +332,10 @@ Examples of legitimate upstream asks:
 - additional sink/writer selection useful for CLI integration
 - query/follow helper methods that remain generic and ATM-free
 
-Tracker status:
+Current tracker opened during this planning pass:
 
-- `sc-observability` issue #55: closed — `ConsoleSink::stderr()` support and
-  ATM CLI `--stderr-logs` routing were delivered in Phase L.1
+- `sc-observability` issue #55: expose console sink writer selection / stderr
+  support for downstream CLI integration and tests
 
 ATM must not push ATM-specific payload, env, or durability semantics down into
 the shared repo as a substitute for the ATM adapter boundary.

@@ -2,7 +2,9 @@
 
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
+use serde::de::Error as DeError;
+use serde::ser::{Error as SerError, SerializeMap};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value};
 
 use crate::error::{AtmError, AtmErrorCode};
@@ -49,13 +51,310 @@ pub enum LogOrder {
     OldestFirst,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
-pub struct LogFieldMatch {
-    pub key: String,
-    pub value: Value,
+/// ATM-owned field-key type for observability query and record projections.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct LogFieldKey(String);
+
+impl LogFieldKey {
+    /// Construct a validated ATM log-field key.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] when the provided key is empty or whitespace-only.
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            return Err(
+                AtmError::validation("ATM log field key must not be empty").with_recovery(
+                    "Provide a non-empty field key when building ATM log queries or records.",
+                ),
+            );
+        }
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+impl Serialize for LogFieldKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for LogFieldKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::new(value).map_err(D::Error::custom)
+    }
+}
+
+/// ATM-owned validated JSON-number representation for the observability
+/// boundary.
+#[derive(Debug, Clone)]
+pub struct AtmJsonNumber {
+    raw: String,
+    number: serde_json::Number,
+    normalized: String,
+}
+
+impl AtmJsonNumber {
+    /// Construct a validated ATM JSON number from a raw numeric string.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] when the input is not a valid RFC 8259 JSON
+    /// number. Non-JSON values such as `NaN` and `Infinity` are rejected.
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        let value = value.into();
+        let parsed: Value = serde_json::from_str(&value).map_err(|source| {
+            AtmError::validation(format!("invalid ATM JSON number `{value}`"))
+                .with_recovery(
+                    "Provide a valid RFC 8259 JSON number such as `1`, `-2.5`, or `6.02e23`.",
+                )
+                .with_source(source)
+        })?;
+        match parsed {
+            Value::Number(number) => Ok(Self {
+                raw: value.clone(),
+                number,
+                normalized: normalize_json_number(&value),
+            }),
+            _ => Err(
+                AtmError::validation(format!("invalid ATM JSON number `{value}`")).with_recovery(
+                    "Provide a valid RFC 8259 JSON number such as `1`, `-2.5`, or `6.02e23`.",
+                ),
+            ),
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.raw
+    }
+
+    fn to_json_number(&self) -> Result<serde_json::Number, AtmError> {
+        Ok(self.number.clone())
+    }
+}
+
+impl PartialEq for AtmJsonNumber {
+    fn eq(&self, other: &Self) -> bool {
+        self.normalized == other.normalized
+    }
+}
+
+impl Eq for AtmJsonNumber {}
+
+impl Serialize for AtmJsonNumber {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.to_json_number()
+            .map_err(S::Error::custom)?
+            .serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for AtmJsonNumber {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = Value::deserialize(deserializer)?;
+        match value {
+            Value::Number(number) => Self::new(number.to_string()).map_err(D::Error::custom),
+            _ => Err(D::Error::custom("expected a JSON number")),
+        }
+    }
+}
+
+/// ATM-owned recursive JSON-value wrapper used by the observability boundary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LogFieldValue {
+    Null,
+    Bool(bool),
+    String(String),
+    Number(AtmJsonNumber),
+    Array(Vec<LogFieldValue>),
+    Object(LogFieldMap),
+}
+
+impl LogFieldValue {
+    pub fn null() -> Self {
+        Self::Null
+    }
+
+    pub fn bool(value: bool) -> Self {
+        Self::Bool(value)
+    }
+
+    pub fn string(value: impl Into<String>) -> Self {
+        Self::String(value.into())
+    }
+
+    pub fn number(value: AtmJsonNumber) -> Self {
+        Self::Number(value)
+    }
+
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Self::String(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    /// Convert a serde_json value into the ATM-owned field-value wrapper.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] when a nested field key or JSON number fails ATM
+    /// validation.
+    pub(crate) fn from_json_value(value: Value) -> Result<Self, AtmError> {
+        match value {
+            Value::Null => Ok(Self::Null),
+            Value::Bool(value) => Ok(Self::Bool(value)),
+            Value::String(value) => Ok(Self::String(value)),
+            Value::Number(value) => Ok(Self::Number(AtmJsonNumber::new(value.to_string())?)),
+            Value::Array(values) => values
+                .into_iter()
+                .map(Self::from_json_value)
+                .collect::<Result<Vec<_>, _>>()
+                .map(Self::Array),
+            Value::Object(values) => LogFieldMap::from_json_map(values).map(Self::Object),
+        }
+    }
+
+    /// Convert the ATM-owned field-value wrapper into a serde_json value.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] when a nested ATM-owned JSON number cannot be
+    /// materialized as a JSON value.
+    pub(crate) fn to_json_value(&self) -> Result<Value, AtmError> {
+        match self {
+            Self::Null => Ok(Value::Null),
+            Self::Bool(value) => Ok(Value::Bool(*value)),
+            Self::String(value) => Ok(Value::String(value.clone())),
+            Self::Number(value) => Ok(Value::Number(value.to_json_number()?)),
+            Self::Array(values) => values
+                .iter()
+                .map(Self::to_json_value)
+                .collect::<Result<Vec<_>, _>>()
+                .map(Value::Array),
+            Self::Object(values) => values.to_json_map().map(Value::Object),
+        }
+    }
+}
+
+impl Serialize for LogFieldValue {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.to_json_value()
+            .map_err(S::Error::custom)?
+            .serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for LogFieldValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = Value::deserialize(deserializer)?;
+        Self::from_json_value(value).map_err(D::Error::custom)
+    }
+}
+
+/// ATM-owned map wrapper used by public observability record projections.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LogFieldMap {
+    entries: Vec<(LogFieldKey, LogFieldValue)>,
+}
+
+impl LogFieldMap {
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    pub fn get(&self, key: &str) -> Option<&LogFieldValue> {
+        self.entries
+            .iter()
+            .find_map(|(entry_key, entry_value)| (entry_key.as_str() == key).then_some(entry_value))
+    }
+
+    /// Convert a serde_json object into the ATM-owned field-map wrapper.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] when a nested key or value fails ATM validation.
+    pub(crate) fn from_json_map(values: Map<String, Value>) -> Result<Self, AtmError> {
+        let entries = values
+            .into_iter()
+            .map(|(key, value)| {
+                Ok((
+                    LogFieldKey::new(key)?,
+                    LogFieldValue::from_json_value(value)?,
+                ))
+            })
+            .collect::<Result<Vec<_>, AtmError>>()?;
+        Ok(Self { entries })
+    }
+
+    fn to_json_map(&self) -> Result<Map<String, Value>, AtmError> {
+        // Duplicate keys collapse with a last-wins policy when projected back
+        // into JSON. Serialize uses the same helper so the policy is
+        // consistent across both outbound paths.
+        self.entries
+            .iter()
+            .try_fold(Map::new(), |mut map, (key, value)| {
+                map.insert(key.as_str().to_string(), value.to_json_value()?);
+                Ok(map)
+            })
+    }
+}
+
+impl Serialize for LogFieldMap {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let json_map = self.to_json_map().map_err(S::Error::custom)?;
+        let mut map = serializer.serialize_map(Some(json_map.len()))?;
+        for (key, value) in json_map {
+            map.serialize_entry(&key, &value)?;
+        }
+        map.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for LogFieldMap {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let values = Map::<String, Value>::deserialize(deserializer)?;
+        Self::from_json_map(values).map_err(D::Error::custom)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct LogFieldMatch {
+    pub key: LogFieldKey,
+    pub value: LogFieldValue,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct AtmLogQuery {
     pub mode: LogMode,
     pub levels: Vec<LogLevelFilter>,
@@ -66,7 +365,7 @@ pub struct AtmLogQuery {
     pub order: LogOrder,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct AtmLogRecord {
     pub timestamp: IsoTimestamp,
     pub severity: LogLevelFilter,
@@ -74,7 +373,7 @@ pub struct AtmLogRecord {
     pub target: Option<String>,
     pub action: Option<String>,
     pub message: Option<String>,
-    pub fields: Map<String, Value>,
+    pub fields: LogFieldMap,
 }
 
 #[derive(Debug, Clone, Default, Serialize, PartialEq)]
@@ -220,11 +519,67 @@ impl ObservabilityPort for NullObservability {
     }
 }
 
+fn normalize_json_number(raw: &str) -> String {
+    let (negative, unsigned) = match raw.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, raw),
+    };
+    let (base, exponent) = match unsigned.find(['e', 'E']) {
+        Some(index) => (
+            &unsigned[..index],
+            unsigned[index + 1..]
+                .parse::<i64>()
+                .expect("valid JSON number exponent"),
+        ),
+        None => (unsigned, 0),
+    };
+    let (integer, fraction) = match base.split_once('.') {
+        Some((integer, fraction)) => (integer, fraction),
+        None => (base, ""),
+    };
+
+    let mut digits = format!("{integer}{fraction}");
+    let mut scale = exponent - fraction.len() as i64;
+
+    let trimmed = digits.trim_start_matches('0');
+    digits = if trimmed.is_empty() {
+        "0".to_string()
+    } else {
+        trimmed.to_string()
+    };
+    if digits == "0" {
+        return "0".to_string();
+    }
+
+    while digits.ends_with('0') {
+        digits.pop();
+        scale += 1;
+    }
+
+    let unsigned = if scale >= 0 {
+        format!("{digits}{}", "0".repeat(scale as usize))
+    } else {
+        let point_index = digits.len() as i64 + scale;
+        if point_index > 0 {
+            let point_index = point_index as usize;
+            format!("{}.{}", &digits[..point_index], &digits[point_index..])
+        } else {
+            format!("0.{}{}", "0".repeat((-point_index) as usize), digits)
+        }
+    };
+
+    if negative {
+        format!("-{unsigned}")
+    } else {
+        unsigned
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        AtmLogQuery, AtmObservabilityHealthState, LogLevelFilter, LogMode, LogOrder,
-        NullObservability, ObservabilityPort,
+        AtmJsonNumber, AtmLogQuery, AtmObservabilityHealthState, LogFieldKey, LogFieldMap,
+        LogFieldValue, LogLevelFilter, LogMode, LogOrder, NullObservability, ObservabilityPort,
     };
     use serde_json::json;
 
@@ -284,5 +639,104 @@ mod tests {
             serde_json::from_value::<LogMode>(json!("tail")).unwrap(),
             LogMode::Tail
         );
+    }
+
+    #[test]
+    fn atm_json_number_rejects_non_json_numeric_values() {
+        assert!(AtmJsonNumber::new("NaN").is_err());
+        assert!(AtmJsonNumber::new("Infinity").is_err());
+        assert!(AtmJsonNumber::new("-Infinity").is_err());
+    }
+
+    #[test]
+    fn atm_json_number_accepts_valid_json_numbers() {
+        for raw in ["1", "1.5", "-42", "6.02e23", "1e-6"] {
+            let number = AtmJsonNumber::new(raw).expect("valid number");
+            let encoded = serde_json::to_string(&number).expect("serialize");
+            let decoded: AtmJsonNumber = serde_json::from_str(&encoded).expect("deserialize");
+            assert_eq!(decoded, number, "number `{raw}` should round-trip");
+        }
+    }
+
+    #[test]
+    fn atm_json_number_equality_is_value_based() {
+        assert_eq!(
+            AtmJsonNumber::new("1").expect("one"),
+            AtmJsonNumber::new("1.0").expect("one point zero")
+        );
+        assert_eq!(
+            AtmJsonNumber::new("1").expect("one"),
+            AtmJsonNumber::new("1e0").expect("scientific")
+        );
+    }
+
+    #[test]
+    fn log_field_key_round_trips_through_json() {
+        let key = LogFieldKey::new("task_id").expect("key");
+        let encoded = serde_json::to_string(&key).expect("encode");
+        let decoded: LogFieldKey = serde_json::from_str(&encoded).expect("decode");
+        assert_eq!(decoded, key);
+    }
+
+    #[test]
+    fn log_field_value_variants_round_trip_through_json() {
+        let object: LogFieldMap = serde_json::from_value(json!({
+            "nested": true,
+            "answer": 42
+        }))
+        .expect("object");
+        let cases = vec![
+            LogFieldValue::Null,
+            LogFieldValue::Bool(true),
+            LogFieldValue::String("hello".to_string()),
+            LogFieldValue::Number(AtmJsonNumber::new("1.0").expect("number")),
+            LogFieldValue::Array(vec![
+                LogFieldValue::String("a".to_string()),
+                LogFieldValue::Bool(false),
+            ]),
+            LogFieldValue::Object(object),
+        ];
+
+        for case in cases {
+            let encoded = serde_json::to_value(&case).expect("encode value");
+            let decoded: LogFieldValue = serde_json::from_value(encoded).expect("decode value");
+            assert_eq!(decoded, case);
+        }
+    }
+
+    #[test]
+    fn log_field_map_round_trips_with_last_key_wins() {
+        let map = LogFieldMap {
+            entries: vec![
+                (
+                    LogFieldKey::new("dup").expect("key"),
+                    LogFieldValue::String("first".to_string()),
+                ),
+                (
+                    LogFieldKey::new("stable").expect("key"),
+                    LogFieldValue::Bool(true),
+                ),
+                (
+                    LogFieldKey::new("dup").expect("key"),
+                    LogFieldValue::String("second".to_string()),
+                ),
+            ],
+        };
+
+        let encoded = serde_json::to_value(&map).expect("encode map");
+        assert_eq!(
+            encoded,
+            json!({
+                "dup": "second",
+                "stable": true
+            })
+        );
+
+        let decoded: LogFieldMap = serde_json::from_value(encoded).expect("decode map");
+        assert_eq!(
+            decoded.get("dup").and_then(LogFieldValue::as_str),
+            Some("second")
+        );
+        assert_eq!(decoded.get("stable"), Some(&LogFieldValue::Bool(true)));
     }
 }

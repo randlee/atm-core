@@ -5,6 +5,9 @@ use atm_core::doctor::{DoctorReport, DoctorSeverity, DoctorStatus};
 use atm_core::observability::{AtmLogRecord, AtmLogSnapshot};
 use atm_core::read::ReadOutcome;
 use atm_core::send::SendOutcome;
+use atm_core::team_admin::{
+    AddMemberOutcome, BackupOutcome, MembersList, RestoreOutcome, RestorePlan, TeamsList,
+};
 use atm_core::types::DisplayBucket;
 
 pub fn print_send_result(outcome: &SendOutcome, json: bool) -> Result<()> {
@@ -197,6 +200,14 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
         }
     }
 
+    if let Some(roster) = &report.member_roster {
+        println!();
+        println!("Members: {}", roster.team);
+        for member in &roster.members {
+            println!("  - {}", member.name);
+        }
+    }
+
     if !report.recommendations.is_empty() {
         println!();
         println!("Recommendations:");
@@ -205,6 +216,99 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+pub fn print_teams_result(outcome: &TeamsList, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(outcome)?);
+        return Ok(());
+    }
+
+    if outcome.teams.is_empty() {
+        println!("No teams found");
+        return Ok(());
+    }
+
+    println!("Teams:");
+    for team in &outcome.teams {
+        println!("  {} ({})", team.name, team.member_count);
+    }
+    Ok(())
+}
+
+pub fn print_members_result(outcome: &MembersList, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(outcome)?);
+        return Ok(());
+    }
+
+    println!("Team: {}", outcome.team);
+    if outcome.members.is_empty() {
+        println!("  No members");
+        return Ok(());
+    }
+
+    for member in &outcome.members {
+        println!(
+            "  {} | type={} model={} cwd={} pane={}",
+            member.name,
+            empty_dash(&member.agent_type),
+            empty_dash(&member.model),
+            empty_dash(&member.cwd),
+            empty_dash(&member.tmux_pane_id)
+        );
+    }
+    Ok(())
+}
+
+pub fn print_add_member_result(outcome: &AddMemberOutcome, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(outcome)?);
+    } else {
+        println!(
+            "Added member {} to {} (created_inbox: {})",
+            outcome.member, outcome.team, outcome.created_inbox
+        );
+    }
+    Ok(())
+}
+
+pub fn print_backup_result(outcome: &BackupOutcome, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(outcome)?);
+    } else {
+        println!("Backup created: {}", outcome.backup_path.display());
+    }
+    Ok(())
+}
+
+pub fn print_restore_plan(plan: &RestorePlan, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(plan)?);
+        return Ok(());
+    }
+
+    println!(
+        "Dry run — would restore from: {}",
+        plan.backup_path.display()
+    );
+    println!("  Members: {}", plan.would_restore_members.join(", "));
+    println!("  Inboxes: {}", plan.would_restore_inboxes.join(", "));
+    println!("  Tasks: {}", plan.would_restore_tasks);
+    Ok(())
+}
+
+pub fn print_restore_result(outcome: &RestoreOutcome, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(outcome)?);
+    } else {
+        println!("Restored from: {}", outcome.backup_path.display());
+        println!(
+            "  members={} inboxes={} tasks={}",
+            outcome.members_restored, outcome.inboxes_restored, outcome.tasks_restored
+        );
+    }
     Ok(())
 }
 
@@ -236,6 +340,10 @@ fn print_bucket(outcome: &ReadOutcome, bucket: DisplayBucket, label: &str) {
             println!("  message_id: {message_id}");
         }
     }
+}
+
+fn empty_dash(value: &str) -> &str {
+    if value.is_empty() { "-" } else { value }
 }
 
 fn print_log_record_line(record: &AtmLogRecord) {

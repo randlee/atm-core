@@ -49,9 +49,10 @@ pub(crate) fn resolve_target(
         .team
         .or_else(|| config::resolve_team(team_override, config))
         .ok_or_else(AtmError::team_unavailable)?;
+    let agent = config::aliases::resolve_agent(&parsed.agent, config);
 
     Ok(ResolvedTarget {
-        agent: parsed.agent,
+        agent,
         team,
         explicit: true,
     })
@@ -104,9 +105,12 @@ pub(crate) fn discover_origin_inboxes(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use tempfile::tempdir;
 
-    use super::discover_origin_inboxes;
+    use super::{discover_origin_inboxes, resolve_target};
+    use crate::config::AtmConfig;
 
     #[test]
     fn discover_origin_inboxes_ignores_primary_and_sorts_matches() {
@@ -125,5 +129,21 @@ mod tests {
                 inboxes.join("arch-ctm.host-b.json")
             ]
         );
+    }
+
+    #[test]
+    fn resolve_target_canonicalizes_alias_before_mailbox_lookup() {
+        let mut aliases = BTreeMap::new();
+        aliases.insert("tl".to_string(), "team-lead".to_string());
+        let config = AtmConfig {
+            default_team: Some("atm-dev".to_string()),
+            aliases,
+            ..Default::default()
+        };
+
+        let target = resolve_target(Some("tl"), "arch-ctm", None, Some(&config)).expect("target");
+        assert_eq!(target.agent, "team-lead");
+        assert_eq!(target.team, "atm-dev");
+        assert!(target.explicit);
     }
 }

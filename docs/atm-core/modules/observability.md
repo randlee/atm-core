@@ -11,7 +11,7 @@ It must not own:
 
 References:
 
-- Product requirements: `docs/requirements.md` §3.5, §10, §11, and §13
+- Product requirements: `docs/requirements.md` §3.5, §10, §11, and §15
 - `REQ-P-LOG-001`
 - `REQ-P-DOCTOR-001`
 - `REQ-P-OBS-001`

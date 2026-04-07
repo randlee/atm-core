@@ -16,6 +16,8 @@ References:
 - `REQ-ATM-CMD-001`
 - `REQ-ATM-OUT-001`
 - `REQ-ATM-OBS-001`
+- `REQ-CORE-CONFIG-001` for obsolete `[atm].identity` configuration drift and
+  baseline `[atm].team_members` checks
 - Product architecture: `docs/architecture.md`
 - Core modules:
   - `docs/atm-core/modules/doctor.md`

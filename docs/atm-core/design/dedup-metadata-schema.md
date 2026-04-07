@@ -76,10 +76,12 @@ Concrete placement and ownership map:
 - forward ATM-owned machine metadata:
   - `metadata.atm.messageId`
   - `metadata.atm.sourceTeam`
+  - `metadata.atm.fromIdentity`
   - `metadata.atm.pendingAckAt`
   - `metadata.atm.acknowledgedAt`
   - `metadata.atm.acknowledgesMessageId`
   - `metadata.atm.alertKind`
+  - `metadata.atm.missingConfigPath`
 
 Implementation guardrails:
 
@@ -181,6 +183,8 @@ Recommendation:
 - ATM read must support Claude-native, legacy ATM top-level, and future
   metadata-based messages
 - ATM may enrich a Claude-native message in place by adding `metadata.atm`
+- cross-team alias projection may also record canonical sender identity in
+  `metadata.atm.fromIdentity`
 - enrichment must be additive and idempotent
 - ATM-native inbox separation is explicitly deferred to a later version after
   the current shared inbox design is used live
@@ -189,6 +193,9 @@ Upgrade rule:
 
 - a Claude-native message may be upgraded in place by adding `metadata.atm`
 - the original Claude-owned fields remain authoritative for message content
+- exception: a cross-team alias projection may retain a Claude-facing alias in
+  `from` only when canonical sender identity is also recorded in
+  `metadata.atm.fromIdentity`
 - ATM workflow data such as ack state or ATM message identity attaches to that
   original stored message rather than moving the message into a different
   envelope format

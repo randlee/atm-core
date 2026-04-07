@@ -1,27 +1,83 @@
 # Live Observability Validation
 
-Phase K Pre-Publish Validation Record — NOT Phase L release signoff.
+Phase L.2 re-ran live validation against the published
+`sc-observability = "1.0.0"` adapter on the ATM CLI binary built from this
+worktree. This pass closes the earlier healthy-only gap by exercising healthy,
+degraded, and unavailable observability states through the shared retained-sink
+fault injector rather than through ATM-local deterministic doubles.
 
-This document records the historical Phase K live validation run against the
-real `sc-observability` adapter on the ATM CLI binary built from that worktree.
-It predates the published-crates cutover and therefore must not be read as the
-final Phase L release validation record.
+## Phase L.6 Rerun (2026-04-07)
 
-Historical note:
+Phase L.6 reran the published-baseline validation after the L.4 public field
+cleanup, the L.5 construction refactor, and the release-closeout identity
+changes. The goal of this rerun was to prove that the shared observability
+surface still behaves the same on the published `1.0.0` crates while also
+confirming the new doctor drift finding for obsolete `[atm].identity`.
 
-- this pass used temporary local patch overrides at validation time
-- Phase L release closeout must rerun live validation against the published
-  crates.io dependency `sc-observability = "1.0.0"`
+Rerun fixtures:
+
+- clean validation fixture `ATM_HOME`:
+  `/var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.MGlw9wjiob`
+- drift-check fixture `ATM_HOME`:
+  `/var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.TVHup79rTM`
+
+Commands rerun on the clean fixture:
+
+1. `atm send arch-ctm@atm-dev "l6 validation seed" --json`
+2. `atm read --json`
+3. `atm doctor --json`
+4. `ATM_OBSERVABILITY_RETAINED_SINK_FAULT=degraded atm doctor --json`
+5. `ATM_OBSERVABILITY_RETAINED_SINK_FAULT=unavailable atm doctor --json`
+6. `atm log snapshot --match command=send --since 10m --limit 10 --json`
+7. `atm log filter --match command=read --json`
+
+Additional drift-check command:
+
+8. `atm doctor --json` with `.atm.toml` containing obsolete `[atm].identity`
+
+Observed results:
+
+- `atm send` succeeded and `atm read` returned one unread message from the
+  clean fixture inbox
+- healthy doctor run stayed `healthy` with `ATM_OBSERVABILITY_HEALTH_OK`
+- degraded fault-injected doctor run stayed `warning` with
+  `ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED`
+- unavailable fault-injected doctor run stayed `error` with
+  `ATM_OBSERVABILITY_HEALTH_FAILED` and exited with status `1`
+- `atm log snapshot` still returned the emitted `send` command record
+- `atm log filter` still returned the emitted `read` command record
+- the active shared file sink remained:
+  `/var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.MGlw9wjiob/.local/share/logs/atm.log.jsonl`
+- the separate drift-check run returned warning status with:
+  - `ATM_WARNING_IDENTITY_DRIFT`
+  - `ATM_OBSERVABILITY_HEALTH_OK`
+
+Interpretation:
+
+- L.4 and L.5 did not change the published shared-adapter wire behavior for
+  ATM observability commands
+- L.6 closes the identity carry-forward findings without disturbing the
+  healthy/degraded/unavailable health mapping already validated in L.2
+- obsolete `[atm].identity` now surfaces as an additive doctor warning rather
+  than a runtime identity fallback
 
 ## Environment
 
-- Worktree: `feature/pK-s6-integration-live-validation`
-- Shared adapter source:
-  `/Users/randlee/Documents/github/sc-observability/crates/sc-observability`
-- Shared types source:
-  `/Users/randlee/Documents/github/sc-observability/crates/sc-observability-types`
-- Temporary `ATM_HOME`:
-  `/var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.lKji7mGmG2`
+- Worktree: `feature/pL-s2-fault-injection`
+- ATM binary: `./target/debug/atm` from the checked-out worktree root
+- Published dependencies:
+  - `sc-observability = "1.0.0"`
+  - `sc-observability-types = "1.0.0"`
+- Healthy/degraded/unavailable fixture `ATM_HOME`:
+  `/var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.IazCSMniAq`
+- Tail fixture `ATM_HOME`:
+  `/var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.ELpCcLpmlE`
+
+Machine-specific note:
+
+- the temporary directory prefixes shown in captured output below come from one
+  local validation host; only the retained-log suffix is normative:
+  `$ATM_HOME/.local/share/logs/atm.log.jsonl`
 
 Fixture setup:
 
@@ -34,33 +90,53 @@ Fixture setup:
 
 ## Commands Run
 
-The following live commands were run against the real adapter:
+Healthy retained-adapter run:
 
 1. `atm send recipient@atm-dev "live snapshot seed" --json`
 2. `atm read --json`
 3. `atm doctor --json`
 4. `atm log snapshot --match command=send --since 10m --limit 10 --json`
 5. `atm log filter --match command=read --json`
-6. `atm log tail --match command=send --json --poll-interval-ms 25 --max-polls 12`
-7. `atm send recipient@atm-dev "live tail seed" --json` while tail was active
+
+Live fault-injected doctor runs through the shared adapter:
+
+6. `ATM_OBSERVABILITY_RETAINED_SINK_FAULT=degraded atm doctor --json`
+7. `ATM_OBSERVABILITY_RETAINED_SINK_FAULT=unavailable atm doctor --json`
+
+Live follow/tail run:
+
+8. `atm log tail --match command=send --json --poll-interval-ms 25`
+9. `atm send recipient@atm-dev "tail capture" --json` while tail was active
+
+## Validation Harness Notes
+
+Phase L.2 adds one validation-only environment seam owned by ATM:
+
+- `ATM_OBSERVABILITY_RETAINED_SINK_FAULT=degraded|unavailable`
+
+Behavior:
+
+- ATM still uses the real shared `Logger` and the real `RetainedSinkFaultInjector`
+  from `sc-observability`
+- the seam adds one extra retained sink wrapped by the shared injector
+- `atm doctor` therefore observes degraded and unavailable logging states
+  through the ordinary shared `Logger::health()` path
+- deterministic ATM integration tests remain the fast/stable regression layer;
+  this live seam supplements them with real shared-adapter validation
 
 ## Adapter State By Test
 
-Real-adapter live runs in this pass were healthy:
+Observed real-adapter states in this pass:
 
 - `atm doctor`: healthy
+- `ATM_OBSERVABILITY_RETAINED_SINK_FAULT=degraded atm doctor`: degraded
+- `ATM_OBSERVABILITY_RETAINED_SINK_FAULT=unavailable atm doctor`: unavailable
 - `atm log snapshot`: healthy
 - `atm log filter`: healthy
 - `atm log tail`: healthy
 
-Degraded and unavailable observability states were not induced live in this
-pass because the retained shared file sink was healthy and no safe generic
-failure trigger exists in the current `sc-observability` public API. Those
-states remain covered by deterministic CLI integration tests:
-
-- `crates/atm/tests/doctor.rs`
-  - `test_doctor_reports_degraded_observability`
-  - `test_doctor_reports_unavailable_observability_as_error`
+The degraded/unavailable runs now come from the shared crate directly instead
+of from ATM-local doubles.
 
 ## Captured Output
 
@@ -79,19 +155,19 @@ states remain covered by deterministic CLI integration tests:
     {
       "severity": "info",
       "code": "ATM_OBSERVABILITY_HEALTH_OK",
-      "message": "shared observability active at /var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.lKji7mGmG2/.local/share/atm/logs/atm.log.jsonl; logging health is healthy and query readiness is healthy.",
+      "message": "shared observability active at /var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.IazCSMniAq/.local/share/logs/atm.log.jsonl; logging health is healthy and query readiness is healthy.",
       "remediation": null
     }
   ],
   "recommendations": [],
   "environment": {
-    "atm_home": "/var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.lKji7mGmG2",
+    "atm_home": "/var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.IazCSMniAq",
     "atm_team": "atm-dev",
     "atm_identity": "arch-ctm",
     "team_override": null
   },
   "observability": {
-    "active_log_path": "/var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.lKji7mGmG2/.local/share/atm/logs/atm.log.jsonl",
+    "active_log_path": "/var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.IazCSMniAq/.local/share/logs/atm.log.jsonl",
     "logging_state": "healthy",
     "query_state": "healthy",
     "detail": null
@@ -101,10 +177,96 @@ states remain covered by deterministic CLI integration tests:
 
 Result:
 
-- `atm doctor` projected the real adapter state correctly
-- active log path matched the actual retained file sink path
+- `atm doctor` projected the healthy shared adapter state correctly
+- active log path matched the current shared file-sink layout
 - query readiness reported healthy
-- the forward doctor success code is `ATM_OBSERVABILITY_HEALTH_OK`
+
+### `ATM_OBSERVABILITY_RETAINED_SINK_FAULT=degraded atm doctor --json`
+
+```json
+{
+  "summary": {
+    "status": "warning",
+    "message": "ATM doctor completed with warnings",
+    "info_count": 0,
+    "warning_count": 1,
+    "error_count": 0
+  },
+  "findings": [
+    {
+      "severity": "warning",
+      "code": "ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED",
+      "message": "shared observability is degraded at /var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.IazCSMniAq/.local/share/logs/atm.log.jsonl; logging health is degraded and query readiness is healthy.",
+      "remediation": "Inspect the shared log store and query path, then re-run `atm doctor`."
+    }
+  ],
+  "recommendations": [
+    "Inspect the shared log store and query path, then re-run `atm doctor`."
+  ],
+  "environment": {
+    "atm_home": "/var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.IazCSMniAq",
+    "atm_team": "atm-dev",
+    "atm_identity": "arch-ctm",
+    "team_override": null
+  },
+  "observability": {
+    "active_log_path": "/var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.IazCSMniAq/.local/share/logs/atm.log.jsonl",
+    "logging_state": "degraded",
+    "query_state": "healthy",
+    "detail": null
+  }
+}
+```
+
+Result:
+
+- the shared retained-sink fault injector drove a warning-grade degraded state
+  through the real adapter
+- ATM preserved the healthy query surface while correctly reporting degraded
+  logging health
+
+### `ATM_OBSERVABILITY_RETAINED_SINK_FAULT=unavailable atm doctor --json`
+
+```json
+{
+  "summary": {
+    "status": "error",
+    "message": "ATM doctor found critical issues",
+    "info_count": 0,
+    "warning_count": 0,
+    "error_count": 1
+  },
+  "findings": [
+    {
+      "severity": "error",
+      "code": "ATM_OBSERVABILITY_HEALTH_FAILED",
+      "message": "shared observability is unavailable; active log path is /var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.IazCSMniAq/.local/share/logs/atm.log.jsonl and query readiness is healthy.",
+      "remediation": "Restore shared observability initialization and confirm the active log path is writable."
+    }
+  ],
+  "recommendations": [
+    "Restore shared observability initialization and confirm the active log path is writable."
+  ],
+  "environment": {
+    "atm_home": "/var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.IazCSMniAq",
+    "atm_team": "atm-dev",
+    "atm_identity": "arch-ctm",
+    "team_override": null
+  },
+  "observability": {
+    "active_log_path": "/var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.IazCSMniAq/.local/share/logs/atm.log.jsonl",
+    "logging_state": "unavailable",
+    "query_state": "healthy",
+    "detail": null
+  }
+}
+```
+
+Result:
+
+- the shared retained-sink fault injector drove an error-grade unavailable
+  state through the real adapter
+- `atm doctor` exited non-zero while still emitting the full JSON report
 
 ### `atm log snapshot --match command=send --since 10m --limit 10 --json`
 
@@ -112,7 +274,7 @@ Result:
 {
   "records": [
     {
-      "timestamp": "2026-04-05T04:56:28.871065Z",
+      "timestamp": "2026-04-07T04:38:26.040228Z",
       "severity": "info",
       "service": "atm",
       "target": "atm.command",
@@ -122,7 +284,7 @@ Result:
         "agent": "recipient",
         "command": "send",
         "dry_run": false,
-        "message_id": "2d9b78ec-8857-4686-bb8a-1f023497ee64",
+        "message_id": "0c45aa64-3974-4fa3-a375-613c4fa8a361",
         "requires_ack": false,
         "sender": "arch-ctm",
         "team": "atm-dev"
@@ -136,8 +298,7 @@ Result:
 Result:
 
 - snapshot mode read from the real shared file-backed store
-- structured match on `command=send` worked
-- emitted send records carried ATM-specific structured fields
+- send-path emission remains queryable through the shared retained log
 
 ### `atm log filter --match command=read --json`
 
@@ -145,7 +306,7 @@ Result:
 {
   "records": [
     {
-      "timestamp": "2026-04-05T04:56:28.876864Z",
+      "timestamp": "2026-04-07T04:38:26.044913Z",
       "severity": "info",
       "service": "atm",
       "target": "atm.command",
@@ -167,90 +328,108 @@ Result:
 
 Result:
 
-- field filtering over the shared retained store worked
-- read-path lifecycle records are queryable through the same surface as send
+- read-path lifecycle records remain queryable through the shared retained log
 
-### `atm log tail --match command=send --json --poll-interval-ms 25 --max-polls 12`
+### `atm log tail --match command=send --json --poll-interval-ms 25`
 
 ```json
-{"timestamp":"2026-04-05T04:56:29.083441Z","severity":"info","service":"atm","target":"atm.command","action":"send","message":"ATM command send completed with outcome sent","fields":{"agent":"recipient","command":"send","dry_run":false,"message_id":"b48a93ce-eabf-43f7-a95c-e2064f965cb2","requires_ack":false,"sender":"arch-ctm","team":"atm-dev"}}
+{"timestamp":"2026-04-07T04:38:42.280917Z","severity":"info","service":"atm","target":"atm.command","action":"send","message":"ATM command send completed with outcome sent","fields":{"agent":"recipient","command":"send","dry_run":false,"message_id":"6589d24b-656a-453a-8c63-ea22cbd223d2","requires_ack":false,"sender":"arch-ctm","team":"atm-dev"}}
 ```
 
 Result:
 
 - tail mode observed the subsequent live send event through the real shared
-  follow path
-- the hidden `--max-polls` seam was sufficient for a bounded live validation
-  run without changing the production tail contract
+  follow path without relying on the hidden test-only `--max-polls` seam
 
-### Shared Log Path
+## Carry-In Closure
 
-Observed retained file sink:
+Phase L.2 closes both Phase K observability carry-in items:
 
-```text
-/var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.lKji7mGmG2/.local/share/atm/logs/atm.log.jsonl
-```
-
-Result:
-
-- doctor health and the filesystem agreed on the active shared log file
-
-## Error-Code Audit
-
-The observability error-code surface was re-audited against
-`docs/atm-error-codes.md`.
-
-Verified mappings:
-
-| Operation | Runtime site | ATM code |
-| --- | --- | --- |
-| bootstrap | `ScObservabilityAdapter::new` service-name validation | `ATM_OBSERVABILITY_BOOTSTRAP_FAILED` |
-| bootstrap | `ScObservabilityAdapter::new` logger init | `ATM_OBSERVABILITY_BOOTSTRAP_FAILED` |
-| emit | target/action validation and `logger.emit(...)` | `ATM_OBSERVABILITY_EMIT_FAILED` |
-| query | target validation, field validation, timestamp conversion, `logger.query(...)` | `ATM_OBSERVABILITY_QUERY_FAILED` |
-| follow | `logger.follow(...)` start + poll failures | `ATM_OBSERVABILITY_FOLLOW_FAILED` |
-| health | doctor unavailable/health-failure projection | `ATM_OBSERVABILITY_HEALTH_FAILED` |
-| health success | doctor healthy projection | `ATM_OBSERVABILITY_HEALTH_OK` |
-| degraded health warning | doctor degraded projection | `ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED` |
+- `ATM-QA-K-001`
+  - retained-log emission is now integration-tested for:
+    - `send`
+    - `read`
+    - `ack`
+    - `clear`
+- `ATM-QA-K-002`
+  - degraded and unavailable doctor paths are now exercised through the real
+    shared adapter using the published fault-injection API
 
 Supporting test coverage:
 
-- `crates/atm-core/src/error.rs`
-  - `observability_error_helpers_use_expected_codes`
 - `crates/atm/tests/doctor.rs`
-  - real-adapter healthy path
-  - deterministic degraded/unavailable paths
+  - healthy real-adapter path
+  - degraded real-adapter fault-injection path
+  - unavailable real-adapter fault-injection path
+- `crates/atm/tests/send.rs`
+  - retained-log emission for `send`
+- `crates/atm/tests/read.rs`
+  - retained-log emission for `read`
+- `crates/atm/tests/ack.rs`
+  - retained-log emission for `ack`
+- `crates/atm/tests/clear.rs`
+  - retained-log emission for `clear`
 - `crates/atm/tests/log.rs`
-  - real-adapter snapshot/filter/tail paths
+  - shared snapshot/filter/tail behavior
 
-## Issues Found And Resolutions
+## Phase L.3 Follow-Up Validation
 
-Issues found during the K.6 closure work:
+Phase L.3 re-ran the live doctor/snapshot path specifically to prove that the
+post-`#21` file-sink layout is the operator-facing path ATM should document.
 
-1. K.6 worktree did not yet include the completed K.4 fix branch or the K.5
-   doctor-delivery branch.
-   Resolution:
-   - merged `origin/feature/pK-s4-atm-log-delivery`
-   - merged `origin/feature/pK-s5-atm-doctor-delivery`
-   - resolved only the expected command/output surface conflicts by preserving
-     both `log` and `doctor`
+Worktree:
 
-2. `atm doctor` integration coverage was initially stub-only.
-   Resolution:
-   - added a real-adapter doctor integration test on the healthy path
+- `feature/pL-s3-file-sink-migration`
 
-3. Observability error-code claims were not backed by a direct constructor test.
-   Resolution:
-   - added an explicit `AtmError` observability-code mapping test
+Commands run:
 
-No additional runtime issues were found in the healthy real-adapter live pass.
+1. `atm send recipient@atm-dev "l3 path seed" --json`
+2. `atm doctor --json`
+3. `atm log snapshot --match command=send --since 10m --limit 10 --json`
+
+Observed results:
+
+- `atm doctor --json` reported
+  `observability.active_log_path ==
+  <ATM_HOME>/.local/share/logs/atm.log.jsonl`
+- `atm log snapshot` returned the retained `send` record emitted into that same
+  migrated store
+- no live command in this pass depended on the older
+  `<log_root>/<service>.log.jsonl` layout
+
+Captured excerpts:
+
+```json
+{
+  "observability": {
+    "active_log_path": "/var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.WybcP84GtN/.local/share/logs/atm.log.jsonl",
+    "logging_state": "healthy",
+    "query_state": "healthy"
+  }
+}
+```
+
+```json
+{
+  "records": [
+    {
+      "action": "send",
+      "fields": {
+        "command": "send",
+        "message_id": "1987711b-fe98-4e35-bb6c-cf65b4424ade"
+      }
+    }
+  ],
+  "truncated": false
+}
+```
 
 ## Production Diagnosis
 
 Current dependency assumptions:
 
-- ATM now consumes `sc-observability 1.0.0` and
-  `sc-observability-types 1.0.0` from crates.io
+- ATM consumes `sc-observability = "1.0.0"` and
+  `sc-observability-types = "1.0.0"` from crates.io
 - retained observability uses the shared JSONL file sink by default
 
 Standard log-file path:
@@ -258,7 +437,7 @@ Standard log-file path:
 - inspect `atm doctor --json` first and use `observability.active_log_path` as
   the source of truth
 - on a standard install, the retained file sink is expected under:
-  `$ATM_HOME/.local/share/atm/logs/atm.log.jsonl`
+  `$ATM_HOME/.local/share/logs/atm.log.jsonl`
 
 How to interpret `atm doctor`:
 
@@ -267,25 +446,9 @@ How to interpret `atm doctor`:
   - retained log writes are healthy
   - retained query readiness is healthy
 - `degraded`
-  - retained logging or query readiness is impaired, but ATM can still produce
-    partial observability data
-  - look for warning-level findings and remediation text in the doctor report
+  - retained logging is dropping or partially unhealthy
+  - query readiness may still be healthy
 - `unavailable`
-  - ATM could not initialize or query the shared observability backend
-  - retained log and doctor/query surfaces should be treated as unavailable
-
-First-line remediation:
-
-- `healthy`
-  - confirm the active log path exists and that recent ATM commands append
-    records as expected
-- `degraded`
-  - inspect the active log path for write permission or file-store issues
-  - rerun `atm doctor --json` and `atm log snapshot --limit 10 --json`
-  - review the warning detail for the specific shared health issue
-- `unavailable`
-  - verify the active log directory is writable
-  - verify the installed `sc-observability` crates are available in the build
-    and that ATM was built against the published 1.0.0 release
-  - rerun `atm doctor --json`; if bootstrap still fails, inspect stderr for the
-    emitted fatal diagnostic and the doctor finding remediation
+  - retained logging is unavailable
+  - `atm doctor` exits non-zero and operators should restore the shared
+    observability sink before trusting retained diagnostics

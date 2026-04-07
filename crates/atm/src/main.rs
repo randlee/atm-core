@@ -1,6 +1,7 @@
 mod commands;
 mod observability;
 mod output;
+mod sc_observability_adapter;
 
 use clap::Parser;
 use clap::error::ErrorKind;
@@ -17,15 +18,6 @@ fn main() {
 }
 
 fn run() -> anyhow::Result<()> {
-    let observability = match observability::init() {
-        Ok(observability) => observability,
-        Err(error) => {
-            let fallback = observability::CliObservability::fallback();
-            fallback.emit_fatal_error("bootstrap", error.as_ref());
-            return Err(error);
-        }
-    };
-
     let cli = match commands::Cli::try_parse() {
         Ok(cli) => cli,
         Err(error) => {
@@ -37,7 +29,17 @@ fn run() -> anyhow::Result<()> {
                 return Ok(());
             }
             let validation_error = atm_core::error::AtmError::validation(error.to_string());
-            observability.emit_fatal_error("parse", &validation_error);
+            observability::CliObservability::fallback()
+                .emit_fatal_error("parse", &validation_error);
+            return Err(error.into());
+        }
+    };
+
+    let observability = match observability::init(cli.stderr_logs()) {
+        Ok(observability) => observability,
+        Err(error) => {
+            let fallback = observability::CliObservability::fallback();
+            fallback.emit_fatal_error("bootstrap", &error);
             return Err(error.into());
         }
     };

@@ -11,9 +11,11 @@ It must not own:
 
 References:
 
-- Product requirements: `docs/requirements.md` §11 and §13
+- Product requirements: `docs/requirements.md` §11 and §15
 - `REQ-P-DOCTOR-001`
 - `REQ-P-OBS-001`
+- `REQ-CORE-CONFIG-001` for obsolete `[atm].identity` configuration drift
+  detection and `[atm].team_members` baseline-roster checks
 - `REQ-CORE-DOCTOR-001`
 - CLI surface: `docs/atm/commands/doctor.md`
 - Supporting boundary: `docs/atm-core/modules/observability.md`

@@ -4,7 +4,7 @@
 
 Product requirement ID:
 - `REQ-P-PRODUCT-001` The retained daemon-free ATM product surface consists of
-  `send`, `read`, `ack`, `clear`, `log`, and `doctor`.
+  `send`, `read`, `ack`, `clear`, `log`, `doctor`, `teams`, and `members`.
 
 Satisfied by:
 - intentionally undecomposed product requirement; this governs overall retained
@@ -21,6 +21,8 @@ The retained product surface is:
 - `atm clear`
 - `atm log`
 - `atm doctor`
+- `atm teams`
+- `atm members`
 
 The rewritten system must preserve usable non-daemon behavior already present in the retained commands unless these requirements explicitly retire or change it.
 
@@ -87,6 +89,14 @@ Satisfied by:
 - structured logging through `sc-observability`
 - log query and follow through `sc-observability`
 - local diagnostics through `atm doctor`
+- local team discovery and recovery through `atm teams`
+- local roster verification through `atm members`
+- the retained local team recovery surface:
+  - `atm teams`
+  - `atm members`
+  - `atm teams add-member`
+  - `atm teams backup`
+  - `atm teams restore`
 - task metadata carried in the mail envelope
 - JSON output mode
 - human-readable output mode
@@ -102,7 +112,9 @@ Satisfied by:
 - runtime spawning and launch commands
 - `atm status` in the initial rewrite
 - separate `atm tail` command in the initial rewrite
-- team lifecycle management outside what the retained commands need
+- team lifecycle management outside the retained local recovery surface
+  (`atm teams`, `atm members`, `atm teams add-member`, `atm teams backup`,
+  `atm teams restore`)
 
 ## 3. External Contracts
 
@@ -170,7 +182,9 @@ Required rules:
   fields such as `metadata.atm.alertKind` and
   `metadata.atm.missingConfigPath`
 - ATM may enrich a Claude-native message in place by adding ATM-owned metadata
-  without rewriting native Claude fields
+  without rewriting native Claude fields except for the explicitly documented
+  cross-team alias projection carve-out on `from`, which also requires
+  `metadata.atm.fromIdentity`
 - locally owned schema enforcement must distinguish legacy top-level UUID-based
   ATM identifiers from forward metadata-based ULID identifiers
 - write-path validation may reject wrong-format ATM-owned identifiers with
@@ -205,14 +219,31 @@ Configuration resolution order:
 
 Required config fields:
 - default team
-- identity
 
 Supported optional config fields:
-- roles map
-- aliases map
-- output format
-- color
-- bridge remotes and hostname aliases used by origin-inbox merge
+- `[atm].team_members`
+- `[atm].aliases`
+- `[atm].post_send_hook`
+- `[atm].post_send_hook_members`
+
+Runtime identity rules:
+- repo-local `.atm.toml` `[atm].identity` is not a valid runtime identity
+  fallback for the retained multi-agent ATM model
+- runtime identity must come from:
+  - explicit command override when supported
+  - hook-file identity
+  - `ATM_IDENTITY`
+- an obsolete config `[atm].identity` field may remain temporarily for
+  migration, but ATM must ignore it for runtime identity resolution and
+  `atm doctor` must flag it for removal
+- `.atm.toml` may define `[atm].team_members` as the baseline team roster that
+  should always be present in `config.json`
+- `.atm.toml` may define `[atm].aliases` for ATM-owned shorthand addressing of
+  canonical member identities
+- `.atm.toml` may define `[atm].post_send_hook` and
+  `[atm].post_send_hook_members` for sender-scoped post-send automation
+- config sections outside ATM-owned config, such as `[rmux]` or future
+  `[scmux]`, are not ATM runtime config and must be ignored by `atm-core`
 
 ### 3.3.1 Config And Schema Recovery
 
@@ -290,11 +321,11 @@ Required integration rules:
   `sc-observability` APIs can own the behavior
 - `atm-core` must keep the shared crates behind an ATM-owned injected boundary
 - `atm` owns the concrete shared-crate bootstrap and dependency wiring
-- ATM must depend on the published crates.io release
-  `sc-observability = "1.0.0"` for initial release validation and delivery
+- the active release baseline uses the published
+  `sc-observability = "1.0.0"` crates.io dependency
 - the same pinned Rust toolchain must be used locally and in CI across ATM and
   `sc-*` repos
-- the concrete release-hardening work is planned in Phase L of
+- the concrete integration work is planned in Phase K of
   [`project-plan.md`](./project-plan.md)
 
 Historical note:
@@ -315,20 +346,18 @@ Satisfied by:
 1. `--from`
 2. hook-file identity
 3. `ATM_IDENTITY`
-4. config identity
 
 ### 4.2 Read Identity Resolution Order
 
 1. `--as`
 2. hook-file identity
 3. `ATM_IDENTITY`
-4. config identity
 
 ### 4.3 Doctor Identity Resolution
 
 `atm doctor` uses the same config and hook-resolution paths as the retained mail commands, but it must not fail immediately only because hook identity is absent. Missing hook identity is a diagnostic finding unless identity resolution is explicitly required for a requested check.
 
-If command identity cannot be determined where required, the command must fail with a structured recovery-oriented error.
+If command identity cannot be determined where required, the command must fail with a structured recovery-oriented error. An obsolete config `identity` field may be reported as a diagnostic, but it does not count as command identity.
 
 ## 5. Address Resolution
 
@@ -337,7 +366,7 @@ Product requirement ID:
   `agent`/`agent@team` forms and precedence rules.
 
 Satisfied by:
-- `REQ-CORE-CONFIG-002` for address parsing, alias/role rewrite, and
+- `REQ-CORE-CONFIG-002` for address parsing, alias rewrite, and
   team/member validation policy
 
 Supported address forms:
@@ -351,45 +380,40 @@ Resolution order:
 
 An explicit `@team` suffix takes precedence over `--team`.
 
-Roles and aliases are resolved after splitting `agent@team`, so only the agent token is rewritten.
+Aliases are resolved after splitting `agent@team`, so only the agent token is
+rewritten.
 
-## 6. Idle Notification Lifecycle
+Alias rules:
+- aliases are accepted as ATM-owned input shorthand only
+- recipient aliases must resolve to canonical member names before validation,
+  self-send checks, and mailbox lookup
+- sender aliases may be accepted on input, but canonical sender identity
+  remains the routing and validation identity
+- same-team messages keep current canonical sender projection behavior
+- cross-team messages may project an alias-oriented sender in the persisted
+  `from` field only when ATM also stores canonical sender identity in
+  `metadata.atm.fromIdentity`
 
-Product requirement ID:
-- `REQ-P-IDLE-001` ATM must treat idle notifications as a non-actionable
-  notification class and retain at most one unread idle notification per
-  sender in any inbox.
+Post-send-hook rules:
+- `post_send_hook` is an ATM-owned helper script/command path list
+- `post_send_hook_members` matches resolved sender identity, not model name
+- a relative hook path must resolve from the directory containing the
+  discovered `.atm.toml`
+- the hook must execute with that same config-root directory as its working
+  directory
+- the hook inherits the process environment and also receives one ATM-owned
+  JSON payload in `ATM_POST_SEND`
+- the `ATM_POST_SEND` payload must contain:
+  - `from`
+  - `to`
+  - `message_id`
+  - `requires_ack`
+  - optional `task_id`
 
-Satisfied by:
-- `REQ-CORE-MAILBOX-001` for sender-scoped idle-notification deduplication in
-  the atomic mailbox append boundary
-- `REQ-CORE-SEND-001` for send-path classification and delivery behavior once
-  the envelope is identified as an idle notification
-
-Required behavior:
-- detect an idle notification by parsing the persisted message `text` field as
-  JSON and checking for `type == "idle_notification"`
-- if parsing fails or the parsed `type` differs, treat the record as a normal
-  message
-- when a new idle notification from sender `S` arrives at inbox `I`, ATM must
-  atomically remove any older unread idle notification from sender `S` in
-  inbox `I` before appending the new record
-- idle notifications are non-actionable and are not part of the unread or
-  pending-ack work queues
-- idle-notification lifecycle rules shall not apply to non-idle message kinds
-
-Deferred from this sprint:
-- read-time auto-purge of displayed idle notifications
-- daemon-side idle-notification removal behavior
-
-## 7. `atm send`
+## 6. `atm send`
 
 Product requirement ID:
 - `REQ-P-SEND-001` `atm send` must satisfy the documented send contract.
-
-<!-- Editorial note: subsections within REQ-P-SEND-001 use a local numbering
-sequence that does not match the top-level requirement IDs. This is
-intentional — do not renumber. -->
 
 Satisfied by:
 - `REQ-ATM-CMD-001` for CLI entry, parsing, and dispatch aspects
@@ -426,7 +450,11 @@ Retired from the current implementation:
 
 - resolve sender identity using the defined precedence
 - resolve recipient address using the defined precedence
-- resolve roles and aliases before mailbox lookup
+- resolve aliases before mailbox lookup
+- when a cross-team alias-oriented sender is projected into `from`, also
+  persist canonical sender identity in `metadata.atm.fromIdentity` and use the
+  canonical sender identity for validation, self-send checks, routing, and
+  audit behavior
 - verify target team existence and target agent membership as part of address
   resolution before mailbox path selection, except for the documented
   `missing-document` fallback in §6.3.1
@@ -440,11 +468,11 @@ Retired from the current implementation:
 - support dry-run without mutation
 - support sender-controlled ack-required messages
 - support optional task metadata on sent messages
+- run `post_send_hook` only after successful non-`dry-run` sends and only when
+  the resolved sender identity is listed in `post_send_hook_members`
+- treat `post_send_hook` failure or timeout as best-effort diagnostics only; it
+  must not roll back or fail an already-successful send
 - write a non-null `message_id` on every ATM-authored message
-- generate `message_id` as a UUID v4 at send time
-- when the outgoing envelope is classified as an idle notification, apply the
-  sender-scoped idle-notification deduplication rule inside the same atomic
-  mailbox append boundary before appending the new record
 - current live write compatibility may generate top-level `message_id` values
   using UUID while the metadata-based schema is not yet implemented
 
@@ -458,7 +486,7 @@ Forward schema requirements:
 
 `message_id` is required on every message written by `atm send`.
 
-`message_id` is optional in the persisted schema (§12.1) only to support
+`message_id` is optional in the persisted schema (§14.1) only to support
 legacy messages written by older clients, but `atm send` never omits it.
 
 Recipients use `message_id` for:
@@ -552,7 +580,7 @@ Dry-run JSON output must include:
 - `requires_ack`
 - `task_id`
 
-## 8. `atm read`
+## 7. `atm read`
 
 Product requirement ID:
 - `REQ-P-READ-001` `atm read` must satisfy the documented read/selection/wait
@@ -760,7 +788,7 @@ JSON output must include:
 - `pending_ack`
 - `history`
 
-## 9. `atm ack`
+## 8. `atm ack`
 
 Product requirement ID:
 - `REQ-P-ACK-001` `atm ack` must satisfy the documented acknowledgement
@@ -811,7 +839,7 @@ JSON output must include:
 - `task_id` (optional String, present when the source message has `taskId`)
 - `reply_target`
 
-## 10. `atm clear`
+## 9. `atm clear`
 
 Product requirement ID:
 - `REQ-P-CLEAR-001` `atm clear` must satisfy the documented clear contract and
@@ -871,7 +899,7 @@ JSON output must include:
 - `remaining_total`
 - removal counters by class
 
-## 11. `atm log`
+## 10. `atm log`
 
 Product requirement ID:
 - `REQ-P-LOG-001` `atm log` must satisfy the documented shared-observability
@@ -947,7 +975,7 @@ Each JSON record must expose at least:
 - event name
 - ATM structured fields map
 
-## 12. `atm doctor`
+## 11. `atm doctor`
 
 Product requirement ID:
 - `REQ-P-DOCTOR-001` `atm doctor` must satisfy the documented local diagnostics
@@ -977,6 +1005,8 @@ The initial doctor implementation must cover:
 - config file discovery and parse health
 - effective team resolution
 - identity resolution inputs and fallbacks
+- obsolete `[atm].identity` configuration drift detection
+- baseline `[atm].team_members` coverage against `config.json.members`
 - team directory existence
 - team config existence and parse health
 - inbox directory existence and writability
@@ -991,6 +1021,8 @@ The initial doctor implementation must cover:
 Human output must provide:
 - overall status summary
 - findings grouped by severity
+- full current member roster from `config.json`, with baseline
+  `[atm].team_members` shown first and `team-lead` first among that baseline
 - concrete remediation guidance when the user can act
 
 JSON output must provide:
@@ -998,6 +1030,7 @@ JSON output must provide:
 - findings
 - recommendations
 - environment override visibility
+- member roster
 - observability health snapshot
 
 Each doctor finding must expose at least:
@@ -1006,9 +1039,158 @@ Each doctor finding must expose at least:
 - message
 - remediation when available
 
+The obsolete config-identity finding must use:
+- `ATM_WARNING_IDENTITY_DRIFT`
+
 Critical findings must cause a non-zero exit status.
 
-## 13. Message And Workflow Model
+## 12. `atm teams`
+
+Product requirement ID:
+- `REQ-P-TEAMS-001` `atm teams` must satisfy the documented retained local
+  team recovery contract.
+
+Satisfied by:
+- `REQ-ATM-CMD-001` for CLI entry, parsing, and dispatch aspects
+- `REQ-ATM-OUT-001` for human-readable and JSON output aspects
+- `REQ-CORE-TEAM-001` for local team discovery, roster mutation, and
+  backup/restore behavior
+
+### 12.1 Purpose
+
+Provide the minimum retained local team-recovery surface required for initial
+release and the documented backup/restore workflow.
+
+### 12.2 Retained Surface
+
+The retained `teams` surface for initial release is:
+- `atm teams`
+- `atm teams add-member`
+- `atm teams backup`
+- `atm teams restore`
+
+The retained surface explicitly does not include broader historical team
+orchestration commands such as:
+- `spawn`
+- `join`
+- `resume`
+- `update-member`
+- `remove-member`
+- `cleanup`
+
+### 12.3 Required Behavior
+
+Bare `atm teams` must:
+- list discovered teams under ATM home deterministically
+- expose at least team name plus enough summary information, such as member
+  count, to pick a target team for restore or repair work
+
+`atm teams add-member` must:
+- validate that the target team exists
+- reject duplicate member names
+- persist the new member entry deterministically in team config
+- create any required local inbox state atomically with the roster update
+
+`atm teams backup` must:
+- create a timestamped snapshot under the ATM team backup area
+- capture the current `config.json`
+- capture team inbox files
+- capture the ATM team task bucket
+- report the created backup path in human and JSON output
+- not claim to back up the separate Claude Code project task list
+
+`atm teams restore` must:
+- restore from the newest snapshot by default or from an explicit backup path
+- support a dry-run mode that reports members, inboxes, and tasks that would
+  be restored
+- preserve the current team-lead entry and current `leadSessionId`
+- add only missing non-lead members from the snapshot
+- clear runtime-only restored-member fields such as session, activity, and
+  pane state before persisting them
+- restore non-lead inbox files from the chosen snapshot deterministically
+- restore the ATM team task bucket and recompute `.highwatermark` from the
+  maximum restored task id
+- fail with a structured error when backup material is missing or malformed
+- avoid partial restore on validation or snapshot-load failure
+
+### 12.4 Output Contract
+
+Human output must make the performed action and target team clear.
+
+JSON output must include:
+- `action`
+- `team`
+
+`add-member` JSON output must additionally include:
+- `member`
+
+`backup` JSON output must additionally include:
+- `backup_path`
+
+`restore` JSON output must additionally include:
+- `backup_path`
+- `members_restored`
+- `inboxes_restored`
+- `tasks_restored`
+
+Dry-run `restore` JSON output must additionally include:
+- `dry_run = true`
+- `would_restore_members`
+- `would_restore_inboxes`
+- `would_restore_tasks`
+
+## 13. `atm members`
+
+Product requirement ID:
+- `REQ-P-MEMBERS-001` `atm members` must satisfy the documented local roster
+  inspection contract.
+
+Satisfied by:
+- `REQ-ATM-CMD-001` for CLI entry, parsing, and dispatch aspects
+- `REQ-ATM-OUT-001` for human-readable and JSON output aspects
+- `REQ-CORE-TEAM-001` for local roster loading and deterministic projection
+
+### 13.1 Purpose
+
+List the current local team roster for verification, recovery, and restore
+follow-up without depending on daemon-only or hook-only state.
+
+### 13.2 Supported Flags
+
+- `--team <name>`
+- `--json`
+
+### 13.3 Required Behavior
+
+`atm members` must:
+- resolve the effective team using the retained team-resolution rules
+- load the local team roster from `config.json`
+- return a structured error when the team or team config is missing
+- show all configured members deterministically, with `team-lead` first when
+  present and remaining members in stable local order
+- expose currently persisted member metadata that ATM already knows locally,
+  such as type, model, cwd, or pane id when present in config
+- remain useful without daemon or hook state
+
+Richer runtime state, such as live session or activity data, may be layered on
+later, but it is not required for the retained local release surface.
+
+### 13.4 Output Contract
+
+Human output must show:
+- team name
+- one row per member
+- enough persisted member detail to verify roster repair or restore outcomes
+
+JSON output must include:
+- `team`
+- `members`
+
+Each member object must expose at least:
+- `name`
+- persisted local member metadata when present
+
+## 14. Message And Workflow Model
 
 Product requirement ID:
 - `REQ-P-WORKFLOW-001` The message/workflow model must satisfy the documented
@@ -1018,7 +1200,7 @@ Satisfied by:
 - `REQ-CORE-WORKFLOW-001` for the canonical two-axis model and legal
   transitions
 
-### 12.1 Persisted Message Fields
+### 14.1 Persisted Message Fields
 
 Required fields:
 - `from`
@@ -1047,7 +1229,7 @@ For ATM-authored messages:
 Legacy or externally imported records may still omit `message_id`; the rewrite
 must preserve such records without inventing synthetic ids during read.
 
-### 12.2 Two-Axis Canonical Model
+### 14.2 Two-Axis Canonical Model
 
 The canonical model has two independent axes.
 
@@ -1077,7 +1259,7 @@ Derived message class for queue logic:
 
 The canonical two-axis model is distinct from the read command’s display buckets.
 
-### 12.3 Required State Transitions
+### 14.3 Required State Transitions
 
 ```text
 Send normal message
@@ -1124,7 +1306,7 @@ Disallowed transitions:
 
 The implementation must encode legal transitions in code structure, not only in comments or tests.
 
-### 12.4 Task Metadata Rule
+### 14.4 Task Metadata Rule
 
 Messages with `taskId` are task-linked messages.
 
@@ -1134,7 +1316,7 @@ Required rules:
 - a task-linked message must continue to appear in `atm read` until acknowledged
 - a task-linked message must never be removed by `atm clear` before acknowledgement
 
-## 14. Observability Requirements
+## 15. Observability Requirements
 
 Product requirement ID:
 - `REQ-P-OBS-001` ATM observability must satisfy the documented best-effort
@@ -1181,23 +1363,8 @@ Sink policy:
 - the shared file sink is required for retained ATM observability
 - the shared console sink is optional and must remain off by default for normal
   ATM CLI command execution so command output stays stable
-- console logging may be enabled explicitly through `--stderr-logs` for local
-  debugging, integration testing, or operator-directed diagnostics without
-  contaminating normal stdout command output
-
-Initial-release observability boundary rules:
-- ATM observability remains scoped to ATM’s messaging workflows, retained-log
-  query/follow, and doctor readiness checks
-- future hook- or `schooks`-driven observability orchestration is out of scope
-  for the initial release and must not force broader boundary changes in
-  Phase L
-- the initial-release observability health contract remains intentionally closed
-  at:
-  - `Healthy`
-  - `Degraded`
-  - `Unavailable`
-- public `atm-core` observability APIs must use ATM-owned boundary types rather
-  than exposing raw `serde_json::Value` / `Map<String, Value>` directly
+- console logging may be enabled later for explicit local debugging or
+  integration testing
 
 Diagnostic logging rules:
 - command failures must emit structured failure diagnostics before the CLI
@@ -1214,7 +1381,7 @@ Diagnostic logging rules:
 - they are explicit observability consumers
 - if shared query/health APIs are unavailable, they must fail with clear structured errors
 
-## 15. Error Requirements
+## 16. Error Requirements
 
 Product requirement ID:
 - `REQ-P-ERROR-001` Public command failures must satisfy the documented
@@ -1259,7 +1426,7 @@ Mutation failures must be fail-safe:
 - no partial read-mark updates
 - no illegal state transitions after failed persistence
 
-## 16. Reliability Requirements
+## 17. Reliability Requirements
 
 Product requirement ID:
 - `REQ-P-RELIABILITY-001` The retained command surface must satisfy the
@@ -1284,7 +1451,7 @@ Satisfied by:
 - seen-state races must not corrupt mailbox data
 - observability emission failures must not corrupt command behavior
 
-## 17. Testing Requirements
+## 18. Testing Requirements
 
 Product requirement ID:
 - `REQ-P-TEST-001` The rewrite must satisfy the documented testing obligations.
@@ -1303,6 +1470,13 @@ Because `sc-observability` is newly introduced into ATM, the rewrite must add ex
 - log query by structured field match
 - log follow/tail behavior
 - doctor observability-health reporting
+- teams list behavior over the local ATM home
+- members list behavior over local team config
+- add-member duplicate validation and inbox creation
+- backup snapshot completeness
+- restore dry-run reporting
+- restore preservation of team-lead / `leadSessionId`
+- restore recomputation of `.highwatermark` to the maximum restored task id
 - retained mail-command correctness when observability emission fails
 - clear eligibility behavior
 
@@ -1312,8 +1486,10 @@ The implementation must include:
 - CLI integration tests for `atm doctor`
 - CLI integration tests for `atm ack`
 - CLI integration tests for `atm clear`
+- CLI integration tests for `atm teams`
+- CLI integration tests for `atm members`
 
-## 18. Acceptance Criteria
+## 19. Acceptance Criteria
 
 Product requirement ID:
 - `REQ-P-ACCEPTANCE-001` The rewrite is complete only when the documented
@@ -1330,6 +1506,8 @@ The rewrite is ready when:
 - `atm clear` works without daemon support
 - `atm log` works through shared `sc-observability` APIs
 - `atm doctor` works as a local diagnostics command
+- `atm teams` provides the retained local team recovery surface
+- `atm members` provides the retained local roster verification surface
 - retained commands preserve documented non-daemon behavior
 - workflow-axis classification is correct
 - workflow-axis transitions are encoded in implementation structure

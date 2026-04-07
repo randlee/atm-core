@@ -15,5 +15,8 @@ References:
 - `REQ-P-SEND-001`
 - `REQ-ATM-CMD-001`
 - `REQ-ATM-OUT-001`
+- `REQ-CORE-CONFIG-002` for alias rewrite before canonical target resolution
+- `REQ-CORE-SEND-002` for cross-team `from` projection with
+  `metadata.atm.fromIdentity`
 - Product architecture: `docs/architecture.md`
 - Core module: `docs/atm-core/modules/send.md`

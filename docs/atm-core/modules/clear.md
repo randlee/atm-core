@@ -5,7 +5,7 @@ pending-ack messages are never removed by clear.
 
 References:
 
-- Product requirements: `docs/requirements.md` §9 and §12
+- Product requirements: `docs/requirements.md` §9 and §14
 - `REQ-P-CLEAR-001`
 - `REQ-P-WORKFLOW-001`
 - `REQ-CORE-WORKFLOW-001`

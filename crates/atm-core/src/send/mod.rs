@@ -2,11 +2,12 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
-use serde_json::Map;
+use serde_json::{Map, json};
 use tracing::warn;
 
 use crate::address::AgentAddress;
@@ -80,12 +81,21 @@ pub fn send_mail(
     observability: &dyn ObservabilityPort,
 ) -> Result<SendOutcome, AtmError> {
     let config = config::load_config(&request.current_dir)?;
-    let sender = resolve_sender_identity(request.sender_override.as_deref(), config.as_ref())?;
+    let canonical_sender =
+        resolve_sender_identity(request.sender_override.as_deref(), config.as_ref())?;
     let recipient = resolve_recipient(
         &request.to,
         request.team_override.as_deref(),
         config.as_ref(),
     )?;
+    let sender_team = config::resolve_team(None, config.as_ref());
+    let sender = display_sender_identity(
+        &canonical_sender,
+        request.sender_override.as_deref(),
+        sender_team.as_deref(),
+        &recipient.team,
+        config.as_ref(),
+    );
 
     let team_dir = home::team_dir_from_home(&request.home_dir, &recipient.team)?;
     if !team_dir.exists() {
@@ -130,7 +140,6 @@ pub fn send_mail(
                 notify_team_lead_missing_config(
                     &request.home_dir,
                     &team_dir,
-                    &sender,
                     &recipient.team,
                     &recipient.agent,
                 );
@@ -152,24 +161,31 @@ pub fn send_mail(
     let timestamp = IsoTimestamp::now();
 
     if !request.dry_run {
+        let mut extra = Map::new();
+        if sender != canonical_sender {
+            set_canonical_sender_metadata(
+                &mut extra,
+                &qualified_sender_identity(&canonical_sender, sender_team.as_deref()),
+            );
+        }
         let envelope = MessageEnvelope {
             from: sender.clone(),
             text: body.clone(),
             timestamp,
             read: false,
-            source_team: Some(recipient.team.clone()),
+            source_team: sender_team.clone().or(Some(recipient.team.clone())),
             summary: Some(summary.clone()),
             message_id: Some(message_id),
             pending_ack_at: requires_ack.then_some(timestamp),
             acknowledged_at: None,
             acknowledges_message_id: None,
             task_id: task_id.clone(),
-            extra: Map::new(),
+            extra,
         };
         mailbox::append_message(&inbox_path, &envelope)?;
     }
 
-    let outcome = SendOutcome {
+    let mut outcome = SendOutcome {
         action: "send",
         team: recipient.team.clone(),
         agent: recipient.agent.clone(),
@@ -184,13 +200,28 @@ pub fn send_mail(
         dry_run: request.dry_run,
     };
 
+    if !request.dry_run {
+        maybe_run_post_send_hook(
+            &mut outcome.warnings,
+            config.as_ref(),
+            PostSendHookContext {
+                sender: &canonical_sender,
+                sender_team: sender_team.as_deref(),
+                recipient: &recipient,
+                message_id,
+                requires_ack,
+                task_id: task_id.as_deref(),
+            },
+        );
+    }
+
     let _ = observability.emit(CommandEvent {
         command: "send",
         action: "send",
         outcome: outcome.outcome,
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
-        sender,
+        sender: canonical_sender,
         message_id: Some(outcome.message_id),
         requires_ack: outcome.requires_ack,
         dry_run: outcome.dry_run,
@@ -208,19 +239,29 @@ struct ResolvedRecipient {
     team: String,
 }
 
+struct PostSendHookContext<'a> {
+    sender: &'a str,
+    sender_team: Option<&'a str>,
+    recipient: &'a ResolvedRecipient,
+    message_id: LegacyMessageId,
+    requires_ack: bool,
+    task_id: Option<&'a str>,
+}
+
 fn resolve_sender_identity(
     sender_override: Option<&str>,
     config: Option<&config::AtmConfig>,
 ) -> Result<String, AtmError> {
     if let Some(sender) = sender_override.filter(|value| !value.trim().is_empty()) {
-        return Ok(sender.to_string());
+        return Ok(config::aliases::resolve_agent(sender.trim(), config));
     }
 
     if let Some(identity) = identity::hook::read_hook_identity()? {
-        return Ok(identity);
+        return Ok(config::aliases::resolve_agent(&identity, config));
     }
 
     identity::resolve_sender_identity(config)
+        .map(|identity| config::aliases::resolve_agent(&identity, config))
 }
 
 fn resolve_recipient(
@@ -235,7 +276,7 @@ fn resolve_recipient(
         .ok_or_else(AtmError::team_unavailable)?;
 
     Ok(ResolvedRecipient {
-        agent: parsed.agent,
+        agent: config::aliases::resolve_agent(&parsed.agent, config),
         team,
     })
 }
@@ -263,13 +304,7 @@ fn is_false(value: &bool) -> bool {
     !*value
 }
 
-fn notify_team_lead_missing_config(
-    home_dir: &Path,
-    team_dir: &Path,
-    sender: &str,
-    team: &str,
-    recipient: &str,
-) {
+fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str, recipient: &str) {
     let alert_key = missing_team_config_alert_key(team_dir);
     if !register_missing_team_config_alert(home_dir, &alert_key) {
         return;
@@ -300,7 +335,7 @@ fn notify_team_lead_missing_config(
     );
 
     let notice = MessageEnvelope {
-        from: sender.to_string(),
+        from: format!("atm-identity-missing@{team}"),
         text: format!(
             "ATM warning: send used existing inbox fallback for {recipient}@{team} because team config is missing at {}. Please restore config.json.",
             config_path.display()
@@ -325,6 +360,158 @@ fn notify_team_lead_missing_config(
             path = %team_lead_inbox.display(),
             "failed to append missing-config notice to team-lead inbox"
         );
+    }
+}
+
+fn display_sender_identity(
+    canonical_sender: &str,
+    sender_override: Option<&str>,
+    sender_team: Option<&str>,
+    recipient_team: &str,
+    config: Option<&config::AtmConfig>,
+) -> String {
+    let cross_team = sender_team.is_some_and(|team| team != recipient_team);
+    if !cross_team {
+        return canonical_sender.to_string();
+    }
+
+    if let Some(sender_override) = sender_override
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        && config::aliases::resolve_agent(sender_override, config) == canonical_sender
+    {
+        return sender_override.to_string();
+    }
+
+    config::aliases::preferred_alias(canonical_sender, config)
+        .unwrap_or_else(|| canonical_sender.to_string())
+}
+
+fn qualified_sender_identity(sender: &str, sender_team: Option<&str>) -> String {
+    sender_team
+        .map(|team| format!("{sender}@{team}"))
+        .unwrap_or_else(|| sender.to_string())
+}
+
+fn set_canonical_sender_metadata(extra: &mut Map<String, serde_json::Value>, canonical_from: &str) {
+    let metadata = extra
+        .entry("metadata".to_string())
+        .or_insert_with(|| serde_json::Value::Object(Map::new()));
+    if !metadata.is_object() {
+        *metadata = serde_json::Value::Object(Map::new());
+    }
+    let Some(metadata) = metadata.as_object_mut() else {
+        return;
+    };
+    let atm = metadata
+        .entry("atm".to_string())
+        .or_insert_with(|| serde_json::Value::Object(Map::new()));
+    if !atm.is_object() {
+        *atm = serde_json::Value::Object(Map::new());
+    }
+    let Some(atm) = atm.as_object_mut() else {
+        return;
+    };
+    atm.insert(
+        "fromIdentity".to_string(),
+        serde_json::Value::String(canonical_from.to_string()),
+    );
+}
+
+fn maybe_run_post_send_hook(
+    warnings: &mut Vec<String>,
+    config: Option<&config::AtmConfig>,
+    context: PostSendHookContext<'_>,
+) {
+    const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
+
+    let Some(config) = config else {
+        return;
+    };
+    let Some(command_argv) = config.post_send_hook.as_ref() else {
+        return;
+    };
+    if !config
+        .post_send_hook_members
+        .iter()
+        .any(|member| member == context.sender)
+    {
+        return;
+    }
+
+    let mut argv = command_argv.iter();
+    let Some(command_path) = argv.next() else {
+        return;
+    };
+    let command_path = {
+        let path = PathBuf::from(command_path);
+        if path.is_absolute() {
+            path
+        } else {
+            config.config_root.join(path)
+        }
+    };
+
+    let payload = json!({
+        "from": qualified_sender_identity(context.sender, context.sender_team),
+        "to": format!("{}@{}", context.recipient.agent, context.recipient.team),
+        "message_id": context.message_id.to_string(),
+        "requires_ack": context.requires_ack,
+        "task_id": context.task_id,
+    });
+
+    let mut command = Command::new(&command_path);
+    command
+        .args(argv)
+        .current_dir(&config.config_root)
+        .env("ATM_POST_SEND", payload.to_string())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(error) => {
+            warnings.push(format!(
+                "warning: post-send hook failed to start from {}: {error}",
+                command_path.display()
+            ));
+            return;
+        }
+    };
+
+    let started_at = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                if !status.success() {
+                    warnings.push(format!(
+                        "warning: post-send hook exited unsuccessfully from {} with status {status}",
+                        command_path.display()
+                    ));
+                }
+                return;
+            }
+            Ok(None) if started_at.elapsed() < POST_SEND_HOOK_TIMEOUT => {
+                thread::sleep(Duration::from_millis(50));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                warnings.push(format!(
+                    "warning: post-send hook timed out after {}s for {}",
+                    POST_SEND_HOOK_TIMEOUT.as_secs(),
+                    command_path.display()
+                ));
+                return;
+            }
+            Err(error) => {
+                warnings.push(format!(
+                    "warning: post-send hook status check failed for {}: {error}",
+                    command_path.display()
+                ));
+                return;
+            }
+        }
     }
 }
 
