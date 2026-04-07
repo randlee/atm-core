@@ -31,6 +31,26 @@ enum ConsoleLogRoute {
     Stderr,
 }
 
+/// Structured CLI-owned observability construction options.
+///
+/// L.5 intentionally keeps the release surface narrow: one explicit
+/// construction entry point without introducing a broader builder or unified
+/// observer abstraction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct CliObservabilityOptions {
+    pub stderr_logs: bool,
+}
+
+impl CliObservabilityOptions {
+    fn console_log_route(self) -> ConsoleLogRoute {
+        if self.stderr_logs {
+            ConsoleLogRoute::Stderr
+        } else {
+            ConsoleLogRoute::Disabled
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RetainedSinkFaultMode {
     Degraded,
@@ -53,20 +73,17 @@ impl std::fmt::Debug for CliObservability {
 }
 
 impl CliObservability {
-    fn concrete_for_home(
-        home_dir: &Path,
-        console_log_route: ConsoleLogRoute,
-    ) -> Result<Self, AtmError> {
-        let adapter = ScObservabilityAdapter::new(home_dir, console_log_route)?;
+    pub fn new(home_dir: &Path, options: CliObservabilityOptions) -> Result<Self, AtmError> {
+        let adapter = ScObservabilityAdapter::new(home_dir, options.console_log_route())?;
         Ok(Self {
             inner: Box::new(adapter),
         })
     }
 
     pub fn fallback() -> Self {
-        Self::concrete_for_home(
+        Self::new(
             &std::env::temp_dir().join("atm-bootstrap-observability"),
-            ConsoleLogRoute::Disabled,
+            CliObservabilityOptions::default(),
         )
         .unwrap_or_else(|_| Self {
             inner: Box::new(atm_core::observability::NullObservability),
@@ -99,18 +116,20 @@ impl CliObservability {
             eprintln!("{}", fatal_emit_failure_message(stage, &emit_error));
         }
     }
+
+    #[cfg(test)]
+    fn from_port(port: impl ObservabilityPort + Send + Sync + 'static) -> Self {
+        Self {
+            inner: Box::new(port),
+        }
+    }
 }
 
 pub fn init(stderr_logs: bool) -> Result<CliObservability> {
     let home_dir = home::atm_home()?;
-    let console_log_route = if stderr_logs {
-        ConsoleLogRoute::Stderr
-    } else {
-        ConsoleLogRoute::Disabled
-    };
-    Ok(CliObservability::concrete_for_home(
+    Ok(CliObservability::new(
         &home_dir,
-        console_log_route,
+        CliObservabilityOptions { stderr_logs },
     )?)
 }
 
@@ -138,6 +157,12 @@ struct ScObservabilityAdapter {
     target_category: TargetCategory,
 }
 
+// L.5 dispositions:
+// - BP-001 / UX-002 retained: boxed trait-object dispatch remains acceptable
+//   for initial release because it keeps CLI bootstrap simple without forcing a
+//   wider enum or unified observer abstraction.
+// - the sealed boundary remains in place so external crates cannot bypass the
+//   intended ATM-owned adapter contract with arbitrary ObservabilityPort impls.
 impl observability::sealed::Sealed for CliObservability {}
 impl observability::sealed::Sealed for ScObservabilityAdapter {}
 
@@ -580,7 +605,8 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{
-        CliObservability, ConsoleLogRoute, fatal_emit_failure_message, level_for_outcome, log_root,
+        CliObservability, CliObservabilityOptions, fatal_emit_failure_message, level_for_outcome,
+        log_root,
     };
 
     struct FailingEmitObservability;
@@ -651,7 +677,7 @@ mod tests {
     fn concrete_adapter_emits_queries_follows_and_reports_health() {
         let tempdir = TempDir::new().expect("tempdir");
         let observability =
-            CliObservability::concrete_for_home(tempdir.path(), ConsoleLogRoute::Disabled)
+            CliObservability::new(tempdir.path(), CliObservabilityOptions::default())
                 .expect("concrete adapter");
 
         observability
@@ -733,9 +759,7 @@ mod tests {
 
     #[test]
     fn cli_observability_is_debuggable() {
-        let observability = CliObservability {
-            inner: Box::new(atm_core::observability::NullObservability),
-        };
+        let observability = CliObservability::from_port(atm_core::observability::NullObservability);
         let debug = format!("{observability:?}");
         assert!(debug.contains("CliObservability"));
     }
@@ -752,9 +776,7 @@ mod tests {
 
     #[test]
     fn emit_fatal_error_executes_secondary_failure_path_without_panicking() {
-        let observability = CliObservability {
-            inner: Box::new(FailingEmitObservability),
-        };
+        let observability = CliObservability::from_port(FailingEmitObservability);
         observability.emit_fatal_error("service", &AtmError::validation("boom"));
     }
 }
