@@ -1134,3 +1134,168 @@ If a trait becomes necessary:
 - `atm doctor` integration behavior
 - `atm teams` integration behavior
 - `atm members` integration behavior
+
+
+## 18. Mailbox File Locking (Phase M)
+
+### 18.1 Problem Statement
+
+`append_message` in `mailbox/mod.rs:23-27` performs an unlocked read-modify-write:
+
+1. `read_messages(path)` — reads and deserializes the full inbox
+2. `messages.push(envelope)` — appends the new record in memory
+3. `atomic::write_messages(path, &messages)` — writes to temp file, fsyncs, renames over original
+
+Step 3 is atomic with respect to partial writes but not concurrent callers. Two concurrent
+callers can both complete step 1 before either reaches step 3; the later rename silently
+overwrites the earlier, losing its appended message. The same race affects read writeback,
+ack transition, and clear set replacement.
+
+### 18.2 Locking Primitive Decision
+
+**Decision: Use the `fs2` crate.**
+
+Rationale:
+- `fs2` provides `FileExt::lock_exclusive()` and `FileExt::try_lock_exclusive()` which map
+  to `flock(2)` on Unix and `LockFileEx` on Windows
+- 98M+ downloads, maintained, compatible with the project's MSRV
+- avoids maintaining separate `cfg(unix)` / `cfg(windows)` implementations
+- the existing `libc` and `windows-sys` dependencies remain available as fallback
+
+Alternative rejected: direct `libc::flock` + `windows-sys::LockFileEx` — more control but
+duplicates what `fs2` already provides correctly.
+
+### 18.3 Lock Architecture
+
+```
+                      +-----------------------+
+                      |   MailboxLockGuard     |
+                      |  (RAII, Drop releases) |
+                      +----------+------------+
+                                 |
+                      +----------v------------+
+                      |   lock.rs::acquire()   |
+                      |  open/create sentinel  |
+                      |  fs2::try_lock_excl()  |
+                      +----------+------------+
+                                 |
+             +-------------------+-------------------+
+             |                                       |
+    Unix: flock(fd, LOCK_EX)           Windows: LockFileEx(handle)
+```
+
+- **Sentinel**: `{inbox_path}.lock` — zero-byte file, created lazily, persists across
+  process lifetimes (stale sentinels are harmless; OS releases lock on fd close/exit)
+- **Granularity**: per-inbox-file — concurrent sends to different recipients never contend
+- **Lock lifetime**: acquired before `read_messages`, held through `atomic::write_messages`
+  rename, released on `MailboxLockGuard` drop
+- **Timeout**: bounded retry loop with `try_lock_exclusive()` + 50ms sleep, default 5s;
+  on expiry returns `AtmError { code: MailboxLockTimeout }`
+
+### 18.4 Integration: `locked_read_modify_write`
+
+All mutation paths go through one function:
+
+```rust
+pub fn locked_read_modify_write<F>(
+    path: &Path,
+    timeout: Duration,
+    mutate: F,
+) -> Result<(), AtmError>
+where
+    F: FnOnce(&mut Vec<MessageEnvelope>) -> Result<(), AtmError>,
+{
+    let _guard = lock::acquire(path, timeout)?;
+    let mut messages = read_messages(path)?;
+    mutate(&mut messages)?;
+    atomic::write_messages(path, &messages)
+}
+```
+
+| Caller | Lock required |
+|--------|--------------|
+| `append_message` | Yes |
+| `read` writeback | Yes |
+| `ack` transition + reply | Yes |
+| `clear` set replacement | Yes |
+| `read_messages` (read-only, no writeback) | No |
+
+### 18.5 New Error Codes
+
+- `MailboxLockTimeout` / `ATM_MAILBOX_LOCK_TIMEOUT` — lock not acquired within timeout
+- New `AtmErrorKind::MailboxLock` variant in `error.rs`
+
+## 19. Restore Transaction Atomicity (Phase M)
+
+### 19.1 Problem Statement
+
+`restore_team` in `team_admin.rs:305-410` mutations order:
+1. Copy inbox files (lines 372-393)
+2. Restore task bucket (line 396)
+3. Recompute highwatermark (line 397)
+4. Write `config.json` (lines 398-400)
+
+If the process crashes between steps 1 and 4, inbox files for members not in config
+exist with no detection mechanism.
+
+### 19.2 Revised Restore Ordering (Config-Last with Staging)
+
+```
+1. Validate backup and compute restore plan (no mutations)
+2. Write .restore-in-progress marker to team directory
+3. Stage inbox files to .restore-staging/inboxes/
+4. Move staged files to live inboxes/ (fs::rename — atomic same-filesystem)
+5. Restore task bucket
+6. Recompute highwatermark
+7. Write config.json + fsync (atomic temp+rename via write_team_config)
+8. Remove .restore-in-progress marker
+```
+
+Key properties:
+- crash at steps 2-6: config.json unchanged, extra inbox files harmless, marker signals re-run
+- crash at step 7: config write is itself atomic (no partial write possible)
+- crash at step 8: config is written, stale marker cleaned up by next doctor/restore run
+
+### 19.3 Staging Directory
+
+- location: `{team_dir}/.restore-staging/inboxes/`
+- lifecycle: created at step 3, contents moved at step 4, directory removed after config write
+- failure path: staging directory cleaned up, no config written
+
+### 19.4 Doctor Integration
+
+New check: scan for `.restore-in-progress` in team directories.
+- Severity: warning
+- Recovery guidance: "A previous `atm teams restore` was interrupted. Re-run the restore
+  command to complete it, or remove the marker file manually if the restore is no longer needed."
+
+## 20. Phase M Minor Architecture Changes
+
+### 20.1 AtmError Display Backtrace
+
+`error.rs` Display impl extended to render backtrace conditionally:
+
+```rust
+if matches!(self.backtrace.status(), std::backtrace::BacktraceStatus::Captured) {
+    write!(f, "\n\nBacktrace:\n{}", self.backtrace)?;
+}
+```
+
+Renders only when `RUST_BACKTRACE=1` or `full` is set and backtrace was captured.
+
+### 20.2 resolve_actor_identity Consolidation
+
+Duplicate function in `ack/mod.rs:185`, `clear/mod.rs:144`, `read/mod.rs:260` moves to
+`identity/mod.rs` as `pub(crate) fn resolve_actor_identity(...)`. All three call sites updated.
+
+### 20.3 normalize_json_number Panic Removal
+
+`observability.rs:532` `.expect("valid JSON number exponent")` replaced with graceful fallback:
+on parse failure, return raw string unchanged + emit `tracing::warn!`. A library function must
+not panic on potentially untrusted input.
+
+### 20.4 Phase L.7 Build-On Notes
+
+Phase M builds on L.7 deliverables (`[atm].team_members`, `[atm].aliases`, `[atm].post_send_hook`).
+Phase M does not modify these but M.2 documents `[atm].identity` deprecation alongside them.
+ARCH-CR-003 (repair notice sender) and ARCH-CR-004 (doctor config key visibility) are addressed in L.7.

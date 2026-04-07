@@ -1524,3 +1524,146 @@ Cross-document invariants that must remain true:
 - `atm clear` never removes unread messages
 - `atm clear` never removes pending-ack messages
 - `atm read --timeout` returns immediately when the requested selection is already non-empty
+
+
+## 20. Phase M: Mailbox Concurrency And Restore Atomicity
+
+Phase M addresses blocking and important findings from the Phase L code review
+(ARCH-CR-001 through ARCH-CR-004 and associated QA findings) that must be
+closed before the 1.0 release.
+
+### 20.1 Mailbox Concurrency Safety
+
+- `REQ-CORE-MAILBOX-LOCK-001` All mailbox read-modify-write operations must
+  hold an exclusive advisory file lock for the duration of the operation.
+
+  Rationale: `append_message` in `mailbox/mod.rs` currently reads the full
+  inbox, appends one record in memory, then calls `atomic::write_messages` to
+  replace the file. Two concurrent writers can both read the same snapshot and
+  the later rename silently drops the earlier writer's append. This is ARCH-CR-001.
+
+  Required behavior:
+  - before entering any read-modify-write section on an inbox file, ATM must
+    acquire an exclusive advisory lock on a well-known lock sentinel derived from
+    the inbox path
+  - the lock must be held for the full duration of read + modify + atomic rename
+  - lock release must happen automatically when the lock guard is dropped (RAII)
+  - lock acquisition must use a bounded timeout (default 5 seconds) and fail
+    with a structured `AtmError` carrying `AtmErrorCode::MailboxLockTimeout`
+    when the timeout expires
+  - the lock file may exist as a zero-byte sentinel but must tolerate stale lock
+    files from crashed processes
+  - advisory locking is cooperative: only concurrent ATM processes coordinate
+
+- `REQ-CORE-MAILBOX-LOCK-002` Mailbox locking must work on macOS, Linux, and
+  Windows without platform-specific feature flags in consuming code.
+
+  Required behavior:
+  - on Unix: use `flock(2)` exclusive lock on the lock sentinel file descriptor
+  - on Windows: use `LockFileEx` exclusive lock on the lock sentinel file handle
+  - the public API must present a single `MailboxLockGuard` type that is
+    platform-uniform; platform branching is internal to `lock.rs`
+  - the `fs2` crate is the preferred implementation
+
+- `REQ-CORE-MAILBOX-LOCK-003` Locks must be per-inbox-file, not per-team or global.
+
+  Required behavior:
+  - locking is scoped to a single inbox file path
+  - two concurrent `atm send` commands to different recipients must not block each other
+  - the lock sentinel path is `{inbox_path}.lock`
+
+- `REQ-CORE-MAILBOX-LOCK-004` Every mailbox mutation path must acquire the lock.
+
+  Required coverage:
+  - `append_message` (send path)
+  - workflow state writeback in read, ack, and clear paths
+  - idle-notification dedup removal during send-time append
+  - any future mutation path added to the mailbox layer
+
+  Read-only `read_messages` calls with no following writeback do not require locking.
+
+- `REQ-CORE-MAILBOX-LOCK-005` Single-process single-threaded usage must not
+  regress measurably due to lock acquisition.
+
+  Required behavior:
+  - uncontended `flock` is a single syscall returning immediately; no background
+    threads or polling loops
+  - lock sentinel created lazily on first lock attempt
+
+### 20.2 Restore Transaction Atomicity
+
+- `REQ-CORE-RESTORE-ATOMIC-001` `teams restore` must write `config.json` as
+  the last mutation step, only after all other restore mutations succeed.
+
+  Rationale: ARCH-CR-002 — `team_admin.rs:372-400` copies inboxes, restores
+  tasks, recomputes highwatermark, then writes config. If the process dies
+  between inbox copy and config write, the team has partially restored inbox
+  files that do not match the config roster.
+
+  Required behavior:
+  - config.json is written last, after all inbox copies and task restores succeed
+  - a `.restore-in-progress` marker file is written to the team directory before
+    mutation begins and removed after config is successfully fsynced
+  - on next `atm teams restore`, if a `.restore-in-progress` marker exists, warn
+    the operator and recommend re-running the restore
+  - `atm doctor` must check for stale `.restore-in-progress` markers and report
+    them as findings with recovery guidance
+
+- `REQ-CORE-RESTORE-ATOMIC-002` Restored inbox files must be staged before
+  being placed in the live inbox directory.
+
+  Required behavior:
+  - inbox files from the backup must first be copied to `.restore-staging/inboxes/`
+  - after all staging copies succeed, move staged files to the live inboxes
+    directory using `fs::rename` where possible
+  - on staging or move failure, clean up the staging directory and fail without
+    writing config
+
+### 20.3 Error Display And Diagnostics
+
+- `REQ-CORE-ERROR-DISPLAY-001` `AtmError::Display` must render the captured
+  backtrace in debug builds when a backtrace is available.
+
+  Required behavior:
+  - when `RUST_BACKTRACE=1` or `RUST_BACKTRACE=full` is set and the captured
+    `Backtrace` status is `Captured`, the `Display` implementation must append
+    the backtrace after the error message and recovery text
+
+- `REQ-CORE-ERROR-DOC-001` Every public function returning `AtmResult` or
+  `Result<_, AtmError>` must have a `# Errors` documentation section.
+
+  Required behavior:
+  - each `# Errors` section must list the `AtmErrorCode` variants the function
+    can return
+  - approximately 23 public functions across 9 source files are affected
+
+- `REQ-CORE-ERROR-RECOVERY-001` Every `AtmError` construction site that
+  represents an operator-actionable failure must use `.with_recovery()`.
+
+  Required behavior:
+  - approximately 16 error construction sites need `.with_recovery()` added
+  - internal invariant violations do not require recovery guidance
+
+### 20.4 Code Consolidation And Documentation
+
+- `REQ-CORE-IDENTITY-CONSOLIDATE-001` The duplicated `resolve_actor_identity`
+  function must be consolidated into a single shared implementation.
+
+  Required behavior:
+  - the identical function in `ack/mod.rs:185`, `clear/mod.rs:144`, and
+    `read/mod.rs:260` must be moved to `identity/mod.rs` as `pub(crate)`
+
+- `REQ-CORE-CONFIG-DOC-001` The deprecated `[atm].identity` config key must be
+  documented in a `# Deprecated` section in the config module documentation.
+
+  Required behavior:
+  - migration guidance: use `ATM_IDENTITY` environment variable instead
+  - reference `ATM_WARNING_IDENTITY_DRIFT` error code
+
+- `REQ-CORE-PANIC-DOC-001` The panic path in `normalize_json_number` must be
+  eliminated and documented.
+
+  Required behavior:
+  - `observability.rs:532` — replace `.expect("valid JSON number exponent")`
+    with a graceful fallback that returns the raw input string on parse failure
+  - a library function must not panic on potentially untrusted input
