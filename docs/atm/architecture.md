@@ -16,6 +16,8 @@ The `atm` crate is responsible for:
 - output selection and rendering
 - process exit status mapping
 - constructing and injecting the concrete observability adapter
+- maintaining the retained CLI subcommand surface, including `teams` and
+  `members`
 
 The `atm` crate must remain thin.
 
@@ -28,6 +30,8 @@ The `atm` crate must remain thin.
   `atm-core`.
 - `atm` owns the temporary pre-publish dependency wiring for a local
   `sc-observability` checkout until the shared crates are published.
+- `atm` owns the retained local recovery CLI shape for `teams` and `members`,
+  but not the underlying team/backup/restore business rules
 
 ## 4. ADR Namespace
 

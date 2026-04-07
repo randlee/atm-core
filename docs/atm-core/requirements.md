@@ -43,6 +43,7 @@ Initial allocation:
 - `REQ-CORE-LOG-*`
 - `REQ-CORE-DOCTOR-*`
 - `REQ-CORE-OBS-*`
+- `REQ-CORE-TEAM-*`
 
 Initial crate requirement IDs:
 
@@ -50,7 +51,7 @@ Initial crate requirement IDs:
   resolution policy. Satisfies the path/config/identity aspects of:
   `REQ-P-CONTRACT-001`, `REQ-P-IDENTITY-001`, `REQ-P-DOCTOR-001`.
 - `REQ-CORE-CONFIG-002` `atm-core` owns daemon-free address parsing,
-  alias/role rewrite, and team/member validation policy. Satisfies the address
+  alias rewrite, and team/member validation policy. Satisfies the address
   resolution and target-validation aspects of:
   `REQ-P-ADDRESS-001`, `REQ-P-SEND-001`, `REQ-P-READ-001`,
   `REQ-P-CLEAR-001`.
@@ -89,6 +90,10 @@ Initial crate requirement IDs:
   ATM-owned event/query models above shared crates. Satisfies the ATM event,
   query-model, and health-contract aspects of:
   `REQ-P-OBS-001`.
+- `REQ-CORE-TEAM-001` `atm-core` owns the retained local team discovery,
+  roster inspection, roster repair, and backup/restore behavior. Satisfies the
+  local team-surface aspects of:
+  `REQ-P-TEAMS-001`, `REQ-P-MEMBERS-001`.
 
 ## 4. Module Ownership
 
@@ -103,6 +108,7 @@ Per-module documentation lives under:
 - [`modules/mailbox.md`](./modules/mailbox.md)
 - [`modules/config.md`](./modules/config.md)
 - [`modules/observability.md`](./modules/observability.md)
+- [`modules/team_admin.md`](./modules/team_admin.md)
 
 Each module document defines:
 
@@ -186,3 +192,99 @@ Required boundary rules:
 
 Detailed design and implementation shape is owned by:
 - [`design/sc-observability-integration.md`](./design/sc-observability-integration.md)
+
+## 8. Config And Team Baseline Semantics
+
+Requirement ID:
+- `REQ-CORE-CONFIG-001`
+
+Required config rules:
+- `atm-core` reads ATM-owned config only from the `[atm]` section of
+  `.atm.toml`
+- `atm-core` ignores launcher-owned sections such as `[rmux]` and future
+  `[scmux]`
+- `[atm].default_team` remains the shared team default
+- `[atm].team_members` defines the baseline team roster that should always be
+  present in `config.json`
+- `[atm].aliases` may define ATM-owned shorthand names for canonical agent
+  identities
+- `[atm].post_send_hook` may define an ATM-owned helper script/command argv
+- `[atm].post_send_hook_members` may define the sender-identity allowlist for
+  that hook
+- `[atm].identity` is obsolete and must not participate in runtime identity
+  resolution; doctor should report it as configuration drift when present
+
+Required identity rules:
+- runtime identity must come from explicit command override, hook identity, or
+  `ATM_IDENTITY`
+- if no valid runtime identity exists where a command requires one, the command
+  must fail with a structured recovery-oriented error rather than inventing a
+  normal sender identity
+- aliases are input shorthand only until ATM resolves them to canonical member
+  names
+- recipient aliases must resolve before membership validation, self-send
+  checks, and mailbox lookup
+- same-team messages keep current canonical sender projection behavior
+- cross-team messages may persist an alias-oriented `from` value for
+  Claude-facing ergonomics only when ATM also stores canonical sender identity
+  in `metadata.atm.fromIdentity`
+- canonical sender identity remains the source of truth for validation,
+  self-send checks, routing, and audit behavior
+- `post_send_hook_members` matches resolved sender identity, not model name
+- `post_send_hook` runs only after a successful non-`dry-run` send and only
+  when the resolved sender identity is included in `post_send_hook_members`
+- a relative `post_send_hook` path resolves from the discovered `.atm.toml`
+  directory, and the hook executes with that same directory as its working
+  directory
+- the hook inherits process environment and also receives one ATM-owned JSON
+  payload in `ATM_POST_SEND` with:
+  - `from`
+  - `to`
+  - `message_id`
+  - `requires_ack`
+  - optional `task_id`
+- hook failure or timeout is best-effort only and must not roll back a
+  successful send
+- the reserved sender `atm-identity-missing@<team>` is available only for
+  ATM-generated repair/diagnostic notices and must not become a general
+  identity fallback
+
+Required doctor rules:
+- `atm doctor` must flag obsolete `[atm].identity` when present
+- `atm doctor` must compare `[atm].team_members` against `config.json.members`
+- missing baseline members are findings
+- extra runtime members in `config.json` are allowed
+- doctor roster output must show all `config.json` members, with baseline
+  members first and `team-lead` first among the baseline set
+
+## 9. Retained Team Recovery Surface
+
+Requirement ID:
+- `REQ-CORE-TEAM-001`
+
+Required service rules:
+- `atm-core` owns the retained local team recovery surface for:
+  - discovered-team listing
+  - local member listing
+  - `add-member`
+  - team backup
+  - team restore
+- these services remain local file/config/inbox operations and must not depend
+  on daemon orchestration or runtime spawning
+- `add-member` must validate team existence and reject duplicate member names
+  before mutating local team config
+- backup must snapshot:
+  - `config.json`
+  - team inbox files
+  - the ATM team task bucket
+- restore must:
+  - preserve the current team-lead entry and current `leadSessionId`
+  - add only missing non-lead members from the snapshot
+  - clear runtime-only restored-member fields such as session or pane state
+  - restore non-lead inboxes
+  - recompute `.highwatermark` from the maximum restored task id
+  - support a dry-run path without making changes
+- malformed or missing snapshot material must fail with structured errors
+  before partial restore is committed
+- `members` must remain useful as a local roster inspection command even when
+  daemon or hook state is unavailable

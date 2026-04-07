@@ -2,7 +2,10 @@
 
 ## 1. Goal
 
-Implement a daemon-free ATM rewrite in this repo that preserves retained `send`, `read`, `ack`, `clear`, `log`, and `doctor` functionality.
+Implement a daemon-free ATM rewrite in this repo that preserves retained
+`send`, `read`, `ack`, `clear`, `log`, and `doctor` functionality and restores
+the minimum release-critical team recovery surface through `teams` and
+`members`.
 
 The authoritative migration document is:
 - [`docs/archive/file-migration-plan.md`](./archive/file-migration-plan.md)
@@ -19,8 +22,8 @@ Status:
 - Phases 0 through F and J are complete.
 - Phase K is complete and ready to roll forward into shared 1.0 release
   alignment work.
-- Phase L is now the latest observability follow-on phase and the next active
-  delivery focus.
+- Phase L is now the latest release-alignment and retained-surface follow-on
+  phase and the next active delivery focus.
 - Phases G and H remain retained-command phases, but their implementation work
   depends on the concrete `sc-observability` integration delivered in Phase K
   and the release-alignment work planned in Phase L.
@@ -31,7 +34,8 @@ Status:
 ## 2. Deliverables
 
 - Rust workspace with `crates/atm-core` and `crates/atm`
-- daemon-free implementation of `send`, `read`, `ack`, `clear`, `log`, and `doctor`
+- daemon-free implementation of `send`, `read`, `ack`, `clear`, `log`,
+  `doctor`, `teams`, and `members`
 - preserved non-daemon mail functionality from the current codebase
 - explicit two-axis workflow model with three display buckets
 - task-linked message metadata with mandatory ack behavior
@@ -106,7 +110,7 @@ Status summary:
 
 | Sprint | Scope | Required outcome |
 | --- | --- | --- |
-| B.1 | CLI skeleton | `atm` exposes exactly `send`, `read`, `ack`, `clear`, `log`, `doctor` as clap subcommands and all CI gates pass |
+| B.1 | CLI skeleton | `atm` exposes the initial core messaging surface: `send`, `read`, `ack`, `clear`, `log`, `doctor` |
 | B.2 | Documentation gap closure | lock the remaining send/read/clear requirements and architecture details before Phase C begins |
 
 Create:
@@ -117,7 +121,8 @@ Create:
 
 Acceptance:
 - workspace builds
-- CLI help shows `send`, `read`, `ack`, `clear`, `log`, and `doctor`
+- CLI help shows the initial core messaging surface: `send`, `read`, `ack`,
+  `clear`, `log`, and `doctor`
 - B.1 and B.2 are both complete before Phase C starts
 - requirements and architecture lock the message id, read dedupe, and clear
   eligibility semantics needed for implementation
@@ -449,23 +454,25 @@ Acceptance:
 - any generic shared-crate usability gaps discovered during implementation are
   filed upstream in `sc-observability`
 
-### Phase L: `sc-observability` 1.0 Alignment [NEXT / LATEST]
+### Phase L: 1.0 Alignment And Release Surface Cleanup [NEXT / LATEST]
 
 Status summary:
 - Phase K delivered the full sc-observability integration against a pre-publish
   local `[patch.crates-io]` override
 - Sprint K-CRATES-IO-1 (2026-04-06) removed the override and switched ATM to
   the published `sc-observability = "1.0.0"` on crates.io; CI passed on all
-  platforms; this sprint completed what was originally scoped as `L.4`
+  platforms; this sprint completed the earlier crates.io cutover work, which
+  is now tracked historically under `K-CRATES-IO-1` rather than as an open
+  Phase L sprint
 - sc-observability 1.0.0 ships issues #55 (ConsoleSink::stderr), #57 (fault
   injection), and #21 (file sink path migration) — all confirmed shipped in
   PR #58 of sc-observability
-- `L.4` is therefore COMPLETE; `L.1` through `L.3` proceed directly against
-  the published crates.io release with no local override required
+- `L.1` through `L.8` therefore proceed directly against the published
+  crates.io release with no local override required
 
 Goal:
-- adopt the three sc-observability 1.0 surface improvements (#55, #57, #21)
-  into the ATM integration layer now that the published crates are available
+- finish the published `sc-observability` 1.0 follow-on work and close the
+  remaining retained release-surface gaps required for initial ATM release
 
 Execution model:
 - this phase is implemented as a coordinated multi-sprint stream owned by
@@ -474,7 +481,8 @@ Execution model:
   review hand-offs using the `/codex-orchestration` skill
 - the Phase K adapter boundary remains the governing implementation boundary;
   Phase L refines the ATM-side integration against the final 1.0 shared crate
-  behavior rather than redefining crate ownership
+  behavior and closes retained release-surface gaps rather than redefining
+  crate ownership
 - the detailed ATM-side 1.0 follow-on decisions are documented in:
   [`docs/atm-core/design/sc-obs-1.0-integration.md`](./atm-core/design/sc-obs-1.0-integration.md)
 - all sprints use `sc-observability = "1.0.0"` from crates.io directly; no
@@ -537,18 +545,206 @@ Planned sprints:
   - dependency note:
     - uses `sc-observability = "1.0.0"` from crates.io directly
 
-- `L.4` Switch To Published crates.io Release [COMPLETE — done in K-CRATES-IO-1]
-  - completed 2026-04-06 via sprint K-CRATES-IO-1 on branch feature/pK-crates-io
-  - commit: 1ce2369f; merged to integrate/phase-K via PR #46, then to develop
-    via PR #45 at e4b8fcf
-  - the `[patch.crates-io]` override is removed; ATM uses crates.io `"1.0.0"`
+- `L.4` Public API Cleanup
+  - goal: remove raw serialization-format leakage from the `atm-core` public
+    observability boundary while preserving centralized JSON handling inside
+    `atm-core`
+  - key tasks:
+    - replace public `serde_json::Value` / `Map<String, Value>` usage in
+      observability-facing `atm-core` types with ATM-owned domain types or
+      wrappers
+    - keep JSON/JSONL parsing, validation, degradation, and repair centralized
+      in `atm-core` rather than pushing that logic into CLI or sibling crates
+    - preserve the published CLI JSON output behavior after the public type
+      cleanup
+  - closes:
+    - `INTEROP-001`
+    - `BP-003`
+  - dependency note:
+    - can proceed in parallel with `L.5` once the Phase K crates.io baseline
+      from `K-CRATES-IO-1` is present
+
+- `L.5` Construction And Boundary Ergonomics
+  - goal: clean up the remaining release-surface ergonomics without forcing
+    speculative refactors that are not yet justified
+  - key tasks:
+    - add a structured `CliObservability` construction path (`new(...)` or an
+      equivalent minimal builder) so CLI bootstrap and tests do not assemble
+      the adapter through ad hoc wiring
+    - review the current boxed trait-object dispatch and sealed-trait pattern;
+      implement a change only when it clearly improves the release design
+    - record an explicit disposition for `DoctorCommand` injectability:
+      - optional for initial release unless a concrete testing or feature need
+        appears during implementation
+  - closes:
+    - `UX-001`
+    - `BP-004`
+    - disposition of `UX-002`
+    - disposition of `BP-001`
+    - disposition of `UNI-003`
+  - dependency note:
+    - may run in parallel with `L.4`, or immediately after it if the public
+      API cleanup changes the preferred construction boundary
+
+- `L.6` Release Closeout
+  - goal: finish the remaining operator-facing and release-readiness validation
+    against the published shared crate behavior
+  - key tasks:
+    - verify file sink path alignment against upstream issue `#21`
+    - rerun full ATM observability validation on the published
+      `sc-observability = "1.0.0"` release
+    - close any remaining documentation traceability gaps uncovered during the
+      Phase L consistency review
+  - result:
+    - release-ready ATM observability signoff for initial release
+  - dependency note:
+    - depends on `L.1` through `L.5` being complete so release validation runs
+      against the final observability surface
+
+- `L.7` Team Baseline And Identity Source Cleanup
+  - goal: align ATM config semantics with multi-agent team launches by moving
+    shared team expectations into `.atm.toml` while removing repo-local
+    identity fallback behavior and defining cross-team alias handling
+  - key tasks:
+    - add ATM-owned `team_members` support under the `[atm]` config section as
+      the baseline roster that should always be present in `config.json`
+    - retain ATM-owned `aliases` support under the `[atm]` config section for
+      shorthand addressing of canonical members, especially cross-team
+      communication with roles such as `team-lead`
+    - add ATM-owned `post_send_hook` and `post_send_hook_members` support under
+      the `[atm]` config section for short-term sender-scoped post-send
+      automation
+    - stop using `[atm].identity` as a runtime identity fallback; identity must
+      come from explicit CLI override, hook identity, or `ATM_IDENTITY`
+    - treat `[atm].identity` as an obsolete field: ignored by runtime identity
+      resolution and flagged by `atm doctor` as configuration drift that should
+      be removed
+    - keep `[atm].default_team` as the shared team default and continue to
+      ignore `[rmux]` and future `[scmux]` sections from `atm-core`
+    - update `atm doctor` to compare `[atm].team_members` against
+      `config.json.members`
+      - missing baseline members are findings
+      - extra runtime members in `config.json` are allowed
+    - update `atm doctor` roster output to show all `config.json` members with
+      baseline members first, `team-lead` first among the baseline set, and
+      extra runtime members afterward
+    - define alias resolution and projection rules:
+      - aliases are accepted as input shorthand only
+      - recipient aliases resolve immediately to canonical member names before
+        validation, self-send checks, and mailbox lookup
+      - same-team messages keep current canonical `from` behavior
+      - cross-team messages may project the sender alias in `from` for
+        Claude-facing ergonomics
+      - whenever alias-oriented `from` projection is used, canonical sender
+        identity must also be persisted in `metadata.atm.fromIdentity` and
+        must drive validation, self-send checks, routing, and audit behavior
+    - define post-send-hook rules:
+      - the hook runs only after a successful non-`dry-run` send
+      - the hook runs only when the resolved sender identity is listed in
+        `post_send_hook_members`
+      - the hook path may be relative and must resolve from the directory that
+        owns the discovered `.atm.toml`
+      - the hook must execute with that same config-root directory as its
+        working directory
+      - the hook inherits the process environment and also receives one
+        ATM-owned JSON payload in `ATM_POST_SEND`
+      - the `ATM_POST_SEND` payload must contain:
+        - `from`
+        - `to`
+        - `message_id`
+        - `requires_ack`
+        - optional `task_id`
+      - hook failure or timeout must never roll back the send; ATM reports the
+        failure as post-send-hook diagnostics only
+    - reserve `atm-identity-missing@<team>` for ATM-generated
+      repair/diagnostic notices only; it must not become a normal sender
+      identity fallback
+  - closes:
+    - config identity/source ambiguity for multi-agent shared repos
+    - baseline-roster visibility gap in `atm doctor`
+    - cross-team alias ambiguity for baseline roles such as `team-lead`
+    - missing sender-scoped post-send automation contract for repo-root helper
+      scripts
+    - duplicate permanent-member spawn planning gap for future team-lead /
+      hook-driven orchestration
+  - dependency note:
+    - independent of `L.1` through `L.3`; it may proceed in parallel once the
+      Phase L config and identity rulings are locked
+
+- `L.8` Retained Team Recovery Surface
+  - goal: restore the minimum `teams` and `members` command surface required
+    for initial release, backup/restore operations, and team-repair workflows
+  - key tasks:
+    - implement bare `atm teams` to list locally discovered teams under
+      `ATM_HOME`
+    - implement `atm members` as a local team-roster view suitable for restore
+      verification and operator checks without requiring daemon or hook state
+    - implement `atm teams add-member` as the retained local roster repair path
+      for missing members after restore or config drift
+    - implement `atm teams backup` as a timestamped local snapshot of
+      `config.json`, team inboxes, and the ATM team task bucket
+    - implement `atm teams restore` with a dry-run path and explicit restore
+      safety rules:
+      - preserve the current team-lead entry and `leadSessionId`
+      - restore only missing non-lead members
+      - clear runtime-only fields such as session/activity/pane state on
+        restored members
+      - restore non-lead inbox files from the chosen snapshot
+      - recompute `.highwatermark` from the maximum restored task id
+      - fail cleanly on missing or malformed backup material without partial
+        restore
+    - keep broader historical team lifecycle/orchestration commands out of
+      scope:
+      - `spawn`
+      - `join`
+      - `resume`
+      - `update-member`
+      - `remove-member`
+      - `cleanup`
+  - tests:
+    - `teams` lists discovered teams deterministically
+    - `members` lists the current local roster deterministically
+    - `add-member` rejects duplicates and creates any required local inbox
+      state atomically
+    - `backup` produces a complete snapshot of team config, inboxes, and ATM
+      task files
+    - `restore --dry-run` reports members/inboxes/tasks that would be restored
+    - `restore` preserves team-lead / `leadSessionId`, clears runtime-only
+      restored-member state, and recomputes `.highwatermark` to the maximum
+      restored task id
+  - dependency note:
+    - depends on the Phase L config semantics from `L.7`, but does not depend
+      on the observability-specific `L.1` through `L.6` work
+
+Recovered Phase K carry-in mapping and later planning carry-ins:
+
+- `ATM-QA-K-001` and `ATM-QA-K-002` are canonical Phase L.2 work items
+- `RUST-QA-001`, `PRR-002`, and the L.1 QA traceability gap `ATM-QA-002` are
+  canonical Phase L.3 work items
+- `INTEROP-001` and duplicate `BP-003` are canonical Phase L.4 work items
+- `UX-001` and duplicate `BP-004` are canonical Phase L.5 work items
+- `UX-002`, `BP-001`, and `UNI-003` are Phase L.5 decision/disposition items;
+  each must either land as implementation work or be explicitly deferred by a
+  documented Phase L architectural ruling
+- config identity/source cleanup and baseline team roster enforcement are
+  canonical Phase L.7 work items identified by the phase-close planning review
+  on 2026-04-07 rather than by numbered Phase K implementation findings
+- the retained `teams` / `members` release-gap closure is canonical Phase L.8
+  work identified during the same release-planning review and backup/restore
+  procedure audit
 
 Acceptance:
-- Phase L covers stderr console routing, fault-injected live validation, and
-  file sink path migration — all against the published crates.io release
-- the phase preserves the ATM-owned adapter boundary and does not redefine the
-  shared crate ownership split established in Phase K
-- `L.4` is already complete; `L.1` through `L.3` are the remaining sprints
+- Phase L cannot close until:
+  - `L.2` through `L.8` are complete
+  - every mapped carry-in item above is either implemented or explicitly
+    deferred by a documented Phase L architectural decision
+  - retained observability behavior is validated against the published
+    crates.io dependency `sc-observability = "1.0.0"`
+  - the retained release-critical team recovery surface (`teams`, `members`,
+    `teams add-member`, `teams backup`, `teams restore`) is implemented and
+    validated
+- the phase must preserve ATM’s initial-release focus on agent messaging and
+  must not absorb future hook/`schooks` orchestration concerns prematurely
 
 ## 5. Hard Rules
 
@@ -584,6 +780,8 @@ The rewrite is ready when:
 - `atm clear` works without daemon support
 - `atm log` works through shared observability APIs
 - `atm doctor` works as a local diagnostics command
+- `atm teams` provides the retained local team recovery surface
+- `atm members` provides retained local roster verification
 - retained non-daemon functionality is preserved or intentionally documented as changed
 - task-linked mail remains pending until acknowledged
 - the file-by-file migration plan is complete enough to implement directly
@@ -596,6 +794,10 @@ Before implementation starts, the docs should be reviewed with these checks:
   surface appears in `docs/archive/file-migration-plan.md`
 - `requirements.md`, `architecture.md`, and `read-behavior.md` agree on the two-axis model, three display buckets, and legal transitions
 - `requirements.md`, `architecture.md`, and `read-behavior.md` agree on `--since`, `--since-last-seen`, `--no-since-last-seen`, `--no-update-seen`, and `--timeout`
-- `requirements.md`, `architecture.md`, and
-  `docs/archive/file-migration-plan.md` agree on the retained command set:
-  `send`, `read`, `ack`, `clear`, `log`, `doctor`
+- `requirements.md`, `architecture.md`, `docs/atm/requirements.md`, and
+  `docs/atm/architecture.md` agree on the retained release surface:
+  `send`, `read`, `ack`, `clear`, `log`, `doctor`, `teams`, `members`
+- `docs/archive/file-migration-plan.md` remains the source of truth for the
+  initial core migration set (`send`, `read`, `ack`, `clear`, `log`,
+  `doctor`), and the release-only `teams` / `members` expansion is explicitly
+  tracked in Phase `L.8`
