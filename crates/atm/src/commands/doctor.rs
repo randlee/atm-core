@@ -16,6 +16,10 @@ pub struct DoctorCommand {
 }
 
 impl DoctorCommand {
+    // L.5 disposition (UNI-003): keep DoctorCommand injectability deferred for
+    // initial release. Current service-level coverage exercises doctor behavior
+    // without introducing a wider command abstraction before a concrete need
+    // appears.
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
