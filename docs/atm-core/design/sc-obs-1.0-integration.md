@@ -120,6 +120,31 @@ Current rule:
   the new location
 - operator-facing docs and validation notes must use the current shared layout
 
+### L.3 Carry-In Closure
+
+Phase L.3 closes the retained Phase K carry-ins that belonged to the file-sink
+alignment follow-up:
+
+- `RUST-QA-001`
+  - resolved by documenting the intended ATM-local ownership split rather than
+    promoting the full concrete query/follow adapter surface into `atm-core`
+  - `atm-core` remains the owner of the ATM-facing observability contract
+    needed by ATM messaging workflows, while `atm` owns the concrete adapter
+    wiring
+- `PRR-002`
+  - resolved by explicitly keeping the ATM observability health contract
+    closed for initial release:
+    - `healthy`
+    - `degraded`
+    - `unavailable`
+- `ATM-QA-002`
+  - resolved by treating the final `--stderr-logs` flag contract in this note
+    as the canonical L.1 reference
+
+Phase L.3 does not implement any L.7 config fields in code. Any merge-forward
+from later Phase L.7 planning adds documentation for `[atm].team_members`,
+`[atm].aliases`, and `[atm].post_send_hook` only.
+
 ## 6. Dependency Strategy
 
 ATM now consumes the published `sc-observability = "1.0.0"` release. Phase L

@@ -469,6 +469,14 @@ Status summary:
   PR #58 of sc-observability
 - `L.1` through `L.8` therefore proceed directly against the published
   crates.io release with no local override required
+- completed sprint record:
+  - `L.1` complete on `feature/pL-s1-stderr-routing` at
+    `a84ef5767813a9f604f84d697874cee74e5689e4`
+  - `L.2` complete on `feature/pL-s2-fault-injection` / PR #51 at
+    `b051c07269a2290315ff3295d728a5ee5c23f153`
+  - `L.3` complete on `feature/pL-s3-file-sink-migration` / PR #52 with the
+    current branch tip carrying the final fix-r1 closure for the live
+    validation and status-summary findings
 
 Goal:
 - finish the published `sc-observability` 1.0 follow-on work and close the

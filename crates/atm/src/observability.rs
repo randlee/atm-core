@@ -99,7 +99,6 @@ impl CliObservability {
             eprintln!("{}", fatal_emit_failure_message(stage, &emit_error));
         }
     }
-
 }
 
 pub fn init(stderr_logs: bool) -> Result<CliObservability> {
