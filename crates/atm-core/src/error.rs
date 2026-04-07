@@ -158,9 +158,7 @@ impl AtmError {
             AtmErrorKind::Identity,
             "identity is not configured",
         )
-        .with_recovery(
-            "Set ATM_IDENTITY, configure identity in .atm.toml, or pass --from once that flag is available.",
-        )
+        .with_recovery("Set ATM_IDENTITY or provide an explicit command identity override when the command supports one.")
     }
 
     pub fn team_unavailable() -> Self {

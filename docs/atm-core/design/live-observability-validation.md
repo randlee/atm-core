@@ -6,6 +6,61 @@ worktree. This pass closes the earlier healthy-only gap by exercising healthy,
 degraded, and unavailable observability states through the shared retained-sink
 fault injector rather than through ATM-local deterministic doubles.
 
+## Phase L.6 Rerun (2026-04-07)
+
+Phase L.6 reran the published-baseline validation after the L.4 public field
+cleanup, the L.5 construction refactor, and the release-closeout identity
+changes. The goal of this rerun was to prove that the shared observability
+surface still behaves the same on the published `1.0.0` crates while also
+confirming the new doctor drift finding for obsolete `[atm].identity`.
+
+Rerun fixtures:
+
+- clean validation fixture `ATM_HOME`:
+  `/var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.MGlw9wjiob`
+- drift-check fixture `ATM_HOME`:
+  `/var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.TVHup79rTM`
+
+Commands rerun on the clean fixture:
+
+1. `atm send arch-ctm@atm-dev "l6 validation seed" --json`
+2. `atm read --json`
+3. `atm doctor --json`
+4. `ATM_OBSERVABILITY_RETAINED_SINK_FAULT=degraded atm doctor --json`
+5. `ATM_OBSERVABILITY_RETAINED_SINK_FAULT=unavailable atm doctor --json`
+6. `atm log snapshot --match command=send --since 10m --limit 10 --json`
+7. `atm log filter --match command=read --json`
+
+Additional drift-check command:
+
+8. `atm doctor --json` with `.atm.toml` containing obsolete `[atm].identity`
+
+Observed results:
+
+- `atm send` succeeded and `atm read` returned one unread message from the
+  clean fixture inbox
+- healthy doctor run stayed `healthy` with `ATM_OBSERVABILITY_HEALTH_OK`
+- degraded fault-injected doctor run stayed `warning` with
+  `ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED`
+- unavailable fault-injected doctor run stayed `error` with
+  `ATM_OBSERVABILITY_HEALTH_FAILED` and exited with status `1`
+- `atm log snapshot` still returned the emitted `send` command record
+- `atm log filter` still returned the emitted `read` command record
+- the active shared file sink remained:
+  `/var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.MGlw9wjiob/.local/share/logs/atm.log.jsonl`
+- the separate drift-check run returned warning status with:
+  - `ATM_WARNING_IDENTITY_DRIFT`
+  - `ATM_OBSERVABILITY_HEALTH_OK`
+
+Interpretation:
+
+- L.4 and L.5 did not change the published shared-adapter wire behavior for
+  ATM observability commands
+- L.6 closes the identity carry-forward findings without disturbing the
+  healthy/degraded/unavailable health mapping already validated in L.2
+- obsolete `[atm].identity` now surfaces as an additive doctor warning rather
+  than a runtime identity fallback
+
 ## Environment
 
 - Worktree: `feature/pL-s2-fault-injection`

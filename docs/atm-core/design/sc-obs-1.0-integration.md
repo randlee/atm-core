@@ -209,3 +209,28 @@ Dispositions:
 - `UNI-003`: deferred
   - `DoctorCommand` injectability remains out of scope for initial release
     unless implementation exposes a concrete testability or composition need
+
+## 9. L.6 Release Closeout
+
+L.6 closes the remaining release-critical operator-facing carry-forward items
+without reopening the broader `.atm.toml` planning note from `L.7`.
+
+Closes:
+- `ATM-QA-001`
+  - runtime identity no longer falls back to obsolete `.atm.toml`
+    `[atm].identity`; the retained multi-agent model now requires runtime
+    identity to come from explicit command override when supported, hook
+    identity, or `ATM_IDENTITY`
+- `ATM-QA-002`
+  - `atm doctor` now reports obsolete `[atm].identity` as
+    `ATM_WARNING_IDENTITY_DRIFT` and directs operators to remove the field and
+    set `ATM_IDENTITY` in the active environment instead
+
+Validation closeout:
+- the published `sc-observability = "1.0.0"` baseline was revalidated after
+  `L.4`, `L.5`, and `L.6`
+- healthy, degraded, and unavailable doctor states still map to the expected
+  shared-adapter health contract
+- the drift warning is additive: it does not replace the observability health
+  finding and therefore surfaces as a warning alongside healthy observability
+  when obsolete config identity is still present
