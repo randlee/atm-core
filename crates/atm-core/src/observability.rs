@@ -2,7 +2,9 @@
 
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
+use serde::de::Error as DeError;
+use serde::ser::{Error as SerError, SerializeMap};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value};
 
 use crate::error::{AtmError, AtmErrorCode};
@@ -49,13 +51,262 @@ pub enum LogOrder {
     OldestFirst,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
-pub struct LogFieldMatch {
-    pub key: String,
-    pub value: Value,
+/// ATM-owned field-key type for observability query and record projections.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct LogFieldKey(String);
+
+impl LogFieldKey {
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            return Err(AtmError::validation("ATM log field key must not be empty"));
+        }
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+impl Serialize for LogFieldKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for LogFieldKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::new(value).map_err(D::Error::custom)
+    }
+}
+
+/// ATM-owned validated JSON-number representation for the observability
+/// boundary.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct AtmJsonNumber(String);
+
+impl AtmJsonNumber {
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        let value = value.into();
+        let parsed: Value = serde_json::from_str(&value).map_err(|source| {
+            AtmError::validation(format!("invalid ATM JSON number `{value}`")).with_source(source)
+        })?;
+        match parsed {
+            Value::Number(_) => Ok(Self(value)),
+            _ => Err(AtmError::validation(format!(
+                "invalid ATM JSON number `{value}`"
+            ))),
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    fn to_json_number(&self) -> Result<serde_json::Number, AtmError> {
+        let parsed: Value = serde_json::from_str(&self.0).map_err(|source| {
+            AtmError::validation(format!("invalid ATM JSON number `{}`", self.0))
+                .with_source(source)
+        })?;
+        match parsed {
+            Value::Number(number) => Ok(number),
+            _ => Err(AtmError::validation(format!(
+                "invalid ATM JSON number `{}`",
+                self.0
+            ))),
+        }
+    }
+}
+
+impl Serialize for AtmJsonNumber {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.to_json_number()
+            .map_err(S::Error::custom)?
+            .serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for AtmJsonNumber {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = Value::deserialize(deserializer)?;
+        match value {
+            Value::Number(number) => Self::new(number.to_string()).map_err(D::Error::custom),
+            _ => Err(D::Error::custom("expected a JSON number")),
+        }
+    }
+}
+
+/// ATM-owned recursive JSON-value wrapper used by the observability boundary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LogFieldValue {
+    Null,
+    Bool(bool),
+    String(String),
+    Number(AtmJsonNumber),
+    Array(Vec<LogFieldValue>),
+    Object(LogFieldMap),
+}
+
+impl LogFieldValue {
+    pub fn null() -> Self {
+        Self::Null
+    }
+
+    pub fn bool(value: bool) -> Self {
+        Self::Bool(value)
+    }
+
+    pub fn string(value: impl Into<String>) -> Self {
+        Self::String(value.into())
+    }
+
+    pub fn number(value: AtmJsonNumber) -> Self {
+        Self::Number(value)
+    }
+
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Self::String(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    fn from_json_value(value: Value) -> Result<Self, AtmError> {
+        match value {
+            Value::Null => Ok(Self::Null),
+            Value::Bool(value) => Ok(Self::Bool(value)),
+            Value::String(value) => Ok(Self::String(value)),
+            Value::Number(value) => Ok(Self::Number(AtmJsonNumber::new(value.to_string())?)),
+            Value::Array(values) => values
+                .into_iter()
+                .map(Self::from_json_value)
+                .collect::<Result<Vec<_>, _>>()
+                .map(Self::Array),
+            Value::Object(values) => LogFieldMap::from_json_map(values).map(Self::Object),
+        }
+    }
+
+    fn to_json_value(&self) -> Result<Value, AtmError> {
+        match self {
+            Self::Null => Ok(Value::Null),
+            Self::Bool(value) => Ok(Value::Bool(*value)),
+            Self::String(value) => Ok(Value::String(value.clone())),
+            Self::Number(value) => Ok(Value::Number(value.to_json_number()?)),
+            Self::Array(values) => values
+                .iter()
+                .map(Self::to_json_value)
+                .collect::<Result<Vec<_>, _>>()
+                .map(Value::Array),
+            Self::Object(values) => values.to_json_map().map(Value::Object),
+        }
+    }
+}
+
+impl Serialize for LogFieldValue {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.to_json_value()
+            .map_err(S::Error::custom)?
+            .serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for LogFieldValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = Value::deserialize(deserializer)?;
+        Self::from_json_value(value).map_err(D::Error::custom)
+    }
+}
+
+/// ATM-owned map wrapper used by public observability record projections.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LogFieldMap {
+    entries: Vec<(LogFieldKey, LogFieldValue)>,
+}
+
+impl LogFieldMap {
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    pub fn get(&self, key: &str) -> Option<&LogFieldValue> {
+        self.entries
+            .iter()
+            .find_map(|(entry_key, entry_value)| (entry_key.as_str() == key).then_some(entry_value))
+    }
+
+    fn from_json_map(values: Map<String, Value>) -> Result<Self, AtmError> {
+        let entries = values
+            .into_iter()
+            .map(|(key, value)| {
+                Ok((
+                    LogFieldKey::new(key)?,
+                    LogFieldValue::from_json_value(value)?,
+                ))
+            })
+            .collect::<Result<Vec<_>, AtmError>>()?;
+        Ok(Self { entries })
+    }
+
+    fn to_json_map(&self) -> Result<Map<String, Value>, AtmError> {
+        self.entries
+            .iter()
+            .try_fold(Map::new(), |mut map, (key, value)| {
+                map.insert(key.as_str().to_string(), value.to_json_value()?);
+                Ok(map)
+            })
+    }
+}
+
+impl Serialize for LogFieldMap {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(self.entries.len()))?;
+        for (key, value) in &self.entries {
+            map.serialize_entry(key.as_str(), value)?;
+        }
+        map.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for LogFieldMap {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let values = Map::<String, Value>::deserialize(deserializer)?;
+        Self::from_json_map(values).map_err(D::Error::custom)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct LogFieldMatch {
+    pub key: LogFieldKey,
+    pub value: LogFieldValue,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct AtmLogQuery {
     pub mode: LogMode,
     pub levels: Vec<LogLevelFilter>,
@@ -66,7 +317,7 @@ pub struct AtmLogQuery {
     pub order: LogOrder,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct AtmLogRecord {
     pub timestamp: IsoTimestamp,
     pub severity: LogLevelFilter,
@@ -74,7 +325,7 @@ pub struct AtmLogRecord {
     pub target: Option<String>,
     pub action: Option<String>,
     pub message: Option<String>,
-    pub fields: Map<String, Value>,
+    pub fields: LogFieldMap,
 }
 
 #[derive(Debug, Clone, Default, Serialize, PartialEq)]

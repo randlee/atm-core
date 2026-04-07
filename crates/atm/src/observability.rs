@@ -6,8 +6,8 @@ use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::home;
 use atm_core::observability::{
     self, AtmLogQuery, AtmLogRecord, AtmLogSnapshot, AtmObservabilityHealth,
-    AtmObservabilityHealthState, CommandEvent, LogFieldMatch, LogLevelFilter, LogOrder,
-    LogTailSession, ObservabilityPort,
+    AtmObservabilityHealthState, CommandEvent, LogFieldMap, LogFieldMatch, LogLevelFilter,
+    LogOrder, LogTailSession, ObservabilityPort,
 };
 use chrono::{DateTime, Utc};
 use sc_observability::{
@@ -419,16 +419,13 @@ fn map_query(
 fn map_field_match(
     field_match: LogFieldMatch,
 ) -> Result<sc_observability_types::LogFieldMatch, AtmError> {
-    if field_match.key.trim().is_empty() {
-        return Err(AtmError::observability_query(
-            "ATM log field match key must not be empty",
-        ));
-    }
+    let key = field_match.key.as_str().to_string();
+    let value = serde_json::to_value(&field_match.value).map_err(|source| {
+        AtmError::observability_query("failed to encode ATM log field match value")
+            .with_source(source)
+    })?;
 
-    Ok(sc_observability_types::LogFieldMatch::equals(
-        field_match.key,
-        field_match.value,
-    ))
+    Ok(sc_observability_types::LogFieldMatch::equals(key, value))
 }
 
 fn map_snapshot(snapshot: sc_observability_types::LogSnapshot) -> Result<AtmLogSnapshot, AtmError> {
@@ -444,6 +441,11 @@ fn map_snapshot(snapshot: sc_observability_types::LogSnapshot) -> Result<AtmLogS
 }
 
 fn map_record(event: LogEvent) -> Result<AtmLogRecord, AtmError> {
+    let fields = serde_json::from_value::<LogFieldMap>(serde_json::Value::Object(event.fields))
+        .map_err(|source| {
+            AtmError::observability_query("failed to project shared log fields into ATM types")
+                .with_source(source)
+        })?;
     Ok(AtmLogRecord {
         timestamp: map_timestamp_back(event.timestamp)?,
         severity: map_level_back(event.level),
@@ -451,7 +453,7 @@ fn map_record(event: LogEvent) -> Result<AtmLogRecord, AtmError> {
         target: Some(event.target.to_string()),
         action: Some(event.action.to_string()),
         message: event.message,
-        fields: event.fields,
+        fields,
     })
 }
 
@@ -661,8 +663,11 @@ mod tests {
         assert_eq!(initial.records[0].service, "atm");
         assert_eq!(initial.records[0].action.as_deref(), Some("send"));
         assert_eq!(
-            initial.records[0].fields["command"],
-            serde_json::Value::String("send".to_string())
+            initial.records[0]
+                .fields
+                .get("command")
+                .and_then(atm_core::observability::LogFieldValue::as_str),
+            Some("send")
         );
 
         let health = observability.health().expect("health");
@@ -693,10 +698,11 @@ mod tests {
         let followed = follow.poll().expect("follow poll");
         assert!(
             followed.records.iter().any(|record| {
-                record.fields.get("message_id")
-                    == Some(&serde_json::Value::String(
-                        "550e8400-e29b-41d4-a716-446655440001".to_string(),
-                    ))
+                record
+                    .fields
+                    .get("message_id")
+                    .and_then(atm_core::observability::LogFieldValue::as_str)
+                    == Some("550e8400-e29b-41d4-a716-446655440001")
             }),
             "follow poll should include the newly emitted record even if the shared tail surface also returns the prior backlog entry"
         );
