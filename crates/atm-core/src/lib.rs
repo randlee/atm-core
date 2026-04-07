@@ -30,6 +30,8 @@ pub mod read;
 pub mod schema;
 /// Mailbox send workflows and request/response models.
 pub mod send;
+/// Retained local team discovery, roster repair, and backup/restore workflows.
+pub mod team_admin;
 /// Internal text-formatting helpers used by ATM core surfaces.
 pub(crate) mod text;
 /// Shared enums and semantic newtypes used across ATM core workflows.
