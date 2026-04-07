@@ -20,8 +20,9 @@ The owning repository referenced by ATM planning docs is:
 - `https://github.com/randlee/sc-observability`
 
 Local developer and CI checkouts may use a sibling `sc-observability` clone for
-pre-publish integration work, but committed ATM docs and scripts must not
-require a user-specific absolute filesystem path.
+historical pre-publish integration work, but the current ATM release path uses
+the published crates.io release and committed ATM docs/scripts must not require
+a user-specific absolute filesystem path.
 
 Related ATM references:
 

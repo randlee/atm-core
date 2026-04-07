@@ -166,23 +166,34 @@ Requirement ID:
 - `REQ-CORE-OBS-001`
 
 Required boundary rules:
-- `atm-core` owns the injected observability boundary used by retained command
-  services
+- `atm-core` owns the injected ATM-local observability boundary used by
+  retained command services
 - `atm-core` must not depend on concrete `sc-observability` crate types
-- the boundary must cover emit, query, follow, and health rather than
-  remaining emit-only
+- the boundary must cover emit, query, follow, and health
 - ATM-owned projected request/result types must be defined in `atm-core` for:
   - log query
   - log record projection
   - tail-session projection
   - doctor health projection
+- the boundary remains scoped to ATM messaging workflows, retained-log
+  query/follow, and doctor readiness; future hook- or `schooks`-driven
+  orchestration is out of scope for the initial release
 - the boundary must remain synchronous and object-safe for service injection
 - shared query/follow and health failures must map to stable `AtmErrorKind`
   variants without leaking shared error enums into `atm-core`
 - `atm-core` command-service failures and degraded recovery warnings must expose
   stable ATM-owned error codes for the CLI observability adapter to log
+- the initial-release health contract remains intentionally closed at:
+  - `Healthy`
+  - `Degraded`
+  - `Unavailable`
+- public observability types in `atm-core` must not expose raw
+  `serde_json::Value` / `Map<String, Value>` directly
 - the corresponding source-of-truth code registry must live in one source file
   and match [`../atm-error-codes.md`](../atm-error-codes.md)
+- the published shared-crate version pin and CLI bootstrap ownership for this
+  boundary are documented in [`../atm/requirements.md`](../atm/requirements.md)
+  under `REQ-ATM-OBS-001`
 
 Detailed design and implementation shape is owned by:
 - [`design/sc-observability-integration.md`](./design/sc-observability-integration.md)

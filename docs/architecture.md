@@ -86,8 +86,9 @@ ATM still owns:
 - structured field filtering
 - runtime health reporting
 
-The shared API gap is no longer the blocker. The current blocker is ATM-side
-integration.
+Phase K delivered the ATM-side integration work. Phase L now governs the
+remaining release-hardening, boundary cleanup, and validation needed before
+initial release.
 
 Initial retained-command integration scope:
 - `sc-observability-types`
@@ -583,9 +584,14 @@ It is responsible for:
 The retained boundary must remain ATM-owned and must not leak shared
 `sc-observability` types directly into `atm-core` public APIs.
 
-`atm-core` owns the ATM-specific event and query vocabulary.
+`atm-core` owns the ATM-specific event and query vocabulary needed for ATM’s
+messaging workflows, retained-log query/follow, and doctor readiness.
 
-`atm` owns the concrete `sc-observability` integration.
+`atm` owns the concrete `sc-observability` integration and CLI-facing routing
+decisions such as `--stderr-logs`.
+
+Future hook- or `schooks`-driven observability orchestration remains out of
+scope for the initial ATM release and must not be inferred from this boundary.
 
 ### 6.6 Log Service
 
@@ -599,15 +605,14 @@ consume those boundary methods directly rather than routing through a separate
 `log::query_logs(...)` or `log::tail_logs(...)` wrapper.
 `AtmLogQuery` contains:
 - mode
-- level filter
+- level filters
 - field matches
 - time window
 - limit
 
 `AtmLogSnapshot` contains:
-- resolved query
-- snapshot ordering metadata
 - returned records
+- truncation flag when the shared query source truncates results
 
 `LogTailSession` is an owning stateful object that yields matching records from the shared observability follow API without exposing a public callback trait.
 
@@ -774,8 +779,8 @@ For explicit observability consumer commands:
 
 ### 14.1 Concrete Integration Shape
 
-The current tracing-only emit adapter is temporary. The retained implementation
-must expand to:
+The retained implementation uses an ATM-owned emit/query/follow/health boundary
+that projects shared observability behavior into ATM-owned types:
 
 - ATM-owned `AtmLogQuery`
 - ATM-owned `AtmLogRecord`
@@ -794,6 +799,16 @@ The exact ATM-owned projected types and object-safe follow-session split are
 defined in:
 - [`docs/atm-core/design/sc-observability-integration.md`](./atm-core/design/sc-observability-integration.md)
 
+Initial-release boundary rulings:
+- this boundary is intentionally ATM-local; it does not attempt to model future
+  hook-driven or `schooks`-orchestrated observability concerns
+- the health contract remains intentionally closed at:
+  - `Healthy`
+  - `Degraded`
+  - `Unavailable`
+- public ATM observability projections must not expose raw
+  `serde_json::Value` / `Map<String, Value>` directly
+
 ### 14.2 Shared Crate Usage Rules
 
 Implementation rules:
@@ -804,9 +819,8 @@ Implementation rules:
 - the shared file sink is the authoritative retained log store for `atm log`
 - the shared console sink remains opt-in so it does not contaminate normal
   command output
-- until `sc-observability` is published, developer and CI builds may use a
-  repo-local Cargo patch/path strategy against a sibling checkout; committed
-  ATM docs and scripts must not require a user-specific absolute path
+- the initial-release dependency is the published crates.io version
+  `sc-observability = "1.0.0"`
 
 ### 14.3 Failure Diagnostic Rules
 

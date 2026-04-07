@@ -1,9 +1,17 @@
 # Live Observability Validation
 
-Phase K live validation was run against the real `sc-observability` adapter on
-the ATM CLI binary built from this worktree. No committed
-`[patch.crates-io]` entries were used; local patch overrides were supplied only
-at validation time.
+Phase K Pre-Publish Validation Record — NOT Phase L release signoff.
+
+This document records the historical Phase K live validation run against the
+real `sc-observability` adapter on the ATM CLI binary built from that worktree.
+It predates the published-crates cutover and therefore must not be read as the
+final Phase L release validation record.
+
+Historical note:
+
+- this pass used temporary local patch overrides at validation time
+- Phase L release closeout must rerun live validation against the published
+  crates.io dependency `sc-observability = "1.0.0"`
 
 ## Environment
 

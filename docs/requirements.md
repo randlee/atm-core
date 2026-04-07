@@ -290,12 +290,11 @@ Required integration rules:
   `sc-observability` APIs can own the behavior
 - `atm-core` must keep the shared crates behind an ATM-owned injected boundary
 - `atm` owns the concrete shared-crate bootstrap and dependency wiring
-- until `sc-observability` is published, local and CI builds may consume the
-  shared crates from a local checkout, but committed ATM docs/scripts must not
-  hardcode user-specific absolute paths
+- ATM must depend on the published crates.io release
+  `sc-observability = "1.0.0"` for initial release validation and delivery
 - the same pinned Rust toolchain must be used locally and in CI across ATM and
   `sc-*` repos
-- the concrete integration work is planned in Phase K of
+- the concrete release-hardening work is planned in Phase L of
   [`project-plan.md`](./project-plan.md)
 
 Historical note:
@@ -1145,8 +1144,23 @@ Sink policy:
 - the shared file sink is required for retained ATM observability
 - the shared console sink is optional and must remain off by default for normal
   ATM CLI command execution so command output stays stable
-- console logging may be enabled later for explicit local debugging or
-  integration testing
+- console logging may be enabled explicitly through `--stderr-logs` for local
+  debugging, integration testing, or operator-directed diagnostics without
+  contaminating normal stdout command output
+
+Initial-release observability boundary rules:
+- ATM observability remains scoped to ATM’s messaging workflows, retained-log
+  query/follow, and doctor readiness checks
+- future hook- or `schooks`-driven observability orchestration is out of scope
+  for the initial release and must not force broader boundary changes in
+  Phase L
+- the initial-release observability health contract remains intentionally closed
+  at:
+  - `Healthy`
+  - `Degraded`
+  - `Unavailable`
+- public `atm-core` observability APIs must use ATM-owned boundary types rather
+  than exposing raw `serde_json::Value` / `Map<String, Value>` directly
 
 Diagnostic logging rules:
 - command failures must emit structured failure diagnostics before the CLI
