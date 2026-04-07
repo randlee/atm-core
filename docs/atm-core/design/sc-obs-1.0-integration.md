@@ -165,6 +165,19 @@ Implementation contract:
 - update `LogFieldMatch` and `AtmLogRecord.fields` to use that field model
 - keep all raw `serde_json` parsing and adapter translation inside `atm-core`
 - preserve the current CLI JSON output shape for retained-log commands
+- `AgentMember.extra` remains explicitly out of scope for L.4 because it uses
+  `#[serde(flatten)]` for round-trip preservation of Claude Code fields rather
+  than the observability-facing field model
+
+`AtmJsonNumber` contract:
+- `AtmJsonNumber` accepts any valid JSON number allowed by RFC 8259
+- `AtmJsonNumber` must reject non-JSON numeric values such as `NaN`,
+  `Infinity`, and `-Infinity`
+- its constructor returns `Result<AtmJsonNumber, AtmError>`
+
+Closes:
+- `INTEROP-001`
+- `BP-003`
 
 ## 8. L.5 Construction Ergonomics
 
@@ -177,3 +190,22 @@ Implementation contract:
   implementation surfaces a concrete defect
 - keep `DoctorCommand` injectability deferred for initial release unless a
   concrete need appears during implementation
+
+Closes:
+- `UX-001`
+- `BP-004`
+
+Dispositions:
+- `UX-002`: retained
+  - dynamic dispatch via `Box<dyn ObservabilityPort + Send + Sync>` remains
+    acceptable for initial release because it keeps the CLI bootstrap surface
+    simple without weakening the ATM-owned boundary
+- `BP-001`: retained
+  - the current sealed-trait pattern remains in place because it prevents
+    arbitrary external `ObservabilityPort` implementations from bypassing the
+    intended ATM adapter boundary; this should be revisited only if an
+    alternative clearly reduces construction complexity or materially improves
+    first-party testing without weakening crate-boundary guarantees
+- `UNI-003`: deferred
+  - `DoctorCommand` injectability remains out of scope for initial release
+    unless implementation exposes a concrete testability or composition need

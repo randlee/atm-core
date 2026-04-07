@@ -299,8 +299,9 @@ Architectural rules:
 
 ### 4.5 Observability Construction Contract
 
-`CliObservability` should expose one structured construction path for initial
-release:
+`CliObservability` (atm crate) should expose one structured construction path
+for initial release, and `CliObservabilityOptions` is also owned by the `atm`
+crate:
 
 ```rust
 pub struct CliObservabilityOptions {

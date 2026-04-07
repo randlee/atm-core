@@ -208,6 +208,10 @@ Required public field-model rules:
 - `LogFieldMap` is the ATM-owned map type used by `AtmLogRecord.fields`
 - `LogFieldMatch` must use `LogFieldKey` + `LogFieldValue`
 - `AtmLogRecord.fields` must use `LogFieldMap`
+- `AtmJsonNumber` must accept any valid RFC 8259 JSON number and reject
+  non-JSON numeric values such as `NaN`, `Infinity`, and `-Infinity`
+- construction of `AtmJsonNumber` must return
+  `Result<AtmJsonNumber, AtmError>`
 - serialization of these ATM-owned types must preserve the current CLI JSON
   wire shape for retained-log commands
 - conversion to and from raw `serde_json` values must remain centralized inside

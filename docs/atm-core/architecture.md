@@ -114,6 +114,22 @@ Current `AgentMember` persisted schema:
 - `extra: serde_json::Map<String, serde_json::Value>` via `#[serde(flatten)]`
   for forward-compatible Claude Code fields
 
+Observability boundary note:
+- `AgentMember.extra` is intentionally out of scope for the L.4 observability
+  field-model cleanup
+- L.4 only replaces raw JSON types on observability-facing public types such as
+  `AtmLogRecord.fields` and `LogFieldMatch`
+- `AgentMember.extra` remains a round-trip preservation mechanism for
+  Claude Code config fields rather than part of the retained-log API surface
+
+Sealed-trait note:
+- the sealed `ObservabilityPort` boundary prevents arbitrary external crates
+  from implementing ATM's injected observability contract and bypassing the
+  intended adapter split between `atm-core` and `atm`
+- this decision should be revisited only if a concrete alternative materially
+  simplifies first-party construction or testing without weakening those
+  crate-boundary guarantees
+
 ## 3.1 Send Alert Metadata Boundary
 
 ATM-authored alert metadata belongs to the send/schema boundary in `atm-core`.
