@@ -200,6 +200,14 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
         }
     }
 
+    if let Some(roster) = &report.member_roster {
+        println!();
+        println!("Members: {}", roster.team);
+        for member in &roster.members {
+            println!("  - {}", member.name);
+        }
+    }
+
     if !report.recommendations.is_empty() {
         println!();
         println!("Recommendations:");

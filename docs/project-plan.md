@@ -483,6 +483,8 @@ Status summary:
     `512dfa4d89ac71307ef7324f64dffb67d5189cc3`
   - `L.6` complete on `feature/pL-s6-release-closeout` / PR #56 at
     `341e28c1f7175f9890a5a1d5606b64e0ce816d52`
+  - `L.7` complete on `feature/pL-s-atm-toml-config` / PR #58 at
+    `70242203dc1130e4b0fa1cfc9268c54314c38d42`
 
 Goal:
 - finish the published `sc-observability` 1.0 follow-on work and close the

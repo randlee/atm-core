@@ -97,14 +97,127 @@ fn test_doctor_reports_obsolete_identity_drift_warning() {
     );
 }
 
+#[test]
+fn test_doctor_reports_missing_baseline_team_member() {
+    let fixture = Fixture::new(&["team-lead", "arch-ctm"]);
+    fixture.write_atm_config(
+        "[atm]\ndefault_team = \"atm-dev\"\nteam_members = [\"team-lead\", \"arch-ctm\", \"qa\"]\n",
+    );
+
+    let output = fixture.run(&["doctor", "--json"], &[]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    let findings = parsed["findings"].as_array().expect("findings array");
+    assert!(
+        findings.iter().any(|finding| {
+            finding["code"] == "ATM_WARNING_BASELINE_MEMBER_MISSING"
+                && finding["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("qa"))
+        }),
+        "stdout: {}",
+        String::from_utf8(output.stdout.clone()).expect("stdout utf8")
+    );
+}
+
+#[test]
+fn test_doctor_reports_member_roster_with_baseline_ordering() {
+    let fixture = Fixture::new(&["qa", "team-lead", "arch-ctm", "temp-worker"]);
+    fixture.write_atm_config(
+        "[atm]\ndefault_team = \"atm-dev\"\nteam_members = [\"arch-ctm\", \"team-lead\", \"qa\"]\n",
+    );
+
+    let output = fixture.run(&["doctor", "--json"], &[]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    let members = parsed["member_roster"]["members"]
+        .as_array()
+        .expect("member roster array");
+    assert_eq!(members[0]["name"], "team-lead");
+    assert_eq!(members[1]["name"], "arch-ctm");
+    assert_eq!(members[2]["name"], "qa");
+    assert_eq!(members[3]["name"], "temp-worker");
+}
+
+#[test]
+fn test_doctor_reports_missing_team_directory_finding() {
+    let fixture = Fixture::empty();
+
+    let output = fixture.run(&["doctor", "--json"], &[]);
+
+    assert!(!output.status.success());
+    let parsed = fixture.stdout_json(&output);
+    let findings = parsed["findings"].as_array().expect("findings array");
+    assert!(
+        findings
+            .iter()
+            .any(|finding| finding["code"] == "ATM_TEAM_NOT_FOUND"),
+        "stdout: {}",
+        String::from_utf8(output.stdout.clone()).expect("stdout utf8")
+    );
+}
+
+#[test]
+fn test_doctor_reports_team_config_parse_failure_finding() {
+    let fixture = Fixture::empty();
+    fixture.write_raw_team_config("{\"members\":");
+
+    let output = fixture.run(&["doctor", "--json"], &[]);
+
+    assert!(!output.status.success());
+    let parsed = fixture.stdout_json(&output);
+    let findings = parsed["findings"].as_array().expect("findings array");
+    assert!(
+        findings
+            .iter()
+            .any(|finding| finding["code"] == "ATM_CONFIG_TEAM_PARSE_FAILED"),
+        "stdout: {}",
+        String::from_utf8(output.stdout.clone()).expect("stdout utf8")
+    );
+}
+
+#[test]
+fn test_doctor_reports_missing_inboxes_directory_finding() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fs::remove_dir_all(fixture.team_dir().join("inboxes")).expect("remove inboxes dir");
+
+    let output = fixture.run(&["doctor", "--json"], &[]);
+
+    assert!(!output.status.success());
+    let parsed = fixture.stdout_json(&output);
+    let findings = parsed["findings"].as_array().expect("findings array");
+    assert!(
+        findings
+            .iter()
+            .any(|finding| finding["code"] == "ATM_MAILBOX_WRITE_FAILED"),
+        "stdout: {}",
+        String::from_utf8(output.stdout.clone()).expect("stdout utf8")
+    );
+}
+
 struct Fixture {
     tempdir: tempfile::TempDir,
 }
 
 impl Fixture {
+    fn empty() -> Self {
+        Self {
+            tempdir: tempfile::tempdir().expect("tempdir"),
+        }
+    }
+
     fn new(members: &[&str]) -> Self {
-        let tempdir = tempfile::tempdir().expect("tempdir");
-        let fixture = Self { tempdir };
+        let fixture = Self::empty();
         fixture.write_team_config(members);
         fixture
     }
@@ -127,6 +240,7 @@ impl Fixture {
     fn write_team_config(&self, members: &[&str]) {
         let team_dir = self.team_dir();
         fs::create_dir_all(&team_dir).expect("team dir");
+        fs::create_dir_all(team_dir.join("inboxes")).expect("inboxes dir");
         let config = TeamConfig {
             members: members
                 .iter()
@@ -146,6 +260,12 @@ impl Fixture {
 
     fn write_atm_config(&self, raw: &str) {
         fs::write(self.tempdir.path().join(".atm.toml"), raw).expect("write .atm.toml");
+    }
+
+    fn write_raw_team_config(&self, raw: &str) {
+        let team_dir = self.team_dir();
+        fs::create_dir_all(&team_dir).expect("team dir");
+        fs::write(team_dir.join("config.json"), raw).expect("write raw team config");
     }
 
     fn stdout_json(&self, output: &std::process::Output) -> Value {

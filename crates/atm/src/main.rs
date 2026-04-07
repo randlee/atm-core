@@ -1,6 +1,7 @@
 mod commands;
 mod observability;
 mod output;
+mod sc_observability_adapter;
 
 use clap::Parser;
 use clap::error::ErrorKind;

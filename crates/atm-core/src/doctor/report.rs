@@ -4,6 +4,7 @@ use serde::Serialize;
 
 use crate::error_codes::AtmErrorCode;
 use crate::observability::AtmObservabilityHealth;
+use crate::team_admin::MembersList;
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -52,6 +53,8 @@ pub struct DoctorReport {
     pub findings: Vec<DoctorFinding>,
     pub recommendations: Vec<String>,
     pub environment: DoctorEnvironmentVisibility,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub member_roster: Option<MembersList>,
     pub observability: AtmObservabilityHealth,
 }
 

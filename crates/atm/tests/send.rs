@@ -1,4 +1,5 @@
 use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
 
 use atm_core::schema::{AgentMember, MessageEnvelope, TeamConfig};
@@ -257,6 +258,7 @@ fn test_send_missing_config_uses_existing_inbox_fallback_and_warns_sender() {
 
     let notices = fixture.inbox_contents("team-lead");
     assert_eq!(notices.len(), 1);
+    assert_eq!(notices[0].from, "atm-identity-missing@atm-dev");
     assert!(
         notices[0]
             .text
@@ -384,6 +386,105 @@ fn test_send_missing_config_does_not_block_when_team_lead_inbox_is_absent() {
     assert_eq!(inbox.len(), 1);
 }
 
+#[test]
+fn test_send_resolves_recipient_alias_before_membership_validation() {
+    let fixture = Fixture::new("team-lead");
+    fixture.write_atm_config("[atm]\n[atm.aliases]\ntl = \"team-lead\"\n");
+
+    let output = fixture.run(&["send", "tl@atm-dev", "hello alias"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let inbox = fixture.inbox_contents("team-lead");
+    assert_eq!(inbox.len(), 1);
+    assert_eq!(inbox[0].text, "hello alias");
+}
+
+#[test]
+fn test_send_cross_team_projects_alias_and_persists_canonical_from_identity() {
+    let fixture = Fixture::new("recipient");
+    fixture.write_team_config_for_team("other-team", "recipient");
+    fixture.write_atm_config("[atm]\n[atm.aliases]\nlead = \"arch-ctm\"\n");
+
+    let output = fixture.run_with_env(
+        &["send", "recipient@other-team", "hello cross-team"],
+        &[("ATM_TEAM", "atm-dev")],
+    );
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let inbox = fixture.inbox_contents_in_team("other-team", "recipient");
+    assert_eq!(inbox.len(), 1);
+    assert_eq!(inbox[0].from, "lead");
+    assert_eq!(
+        inbox[0].extra["metadata"]["atm"]["fromIdentity"],
+        "arch-ctm@atm-dev"
+    );
+}
+
+#[test]
+fn test_send_runs_post_send_hook_with_expected_payload() {
+    let fixture = Fixture::new("recipient");
+    let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
+    fixture.write_atm_config(&format!(
+        "[atm]\npost_send_hook = ['{}', 'capture', '{}']\npost_send_hook_members = ['arch-ctm']\n",
+        hook_path.display(),
+        payload_path.display()
+    ));
+
+    let output = fixture.run(&["send", "recipient@atm-dev", "hello hook"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let payload: serde_json::Value =
+        serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
+    assert_eq!(payload["from"], "arch-ctm@atm-dev");
+    assert_eq!(payload["to"], "recipient@atm-dev");
+    assert_eq!(payload["requires_ack"], false);
+    assert!(payload["message_id"].as_str().is_some());
+    assert!(payload.get("task_id").is_some());
+}
+
+#[test]
+fn test_send_post_send_hook_failure_does_not_roll_back_send() {
+    let fixture = Fixture::new("recipient");
+    let (hook_path, payload_path) = fixture.install_hook_fixture("fail");
+    fixture.write_atm_config(&format!(
+        "[atm]\npost_send_hook = ['{}', 'fail', '{}']\npost_send_hook_members = ['arch-ctm']\n",
+        hook_path.display(),
+        payload_path.display()
+    ));
+
+    let output = fixture.run(&["send", "recipient@atm-dev", "hello failed hook", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("valid send json");
+    let warnings = parsed["warnings"].as_array().expect("warnings array");
+    assert!(
+        warnings.iter().any(|warning| warning
+            .as_str()
+            .is_some_and(|warning| warning.contains("post-send hook exited unsuccessfully"))),
+        "stdout: {}",
+        fixture.stdout(&output)
+    );
+    let inbox = fixture.inbox_contents("recipient");
+    assert_eq!(inbox.len(), 1);
+}
+
 struct Fixture {
     tempdir: tempfile::TempDir,
 }
@@ -397,15 +498,7 @@ impl Fixture {
     }
 
     fn run(&self, args: &[&str]) -> std::process::Output {
-        Command::new(env!("CARGO_BIN_EXE_atm"))
-            .args(args)
-            .env("ATM_HOME", self.tempdir.path())
-            .env("ATM_CONFIG_HOME", self.tempdir.path())
-            .env("ATM_IDENTITY", "arch-ctm")
-            .env("ATM_TEAM", "atm-dev")
-            .current_dir(self.tempdir.path())
-            .output()
-            .expect("run atm")
+        self.run_with_env(args, &[])
     }
 
     fn run_without_identity(&self, args: &[&str]) -> std::process::Output {
@@ -420,13 +513,27 @@ impl Fixture {
             .expect("run atm without identity")
     }
 
+    fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
+        command
+            .args(args)
+            .env("ATM_HOME", self.tempdir.path())
+            .env("ATM_CONFIG_HOME", self.tempdir.path())
+            .env("ATM_IDENTITY", "arch-ctm")
+            .env("ATM_TEAM", "atm-dev")
+            .current_dir(self.tempdir.path());
+        for (key, value) in extra_env {
+            command.env(key, value);
+        }
+        command.output().expect("run atm")
+    }
+
     fn write_team_config(&self, recipient: &str) {
-        let team_dir = self
-            .tempdir
-            .path()
-            .join(".claude")
-            .join("teams")
-            .join("atm-dev");
+        self.write_team_config_for_team("atm-dev", recipient);
+    }
+
+    fn write_team_config_for_team(&self, team: &str, recipient: &str) {
+        let team_dir = self.tempdir.path().join(".claude").join("teams").join(team);
         fs::create_dir_all(&team_dir).expect("team dir");
         let config = TeamConfig {
             members: vec![AgentMember {
@@ -458,11 +565,15 @@ impl Fixture {
     }
 
     fn inbox_path(&self, recipient: &str) -> std::path::PathBuf {
+        self.inbox_path_in_team("atm-dev", recipient)
+    }
+
+    fn inbox_path_in_team(&self, team: &str, recipient: &str) -> std::path::PathBuf {
         self.tempdir
             .path()
             .join(".claude")
             .join("teams")
-            .join("atm-dev")
+            .join(team)
             .join("inboxes")
             .join(format!("{recipient}.json"))
     }
@@ -488,7 +599,11 @@ impl Fixture {
     }
 
     fn inbox_contents(&self, recipient: &str) -> Vec<MessageEnvelope> {
-        let inbox_path = self.inbox_path(recipient);
+        self.inbox_contents_in_team("atm-dev", recipient)
+    }
+
+    fn inbox_contents_in_team(&self, team: &str, recipient: &str) -> Vec<MessageEnvelope> {
+        let inbox_path = self.inbox_path_in_team(team, recipient);
         let raw = fs::read_to_string(&inbox_path).expect("inbox contents");
         if raw.trim().is_empty() {
             return Vec::new();
@@ -504,6 +619,29 @@ impl Fixture {
             .join(".claude")
             .join("teams")
             .join("atm-dev")
+    }
+
+    fn install_hook_fixture(&self, mode: &str) -> (PathBuf, PathBuf) {
+        let fixture_binary = PathBuf::from(env!("CARGO_BIN_EXE_atm_post_send_hook_fixture"));
+        let hook_dir = self.tempdir.path().join("bin");
+        fs::create_dir_all(&hook_dir).expect("hook dir");
+        let hook_path = hook_dir.join(fixture_binary.file_name().expect("hook binary filename"));
+        fs::copy(&fixture_binary, &hook_path).expect("copy hook fixture");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            let mut permissions = fs::metadata(&hook_path)
+                .expect("hook metadata")
+                .permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(&hook_path, permissions).expect("hook permissions");
+        }
+        let payload_path = self.tempdir.path().join(format!("{mode}-payload.json"));
+        (
+            PathBuf::from("bin").join(hook_path.file_name().expect("copied hook binary filename")),
+            payload_path,
+        )
     }
 
     fn stdout(&self, output: &std::process::Output) -> String {
