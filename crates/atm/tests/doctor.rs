@@ -97,6 +97,58 @@ fn test_doctor_reports_obsolete_identity_drift_warning() {
     );
 }
 
+#[test]
+fn test_doctor_reports_missing_baseline_team_member() {
+    let fixture = Fixture::new(&["team-lead", "arch-ctm"]);
+    fixture.write_atm_config(
+        "[atm]\ndefault_team = \"atm-dev\"\nteam_members = [\"team-lead\", \"arch-ctm\", \"qa\"]\n",
+    );
+
+    let output = fixture.run(&["doctor", "--json"], &[]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    let findings = parsed["findings"].as_array().expect("findings array");
+    assert!(
+        findings.iter().any(|finding| {
+            finding["code"] == "ATM_WARNING_BASELINE_MEMBER_MISSING"
+                && finding["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("qa"))
+        }),
+        "stdout: {}",
+        String::from_utf8(output.stdout.clone()).expect("stdout utf8")
+    );
+}
+
+#[test]
+fn test_doctor_reports_member_roster_with_baseline_ordering() {
+    let fixture = Fixture::new(&["qa", "team-lead", "arch-ctm", "temp-worker"]);
+    fixture.write_atm_config(
+        "[atm]\ndefault_team = \"atm-dev\"\nteam_members = [\"arch-ctm\", \"team-lead\", \"qa\"]\n",
+    );
+
+    let output = fixture.run(&["doctor", "--json"], &[]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    let members = parsed["member_roster"]["members"]
+        .as_array()
+        .expect("member roster array");
+    assert_eq!(members[0]["name"], "team-lead");
+    assert_eq!(members[1]["name"], "arch-ctm");
+    assert_eq!(members[2]["name"], "qa");
+    assert_eq!(members[3]["name"], "temp-worker");
+}
+
 struct Fixture {
     tempdir: tempfile::TempDir,
 }

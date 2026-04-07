@@ -1,11 +1,14 @@
 pub mod health;
 pub mod report;
 
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use crate::config;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
+use crate::schema::AgentMember;
+use crate::team_admin::{MemberSummary, MembersList};
 
 pub use report::{
     DoctorEnvironmentVisibility, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
@@ -24,6 +27,8 @@ pub fn run_doctor(
     observability: &dyn ObservabilityPort,
 ) -> Result<DoctorReport, crate::error::AtmError> {
     let config = config::load_config(&query.current_dir)?;
+    let home_dir = query.home_dir.clone();
+    let resolved_team = config::resolve_team(query.team_override.as_deref(), config.as_ref());
 
     let environment = health::environment_visibility(query.home_dir, query.team_override);
     let (observability_health, finding) = match observability.health() {
@@ -53,6 +58,9 @@ pub fn run_doctor(
             ),
         });
     }
+    let member_roster = resolved_team
+        .as_deref()
+        .and_then(|team| load_member_roster(&home_dir, team, config.as_ref(), &mut findings));
     findings.push(finding);
     let recommendations = findings
         .iter()
@@ -85,8 +93,94 @@ pub fn run_doctor(
         findings,
         recommendations,
         environment,
+        member_roster,
         observability: observability_health,
     })
+}
+
+fn load_member_roster(
+    home_dir: &std::path::Path,
+    team: &str,
+    config: Option<&config::AtmConfig>,
+    findings: &mut Vec<DoctorFinding>,
+) -> Option<MembersList> {
+    let team_dir = crate::home::team_dir_from_home(home_dir, team).ok()?;
+    let team_config = config::load_team_config(&team_dir).ok()?;
+    let baseline = config
+        .map(|config| config.team_members.as_slice())
+        .unwrap_or(&[]);
+
+    let present = team_config
+        .members
+        .iter()
+        .map(|member| member.name.clone())
+        .collect::<BTreeSet<_>>();
+    for member in baseline {
+        if present.contains(member) {
+            continue;
+        }
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::WarningBaselineMemberMissing,
+            message: format!(
+                "baseline member '{member}' is missing from team config.json for '{team}'"
+            ),
+            remediation: Some(format!(
+                "Restore '{member}' in .claude/teams/{team}/config.json or remove it from [atm].team_members if it is no longer part of the baseline roster."
+            )),
+        });
+    }
+
+    Some(MembersList {
+        team: team.to_string(),
+        members: ordered_member_summaries(&team_config.members, baseline),
+    })
+}
+
+fn ordered_member_summaries(members: &[AgentMember], baseline: &[String]) -> Vec<MemberSummary> {
+    let mut ordered = Vec::new();
+    let mut included = BTreeSet::new();
+
+    if baseline.iter().any(|member| member == "team-lead")
+        && let Some(team_lead) = members.iter().find(|member| member.name == "team-lead")
+    {
+        ordered.push(member_summary(team_lead));
+        included.insert(team_lead.name.clone());
+    }
+
+    for baseline_member in baseline {
+        if baseline_member == "team-lead" {
+            continue;
+        }
+        if let Some(member) = members
+            .iter()
+            .find(|member| member.name == *baseline_member)
+        {
+            ordered.push(member_summary(member));
+            included.insert(member.name.clone());
+        }
+    }
+
+    for member in members {
+        if included.insert(member.name.clone()) {
+            ordered.push(member_summary(member));
+        }
+    }
+
+    ordered
+}
+
+fn member_summary(member: &AgentMember) -> MemberSummary {
+    MemberSummary {
+        name: member.name.clone(),
+        agent_id: member.agent_id.clone(),
+        agent_type: member.agent_type.clone(),
+        model: member.model.clone(),
+        joined_at: member.joined_at,
+        tmux_pane_id: member.tmux_pane_id.clone(),
+        cwd: member.cwd.clone(),
+        extra: member.extra.clone(),
+    }
 }
 
 #[cfg(test)]

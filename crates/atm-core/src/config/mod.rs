@@ -36,10 +36,19 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
         .with_source(error)
     })?;
     let obsolete_identity_present = parsed.atm.identity.is_some() || parsed.identity.is_some();
+    let config_root = path
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."));
 
     Ok(Some(AtmConfig {
         identity: parsed.atm.identity.or(parsed.identity),
         default_team: parsed.atm.default_team.or(parsed.default_team),
+        team_members: normalize_string_list(parsed.atm.team_members),
+        aliases: normalize_aliases(parsed.atm.aliases),
+        post_send_hook: normalize_optional_command(parsed.atm.post_send_hook),
+        post_send_hook_members: normalize_string_list(parsed.atm.post_send_hook_members),
+        config_root,
         obsolete_identity_present,
     }))
 }
@@ -117,6 +126,39 @@ struct RawAtmSection {
     identity: Option<String>,
     #[serde(default)]
     default_team: Option<String>,
+    #[serde(default)]
+    team_members: Vec<String>,
+    #[serde(default)]
+    aliases: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    post_send_hook: Option<Vec<String>>,
+    #[serde(default)]
+    post_send_hook_members: Vec<String>,
+}
+
+fn normalize_string_list(values: Vec<String>) -> Vec<String> {
+    values
+        .into_iter()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .collect()
+}
+
+fn normalize_aliases(
+    aliases: std::collections::BTreeMap<String, String>,
+) -> std::collections::BTreeMap<String, String> {
+    aliases
+        .into_iter()
+        .map(|(alias, canonical)| (alias.trim().to_string(), canonical.trim().to_string()))
+        .filter(|(alias, canonical)| !alias.is_empty() && !canonical.is_empty())
+        .collect()
+}
+
+fn normalize_optional_command(command: Option<Vec<String>>) -> Option<Vec<String>> {
+    command.and_then(|values| {
+        let normalized = normalize_string_list(values);
+        (!normalized.is_empty()).then_some(normalized)
+    })
 }
 
 fn parse_team_config(config_path: &Path, raw: &str) -> Result<TeamConfig, AtmError> {
@@ -222,6 +264,7 @@ mod tests {
         let config = load_config(&nested).expect("config").expect("present");
         assert_eq!(config.identity.as_deref(), Some("arch-ctm"));
         assert_eq!(config.default_team.as_deref(), Some("atm-dev"));
+        assert_eq!(config.config_root, root);
         assert!(config.obsolete_identity_present);
     }
 
@@ -237,7 +280,48 @@ mod tests {
         let config = load_config(&root).expect("config").expect("present");
         assert_eq!(config.identity.as_deref(), Some("arch-ctm"));
         assert_eq!(config.default_team.as_deref(), Some("atm-dev"));
+        assert_eq!(config.config_root, root);
         assert!(config.obsolete_identity_present);
+    }
+
+    #[test]
+    fn load_config_reads_team_members_aliases_and_post_send_hook() {
+        let root = unique_temp_dir("atm-config-surface");
+        fs::write(
+            root.join(".atm.toml"),
+            r#"[atm]
+default_team = "atm-dev"
+team_members = ["team-lead", "arch-ctm", " ", "qa"]
+post_send_hook = ["bin/hook", "notify"]
+post_send_hook_members = ["arch-ctm", "", "team-lead"]
+
+[atm.aliases]
+tl = "team-lead"
+qa = "quality-mgr"
+blank = ""
+"#,
+        )
+        .expect("config");
+
+        let config = load_config(&root).expect("config").expect("present");
+        assert_eq!(config.team_members, vec!["team-lead", "arch-ctm", "qa"]);
+        assert_eq!(
+            config.post_send_hook.as_deref(),
+            Some(&["bin/hook".to_string(), "notify".to_string()][..])
+        );
+        assert_eq!(
+            config.post_send_hook_members,
+            vec!["arch-ctm".to_string(), "team-lead".to_string()]
+        );
+        assert_eq!(
+            config.aliases.get("tl").map(String::as_str),
+            Some("team-lead")
+        );
+        assert_eq!(
+            config.aliases.get("qa").map(String::as_str),
+            Some("quality-mgr")
+        );
+        assert!(!config.aliases.contains_key("blank"));
     }
 
     #[test]
@@ -370,6 +454,11 @@ mod tests {
         let config = AtmConfig {
             identity: Some("config-identity".into()),
             default_team: None,
+            team_members: Vec::new(),
+            aliases: Default::default(),
+            post_send_hook: None,
+            post_send_hook_members: Vec::new(),
+            config_root: PathBuf::new(),
             obsolete_identity_present: true,
         };
 
@@ -389,6 +478,11 @@ mod tests {
         let config = AtmConfig {
             identity: Some("config-identity".into()),
             default_team: None,
+            team_members: Vec::new(),
+            aliases: Default::default(),
+            post_send_hook: None,
+            post_send_hook_members: Vec::new(),
+            config_root: PathBuf::new(),
             obsolete_identity_present: true,
         };
 
@@ -405,6 +499,11 @@ mod tests {
         let config = AtmConfig {
             identity: None,
             default_team: Some("config-team".into()),
+            team_members: Vec::new(),
+            aliases: Default::default(),
+            post_send_hook: None,
+            post_send_hook_members: Vec::new(),
+            config_root: PathBuf::new(),
             obsolete_identity_present: false,
         };
 

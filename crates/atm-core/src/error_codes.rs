@@ -76,6 +76,8 @@ pub enum AtmErrorCode {
     WarningSendAlertStateDegraded,
     /// Obsolete .atm.toml identity config is still present.
     WarningIdentityDrift,
+    /// A baseline team member declared in .atm.toml is missing from config.json.
+    WarningBaselineMemberMissing,
 }
 
 impl AtmErrorCode {
@@ -114,6 +116,7 @@ impl AtmErrorCode {
             Self::WarningMissingTeamConfigFallback => "ATM_WARNING_MISSING_TEAM_CONFIG_FALLBACK",
             Self::WarningSendAlertStateDegraded => "ATM_WARNING_SEND_ALERT_STATE_DEGRADED",
             Self::WarningIdentityDrift => "ATM_WARNING_IDENTITY_DRIFT",
+            Self::WarningBaselineMemberMissing => "ATM_WARNING_BASELINE_MEMBER_MISSING",
         }
     }
 }
