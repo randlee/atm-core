@@ -128,10 +128,7 @@ impl CliObservability {
 
 pub fn init(stderr_logs: bool) -> Result<CliObservability, AtmError> {
     let home_dir = home::atm_home()?;
-    Ok(CliObservability::new(
-        &home_dir,
-        CliObservabilityOptions { stderr_logs },
-    )?)
+    CliObservability::new(&home_dir, CliObservabilityOptions { stderr_logs })
 }
 
 impl ObservabilityPort for CliObservability {
