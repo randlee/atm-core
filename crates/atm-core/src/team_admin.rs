@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -322,9 +323,16 @@ pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> 
         })
         .map(|member| member.name.clone())
         .collect::<Vec<_>>();
+    let members_to_restore_set = members_to_restore.iter().cloned().collect::<BTreeSet<_>>();
 
     let mut inboxes_to_restore = list_backup_inboxes(&backup_dir)?;
-    inboxes_to_restore.retain(|name| name != "team-lead.json");
+    inboxes_to_restore.retain(|name| {
+        if name == "team-lead.json" {
+            return false;
+        }
+        name.strip_suffix(".json")
+            .is_some_and(|member| members_to_restore_set.contains(member))
+    });
     let tasks_to_restore = count_numeric_task_files(&backup_dir.join("tasks"))?;
 
     if request.dry_run {
@@ -447,6 +455,7 @@ fn ensure_inbox_exists(inbox_path: &Path) -> Result<bool, AtmError> {
                 parent.display()
             ))
             .with_source(error)
+            .with_recovery("Check inbox directory permissions and rerun the team recovery command.")
         })?;
     }
 
@@ -460,6 +469,7 @@ fn ensure_inbox_exists(inbox_path: &Path) -> Result<bool, AtmError> {
                 inbox_path.display()
             ))
             .with_source(error)
+            .with_recovery("Check inbox permissions and rerun the team recovery command.")
         })?;
     Ok(true)
 }
@@ -478,6 +488,7 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), AtmError> {
                 parent.display()
             ))
             .with_source(error)
+            .with_recovery("Check config directory permissions and rerun the operation.")
         })?;
     }
 
@@ -486,7 +497,10 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), AtmError> {
         return Err(AtmError::file_policy(format!(
             "forced team config write failure for {}",
             path.display()
-        )));
+        ))
+        .with_recovery(
+            "Unset ATM_TEST_FAIL_TEAM_CONFIG_WRITE or rerun without the injected test failure.",
+        ));
     }
 
     let temp_path = path.with_file_name(format!(
@@ -503,6 +517,7 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), AtmError> {
             temp_path.display()
         ))
         .with_source(error)
+        .with_recovery("Check config directory permissions and available disk space, then retry.")
     })?;
     fs::rename(&temp_path, path).map_err(|error| {
         AtmError::file_policy(format!(
@@ -510,6 +525,7 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), AtmError> {
             path.display()
         ))
         .with_source(error)
+        .with_recovery("Check config file permissions and rerun the operation.")
     })?;
     Ok(())
 }
@@ -524,6 +540,7 @@ fn copy_regular_files(src: &Path, dst: &Path) -> Result<(), AtmError> {
             dst.display()
         ))
         .with_source(error)
+        .with_recovery("Check destination directory permissions and retry the copy.")
     })?;
 
     let mut entries = fs::read_dir(src)
@@ -533,6 +550,7 @@ fn copy_regular_files(src: &Path, dst: &Path) -> Result<(), AtmError> {
                 src.display()
             ))
             .with_source(error)
+            .with_recovery("Check source directory permissions and retry the copy.")
         })?
         .filter_map(Result::ok)
         .filter(|entry| entry.path().is_file())
@@ -549,6 +567,7 @@ fn copy_regular_files(src: &Path, dst: &Path) -> Result<(), AtmError> {
                 to.display()
             ))
             .with_source(error)
+            .with_recovery("Check source and destination permissions and retry the copy.")
         })?;
     }
 
@@ -584,6 +603,7 @@ fn locate_backup_dir(
                 root.display()
             ))
             .with_source(error)
+            .with_recovery("Check backup directory permissions or pass an explicit --from path.")
         })?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
@@ -608,6 +628,7 @@ fn list_backup_inboxes(backup_dir: &Path) -> Result<Vec<String>, AtmError> {
                 inbox_dir.display()
             ))
             .with_source(error)
+            .with_recovery("Check backup inbox permissions and retry the restore.")
         })?
         .filter_map(Result::ok)
         .filter(|entry| entry.path().is_file())
@@ -628,6 +649,7 @@ fn count_numeric_task_files(tasks_dir: &Path) -> Result<usize, AtmError> {
                 tasks_dir.display()
             ))
             .with_source(error)
+            .with_recovery("Check task directory permissions and retry the restore.")
         })?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
@@ -652,6 +674,7 @@ fn restore_task_bucket(src: &Path, dst: &Path) -> Result<(), AtmError> {
                 dst.display()
             ))
             .with_source(error)
+            .with_recovery("Check task directory permissions and rerun the restore.")
         })?;
         return Ok(());
     }
@@ -670,6 +693,7 @@ fn restore_task_bucket(src: &Path, dst: &Path) -> Result<(), AtmError> {
                 staging.display()
             ))
             .with_source(error)
+            .with_recovery("Check task staging directory permissions and rerun the restore.")
         })?;
     }
     copy_regular_files(src, &staging)?;
@@ -681,6 +705,7 @@ fn restore_task_bucket(src: &Path, dst: &Path) -> Result<(), AtmError> {
                 dst.display()
             ))
             .with_source(error)
+            .with_recovery("Check task directory permissions and rerun the restore.")
         })?;
     }
     if let Some(parent) = dst.parent() {
@@ -690,6 +715,7 @@ fn restore_task_bucket(src: &Path, dst: &Path) -> Result<(), AtmError> {
                 parent.display()
             ))
             .with_source(error)
+            .with_recovery("Check task parent directory permissions and rerun the restore.")
         })?;
     }
     fs::rename(&staging, dst).map_err(|error| {
@@ -698,6 +724,7 @@ fn restore_task_bucket(src: &Path, dst: &Path) -> Result<(), AtmError> {
             dst.display()
         ))
         .with_source(error)
+        .with_recovery("Check task directory permissions and rerun the restore.")
     })?;
     Ok(())
 }
@@ -709,6 +736,7 @@ fn recompute_highwatermark(tasks_dir: &Path) -> Result<usize, AtmError> {
             tasks_dir.display()
         ))
         .with_source(error)
+        .with_recovery("Check task directory permissions and rerun the restore.")
     })?;
 
     let max_id = fs::read_dir(tasks_dir)
@@ -718,6 +746,7 @@ fn recompute_highwatermark(tasks_dir: &Path) -> Result<usize, AtmError> {
                 tasks_dir.display()
             ))
             .with_source(error)
+            .with_recovery("Check task directory permissions and rerun the restore.")
         })?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
@@ -738,6 +767,7 @@ fn recompute_highwatermark(tasks_dir: &Path) -> Result<usize, AtmError> {
             tasks_dir.join(".highwatermark").display()
         ))
         .with_source(error)
+        .with_recovery("Check task directory permissions and rerun the restore.")
     })?;
     Ok(max_id)
 }

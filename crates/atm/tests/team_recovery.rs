@@ -315,6 +315,68 @@ fn test_restore_preserves_team_lead_and_recomputes_highwatermark() {
     assert_eq!(fixture.read_highwatermark("atm-dev"), "82");
 }
 
+#[test]
+fn test_restore_does_not_overwrite_existing_member_inbox() {
+    let fixture = Fixture::new();
+    fixture.write_team_config_value(
+        "atm-dev",
+        json!({
+            "leadSessionId":"lead-current",
+            "members":[
+                {"name":"team-lead","agentType":"lead","cwd":"/repo"},
+                {"name":"existing","agentType":"worker","cwd":"/repo"}
+            ]
+        }),
+    );
+    fixture.write_inbox("atm-dev", "existing", "keep existing inbox");
+
+    let backup_dir = fixture.make_backup_dir("atm-dev", "20260407T030405000000000Z");
+    fixture.write_json(
+        backup_dir.join("config.json"),
+        &json!({
+            "leadSessionId":"lead-backup",
+            "members":[
+                {"name":"team-lead","agentType":"lead","cwd":"/backup"},
+                {"name":"existing","agentType":"worker","cwd":"/backup"},
+                {"name":"arch-ctm","agentType":"general-purpose","cwd":"/repo"}
+            ]
+        }),
+    );
+    fixture.write_inbox_at(
+        backup_dir.join("inboxes").join("existing.json"),
+        "team-lead",
+        "do not overwrite existing inbox",
+    );
+    fixture.write_inbox_at(
+        backup_dir.join("inboxes").join("arch-ctm.json"),
+        "team-lead",
+        "restore new member inbox",
+    );
+
+    let output = fixture.run(&[
+        "teams",
+        "restore",
+        "atm-dev",
+        "--from",
+        backup_dir.to_str().expect("utf8"),
+        "--json",
+    ]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+
+    let existing_inbox =
+        fs::read_to_string(fixture.inbox_path("atm-dev", "existing")).expect("existing inbox");
+    assert!(existing_inbox.contains("keep existing inbox"));
+    assert!(!existing_inbox.contains("do not overwrite existing inbox"));
+
+    let restored_inbox =
+        fs::read_to_string(fixture.inbox_path("atm-dev", "arch-ctm")).expect("restored inbox");
+    assert!(restored_inbox.contains("restore new member inbox"));
+}
+
 struct Fixture {
     tempdir: tempfile::TempDir,
 }
