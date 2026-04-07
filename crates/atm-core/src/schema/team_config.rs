@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 
 use super::agent_member::AgentMember;
 
@@ -6,4 +7,7 @@ use super::agent_member::AgentMember;
 pub struct TeamConfig {
     #[serde(default)]
     pub members: Vec<AgentMember>,
+
+    #[serde(flatten)]
+    pub extra: Map<String, Value>,
 }

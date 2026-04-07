@@ -140,7 +140,10 @@ fn parse_team_config(config_path: &Path, raw: &str) -> Result<TeamConfig, AtmErr
         }
     };
 
-    Ok(TeamConfig { members })
+    let mut extra = object.clone();
+    extra.remove("members");
+
+    Ok(TeamConfig { members, extra })
 }
 
 fn parse_team_member(config_path: &Path, index: usize, entry: &Value) -> Option<AgentMember> {
@@ -177,6 +180,8 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
 
+    use serde_json::Value;
+
     use super::{AtmConfig, load_config, parse_team_config, resolve_identity, resolve_team};
 
     #[test]
@@ -207,6 +212,7 @@ mod tests {
         assert_eq!(config.members.len(), 2);
         assert_eq!(config.members[0].name, "arch-ctm");
         assert_eq!(config.members[1].name, "team-lead");
+        assert!(config.extra.is_empty());
     }
 
     #[test]
@@ -221,6 +227,7 @@ mod tests {
         assert_eq!(config.members.len(), 2);
         assert_eq!(config.members[0].name, "arch-ctm");
         assert_eq!(config.members[1].name, "team-lead");
+        assert!(config.extra.is_empty());
     }
 
     #[test]
@@ -235,6 +242,7 @@ mod tests {
         assert_eq!(config.members.len(), 2);
         assert_eq!(config.members[0].name, "arch-ctm");
         assert_eq!(config.members[1].name, "team-lead");
+        assert!(config.extra.is_empty());
     }
 
     #[test]
@@ -243,6 +251,23 @@ mod tests {
         let config = parse_team_config(&config_path, r#"{}"#).expect("team config");
 
         assert!(config.members.is_empty());
+        assert!(config.extra.is_empty());
+    }
+
+    #[test]
+    fn parse_team_config_preserves_root_extra_fields() {
+        let config_path = temp_config_path();
+        let config = parse_team_config(
+            &config_path,
+            r#"{"leadSessionId":"lead-123","members":[{"name":"team-lead"}]}"#,
+        )
+        .expect("team config");
+
+        assert_eq!(config.members.len(), 1);
+        assert_eq!(
+            config.extra["leadSessionId"],
+            Value::String("lead-123".to_string())
+        );
     }
 
     #[test]
