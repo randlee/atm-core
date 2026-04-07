@@ -540,6 +540,36 @@ Send ordering rules:
   first and derive the persisted message `timestamp` from it
 - perform duplicate suppression and final append inside the same atomic append boundary
 
+#### 6.1.1 Idle-Notification Lifecycle
+
+- message classification first attempts to parse the persisted `text` field as
+  JSON and treat the message as an idle notification when the parsed object has
+  `type == "idle_notification"`
+- if parsing fails, or `type` differs, the message is classified as a normal
+  message
+- when a newly appended message is classified as an idle notification, the
+  mailbox append boundary removes any older unread idle notification from the
+  same sender in the same inbox before appending the new record
+- `atm clear --idle-only` remains manual backlog cleanup, not the primary
+  lifecycle path
+
+Deferred follow-on work:
+- read-time auto-purge of displayed idle notifications
+- daemon-side idle-notification removal behavior
+
+#### 6.1.2 Task-Assignment Classification
+
+- classification uses the same text-field JSON detection pattern and treats a
+  message as a task assignment when the parsed object has
+  `type == "task_assignment"`
+- because the Claude Code schema is fixed, classification must populate
+  `extra["task_id"]` and `extra["priority"]` from the parsed text-field JSON
+  rather than extending `MessageEnvelope` with new top-level fields
+- final field naming and task-subsystem semantics remain coordinated with the
+  future `arch-ctask` task subsystem design; see `atm-core` issue `#17`
+- task-assignment extraction remains deferred until the `arch-ctask` subsystem
+  is defined
+
 Missing-team-config fallback is limited to `send`:
 - fallback applies only when `config.json` is missing and the target inbox
   already exists
@@ -881,6 +911,7 @@ The mailbox layer owns:
 - origin-inbox merge
 - atomic workflow-state updates
 - atomic clear-set replacement
+- sender-scoped idle-notification dedup inside the atomic append boundary
 
 The mailbox layer does not own selection policy, display buckets, output formatting, log query behavior, or doctor diagnostics.
 
