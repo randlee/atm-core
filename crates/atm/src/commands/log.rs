@@ -3,11 +3,11 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use atm_core::observability::{
-    AtmLogQuery, LogFieldMatch, LogLevelFilter, LogMode, LogOrder, ObservabilityPort,
+    AtmJsonNumber, AtmLogQuery, LogFieldKey, LogFieldMatch, LogFieldValue, LogLevelFilter, LogMode,
+    LogOrder, ObservabilityPort,
 };
 use atm_core::types::IsoTimestamp;
 use clap::{Args, Subcommand, ValueEnum};
-use serde_json::Value;
 
 use crate::observability::CliObservability;
 use crate::output;
@@ -181,28 +181,22 @@ fn parse_match_expression(raw: &str) -> Result<LogFieldMatch> {
     }
 
     Ok(LogFieldMatch {
-        key: key.to_string(),
+        key: LogFieldKey::new(key.to_string())?,
         value: parse_match_value(value),
     })
 }
 
-fn parse_match_value(raw: &str) -> Value {
+fn parse_match_value(raw: &str) -> LogFieldValue {
     if raw.eq_ignore_ascii_case("true") {
-        Value::Bool(true)
+        LogFieldValue::bool(true)
     } else if raw.eq_ignore_ascii_case("false") {
-        Value::Bool(false)
+        LogFieldValue::bool(false)
     } else if raw.eq_ignore_ascii_case("null") {
-        Value::Null
-    } else if let Ok(number) = raw.parse::<i64>() {
-        Value::Number(number.into())
-    } else if let Ok(number) = raw.parse::<u64>() {
-        Value::Number(number.into())
-    } else if let Ok(number) = raw.parse::<f64>() {
-        serde_json::Number::from_f64(number)
-            .map(Value::Number)
-            .unwrap_or_else(|| Value::String(raw.to_string()))
+        LogFieldValue::null()
+    } else if let Ok(number) = AtmJsonNumber::new(raw.to_string()) {
+        LogFieldValue::number(number)
     } else {
-        Value::String(raw.to_string())
+        LogFieldValue::string(raw.to_string())
     }
 }
 

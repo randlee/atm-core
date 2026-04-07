@@ -1,5 +1,13 @@
 # `sc-observability` Integration Plan
 
+Status note:
+
+- this document is the historical Phase K integration baseline
+- current release-alignment decisions for the published 1.0 surface now live in
+  [`sc-obs-1.0-integration.md`](./sc-obs-1.0-integration.md)
+- when the two documents differ on current-state details, the Phase L 1.0 note
+  is authoritative
+
 ## 1. Purpose
 
 This document defines the production implementation plan for integrating
@@ -129,7 +137,7 @@ pub struct AtmLogRecord {
     pub target: Option<String>,
     pub action: Option<String>,
     pub message: Option<String>,
-    pub fields: serde_json::Map<String, serde_json::Value>,
+    pub fields: LogFieldMap,
 }
 
 pub struct AtmLogSnapshot {

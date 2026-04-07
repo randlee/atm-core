@@ -28,8 +28,11 @@ The `atm` crate must remain thin.
 - `atm` owns mapping of CLI flags to `atm-core` request structs.
 - `atm` owns bootstrap of shared observability implementations used by
   `atm-core`.
-- `atm` owns the temporary pre-publish dependency wiring for a local
-  `sc-observability` checkout until the shared crates are published.
+- `atm` owns the concrete published-crate bootstrap against
+  `sc-observability = "1.0.0"`.
+- `atm` owns the structured construction contract for the concrete adapter:
+  `CliObservability::new(home_dir, CliObservabilityOptions)`.
+- `atm` may retain `init(...)` only as a delegating helper.
 - `atm` owns the retained local recovery CLI shape for `teams` and `members`,
   but not the underlying team/backup/restore business rules
 

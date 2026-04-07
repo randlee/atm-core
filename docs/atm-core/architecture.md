@@ -20,6 +20,17 @@ service boundaries.
 - `atm-core` owns persisted config/team loading policy, including compatibility
   defaults, recovery boundaries, and precise parse diagnostics.
 
+Observability release boundary rules:
+- raw `serde_json::Value` / `serde_json::Map` remain internal translation types
+  only; they are not part of the public observability contract
+- the public L.4 field model uses:
+  - `LogFieldKey`
+  - `AtmJsonNumber`
+  - `LogFieldValue`
+  - `LogFieldMap`
+- CLI JSON output remains wire-compatible with the current retained-log output
+  shape after the boundary cleanup
+
 ## 3. Config Loading Boundary
 
 Persisted config and team-document handling belongs at the `atm-core` loading
@@ -102,6 +113,22 @@ Current `AgentMember` persisted schema:
 - `cwd: String`, default empty string
 - `extra: serde_json::Map<String, serde_json::Value>` via `#[serde(flatten)]`
   for forward-compatible Claude Code fields
+
+Observability boundary note:
+- `AgentMember.extra` is intentionally out of scope for the L.4 observability
+  field-model cleanup
+- L.4 only replaces raw JSON types on observability-facing public types such as
+  `AtmLogRecord.fields` and `LogFieldMatch`
+- `AgentMember.extra` remains a round-trip preservation mechanism for
+  Claude Code config fields rather than part of the retained-log API surface
+
+Sealed-trait note:
+- the sealed `ObservabilityPort` boundary prevents arbitrary external crates
+  from implementing ATM's injected observability contract and bypassing the
+  intended adapter split between `atm-core` and `atm`
+- this decision should be revisited only if a concrete alternative materially
+  simplifies first-party construction or testing without weakening those
+  crate-boundary guarantees
 
 ## 3.1 Send Alert Metadata Boundary
 
