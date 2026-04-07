@@ -26,6 +26,23 @@ The rewritten system must preserve usable non-daemon behavior already present in
 
 The system uses structured logging through `sc-observability`.
 
+Schema ownership references:
+
+- Claude Code-native message schema:
+  [`claude-code-message-schema.md`](./claude-code-message-schema.md)
+- ATM additive/interpreted message schema:
+  [`atm-message-schema.md`](./atm-message-schema.md)
+- legacy ATM read-compatibility schema:
+  [`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)
+- `sc-observability` schema ownership pointer:
+  [`sc-observability-schema.md`](./sc-observability-schema.md)
+- ATM-owned error-code registry:
+  [`atm-error-codes.md`](./atm-error-codes.md)
+- schema enforcement models:
+  `tools/schema_models/claude_code_message_schema.py` and
+  `tools/schema_models/atm_message_schema.py` and
+  `tools/schema_models/legacy_atm_message_schema.py`
+
 ## 1.1 Documentation Structure
 
 Documentation organization is defined in
@@ -125,6 +142,58 @@ Per-team layout:
 
 The rewrite retains origin-file merge behavior for read and wait paths because it is part of the current file-based mail surface and does not require the daemon.
 
+### 3.2.1 Message Schema Ownership And Compatibility
+
+Product requirement ID:
+- `REQ-P-SCHEMA-001` ATM must preserve explicit ownership boundaries between
+  Claude Code-native message schema, legacy ATM compatibility schema, and
+  forward ATM metadata schema.
+
+Satisfied by:
+- `REQ-CORE-MAILBOX-001` for persisted inbox read/write compatibility
+- `REQ-CORE-WORKFLOW-001` for ATM workflow semantics layered onto compatible
+  message representations
+
+Required rules:
+
+- Claude Code-native message schema is owned by Claude Code
+- ATM must not redefine Claude-native fields as if ATM owned them
+- ATM read must accept:
+  - Claude Code-native messages
+  - legacy ATM top-level additive messages
+  - future ATM metadata-based messages
+- new ATM-only machine-readable fields must not be added as new top-level inbox
+  fields
+- forward ATM machine-readable fields must live in `metadata.atm`
+- forward ATM-authored alert and repair metadata, including legacy
+  `atmAlertKind` and `missingConfigPath`, must migrate to `metadata.atm`
+  fields such as `metadata.atm.alertKind` and
+  `metadata.atm.missingConfigPath`
+- ATM may enrich a Claude-native message in place by adding ATM-owned metadata
+  without rewriting native Claude fields
+- locally owned schema enforcement must distinguish legacy top-level UUID-based
+  ATM identifiers from forward metadata-based ULID identifiers
+- write-path validation may reject wrong-format ATM-owned identifiers with
+  descriptive errors
+- read-path validation failure for ATM-owned fields must trigger warning +
+  degradation logic rather than failing the overall message read
+- a separate ATM-native inbox is explicitly deferred and must not be assumed by
+  the current live design
+
+Current-phase migration constraint:
+
+- Phase J sprint J.4 is documentation and planning only
+- existing runtime write/read behavior for legacy top-level alert fields remains
+  stable until a later implementation sprint performs the actual migration
+`REQ-P-SCHEMA-001` is owned by:
+
+- [`claude-code-message-schema.md`](./claude-code-message-schema.md)
+- [`atm-message-schema.md`](./atm-message-schema.md)
+- [`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)
+- [`atm-core/design/dedup-metadata-schema.md`](./atm-core/design/dedup-metadata-schema.md)
+  §2.2 and §3.3 for forward ATM alert-field placement and sender-side dedup
+  semantics
+
 ### 3.3 Configuration Resolution
 
 Configuration resolution order:
@@ -145,6 +214,48 @@ Supported optional config fields:
 - color
 - bridge remotes and hostname aliases used by origin-inbox merge
 
+### 3.3.1 Config And Schema Recovery
+
+Product requirement ID:
+- `REQ-P-CONFIG-HEALTH-001` Persisted ATM config and team JSON loading must
+  recover at the narrowest safe scope and report precise diagnostics when
+  recovery is not safe.
+
+Satisfied by:
+- `REQ-CORE-CONFIG-003` for config/team schema recovery and diagnostic policy
+- `REQ-CORE-SEND-001` for send-time missing-config fallback and repair
+  notification policy
+- `REQ-CORE-MAILBOX-001` for mailbox record skip behavior
+
+Required persisted-data classes:
+- `compatibility-recoverable`
+- `record-invalid`
+- `document-invalid`
+- `missing-document`
+
+Required handling policy:
+- compatibility-only schema drift may be recovered with documented,
+  deterministic defaults
+- malformed records inside a larger persisted collection should be skipped or
+  quarantined individually when the rest of the document remains trustworthy
+- malformed root documents or invalid root structure must fail with structured
+  errors rather than guessed repairs
+- missing persisted team config is a distinct `missing-document` condition and
+  must not be collapsed into generic parse corruption
+- identity and routing semantics must never be fabricated to keep a command
+  running
+
+Required diagnostics:
+- failure class when known
+- file path
+- entity scope when known, such as member name or collection entry
+- field name when known
+- parser detail, including line and column when available
+- recovery guidance when operator action is required
+
+Operator examples and safe repair guidance live in
+[`persisted-data-repair.md`](./persisted-data-repair.md).
+
 ### 3.4 Claude Settings Resolution
 
 The system must resolve Claude settings for file-reference policy checks.
@@ -155,9 +266,11 @@ Resolution order:
 3. repo-local `.claude/settings.json`
 4. global `{ATM_HOME}/.claude/settings.json`
 
-### 3.5 Observability Shared API Prerequisite
+### 3.5 Observability Shared Integration Baseline
 
-ATM depends on `sc-observability` providing a shared logging surface that supports:
+ATM depends on `sc-observability` as the shared logging/query/health substrate.
+
+The shared surface ATM integrates against must support:
 - structured log emission
 - historical query of retained records
 - follow/tail of new matching records
@@ -167,10 +280,26 @@ ATM depends on `sc-observability` providing a shared logging surface that suppor
 - limit/order controls
 - health reporting for the logging runtime
 
-This prerequisite is handled by an early ATM planning/coordination sprint:
-- `OBS-GAP-1`
+The current shared repo now exposes those generic capabilities. ATM must
+integrate with them directly rather than preserving a local tracing-only
+adapter.
 
-ATM must not implement a parallel ad hoc log-query engine when shared `sc-observability` APIs can own the behavior.
+Required integration rules:
+
+- ATM must not implement a parallel ad hoc log-query engine when shared
+  `sc-observability` APIs can own the behavior
+- `atm-core` must keep the shared crates behind an ATM-owned injected boundary
+- `atm` owns the concrete shared-crate bootstrap and dependency wiring
+- ATM must depend on the published crates.io release
+  `sc-observability = "1.0.0"` for initial release validation and delivery
+- the same pinned Rust toolchain must be used locally and in CI across ATM and
+  `sc-*` repos
+- the concrete release-hardening work is planned in Phase L of
+  [`project-plan.md`](./project-plan.md)
+
+Historical note:
+- `OBS-GAP-1` is complete as a historical planning artifact and does not remain
+  the gating item for retained observability delivery
 
 ## 4. Identity Resolution
 
@@ -266,8 +395,8 @@ Satisfied by:
 - `REQ-ATM-CMD-001` for CLI entry, parsing, and dispatch aspects
 - `REQ-ATM-OUT-001` for human-readable and JSON output aspects
 - `REQ-CORE-CONFIG-002` for address resolution and target-validation aspects
-- `REQ-CORE-SEND-001` for send-path message construction and classification
-  aspects
+- `REQ-CORE-SEND-001` for send-time missing-config fallback and repair
+  notification behavior
 - `REQ-CORE-MAILBOX-001` for message creation, duplicate suppression, and
   atomic mailbox mutation aspects
 
@@ -298,7 +427,9 @@ Retired from the current implementation:
 - resolve sender identity using the defined precedence
 - resolve recipient address using the defined precedence
 - resolve roles and aliases before mailbox lookup
-- verify target team existence and target agent membership as part of address resolution before mailbox path selection
+- verify target team existence and target agent membership as part of address
+  resolution before mailbox path selection, except for the documented
+  `missing-document` fallback in §6.3.1
 - generate summary when not explicitly provided
 - enter the atomic append boundary before final inbox mutation
 - validate message text inside the atomic append boundary
@@ -314,6 +445,16 @@ Retired from the current implementation:
 - when the outgoing envelope is classified as an idle notification, apply the
   sender-scoped idle-notification deduplication rule inside the same atomic
   mailbox append boundary before appending the new record
+- current live write compatibility may generate top-level `message_id` values
+  using UUID while the metadata-based schema is not yet implemented
+
+Forward schema requirements:
+
+- once ATM writes `messageId` under `metadata.atm`, it must use ULID rather
+  than UUID for newly-authored values
+- ATM must generate the ULID first and derive the persisted Claude-native
+  `timestamp` from that ULID creation instant
+- legacy UUID `message_id` remains read-compatible
 
 `message_id` is required on every message written by `atm send`.
 
@@ -324,6 +465,26 @@ Recipients use `message_id` for:
 - duplicate suppression
 - read-time duplicate collapse
 - acknowledgement targeting
+
+### 6.3.1 Missing Team Config Fallback
+
+When team `config.json` is missing, `atm send` may still proceed only when:
+- the resolved team directory exists
+- the target inbox path already exists
+- no team, agent, or routing identity must be guessed
+
+When `atm send` uses this fallback, it must:
+- surface an actionable warning to the sender that delivery used inbox fallback
+  because team config is missing
+- keep the original delivery path best-effort and non-interactive
+- send a best-effort repair notification to `team-lead` when that recipient can
+  be resolved without guesswork
+- deduplicate repeated repair notifications for the same unresolved missing-team
+  config condition so inboxes do not accumulate hundreds of identical messages
+
+When team `config.json` is malformed rather than missing:
+- `atm send` must fail with a structured configuration error
+- malformed config must not silently degrade into missing-config fallback
 
 ### 6.4 Message Source Semantics
 
@@ -753,6 +914,8 @@ Deferred from the current source repo:
 - default to snapshot mode when `--tail` is not set
 - return snapshot results newest-first before applying output limits
 - return followed records in arrival order while `--tail` is active
+- use the built-in shared file-backed retained log store as the authoritative
+  query/follow source
 
 ### 10.4 ATM Log Fields
 
@@ -820,6 +983,7 @@ The initial doctor implementation must cover:
 - hook identity availability
 - `ATM_HOME`, `ATM_TEAM`, and `ATM_IDENTITY` override visibility
 - `sc-observability` initialization health
+- active shared log path visibility
 - `sc-observability` query-health readiness for `atm log`
 
 ### 11.4 Output Contract
@@ -870,13 +1034,15 @@ Optional fields:
 - `pendingAckAt`
 - `acknowledgedAt`
 - `acknowledgesMessageId`
+- `metadata`
 
 Unknown fields must be preserved.
 
 For ATM-authored messages:
-- `message_id` is mandatory
-- `message_id` must be UUID v4
-- `message_id` must not be null or blank
+- ATM machine-readable identity is mandatory
+- current legacy top-level `message_id` values may be UUID
+- forward metadata `messageId` values must be ULID
+- ATM-authored machine identifiers must not be null or blank
 
 Legacy or externally imported records may still omit `message_id`; the rewrite
 must preserve such records without inventing synthetic ids during read.
@@ -982,6 +1148,14 @@ Satisfied by:
 
 ATM must emit structured records through `sc-observability`.
 
+Initial shared integration scope:
+- `sc-observability-types`
+- `sc-observability`
+
+Deferred from the initial retained observability integration:
+- `sc-observe`
+- `sc-observability-otlp`
+
 Required ATM event classes:
 - command started
 - command succeeded
@@ -1003,6 +1177,39 @@ Emission is best-effort:
 - logging failures must never block retained command behavior
 - command correctness takes priority over observability delivery
 
+Sink policy:
+- the shared file sink is required for retained ATM observability
+- the shared console sink is optional and must remain off by default for normal
+  ATM CLI command execution so command output stays stable
+- console logging may be enabled explicitly through `--stderr-logs` for local
+  debugging, integration testing, or operator-directed diagnostics without
+  contaminating normal stdout command output
+
+Initial-release observability boundary rules:
+- ATM observability remains scoped to ATM’s messaging workflows, retained-log
+  query/follow, and doctor readiness checks
+- future hook- or `schooks`-driven observability orchestration is out of scope
+  for the initial release and must not force broader boundary changes in
+  Phase L
+- the initial-release observability health contract remains intentionally closed
+  at:
+  - `Healthy`
+  - `Degraded`
+  - `Unavailable`
+- public `atm-core` observability APIs must use ATM-owned boundary types rather
+  than exposing raw `serde_json::Value` / `Map<String, Value>` directly
+
+Diagnostic logging rules:
+- command failures must emit structured failure diagnostics before the CLI
+  exits, even when the command fails before reaching a core service
+- degraded recovery paths that intentionally continue, such as malformed-record
+  skips or missing-config fallback warnings, must also emit structured warning
+  diagnostics
+- every ATM warning/error diagnostic must carry a stable ATM-owned error code in
+  addition to human-readable text
+- command lifecycle failure events must include the stable error code when one
+  is available
+
 `atm log` and `atm doctor` are not best-effort features in the same sense:
 - they are explicit observability consumers
 - if shared query/health APIs are unavailable, they must fail with clear structured errors
@@ -1020,8 +1227,19 @@ Satisfied by:
 
 All user-visible failures must use structured errors with recovery guidance.
 
+Persisted-data failures must preserve parser and entity context when available.
+
+Stable error-code rule:
+- every public `AtmError` must map to a stable ATM-owned error code
+- ATM warning and error logs must include that code
+- CLI bootstrap and argument-validation failures must also be logged with a
+  stable error code before process exit
+- the single source of truth for ATM-owned error codes is
+  [`atm-error-codes.md`](./atm-error-codes.md)
+
 Minimum error categories:
 - configuration
+- missing document
 - address
 - identity resolution
 - team not found
@@ -1056,6 +1274,12 @@ Satisfied by:
 - duplicate message ids must not be appended twice
 - read-time duplicate message ids collapse to the newest visible entry
 - corrupt records should be skipped individually when possible
+- persisted config/team schema drift should recover with deterministic defaults
+  when safe
+- missing team config may use only the explicitly documented send fallback
+  behavior
+- persisted config/team records with missing identity or routing-critical fields
+  must fail or be isolated rather than guessed
 - missing inbox files are treated as empty inboxes
 - seen-state races must not corrupt mailbox data
 - observability emission failures must not corrupt command behavior

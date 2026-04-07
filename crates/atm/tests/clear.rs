@@ -1,11 +1,10 @@
 use std::fs;
 use std::process::Command;
 
-use atm_core::schema::{AgentMember, MessageEnvelope, TeamConfig};
+use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
 use atm_core::types::IsoTimestamp;
 use chrono::{Duration, Utc};
 use serde_json::Value;
-use uuid::Uuid;
 
 #[test]
 fn test_clear_default_removes_only_read_and_acknowledged() {
@@ -125,9 +124,11 @@ fn test_clear_never_removes_pending_ack() {
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["removed_total"], 0);
     assert_eq!(fixture.inbox_contents("arch-ctm").len(), 1);
-    assert!(fixture.inbox_contents("arch-ctm")[0]
-        .pending_ack_at
-        .is_some());
+    assert!(
+        fixture.inbox_contents("arch-ctm")[0]
+            .pending_ack_at
+            .is_some()
+    );
 }
 
 #[test]
@@ -353,6 +354,7 @@ impl Fixture {
                 .iter()
                 .map(|member| AgentMember {
                     name: (*member).to_string(),
+                    ..Default::default()
                 })
                 .collect(),
         };
@@ -448,7 +450,7 @@ impl Fixture {
             read,
             source_team: Some("atm-dev".into()),
             summary: None,
-            message_id: Some(Uuid::new_v4()),
+            message_id: Some(LegacyMessageId::new()),
             pending_ack_at: pending_ack_at.map(Into::into),
             acknowledged_at: acknowledged_at.map(Into::into),
             acknowledges_message_id: None,

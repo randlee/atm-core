@@ -52,6 +52,22 @@ Initial crate requirement IDs:
   into `atm-core`. Satisfies the CLI bootstrap/injection aspects of:
   `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-OBS-001`.
 
+`REQ-ATM-OBS-001` additionally requires:
+
+- initializing the concrete shared logger once per CLI process
+- mapping ATM env/config decisions into shared logger configuration
+- consuming the published crates.io dependency
+  `sc-observability = "1.0.0"` for initial release
+- owning CLI-facing console sink routing, including the explicit
+  `--stderr-logs` path
+- constructing `CliObservability` through a structured constructor surface
+  rather than ad hoc field wiring
+- logging CLI bootstrap, parse, and terminal command failures with stable
+  ATM-owned error codes before exit
+- using the single ATM-owned code registry defined by
+  [`../atm-error-codes.md`](../atm-error-codes.md) rather than local ad hoc
+  code strings
+
 ## 4. Command Ownership
 
 Per-command documentation lives under:
@@ -76,5 +92,6 @@ The `atm` crate docs must remain aligned with:
 
 - [`../requirements.md`](../requirements.md)
 - [`../architecture.md`](../architecture.md)
+- [`../atm-error-codes.md`](../atm-error-codes.md)
 - [`../project-plan.md`](../project-plan.md)
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)

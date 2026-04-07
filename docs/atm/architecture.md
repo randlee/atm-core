@@ -26,6 +26,12 @@ The `atm` crate must remain thin.
 - `atm` owns mapping of CLI flags to `atm-core` request structs.
 - `atm` owns bootstrap of shared observability implementations used by
   `atm-core`.
+- `atm` owns the published shared-crate dependency wiring for
+  `sc-observability = "1.0.0"`.
+- `atm` owns CLI-facing console sink routing decisions such as
+  `--stderr-logs`.
+- `atm` should construct `CliObservability` through a structured constructor or
+  equivalent dedicated wiring surface rather than scattered ad hoc assembly.
 
 ## 4. ADR Namespace
 

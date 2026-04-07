@@ -54,6 +54,21 @@ Initial crate requirement IDs:
   resolution and target-validation aspects of:
   `REQ-P-ADDRESS-001`, `REQ-P-SEND-001`, `REQ-P-READ-001`,
   `REQ-P-CLEAR-001`.
+- `REQ-CORE-CONFIG-003` `atm-core` owns persisted config/team schema recovery
+  and diagnostic policy. Satisfies the compatibility-recovery and
+  persisted-data error aspects of:
+  `REQ-P-CONFIG-HEALTH-001`, `REQ-P-ERROR-001`,
+  `REQ-P-RELIABILITY-001`.
+- `REQ-CORE-SEND-001` `atm-core` owns send-time missing-config fallback,
+  sender-warning, and repair-notification behavior above the shared config
+  loader. Satisfies the missing-config send-path aspects of:
+  `REQ-P-SEND-001`, `REQ-P-CONFIG-HEALTH-001`,
+  `REQ-P-RELIABILITY-001`.
+- `REQ-CORE-SEND-002` `atm-core` owns ATM-authored alert metadata placement,
+  compatibility reads, and degradation rules across write/read paths. Satisfies
+  the alert-metadata schema and sender-side dedup aspects of:
+  `REQ-P-SCHEMA-001`, `REQ-P-CONFIG-HEALTH-001`,
+  `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-MAILBOX-001` `atm-core` owns daemon-free mailbox/store behavior.
   Satisfies the persisted mailbox I/O and mutation aspects of:
   `REQ-P-CONTRACT-001`, `REQ-P-SEND-001`, `REQ-P-READ-001`,
@@ -109,3 +124,81 @@ The `atm-core` crate docs must remain aligned with:
 - [`../architecture.md`](../architecture.md)
 - [`../project-plan.md`](../project-plan.md)
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
+- [`../atm-message-schema.md`](../atm-message-schema.md)
+- [`../legacy-atm-message-schema.md`](../legacy-atm-message-schema.md)
+- [`../atm-error-codes.md`](../atm-error-codes.md)
+- [`./design/dedup-metadata-schema.md`](./design/dedup-metadata-schema.md)
+- [`./design/sc-observability-integration.md`](./design/sc-observability-integration.md)
+- [`./design/sc-obs-1.0-integration.md`](./design/sc-obs-1.0-integration.md)
+
+## 6. Send Alert Metadata
+
+Requirement ID:
+- `REQ-CORE-SEND-002`
+
+Required write-path rules:
+- ATM-authored alert field writes must use ATM-owned `metadata.atm` fields
+- forward alert writes must target `metadata.atm.alertKind` and
+  `metadata.atm.missingConfigPath` or a later explicitly documented
+  `metadata.atm` field
+- new ATM-only alert top-level fields must be rejected with a descriptive
+  validation error on the write path
+- exception: until the alert metadata migration sprint lands, the current
+  runtime send path may continue writing legacy top-level `atmAlertKind` and
+  `missingConfigPath` fields; this carve-out is bounded by
+  [`architecture.md` §3.1](./architecture.md)
+- the write-path rejection requirement applies to new ATM-only alert fields
+  introduced after Phase J
+
+Required read-path rules:
+- ATM read must accept legacy top-level alert fields such as `atmAlertKind` and
+  `missingConfigPath`
+- ATM read must also accept forward `metadata.atm` alert fields
+- malformed ATM-owned alert metadata must degrade gracefully, emit warning
+  diagnostics, and never cause the message to be dropped when the
+  Claude-native envelope remains usable
+
+Forward migration rule:
+- legacy top-level `atmAlertKind` migrates to `metadata.atm.alertKind`
+- legacy top-level `missingConfigPath` migrates to
+  `metadata.atm.missingConfigPath`
+- the forward architectural target and compatibility-period carve-out are
+  documented in [`architecture.md` §3.1](./architecture.md)
+
+## 7. Observability Integration Boundary
+
+Requirement ID:
+- `REQ-CORE-OBS-001`
+
+Required boundary rules:
+- `atm-core` owns the injected ATM-local observability boundary used by
+  retained command services
+- `atm-core` must not depend on concrete `sc-observability` crate types
+- the boundary must cover emit, query, follow, and health
+- ATM-owned projected request/result types must be defined in `atm-core` for:
+  - log query
+  - log record projection
+  - tail-session projection
+  - doctor health projection
+- the boundary remains scoped to ATM messaging workflows, retained-log
+  query/follow, and doctor readiness; future hook- or `schooks`-driven
+  orchestration is out of scope for the initial release
+- the boundary must remain synchronous and object-safe for service injection
+- shared query/follow and health failures must map to stable `AtmErrorKind`
+  variants without leaking shared error enums into `atm-core`
+- `atm-core` command-service failures and degraded recovery warnings must expose
+  stable ATM-owned error codes for the CLI observability adapter to log
+- the initial-release health contract remains intentionally closed at:
+  - `Healthy`
+  - `Degraded`
+  - `Unavailable`
+- public observability types in `atm-core` must not expose raw
+  `serde_json::Value` / `Map<String, Value>` directly
+- the corresponding source-of-truth code registry must live in one source file
+  and match [`../atm-error-codes.md`](../atm-error-codes.md)
+- the published shared-crate version pin and CLI bootstrap ownership for this
+  boundary are documented in [`../atm/requirements.md`](../atm/requirements.md)
+  under `REQ-ATM-OBS-001`
+
+Detailed design and implementation shape is owned by:
+- [`design/sc-observability-integration.md`](./design/sc-observability-integration.md)

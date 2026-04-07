@@ -48,6 +48,23 @@ Crate-local boundary detail is owned by:
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm/architecture.md`](./atm/architecture.md)
 
+Schema ownership references:
+
+- Claude Code-native message schema:
+  [`claude-code-message-schema.md`](./claude-code-message-schema.md)
+- ATM additive/interpreted message schema:
+  [`atm-message-schema.md`](./atm-message-schema.md)
+- legacy ATM read-compatibility schema:
+  [`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)
+- `sc-observability` schema ownership pointer:
+  [`sc-observability-schema.md`](./sc-observability-schema.md)
+- ATM-owned error-code registry:
+  [`atm-error-codes.md`](./atm-error-codes.md)
+- schema enforcement models:
+  `tools/schema_models/claude_code_message_schema.py` and
+  `tools/schema_models/atm_message_schema.py` and
+  `tools/schema_models/legacy_atm_message_schema.py`
+
 ### 2.3 Shared Observability Boundary
 
 `atm-core` must not import `sc-observability` directly.
@@ -69,7 +86,20 @@ ATM still owns:
 - structured field filtering
 - runtime health reporting
 
-An early ATM planning/coordination sprint, `OBS-GAP-1`, must verify and close this shared API surface before ATM log/doctor implementation proceeds.
+Phase K delivered the ATM-side integration work. Phase L now governs the
+remaining release-hardening, boundary cleanup, and validation needed before
+initial release.
+
+Initial retained-command integration scope:
+- `sc-observability-types`
+- `sc-observability`
+
+Deferred from the initial retained-command integration scope:
+- `sc-observe`
+- `sc-observability-otlp`
+
+The controlling ATM-side implementation design is:
+- [`docs/atm-core/design/sc-observability-integration.md`](./atm-core/design/sc-observability-integration.md)
 
 ## 3. Module Layout
 
@@ -238,34 +268,100 @@ pub struct LogFieldMatch {
 The rewrite reuses the existing team config schema where feasible.
 
 Only a small subset is required by the retained surface:
-- team name
-- member names
-- enough member metadata to preserve round-trips
-- bridge remote host configuration needed for origin-file merge
+- member roster
+- enough member metadata to preserve round-trips when present
+- bridge remote host configuration needed for origin-file merge when present
+
+Team config loading must follow a narrow-scope recovery policy:
+- compatibility-only schema drift may use deterministic defaults at the schema
+  boundary
+- malformed member records should be isolated at member scope only when the
+  remaining roster is still trustworthy
+- missing `config.json` is a distinct `missing-document` condition, not a parse
+  error
+- root-document corruption or invalid root structure remains a command error
+- identity and routing fields must never be guessed to keep commands running
+
+Diagnostics for team config failures must preserve:
+- failure class when known
+- file path
+- member or collection scope when known
+- parser line and column when available
+- original parser cause for operator repair
+
+Sample operator-facing repair cases live in
+[`persisted-data-repair.md`](./persisted-data-repair.md).
 
 ### 5.2 Inbox Message
 
-Persisted fields used by the rewrite:
-- `from`
-- `source_team`
-- `text`
-- `timestamp`
-- `read`
-- `summary`
-- `message_id`
-- `taskId`
-- `pendingAckAt`
-- `acknowledgedAt`
-- `acknowledgesMessageId`
+Current persisted inbox superset may contain:
+- Claude-native baseline fields:
+  - `from`
+  - `text`
+  - `timestamp`
+  - `read`
+  - `summary`
+  - optional producer field `color`
+- legacy ATM top-level additive fields such as:
+  - `source_team`
+  - `message_id`
+  - `pendingAckAt`
+  - `acknowledgedAt`
+  - `acknowledgesMessageId`
+- shared/de facto interpreted fields such as:
+  - `taskId`
+- forward metadata container:
+  - `metadata`
 - unknown fields
 
+Schema ownership split:
+
+- Claude-native baseline fields are documented in
+  [`claude-code-message-schema.md`](./claude-code-message-schema.md)
+- legacy ATM top-level additive compatibility fields are documented in
+  [`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)
+- forward ATM machine-readable schema is documented in
+  [`atm-message-schema.md`](./atm-message-schema.md)
+
+Forward architectural rules:
+
+- new ATM-only machine-readable data belongs in `metadata.atm`
+- legacy top-level ATM fields remain read-compatible but are deprecated for new
+  write behavior
+- forward ATM-authored alert metadata, including legacy `atmAlertKind` and
+  `missingConfigPath`, belongs under `metadata.atm` as
+  `metadata.atm.alertKind` and `metadata.atm.missingConfigPath`
+- ATM may enrich a Claude-native stored message by adding `metadata.atm`
+  without rewriting the native Claude fields
+- the current live design still uses a shared inbox surface; a separate
+  ATM-native inbox is intentionally deferred to a later architecture phase
+
+Current-phase constraint:
+
+- the current runtime send/alert write path may continue writing legacy
+  top-level alert fields during the compatibility period
+- the metadata.atm alert placement defined above is the forward architectural
+  target and must not be partially implemented without the corresponding
+  migration sprint and tests
+- the owning design rationale for this migration remains
+  [`atm-core/design/dedup-metadata-schema.md`](./atm-core/design/dedup-metadata-schema.md)
+  §2.2 and §3.3
 Canonical read and ack axes are derived from persisted fields and not serialized separately.
 
 Invariant:
-- every ATM-authored message written by `send::send_mail` carries a non-null
-  UUID v4 `message_id`
-- legacy or externally imported records may still lack `message_id` and must be
-  preserved as-is
+- legacy top-level `message_id` values may be UUID or absent
+- forward ATM metadata `messageId` values must be ULID
+- write-path schema enforcement must reject placing ULID identifiers in the
+  legacy top-level `message_id` slot and must reject placing UUID identifiers
+  in forward `metadata.atm.messageId`
+- read-path validation failure for those ATM-owned fields must log a warning,
+  treat the malformed ATM-owned field as absent for ATM semantics, and continue
+  processing the message when the Claude-native envelope remains usable
+- when ATM authors a new ULID `messageId`, the persisted message `timestamp`
+  must be derived from that ULID creation time so identifier ordering and
+  timestamp ordering are aligned
+- legacy or externally imported records may still lack ATM machine identifiers
+- such records must be preserved as-is until enriched
 
 ## 6. Public Service APIs
 
@@ -292,17 +388,22 @@ Public entrypoint:
 - stdin text
 - file reference
 
-`SendOutcome` contains:
-- action
-- resolved team
-- resolved recipient
-- resolved sender
-- generated message id
-- task id
-- requires-ack flag
-- summary
-- rendered message body
-- delivery result
+`SendOutcome` fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `action` | `&'static str` | Stable send action marker. |
+| `team` | `String` | Resolved target team. |
+| `agent` | `String` | Resolved target recipient. |
+| `sender` | `String` | Resolved sender identity. |
+| `outcome` | `&'static str` | Delivery result such as `sent` or `dry_run`. |
+| `message_id` | `Uuid` | ATM-authored UUID v4 for the send operation. |
+| `requires_ack` | `bool` | Whether the message requires acknowledgement. |
+| `task_id` | `Option<String>` | Optional task identifier persisted on the message. |
+| `summary` | `Option<String>` | Generated or caller-supplied summary text. |
+| `message` | `Option<String>` | Rendered message body for dry-run output. |
+| `warnings` | `Vec<String>` | Actionable degraded-mode warnings surfaced when send succeeds under a permitted fallback condition. |
+| `dry_run` | `bool` | Whether the send was executed as a dry run. |
 
 The file-reference path may be rewritten through the file policy layer.
 
@@ -316,6 +417,7 @@ Normal send JSON output includes:
 - `message_id`
 - `requires_ack`
 - `task_id`
+- `warnings` when send completed in a degraded but permitted mode
 
 Dry-run send JSON output includes:
 - `action = "send"`
@@ -325,12 +427,16 @@ Dry-run send JSON output includes:
 - `dry_run = true`
 - `requires_ack`
 - `task_id`
+- `warnings` when dry-run surfaces degraded send conditions
 
 Send ordering rules:
 - resolve target address, team existence, and agent membership as one address-resolution stage before mailbox path selection
 - enter the atomic append boundary before final inbox mutation
 - validate message text inside the atomic append boundary
-- generate UUID v4 `message_id` inside the atomic append boundary
+- current legacy top-level `message_id` generation remains supported for live
+  compatibility
+- forward metadata schema generation must create the ATM ULID `messageId`
+  first and derive the persisted message `timestamp` from it
 - perform duplicate suppression and final append inside the same atomic append boundary
 
 #### 6.1.1 Idle-Notification Lifecycle
@@ -362,6 +468,15 @@ Deferred follow-on work:
   future `arch-ctask` task subsystem design; see `atm-core` issue `#17`
 - task-assignment extraction remains deferred until the `arch-ctask` subsystem
   is defined
+
+Missing-team-config fallback is limited to `send`:
+- fallback applies only when `config.json` is missing and the target inbox
+  already exists
+- malformed `config.json` remains a command error
+- fallback must surface an actionable sender warning
+- fallback may send a best-effort repair notice to `team-lead`
+- repair notices must be deduplicated by unresolved condition so repeated sends
+  do not flood inboxes
 
 ### 6.2 Read Service
 
@@ -411,6 +526,11 @@ Read deduplication rule:
 - collapse multiple entries with the same non-null `message_id` to the most
   recent entry before bucket selection and output rendering
 - when timestamps tie, keep the later encountered inbox record
+
+Read/enrichment rule:
+- when a message needs ATM workflow semantics but lacks ATM-owned machine
+  metadata, ATM may enrich the original stored message additively
+- enrichment must be idempotent and must not rewrite native Claude fields
 
 The read service derives `MessageClass` from `(ReadState, AckState)` and applies display-bucket selection to the derived class, not to raw persisted fields.
 
@@ -491,28 +611,38 @@ It is responsible for:
 - log tail/follow
 - observability health projection
 
-`atm-core` owns the ATM-specific event and query vocabulary.
+The retained boundary must remain ATM-owned and must not leak shared
+`sc-observability` types directly into `atm-core` public APIs.
 
-`atm` owns the concrete `sc-observability` integration.
+`atm-core` owns the ATM-specific event and query vocabulary needed for ATM’s
+messaging workflows, retained-log query/follow, and doctor readiness.
+
+`atm` owns the concrete `sc-observability` integration and CLI-facing routing
+decisions such as `--stderr-logs`.
+
+Future hook- or `schooks`-driven observability orchestration remains out of
+scope for the initial ATM release and must not be inferred from this boundary.
 
 ### 6.6 Log Service
 
 Public entrypoints:
 
-- `log::query_logs(query: LogQuery, observability: &dyn ObservabilityPort) -> Result<LogSnapshot, AtmError>`
-- `log::tail_logs(query: LogQuery, observability: &dyn ObservabilityPort) -> Result<LogTailSession, AtmError>`
+- `ObservabilityPort::query(query: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError>`
+- `ObservabilityPort::follow(query: AtmLogQuery) -> Result<LogTailSession, AtmError>`
 
-`LogQuery` contains:
+ATM CLI surfaces such as `atm log snapshot`, `atm log filter`, and `atm log tail`
+consume those boundary methods directly rather than routing through a separate
+`log::query_logs(...)` or `log::tail_logs(...)` wrapper.
+`AtmLogQuery` contains:
 - mode
-- level filter
+- level filters
 - field matches
 - time window
 - limit
 
-`LogSnapshot` contains:
-- resolved query
-- snapshot ordering metadata
+`AtmLogSnapshot` contains:
 - returned records
+- truncation flag when the shared query source truncates results
 
 `LogTailSession` is an owning stateful object that yields matching records from the shared observability follow API without exposing a public callback trait.
 
@@ -669,6 +799,7 @@ Required ATM event fields:
 - task id
 - outcome
 - error class when applicable
+- stable error code when applicable
 - message count when applicable
 - transition count when applicable
 
@@ -677,12 +808,71 @@ For explicit observability consumer commands:
 - `atm doctor` depends on shared health APIs
 - failures in those consumer paths are command errors, not silently dropped events
 
+### 14.1 Concrete Integration Shape
+
+The retained implementation uses an ATM-owned emit/query/follow/health boundary
+that projects shared observability behavior into ATM-owned types:
+
+- ATM-owned `AtmLogQuery`
+- ATM-owned `AtmLogRecord`
+- ATM-owned `AtmLogSnapshot`
+- ATM-owned `AtmObservabilityHealth`
+- an ATM-owned synchronous `LogTailSession`
+
+Required boundary responsibilities:
+
+- `ObservabilityPort::emit(...)`
+- `ObservabilityPort::query(...)`
+- `ObservabilityPort::follow(...)`
+- `ObservabilityPort::health(...)`
+
+The exact ATM-owned projected types and object-safe follow-session split are
+defined in:
+- [`docs/atm-core/design/sc-observability-integration.md`](./atm-core/design/sc-observability-integration.md)
+
+Initial-release boundary rulings:
+- this boundary is intentionally ATM-local; it does not attempt to model future
+  hook-driven or `schooks`-orchestrated observability concerns
+- the health contract remains intentionally closed at:
+  - `Healthy`
+  - `Degraded`
+  - `Unavailable`
+- public ATM observability projections must not expose raw
+  `serde_json::Value` / `Map<String, Value>` directly
+
+### 14.2 Shared Crate Usage Rules
+
+Implementation rules:
+
+- `atm-core` remains concrete-crate-neutral and consumes only the injected
+  boundary
+- `atm` initializes the shared logger exactly once per process
+- the shared file sink is the authoritative retained log store for `atm log`
+- the shared console sink remains opt-in so it does not contaminate normal
+  command output
+- the initial-release dependency is the published crates.io version
+  `sc-observability = "1.0.0"`
+
+### 14.3 Failure Diagnostic Rules
+
+Required diagnostic behavior:
+
+- CLI bootstrap failures must be logged before process exit
+- CLI parse/validation failures that occur before a core service runs must be
+  logged before process exit
+- retained command-service failures must emit structured failure diagnostics
+  with stable ATM-owned error codes
+- degraded recovery warnings that continue the command must also log stable
+  error codes
+- command success-only logging is insufficient for the retained architecture
+
 ## 15. Error Model
 
 Root public error:
 
 ```rust
 pub struct AtmError {
+    pub code: AtmErrorCode,
     pub kind: AtmErrorKind,
     pub message: String,
     pub recovery: Option<String>,
@@ -690,8 +880,15 @@ pub struct AtmError {
 }
 ```
 
+```rust
+pub enum AtmErrorCode {
+    // single central registry re-exported from crates/atm-core/src/error_codes.rs
+}
+```
+
 Required families:
 - config
+- missing document
 - address
 - identity
 - team not found
@@ -707,9 +904,16 @@ Required families:
 - observability health
 
 Every public error must include:
+- a stable ATM-owned error code
 - a stable class
 - human-readable cause
 - recovery guidance when the user can act
+
+The single source of truth for ATM-owned error codes is:
+- [`atm-error-codes.md`](./atm-error-codes.md)
+
+Persisted-data errors should additionally carry file/entity/parser context so
+CLI surfaces can report the exact failing document and scope.
 
 ## 16. Trait Policy
 
@@ -724,6 +928,8 @@ If a trait becomes necessary:
 `atm-core` tests:
 - address parsing
 - config precedence
+- tolerant team-config parsing for compatibility-only schema drift
+- precise persisted-data diagnostics for non-recoverable config failures
 - bridge hostname resolution for merged inbox reads
 - settings resolution
 - hook identity resolution

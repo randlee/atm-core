@@ -1,7 +1,7 @@
 use std::fs;
 use std::process::Command;
 
-use atm_core::schema::{AgentMember, MessageEnvelope, TeamConfig};
+use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
 use atm_core::types::IsoTimestamp;
 use chrono::{Duration, Utc};
 use serde_json::Value;
@@ -55,7 +55,10 @@ fn test_ack_transitions_pending_ack_and_appends_reply() {
     assert_eq!(replies.len(), 1);
     assert_eq!(replies[0].text, "received and starting");
     assert_eq!(replies[0].from, "arch-ctm");
-    assert_eq!(replies[0].acknowledges_message_id, Some(message_id));
+    assert_eq!(
+        replies[0].acknowledges_message_id,
+        Some(LegacyMessageId::from(message_id))
+    );
 }
 
 #[test]
@@ -166,6 +169,7 @@ impl Fixture {
                 .iter()
                 .map(|member| AgentMember {
                     name: (*member).to_string(),
+                    ..Default::default()
                 })
                 .collect(),
         };
@@ -262,7 +266,7 @@ impl Fixture {
             read,
             source_team: Some("atm-dev".into()),
             summary: None,
-            message_id: Some(message_id),
+            message_id: Some(LegacyMessageId::from(message_id)),
             pending_ack_at: pending_offset
                 .map(|offset| IsoTimestamp::from_datetime(timestamp + offset)),
             acknowledged_at: acknowledged_offset

@@ -1,11 +1,13 @@
 use std::fs;
 use std::process::Command;
 
-use atm_core::schema::{AgentMember, MessageEnvelope, TeamConfig};
+use atm_core::schema::{
+    AgentMember, AtmMessageId, AtmMetadataFields, ForwardMetadataEnvelope, LegacyMessageId,
+    MessageEnvelope, MessageMetadata, TeamConfig,
+};
 use atm_core::types::IsoTimestamp;
 use chrono::{TimeZone, Utc};
 use serde_json::Value;
-use uuid::Uuid;
 
 #[test]
 fn test_read_own_inbox_default() {
@@ -142,6 +144,19 @@ fn test_read_json_output() {
 }
 
 #[test]
+fn test_read_missing_team_config_fails_with_actionable_error() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
+
+    let output = fixture.run(&["read", "--json"]);
+
+    assert!(!output.status.success());
+    let stderr = fixture.stderr(&output);
+    assert!(stderr.contains("team config is missing"));
+    assert!(stderr.contains("Restore config.json"));
+}
+
+#[test]
 fn test_read_seen_state() {
     let fixture = Fixture::new(&["arch-ctm"]);
     fixture.write_inbox(
@@ -243,7 +258,7 @@ fn test_read_all_flag() {
         ],
     );
 
-    let output = fixture.run(&["read", "--all", "--json"]);
+    let output = fixture.run(&["read", "--all", "--no-mark", "--json"]);
 
     assert!(
         output.status.success(),
@@ -296,6 +311,284 @@ fn test_read_from_filter() {
     assert_eq!(parsed["count"], 1);
     assert_eq!(parsed["messages"][0]["from"], "sender-a");
     assert_eq!(parsed["bucket_counts"]["unread"], 2);
+}
+
+#[test]
+fn test_read_deduplicates_unread_idle_notifications_per_sender() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[
+            fixture.message(
+                "daemon",
+                &idle_notification_text("team-lead", "available"),
+                false,
+                None,
+                None,
+                0,
+            ),
+            fixture.message(
+                "daemon",
+                &idle_notification_text("team-lead", "available"),
+                false,
+                None,
+                None,
+                1,
+            ),
+            fixture.message("team-lead", "normal unread", false, None, None, 2),
+        ],
+    );
+
+    let output = fixture.run(&["read", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["count"], 2);
+    assert_eq!(parsed["bucket_counts"]["unread"], 2);
+    let messages = parsed["messages"].as_array().expect("messages array");
+    assert_eq!(messages[0]["text"], "normal unread");
+    assert!(
+        messages
+            .iter()
+            .filter(|message| message["text"] == idle_notification_text("team-lead", "available"))
+            .count()
+            == 1
+    );
+}
+
+#[test]
+fn test_read_deduplicates_idle_notifications_per_sender_only() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[
+            fixture.message(
+                "daemon",
+                &idle_notification_text("sender-a", "available"),
+                false,
+                None,
+                None,
+                0,
+            ),
+            fixture.message(
+                "daemon",
+                &idle_notification_text("sender-a", "available"),
+                false,
+                None,
+                None,
+                1,
+            ),
+            fixture.message(
+                "daemon",
+                &idle_notification_text("sender-b", "available"),
+                false,
+                None,
+                None,
+                2,
+            ),
+            fixture.message(
+                "daemon",
+                &idle_notification_text("sender-b", "available"),
+                false,
+                None,
+                None,
+                3,
+            ),
+        ],
+    );
+
+    let output = fixture.run(&["read", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    let messages = parsed["messages"].as_array().expect("messages array");
+    assert_eq!(messages.len(), 2);
+    assert_eq!(parsed["bucket_counts"]["unread"], 2);
+    assert_eq!(
+        messages
+            .iter()
+            .filter(|message| message["text"] == idle_notification_text("sender-a", "available"))
+            .count(),
+        1
+    );
+    assert_eq!(
+        messages
+            .iter()
+            .filter(|message| message["text"] == idle_notification_text("sender-b", "available"))
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn test_read_keeps_read_idle_notifications_visible() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[
+            fixture.message(
+                "daemon",
+                &idle_notification_text("team-lead", "available"),
+                true,
+                None,
+                None,
+                0,
+            ),
+            fixture.message(
+                "daemon",
+                &idle_notification_text("team-lead", "available"),
+                true,
+                None,
+                None,
+                1,
+            ),
+            fixture.message(
+                "daemon",
+                &idle_notification_text("team-lead", "available"),
+                false,
+                None,
+                None,
+                2,
+            ),
+        ],
+    );
+
+    let output = fixture.run(&["read", "--all", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    let messages = parsed["messages"].as_array().expect("messages array");
+    assert_eq!(parsed["count"], 3);
+    assert_eq!(parsed["bucket_counts"]["unread"], 1);
+    assert_eq!(parsed["bucket_counts"]["history"], 2);
+    assert_eq!(
+        messages
+            .iter()
+            .filter(|message| message["text"] == idle_notification_text("team-lead", "available"))
+            .count(),
+        3
+    );
+}
+
+#[test]
+fn test_read_preserves_none_message_id_records_in_output() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    let mut without_id = fixture.message("team-lead", "no id", false, None, None, 0);
+    without_id.message_id = None;
+    let duplicate_id = LegacyMessageId::new();
+    let mut older = fixture.message("team-lead", "older dup", false, None, None, 1);
+    older.message_id = Some(duplicate_id);
+    let mut newer = fixture.message("team-lead", "newer dup", false, None, None, 2);
+    newer.message_id = Some(duplicate_id);
+    fixture.write_inbox("arch-ctm", &[without_id, older, newer]);
+
+    let output = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    let messages = parsed["messages"].as_array().expect("messages array");
+    assert_eq!(messages.len(), 2);
+    assert!(messages.iter().any(|message| message["text"] == "no id"));
+    assert!(
+        messages
+            .iter()
+            .any(|message| message["text"] == "newer dup")
+    );
+}
+
+#[test]
+fn test_read_keeps_read_and_unread_idle_notifications_from_different_files() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[fixture.message(
+            "daemon",
+            &idle_notification_text("team-lead", "available"),
+            false,
+            None,
+            None,
+            1,
+        )],
+    );
+    fixture.write_origin_inbox(
+        "arch-ctm",
+        "host-a",
+        &[fixture.message(
+            "daemon",
+            &idle_notification_text("team-lead", "available"),
+            true,
+            None,
+            None,
+            0,
+        )],
+    );
+
+    let output = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    let messages = parsed["messages"].as_array().expect("messages array");
+    assert_eq!(
+        messages
+            .iter()
+            .filter(|message| message["text"] == idle_notification_text("team-lead", "available"))
+            .count(),
+        2
+    );
+    assert_eq!(parsed["bucket_counts"]["unread"], 1);
+    assert_eq!(parsed["bucket_counts"]["history"], 1);
+}
+
+#[test]
+fn test_forward_metadata_message_id_timestamp_matches_persisted_timestamp() {
+    let (message_id, timestamp) = AtmMessageId::new_with_timestamp();
+    let envelope = ForwardMetadataEnvelope {
+        timestamp,
+        metadata: MessageMetadata {
+            atm: Some(AtmMetadataFields {
+                message_id: Some(message_id),
+                source_team: Some("atm-dev".into()),
+                pending_ack_at: None,
+                acknowledged_at: None,
+                acknowledges_message_id: None,
+                alert_kind: None,
+                missing_config_path: None,
+                extra: serde_json::Map::new(),
+            }),
+            extra: serde_json::Map::new(),
+        },
+    };
+
+    assert_eq!(
+        envelope
+            .metadata
+            .atm
+            .expect("atm metadata")
+            .message_id
+            .expect("message id")
+            .timestamp(),
+        envelope.timestamp
+    );
 }
 
 #[test]
@@ -380,6 +673,7 @@ impl Fixture {
                 .iter()
                 .map(|member| AgentMember {
                     name: (*member).to_string(),
+                    ..Default::default()
                 })
                 .collect(),
         };
@@ -411,6 +705,19 @@ impl Fixture {
         fs::write(path, timestamp.to_rfc3339()).expect("write seen state");
     }
 
+    fn write_origin_inbox(&self, agent: &str, origin: &str, messages: &[MessageEnvelope]) {
+        let inbox_path = self.origin_inbox_path(agent, origin);
+        if let Some(parent) = inbox_path.parent() {
+            fs::create_dir_all(parent).expect("origin inbox dir");
+        }
+        let raw = messages
+            .iter()
+            .map(|message| serde_json::to_string(message).expect("json line"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(inbox_path, format!("{raw}\n")).expect("write origin inbox");
+    }
+
     fn read_seen_state(&self, agent: &str) -> Option<chrono::DateTime<Utc>> {
         let path = self.team_dir().join(".seen").join(agent);
         let raw = fs::read_to_string(path).ok()?;
@@ -423,6 +730,12 @@ impl Fixture {
         self.team_dir()
             .join("inboxes")
             .join(format!("{agent}.json"))
+    }
+
+    fn origin_inbox_path(&self, agent: &str, origin: &str) -> std::path::PathBuf {
+        self.team_dir()
+            .join("inboxes")
+            .join(format!("{agent}.{origin}.json"))
     }
 
     fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {
@@ -471,7 +784,7 @@ impl Fixture {
             read,
             source_team: Some("atm-dev".into()),
             summary: None,
-            message_id: Some(Uuid::new_v4()),
+            message_id: Some(LegacyMessageId::new()),
             pending_ack_at: pending_ack_offset
                 .map(|offset| IsoTimestamp::from_datetime(self.timestamp(offset))),
             acknowledged_at: acknowledged_offset
@@ -481,4 +794,16 @@ impl Fixture {
             extra: serde_json::Map::new(),
         }
     }
+}
+
+fn idle_notification_text(from: &str, idle_reason: &str) -> String {
+    // Claude Code owns the idle-notification payload shape in the text field.
+    // Keep this fixture aligned with docs/claude-code-message-schema.md.
+    serde_json::json!({
+        "type": "idle_notification",
+        "from": from,
+        "timestamp": "2026-03-30T00:00:00Z",
+        "idleReason": idle_reason,
+    })
+    .to_string()
 }

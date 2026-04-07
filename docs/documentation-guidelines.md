@@ -86,6 +86,11 @@ docs/
   documentation-guidelines.md
   requirements.md
   architecture.md
+  atm-error-codes.md
+  claude-code-message-schema.md
+  atm-message-schema.md
+  legacy-atm-message-schema.md
+  sc-observability-schema.md
   project-plan.md
   read-behavior.md
   archive/
@@ -122,8 +127,39 @@ Notes:
 - Additional supporting docs may be added under `docs/atm/` or
   `docs/atm-core/` when justified.
 - Top-level docs remain the only product-level source of truth.
+- Cross-subsystem schema ownership docs that define who owns a wire/storage
+  schema belong at top level and must use explicit subsystem names in the file
+  name.
 - Command docs belong under `docs/atm/commands/`.
 - Core service and module ownership docs belong under `docs/atm-core/modules/`.
+
+Schema ownership file naming rules:
+
+- Claude Code-native schema docs must include `claude`, `code`, and `schema`
+  in the filename.
+- ATM additive/interpreted schema docs must include `atm` and `schema` in the
+  filename.
+- Legacy compatibility schema docs should include both the owning subsystem
+  name and `schema` in the filename so read-only compatibility contracts are
+  explicit rather than implied.
+- Shared subsystem schema pointers, such as `sc-observability`, should be
+  co-located with the ATM and Claude Code schema docs and should point to the
+  owning external repository instead of redefining that subsystem locally.
+
+Schema enforcement rules:
+
+- Every schema defined locally in `docs/` must have a corresponding enforcement
+  model in source control.
+- Python/Pydantic enforcement models for top-level schema docs live under
+  `tools/schema_models/`.
+- External schema pointer docs, such as `sc-observability`, may omit a local
+  Pydantic model when this repository does not own the schema definition.
+- Source files that parse or serialize a locally documented schema must include
+  comments pointing to the owning schema doc and must not silently redefine an
+  externally owned schema.
+- Unit tests that validate a locally documented schema must import the
+  corresponding enforcement model and make the target schema file explicit in
+  the test name, docstring, or nearby comment.
 
 ## 4. Top-Level Document Responsibilities
 
@@ -177,6 +213,7 @@ Top-level supporting docs are allowed only when they remain cross-cutting.
 Examples:
 
 - `read-behavior.md`
+- `atm-error-codes.md`
 
 Migration-only supporting documents now live under `docs/archive/`:
 

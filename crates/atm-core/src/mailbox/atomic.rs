@@ -3,6 +3,7 @@ use std::io::Write;
 use std::path::Path;
 
 use crate::error::{AtmError, AtmErrorKind};
+use crate::mailbox::temp_file_suffix;
 use crate::schema::MessageEnvelope;
 
 pub fn write_messages(path: &Path, messages: &[MessageEnvelope]) -> Result<(), AtmError> {
@@ -16,12 +17,12 @@ pub fn write_messages(path: &Path, messages: &[MessageEnvelope]) -> Result<(), A
         })?;
     }
 
-    let temp_path = path.with_extension(format!(
-        "{}tmp",
-        path.extension()
+    let temp_path = path.with_file_name(format!(
+        "{}.{}.tmp",
+        path.file_name()
             .and_then(|value| value.to_str())
-            .map(|value| format!("{value}."))
-            .unwrap_or_default()
+            .unwrap_or("mailbox"),
+        temp_file_suffix()
     ));
 
     {

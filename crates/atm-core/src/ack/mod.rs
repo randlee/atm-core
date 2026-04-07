@@ -1,21 +1,20 @@
-use std::collections::HashMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use serde_json::Map;
-use tracing::{trace, warn};
-use uuid::Uuid;
+use tracing::trace;
 
 use crate::address::AgentAddress;
 use crate::config;
-use crate::error::{AtmError, AtmErrorKind};
+use crate::error::AtmError;
 use crate::home;
 use crate::identity;
 use crate::mailbox;
+use crate::mailbox::source::{SourceFile, SourcedMessage, discover_origin_inboxes};
+use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
-use crate::schema::{MessageEnvelope, TeamConfig};
+use crate::schema::{LegacyMessageId, MessageEnvelope};
 use crate::send::{input, summary};
 use crate::types::IsoTimestamp;
 
@@ -25,7 +24,7 @@ pub struct AckRequest {
     pub current_dir: PathBuf,
     pub actor_override: Option<String>,
     pub team_override: Option<String>,
-    pub message_id: Uuid,
+    pub message_id: LegacyMessageId,
     pub reply_body: String,
 }
 
@@ -34,25 +33,12 @@ pub struct AckOutcome {
     pub action: &'static str,
     pub team: String,
     pub agent: String,
-    pub message_id: Uuid,
+    pub message_id: LegacyMessageId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<String>,
     pub reply_target: String,
-    pub reply_message_id: Uuid,
+    pub reply_message_id: LegacyMessageId,
     pub reply_text: String,
-}
-
-#[derive(Debug, Clone)]
-struct SourceFile {
-    path: PathBuf,
-    messages: Vec<MessageEnvelope>,
-}
-
-#[derive(Debug, Clone)]
-struct SourcedMessage {
-    envelope: MessageEnvelope,
-    source_path: PathBuf,
-    source_index: usize,
 }
 
 pub fn ack_mail(
@@ -68,7 +54,7 @@ pub fn ack_mail(
         return Err(AtmError::team_not_found(&team));
     }
 
-    let team_config = load_team_config(&team_dir)?;
+    let team_config = config::load_team_config(&team_dir)?;
     if !team_config
         .members
         .iter()
@@ -78,26 +64,34 @@ pub fn ack_mail(
     }
 
     let mut source_files = load_source_files(&request.home_dir, &team, &actor)?;
-    let source_message = dedupe_sourced_messages(merged_surface(&source_files))
-        .into_iter()
-        .filter_map(|message| match message.envelope.message_id {
-            Some(_) => Some(message),
-            None => {
-                trace!(
-                    source_path = %message.source_path.display(),
-                    source_index = message.source_index,
-                    "skipping source message without message_id during ack lookup"
-                );
-                None
-            }
-        })
-        .find(|message| message.envelope.message_id == Some(request.message_id))
-        .ok_or_else(|| {
-            AtmError::validation(format!(
-                "message {} was not found in {}@{}",
-                request.message_id, actor, team
-            ))
-        })?;
+    // Ack intentionally does not apply read-surface idle-notification dedup.
+    // It must preserve the raw merged surface after legacy message_id
+    // canonicalization so acknowledgement lookup does not depend on read-only
+    // inbox clutter policy.
+    let source_message = dedupe_legacy_message_id_surface(
+        merged_surface(&source_files),
+        |message: &SourcedMessage| message.envelope.message_id,
+        |message: &SourcedMessage| message.envelope.timestamp,
+    )
+    .into_iter()
+    .filter_map(|message| match message.envelope.message_id {
+        Some(_) => Some(message),
+        None => {
+            trace!(
+                source_path = %message.source_path.display(),
+                source_index = message.source_index,
+                "skipping source message without message_id during ack lookup"
+            );
+            None
+        }
+    })
+    .find(|message| message.envelope.message_id == Some(request.message_id))
+    .ok_or_else(|| {
+        AtmError::validation(format!(
+            "message {} was not found in {}@{}",
+            request.message_id, actor, team
+        ))
+    })?;
 
     match (
         state::derive_read_state(&source_message.envelope),
@@ -124,7 +118,7 @@ pub fn ack_mail(
         return Err(AtmError::team_not_found(&reply_team));
     }
 
-    let reply_team_config = load_team_config(&reply_team_dir)?;
+    let reply_team_config = config::load_team_config(&reply_team_dir)?;
     if !reply_team_config
         .members
         .iter()
@@ -135,7 +129,7 @@ pub fn ack_mail(
 
     let ack_timestamp = IsoTimestamp::now();
     let reply_text = input::validate_message_text(request.reply_body)?;
-    let reply_message_id = Uuid::new_v4();
+    let reply_message_id = LegacyMessageId::new();
     let source_task_id = source_message.envelope.task_id.clone();
     let reply_message = MessageEnvelope {
         from: actor.clone(),
@@ -170,7 +164,7 @@ pub fn ack_mail(
         reply_text: reply_text.clone(),
     };
 
-    let _ = observability.emit_command_event(CommandEvent {
+    let _ = observability.emit(CommandEvent {
         command: "ack",
         action: "ack",
         outcome: "ok",
@@ -181,6 +175,8 @@ pub fn ack_mail(
         requires_ack: false,
         dry_run: false,
         task_id: source_task_id,
+        error_code: None,
+        error_message: None,
     });
 
     Ok(outcome)
@@ -221,31 +217,6 @@ fn resolve_reply_target(
     Ok((parsed.agent, team))
 }
 
-fn load_team_config(team_dir: &Path) -> Result<TeamConfig, AtmError> {
-    let config_path = team_dir.join("config.json");
-    let raw = fs::read_to_string(&config_path).map_err(|error| {
-        AtmError::new(
-            AtmErrorKind::Config,
-            format!(
-                "failed to read team config at {}: {error}",
-                config_path.display()
-            ),
-        )
-        .with_source(error)
-    })?;
-
-    serde_json::from_str(&raw).map_err(|error| {
-        AtmError::new(
-            AtmErrorKind::Config,
-            format!(
-                "failed to parse team config at {}: {error}",
-                config_path.display()
-            ),
-        )
-        .with_source(error)
-    })
-}
-
 fn load_source_files(
     home_dir: &Path,
     team: &str,
@@ -271,48 +242,6 @@ fn load_source_files(
     Ok(sources)
 }
 
-fn discover_origin_inboxes(inboxes_dir: &Path, agent: &str) -> Result<Vec<PathBuf>, AtmError> {
-    if !inboxes_dir.exists() {
-        return Ok(Vec::new());
-    }
-
-    let prefix = format!("{agent}.");
-    let primary = format!("{agent}.json");
-    let mut paths = fs::read_dir(inboxes_dir)
-        .map_err(|error| {
-            AtmError::new(
-                AtmErrorKind::MailboxRead,
-                format!(
-                    "failed to read inbox directory {}: {error}",
-                    inboxes_dir.display()
-                ),
-            )
-            .with_source(error)
-        })?
-        .filter_map(|entry| match entry {
-            Ok(entry) => Some(entry.path()),
-            Err(error) => {
-                warn!(
-                    inbox_dir = %inboxes_dir.display(),
-                    agent,
-                    %error,
-                    "skipping unreadable origin inbox entry"
-                );
-                None
-            }
-        })
-        .filter(|path| {
-            path.file_name()
-                .and_then(|value| value.to_str())
-                .map(|name| name.starts_with(&prefix) && name.ends_with(".json") && name != primary)
-                .unwrap_or(false)
-        })
-        .collect::<Vec<_>>();
-
-    paths.sort();
-    Ok(paths)
-}
-
 fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
     source_files
         .iter()
@@ -327,35 +256,6 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
                     source_path: source.path.clone(),
                     source_index,
                 })
-        })
-        .collect()
-}
-
-fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
-    let mut latest_for_id: HashMap<Uuid, (IsoTimestamp, usize)> = HashMap::new();
-    for (index, message) in messages.iter().enumerate() {
-        if let Some(message_id) = message.envelope.message_id {
-            latest_for_id
-                .entry(message_id)
-                .and_modify(|entry| {
-                    if message.envelope.timestamp > entry.0
-                        || (message.envelope.timestamp == entry.0 && index > entry.1)
-                    {
-                        *entry = (message.envelope.timestamp, index);
-                    }
-                })
-                .or_insert((message.envelope.timestamp, index));
-        }
-    }
-
-    messages
-        .into_iter()
-        .enumerate()
-        .filter_map(|(index, message)| match message.envelope.message_id {
-            Some(message_id) => latest_for_id
-                .get(&message_id)
-                .and_then(|(_, keep_index)| (*keep_index == index).then_some(message)),
-            None => Some(message),
         })
         .collect()
 }

@@ -4,21 +4,20 @@ pub(crate) mod state;
 pub(crate) mod wait;
 
 use std::collections::HashMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
-use tracing::warn;
-use uuid::Uuid;
+use serde_json::Value;
 
-use crate::address::AgentAddress;
 use crate::config;
-use crate::error::{AtmError, AtmErrorKind};
+use crate::error::AtmError;
 use crate::home;
 use crate::identity;
 use crate::mailbox;
+use crate::mailbox::source::{SourceFile, SourcedMessage, discover_origin_inboxes, resolve_target};
+use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
-use crate::schema::{MessageEnvelope, TeamConfig};
+use crate::schema::MessageEnvelope;
 use crate::types::{AckActivationMode, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection};
 
 #[derive(Debug, Clone)]
@@ -70,19 +69,6 @@ pub struct ReadOutcome {
     pub bucket_counts: BucketCounts,
 }
 
-#[derive(Debug, Clone)]
-struct SourceFile {
-    path: PathBuf,
-    messages: Vec<MessageEnvelope>,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct SourcedMessage {
-    pub envelope: MessageEnvelope,
-    pub source_path: PathBuf,
-    pub source_index: usize,
-}
-
 pub fn read_mail(
     query: ReadQuery,
     observability: &dyn ObservabilityPort,
@@ -102,7 +88,7 @@ pub fn read_mail(
         return Err(AtmError::team_not_found(&target.team));
     }
 
-    let team_config = load_team_config(&team_dir)?;
+    let team_config = config::load_team_config(&team_dir)?;
     if target.explicit
         && !team_config
             .members
@@ -120,7 +106,13 @@ pub fn read_mail(
     };
 
     let mut source_files = load_source_files(&query.home_dir, &target.team, &target.agent)?;
-    let mut classified_all = classify_all(dedupe_sourced_messages(merged_surface(&source_files)));
+    let mut classified_all = classify_all(apply_idle_notification_dedup(
+        dedupe_legacy_message_id_surface(
+            merged_surface(&source_files),
+            |message: &SourcedMessage| message.envelope.message_id,
+            |message: &SourcedMessage| message.envelope.timestamp,
+        ),
+    ));
     let mut bucket_counts = bucket_counts_for(&classified_all);
     let mut filtered = apply_filters(
         classified_all.clone(),
@@ -130,34 +122,45 @@ pub fn read_mail(
     let mut selected = select_messages(&filtered, query.selection_mode, seen_watermark);
     let mut timed_out = false;
 
-    if selected.is_empty() {
-        if let Some(timeout_secs) = query.timeout_secs {
-            let wait_satisfied = wait::wait_for_eligible_message(
-                timeout_secs,
-                || {
-                    Ok(dedupe_sourced_messages(merged_surface(&load_source_files(
-                        &query.home_dir,
-                        &target.team,
-                        &target.agent,
-                    )?)))
-                },
-                |messages| !selected_after_filters(messages, &query, seen_watermark).is_empty(),
-            )?;
+    if selected.is_empty()
+        && let Some(timeout_secs) = query.timeout_secs
+    {
+        let wait_satisfied = wait::wait_for_eligible_message(
+            timeout_secs,
+            || {
+                Ok(apply_idle_notification_dedup(
+                    dedupe_legacy_message_id_surface(
+                        merged_surface(&load_source_files(
+                            &query.home_dir,
+                            &target.team,
+                            &target.agent,
+                        )?),
+                        |message: &SourcedMessage| message.envelope.message_id,
+                        |message: &SourcedMessage| message.envelope.timestamp,
+                    ),
+                ))
+            },
+            |messages| !selected_after_filters(messages, &query, seen_watermark).is_empty(),
+        )?;
 
-            if wait_satisfied {
-                source_files = load_source_files(&query.home_dir, &target.team, &target.agent)?;
-                classified_all =
-                    classify_all(dedupe_sourced_messages(merged_surface(&source_files)));
-                bucket_counts = bucket_counts_for(&classified_all);
-                filtered = apply_filters(
-                    classified_all.clone(),
-                    query.sender_filter.as_deref(),
-                    query.timestamp_filter,
-                );
-                selected = select_messages(&filtered, query.selection_mode, seen_watermark);
-            } else {
-                timed_out = true;
-            }
+        if wait_satisfied {
+            source_files = load_source_files(&query.home_dir, &target.team, &target.agent)?;
+            classified_all = classify_all(apply_idle_notification_dedup(
+                dedupe_legacy_message_id_surface(
+                    merged_surface(&source_files),
+                    |message: &SourcedMessage| message.envelope.message_id,
+                    |message: &SourcedMessage| message.envelope.timestamp,
+                ),
+            ));
+            bucket_counts = bucket_counts_for(&classified_all);
+            filtered = apply_filters(
+                classified_all.clone(),
+                query.sender_filter.as_deref(),
+                query.timestamp_filter,
+            );
+            selected = select_messages(&filtered, query.selection_mode, seen_watermark);
+        } else {
+            timed_out = true;
         }
     }
 
@@ -189,19 +192,19 @@ pub fn read_mail(
         persist_source_files(&source_files)?;
     }
 
-    if query.seen_state_update && !selected.is_empty() {
-        if let Some(latest_timestamp) = selected
+    if query.seen_state_update
+        && !selected.is_empty()
+        && let Some(latest_timestamp) = selected
             .iter()
             .map(|message| message.envelope.timestamp)
             .max()
-        {
-            seen_state::save_seen_watermark(
-                &query.home_dir,
-                &target.team,
-                &target.agent,
-                latest_timestamp,
-            )?;
-        }
+    {
+        seen_state::save_seen_watermark(
+            &query.home_dir,
+            &target.team,
+            &target.agent,
+            latest_timestamp,
+        )?;
     }
 
     let output_messages = selected
@@ -236,7 +239,7 @@ pub fn read_mail(
         bucket_counts,
     };
 
-    let _ = observability.emit_command_event(CommandEvent {
+    let _ = observability.emit(CommandEvent {
         command: "read",
         action: "read",
         outcome: if timed_out { "timeout" } else { "ok" },
@@ -247,16 +250,11 @@ pub fn read_mail(
         requires_ack: false,
         dry_run: false,
         task_id: None,
+        error_code: None,
+        error_message: None,
     });
 
     Ok(outcome)
-}
-
-#[derive(Debug)]
-struct ResolvedTarget {
-    agent: String,
-    team: String,
-    explicit: bool,
 }
 
 fn resolve_actor_identity(
@@ -272,60 +270,6 @@ fn resolve_actor_identity(
     }
 
     identity::resolve_sender_identity(config)
-}
-
-fn resolve_target(
-    target_address: Option<&str>,
-    actor: &str,
-    team_override: Option<&str>,
-    config: Option<&config::AtmConfig>,
-) -> Result<ResolvedTarget, AtmError> {
-    let Some(target_address) = target_address else {
-        let team =
-            config::resolve_team(team_override, config).ok_or_else(AtmError::team_unavailable)?;
-        return Ok(ResolvedTarget {
-            agent: actor.to_string(),
-            team,
-            explicit: false,
-        });
-    };
-
-    let parsed: AgentAddress = target_address.parse()?;
-    let team = parsed
-        .team
-        .or_else(|| config::resolve_team(team_override, config))
-        .ok_or_else(AtmError::team_unavailable)?;
-
-    Ok(ResolvedTarget {
-        agent: parsed.agent,
-        team,
-        explicit: true,
-    })
-}
-
-fn load_team_config(team_dir: &Path) -> Result<TeamConfig, AtmError> {
-    let config_path = team_dir.join("config.json");
-    let raw = fs::read_to_string(&config_path).map_err(|error| {
-        AtmError::new(
-            AtmErrorKind::Config,
-            format!(
-                "failed to read team config at {}: {error}",
-                config_path.display()
-            ),
-        )
-        .with_source(error)
-    })?;
-
-    serde_json::from_str(&raw).map_err(|error| {
-        AtmError::new(
-            AtmErrorKind::Config,
-            format!(
-                "failed to parse team config at {}: {error}",
-                config_path.display()
-            ),
-        )
-        .with_source(error)
-    })
 }
 
 fn load_source_files(
@@ -351,48 +295,6 @@ fn load_source_files(
     Ok(sources)
 }
 
-fn discover_origin_inboxes(inboxes_dir: &Path, agent: &str) -> Result<Vec<PathBuf>, AtmError> {
-    if !inboxes_dir.exists() {
-        return Ok(Vec::new());
-    }
-
-    let prefix = format!("{agent}.");
-    let primary = format!("{agent}.json");
-    let mut paths = fs::read_dir(inboxes_dir)
-        .map_err(|error| {
-            AtmError::new(
-                AtmErrorKind::MailboxRead,
-                format!(
-                    "failed to read inbox directory {}: {error}",
-                    inboxes_dir.display()
-                ),
-            )
-            .with_source(error)
-        })?
-        .filter_map(|entry| match entry {
-            Ok(entry) => Some(entry.path()),
-            Err(error) => {
-                warn!(
-                    inbox_dir = %inboxes_dir.display(),
-                    agent,
-                    %error,
-                    "skipping unreadable origin inbox entry"
-                );
-                None
-            }
-        })
-        .filter(|path| {
-            path.file_name()
-                .and_then(|value| value.to_str())
-                .map(|name| name.starts_with(&prefix) && name.ends_with(".json") && name != primary)
-                .unwrap_or(false)
-        })
-        .collect::<Vec<_>>();
-
-    paths.sort();
-    Ok(paths)
-}
-
 fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
     source_files
         .iter()
@@ -411,33 +313,73 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
         .collect()
 }
 
-fn dedupe_sourced_messages(messages: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
-    let mut latest_for_id: HashMap<Uuid, (IsoTimestamp, usize)> = HashMap::new();
+fn apply_idle_notification_dedup(deduped: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
+    let latest_idle_for_sender = messages_from_idle_sender(&deduped);
+
+    deduped
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, message)| {
+            dedupe_idle_notifications(index, &message, &latest_idle_for_sender).then_some(message)
+        })
+        .collect()
+}
+
+fn dedupe_idle_notifications(
+    index: usize,
+    message: &SourcedMessage,
+    latest_idle_for_sender: &HashMap<String, usize>,
+) -> bool {
+    if !is_unread_idle_notification(&message.envelope) {
+        return true;
+    }
+
+    idle_sender(&message.envelope)
+        .and_then(|sender| latest_idle_for_sender.get(&sender))
+        .map(|keep_index| *keep_index == index)
+        .unwrap_or(true)
+}
+
+fn messages_from_idle_sender(messages: &[SourcedMessage]) -> HashMap<String, usize> {
+    let mut latest_idle_for_sender = HashMap::new();
+
     for (index, message) in messages.iter().enumerate() {
-        if let Some(message_id) = message.envelope.message_id {
-            latest_for_id
-                .entry(message_id)
-                .and_modify(|entry| {
-                    if message.envelope.timestamp > entry.0
-                        || (message.envelope.timestamp == entry.0 && index > entry.1)
-                    {
-                        *entry = (message.envelope.timestamp, index);
-                    }
-                })
-                .or_insert((message.envelope.timestamp, index));
+        if !is_unread_idle_notification(&message.envelope) {
+            continue;
+        }
+
+        if let Some(sender) = idle_sender(&message.envelope) {
+            latest_idle_for_sender
+                .entry(sender)
+                .and_modify(|keep_index| *keep_index = index)
+                .or_insert(index);
         }
     }
 
-    messages
-        .into_iter()
-        .enumerate()
-        .filter_map(|(index, message)| match message.envelope.message_id {
-            Some(message_id) => latest_for_id
-                .get(&message_id)
-                .and_then(|(_, keep_index)| (*keep_index == index).then_some(message)),
-            None => Some(message),
+    latest_idle_for_sender
+}
+
+fn is_unread_idle_notification(message: &MessageEnvelope) -> bool {
+    !message.read && idle_notification_sender(message).is_some()
+}
+
+fn idle_sender(message: &MessageEnvelope) -> Option<String> {
+    idle_notification_sender(message)
+}
+
+fn idle_notification_sender(message: &MessageEnvelope) -> Option<String> {
+    serde_json::from_str::<Value>(&message.text)
+        .ok()
+        .and_then(|value| {
+            (value.get("type").and_then(Value::as_str) == Some("idle_notification"))
+                .then(|| {
+                    value
+                        .get("from")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                })
+                .flatten()
         })
-        .collect()
 }
 
 fn classify_all(messages: Vec<SourcedMessage>) -> Vec<ClassifiedMessage> {
@@ -529,16 +471,14 @@ fn apply_display_mutations(
     for message in displayed_messages {
         let transitioned = transition_displayed_message(message, promote_unread, now);
         let updated = transitioned.into_envelope();
-        if updated != message.envelope {
-            if let Some(source_file) = source_files
+        if updated != message.envelope
+            && let Some(source_file) = source_files
                 .iter_mut()
                 .find(|source| source.path == message.source_path)
-            {
-                if let Some(stored) = source_file.messages.get_mut(message.source_index) {
-                    *stored = updated;
-                    mutation_applied = true;
-                }
-            }
+            && let Some(stored) = source_file.messages.get_mut(message.source_index)
+        {
+            *stored = updated;
+            mutation_applied = true;
         }
     }
 
@@ -598,25 +538,4 @@ fn persist_source_files(source_files: &[SourceFile]) -> Result<(), AtmError> {
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::discover_origin_inboxes;
-
-    #[test]
-    fn discover_origin_inboxes_ignores_primary_and_sorts_matches() {
-        let tempdir = tempfile::tempdir().expect("tempdir");
-        let inboxes = tempdir.path();
-        std::fs::write(inboxes.join("arch-ctm.json"), "").expect("primary");
-        std::fs::write(inboxes.join("arch-ctm.host-b.json"), "").expect("host b");
-        std::fs::write(inboxes.join("arch-ctm.host-a.json"), "").expect("host a");
-        std::fs::write(inboxes.join("other.json"), "").expect("other");
-
-        let discovered = discover_origin_inboxes(inboxes, "arch-ctm").expect("discover");
-
-        assert_eq!(discovered.len(), 2);
-        assert!(discovered[0].ends_with("arch-ctm.host-a.json"));
-        assert!(discovered[1].ends_with("arch-ctm.host-b.json"));
-    }
 }

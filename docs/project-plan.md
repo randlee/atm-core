@@ -16,10 +16,17 @@ restructured, product docs remain in `docs/` and crate-local detail moves into
 `docs/atm/` and `docs/atm-core/`.
 
 Status:
-- Phases 0 through F are complete.
-- Phase PG is complete (PR #18 open, pending QA-3 pass and merge).
-- Phase PH is the idle-notification send-path follow-on and will begin after
-  Phase PG merges.
+- Phases 0 through F and J are complete.
+- Phase K is complete and ready to roll forward into shared 1.0 release
+  alignment work.
+- Phase L is now the latest observability follow-on phase and the next active
+  delivery focus.
+- Phases G and H remain retained-command phases, but their implementation work
+  depends on the concrete `sc-observability` integration delivered in Phase K
+  and the release-alignment work planned in Phase L.
+- Message schema ownership and metadata normalization are now implemented well
+  enough for live shared-inbox adoption, while a separate ATM-native inbox
+  remains deferred to a later version.
 
 ## 2. Deliverables
 
@@ -31,6 +38,8 @@ Status:
 - structured errors with recovery guidance
 - structured logs through `sc-observability`
 - retained and new integration tests for the retained command surface
+- explicit schema ownership docs for Claude Code, legacy ATM compatibility, and
+  forward ATM metadata
 
 ## 3. Crates
 
@@ -71,6 +80,8 @@ Acceptance:
 Status summary:
 - The `sc-observability` API gap was catalogued and closed before the ATM log
   and doctor work depends on it.
+- This phase is historical context only; it is no longer the gating item for
+  retained observability delivery.
 - Delivered in PR #1.
 
 Goal:
@@ -191,11 +202,12 @@ Acceptance:
 - `atm clear` removes only clearable messages
 - pending-ack messages remain visible until acknowledgement
 
-### Phase G: Log Path [IN PROGRESS / NEXT]
+### Phase G: Log Path [UNBLOCKED - Phase K COMPLETE]
 
 Status summary:
-- Next active implementation branch: `feature/pg-s1-log-path` off
-  `integrate/phase-g`.
+- The retained `log` command remains a command-phase deliverable, but concrete
+  implementation is blocked until Phase K lands the real
+  `sc-observability` adapter and shared query/follow integration.
 
 Port and redesign the log command:
 - injected observability port usage
@@ -209,77 +221,12 @@ Acceptance:
 - tail mode works
 - emit failures remain best-effort for mail commands
 
-### Phase PG: Idle-Notification Planning [COMPLETE]
+### Phase H: Doctor Path [UNBLOCKED - Phase K COMPLETE]
 
 Status summary:
-- Sprint PG.1 completed the gap analysis, requirements updates, and
-  read-behavior cleanup for idle-notification lifecycle rules.
-- Sprint PG.2 completed the architecture, mailbox-module ownership, and Phase
-  PH planning updates.
-- PR #18 is open targeting `develop`. QA-3 PASSED at 22a956f. Merge is
-  gated on user approval (user is not merging until Phase PH is ready to start).
-- Non-blocking findings from QA-3 tracked for follow-on work:
-  - architecture.md §Clear Pipeline stale "pending-ack override" references
-    (pre-existing, recommend a cleanup sprint — see atm-core issue #20)
-  - `dedupe_sourced_messages` copy-pasted into read/clear/ack modules; drift
-    detected (recommend extraction to mailbox/mod.rs in PH or later — issue #21)
-  - Coverage gaps in error.rs, mailbox/atomic.rs, observability.rs, output.rs
-    (74.2% overall vs 80% guideline; pre-existing)
-
-Sprints:
-- Sprint PG.1 [COMPLETE]
-  - gap analysis for idle-notification dedup and cleanup behavior
-  - `REQ-P-IDLE-001` plus sender-scoped send-path dedup requirements
-  - stale pending-ack clear-override removal from `read-behavior.md`
-- Sprint PG.2 [COMPLETE]
-  - architecture ownership for idle-notification lifecycle and task-assignment
-    classification
-  - mailbox-module ownership for atomic sender-scoped dedup
-  - Phase PH / Sprint PH.1 implementation plan for send-path dedup
-
-### Phase PH: Idle-Notification Send-Path Dedup [PLANNED]
-
-Status summary:
-- PG documentation now defines sender-scoped idle-notification dedup, and the
-  next implementation sprint is to land that behavior in the mailbox append
-  boundary after the PG branch merges to `develop`.
-
-Sprint PH.1 goal:
-- implement send-path idle-notification dedup in the mailbox append boundary
-
-Sprint PH.1 deliverables:
-- add a `MessageKind` classification helper that parses message `text` as JSON
-  and returns `Idle`, `TaskAssignment`, or `Normal`
-- classify idle notifications when the parsed text JSON has
-  `type == "idle_notification"`
-- classify task assignments when the parsed text JSON has
-  `type == "task_assignment"`
-- populate `extra["task_id"]` and `extra["priority"]` from task-assignment
-  text JSON instead of extending the top-level envelope schema
-- implement mailbox append dedup logic that scans the target inbox for an older
-  unread idle notification from the same sender, removes it atomically, and
-  then appends the new idle notification
-- add integration tests covering:
-  - a new idle notification dedups an older unread idle notification from the
-    same sender
-  - a second idle notification from a different sender is not removed
-  - an already-read idle notification is not removed
-  - a non-idle message is unaffected
-
-Sprint PH.1 acceptance criteria:
-- all existing tests pass
-- new idle-dedup integration tests pass
-- no measurable regression is introduced on the normal send path
-
-Dependencies:
-- the PG branch must merge to `develop` first
-
-Deferred to a separate follow-on phase:
-- read-time auto-purge
-- daemon-side idle-notification removal
-- task-assignment extraction beyond `extra[...]` map population
-
-### Phase H: Doctor Path
+- The retained `doctor` command remains a command-phase deliverable, but
+  concrete implementation is blocked until Phase K lands the real
+  `sc-observability` health/query integration.
 
 Port and redesign the doctor command:
 - local config/path checks
@@ -290,8 +237,6 @@ Port and redesign the doctor command:
 
 Acceptance:
 - `atm doctor` works without daemon support
-- doctor findings reflect the local daemon-free system
-- observability readiness is visible in doctor output
 
 ### Phase I: Cleanup And Hardening
 
@@ -302,11 +247,358 @@ Delete:
 Add:
 - integration tests
 - snapshot tests
+- config/schema hardening for legacy team records with deterministic recovery
+  and precise diagnostics
 - documentation polish
 
 Acceptance:
 - implementation matches `requirements.md`, `architecture.md`,
   `read-behavior.md`, and `docs/archive/file-migration-plan.md`
+
+### Phase J: Message Schema Normalization [COMPLETE]
+
+Status summary:
+- schema ownership, compatibility, and forward metadata rules are now
+  documented
+- the current live design continues to use the shared Claude inbox surface and
+  passed J.5 live validation
+- a separate ATM-native inbox is explicitly deferred until after the current
+  design is live and proven
+- no J.5 runtime blocker was found that forces an immediate inbox split
+
+Goal:
+- make the shared inbox design safe to run live by clarifying schema ownership,
+  deprecating new ATM-only top-level fields, and defining the forward
+  metadata-based ATM schema
+
+Execution model:
+- this phase is implemented as a coordinated multi-sprint stream owned by
+  `team-lead`
+- `team-lead` should orchestrate the sprint sequence, worktree assignments, and
+  review hand-offs using the `/codex-orchestration` skill
+- sprint execution should not assume a separate ATM-native inbox; all work in
+  this phase targets the current shared inbox design
+
+Deliverables:
+- explicit schema ownership docs:
+  - Claude Code-native schema
+  - legacy ATM read-compatibility schema
+  - forward ATM metadata schema
+- enforcement models for locally owned schema docs
+- requirements and architecture rules for:
+  - legacy read compatibility
+  - metadata-only ATM machine fields going forward
+  - ULID-based ATM message identifiers
+  - timestamp derivation from ULID creation time
+  - additive enrichment of Claude-native messages with ATM metadata
+- implementation plan for the initial dedup work:
+  - PR #18 idle-notification receiver-side dedup using the Claude-native idle
+    payload in `text`
+  - consolidation of ATM `message_id` surface canonicalization rules across
+    read, ack, and clear
+  - migration plan for ATM-authored repair/alert dedup toward `metadata.atm`
+- next-version deferral note for a separate ATM-native inbox
+
+Completed sprints:
+
+- `J.1` Schema Ownership Lock
+  - land the production schema docs and local enforcement models
+  - add source-code and unit-test references back to the owning schema docs
+  - acceptance: no ambiguity remains about Claude-native vs ATM-owned vs
+    legacy ATM read-compat fields
+
+- `J.2` Native Idle Dedup Implementation
+  - implement PR #18 receiver-side idle-notification dedup against the
+    Claude-native JSON payload stored in `text`
+  - remove or reject any implementation that tries to redefine idle notices as
+    an ATM-owned native top-level schema
+  - acceptance: at most one unread idle notification per sender remains visible
+    in an inbox, with fixtures and tests aligned to the Claude-native schema
+
+- `J.3` Surface Canonicalization Consolidation
+  - centralize `message_id` dedup logic used by read, ack, and clear
+  - keep current legacy top-level `message_id` behavior read-compatible while
+    documenting the later move to `metadata.atm.messageId`
+  - acceptance: one shared dedup contract is used across operator-facing
+    mailbox surfaces
+
+- `J.4` ATM Alert Metadata Migration Plan
+  - migrate the design for ATM-authored repair notices from ad hoc top-level
+    fields toward `metadata.atm`
+  - explicitly preserve legacy top-level `atmAlertKind` and
+    `missingConfigPath` as read-compatible until the runtime migration sprint
+    lands
+  - keep current alert writes/read-compat behavior stable until the migration
+    sprint lands
+  - acceptance: requirements and architecture specify the forward metadata
+    placement for ATM alert/dedup fields without breaking legacy reads
+
+- `J.5` Live Shared-Inbox Validation
+  - exercise the documented shared-inbox design in live/manual flows before any
+    ATM-native inbox redesign is considered
+  - confirm Claude-context projection limitations, enrichment expectations, and
+    ack/dedup operator workflows against real inbox files
+  - acceptance: the current shared-inbox design is proven usable enough to
+    defer ATM-native inbox work to a later version
+  - delivered in:
+    [`docs/atm-core/design/live-shared-inbox-validation.md`](./atm-core/design/live-shared-inbox-validation.md)
+
+Acceptance:
+- schema ownership is explicit in requirements and architecture
+- legacy ATM top-level fields are documented as read-compatible but deprecated
+  for new writes
+- forward ATM metadata schema requires ULID-based ATM message identifiers
+- PR #18 idle-notification dedup is explicitly represented in the implementation
+  plan as a Claude-native schema-following sprint
+- the phase is organized into explicit sprints orchestrated by `team-lead`
+  using `/codex-orchestration`
+- the current architecture explicitly defers a separate ATM-native inbox until
+  a later version
+
+### Phase K: `sc-observability` Integration [COMPLETE]
+
+Status summary:
+- ATM now uses the shared `sc-observability` stack for retained emit, query,
+  follow, and health behavior
+- `atm log` and `atm doctor` are delivered on the shared stack with ATM-owned
+  boundary types and error-code mapping
+- the remaining follow-on work is release-alignment and post-1.0 feature
+  adoption, tracked in Phase L
+
+Goal:
+- integrate ATM with the current shared `sc-observability` logging/query/health
+  surface in a production-ready way before resuming retained `log` and
+  `doctor` delivery
+
+Execution model:
+- this phase is implemented as a coordinated multi-sprint stream owned by
+  `team-lead`
+- `team-lead` should orchestrate the sprint sequence, worktree assignments, and
+  review hand-offs using the `/codex-orchestration` skill
+- the phase uses the ATM-owned adapter/boundary documented in:
+  [`docs/atm-core/design/sc-observability-integration.md`](./atm-core/design/sc-observability-integration.md)
+- until `sc-observability` is published, local and CI builds may consume the
+  shared crates from a sibling checkout using a repo-local Cargo patch/path
+  strategy; committed ATM docs and scripts must not require user-specific
+  absolute paths
+
+Planned sprints:
+
+- `K.1` Toolchain And Dependency Alignment
+  - align ATM to the shared Rust toolchain floor and current stable pin
+  - define the pre-publish local dependency strategy used in developer builds
+    and CI
+  - land `rust-toolchain.toml`, repo/CI toolchain pinning, and
+    `docs/atm-core/dev/pre-publish-deps.md`
+  - acceptance: ATM toolchain/docs/CI strategy is explicit and matches the
+    shared repo dependency floor
+
+- `K.2` Observability Port Expansion
+  - expand the `atm-core` boundary from emit-only to emit/query/follow/health
+  - keep `sc-observability` types out of `atm-core` public APIs
+  - introduce the single ATM-owned error-code registry in `atm-core` and wire
+    it into `AtmError`
+  - acceptance: `atm-core` owns the projected ATM request/result types and a
+    synchronous tail session boundary, and the error-code registry is centrally
+    defined
+
+- `K.3` Concrete Adapter Bootstrap
+  - replace the local tracing-only `atm` implementation with a real
+    `sc-observability` adapter
+  - initialize the shared logger once per CLI process and inject it into
+    `atm-core`
+  - add terminal failure logging for bootstrap, parse, and core-service error
+    paths
+  - acceptance: retained mail commands emit through the shared logger and
+    preserve best-effort behavior, and failure diagnostics carry stable ATM
+    error codes
+
+- `K.4` `atm log` Delivery On Shared Query/Follow
+  - implement the retained `log` command over `Logger::query(...)` and
+    `Logger::follow(...)`
+  - acceptance: snapshot/tail/filtering behavior works through the shared log
+    store with integration coverage
+
+- `K.5` `atm doctor` Delivery On Shared Health
+  - implement the retained `doctor` command over shared logging/query health
+  - acceptance: doctor integration tests cover healthy, unavailable, and
+    degraded adapter states; each state produces a structured `DoctorReport`
+    with a stable ATM error code from `docs/atm-error-codes.md` when
+    applicable
+
+- `K.6` Integration And Live Validation
+  - close the command-test gap for observability consumer paths and run one
+    live/manual validation pass against a real ATM home
+  - close the error-logging gap by verifying CLI/bootstrap/service failures and
+    degraded recovery warnings all emit stable ATM-owned error codes
+  - acceptance: `atm log` (snapshot, tail, filter) and `atm doctor` are tested
+    against the real `sc-observability` adapter in at least one live
+    validation pass, and the results are documented in
+    `docs/atm-core/design/live-observability-validation.md`
+
+Acceptance:
+- ATM no longer depends on a local tracing-only observability adapter
+- `atm-core` owns an explicit emit/query/follow/health boundary over shared
+  observability crates
+- local and CI builds use the same documented pre-publish shared-crate
+  dependency strategy
+- `atm log` and `atm doctor` are implemented on the shared logging/query/health
+  stack
+- observability command integration coverage exists for snapshot, tail, filter,
+  and doctor readiness flows
+- any generic shared-crate usability gaps discovered during implementation are
+  filed upstream in `sc-observability`
+
+### Phase L: Observability Release Hardening [NEXT / LATEST]
+
+Status summary:
+- Phase K delivered the full `sc-observability` integration for retained ATM
+  commands and completed the crates.io cutover to the published
+  `sc-observability = "1.0.0"` release
+- Sprint `L.1` is complete: ATM now supports explicit stderr console routing
+  through `ConsoleSink::stderr()` via the final CLI flag `--stderr-logs`
+- the remaining Phase L work is not another compatibility pass; it is the
+  release-hardening phase that closes the open validation, boundary, and
+  public-API cleanup findings before initial release
+
+Goal:
+- make ATM observability production-ready for the initial ATM release while
+  keeping ATM focused on agent messaging rather than expanding into the future
+  hook/`schooks` observability control plane
+
+Execution model:
+- this phase is implemented as a coordinated multi-sprint stream owned by
+  `team-lead`
+- `team-lead` should orchestrate the sprint sequence, worktree assignments, and
+  review hand-offs using the `/codex-orchestration` skill
+- all sprints use the published crates.io dependency
+  `sc-observability = "1.0.0"` directly; no local override is permitted
+- the detailed ATM-side release-hardening decisions are documented in:
+  [`docs/atm-core/design/sc-obs-1.0-integration.md`](./atm-core/design/sc-obs-1.0-integration.md)
+- future hook-driven signal ingestion and environment shaping remain deferred
+  until post-initial-release ATM + `schooks` work; Phase L must not pre-empt
+  that later design
+
+Planned sprints:
+
+- `L.1` Stderr Console Routing [COMPLETE]
+  - completed 2026-04-06 on branch `feature/pL-s1-stderr-routing`
+  - commit: `a84ef5767813a9f604f84d697874cee74e5689e4`
+  - delivered:
+    - `ConsoleSink::stderr()` support in the concrete CLI adapter
+    - explicit global CLI routing through `--stderr-logs`
+    - integration coverage for stdout/stderr path separation
+  - note:
+    - the final CLI flag name is `--stderr-logs`; this closes the earlier
+      L.1 QA traceability finding `ATM-QA-002`
+
+- `L.2` Live Validation And Emission Coverage
+  - goal: close the remaining runtime-observability proof gap by validating the
+    real adapter under degraded/unavailable conditions and by proving retained
+    record emission for all retained message commands
+  - key tasks:
+    - use the shared fault-injection API from upstream issue `#57` to induce
+      degraded and unavailable retained-sink states through the real ATM
+      adapter
+    - extend the live validation report so healthy, degraded, and unavailable
+      states are all exercised against the shared crate
+    - add integration coverage proving `send`, `read`, `ack`, and `clear` all
+      emit retained log records through the shared adapter
+    - keep deterministic ATM integration tests as the fast regression layer;
+      the fault-injected live path supplements rather than replaces them
+  - closes:
+    - `ATM-QA-K-001`
+    - `ATM-QA-K-002`
+
+- `L.3` Boundary And Contract Rulings
+  - goal: align the docs and implementation boundary with the agreed initial
+    release scope instead of continuing the broader Phase K wording
+  - key tasks:
+    - document the ATM-local observability ownership model:
+      - `atm-core` owns the minimal injected boundary needed by ATM messaging,
+        retained-log query/follow, and doctor readiness
+      - `atm` owns concrete adapter wiring and CLI routing
+      - future hook/`schooks` orchestration remains out of scope for this phase
+    - explicitly keep the health contract closed at:
+      - `Healthy`
+      - `Degraded`
+      - `Unavailable`
+    - update all requirements/architecture/design docs so they no longer imply
+      that Phase L is redesigning observability ownership around future
+      cross-tool orchestration
+  - closes:
+    - `RUST-QA-001`
+    - `PRR-002`
+    - (`ATM-QA-002`: traceability closed in L.1 — flag name
+      `--stderr-logs` confirmed)
+
+- `L.4` Public API Cleanup
+  - goal: remove raw serialization-format leakage from the `atm-core` public
+    observability boundary while preserving centralized JSON handling inside
+    `atm-core`
+  - key tasks:
+    - replace public `serde_json::Value` / `Map<String, Value>` usage in
+      observability-facing `atm-core` types with ATM-owned domain types or
+      wrappers
+    - keep JSON/JSONL parsing, validation, degradation, and repair centralized
+      in `atm-core` rather than pushing that logic into CLI or sibling crates
+    - preserve the published CLI JSON output behavior after the public type
+      cleanup
+  - closes:
+    - `INTEROP-001`
+    - `BP-003`
+
+- `L.5` Construction And Boundary Ergonomics
+  - goal: clean up the remaining release-surface ergonomics without forcing
+    speculative refactors that are not yet justified
+  - key tasks:
+    - add a structured `CliObservability` construction path (`new(...)` or an
+      equivalent minimal builder) so CLI bootstrap and tests do not assemble
+      the adapter through ad hoc wiring
+    - review the current boxed trait-object dispatch and sealed-trait pattern;
+      implement a change only when it clearly improves the release design
+    - record an explicit disposition for `DoctorCommand` injectability:
+      - optional for initial release unless a concrete testing or feature need
+        appears during implementation
+  - closes:
+    - `UX-001`
+    - `BP-004`
+    - disposition of `UX-002`
+    - disposition of `BP-001`
+    - disposition of `UNI-003`
+
+- `L.6` Release Closeout
+  - goal: finish the remaining operator-facing and release-readiness validation
+    against the published shared crate behavior
+  - key tasks:
+    - verify file sink path alignment against upstream issue `#21`
+    - rerun full ATM observability validation on the published
+      `sc-observability = "1.0.0"` release
+    - close any remaining documentation traceability gaps uncovered during the
+      Phase L consistency review
+  - result:
+    - release-ready ATM observability signoff for initial release
+
+Recovered Phase K carry-in mapping:
+
+- `ATM-QA-K-001` and `ATM-QA-K-002` are canonical Phase L.2 work items
+- `RUST-QA-001`, `PRR-002`, and the L.1 QA traceability gap `ATM-QA-002` are
+  canonical Phase L.3 work items
+- `INTEROP-001` and duplicate `BP-003` are canonical Phase L.4 work items
+- `UX-001` and duplicate `BP-004` are canonical Phase L.5 work items
+- `UX-002`, `BP-001`, and `UNI-003` are Phase L.5 decision/disposition items;
+  each must either land as implementation work or be explicitly deferred by a
+  documented Phase L architectural ruling
+
+Acceptance:
+- Phase L cannot close until:
+  - `L.2` through `L.6` are complete
+  - every mapped carry-in item above is either implemented or explicitly
+    deferred by a documented Phase L architectural decision
+  - retained observability behavior is validated against the published
+    crates.io dependency `sc-observability = "1.0.0"`
+- the phase must preserve ATM’s initial-release focus on agent messaging and
+  must not absorb future hook/`schooks` orchestration concerns prematurely
 
 ## 5. Hard Rules
 
@@ -319,6 +611,11 @@ Acceptance:
 - Display bucket behavior must remain separate from the canonical two-axis workflow model.
 - Task-linked mail must be ack-required from creation time.
 - Generic logging query/follow/filter behavior should live in `sc-observability` where possible, not in ATM-specific code.
+- Persisted config/schema compatibility issues must recover at the narrowest
+  safe scope, and identity/routing fields must never be guessed.
+- Missing team config remains distinct from malformed team config; only the
+  documented send fallback may bypass it, and repeated repair notifications
+  must be deduplicated by unresolved condition.
 
 Cross-document invariants that must stay locked during implementation:
 - `taskId` implies ack-required send behavior

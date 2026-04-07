@@ -1,4 +1,20 @@
-# OBS-GAP-1: `sc-observability` API Gap Analysis For ATM
+# OBS-GAP-1: Historical `sc-observability` API Gap Analysis For ATM
+
+## Status Note
+
+This document is historical.
+
+The shared `sc-observability` repo now ships the generic query, follow, and
+query-health surfaces that were missing when this analysis was first written.
+The active ATM-side work is no longer "request the missing shared API"; it is
+"integrate ATM with the current shared API".
+
+Current controlling ATM integration documents:
+
+- [`../project-plan.md`](../project-plan.md) Phase K
+- [`../requirements.md`](../requirements.md) §3.5 and §13
+- [`../architecture.md`](../architecture.md) §2.3 and §14
+- [`../atm-core/design/sc-observability-integration.md`](../atm-core/design/sc-observability-integration.md)
 
 ## 1. Purpose
 
@@ -84,17 +100,24 @@ ATM-specific ownership for `atm doctor` should remain limited to:
 - ATM config/env/path checks
 - ATM-specific recovery messaging
 
-## 3. Gap List Against Current `sc-observability`
+## 3. Historical Gap List Against The Shared-Repo Snapshot Used By Phase A
 
-This section compares ATM requirements with the current shared repo at:
+This section records the Phase A comparison against the shared-repo snapshot
+that existed when `OBS-GAP-1` was written.
 
-- `/Users/randlee/Documents/github/sc-observability/crates/sc-observability`
-- `/Users/randlee/Documents/github/sc-observability/crates/sc-observe`
-- `/Users/randlee/Documents/github/sc-observability/crates/sc-observability-types`
+It is intentionally retained for traceability, but it is not the current source
+of truth for shared-repo readiness. The current controlling state is documented
+in Phase K and the active integration design.
+
+The historical analysis examined these shared crates:
+
+- `sc-observability`
+- `sc-observe`
+- `sc-observability-types`
 
 ### 3.1 Capability Matrix
 
-| Required capability | Status | Current evidence | Gap summary |
+| Required capability | Status | Historical evidence | Gap summary |
 | --- | --- | --- | --- |
 | Structured log emission | Present | `sc-observability::Logger::emit`, `LogEmitter`, `LogEvent` | Shared logging emission already exists and matches ATM best-effort needs. |
 | In-process logging health | Present | `Logger::health`, `LoggingHealthReport`, `active_log_path` | Sufficient baseline for `atm doctor` health reporting. |
@@ -107,15 +130,15 @@ This section compares ATM requirements with the current shared repo at:
 | Limit and ordering controls | Missing | no query result model | ATM has no shared way to request newest-first snapshots or capped result sets. |
 | Query readiness probe for doctor | Missing | health exists, query surface does not | `atm doctor` cannot verify `atm log` readiness until shared query/follow APIs exist. |
 
-### 3.2 Interpretation
+### 3.2 Historical Interpretation
 
-The current shared workspace is already good enough for:
+At the time of this analysis, the shared workspace was already good enough for:
 
 - ATM best-effort emission
 - ATM logging health inspection
 - future routing health, if ATM later chooses to emit typed observations
 
-The current shared workspace is not yet good enough for:
+At the time of this analysis, the shared workspace was not yet good enough for:
 
 - `atm log`
 - `atm log --tail`
@@ -124,10 +147,10 @@ The current shared workspace is not yet good enough for:
 The missing capability is not generic logging itself. The missing capability is
 consumer-side access to the retained structured log records.
 
-## 4. Concrete API Requests For `arch-obs`
+## 4. Historical API Requests For `arch-obs`
 
-ATM should ask `arch-obs` to add a shared log-reader/query/follow surface to
-`sc-observability`.
+Phase A recommended that ATM ask `arch-obs` to add a shared
+log-reader/query/follow surface to `sc-observability`.
 
 This should live in `sc-observability`, not `sc-observe`, because the required
 behavior is part of the logging-only layer:
@@ -273,7 +296,7 @@ Ensure the shared query/follow API works for logging-only consumers that use
 
 This keeps the query/follow surface aligned with the documented layered design.
 
-## 5. ATM Port Boundary Decision
+## 5. ATM Port Boundary Decision Recorded By Phase A
 
 The boundary decision is:
 
@@ -305,9 +328,9 @@ Shared `sc-observability` should own:
 - generic limit/order behavior
 - in-process logging health snapshots
 
-### 5.3 Shared Responsibilities That ATM Does Not Need Yet
+### 5.3 Shared Responsibilities That ATM Did Not Need Yet
 
-ATM does not need the following to start Phase A/B implementation:
+ATM did not need the following to start Phase A/B implementation:
 
 - OTLP export
 - typed observation routing through `sc-observe`
@@ -316,11 +339,11 @@ ATM does not need the following to start Phase A/B implementation:
 
 Those remain separate concerns.
 
-## 6. Conclusion
+## 6. Historical Conclusion
 
-### 6.1 Shared-Crate Readiness
+### 6.1 Shared-Crate Readiness At The Time Of Analysis
 
-Current shared-crate readiness is:
+At the time of this analysis, shared-crate readiness was:
 
 - sufficient for ATM best-effort log emission
 - sufficient for ATM in-process logging health
@@ -330,7 +353,8 @@ Current shared-crate readiness is:
 
 ### 6.2 ATM-Local Query Engine Decision
 
-ATM should **not** build a local ad hoc log query engine.
+Phase A concluded that ATM should **not** build a local ad hoc log query
+engine.
 
 Reason:
 
@@ -341,7 +365,7 @@ Reason:
 - the retained ATM architecture already expects generic query/follow mechanics
   to live in the shared observability layer
 
-Therefore the required path is:
+Therefore the Phase A recommended path was:
 
 1. `arch-obs` adds the shared query/follow/readiness API
 2. `atm` implements `ObservabilityPort` against that shared API
