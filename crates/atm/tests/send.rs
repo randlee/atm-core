@@ -405,6 +405,7 @@ impl Fixture {
                 name: recipient.to_string(),
                 ..Default::default()
             }],
+            ..Default::default()
         };
         fs::write(
             team_dir.join("config.json"),

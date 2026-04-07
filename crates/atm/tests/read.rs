@@ -707,6 +707,7 @@ impl Fixture {
                     ..Default::default()
                 })
                 .collect(),
+            ..Default::default()
         };
         fs::write(
             team_dir.join("config.json"),
