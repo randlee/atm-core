@@ -77,6 +77,7 @@ Forward write target for ATM-owned machine-readable fields:
 
 - `messageId`
 - `sourceTeam`
+- `fromIdentity`
 - `pendingAckAt`
 - `acknowledgedAt`
 - `acknowledgesMessageId`
@@ -106,11 +107,16 @@ Enrichment rule:
 - enrichment must be additive and idempotent
 - ATM must not rewrite native Claude fields such as `from`, `text`,
   `timestamp`, `read`, or `summary` in order to attach ATM metadata
+- exception: when cross-team alias projection is intentionally used, ATM may
+  retain the Claude-facing alias in `from` only when canonical sender identity
+  is also recorded in `metadata.atm.fromIdentity`
 
 Forward placement map:
 
 - legacy top-level `message_id` migrates to `metadata.atm.messageId`
 - legacy top-level `source_team` migrates to `metadata.atm.sourceTeam`
+- cross-team alias projection stores canonical sender identity in
+  `metadata.atm.fromIdentity`
 - legacy top-level `pendingAckAt` remains `metadata.atm.pendingAckAt`
 - legacy top-level `acknowledgedAt` remains `metadata.atm.acknowledgedAt`
 - legacy top-level `acknowledgesMessageId` remains

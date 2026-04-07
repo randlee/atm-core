@@ -37,6 +37,20 @@ Required loading policy:
 This keeps tolerant parsing centralized and prevents commands from inventing
 ad hoc recovery behavior.
 
+ATM-owned `.atm.toml` semantics for the retained multi-agent model:
+- `atm-core` consumes the `[atm]` section only
+- `[atm].default_team` remains the shared team default
+- `[atm].team_members` is the baseline roster used for doctor and future
+  orchestration-safety checks
+- `[atm].aliases` is an ATM-owned shorthand map for canonical agent names
+- `[atm].post_send_hook` is an ATM-owned helper command definition for
+  best-effort post-send automation
+- `[atm].post_send_hook_members` is the sender-identity allowlist for that
+  helper
+- `[atm].identity` is obsolete and ignored by runtime identity resolution
+- launcher-owned sections such as `[rmux]` and future `[scmux]` are outside the
+  `atm-core` runtime boundary and are intentionally ignored
+
 Send-specific policy remains layered above the loader:
 - send may use a narrowly defined missing-document fallback when the product
   docs explicitly allow it
@@ -44,6 +58,32 @@ Send-specific policy remains layered above the loader:
   send fallback
 - deduplicated repair notifications belong to the send orchestration boundary,
   not to generic config parsing
+
+Identity-specific policy:
+- runtime identity must come from explicit override, hook identity, or
+  `ATM_IDENTITY`
+- `atm-core` must not derive a normal sender/actor identity from repo-local
+  config in the shared multi-agent checkout model
+- aliases must resolve to canonical member names before membership validation,
+  self-send checks, and mailbox lookup
+- same-team messages keep current canonical sender projection behavior
+- cross-team messages may project an alias-oriented `from` field only when
+  canonical sender identity is also persisted in `metadata.atm.fromIdentity` for
+  validation, routing, and audit use
+- post-send-hook execution is outside the atomic mailbox mutation boundary
+- a relative hook path resolves from the discovered `.atm.toml` directory and
+  executes with that same directory as working directory
+- the hook inherits process environment and receives one ATM-owned JSON
+  payload in `ATM_POST_SEND`
+- hook execution is gated by resolved sender identity membership in
+  `[atm].post_send_hook_members`
+- hook failure or timeout is best-effort only and must not convert a
+  successful send into a command failure
+- the reserved diagnostic sender `atm-identity-missing@<team>` is for
+  ATM-generated repair/diagnostic notices only
+- doctor should project the live `config.json` roster in a deterministic order:
+  baseline `[atm].team_members` first, `team-lead` first among that baseline,
+  then extra runtime members
 
 Current `AgentMember` persisted schema:
 - `name: String` required for roster membership checks

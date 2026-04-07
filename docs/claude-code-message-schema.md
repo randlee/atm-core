@@ -61,7 +61,8 @@ Current ATM implication:
 - ATM must not invent a replacement Claude-native idle schema.
 - ATM may enrich a Claude-native message only by adding ATM-owned metadata as
   documented in [`atm-message-schema.md`](./atm-message-schema.md); it must not
-  rewrite the native Claude fields to do so.
+  rewrite the native Claude fields to do so except for the explicitly
+  documented ATM-owned cross-team alias projection carve-out on `from`.
 
 Validation rule:
 

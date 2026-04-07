@@ -537,18 +537,142 @@ Planned sprints:
   - dependency note:
     - uses `sc-observability = "1.0.0"` from crates.io directly
 
-- `L.4` Switch To Published crates.io Release [COMPLETE — done in K-CRATES-IO-1]
-  - completed 2026-04-06 via sprint K-CRATES-IO-1 on branch feature/pK-crates-io
-  - commit: 1ce2369f; merged to integrate/phase-K via PR #46, then to develop
-    via PR #45 at e4b8fcf
-  - the `[patch.crates-io]` override is removed; ATM uses crates.io `"1.0.0"`
+- `L.4` Public API Cleanup
+  - goal: remove raw serialization-format leakage from the `atm-core` public
+    observability boundary while preserving centralized JSON handling inside
+    `atm-core`
+  - key tasks:
+    - replace public `serde_json::Value` / `Map<String, Value>` usage in
+      observability-facing `atm-core` types with ATM-owned domain types or
+      wrappers
+    - keep JSON/JSONL parsing, validation, degradation, and repair centralized
+      in `atm-core` rather than pushing that logic into CLI or sibling crates
+    - preserve the published CLI JSON output behavior after the public type
+      cleanup
+  - closes:
+    - `INTEROP-001`
+    - `BP-003`
+
+- `L.5` Construction And Boundary Ergonomics
+  - goal: clean up the remaining release-surface ergonomics without forcing
+    speculative refactors that are not yet justified
+  - key tasks:
+    - add a structured `CliObservability` construction path (`new(...)` or an
+      equivalent minimal builder) so CLI bootstrap and tests do not assemble
+      the adapter through ad hoc wiring
+    - review the current boxed trait-object dispatch and sealed-trait pattern;
+      implement a change only when it clearly improves the release design
+    - record an explicit disposition for `DoctorCommand` injectability:
+      - optional for initial release unless a concrete testing or feature need
+        appears during implementation
+  - closes:
+    - `UX-001`
+    - `BP-004`
+    - disposition of `UX-002`
+    - disposition of `BP-001`
+    - disposition of `UNI-003`
+
+- `L.6` Release Closeout
+  - goal: finish the remaining operator-facing and release-readiness validation
+    against the published shared crate behavior
+  - key tasks:
+    - verify file sink path alignment against upstream issue `#21`
+    - rerun full ATM observability validation on the published
+      `sc-observability = "1.0.0"` release
+    - close any remaining documentation traceability gaps uncovered during the
+      Phase L consistency review
+  - result:
+    - release-ready ATM observability signoff for initial release
+
+- `L.7` Team Baseline And Identity Source Cleanup
+  - goal: align ATM config semantics with multi-agent team launches by moving
+    shared team expectations into `.atm.toml` while removing repo-local
+    identity fallback behavior and defining cross-team alias handling
+  - key tasks:
+    - add ATM-owned `team_members` support under the `[atm]` config section as
+      the baseline roster that should always be present in `config.json`
+    - retain ATM-owned `aliases` support under the `[atm]` config section for
+      shorthand addressing of canonical members, especially cross-team
+      communication with roles such as `team-lead`
+    - add ATM-owned `post_send_hook` and `post_send_hook_members` support under
+      the `[atm]` config section for short-term sender-scoped post-send
+      automation
+    - stop using `[atm].identity` as a runtime identity fallback; identity must
+      come from explicit CLI override, hook identity, or `ATM_IDENTITY`
+    - treat `[atm].identity` as an obsolete field: ignored by runtime identity
+      resolution and flagged by `atm doctor` as configuration drift that should
+      be removed
+    - keep `[atm].default_team` as the shared team default and continue to
+      ignore `[rmux]` and future `[scmux]` sections from `atm-core`
+    - update `atm doctor` to compare `[atm].team_members` against
+      `config.json.members`
+      - missing baseline members are findings
+      - extra runtime members in `config.json` are allowed
+    - update `atm doctor` roster output to show all `config.json` members with
+      baseline members first, `team-lead` first among the baseline set, and
+      extra runtime members afterward
+    - define alias resolution and projection rules:
+      - aliases are accepted as input shorthand only
+      - recipient aliases resolve immediately to canonical member names before
+        validation, self-send checks, and mailbox lookup
+      - same-team messages keep current canonical `from` behavior
+      - cross-team messages may project the sender alias in `from` for
+        Claude-facing ergonomics
+      - whenever alias-oriented `from` projection is used, canonical sender
+        identity must also be persisted in `metadata.atm.fromIdentity` and
+        must drive validation, self-send checks, routing, and audit behavior
+    - define post-send-hook rules:
+      - the hook runs only after a successful non-`dry-run` send
+      - the hook runs only when the resolved sender identity is listed in
+        `post_send_hook_members`
+      - the hook path may be relative and must resolve from the directory that
+        owns the discovered `.atm.toml`
+      - the hook must execute with that same config-root directory as its
+        working directory
+      - the hook inherits the process environment and also receives one
+        ATM-owned JSON payload in `ATM_POST_SEND`
+      - the `ATM_POST_SEND` payload must contain:
+        - `from`
+        - `to`
+        - `message_id`
+        - `requires_ack`
+        - optional `task_id`
+      - hook failure or timeout must never roll back the send; ATM reports the
+        failure as post-send-hook diagnostics only
+    - reserve `atm-identity-missing@<team>` for ATM-generated
+      repair/diagnostic notices only; it must not become a normal sender
+      identity fallback
+  - closes:
+    - config identity/source ambiguity for multi-agent shared repos
+    - baseline-roster visibility gap in `atm doctor`
+    - cross-team alias ambiguity for baseline roles such as `team-lead`
+    - missing sender-scoped post-send automation contract for repo-root helper
+      scripts
+    - duplicate permanent-member spawn planning gap for future team-lead /
+      hook-driven orchestration
+
+Recovered Phase K carry-in mapping:
+
+- `ATM-QA-K-001` and `ATM-QA-K-002` are canonical Phase L.2 work items
+- `RUST-QA-001`, `PRR-002`, and the L.1 QA traceability gap `ATM-QA-002` are
+  canonical Phase L.3 work items
+- `INTEROP-001` and duplicate `BP-003` are canonical Phase L.4 work items
+- `UX-001` and duplicate `BP-004` are canonical Phase L.5 work items
+- `UX-002`, `BP-001`, and `UNI-003` are Phase L.5 decision/disposition items;
+  each must either land as implementation work or be explicitly deferred by a
+  documented Phase L architectural ruling
+- config identity/source cleanup and baseline team roster enforcement are
+  canonical Phase L.7 work items
 
 Acceptance:
-- Phase L covers stderr console routing, fault-injected live validation, and
-  file sink path migration — all against the published crates.io release
-- the phase preserves the ATM-owned adapter boundary and does not redefine the
-  shared crate ownership split established in Phase K
-- `L.4` is already complete; `L.1` through `L.3` are the remaining sprints
+- Phase L cannot close until:
+  - `L.2` through `L.7` are complete
+  - every mapped carry-in item above is either implemented or explicitly
+    deferred by a documented Phase L architectural decision
+  - retained observability behavior is validated against the published
+    crates.io dependency `sc-observability = "1.0.0"`
+- the phase must preserve ATM’s initial-release focus on agent messaging and
+  must not absorb future hook/`schooks` orchestration concerns prematurely
 
 ## 5. Hard Rules
 

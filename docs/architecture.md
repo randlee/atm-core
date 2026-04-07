@@ -76,6 +76,8 @@ ATM still owns:
 - ATM-specific structured fields
 - mapping CLI filters to shared query/follow APIs
 - ATM doctor projections over shared health models
+- ATM-owned config semantics for baseline roster, alias resolution, and
+  runtime-identity precedence
 
 `sc-observability` should own as much generic functionality as possible:
 - emission
@@ -260,6 +262,29 @@ pub struct LogFieldMatch {
 }
 ```
 
+### 4.5 Identity And Alias Projection
+
+ATM must distinguish canonical routing identity from the Claude-facing sender
+projection.
+
+Architectural rules:
+- runtime identity resolves from explicit CLI override, hook identity, or
+  `ATM_IDENTITY`, not repo-local `[atm].identity`
+- ATM-owned aliases are input shorthands that resolve to canonical member names
+- same-team messages keep current canonical sender projection behavior
+- cross-team messages may project an alias-friendly sender in the persisted
+  `from` field for Claude-facing ergonomics
+- whenever cross-team alias projection is used, ATM must also persist
+  canonical sender identity in `metadata.atm.fromIdentity`
+- self-send checks, target validation, routing, and audit logic must use the
+  canonical sender identity rather than the display-oriented `from` projection
+- ATM-owned post-send hooks are sender-scoped best-effort helpers, not part of
+  the atomic send boundary
+- relative post-send-hook paths resolve from the discovered `.atm.toml`
+  directory and execute with that same directory as the working directory
+- the hook receives inherited environment plus one ATM-owned JSON payload in
+  `ATM_POST_SEND`
+
 ## 5. Persisted Schema
 
 ### 5.1 Team Config
@@ -270,6 +295,18 @@ Only a small subset is required by the retained surface:
 - member roster
 - enough member metadata to preserve round-trips when present
 - bridge remote host configuration needed for origin-file merge when present
+
+ATM config and team-launch config are distinct concerns:
+- ATM-owned config uses the `[atm]` section of `.atm.toml`
+- launcher-owned sections such as `[rmux]` and future `[scmux]` remain outside
+  the `atm-core` runtime config boundary and are ignored by ATM
+- `[atm].team_members` is the ATM-owned baseline roster for doctor/orchestration
+  checks
+- `[atm].aliases` is the ATM-owned shorthand map for canonical agent names
+- `[atm].post_send_hook` and `[atm].post_send_hook_members` are ATM-owned
+  best-effort sender-scoped automation settings
+- `[atm].identity` is obsolete in the retained multi-agent model and must not
+  participate in runtime identity resolution
 
 Team config loading must follow a narrow-scope recovery policy:
 - compatibility-only schema drift may use deterministic defaults at the schema
@@ -330,6 +367,8 @@ Forward architectural rules:
 - forward ATM-authored alert metadata, including legacy `atmAlertKind` and
   `missingConfigPath`, belongs under `metadata.atm` as
   `metadata.atm.alertKind` and `metadata.atm.missingConfigPath`
+- cross-team alias projection stores canonical sender identity in
+  `metadata.atm.fromIdentity`
 - ATM may enrich a Claude-native stored message by adding `metadata.atm`
   without rewriting the native Claude fields
 - the current live design still uses a shared inbox surface; a separate
@@ -500,6 +539,9 @@ Read/enrichment rule:
 - when a message needs ATM workflow semantics but lacks ATM-owned machine
   metadata, ATM may enrich the original stored message additively
 - enrichment must be idempotent and must not rewrite native Claude fields
+  except for the explicitly documented cross-team alias projection carve-out on
+  `from`, which also requires canonical sender identity in
+  `metadata.atm.fromIdentity`
 
 The read service derives `MessageClass` from `(ReadState, AckState)` and applies display-bucket selection to the derived class, not to raw persisted fields.
 
@@ -633,6 +675,7 @@ Public entrypoint:
 - findings
 - recommendations
 - environment override visibility
+- current team member roster from `config.json`
 - observability health
 
 `DoctorFinding` contains:
@@ -642,6 +685,12 @@ Public entrypoint:
 - remediation
 
 The report model should reuse the current doctor command’s severity/finding structure where useful, but local checks replace daemon checks.
+
+Roster output rules:
+- show all current `config.json` members in doctor output
+- show baseline `[atm].team_members` first
+- show `team-lead` first among the baseline members when present
+- show extra runtime members after the baseline set
 
 ## 7. Read Pipeline
 
@@ -703,12 +752,14 @@ Shared `sc-observability` should own record storage, filtering, and follow mecha
 The doctor pipeline stages are:
 1. resolve config and environment overrides
 2. resolve effective team and identity inputs
-3. verify local team/mailbox/config paths
-4. verify hook identity availability
-5. verify observability initialization and health
-6. verify observability query readiness for `atm log`
-7. assemble findings and recommendations
-8. render report
+3. inspect ATM config for obsolete fields such as `[atm].identity`
+4. verify local team/mailbox/config paths
+5. verify hook identity availability
+6. compare baseline `[atm].team_members` against `config.json.members`
+7. verify observability initialization and health
+8. verify observability query readiness for `atm log`
+9. assemble findings, recommendations, and ordered roster output
+10. render report
 
 ## 12. Mailbox Storage
 
@@ -730,6 +781,11 @@ The mailbox layer does not own selection policy, display buckets, output formatt
 Hook-file identity is retained because it is a current non-daemon convenience path for send/read identity resolution.
 
 Only hook identity resolution is required for the rewrite. Session-resolution paths that exist only to bridge runtime/daemon ambiguity are not required.
+
+Repo-local config identity is not retained as a runtime fallback. In the
+multi-agent model, runtime identity must come from explicit CLI override,
+hook identity, or `ATM_IDENTITY`. An obsolete `[atm].identity` field may be
+diagnosed by doctor, but it must not control sender/actor resolution.
 
 ### 13.2 File Policy
 

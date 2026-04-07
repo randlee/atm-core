@@ -170,7 +170,9 @@ Required rules:
   fields such as `metadata.atm.alertKind` and
   `metadata.atm.missingConfigPath`
 - ATM may enrich a Claude-native message in place by adding ATM-owned metadata
-  without rewriting native Claude fields
+  without rewriting native Claude fields except for the explicitly documented
+  cross-team alias projection carve-out on `from`, which also requires
+  `metadata.atm.fromIdentity`
 - locally owned schema enforcement must distinguish legacy top-level UUID-based
   ATM identifiers from forward metadata-based ULID identifiers
 - write-path validation may reject wrong-format ATM-owned identifiers with
@@ -205,14 +207,31 @@ Configuration resolution order:
 
 Required config fields:
 - default team
-- identity
 
 Supported optional config fields:
-- roles map
+- team members baseline roster
 - aliases map
-- output format
-- color
-- bridge remotes and hostname aliases used by origin-inbox merge
+- post-send hook
+- post-send hook member allowlist
+
+Runtime identity rules:
+- repo-local `.atm.toml` identity is not a valid runtime identity fallback for
+  the retained multi-agent ATM model
+- runtime identity must come from:
+  - explicit command override when supported
+  - hook-file identity
+  - `ATM_IDENTITY`
+- an obsolete config `identity` field may remain temporarily for migration, but
+  ATM must ignore it for runtime identity resolution and `atm doctor` must flag
+  it for removal
+- `.atm.toml` may define `[atm].team_members` as the baseline team roster that
+  should always be present in `config.json`
+- `.atm.toml` may define `[atm].aliases` for ATM-owned shorthand addressing of
+  canonical member identities
+- `.atm.toml` may define `[atm].post_send_hook` and
+  `[atm].post_send_hook_members` for sender-scoped post-send automation
+- config sections outside ATM-owned config, such as `[rmux]` or future
+  `[scmux]`, are not ATM runtime config and must be ignored by `atm-core`
 
 ### 3.3.1 Config And Schema Recovery
 
@@ -316,20 +335,18 @@ Satisfied by:
 1. `--from`
 2. hook-file identity
 3. `ATM_IDENTITY`
-4. config identity
 
 ### 4.2 Read Identity Resolution Order
 
 1. `--as`
 2. hook-file identity
 3. `ATM_IDENTITY`
-4. config identity
 
 ### 4.3 Doctor Identity Resolution
 
 `atm doctor` uses the same config and hook-resolution paths as the retained mail commands, but it must not fail immediately only because hook identity is absent. Missing hook identity is a diagnostic finding unless identity resolution is explicitly required for a requested check.
 
-If command identity cannot be determined where required, the command must fail with a structured recovery-oriented error.
+If command identity cannot be determined where required, the command must fail with a structured recovery-oriented error. An obsolete config `identity` field may be reported as a diagnostic, but it does not count as command identity.
 
 ## 5. Address Resolution
 
@@ -338,7 +355,7 @@ Product requirement ID:
   `agent`/`agent@team` forms and precedence rules.
 
 Satisfied by:
-- `REQ-CORE-CONFIG-002` for address parsing, alias/role rewrite, and
+- `REQ-CORE-CONFIG-002` for address parsing, alias rewrite, and
   team/member validation policy
 
 Supported address forms:
@@ -352,7 +369,35 @@ Resolution order:
 
 An explicit `@team` suffix takes precedence over `--team`.
 
-Roles and aliases are resolved after splitting `agent@team`, so only the agent token is rewritten.
+Aliases are resolved after splitting `agent@team`, so only the agent token is
+rewritten.
+
+Alias rules:
+- aliases are accepted as ATM-owned input shorthand only
+- recipient aliases must resolve to canonical member names before validation,
+  self-send checks, and mailbox lookup
+- sender aliases may be accepted on input, but canonical sender identity
+  remains the routing and validation identity
+- same-team messages keep current canonical sender projection behavior
+- cross-team messages may project an alias-oriented sender in the persisted
+  `from` field only when ATM also stores canonical sender identity in
+  `metadata.atm.fromIdentity`
+
+Post-send-hook rules:
+- `post_send_hook` is an ATM-owned helper script/command path list
+- `post_send_hook_members` matches resolved sender identity, not model name
+- a relative hook path must resolve from the directory containing the
+  discovered `.atm.toml`
+- the hook must execute with that same config-root directory as its working
+  directory
+- the hook inherits the process environment and also receives one ATM-owned
+  JSON payload in `ATM_POST_SEND`
+- the `ATM_POST_SEND` payload must contain:
+  - `from`
+  - `to`
+  - `message_id`
+  - `requires_ack`
+  - optional `task_id`
 
 ## 6. `atm send`
 
@@ -394,7 +439,11 @@ Retired from the current implementation:
 
 - resolve sender identity using the defined precedence
 - resolve recipient address using the defined precedence
-- resolve roles and aliases before mailbox lookup
+- resolve aliases before mailbox lookup
+- when a cross-team alias-oriented sender is projected into `from`, also
+  persist canonical sender identity in `metadata.atm.fromIdentity` and use the
+  canonical sender identity for validation, self-send checks, routing, and
+  audit behavior
 - verify target team existence and target agent membership as part of address
   resolution before mailbox path selection, except for the documented
   `missing-document` fallback in §6.3.1
@@ -408,6 +457,10 @@ Retired from the current implementation:
 - support dry-run without mutation
 - support sender-controlled ack-required messages
 - support optional task metadata on sent messages
+- run `post_send_hook` only after successful non-`dry-run` sends and only when
+  the resolved sender identity is listed in `post_send_hook_members`
+- treat `post_send_hook` failure or timeout as best-effort diagnostics only; it
+  must not roll back or fail an already-successful send
 - write a non-null `message_id` on every ATM-authored message
 - current live write compatibility may generate top-level `message_id` values
   using UUID while the metadata-based schema is not yet implemented
@@ -941,6 +994,8 @@ The initial doctor implementation must cover:
 - config file discovery and parse health
 - effective team resolution
 - identity resolution inputs and fallbacks
+- obsolete ATM config identity detection
+- baseline `[atm].team_members` coverage against `config.json.members`
 - team directory existence
 - team config existence and parse health
 - inbox directory existence and writability
@@ -955,6 +1010,8 @@ The initial doctor implementation must cover:
 Human output must provide:
 - overall status summary
 - findings grouped by severity
+- full current member roster from `config.json`, with baseline
+  `[atm].team_members` shown first and `team-lead` first among that baseline
 - concrete remediation guidance when the user can act
 
 JSON output must provide:
@@ -962,6 +1019,7 @@ JSON output must provide:
 - findings
 - recommendations
 - environment override visibility
+- member roster
 - observability health snapshot
 
 Each doctor finding must expose at least:
