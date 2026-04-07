@@ -100,6 +100,43 @@ fn test_clear_dry_run_does_not_mutate() {
 }
 
 #[test]
+fn test_clear_emits_retained_log_record() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[fixture.message(
+            "team-lead",
+            "read",
+            true,
+            None,
+            None,
+            Utc::now() - Duration::days(3),
+        )],
+    );
+
+    let clear = fixture.run(&["clear", "--json"]);
+    assert!(clear.status.success(), "stderr: {}", fixture.stderr(&clear));
+
+    let output = fixture.run(&["log", "filter", "--match", "command=clear", "--json"]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    let records = parsed["records"].as_array().expect("records array");
+    assert!(
+        records.iter().any(|record| {
+            record["fields"]["command"] == "clear"
+                && record["fields"]["agent"] == "arch-ctm"
+                && record["fields"]["team"] == "atm-dev"
+        }),
+        "stdout: {}",
+        String::from_utf8(output.stdout.clone()).expect("stdout utf8")
+    );
+}
+
+#[test]
 fn test_clear_never_removes_pending_ack() {
     let fixture = Fixture::new(&["arch-ctm"]);
     fixture.write_inbox(

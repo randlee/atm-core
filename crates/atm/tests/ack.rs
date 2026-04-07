@@ -92,6 +92,44 @@ fn test_ack_updates_origin_inbox_file() {
 }
 
 #[test]
+fn test_ack_emits_retained_log_record() {
+    let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
+    let message_id = Uuid::new_v4();
+    fixture.write_inbox(
+        "arch-ctm",
+        &[fixture.message(
+            "team-lead",
+            "please ack",
+            true,
+            Some(Duration::minutes(5)),
+            None,
+            message_id,
+        )],
+    );
+
+    let ack = fixture.run(&["ack", &message_id.to_string(), "got it", "--json"]);
+    assert!(ack.status.success(), "stderr: {}", fixture.stderr(&ack));
+
+    let output = fixture.run(&["log", "filter", "--match", "command=ack", "--json"]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    let records = parsed["records"].as_array().expect("records array");
+    assert!(
+        records.iter().any(|record| {
+            record["fields"]["command"] == "ack"
+                && record["fields"]["agent"] == "arch-ctm"
+                && record["fields"]["message_id"] == message_id.to_string()
+        }),
+        "stdout: {}",
+        String::from_utf8(output.stdout.clone()).expect("stdout utf8")
+    );
+}
+
+#[test]
 fn test_ack_rejects_already_acknowledged_message() {
     let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
     let message_id = Uuid::new_v4();

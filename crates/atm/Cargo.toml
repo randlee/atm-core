@@ -14,7 +14,7 @@ atm-core = { path = "../atm-core" }
 anyhow.workspace = true
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
-sc-observability = "1.0.0"
+sc-observability = { version = "1.0.0", features = ["fault-injection"] }
 sc-observability-types = "1.0.0"
 serde_json.workspace = true
 time = "0.3"
