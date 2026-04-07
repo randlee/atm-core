@@ -23,6 +23,7 @@ fn test_teams_lists_discovered_teams_deterministically() {
 
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["action"], "list");
+    assert_eq!(parsed["team"], "atm-dev");
     let teams = parsed["teams"].as_array().expect("teams array");
     assert_eq!(teams.len(), 2);
     assert_eq!(teams[0]["name"], "atm-dev");

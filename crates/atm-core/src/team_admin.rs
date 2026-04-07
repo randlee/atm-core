@@ -19,7 +19,8 @@ pub struct TeamSummary {
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct TeamsList {
-    pub action: &'static str,
+    pub action: String,
+    pub team: String,
     pub teams: Vec<TeamSummary>,
 }
 
@@ -109,11 +110,20 @@ pub struct RestoreOutcome {
     pub tasks_restored: usize,
 }
 
-pub fn list_teams(home_dir: PathBuf) -> Result<TeamsList, AtmError> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RestoreResult {
+    DryRun(RestorePlan),
+    Applied(RestoreOutcome),
+}
+
+pub fn list_teams(home_dir: PathBuf, current_dir: PathBuf) -> Result<TeamsList, AtmError> {
+    let config = load_config(&current_dir)?;
+    let current_team = resolve_team(None, config.as_ref()).unwrap_or_default();
     let teams_root = teams_root_from_home(&home_dir);
     if !teams_root.exists() {
         return Ok(TeamsList {
-            action: "list",
+            action: "list".to_string(),
+            team: current_team,
             teams: Vec::new(),
         });
     }
@@ -125,6 +135,7 @@ pub fn list_teams(home_dir: PathBuf) -> Result<TeamsList, AtmError> {
             teams_root.display()
         ))
         .with_source(error)
+        .with_recovery("Check ATM_HOME and ensure the teams directory is readable.")
     })? {
         let entry = entry.map_err(|error| {
             AtmError::file_policy(format!(
@@ -132,6 +143,7 @@ pub fn list_teams(home_dir: PathBuf) -> Result<TeamsList, AtmError> {
                 teams_root.display()
             ))
             .with_source(error)
+            .with_recovery("Check ATM_HOME and ensure the teams directory is readable.")
         })?;
         let path = entry.path();
         if !path.is_dir() {
@@ -159,7 +171,8 @@ pub fn list_teams(home_dir: PathBuf) -> Result<TeamsList, AtmError> {
 
     teams.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(TeamsList {
-        action: "list",
+        action: "list".to_string(),
+        team: current_team,
         teams,
     })
 }
@@ -228,7 +241,9 @@ pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmErro
         if created_inbox {
             let _ = fs::remove_file(&inbox_path);
         }
-        return Err(error);
+        return Err(
+            error.with_recovery("Check team config permissions and rerun `atm teams add-member`.")
+        );
     }
 
     Ok(AddMemberOutcome {
@@ -260,6 +275,7 @@ pub fn backup_team(request: BackupRequest) -> Result<BackupOutcome, AtmError> {
             backup_dir.display()
         ))
         .with_source(error)
+        .with_recovery("Check backup directory permissions under ATM_HOME and retry the backup.")
     })?;
 
     fs::copy(&config_path, backup_dir.join("config.json")).map_err(|error| {
@@ -269,6 +285,7 @@ pub fn backup_team(request: BackupRequest) -> Result<BackupOutcome, AtmError> {
             backup_dir.display()
         ))
         .with_source(error)
+        .with_recovery("Check source and backup directory permissions and retry the backup.")
     })?;
 
     copy_regular_files(&team_dir.join("inboxes"), &backup_dir.join("inboxes"))?;
@@ -284,9 +301,7 @@ pub fn backup_team(request: BackupRequest) -> Result<BackupOutcome, AtmError> {
     })
 }
 
-pub fn restore_team(
-    request: RestoreRequest,
-) -> Result<Result<RestoreOutcome, RestorePlan>, AtmError> {
+pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> {
     let team_dir = home::team_dir_from_home(&request.home_dir, &request.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&request.team));
@@ -313,7 +328,7 @@ pub fn restore_team(
     let tasks_to_restore = count_numeric_task_files(&backup_dir.join("tasks"))?;
 
     if request.dry_run {
-        return Ok(Err(RestorePlan {
+        return Ok(RestoreResult::DryRun(RestorePlan {
             action: "restore",
             team: request.team,
             backup_path: backup_dir,
@@ -353,6 +368,7 @@ pub fn restore_team(
             inboxes_dir.display()
         ))
         .with_source(error)
+        .with_recovery("Check inbox directory permissions and rerun `atm teams restore`.")
     })?;
     for inbox_name in &inboxes_to_restore {
         let from = backup_dir.join("inboxes").join(inbox_name);
@@ -364,15 +380,18 @@ pub fn restore_team(
                 from.display()
             ))
             .with_source(error)
+            .with_recovery("Check inbox permissions and backup integrity, then rerun the restore.")
         })?;
     }
 
     let tasks_dir = tasks_dir_from_home(&request.home_dir, &request.team);
     restore_task_bucket(&backup_dir.join("tasks"), &tasks_dir)?;
     recompute_highwatermark(&tasks_dir)?;
-    write_team_config(&team_dir, &updated_config)?;
+    write_team_config(&team_dir, &updated_config).map_err(|error| {
+        error.with_recovery("Check team config permissions and rerun `atm teams restore`.")
+    })?;
 
-    Ok(Ok(RestoreOutcome {
+    Ok(RestoreResult::Applied(RestoreOutcome {
         action: "restore",
         team: request.team,
         backup_path: backup_dir,

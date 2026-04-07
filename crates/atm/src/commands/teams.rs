@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use atm_core::home;
-use atm_core::team_admin::{self, AddMemberRequest, BackupRequest, RestoreRequest};
+use atm_core::team_admin::{self, AddMemberRequest, BackupRequest, RestoreRequest, RestoreResult};
 use clap::{Args, Subcommand};
 
 use crate::observability::CliObservability;
@@ -72,7 +72,7 @@ impl TeamsCommand {
         let home_dir = home::atm_home()?;
         match self.command {
             None => {
-                let outcome = team_admin::list_teams(home_dir)?;
+                let outcome = team_admin::list_teams(home_dir, std::env::current_dir()?)?;
                 output::print_teams_result(&outcome, self.json)
             }
             Some(TeamsSubcommand::AddMember(command)) => command.run(home_dir),
@@ -119,8 +119,8 @@ impl RestoreCommand {
             from: self.from,
             dry_run: self.dry_run,
         })? {
-            Ok(outcome) => output::print_restore_result(&outcome, self.json),
-            Err(plan) => output::print_restore_plan(&plan, self.json),
+            RestoreResult::Applied(outcome) => output::print_restore_result(&outcome, self.json),
+            RestoreResult::DryRun(plan) => output::print_restore_plan(&plan, self.json),
         }
     }
 }
