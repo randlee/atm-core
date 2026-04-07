@@ -218,7 +218,7 @@ impl LogFieldValue {
     ///
     /// Returns [`AtmError`] when a nested field key or JSON number fails ATM
     /// validation.
-    pub fn from_json_value(value: Value) -> Result<Self, AtmError> {
+    pub(crate) fn from_json_value(value: Value) -> Result<Self, AtmError> {
         match value {
             Value::Null => Ok(Self::Null),
             Value::Bool(value) => Ok(Self::Bool(value)),
@@ -239,7 +239,7 @@ impl LogFieldValue {
     ///
     /// Returns [`AtmError`] when a nested ATM-owned JSON number cannot be
     /// materialized as a JSON value.
-    pub fn to_json_value(&self) -> Result<Value, AtmError> {
+    pub(crate) fn to_json_value(&self) -> Result<Value, AtmError> {
         match self {
             Self::Null => Ok(Value::Null),
             Self::Bool(value) => Ok(Value::Bool(*value)),
@@ -298,7 +298,7 @@ impl LogFieldMap {
     /// # Errors
     ///
     /// Returns [`AtmError`] when a nested key or value fails ATM validation.
-    pub fn from_json_map(values: Map<String, Value>) -> Result<Self, AtmError> {
+    pub(crate) fn from_json_map(values: Map<String, Value>) -> Result<Self, AtmError> {
         let entries = values
             .into_iter()
             .map(|(key, value)| {
