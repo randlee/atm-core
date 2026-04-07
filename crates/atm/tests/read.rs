@@ -144,6 +144,36 @@ fn test_read_json_output() {
 }
 
 #[test]
+fn test_read_emits_retained_log_record() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[fixture.message("team-lead", "hello", false, None, None, 0)],
+    );
+
+    let read = fixture.run(&["read", "--json"]);
+    assert!(read.status.success(), "stderr: {}", fixture.stderr(&read));
+
+    let output = fixture.run(&["log", "filter", "--match", "command=read", "--json"]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    let records = parsed["records"].as_array().expect("records array");
+    assert!(
+        records.iter().any(|record| {
+            record["fields"]["command"] == "read"
+                && record["fields"]["agent"] == "arch-ctm"
+                && record["fields"]["team"] == "atm-dev"
+        }),
+        "stdout: {}",
+        String::from_utf8(output.stdout.clone()).expect("stdout utf8")
+    );
+}
+
+#[test]
 fn test_read_missing_team_config_fails_with_actionable_error() {
     let fixture = Fixture::new(&["arch-ctm"]);
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");

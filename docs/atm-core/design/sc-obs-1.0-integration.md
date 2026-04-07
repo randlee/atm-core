@@ -11,9 +11,8 @@ pre-publish shared crates. Phase L is narrower:
 - adopt the last shared usability/features needed by ATM (`#55`, `#57`, `#21`)
 - depend on upstream shared consumer-doc cleanup from `#20` without creating a
   separate ATM implementation sprint just for shared documentation work
-- keep all pre-publish implementation sprints on the local
-  `[patch.crates-io]` strategy
-- switch to crates.io `^1.0.0` only after the shared 1.0 release exists
+- finish the remaining release-alignment work against the published
+  `sc-observability = "1.0.0"` release
 
 ## 2. Scope
 
@@ -67,29 +66,27 @@ This change is useful for:
 
 ## 4. Fault Injection Strategy (`#57`)
 
-Phase K live validation proved the healthy real-adapter path only. Degraded and
-unavailable states remained covered by deterministic ATM tests because the
-shared public API did not provide a safe live failure trigger.
+`L.2` adopts the upstream retained-sink fault injector from `#57`.
 
-Required Phase L direction:
+Implemented shape:
 
-- use the upstream public fault-injection capability from `#57`
-- drive degraded and unavailable retained-sink states through the real ATM
-  adapter, not only through ATM-local doubles
-- extend live validation so all three states are exercised:
+- ATM keeps deterministic integration tests as the fast regression layer
+- ATM also exposes one validation-only env seam:
+  - `ATM_OBSERVABILITY_RETAINED_SINK_FAULT=degraded|unavailable`
+- that seam still uses the real shared `RetainedSinkFaultInjector` through the
+  `atm` adapter rather than ATM-local health doubles
+- live validation now exercises all three states:
   - healthy
   - degraded
   - unavailable
 
-Expected implementation shape:
+Current outcome:
 
-- keep deterministic ATM integration tests as the fast regression layer
-- add real-adapter end-to-end tests or scripted validation that use the shared
-  fault injection API directly through the `atm` adapter
-- update the live validation report with the exact degraded/unavailable
-  scenarios exercised
-
-This closes the pre-publish readiness gap that remained after Phase K.
+- end-to-end `atm doctor` coverage now verifies degraded and unavailable states
+  through the real shared adapter path
+- the live validation report records the induced degraded/unavailable runs
+  explicitly
+- the earlier healthy-only validation gap from Phase K is closed
 
 ## 5. File Sink Path Alignment (`#21`)
 
@@ -105,6 +102,6 @@ Required Phase L direction:
 
 ## 6. Dependency Strategy
 
-ATM now consumes the published `sc-observability = "^1.0.0"` release. Phase L
+ATM now consumes the published `sc-observability = "1.0.0"` release. Phase L
 continues from that published baseline rather than the earlier local
 `[patch.crates-io]` pre-publish strategy.

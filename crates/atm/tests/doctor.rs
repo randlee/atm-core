@@ -28,6 +28,49 @@ fn test_doctor_reports_healthy_observability_with_real_adapter() {
     );
 }
 
+#[test]
+fn test_doctor_reports_degraded_observability_with_real_fault_injection() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+
+    let output = fixture.run(
+        &["doctor", "--json"],
+        &[("ATM_OBSERVABILITY_RETAINED_SINK_FAULT", "degraded")],
+    );
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["summary"]["status"], "warning");
+    assert_eq!(parsed["findings"][0]["severity"], "warning");
+    assert_eq!(
+        parsed["findings"][0]["code"],
+        "ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED"
+    );
+    assert_eq!(parsed["observability"]["logging_state"], "degraded");
+    assert_eq!(parsed["observability"]["query_state"], "healthy");
+}
+
+#[test]
+fn test_doctor_reports_unavailable_observability_with_real_fault_injection() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+
+    let output = fixture.run(
+        &["doctor", "--json"],
+        &[("ATM_OBSERVABILITY_RETAINED_SINK_FAULT", "unavailable")],
+    );
+
+    assert!(!output.status.success());
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["summary"]["status"], "error");
+    assert_eq!(parsed["findings"][0]["severity"], "error");
+    assert_eq!(parsed["findings"][0]["code"], "ATM_OBSERVABILITY_HEALTH_FAILED");
+    assert_eq!(parsed["observability"]["logging_state"], "unavailable");
+    assert_eq!(parsed["observability"]["query_state"], "healthy");
+}
+
 struct Fixture {
     tempdir: tempfile::TempDir,
 }
