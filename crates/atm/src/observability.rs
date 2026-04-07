@@ -420,7 +420,7 @@ fn map_field_match(
     field_match: LogFieldMatch,
 ) -> Result<sc_observability_types::LogFieldMatch, AtmError> {
     let key = field_match.key.as_str().to_string();
-    let value = serde_json::to_value(&field_match.value).map_err(|source| {
+    let value = field_match.value.to_json_value().map_err(|source| {
         AtmError::observability_query("failed to encode ATM log field match value")
             .with_source(source)
     })?;
@@ -441,11 +441,10 @@ fn map_snapshot(snapshot: sc_observability_types::LogSnapshot) -> Result<AtmLogS
 }
 
 fn map_record(event: LogEvent) -> Result<AtmLogRecord, AtmError> {
-    let fields = serde_json::from_value::<LogFieldMap>(serde_json::Value::Object(event.fields))
-        .map_err(|source| {
-            AtmError::observability_query("failed to project shared log fields into ATM types")
-                .with_source(source)
-        })?;
+    let fields = LogFieldMap::from_json_map(event.fields).map_err(|source| {
+        AtmError::observability_query("failed to project shared log fields into ATM types")
+            .with_source(source)
+    })?;
     Ok(AtmLogRecord {
         timestamp: map_timestamp_back(event.timestamp)?,
         severity: map_level_back(event.level),
