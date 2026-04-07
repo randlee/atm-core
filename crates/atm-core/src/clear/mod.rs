@@ -146,7 +146,7 @@ fn resolve_actor_identity(
     config: Option<&config::AtmConfig>,
 ) -> Result<String, AtmError> {
     if let Some(actor) = actor_override.filter(|value| !value.trim().is_empty()) {
-        return Ok(actor.to_string());
+        return Ok(config::aliases::resolve_agent(actor, config));
     }
 
     if let Some(identity) = identity::hook::read_hook_identity()? {

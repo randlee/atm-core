@@ -2,7 +2,9 @@ pub mod health;
 pub mod report;
 
 use std::collections::BTreeSet;
-use std::path::PathBuf;
+use std::fs::{self, OpenOptions};
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::config;
 use crate::error_codes::AtmErrorCode;
@@ -99,16 +101,46 @@ pub fn run_doctor(
 }
 
 fn load_member_roster(
-    home_dir: &std::path::Path,
+    home_dir: &Path,
     team: &str,
     config: Option<&config::AtmConfig>,
     findings: &mut Vec<DoctorFinding>,
 ) -> Option<MembersList> {
-    let team_dir = crate::home::team_dir_from_home(home_dir, team).ok()?;
-    let team_config = config::load_team_config(&team_dir).ok()?;
+    let team_dir = match crate::home::team_dir_from_home(home_dir, team) {
+        Ok(team_dir) => team_dir,
+        Err(error) => {
+            push_doctor_error(findings, DoctorSeverity::Error, error);
+            return None;
+        }
+    };
+    if !team_dir.is_dir() {
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Error,
+            code: AtmErrorCode::TeamNotFound,
+            message: format!(
+                "team directory is missing at {} for '{}'",
+                team_dir.display(),
+                team
+            ),
+            remediation: Some(format!(
+                "Create .claude/teams/{team} or correct ATM_HOME / --team before rerunning `atm doctor`."
+            )),
+        });
+        return None;
+    }
+
+    let team_config = match config::load_team_config(&team_dir) {
+        Ok(team_config) => team_config,
+        Err(error) => {
+            push_doctor_error(findings, DoctorSeverity::Error, error);
+            return None;
+        }
+    };
     let baseline = config
         .map(|config| config.team_members.as_slice())
         .unwrap_or(&[]);
+
+    check_inbox_directory(team, &team_dir.join("inboxes"), findings);
 
     let present = team_config
         .members
@@ -135,6 +167,70 @@ fn load_member_roster(
         team: team.to_string(),
         members: ordered_member_summaries(&team_config.members, baseline),
     })
+}
+
+fn push_doctor_error(
+    findings: &mut Vec<DoctorFinding>,
+    severity: DoctorSeverity,
+    error: crate::error::AtmError,
+) {
+    findings.push(DoctorFinding {
+        severity,
+        code: error.code,
+        message: error.message,
+        remediation: error.recovery,
+    });
+}
+
+fn check_inbox_directory(team: &str, inboxes_dir: &Path, findings: &mut Vec<DoctorFinding>) {
+    if !inboxes_dir.is_dir() {
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Error,
+            code: AtmErrorCode::MailboxWriteFailed,
+            message: format!(
+                "inbox directory is missing at {} for '{}'",
+                inboxes_dir.display(),
+                team
+            ),
+            remediation: Some(format!(
+                "Create .claude/teams/{team}/inboxes and ensure ATM can write inbox files before rerunning `atm doctor`."
+            )),
+        });
+        return;
+    }
+
+    if let Err(error) = probe_directory_writable(inboxes_dir) {
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Error,
+            code: AtmErrorCode::MailboxWriteFailed,
+            message: format!(
+                "inbox directory is not writable at {}: {error}",
+                inboxes_dir.display()
+            ),
+            remediation: Some(
+                "Check inbox directory permissions and ensure ATM can create and remove inbox files before rerunning `atm doctor`."
+                    .to_string(),
+            ),
+        });
+    }
+}
+
+fn probe_directory_writable(directory: &Path) -> Result<(), std::io::Error> {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let probe_path = directory.join(format!(
+        ".atm-doctor-write-probe-{}-{nonce}",
+        std::process::id()
+    ));
+    let file = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&probe_path)?;
+    drop(file);
+    fs::remove_file(&probe_path)?;
+    Ok(())
 }
 
 fn ordered_member_summaries(members: &[AgentMember], baseline: &[String]) -> Vec<MemberSummary> {
@@ -194,6 +290,7 @@ mod tests {
         AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
         LogTailSession, ObservabilityPort,
     };
+    use crate::schema::{AgentMember, TeamConfig};
 
     enum StubHealth {
         Ok(AtmObservabilityHealth),
@@ -253,6 +350,36 @@ mod tests {
                 active_log_path: root.join("atm.log.jsonl"),
             }
         }
+
+        fn team_dir(&self) -> PathBuf {
+            self.home_dir.join(".claude").join("teams").join("atm-dev")
+        }
+
+        fn write_team_layout(&self, members: &[&str]) {
+            let team_dir = self.team_dir();
+            std::fs::create_dir_all(team_dir.join("inboxes")).expect("inboxes dir");
+            let config = TeamConfig {
+                members: members
+                    .iter()
+                    .map(|member| AgentMember {
+                        name: (*member).to_string(),
+                        ..Default::default()
+                    })
+                    .collect(),
+                ..Default::default()
+            };
+            std::fs::write(
+                team_dir.join("config.json"),
+                serde_json::to_vec(&config).expect("team config"),
+            )
+            .expect("write team config");
+        }
+
+        fn write_raw_team_config(&self, raw: &str) {
+            let team_dir = self.team_dir();
+            std::fs::create_dir_all(&team_dir).expect("team dir");
+            std::fs::write(team_dir.join("config.json"), raw).expect("write raw team config");
+        }
     }
 
     fn query(paths: &TestPaths) -> DoctorQuery {
@@ -266,6 +393,7 @@ mod tests {
     #[test]
     fn run_doctor_reports_healthy_observability() {
         let paths = TestPaths::new();
+        paths.write_team_layout(&["arch-ctm"]);
         let report = run_doctor(
             query(&paths),
             &StubObservability {
@@ -287,6 +415,7 @@ mod tests {
     #[test]
     fn run_doctor_reports_obsolete_identity_drift_as_warning() {
         let paths = TestPaths::new();
+        paths.write_team_layout(&["arch-ctm"]);
         std::fs::write(
             paths.current_dir.join(".atm.toml"),
             "[atm]\nidentity = \"arch-ctm\"\n",
@@ -319,6 +448,7 @@ mod tests {
     #[test]
     fn run_doctor_reports_degraded_observability_as_warning() {
         let paths = TestPaths::new();
+        paths.write_team_layout(&["arch-ctm"]);
         let report = run_doctor(
             query(&paths),
             &StubObservability {
@@ -343,6 +473,7 @@ mod tests {
     #[test]
     fn run_doctor_reports_unavailable_observability_as_error() {
         let paths = TestPaths::new();
+        paths.write_team_layout(&["arch-ctm"]);
         let report = run_doctor(
             query(&paths),
             &StubObservability {
@@ -367,6 +498,7 @@ mod tests {
     #[test]
     fn run_doctor_reports_observability_health_errors() {
         let paths = TestPaths::new();
+        paths.write_team_layout(&["arch-ctm"]);
         let report = run_doctor(
             query(&paths),
             &StubObservability {
@@ -391,6 +523,86 @@ mod tests {
             report.findings[0]
                 .message
                 .contains("health check transport failed")
+        );
+    }
+
+    #[test]
+    fn run_doctor_reports_missing_team_directory_as_error() {
+        let paths = TestPaths::new();
+        let report = run_doctor(
+            query(&paths),
+            &StubObservability {
+                health: StubHealth::Ok(AtmObservabilityHealth {
+                    active_log_path: Some(paths.active_log_path.clone()),
+                    logging_state: AtmObservabilityHealthState::Healthy,
+                    query_state: Some(AtmObservabilityHealthState::Healthy),
+                    detail: None,
+                }),
+            },
+        )
+        .expect("doctor report");
+
+        assert_eq!(report.summary.status, DoctorStatus::Error);
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|finding| finding.code == AtmErrorCode::TeamNotFound),
+            "{report:#?}"
+        );
+    }
+
+    #[test]
+    fn run_doctor_reports_team_config_parse_failure_as_error() {
+        let paths = TestPaths::new();
+        paths.write_raw_team_config("{\"members\":");
+        let report = run_doctor(
+            query(&paths),
+            &StubObservability {
+                health: StubHealth::Ok(AtmObservabilityHealth {
+                    active_log_path: Some(paths.active_log_path.clone()),
+                    logging_state: AtmObservabilityHealthState::Healthy,
+                    query_state: Some(AtmObservabilityHealthState::Healthy),
+                    detail: None,
+                }),
+            },
+        )
+        .expect("doctor report");
+
+        assert_eq!(report.summary.status, DoctorStatus::Error);
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|finding| finding.code == AtmErrorCode::ConfigTeamParseFailed),
+            "{report:#?}"
+        );
+    }
+
+    #[test]
+    fn run_doctor_reports_missing_inboxes_directory_as_error() {
+        let paths = TestPaths::new();
+        paths.write_raw_team_config(r#"{"members":[{"name":"arch-ctm"}]}"#);
+        let report = run_doctor(
+            query(&paths),
+            &StubObservability {
+                health: StubHealth::Ok(AtmObservabilityHealth {
+                    active_log_path: Some(paths.active_log_path.clone()),
+                    logging_state: AtmObservabilityHealthState::Healthy,
+                    query_state: Some(AtmObservabilityHealthState::Healthy),
+                    detail: None,
+                }),
+            },
+        )
+        .expect("doctor report");
+
+        assert_eq!(report.summary.status, DoctorStatus::Error);
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|finding| finding.code == AtmErrorCode::MailboxWriteFailed),
+            "{report:#?}"
         );
     }
 }

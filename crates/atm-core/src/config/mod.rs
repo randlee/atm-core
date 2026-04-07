@@ -13,7 +13,7 @@ use tracing::warn;
 
 pub use types::AtmConfig;
 
-use crate::error::{AtmError, AtmErrorKind};
+use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::schema::{AgentMember, TeamConfig};
 
 pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
@@ -163,7 +163,8 @@ fn normalize_optional_command(command: Option<Vec<String>>) -> Option<Vec<String
 
 fn parse_team_config(config_path: &Path, raw: &str) -> Result<TeamConfig, AtmError> {
     let root: Value = serde_json::from_str(raw).map_err(|error| {
-        AtmError::new(
+        AtmError::new_with_code(
+            AtmErrorCode::ConfigTeamParseFailed,
             AtmErrorKind::Config,
             format!(
                 "failed to parse team config at {}: {error}",
@@ -175,7 +176,8 @@ fn parse_team_config(config_path: &Path, raw: &str) -> Result<TeamConfig, AtmErr
     })?;
 
     let object = root.as_object().ok_or_else(|| {
-        AtmError::new(
+        AtmError::new_with_code(
+            AtmErrorCode::ConfigTeamParseFailed,
             AtmErrorKind::Config,
             format!(
                 "failed to parse team config at {}: root value must be a JSON object",
@@ -193,7 +195,8 @@ fn parse_team_config(config_path: &Path, raw: &str) -> Result<TeamConfig, AtmErr
             .filter_map(|(index, entry)| parse_team_member(config_path, index, entry))
             .collect(),
         Some(_) => {
-            return Err(AtmError::new(
+            return Err(AtmError::new_with_code(
+                AtmErrorCode::ConfigTeamParseFailed,
                 AtmErrorKind::Config,
                 format!(
                     "failed to parse team config at {}: field 'members' must be a JSON array",
@@ -246,6 +249,7 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
 
+    use crate::error_codes::AtmErrorCode;
     use serde_json::Value;
 
     use super::{AtmConfig, load_config, parse_team_config, resolve_identity, resolve_team};
@@ -401,6 +405,7 @@ blank = ""
             .expect_err("syntax error");
 
         assert!(error.is_config());
+        assert_eq!(error.code, AtmErrorCode::ConfigTeamParseFailed);
         assert!(error.message.contains("config.json"));
         assert!(error.message.contains("EOF while parsing"));
         assert!(error.recovery.as_deref().is_some());
@@ -413,6 +418,7 @@ blank = ""
             parse_team_config(&config_path, r#"["arch-ctm"]"#).expect_err("root shape error");
 
         assert!(error.is_config());
+        assert_eq!(error.code, AtmErrorCode::ConfigTeamParseFailed);
         assert!(error.message.contains("root value must be a JSON object"));
         assert!(error.recovery.as_deref().is_some());
     }
@@ -424,6 +430,7 @@ blank = ""
             .expect_err("members shape error");
 
         assert!(error.is_config());
+        assert_eq!(error.code, AtmErrorCode::ConfigTeamParseFailed);
         assert!(
             error
                 .message
