@@ -883,9 +883,12 @@ Deliverables:
   with bounded retry loop (50ms intervals, 5s default timeout)
 - Add `MailboxLockTimeout` error code to `error_codes.rs`
 - Add `MailboxLock` error kind to `error.rs` with recovery guidance
-- Implement `locked_read_modify_write()` in `mailbox/mod.rs`
+- Implement `locked_read_modify_write()` in `mailbox/mod.rs` for single-file append paths
 - Refactor `append_message` to use `locked_read_modify_write`
-- Refactor read writeback, ack writeback, and clear set replacement to acquire lock
+- Add deterministic multi-lock acquisition for `read`, `ack`, and `clear` so those commands
+  lock every discovered source inbox before their first `read_messages(...)` call and hold the
+  locks through final writeback
+- Ensure the missing-config team-lead notice path benefits from the same `append_message` lock
 - Lock sentinel: `{inbox_path}.lock` (zero-byte, created lazily)
 
 Files to modify:
@@ -894,20 +897,22 @@ Files to modify:
 - `crates/atm-core/src/mailbox/mod.rs` (add `locked_read_modify_write`, refactor `append_message`)
 - `crates/atm-core/src/error.rs` (add `MailboxLock` kind)
 - `crates/atm-core/src/error_codes.rs` (add `MailboxLockTimeout`)
-- `crates/atm-core/src/read/mod.rs` (lock around writeback)
-- `crates/atm-core/src/ack/mod.rs` (lock around transition + reply)
-- `crates/atm-core/src/clear/mod.rs` (lock around set replacement)
+- `crates/atm-core/src/read/mod.rs` (acquire sorted source-file locks before `load_source_files`, hold through writeback)
+- `crates/atm-core/src/ack/mod.rs` (acquire sorted source-file locks before `load_source_files`, hold through transition + reply persist)
+- `crates/atm-core/src/clear/mod.rs` (acquire sorted source-file locks before `load_source_files`, hold through set replacement)
 
 Tests required:
 - Unit: `lock.rs` acquire/release, timeout, stale sentinel tolerance
 - Unit: `locked_read_modify_write` basic operation
 - Integration: concurrent append from two threads does not lose messages
+- Integration: multi-source `read`/`ack`/`clear` acquire locks in deterministic path order
 - Integration: lock timeout produces `MailboxLockTimeout` error code
 - All existing tests must pass (single-process path unaffected)
 
 Acceptance criteria:
 - `lock.rs` is no longer a placeholder stub
 - all mailbox read-modify-write paths hold an exclusive lock
+- `read`, `ack`, and `clear` lock their entire source-file set before reading any source inbox
 - concurrent `atm send` to the same inbox from two processes does not lose messages
 - CI passes on macOS, Linux, Windows
 
@@ -932,22 +937,27 @@ Deliverables (itemized by finding):
    - Extend `Display` in `error.rs` to render `self.backtrace` when `BacktraceStatus::Captured`
    - File: `error.rs`
 
-3. **`# Errors` doc sections** (~23 public functions):
-   - `send/mod.rs`, `send/input.rs`, `read/mod.rs`, `ack/mod.rs`, `clear/mod.rs`,
-     `config/mod.rs`, `home.rs`, `mailbox/mod.rs`, `team_admin.rs`
-   - Each `# Errors` section lists applicable `AtmErrorCode` variants
+3. **`# Errors` doc audit**:
+   - audit the public `Result<_, AtmError>` API surface in the modules touched by Phase M:
+     `send/mod.rs`, `send/input.rs`, `read/mod.rs`, `ack/mod.rs`, `clear/mod.rs`,
+     `config/mod.rs`, `home.rs`, `mailbox/mod.rs`, `team_admin.rs`, and any new public
+     helpers introduced by M.1/M.2
+   - add `# Errors` sections where missing and list the applicable `AtmErrorCode` variants
+   - avoid relying on stale hard-coded function counts; use the current public API surface
 
-4. **`.with_recovery()` coverage** (~16 sites):
-   - `ack/mod.rs:90,102,108`, `send/input.rs:22,31`, `clear/mod.rs:208`
-   - `ack/mod.rs:228,272,282`, `read/mod.rs:283`, `clear/mod.rs:167`
-   - `address.rs:17,23,26,29`, `send/file_policy.rs:14,42,45`
+4. **`.with_recovery()` audit**:
+   - perform a grep-driven audit of remaining operator-actionable bare error construction sites
+     in `ack/mod.rs`, `read/mod.rs`, `clear/mod.rs`, `address.rs`, `send/input.rs`,
+     `send/file_policy.rs`, `home.rs`, `mailbox/mod.rs`, and any new M.1/M.2 code
+   - do not re-edit sites that already received recovery guidance in L.7/L.8 unless the new
+     Phase M design changes their operator action
 
 5. **Legacy config key docs**:
    - Add `# Deprecated` section to `config/mod.rs` or `config/types.rs` for `[atm].identity`
    - Reference `ATM_WARNING_IDENTITY_DRIFT`; document migration: use `ATM_IDENTITY` env var
 
 6. **`normalize_json_number` panic removal**:
-   - Replace `.expect()` at `observability.rs:532` with graceful fallback + `tracing::warn!`
+   - Replace the current exponent-parse `.expect()` in `observability.rs` with graceful fallback + `tracing::warn!`
    - Add `# Panics` doc noting precondition removed
 
 7. **`resolve_actor_identity` consolidation**:
@@ -960,16 +970,18 @@ Tests required:
 - Backtrace: `Display` output includes backtrace when `RUST_BACKTRACE=1`, excludes otherwise
 - `normalize_json_number`: malformed exponent returns raw string (no panic)
 - `resolve_actor_identity`: existing tests pass after consolidation (no behavior change)
-- `cargo doc --no-deps` must produce 0 warnings
+- Documentation review pass confirms new `# Errors`, `# Deprecated`, and `# Panics` sections exist
+  on the touched public API surface
 
 Acceptance criteria:
 - `restore_team` writes config.json last with staging and progress marker
 - `AtmError::Display` conditionally renders backtrace
-- all public `Result`-returning functions have `# Errors` doc sections
+- all public `Result`-returning functions in the touched M.2 modules have `# Errors` doc sections
 - `.with_recovery()` present at all operator-actionable error sites
 - `[atm].identity` documented as deprecated
 - `normalize_json_number` does not panic on malformed input
 - `resolve_actor_identity` exists in exactly one location
+- no stale M.2 line-number references remain in the sprint spec
 - CI passes on all platforms
 
 ---

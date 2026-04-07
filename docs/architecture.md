@@ -1160,7 +1160,8 @@ Rationale:
   to `flock(2)` on Unix and `LockFileEx` on Windows
 - 98M+ downloads, maintained, compatible with the project's MSRV
 - avoids maintaining separate `cfg(unix)` / `cfg(windows)` implementations
-- the existing `libc` and `windows-sys` dependencies remain available as fallback
+- the current `atm-core` Cargo.toml already carries `libc` and `windows-sys`, but
+  only as low-level building blocks, not as a cross-platform mailbox-locking API
 
 Alternative rejected: direct `libc::flock` + `windows-sys::LockFileEx` — more control but
 duplicates what `fs2` already provides correctly.
@@ -1192,9 +1193,9 @@ duplicates what `fs2` already provides correctly.
 - **Timeout**: bounded retry loop with `try_lock_exclusive()` + 50ms sleep, default 5s;
   on expiry returns `AtmError { code: MailboxLockTimeout }`
 
-### 18.4 Integration: `locked_read_modify_write`
+### 18.4 Integration: Single-File Helper + Multi-File Lock Set
 
-All mutation paths go through one function:
+`append_message` is a true single-file read-modify-write and should use one shared helper:
 
 ```rust
 pub fn locked_read_modify_write<F>(
@@ -1212,12 +1213,36 @@ where
 }
 ```
 
+That helper is the right shape for:
+- `append_message`
+- the missing-config team-lead notice path, because it also calls `append_message`
+
+It is **not** sufficient by itself for `read`, `ack`, and `clear`, because those
+commands call `load_source_files(...)` and compute a merged surface across the
+requested inbox plus any origin inboxes before writing back. To make those paths
+concurrency-safe, Phase M needs a second abstraction:
+
+```rust
+pub fn acquire_many_sorted<'a>(
+    paths: impl IntoIterator<Item = &'a Path>,
+    timeout: Duration,
+) -> Result<Vec<MailboxLockGuard>, AtmError>
+```
+
+Required usage:
+- discover the full source-file set first
+- sort paths deterministically
+- acquire all locks
+- then call `load_source_files(...)`
+- hold every guard until every source writeback completes
+
 | Caller | Lock required |
 |--------|--------------|
-| `append_message` | Yes |
-| `read` writeback | Yes |
-| `ack` transition + reply | Yes |
-| `clear` set replacement | Yes |
+| `append_message` | `locked_read_modify_write` |
+| `send` missing-config notice append | `append_message` coverage |
+| `read` writeback | multi-file lock set held from first read through persist |
+| `ack` transition + reply | multi-file lock set held from first read through persist |
+| `clear` set replacement | multi-file lock set held from first read through persist |
 | `read_messages` (read-only, no writeback) | No |
 
 ### 18.5 New Error Codes
@@ -1229,11 +1254,11 @@ where
 
 ### 19.1 Problem Statement
 
-`restore_team` in `team_admin.rs:305-410` mutations order:
-1. Copy inbox files (lines 372-393)
-2. Restore task bucket (line 396)
-3. Recompute highwatermark (line 397)
-4. Write `config.json` (lines 398-400)
+`restore_team` in `team_admin.rs` currently mutates in this order:
+1. Copy inbox files to the live inbox directory
+2. Restore task bucket
+3. Recompute highwatermark
+4. Write `config.json`
 
 If the process crashes between steps 1 and 4, inbox files for members not in config
 exist with no detection mechanism.
@@ -1253,7 +1278,8 @@ exist with no detection mechanism.
 
 Key properties:
 - crash at steps 2-6: config.json unchanged, extra inbox files harmless, marker signals re-run
-- crash at step 7: config write is itself atomic (no partial write possible)
+- crash at step 7: config write is itself atomic via the existing `write_team_config(...)`
+  temp-file + rename path, so no partial config write is possible
 - crash at step 8: config is written, stale marker cleaned up by next doctor/restore run
 
 ### 19.3 Staging Directory
@@ -1281,21 +1307,26 @@ if matches!(self.backtrace.status(), std::backtrace::BacktraceStatus::Captured) 
 }
 ```
 
-Renders only when `RUST_BACKTRACE=1` or `full` is set and backtrace was captured.
+Renders only when the stored `Backtrace` status is `Captured`, which in practice
+corresponds to a runtime backtrace-enabled environment.
 
 ### 20.2 resolve_actor_identity Consolidation
 
-Duplicate function in `ack/mod.rs:185`, `clear/mod.rs:144`, `read/mod.rs:260` moves to
-`identity/mod.rs` as `pub(crate) fn resolve_actor_identity(...)`. All three call sites updated.
+Duplicate function in `ack/mod.rs`, `clear/mod.rs`, and `read/mod.rs` moves to
+`identity/mod.rs` as `pub(crate) fn resolve_actor_identity(...)`. All three call sites
+update to use the shared helper while preserving the existing override -> hook -> runtime
+identity resolution order.
 
 ### 20.3 normalize_json_number Panic Removal
 
-`observability.rs:532` `.expect("valid JSON number exponent")` replaced with graceful fallback:
-on parse failure, return raw string unchanged + emit `tracing::warn!`. A library function must
-not panic on potentially untrusted input.
+`observability.rs` currently contains `.expect("valid JSON number exponent")` in
+`normalize_json_number(...)` at the exponent parse site. Phase M replaces that panic
+with graceful fallback: on parse failure, return the raw string unchanged and emit
+`tracing::warn!`. A library function must not panic on potentially untrusted input.
 
 ### 20.4 Phase L.7 Build-On Notes
 
-Phase M builds on L.7 deliverables (`[atm].team_members`, `[atm].aliases`, `[atm].post_send_hook`).
-Phase M does not modify these but M.2 documents `[atm].identity` deprecation alongside them.
-ARCH-CR-003 (repair notice sender) and ARCH-CR-004 (doctor config key visibility) are addressed in L.7.
+Phase M builds on the already-landed L.7 runtime surface
+(`team_members`, `aliases`, `post_send_hook`, doctor identity drift warning).
+Phase M does not re-open that feature set; it only adds the remaining concurrency,
+restore, and code-review hardening needed for 1.0.

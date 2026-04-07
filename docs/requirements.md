@@ -1575,14 +1575,31 @@ closed before the 1.0 release.
 - `REQ-CORE-MAILBOX-LOCK-004` Every mailbox mutation path must acquire the lock.
 
   Required coverage:
-  - `append_message` (send path)
+  - `append_message` for both normal send and the missing-config team-lead notice path
   - workflow state writeback in read, ack, and clear paths
-  - idle-notification dedup removal during send-time append
   - any future mutation path added to the mailbox layer
 
   Read-only `read_messages` calls with no following writeback do not require locking.
 
-- `REQ-CORE-MAILBOX-LOCK-005` Single-process single-threaded usage must not
+- `REQ-CORE-MAILBOX-LOCK-005` Multi-source mailbox commands must acquire all
+  required locks before reading any source inbox, and must do so in deterministic
+  path order.
+
+  Rationale: `read`, `ack`, and `clear` do not operate on a single inbox file.
+  They call `load_source_files(...)`, which reads the requested inbox plus any
+  origin inboxes, compute a merged surface from those snapshots, and then write
+  one or more source files back. Taking a lock only during the final write step
+  would still allow stale reads and lost updates.
+
+  Required behavior:
+  - `read`, `ack`, and `clear` must discover their full source-file set, sort the
+    paths deterministically, acquire all locks, then call `load_source_files(...)`
+  - those locks must remain held through surface computation, state transition,
+    and final writeback
+  - deterministic ordering must prevent deadlock when two commands contend on the
+    same pair of inbox files in opposite discovery order
+
+- `REQ-CORE-MAILBOX-LOCK-006` Single-process single-threaded usage must not
   regress measurably due to lock acquisition.
 
   Required behavior:
@@ -1601,9 +1618,13 @@ closed before the 1.0 release.
   files that do not match the config roster.
 
   Required behavior:
+  - restore planning and backup validation happen before the marker is written
   - config.json is written last, after all inbox copies and task restores succeed
   - a `.restore-in-progress` marker file is written to the team directory before
     mutation begins and removed after config is successfully fsynced
+  - the config-last step must continue using the existing `write_team_config(...)`
+    atomic temp-file + rename pattern instead of introducing a second config
+    persistence path
   - on next `atm teams restore`, if a `.restore-in-progress` marker exists, warn
     the operator and recommend re-running the restore
   - `atm doctor` must check for stale `.restore-in-progress` markers and report
@@ -1630,18 +1651,26 @@ closed before the 1.0 release.
     the backtrace after the error message and recovery text
 
 - `REQ-CORE-ERROR-DOC-001` Every public function returning `AtmResult` or
-  `Result<_, AtmError>` must have a `# Errors` documentation section.
+  `Result<_, AtmError>` in the modules touched by Phase M must have a `# Errors`
+  documentation section.
 
   Required behavior:
   - each `# Errors` section must list the `AtmErrorCode` variants the function
     can return
-  - approximately 23 public functions across 9 source files are affected
+  - the implementation must audit the current public API surface instead of
+    relying on a stale hard-coded function count
 
 - `REQ-CORE-ERROR-RECOVERY-001` Every `AtmError` construction site that
   represents an operator-actionable failure must use `.with_recovery()`.
 
   Required behavior:
-  - approximately 16 error construction sites need `.with_recovery()` added
+  - Phase M must perform a grep-driven audit of remaining bare
+    `AtmError::new(...)`, `AtmError::mailbox_*`, `AtmError::file_policy(...)`,
+    and similar operator-actionable construction sites in the touched modules
+  - the audit must include the remaining bare sites in mailbox, address,
+    send-input, file-policy, and state-transition code, plus any new errors
+    introduced by M.1 mailbox locking or M.2 restore staging
+  - sites already covered by L.7/L.8 recovery work do not need duplicate edits
   - internal invariant violations do not require recovery guidance
 
 ### 20.4 Code Consolidation And Documentation
@@ -1650,8 +1679,8 @@ closed before the 1.0 release.
   function must be consolidated into a single shared implementation.
 
   Required behavior:
-  - the identical function in `ack/mod.rs:185`, `clear/mod.rs:144`, and
-    `read/mod.rs:260` must be moved to `identity/mod.rs` as `pub(crate)`
+  - the identical helper currently present in `ack/mod.rs`, `clear/mod.rs`, and
+    `read/mod.rs` must be moved to `identity/mod.rs` as `pub(crate)`
 
 - `REQ-CORE-CONFIG-DOC-001` The deprecated `[atm].identity` config key must be
   documented in a `# Deprecated` section in the config module documentation.
