@@ -289,10 +289,12 @@ Architectural rules:
   canonical sender identity rather than the display-oriented `from` projection
 - ATM-owned post-send hooks are sender-scoped best-effort helpers, not part of
   the atomic send boundary
+- the hook runs only after a successful non-`dry-run` send
 - relative post-send-hook paths resolve from the discovered `.atm.toml`
   directory and execute with that same directory as the working directory
 - the hook receives inherited environment plus one ATM-owned JSON payload in
   `ATM_POST_SEND`
+- hook failure or timeout never rolls back a successful send
 
 ## 5. Persisted Schema
 
@@ -846,6 +848,9 @@ contain:
 - `message_id`
 - `requires_ack`
 - optional `task_id`
+
+The post-send hook runs only after a successful non-`dry-run` send, and hook
+failure or timeout never rolls back a successful send.
 
 ### 13.2 File Policy
 

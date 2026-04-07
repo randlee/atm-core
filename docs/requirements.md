@@ -227,15 +227,15 @@ Supported optional config fields:
 - `[atm].post_send_hook_members`
 
 Runtime identity rules:
-- repo-local `.atm.toml` identity is not a valid runtime identity fallback for
-  the retained multi-agent ATM model
+- repo-local `.atm.toml` `[atm].identity` is not a valid runtime identity
+  fallback for the retained multi-agent ATM model
 - runtime identity must come from:
   - explicit command override when supported
   - hook-file identity
   - `ATM_IDENTITY`
-- an obsolete config `identity` field may remain temporarily for migration, but
-  ATM must ignore it for runtime identity resolution and `atm doctor` must flag
-  it for removal
+- an obsolete config `[atm].identity` field may remain temporarily for
+  migration, but ATM must ignore it for runtime identity resolution and
+  `atm doctor` must flag it for removal
 - `.atm.toml` may define `[atm].team_members` as the baseline team roster that
   should always be present in `config.json`
 - `.atm.toml` may define `[atm].aliases` for ATM-owned shorthand addressing of

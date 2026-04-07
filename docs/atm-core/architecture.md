@@ -71,6 +71,7 @@ Identity-specific policy:
   canonical sender identity is also persisted in `metadata.atm.fromIdentity` for
   validation, routing, and audit use
 - post-send-hook execution is outside the atomic mailbox mutation boundary
+- the hook runs only after a successful non-`dry-run` send
 - a relative hook path resolves from the discovered `.atm.toml` directory and
   executes with that same directory as working directory
 - the hook inherits process environment and receives one ATM-owned JSON

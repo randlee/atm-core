@@ -212,7 +212,7 @@ Required config rules:
 - `[atm].post_send_hook_members` may define the sender-identity allowlist for
   that hook
 - `[atm].identity` is obsolete and must not participate in runtime identity
-  resolution
+  resolution; doctor should report it as configuration drift when present
 
 Required identity rules:
 - runtime identity must come from explicit command override, hook identity, or
