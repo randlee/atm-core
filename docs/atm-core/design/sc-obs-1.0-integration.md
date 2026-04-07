@@ -64,6 +64,12 @@ This change is useful for:
 - tests that need to distinguish retained log output from normal command output
 - reducing accidental stdout contamination in scripted ATM usage
 
+Traceability:
+
+- the final CLI flag name is `--stderr-logs`
+- this section is the canonical L.1 reference for that flag and closes the
+  earlier traceability gap that QA tracked as `ATM-QA-002`
+
 ## 4. Fault Injection Strategy (`#57`)
 
 `L.2` adopts the upstream retained-sink fault injector from `#57`.
@@ -87,18 +93,57 @@ Current outcome:
 - the live validation report records the induced degraded/unavailable runs
   explicitly
 - the earlier healthy-only validation gap from Phase K is closed
+- the ATM-owned observability health contract remains intentionally closed for
+  initial release:
+  - `healthy`
+  - `degraded`
+  - `unavailable`
+- additional health nuance is deferred until a versioned follow-on change has
+  a concrete consumer need
 
 ## 5. File Sink Path Alignment (`#21`)
 
 ATM must not hardcode assumptions about the earlier retained file layout once
 the shared crate adopts the newer path shape.
 
-Required Phase L direction:
+`L.3` closes the path-migration work by treating the shared adapter as the
+source of truth for the active retained log file.
+
+Current rule:
 
 - ATM-side path assumptions must follow the shared crate layout
+- the retained file sink now lives at:
+  - `$ATM_HOME/.local/share/logs/<service_name>.log.jsonl`
+- for ATM itself, the operator-facing expected path is:
+  - `$ATM_HOME/.local/share/logs/atm.log.jsonl`
 - retained query/follow and doctor health checks must be revalidated against
   the new location
 - operator-facing docs and validation notes must use the current shared layout
+
+### L.3 Carry-In Closure
+
+Phase L.3 closes the retained Phase K carry-ins that belonged to the file-sink
+alignment follow-up:
+
+- `RUST-QA-001`
+  - resolved by documenting the intended ATM-local ownership split rather than
+    promoting the full concrete query/follow adapter surface into `atm-core`
+  - `atm-core` remains the owner of the ATM-facing observability contract
+    needed by ATM messaging workflows, while `atm` owns the concrete adapter
+    wiring
+- `PRR-002`
+  - resolved by explicitly keeping the ATM observability health contract
+    closed for initial release:
+    - `healthy`
+    - `degraded`
+    - `unavailable`
+- `ATM-QA-002`
+  - resolved by treating the final `--stderr-logs` flag contract in this note
+    as the canonical L.1 reference
+
+Phase L.3 does not implement any L.7 config fields in code. Any merge-forward
+from later Phase L.7 planning adds documentation for `[atm].team_members`,
+`[atm].aliases`, and `[atm].post_send_hook` only.
 
 ## 6. Dependency Strategy
 

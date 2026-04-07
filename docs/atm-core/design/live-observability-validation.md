@@ -9,8 +9,7 @@ fault injector rather than through ATM-local deterministic doubles.
 ## Environment
 
 - Worktree: `feature/pL-s2-fault-injection`
-- ATM binary:
-  `/Users/randlee/Documents/github/atm-core-worktrees/feature/pL-s2-fault-injection/target/debug/atm`
+- ATM binary: `./target/debug/atm` from the checked-out worktree root
 - Published dependencies:
   - `sc-observability = "1.0.0"`
   - `sc-observability-types = "1.0.0"`
@@ -18,6 +17,12 @@ fault injector rather than through ATM-local deterministic doubles.
   `/var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.IazCSMniAq`
 - Tail fixture `ATM_HOME`:
   `/var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.ELpCcLpmlE`
+
+Machine-specific note:
+
+- the temporary directory prefixes shown in captured output below come from one
+  local validation host; only the retained-log suffix is normative:
+  `$ATM_HOME/.local/share/logs/atm.log.jsonl`
 
 Fixture setup:
 
@@ -311,6 +316,58 @@ Supporting test coverage:
   - retained-log emission for `clear`
 - `crates/atm/tests/log.rs`
   - shared snapshot/filter/tail behavior
+
+## Phase L.3 Follow-Up Validation
+
+Phase L.3 re-ran the live doctor/snapshot path specifically to prove that the
+post-`#21` file-sink layout is the operator-facing path ATM should document.
+
+Worktree:
+
+- `feature/pL-s3-file-sink-migration`
+
+Commands run:
+
+1. `atm send recipient@atm-dev "l3 path seed" --json`
+2. `atm doctor --json`
+3. `atm log snapshot --match command=send --since 10m --limit 10 --json`
+
+Observed results:
+
+- `atm doctor --json` reported
+  `observability.active_log_path ==
+  <ATM_HOME>/.local/share/logs/atm.log.jsonl`
+- `atm log snapshot` returned the retained `send` record emitted into that same
+  migrated store
+- no live command in this pass depended on the older
+  `<log_root>/<service>.log.jsonl` layout
+
+Captured excerpts:
+
+```json
+{
+  "observability": {
+    "active_log_path": "/var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/tmp.WybcP84GtN/.local/share/logs/atm.log.jsonl",
+    "logging_state": "healthy",
+    "query_state": "healthy"
+  }
+}
+```
+
+```json
+{
+  "records": [
+    {
+      "action": "send",
+      "fields": {
+        "command": "send",
+        "message_id": "1987711b-fe98-4e35-bb6c-cf65b4424ade"
+      }
+    }
+  ],
+  "truncated": false
+}
+```
 
 ## Production Diagnosis
 

@@ -21,10 +21,9 @@ fn test_doctor_reports_healthy_observability_with_real_adapter() {
     assert_eq!(parsed["findings"][0]["code"], "ATM_OBSERVABILITY_HEALTH_OK");
     assert_eq!(parsed["observability"]["logging_state"], "healthy");
     assert_eq!(parsed["observability"]["query_state"], "healthy");
-    assert!(
-        parsed["observability"]["active_log_path"]
-            .as_str()
-            .is_some()
+    assert_eq!(
+        parsed["observability"]["active_log_path"],
+        fixture.active_log_path().display().to_string()
     );
 }
 
@@ -134,5 +133,14 @@ impl Fixture {
             .join(".claude")
             .join("teams")
             .join("atm-dev")
+    }
+
+    fn active_log_path(&self) -> std::path::PathBuf {
+        self.tempdir
+            .path()
+            .join(".local")
+            .join("share")
+            .join("logs")
+            .join("atm.log.jsonl")
     }
 }
