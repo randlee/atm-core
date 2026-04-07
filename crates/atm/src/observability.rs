@@ -99,7 +99,6 @@ impl CliObservability {
             eprintln!("{}", fatal_emit_failure_message(stage, &emit_error));
         }
     }
-
 }
 
 pub fn init(stderr_logs: bool) -> Result<CliObservability> {
@@ -243,6 +242,9 @@ fn fatal_emit_failure_message(stage: &str, emit_error: &AtmError) -> String {
 }
 
 fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError> {
+    // WARNING: production-reachable diagnostic seam. Phase L intentionally
+    // keeps this env hook available so live degraded/unavailable validation
+    // can exercise the real shared adapter before initial release.
     let Some(value) = std::env::var(ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV)
         .ok()
         .map(|value| value.trim().to_ascii_lowercase())

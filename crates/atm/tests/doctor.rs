@@ -66,7 +66,10 @@ fn test_doctor_reports_unavailable_observability_with_real_fault_injection() {
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["summary"]["status"], "error");
     assert_eq!(parsed["findings"][0]["severity"], "error");
-    assert_eq!(parsed["findings"][0]["code"], "ATM_OBSERVABILITY_HEALTH_FAILED");
+    assert_eq!(
+        parsed["findings"][0]["code"],
+        "ATM_OBSERVABILITY_HEALTH_FAILED"
+    );
     assert_eq!(parsed["observability"]["logging_state"], "unavailable");
     assert_eq!(parsed["observability"]["query_state"], "healthy");
 }
@@ -88,6 +91,7 @@ impl Fixture {
         command
             .args(args)
             .env("ATM_HOME", self.tempdir.path())
+            .env("ATM_CONFIG_HOME", self.tempdir.path())
             .env("ATM_IDENTITY", "arch-ctm")
             .env("ATM_TEAM", "atm-dev")
             .current_dir(self.tempdir.path());
