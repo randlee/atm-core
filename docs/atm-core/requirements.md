@@ -175,6 +175,9 @@ Required boundary rules:
 - `atm-core` owns the injected observability boundary used by retained command
   services
 - `atm-core` must not depend on concrete `sc-observability` crate types
+- the public `atm-core` observability boundary must not expose
+  `serde_json::Value`, `serde_json::Map`, or other serialization-format types
+  directly
 - the boundary must cover emit, query, follow, and health rather than
   remaining emit-only
 - ATM-owned projected request/result types must be defined in `atm-core` for:
@@ -190,8 +193,32 @@ Required boundary rules:
 - the corresponding source-of-truth code registry must live in one source file
   and match [`../atm-error-codes.md`](../atm-error-codes.md)
 
+Required public field-model rules:
+- `LogFieldKey` is the validated ATM-owned field-name type used by retained-log
+  queries and projected records
+- `AtmJsonNumber` is the validated ATM-owned representation for JSON numeric
+  literals at the observability boundary
+- `LogFieldValue` is the ATM-owned recursive value model with variants for:
+  - null
+  - bool
+  - string
+  - number (`AtmJsonNumber`)
+  - array of `LogFieldValue`
+  - object (`LogFieldMap`)
+- `LogFieldMap` is the ATM-owned map type used by `AtmLogRecord.fields`
+- `LogFieldMatch` must use `LogFieldKey` + `LogFieldValue`
+- `AtmLogRecord.fields` must use `LogFieldMap`
+- serialization of these ATM-owned types must preserve the current CLI JSON
+  wire shape for retained-log commands
+- conversion to and from raw `serde_json` values must remain centralized inside
+  `atm-core`
+
 Detailed design and implementation shape is owned by:
 - [`design/sc-observability-integration.md`](./design/sc-observability-integration.md)
+  for the historical Phase K boundary expansion rationale
+- [`design/sc-obs-1.0-integration.md`](./design/sc-obs-1.0-integration.md)
+  for the active Phase L release-alignment decisions, including the L.4 public
+  boundary cleanup
 
 ## 8. Config And Team Baseline Semantics
 

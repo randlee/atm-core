@@ -269,9 +269,59 @@ pub struct LogFieldMatch {
     pub key: LogFieldKey,
     pub value: LogFieldValue,
 }
+
+pub struct LogFieldMap(BTreeMap<LogFieldKey, LogFieldValue>);
+
+pub struct AtmJsonNumber(String);
+
+pub enum LogFieldValue {
+    Null,
+    Bool(bool),
+    String(String),
+    Number(AtmJsonNumber),
+    Array(Vec<LogFieldValue>),
+    Object(LogFieldMap),
+}
 ```
 
-### 4.5 Identity And Alias Projection
+Architectural rules:
+- `LogFieldKey` replaces raw field-name strings at the public observability
+  boundary
+- `AtmJsonNumber` replaces raw numeric `serde_json` values at the public
+  observability boundary
+- `LogFieldValue` and `LogFieldMap` replace raw `serde_json::Value` /
+  `Map<String, Value>` in `LogFieldMatch` and `AtmLogRecord`
+- these ATM-owned types must serialize to the same JSON shape the CLI exposes
+  today; the boundary cleanup is a Rust API cleanup, not a CLI wire-format
+  redesign
+- conversion to and from raw `serde_json` values remains centralized inside
+  `atm-core`
+
+### 4.5 Observability Construction Contract
+
+`CliObservability` should expose one structured construction path for initial
+release:
+
+```rust
+pub struct CliObservabilityOptions {
+    pub stderr_logs: bool,
+}
+
+impl CliObservability {
+    pub fn new(home_dir: &Path, options: CliObservabilityOptions) -> Result<Self, AtmError>;
+}
+```
+
+Architectural rules:
+- the top-level `init(stderr_logs)` helper may remain as a CLI convenience, but
+  it should delegate to `CliObservability::new(...)`
+- dynamic dispatch via `Box<dyn ObservabilityPort + Send + Sync>` remains
+  acceptable for initial release
+- the current sealed-trait pattern remains acceptable for initial release
+- `DoctorCommand` injectability is explicitly deferred unless implementation
+  surfaces a concrete need
+
+### 4.6 Identity And Alias Projection
 
 ATM must distinguish canonical routing identity from the Claude-facing sender
 projection.

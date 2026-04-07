@@ -321,9 +321,8 @@ Required integration rules:
   `sc-observability` APIs can own the behavior
 - `atm-core` must keep the shared crates behind an ATM-owned injected boundary
 - `atm` owns the concrete shared-crate bootstrap and dependency wiring
-- until `sc-observability` is published, local and CI builds may consume the
-  shared crates from a local checkout, but committed ATM docs/scripts must not
-  hardcode user-specific absolute paths
+- the active release baseline uses the published
+  `sc-observability = "1.0.0"` crates.io dependency
 - the same pinned Rust toolchain must be used locally and in CI across ATM and
   `sc-*` repos
 - the concrete integration work is planned in Phase K of

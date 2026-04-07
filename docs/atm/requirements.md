@@ -58,10 +58,13 @@ Initial crate requirement IDs:
 
 - initializing the concrete shared logger once per CLI process
 - mapping ATM env/config decisions into shared logger configuration
-- consuming `sc-observability` from a local checkout in developer/CI builds
-  until publish is complete, without hardcoding user-specific absolute paths
-- switching to versioned published crate dependencies once the shared workspace
-  is released
+- consuming the published `sc-observability = "1.0.0"` crate baseline rather
+  than a local pre-publish checkout
+- exposing one structured construction contract for the concrete adapter:
+  - `CliObservability::new(home_dir, CliObservabilityOptions)`
+- keeping `init(...)` only as a delegating CLI bootstrap helper
+- retaining dynamic dispatch and the current sealed-trait pattern unless
+  implementation surfaces a concrete defect
 - logging CLI bootstrap, parse, and terminal command failures with stable
   ATM-owned error codes before exit
 - using the single ATM-owned code registry defined by

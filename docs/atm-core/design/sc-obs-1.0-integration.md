@@ -105,3 +105,30 @@ Required Phase L direction:
 ATM now consumes the published `sc-observability = "1.0.0"` release. Phase L
 continues from that published baseline rather than the earlier local
 `[patch.crates-io]` pre-publish strategy.
+
+## 7. L.4 Public Boundary Cleanup
+
+L.4 is a Rust API cleanup sprint, not a CLI JSON redesign.
+
+Implementation contract:
+- replace public raw `serde_json::Value` / `serde_json::Map` usage with the
+  ATM-owned field model:
+  - `LogFieldKey`
+  - `AtmJsonNumber`
+  - `LogFieldValue`
+  - `LogFieldMap`
+- update `LogFieldMatch` and `AtmLogRecord.fields` to use that field model
+- keep all raw `serde_json` parsing and adapter translation inside `atm-core`
+- preserve the current CLI JSON output shape for retained-log commands
+
+## 8. L.5 Construction Ergonomics
+
+L.5 is a construction-contract cleanup sprint.
+
+Implementation contract:
+- add `CliObservability::new(home_dir, CliObservabilityOptions)`
+- keep `init(...)` only as a delegating CLI bootstrap helper
+- keep dynamic dispatch and the current sealed-trait pattern unless
+  implementation surfaces a concrete defect
+- keep `DoctorCommand` injectability deferred for initial release unless a
+  concrete need appears during implementation

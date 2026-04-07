@@ -20,6 +20,17 @@ service boundaries.
 - `atm-core` owns persisted config/team loading policy, including compatibility
   defaults, recovery boundaries, and precise parse diagnostics.
 
+Observability release boundary rules:
+- raw `serde_json::Value` / `serde_json::Map` remain internal translation types
+  only; they are not part of the public observability contract
+- the public L.4 field model uses:
+  - `LogFieldKey`
+  - `AtmJsonNumber`
+  - `LogFieldValue`
+  - `LogFieldMap`
+- CLI JSON output remains wire-compatible with the current retained-log output
+  shape after the boundary cleanup
+
 ## 3. Config Loading Boundary
 
 Persisted config and team-document handling belongs at the `atm-core` loading

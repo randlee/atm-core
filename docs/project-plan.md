@@ -551,15 +551,31 @@ Planned sprints:
     `atm-core`
   - key tasks:
     - replace public `serde_json::Value` / `Map<String, Value>` usage in
-      observability-facing `atm-core` types with ATM-owned domain types or
-      wrappers
+      observability-facing `atm-core` types with the ATM-owned field model:
+      - `LogFieldKey`
+      - `AtmJsonNumber`
+      - `LogFieldValue`
+      - `LogFieldMap`
+    - update `LogFieldMatch` to use `LogFieldKey` + `LogFieldValue`
+    - update `AtmLogRecord.fields` to use `LogFieldMap`
     - keep JSON/JSONL parsing, validation, degradation, and repair centralized
       in `atm-core` rather than pushing that logic into CLI or sibling crates
+    - keep all raw `serde_json` translation at the `atm-core` boundary edge;
+      CLI and sibling crates must not need to manipulate raw retained-log JSON
+      values directly
     - preserve the published CLI JSON output behavior after the public type
       cleanup
   - closes:
     - `INTEROP-001`
     - `BP-003`
+  - tests:
+    - unit coverage for `LogFieldKey`, `AtmJsonNumber`, `LogFieldValue`, and
+      `LogFieldMap` serde/validation behavior
+    - unit coverage for adapter mapping between ATM-owned field types and the
+      shared query/result values
+    - integration coverage proving CLI JSON output remains stable for
+      `atm log snapshot --json`, `atm log filter --json`, and
+      `atm log tail --json`
   - dependency note:
     - can proceed in parallel with `L.5` once the Phase K crates.io baseline
       from `K-CRATES-IO-1` is present
@@ -568,13 +584,17 @@ Planned sprints:
   - goal: clean up the remaining release-surface ergonomics without forcing
     speculative refactors that are not yet justified
   - key tasks:
-    - add a structured `CliObservability` construction path (`new(...)` or an
-      equivalent minimal builder) so CLI bootstrap and tests do not assemble
-      the adapter through ad hoc wiring
-    - review the current boxed trait-object dispatch and sealed-trait pattern;
-      implement a change only when it clearly improves the release design
-    - record an explicit disposition for `DoctorCommand` injectability:
-      - optional for initial release unless a concrete testing or feature need
+    - add a structured construction API:
+      - `CliObservability::new(home_dir, CliObservabilityOptions)`
+    - keep `init(...)` only as a delegating CLI bootstrap helper
+    - define `CliObservabilityOptions` as the single supported construction
+      contract for production bootstrap and tests
+    - keep dynamic dispatch (`Box<dyn ObservabilityPort + Send + Sync>`) unless
+      implementation proves a concrete release defect
+    - keep the current sealed-trait pattern unless implementation proves a
+      concrete encapsulation defect
+    - record the explicit disposition for `DoctorCommand` injectability:
+      - deferred for initial release unless a concrete testing or feature need
         appears during implementation
   - closes:
     - `UX-001`
@@ -582,6 +602,10 @@ Planned sprints:
     - disposition of `UX-002`
     - disposition of `BP-001`
     - disposition of `UNI-003`
+  - tests:
+    - constructor coverage for default bootstrap and stderr-routing bootstrap
+    - no-regression coverage for existing `atm doctor` / `atm log` bootstrap
+      behavior after the construction refactor
   - dependency note:
     - may run in parallel with `L.4`, or immediately after it if the public
       API cleanup changes the preferred construction boundary
@@ -600,6 +624,8 @@ Planned sprints:
   - dependency note:
     - depends on `L.1` through `L.5` being complete so release validation runs
       against the final observability surface
+    - distinct from `L.7`; config/identity cleanup is not part of the
+      release-closeout sprint
 
 - `L.7` Team Baseline And Identity Source Cleanup
   - goal: align ATM config semantics with multi-agent team launches by moving
