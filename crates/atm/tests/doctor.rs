@@ -21,11 +21,56 @@ fn test_doctor_reports_healthy_observability_with_real_adapter() {
     assert_eq!(parsed["findings"][0]["code"], "ATM_OBSERVABILITY_HEALTH_OK");
     assert_eq!(parsed["observability"]["logging_state"], "healthy");
     assert_eq!(parsed["observability"]["query_state"], "healthy");
-    assert!(
-        parsed["observability"]["active_log_path"]
-            .as_str()
-            .is_some()
+    assert_eq!(
+        parsed["observability"]["active_log_path"],
+        fixture.active_log_path().display().to_string()
     );
+}
+
+#[test]
+fn test_doctor_reports_degraded_observability_with_real_fault_injection() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+
+    let output = fixture.run(
+        &["doctor", "--json"],
+        &[("ATM_OBSERVABILITY_RETAINED_SINK_FAULT", "degraded")],
+    );
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["summary"]["status"], "warning");
+    assert_eq!(parsed["findings"][0]["severity"], "warning");
+    assert_eq!(
+        parsed["findings"][0]["code"],
+        "ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED"
+    );
+    assert_eq!(parsed["observability"]["logging_state"], "degraded");
+    assert_eq!(parsed["observability"]["query_state"], "healthy");
+}
+
+#[test]
+fn test_doctor_reports_unavailable_observability_with_real_fault_injection() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+
+    let output = fixture.run(
+        &["doctor", "--json"],
+        &[("ATM_OBSERVABILITY_RETAINED_SINK_FAULT", "unavailable")],
+    );
+
+    assert!(!output.status.success());
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["summary"]["status"], "error");
+    assert_eq!(parsed["findings"][0]["severity"], "error");
+    assert_eq!(
+        parsed["findings"][0]["code"],
+        "ATM_OBSERVABILITY_HEALTH_FAILED"
+    );
+    assert_eq!(parsed["observability"]["logging_state"], "unavailable");
+    assert_eq!(parsed["observability"]["query_state"], "healthy");
 }
 
 struct Fixture {
@@ -45,6 +90,7 @@ impl Fixture {
         command
             .args(args)
             .env("ATM_HOME", self.tempdir.path())
+            .env("ATM_CONFIG_HOME", self.tempdir.path())
             .env("ATM_IDENTITY", "arch-ctm")
             .env("ATM_TEAM", "atm-dev")
             .current_dir(self.tempdir.path());
@@ -88,5 +134,14 @@ impl Fixture {
             .join(".claude")
             .join("teams")
             .join("atm-dev")
+    }
+
+    fn active_log_path(&self) -> std::path::PathBuf {
+        self.tempdir
+            .path()
+            .join(".local")
+            .join("share")
+            .join("logs")
+            .join("atm.log.jsonl")
     }
 }

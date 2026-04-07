@@ -1,6 +1,7 @@
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
+use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
@@ -11,6 +12,11 @@ use chrono::{Duration as ChronoDuration, Utc};
 fn test_log_snapshot_json_returns_recent_records() {
     let fixture = Fixture::new(&["arch-ctm", "recipient"]);
     fixture.send("recipient@atm-dev", "hello snapshot");
+    assert!(
+        fixture.active_log_path().is_file(),
+        "expected retained log file at {}",
+        fixture.active_log_path().display()
+    );
 
     let output = fixture.run(&[
         "log",
@@ -273,6 +279,7 @@ impl Fixture {
         Command::new(env!("CARGO_BIN_EXE_atm"))
             .args(args)
             .env("ATM_HOME", self.tempdir.path())
+            .env("ATM_CONFIG_HOME", self.tempdir.path())
             .env("ATM_IDENTITY", "arch-ctm")
             .env("ATM_TEAM", "atm-dev")
             .current_dir(self.tempdir.path())
@@ -284,6 +291,7 @@ impl Fixture {
         Command::new(env!("CARGO_BIN_EXE_atm"))
             .args(args)
             .env("ATM_HOME", self.tempdir.path())
+            .env("ATM_CONFIG_HOME", self.tempdir.path())
             .env("ATM_IDENTITY", "arch-ctm")
             .env("ATM_TEAM", "atm-dev")
             .current_dir(self.tempdir.path())
@@ -299,14 +307,29 @@ impl Fixture {
         count: usize,
     ) -> Vec<serde_json::Value> {
         let stdout = child.stdout.take().expect("tail stdout");
-        let mut reader = BufReader::new(stdout);
-        let mut line = String::new();
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let mut reader = BufReader::new(stdout);
+            loop {
+                let mut line = String::new();
+                match reader.read_line(&mut line) {
+                    Ok(0) => break,
+                    Ok(_) => {
+                        if tx.send(line).is_err() {
+                            break;
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
         let mut records = Vec::new();
 
         while records.len() < count {
-            line.clear();
-            let bytes = reader.read_line(&mut line).expect("read line");
-            assert!(bytes > 0, "tail exited before producing enough output");
+            let line = rx.recv_timeout(Duration::from_secs(5)).unwrap_or_else(|_| {
+                let _ = child.kill();
+                panic!("tail timed out before producing enough output");
+            });
             if line.trim().is_empty() {
                 continue;
             }
@@ -350,6 +373,15 @@ impl Fixture {
             .join(".claude")
             .join("teams")
             .join("atm-dev")
+    }
+
+    fn active_log_path(&self) -> std::path::PathBuf {
+        self.tempdir
+            .path()
+            .join(".local")
+            .join("share")
+            .join("logs")
+            .join("atm.log.jsonl")
     }
 
     fn stdout(&self, output: &std::process::Output) -> String {

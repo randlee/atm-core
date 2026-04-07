@@ -10,7 +10,10 @@ use atm_core::observability::{
     LogTailSession, ObservabilityPort,
 };
 use chrono::{DateTime, Utc};
-use sc_observability::{ConsoleSink, Logger, LoggerConfig, SinkRegistration};
+use sc_observability::{
+    ConsoleSink, JsonlFileSink, Logger, LoggerBuilder, LoggerConfig, RetainedSinkFaultInjector,
+    RetentionPolicy, RotationPolicy, SinkRegistration,
+};
 use sc_observability_types::{
     ActionName, CorrelationId, DiagnosticInfo, Level, LogEvent, LogQuery, OutcomeLabel,
     ProcessIdentity, QueryError, SchemaVersion, ServiceName, TargetCategory, Timestamp,
@@ -20,11 +23,18 @@ use time::OffsetDateTime;
 
 const ATM_SERVICE_NAME: &str = "atm";
 const ATM_COMMAND_TARGET: &str = "atm.command";
+const ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ConsoleLogRoute {
     Disabled,
     Stderr,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RetainedSinkFaultMode {
+    Degraded,
+    Unavailable,
 }
 /// ATM CLI observability handle.
 ///
@@ -89,21 +99,10 @@ impl CliObservability {
             eprintln!("{}", fatal_emit_failure_message(stage, &emit_error));
         }
     }
-
-    #[cfg(any(test, feature = "test-util"))]
-    fn static_health(health: AtmObservabilityHealth) -> Self {
-        Self {
-            inner: Box::new(StaticHealthObservability { health }),
-        }
-    }
 }
 
 pub fn init(stderr_logs: bool) -> Result<CliObservability> {
     let home_dir = home::atm_home()?;
-    #[cfg(any(test, feature = "test-util"))]
-    if let Some(override_health) = test_health_override(&home_dir) {
-        return Ok(override_health);
-    }
     let console_log_route = if stderr_logs {
         ConsoleLogRoute::Stderr
     } else {
@@ -139,15 +138,8 @@ struct ScObservabilityAdapter {
     target_category: TargetCategory,
 }
 
-#[cfg(any(test, feature = "test-util"))]
-struct StaticHealthObservability {
-    health: AtmObservabilityHealth,
-}
-
 impl observability::sealed::Sealed for CliObservability {}
 impl observability::sealed::Sealed for ScObservabilityAdapter {}
-#[cfg(any(test, feature = "test-util"))]
-impl observability::sealed::Sealed for StaticHealthObservability {}
 
 impl ScObservabilityAdapter {
     fn new(home_dir: &Path, console_log_route: ConsoleLogRoute) -> Result<Self, AtmError> {
@@ -169,6 +161,9 @@ impl ScObservabilityAdapter {
         })?;
         if console_log_route == ConsoleLogRoute::Stderr {
             builder.register_sink(SinkRegistration::new(Arc::new(ConsoleSink::stderr())));
+        }
+        if let Some(mode) = retained_sink_fault_mode()? {
+            register_retained_sink_fault(&mut builder, home_dir, mode);
         }
         let logger = builder.build();
 
@@ -232,59 +227,58 @@ impl ObservabilityPort for ScObservabilityAdapter {
     }
 }
 
-#[cfg(any(test, feature = "test-util"))]
-impl ObservabilityPort for StaticHealthObservability {
-    fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {
-        Ok(())
-    }
-
-    fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
-        Ok(AtmLogSnapshot::default())
-    }
-
-    fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, AtmError> {
-        Ok(LogTailSession::empty())
-    }
-
-    fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
-        Ok(self.health.clone())
-    }
-}
-
 fn log_root(home_dir: &Path) -> PathBuf {
     home_dir.join(".local").join("share")
+}
+
+fn fault_injection_log_path(home_dir: &Path) -> PathBuf {
+    log_root(home_dir)
+        .join("logs")
+        .join("atm-fault-injection.log.jsonl")
 }
 
 fn fatal_emit_failure_message(stage: &str, emit_error: &AtmError) -> String {
     format!("ATM fatal diagnostic emission failed during {stage}: {emit_error}")
 }
 
-#[cfg(any(test, feature = "test-util"))]
-fn test_health_override(home_dir: &Path) -> Option<CliObservability> {
-    // Keep the CLI integration harness deterministic for doctor/log surfaces
-    // without depending on induced file-sink failures inside sc-observability.
-    let state = std::env::var("ATM_TEST_OBSERVABILITY_HEALTH").ok()?;
-    let logging_state = match state.as_str() {
-        "healthy" => AtmObservabilityHealthState::Healthy,
-        "degraded" => AtmObservabilityHealthState::Degraded,
-        "unavailable" => AtmObservabilityHealthState::Unavailable,
-        _ => return None,
+fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError> {
+    // WARNING: production-reachable diagnostic seam. Phase L intentionally
+    // keeps this env hook available so live degraded/unavailable validation
+    // can exercise the real shared adapter before initial release.
+    let Some(value) = std::env::var(ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV)
+        .ok()
+        .map(|value| value.trim().to_ascii_lowercase())
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(None);
     };
-    let query_state = std::env::var("ATM_TEST_OBSERVABILITY_QUERY_STATE")
-        .ok()
-        .as_deref()
-        .and_then(parse_health_state)
-        .unwrap_or(logging_state);
-    let detail = std::env::var("ATM_TEST_OBSERVABILITY_DETAIL")
-        .ok()
-        .filter(|value| !value.is_empty());
 
-    Some(CliObservability::static_health(AtmObservabilityHealth {
-        active_log_path: Some(log_root(home_dir).join("logs").join("atm.log.jsonl")),
-        logging_state,
-        query_state: Some(query_state),
-        detail,
-    }))
+    match value.as_str() {
+        "degraded" => Ok(Some(RetainedSinkFaultMode::Degraded)),
+        "unavailable" => Ok(Some(RetainedSinkFaultMode::Unavailable)),
+        _ => Err(AtmError::observability_bootstrap(format!(
+            "invalid {ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV} value `{value}`; use `degraded` or `unavailable`"
+        ))),
+    }
+}
+
+fn register_retained_sink_fault(
+    builder: &mut LoggerBuilder,
+    home_dir: &Path,
+    mode: RetainedSinkFaultMode,
+) {
+    let injector = RetainedSinkFaultInjector::new();
+    let sink = Arc::new(JsonlFileSink::new(
+        fault_injection_log_path(home_dir),
+        RotationPolicy::default(),
+        RetentionPolicy::default(),
+    ));
+    builder.register_sink(SinkRegistration::new(injector.wrap(sink)));
+
+    match mode {
+        RetainedSinkFaultMode::Degraded => injector.force_degraded(),
+        RetainedSinkFaultMode::Unavailable => injector.force_unavailable(),
+    }
 }
 
 fn map_command_event(
@@ -532,16 +526,6 @@ fn map_query_state(state: sc_observability_types::QueryHealthState) -> AtmObserv
         sc_observability_types::QueryHealthState::Unavailable => {
             AtmObservabilityHealthState::Unavailable
         }
-    }
-}
-
-#[cfg(any(test, feature = "test-util"))]
-fn parse_health_state(value: &str) -> Option<AtmObservabilityHealthState> {
-    match value {
-        "healthy" => Some(AtmObservabilityHealthState::Healthy),
-        "degraded" => Some(AtmObservabilityHealthState::Degraded),
-        "unavailable" => Some(AtmObservabilityHealthState::Unavailable),
-        _ => None,
     }
 }
 
