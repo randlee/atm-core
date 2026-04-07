@@ -235,59 +235,6 @@ fn canonical_sender_identity(message: &MessageEnvelope) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
-#[cfg(test)]
-mod tests {
-    use serde_json::json;
-
-    use super::{canonical_sender_identity, resolve_reply_target};
-    use crate::schema::MessageEnvelope;
-    use crate::types::IsoTimestamp;
-
-    fn message_with_from(from: &str) -> MessageEnvelope {
-        MessageEnvelope {
-            from: from.to_string(),
-            text: "hello".to_string(),
-            timestamp: IsoTimestamp::now(),
-            read: false,
-            source_team: Some("atm-dev".to_string()),
-            summary: None,
-            message_id: None,
-            pending_ack_at: None,
-            acknowledged_at: None,
-            acknowledges_message_id: None,
-            task_id: None,
-            extra: serde_json::Map::new(),
-        }
-    }
-
-    #[test]
-    fn canonical_sender_identity_reads_metadata_override() {
-        let mut message = message_with_from("lead");
-        message.extra.insert(
-            "metadata".to_string(),
-            json!({"atm": {"fromIdentity": "team-lead@src-gen"}}),
-        );
-
-        assert_eq!(
-            canonical_sender_identity(&message).as_deref(),
-            Some("team-lead@src-gen")
-        );
-    }
-
-    #[test]
-    fn resolve_reply_target_prefers_canonical_sender_identity_metadata() {
-        let mut message = message_with_from("lead");
-        message.source_team = Some("atm-dev".to_string());
-        message.extra.insert(
-            "metadata".to_string(),
-            json!({"atm": {"fromIdentity": "team-lead@src-gen"}}),
-        );
-
-        let target = resolve_reply_target(&message, "atm-dev").expect("reply target");
-        assert_eq!(target, ("team-lead".to_string(), "src-gen".to_string()));
-    }
-}
-
 fn load_source_files(
     home_dir: &Path,
     team: &str,
@@ -392,4 +339,57 @@ fn persist_source_files(source_files: &[SourceFile]) -> Result<(), AtmError> {
         mailbox::atomic::write_messages(&source.path, &source.messages)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::{canonical_sender_identity, resolve_reply_target};
+    use crate::schema::MessageEnvelope;
+    use crate::types::IsoTimestamp;
+
+    fn message_with_from(from: &str) -> MessageEnvelope {
+        MessageEnvelope {
+            from: from.to_string(),
+            text: "hello".to_string(),
+            timestamp: IsoTimestamp::now(),
+            read: false,
+            source_team: Some("atm-dev".to_string()),
+            summary: None,
+            message_id: None,
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            task_id: None,
+            extra: serde_json::Map::new(),
+        }
+    }
+
+    #[test]
+    fn canonical_sender_identity_reads_metadata_override() {
+        let mut message = message_with_from("lead");
+        message.extra.insert(
+            "metadata".to_string(),
+            json!({"atm": {"fromIdentity": "team-lead@src-gen"}}),
+        );
+
+        assert_eq!(
+            canonical_sender_identity(&message).as_deref(),
+            Some("team-lead@src-gen")
+        );
+    }
+
+    #[test]
+    fn resolve_reply_target_prefers_canonical_sender_identity_metadata() {
+        let mut message = message_with_from("lead");
+        message.source_team = Some("atm-dev".to_string());
+        message.extra.insert(
+            "metadata".to_string(),
+            json!({"atm": {"fromIdentity": "team-lead@src-gen"}}),
+        );
+
+        let target = resolve_reply_target(&message, "atm-dev").expect("reply target");
+        assert_eq!(target, ("team-lead".to_string(), "src-gen".to_string()));
+    }
 }
