@@ -481,8 +481,8 @@ Status summary:
     `4304d825ff6dddc52ddc21e08f5d2bb3ead795dc`
   - `L.5` complete on `feature/pL-s5-construction-ergonomics` at
     `512dfa4d89ac71307ef7324f64dffb67d5189cc3`
-  - `L.6` complete on `feature/pL-s6-release-closeout` at the current branch
-    closeout head for this sprint
+  - `L.6` complete on `feature/pL-s6-release-closeout` / PR #56 at
+    `341e28c1f7175f9890a5a1d5606b64e0ce816d52`
 
 Goal:
 - finish the published `sc-observability` 1.0 follow-on work and close the
