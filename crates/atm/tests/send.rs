@@ -82,6 +82,33 @@ fn test_send_json_output() {
 }
 
 #[test]
+fn test_send_emits_retained_log_record() {
+    let fixture = Fixture::new("recipient");
+
+    let send = fixture.run(&["send", "recipient@atm-dev", "hello emit", "--json"]);
+    assert!(send.status.success(), "stderr: {}", fixture.stderr(&send));
+
+    let output = fixture.run(&["log", "filter", "--match", "command=send", "--json"]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+
+    let parsed: serde_json::Value = serde_json::from_slice(&output.stdout).expect("valid log json");
+    let records = parsed["records"].as_array().expect("records array");
+    assert!(
+        records.iter().any(|record| {
+            record["fields"]["command"] == "send"
+                && record["fields"]["agent"] == "recipient"
+                && record["fields"]["team"] == "atm-dev"
+        }),
+        "stdout: {}",
+        fixture.stdout(&output)
+    );
+}
+
+#[test]
 fn test_send_requires_ack() {
     let fixture = Fixture::new("recipient");
 
@@ -357,6 +384,7 @@ impl Fixture {
         Command::new(env!("CARGO_BIN_EXE_atm"))
             .args(args)
             .env("ATM_HOME", self.tempdir.path())
+            .env("ATM_CONFIG_HOME", self.tempdir.path())
             .env("ATM_IDENTITY", "arch-ctm")
             .env("ATM_TEAM", "atm-dev")
             .current_dir(self.tempdir.path())
