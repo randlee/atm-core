@@ -1,7 +1,6 @@
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
-
-use tracing::warn;
 
 use crate::address::AgentAddress;
 use crate::config;
@@ -70,39 +69,39 @@ pub(crate) fn discover_origin_inboxes(
 
     let prefix = format!("{agent}.");
     let primary = format!("{agent}.json");
-    let mut paths = fs::read_dir(inboxes_dir)
-        .map_err(|error| {
-            AtmError::new(
-                AtmErrorKind::MailboxRead,
-                format!(
-                    "failed to read inbox directory {}: {error}",
-                    inboxes_dir.display()
-                ),
-            )
-            .with_recovery(
-                "Check inbox directory permissions and ensure the source inbox directory still exists before retrying the ATM command.",
-            )
-            .with_source(error)
-        })?
-        .filter_map(|entry| match entry {
-            Ok(entry) => Some(entry.path()),
-            Err(error) => {
-                warn!(
-                    inbox_dir = %inboxes_dir.display(),
-                    agent,
-                    %error,
-                    "skipping unreadable origin inbox entry"
-                );
-                None
-            }
-        })
-        .filter(|path| {
-            path.file_name()
-                .and_then(|value| value.to_str())
-                .map(|name| name.starts_with(&prefix) && name.ends_with(".json") && name != primary)
-                .unwrap_or(false)
-        })
-        .collect::<Vec<_>>();
+    #[cfg(debug_assertions)]
+    if let Some(error) = forced_source_discovery_fault() {
+        return Err(origin_inbox_enumeration_error(inboxes_dir, agent, error));
+    }
+
+    let entries = fs::read_dir(inboxes_dir).map_err(|error| {
+        AtmError::new(
+            AtmErrorKind::MailboxRead,
+            format!(
+                "failed to read inbox directory {}: {error}",
+                inboxes_dir.display()
+            ),
+        )
+        .with_recovery(
+            "Check inbox directory permissions and ensure the source inbox directory still exists before retrying the ATM command.",
+        )
+        .with_source(error)
+    })?;
+
+    let mut paths = Vec::new();
+    for entry in entries {
+        let path = entry
+            .map_err(|error| origin_inbox_enumeration_error(inboxes_dir, agent, error))?
+            .path();
+        if path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .map(|name| name.starts_with(&prefix) && name.ends_with(".json") && name != primary)
+            .unwrap_or(false)
+        {
+            paths.push(path);
+        }
+    }
 
     paths.sort();
     Ok(paths)
@@ -147,6 +146,26 @@ pub(crate) fn rediscover_and_validate_source_paths(
     Ok(rediscovered)
 }
 
+fn origin_inbox_enumeration_error(inboxes_dir: &Path, agent: &str, error: io::Error) -> AtmError {
+    AtmError::new(
+        AtmErrorKind::MailboxRead,
+        format!(
+            "failed to enumerate origin inbox entries for agent '{agent}' in {}: {error}",
+            inboxes_dir.display()
+        ),
+    )
+    .with_recovery(
+        "Check inbox directory permissions and ensure the source inbox directory can be enumerated completely before retrying the ATM command.",
+    )
+    .with_source(error)
+}
+
+#[cfg(debug_assertions)]
+fn forced_source_discovery_fault() -> Option<io::Error> {
+    std::env::var_os("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT")
+        .map(|_| io::Error::other("synthetic read_dir entry enumeration fault"))
+}
+
 pub(crate) fn load_source_files(paths: &[PathBuf]) -> Result<Vec<SourceFile>, AtmError> {
     let mut sources = Vec::with_capacity(paths.len());
     for path in paths {
@@ -173,12 +192,14 @@ pub(crate) fn load_source_files(paths: &[PathBuf]) -> Result<Vec<SourceFile>, At
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+    use std::io;
+    use std::path::Path;
 
     use tempfile::tempdir;
 
     use super::{
-        discover_origin_inboxes, load_source_files, rediscover_and_validate_source_paths,
-        resolve_target,
+        discover_origin_inboxes, load_source_files, origin_inbox_enumeration_error,
+        rediscover_and_validate_source_paths, resolve_target,
     };
     use crate::config::AtmConfig;
 
@@ -198,6 +219,22 @@ mod tests {
                 inboxes.join("arch-ctm.host-a.json"),
                 inboxes.join("arch-ctm.host-b.json")
             ]
+        );
+    }
+
+    #[test]
+    fn origin_inbox_enumeration_error_is_mailbox_read_failure() {
+        let error = origin_inbox_enumeration_error(
+            Path::new("/tmp/inboxes"),
+            "arch-ctm",
+            io::Error::other("synthetic"),
+        );
+
+        assert!(error.is_mailbox_read());
+        assert!(
+            error
+                .message
+                .contains("failed to enumerate origin inbox entries")
         );
     }
 

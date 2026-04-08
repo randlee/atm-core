@@ -1598,8 +1598,12 @@ closed before the 1.0 release.
     duplicate paths, sort the resulting paths deterministically by canonical path
     string, acquire all locks, then call `load_source_files(...)`
   - source-file discovery must happen before any source inbox read and must use
-    the command's existing requested-inbox plus origin-inbox resolution logic;
-    files that do not exist at discovery time are excluded from the lock set
+    the command's existing requested-inbox plus origin-inbox resolution logic
+  - legitimately absent inbox paths at discovery time are excluded from the
+    lock set rather than locked speculatively
+  - source enumeration faults are not treated as absent paths; if origin inbox
+    discovery cannot enumerate the candidate directory completely, the command
+    must fail closed instead of continuing with a partial source set
   - those locks must remain held through surface computation, state transition,
     and final writeback
   - deterministic ordering must prevent deadlock when two commands contend on the
@@ -1700,7 +1704,9 @@ closed before the 1.0 release.
 
   Required behavior:
   - add bounded tests for lock contention timeout on the mutation commands that
-    use mailbox locking (`send`, `read` with mutation, `ack`, `clear`)
+    use mailbox locking; for the follow-up sprint the explicit command coverage
+    list is `send` for contention timeout, `clear` for fail-closed discovery,
+    and `send` for non-contention lock-error classification
   - add deterministic coverage for fail-closed source discovery when an origin
     inbox directory entry cannot be enumerated successfully
   - add deterministic coverage for non-contention lock-path failures so they do

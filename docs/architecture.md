@@ -1262,11 +1262,14 @@ pub fn acquire_many_sorted(
 Required usage:
 - discover the full source-file set first
 - dedupe paths and sort them deterministically by canonical path string
-- source-file discovery must finish before the first inbox read; missing paths at
-  discovery time are excluded from the lock set rather than locked speculatively
+- source-file discovery must finish before the first inbox read
+- legitimately absent inbox paths at discovery time are excluded from the lock
+  set rather than locked speculatively
 - source discovery must fail closed for mutation commands: unreadable
   `read_dir(...)` entries or equivalent enumeration faults are treated as source
   set instability, not as warnings that can be skipped
+- source discovery faults abort the command before lock acquisition; mutation
+  commands never attempt a partial lock set after a discovery failure
 - acquire all locks against one total timeout budget
 - if any acquisition fails, drop every earlier lock immediately and abort before
   any source-file read
@@ -1307,6 +1310,7 @@ stale snapshot.
 |--------|--------------|
 | `append_message` | `locked_read_modify_write` |
 | `send` missing-config notice append | `append_message` coverage |
+| source discovery fault (`read` / `ack` / `clear`) | abort before lock acquisition; no partial lock set attempted |
 | `read` writeback | multi-file lock set held from first read through persist |
 | `ack` transition + reply | two-phase cooperative lock — actor-source set acquired, dropped, re-acquired as full superset including reply inbox; see §18.4.1 |
 | `clear` set replacement | multi-file lock set held from first read through persist |
@@ -1314,6 +1318,8 @@ stale snapshot.
 
 ### 18.5 New Error Codes
 
+- `MailboxLockFailed` / `ATM_MAILBOX_LOCK_FAILED` — lock-path creation,
+  open, or acquisition failed for a non-contention filesystem or OS reason
 - `MailboxLockTimeout` / `ATM_MAILBOX_LOCK_TIMEOUT` — lock not acquired within timeout
 - New `AtmErrorKind::MailboxLock` variant in `error.rs`
 

@@ -138,7 +138,7 @@ pub fn clear_mail(
         let source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
         let _locks = mailbox::lock::acquire_many_sorted(
             source_paths.clone(),
-            mailbox::lock::DEFAULT_LOCK_TIMEOUT,
+            mailbox::lock::default_lock_timeout(),
         )?;
         let source_paths = rediscover_and_validate_source_paths(
             &source_paths,

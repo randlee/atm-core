@@ -1144,7 +1144,7 @@ Post-close review note:
 
 #### M.F1 — Locking Hardening Follow-up
 
-Branch: `feature/pM-locking-followup` (from `develop @ 1e6515a`)
+Branch: `feature/pM-locking-followup` (from `develop`, base commit `1e6515a`)
 
 Goal: close the post-merge production-readiness findings from
 `ATM-CORE-M-CODE-REVIEW` without reopening unrelated Phase M refactors.
@@ -1172,14 +1172,19 @@ Finding registry:
   - resolution criteria:
     - the shared atomic replacement helper durably publishes rename results to
       the parent directory wherever the platform supports directory sync
-    - unsupported platform behavior is documented explicitly at the helper boundary
+    - the helper-boundary doc comment names Linux/macOS as parent-directory-sync
+      platforms and Windows as the current `Ok(())`-without-parent-sync platform
+    - the helper-boundary doc comment explicitly states the `Ok(())` behavior on
+      platforms where ATM cannot issue a parent-directory sync
+    - the platform caveat appears as a public doc comment at the shared helper
+      boundary, not only in the sprint notes
 - `M-LF-004` Failure-path test coverage gap
   - finding: mailbox-locking tests prove several success/no-deadlock paths, but
     they do not cover timeout/error/fail-closed paths strongly enough
   - resolution criteria:
-    - bounded contention-timeout coverage exists for the relevant mutation commands
-    - deterministic fail-closed source-discovery coverage exists
-    - deterministic non-contention lock-error coverage exists
+    - bounded contention-timeout coverage exists for `send`
+    - deterministic fail-closed source-discovery coverage exists for `clear`
+    - deterministic non-contention lock-error coverage exists for `send`
 - `M-LF-005` Locked-mutation duplication follow-up
   - finding: read/ack/clear still duplicate the lock -> rediscover -> load ->
     persist pattern
@@ -1233,6 +1238,9 @@ Acceptance criteria:
 - `MailboxLockTimeout` is emitted only for true contention paths
 - rename-based mailbox persistence includes parent-directory durability handling
   at the shared helper boundary
-- failure-path locking coverage is deterministic and CI-safe
+- failure-path locking coverage is deterministic and CI-safe:
+  - `send` returns a bounded `MailboxLockTimeout` under held-lock contention
+  - `clear` fails closed on synthetic source-discovery fault without mailbox mutation
+  - `send` reports synthetic non-contention lock-path failure as `MailboxLockFailed`
 - `M-LF-005` remains explicitly advisory unless a helper extraction is needed to
   land the blocking/important fixes

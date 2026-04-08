@@ -14,12 +14,6 @@ use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorKind};
 use crate::schema::{LegacyMessageId, MessageEnvelope};
-use uuid::Uuid;
-
-pub(crate) fn temp_file_suffix() -> String {
-    format!("{}-{}", std::process::id(), Uuid::new_v4().simple())
-}
-
 /// Append one message to a mailbox JSONL file under the mailbox lock.
 ///
 /// # Errors
@@ -31,7 +25,7 @@ pub(crate) fn temp_file_suffix() -> String {
 /// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`] when the mailbox
 /// cannot be loaded, locked, or atomically replaced.
 pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), AtmError> {
-    locked_read_modify_write(path, lock::DEFAULT_LOCK_TIMEOUT, |messages| {
+    locked_read_modify_write(path, lock::default_lock_timeout(), |messages| {
         messages.push(envelope.clone());
         Ok(())
     })
