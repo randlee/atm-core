@@ -1,78 +1,39 @@
-use std::fs;
-use std::io::Write;
 use std::path::Path;
 
 use crate::error::{AtmError, AtmErrorKind};
-use crate::mailbox::temp_file_suffix;
+use crate::persistence;
 use crate::schema::MessageEnvelope;
 
+/// Atomically replace one mailbox JSONL file from fully serialized records.
+///
+/// ATM serializes every envelope into one temp file, fsyncs that temp file, and
+/// then performs same-filesystem replacement through the shared persistence
+/// helper. On Linux, a successful return means the file contents and renamed
+/// directory entry were durably published after the parent-directory fsync. On
+/// macOS, ATM performs the same parent-directory sync call, but APFS durability
+/// semantics may still differ from Linux after power loss. On Windows, the
+/// shared helper returns `Ok(())` after temp-file fsync plus rename without an
+/// additional parent-directory sync because the standard library does not
+/// expose a portable directory-sync operation there.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`] when message
+/// serialization fails or the mailbox temp-file write, fsync, rename, or
+/// parent-directory durability step cannot be completed.
 pub fn write_messages(path: &Path, messages: &[MessageEnvelope]) -> Result<(), AtmError> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            AtmError::new(
-                AtmErrorKind::MailboxWrite,
-                format!("failed to create mailbox directory: {error}"),
-            )
-            .with_recovery(
-                "Check mailbox directory permissions and available disk space, then retry the ATM command.",
-            )
-            .with_source(error)
-        })?;
+    let mut bytes = Vec::new();
+    for message in messages {
+        serde_json::to_writer(&mut bytes, message)?;
+        bytes.push(b'\n');
     }
 
-    let temp_path = path.with_file_name(format!(
-        "{}.{}.tmp",
-        path.file_name()
-            .and_then(|value| value.to_str())
-            .unwrap_or("mailbox"),
-        temp_file_suffix()
-    ));
-
-    {
-        let mut file = fs::File::create(&temp_path).map_err(|error| {
-            AtmError::new(
-                AtmErrorKind::MailboxWrite,
-                format!("failed to create mailbox temp file: {error}"),
-            )
-            .with_recovery(
-                "Check mailbox directory permissions and available disk space, then retry the ATM command.",
-            )
-            .with_source(error)
-        })?;
-        for message in messages {
-            serde_json::to_writer(&mut file, message)?;
-            file.write_all(b"\n").map_err(|error| {
-                AtmError::new(
-                    AtmErrorKind::MailboxWrite,
-                    format!("failed to write mailbox record: {error}"),
-                )
-                .with_recovery(
-                    "Check available disk space and mailbox file permissions, then retry the ATM command.",
-                )
-                .with_source(error)
-            })?;
-        }
-        file.sync_all().map_err(|error| {
-            AtmError::new(
-                AtmErrorKind::MailboxWrite,
-                format!("failed to fsync mailbox temp file: {error}"),
-            )
-            .with_recovery(
-                "Check disk health and filesystem permissions, then retry the ATM command after the mailbox temp file can be synced successfully.",
-            )
-            .with_source(error)
-        })?;
-    }
-
-    fs::rename(&temp_path, path).map_err(|error| {
-        AtmError::new(
-            AtmErrorKind::MailboxWrite,
-            format!("failed to replace mailbox file: {error}"),
-        )
-        .with_recovery(
-            "Check that the mailbox directory is writable and on a healthy filesystem, then retry the ATM command.",
-        )
-        .with_source(error)
-    })?;
-    Ok(())
+    persistence::atomic_write_bytes(
+        path,
+        &bytes,
+        AtmErrorKind::MailboxWrite,
+        "mailbox file",
+        "Check that the mailbox directory is writable, has available disk space, and resides on a healthy filesystem before retrying the ATM command.",
+    )
 }

@@ -1546,7 +1546,9 @@ closed before the 1.0 release.
   - before entering any read-modify-write section on an inbox file, ATM must
     acquire an exclusive advisory lock on a well-known lock sentinel derived from
     the inbox path
-  - the lock must be held for the full duration of read + modify + atomic rename
+  - the lock must be held for the full duration of read + modify + atomic
+    replacement, including any durability sync that is part of the shared
+    atomic-write helper boundary
   - lock release must happen automatically when the lock guard is dropped (RAII)
   - lock acquisition must use a bounded timeout (default 5 seconds) and fail
     with a structured `AtmError` carrying `AtmErrorCode::MailboxLockTimeout`
@@ -1596,8 +1598,12 @@ closed before the 1.0 release.
     duplicate paths, sort the resulting paths deterministically by canonical path
     string, acquire all locks, then call `load_source_files(...)`
   - source-file discovery must happen before any source inbox read and must use
-    the command's existing requested-inbox plus origin-inbox resolution logic;
-    files that do not exist at discovery time are excluded from the lock set
+    the command's existing requested-inbox plus origin-inbox resolution logic
+  - legitimately absent inbox paths at discovery time are excluded from the
+    lock set rather than locked speculatively
+  - source enumeration faults are not treated as absent paths; if origin inbox
+    discovery cannot enumerate the candidate directory completely, the command
+    must fail closed instead of continuing with a partial source set
   - those locks must remain held through surface computation, state transition,
     and final writeback
   - deterministic ordering must prevent deadlock when two commands contend on the
@@ -1609,6 +1615,10 @@ closed before the 1.0 release.
     reading or mutating any source inbox
   - partial lock acquisition must never degrade into a best-effort state-changing
     command result for `read`, `ack`, or `clear`
+  - source discovery for mutation commands must fail closed: if directory
+    enumeration itself fails or if any directory entry in the candidate inbox
+    directory cannot be enumerated reliably, the command must abort before lock
+    acquisition instead of warning and continuing with a partial source set
   - if a discovered file disappears or becomes unreadable after lock planning but
     before or during source-file load, the command must fail as a normal
     operator-actionable file-read error and must not persist any partial state
@@ -1620,6 +1630,20 @@ closed before the 1.0 release.
   - uncontended `flock` is a single syscall returning immediately; no background
     threads or polling loops
   - lock sentinel created lazily on first lock attempt
+
+- `REQ-CORE-MAILBOX-LOCK-007` Lock acquisition must distinguish true lock
+  contention from other lock-path I/O failures.
+
+  Required behavior:
+  - only retry errors that actually mean "lock currently held by another
+    process" for the current platform/API surface
+  - if the sentinel file cannot be opened, locked, or queried because of a
+    non-contention I/O or OS error, fail immediately with `MailboxLockFailed`
+    rather than sleeping until the timeout budget expires
+  - `MailboxLockTimeout` is reserved for genuine contention or equivalent
+    lock-busy conditions
+  - operator recovery guidance must distinguish "wait and retry" from
+    "repair filesystem/permissions state"
 
 ### 20.2 Shared Mutable File Atomicity
 
@@ -1639,6 +1663,10 @@ closed before the 1.0 release.
   Required behavior:
   - live-file replacement must use a temp-file + fsync + rename pattern or an
     equivalent same-filesystem atomic-replacement mechanism
+  - for files replaced via rename, the helper must fsync the parent directory
+    after the rename whenever the platform allows directory-sync semantics, so
+    successful return means both file contents and name publication are durably
+    committed as far as the host platform can provide
   - no live shared structured file may be truncated and rewritten in place
   - mailbox locking does not replace atomic persistence; both are required for
     mailbox files
@@ -1667,6 +1695,40 @@ closed before the 1.0 release.
   - the Phase M audit must grep for direct `fs::write`, `File::create`, or
     equivalent in-place rewrites of live shared mutable structured files and
     either remove them or document why the path is not in scope
+
+### 20.2.1 Locking Failure-Path Test Contract
+
+- `REQ-CORE-MAILBOX-TEST-001` Phase M follow-up coverage must include
+  deterministic failure-path locking tests in addition to success-path
+  no-deadlock tests.
+
+  Required behavior:
+  - add bounded tests for lock contention timeout on the mutation commands that
+    use mailbox locking; for the follow-up sprint the explicit command coverage
+    list is `send` for contention timeout, `clear` for fail-closed discovery,
+    and `send` for non-contention lock-error classification
+  - add deterministic coverage for fail-closed source discovery when an origin
+    inbox directory entry cannot be enumerated successfully
+  - add deterministic coverage for non-contention lock-path failures so they do
+    not regress into `MailboxLockTimeout`
+
+- `REQ-CORE-MAILBOX-TEST-002` Locking tests must use bounded, non-flaky
+  construction that cannot hang indefinitely.
+
+  Required behavior:
+  - use explicit timeout-based synchronization (`recv_timeout`,
+    `wait_timeout`, elapsed-time assertions with bounded slack) rather than
+    open-ended thread joins or sleeps waiting for success
+  - tests for directory-entry enumeration failure must use a deterministic seam
+    or injected enumerator/fault source rather than permission tricks, racing
+    deletes, or environment-sensitive filesystem behavior
+  - tests for non-contention lock errors must use a deterministic seam or
+    injectable failure source rather than depending on platform-specific errno
+    behavior
+  - tests that intentionally hold a lock must guarantee teardown via scoped
+    guards/channels even when the assertion path fails
+  - crash-durability helper tests should verify sequencing and error propagation
+    through deterministic seams; they must not rely on real crash simulation
 
 ### 20.3 Restore Transaction Atomicity
 

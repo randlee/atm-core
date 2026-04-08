@@ -1210,9 +1210,14 @@ duplicates what `fs2` already provides correctly.
   process lifetimes (stale sentinels are harmless; OS releases lock on fd close/exit)
 - **Granularity**: per-inbox-file — concurrent sends to different recipients never contend
 - **Lock lifetime**: acquired before `read_messages`, held through `atomic::write_messages`
-  rename, released on `MailboxLockGuard` drop
+  durability boundary (temp-file write, rename, and any parent-directory sync),
+  released on `MailboxLockGuard` drop
 - **Timeout**: bounded retry loop with `try_lock_exclusive()` + 50ms sleep, default 5s;
   on expiry returns `AtmError { code: MailboxLockTimeout }`
+- **Error classification**: only genuine "lock busy" results participate in the
+  retry loop. Non-contention I/O and OS failures from the lock path fail fast as
+  `MailboxLockFailed` with filesystem/permissions recovery guidance instead of
+  being collapsed into a timeout.
 - **Cooperative limitation**: `fs2` locks are advisory and only coordinate ATM
   processes that participate in the same locking protocol. Direct file edits or
   other tools that bypass ATM locking are outside the protection boundary. This
@@ -1257,8 +1262,14 @@ pub fn acquire_many_sorted(
 Required usage:
 - discover the full source-file set first
 - dedupe paths and sort them deterministically by canonical path string
-- source-file discovery must finish before the first inbox read; missing paths at
-  discovery time are excluded from the lock set rather than locked speculatively
+- source-file discovery must finish before the first inbox read
+- legitimately absent inbox paths at discovery time are excluded from the lock
+  set rather than locked speculatively
+- source discovery must fail closed for mutation commands: unreadable
+  `read_dir(...)` entries or equivalent enumeration faults are treated as source
+  set instability, not as warnings that can be skipped
+- source discovery faults abort the command before lock acquisition; mutation
+  commands never attempt a partial lock set after a discovery failure
 - acquire all locks against one total timeout budget
 - if any acquisition fails, drop every earlier lock immediately and abort before
   any source-file read
@@ -1299,6 +1310,7 @@ stale snapshot.
 |--------|--------------|
 | `append_message` | `locked_read_modify_write` |
 | `send` missing-config notice append | `append_message` coverage |
+| source discovery fault (`read` / `ack` / `clear`) | abort before lock acquisition; no partial lock set attempted |
 | `read` writeback | multi-file lock set held from first read through persist |
 | `ack` transition + reply | two-phase cooperative lock — actor-source set acquired, dropped, re-acquired as full superset including reply inbox; see §18.4.1 |
 | `clear` set replacement | multi-file lock set held from first read through persist |
@@ -1306,6 +1318,8 @@ stale snapshot.
 
 ### 18.5 New Error Codes
 
+- `MailboxLockFailed` / `ATM_MAILBOX_LOCK_FAILED` — lock-path creation,
+  open, or acquisition failed for a non-contention filesystem or OS reason
 - `MailboxLockTimeout` / `ATM_MAILBOX_LOCK_TIMEOUT` — lock not acquired within timeout
 - New `AtmErrorKind::MailboxLock` variant in `error.rs`
 
@@ -1329,6 +1343,10 @@ Architectural rule:
 - no live shared mutable structured file may be rewritten in place
 - writers must use a temp-file + fsync + rename style replacement on the same
   filesystem, or a documented equivalent with the same atomicity guarantee
+- for rename-based replacement, the helper must also fsync the parent directory
+  after the rename whenever the platform supports directory-sync semantics; this
+  is the Phase M crash-durability boundary for mailbox/config/shared-state
+  replacement
 - `atm-core` must own one shared low-level atomic persistence primitive and a
   small set of typed writer helpers layered on top of it, rather than open-code
   file replacement logic at individual call sites
@@ -1341,6 +1359,30 @@ Architectural rule:
 This rule intentionally applies beyond mailbox files so future work does not
 reintroduce partial-write or torn-state risks through backup/restore or shared
 auxiliary state paths.
+
+### 18.6.1 Deterministic Locking-Test Strategy
+
+The follow-up locking fixes require failure-path tests, but those tests must not
+depend on races or hang-prone construction.
+
+Test strategy:
+- contention tests use a helper thread/process that acquires the target lock and
+  signals readiness through a channel or barrier
+- the command under test uses a short bounded lock timeout
+- assertions use `recv_timeout(...)`, elapsed-time ceilings, and scoped guard
+  teardown instead of indefinite `join()`/sleep loops
+- source-discovery fault tests use a deterministic seam (for example, an
+  injected directory-entry iterator/fault source) to force an unreadable origin
+  entry without depending on filesystem timing or permission quirks
+- non-contention lock error tests use a deterministic seam around the lock
+  attempt/classifier rather than trying to synthesize platform-specific OS
+  failures opportunistically
+- durability tests validate helper sequencing and error propagation through
+  deterministic seams; they do not attempt literal crash simulation in unit or
+  integration test runs
+
+This is intentionally stricter than the Phase M success-path deadlock tests so
+CI remains bounded and repeatable across macOS, Linux, and Windows.
 
 ## 19. Restore Transaction Atomicity (Phase M)
 

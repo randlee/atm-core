@@ -143,8 +143,10 @@ pub fn read_mail(
         (Vec<SourceFile>, BucketCounts, Vec<ClassifiedMessage>),
         AtmError,
     > {
-        let _locks =
-            mailbox::lock::acquire_many_sorted(paths.clone(), mailbox::lock::DEFAULT_LOCK_TIMEOUT)?;
+        let _locks = mailbox::lock::acquire_many_sorted(
+            paths.clone(),
+            mailbox::lock::default_lock_timeout(),
+        )?;
         *paths = rediscover_and_validate_source_paths(
             paths,
             &query.home_dir,
@@ -168,7 +170,7 @@ pub fn read_mail(
                     discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
                 let _poll_locks = mailbox::lock::acquire_many_sorted(
                     poll_paths.clone(),
-                    mailbox::lock::DEFAULT_LOCK_TIMEOUT,
+                    mailbox::lock::default_lock_timeout(),
                 )?;
                 poll_paths = rediscover_and_validate_source_paths(
                     &poll_paths,
@@ -213,7 +215,7 @@ pub fn read_mail(
     } else {
         let _locks = mailbox::lock::acquire_many_sorted(
             source_paths.clone(),
-            mailbox::lock::DEFAULT_LOCK_TIMEOUT,
+            mailbox::lock::default_lock_timeout(),
         )?;
         source_paths = rediscover_and_validate_source_paths(
             &source_paths,

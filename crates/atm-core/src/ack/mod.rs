@@ -90,7 +90,7 @@ pub fn ack_mail(
     let mut actor_source_paths = discover_source_paths(&request.home_dir, &team, &actor)?;
     let source_locks = mailbox::lock::acquire_many_sorted(
         actor_source_paths.clone(),
-        mailbox::lock::DEFAULT_LOCK_TIMEOUT,
+        mailbox::lock::default_lock_timeout(),
     )?;
     actor_source_paths = rediscover_and_validate_source_paths(
         &actor_source_paths,
@@ -183,8 +183,10 @@ pub fn ack_mail(
     // correctness; see "18.4.1 Cooperative Locking Caveat For `ack_mail`" in
     // docs/architecture.md.
     drop(source_locks);
-    let _final_locks =
-        mailbox::lock::acquire_many_sorted(final_write_paths, mailbox::lock::DEFAULT_LOCK_TIMEOUT)?;
+    let _final_locks = mailbox::lock::acquire_many_sorted(
+        final_write_paths,
+        mailbox::lock::default_lock_timeout(),
+    )?;
     actor_source_paths = rediscover_and_validate_source_paths(
         &actor_source_paths,
         &request.home_dir,

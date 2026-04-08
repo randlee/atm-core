@@ -1,4 +1,5 @@
 use std::fs::{self, File, OpenOptions};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -14,6 +15,14 @@ pub(crate) const DEFAULT_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
 /// A short retry interval keeps contention responsive without spinning hard on
 /// the lock sentinel file.
 const RETRY_INTERVAL: Duration = Duration::from_millis(50);
+
+pub(crate) fn default_lock_timeout() -> Duration {
+    if let Some(timeout) = debug_timeout_override() {
+        return timeout;
+    }
+
+    DEFAULT_LOCK_TIMEOUT
+}
 
 #[derive(Debug)]
 pub(crate) struct MailboxLockGuard {
@@ -67,7 +76,10 @@ pub(crate) fn sort_unique_paths(paths: impl IntoIterator<Item = PathBuf>) -> Vec
 /// # Errors
 ///
 /// Returns [`AtmError`] when the lock sentinel cannot be created/opened or when
-/// acquisition times out before the configured deadline.
+/// acquisition either fails fast with
+/// [`crate::error_codes::AtmErrorCode::MailboxLockFailed`] or times out with
+/// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`] before the
+/// configured deadline.
 pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard, AtmError> {
     let lock_path = sentinel_path(path);
     if let Some(parent) = lock_path.parent() {
@@ -102,7 +114,7 @@ pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard
 
     let deadline = Instant::now() + timeout;
     loop {
-        match file.try_lock_exclusive() {
+        match try_lock_exclusive(&file, &lock_path) {
             Ok(()) => {
                 return Ok(MailboxLockGuard {
                     target_path: path.to_path_buf(),
@@ -110,11 +122,23 @@ pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard
                     file,
                 });
             }
-            Err(error) if Instant::now() >= deadline => {
+            Err(error) if is_lock_contention_error(&error) && Instant::now() >= deadline => {
                 return Err(AtmError::mailbox_lock_timeout(path).with_source(error));
             }
-            Err(_) => {
+            Err(error) if is_lock_contention_error(&error) => {
                 thread::sleep(RETRY_INTERVAL);
+            }
+            Err(error) => {
+                return Err(
+                    AtmError::mailbox_lock(format!(
+                        "failed to acquire mailbox lock {}: {error}",
+                        lock_path.display()
+                    ))
+                    .with_recovery(
+                        "Check mailbox lock-file permissions, parent-directory writability, and filesystem health before retrying the ATM command.",
+                    )
+                    .with_source(error),
+                );
             }
         }
     }
@@ -145,13 +169,64 @@ pub(crate) fn acquire_many_sorted(
     Ok(guards)
 }
 
+fn try_lock_exclusive(file: &File, lock_path: &Path) -> io::Result<()> {
+    if std::env::var_os("ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR").is_some() {
+        return Err(io::Error::other(format!(
+            "synthetic non-contention lock failure for {}",
+            lock_path.display()
+        )));
+    }
+
+    file.try_lock_exclusive()
+}
+
+fn is_lock_contention_error(error: &io::Error) -> bool {
+    if error.kind() == io::ErrorKind::WouldBlock {
+        return true;
+    }
+
+    #[cfg(unix)]
+    {
+        matches!(
+            error.raw_os_error(),
+            Some(code) if code == libc::EWOULDBLOCK || code == libc::EAGAIN
+        )
+    }
+
+    #[cfg(windows)]
+    {
+        return matches!(
+            error.raw_os_error(),
+            Some(code)
+                if code == windows_sys::Win32::Foundation::ERROR_LOCK_VIOLATION as i32
+                    || code == windows_sys::Win32::Foundation::ERROR_SHARING_VIOLATION as i32
+        );
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    {
+        false
+    }
+}
+
+fn debug_timeout_override() -> Option<Duration> {
+    std::env::var("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .map(Duration::from_millis)
+}
+
 #[cfg(test)]
 mod tests {
+    use std::io;
     use std::time::{Duration, Instant};
 
     use tempfile::tempdir;
 
-    use super::{DEFAULT_LOCK_TIMEOUT, acquire, acquire_many_sorted, sentinel_path};
+    use super::{
+        DEFAULT_LOCK_TIMEOUT, acquire, acquire_many_sorted, default_lock_timeout,
+        is_lock_contention_error, sentinel_path,
+    };
     use crate::error::AtmErrorCode;
 
     #[test]
@@ -257,6 +332,17 @@ mod tests {
 
         let sorted = super::sort_unique_paths(vec![a, b.clone(), c]);
         assert_eq!(sorted[0], b);
+    }
+
+    #[test]
+    fn default_lock_timeout_uses_default_without_override() {
+        assert_eq!(default_lock_timeout(), DEFAULT_LOCK_TIMEOUT);
+    }
+
+    #[test]
+    fn would_block_is_classified_as_lock_contention() {
+        let error = io::Error::from(io::ErrorKind::WouldBlock);
+        assert!(is_lock_contention_error(&error));
     }
 
     use std::path::PathBuf;

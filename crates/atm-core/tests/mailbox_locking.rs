@@ -1,20 +1,26 @@
+use std::ffi::{OsStr, OsString};
 use std::fs;
-use std::sync::{Arc, Barrier, mpsc};
+use std::fs::OpenOptions;
+use std::sync::{Arc, Barrier, Mutex, OnceLock, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use atm_core::ack::{AckRequest, ack_mail};
 use atm_core::clear::{ClearQuery, clear_mail};
+use atm_core::error::AtmErrorCode;
 use atm_core::observability::NullObservability;
 use atm_core::read::{ReadQuery, read_mail};
 use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest, send_mail};
 use atm_core::types::{AckActivationMode, IsoTimestamp, ReadSelection};
 use chrono::Utc;
+use fs2::FileExt;
+use serial_test::serial;
 use tempfile::TempDir;
 use uuid::Uuid;
 
 #[test]
+#[serial]
 fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
@@ -79,6 +85,7 @@ fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
 }
 
 #[test]
+#[serial]
 fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() {
     let observability = Arc::new(NullObservability);
 
@@ -226,6 +233,7 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
 }
 
 #[test]
+#[serial]
 fn multi_source_read_and_clear_complete_without_deadlock() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
@@ -311,9 +319,138 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
     assert!(fixture.origin_inbox_path("arch-ctm", "host-b").exists());
 }
 
+#[test]
+#[serial]
+fn send_times_out_under_bounded_lock_contention() {
+    let _env_lock = env_lock().lock().expect("env lock");
+    let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let lock_path = sentinel_path(&fixture.primary_inbox_path("arch-ctm"));
+    let lock_file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&lock_path)
+        .expect("open lock file");
+    lock_file.lock_exclusive().expect("hold mailbox lock");
+
+    let started = Instant::now();
+    let error = send_mail(
+        fixture.send_request("team-lead", "arch-ctm@atm-dev", "blocked send"),
+        &observability,
+    )
+    .expect_err("timeout");
+
+    assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
+    assert!(
+        started.elapsed() < Duration::from_secs(1),
+        "lock-timeout coverage exceeded the deterministic budget"
+    );
+}
+
+#[test]
+#[serial]
+fn clear_fails_closed_on_synthetic_source_discovery_fault() {
+    let _env_lock = env_lock().lock().expect("env lock");
+    let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT", "1");
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    fixture.write_origin_inbox(
+        "arch-ctm",
+        "host-a",
+        &[read_message(
+            "qa",
+            "origin read a",
+            LegacyMessageId::from(Uuid::new_v4()),
+        )],
+    );
+    let before_primary =
+        fs::read_to_string(fixture.primary_inbox_path("arch-ctm")).expect("primary inbox before");
+    let before_origin = fs::read_to_string(fixture.origin_inbox_path("arch-ctm", "host-a"))
+        .expect("origin inbox before");
+
+    let error = clear_mail(fixture.clear_query("arch-ctm"), &observability).expect_err("fault");
+
+    assert_eq!(error.code, AtmErrorCode::MailboxReadFailed);
+    assert_eq!(
+        fs::read_to_string(fixture.primary_inbox_path("arch-ctm")).expect("primary inbox after"),
+        before_primary
+    );
+    assert_eq!(
+        fs::read_to_string(fixture.origin_inbox_path("arch-ctm", "host-a"))
+            .expect("origin inbox after"),
+        before_origin
+    );
+}
+
+#[test]
+#[serial]
+fn send_reports_non_contention_lock_failures_without_timeout() {
+    let _env_lock = env_lock().lock().expect("env lock");
+    let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR", "1");
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let started = Instant::now();
+
+    let error = send_mail(
+        fixture.send_request("team-lead", "arch-ctm@atm-dev", "lock failure"),
+        &observability,
+    )
+    .expect_err("non-contention lock failure");
+
+    assert_eq!(error.code, AtmErrorCode::MailboxLockFailed);
+    assert!(
+        started.elapsed() < Duration::from_secs(1),
+        "non-contention lock classification should fail fast"
+    );
+}
+
 enum CommandOp {
     Read(ReadQuery, Arc<NullObservability>),
     Clear(ClearQuery, Arc<NullObservability>),
+}
+
+fn env_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
+struct EnvGuard {
+    key: &'static str,
+    original: Option<OsString>,
+}
+
+impl EnvGuard {
+    fn set_raw(key: &'static str, value: &str) -> Self {
+        let original = std::env::var_os(key);
+        set_env_var(key, value);
+        Self { key, original }
+    }
+}
+
+impl Drop for EnvGuard {
+    fn drop(&mut self) {
+        match self.original.take() {
+            Some(value) => set_env_var(self.key, value),
+            None => remove_env_var(self.key),
+        }
+    }
+}
+
+fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
+    // SAFETY: these tests take a process-wide mutex and use #[serial] before
+    // mutating the environment, so the mutation is serialized within this
+    // process.
+    unsafe { std::env::set_var(key, value) }
+}
+
+fn remove_env_var<K: AsRef<OsStr>>(key: K) {
+    // SAFETY: these tests take a process-wide mutex and use #[serial] before
+    // mutating the environment, so the mutation is serialized within this
+    // process.
+    unsafe { std::env::remove_var(key) }
 }
 
 struct Fixture {
@@ -487,6 +624,12 @@ fn write_inbox(path: &std::path::Path, messages: &[MessageEnvelope]) {
         .collect::<Vec<_>>()
         .join("\n");
     fs::write(path, format!("{raw}\n")).expect("write inbox");
+}
+
+fn sentinel_path(path: &std::path::Path) -> std::path::PathBuf {
+    let mut os = path.as_os_str().to_os_string();
+    os.push(".lock");
+    std::path::PathBuf::from(os)
 }
 
 fn pending_ack_message(
