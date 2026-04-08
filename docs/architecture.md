@@ -1231,10 +1231,23 @@ pub fn acquire_many_sorted<'a>(
 
 Required usage:
 - discover the full source-file set first
-- sort paths deterministically
-- acquire all locks
+- dedupe paths and sort them deterministically by canonical path string
+- source-file discovery must finish before the first inbox read; missing paths at
+  discovery time are excluded from the lock set rather than locked speculatively
+- acquire all locks against one total timeout budget
+- if any acquisition fails, drop every earlier lock immediately and abort before
+  any source-file read
+- if a discovered file disappears or becomes unreadable after lock planning but
+  before `load_source_files(...)` completes, abort without persisting any
+  partial state; this remains a normal operator-actionable file-read failure,
+  not a partial-lock degraded mode
 - then call `load_source_files(...)`
 - hold every guard until every source writeback completes
+
+This intentionally preserves a single logical merged-surface decision boundary
+for `read`, `ack`, and `clear`. Those commands are not allowed to degrade into
+partial-lock best-effort mutation, because doing so would mix snapshots from
+different logical times and make writeback correctness nondeterministic.
 
 | Caller | Lock required |
 |--------|--------------|
@@ -1249,6 +1262,39 @@ Required usage:
 
 - `MailboxLockTimeout` / `ATM_MAILBOX_LOCK_TIMEOUT` — lock not acquired within timeout
 - New `AtmErrorKind::MailboxLock` variant in `error.rs`
+
+### 18.6 Shared Mutable File Atomicity
+
+Mailbox locking closes the concurrent lost-update race for inbox files, but it
+is only one part of the persistence contract. Phase M also treats atomic file
+replacement as a repo-wide rule for shared mutable ATM-owned structured state.
+
+Scope:
+- live inbox files
+- team `config.json`
+- ATM-owned task-bucket files restored or rewritten by team recovery
+- `.highwatermark`
+- shared persisted coordination/state files such as send-alert or
+  restore-progress markers when they carry ATM-owned operator state
+- any future ATM-owned JSON/JSONL/state file rewritten by more than one ATM
+  process or operator workflow
+
+Architectural rule:
+- no live shared mutable structured file may be rewritten in place
+- writers must use a temp-file + fsync + rename style replacement on the same
+  filesystem, or a documented equivalent with the same atomicity guarantee
+- `atm-core` must own one shared low-level atomic persistence primitive and a
+  small set of typed writer helpers layered on top of it, rather than open-code
+  file replacement logic at individual call sites
+- existing helpers such as `atomic::write_messages(...)` and
+  `write_team_config(...)` are the preferred integration points; new shared
+  state added by Phase M should extend that helper pattern with typed helpers
+  for task-bucket, highwatermark, and shared coordination files instead of
+  open-coding direct `fs::write(...)` mutations
+
+This rule intentionally applies beyond mailbox files so future work does not
+reintroduce partial-write or torn-state risks through backup/restore or shared
+auxiliary state paths.
 
 ## 19. Restore Transaction Atomicity (Phase M)
 
@@ -1294,6 +1340,10 @@ New check: scan for `.restore-in-progress` in team directories.
 - Severity: warning
 - Recovery guidance: "A previous `atm teams restore` was interrupted. Re-run the restore
   command to complete it, or remove the marker file manually if the restore is no longer needed."
+
+If `.restore-staging/` already exists at restore start, the implementation must
+either clean it before staging begins or fail with actionable recovery text.
+It must never merge old staging contents with the new restore attempt.
 
 ## 20. Phase M Minor Architecture Changes
 

@@ -1592,12 +1592,26 @@ closed before the 1.0 release.
   would still allow stale reads and lost updates.
 
   Required behavior:
-  - `read`, `ack`, and `clear` must discover their full source-file set, sort the
-    paths deterministically, acquire all locks, then call `load_source_files(...)`
+  - `read`, `ack`, and `clear` must discover their full source-file set, dedupe
+    duplicate paths, sort the resulting paths deterministically by canonical path
+    string, acquire all locks, then call `load_source_files(...)`
+  - source-file discovery must happen before any source inbox read and must use
+    the command's existing requested-inbox plus origin-inbox resolution logic;
+    files that do not exist at discovery time are excluded from the lock set
   - those locks must remain held through surface computation, state transition,
     and final writeback
   - deterministic ordering must prevent deadlock when two commands contend on the
     same pair of inbox files in opposite discovery order
+  - lock acquisition uses one total timeout budget for the full lock set, not a
+    fresh timeout per file
+  - if any lock in the set cannot be acquired, every previously acquired lock in
+    that attempt must be released immediately and the command must fail without
+    reading or mutating any source inbox
+  - partial lock acquisition must never degrade into a best-effort state-changing
+    command result for `read`, `ack`, or `clear`
+  - if a discovered file disappears or becomes unreadable after lock planning but
+    before or during source-file load, the command must fail as a normal
+    operator-actionable file-read error and must not persist any partial state
 
 - `REQ-CORE-MAILBOX-LOCK-006` Single-process single-threaded usage must not
   regress measurably due to lock acquisition.
@@ -1607,7 +1621,54 @@ closed before the 1.0 release.
     threads or polling loops
   - lock sentinel created lazily on first lock attempt
 
-### 20.2 Restore Transaction Atomicity
+### 20.2 Shared Mutable File Atomicity
+
+- `REQ-CORE-PERSIST-ATOMIC-001` Every shared mutable ATM-owned structured state
+  file must be persisted atomically.
+
+  Scope:
+  - live inbox files under `.claude/teams/<team>/inboxes/*.json`
+  - team `config.json`
+  - ATM-owned task-bucket JSON/state files written during backup/restore flows
+  - `.highwatermark` and any equivalent ATM-owned monotonic task-state file
+  - send-alert / restore-progress / similar ATM-owned persisted coordination
+    state when that state is shared across processes or operators
+  - any future ATM-owned JSON or JSONL file that can be rewritten by more than
+    one ATM process, agent, or operator workflow
+
+  Required behavior:
+  - live-file replacement must use a temp-file + fsync + rename pattern or an
+    equivalent same-filesystem atomic-replacement mechanism
+  - no live shared structured file may be truncated and rewritten in place
+  - mailbox locking does not replace atomic persistence; both are required for
+    mailbox files
+
+- `REQ-CORE-PERSIST-ATOMIC-002` Phase M must treat atomic persistence as a
+  cross-cutting invariant, not a mailbox-only or restore-only rule.
+
+  Required behavior:
+  - when Phase M touches a shared mutable structured file path, the
+    implementation must either route that path through an existing atomic write
+    helper or add one before modifying the file
+  - new shared mutable JSON/JSONL/state files introduced during Phase M must
+    adopt the same atomic persistence contract immediately rather than deferring
+    to a follow-on cleanup sprint
+
+- `REQ-CORE-PERSIST-ATOMIC-003` Atomic persistence helpers must be centralized
+  and reused instead of duplicated ad hoc at call sites.
+
+  Required behavior:
+  - `atm-core` must own the shared atomic persistence primitive used by mailbox,
+    config, task-bucket, highwatermark, and shared coordination writers
+  - mailbox writes continue using the mailbox atomic helper
+  - team-config writes continue using `write_team_config(...)`
+  - task-bucket / highwatermark / shared state writes added or touched by Phase M
+    must use a documented helper with the same temp-file + rename semantics
+  - the Phase M audit must grep for direct `fs::write`, `File::create`, or
+    equivalent in-place rewrites of live shared mutable structured files and
+    either remove them or document why the path is not in scope
+
+### 20.3 Restore Transaction Atomicity
 
 - `REQ-CORE-RESTORE-ATOMIC-001` `teams restore` must write `config.json` as
   the last mutation step, only after all other restore mutations succeed.
@@ -1639,8 +1700,20 @@ closed before the 1.0 release.
     directory using `fs::rename` where possible
   - on staging or move failure, clean up the staging directory and fail without
     writing config
+  - if stale staging already exists at restore start, the command must either
+    clean it first or fail with a recovery message; it must never merge old and
+    new staging contents implicitly
 
-### 20.3 Error Display And Diagnostics
+- `REQ-CORE-RESTORE-ATOMIC-003` Stale restore-progress markers must have a fixed
+  diagnostics contract.
+
+  Required behavior:
+  - `atm doctor` must report stale `.restore-in-progress` markers as warnings
+  - the finding must not become a blocking error by default
+  - the finding must include recovery guidance telling the operator to rerun
+    `atm teams restore` or remove the marker after manual verification
+
+### 20.4 Error Display And Diagnostics
 
 - `REQ-CORE-ERROR-DISPLAY-001` `AtmError::Display` must render the captured
   backtrace in debug builds when a backtrace is available.
@@ -1651,29 +1724,63 @@ closed before the 1.0 release.
     the backtrace after the error message and recovery text
 
 - `REQ-CORE-ERROR-DOC-001` Every public function returning `AtmResult` or
-  `Result<_, AtmError>` in the modules touched by Phase M must have a `# Errors`
-  documentation section.
+  `Result<_, AtmError>` in the explicit Phase M audit inventory must have a
+  `# Errors` documentation section.
 
   Required behavior:
+  - the Phase M audit inventory must explicitly include:
+    - `mailbox/mod.rs`
+    - `mailbox/lock.rs`
+    - `read/mod.rs`
+    - `ack/mod.rs`
+    - `clear/mod.rs`
+    - `team_admin.rs`
+    - `doctor/mod.rs`
+    - `error.rs`
+    - `config/mod.rs`
+    - `home.rs`
+    - `send/mod.rs`
+    - `send/input.rs`
+    - `send/file_policy.rs`
+    - `identity/mod.rs` if the consolidation lands there
+    - any new public atomic/state helper introduced by Phase M
   - each `# Errors` section must list the `AtmErrorCode` variants the function
     can return
   - the implementation must audit the current public API surface instead of
     relying on a stale hard-coded function count
 
-- `REQ-CORE-ERROR-RECOVERY-001` Every `AtmError` construction site that
-  represents an operator-actionable failure must use `.with_recovery()`.
+- `REQ-CORE-ERROR-RECOVERY-001` Every `AtmError` construction site in the
+  explicit Phase M audit inventory that represents an operator-actionable
+  failure must use `.with_recovery()`.
 
   Required behavior:
   - Phase M must perform a grep-driven audit of remaining bare
     `AtmError::new(...)`, `AtmError::mailbox_*`, `AtmError::file_policy(...)`,
-    and similar operator-actionable construction sites in the touched modules
-  - the audit must include the remaining bare sites in mailbox, address,
-    send-input, file-policy, and state-transition code, plus any new errors
-    introduced by M.1 mailbox locking or M.2 restore staging
+    and similar operator-actionable construction sites in the explicit Phase M
+    audit inventory
+  - the audit must explicitly include bare operator-actionable sites in:
+    - `mailbox/mod.rs`
+    - `mailbox/lock.rs`
+    - `read/mod.rs`
+    - `ack/mod.rs`
+    - `clear/mod.rs`
+    - `team_admin.rs`
+    - `doctor/mod.rs`
+    - `config/mod.rs`
+    - `home.rs`
+    - `address.rs`
+    - `send/mod.rs`
+    - `send/input.rs`
+    - `send/file_policy.rs`
+    - `identity/mod.rs` if new operator-facing errors are introduced there
+    - any new M.1/M.2 helper that constructs `AtmError`
+  - permission, timeout, missing-file, malformed-input, lock-contention, and
+    operator-remediable configuration failures are always considered
+    operator-actionable for this audit
   - sites already covered by L.7/L.8 recovery work do not need duplicate edits
   - internal invariant violations do not require recovery guidance
 
-### 20.4 Code Consolidation And Documentation
+### 20.5 Code Consolidation And Documentation
 
 - `REQ-CORE-IDENTITY-CONSOLIDATE-001` The duplicated `resolve_actor_identity`
   function must be consolidated into a single shared implementation.

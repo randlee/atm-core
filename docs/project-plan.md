@@ -888,7 +888,22 @@ Deliverables:
 - Add deterministic multi-lock acquisition for `read`, `ack`, and `clear` so those commands
   lock every discovered source inbox before their first `read_messages(...)` call and hold the
   locks through final writeback
+- Make the multi-lock contract explicit in code:
+  - finish source-file discovery before the first inbox read
+  - exclude files missing at discovery time from the lock set
+  - dedupe duplicate paths before acquisition
+  - sort the set by canonical path string before acquisition
+  - apply one total timeout budget to the full set
+  - if any acquisition fails, release all earlier locks and abort before any
+    source-file read or mutation
+  - if a discovered file disappears before `load_source_files(...)` completes,
+    abort the command with an operator-actionable file-read error and persist
+    no partial state
 - Ensure the missing-config team-lead notice path benefits from the same `append_message` lock
+- Audit the shared mutable JSON/JSONL/state files touched by M.1 and route each through an
+  atomic temp-file + fsync + rename style helper rather than an in-place rewrite path
+- Centralize any new atomic-replacement logic behind one `atm-core` helper boundary rather than
+  duplicating temp-file + rename code at individual call sites
 - Lock sentinel: `{inbox_path}.lock` (zero-byte, created lazily)
 
 Files to modify:
@@ -905,14 +920,26 @@ Tests required:
 - Unit: `lock.rs` acquire/release, timeout, stale sentinel tolerance
 - Unit: `locked_read_modify_write` basic operation
 - Integration: concurrent append from two threads does not lose messages
+- Integration: concurrent `send` and `ack`/`clear` against the same inbox or
+  overlapping origin set preserve correctness and do not silently lose updates
 - Integration: multi-source `read`/`ack`/`clear` acquire locks in deterministic path order
 - Integration: lock timeout produces `MailboxLockTimeout` error code
+- Integration: if lock N of M fails, every earlier lock is released and the
+  command aborts before the first source inbox read
+- Integration: one total timeout budget applies across the full multi-lock set
+  instead of resetting per file
+- Integration: duplicate discovered paths collapse to one lock acquisition
+- Integration: a discovered source inbox disappearing before load causes a
+  normal actionable failure and no persisted partial state
+- Integration: concurrent `read`/`ack`/`clear` against overlapping origin
+  inbox sets do not deadlock because both commands acquire in the same sorted order
 - All existing tests must pass (single-process path unaffected)
 
 Acceptance criteria:
 - `lock.rs` is no longer a placeholder stub
 - all mailbox read-modify-write paths hold an exclusive lock
 - `read`, `ack`, and `clear` lock their entire source-file set before reading any source inbox
+- no shared mutable structured file touched by M.1 is rewritten in place
 - concurrent `atm send` to the same inbox from two processes does not lose messages
 - CI passes on macOS, Linux, Windows
 
@@ -930,6 +957,8 @@ Deliverables (itemized by finding):
    - Reorder `restore_team` in `team_admin.rs` to config-last with staging
    - Add `.restore-in-progress` marker write before mutations, remove after config write
    - Add inbox staging to `.restore-staging/inboxes/` before live move
+   - Apply the same atomic-persistence rule to restored task-bucket files,
+     `.highwatermark`, and shared restore coordination state touched by this flow
    - Add `atm doctor` check for stale `.restore-in-progress` markers
    - Files: `team_admin.rs`, `doctor/mod.rs`
 
@@ -938,46 +967,71 @@ Deliverables (itemized by finding):
    - File: `error.rs`
 
 3. **`# Errors` doc audit**:
-   - audit the public `Result<_, AtmError>` API surface in the modules touched by Phase M:
-     `send/mod.rs`, `send/input.rs`, `read/mod.rs`, `ack/mod.rs`, `clear/mod.rs`,
-     `config/mod.rs`, `home.rs`, `mailbox/mod.rs`, `team_admin.rs`, and any new public
-     helpers introduced by M.1/M.2
+   - audit the public `Result<_, AtmError>` API surface in this explicit inventory:
+     `mailbox/mod.rs`, `mailbox/lock.rs`, `read/mod.rs`, `ack/mod.rs`,
+     `clear/mod.rs`, `team_admin.rs`, `doctor/mod.rs`, `error.rs`,
+     `config/mod.rs`, `home.rs`, `send/mod.rs`, `send/input.rs`,
+     `send/file_policy.rs`, `identity/mod.rs` if consolidation lands there,
+     and any new public helper introduced by M.1/M.2
    - add `# Errors` sections where missing and list the applicable `AtmErrorCode` variants
    - avoid relying on stale hard-coded function counts; use the current public API surface
 
 4. **`.with_recovery()` audit**:
-   - perform a grep-driven audit of remaining operator-actionable bare error construction sites
-     in `ack/mod.rs`, `read/mod.rs`, `clear/mod.rs`, `address.rs`, `send/input.rs`,
-     `send/file_policy.rs`, `home.rs`, `mailbox/mod.rs`, and any new M.1/M.2 code
-   - do not re-edit sites that already received recovery guidance in L.7/L.8 unless the new
-     Phase M design changes their operator action
+  - perform a grep-driven audit of remaining operator-actionable bare error construction sites
+    in this explicit inventory: `mailbox/mod.rs`, `mailbox/lock.rs`, `read/mod.rs`,
+    `ack/mod.rs`, `clear/mod.rs`, `team_admin.rs`, `doctor/mod.rs`, `config/mod.rs`,
+    `home.rs`, `address.rs`, `send/mod.rs`, `send/input.rs`, `send/file_policy.rs`,
+    `identity/mod.rs` if it gains operator-facing errors, and any new M.1/M.2 code
+  - do not re-edit sites that already received recovery guidance in L.7/L.8 unless the new
+    Phase M design changes their operator action
 
-5. **Legacy config key docs**:
+5. **Shared mutable file persistence audit**:
+   - grep this explicit inventory for direct writes to live shared mutable
+     JSON/JSONL/state files (`fs::write`, `File::create`, equivalent):
+     `mailbox/mod.rs`, `mailbox/lock.rs`, `read/mod.rs`, `ack/mod.rs`,
+     `clear/mod.rs`, `team_admin.rs`, `doctor/mod.rs`, `config/mod.rs`,
+     `home.rs`, `send/mod.rs`, `send/input.rs`, `send/file_policy.rs`,
+     `identity/mod.rs` if it gains persistence responsibilities, and any new
+     helper introduced by M.1/M.2
+   - route each in-scope path through an atomic helper or document why the path
+     is scratch/staging-only and therefore exempt
+   - files in scope include inboxes, team config, restored task-bucket state,
+     `.highwatermark`, and shared coordination files such as restore-progress
+     or send-alert state
+
+6. **Legacy config key docs**:
    - Add `# Deprecated` section to `config/mod.rs` or `config/types.rs` for `[atm].identity`
    - Reference `ATM_WARNING_IDENTITY_DRIFT`; document migration: use `ATM_IDENTITY` env var
 
-6. **`normalize_json_number` panic removal**:
+7. **`normalize_json_number` panic removal**:
    - Replace the current exponent-parse `.expect()` in `observability.rs` with graceful fallback + `tracing::warn!`
    - Add `# Panics` doc noting precondition removed
 
-7. **`resolve_actor_identity` consolidation**:
+8. **`resolve_actor_identity` consolidation**:
    - Move to `identity/mod.rs` as `pub(crate)` function
    - Update call sites in `ack/mod.rs`, `clear/mod.rs`, `read/mod.rs`
 
 Tests required:
 - Restore atomicity: interrupted restore leaves `.restore-in-progress` marker; re-run completes;
   doctor detects stale marker
+- Restore atomicity: pre-existing `.restore-staging/` is either cleaned first or
+  rejected with actionable recovery text; stale and fresh staging contents are never merged
+- Restore atomicity: config-last ordering means config is unchanged when inbox/task/highwatermark
+  staging fails before the final config write
+- Restore atomicity: failure to remove the marker after a successful config
+  write leaves a warning-only stale-marker finding rather than corrupting team state
 - Backtrace: `Display` output includes backtrace when `RUST_BACKTRACE=1`, excludes otherwise
 - `normalize_json_number`: malformed exponent returns raw string (no panic)
 - `resolve_actor_identity`: existing tests pass after consolidation (no behavior change)
 - Documentation review pass confirms new `# Errors`, `# Deprecated`, and `# Panics` sections exist
-  on the touched public API surface
+  on the explicit M.2 audit inventory
 
 Acceptance criteria:
 - `restore_team` writes config.json last with staging and progress marker
+- all shared mutable structured files touched by M.2 use atomic replacement helpers
 - `AtmError::Display` conditionally renders backtrace
-- all public `Result`-returning functions in the touched M.2 modules have `# Errors` doc sections
-- `.with_recovery()` present at all operator-actionable error sites
+- all public `Result`-returning functions in the explicit M.2 audit inventory have `# Errors` doc sections
+- `.with_recovery()` present at all operator-actionable sites in the explicit M.2 audit inventory
 - `[atm].identity` documented as deprecated
 - `normalize_json_number` does not panic on malformed input
 - `resolve_actor_identity` exists in exactly one location
