@@ -43,12 +43,6 @@ pub struct AckOutcome {
     pub reply_text: String,
 }
 
-/// Acknowledge one pending-ack mailbox message and append the reply.
-///
-/// # Errors
-///
-/// Returns [`AtmError`] when config, identity, mailbox locking, ack-state
-/// validation, reply-target validation, or mailbox persistence fail.
 pub fn ack_mail(
     request: AckRequest,
     observability: &dyn ObservabilityPort,
@@ -73,16 +67,13 @@ pub fn ack_mail(
     }
 
     let actor_source_paths = discover_source_paths(&request.home_dir, &team, &actor)?;
-    let initial_locks = mailbox::lock::acquire_many_sorted(
-        actor_source_paths.clone(),
-        mailbox::lock::DEFAULT_LOCK_TIMEOUT,
-    )?;
-    let mut source_files = load_source_files(&actor_source_paths)?;
+    let preflight_source_files = load_source_files(&actor_source_paths)?;
     // Ack intentionally does not apply read-surface idle-notification dedup.
     // It must preserve the raw merged surface after legacy message_id
     // canonicalization so acknowledgement lookup does not depend on read-only
     // inbox clutter policy.
-    let source_message = find_source_message(&source_files, request.message_id, &actor, &team)?;
+    let source_message =
+        find_source_message(&preflight_source_files, request.message_id, &actor, &team)?;
 
     match (
         state::derive_read_state(&source_message.envelope),
@@ -149,13 +140,22 @@ pub fn ack_mail(
         final_paths.push(reply_inbox_path.clone());
         final_paths
     };
-    drop(initial_locks);
-    let _final_locks = mailbox::lock::acquire_many_sorted(
-        final_write_paths.clone(),
-        mailbox::lock::DEFAULT_LOCK_TIMEOUT,
-    )?;
-    source_files = load_source_files(&actor_source_paths)?;
+    let _final_locks =
+        mailbox::lock::acquire_many_sorted(final_write_paths, mailbox::lock::DEFAULT_LOCK_TIMEOUT)?;
+    let mut source_files = load_source_files(&actor_source_paths)?;
     let source_message = find_source_message(&source_files, request.message_id, &actor, &team)?;
+    match (
+        state::derive_read_state(&source_message.envelope),
+        state::derive_ack_state(&source_message.envelope),
+    ) {
+        (crate::types::ReadState::Read, crate::types::AckState::PendingAck) => {}
+        _ => {
+            return Err(AtmError::validation(format!(
+                "message {} is not in the (read, pending_ack) state",
+                request.message_id
+            )));
+        }
+    }
     update_source_message(&mut source_files, &source_message, ack_timestamp)?;
 
     append_reply_message(&mut source_files, &reply_inbox_path, reply_message)?;
@@ -328,8 +328,13 @@ fn append_reply_message(
 
     source_files.push(SourceFile {
         path: reply_inbox_path.to_path_buf(),
-        messages: vec![reply_message],
+        messages: mailbox::read_messages(reply_inbox_path)?,
     });
+    source_files
+        .last_mut()
+        .ok_or_else(|| AtmError::mailbox_write("reply inbox source file disappeared after push"))?
+        .messages
+        .push(reply_message);
     source_files.sort_by(|left, right| left.path.cmp(&right.path));
     Ok(())
 }

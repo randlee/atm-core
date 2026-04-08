@@ -154,7 +154,7 @@ mod tests {
 
     use tempfile::tempdir;
 
-    use super::{discover_origin_inboxes, resolve_target};
+    use super::{discover_origin_inboxes, load_source_files, resolve_target};
     use crate::config::AtmConfig;
 
     #[test]
@@ -190,5 +190,17 @@ mod tests {
         assert_eq!(target.agent, "team-lead");
         assert_eq!(target.team, "atm-dev");
         assert!(target.explicit);
+    }
+
+    #[test]
+    fn load_source_files_reports_disappearing_mailbox() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = tempdir.path().join("arch-ctm.json");
+        std::fs::write(&path, "").expect("mailbox");
+        std::fs::remove_file(&path).expect("remove");
+
+        let error = load_source_files(&[path]).expect_err("missing mailbox");
+        assert!(error.is_mailbox_read());
+        assert!(error.message.contains("disappeared"));
     }
 }

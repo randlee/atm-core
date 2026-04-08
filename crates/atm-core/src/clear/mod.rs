@@ -48,12 +48,6 @@ pub struct ClearOutcome {
     pub removed_by_class: RemovedByClass,
 }
 
-/// Remove read/acknowledged mailbox messages that match the clear query.
-///
-/// # Errors
-///
-/// Returns [`AtmError`] when config, identity, mailbox discovery, mailbox
-/// locks, or atomic mailbox persistence fail.
 pub fn clear_mail(
     query: ClearQuery,
     observability: &dyn ObservabilityPort,
@@ -82,11 +76,8 @@ pub fn clear_mail(
         return Err(AtmError::agent_not_found(&target.agent, &target.team));
     }
 
-    let mut source_files = load_source_files(&discover_source_paths(
-        &query.home_dir,
-        &target.team,
-        &target.agent,
-    )?)?;
+    let source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
+    let mut source_files = load_source_files(&source_paths)?;
     // Clear intentionally does not apply read-surface idle-notification dedup.
     // Cleanup decisions must inspect the raw merged surface after legacy
     // message_id canonicalization only.
@@ -110,44 +101,53 @@ pub fn clear_mail(
         .map(|message| (message.source_path.clone(), message.source_index))
         .collect::<HashSet<_>>();
 
-    if !query.dry_run {
-        let source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
+    let (removed_total, remaining_total, removed_by_class) = if query.dry_run {
+        (
+            removable.len(),
+            merged.len().saturating_sub(removable.len()),
+            removed_by_class,
+        )
+    } else {
         let _locks = mailbox::lock::acquire_many_sorted(
             source_paths.clone(),
             mailbox::lock::DEFAULT_LOCK_TIMEOUT,
         )?;
+        maybe_remove_locked_source_file_for_test(&source_paths)?;
         source_files = load_source_files(&source_paths)?;
         let merged = dedupe_legacy_message_id_surface(
             merged_surface(&source_files),
             |message: &SourcedMessage| message.envelope.message_id,
             |message: &SourcedMessage| message.envelope.timestamp,
         );
+        let mut locked_removed_by_class = RemovedByClass::default();
         let removable = merged
             .iter()
             .filter(|message| is_clearable(message, cutoff, query.idle_only))
+            .inspect(|message| {
+                count_removed(
+                    &mut locked_removed_by_class,
+                    state::classify_message(&message.envelope),
+                )
+            })
             .map(|message| (message.source_path.clone(), message.source_index))
             .collect::<HashSet<_>>();
 
         apply_removals(&mut source_files, &removable);
         persist_source_files(&source_files)?;
-    }
-
-    let remaining_total = if query.dry_run {
-        merged.len().saturating_sub(removable.len())
-    } else {
-        dedupe_legacy_message_id_surface(
+        let remaining_total = dedupe_legacy_message_id_surface(
             merged_surface(&source_files),
             |message: &SourcedMessage| message.envelope.message_id,
             |message: &SourcedMessage| message.envelope.timestamp,
         )
-        .len()
+        .len();
+        (removable.len(), remaining_total, locked_removed_by_class)
     };
 
     let outcome = ClearOutcome {
         action: "clear",
         team: target.team,
         agent: target.agent,
-        removed_total: removable.len(),
+        removed_total,
         remaining_total,
         removed_by_class,
     };
@@ -217,6 +217,23 @@ fn is_idle_notification(message: &MessageEnvelope) -> bool {
         .ok()
         .map(|value| value.get("type").and_then(Value::as_str) == Some("idle_notification"))
         .unwrap_or(false)
+}
+
+fn maybe_remove_locked_source_file_for_test(source_paths: &[PathBuf]) -> Result<(), AtmError> {
+    if std::env::var_os("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD").is_none() {
+        return Ok(());
+    }
+
+    let Some(path) = source_paths.first() else {
+        return Ok(());
+    };
+    std::fs::remove_file(path).map_err(|error| {
+        AtmError::mailbox_write(format!(
+            "failed to remove locked inbox {} during test injection: {error}",
+            path.display()
+        ))
+        .with_source(error)
+    })
 }
 
 fn count_removed(counts: &mut RemovedByClass, class: MessageClass) {

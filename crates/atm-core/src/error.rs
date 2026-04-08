@@ -306,7 +306,7 @@ impl AtmErrorKind {
             Self::Identity => AtmErrorCode::IdentityUnavailable,
             Self::TeamNotFound => AtmErrorCode::TeamNotFound,
             Self::AgentNotFound => AtmErrorCode::AgentNotFound,
-            Self::MailboxLock => AtmErrorCode::MailboxWriteFailed,
+            Self::MailboxLock => AtmErrorCode::MailboxLockFailed,
             Self::MailboxRead => AtmErrorCode::MailboxReadFailed,
             Self::MailboxWrite => AtmErrorCode::MailboxWriteFailed,
             Self::FilePolicy => AtmErrorCode::FilePolicyRejected,

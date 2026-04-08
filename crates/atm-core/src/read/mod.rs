@@ -71,12 +71,6 @@ pub struct ReadOutcome {
     pub bucket_counts: BucketCounts,
 }
 
-/// Read and classify mailbox messages for one agent inbox surface.
-///
-/// # Errors
-///
-/// Returns [`AtmError`] when config, identity, team membership, mailbox reads,
-/// mailbox locks, or seen-state persistence fail.
 pub fn read_mail(
     query: ReadQuery,
     observability: &dyn ObservabilityPort,
@@ -113,11 +107,8 @@ pub fn read_mail(
         None
     };
 
-    let mut source_files = load_source_files(&discover_source_paths(
-        &query.home_dir,
-        &target.team,
-        &target.agent,
-    )?)?;
+    let mut source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
+    let mut source_files = load_source_files(&source_paths)?;
     let mut classified_all = classify_all(apply_idle_notification_dedup(
         dedupe_legacy_message_id_surface(
             merged_surface(&source_files),
@@ -156,11 +147,8 @@ pub fn read_mail(
         )?;
 
         if wait_satisfied {
-            source_files = load_source_files(&discover_source_paths(
-                &query.home_dir,
-                &target.team,
-                &target.agent,
-            )?)?;
+            source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
+            source_files = load_source_files(&source_paths)?;
             classified_all = classify_all(apply_idle_notification_dedup(
                 dedupe_legacy_message_id_surface(
                     merged_surface(&source_files),
@@ -196,7 +184,6 @@ pub fn read_mail(
     let mutation_applied = if timed_out || selected.is_empty() {
         false
     } else {
-        let source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
         let _locks = mailbox::lock::acquire_many_sorted(
             source_paths.clone(),
             mailbox::lock::DEFAULT_LOCK_TIMEOUT,
