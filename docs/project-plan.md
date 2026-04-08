@@ -867,7 +867,13 @@ Before implementation starts, the docs should be reviewed with these checks:
 
 ### Phase M: Mailbox Locking And Code Review Fixes
 
-Status: PLANNED
+Status: COMPLETE
+
+Sprint completion records:
+- `M.1` complete on `feature/pM-s1-mailbox-locking` / PR #60, merged to
+  `integrate/phase-M` at `760e904`
+- `M.2` complete on `feature/pM-s2-review-fixes` / PR #61, merged to
+  `integrate/phase-M` at `c9fb9fa`
 
 Goal: close all blocking and important code-review findings from the Phase L review before
 declaring the codebase 1.0-ready. ARCH-CR-003 and ARCH-CR-004 are closed in L.7 (not Phase M scope).
@@ -890,12 +896,14 @@ Phase M finding registry:
     - bare operator-actionable construction sites are updated or explicitly
       excluded as non-operator-facing invariant failures
 - `BP-ECR-003` Error-display causal-context gap
-  - finding: `AtmError::Display` does not expose captured backtrace context when
-    runtime backtraces are enabled
+  - finding: `AtmError::Display` risks flooding normal CLI/log output with
+    multi-kilobyte backtraces when full diagnostic detail is only needed on
+    demand
   - resolution criteria:
-    - `Display` appends the captured backtrace when
-      `BacktraceStatus::Captured`
-    - tests cover both backtrace-present and backtrace-absent output
+    - `Display` remains concise and does not append the captured backtrace
+    - full backtrace access remains available via Debug output and a dedicated
+      accessor
+    - tests cover both backtrace-present and backtrace-absent branches
 - `BP-ECR-004` Deprecated identity migration-doc gap
   - finding: obsolete `[atm].identity` behavior and migration guidance are not
     documented consistently enough for operator repair
@@ -1019,8 +1027,9 @@ Deliverables (itemized by finding):
    - Add `atm doctor` check for stale `.restore-in-progress` markers
    - Files: `team_admin.rs`, `doctor/mod.rs`
 
-2. **AtmError backtrace rendering**:
-   - Extend `Display` in `error.rs` to render `self.backtrace` when `BacktraceStatus::Captured`
+2. **AtmError backtrace access**:
+   - Keep `Display` concise and omit multi-KB backtrace rendering
+   - Expose captured backtraces through Debug output and a dedicated accessor
    - File: `error.rs`
 
 3. **`# Errors` doc audit**:
@@ -1079,7 +1088,8 @@ Tests required:
   write leaves a warning-only stale-marker finding rather than corrupting team state
 - Restore atomicity: `recompute_highwatermark` is either converted to atomic
   replacement or covered by an explicit crash-safety regression test
-- Backtrace: `Display` output includes backtrace when `RUST_BACKTRACE=1`, excludes otherwise
+- Backtrace: captured and absent backtrace branches are both tested; `Display`
+  remains concise and the dedicated backtrace accessor remains available
 - `normalize_json_number`: malformed exponent returns raw string (no panic)
 - `resolve_actor_identity`: existing tests pass after consolidation (no behavior change)
 - Documentation review pass confirms new `# Errors`, `# Deprecated`, and `# Panics` sections exist
@@ -1117,7 +1127,8 @@ Phase M dependency graph:
   integrate/phase-M --> develop (final phase integration PR)
 ```
 
-Phase M is complete when:
+Phase M closeout gate (satisfied on `integrate/phase-M`; final merge to
+`develop` remains the release-integration step):
 - M.1 and M.2 are both merged to `integrate/phase-M`
 - ARCH-CR-001 and ARCH-CR-002 blocking findings are resolved
 - all BP-ECR-001 through BP-ECR-006 findings are resolved

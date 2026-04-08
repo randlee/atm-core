@@ -20,12 +20,44 @@ pub(crate) fn temp_file_suffix() -> String {
     format!("{}-{}", std::process::id(), Uuid::new_v4().simple())
 }
 
+/// Append one message to a mailbox JSONL file under the mailbox lock.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::MailboxReadFailed`],
+/// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`],
+/// [`crate::error_codes::AtmErrorCode::MailboxLockFailed`], or
+/// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`] when the mailbox
+/// cannot be loaded, locked, or atomically replaced.
 pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), AtmError> {
+    locked_read_modify_write(path, lock::DEFAULT_LOCK_TIMEOUT, |messages| {
+        messages.push(envelope.clone());
+        Ok(())
+    })
+}
+
+pub(crate) fn locked_read_modify_write<F>(
+    path: &Path,
+    timeout: std::time::Duration,
+    mutate: F,
+) -> Result<(), AtmError>
+where
+    F: FnOnce(&mut Vec<MessageEnvelope>) -> Result<(), AtmError>,
+{
+    let _guard = lock::acquire_many_sorted([path.to_path_buf()], timeout)?;
     let mut messages = read_messages(path)?;
-    messages.push(envelope.clone());
+    mutate(&mut messages)?;
     atomic::write_messages(path, &messages)
 }
 
+/// Read all valid mailbox records from a mailbox JSONL file.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::MailboxReadFailed`] when the mailbox
+/// file cannot be opened or read.
 pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
     if !path.exists() {
         return Ok(Vec::new());
@@ -36,6 +68,7 @@ pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
             AtmErrorKind::MailboxRead,
             format!("failed to open mailbox file {}: {error}", path.display()),
         )
+        .with_recovery("Retry after concurrent ATM activity completes, or verify the mailbox file still exists and is readable.")
         .with_source(error)
     })?;
     let reader = std::io::BufReader::new(file);
@@ -51,6 +84,7 @@ pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
                     path.display()
                 ),
             )
+            .with_recovery("Retry after concurrent ATM activity completes, or inspect the mailbox file for truncation or permission issues.")
             .with_source(error)
         })?;
         if line.trim().is_empty() {
@@ -112,6 +146,8 @@ fn sanitize_legacy_message_id(value: &mut Value, path: &Path, line_number: usize
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::sync::{Arc, Barrier};
+    use std::thread;
 
     use chrono::{TimeZone, Utc};
     use tempfile::TempDir;
@@ -120,7 +156,8 @@ mod tests {
     use crate::schema::MessageEnvelope;
     use crate::types::IsoTimestamp;
 
-    use super::{append_message, read_messages};
+    use super::{append_message, locked_read_modify_write, read_messages};
+    use crate::mailbox::lock;
 
     #[test]
     fn append_message_persists_one_jsonl_record() {
@@ -134,6 +171,27 @@ mod tests {
         assert!(raw.contains("\"text\":\"first\""));
         let read_back = read_messages(&path).expect("read back");
         assert_eq!(read_back, vec![envelope]);
+    }
+
+    #[test]
+    fn locked_read_modify_write_reads_mutates_and_rewrites_under_lock() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("locked-rmw.jsonl");
+        let first = sample_message(Uuid::new_v4(), "first");
+        append_message(&path, &first).expect("seed");
+
+        locked_read_modify_write(&path, lock::DEFAULT_LOCK_TIMEOUT, |messages| {
+            assert_eq!(messages.len(), 1);
+            messages[0].read = true;
+            messages.push(sample_message(Uuid::new_v4(), "second"));
+            Ok(())
+        })
+        .expect("locked read modify write");
+
+        let messages = read_messages(&path).expect("read");
+        assert_eq!(messages.len(), 2);
+        assert!(messages[0].read);
+        assert_eq!(messages[1].text, "second");
     }
 
     #[test]
@@ -196,6 +254,34 @@ mod tests {
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].text, "valid body");
         assert!(messages[0].message_id.is_none());
+    }
+
+    #[test]
+    fn append_message_preserves_both_records_under_concurrent_writers() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("append-message-concurrent.jsonl");
+        let barrier = Arc::new(Barrier::new(3));
+
+        let mut handles = Vec::new();
+        for body in ["first", "second"] {
+            let path = path.clone();
+            let barrier = Arc::clone(&barrier);
+            handles.push(thread::spawn(move || {
+                let envelope = sample_message(Uuid::new_v4(), body);
+                barrier.wait();
+                append_message(&path, &envelope).expect("append");
+            }));
+        }
+
+        barrier.wait();
+        for handle in handles {
+            handle.join().expect("thread");
+        }
+
+        let messages = read_messages(&path).expect("read");
+        assert_eq!(messages.len(), 2);
+        assert!(messages.iter().any(|message| message.text == "first"));
+        assert!(messages.iter().any(|message| message.text == "second"));
     }
 
     fn sample_message(message_id: Uuid, body: &str) -> MessageEnvelope {

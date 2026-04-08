@@ -2,12 +2,14 @@ use anyhow::{Context, Result};
 use atm_core::ack::{self, AckRequest};
 use atm_core::home;
 use atm_core::schema::LegacyMessageId;
+use atm_core::types::{AgentName, TeamName};
 use clap::Args;
 
 use crate::observability::CliObservability;
 use crate::output;
 
 #[derive(Debug, Args)]
+/// Acknowledge one pending-ack message and send a reply.
 pub struct AckCommand {
     message_id: String,
     reply: String,
@@ -23,6 +25,7 @@ pub struct AckCommand {
 }
 
 impl AckCommand {
+    /// Execute the `atm ack` command.
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
@@ -35,8 +38,8 @@ impl AckCommand {
             AckRequest {
                 home_dir,
                 current_dir,
-                actor_override: self.actor,
-                team_override: self.team,
+                actor_override: self.actor.map(AgentName::from),
+                team_override: self.team.map(TeamName::from),
                 message_id,
                 reply_body: self.reply,
             },

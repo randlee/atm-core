@@ -11,6 +11,7 @@ use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
 use crate::schema::AgentMember;
 use crate::team_admin::{MemberSummary, MembersList};
+use crate::types::TeamName;
 
 pub use report::{
     DoctorEnvironmentVisibility, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
@@ -21,9 +22,15 @@ pub use report::{
 pub struct DoctorQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
-    pub team_override: Option<String>,
+    pub team_override: Option<TeamName>,
 }
 
+/// Run the ATM doctor checks for config, roster, and observability health.
+///
+/// # Errors
+///
+/// Returns [`crate::error::AtmError`] when loading `.atm.toml` fails before the
+/// doctor report can be assembled.
 pub fn run_doctor(
     query: DoctorQuery,
     observability: &dyn ObservabilityPort,
@@ -129,6 +136,8 @@ fn load_member_roster(
         return None;
     }
 
+    check_restore_marker(team, &team_dir, findings);
+
     let team_config = match config::load_team_config(&team_dir) {
         Ok(team_config) => team_config,
         Err(error) => {
@@ -164,7 +173,7 @@ fn load_member_roster(
     }
 
     Some(MembersList {
-        team: team.to_string(),
+        team: team.to_string().into(),
         members: ordered_member_summaries(&team_config.members, baseline),
     })
 }
@@ -213,6 +222,27 @@ fn check_inbox_directory(team: &str, inboxes_dir: &Path, findings: &mut Vec<Doct
             ),
         });
     }
+}
+
+fn check_restore_marker(team: &str, team_dir: &Path, findings: &mut Vec<DoctorFinding>) {
+    let marker = team_dir.join(".restore-in-progress");
+    if !marker.is_file() {
+        return;
+    }
+
+    findings.push(DoctorFinding {
+        severity: DoctorSeverity::Warning,
+        code: AtmErrorCode::WarningRestoreInProgress,
+        message: format!(
+            "stale restore marker is present at {} for '{}'; a prior `atm teams restore` may have been interrupted",
+            marker.display(),
+            team
+        ),
+        remediation: Some(format!(
+            "Inspect {} for partial restore state, rerun `atm teams restore {team}`, then remove the marker once recovery is complete.",
+            team_dir.display()
+        )),
+    });
 }
 
 fn probe_directory_writable(directory: &Path) -> Result<(), std::io::Error> {
@@ -268,7 +298,7 @@ fn ordered_member_summaries(members: &[AgentMember], baseline: &[String]) -> Vec
 
 fn member_summary(member: &AgentMember) -> MemberSummary {
     MemberSummary {
-        name: member.name.clone(),
+        name: member.name.clone().into(),
         agent_id: member.agent_id.clone(),
         agent_type: member.agent_type.clone(),
         model: member.model.clone(),
@@ -386,7 +416,7 @@ mod tests {
         DoctorQuery {
             home_dir: paths.home_dir.clone(),
             current_dir: paths.current_dir.clone(),
-            team_override: Some("atm-dev".to_string()),
+            team_override: Some("atm-dev".into()),
         }
     }
 

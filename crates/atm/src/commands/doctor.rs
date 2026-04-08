@@ -1,12 +1,14 @@
 use anyhow::Result;
 use atm_core::doctor::{self, DoctorQuery};
 use atm_core::home;
+use atm_core::types::TeamName;
 use clap::Args;
 
 use crate::observability::CliObservability;
 use crate::output;
 
 #[derive(Debug, Args)]
+/// Run ATM health and configuration diagnostics.
 pub struct DoctorCommand {
     #[arg(long, help = "Override the resolved team for the doctor check.")]
     team: Option<String>,
@@ -20,6 +22,7 @@ impl DoctorCommand {
     // initial release. Current service-level coverage exercises doctor behavior
     // without introducing a wider command abstraction before a concrete need
     // appears.
+    /// Execute the `atm doctor` command.
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
@@ -27,7 +30,7 @@ impl DoctorCommand {
             DoctorQuery {
                 home_dir,
                 current_dir,
-                team_override: self.team,
+                team_override: self.team.map(TeamName::from),
             },
             observability,
         )?;

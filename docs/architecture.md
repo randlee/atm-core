@@ -960,7 +960,7 @@ contain:
 The post-send hook runs only after a successful non-`dry-run` send, and hook
 failure or timeout never rolls back a successful send.
 
-### 13.2 File Policy
+### 13.3 File Policy
 
 The current `send --file` behavior is retained:
 - inspect Claude settings permissions when available
@@ -1248,8 +1248,8 @@ requested inbox plus any origin inboxes before writing back. To make those paths
 concurrency-safe, Phase M needs a second abstraction:
 
 ```rust
-pub fn acquire_many_sorted<'a>(
-    paths: impl IntoIterator<Item = &'a Path>,
+pub fn acquire_many_sorted(
+    paths: impl IntoIterator<Item = PathBuf>,
     timeout: Duration,
 ) -> Result<Vec<MailboxLockGuard>, AtmError>
 ```
@@ -1274,12 +1274,33 @@ for `read`, `ack`, and `clear`. Those commands are not allowed to degrade into
 partial-lock best-effort mutation, because doing so would mix snapshots from
 different logical times and make writeback correctness nondeterministic.
 
+### 18.4.1 Cooperative Locking Caveat For `ack_mail`
+
+`ack_mail` sometimes needs to mutate a source inbox set and append the reply to
+another inbox that was not part of the initial actor-source set. In that case
+it follows a documented two-phase lock pattern:
+
+1. acquire the actor-source lock set
+2. validate state and compute the reply inbox path
+3. drop the initial subset lock set
+4. re-acquire the full sorted superset that includes the reply inbox
+5. re-discover source paths, reload state, and re-validate before mutation
+6. persist both the updated source message and reply while the superset locks
+   are still held
+
+This is required because trying to acquire the superset while still holding the
+subset can deadlock if the reply inbox sorts before any of the already-held
+actor inbox paths. The temporary unlock gap is acceptable only because
+`ack_mail` re-validates both the source-path set and the pending-ack state
+after the final lock acquisition and aborts on drift instead of mutating a
+stale snapshot.
+
 | Caller | Lock required |
 |--------|--------------|
 | `append_message` | `locked_read_modify_write` |
 | `send` missing-config notice append | `append_message` coverage |
 | `read` writeback | multi-file lock set held from first read through persist |
-| `ack` transition + reply | multi-file lock set held from first read through persist |
+| `ack` transition + reply | two-phase cooperative lock — actor-source set acquired, dropped, re-acquired as full superset including reply inbox; see §18.4.1 |
 | `clear` set replacement | multi-file lock set held from first read through persist |
 | `read_messages` (read-only, no writeback) | No |
 
@@ -1374,16 +1395,14 @@ It must never merge old staging contents with the new restore attempt.
 
 ### 20.1 AtmError Display Backtrace
 
-`error.rs` Display impl extended to render backtrace conditionally:
+`AtmError` keeps the user-facing `Display` output concise:
 
-```rust
-if matches!(self.backtrace.status(), std::backtrace::BacktraceStatus::Captured) {
-    write!(f, "\n\nBacktrace:\n{}", self.backtrace)?;
-}
-```
+- `Display` renders only the primary message and recovery text
+- captured backtraces stay available through Debug output and a dedicated
+  accessor on `AtmError`
 
-Renders only when the stored `Backtrace` status is `Captured`, which in practice
-corresponds to a runtime backtrace-enabled environment.
+This avoids multi-kilobyte backtrace blobs in normal CLI/log output while
+preserving full diagnostic depth for explicit debugging.
 
 ### 20.2 resolve_actor_identity Consolidation
 

@@ -6,6 +6,7 @@ use serde::de::Error as DeError;
 use serde::ser::{Error as SerError, SerializeMap};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value};
+use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode};
 use crate::schema::LegacyMessageId;
@@ -429,17 +430,24 @@ where
     }
 }
 
+/// One follow/tail session over retained ATM observability records.
+///
+/// `LogTailSession` is `Send` but intentionally not `Sync`: callers should move
+/// one session onto one polling task and share the owning `ObservabilityPort`
+/// behind an `Arc` if multiple async tasks need to create independent sessions.
 pub struct LogTailSession {
     inner: Box<dyn LogFollowPort>,
 }
 
 impl LogTailSession {
+    /// Construct an empty follow session that never yields records.
     pub fn empty() -> Self {
         Self {
             inner: Box::<EmptyFollowPort>::default(),
         }
     }
 
+    /// Construct one follow session from a polling closure.
     pub fn from_poller<F>(poller: F) -> Self
     where
         F: FnMut() -> Result<AtmLogSnapshot, AtmError> + Send + 'static,
@@ -476,6 +484,10 @@ pub trait ObservabilityPort: sealed::Sealed {
     /// query or when ATM-specific query projection fails.
     fn query(&self, req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError>;
     /// Start a retained follow/tail session for ATM observability records.
+    ///
+    /// The returned [`LogTailSession`] is designed for one polling owner at a
+    /// time. Async callers that need multiple consumers should share the port
+    /// behind an `Arc` and create one independent session per task.
     ///
     /// # Errors
     ///
@@ -519,18 +531,25 @@ impl ObservabilityPort for NullObservability {
     }
 }
 
+/// Normalize a JSON number string into a canonical decimal representation.
+///
+/// # Panics
+///
+/// This function does not panic on malformed exponents. If exponent parsing
+/// fails unexpectedly, it logs a warning and preserves the original string.
 fn normalize_json_number(raw: &str) -> String {
     let (negative, unsigned) = match raw.strip_prefix('-') {
         Some(rest) => (true, rest),
         None => (false, raw),
     };
     let (base, exponent) = match unsigned.find(['e', 'E']) {
-        Some(index) => (
-            &unsigned[..index],
-            unsigned[index + 1..]
-                .parse::<i64>()
-                .expect("valid JSON number exponent"),
-        ),
+        Some(index) => match unsigned[index + 1..].parse::<i64>() {
+            Ok(exponent) => (&unsigned[..index], exponent),
+            Err(error) => {
+                warn!(raw, %error, "failed to normalize JSON number exponent; preserving original value");
+                return raw.to_string();
+            }
+        },
         None => (unsigned, 0),
     };
     let (integer, fraction) = match base.split_once('.') {
@@ -580,6 +599,7 @@ mod tests {
     use super::{
         AtmJsonNumber, AtmLogQuery, AtmObservabilityHealthState, LogFieldKey, LogFieldMap,
         LogFieldValue, LogLevelFilter, LogMode, LogOrder, NullObservability, ObservabilityPort,
+        normalize_json_number,
     };
     use serde_json::json;
 
@@ -668,6 +688,11 @@ mod tests {
             AtmJsonNumber::new("1").expect("one"),
             AtmJsonNumber::new("1e0").expect("scientific")
         );
+    }
+
+    #[test]
+    fn normalize_json_number_preserves_raw_string_for_malformed_exponent() {
+        assert_eq!(normalize_json_number("1e-not-a-number"), "1e-not-a-number");
     }
 
     #[test]

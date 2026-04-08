@@ -6,7 +6,9 @@ use tracing::warn;
 use crate::address::AgentAddress;
 use crate::config;
 use crate::error::{AtmError, AtmErrorKind};
+use crate::home;
 use crate::schema::MessageEnvelope;
+use crate::types::SourceIndex;
 
 #[derive(Debug, Clone)]
 pub(crate) struct SourceFile {
@@ -18,7 +20,7 @@ pub(crate) struct SourceFile {
 pub(crate) struct SourcedMessage {
     pub envelope: MessageEnvelope,
     pub source_path: PathBuf,
-    pub source_index: usize,
+    pub source_index: SourceIndex,
 }
 
 #[derive(Debug)]
@@ -77,6 +79,9 @@ pub(crate) fn discover_origin_inboxes(
                     inboxes_dir.display()
                 ),
             )
+            .with_recovery(
+                "Check inbox directory permissions and ensure the source inbox directory still exists before retrying the ATM command.",
+            )
             .with_source(error)
         })?
         .filter_map(|entry| match entry {
@@ -103,13 +108,78 @@ pub(crate) fn discover_origin_inboxes(
     Ok(paths)
 }
 
+pub(crate) fn discover_source_paths(
+    home_dir: &Path,
+    team: &str,
+    agent: &str,
+) -> Result<Vec<PathBuf>, AtmError> {
+    let inbox_path = home::inbox_path_from_home(home_dir, team, agent)?;
+    let inboxes_dir = inbox_path
+        .parent()
+        .ok_or_else(|| AtmError::mailbox_read("inbox path has no parent directory"))?;
+    let inboxes_dir = inboxes_dir.to_path_buf();
+
+    let mut paths = Vec::new();
+    if inbox_path.exists() {
+        paths.push(inbox_path);
+    }
+    paths.extend(discover_origin_inboxes(&inboxes_dir, agent)?);
+    paths.sort_by_key(|path| path.to_string_lossy().into_owned());
+    paths.dedup();
+    Ok(paths)
+}
+
+pub(crate) fn rediscover_and_validate_source_paths(
+    locked_paths: &[PathBuf],
+    home_dir: &Path,
+    team: &str,
+    agent: &str,
+) -> Result<Vec<PathBuf>, AtmError> {
+    let rediscovered = discover_source_paths(home_dir, team, agent)?;
+    if rediscovered != locked_paths {
+        return Err(AtmError::mailbox_lock(
+            "source path set changed between discovery and lock acquisition",
+        )
+        .with_recovery(
+            "Retry after the competing ATM operation completes so ATM can rediscover the stable inbox set.",
+        ));
+    }
+    Ok(rediscovered)
+}
+
+pub(crate) fn load_source_files(paths: &[PathBuf]) -> Result<Vec<SourceFile>, AtmError> {
+    let mut sources = Vec::with_capacity(paths.len());
+    for path in paths {
+        if !path.exists() {
+            return Err(AtmError::mailbox_read(format!(
+                "mailbox file disappeared before locked read completed: {}",
+                path.display()
+            ))
+            .with_recovery(
+                "Retry after the competing ATM operation completes, or verify the team inbox files still exist.",
+            ));
+        }
+
+        let messages = super::read_messages(path)?;
+        sources.push(SourceFile {
+            path: path.clone(),
+            messages,
+        });
+    }
+
+    Ok(sources)
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
 
     use tempfile::tempdir;
 
-    use super::{discover_origin_inboxes, resolve_target};
+    use super::{
+        discover_origin_inboxes, load_source_files, rediscover_and_validate_source_paths,
+        resolve_target,
+    };
     use crate::config::AtmConfig;
 
     #[test]
@@ -145,5 +215,41 @@ mod tests {
         assert_eq!(target.agent, "team-lead");
         assert_eq!(target.team, "atm-dev");
         assert!(target.explicit);
+    }
+
+    #[test]
+    fn load_source_files_reports_disappearing_mailbox() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = tempdir.path().join("arch-ctm.json");
+        std::fs::write(&path, "").expect("mailbox");
+        std::fs::remove_file(&path).expect("remove");
+
+        let error = load_source_files(&[path]).expect_err("missing mailbox");
+        assert!(error.is_mailbox_read());
+        assert!(error.message.contains("disappeared"));
+    }
+
+    #[test]
+    fn rediscover_and_validate_source_paths_reports_drift() {
+        let tempdir = tempdir().expect("tempdir");
+        let home = tempdir.path();
+        let inboxes = home
+            .join(".claude")
+            .join("teams")
+            .join("atm-dev")
+            .join("inboxes");
+        std::fs::create_dir_all(&inboxes).expect("inboxes");
+        let locked = inboxes.join("arch-ctm.json");
+        let added = inboxes.join("arch-ctm.host-a.json");
+        std::fs::write(&locked, "").expect("primary");
+
+        let discovered =
+            super::discover_source_paths(home, "atm-dev", "arch-ctm").expect("discover");
+        std::fs::write(&added, "").expect("origin");
+
+        let error = rediscover_and_validate_source_paths(&discovered, home, "atm-dev", "arch-ctm")
+            .expect_err("drift error");
+        assert!(error.is_mailbox_lock());
+        assert!(error.message.contains("source path set changed"));
     }
 }

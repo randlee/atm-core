@@ -1,4 +1,4 @@
-use std::backtrace::Backtrace;
+use std::backtrace::{Backtrace, BacktraceStatus};
 use std::error::Error as StdError;
 use std::fmt;
 
@@ -12,6 +12,7 @@ pub(crate) enum AtmErrorKind {
     Identity,
     TeamNotFound,
     AgentNotFound,
+    MailboxLock,
     MailboxRead,
     MailboxWrite,
     FilePolicy,
@@ -83,6 +84,10 @@ impl AtmError {
         self.kind == AtmErrorKind::MailboxRead
     }
 
+    pub fn is_mailbox_lock(&self) -> bool {
+        self.kind == AtmErrorKind::MailboxLock
+    }
+
     pub fn is_mailbox_write(&self) -> bool {
         self.kind == AtmErrorKind::MailboxWrite
     }
@@ -134,6 +139,11 @@ impl AtmError {
     {
         self.source = Some(Box::new(source));
         self
+    }
+
+    /// Return the captured backtrace when one is available.
+    pub fn backtrace(&self) -> Option<&Backtrace> {
+        (self.backtrace.status() == BacktraceStatus::Captured).then_some(&self.backtrace)
     }
 
     pub fn home_directory_unavailable() -> Self {
@@ -200,6 +210,26 @@ impl AtmError {
 
     pub fn mailbox_read(message: impl Into<String>) -> Self {
         Self::new(AtmErrorKind::MailboxRead, message)
+    }
+
+    pub fn mailbox_lock(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorKind::MailboxLock, message).with_recovery(
+            "Retry after other ATM mailbox activity completes, or wait for the competing process to release its mailbox lock.",
+        )
+    }
+
+    pub fn mailbox_lock_timeout(path: &std::path::Path) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::MailboxLockTimeout,
+            AtmErrorKind::MailboxLock,
+            format!(
+                "timed out waiting for mailbox lock on {}",
+                path.display()
+            ),
+        )
+        .with_recovery(
+            "Retry after the competing ATM process finishes, or investigate whether another process is holding the mailbox lock unexpectedly.",
+        )
     }
 
     pub fn mailbox_write(message: impl Into<String>) -> Self {
@@ -276,6 +306,7 @@ impl AtmErrorKind {
             Self::Identity => AtmErrorCode::IdentityUnavailable,
             Self::TeamNotFound => AtmErrorCode::TeamNotFound,
             Self::AgentNotFound => AtmErrorCode::AgentNotFound,
+            Self::MailboxLock => AtmErrorCode::MailboxLockFailed,
             Self::MailboxRead => AtmErrorCode::MailboxReadFailed,
             Self::MailboxWrite => AtmErrorCode::MailboxWriteFailed,
             Self::FilePolicy => AtmErrorCode::FilePolicyRejected,
@@ -293,6 +324,8 @@ impl AtmErrorKind {
 
 #[cfg(test)]
 mod tests {
+    use std::backtrace::Backtrace;
+
     use super::{AtmError, AtmErrorCode};
 
     #[test]
@@ -317,5 +350,27 @@ mod tests {
             AtmError::observability_health("health failed").code,
             AtmErrorCode::ObservabilityHealthFailed
         );
+    }
+
+    #[test]
+    fn display_remains_concise_when_backtrace_is_captured() {
+        let mut error = AtmError::validation("boom");
+        error.backtrace = Backtrace::force_capture();
+
+        let rendered = error.to_string();
+        assert!(rendered.contains("boom"));
+        assert!(!rendered.contains("Backtrace:"));
+        assert!(error.backtrace().is_some());
+    }
+
+    #[test]
+    fn display_handles_absent_backtrace() {
+        let mut error = AtmError::validation("boom");
+        error.backtrace = Backtrace::disabled();
+
+        let rendered = error.to_string();
+        assert!(rendered.contains("boom"));
+        assert!(!rendered.contains("Backtrace:"));
+        assert!(error.backtrace().is_none());
     }
 }

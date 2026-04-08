@@ -24,6 +24,8 @@ pub(crate) mod mailbox;
 pub(crate) mod model_registry;
 /// Observability adapter traits and event payload types.
 pub mod observability;
+/// Internal atomic persistence helpers for shared mutable state files.
+pub(crate) mod persistence;
 /// Mailbox read/query workflows and output models.
 pub mod read;
 /// Public mailbox and team schema types shared with CLI tests and adapters.

@@ -3,12 +3,14 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use atm_core::clear::{self, ClearQuery};
 use atm_core::home;
+use atm_core::types::{AgentName, TeamName};
 use clap::Args;
 
 use crate::observability::CliObservability;
 use crate::output;
 
 #[derive(Debug, Args)]
+/// Clear read or acknowledged messages from a mailbox.
 pub struct ClearCommand {
     target: Option<String>,
 
@@ -32,6 +34,7 @@ pub struct ClearCommand {
 }
 
 impl ClearCommand {
+    /// Execute the `atm clear` command.
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
@@ -41,9 +44,9 @@ impl ClearCommand {
             ClearQuery {
                 home_dir,
                 current_dir,
-                actor_override: self.actor_override,
+                actor_override: self.actor_override.map(AgentName::from),
                 target_address: self.target,
-                team_override: self.team,
+                team_override: self.team.map(TeamName::from),
                 older_than,
                 idle_only: self.idle_only,
                 dry_run: self.dry_run,

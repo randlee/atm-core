@@ -32,6 +32,10 @@ pub enum AtmErrorCode {
     MailboxReadFailed,
     /// Writing a mailbox failed.
     MailboxWriteFailed,
+    /// Acquiring or releasing a mailbox lock failed.
+    MailboxLockFailed,
+    /// Acquiring a mailbox lock timed out.
+    MailboxLockTimeout,
     /// A malformed mailbox record was skipped.
     MailboxRecordSkipped,
     /// Message validation failed.
@@ -78,6 +82,8 @@ pub enum AtmErrorCode {
     WarningIdentityDrift,
     /// A baseline team member declared in .atm.toml is missing from config.json.
     WarningBaselineMemberMissing,
+    /// A restore operation left a stale in-progress marker behind.
+    WarningRestoreInProgress,
 }
 
 impl AtmErrorCode {
@@ -94,6 +100,8 @@ impl AtmErrorCode {
             Self::AgentNotFound => "ATM_AGENT_NOT_FOUND",
             Self::MailboxReadFailed => "ATM_MAILBOX_READ_FAILED",
             Self::MailboxWriteFailed => "ATM_MAILBOX_WRITE_FAILED",
+            Self::MailboxLockFailed => "ATM_MAILBOX_LOCK_FAILED",
+            Self::MailboxLockTimeout => "ATM_MAILBOX_LOCK_TIMEOUT",
             Self::MailboxRecordSkipped => "ATM_MAILBOX_RECORD_SKIPPED",
             Self::MessageValidationFailed => "ATM_MESSAGE_VALIDATION_FAILED",
             Self::SerializationFailed => "ATM_SERIALIZATION_FAILED",
@@ -117,6 +125,7 @@ impl AtmErrorCode {
             Self::WarningSendAlertStateDegraded => "ATM_WARNING_SEND_ALERT_STATE_DEGRADED",
             Self::WarningIdentityDrift => "ATM_WARNING_IDENTITY_DRIFT",
             Self::WarningBaselineMemberMissing => "ATM_WARNING_BASELINE_MEMBER_MISSING",
+            Self::WarningRestoreInProgress => "ATM_WARNING_RESTORE_IN_PROGRESS",
         }
     }
 }

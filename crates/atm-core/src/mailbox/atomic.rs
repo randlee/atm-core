@@ -13,6 +13,9 @@ pub fn write_messages(path: &Path, messages: &[MessageEnvelope]) -> Result<(), A
                 AtmErrorKind::MailboxWrite,
                 format!("failed to create mailbox directory: {error}"),
             )
+            .with_recovery(
+                "Check mailbox directory permissions and available disk space, then retry the ATM command.",
+            )
             .with_source(error)
         })?;
     }
@@ -31,6 +34,9 @@ pub fn write_messages(path: &Path, messages: &[MessageEnvelope]) -> Result<(), A
                 AtmErrorKind::MailboxWrite,
                 format!("failed to create mailbox temp file: {error}"),
             )
+            .with_recovery(
+                "Check mailbox directory permissions and available disk space, then retry the ATM command.",
+            )
             .with_source(error)
         })?;
         for message in messages {
@@ -40,6 +46,9 @@ pub fn write_messages(path: &Path, messages: &[MessageEnvelope]) -> Result<(), A
                     AtmErrorKind::MailboxWrite,
                     format!("failed to write mailbox record: {error}"),
                 )
+                .with_recovery(
+                    "Check available disk space and mailbox file permissions, then retry the ATM command.",
+                )
                 .with_source(error)
             })?;
         }
@@ -47,6 +56,9 @@ pub fn write_messages(path: &Path, messages: &[MessageEnvelope]) -> Result<(), A
             AtmError::new(
                 AtmErrorKind::MailboxWrite,
                 format!("failed to fsync mailbox temp file: {error}"),
+            )
+            .with_recovery(
+                "Check disk health and filesystem permissions, then retry the ATM command after the mailbox temp file can be synced successfully.",
             )
             .with_source(error)
         })?;
@@ -56,6 +68,9 @@ pub fn write_messages(path: &Path, messages: &[MessageEnvelope]) -> Result<(), A
         AtmError::new(
             AtmErrorKind::MailboxWrite,
             format!("failed to replace mailbox file: {error}"),
+        )
+        .with_recovery(
+            "Check that the mailbox directory is writable and on a healthy filesystem, then retry the ATM command.",
         )
         .with_source(error)
     })?;

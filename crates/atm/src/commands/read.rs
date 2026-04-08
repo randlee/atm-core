@@ -1,13 +1,14 @@
 use anyhow::{Context, Result};
 use atm_core::home;
 use atm_core::read::{self, ReadQuery};
-use atm_core::types::{AckActivationMode, IsoTimestamp, ReadSelection};
+use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
 use clap::Args;
 
 use crate::observability::CliObservability;
 use crate::output;
 
 #[derive(Debug, Args)]
+/// Read one ATM mailbox surface and optionally update read state.
 pub struct ReadCommand {
     target: Option<String>,
 
@@ -58,6 +59,7 @@ pub struct ReadCommand {
 }
 
 impl ReadCommand {
+    /// Execute the `atm read` command.
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
@@ -70,9 +72,9 @@ impl ReadCommand {
             ReadQuery {
                 home_dir,
                 current_dir,
-                actor_override: self.actor,
+                actor_override: self.actor.map(AgentName::from),
                 target_address: self.target,
-                team_override: self.team,
+                team_override: self.team.map(TeamName::from),
                 selection_mode,
                 seen_state_filter: !self.no_since_last_seen,
                 seen_state_update: !self.no_update_seen,

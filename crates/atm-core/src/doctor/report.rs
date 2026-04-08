@@ -5,6 +5,7 @@ use serde::Serialize;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::AtmObservabilityHealth;
 use crate::team_admin::MembersList;
+use crate::types::{AgentName, TeamName};
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -42,9 +43,9 @@ pub struct DoctorSummary {
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct DoctorEnvironmentVisibility {
     pub atm_home: Option<PathBuf>,
-    pub atm_team: Option<String>,
-    pub atm_identity: Option<String>,
-    pub team_override: Option<String>,
+    pub atm_team: Option<TeamName>,
+    pub atm_identity: Option<AgentName>,
+    pub team_override: Option<TeamName>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
