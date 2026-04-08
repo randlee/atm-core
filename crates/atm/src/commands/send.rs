@@ -9,6 +9,7 @@ use crate::observability::CliObservability;
 use crate::output;
 
 #[derive(Debug, Args)]
+/// Send one ATM mailbox message.
 pub struct SendCommand {
     #[arg()]
     to: String,
@@ -45,6 +46,7 @@ pub struct SendCommand {
 }
 
 impl SendCommand {
+    /// Execute the `atm send` command.
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;

@@ -10,6 +10,7 @@ use atm_core::team_admin::{
 };
 use atm_core::types::DisplayBucket;
 
+/// Print one send result in human-readable or JSON form.
 pub fn print_send_result(outcome: &SendOutcome, json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(outcome)?);
@@ -26,6 +27,7 @@ pub fn print_send_result(outcome: &SendOutcome, json: bool) -> Result<()> {
     Ok(())
 }
 
+/// Print one read result in human-readable or JSON form.
 pub fn print_read_result(outcome: &ReadOutcome, json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(outcome)?);
@@ -56,6 +58,7 @@ pub fn print_read_result(outcome: &ReadOutcome, json: bool) -> Result<()> {
     Ok(())
 }
 
+/// Print one acknowledgement result in human-readable or JSON form.
 pub fn print_ack_result(outcome: &AckOutcome, json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(outcome)?);
@@ -73,6 +76,7 @@ pub fn print_ack_result(outcome: &AckOutcome, json: bool) -> Result<()> {
     Ok(())
 }
 
+/// Print one clear result in human-readable or JSON form.
 pub fn print_clear_result(outcome: &ClearOutcome, dry_run: bool, json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(outcome)?);
@@ -101,6 +105,7 @@ pub fn print_clear_result(outcome: &ClearOutcome, dry_run: bool, json: bool) -> 
     Ok(())
 }
 
+/// Print one retained log snapshot in human-readable or JSON form.
 pub fn print_log_snapshot(snapshot: &AtmLogSnapshot, json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(snapshot)?);
@@ -114,6 +119,7 @@ pub fn print_log_snapshot(snapshot: &AtmLogSnapshot, json: bool) -> Result<()> {
     Ok(())
 }
 
+/// Print one stream of retained log records in human-readable or JSON form.
 pub fn print_log_records<I>(records: I, json: bool) -> Result<()>
 where
     I: IntoIterator<Item = AtmLogRecord>,
@@ -129,6 +135,7 @@ where
     Ok(())
 }
 
+/// Print one doctor report in human-readable or JSON form.
 pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(report)?);
@@ -219,6 +226,7 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
     Ok(())
 }
 
+/// Print one teams listing in human-readable or JSON form.
 pub fn print_teams_result(outcome: &TeamsList, json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(outcome)?);
@@ -237,6 +245,7 @@ pub fn print_teams_result(outcome: &TeamsList, json: bool) -> Result<()> {
     Ok(())
 }
 
+/// Print one members listing in human-readable or JSON form.
 pub fn print_members_result(outcome: &MembersList, json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(outcome)?);
@@ -262,6 +271,7 @@ pub fn print_members_result(outcome: &MembersList, json: bool) -> Result<()> {
     Ok(())
 }
 
+/// Print one add-member result in human-readable or JSON form.
 pub fn print_add_member_result(outcome: &AddMemberOutcome, json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(outcome)?);
@@ -274,6 +284,7 @@ pub fn print_add_member_result(outcome: &AddMemberOutcome, json: bool) -> Result
     Ok(())
 }
 
+/// Print one backup result in human-readable or JSON form.
 pub fn print_backup_result(outcome: &BackupOutcome, json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(outcome)?);
@@ -283,6 +294,7 @@ pub fn print_backup_result(outcome: &BackupOutcome, json: bool) -> Result<()> {
     Ok(())
 }
 
+/// Print one restore dry-run plan in human-readable or JSON form.
 pub fn print_restore_plan(plan: &RestorePlan, json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(plan)?);
@@ -293,12 +305,20 @@ pub fn print_restore_plan(plan: &RestorePlan, json: bool) -> Result<()> {
         "Dry run — would restore from: {}",
         plan.backup_path.display()
     );
-    println!("  Members: {}", plan.would_restore_members.join(", "));
+    println!(
+        "  Members: {}",
+        plan.would_restore_members
+            .iter()
+            .map(|member| member.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
     println!("  Inboxes: {}", plan.would_restore_inboxes.join(", "));
     println!("  Tasks: {}", plan.would_restore_tasks);
     Ok(())
 }
 
+/// Print one applied restore result in human-readable or JSON form.
 pub fn print_restore_result(outcome: &RestoreOutcome, json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(outcome)?);

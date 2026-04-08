@@ -8,6 +8,7 @@ use crate::config;
 use crate::error::{AtmError, AtmErrorKind};
 use crate::home;
 use crate::schema::MessageEnvelope;
+use crate::types::SourceIndex;
 
 #[derive(Debug, Clone)]
 pub(crate) struct SourceFile {
@@ -19,7 +20,7 @@ pub(crate) struct SourceFile {
 pub(crate) struct SourcedMessage {
     pub envelope: MessageEnvelope,
     pub source_path: PathBuf,
-    pub source_index: usize,
+    pub source_index: SourceIndex,
 }
 
 #[derive(Debug)]

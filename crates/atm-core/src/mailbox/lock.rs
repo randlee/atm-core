@@ -9,6 +9,10 @@ use tracing::warn;
 use crate::error::AtmError;
 
 pub(crate) const DEFAULT_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
+/// Polling interval between advisory lock acquisition retries.
+///
+/// A short retry interval keeps contention responsive without spinning hard on
+/// the lock sentinel file.
 const RETRY_INTERVAL: Duration = Duration::from_millis(50);
 
 #[derive(Debug)]

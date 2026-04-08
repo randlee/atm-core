@@ -19,7 +19,7 @@ use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::persistence;
 use crate::schema::{LegacyMessageId, MessageEnvelope};
-use crate::types::IsoTimestamp;
+use crate::types::{AgentName, IsoTimestamp, TeamName};
 
 pub(crate) mod file_policy;
 pub(crate) mod input;
@@ -49,11 +49,12 @@ pub struct SendRequest {
     pub dry_run: bool,
 }
 
+/// Result of sending one ATM mailbox message.
 #[derive(Debug, Clone, Serialize)]
 pub struct SendOutcome {
     pub action: &'static str,
-    pub team: String,
-    pub agent: String,
+    pub team: TeamName,
+    pub agent: AgentName,
     pub sender: String,
     pub outcome: &'static str,
     pub message_id: LegacyMessageId,
@@ -194,8 +195,8 @@ pub fn send_mail(
 
     let mut outcome = SendOutcome {
         action: "send",
-        team: recipient.team.clone(),
-        agent: recipient.agent.clone(),
+        team: recipient.team.clone().into(),
+        agent: recipient.agent.clone().into(),
         sender: sender.clone(),
         outcome: if request.dry_run { "dry_run" } else { "sent" },
         message_id,
@@ -226,8 +227,8 @@ pub fn send_mail(
         command: "send",
         action: "send",
         outcome: outcome.outcome,
-        team: outcome.team.clone(),
-        agent: outcome.agent.clone(),
+        team: outcome.team.to_string(),
+        agent: outcome.agent.to_string(),
         sender: canonical_sender,
         message_id: Some(outcome.message_id),
         requires_ack: outcome.requires_ack,

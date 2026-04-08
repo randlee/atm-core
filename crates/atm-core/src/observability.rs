@@ -430,17 +430,24 @@ where
     }
 }
 
+/// One follow/tail session over retained ATM observability records.
+///
+/// `LogTailSession` is `Send` but intentionally not `Sync`: callers should move
+/// one session onto one polling task and share the owning `ObservabilityPort`
+/// behind an `Arc` if multiple async tasks need to create independent sessions.
 pub struct LogTailSession {
     inner: Box<dyn LogFollowPort>,
 }
 
 impl LogTailSession {
+    /// Construct an empty follow session that never yields records.
     pub fn empty() -> Self {
         Self {
             inner: Box::<EmptyFollowPort>::default(),
         }
     }
 
+    /// Construct one follow session from a polling closure.
     pub fn from_poller<F>(poller: F) -> Self
     where
         F: FnMut() -> Result<AtmLogSnapshot, AtmError> + Send + 'static,
@@ -477,6 +484,10 @@ pub trait ObservabilityPort: sealed::Sealed {
     /// query or when ATM-specific query projection fails.
     fn query(&self, req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError>;
     /// Start a retained follow/tail session for ATM observability records.
+    ///
+    /// The returned [`LogTailSession`] is designed for one polling owner at a
+    /// time. Async callers that need multiple consumers should share the port
+    /// behind an `Arc` and create one independent session per task.
     ///
     /// # Errors
     ///

@@ -8,6 +8,7 @@ use crate::observability::CliObservability;
 use crate::output;
 
 #[derive(Debug, Args)]
+/// Read one ATM mailbox surface and optionally update read state.
 pub struct ReadCommand {
     target: Option<String>,
 
@@ -58,6 +59,7 @@ pub struct ReadCommand {
 }
 
 impl ReadCommand {
+    /// Execute the `atm read` command.
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;

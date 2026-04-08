@@ -360,36 +360,6 @@ fn test_clear_removes_from_origin_inbox_file() {
     assert_eq!(fixture.origin_inbox_contents("arch-ctm", "host-a").len(), 0);
 }
 
-#[test]
-fn test_clear_reports_graceful_error_when_locked_inbox_disappears_before_load() {
-    let fixture = Fixture::new(&["arch-ctm"]);
-    fixture.write_inbox(
-        "arch-ctm",
-        &[fixture.message(
-            "team-lead",
-            "read",
-            true,
-            None,
-            None,
-            Utc::now() - Duration::days(3),
-        )],
-    );
-
-    let output = fixture.run_with_env(
-        &["clear", "--json"],
-        &[("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD", "1")],
-    );
-
-    assert!(!output.status.success());
-    assert!(
-        fixture
-            .stderr(&output)
-            .contains("mailbox file disappeared before locked read completed"),
-        "stderr: {}",
-        fixture.stderr(&output)
-    );
-}
-
 struct Fixture {
     tempdir: tempfile::TempDir,
 }

@@ -8,6 +8,7 @@ use crate::observability::CliObservability;
 use crate::output;
 
 #[derive(Debug, Args)]
+/// Acknowledge one pending-ack message and send a reply.
 pub struct AckCommand {
     message_id: String,
     reply: String,
@@ -23,6 +24,7 @@ pub struct AckCommand {
 }
 
 impl AckCommand {
+    /// Execute the `atm ack` command.
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;

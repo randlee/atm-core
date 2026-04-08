@@ -28,6 +28,7 @@ use crate::observability::CliObservability;
     version,
     disable_help_subcommand = true
 )]
+/// Top-level ATM command-line entrypoint.
 pub struct Cli {
     /// Route retained observability console logs to stderr.
     ///
@@ -41,10 +42,12 @@ pub struct Cli {
 }
 
 impl Cli {
+    /// Return whether retained console logs should be routed to stderr.
     pub fn stderr_logs(&self) -> bool {
         self.stderr_logs
     }
 
+    /// Run the selected ATM subcommand.
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         self.command.run(observability)
     }

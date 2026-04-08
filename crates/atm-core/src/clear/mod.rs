@@ -19,8 +19,9 @@ use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
 use crate::schema::MessageEnvelope;
-use crate::types::MessageClass;
+use crate::types::{AgentName, MessageClass, SourceIndex, TeamName};
 
+/// Parameters for clearing read or acknowledged mailbox messages.
 #[derive(Debug, Clone)]
 pub struct ClearQuery {
     pub home_dir: PathBuf,
@@ -33,22 +34,31 @@ pub struct ClearQuery {
     pub dry_run: bool,
 }
 
+/// Counts of removed mailbox messages by ATM display class.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct RemovedByClass {
     pub acknowledged: usize,
     pub read: usize,
 }
 
+/// Result of one mailbox cleanup command.
 #[derive(Debug, Clone, Serialize)]
 pub struct ClearOutcome {
     pub action: &'static str,
-    pub team: String,
-    pub agent: String,
+    pub team: TeamName,
+    pub agent: AgentName,
     pub removed_total: usize,
     pub remaining_total: usize,
     pub removed_by_class: RemovedByClass,
 }
 
+/// Remove read or acknowledged messages from one mailbox surface.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when actor or target resolution fails, the team or
+/// agent cannot be validated, shared mailbox locks cannot be acquired, or the
+/// selected source files cannot be persisted safely.
 pub fn clear_mail(
     query: ClearQuery,
     observability: &dyn ObservabilityPort,
@@ -77,38 +87,38 @@ pub fn clear_mail(
         return Err(AtmError::agent_not_found(&target.agent, &target.team));
     }
 
-    let source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
-    let mut source_files = load_source_files(&source_paths)?;
-    // Clear intentionally does not apply read-surface idle-notification dedup.
-    // Cleanup decisions must inspect the raw merged surface after legacy
-    // message_id canonicalization only.
-    let merged = dedupe_legacy_message_id_surface(
-        merged_surface(&source_files),
-        |message: &SourcedMessage| message.envelope.message_id,
-        |message: &SourcedMessage| message.envelope.timestamp,
-    );
     let cutoff = cutoff_timestamp(query.older_than)?;
 
-    let mut removed_by_class = RemovedByClass::default();
-    let removable = merged
-        .iter()
-        .filter(|message| is_clearable(message, cutoff, query.idle_only))
-        .inspect(|message| {
-            count_removed(
-                &mut removed_by_class,
-                state::classify_message(&message.envelope),
-            )
-        })
-        .map(|message| (message.source_path.clone(), message.source_index))
-        .collect::<HashSet<_>>();
-
     let (removed_total, remaining_total, removed_by_class) = if query.dry_run {
+        let source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
+        let source_files = load_source_files(&source_paths)?;
+        // Clear intentionally does not apply read-surface idle-notification dedup.
+        // Cleanup decisions must inspect the raw merged surface after legacy
+        // message_id canonicalization only.
+        let merged = dedupe_legacy_message_id_surface(
+            merged_surface(&source_files),
+            |message: &SourcedMessage| message.envelope.message_id,
+            |message: &SourcedMessage| message.envelope.timestamp,
+        );
+        let mut removed_by_class = RemovedByClass::default();
+        let removable = merged
+            .iter()
+            .filter(|message| is_clearable(message, cutoff, query.idle_only))
+            .inspect(|message| {
+                count_removed(
+                    &mut removed_by_class,
+                    state::classify_message(&message.envelope),
+                )
+            })
+            .map(|message| (message.source_path.clone(), message.source_index))
+            .collect::<HashSet<_>>();
         (
             removable.len(),
             merged.len().saturating_sub(removable.len()),
             removed_by_class,
         )
     } else {
+        let source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
         let _locks = mailbox::lock::acquire_many_sorted(
             source_paths.clone(),
             mailbox::lock::DEFAULT_LOCK_TIMEOUT,
@@ -119,8 +129,9 @@ pub fn clear_mail(
             &target.team,
             &target.agent,
         )?;
+        #[cfg(test)]
         maybe_remove_locked_source_file_for_test(&source_paths)?;
-        source_files = load_source_files(&source_paths)?;
+        let mut source_files = load_source_files(&source_paths)?;
         let merged = dedupe_legacy_message_id_surface(
             merged_surface(&source_files),
             |message: &SourcedMessage| message.envelope.message_id,
@@ -152,8 +163,8 @@ pub fn clear_mail(
 
     let outcome = ClearOutcome {
         action: "clear",
-        team: target.team,
-        agent: target.agent,
+        team: target.team.clone().into(),
+        agent: target.agent.clone().into(),
         removed_total,
         remaining_total,
         removed_by_class,
@@ -163,8 +174,8 @@ pub fn clear_mail(
         command: "clear",
         action: "clear",
         outcome: if query.dry_run { "dry_run" } else { "ok" },
-        team: outcome.team.clone(),
-        agent: outcome.agent.clone(),
+        team: outcome.team.to_string(),
+        agent: outcome.agent.to_string(),
         sender: actor,
         message_id: None,
         requires_ack: false,
@@ -189,7 +200,7 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
                 .map(|(source_index, envelope)| SourcedMessage {
                     envelope,
                     source_path: source.path.clone(),
-                    source_index,
+                    source_index: source_index.into(),
                 })
         })
         .collect()
@@ -226,6 +237,7 @@ fn is_idle_notification(message: &MessageEnvelope) -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(test)]
 fn maybe_remove_locked_source_file_for_test(source_paths: &[PathBuf]) -> Result<(), AtmError> {
     if std::env::var_os("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD").is_none() {
         return Ok(());
@@ -252,7 +264,7 @@ fn count_removed(counts: &mut RemovedByClass, class: MessageClass) {
     }
 }
 
-fn apply_removals(source_files: &mut [SourceFile], removable: &HashSet<(PathBuf, usize)>) {
+fn apply_removals(source_files: &mut [SourceFile], removable: &HashSet<(PathBuf, SourceIndex)>) {
     for source in source_files {
         source.messages = source
             .messages
@@ -260,7 +272,7 @@ fn apply_removals(source_files: &mut [SourceFile], removable: &HashSet<(PathBuf,
             .cloned()
             .enumerate()
             .filter_map(|(index, message)| {
-                (!removable.contains(&(source.path.clone(), index))).then_some(message)
+                (!removable.contains(&(source.path.clone(), index.into()))).then_some(message)
             })
             .collect();
     }
@@ -271,4 +283,32 @@ fn persist_source_files(source_files: &[SourceFile]) -> Result<(), AtmError> {
         mailbox::atomic::write_messages(&source.path, &source.messages)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::tempdir;
+
+    use super::maybe_remove_locked_source_file_for_test;
+    use crate::mailbox::source::load_source_files;
+
+    #[test]
+    fn locked_clear_source_removal_reports_disappearing_mailbox() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = tempdir.path().join("arch-ctm.json");
+        std::fs::write(&path, "").expect("mailbox");
+        // Test-only env mutation is scoped to this process and reset below.
+        unsafe {
+            std::env::set_var("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD", "1");
+        }
+
+        maybe_remove_locked_source_file_for_test(std::slice::from_ref(&path)).expect("remove");
+        let error = load_source_files(&[path]).expect_err("missing mailbox");
+
+        unsafe {
+            std::env::remove_var("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD");
+        }
+        assert!(error.is_mailbox_read());
+        assert!(error.message.contains("disappeared"));
+    }
 }

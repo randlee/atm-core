@@ -12,14 +12,16 @@ use crate::identity;
 use crate::mailbox;
 use crate::mailbox::source::{
     SourceFile, SourcedMessage, discover_source_paths, load_source_files,
+    rediscover_and_validate_source_paths,
 };
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
 use crate::schema::{LegacyMessageId, MessageEnvelope};
 use crate::send::{input, summary};
-use crate::types::IsoTimestamp;
+use crate::types::{AgentName, IsoTimestamp, TeamName};
 
+/// Parameters for acknowledging one pending-ack mailbox message.
 #[derive(Debug, Clone)]
 pub struct AckRequest {
     pub home_dir: PathBuf,
@@ -30,11 +32,12 @@ pub struct AckRequest {
     pub reply_body: String,
 }
 
+/// Summary of one successful acknowledgement and reply emission.
 #[derive(Debug, Clone, Serialize)]
 pub struct AckOutcome {
     pub action: &'static str,
-    pub team: String,
-    pub agent: String,
+    pub team: TeamName,
+    pub agent: AgentName,
     pub message_id: LegacyMessageId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<String>,
@@ -43,6 +46,13 @@ pub struct AckOutcome {
     pub reply_text: String,
 }
 
+/// Acknowledge one previously read pending-ack message and append a reply.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when actor or team resolution fails, the message is
+/// missing or no longer pending acknowledgement, reply-target validation
+/// fails, or either the source or reply inbox cannot be persisted.
 pub fn ack_mail(
     request: AckRequest,
     observability: &dyn ObservabilityPort,
@@ -66,14 +76,23 @@ pub fn ack_mail(
         return Err(AtmError::agent_not_found(&actor, &team));
     }
 
-    let actor_source_paths = discover_source_paths(&request.home_dir, &team, &actor)?;
-    let preflight_source_files = load_source_files(&actor_source_paths)?;
+    let mut actor_source_paths = discover_source_paths(&request.home_dir, &team, &actor)?;
+    let source_locks = mailbox::lock::acquire_many_sorted(
+        actor_source_paths.clone(),
+        mailbox::lock::DEFAULT_LOCK_TIMEOUT,
+    )?;
+    actor_source_paths = rediscover_and_validate_source_paths(
+        &actor_source_paths,
+        &request.home_dir,
+        &team,
+        &actor,
+    )?;
+    let source_files = load_source_files(&actor_source_paths)?;
     // Ack intentionally does not apply read-surface idle-notification dedup.
     // It must preserve the raw merged surface after legacy message_id
     // canonicalization so acknowledgement lookup does not depend on read-only
     // inbox clutter policy.
-    let source_message =
-        find_source_message(&preflight_source_files, request.message_id, &actor, &team)?;
+    let source_message = find_source_message(&source_files, request.message_id, &actor, &team)?;
 
     match (
         state::derive_read_state(&source_message.envelope),
@@ -140,8 +159,15 @@ pub fn ack_mail(
         final_paths.push(reply_inbox_path.clone());
         final_paths
     };
+    drop(source_locks);
     let _final_locks =
         mailbox::lock::acquire_many_sorted(final_write_paths, mailbox::lock::DEFAULT_LOCK_TIMEOUT)?;
+    actor_source_paths = rediscover_and_validate_source_paths(
+        &actor_source_paths,
+        &request.home_dir,
+        &team,
+        &actor,
+    )?;
     let mut source_files = load_source_files(&actor_source_paths)?;
     let source_message = find_source_message(&source_files, request.message_id, &actor, &team)?;
     match (
@@ -163,8 +189,8 @@ pub fn ack_mail(
 
     let outcome = AckOutcome {
         action: "ack",
-        team: team.clone(),
-        agent: actor.clone(),
+        team: team.clone().into(),
+        agent: actor.clone().into(),
         message_id: request.message_id,
         task_id: source_task_id.clone(),
         reply_target: format!("{reply_agent}@{reply_team}"),
@@ -240,7 +266,7 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
                 .map(|(source_index, envelope)| SourcedMessage {
                     envelope,
                     source_path: source.path.clone(),
-                    source_index,
+                    source_index: source_index.into(),
                 })
         })
         .collect()
@@ -263,7 +289,7 @@ fn find_source_message(
         None => {
             trace!(
                 source_path = %message.source_path.display(),
-                source_index = message.source_index,
+                source_index = usize::from(message.source_index),
                 "skipping source message without message_id during ack lookup"
             );
             None
@@ -295,11 +321,11 @@ fn update_source_message(
 
     let stored = source_file
         .messages
-        .get_mut(source_message.source_index)
+        .get_mut(source_message.source_index.get())
         .ok_or_else(|| {
             AtmError::mailbox_write(format!(
                 "source message index {} disappeared during acknowledgement",
-                source_message.source_index
+                usize::from(source_message.source_index)
             ))
         })?;
 
@@ -332,7 +358,7 @@ fn append_reply_message(
     });
     source_files
         .last_mut()
-        .ok_or_else(|| AtmError::mailbox_write("reply inbox source file disappeared after push"))?
+        .expect("Vec::push is infallible — last_mut always returns Some after push")
         .messages
         .push(reply_message);
     source_files.sort_by(|left, right| left.path.cmp(&right.path));

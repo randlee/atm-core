@@ -12,23 +12,27 @@ use crate::error::{AtmError, AtmErrorKind};
 use crate::home;
 use crate::persistence;
 use crate::schema::{AgentMember, TeamConfig};
+use crate::types::{AgentName, TeamName};
 
+/// One discovered team and its current member count.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct TeamSummary {
-    pub name: String,
+    pub name: TeamName,
     pub member_count: usize,
 }
 
+/// Result of listing discoverable teams under ATM home.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct TeamsList {
     pub action: String,
-    pub team: String,
+    pub team: TeamName,
     pub teams: Vec<TeamSummary>,
 }
 
+/// One member entry from a team's live `config.json` roster.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct MemberSummary {
-    pub name: String,
+    pub name: AgentName,
     pub agent_id: String,
     pub agent_type: String,
     pub model: String,
@@ -38,12 +42,14 @@ pub struct MemberSummary {
     pub extra: serde_json::Map<String, Value>,
 }
 
+/// Result of listing all current members for one team.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct MembersList {
-    pub team: String,
+    pub team: TeamName,
     pub members: Vec<MemberSummary>,
 }
 
+/// Parameters for listing the members of one team.
 #[derive(Debug, Clone)]
 pub struct MembersQuery {
     pub home_dir: PathBuf,
@@ -51,6 +57,7 @@ pub struct MembersQuery {
     pub team_override: Option<String>,
 }
 
+/// Parameters for adding one member to a team roster.
 #[derive(Debug, Clone)]
 pub struct AddMemberRequest {
     pub home_dir: PathBuf,
@@ -62,27 +69,31 @@ pub struct AddMemberRequest {
     pub tmux_pane_id: Option<String>,
 }
 
+/// Result of adding one member and optional inbox to a team.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct AddMemberOutcome {
     pub action: &'static str,
-    pub team: String,
-    pub member: String,
+    pub team: TeamName,
+    pub member: AgentName,
     pub created_inbox: bool,
 }
 
+/// Parameters for creating one team backup.
 #[derive(Debug, Clone)]
 pub struct BackupRequest {
     pub home_dir: PathBuf,
     pub team: String,
 }
 
+/// Result of one successful team backup.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct BackupOutcome {
     pub action: &'static str,
-    pub team: String,
+    pub team: TeamName,
     pub backup_path: PathBuf,
 }
 
+/// Parameters for restoring one team from backup.
 #[derive(Debug, Clone)]
 pub struct RestoreRequest {
     pub home_dir: PathBuf,
@@ -91,27 +102,30 @@ pub struct RestoreRequest {
     pub dry_run: bool,
 }
 
+/// Dry-run restore plan for one backup restore attempt.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct RestorePlan {
     pub action: &'static str,
-    pub team: String,
+    pub team: TeamName,
     pub backup_path: PathBuf,
     pub dry_run: bool,
-    pub would_restore_members: Vec<String>,
+    pub would_restore_members: Vec<AgentName>,
     pub would_restore_inboxes: Vec<String>,
     pub would_restore_tasks: usize,
 }
 
+/// Applied restore summary for one team restore operation.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct RestoreOutcome {
     pub action: &'static str,
-    pub team: String,
+    pub team: TeamName,
     pub backup_path: PathBuf,
     pub members_restored: usize,
     pub inboxes_restored: usize,
     pub tasks_restored: usize,
 }
 
+/// Result of a restore command, either as a dry-run plan or applied change.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RestoreResult {
     DryRun(RestorePlan),
@@ -131,7 +145,7 @@ pub fn list_teams(home_dir: PathBuf, current_dir: PathBuf) -> Result<TeamsList, 
     if !teams_root.exists() {
         return Ok(TeamsList {
             action: "list".to_string(),
-            team: current_team,
+            team: current_team.into(),
             teams: Vec::new(),
         });
     }
@@ -166,7 +180,7 @@ pub fn list_teams(home_dir: PathBuf, current_dir: PathBuf) -> Result<TeamsList, 
 
         match load_team_config(&path) {
             Ok(config) => teams.push(TeamSummary {
-                name: entry.file_name().to_string_lossy().to_string(),
+                name: entry.file_name().to_string_lossy().to_string().into(),
                 member_count: config.members.len(),
             }),
             Err(error) => warn!(
@@ -180,7 +194,7 @@ pub fn list_teams(home_dir: PathBuf, current_dir: PathBuf) -> Result<TeamsList, 
     teams.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(TeamsList {
         action: "list".to_string(),
-        team: current_team,
+        team: current_team.into(),
         teams,
     })
 }
@@ -216,7 +230,10 @@ pub fn list_members(query: MembersQuery) -> Result<MembersList, AtmError> {
         members.push(member_summary(member));
     }
 
-    Ok(MembersList { team, members })
+    Ok(MembersList {
+        team: team.into(),
+        members,
+    })
 }
 
 /// Add one member record and inbox file to a team.
@@ -268,8 +285,8 @@ pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmErro
 
     Ok(AddMemberOutcome {
         action: "add-member",
-        team: request.team,
-        member: request.member,
+        team: request.team.into(),
+        member: request.member.into(),
         created_inbox,
     })
 }
@@ -322,7 +339,7 @@ pub fn backup_team(request: BackupRequest) -> Result<BackupOutcome, AtmError> {
 
     Ok(BackupOutcome {
         action: "backup",
-        team: request.team,
+        team: request.team.into(),
         backup_path: backup_dir,
     })
 }
@@ -370,10 +387,10 @@ pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> 
     if request.dry_run {
         return Ok(RestoreResult::DryRun(RestorePlan {
             action: "restore",
-            team: request.team,
+            team: request.team.into(),
             backup_path: backup_dir,
             dry_run: true,
-            would_restore_members: members_to_restore,
+            would_restore_members: members_to_restore.into_iter().map(Into::into).collect(),
             would_restore_inboxes: inboxes_to_restore,
             would_restore_tasks: tasks_to_restore,
         }));
@@ -476,7 +493,7 @@ pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> 
 
     Ok(RestoreResult::Applied(RestoreOutcome {
         action: "restore",
-        team: request.team,
+        team: request.team.into(),
         backup_path: backup_dir,
         members_restored: members_to_restore.len(),
         inboxes_restored: inboxes_to_restore.len(),
@@ -486,7 +503,7 @@ pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> 
 
 fn member_summary(member: &AgentMember) -> MemberSummary {
     MemberSummary {
-        name: member.name.clone(),
+        name: member.name.clone().into(),
         agent_id: member.agent_id.clone(),
         agent_type: member.agent_type.clone(),
         model: member.model.clone(),

@@ -21,8 +21,12 @@ use crate::mailbox::source::{
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::MessageEnvelope;
-use crate::types::{AckActivationMode, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection};
+use crate::types::{
+    AckActivationMode, AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
+    SourceIndex, TeamName,
+};
 
+/// Parameters for querying and optionally mutating one mailbox display surface.
 #[derive(Debug, Clone)]
 pub struct ReadQuery {
     pub home_dir: PathBuf,
@@ -40,6 +44,7 @@ pub struct ReadQuery {
     pub timeout_secs: Option<u64>,
 }
 
+/// Bucket counts for one classified mailbox surface.
 #[derive(Debug, Clone, Serialize)]
 pub struct BucketCounts {
     pub unread: usize,
@@ -47,10 +52,11 @@ pub struct BucketCounts {
     pub history: usize,
 }
 
+/// One mailbox message classified for ATM display output.
 #[derive(Debug, Clone, Serialize)]
 pub struct ClassifiedMessage {
     #[serde(skip)]
-    source_index: usize,
+    source_index: SourceIndex,
     #[serde(skip)]
     source_path: PathBuf,
     pub bucket: DisplayBucket,
@@ -59,11 +65,12 @@ pub struct ClassifiedMessage {
     pub envelope: MessageEnvelope,
 }
 
+/// Result of one mailbox read/query command.
 #[derive(Debug, Clone, Serialize)]
 pub struct ReadOutcome {
     pub action: &'static str,
-    pub team: String,
-    pub agent: String,
+    pub team: TeamName,
+    pub agent: AgentName,
     pub selection_mode: ReadSelection,
     pub history_collapsed: bool,
     pub mutation_applied: bool,
@@ -72,6 +79,13 @@ pub struct ReadOutcome {
     pub bucket_counts: BucketCounts,
 }
 
+/// Read one mailbox surface, optionally marking displayed messages as read.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when actor or target resolution fails, the team or
+/// agent cannot be validated, shared mailbox locks cannot be acquired, or the
+/// selected mailbox state cannot be reloaded or persisted safely.
 pub fn read_mail(
     query: ReadQuery,
     observability: &dyn ObservabilityPort,
@@ -109,21 +123,23 @@ pub fn read_mail(
     };
 
     let mut source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
-    let mut source_files = load_source_files(&source_paths)?;
-    let mut classified_all = classify_all(apply_idle_notification_dedup(
-        dedupe_legacy_message_id_surface(
-            merged_surface(&source_files),
-            |message: &SourcedMessage| message.envelope.message_id,
-            |message: &SourcedMessage| message.envelope.timestamp,
-        ),
-    ));
-    let mut bucket_counts = bucket_counts_for(&classified_all);
-    let mut filtered = apply_filters(
-        classified_all.clone(),
-        query.sender_filter.as_deref(),
-        query.timestamp_filter,
-    );
-    let mut selected = select_messages(&filtered, query.selection_mode, seen_watermark);
+    let load_locked_snapshot = |paths: &mut Vec<PathBuf>| -> Result<
+        (Vec<SourceFile>, BucketCounts, Vec<ClassifiedMessage>),
+        AtmError,
+    > {
+        let _locks =
+            mailbox::lock::acquire_many_sorted(paths.clone(), mailbox::lock::DEFAULT_LOCK_TIMEOUT)?;
+        *paths = rediscover_and_validate_source_paths(
+            paths,
+            &query.home_dir,
+            &target.team,
+            &target.agent,
+        )?;
+        load_selection_state(paths, &query, seen_watermark)
+    };
+
+    let (mut source_files, mut bucket_counts, mut selected) =
+        load_locked_snapshot(&mut source_paths)?;
     let mut timed_out = false;
 
     if selected.is_empty()
@@ -132,13 +148,21 @@ pub fn read_mail(
         let wait_satisfied = wait::wait_for_eligible_message(
             timeout_secs,
             || {
+                let mut poll_paths =
+                    discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
+                let _poll_locks = mailbox::lock::acquire_many_sorted(
+                    poll_paths.clone(),
+                    mailbox::lock::DEFAULT_LOCK_TIMEOUT,
+                )?;
+                poll_paths = rediscover_and_validate_source_paths(
+                    &poll_paths,
+                    &query.home_dir,
+                    &target.team,
+                    &target.agent,
+                )?;
                 Ok(apply_idle_notification_dedup(
                     dedupe_legacy_message_id_surface(
-                        merged_surface(&load_source_files(&discover_source_paths(
-                            &query.home_dir,
-                            &target.team,
-                            &target.agent,
-                        )?)?),
+                        merged_surface(&load_source_files(&poll_paths)?),
                         |message: &SourcedMessage| message.envelope.message_id,
                         |message: &SourcedMessage| message.envelope.timestamp,
                     ),
@@ -149,21 +173,7 @@ pub fn read_mail(
 
         if wait_satisfied {
             source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
-            source_files = load_source_files(&source_paths)?;
-            classified_all = classify_all(apply_idle_notification_dedup(
-                dedupe_legacy_message_id_surface(
-                    merged_surface(&source_files),
-                    |message: &SourcedMessage| message.envelope.message_id,
-                    |message: &SourcedMessage| message.envelope.timestamp,
-                ),
-            ));
-            bucket_counts = bucket_counts_for(&classified_all);
-            filtered = apply_filters(
-                classified_all.clone(),
-                query.sender_filter.as_deref(),
-                query.timestamp_filter,
-            );
-            selected = select_messages(&filtered, query.selection_mode, seen_watermark);
+            (source_files, bucket_counts, selected) = load_locked_snapshot(&mut source_paths)?;
         } else {
             timed_out = true;
         }
@@ -195,21 +205,8 @@ pub fn read_mail(
             &target.team,
             &target.agent,
         )?;
-        source_files = load_source_files(&source_paths)?;
-        classified_all = classify_all(apply_idle_notification_dedup(
-            dedupe_legacy_message_id_surface(
-                merged_surface(&source_files),
-                |message: &SourcedMessage| message.envelope.message_id,
-                |message: &SourcedMessage| message.envelope.timestamp,
-            ),
-        ));
-        bucket_counts = bucket_counts_for(&classified_all);
-        filtered = apply_filters(
-            classified_all.clone(),
-            query.sender_filter.as_deref(),
-            query.timestamp_filter,
-        );
-        selected = select_messages(&filtered, query.selection_mode, seen_watermark);
+        (source_files, bucket_counts, selected) =
+            load_selection_state(&source_paths, &query, seen_watermark)?;
         selected.sort_by(|left, right| {
             right
                 .envelope
@@ -260,7 +257,7 @@ pub fn read_mail(
             envelope: source_files
                 .iter()
                 .find(|source| source.path == selected_message.source_path)
-                .and_then(|source| source.messages.get(selected_message.source_index))
+                .and_then(|source| source.messages.get(selected_message.source_index.get()))
                 .cloned()
                 .unwrap_or(selected_message.envelope),
         })
@@ -272,8 +269,8 @@ pub fn read_mail(
 
     let outcome = ReadOutcome {
         action: "read",
-        team: target.team,
-        agent: target.agent,
+        team: target.team.clone().into(),
+        agent: target.agent.clone().into(),
         selection_mode: query.selection_mode,
         history_collapsed,
         mutation_applied,
@@ -286,8 +283,8 @@ pub fn read_mail(
         command: "read",
         action: "read",
         outcome: if timed_out { "timeout" } else { "ok" },
-        team: outcome.team.clone(),
-        agent: outcome.agent.clone(),
+        team: outcome.team.to_string(),
+        agent: outcome.agent.to_string(),
         sender: actor,
         message_id: None,
         requires_ack: false,
@@ -298,6 +295,29 @@ pub fn read_mail(
     });
 
     Ok(outcome)
+}
+
+fn load_selection_state(
+    source_paths: &[PathBuf],
+    query: &ReadQuery,
+    seen_watermark: Option<IsoTimestamp>,
+) -> Result<(Vec<SourceFile>, BucketCounts, Vec<ClassifiedMessage>), AtmError> {
+    let source_files = load_source_files(source_paths)?;
+    let classified_all = classify_all(apply_idle_notification_dedup(
+        dedupe_legacy_message_id_surface(
+            merged_surface(&source_files),
+            |message: &SourcedMessage| message.envelope.message_id,
+            |message: &SourcedMessage| message.envelope.timestamp,
+        ),
+    ));
+    let bucket_counts = bucket_counts_for(&classified_all);
+    let filtered = apply_filters(
+        classified_all.clone(),
+        query.sender_filter.as_deref(),
+        query.timestamp_filter,
+    );
+    let selected = select_messages(&filtered, query.selection_mode, seen_watermark);
+    Ok((source_files, bucket_counts, selected))
 }
 
 fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
@@ -312,7 +332,7 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
                 .map(|(source_index, envelope)| SourcedMessage {
                     envelope,
                     source_path: source.path.clone(),
-                    source_index,
+                    source_index: source_index.into(),
                 })
         })
         .collect()
@@ -480,7 +500,7 @@ fn apply_display_mutations(
             && let Some(source_file) = source_files
                 .iter_mut()
                 .find(|source| source.path == message.source_path)
-            && let Some(stored) = source_file.messages.get_mut(message.source_index)
+            && let Some(stored) = source_file.messages.get_mut(message.source_index.get())
         {
             *stored = updated;
             mutation_applied = true;

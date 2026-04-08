@@ -41,7 +41,7 @@ pub(crate) fn locked_read_modify_write<F>(
 where
     F: FnOnce(&mut Vec<MessageEnvelope>) -> Result<(), AtmError>,
 {
-    let _guard = lock::acquire(path, timeout)?;
+    let _guard = lock::acquire_many_sorted([path.to_path_buf()], timeout)?;
     let mut messages = read_messages(path)?;
     mutate(&mut messages)?;
     atomic::write_messages(path, &messages)

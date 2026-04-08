@@ -18,12 +18,14 @@ const DEFAULT_SNAPSHOT_LIMIT: usize = 50;
 const DEFAULT_TAIL_POLL_INTERVAL_MS: u64 = 250;
 
 #[derive(Debug, Args)]
+/// Query or follow ATM retained observability records.
 pub struct LogCommand {
     #[command(subcommand)]
     mode: LogModeCommand,
 }
 
 impl LogCommand {
+    /// Execute the `atm log` command.
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         match self.mode {
             LogModeCommand::Snapshot(args) => {

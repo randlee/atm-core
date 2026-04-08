@@ -9,6 +9,7 @@ use crate::observability::CliObservability;
 use crate::output;
 
 #[derive(Debug, Args)]
+/// List teams or run one team-administration subcommand.
 pub struct TeamsCommand {
     #[command(subcommand)]
     command: Option<TeamsSubcommand>,
@@ -68,6 +69,7 @@ struct RestoreCommand {
 }
 
 impl TeamsCommand {
+    /// Execute the `atm teams` command.
     pub fn run(self, _observability: &CliObservability) -> Result<()> {
         let home_dir = home::atm_home()?;
         match self.command {

@@ -172,7 +172,7 @@ fn load_member_roster(
     }
 
     Some(MembersList {
-        team: team.to_string(),
+        team: team.to_string().into(),
         members: ordered_member_summaries(&team_config.members, baseline),
     })
 }
@@ -297,7 +297,7 @@ fn ordered_member_summaries(members: &[AgentMember], baseline: &[String]) -> Vec
 
 fn member_summary(member: &AgentMember) -> MemberSummary {
     MemberSummary {
-        name: member.name.clone(),
+        name: member.name.clone().into(),
         agent_id: member.agent_id.clone(),
         agent_type: member.agent_type.clone(),
         model: member.model.clone(),
