@@ -1300,7 +1300,7 @@ stale snapshot.
 | `append_message` | `locked_read_modify_write` |
 | `send` missing-config notice append | `append_message` coverage |
 | `read` writeback | multi-file lock set held from first read through persist |
-| `ack` transition + reply | multi-file lock set held from first read through persist |
+| `ack` transition + reply | two-phase cooperative lock — actor-source set acquired, dropped, re-acquired as full superset including reply inbox; see §18.4.1 |
 | `clear` set replacement | multi-file lock set held from first read through persist |
 | `read_messages` (read-only, no writeback) | No |
 
