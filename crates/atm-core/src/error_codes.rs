@@ -32,6 +32,8 @@ pub enum AtmErrorCode {
     MailboxReadFailed,
     /// Writing a mailbox failed.
     MailboxWriteFailed,
+    /// Acquiring a mailbox lock timed out.
+    MailboxLockTimeout,
     /// A malformed mailbox record was skipped.
     MailboxRecordSkipped,
     /// Message validation failed.
@@ -94,6 +96,7 @@ impl AtmErrorCode {
             Self::AgentNotFound => "ATM_AGENT_NOT_FOUND",
             Self::MailboxReadFailed => "ATM_MAILBOX_READ_FAILED",
             Self::MailboxWriteFailed => "ATM_MAILBOX_WRITE_FAILED",
+            Self::MailboxLockTimeout => "ATM_MAILBOX_LOCK_TIMEOUT",
             Self::MailboxRecordSkipped => "ATM_MAILBOX_RECORD_SKIPPED",
             Self::MessageValidationFailed => "ATM_MESSAGE_VALIDATION_FAILED",
             Self::SerializationFailed => "ATM_SERIALIZATION_FAILED",

@@ -17,6 +17,7 @@ chrono = { version = "0.4", features = ["serde"] }
 toml = "0.8"
 ulid = { version = "1.2.1", features = ["serde"] }
 uuid = { version = "1", features = ["serde", "v4"] }
+fs2 = "0.4"
 
 [dev-dependencies]
 serial_test = "3"

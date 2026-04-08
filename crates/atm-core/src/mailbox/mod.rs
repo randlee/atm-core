@@ -21,8 +21,23 @@ pub(crate) fn temp_file_suffix() -> String {
 }
 
 pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), AtmError> {
+    locked_read_modify_write(path, lock::DEFAULT_LOCK_TIMEOUT, |messages| {
+        messages.push(envelope.clone());
+        Ok(())
+    })
+}
+
+pub(crate) fn locked_read_modify_write<F>(
+    path: &Path,
+    timeout: std::time::Duration,
+    mutate: F,
+) -> Result<(), AtmError>
+where
+    F: FnOnce(&mut Vec<MessageEnvelope>) -> Result<(), AtmError>,
+{
+    let _guard = lock::acquire(path, timeout)?;
     let mut messages = read_messages(path)?;
-    messages.push(envelope.clone());
+    mutate(&mut messages)?;
     atomic::write_messages(path, &messages)
 }
 
