@@ -8,8 +8,9 @@ use serde_json::Value;
 use tracing::warn;
 
 use crate::config::{load_config, load_team_config, resolve_team};
-use crate::error::AtmError;
+use crate::error::{AtmError, AtmErrorKind};
 use crate::home;
+use crate::persistence;
 use crate::schema::{AgentMember, TeamConfig};
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -117,6 +118,12 @@ pub enum RestoreResult {
     Applied(RestoreOutcome),
 }
 
+/// List teams currently discoverable under ATM home.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when `.atm.toml` cannot be loaded or the teams root
+/// cannot be enumerated.
 pub fn list_teams(home_dir: PathBuf, current_dir: PathBuf) -> Result<TeamsList, AtmError> {
     let config = load_config(&current_dir)?;
     let current_team = resolve_team(None, config.as_ref()).unwrap_or_default();
@@ -178,6 +185,12 @@ pub fn list_teams(home_dir: PathBuf, current_dir: PathBuf) -> Result<TeamsList, 
     })
 }
 
+/// List the current member roster for one team.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when team resolution fails, the team directory is
+/// missing, or `config.json` cannot be loaded.
 pub fn list_members(query: MembersQuery) -> Result<MembersList, AtmError> {
     let config = load_config(&query.current_dir)?;
     let team = resolve_team(query.team_override.as_deref(), config.as_ref())
@@ -206,6 +219,12 @@ pub fn list_members(query: MembersQuery) -> Result<MembersList, AtmError> {
     Ok(MembersList { team, members })
 }
 
+/// Add one member record and inbox file to a team.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the team is missing, the member already exists, or
+/// inbox/config persistence fails.
 pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmError> {
     let team_dir = home::team_dir_from_home(&request.home_dir, &request.team)?;
     if !team_dir.exists() {
@@ -255,6 +274,12 @@ pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmErro
     })
 }
 
+/// Create a point-in-time backup of one team's config, inboxes, and task files.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the team/config is missing or backup directory/file
+/// creation fails.
 pub fn backup_team(request: BackupRequest) -> Result<BackupOutcome, AtmError> {
     let team_dir = home::team_dir_from_home(&request.home_dir, &request.team)?;
     if !team_dir.exists() {
@@ -302,6 +327,13 @@ pub fn backup_team(request: BackupRequest) -> Result<BackupOutcome, AtmError> {
     })
 }
 
+/// Restore one team from a backup directory.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when backup discovery, staging/live restore work, or
+/// config-last persistence fails. Failure to remove the restore marker after a
+/// successful restore is degraded to a warning-only follow-up path.
 pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> {
     let team_dir = home::team_dir_from_home(&request.home_dir, &request.team)?;
     if !team_dir.exists() {
@@ -347,6 +379,8 @@ pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> 
         }));
     }
 
+    prepare_restore_staging_dir(&team_dir)?;
+    write_restore_marker(&team_dir, &backup_dir)?;
     let mut updated_config = current_config.clone();
     for member in &backup_config.members {
         if member.name == "team-lead" {
@@ -378,17 +412,39 @@ pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> 
         .with_source(error)
         .with_recovery("Check inbox directory permissions and rerun `atm teams restore`.")
     })?;
+    let inbox_staging_dir = restore_staging_inboxes_dir(&team_dir);
+    fs::create_dir_all(&inbox_staging_dir).map_err(|error| {
+        AtmError::mailbox_write(format!(
+            "failed to create inbox restore staging directory {}: {error}",
+            inbox_staging_dir.display()
+        ))
+        .with_source(error)
+        .with_recovery("Check inbox staging permissions and rerun `atm teams restore`.")
+    })?;
     for inbox_name in &inboxes_to_restore {
         let from = backup_dir.join("inboxes").join(inbox_name);
-        let to = inboxes_dir.join(inbox_name);
-        fs::copy(&from, &to).map_err(|error| {
+        let staged = inbox_staging_dir.join(inbox_name);
+        copy_restored_inbox_to_staging(&from, &staged).map_err(|error| {
             AtmError::mailbox_write(format!(
-                "failed to restore inbox {} from {}: {error}",
-                to.display(),
+                "failed to stage restored inbox {} from {}: {error}",
+                staged.display(),
                 from.display()
             ))
             .with_source(error)
             .with_recovery("Check inbox permissions and backup integrity, then rerun the restore.")
+        })?;
+    }
+    for inbox_name in &inboxes_to_restore {
+        let staged = inbox_staging_dir.join(inbox_name);
+        let to = inboxes_dir.join(inbox_name);
+        fs::rename(&staged, &to).map_err(|error| {
+            AtmError::mailbox_write(format!(
+                "failed to install restored inbox {} from {}: {error}",
+                to.display(),
+                staged.display()
+            ))
+            .with_source(error)
+            .with_recovery("Check inbox permissions and rerun `atm teams restore`.")
         })?;
     }
 
@@ -398,6 +454,25 @@ pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> 
     write_team_config(&team_dir, &updated_config).map_err(|error| {
         error.with_recovery("Check team config permissions and rerun `atm teams restore`.")
     })?;
+    let marker_cleanup_error = clear_restore_marker(&team_dir).err();
+    let staging_root = restore_staging_dir(&team_dir);
+    if staging_root.exists() {
+        fs::remove_dir_all(&staging_root).map_err(|error| {
+            AtmError::file_policy(format!(
+                "failed to remove restore staging directory {}: {error}",
+                staging_root.display()
+            ))
+            .with_source(error)
+            .with_recovery("Remove the restore staging directory after confirming the restore completed successfully.")
+        })?;
+    }
+    if let Some(error) = marker_cleanup_error {
+        warn!(
+            %error,
+            team = %request.team,
+            "restore completed but the stale restore marker could not be removed"
+        );
+    }
 
     Ok(RestoreResult::Applied(RestoreOutcome {
         action: "restore",
@@ -481,17 +556,6 @@ fn write_team_config(team_dir: &Path, config: &TeamConfig) -> Result<(), AtmErro
 }
 
 fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), AtmError> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            AtmError::file_policy(format!(
-                "failed to create parent directory {}: {error}",
-                parent.display()
-            ))
-            .with_source(error)
-            .with_recovery("Check config directory permissions and rerun the operation.")
-        })?;
-    }
-
     // Test seam for deterministic rollback coverage in integration tests.
     if std::env::var_os("ATM_TEST_FAIL_TEAM_CONFIG_WRITE").is_some() {
         return Err(AtmError::file_policy(format!(
@@ -502,32 +566,13 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), AtmError> {
             "Unset ATM_TEST_FAIL_TEAM_CONFIG_WRITE or rerun without the injected test failure.",
         ));
     }
-
-    let temp_path = path.with_file_name(format!(
-        ".{}.tmp.{}.{}",
-        path.file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("config"),
-        std::process::id(),
-        Utc::now().timestamp_nanos_opt().unwrap_or_default()
-    ));
-    fs::write(&temp_path, bytes).map_err(|error| {
-        AtmError::file_policy(format!(
-            "failed to write temporary file {}: {error}",
-            temp_path.display()
-        ))
-        .with_source(error)
-        .with_recovery("Check config directory permissions and available disk space, then retry.")
-    })?;
-    fs::rename(&temp_path, path).map_err(|error| {
-        AtmError::file_policy(format!(
-            "failed to atomically replace {}: {error}",
-            path.display()
-        ))
-        .with_source(error)
-        .with_recovery("Check config file permissions and rerun the operation.")
-    })?;
-    Ok(())
+    persistence::atomic_write_bytes(
+        path,
+        bytes,
+        AtmErrorKind::FilePolicy,
+        "config",
+        "Check config directory permissions and rerun the operation.",
+    )
 }
 
 fn copy_regular_files(src: &Path, dst: &Path) -> Result<(), AtmError> {
@@ -761,14 +806,13 @@ fn recompute_highwatermark(tasks_dir: &Path) -> Result<usize, AtmError> {
         .max()
         .unwrap_or(0);
 
-    fs::write(tasks_dir.join(".highwatermark"), format!("{max_id}\n")).map_err(|error| {
-        AtmError::file_policy(format!(
-            "failed to write {}: {error}",
-            tasks_dir.join(".highwatermark").display()
-        ))
-        .with_source(error)
-        .with_recovery("Check task directory permissions and rerun the restore.")
-    })?;
+    persistence::atomic_write_string(
+        &tasks_dir.join(".highwatermark"),
+        &format!("{max_id}\n"),
+        AtmErrorKind::FilePolicy,
+        "task highwatermark",
+        "Check task directory permissions and rerun the restore.",
+    )?;
     Ok(max_id)
 }
 
@@ -786,4 +830,84 @@ fn clear_runtime_member_state(member: &mut AgentMember) {
     ] {
         member.extra.remove(key);
     }
+}
+
+fn restore_marker_path(team_dir: &Path) -> PathBuf {
+    team_dir.join(".restore-in-progress")
+}
+
+fn restore_staging_dir(team_dir: &Path) -> PathBuf {
+    team_dir.join(".restore-staging")
+}
+
+fn restore_staging_inboxes_dir(team_dir: &Path) -> PathBuf {
+    restore_staging_dir(team_dir).join("inboxes")
+}
+
+fn prepare_restore_staging_dir(team_dir: &Path) -> Result<(), AtmError> {
+    let staging_root = restore_staging_dir(team_dir);
+    if staging_root.exists() {
+        fs::remove_dir_all(&staging_root).map_err(|error| {
+            AtmError::file_policy(format!(
+                "failed to clear restore staging directory {}: {error}",
+                staging_root.display()
+            ))
+            .with_source(error)
+            .with_recovery("Check restore staging permissions and rerun `atm teams restore`.")
+        })?;
+    }
+    Ok(())
+}
+
+fn copy_restored_inbox_to_staging(from: &Path, staged: &Path) -> Result<u64, std::io::Error> {
+    if std::env::var_os("ATM_TEST_FAIL_RESTORE_INBOX_STAGE").is_some() {
+        return Err(std::io::Error::other(format!(
+            "forced inbox staging failure for {}",
+            staged.display()
+        )));
+    }
+    fs::copy(from, staged)
+}
+
+fn write_restore_marker(team_dir: &Path, backup_dir: &Path) -> Result<(), AtmError> {
+    let marker = restore_marker_path(team_dir);
+    let payload = serde_json::json!({
+        "backup_path": backup_dir,
+        "pid": std::process::id(),
+        "timestamp": Utc::now().to_rfc3339(),
+    });
+    let bytes = serde_json::to_vec_pretty(&payload).map_err(AtmError::from)?;
+    persistence::atomic_write_bytes(
+        &marker,
+        &bytes,
+        AtmErrorKind::FilePolicy,
+        "restore marker",
+        "Check team directory permissions and rerun `atm teams restore`.",
+    )
+}
+
+fn clear_restore_marker(team_dir: &Path) -> Result<(), AtmError> {
+    let marker = restore_marker_path(team_dir);
+    if !marker.exists() {
+        return Ok(());
+    }
+
+    if std::env::var_os("ATM_TEST_FAIL_RESTORE_MARKER_REMOVE").is_some() {
+        return Err(AtmError::file_policy(format!(
+            "failed to remove restore marker {}: forced test failure",
+            marker.display()
+        ))
+        .with_recovery(
+            "Remove the stale restore marker after verifying the restored team state.",
+        ));
+    }
+
+    fs::remove_file(&marker).map_err(|error| {
+        AtmError::file_policy(format!(
+            "failed to remove restore marker {}: {error}",
+            marker.display()
+        ))
+        .with_source(error)
+        .with_recovery("Remove the stale restore marker after verifying the restored team state.")
+    })
 }

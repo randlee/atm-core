@@ -53,7 +53,7 @@ pub fn clear_mail(
     observability: &dyn ObservabilityPort,
 ) -> Result<ClearOutcome, AtmError> {
     let config = config::load_config(&query.current_dir)?;
-    let actor = resolve_actor_identity(query.actor_override.as_deref(), config.as_ref())?;
+    let actor = identity::resolve_actor_identity(query.actor_override.as_deref(), config.as_ref())?;
     let target = resolve_target(
         query.target_address.as_deref(),
         &actor,
@@ -168,21 +168,6 @@ pub fn clear_mail(
     });
 
     Ok(outcome)
-}
-
-fn resolve_actor_identity(
-    actor_override: Option<&str>,
-    config: Option<&config::AtmConfig>,
-) -> Result<String, AtmError> {
-    if let Some(actor) = actor_override.filter(|value| !value.trim().is_empty()) {
-        return Ok(config::aliases::resolve_agent(actor, config));
-    }
-
-    if let Some(identity) = identity::hook::read_hook_identity()? {
-        return Ok(identity);
-    }
-
-    identity::resolve_sender_identity(config)
 }
 
 fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {

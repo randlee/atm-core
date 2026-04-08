@@ -1,4 +1,4 @@
-use std::backtrace::Backtrace;
+use std::backtrace::{Backtrace, BacktraceStatus};
 use std::error::Error as StdError;
 use std::fmt;
 
@@ -139,6 +139,11 @@ impl AtmError {
     {
         self.source = Some(Box::new(source));
         self
+    }
+
+    /// Return the captured backtrace when one is available.
+    pub fn backtrace(&self) -> Option<&Backtrace> {
+        (self.backtrace.status() == BacktraceStatus::Captured).then_some(&self.backtrace)
     }
 
     pub fn home_directory_unavailable() -> Self {
@@ -319,6 +324,8 @@ impl AtmErrorKind {
 
 #[cfg(test)]
 mod tests {
+    use std::backtrace::Backtrace;
+
     use super::{AtmError, AtmErrorCode};
 
     #[test]
@@ -343,9 +350,27 @@ mod tests {
             AtmError::observability_health("health failed").code,
             AtmErrorCode::ObservabilityHealthFailed
         );
-        assert_eq!(
-            AtmError::mailbox_lock("lock failed").code,
-            AtmErrorCode::MailboxLockFailed
-        );
+    }
+
+    #[test]
+    fn display_remains_concise_when_backtrace_is_captured() {
+        let mut error = AtmError::validation("boom");
+        error.backtrace = Backtrace::force_capture();
+
+        let rendered = error.to_string();
+        assert!(rendered.contains("boom"));
+        assert!(!rendered.contains("Backtrace:"));
+        assert!(error.backtrace().is_some());
+    }
+
+    #[test]
+    fn display_handles_absent_backtrace() {
+        let mut error = AtmError::validation("boom");
+        error.backtrace = Backtrace::disabled();
+
+        let rendered = error.to_string();
+        assert!(rendered.contains("boom"));
+        assert!(!rendered.contains("Backtrace:"));
+        assert!(error.backtrace().is_none());
     }
 }

@@ -3,6 +3,13 @@ use std::path::{Path, PathBuf};
 
 use crate::error::AtmError;
 
+/// Resolve the ATM home directory for the current process.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::ConfigHomeUnavailable`] when neither
+/// `ATM_HOME` nor the OS user-home environment variables can be resolved.
 pub fn atm_home() -> Result<PathBuf, AtmError> {
     if let Some(home) = env::var_os("ATM_HOME").filter(|value| !value.is_empty()) {
         return Ok(PathBuf::from(home));
@@ -11,18 +18,44 @@ pub fn atm_home() -> Result<PathBuf, AtmError> {
     resolve_user_home()
 }
 
+/// Resolve the team directory for `team` under the current ATM home.
+///
+/// # Errors
+///
+/// Propagates [`atm_home`] failures when the ATM home directory cannot be
+/// resolved.
 pub fn team_dir(team: &str) -> Result<PathBuf, AtmError> {
     team_dir_from_home(&atm_home()?, team)
 }
 
+/// Resolve the primary inbox path for `agent` in `team` under the current ATM home.
+///
+/// # Errors
+///
+/// Propagates [`atm_home`] failures when the ATM home directory cannot be
+/// resolved.
 pub fn inbox_path(team: &str, agent: &str) -> Result<PathBuf, AtmError> {
     inbox_path_from_home(&atm_home()?, team, agent)
 }
 
+/// Resolve the team directory for `team` under an explicit ATM home root.
+///
+/// # Errors
+///
+/// This helper is currently infallible after `home_dir` resolution. The
+/// `Result` shape is retained so callers can share one path-construction
+/// contract with helpers that may grow validation in the future.
 pub fn team_dir_from_home(home_dir: &Path, team: &str) -> Result<PathBuf, AtmError> {
     Ok(home_dir.join(".claude").join("teams").join(team))
 }
 
+/// Resolve the primary inbox path for `agent` in `team` under an explicit ATM home root.
+///
+/// # Errors
+///
+/// This helper is currently infallible after `home_dir` resolution. The
+/// `Result` shape is retained so callers can share one path-construction
+/// contract with helpers that may grow validation in the future.
 pub fn inbox_path_from_home(home_dir: &Path, team: &str, agent: &str) -> Result<PathBuf, AtmError> {
     Ok(team_dir_from_home(home_dir, team)?
         .join("inboxes")

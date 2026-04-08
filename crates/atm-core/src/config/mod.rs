@@ -16,6 +16,13 @@ pub use types::AtmConfig;
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::schema::{AgentMember, TeamConfig};
 
+/// Load `.atm.toml` by walking upward from `start_dir`.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::ConfigParseFailed`] when the config file
+/// cannot be read or parsed as TOML.
 pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
     let Some(path) = find_config_path(start_dir) else {
         return Ok(None);
@@ -26,12 +33,16 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
             AtmErrorKind::Config,
             format!("failed to read config at {}: {error}", path.display()),
         )
+        .with_recovery("Check .atm.toml permissions and syntax, or run the command from a directory inside the intended ATM workspace.")
         .with_source(error)
     })?;
     let parsed = toml::from_str::<RawConfigFile>(&contents).map_err(|error| {
         AtmError::new(
             AtmErrorKind::Config,
             format!("failed to parse config at {}: {error}", path.display()),
+        )
+        .with_recovery(
+            "Repair the .atm.toml syntax or remove malformed ATM config keys before retrying.",
         )
         .with_source(error)
     })?;
@@ -53,6 +64,15 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
     }))
 }
 
+/// Load and validate `config.json` for a team directory.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::ConfigTeamMissing`] when the team config
+/// document does not exist, or
+/// [`crate::error_codes::AtmErrorCode::ConfigTeamParseFailed`] when the JSON
+/// document is malformed or violates the required team-config shape.
 pub fn load_team_config(team_dir: &Path) -> Result<TeamConfig, AtmError> {
     let config_path = team_dir.join("config.json");
     let raw = fs::read_to_string(&config_path).map_err(|error| {

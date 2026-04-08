@@ -24,6 +24,12 @@ pub struct DoctorQuery {
     pub team_override: Option<String>,
 }
 
+/// Run the ATM doctor checks for config, roster, and observability health.
+///
+/// # Errors
+///
+/// Returns [`crate::error::AtmError`] when loading `.atm.toml` fails before the
+/// doctor report can be assembled.
 pub fn run_doctor(
     query: DoctorQuery,
     observability: &dyn ObservabilityPort,
@@ -129,6 +135,8 @@ fn load_member_roster(
         return None;
     }
 
+    check_restore_marker(team, &team_dir, findings);
+
     let team_config = match config::load_team_config(&team_dir) {
         Ok(team_config) => team_config,
         Err(error) => {
@@ -213,6 +221,27 @@ fn check_inbox_directory(team: &str, inboxes_dir: &Path, findings: &mut Vec<Doct
             ),
         });
     }
+}
+
+fn check_restore_marker(team: &str, team_dir: &Path, findings: &mut Vec<DoctorFinding>) {
+    let marker = team_dir.join(".restore-in-progress");
+    if !marker.is_file() {
+        return;
+    }
+
+    findings.push(DoctorFinding {
+        severity: DoctorSeverity::Warning,
+        code: AtmErrorCode::WarningRestoreInProgress,
+        message: format!(
+            "stale restore marker is present at {} for '{}'; a prior `atm teams restore` may have been interrupted",
+            marker.display(),
+            team
+        ),
+        remediation: Some(format!(
+            "Inspect {} for partial restore state, rerun `atm teams restore {team}`, then remove the marker once recovery is complete.",
+            team_dir.display()
+        )),
+    });
 }
 
 fn probe_directory_writable(directory: &Path) -> Result<(), std::io::Error> {

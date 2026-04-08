@@ -16,8 +16,8 @@ use crate::error::AtmError;
 use crate::home;
 use crate::identity;
 use crate::mailbox;
-use crate::mailbox::temp_file_suffix;
 use crate::observability::{CommandEvent, ObservabilityPort};
+use crate::persistence;
 use crate::schema::{LegacyMessageId, MessageEnvelope};
 use crate::types::IsoTimestamp;
 
@@ -76,13 +76,20 @@ struct SendAlertState {
     missing_team_config_keys: BTreeSet<String>,
 }
 
+/// Send one mailbox message to a team member.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when sender identity cannot be resolved, recipient or
+/// team validation fails, message/file-policy validation fails, or mailbox
+/// persistence fails.
 pub fn send_mail(
     request: SendRequest,
     observability: &dyn ObservabilityPort,
 ) -> Result<SendOutcome, AtmError> {
     let config = config::load_config(&request.current_dir)?;
     let canonical_sender =
-        resolve_sender_identity(request.sender_override.as_deref(), config.as_ref())?;
+        identity::resolve_sender_identity(request.sender_override.as_deref(), config.as_ref())?;
     let recipient = resolve_recipient(
         &request.to,
         request.team_override.as_deref(),
@@ -246,22 +253,6 @@ struct PostSendHookContext<'a> {
     message_id: LegacyMessageId,
     requires_ack: bool,
     task_id: Option<&'a str>,
-}
-
-fn resolve_sender_identity(
-    sender_override: Option<&str>,
-    config: Option<&config::AtmConfig>,
-) -> Result<String, AtmError> {
-    if let Some(sender) = sender_override.filter(|value| !value.trim().is_empty()) {
-        return Ok(config::aliases::resolve_agent(sender.trim(), config));
-    }
-
-    if let Some(identity) = identity::hook::read_hook_identity()? {
-        return Ok(config::aliases::resolve_agent(&identity, config));
-    }
-
-    identity::resolve_sender_identity(config)
-        .map(|identity| config::aliases::resolve_agent(&identity, config))
 }
 
 fn resolve_recipient(
@@ -598,6 +589,7 @@ fn load_send_alert_state(path: &Path) -> Result<SendAlertState, AtmError> {
                 path.display()
             ),
         )
+        .with_recovery("Check ATM config-state permissions or remove the damaged state file before retrying the send command.")
         .with_source(error)
     })?;
     serde_json::from_str(&raw).map_err(|error| {
@@ -608,53 +600,22 @@ fn load_send_alert_state(path: &Path) -> Result<SendAlertState, AtmError> {
                 path.display()
             ),
         )
+        .with_recovery(
+            "Remove the malformed send alert state file so ATM can recreate it on the next send.",
+        )
         .with_source(error)
     })
 }
 
 fn save_send_alert_state(path: &Path, state: &SendAlertState) -> Result<(), AtmError> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            AtmError::new(
-                crate::error::AtmErrorKind::Config,
-                format!(
-                    "failed to create send alert state directory {}: {error}",
-                    parent.display()
-                ),
-            )
-            .with_source(error)
-        })?;
-    }
-
-    let temp_path = path.with_file_name(format!(
-        "{}.{}.tmp",
-        path.file_name()
-            .and_then(|value| value.to_str())
-            .unwrap_or("state"),
-        temp_file_suffix()
-    ));
     let data = serde_json::to_vec(state)?;
-    fs::write(&temp_path, data).map_err(|error| {
-        AtmError::new(
-            crate::error::AtmErrorKind::Config,
-            format!(
-                "failed to write send alert state temp file {}: {error}",
-                temp_path.display()
-            ),
-        )
-        .with_source(error)
-    })?;
-    fs::rename(&temp_path, path).map_err(|error| {
-        AtmError::new(
-            crate::error::AtmErrorKind::Config,
-            format!(
-                "failed to replace send alert state at {}: {error}",
-                path.display()
-            ),
-        )
-        .with_source(error)
-    })?;
-    Ok(())
+    persistence::atomic_write_bytes(
+        path,
+        &data,
+        crate::error::AtmErrorKind::Config,
+        "send alert state",
+        "Check ATM config-state directory permissions and rerun the send operation.",
+    )
 }
 
 fn acquire_send_alert_lock(path: &Path) -> Option<SendAlertLock> {

@@ -82,6 +82,8 @@ pub enum AtmErrorCode {
     WarningIdentityDrift,
     /// A baseline team member declared in .atm.toml is missing from config.json.
     WarningBaselineMemberMissing,
+    /// A restore operation left a stale in-progress marker behind.
+    WarningRestoreInProgress,
 }
 
 impl AtmErrorCode {
@@ -123,6 +125,7 @@ impl AtmErrorCode {
             Self::WarningSendAlertStateDegraded => "ATM_WARNING_SEND_ALERT_STATE_DEGRADED",
             Self::WarningIdentityDrift => "ATM_WARNING_IDENTITY_DRIFT",
             Self::WarningBaselineMemberMissing => "ATM_WARNING_BASELINE_MEMBER_MISSING",
+            Self::WarningRestoreInProgress => "ATM_WARNING_RESTORE_IN_PROGRESS",
         }
     }
 }

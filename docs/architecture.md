@@ -1374,16 +1374,14 @@ It must never merge old staging contents with the new restore attempt.
 
 ### 20.1 AtmError Display Backtrace
 
-`error.rs` Display impl extended to render backtrace conditionally:
+`AtmError` keeps the user-facing `Display` output concise:
 
-```rust
-if matches!(self.backtrace.status(), std::backtrace::BacktraceStatus::Captured) {
-    write!(f, "\n\nBacktrace:\n{}", self.backtrace)?;
-}
-```
+- `Display` renders only the primary message and recovery text
+- captured backtraces stay available through Debug output and a dedicated
+  accessor on `AtmError`
 
-Renders only when the stored `Backtrace` status is `Captured`, which in practice
-corresponds to a runtime backtrace-enabled environment.
+This avoids multi-kilobyte backtrace blobs in normal CLI/log output while
+preserving full diagnostic depth for explicit debugging.
 
 ### 20.2 resolve_actor_identity Consolidation
 

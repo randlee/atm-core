@@ -20,6 +20,12 @@ pub(crate) fn temp_file_suffix() -> String {
     format!("{}-{}", std::process::id(), Uuid::new_v4().simple())
 }
 
+/// Append one message to a mailbox JSONL file under the mailbox lock.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] with mailbox read/write or lock codes when the mailbox
+/// cannot be loaded, locked, or atomically replaced.
 pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), AtmError> {
     locked_read_modify_write(path, lock::DEFAULT_LOCK_TIMEOUT, |messages| {
         messages.push(envelope.clone());
@@ -41,6 +47,13 @@ where
     atomic::write_messages(path, &messages)
 }
 
+/// Read all valid mailbox records from a mailbox JSONL file.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::MailboxReadFailed`] when the mailbox
+/// file cannot be opened or read.
 pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
     if !path.exists() {
         return Ok(Vec::new());
@@ -51,6 +64,7 @@ pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
             AtmErrorKind::MailboxRead,
             format!("failed to open mailbox file {}: {error}", path.display()),
         )
+        .with_recovery("Retry after concurrent ATM activity completes, or verify the mailbox file still exists and is readable.")
         .with_source(error)
     })?;
     let reader = std::io::BufReader::new(file);
@@ -66,6 +80,7 @@ pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
                     path.display()
                 ),
             )
+            .with_recovery("Retry after concurrent ATM activity completes, or inspect the mailbox file for truncation or permission issues.")
             .with_source(error)
         })?;
         if line.trim().is_empty() {
