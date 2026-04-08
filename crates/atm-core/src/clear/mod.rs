@@ -76,11 +76,8 @@ pub fn clear_mail(
         return Err(AtmError::agent_not_found(&target.agent, &target.team));
     }
 
-    let mut source_files = load_source_files(&discover_source_paths(
-        &query.home_dir,
-        &target.team,
-        &target.agent,
-    )?)?;
+    let source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
+    let mut source_files = load_source_files(&source_paths)?;
     // Clear intentionally does not apply read-surface idle-notification dedup.
     // Cleanup decisions must inspect the raw merged surface after legacy
     // message_id canonicalization only.
@@ -105,7 +102,6 @@ pub fn clear_mail(
         .collect::<HashSet<_>>();
 
     if !query.dry_run {
-        let source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
         let _locks = mailbox::lock::acquire_many_sorted(
             source_paths.clone(),
             mailbox::lock::DEFAULT_LOCK_TIMEOUT,

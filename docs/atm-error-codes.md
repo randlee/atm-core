@@ -67,6 +67,7 @@ Error codes should describe the failure class, not a specific prose message.
 
 - `ATM_MAILBOX_READ_FAILED`
 - `ATM_MAILBOX_WRITE_FAILED`
+- `ATM_MAILBOX_LOCK_FAILED`
 - `ATM_MAILBOX_RECORD_SKIPPED`
 - `ATM_MESSAGE_VALIDATION_FAILED`
 - `ATM_SERIALIZATION_FAILED`

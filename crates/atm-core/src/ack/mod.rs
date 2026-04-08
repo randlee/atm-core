@@ -66,16 +66,13 @@ pub fn ack_mail(
     }
 
     let actor_source_paths = discover_source_paths(&request.home_dir, &team, &actor)?;
-    let initial_locks = mailbox::lock::acquire_many_sorted(
-        actor_source_paths.clone(),
-        mailbox::lock::DEFAULT_LOCK_TIMEOUT,
-    )?;
-    let mut source_files = load_source_files(&actor_source_paths)?;
+    let preflight_source_files = load_source_files(&actor_source_paths)?;
     // Ack intentionally does not apply read-surface idle-notification dedup.
     // It must preserve the raw merged surface after legacy message_id
     // canonicalization so acknowledgement lookup does not depend on read-only
     // inbox clutter policy.
-    let source_message = find_source_message(&source_files, request.message_id, &actor, &team)?;
+    let source_message =
+        find_source_message(&preflight_source_files, request.message_id, &actor, &team)?;
 
     match (
         state::derive_read_state(&source_message.envelope),
@@ -142,12 +139,9 @@ pub fn ack_mail(
         final_paths.push(reply_inbox_path.clone());
         final_paths
     };
-    drop(initial_locks);
-    let _final_locks = mailbox::lock::acquire_many_sorted(
-        final_write_paths.clone(),
-        mailbox::lock::DEFAULT_LOCK_TIMEOUT,
-    )?;
-    source_files = load_source_files(&actor_source_paths)?;
+    let _final_locks =
+        mailbox::lock::acquire_many_sorted(final_write_paths, mailbox::lock::DEFAULT_LOCK_TIMEOUT)?;
+    let mut source_files = load_source_files(&actor_source_paths)?;
     let source_message = find_source_message(&source_files, request.message_id, &actor, &team)?;
     update_source_message(&mut source_files, &source_message, ack_timestamp)?;
 

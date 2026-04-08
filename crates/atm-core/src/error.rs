@@ -301,7 +301,7 @@ impl AtmErrorKind {
             Self::Identity => AtmErrorCode::IdentityUnavailable,
             Self::TeamNotFound => AtmErrorCode::TeamNotFound,
             Self::AgentNotFound => AtmErrorCode::AgentNotFound,
-            Self::MailboxLock => AtmErrorCode::MailboxWriteFailed,
+            Self::MailboxLock => AtmErrorCode::MailboxLockFailed,
             Self::MailboxRead => AtmErrorCode::MailboxReadFailed,
             Self::MailboxWrite => AtmErrorCode::MailboxWriteFailed,
             Self::FilePolicy => AtmErrorCode::FilePolicyRejected,
@@ -342,6 +342,10 @@ mod tests {
         assert_eq!(
             AtmError::observability_health("health failed").code,
             AtmErrorCode::ObservabilityHealthFailed
+        );
+        assert_eq!(
+            AtmError::mailbox_lock("lock failed").code,
+            AtmErrorCode::MailboxLockFailed
         );
     }
 }
