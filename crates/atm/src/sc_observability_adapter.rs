@@ -1,3 +1,9 @@
+//! Adapter layer bridging ATM CLI observability to `sc_observability`.
+//!
+//! This module is the sole sanctioned import site for `sc_observability`; all
+//! shared observability calls route through this adapter to preserve the
+//! inversion-of-control boundary between `atm` and `atm-core`.
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 

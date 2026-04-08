@@ -176,6 +176,12 @@ pub fn ack_mail(
         final_paths.push(reply_inbox_path.clone());
         final_paths
     };
+    // Drop the initial actor-only locks before re-acquiring the full sorted
+    // set that includes the reply inbox. Holding the subset while trying to
+    // acquire the superset could deadlock if the reply inbox sorts before any
+    // actor path. Re-validation after acquiring `_final_locks` preserves
+    // correctness; this is the cooperative-locking caveat documented in
+    // architecture.md.
     drop(source_locks);
     let _final_locks =
         mailbox::lock::acquire_many_sorted(final_write_paths, mailbox::lock::DEFAULT_LOCK_TIMEOUT)?;
