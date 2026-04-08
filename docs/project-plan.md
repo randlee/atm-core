@@ -1134,3 +1134,105 @@ Phase M closeout gate (satisfied on `integrate/phase-M`; final merge to
 - all BP-ECR-001 through BP-ECR-006 findings are resolved
 - CI passes on all platforms
 - `integrate/phase-M` merges to `develop`
+
+Post-close review note:
+- a later critical review on `develop @ 1e6515a` identified additional locking
+  hardening issues that were not fully constrained by the original M.1/M.2
+  deliverables. Those are tracked below as a narrowly scoped follow-up sprint.
+
+---
+
+#### M.F1 — Locking Hardening Follow-up
+
+Branch: `feature/pM-locking-followup` (from `develop @ 1e6515a`)
+
+Goal: close the post-merge production-readiness findings from
+`ATM-CORE-M-CODE-REVIEW` without reopening unrelated Phase M refactors.
+
+Finding registry:
+- `M-LF-001` Source discovery fail-open gap
+  - finding: `discover_origin_inboxes(...)` can skip unreadable inbox-directory
+    entries and continue, allowing mutation commands to operate on an
+    incomplete locked source set
+  - resolution criteria:
+    - mutation-path source discovery fails closed on entry-enumeration errors
+    - commands abort before lock acquisition or mailbox read when the source
+      set cannot be enumerated completely
+    - no partial-source mutation path remains
+- `M-LF-002` Lock-error classification gap
+  - finding: `lock.rs::acquire()` can collapse permanent I/O/OS failures into
+    `MailboxLockTimeout`
+  - resolution criteria:
+    - only true lock-busy conditions retry until timeout
+    - non-contention failures return `MailboxLockFailed` immediately with
+      operator recovery guidance
+- `M-LF-003` Atomic durability gap
+  - finding: rename-based mailbox replacement does not fsync the parent
+    directory after rename
+  - resolution criteria:
+    - the shared atomic replacement helper durably publishes rename results to
+      the parent directory wherever the platform supports directory sync
+    - unsupported platform behavior is documented explicitly at the helper boundary
+- `M-LF-004` Failure-path test coverage gap
+  - finding: mailbox-locking tests prove several success/no-deadlock paths, but
+    they do not cover timeout/error/fail-closed paths strongly enough
+  - resolution criteria:
+    - bounded contention-timeout coverage exists for the relevant mutation commands
+    - deterministic fail-closed source-discovery coverage exists
+    - deterministic non-contention lock-error coverage exists
+- `M-LF-005` Locked-mutation duplication follow-up
+  - finding: read/ack/clear still duplicate the lock -> rediscover -> load ->
+    persist pattern
+  - disposition:
+    - advisory only for this sprint
+    - refactor to a shared helper is allowed only if it directly simplifies
+      `M-LF-001` through `M-LF-004`
+    - a standalone cleanup refactor is out of scope for this follow-up
+
+Deliverables:
+- make mutation-path source discovery fail closed on directory-entry
+  enumeration faults
+- update lock acquisition so retry/timeout behavior is reserved for true
+  contention and non-contention lock errors fail fast
+- extend the shared atomic write path to fsync the parent directory after
+  rename where supported
+- add deterministic failure-path tests for:
+  - contention timeout
+  - fail-closed source discovery
+  - non-contention lock-path failure classification
+- document any platform caveat for parent-directory fsync directly at the
+  helper boundary
+- do not broaden the scope into unrelated API cleanup or large helper
+  extraction unless needed to land the fixes above safely
+
+Files expected to change:
+- `crates/atm-core/src/mailbox/source.rs`
+- `crates/atm-core/src/mailbox/lock.rs`
+- `crates/atm-core/src/mailbox/atomic.rs`
+- `crates/atm-core/src/persistence.rs` if mailbox durability is unified there
+- `crates/atm-core/src/read/mod.rs`, `ack/mod.rs`, `clear/mod.rs` only as
+  needed to accommodate strict source-discovery behavior
+- `crates/atm-core/tests/mailbox_locking.rs`
+- docs: `requirements.md`, `architecture.md`, `project-plan.md`
+
+Tests required:
+- Integration: a synthetic directory-entry enumeration fault causes mutation
+  commands to fail closed before mailbox mutation
+- Integration: a held mailbox lock produces a bounded `MailboxLockTimeout`
+  result without deadlock or indefinite hang
+- Unit or focused integration: a deterministic non-contention lock failure path
+  returns `MailboxLockFailed`, not `MailboxLockTimeout`
+- Unit: atomic replacement helper verifies parent-directory fsync sequencing via
+  a deterministic seam or focused helper test
+- All locking tests must use bounded coordination primitives (`recv_timeout`,
+  `wait_timeout`, elapsed ceilings) and guaranteed teardown; no open-ended joins
+  or sleep-based race assumptions
+
+Acceptance criteria:
+- no mailbox mutation command can proceed from a partially enumerated source set
+- `MailboxLockTimeout` is emitted only for true contention paths
+- rename-based mailbox persistence includes parent-directory durability handling
+  at the shared helper boundary
+- failure-path locking coverage is deterministic and CI-safe
+- `M-LF-005` remains explicitly advisory unless a helper extraction is needed to
+  land the blocking/important fixes
