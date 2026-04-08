@@ -5,6 +5,8 @@ use std::path::PathBuf;
 pub struct AtmConfig {
     /// Deprecated compatibility-only field for legacy `.atm.toml` parsing.
     ///
+    /// # Deprecated
+    ///
     /// ATM no longer uses config identity as a runtime fallback. Callers must
     /// use `ATM_IDENTITY` or an explicit sender override instead. `atm doctor`
     /// surfaces `ATM_WARNING_IDENTITY_DRIFT` when this obsolete field is still
