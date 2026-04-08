@@ -346,7 +346,7 @@ fn append_reply_message(
     });
     source_files
         .last_mut()
-        .expect("reply inbox source file just pushed")
+        .ok_or_else(|| AtmError::mailbox_write("reply inbox source file disappeared after push"))?
         .messages
         .push(reply_message);
     source_files.sort_by(|left, right| left.path.cmp(&right.path));

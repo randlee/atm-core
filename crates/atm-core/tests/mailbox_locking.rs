@@ -171,7 +171,7 @@ fn message(from: &str, message_id: &LegacyMessageId, text: &str) -> MessageEnvel
         read: true,
         source_team: Some("atm-dev".to_string()),
         summary: None,
-        message_id: Some(message_id.clone()),
+        message_id: Some(*message_id),
         pending_ack_at: Some(IsoTimestamp::from_datetime(Utc::now())),
         acknowledged_at: None,
         acknowledges_message_id: None,
