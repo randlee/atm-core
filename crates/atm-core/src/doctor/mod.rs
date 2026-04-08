@@ -11,6 +11,7 @@ use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
 use crate::schema::AgentMember;
 use crate::team_admin::{MemberSummary, MembersList};
+use crate::types::TeamName;
 
 pub use report::{
     DoctorEnvironmentVisibility, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
@@ -21,7 +22,7 @@ pub use report::{
 pub struct DoctorQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
-    pub team_override: Option<String>,
+    pub team_override: Option<TeamName>,
 }
 
 /// Run the ATM doctor checks for config, roster, and observability health.
@@ -415,7 +416,7 @@ mod tests {
         DoctorQuery {
             home_dir: paths.home_dir.clone(),
             current_dir: paths.current_dir.clone(),
-            team_override: Some("atm-dev".to_string()),
+            team_override: Some("atm-dev".into()),
         }
     }
 

@@ -425,9 +425,9 @@ impl Fixture {
         SendRequest {
             home_dir: self.tempdir.path().to_path_buf(),
             current_dir: self.tempdir.path().to_path_buf(),
-            sender_override: Some(sender.to_string()),
+            sender_override: Some(sender.into()),
             to: to.to_string(),
-            team_override: Some("atm-dev".to_string()),
+            team_override: Some("atm-dev".into()),
             message_source: SendMessageSource::Inline(text.to_string()),
             summary_override: None,
             requires_ack: false,

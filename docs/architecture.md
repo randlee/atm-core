@@ -1274,6 +1274,27 @@ for `read`, `ack`, and `clear`. Those commands are not allowed to degrade into
 partial-lock best-effort mutation, because doing so would mix snapshots from
 different logical times and make writeback correctness nondeterministic.
 
+### 18.4.1 Cooperative Locking Caveat For `ack_mail`
+
+`ack_mail` sometimes needs to mutate a source inbox set and append the reply to
+another inbox that was not part of the initial actor-source set. In that case
+it follows a documented two-phase lock pattern:
+
+1. acquire the actor-source lock set
+2. validate state and compute the reply inbox path
+3. drop the initial subset lock set
+4. re-acquire the full sorted superset that includes the reply inbox
+5. re-discover source paths, reload state, and re-validate before mutation
+6. persist both the updated source message and reply while the superset locks
+   are still held
+
+This is required because trying to acquire the superset while still holding the
+subset can deadlock if the reply inbox sorts before any of the already-held
+actor inbox paths. The temporary unlock gap is acceptable only because
+`ack_mail` re-validates both the source-path set and the pending-ack state
+after the final lock acquisition and aborts on drift instead of mutating a
+stale snapshot.
+
 | Caller | Lock required |
 |--------|--------------|
 | `append_message` | `locked_read_modify_write` |

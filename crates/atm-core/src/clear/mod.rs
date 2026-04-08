@@ -310,12 +310,14 @@ fn persist_source_files(source_files: &[SourceFile]) -> Result<(), AtmError> {
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
     use tempfile::tempdir;
 
     use super::maybe_remove_locked_source_file_for_test;
     use crate::mailbox::source::load_source_files;
 
     #[test]
+    #[serial]
     fn locked_clear_source_removal_reports_disappearing_mailbox() {
         let tempdir = tempdir().expect("tempdir");
         let path = tempdir.path().join("arch-ctm.json");

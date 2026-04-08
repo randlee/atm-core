@@ -24,7 +24,11 @@ pub(crate) fn temp_file_suffix() -> String {
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] with mailbox read/write or lock codes when the mailbox
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::MailboxReadFailed`],
+/// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`],
+/// [`crate::error_codes::AtmErrorCode::MailboxLockFailed`], or
+/// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`] when the mailbox
 /// cannot be loaded, locked, or atomically replaced.
 pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), AtmError> {
     locked_read_modify_write(path, lock::DEFAULT_LOCK_TIMEOUT, |messages| {

@@ -36,10 +36,6 @@ impl Drop for MailboxLockGuard {
 }
 
 /// Return the sentinel lock-file path for a mailbox file.
-///
-/// # Errors
-///
-/// This helper does not return errors.
 pub(crate) fn sentinel_path(path: &Path) -> PathBuf {
     let mut os = path.as_os_str().to_os_string();
     os.push(".lock");
@@ -48,10 +44,8 @@ pub(crate) fn sentinel_path(path: &Path) -> PathBuf {
 
 /// Sort and deduplicate mailbox paths by canonical filesystem identity.
 ///
-/// # Errors
-///
-/// This helper does not return errors. Canonicalization failures fall back to
-/// the original path string for sorting and deduplication.
+/// Canonicalization failures fall back to the original path string for sorting
+/// and deduplication.
 pub(crate) fn sort_unique_paths(paths: impl IntoIterator<Item = PathBuf>) -> Vec<PathBuf> {
     let mut paths = paths
         .into_iter()

@@ -39,9 +39,9 @@ pub enum SendMessageSource {
 pub struct SendRequest {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
-    pub sender_override: Option<String>,
+    pub sender_override: Option<AgentName>,
     pub to: String,
-    pub team_override: Option<String>,
+    pub team_override: Option<TeamName>,
     pub message_source: SendMessageSource,
     pub summary_override: Option<String>,
     pub requires_ack: bool,
@@ -81,9 +81,18 @@ struct SendAlertState {
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when sender identity cannot be resolved, recipient or
-/// team validation fails, message/file-policy validation fails, or mailbox
-/// persistence fails.
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::IdentityUnavailable`],
+/// [`crate::error_codes::AtmErrorCode::TeamUnavailable`],
+/// [`crate::error_codes::AtmErrorCode::TeamNotFound`],
+/// [`crate::error_codes::AtmErrorCode::AgentNotFound`],
+/// [`crate::error_codes::AtmErrorCode::AddressParseFailed`],
+/// [`crate::error_codes::AtmErrorCode::MessageValidationFailed`],
+/// [`crate::error_codes::AtmErrorCode::FilePolicyRejected`],
+/// [`crate::error_codes::AtmErrorCode::MailboxReadFailed`], or
+/// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`] when sender
+/// identity cannot be resolved, recipient or team validation fails,
+/// message/file-policy validation fails, or mailbox persistence fails.
 pub fn send_mail(
     request: SendRequest,
     observability: &dyn ObservabilityPort,

@@ -79,6 +79,9 @@ pub(crate) fn discover_origin_inboxes(
                     inboxes_dir.display()
                 ),
             )
+            .with_recovery(
+                "Check inbox directory permissions and ensure the source inbox directory still exists before retrying the ATM command.",
+            )
             .with_source(error)
         })?
         .filter_map(|entry| match entry {

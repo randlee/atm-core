@@ -137,6 +137,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn atm_home_prefers_atm_home_env() {
         let _guard = env_lock().lock().expect("env lock");
         let tempdir = TempDir::new().expect("tempdir");
@@ -148,6 +149,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    #[serial_test::serial]
     fn atm_home_falls_back_to_home_dir() {
         let _guard = env_lock().lock().expect("env lock");
         let tempdir = TempDir::new().expect("tempdir");
@@ -159,6 +161,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn team_and_inbox_paths_use_claude_team_layout() {
         let _guard = env_lock().lock().expect("env lock");
         let tempdir = TempDir::new().expect("tempdir");

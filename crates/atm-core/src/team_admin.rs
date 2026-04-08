@@ -54,7 +54,7 @@ pub struct MembersList {
 pub struct MembersQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
-    pub team_override: Option<String>,
+    pub team_override: Option<TeamName>,
 }
 
 /// Parameters for adding one member to a team roster.

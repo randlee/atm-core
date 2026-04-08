@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use atm_core::home;
 use atm_core::send::{self, SendMessageSource, SendRequest};
+use atm_core::types::{AgentName, TeamName};
 use clap::Args;
 
 use crate::observability::CliObservability;
@@ -56,9 +57,9 @@ impl SendCommand {
             SendRequest {
                 home_dir,
                 current_dir,
-                sender_override: self.from,
+                sender_override: self.from.map(AgentName::from),
                 to: self.to,
-                team_override: self.team,
+                team_override: self.team.map(TeamName::from),
                 message_source,
                 summary_override: self.summary,
                 requires_ack: self.requires_ack,

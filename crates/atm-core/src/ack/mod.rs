@@ -140,7 +140,7 @@ pub fn ack_mail(
     if !reply_team_config
         .members
         .iter()
-        .any(|member| member.name == reply_agent)
+        .any(|member| member.name == reply_agent.as_str())
     {
         return Err(AtmError::agent_not_found(&reply_agent, &reply_team));
     }
@@ -180,8 +180,8 @@ pub fn ack_mail(
     // set that includes the reply inbox. Holding the subset while trying to
     // acquire the superset could deadlock if the reply inbox sorts before any
     // actor path. Re-validation after acquiring `_final_locks` preserves
-    // correctness; this is the cooperative-locking caveat documented in
-    // architecture.md.
+    // correctness; see "18.4.1 Cooperative Locking Caveat For `ack_mail`" in
+    // docs/architecture.md.
     drop(source_locks);
     let _final_locks =
         mailbox::lock::acquire_many_sorted(final_write_paths, mailbox::lock::DEFAULT_LOCK_TIMEOUT)?;
@@ -245,11 +245,11 @@ pub fn ack_mail(
 fn resolve_reply_target(
     message: &MessageEnvelope,
     current_team: &str,
-) -> Result<(String, String), AtmError> {
+) -> Result<(AgentName, TeamName), AtmError> {
     if let Some(identity) = canonical_sender_identity(message) {
         let parsed: AgentAddress = identity.parse()?;
         let team = parsed.team.ok_or_else(AtmError::team_unavailable)?;
-        return Ok((parsed.agent, team));
+        return Ok((parsed.agent.into(), team.into()));
     }
 
     let parsed: AgentAddress = if message.from.contains('@') {
@@ -265,7 +265,7 @@ fn resolve_reply_target(
     };
 
     let team = parsed.team.ok_or_else(AtmError::team_unavailable)?;
-    Ok((parsed.agent, team))
+    Ok((parsed.agent.into(), team.into()))
 }
 
 fn canonical_sender_identity(message: &MessageEnvelope) -> Option<String> {
@@ -450,6 +450,6 @@ mod tests {
         );
 
         let target = resolve_reply_target(&message, "atm-dev").expect("reply target");
-        assert_eq!(target, ("team-lead".to_string(), "src-gen".to_string()));
+        assert_eq!(target, ("team-lead".into(), "src-gen".into()));
     }
 }
