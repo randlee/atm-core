@@ -4,7 +4,7 @@ pub(crate) mod state;
 pub(crate) mod wait;
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use serde::Serialize;
 use serde_json::Value;
@@ -14,7 +14,9 @@ use crate::error::AtmError;
 use crate::home;
 use crate::identity;
 use crate::mailbox;
-use crate::mailbox::source::{SourceFile, SourcedMessage, discover_origin_inboxes, resolve_target};
+use crate::mailbox::source::{
+    SourceFile, SourcedMessage, discover_source_paths, load_source_files, resolve_target,
+};
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::MessageEnvelope;
@@ -105,7 +107,8 @@ pub fn read_mail(
         None
     };
 
-    let mut source_files = load_source_files(&query.home_dir, &target.team, &target.agent)?;
+    let mut source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
+    let mut source_files = load_source_files(&source_paths)?;
     let mut classified_all = classify_all(apply_idle_notification_dedup(
         dedupe_legacy_message_id_surface(
             merged_surface(&source_files),
@@ -130,11 +133,11 @@ pub fn read_mail(
             || {
                 Ok(apply_idle_notification_dedup(
                     dedupe_legacy_message_id_surface(
-                        merged_surface(&load_source_files(
+                        merged_surface(&load_source_files(&discover_source_paths(
                             &query.home_dir,
                             &target.team,
                             &target.agent,
-                        )?),
+                        )?)?),
                         |message: &SourcedMessage| message.envelope.message_id,
                         |message: &SourcedMessage| message.envelope.timestamp,
                     ),
@@ -144,7 +147,8 @@ pub fn read_mail(
         )?;
 
         if wait_satisfied {
-            source_files = load_source_files(&query.home_dir, &target.team, &target.agent)?;
+            source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
+            source_files = load_source_files(&source_paths)?;
             classified_all = classify_all(apply_idle_notification_dedup(
                 dedupe_legacy_message_id_surface(
                     merged_surface(&source_files),
@@ -180,6 +184,38 @@ pub fn read_mail(
     let mutation_applied = if timed_out || selected.is_empty() {
         false
     } else {
+        let _locks = mailbox::lock::acquire_many_sorted(
+            source_paths.clone(),
+            mailbox::lock::DEFAULT_LOCK_TIMEOUT,
+        )?;
+        source_files = load_source_files(&source_paths)?;
+        classified_all = classify_all(apply_idle_notification_dedup(
+            dedupe_legacy_message_id_surface(
+                merged_surface(&source_files),
+                |message: &SourcedMessage| message.envelope.message_id,
+                |message: &SourcedMessage| message.envelope.timestamp,
+            ),
+        ));
+        bucket_counts = bucket_counts_for(&classified_all);
+        filtered = apply_filters(
+            classified_all.clone(),
+            query.sender_filter.as_deref(),
+            query.timestamp_filter,
+        );
+        selected = select_messages(&filtered, query.selection_mode, seen_watermark);
+        selected.sort_by(|left, right| {
+            right
+                .envelope
+                .timestamp
+                .cmp(&left.envelope.timestamp)
+                .then_with(|| right.envelope.message_id.cmp(&left.envelope.message_id))
+                .then_with(|| right.source_index.cmp(&left.source_index))
+        });
+
+        if let Some(limit) = query.limit {
+            selected.truncate(limit);
+        }
+
         apply_display_mutations(
             &mut source_files,
             &selected,
@@ -270,29 +306,6 @@ fn resolve_actor_identity(
     }
 
     identity::resolve_sender_identity(config)
-}
-
-fn load_source_files(
-    home_dir: &Path,
-    team: &str,
-    agent: &str,
-) -> Result<Vec<SourceFile>, AtmError> {
-    let inbox_path = home::inbox_path_from_home(home_dir, team, agent)?;
-    let inboxes_dir = inbox_path
-        .parent()
-        .ok_or_else(|| AtmError::mailbox_read("inbox path has no parent directory"))?;
-    let inboxes_dir = inboxes_dir.to_path_buf();
-
-    let mut paths = vec![inbox_path];
-    paths.extend(discover_origin_inboxes(&inboxes_dir, agent)?);
-
-    let mut sources = Vec::with_capacity(paths.len());
-    for path in paths {
-        let messages = mailbox::read_messages(&path)?;
-        sources.push(SourceFile { path, messages });
-    }
-
-    Ok(sources)
 }
 
 fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {

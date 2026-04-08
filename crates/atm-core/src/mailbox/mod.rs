@@ -21,8 +21,23 @@ pub(crate) fn temp_file_suffix() -> String {
 }
 
 pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), AtmError> {
+    locked_read_modify_write(path, lock::DEFAULT_LOCK_TIMEOUT, |messages| {
+        messages.push(envelope.clone());
+        Ok(())
+    })
+}
+
+pub(crate) fn locked_read_modify_write<F>(
+    path: &Path,
+    timeout: std::time::Duration,
+    mutate: F,
+) -> Result<(), AtmError>
+where
+    F: FnOnce(&mut Vec<MessageEnvelope>) -> Result<(), AtmError>,
+{
+    let _guard = lock::acquire(path, timeout)?;
     let mut messages = read_messages(path)?;
-    messages.push(envelope.clone());
+    mutate(&mut messages)?;
     atomic::write_messages(path, &messages)
 }
 
@@ -112,6 +127,8 @@ fn sanitize_legacy_message_id(value: &mut Value, path: &Path, line_number: usize
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::sync::{Arc, Barrier};
+    use std::thread;
 
     use chrono::{TimeZone, Utc};
     use tempfile::TempDir;
@@ -196,6 +213,34 @@ mod tests {
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].text, "valid body");
         assert!(messages[0].message_id.is_none());
+    }
+
+    #[test]
+    fn append_message_preserves_both_records_under_concurrent_writers() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("append-message-concurrent.jsonl");
+        let barrier = Arc::new(Barrier::new(3));
+
+        let mut handles = Vec::new();
+        for body in ["first", "second"] {
+            let path = path.clone();
+            let barrier = Arc::clone(&barrier);
+            handles.push(thread::spawn(move || {
+                let envelope = sample_message(Uuid::new_v4(), body);
+                barrier.wait();
+                append_message(&path, &envelope).expect("append");
+            }));
+        }
+
+        barrier.wait();
+        for handle in handles {
+            handle.join().expect("thread");
+        }
+
+        let messages = read_messages(&path).expect("read");
+        assert_eq!(messages.len(), 2);
+        assert!(messages.iter().any(|message| message.text == "first"));
+        assert!(messages.iter().any(|message| message.text == "second"));
     }
 
     fn sample_message(message_id: Uuid, body: &str) -> MessageEnvelope {

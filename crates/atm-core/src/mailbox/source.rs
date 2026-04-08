@@ -6,6 +6,7 @@ use tracing::warn;
 use crate::address::AgentAddress;
 use crate::config;
 use crate::error::{AtmError, AtmErrorKind};
+use crate::home;
 use crate::schema::MessageEnvelope;
 
 #[derive(Debug, Clone)]
@@ -103,13 +104,57 @@ pub(crate) fn discover_origin_inboxes(
     Ok(paths)
 }
 
+pub(crate) fn discover_source_paths(
+    home_dir: &Path,
+    team: &str,
+    agent: &str,
+) -> Result<Vec<PathBuf>, AtmError> {
+    let inbox_path = home::inbox_path_from_home(home_dir, team, agent)?;
+    let inboxes_dir = inbox_path
+        .parent()
+        .ok_or_else(|| AtmError::mailbox_read("inbox path has no parent directory"))?;
+    let inboxes_dir = inboxes_dir.to_path_buf();
+
+    let mut paths = Vec::new();
+    if inbox_path.exists() {
+        paths.push(inbox_path);
+    }
+    paths.extend(discover_origin_inboxes(&inboxes_dir, agent)?);
+    paths.sort_by_key(|path| path.to_string_lossy().into_owned());
+    paths.dedup();
+    Ok(paths)
+}
+
+pub(crate) fn load_source_files(paths: &[PathBuf]) -> Result<Vec<SourceFile>, AtmError> {
+    let mut sources = Vec::with_capacity(paths.len());
+    for path in paths {
+        if !path.exists() {
+            return Err(AtmError::mailbox_read(format!(
+                "mailbox file disappeared before locked read completed: {}",
+                path.display()
+            ))
+            .with_recovery(
+                "Retry after the competing ATM operation completes, or verify the team inbox files still exist.",
+            ));
+        }
+
+        let messages = super::read_messages(path)?;
+        sources.push(SourceFile {
+            path: path.clone(),
+            messages,
+        });
+    }
+
+    Ok(sources)
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
 
     use tempfile::tempdir;
 
-    use super::{discover_origin_inboxes, resolve_target};
+    use super::{discover_origin_inboxes, load_source_files, resolve_target};
     use crate::config::AtmConfig;
 
     #[test]
@@ -145,5 +190,17 @@ mod tests {
         assert_eq!(target.agent, "team-lead");
         assert_eq!(target.team, "atm-dev");
         assert!(target.explicit);
+    }
+
+    #[test]
+    fn load_source_files_reports_disappearing_mailbox() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = tempdir.path().join("arch-ctm.json");
+        std::fs::write(&path, "").expect("mailbox");
+        std::fs::remove_file(&path).expect("remove");
+
+        let error = load_source_files(&[path]).expect_err("missing mailbox");
+        assert!(error.is_mailbox_read());
+        assert!(error.message.contains("disappeared"));
     }
 }

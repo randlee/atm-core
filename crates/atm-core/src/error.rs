@@ -12,6 +12,7 @@ pub(crate) enum AtmErrorKind {
     Identity,
     TeamNotFound,
     AgentNotFound,
+    MailboxLock,
     MailboxRead,
     MailboxWrite,
     FilePolicy,
@@ -81,6 +82,10 @@ impl AtmError {
 
     pub fn is_mailbox_read(&self) -> bool {
         self.kind == AtmErrorKind::MailboxRead
+    }
+
+    pub fn is_mailbox_lock(&self) -> bool {
+        self.kind == AtmErrorKind::MailboxLock
     }
 
     pub fn is_mailbox_write(&self) -> bool {
@@ -202,6 +207,26 @@ impl AtmError {
         Self::new(AtmErrorKind::MailboxRead, message)
     }
 
+    pub fn mailbox_lock(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorKind::MailboxLock, message).with_recovery(
+            "Retry after other ATM mailbox activity completes, or wait for the competing process to release its mailbox lock.",
+        )
+    }
+
+    pub fn mailbox_lock_timeout(path: &std::path::Path) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::MailboxLockTimeout,
+            AtmErrorKind::MailboxLock,
+            format!(
+                "timed out waiting for mailbox lock on {}",
+                path.display()
+            ),
+        )
+        .with_recovery(
+            "Retry after the competing ATM process finishes, or investigate whether another process is holding the mailbox lock unexpectedly.",
+        )
+    }
+
     pub fn mailbox_write(message: impl Into<String>) -> Self {
         Self::new(AtmErrorKind::MailboxWrite, message)
     }
@@ -276,6 +301,7 @@ impl AtmErrorKind {
             Self::Identity => AtmErrorCode::IdentityUnavailable,
             Self::TeamNotFound => AtmErrorCode::TeamNotFound,
             Self::AgentNotFound => AtmErrorCode::AgentNotFound,
+            Self::MailboxLock => AtmErrorCode::MailboxLockFailed,
             Self::MailboxRead => AtmErrorCode::MailboxReadFailed,
             Self::MailboxWrite => AtmErrorCode::MailboxWriteFailed,
             Self::FilePolicy => AtmErrorCode::FilePolicyRejected,
@@ -316,6 +342,10 @@ mod tests {
         assert_eq!(
             AtmError::observability_health("health failed").code,
             AtmErrorCode::ObservabilityHealthFailed
+        );
+        assert_eq!(
+            AtmError::mailbox_lock("lock failed").code,
+            AtmErrorCode::MailboxLockFailed
         );
     }
 }

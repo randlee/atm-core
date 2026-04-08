@@ -10,7 +10,9 @@ use crate::error::AtmError;
 use crate::home;
 use crate::identity;
 use crate::mailbox;
-use crate::mailbox::source::{SourceFile, SourcedMessage, discover_origin_inboxes};
+use crate::mailbox::source::{
+    SourceFile, SourcedMessage, discover_source_paths, load_source_files,
+};
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
@@ -63,35 +65,14 @@ pub fn ack_mail(
         return Err(AtmError::agent_not_found(&actor, &team));
     }
 
-    let mut source_files = load_source_files(&request.home_dir, &team, &actor)?;
+    let actor_source_paths = discover_source_paths(&request.home_dir, &team, &actor)?;
+    let preflight_source_files = load_source_files(&actor_source_paths)?;
     // Ack intentionally does not apply read-surface idle-notification dedup.
     // It must preserve the raw merged surface after legacy message_id
     // canonicalization so acknowledgement lookup does not depend on read-only
     // inbox clutter policy.
-    let source_message = dedupe_legacy_message_id_surface(
-        merged_surface(&source_files),
-        |message: &SourcedMessage| message.envelope.message_id,
-        |message: &SourcedMessage| message.envelope.timestamp,
-    )
-    .into_iter()
-    .filter_map(|message| match message.envelope.message_id {
-        Some(_) => Some(message),
-        None => {
-            trace!(
-                source_path = %message.source_path.display(),
-                source_index = message.source_index,
-                "skipping source message without message_id during ack lookup"
-            );
-            None
-        }
-    })
-    .find(|message| message.envelope.message_id == Some(request.message_id))
-    .ok_or_else(|| {
-        AtmError::validation(format!(
-            "message {} was not found in {}@{}",
-            request.message_id, actor, team
-        ))
-    })?;
+    let source_message =
+        find_source_message(&preflight_source_files, request.message_id, &actor, &team)?;
 
     match (
         state::derive_read_state(&source_message.envelope),
@@ -146,10 +127,36 @@ pub fn ack_mail(
         extra: Map::new(),
     };
 
-    update_source_message(&mut source_files, &source_message, ack_timestamp)?;
-
     let reply_inbox_path =
         home::inbox_path_from_home(&request.home_dir, &reply_team, &reply_agent)?;
+    let final_write_paths = if actor_source_paths
+        .iter()
+        .any(|path| path == &reply_inbox_path)
+    {
+        actor_source_paths.clone()
+    } else {
+        let mut final_paths = actor_source_paths.clone();
+        final_paths.push(reply_inbox_path.clone());
+        final_paths
+    };
+    let _final_locks =
+        mailbox::lock::acquire_many_sorted(final_write_paths, mailbox::lock::DEFAULT_LOCK_TIMEOUT)?;
+    let mut source_files = load_source_files(&actor_source_paths)?;
+    let source_message = find_source_message(&source_files, request.message_id, &actor, &team)?;
+    match (
+        state::derive_read_state(&source_message.envelope),
+        state::derive_ack_state(&source_message.envelope),
+    ) {
+        (crate::types::ReadState::Read, crate::types::AckState::PendingAck) => {}
+        _ => {
+            return Err(AtmError::validation(format!(
+                "message {} is not in the (read, pending_ack) state",
+                request.message_id
+            )));
+        }
+    }
+    update_source_message(&mut source_files, &source_message, ack_timestamp)?;
+
     append_reply_message(&mut source_files, &reply_inbox_path, reply_message)?;
     persist_source_files(&source_files)?;
 
@@ -235,31 +242,6 @@ fn canonical_sender_identity(message: &MessageEnvelope) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
-fn load_source_files(
-    home_dir: &Path,
-    team: &str,
-    agent: &str,
-) -> Result<Vec<SourceFile>, AtmError> {
-    let inbox_path = home::inbox_path_from_home(home_dir, team, agent)?;
-    let inboxes_dir = inbox_path
-        .parent()
-        .ok_or_else(|| AtmError::mailbox_read("inbox path has no parent directory"))?;
-    let inboxes_dir = inboxes_dir.to_path_buf();
-
-    let mut paths = vec![inbox_path];
-    paths.extend(discover_origin_inboxes(&inboxes_dir, agent)?);
-
-    let mut sources = Vec::with_capacity(paths.len());
-    for path in paths {
-        sources.push(SourceFile {
-            messages: mailbox::read_messages(&path)?,
-            path,
-        });
-    }
-
-    Ok(sources)
-}
-
 fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
     source_files
         .iter()
@@ -276,6 +258,38 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
                 })
         })
         .collect()
+}
+
+fn find_source_message(
+    source_files: &[SourceFile],
+    message_id: LegacyMessageId,
+    actor: &str,
+    team: &str,
+) -> Result<SourcedMessage, AtmError> {
+    dedupe_legacy_message_id_surface(
+        merged_surface(source_files),
+        |message: &SourcedMessage| message.envelope.message_id,
+        |message: &SourcedMessage| message.envelope.timestamp,
+    )
+    .into_iter()
+    .filter_map(|message| match message.envelope.message_id {
+        Some(_) => Some(message),
+        None => {
+            trace!(
+                source_path = %message.source_path.display(),
+                source_index = message.source_index,
+                "skipping source message without message_id during ack lookup"
+            );
+            None
+        }
+    })
+    .find(|message| message.envelope.message_id == Some(message_id))
+    .ok_or_else(|| {
+        AtmError::validation(format!(
+            "message {} was not found in {}@{}",
+            message_id, actor, team
+        ))
+    })
 }
 
 fn update_source_message(
@@ -328,8 +342,13 @@ fn append_reply_message(
 
     source_files.push(SourceFile {
         path: reply_inbox_path.to_path_buf(),
-        messages: vec![reply_message],
+        messages: mailbox::read_messages(reply_inbox_path)?,
     });
+    source_files
+        .last_mut()
+        .ok_or_else(|| AtmError::mailbox_write("reply inbox source file disappeared after push"))?
+        .messages
+        .push(reply_message);
     source_files.sort_by(|left, right| left.path.cmp(&right.path));
     Ok(())
 }
