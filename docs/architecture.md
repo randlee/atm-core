@@ -86,6 +86,26 @@ Release-process ownership rules:
   and must be ported into this repo with source-of-truth paths updated to the
   new repo layout and retained crate list
 
+Release infrastructure notes:
+- Homebrew continues to use the shared `randlee/homebrew-tap` repository and
+  existing `Formula/agent-team-mail.rb` / `Formula/atm.rb` formulas
+- `HOMEBREW_TAP_TOKEN` is a required secret for the `atm-core` repo before the
+  ported Homebrew update automation can run successfully
+- `winget` uses the same `randlee` publisher namespace proven in
+  `claude-history`; the retained CLI package ID for this repo is
+  `randlee.agent-team-mail`
+- the ported `winget` flow uses the default GitHub workflow token and does not
+  introduce a separate `winget`-specific secret requirement
+- the release workflow should use
+  `vedantmgoyal2009/winget-releaser@v2` against the Windows ZIP release asset
+  and its SHA256 rather than inventing repo-specific manifest plumbing first
+- the initial `winget` manifest submission is a one-time manual bootstrap
+  action; recurring releases are workflow-driven after the package exists in
+  `microsoft/winget-pkgs`
+- release verification must treat `winget` submission success and manifest
+  generation as the immediate release signal because Microsoft review normally
+  delays public installability by 1-2 days
+
 Schema ownership references:
 
 - Claude Code-native message schema:

@@ -1270,6 +1270,14 @@ Status summary:
   GitHub Releases, and Homebrew automation
 - the old repo does not contain `winget` release automation, so this repo must
   add it as new release infrastructure rather than porting it directly
+- `team-lead` has confirmed the shared account-level publish infrastructure:
+  - Homebrew tap remains `randlee/homebrew-tap`
+  - `HOMEBREW_TAP_TOKEN` exists in account secrets but is not yet configured on
+    `atm-core`
+  - `winget` has a proven reference implementation in `randlee/claude-history`
+    using `vedantmgoyal2009/winget-releaser@v2`
+  - `winget` uses the default GitHub workflow token and does not require an
+    additional repo secret
 - this repo currently has only CI and no equivalent release-manifest,
   preflight, release, or publisher-agent infrastructure
 - the new repo currently uses local crate names (`atm`, `atm-core`) that are
@@ -1320,6 +1328,8 @@ Goal:
 
 Deliverables:
 - add `release/publish-artifacts.toml` as the new release artifact manifest
+- add the missing `HOMEBREW_TAP_TOKEN` GitHub secret to `atm-core` as a
+  one-time prerequisite before the Homebrew update job is expected to pass
 - port and adapt:
   - `.github/workflows/release-preflight.yml`
   - `.github/workflows/release.yml`
@@ -1347,8 +1357,18 @@ Deliverables:
   - manifest generation or update path
   - release-version and asset-URL wiring
   - SHA256 update from the released Windows archive
-  - publish/submit step appropriate to the chosen `winget` repository flow
-  - post-publish verification that the released version is visible to `winget`
+  - `vedantmgoyal2009/winget-releaser@v2` workflow step targeting package ID
+    `randlee.agent-team-mail`
+  - use the Windows ZIP asset from the GitHub Release as the installer source
+  - one-time initial manifest submission procedure for the first release
+  - recurring submission flow for later releases after the package exists in
+    `microsoft/winget-pkgs`
+  - no additional `winget` secret beyond the default workflow `GITHUB_TOKEN`
+  - verification of submission success rather than same-day installability
+- port/reference the proven `claude-history` winget materials:
+  - `.winget/randlee.claude-history.yaml`
+  - `docs/WINGET_SETUP.md`
+  - the `winget` step in `.github/workflows/release.yml`
 
 Acceptance criteria:
 - this repo has release-preflight and release workflows with no missing helper
@@ -1361,6 +1381,9 @@ Acceptance criteria:
   Homebrew update steps without references to removed daemon/TUI/MCP artifacts
 - release automation includes a concrete `winget` update/publish path for the
   retained Windows CLI install surface
+- `N.2` explicitly records the Homebrew secret prerequisite and the one-time
+  `winget` bootstrap requirement so the workflow design does not assume either
+  exists magically
 
 #### N.3 — Publisher Agent Port
 
@@ -1385,6 +1408,14 @@ Deliverables:
   - `winget`
 - update the inventory and verification expectations so the publisher does not
   expect daemon, MCP, TUI, or CI monitor outputs from this repo
+- document in the publisher agent:
+  - that `HOMEBREW_TAP_TOKEN` must exist on `atm-core` before Homebrew release
+    automation can run
+  - that the first `winget` release requires a one-time manual manifest
+    submission
+  - that later `winget` releases are workflow-driven
+  - that Microsoft review introduces a normal 1-2 day delay before `winget`
+    installability is observable
 
 Acceptance criteria:
 - `.claude/agents/publisher.md` exists in this repo
@@ -1447,11 +1478,15 @@ Deliverables:
   - GitHub Releases
   - Homebrew
   - `winget`
+- verify that `winget` readiness proof checks successful submission/manifests,
+  not immediate public installability
 
 Acceptance criteria:
 - all dry-run packaging and publishability checks succeed from this repo
 - the release inventory matches the retained release scope exactly
 - no retained release doc or workflow step depends on removed legacy crates
+- `N.5` explicitly acknowledges the 1-2 day Microsoft review lag so release
+  operators do not treat normal `winget` review delay as a failed publish
 
 Phase N completion gate:
 - package identities are switched to the legacy crates.io names

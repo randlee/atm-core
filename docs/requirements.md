@@ -142,6 +142,10 @@ Product requirement ID:
   therefore a required additional release channel even though it was not part
   of the historical `agent-team-mail` release system.
 
+- `REQ-P-RELEASE-006` Release prerequisites that depend on account-level
+  distribution infrastructure must be made explicit in the repo-owned release
+  plan before `1.0` release automation is considered complete.
+
 Required behavior:
 - the `1.0` release must publish the retained CLI and core crates under the
   legacy crates.io package names:
@@ -156,6 +160,19 @@ Required behavior:
 - `winget` is not a historical release channel for `agent-team-mail`, but it
   is a required new `1.0` release channel so normal Windows users can install
   ATM without Rust tooling or manual zip handling
+- Homebrew release automation depends on the existing `randlee/homebrew-tap`
+  tap and requires `HOMEBREW_TAP_TOKEN` to be configured in `atm-core` GitHub
+  secrets before the release workflow can update formulas from this repo
+- `winget` release automation uses the `randlee` namespace with package ID
+  `randlee.agent-team-mail`
+- the first `winget` release requires a one-time manual manifest submission to
+  `microsoft/winget-pkgs`; after that initial submission, later releases may
+  be automated from this repo
+- `winget` release automation must not require a repo-specific secret beyond
+  the default GitHub workflow token
+- release readiness proof for `winget` must validate successful submission or
+  manifest update dispatch; it cannot require same-day installability because
+  Microsoft review introduces a normal 1-2 day publication lag
 
 ## 3. External Contracts
 
