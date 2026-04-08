@@ -15,7 +15,8 @@ use crate::home;
 use crate::identity;
 use crate::mailbox;
 use crate::mailbox::source::{
-    SourceFile, SourcedMessage, discover_source_paths, load_source_files, resolve_target,
+    SourceFile, SourcedMessage, discover_source_paths, load_source_files,
+    rediscover_and_validate_source_paths, resolve_target,
 };
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
@@ -187,6 +188,12 @@ pub fn read_mail(
         let _locks = mailbox::lock::acquire_many_sorted(
             source_paths.clone(),
             mailbox::lock::DEFAULT_LOCK_TIMEOUT,
+        )?;
+        source_paths = rediscover_and_validate_source_paths(
+            &source_paths,
+            &query.home_dir,
+            &target.team,
+            &target.agent,
         )?;
         source_files = load_source_files(&source_paths)?;
         classified_all = classify_all(apply_idle_notification_dedup(

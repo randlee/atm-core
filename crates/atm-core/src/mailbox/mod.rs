@@ -152,7 +152,8 @@ mod tests {
     use crate::schema::MessageEnvelope;
     use crate::types::IsoTimestamp;
 
-    use super::{append_message, read_messages};
+    use super::{append_message, locked_read_modify_write, read_messages};
+    use crate::mailbox::lock;
 
     #[test]
     fn append_message_persists_one_jsonl_record() {
@@ -166,6 +167,27 @@ mod tests {
         assert!(raw.contains("\"text\":\"first\""));
         let read_back = read_messages(&path).expect("read back");
         assert_eq!(read_back, vec![envelope]);
+    }
+
+    #[test]
+    fn locked_read_modify_write_reads_mutates_and_rewrites_under_lock() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("locked-rmw.jsonl");
+        let first = sample_message(Uuid::new_v4(), "first");
+        append_message(&path, &first).expect("seed");
+
+        locked_read_modify_write(&path, lock::DEFAULT_LOCK_TIMEOUT, |messages| {
+            assert_eq!(messages.len(), 1);
+            messages[0].read = true;
+            messages.push(sample_message(Uuid::new_v4(), "second"));
+            Ok(())
+        })
+        .expect("locked read modify write");
+
+        let messages = read_messages(&path).expect("read");
+        assert_eq!(messages.len(), 2);
+        assert!(messages[0].read);
+        assert_eq!(messages[1].text, "second");
     }
 
     #[test]

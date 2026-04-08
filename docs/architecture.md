@@ -960,7 +960,7 @@ contain:
 The post-send hook runs only after a successful non-`dry-run` send, and hook
 failure or timeout never rolls back a successful send.
 
-### 13.2 File Policy
+### 13.3 File Policy
 
 The current `send --file` behavior is retained:
 - inspect Claude settings permissions when available

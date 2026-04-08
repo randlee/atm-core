@@ -867,7 +867,13 @@ Before implementation starts, the docs should be reviewed with these checks:
 
 ### Phase M: Mailbox Locking And Code Review Fixes
 
-Status: PLANNED
+Status: COMPLETE
+
+Sprint completion records:
+- `M.1` complete on `feature/pM-s1-mailbox-locking` / PR #60, merged to
+  `integrate/phase-M` at `760e904`
+- `M.2` complete on `feature/pM-s2-review-fixes` / PR #61, merged to
+  `integrate/phase-M` at `c9fb9fa`
 
 Goal: close all blocking and important code-review findings from the Phase L review before
 declaring the codebase 1.0-ready. ARCH-CR-003 and ARCH-CR-004 are closed in L.7 (not Phase M scope).
@@ -1121,7 +1127,8 @@ Phase M dependency graph:
   integrate/phase-M --> develop (final phase integration PR)
 ```
 
-Phase M is complete when:
+Phase M closeout gate (satisfied on `integrate/phase-M`; final merge to
+`develop` remains the release-integration step):
 - M.1 and M.2 are both merged to `integrate/phase-M`
 - ARCH-CR-001 and ARCH-CR-002 blocking findings are resolved
 - all BP-ECR-001 through BP-ECR-006 findings are resolved

@@ -564,6 +564,22 @@ fn test_restore_config_failure_leaves_restore_marker_and_rerun_completes() {
             .is_file()
     );
 
+    let doctor = fixture.run(&["doctor", "--json"]);
+    assert!(
+        doctor.status.success(),
+        "stderr: {}",
+        fixture.stderr(&doctor)
+    );
+    let parsed = fixture.stdout_json(&doctor);
+    let findings = parsed["findings"].as_array().expect("findings array");
+    assert!(
+        findings.iter().any(|finding| {
+            finding["code"] == "ATM_WARNING_RESTORE_IN_PROGRESS" && finding["severity"] == "warning"
+        }),
+        "stdout: {}",
+        String::from_utf8(doctor.stdout.clone()).expect("stdout utf8")
+    );
+
     let retry = fixture.run(&[
         "teams",
         "restore",

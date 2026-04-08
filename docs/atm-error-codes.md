@@ -68,9 +68,24 @@ Error codes should describe the failure class, not a specific prose message.
 - `ATM_MAILBOX_READ_FAILED`
 - `ATM_MAILBOX_WRITE_FAILED`
 - `ATM_MAILBOX_LOCK_FAILED`
+- `ATM_MAILBOX_LOCK_TIMEOUT`
 - `ATM_MAILBOX_RECORD_SKIPPED`
 - `ATM_MESSAGE_VALIDATION_FAILED`
 - `ATM_SERIALIZATION_FAILED`
+
+#### 5.3.1 `ATM_MAILBOX_LOCK_TIMEOUT`
+
+- code: `ATM_MAILBOX_LOCK_TIMEOUT`
+- description: mailbox lock acquisition exceeded the total timeout budget before
+  ATM could obtain the required exclusive lock set
+- HTTP status: `503 Service Unavailable`
+- context:
+  - emitted by single-file mailbox mutations when one inbox lock remains
+    contended past the configured deadline
+  - emitted by multi-source `read`, `ack`, and `clear` when the full sorted lock
+    set cannot be acquired under the shared timeout budget
+  - signals a retriable contention condition; ATM must abort before persisting
+    partial mailbox state
 
 ### 5.4 File Policy And Attachments
 

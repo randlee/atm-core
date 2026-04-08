@@ -125,6 +125,24 @@ pub(crate) fn discover_source_paths(
     Ok(paths)
 }
 
+pub(crate) fn rediscover_and_validate_source_paths(
+    locked_paths: &[PathBuf],
+    home_dir: &Path,
+    team: &str,
+    agent: &str,
+) -> Result<Vec<PathBuf>, AtmError> {
+    let rediscovered = discover_source_paths(home_dir, team, agent)?;
+    if rediscovered != locked_paths {
+        return Err(AtmError::mailbox_lock(
+            "source path set changed between discovery and lock acquisition",
+        )
+        .with_recovery(
+            "Retry after the competing ATM operation completes so ATM can rediscover the stable inbox set.",
+        ));
+    }
+    Ok(rediscovered)
+}
+
 pub(crate) fn load_source_files(paths: &[PathBuf]) -> Result<Vec<SourceFile>, AtmError> {
     let mut sources = Vec::with_capacity(paths.len());
     for path in paths {
@@ -154,7 +172,10 @@ mod tests {
 
     use tempfile::tempdir;
 
-    use super::{discover_origin_inboxes, load_source_files, resolve_target};
+    use super::{
+        discover_origin_inboxes, load_source_files, rediscover_and_validate_source_paths,
+        resolve_target,
+    };
     use crate::config::AtmConfig;
 
     #[test]
@@ -202,5 +223,29 @@ mod tests {
         let error = load_source_files(&[path]).expect_err("missing mailbox");
         assert!(error.is_mailbox_read());
         assert!(error.message.contains("disappeared"));
+    }
+
+    #[test]
+    fn rediscover_and_validate_source_paths_reports_drift() {
+        let tempdir = tempdir().expect("tempdir");
+        let home = tempdir.path();
+        let inboxes = home
+            .join(".claude")
+            .join("teams")
+            .join("atm-dev")
+            .join("inboxes");
+        std::fs::create_dir_all(&inboxes).expect("inboxes");
+        let locked = inboxes.join("arch-ctm.json");
+        let added = inboxes.join("arch-ctm.host-a.json");
+        std::fs::write(&locked, "").expect("primary");
+
+        let discovered =
+            super::discover_source_paths(home, "atm-dev", "arch-ctm").expect("discover");
+        std::fs::write(&added, "").expect("origin");
+
+        let error = rediscover_and_validate_source_paths(&discovered, home, "atm-dev", "arch-ctm")
+            .expect_err("drift error");
+        assert!(error.is_mailbox_lock());
+        assert!(error.message.contains("source path set changed"));
     }
 }

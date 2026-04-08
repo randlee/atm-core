@@ -12,7 +12,8 @@ use crate::home;
 use crate::identity;
 use crate::mailbox;
 use crate::mailbox::source::{
-    SourceFile, SourcedMessage, discover_source_paths, load_source_files, resolve_target,
+    SourceFile, SourcedMessage, discover_source_paths, load_source_files,
+    rediscover_and_validate_source_paths, resolve_target,
 };
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
@@ -111,6 +112,12 @@ pub fn clear_mail(
         let _locks = mailbox::lock::acquire_many_sorted(
             source_paths.clone(),
             mailbox::lock::DEFAULT_LOCK_TIMEOUT,
+        )?;
+        let source_paths = rediscover_and_validate_source_paths(
+            &source_paths,
+            &query.home_dir,
+            &target.team,
+            &target.agent,
         )?;
         maybe_remove_locked_source_file_for_test(&source_paths)?;
         source_files = load_source_files(&source_paths)?;
