@@ -69,7 +69,6 @@ pub(crate) fn discover_origin_inboxes(
 
     let prefix = format!("{agent}.");
     let primary = format!("{agent}.json");
-    #[cfg(debug_assertions)]
     if let Some(error) = forced_source_discovery_fault() {
         return Err(origin_inbox_enumeration_error(inboxes_dir, agent, error));
     }
@@ -160,7 +159,6 @@ fn origin_inbox_enumeration_error(inboxes_dir: &Path, agent: &str, error: io::Er
     .with_source(error)
 }
 
-#[cfg(debug_assertions)]
 fn forced_source_discovery_fault() -> Option<io::Error> {
     std::env::var_os("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT")
         .map(|_| io::Error::other("synthetic read_dir entry enumeration fault"))
@@ -225,7 +223,7 @@ mod tests {
     #[test]
     fn origin_inbox_enumeration_error_is_mailbox_read_failure() {
         let error = origin_inbox_enumeration_error(
-            Path::new("/tmp/inboxes"),
+            Path::new("test-inbox-dir"),
             "arch-ctm",
             io::Error::other("synthetic"),
         );

@@ -1178,6 +1178,9 @@ Finding registry:
       platforms where ATM cannot issue a parent-directory sync
     - the platform caveat appears as a public doc comment at the shared helper
       boundary, not only in the sprint notes
+    - the platform-conditional test strategy is explicit: `#[cfg(unix)]` covers
+      the parent-directory fsync path, while `#[cfg(not(unix))]` confirms the
+      helper returns `Ok(())` on the no-op parent-sync branch
 - `M-LF-004` Failure-path test coverage gap
   - finding: mailbox-locking tests prove several success/no-deadlock paths, but
     they do not cover timeout/error/fail-closed paths strongly enough
@@ -1229,6 +1232,8 @@ Tests required:
   returns `MailboxLockFailed`, not `MailboxLockTimeout`
 - Unit: atomic replacement helper verifies parent-directory fsync sequencing via
   a deterministic seam or focused helper test
+- Unit: `#[cfg(not(unix))]` coverage confirms the shared helper returns `Ok(())`
+  without error on platforms where parent-directory sync is unavailable
 - All locking tests must use bounded coordination primitives (`recv_timeout`,
   `wait_timeout`, elapsed ceilings) and guaranteed teardown; no open-ended joins
   or sleep-based race assumptions

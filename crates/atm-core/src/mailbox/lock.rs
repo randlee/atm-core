@@ -17,7 +17,6 @@ pub(crate) const DEFAULT_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
 const RETRY_INTERVAL: Duration = Duration::from_millis(50);
 
 pub(crate) fn default_lock_timeout() -> Duration {
-    #[cfg(debug_assertions)]
     if let Some(timeout) = debug_timeout_override() {
         return timeout;
     }
@@ -171,7 +170,6 @@ pub(crate) fn acquire_many_sorted(
 }
 
 fn try_lock_exclusive(file: &File, lock_path: &Path) -> io::Result<()> {
-    #[cfg(debug_assertions)]
     if std::env::var_os("ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR").is_some() {
         return Err(io::Error::other(format!(
             "synthetic non-contention lock failure for {}",
@@ -211,7 +209,6 @@ fn is_lock_contention_error(error: &io::Error) -> bool {
     }
 }
 
-#[cfg(debug_assertions)]
 fn debug_timeout_override() -> Option<Duration> {
     std::env::var("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS")
         .ok()

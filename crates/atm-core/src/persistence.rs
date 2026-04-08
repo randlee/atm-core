@@ -254,4 +254,25 @@ mod tests {
         assert!(error.is_mailbox_write());
         assert!(error.message.contains("failed to sync parent directory"));
     }
+
+    #[cfg(not(unix))]
+    #[test]
+    fn atomic_write_bytes_succeeds_without_parent_directory_sync() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = tempdir.path().join("state.json");
+
+        atomic_write_bytes(
+            &path,
+            br#"{"value":1}"#,
+            AtmErrorKind::MailboxWrite,
+            "state file",
+            "retry after fixing the state file path",
+        )
+        .expect("write without parent sync");
+
+        assert_eq!(
+            std::fs::read_to_string(&path).expect("state file"),
+            r#"{"value":1}"#
+        );
+    }
 }
