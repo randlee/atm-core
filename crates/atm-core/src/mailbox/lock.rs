@@ -82,6 +82,9 @@ pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard
                 "failed to create mailbox lock directory {}: {error}",
                 parent.display()
             ))
+            .with_recovery(
+                "Ensure the mailbox directory exists and is writable before retrying the ATM command.",
+            )
             .with_source(error)
         })?;
     }
@@ -97,6 +100,9 @@ pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard
                 "failed to open mailbox lock {}: {error}",
                 lock_path.display()
             ))
+            .with_recovery(
+                "Ensure the mailbox lock file path is writable and not blocked by permissions before retrying the ATM command.",
+            )
             .with_source(error)
         })?;
 

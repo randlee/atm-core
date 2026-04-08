@@ -3,6 +3,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use atm_core::clear::{self, ClearQuery};
 use atm_core::home;
+use atm_core::types::{AgentName, TeamName};
 use clap::Args;
 
 use crate::observability::CliObservability;
@@ -43,9 +44,9 @@ impl ClearCommand {
             ClearQuery {
                 home_dir,
                 current_dir,
-                actor_override: self.actor_override,
+                actor_override: self.actor_override.map(AgentName::from),
                 target_address: self.target,
-                team_override: self.team,
+                team_override: self.team.map(TeamName::from),
                 older_than,
                 idle_only: self.idle_only,
                 dry_run: self.dry_run,

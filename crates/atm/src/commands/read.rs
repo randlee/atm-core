@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use atm_core::home;
 use atm_core::read::{self, ReadQuery};
-use atm_core::types::{AckActivationMode, IsoTimestamp, ReadSelection};
+use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
 use clap::Args;
 
 use crate::observability::CliObservability;
@@ -72,9 +72,9 @@ impl ReadCommand {
             ReadQuery {
                 home_dir,
                 current_dir,
-                actor_override: self.actor,
+                actor_override: self.actor.map(AgentName::from),
                 target_address: self.target,
-                team_override: self.team,
+                team_override: self.team.map(TeamName::from),
                 selection_mode,
                 seen_state_filter: !self.no_since_last_seen,
                 seen_state_update: !self.no_update_seen,

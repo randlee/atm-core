@@ -383,8 +383,8 @@ impl Fixture {
         AckRequest {
             home_dir: self.tempdir.path().to_path_buf(),
             current_dir: self.tempdir.path().to_path_buf(),
-            actor_override: Some(actor.to_string()),
-            team_override: Some("atm-dev".to_string()),
+            actor_override: Some(actor.into()),
+            team_override: Some("atm-dev".into()),
             message_id,
             reply_body: reply_body.to_string(),
         }
@@ -394,9 +394,9 @@ impl Fixture {
         ClearQuery {
             home_dir: self.tempdir.path().to_path_buf(),
             current_dir: self.tempdir.path().to_path_buf(),
-            actor_override: Some(actor.to_string()),
+            actor_override: Some(actor.into()),
             target_address: None,
-            team_override: Some("atm-dev".to_string()),
+            team_override: Some("atm-dev".into()),
             older_than: None,
             idle_only: false,
             dry_run: false,
@@ -407,9 +407,9 @@ impl Fixture {
         ReadQuery {
             home_dir: self.tempdir.path().to_path_buf(),
             current_dir: self.tempdir.path().to_path_buf(),
-            actor_override: Some(actor.to_string()),
+            actor_override: Some(actor.into()),
             target_address: None,
-            team_override: Some("atm-dev".to_string()),
+            team_override: Some("atm-dev".into()),
             selection_mode: ReadSelection::Actionable,
             seen_state_filter: false,
             seen_state_update: false,

@@ -26,9 +26,9 @@ use crate::types::{AgentName, MessageClass, SourceIndex, TeamName};
 pub struct ClearQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
-    pub actor_override: Option<String>,
+    pub actor_override: Option<AgentName>,
     pub target_address: Option<String>,
-    pub team_override: Option<String>,
+    pub team_override: Option<TeamName>,
     pub older_than: Option<Duration>,
     pub idle_only: bool,
     pub dry_run: bool,
@@ -56,9 +56,20 @@ pub struct ClearOutcome {
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when actor or target resolution fails, the team or
-/// agent cannot be validated, shared mailbox locks cannot be acquired, or the
-/// selected source files cannot be persisted safely.
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::IdentityUnavailable`],
+/// [`crate::error_codes::AtmErrorCode::TeamUnavailable`],
+/// [`crate::error_codes::AtmErrorCode::TeamNotFound`],
+/// [`crate::error_codes::AtmErrorCode::AgentNotFound`],
+/// [`crate::error_codes::AtmErrorCode::AddressParseFailed`],
+/// [`crate::error_codes::AtmErrorCode::MailboxReadFailed`],
+/// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`],
+/// [`crate::error_codes::AtmErrorCode::MailboxLockFailed`],
+/// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`], or
+/// [`crate::error_codes::AtmErrorCode::MessageValidationFailed`] when actor or
+/// target resolution fails, the team or agent cannot be validated, shared
+/// mailbox locks cannot be acquired, or the selected source files cannot be
+/// persisted safely.
 pub fn clear_mail(
     query: ClearQuery,
     observability: &dyn ObservabilityPort,
@@ -74,7 +85,9 @@ pub fn clear_mail(
 
     let team_dir = home::team_dir_from_home(&query.home_dir, &target.team)?;
     if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&target.team));
+        return Err(AtmError::team_not_found(&target.team).with_recovery(
+            "Create the team config for the requested team or target a different team before retrying `atm clear`.",
+        ));
     }
 
     let team_config = config::load_team_config(&team_dir)?;
@@ -84,7 +97,11 @@ pub fn clear_mail(
             .iter()
             .any(|member| member.name == target.agent)
     {
-        return Err(AtmError::agent_not_found(&target.agent, &target.team));
+        return Err(
+            AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
+                "Update the team membership in config.json or clear a different mailbox target.",
+            ),
+        );
     }
 
     let cutoff = cutoff_timestamp(query.older_than)?;
@@ -211,8 +228,11 @@ fn cutoff_timestamp(
 ) -> Result<Option<chrono::DateTime<Utc>>, AtmError> {
     older_than
         .map(|duration| {
-            TimeDelta::from_std(duration)
-                .map_err(|error| AtmError::validation(format!("invalid duration filter: {error}")))
+            TimeDelta::from_std(duration).map_err(|error| {
+                AtmError::validation(format!("invalid duration filter: {error}")).with_recovery(
+                    "Use --older-than with a positive duration like 30s, 10m, 2h, or 7d.",
+                )
+            })
         })
         .transpose()
         .map(|delta| delta.map(|delta| Utc::now() - delta))
@@ -251,6 +271,9 @@ fn maybe_remove_locked_source_file_for_test(source_paths: &[PathBuf]) -> Result<
             "failed to remove locked inbox {} during test injection: {error}",
             path.display()
         ))
+        .with_recovery(
+            "Clear ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD or restore the missing inbox file before retrying the injected test path.",
+        )
         .with_source(error)
     })
 }

@@ -31,9 +31,9 @@ use crate::types::{
 pub struct ReadQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
-    pub actor_override: Option<String>,
+    pub actor_override: Option<AgentName>,
     pub target_address: Option<String>,
-    pub team_override: Option<String>,
+    pub team_override: Option<TeamName>,
     pub selection_mode: ReadSelection,
     pub seen_state_filter: bool,
     pub seen_state_update: bool,
@@ -83,9 +83,19 @@ pub struct ReadOutcome {
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when actor or target resolution fails, the team or
-/// agent cannot be validated, shared mailbox locks cannot be acquired, or the
-/// selected mailbox state cannot be reloaded or persisted safely.
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::IdentityUnavailable`],
+/// [`crate::error_codes::AtmErrorCode::TeamUnavailable`],
+/// [`crate::error_codes::AtmErrorCode::TeamNotFound`],
+/// [`crate::error_codes::AtmErrorCode::AgentNotFound`],
+/// [`crate::error_codes::AtmErrorCode::AddressParseFailed`],
+/// [`crate::error_codes::AtmErrorCode::MailboxReadFailed`],
+/// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`],
+/// [`crate::error_codes::AtmErrorCode::MailboxLockFailed`], or
+/// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`] when actor or
+/// target resolution fails, the team or agent cannot be validated, shared
+/// mailbox locks cannot be acquired, or the selected mailbox state cannot be
+/// reloaded or persisted safely.
 pub fn read_mail(
     query: ReadQuery,
     observability: &dyn ObservabilityPort,
@@ -102,7 +112,9 @@ pub fn read_mail(
 
     let team_dir = home::team_dir_from_home(&query.home_dir, &target.team)?;
     if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&target.team));
+        return Err(AtmError::team_not_found(&target.team).with_recovery(
+            "Create the team config for the requested team or target a different team before retrying `atm read`.",
+        ));
     }
 
     let team_config = config::load_team_config(&team_dir)?;
@@ -112,7 +124,11 @@ pub fn read_mail(
             .iter()
             .any(|member| member.name == target.agent)
     {
-        return Err(AtmError::agent_not_found(&target.agent, &target.team));
+        return Err(
+            AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
+                "Update the team membership in config.json or read a different mailbox target.",
+            ),
+        );
     }
 
     let own_inbox = actor == target.agent && actor_team.as_deref() == Some(target.team.as_str());
@@ -220,17 +236,17 @@ pub fn read_mail(
             selected.truncate(limit);
         }
 
-        apply_display_mutations(
+        let mutation_applied = apply_display_mutations(
             &mut source_files,
             &selected,
             query.ack_activation_mode,
             own_inbox,
-        )
+        );
+        if mutation_applied {
+            persist_source_files(&source_files)?;
+        }
+        mutation_applied
     };
-
-    if mutation_applied {
-        persist_source_files(&source_files)?;
-    }
 
     if query.seen_state_update
         && !selected.is_empty()

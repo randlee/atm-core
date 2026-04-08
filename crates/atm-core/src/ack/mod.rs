@@ -26,8 +26,8 @@ use crate::types::{AgentName, IsoTimestamp, TeamName};
 pub struct AckRequest {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
-    pub actor_override: Option<String>,
-    pub team_override: Option<String>,
+    pub actor_override: Option<AgentName>,
+    pub team_override: Option<TeamName>,
     pub message_id: LegacyMessageId,
     pub reply_body: String,
 }
@@ -50,9 +50,20 @@ pub struct AckOutcome {
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when actor or team resolution fails, the message is
-/// missing or no longer pending acknowledgement, reply-target validation
-/// fails, or either the source or reply inbox cannot be persisted.
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::IdentityUnavailable`],
+/// [`crate::error_codes::AtmErrorCode::TeamUnavailable`],
+/// [`crate::error_codes::AtmErrorCode::TeamNotFound`],
+/// [`crate::error_codes::AtmErrorCode::AgentNotFound`],
+/// [`crate::error_codes::AtmErrorCode::AddressParseFailed`],
+/// [`crate::error_codes::AtmErrorCode::MailboxReadFailed`],
+/// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`],
+/// [`crate::error_codes::AtmErrorCode::MailboxLockFailed`],
+/// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`], or
+/// [`crate::error_codes::AtmErrorCode::MessageValidationFailed`] when actor or
+/// team resolution fails, the message is missing or no longer pending
+/// acknowledgement, reply-target validation fails, or either the source or
+/// reply inbox cannot be persisted.
 pub fn ack_mail(
     request: AckRequest,
     observability: &dyn ObservabilityPort,
@@ -103,13 +114,19 @@ pub fn ack_mail(
             return Err(AtmError::validation(format!(
                 "message {} is already acknowledged",
                 request.message_id
-            )));
+            ))
+            .with_recovery(
+                "Refresh the mailbox with `atm read` and choose a message that is still pending acknowledgement.",
+            ));
         }
         _ => {
             return Err(AtmError::validation(format!(
                 "message {} is not in the (read, pending_ack) state",
                 request.message_id
-            )));
+            ))
+            .with_recovery(
+                "Refresh the mailbox with `atm read` and choose a message that is still pending acknowledgement.",
+            ));
         }
     }
 
@@ -179,7 +196,10 @@ pub fn ack_mail(
             return Err(AtmError::validation(format!(
                 "message {} is not in the (read, pending_ack) state",
                 request.message_id
-            )));
+            ))
+            .with_recovery(
+                "Refresh the mailbox with `atm read` and retry the acknowledgement if the message is still pending acknowledgement.",
+            ));
         }
     }
     update_source_message(&mut source_files, &source_message, ack_timestamp)?;
@@ -301,6 +321,9 @@ fn find_source_message(
             "message {} was not found in {}@{}",
             message_id, actor, team
         ))
+        .with_recovery(
+            "Refresh the mailbox with `atm read` and choose a message that is still present in the pending-ack surface.",
+        )
     })
 }
 
