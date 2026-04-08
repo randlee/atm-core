@@ -38,6 +38,11 @@ mod tests {
         let config = AtmConfig {
             identity: Some("config-agent".into()),
             default_team: None,
+            team_members: Vec::new(),
+            aliases: Default::default(),
+            post_send_hook: None,
+            post_send_hook_members: Vec::new(),
+            config_root: std::path::PathBuf::new(),
             obsolete_identity_present: true,
         };
         assert_eq!(
@@ -57,6 +62,11 @@ mod tests {
         let config = AtmConfig {
             identity: Some("config-agent".into()),
             default_team: None,
+            team_members: Vec::new(),
+            aliases: Default::default(),
+            post_send_hook: None,
+            post_send_hook_members: Vec::new(),
+            config_root: std::path::PathBuf::new(),
             obsolete_identity_present: true,
         };
 
@@ -93,6 +103,11 @@ mod tests {
         let config = AtmConfig {
             identity: Some("config-agent".into()),
             default_team: Some("config-team".into()),
+            team_members: Vec::new(),
+            aliases: Default::default(),
+            post_send_hook: None,
+            post_send_hook_members: Vec::new(),
+            config_root: std::path::PathBuf::new(),
             obsolete_identity_present: true,
         };
 
