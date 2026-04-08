@@ -143,6 +143,18 @@ pub fn ack_mail(
         mailbox::lock::acquire_many_sorted(final_write_paths, mailbox::lock::DEFAULT_LOCK_TIMEOUT)?;
     let mut source_files = load_source_files(&actor_source_paths)?;
     let source_message = find_source_message(&source_files, request.message_id, &actor, &team)?;
+    match (
+        state::derive_read_state(&source_message.envelope),
+        state::derive_ack_state(&source_message.envelope),
+    ) {
+        (crate::types::ReadState::Read, crate::types::AckState::PendingAck) => {}
+        _ => {
+            return Err(AtmError::validation(format!(
+                "message {} is not in the (read, pending_ack) state",
+                request.message_id
+            )));
+        }
+    }
     update_source_message(&mut source_files, &source_message, ack_timestamp)?;
 
     append_reply_message(&mut source_files, &reply_inbox_path, reply_message)?;
@@ -330,8 +342,13 @@ fn append_reply_message(
 
     source_files.push(SourceFile {
         path: reply_inbox_path.to_path_buf(),
-        messages: vec![reply_message],
+        messages: mailbox::read_messages(reply_inbox_path)?,
     });
+    source_files
+        .last_mut()
+        .expect("reply inbox source file just pushed")
+        .messages
+        .push(reply_message);
     source_files.sort_by(|left, right| left.path.cmp(&right.path));
     Ok(())
 }

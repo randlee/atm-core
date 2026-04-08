@@ -1248,8 +1248,8 @@ requested inbox plus any origin inboxes before writing back. To make those paths
 concurrency-safe, Phase M needs a second abstraction:
 
 ```rust
-pub fn acquire_many_sorted<'a>(
-    paths: impl IntoIterator<Item = &'a Path>,
+pub fn acquire_many_sorted(
+    paths: impl IntoIterator<Item = PathBuf>,
     timeout: Duration,
 ) -> Result<Vec<MailboxLockGuard>, AtmError>
 ```
