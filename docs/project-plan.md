@@ -483,8 +483,12 @@ Status summary:
     `512dfa4d89ac71307ef7324f64dffb67d5189cc3`
   - `L.6` complete on `feature/pL-s6-release-closeout` / PR #56 at
     `341e28c1f7175f9890a5a1d5606b64e0ce816d52`
-  - `L.7` complete on `feature/pL-s-atm-toml-config` / PR #58 at
-    `70242203dc1130e4b0fa1cfc9268c54314c38d42`
+  - `L.7` complete on `feature/pL-s-atm-toml-config` / PR #58, merged to
+    `integrate/phase-L` at `5cd266d`, with final branch tip
+    `fe467af27f3f7e0ac5280fb80e72201af99f9d75` carrying the pre-merge
+    completion record fix after QA-2 PASS
+  - `L.8` complete on `feature/pL-s8-team-recovery` / PR #53, merged to
+    `integrate/phase-L` at `18aaa9a`
 
 Goal:
 - finish the published `sc-observability` 1.0 follow-on work and close the
@@ -859,3 +863,263 @@ Before implementation starts, the docs should be reviewed with these checks:
   initial core migration set (`send`, `read`, `ack`, `clear`, `log`,
   `doctor`), and the release-only `teams` / `members` expansion is explicitly
   tracked in Phase `L.8`
+
+
+### Phase M: Mailbox Locking And Code Review Fixes
+
+Status: PLANNED
+
+Goal: close all blocking and important code-review findings from the Phase L review before
+declaring the codebase 1.0-ready. ARCH-CR-003 and ARCH-CR-004 are closed in L.7 (not Phase M scope).
+
+Phase M finding registry:
+- `BP-ECR-001` Public error-surface documentation gap
+  - finding: public `AtmResult` / `Result<_, AtmError>` functions in the
+    affected modules do not consistently declare `# Errors` sections with
+    concrete `AtmErrorCode` coverage
+  - resolution criteria:
+    - the explicit M.2 audit inventory is reviewed
+    - every public `Result`-returning function in that inventory has a `# Errors`
+      section
+    - each section lists the applicable `AtmErrorCode` variants
+- `BP-ECR-002` Operator recovery guidance gap
+  - finding: operator-actionable failures still exist without
+    `.with_recovery()` guidance
+  - resolution criteria:
+    - the explicit M.2 recovery audit inventory is grep-reviewed
+    - bare operator-actionable construction sites are updated or explicitly
+      excluded as non-operator-facing invariant failures
+- `BP-ECR-003` Error-display causal-context gap
+  - finding: `AtmError::Display` does not expose captured backtrace context when
+    runtime backtraces are enabled
+  - resolution criteria:
+    - `Display` appends the captured backtrace when
+      `BacktraceStatus::Captured`
+    - tests cover both backtrace-present and backtrace-absent output
+- `BP-ECR-004` Deprecated identity migration-doc gap
+  - finding: obsolete `[atm].identity` behavior and migration guidance are not
+    documented consistently enough for operator repair
+  - resolution criteria:
+    - config docs contain a `# Deprecated` section for `[atm].identity`
+    - docs state it is ignored for runtime identity resolution
+    - docs reference `ATM_WARNING_IDENTITY_DRIFT` and the `ATM_IDENTITY`
+      migration path
+- `BP-ECR-005` Panic-on-untrusted-input gap
+  - finding: `normalize_json_number(...)` still panics on malformed exponent
+    input instead of degrading safely
+  - resolution criteria:
+    - the `.expect(...)` is replaced with graceful fallback returning the raw
+      string
+    - warning-level logging documents the degradation path
+    - malformed-input regression tests pass without panic
+- `BP-ECR-006` Shared identity-error contract gap
+  - finding: `resolve_actor_identity` remains triplicated, which risks drift in
+    identity-resolution errors and recovery guidance
+  - resolution criteria:
+    - `resolve_actor_identity` exists in one shared `identity/mod.rs` location
+    - `ack`, `clear`, and `read` call the shared helper
+    - behavior remains unchanged except for the shared implementation boundary
+
+Integration branch: `integrate/phase-M` (branched from `integrate/phase-L`)
+
+Execution model: codex-orchestration — arch-ctm is sole developer, sequential sprints,
+quality-mgr runs QA in parallel. See `/codex-orchestration` skill.
+
+---
+
+#### M.1 — Mailbox Locking
+
+Branch: `feature/pM-s1-mailbox-locking` (from `integrate/phase-M`)
+
+Deliverables:
+- Add `fs2` dependency to `crates/atm-core/Cargo.toml`
+- Implement `lock.rs` with `MailboxLockGuard` and `acquire()` using `fs2::FileExt::try_lock_exclusive()`
+  with bounded retry loop (50ms intervals, 5s default timeout)
+- Add `MailboxLockTimeout` error code to `error_codes.rs`
+- Add `MailboxLock` error kind to `error.rs` with recovery guidance
+- Implement `locked_read_modify_write()` in `mailbox/mod.rs` for single-file append paths
+- Refactor `append_message` to use `locked_read_modify_write`
+- Add deterministic multi-lock acquisition for `read`, `ack`, and `clear` so those commands
+  lock every discovered source inbox before their first `read_messages(...)` call and hold the
+  locks through final writeback
+- Make the multi-lock contract explicit in code:
+  - finish source-file discovery before the first inbox read
+  - exclude files missing at discovery time from the lock set
+  - dedupe duplicate paths before acquisition
+  - sort the set by canonical path string before acquisition
+  - apply one total timeout budget to the full set
+  - if any acquisition fails, release all earlier locks and abort before any
+    source-file read or mutation
+  - if a discovered file disappears before `load_source_files(...)` completes,
+    abort the command with an operator-actionable file-read error and persist
+    no partial state
+- Ensure the missing-config team-lead notice path benefits from the same `append_message` lock
+- Audit the shared mutable JSON/JSONL/state files touched by M.1 and route each through an
+  atomic temp-file + fsync + rename style helper rather than an in-place rewrite path
+- Centralize any new atomic-replacement logic behind one `atm-core` helper boundary rather than
+  duplicating temp-file + rename code at individual call sites
+- Lock sentinel: `{inbox_path}.lock` (zero-byte, created lazily)
+
+Files to modify:
+- `crates/atm-core/Cargo.toml` (add fs2)
+- `crates/atm-core/src/mailbox/lock.rs` (implement from placeholder stub)
+- `crates/atm-core/src/mailbox/mod.rs` (add `locked_read_modify_write`, refactor `append_message`)
+- `crates/atm-core/src/error.rs` (add `MailboxLock` kind)
+- `crates/atm-core/src/error_codes.rs` (add `MailboxLockTimeout`)
+- `crates/atm-core/src/read/mod.rs` (acquire sorted source-file locks before `load_source_files`, hold through writeback)
+- `crates/atm-core/src/ack/mod.rs` (acquire sorted source-file locks before `load_source_files`, hold through transition + reply persist)
+- `crates/atm-core/src/clear/mod.rs` (acquire sorted source-file locks before `load_source_files`, hold through set replacement)
+
+Tests required:
+- Unit: `lock.rs` acquire/release, timeout, stale sentinel tolerance
+- Unit: `locked_read_modify_write` basic operation
+- Integration: concurrent append from two threads does not lose messages
+- Integration: concurrent `send` and `ack`/`clear` against the same inbox or
+  overlapping origin set preserve correctness and do not silently lose updates
+- Integration: multi-source `read`/`ack`/`clear` acquire locks in deterministic path order
+- Integration: lock timeout produces `MailboxLockTimeout` error code
+- Integration: if lock N of M fails, every earlier lock is released and the
+  command aborts before the first source inbox read
+- Integration: one total timeout budget applies across the full multi-lock set
+  instead of resetting per file
+- Integration: duplicate discovered paths collapse to one lock acquisition
+- Integration: a discovered source inbox disappearing before load causes a
+  normal actionable failure and no persisted partial state
+- Integration: concurrent `read`/`ack`/`clear` against overlapping origin
+  inbox sets do not deadlock because both commands acquire in the same sorted order
+- All existing tests must pass (single-process path unaffected)
+
+Acceptance criteria:
+- `lock.rs` is no longer a placeholder stub
+- all mailbox read-modify-write paths hold an exclusive lock
+- `read`, `ack`, and `clear` lock their entire source-file set before reading any source inbox
+- no shared mutable structured file touched by M.1 is rewritten in place
+- concurrent `atm send` to the same inbox from two processes does not lose messages
+- CI passes on macOS, Linux, Windows
+
+---
+
+#### M.2 — Code Review Fixes
+
+Branch: `feature/pM-s2-review-fixes` (from `integrate/phase-M` after M.1 merges)
+
+Dependency: M.1 must be merged to `integrate/phase-M` first.
+
+Deliverables (itemized by finding):
+
+1. **Restore atomicity** (ARCH-CR-002):
+   - Reorder `restore_team` in `team_admin.rs` to config-last with staging
+   - Add `.restore-in-progress` marker write before mutations, remove after config write
+   - Add inbox staging to `.restore-staging/inboxes/` before live move
+   - Apply the same atomic-persistence rule to restored task-bucket files,
+     `.highwatermark`, and shared restore coordination state touched by this flow
+   - `recompute_highwatermark` must either be converted to an atomic helper-backed
+     write path or be covered by an explicit crash-safety test proving the
+     remaining implementation is safe enough for 1.0
+   - Add `atm doctor` check for stale `.restore-in-progress` markers
+   - Files: `team_admin.rs`, `doctor/mod.rs`
+
+2. **AtmError backtrace rendering**:
+   - Extend `Display` in `error.rs` to render `self.backtrace` when `BacktraceStatus::Captured`
+   - File: `error.rs`
+
+3. **`# Errors` doc audit**:
+   - audit the public `Result<_, AtmError>` API surface in this explicit inventory:
+     `mailbox/mod.rs`, `mailbox/lock.rs`, `read/mod.rs`, `ack/mod.rs`,
+     `clear/mod.rs`, `team_admin.rs`, `doctor/mod.rs`, `error.rs`,
+     `config/mod.rs`, `home.rs`, `send/mod.rs`, `send/input.rs`,
+     `send/file_policy.rs`, `identity/mod.rs` if consolidation lands there,
+     and any new public helper introduced by M.1/M.2
+   - add `# Errors` sections where missing and list the applicable `AtmErrorCode` variants
+   - avoid relying on stale hard-coded function counts; use the current public API surface
+
+4. **`.with_recovery()` audit**:
+  - perform a grep-driven audit of remaining operator-actionable bare error construction sites
+    in this explicit inventory: `mailbox/mod.rs`, `mailbox/lock.rs`, `read/mod.rs`,
+    `ack/mod.rs`, `clear/mod.rs`, `team_admin.rs`, `doctor/mod.rs`, `config/mod.rs`,
+    `home.rs`, `address.rs`, `send/mod.rs`, `send/input.rs`, `send/file_policy.rs`,
+    `identity/mod.rs` if it gains operator-facing errors, and any new M.1/M.2 code
+  - do not re-edit sites that already received recovery guidance in L.7/L.8 unless the new
+    Phase M design changes their operator action
+
+5. **Shared mutable file persistence audit**:
+   - grep this explicit inventory for direct writes to live shared mutable
+     JSON/JSONL/state files (`fs::write`, `File::create`, equivalent):
+     `mailbox/mod.rs`, `mailbox/lock.rs`, `read/mod.rs`, `ack/mod.rs`,
+     `clear/mod.rs`, `team_admin.rs`, `doctor/mod.rs`, `config/mod.rs`,
+     `home.rs`, `send/mod.rs`, `send/input.rs`, `send/file_policy.rs`,
+     `identity/mod.rs` if it gains persistence responsibilities, and any new
+     helper introduced by M.1/M.2
+   - route each in-scope path through an atomic helper or document why the path
+     is scratch/staging-only and therefore exempt
+   - files in scope include inboxes, team config, restored task-bucket state,
+     `.highwatermark`, and shared coordination files such as restore-progress
+     or send-alert state
+
+6. **Legacy config key docs**:
+   - Add `# Deprecated` section to `config/mod.rs` or `config/types.rs` for `[atm].identity`
+   - Reference `ATM_WARNING_IDENTITY_DRIFT`; document migration: use `ATM_IDENTITY` env var
+
+7. **`normalize_json_number` panic removal**:
+   - Replace the current exponent-parse `.expect()` in `observability.rs` with graceful fallback + `tracing::warn!`
+   - Add `# Panics` doc noting precondition removed
+
+8. **`resolve_actor_identity` consolidation**:
+   - Move to `identity/mod.rs` as `pub(crate)` function
+   - Update call sites in `ack/mod.rs`, `clear/mod.rs`, `read/mod.rs`
+
+Tests required:
+- Restore atomicity: interrupted restore leaves `.restore-in-progress` marker; re-run completes;
+  doctor detects stale marker
+- Restore atomicity: pre-existing `.restore-staging/` is either cleaned first or
+  rejected with actionable recovery text; stale and fresh staging contents are never merged
+- Restore atomicity: config-last ordering means config is unchanged when inbox/task/highwatermark
+  staging fails before the final config write
+- Restore atomicity: failure to remove the marker after a successful config
+  write leaves a warning-only stale-marker finding rather than corrupting team state
+- Restore atomicity: `recompute_highwatermark` is either converted to atomic
+  replacement or covered by an explicit crash-safety regression test
+- Backtrace: `Display` output includes backtrace when `RUST_BACKTRACE=1`, excludes otherwise
+- `normalize_json_number`: malformed exponent returns raw string (no panic)
+- `resolve_actor_identity`: existing tests pass after consolidation (no behavior change)
+- Documentation review pass confirms new `# Errors`, `# Deprecated`, and `# Panics` sections exist
+  on the explicit M.2 audit inventory
+
+Acceptance criteria:
+- `restore_team` writes config.json last with staging and progress marker
+- all shared mutable structured files touched by M.2 use atomic replacement helpers
+- `recompute_highwatermark` no longer relies on an undocumented in-place write
+  path without either conversion or explicit crash-safety coverage
+- `AtmError::Display` conditionally renders backtrace
+- all public `Result`-returning functions in the explicit M.2 audit inventory have `# Errors` doc sections
+- `.with_recovery()` present at all operator-actionable sites in the explicit M.2 audit inventory
+- `[atm].identity` documented as deprecated
+- `normalize_json_number` does not panic on malformed input
+- `resolve_actor_identity` exists in exactly one location
+- no stale M.2 line-number references remain in the sprint spec
+- CI passes on all platforms
+
+---
+
+Phase M dependency graph:
+
+```
+  integrate/phase-M (from integrate/phase-L)
+    |
+    +-- M.1: mailbox locking
+    |     |
+    |     v (merge to integrate/phase-M)
+    |
+    +-- M.2: review fixes (branch from integrate/phase-M after M.1 merge)
+          |
+          v (merge to integrate/phase-M)
+
+  integrate/phase-M --> develop (final phase integration PR)
+```
+
+Phase M is complete when:
+- M.1 and M.2 are both merged to `integrate/phase-M`
+- ARCH-CR-001 and ARCH-CR-002 blocking findings are resolved
+- all BP-ECR-001 through BP-ECR-006 findings are resolved
+- CI passes on all platforms
+- `integrate/phase-M` merges to `develop`

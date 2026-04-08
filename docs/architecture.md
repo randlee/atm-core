@@ -388,6 +388,27 @@ Diagnostics for team config failures must preserve:
 - parser line and column when available
 - original parser cause for operator repair
 
+### 13.2 Deprecated `[atm].identity`
+
+`[atm].identity` remains parse-compatible only as an obsolete migration field.
+It is no longer part of runtime sender or actor resolution.
+
+Current runtime contract:
+- runtime identity resolves from explicit CLI override when supported, then
+  hook identity, then `ATM_IDENTITY`
+- if no runtime identity source is available, the command fails with
+  `ATM_IDENTITY_UNAVAILABLE`
+- `[atm].identity` is ignored for runtime resolution even when still present in
+  `.atm.toml`
+
+Deprecation and migration contract:
+- `atm doctor` reports stale `[atm].identity` with
+  `ATM_WARNING_IDENTITY_DRIFT`
+- operator migration path is: remove `[atm].identity` and set `ATM_IDENTITY`
+  in the active agent environment instead
+- keeping the obsolete key temporarily is tolerated for migration diagnostics
+  only; it must not change runtime behavior
+
 Sample operator-facing repair cases live in
 [`persisted-data-repair.md`](./persisted-data-repair.md).
 
@@ -1134,3 +1155,278 @@ If a trait becomes necessary:
 - `atm doctor` integration behavior
 - `atm teams` integration behavior
 - `atm members` integration behavior
+
+
+## 18. Mailbox File Locking (Phase M)
+
+### 18.1 Problem Statement
+
+`append_message` in `mailbox/mod.rs:23-27` performs an unlocked read-modify-write:
+
+1. `read_messages(path)` — reads and deserializes the full inbox
+2. `messages.push(envelope)` — appends the new record in memory
+3. `atomic::write_messages(path, &messages)` — writes to temp file, fsyncs, renames over original
+
+Step 3 is atomic with respect to partial writes but not concurrent callers. Two concurrent
+callers can both complete step 1 before either reaches step 3; the later rename silently
+overwrites the earlier, losing its appended message. The same race affects read writeback,
+ack transition, and clear set replacement.
+
+### 18.2 Locking Primitive Decision
+
+**Decision: Use the `fs2` crate.**
+
+Rationale:
+- `fs2` provides `FileExt::lock_exclusive()` and `FileExt::try_lock_exclusive()` which map
+  to `flock(2)` on Unix and `LockFileEx` on Windows
+- 98M+ downloads, maintained, compatible with the project's MSRV
+- avoids maintaining separate `cfg(unix)` / `cfg(windows)` implementations
+- the current `atm-core` Cargo.toml already carries `libc` and `windows-sys`, but
+  only as low-level building blocks, not as a cross-platform mailbox-locking API
+
+Alternative rejected: direct `libc::flock` + `windows-sys::LockFileEx` — more control but
+duplicates what `fs2` already provides correctly.
+
+### 18.3 Lock Architecture
+
+```
+                      +-----------------------+
+                      |   MailboxLockGuard     |
+                      |  (RAII, Drop releases) |
+                      +----------+------------+
+                                 |
+                      +----------v------------+
+                      |   lock.rs::acquire()   |
+                      |  open/create sentinel  |
+                      |  fs2::try_lock_excl()  |
+                      +----------+------------+
+                                 |
+             +-------------------+-------------------+
+             |                                       |
+    Unix: flock(fd, LOCK_EX)           Windows: LockFileEx(handle)
+```
+
+- **Sentinel**: `{inbox_path}.lock` — zero-byte file, created lazily, persists across
+  process lifetimes (stale sentinels are harmless; OS releases lock on fd close/exit)
+- **Granularity**: per-inbox-file — concurrent sends to different recipients never contend
+- **Lock lifetime**: acquired before `read_messages`, held through `atomic::write_messages`
+  rename, released on `MailboxLockGuard` drop
+- **Timeout**: bounded retry loop with `try_lock_exclusive()` + 50ms sleep, default 5s;
+  on expiry returns `AtmError { code: MailboxLockTimeout }`
+- **Cooperative limitation**: `fs2` locks are advisory and only coordinate ATM
+  processes that participate in the same locking protocol. Direct file edits or
+  other tools that bypass ATM locking are outside the protection boundary. This
+  is an accepted limitation for the ATM shared-inbox model.
+
+### 18.4 Integration: Single-File Helper + Multi-File Lock Set
+
+`append_message` is a true single-file read-modify-write and should use one shared helper:
+
+```rust
+pub fn locked_read_modify_write<F>(
+    path: &Path,
+    timeout: Duration,
+    mutate: F,
+) -> Result<(), AtmError>
+where
+    F: FnOnce(&mut Vec<MessageEnvelope>) -> Result<(), AtmError>,
+{
+    let _guard = lock::acquire(path, timeout)?;
+    let mut messages = read_messages(path)?;
+    mutate(&mut messages)?;
+    atomic::write_messages(path, &messages)
+}
+```
+
+That helper is the right shape for:
+- `append_message`
+- the missing-config team-lead notice path, because it also calls `append_message`
+
+It is **not** sufficient by itself for `read`, `ack`, and `clear`, because those
+commands call `load_source_files(...)` and compute a merged surface across the
+requested inbox plus any origin inboxes before writing back. To make those paths
+concurrency-safe, Phase M needs a second abstraction:
+
+```rust
+pub fn acquire_many_sorted<'a>(
+    paths: impl IntoIterator<Item = &'a Path>,
+    timeout: Duration,
+) -> Result<Vec<MailboxLockGuard>, AtmError>
+```
+
+Required usage:
+- discover the full source-file set first
+- dedupe paths and sort them deterministically by canonical path string
+- source-file discovery must finish before the first inbox read; missing paths at
+  discovery time are excluded from the lock set rather than locked speculatively
+- acquire all locks against one total timeout budget
+- if any acquisition fails, drop every earlier lock immediately and abort before
+  any source-file read
+- if a discovered file disappears or becomes unreadable after lock planning but
+  before `load_source_files(...)` completes, abort without persisting any
+  partial state; this remains a normal operator-actionable file-read failure,
+  not a partial-lock degraded mode
+- then call `load_source_files(...)`
+- hold every guard until every source writeback completes
+
+This intentionally preserves a single logical merged-surface decision boundary
+for `read`, `ack`, and `clear`. Those commands are not allowed to degrade into
+partial-lock best-effort mutation, because doing so would mix snapshots from
+different logical times and make writeback correctness nondeterministic.
+
+| Caller | Lock required |
+|--------|--------------|
+| `append_message` | `locked_read_modify_write` |
+| `send` missing-config notice append | `append_message` coverage |
+| `read` writeback | multi-file lock set held from first read through persist |
+| `ack` transition + reply | multi-file lock set held from first read through persist |
+| `clear` set replacement | multi-file lock set held from first read through persist |
+| `read_messages` (read-only, no writeback) | No |
+
+### 18.5 New Error Codes
+
+- `MailboxLockTimeout` / `ATM_MAILBOX_LOCK_TIMEOUT` — lock not acquired within timeout
+- New `AtmErrorKind::MailboxLock` variant in `error.rs`
+
+### 18.6 Shared Mutable File Atomicity
+
+Mailbox locking closes the concurrent lost-update race for inbox files, but it
+is only one part of the persistence contract. Phase M also treats atomic file
+replacement as a repo-wide rule for shared mutable ATM-owned structured state.
+
+Scope:
+- live inbox files
+- team `config.json`
+- ATM-owned task-bucket files restored or rewritten by team recovery
+- `.highwatermark`
+- shared persisted coordination/state files such as send-alert or
+  restore-progress markers when they carry ATM-owned operator state
+- any future ATM-owned JSON/JSONL/state file rewritten by more than one ATM
+  process or operator workflow
+
+Architectural rule:
+- no live shared mutable structured file may be rewritten in place
+- writers must use a temp-file + fsync + rename style replacement on the same
+  filesystem, or a documented equivalent with the same atomicity guarantee
+- `atm-core` must own one shared low-level atomic persistence primitive and a
+  small set of typed writer helpers layered on top of it, rather than open-code
+  file replacement logic at individual call sites
+- existing helpers such as `atomic::write_messages(...)` and
+  `write_team_config(...)` are the preferred integration points; new shared
+  state added by Phase M should extend that helper pattern with typed helpers
+  for task-bucket, highwatermark, and shared coordination files instead of
+  open-coding direct `fs::write(...)` mutations
+
+This rule intentionally applies beyond mailbox files so future work does not
+reintroduce partial-write or torn-state risks through backup/restore or shared
+auxiliary state paths.
+
+## 19. Restore Transaction Atomicity (Phase M)
+
+### 19.1 Problem Statement
+
+`restore_team` in `team_admin.rs` currently mutates in this order:
+1. Copy inbox files to the live inbox directory
+2. Restore task bucket
+3. Recompute highwatermark
+4. Write `config.json`
+
+If the process crashes between steps 1 and 4, inbox files for members not in config
+exist with no detection mechanism.
+
+### 19.2 Revised Restore Ordering (Config-Last with Staging)
+
+```
+1. Validate backup and compute restore plan (no mutations)
+2. Write .restore-in-progress marker to team directory
+3. Stage inbox files to .restore-staging/inboxes/
+4. Move staged files to live inboxes/ (fs::rename — atomic same-filesystem)
+5. Restore task bucket
+6. Recompute highwatermark
+7. Write config.json + fsync (atomic temp+rename via write_team_config)
+8. Remove .restore-in-progress marker
+```
+
+Key properties:
+- crash at steps 2-6: config.json unchanged, extra inbox files harmless, marker signals re-run
+- crash at step 7: config write is itself atomic via the existing `write_team_config(...)`
+  temp-file + rename path, so no partial config write is possible
+- crash at step 8: config is written, stale marker cleaned up by next doctor/restore run
+
+### 19.3 Staging Directory
+
+- location: `{team_dir}/.restore-staging/inboxes/`
+- lifecycle: created at step 3, contents moved at step 4, directory removed after config write
+- failure path: staging directory cleaned up, no config written
+
+### 19.4 Doctor Integration
+
+New check: scan for `.restore-in-progress` in team directories.
+- Severity: warning
+- Recovery guidance: "A previous `atm teams restore` was interrupted. Re-run the restore
+  command to complete it, or remove the marker file manually if the restore is no longer needed."
+
+If `.restore-staging/` already exists at restore start, the implementation must
+either clean it before staging begins or fail with actionable recovery text.
+It must never merge old staging contents with the new restore attempt.
+
+## 20. Phase M Minor Architecture Changes
+
+### 20.1 AtmError Display Backtrace
+
+`error.rs` Display impl extended to render backtrace conditionally:
+
+```rust
+if matches!(self.backtrace.status(), std::backtrace::BacktraceStatus::Captured) {
+    write!(f, "\n\nBacktrace:\n{}", self.backtrace)?;
+}
+```
+
+Renders only when the stored `Backtrace` status is `Captured`, which in practice
+corresponds to a runtime backtrace-enabled environment.
+
+### 20.2 resolve_actor_identity Consolidation
+
+Duplicate function in `ack/mod.rs`, `clear/mod.rs`, and `read/mod.rs` moves to
+`identity/mod.rs` as `pub(crate) fn resolve_actor_identity(...)`. All three call sites
+update to use the shared helper while preserving the existing override -> hook -> runtime
+identity resolution order.
+
+### 20.3 normalize_json_number Panic Removal
+
+`observability.rs` currently contains `.expect("valid JSON number exponent")` in
+`normalize_json_number(...)` at the exponent parse site. Phase M replaces that panic
+with graceful fallback: on parse failure, return the raw string unchanged and emit
+`tracing::warn!`. A library function must not panic on potentially untrusted input.
+
+### 20.4 Error-Surface Audit Methodology
+
+Phase M uses an explicit audit methodology for `REQ-CORE-ERROR-DOC-001` and
+`REQ-CORE-ERROR-RECOVERY-001` so signoff does not depend on ad hoc review.
+
+Method:
+- grep the production source tree for `expect(` and bare `AtmError`
+  construction sites
+- review the resulting inventory manually against the explicit Phase M audit
+  inventory in the sprint plan
+- exclude:
+  - test-only code
+  - `#[cfg(test)]` modules embedded in production files
+  - intentional invariant assertions that do not represent operator-actionable
+    failures
+- keep the remaining production-path sites in scope for either:
+  - `# Errors` documentation updates
+  - `.with_recovery()` additions
+  - panic removal or other structural correction when the failure mode is not
+    acceptable in library code
+
+The initial planning audit identified 16 production-path `expect(...)` sites
+requiring review under this methodology. Phase M treats that number as a
+starting inventory, not as a substitute for a fresh grep during implementation.
+
+### 20.5 Phase L.7 Build-On Notes
+
+Phase M builds on the already-landed L.7 runtime surface
+(`team_members`, `aliases`, `post_send_hook`, doctor identity drift warning).
+Phase M does not re-open that feature set; it only adds the remaining concurrency,
+restore, and code-review hardening needed for 1.0.
