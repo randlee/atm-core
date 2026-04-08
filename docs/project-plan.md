@@ -1249,3 +1249,206 @@ Acceptance criteria:
   - `send` reports synthetic non-contention lock-path failure as `MailboxLockFailed`
 - `M-LF-005` remains explicitly advisory unless a helper extraction is needed to
   land the blocking/important fixes
+
+---
+
+### Phase N: Publish Replacement And Distribution Parity [PLANNED]
+
+Goal:
+- ship the retained `1.0` release from this repo as the direct replacement for
+  the historical `agent-team-mail` CLI/core release line
+- preserve the historical release channels that actually existed for the old
+  repo:
+  - crates.io
+  - GitHub Releases
+  - Homebrew
+- explicitly exclude `winget` from parity scope because it was not part of the
+  prior release system
+
+Status summary:
+- the old repo already contains the release source of truth for crates.io,
+  GitHub Releases, and Homebrew automation
+- this repo currently has only CI and no equivalent release-manifest,
+  preflight, release, or publisher-agent infrastructure
+- the new repo currently uses local crate names (`atm`, `atm-core`) that are
+  not the intended public replacement identities
+
+#### N.1 — Package Identity And Manifest Replacement
+
+Goal:
+- convert the retained publishable crates in this repo to the legacy package
+  identities expected by downstream users
+
+Deliverables:
+- rename `crates/atm/Cargo.toml` package name from `atm` to
+  `agent-team-mail`
+- rename `crates/atm-core/Cargo.toml` package name from `atm-core` to
+  `agent-team-mail-core`
+- keep the CLI binary name `atm`
+- set both publishable crates to the intended `1.0.0` release version
+- replace the CLI path-only core dependency with an explicit versioned
+  dependency on `agent-team-mail-core`
+- add release-grade package metadata to both publishable manifests:
+  - description
+  - repository
+  - homepage
+  - readme
+  - keywords
+  - categories
+- ensure the publishable crate surface excludes test-only fixture binaries and
+  other non-release executables
+- audit release dependency features so production releases do not ship
+  test-oriented features unless explicitly intended
+
+Acceptance criteria:
+- `cargo package -p agent-team-mail-core --locked` succeeds
+- `cargo package -p agent-team-mail --locked` succeeds
+- `cargo publish --dry-run -p agent-team-mail-core --locked --no-verify`
+  succeeds
+- `cargo publish --dry-run -p agent-team-mail --locked --no-verify` succeeds
+- only the retained release binary `atm` is part of the publishable CLI
+  install surface
+
+#### N.2 — Release Automation Port
+
+Goal:
+- port the old repo’s release automation into this repo, narrowed to the
+  retained CLI/core release surface plus continued shared-family dependency
+  verification
+
+Deliverables:
+- add `release/publish-artifacts.toml` as the new release artifact manifest
+- port and adapt:
+  - `.github/workflows/release-preflight.yml`
+  - `.github/workflows/release.yml`
+  - `scripts/release_gate.sh`
+  - `scripts/release_artifacts.py`
+  - release inventory schema/supporting release docs needed by the workflows
+- define the retained publishable artifact set in
+  `release/publish-artifacts.toml`:
+  - `agent-team-mail-core`
+  - `agent-team-mail`
+- define the retained binary artifact set for GitHub Releases:
+  - `atm`
+- keep crates.io publish ordering explicit:
+  - `agent-team-mail-core` before `agent-team-mail`
+- keep GitHub Release asset packaging for the supported platform targets:
+  - `x86_64-unknown-linux-gnu`
+  - `x86_64-apple-darwin`
+  - `aarch64-apple-darwin`
+  - `x86_64-pc-windows-msvc`
+- port Homebrew update automation for the formulas already managed by the old
+  release workflow:
+  - `Formula/agent-team-mail.rb`
+  - `Formula/atm.rb`
+
+Acceptance criteria:
+- this repo has release-preflight and release workflows with no missing helper
+  files or schema dependencies
+- the release artifact manifest is the single source of truth for publishable
+  crates and release binaries in this repo
+- preflight validates version alignment, artifact inventory, and dependency
+  ordering from this repo layout
+- release workflow produces retained `atm` archives, crates publish order, and
+  Homebrew update steps without references to removed daemon/TUI/MCP artifacts
+
+#### N.3 — Publisher Agent Port
+
+Goal:
+- port the release-orchestration agent instructions into this repo so release
+  execution remains controlled by the same hardened operating procedure
+
+Deliverables:
+- create `.claude/agents/publisher.md` in this repo
+- port the old `publisher` agent instructions and update all source-of-truth
+  references to this repo’s files and workflows
+- keep the hard rules around:
+  - tag creation only by workflow
+  - no manual `v*` tag pushes
+  - develop -> main release gate ordering
+  - required preflight and release workflow dispatch steps
+- narrow the retained artifact/channel assumptions to this repo’s actual
+  publish surface:
+  - crates.io
+  - GitHub Releases
+  - Homebrew
+- update the inventory and verification expectations so the publisher does not
+  expect daemon, MCP, TUI, CI monitor, or `winget` outputs from this repo
+
+Acceptance criteria:
+- `.claude/agents/publisher.md` exists in this repo
+- publisher source-of-truth paths resolve to files that exist in this repo
+- publisher instructions enumerate the retained artifact set and release
+  channels accurately
+- publisher instructions explicitly state that `winget` is not part of parity
+  scope for this replacement phase
+
+#### N.4 — Customer-Facing Release Surface Documentation
+
+Goal:
+- make the replacement release understandable to downstream users and package
+  consumers before `1.0` ships
+
+Deliverables:
+- rewrite `README.md` from reset-workspace language into release-facing product
+  documentation
+- document installation from:
+  - GitHub Releases
+  - Homebrew
+  - crates.io
+- state that `agent-team-mail` and `agent-team-mail-core` are now published
+  from this repo
+- explain that the retained `1.0` replacement scope covers the daemon-free
+  CLI/core pair and continues to consume the published `sc-observability`
+  family
+- explicitly state that `winget` is not part of replacement parity scope
+
+Acceptance criteria:
+- `README.md` matches the retained release surface and actual distribution
+  channels
+- customer-facing install instructions no longer describe this repo as a reset
+  workspace
+- release docs do not promise `winget` or non-retained legacy crates
+
+#### N.5 — Final Release Readiness Proof
+
+Goal:
+- prove that the retained replacement release can be published and installed
+  from this repo before the real `1.0` publish run starts
+
+Deliverables:
+- run and record:
+  - `cargo fmt --all --check`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
+  - `cargo test --workspace`
+  - `cargo package -p agent-team-mail-core --locked`
+  - `cargo package -p agent-team-mail --locked`
+  - `cargo publish --dry-run -p agent-team-mail-core --locked --no-verify`
+  - `cargo publish --dry-run -p agent-team-mail --locked --no-verify`
+- perform one install smoke test against the packaged/publishable CLI artifact
+  surface to confirm `atm` is the installed entrypoint
+- verify that the release inventory and post-publish verification expectations
+  cover only the retained parity channels:
+  - crates.io
+  - GitHub Releases
+  - Homebrew
+
+Acceptance criteria:
+- all dry-run packaging and publishability checks succeed from this repo
+- the release inventory matches the retained parity scope exactly
+- no retained release doc or workflow step depends on `winget` or removed
+  legacy crates
+
+Phase N completion gate:
+- package identities are switched to the legacy crates.io names
+- release automation is present in this repo and references the retained
+  artifact set correctly
+- `.claude/agents/publisher.md` is ported and accurate for this repo
+- customer-facing docs reflect the retained replacement release
+- preflight and release dry-runs are clean for the retained publishable crates
+- parity channels confirmed:
+  - crates.io
+  - GitHub Releases
+  - Homebrew
+- non-parity channels explicitly confirmed out of scope:
+  - `winget`

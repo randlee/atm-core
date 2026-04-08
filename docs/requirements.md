@@ -116,6 +116,44 @@ Satisfied by:
   (`atm teams`, `atm members`, `atm teams add-member`, `atm teams backup`,
   `atm teams restore`)
 
+### 2.3 Release Distribution Scope
+
+Product requirement ID:
+- `REQ-P-RELEASE-001` The `1.0` retained-surface release must replace the
+  previously published `agent-team-mail` CLI/core distribution channels from
+  this repo without requiring downstream users to adopt new crate identities.
+
+- `REQ-P-RELEASE-002` Channel parity for the replacement release is limited to
+  the historical release channels that actually existed for the old repo:
+  crates.io, GitHub Releases, and Homebrew.
+
+- `REQ-P-RELEASE-003` Crate/package identity continuity must be preserved by
+  publishing the retained CLI/core replacement under the legacy package names
+  `agent-team-mail` and `agent-team-mail-core` while keeping the installed CLI
+  binary name `atm`.
+
+- `REQ-P-RELEASE-004` This repo must own the release-process control surface
+  needed to ship and verify the replacement release, including the release
+  workflows, artifact manifest, supporting scripts, and `publisher` agent
+  instructions.
+
+Required behavior:
+- the `1.0` release must publish the retained CLI and core crates under the
+  legacy crates.io package names:
+  - `agent-team-mail`
+  - `agent-team-mail-core`
+- the `atm` binary name remains the installed CLI entrypoint
+- the release channels that were already part of the historical
+  `agent-team-mail` release system and must be replaced from this repo are:
+  - crates.io
+  - GitHub Releases
+  - Homebrew
+- `winget` is not a historical release channel for `agent-team-mail` and is
+  therefore not required for channel-parity acceptance in this replacement
+  phase
+- any future `winget` support is additive follow-on work and must not be
+  inferred as part of the `1.0` parity scope
+
 ## 3. External Contracts
 
 Product requirement ID:

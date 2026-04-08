@@ -50,6 +50,38 @@ Crate-local boundary detail is owned by:
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm/architecture.md`](./atm/architecture.md)
 
+### 2.4 Release Publication Boundary
+
+The `1.0` retained-surface release is a source-repo replacement of the old
+`agent-team-mail` CLI/core publication path, not a new public package family.
+
+Architectural rules:
+- this repo becomes the source of truth for publishing:
+  - `agent-team-mail`
+  - `agent-team-mail-core`
+- this repo does not publish its retained CLI/core release under the crate
+  names `atm` or `atm-core`
+- crate identity continuity for downstream users is preserved by package-name
+  replacement while keeping the CLI binary name `atm`
+- GitHub Releases and Homebrew remain release channels owned by the same source
+  repo release workflow family
+- `winget` is not part of historical channel parity for this replacement and
+  must not be added implicitly to the `1.0` release architecture
+
+Release-process ownership rules:
+- release automation is repo-owned infrastructure, not ad hoc operator
+  procedure
+- the new repo must own:
+  - release artifact manifest
+  - preflight workflow
+  - release workflow
+  - release-gate script/helpers
+  - release inventory generation and verification
+  - Homebrew formula update automation
+- the `publisher` agent instructions are part of the release-control surface
+  and must be ported into this repo with source-of-truth paths updated to the
+  new repo layout and retained crate list
+
 Schema ownership references:
 
 - Claude Code-native message schema:
