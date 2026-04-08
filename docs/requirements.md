@@ -137,6 +137,11 @@ Product requirement ID:
   workflows, artifact manifest, supporting scripts, and `publisher` agent
   instructions.
 
+- `REQ-P-RELEASE-005` Windows installation must be first-class for `1.0`
+  without requiring Rust tooling or manual archive extraction; `winget` is
+  therefore a required additional release channel even though it was not part
+  of the historical `agent-team-mail` release system.
+
 Required behavior:
 - the `1.0` release must publish the retained CLI and core crates under the
   legacy crates.io package names:
@@ -148,11 +153,9 @@ Required behavior:
   - crates.io
   - GitHub Releases
   - Homebrew
-- `winget` is not a historical release channel for `agent-team-mail` and is
-  therefore not required for channel-parity acceptance in this replacement
-  phase
-- any future `winget` support is additive follow-on work and must not be
-  inferred as part of the `1.0` parity scope
+- `winget` is not a historical release channel for `agent-team-mail`, but it
+  is a required new `1.0` release channel so normal Windows users can install
+  ATM without Rust tooling or manual zip handling
 
 ## 3. External Contracts
 

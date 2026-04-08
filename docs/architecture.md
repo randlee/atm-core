@@ -63,10 +63,13 @@ Architectural rules:
   names `atm` or `atm-core`
 - crate identity continuity for downstream users is preserved by package-name
   replacement while keeping the CLI binary name `atm`
-- GitHub Releases and Homebrew remain release channels owned by the same source
-  repo release workflow family
-- `winget` is not part of historical channel parity for this replacement and
-  must not be added implicitly to the `1.0` release architecture
+- historical parity channels remain:
+  - crates.io
+  - GitHub Releases
+  - Homebrew
+- `winget` is not part of historical parity, but it is required in the new
+  release architecture because Windows installation must be first-class for
+  `1.0` without Rust tooling or manual archive extraction
 
 Release-process ownership rules:
 - release automation is repo-owned infrastructure, not ad hoc operator
@@ -78,6 +81,7 @@ Release-process ownership rules:
   - release-gate script/helpers
   - release inventory generation and verification
   - Homebrew formula update automation
+  - `winget` manifest/update automation and verification
 - the `publisher` agent instructions are part of the release-control surface
   and must be ported into this repo with source-of-truth paths updated to the
   new repo layout and retained crate list

@@ -1262,12 +1262,14 @@ Goal:
   - crates.io
   - GitHub Releases
   - Homebrew
-- explicitly exclude `winget` from parity scope because it was not part of the
-  prior release system
+- add `winget` as a required new `1.0` channel so Windows users can install
+  without Rust tooling or manual archive extraction
 
 Status summary:
 - the old repo already contains the release source of truth for crates.io,
   GitHub Releases, and Homebrew automation
+- the old repo does not contain `winget` release automation, so this repo must
+  add it as new release infrastructure rather than porting it directly
 - this repo currently has only CI and no equivalent release-manifest,
   preflight, release, or publisher-agent infrastructure
 - the new repo currently uses local crate names (`atm`, `atm-core`) that are
@@ -1314,7 +1316,7 @@ Acceptance criteria:
 Goal:
 - port the old repo’s release automation into this repo, narrowed to the
   retained CLI/core release surface plus continued shared-family dependency
-  verification
+  verification and the new required `winget` channel
 
 Deliverables:
 - add `release/publish-artifacts.toml` as the new release artifact manifest
@@ -1341,6 +1343,12 @@ Deliverables:
   release workflow:
   - `Formula/agent-team-mail.rb`
   - `Formula/atm.rb`
+- add `winget` release automation for the retained CLI package:
+  - manifest generation or update path
+  - release-version and asset-URL wiring
+  - SHA256 update from the released Windows archive
+  - publish/submit step appropriate to the chosen `winget` repository flow
+  - post-publish verification that the released version is visible to `winget`
 
 Acceptance criteria:
 - this repo has release-preflight and release workflows with no missing helper
@@ -1351,6 +1359,8 @@ Acceptance criteria:
   ordering from this repo layout
 - release workflow produces retained `atm` archives, crates publish order, and
   Homebrew update steps without references to removed daemon/TUI/MCP artifacts
+- release automation includes a concrete `winget` update/publish path for the
+  retained Windows CLI install surface
 
 #### N.3 — Publisher Agent Port
 
@@ -1372,16 +1382,17 @@ Deliverables:
   - crates.io
   - GitHub Releases
   - Homebrew
+  - `winget`
 - update the inventory and verification expectations so the publisher does not
-  expect daemon, MCP, TUI, CI monitor, or `winget` outputs from this repo
+  expect daemon, MCP, TUI, or CI monitor outputs from this repo
 
 Acceptance criteria:
 - `.claude/agents/publisher.md` exists in this repo
 - publisher source-of-truth paths resolve to files that exist in this repo
 - publisher instructions enumerate the retained artifact set and release
   channels accurately
-- publisher instructions explicitly state that `winget` is not part of parity
-  scope for this replacement phase
+- publisher instructions distinguish historical parity channels from the new
+  required `winget` channel for Windows installation
 
 #### N.4 — Customer-Facing Release Surface Documentation
 
@@ -1396,19 +1407,22 @@ Deliverables:
   - GitHub Releases
   - Homebrew
   - crates.io
+  - `winget`
 - state that `agent-team-mail` and `agent-team-mail-core` are now published
   from this repo
 - explain that the retained `1.0` replacement scope covers the daemon-free
   CLI/core pair and continues to consume the published `sc-observability`
   family
-- explicitly state that `winget` is not part of replacement parity scope
+- explain that `winget` is a new required `1.0` Windows channel rather than a
+  historical parity channel
 
 Acceptance criteria:
 - `README.md` matches the retained release surface and actual distribution
   channels
 - customer-facing install instructions no longer describe this repo as a reset
   workspace
-- release docs do not promise `winget` or non-retained legacy crates
+- release docs promise only retained legacy crates and the actual supported
+  install channels, including `winget`
 
 #### N.5 — Final Release Readiness Proof
 
@@ -1428,16 +1442,16 @@ Deliverables:
 - perform one install smoke test against the packaged/publishable CLI artifact
   surface to confirm `atm` is the installed entrypoint
 - verify that the release inventory and post-publish verification expectations
-  cover only the retained parity channels:
+  cover the retained release channels:
   - crates.io
   - GitHub Releases
   - Homebrew
+  - `winget`
 
 Acceptance criteria:
 - all dry-run packaging and publishability checks succeed from this repo
-- the release inventory matches the retained parity scope exactly
-- no retained release doc or workflow step depends on `winget` or removed
-  legacy crates
+- the release inventory matches the retained release scope exactly
+- no retained release doc or workflow step depends on removed legacy crates
 
 Phase N completion gate:
 - package identities are switched to the legacy crates.io names
@@ -1446,9 +1460,10 @@ Phase N completion gate:
 - `.claude/agents/publisher.md` is ported and accurate for this repo
 - customer-facing docs reflect the retained replacement release
 - preflight and release dry-runs are clean for the retained publishable crates
-- parity channels confirmed:
+- retained release channels confirmed:
   - crates.io
   - GitHub Releases
   - Homebrew
-- non-parity channels explicitly confirmed out of scope:
   - `winget`
+- `winget` is explicitly documented as a new required Windows install channel,
+  not as historical parity
