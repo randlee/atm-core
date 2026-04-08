@@ -43,12 +43,19 @@ pub struct AckOutcome {
     pub reply_text: String,
 }
 
+/// Acknowledge one pending-ack mailbox message and append the reply.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when config, identity, mailbox locking, ack-state
+/// validation, reply-target validation, or mailbox persistence fail.
 pub fn ack_mail(
     request: AckRequest,
     observability: &dyn ObservabilityPort,
 ) -> Result<AckOutcome, AtmError> {
     let config = config::load_config(&request.current_dir)?;
-    let actor = resolve_actor_identity(request.actor_override.as_deref(), config.as_ref())?;
+    let actor =
+        identity::resolve_actor_identity(request.actor_override.as_deref(), config.as_ref())?;
     let team = config::resolve_team(request.team_override.as_deref(), config.as_ref())
         .ok_or_else(AtmError::team_unavailable)?;
     let team_dir = home::team_dir_from_home(&request.home_dir, &team)?;
@@ -181,21 +188,6 @@ pub fn ack_mail(
     });
 
     Ok(outcome)
-}
-
-fn resolve_actor_identity(
-    actor_override: Option<&str>,
-    config: Option<&config::AtmConfig>,
-) -> Result<String, AtmError> {
-    if let Some(actor) = actor_override.filter(|value| !value.trim().is_empty()) {
-        return Ok(config::aliases::resolve_agent(actor, config));
-    }
-
-    if let Some(identity) = identity::hook::read_hook_identity()? {
-        return Ok(identity);
-    }
-
-    identity::resolve_sender_identity(config)
 }
 
 fn resolve_reply_target(

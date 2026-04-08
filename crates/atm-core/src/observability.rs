@@ -6,6 +6,7 @@ use serde::de::Error as DeError;
 use serde::ser::{Error as SerError, SerializeMap};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value};
+use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode};
 use crate::schema::LegacyMessageId;
@@ -519,18 +520,25 @@ impl ObservabilityPort for NullObservability {
     }
 }
 
+/// Normalize a JSON number string into a canonical decimal representation.
+///
+/// # Panics
+///
+/// This function does not panic on malformed exponents. If exponent parsing
+/// fails unexpectedly, it logs a warning and preserves the original string.
 fn normalize_json_number(raw: &str) -> String {
     let (negative, unsigned) = match raw.strip_prefix('-') {
         Some(rest) => (true, rest),
         None => (false, raw),
     };
     let (base, exponent) = match unsigned.find(['e', 'E']) {
-        Some(index) => (
-            &unsigned[..index],
-            unsigned[index + 1..]
-                .parse::<i64>()
-                .expect("valid JSON number exponent"),
-        ),
+        Some(index) => match unsigned[index + 1..].parse::<i64>() {
+            Ok(exponent) => (&unsigned[..index], exponent),
+            Err(error) => {
+                warn!(raw, %error, "failed to normalize JSON number exponent; preserving original value");
+                return raw.to_string();
+            }
+        },
         None => (unsigned, 0),
     };
     let (integer, fraction) = match base.split_once('.') {

@@ -1,10 +1,16 @@
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::error::{AtmError, AtmErrorKind};
+use crate::persistence;
 use crate::types::IsoTimestamp;
 
+/// Load the last-seen watermark for one agent inbox.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the watermark file exists but cannot be read or
+/// parsed as RFC3339.
 pub fn load_seen_watermark(
     home_dir: &Path,
     team: &str,
@@ -20,6 +26,7 @@ pub fn load_seen_watermark(
             AtmErrorKind::MailboxRead,
             format!("failed to read seen-state watermark: {error}"),
         )
+        .with_recovery("Check seen-state file permissions or remove the malformed watermark file before rerunning the read command.")
         .with_source(error)
     })?;
 
@@ -33,12 +40,19 @@ pub fn load_seen_watermark(
             AtmErrorKind::Serialization,
             format!("invalid seen-state watermark: {error}"),
         )
+        .with_recovery("Remove the malformed seen-state watermark file so ATM can rebuild it on the next successful read.")
         .with_source(error)
     })?;
 
     Ok(Some(parsed.with_timezone(&chrono::Utc).into()))
 }
 
+/// Persist the last-seen watermark for one agent inbox.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the seen-state directory cannot be created or the
+/// watermark cannot be atomically replaced.
 pub fn save_seen_watermark(
     home_dir: &Path,
     team: &str,
@@ -46,50 +60,13 @@ pub fn save_seen_watermark(
     timestamp: IsoTimestamp,
 ) -> Result<(), AtmError> {
     let path = seen_state_path(home_dir, team, agent);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            AtmError::new(
-                AtmErrorKind::MailboxWrite,
-                format!("failed to create seen-state directory: {error}"),
-            )
-            .with_source(error)
-        })?;
-    }
-
-    let temp_path = path.with_extension("tmp");
-    {
-        let mut file = fs::File::create(&temp_path).map_err(|error| {
-            AtmError::new(
-                AtmErrorKind::MailboxWrite,
-                format!("failed to create seen-state temp file: {error}"),
-            )
-            .with_source(error)
-        })?;
-        file.write_all(timestamp.into_inner().to_rfc3339().as_bytes())
-            .map_err(|error| {
-                AtmError::new(
-                    AtmErrorKind::MailboxWrite,
-                    format!("failed to write seen-state watermark: {error}"),
-                )
-                .with_source(error)
-            })?;
-        file.sync_all().map_err(|error| {
-            AtmError::new(
-                AtmErrorKind::MailboxWrite,
-                format!("failed to sync seen-state watermark: {error}"),
-            )
-            .with_source(error)
-        })?;
-    }
-
-    fs::rename(&temp_path, &path).map_err(|error| {
-        AtmError::new(
-            AtmErrorKind::MailboxWrite,
-            format!("failed to replace seen-state watermark: {error}"),
-        )
-        .with_source(error)
-    })?;
-    Ok(())
+    persistence::atomic_write_string(
+        &path,
+        &timestamp.into_inner().to_rfc3339(),
+        AtmErrorKind::MailboxWrite,
+        "seen-state watermark",
+        "Check seen-state directory permissions and rerun the read command.",
+    )
 }
 
 fn seen_state_path(home_dir: &Path, team: &str, agent: &str) -> PathBuf {

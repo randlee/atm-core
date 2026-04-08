@@ -205,6 +205,33 @@ fn test_doctor_reports_missing_inboxes_directory_finding() {
     );
 }
 
+#[test]
+fn test_doctor_reports_stale_restore_marker_warning() {
+    let fixture = Fixture::new(&["team-lead", "arch-ctm"]);
+    fs::write(
+        fixture.team_dir().join(".restore-in-progress"),
+        "{\"backup_path\":\"/tmp/backup\"}",
+    )
+    .expect("restore marker");
+
+    let output = fixture.run(&["doctor", "--json"], &[]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    let findings = parsed["findings"].as_array().expect("findings array");
+    assert!(
+        findings
+            .iter()
+            .any(|finding| finding["code"] == "ATM_WARNING_RESTORE_IN_PROGRESS"),
+        "stdout: {}",
+        String::from_utf8(output.stdout.clone()).expect("stdout utf8")
+    );
+}
+
 struct Fixture {
     tempdir: tempfile::TempDir,
 }

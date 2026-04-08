@@ -6,6 +6,34 @@ use hook::HookIdentity;
 use crate::config::AtmConfig;
 use crate::error::AtmError;
 
+/// Resolve the active actor identity for commands that allow an explicit override.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] with [`crate::error_codes::AtmErrorCode::IdentityUnavailable`]
+/// when neither the explicit override, hook identity, nor `ATM_IDENTITY`
+/// environment variable provides a sender identity.
+pub(crate) fn resolve_actor_identity(
+    actor_override: Option<&str>,
+    config: Option<&AtmConfig>,
+) -> Result<String, AtmError> {
+    if let Some(actor) = actor_override.filter(|value| !value.trim().is_empty()) {
+        return Ok(crate::config::aliases::resolve_agent(actor, config));
+    }
+
+    if let Some(identity) = hook::read_hook_identity()? {
+        return Ok(identity);
+    }
+
+    resolve_sender_identity(config)
+}
+
+/// Resolve the canonical sender identity for the current ATM process.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] with [`crate::error_codes::AtmErrorCode::IdentityUnavailable`]
+/// when `ATM_IDENTITY` is not set in the current environment.
 pub fn resolve_sender_identity(config: Option<&AtmConfig>) -> Result<String, AtmError> {
     crate::config::resolve_identity(config).ok_or_else(AtmError::identity_unavailable)
 }

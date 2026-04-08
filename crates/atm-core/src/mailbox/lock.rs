@@ -38,6 +38,12 @@ pub(crate) fn sort_unique_paths(paths: impl IntoIterator<Item = PathBuf>) -> Vec
     paths
 }
 
+/// Acquire the advisory lock for one mailbox path.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the lock sentinel cannot be created/opened or when
+/// acquisition times out before the configured deadline.
 pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard, AtmError> {
     let lock_path = sentinel_path(path);
     if let Some(parent) = lock_path.parent() {

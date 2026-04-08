@@ -377,6 +377,105 @@ fn test_restore_does_not_overwrite_existing_member_inbox() {
     assert!(restored_inbox.contains("restore new member inbox"));
 }
 
+#[test]
+fn test_restore_config_failure_leaves_restore_marker_for_recovery() {
+    let fixture = Fixture::new();
+    fixture.write_team_config_value(
+        "atm-dev",
+        json!({"leadSessionId":"lead-current","members":[{"name":"team-lead"}]}),
+    );
+
+    let backup_dir = fixture.make_backup_dir("atm-dev", "20260407T040506000000000Z");
+    fixture.write_json(
+        backup_dir.join("config.json"),
+        &json!({
+            "leadSessionId":"lead-backup",
+            "members":[
+                {"name":"team-lead"},
+                {"name":"arch-ctm","agentType":"general-purpose","model":"sonnet","cwd":"/repo"}
+            ]
+        }),
+    );
+    fixture.write_inbox_at(
+        backup_dir.join("inboxes").join("arch-ctm.json"),
+        "team-lead",
+        "restore worker inbox",
+    );
+    fixture.write_json(
+        backup_dir.join("tasks").join("80.json"),
+        &json!({"id":"80","status":"open"}),
+    );
+
+    let output = fixture.run_with_env(
+        &[
+            "teams",
+            "restore",
+            "atm-dev",
+            "--from",
+            backup_dir.to_str().expect("utf8"),
+            "--json",
+        ],
+        &[("ATM_TEST_FAIL_TEAM_CONFIG_WRITE", "1")],
+    );
+    assert!(
+        !output.status.success(),
+        "stdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    assert!(
+        fixture
+            .team_dir("atm-dev")
+            .join(".restore-in-progress")
+            .is_file()
+    );
+}
+
+#[test]
+fn test_restore_success_clears_restore_marker() {
+    let fixture = Fixture::new();
+    fixture.write_team_config_value(
+        "atm-dev",
+        json!({"leadSessionId":"lead-current","members":[{"name":"team-lead"}]}),
+    );
+
+    let backup_dir = fixture.make_backup_dir("atm-dev", "20260407T050607000000000Z");
+    fixture.write_json(
+        backup_dir.join("config.json"),
+        &json!({
+            "leadSessionId":"lead-backup",
+            "members":[
+                {"name":"team-lead"},
+                {"name":"arch-ctm","agentType":"general-purpose","model":"sonnet","cwd":"/repo"}
+            ]
+        }),
+    );
+    fixture.write_inbox_at(
+        backup_dir.join("inboxes").join("arch-ctm.json"),
+        "team-lead",
+        "restore worker inbox",
+    );
+
+    let output = fixture.run(&[
+        "teams",
+        "restore",
+        "atm-dev",
+        "--from",
+        backup_dir.to_str().expect("utf8"),
+        "--json",
+    ]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    assert!(
+        !fixture
+            .team_dir("atm-dev")
+            .join(".restore-in-progress")
+            .exists()
+    );
+}
+
 struct Fixture {
     tempdir: tempfile::TempDir,
 }

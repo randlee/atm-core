@@ -1,4 +1,4 @@
-use std::backtrace::Backtrace;
+use std::backtrace::{Backtrace, BacktraceStatus};
 use std::error::Error as StdError;
 use std::fmt;
 
@@ -268,6 +268,9 @@ impl fmt::Display for AtmError {
         if let Some(recovery) = &self.recovery {
             write!(f, " Recovery: {recovery}")?;
         }
+        if self.backtrace.status() == BacktraceStatus::Captured {
+            write!(f, "\nBacktrace:\n{}", self.backtrace)?;
+        }
         Ok(())
     }
 }
@@ -343,5 +346,15 @@ mod tests {
             AtmError::observability_health("health failed").code,
             AtmErrorCode::ObservabilityHealthFailed
         );
+    }
+
+    #[test]
+    fn display_renders_captured_backtrace() {
+        let mut error = AtmError::validation("boom");
+        error.backtrace = std::backtrace::Backtrace::force_capture();
+
+        let rendered = error.to_string();
+        assert!(rendered.contains("boom"));
+        assert!(rendered.contains("Backtrace:"));
     }
 }
