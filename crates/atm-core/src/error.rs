@@ -141,6 +141,11 @@ impl AtmError {
         self
     }
 
+    /// Return the captured backtrace when one is available.
+    pub fn backtrace(&self) -> Option<&Backtrace> {
+        (self.backtrace.status() == BacktraceStatus::Captured).then_some(&self.backtrace)
+    }
+
     pub fn home_directory_unavailable() -> Self {
         Self::new_with_code(
             AtmErrorCode::ConfigHomeUnavailable,
@@ -268,9 +273,6 @@ impl fmt::Display for AtmError {
         if let Some(recovery) = &self.recovery {
             write!(f, " Recovery: {recovery}")?;
         }
-        if self.backtrace.status() == BacktraceStatus::Captured {
-            write!(f, "\nBacktrace:\n{}", self.backtrace)?;
-        }
         Ok(())
     }
 }
@@ -322,6 +324,8 @@ impl AtmErrorKind {
 
 #[cfg(test)]
 mod tests {
+    use std::backtrace::Backtrace;
+
     use super::{AtmError, AtmErrorCode};
 
     #[test]
@@ -349,12 +353,24 @@ mod tests {
     }
 
     #[test]
-    fn display_renders_captured_backtrace() {
+    fn display_remains_concise_when_backtrace_is_captured() {
         let mut error = AtmError::validation("boom");
-        error.backtrace = std::backtrace::Backtrace::force_capture();
+        error.backtrace = Backtrace::force_capture();
 
         let rendered = error.to_string();
         assert!(rendered.contains("boom"));
-        assert!(rendered.contains("Backtrace:"));
+        assert!(!rendered.contains("Backtrace:"));
+        assert!(error.backtrace().is_some());
+    }
+
+    #[test]
+    fn display_handles_absent_backtrace() {
+        let mut error = AtmError::validation("boom");
+        error.backtrace = Backtrace::disabled();
+
+        let rendered = error.to_string();
+        assert!(rendered.contains("boom"));
+        assert!(!rendered.contains("Backtrace:"));
+        assert!(error.backtrace().is_none());
     }
 }

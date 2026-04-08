@@ -89,7 +89,7 @@ pub fn send_mail(
 ) -> Result<SendOutcome, AtmError> {
     let config = config::load_config(&request.current_dir)?;
     let canonical_sender =
-        resolve_sender_identity(request.sender_override.as_deref(), config.as_ref())?;
+        identity::resolve_sender_identity(request.sender_override.as_deref(), config.as_ref())?;
     let recipient = resolve_recipient(
         &request.to,
         request.team_override.as_deref(),
@@ -253,22 +253,6 @@ struct PostSendHookContext<'a> {
     message_id: LegacyMessageId,
     requires_ack: bool,
     task_id: Option<&'a str>,
-}
-
-fn resolve_sender_identity(
-    sender_override: Option<&str>,
-    config: Option<&config::AtmConfig>,
-) -> Result<String, AtmError> {
-    if let Some(sender) = sender_override.filter(|value| !value.trim().is_empty()) {
-        return Ok(config::aliases::resolve_agent(sender.trim(), config));
-    }
-
-    if let Some(identity) = identity::hook::read_hook_identity()? {
-        return Ok(config::aliases::resolve_agent(&identity, config));
-    }
-
-    identity::resolve_sender_identity(config)
-        .map(|identity| config::aliases::resolve_agent(&identity, config))
 }
 
 fn resolve_recipient(

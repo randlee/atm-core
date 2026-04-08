@@ -6,7 +6,10 @@ pub struct AtmConfig {
     /// Deprecated compatibility-only field for legacy `.atm.toml` parsing.
     ///
     /// ATM no longer uses config identity as a runtime fallback. Callers must
-    /// use `ATM_IDENTITY` or an explicit sender override instead.
+    /// use `ATM_IDENTITY` or an explicit sender override instead. `atm doctor`
+    /// surfaces `ATM_WARNING_IDENTITY_DRIFT` when this obsolete field is still
+    /// present. Migration path: remove `[atm].identity` from `.atm.toml` and
+    /// inject `ATM_IDENTITY` in the active agent environment.
     pub identity: Option<String>,
     pub default_team: Option<String>,
     pub team_members: Vec<String>,

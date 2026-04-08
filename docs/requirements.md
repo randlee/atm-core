@@ -1715,13 +1715,13 @@ closed before the 1.0 release.
 
 ### 20.4 Error Display And Diagnostics
 
-- `REQ-CORE-ERROR-DISPLAY-001` `AtmError::Display` must render the captured
-  backtrace in debug builds when a backtrace is available.
+- `REQ-CORE-ERROR-DISPLAY-001` `AtmError::Display` must remain concise and
+  must not emit multi-KB backtrace output.
 
   Required behavior:
-  - when `RUST_BACKTRACE=1` or `RUST_BACKTRACE=full` is set and the captured
-    `Backtrace` status is `Captured`, the `Display` implementation must append
-    the backtrace after the error message and recovery text
+  - `Display` renders the human-readable message and recovery text only
+  - captured backtraces remain available via Debug output and a dedicated
+    accessor on `AtmError`
 
 - `REQ-CORE-ERROR-DOC-001` Every public function returning `AtmResult` or
   `Result<_, AtmError>` in the explicit Phase M audit inventory must have a
@@ -1800,6 +1800,6 @@ closed before the 1.0 release.
   eliminated and documented.
 
   Required behavior:
-  - `observability.rs:532` — replace `.expect("valid JSON number exponent")`
+  - `observability.rs:529` — replace `.expect("valid JSON number exponent")`
     with a graceful fallback that returns the raw input string on parse failure
   - a library function must not panic on potentially untrusted input

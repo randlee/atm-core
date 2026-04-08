@@ -39,11 +39,23 @@ pub fn inbox_path(team: &str, agent: &str) -> Result<PathBuf, AtmError> {
 }
 
 /// Resolve the team directory for `team` under an explicit ATM home root.
+///
+/// # Errors
+///
+/// This helper is currently infallible after `home_dir` resolution. The
+/// `Result` shape is retained so callers can share one path-construction
+/// contract with helpers that may grow validation in the future.
 pub fn team_dir_from_home(home_dir: &Path, team: &str) -> Result<PathBuf, AtmError> {
     Ok(home_dir.join(".claude").join("teams").join(team))
 }
 
 /// Resolve the primary inbox path for `agent` in `team` under an explicit ATM home root.
+///
+/// # Errors
+///
+/// This helper is currently infallible after `home_dir` resolution. The
+/// `Result` shape is retained so callers can share one path-construction
+/// contract with helpers that may grow validation in the future.
 pub fn inbox_path_from_home(home_dir: &Path, team: &str, agent: &str) -> Result<PathBuf, AtmError> {
     Ok(team_dir_from_home(home_dir, team)?
         .join("inboxes")

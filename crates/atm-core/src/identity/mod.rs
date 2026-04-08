@@ -25,16 +25,41 @@ pub(crate) fn resolve_actor_identity(
         return Ok(identity);
     }
 
-    resolve_sender_identity(config)
+    resolve_runtime_sender_identity(config)
 }
 
-/// Resolve the canonical sender identity for the current ATM process.
+/// Resolve the sender identity for `send`, preserving sender-override and
+/// alias-after-hook behavior.
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] with [`crate::error_codes::AtmErrorCode::IdentityUnavailable`]
-/// when `ATM_IDENTITY` is not set in the current environment.
-pub fn resolve_sender_identity(config: Option<&AtmConfig>) -> Result<String, AtmError> {
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::IdentityUnavailable`] when neither the
+/// explicit override, hook identity, nor `ATM_IDENTITY` provides a sender.
+pub(crate) fn resolve_sender_identity(
+    sender_override: Option<&str>,
+    config: Option<&AtmConfig>,
+) -> Result<String, AtmError> {
+    if let Some(sender) = sender_override.filter(|value| !value.trim().is_empty()) {
+        return Ok(crate::config::aliases::resolve_agent(sender.trim(), config));
+    }
+
+    if let Some(identity) = hook::read_hook_identity()? {
+        return Ok(crate::config::aliases::resolve_agent(&identity, config));
+    }
+
+    resolve_runtime_sender_identity(config)
+        .map(|identity| crate::config::aliases::resolve_agent(&identity, config))
+}
+
+/// Resolve the canonical runtime sender identity for the current ATM process.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::IdentityUnavailable`] when
+/// `ATM_IDENTITY` is not set in the current environment.
+pub fn resolve_runtime_sender_identity(config: Option<&AtmConfig>) -> Result<String, AtmError> {
     crate::config::resolve_identity(config).ok_or_else(AtmError::identity_unavailable)
 }
 
@@ -43,7 +68,7 @@ pub fn resolve_hook_identity(
     team_override: Option<&str>,
     config: Option<&AtmConfig>,
 ) -> Result<HookIdentity, AtmError> {
-    let agent = resolve_sender_identity(config)?;
+    let agent = resolve_runtime_sender_identity(config)?;
     let team = crate::config::resolve_team(team_override, config)
         .ok_or_else(AtmError::team_unavailable)?;
     Ok(HookIdentity { agent, team })
@@ -52,10 +77,14 @@ pub fn resolve_hook_identity(
 #[cfg(test)]
 mod tests {
     use std::env;
+    #[cfg(unix)]
+    use std::fs;
+    #[cfg(unix)]
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     use crate::config::AtmConfig;
 
-    use super::{resolve_hook_identity, resolve_sender_identity};
+    use super::{resolve_hook_identity, resolve_runtime_sender_identity, resolve_sender_identity};
 
     #[test]
     #[serial_test::serial]
@@ -74,7 +103,7 @@ mod tests {
             obsolete_identity_present: true,
         };
         assert_eq!(
-            resolve_sender_identity(Some(&config)).expect("identity"),
+            resolve_runtime_sender_identity(Some(&config)).expect("identity"),
             "arch-ctm"
         );
 
@@ -98,7 +127,7 @@ mod tests {
             obsolete_identity_present: true,
         };
 
-        let error = resolve_sender_identity(Some(&config)).expect_err("identity error");
+        let error = resolve_runtime_sender_identity(Some(&config)).expect_err("identity error");
         assert!(error.is_identity());
 
         restore("ATM_IDENTITY", original_identity);
@@ -144,6 +173,47 @@ mod tests {
 
         restore("ATM_IDENTITY", original_identity);
         restore("ATM_TEAM", original_team);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial_test::serial]
+    fn send_sender_identity_applies_alias_to_hook_identity() {
+        let original_identity = env::var_os("ATM_IDENTITY");
+        remove_env_var("ATM_IDENTITY");
+
+        let hook_path =
+            std::env::temp_dir().join(format!("atm-hook-{}.json", unsafe { libc::getppid() }));
+        let created_at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_secs_f64();
+        fs::write(
+            &hook_path,
+            format!(r#"{{"agent_name":"lead","created_at":{created_at}}}"#),
+        )
+        .expect("hook file");
+
+        let mut aliases = std::collections::BTreeMap::new();
+        aliases.insert("lead".to_string(), "team-lead".to_string());
+        let config = AtmConfig {
+            identity: None,
+            default_team: None,
+            team_members: Vec::new(),
+            aliases,
+            post_send_hook: None,
+            post_send_hook_members: Vec::new(),
+            config_root: std::path::PathBuf::new(),
+            obsolete_identity_present: false,
+        };
+
+        assert_eq!(
+            resolve_sender_identity(None, Some(&config)).expect("send identity"),
+            "team-lead"
+        );
+
+        let _ = fs::remove_file(hook_path);
+        restore("ATM_IDENTITY", original_identity);
     }
 
     fn restore(key: &str, value: Option<std::ffi::OsString>) {

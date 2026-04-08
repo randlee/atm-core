@@ -331,8 +331,9 @@ pub fn backup_team(request: BackupRequest) -> Result<BackupOutcome, AtmError> {
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when backup discovery, staged inbox/task restore,
-/// config-last persistence, or restore-marker cleanup fails.
+/// Returns [`AtmError`] when backup discovery, staging/live restore work, or
+/// config-last persistence fails. Failure to remove the restore marker after a
+/// successful restore is degraded to a warning-only follow-up path.
 pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> {
     let team_dir = home::team_dir_from_home(&request.home_dir, &request.team)?;
     if !team_dir.exists() {
@@ -378,6 +379,7 @@ pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> 
         }));
     }
 
+    prepare_restore_staging_dir(&team_dir)?;
     write_restore_marker(&team_dir, &backup_dir)?;
     let mut updated_config = current_config.clone();
     for member in &backup_config.members {
@@ -411,16 +413,6 @@ pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> 
         .with_recovery("Check inbox directory permissions and rerun `atm teams restore`.")
     })?;
     let inbox_staging_dir = restore_staging_inboxes_dir(&team_dir);
-    if inbox_staging_dir.exists() {
-        fs::remove_dir_all(&inbox_staging_dir).map_err(|error| {
-            AtmError::mailbox_write(format!(
-                "failed to clear inbox restore staging directory {}: {error}",
-                inbox_staging_dir.display()
-            ))
-            .with_source(error)
-            .with_recovery("Check inbox staging permissions and rerun `atm teams restore`.")
-        })?;
-    }
     fs::create_dir_all(&inbox_staging_dir).map_err(|error| {
         AtmError::mailbox_write(format!(
             "failed to create inbox restore staging directory {}: {error}",
@@ -432,7 +424,7 @@ pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> 
     for inbox_name in &inboxes_to_restore {
         let from = backup_dir.join("inboxes").join(inbox_name);
         let staged = inbox_staging_dir.join(inbox_name);
-        fs::copy(&from, &staged).map_err(|error| {
+        copy_restored_inbox_to_staging(&from, &staged).map_err(|error| {
             AtmError::mailbox_write(format!(
                 "failed to stage restored inbox {} from {}: {error}",
                 staged.display(),
@@ -462,7 +454,7 @@ pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> 
     write_team_config(&team_dir, &updated_config).map_err(|error| {
         error.with_recovery("Check team config permissions and rerun `atm teams restore`.")
     })?;
-    clear_restore_marker(&team_dir)?;
+    let marker_cleanup_error = clear_restore_marker(&team_dir).err();
     let staging_root = restore_staging_dir(&team_dir);
     if staging_root.exists() {
         fs::remove_dir_all(&staging_root).map_err(|error| {
@@ -473,6 +465,13 @@ pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> 
             .with_source(error)
             .with_recovery("Remove the restore staging directory after confirming the restore completed successfully.")
         })?;
+    }
+    if let Some(error) = marker_cleanup_error {
+        warn!(
+            %error,
+            team = %request.team,
+            "restore completed but the stale restore marker could not be removed"
+        );
     }
 
     Ok(RestoreResult::Applied(RestoreOutcome {
@@ -845,6 +844,31 @@ fn restore_staging_inboxes_dir(team_dir: &Path) -> PathBuf {
     restore_staging_dir(team_dir).join("inboxes")
 }
 
+fn prepare_restore_staging_dir(team_dir: &Path) -> Result<(), AtmError> {
+    let staging_root = restore_staging_dir(team_dir);
+    if staging_root.exists() {
+        fs::remove_dir_all(&staging_root).map_err(|error| {
+            AtmError::file_policy(format!(
+                "failed to clear restore staging directory {}: {error}",
+                staging_root.display()
+            ))
+            .with_source(error)
+            .with_recovery("Check restore staging permissions and rerun `atm teams restore`.")
+        })?;
+    }
+    Ok(())
+}
+
+fn copy_restored_inbox_to_staging(from: &Path, staged: &Path) -> Result<u64, std::io::Error> {
+    if std::env::var_os("ATM_TEST_FAIL_RESTORE_INBOX_STAGE").is_some() {
+        return Err(std::io::Error::other(format!(
+            "forced inbox staging failure for {}",
+            staged.display()
+        )));
+    }
+    fs::copy(from, staged)
+}
+
 fn write_restore_marker(team_dir: &Path, backup_dir: &Path) -> Result<(), AtmError> {
     let marker = restore_marker_path(team_dir);
     let payload = serde_json::json!({
@@ -866,6 +890,16 @@ fn clear_restore_marker(team_dir: &Path) -> Result<(), AtmError> {
     let marker = restore_marker_path(team_dir);
     if !marker.exists() {
         return Ok(());
+    }
+
+    if std::env::var_os("ATM_TEST_FAIL_RESTORE_MARKER_REMOVE").is_some() {
+        return Err(AtmError::file_policy(format!(
+            "failed to remove restore marker {}: forced test failure",
+            marker.display()
+        ))
+        .with_recovery(
+            "Remove the stale restore marker after verifying the restored team state.",
+        ));
     }
 
     fs::remove_file(&marker).map_err(|error| {

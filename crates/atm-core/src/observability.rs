@@ -588,6 +588,7 @@ mod tests {
     use super::{
         AtmJsonNumber, AtmLogQuery, AtmObservabilityHealthState, LogFieldKey, LogFieldMap,
         LogFieldValue, LogLevelFilter, LogMode, LogOrder, NullObservability, ObservabilityPort,
+        normalize_json_number,
     };
     use serde_json::json;
 
@@ -676,6 +677,11 @@ mod tests {
             AtmJsonNumber::new("1").expect("one"),
             AtmJsonNumber::new("1e0").expect("scientific")
         );
+    }
+
+    #[test]
+    fn normalize_json_number_preserves_raw_string_for_malformed_exponent() {
+        assert_eq!(normalize_json_number("1e-not-a-number"), "1e-not-a-number");
     }
 
     #[test]
