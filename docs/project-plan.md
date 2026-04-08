@@ -483,8 +483,12 @@ Status summary:
     `512dfa4d89ac71307ef7324f64dffb67d5189cc3`
   - `L.6` complete on `feature/pL-s6-release-closeout` / PR #56 at
     `341e28c1f7175f9890a5a1d5606b64e0ce816d52`
-  - `L.7` complete on `feature/pL-s-atm-toml-config` / PR #58 at
-    `70242203dc1130e4b0fa1cfc9268c54314c38d42`
+  - `L.7` complete on `feature/pL-s-atm-toml-config` / PR #58, merged to
+    `integrate/phase-L` at `5cd266d`, with final branch tip
+    `fe467af27f3f7e0ac5280fb80e72201af99f9d75` carrying the pre-merge
+    completion record fix after QA-2 PASS
+  - `L.8` complete on `feature/pL-s8-team-recovery` / PR #53, merged to
+    `integrate/phase-L` at `18aaa9a`
 
 Goal:
 - finish the published `sc-observability` 1.0 follow-on work and close the
@@ -868,6 +872,54 @@ Status: PLANNED
 Goal: close all blocking and important code-review findings from the Phase L review before
 declaring the codebase 1.0-ready. ARCH-CR-003 and ARCH-CR-004 are closed in L.7 (not Phase M scope).
 
+Phase M finding registry:
+- `BP-ECR-001` Public error-surface documentation gap
+  - finding: public `AtmResult` / `Result<_, AtmError>` functions in the
+    affected modules do not consistently declare `# Errors` sections with
+    concrete `AtmErrorCode` coverage
+  - resolution criteria:
+    - the explicit M.2 audit inventory is reviewed
+    - every public `Result`-returning function in that inventory has a `# Errors`
+      section
+    - each section lists the applicable `AtmErrorCode` variants
+- `BP-ECR-002` Operator recovery guidance gap
+  - finding: operator-actionable failures still exist without
+    `.with_recovery()` guidance
+  - resolution criteria:
+    - the explicit M.2 recovery audit inventory is grep-reviewed
+    - bare operator-actionable construction sites are updated or explicitly
+      excluded as non-operator-facing invariant failures
+- `BP-ECR-003` Error-display causal-context gap
+  - finding: `AtmError::Display` does not expose captured backtrace context when
+    runtime backtraces are enabled
+  - resolution criteria:
+    - `Display` appends the captured backtrace when
+      `BacktraceStatus::Captured`
+    - tests cover both backtrace-present and backtrace-absent output
+- `BP-ECR-004` Deprecated identity migration-doc gap
+  - finding: obsolete `[atm].identity` behavior and migration guidance are not
+    documented consistently enough for operator repair
+  - resolution criteria:
+    - config docs contain a `# Deprecated` section for `[atm].identity`
+    - docs state it is ignored for runtime identity resolution
+    - docs reference `ATM_WARNING_IDENTITY_DRIFT` and the `ATM_IDENTITY`
+      migration path
+- `BP-ECR-005` Panic-on-untrusted-input gap
+  - finding: `normalize_json_number(...)` still panics on malformed exponent
+    input instead of degrading safely
+  - resolution criteria:
+    - the `.expect(...)` is replaced with graceful fallback returning the raw
+      string
+    - warning-level logging documents the degradation path
+    - malformed-input regression tests pass without panic
+- `BP-ECR-006` Shared identity-error contract gap
+  - finding: `resolve_actor_identity` remains triplicated, which risks drift in
+    identity-resolution errors and recovery guidance
+  - resolution criteria:
+    - `resolve_actor_identity` exists in one shared `identity/mod.rs` location
+    - `ack`, `clear`, and `read` call the shared helper
+    - behavior remains unchanged except for the shared implementation boundary
+
 Integration branch: `integrate/phase-M` (branched from `integrate/phase-L`)
 
 Execution model: codex-orchestration — arch-ctm is sole developer, sequential sprints,
@@ -961,6 +1013,9 @@ Deliverables (itemized by finding):
    - Add inbox staging to `.restore-staging/inboxes/` before live move
    - Apply the same atomic-persistence rule to restored task-bucket files,
      `.highwatermark`, and shared restore coordination state touched by this flow
+   - `recompute_highwatermark` must either be converted to an atomic helper-backed
+     write path or be covered by an explicit crash-safety test proving the
+     remaining implementation is safe enough for 1.0
    - Add `atm doctor` check for stale `.restore-in-progress` markers
    - Files: `team_admin.rs`, `doctor/mod.rs`
 
@@ -1022,6 +1077,8 @@ Tests required:
   staging fails before the final config write
 - Restore atomicity: failure to remove the marker after a successful config
   write leaves a warning-only stale-marker finding rather than corrupting team state
+- Restore atomicity: `recompute_highwatermark` is either converted to atomic
+  replacement or covered by an explicit crash-safety regression test
 - Backtrace: `Display` output includes backtrace when `RUST_BACKTRACE=1`, excludes otherwise
 - `normalize_json_number`: malformed exponent returns raw string (no panic)
 - `resolve_actor_identity`: existing tests pass after consolidation (no behavior change)
@@ -1031,6 +1088,8 @@ Tests required:
 Acceptance criteria:
 - `restore_team` writes config.json last with staging and progress marker
 - all shared mutable structured files touched by M.2 use atomic replacement helpers
+- `recompute_highwatermark` no longer relies on an undocumented in-place write
+  path without either conversion or explicit crash-safety coverage
 - `AtmError::Display` conditionally renders backtrace
 - all public `Result`-returning functions in the explicit M.2 audit inventory have `# Errors` doc sections
 - `.with_recovery()` present at all operator-actionable sites in the explicit M.2 audit inventory

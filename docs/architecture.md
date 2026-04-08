@@ -388,6 +388,27 @@ Diagnostics for team config failures must preserve:
 - parser line and column when available
 - original parser cause for operator repair
 
+### 13.2 Deprecated `[atm].identity`
+
+`[atm].identity` remains parse-compatible only as an obsolete migration field.
+It is no longer part of runtime sender or actor resolution.
+
+Current runtime contract:
+- runtime identity resolves from explicit CLI override when supported, then
+  hook identity, then `ATM_IDENTITY`
+- if no runtime identity source is available, the command fails with
+  `ATM_IDENTITY_UNAVAILABLE`
+- `[atm].identity` is ignored for runtime resolution even when still present in
+  `.atm.toml`
+
+Deprecation and migration contract:
+- `atm doctor` reports stale `[atm].identity` with
+  `ATM_WARNING_IDENTITY_DRIFT`
+- operator migration path is: remove `[atm].identity` and set `ATM_IDENTITY`
+  in the active agent environment instead
+- keeping the obsolete key temporarily is tolerated for migration diagnostics
+  only; it must not change runtime behavior
+
 Sample operator-facing repair cases live in
 [`persisted-data-repair.md`](./persisted-data-repair.md).
 
@@ -1192,6 +1213,10 @@ duplicates what `fs2` already provides correctly.
   rename, released on `MailboxLockGuard` drop
 - **Timeout**: bounded retry loop with `try_lock_exclusive()` + 50ms sleep, default 5s;
   on expiry returns `AtmError { code: MailboxLockTimeout }`
+- **Cooperative limitation**: `fs2` locks are advisory and only coordinate ATM
+  processes that participate in the same locking protocol. Direct file edits or
+  other tools that bypass ATM locking are outside the protection boundary. This
+  is an accepted limitation for the ATM shared-inbox model.
 
 ### 18.4 Integration: Single-File Helper + Multi-File Lock Set
 
@@ -1374,7 +1399,32 @@ identity resolution order.
 with graceful fallback: on parse failure, return the raw string unchanged and emit
 `tracing::warn!`. A library function must not panic on potentially untrusted input.
 
-### 20.4 Phase L.7 Build-On Notes
+### 20.4 Error-Surface Audit Methodology
+
+Phase M uses an explicit audit methodology for `REQ-CORE-ERROR-DOC-001` and
+`REQ-CORE-ERROR-RECOVERY-001` so signoff does not depend on ad hoc review.
+
+Method:
+- grep the production source tree for `expect(` and bare `AtmError`
+  construction sites
+- review the resulting inventory manually against the explicit Phase M audit
+  inventory in the sprint plan
+- exclude:
+  - test-only code
+  - `#[cfg(test)]` modules embedded in production files
+  - intentional invariant assertions that do not represent operator-actionable
+    failures
+- keep the remaining production-path sites in scope for either:
+  - `# Errors` documentation updates
+  - `.with_recovery()` additions
+  - panic removal or other structural correction when the failure mode is not
+    acceptable in library code
+
+The initial planning audit identified 16 production-path `expect(...)` sites
+requiring review under this methodology. Phase M treats that number as a
+starting inventory, not as a substitute for a fresh grep during implementation.
+
+### 20.5 Phase L.7 Build-On Notes
 
 Phase M builds on the already-landed L.7 runtime surface
 (`team_members`, `aliases`, `post_send_hook`, doctor identity drift warning).
