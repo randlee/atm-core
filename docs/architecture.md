@@ -50,6 +50,62 @@ Crate-local boundary detail is owned by:
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm/architecture.md`](./atm/architecture.md)
 
+### 2.4 Release Publication Boundary
+
+The `1.0` retained-surface release is a source-repo replacement of the old
+`agent-team-mail` CLI/core publication path, not a new public package family.
+
+Architectural rules:
+- this repo becomes the source of truth for publishing:
+  - `agent-team-mail`
+  - `agent-team-mail-core`
+- this repo does not publish its retained CLI/core release under the crate
+  names `atm` or `atm-core`
+- crate identity continuity for downstream users is preserved by package-name
+  replacement while keeping the CLI binary name `atm`
+- historical parity channels remain:
+  - crates.io
+  - GitHub Releases
+  - Homebrew
+- `winget` is not part of historical parity, but it is required in the new
+  release architecture because Windows installation must be first-class for
+  `1.0` without Rust tooling or manual archive extraction
+
+Release-process ownership rules:
+- release automation is repo-owned infrastructure, not ad hoc operator
+  procedure
+- the new repo must own:
+  - release artifact manifest
+  - preflight workflow
+  - release workflow
+  - release-gate script/helpers
+  - release inventory generation and verification
+  - Homebrew formula update automation
+  - `winget` manifest/update automation and verification
+- the `publisher` agent instructions are part of the release-control surface
+  and must be ported into this repo with source-of-truth paths updated to the
+  new repo layout and retained crate list
+
+Release infrastructure notes:
+- Homebrew continues to use the shared `randlee/homebrew-tap` repository and
+  existing `Formula/agent-team-mail.rb` / `Formula/atm.rb` formulas
+- `HOMEBREW_TAP_TOKEN` is a required secret for the `atm-core` repo before the
+  ported Homebrew update automation can run successfully
+- `winget` uses the same `randlee` publisher namespace proven in
+  `claude-history`; the retained CLI package ID for this repo is
+  `randlee.agent-team-mail`
+- the ported `winget` flow uses the default GitHub workflow token and does not
+  introduce a separate `winget`-specific secret requirement
+- the release workflow should use
+  `vedantmgoyal2009/winget-releaser@v2` against the Windows ZIP release asset
+  and its SHA256 rather than inventing repo-specific manifest plumbing first
+- the initial `winget` manifest submission is a one-time manual bootstrap
+  action; recurring releases are workflow-driven after the package exists in
+  `microsoft/winget-pkgs`
+- release verification must treat `winget` submission success and manifest
+  generation as the immediate release signal because Microsoft review normally
+  delays public installability by 1-2 days
+
 Schema ownership references:
 
 - Claude Code-native message schema:

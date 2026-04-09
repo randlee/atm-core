@@ -116,6 +116,64 @@ Satisfied by:
   (`atm teams`, `atm members`, `atm teams add-member`, `atm teams backup`,
   `atm teams restore`)
 
+### 2.3 Release Distribution Scope
+
+Product requirement ID:
+- `REQ-P-RELEASE-001` The `1.0` retained-surface release must replace the
+  previously published `agent-team-mail` CLI/core distribution channels from
+  this repo without requiring downstream users to adopt new crate identities.
+
+- `REQ-P-RELEASE-002` Channel parity for the replacement release is limited to
+  the historical release channels that actually existed for the old repo:
+  crates.io, GitHub Releases, and Homebrew.
+
+- `REQ-P-RELEASE-003` Crate/package identity continuity must be preserved by
+  publishing the retained CLI/core replacement under the legacy package names
+  `agent-team-mail` and `agent-team-mail-core` while keeping the installed CLI
+  binary name `atm`.
+
+- `REQ-P-RELEASE-004` This repo must own the release-process control surface
+  needed to ship and verify the replacement release, including the release
+  workflows, artifact manifest, supporting scripts, and `publisher` agent
+  instructions.
+
+- `REQ-P-RELEASE-005` Windows installation must be first-class for `1.0`
+  without requiring Rust tooling or manual archive extraction; `winget` is
+  therefore a required additional release channel even though it was not part
+  of the historical `agent-team-mail` release system.
+
+- `REQ-P-RELEASE-006` Release prerequisites that depend on account-level
+  distribution infrastructure must be made explicit in the repo-owned release
+  plan before `1.0` release automation is considered complete.
+
+Required behavior:
+- the `1.0` release must publish the retained CLI and core crates under the
+  legacy crates.io package names:
+  - `agent-team-mail`
+  - `agent-team-mail-core`
+- the `atm` binary name remains the installed CLI entrypoint
+- the release channels that were already part of the historical
+  `agent-team-mail` release system and must be replaced from this repo are:
+  - crates.io
+  - GitHub Releases
+  - Homebrew
+- `winget` is not a historical release channel for `agent-team-mail`, but it
+  is a required new `1.0` release channel so normal Windows users can install
+  ATM without Rust tooling or manual zip handling
+- Homebrew release automation depends on the existing `randlee/homebrew-tap`
+  tap and requires `HOMEBREW_TAP_TOKEN` to be configured in `atm-core` GitHub
+  secrets before the release workflow can update formulas from this repo
+- `winget` release automation uses the `randlee` namespace with package ID
+  `randlee.agent-team-mail`
+- the first `winget` release requires a one-time manual manifest submission to
+  `microsoft/winget-pkgs`; after that initial submission, later releases may
+  be automated from this repo
+- `winget` release automation must not require a repo-specific secret beyond
+  the default GitHub workflow token
+- release readiness proof for `winget` must validate successful submission or
+  manifest update dispatch; it cannot require same-day installability because
+  Microsoft review introduces a normal 1-2 day publication lag
+
 ## 3. External Contracts
 
 Product requirement ID:
