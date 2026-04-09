@@ -88,6 +88,75 @@ jobs:
             --generated-at "$generated_at" \
             --output release/release-inventory.json
 
+      - name: Validate generated release inventory against schema constraints
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          schema_path = Path("docs/release-inventory-schema.json")
+          inventory_path = Path("release/release-inventory.json")
+
+          schema = json.loads(schema_path.read_text(encoding="utf-8"))
+          inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+
+          required_top = ["releaseVersion", "releaseTag", "releaseCommit", "generatedAt", "items"]
+          for field in required_top:
+              if field not in inventory:
+                  raise SystemExit(f"inventory missing required top-level field: {field}")
+
+          items = inventory.get("items", [])
+          if not isinstance(items, list) or not items:
+              raise SystemExit("inventory.items must be a non-empty array")
+
+          required_item = ["artifact", "version", "sourceRef", "publishTarget", "verifyCommands", "required"]
+          artifacts = []
+          for idx, item in enumerate(items):
+              if not isinstance(item, dict):
+                  raise SystemExit(f"inventory.items[{idx}] must be an object")
+              for field in required_item:
+                  if field not in item:
+                      raise SystemExit(f"inventory.items[{idx}] missing required field: {field}")
+              verify = item["verifyCommands"]
+              if not isinstance(verify, list) or not verify:
+                  raise SystemExit(f"inventory.items[{idx}].verifyCommands must be non-empty")
+              if not isinstance(item["required"], bool):
+                  raise SystemExit(f"inventory.items[{idx}].required must be boolean")
+              artifacts.append(item["artifact"])
+              publish = item.get("publish", True)
+              if not isinstance(publish, bool):
+                  raise SystemExit(f"inventory.items[{idx}].publish must be boolean when present")
+              if not publish:
+                  waiver_reason = item.get("waiver_reason")
+                  if not isinstance(waiver_reason, str) or not waiver_reason.strip():
+                      raise SystemExit(
+                          f"inventory.items[{idx}] sets publish=false but waiver_reason is missing/empty"
+                      )
+              waiver = item.get("waiver")
+              if waiver is not None:
+                  for wf in ["approver", "reason", "gateCheck"]:
+                      if not str(waiver.get(wf, "")).strip():
+                          raise SystemExit(
+                              f"inventory.items[{idx}].waiver.{wf} must be present and non-empty"
+                          )
+
+          if len(artifacts) != len(set(artifacts)):
+              raise SystemExit("inventory has duplicate artifact entries")
+          if artifacts != sorted(artifacts):
+              raise SystemExit("inventory items must be sorted by artifact for deterministic ordering")
+
+          item_required = set(schema["$defs"]["item"]["required"])
+          missing = set(required_item) - item_required
+          if missing:
+              raise SystemExit(
+                  f"schema missing required item fields: {', '.join(sorted(missing))}"
+              )
+
+          print("release inventory validation passed")
+          PY
+
       - name: Upload release inventory artifact
         uses: actions/upload-artifact@v4
         with:
@@ -243,7 +312,7 @@ jobs:
           path: ${{ env.ARCHIVE }}
 
   release:
-    needs: [gate-and-tag, build]
+    needs: [gate-and-tag, build, publish-crates]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
