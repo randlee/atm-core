@@ -3,6 +3,44 @@
 version = 4
 
 [[package]]
+name = "agent-team-mail"
+version = "1.0.0"
+dependencies = [
+ "agent-team-mail-core",
+ "anyhow",
+ "chrono",
+ "clap",
+ "sc-observability",
+ "sc-observability-types",
+ "serde_json",
+ "serial_test",
+ "tempfile",
+ "time",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "agent-team-mail-core"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "fs2",
+ "libc",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "tempfile",
+ "thiserror",
+ "toml",
+ "tracing",
+ "ulid",
+ "uuid",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -66,44 +104,6 @@ name = "anyhow"
 version = "1.0.102"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
-
-[[package]]
-name = "atm"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "atm-core",
- "chrono",
- "clap",
- "sc-observability",
- "sc-observability-types",
- "serde_json",
- "serial_test",
- "tempfile",
- "time",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "atm-core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "fs2",
- "libc",
- "serde",
- "serde_json",
- "serial_test",
- "tempfile",
- "thiserror",
- "toml",
- "tracing",
- "ulid",
- "uuid",
- "windows-sys 0.59.0",
-]
 
 [[package]]
 name = "autocfg"
