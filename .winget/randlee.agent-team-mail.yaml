@@ -1,0 +1,27 @@
+PackageIdentifier: randlee.agent-team-mail
+PackageVersion: 1.0.0
+PackageLocale: en-US
+Publisher: Randy Lee
+PublisherUrl: https://github.com/randlee
+PackageName: agent-team-mail
+PackageUrl: https://github.com/randlee/atm-core
+License: MIT OR Apache-2.0
+LicenseUrl: https://github.com/randlee/atm-core/blob/main/LICENSE
+ShortDescription: Daemon-free CLI for local agent team mail workflows
+Description: |
+  agent-team-mail is the retained daemon-free ATM CLI published from the
+  atm-core repository. It ships the `atm` binary and supports local send, read,
+  ack, clear, doctor, log, teams, and members workflows without a daemon.
+Tags:
+  - cli
+  - agent
+  - mail
+  - teams
+  - developer-tools
+Installers:
+  - Architecture: x64
+    InstallerType: zip
+    InstallerUrl: https://github.com/randlee/atm-core/releases/download/v1.0.0/atm_1.0.0_x86_64-pc-windows-msvc.zip
+    InstallerSha256: <SHA256_HASH_TO_BE_FILLED_AFTER_RELEASE>
+ManifestType: installer
+ManifestVersion: 1.0.0
