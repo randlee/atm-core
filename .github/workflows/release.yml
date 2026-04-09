@@ -1,0 +1,340 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 1.0.0 or v1.0.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_ARTIFACT_MANIFEST: release/publish-artifacts.toml
+
+jobs:
+  gate-and-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.meta.outputs.release_tag }}
+      release_version: ${{ steps.meta.outputs.release_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Normalize version input
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          raw='${{ github.event.inputs.version }}'
+          tag="$raw"
+          [[ "$tag" == v* ]] || tag="v${tag}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version: '$raw' (expected X.Y.Z or vX.Y.Z)" >&2
+            exit 1
+          fi
+          version="${tag#v}"
+          echo "release_tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "release_version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Run release gate
+        run: scripts/release_gate.sh
+
+      - name: Ensure tag is correct or create it
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag='${{ steps.meta.outputs.release_tag }}'
+          main_sha="$(git rev-parse origin/main)"
+          remote_tag_sha="$(git ls-remote --tags origin "refs/tags/${tag}" | awk '{print $1}' || true)"
+          if [[ -n "$remote_tag_sha" ]]; then
+            if [[ "$remote_tag_sha" == "$main_sha" ]]; then
+              echo "Tag ${tag} already exists and points to origin/main (${main_sha}), skipping creation"
+              exit 0
+            fi
+            echo "Tag ${tag} exists but points to ${remote_tag_sha}, not origin/main (${main_sha})" >&2
+            exit 1
+          fi
+          git tag "$tag" origin/main
+          git push origin "$tag"
+
+  prepare-release-inventory:
+    needs: gate-and-tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate-and-tag.outputs.release_tag }}
+
+      - name: Generate release inventory artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='${{ needs.gate-and-tag.outputs.release_version }}'
+          tag='${{ needs.gate-and-tag.outputs.release_tag }}'
+          commit="$(git rev-parse "$tag")"
+          generated_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          mkdir -p release
+          python3 scripts/release_artifacts.py emit-inventory \
+            --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+            --version "$version" \
+            --tag "$tag" \
+            --commit "$commit" \
+            --source-ref "refs/tags/${tag}" \
+            --generated-at "$generated_at" \
+            --output release/release-inventory.json
+
+      - name: Upload release inventory artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-inventory
+          path: release/release-inventory.json
+
+  pre-publish-audit:
+    needs: [gate-and-tag, prepare-release-inventory]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate-and-tag.outputs.release_tag }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cargo package audit (core crate) + locked compile check (non-core)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t full_checks < <(
+            python3 scripts/release_artifacts.py list-preflight \
+              --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+              --mode full
+          )
+          for crate in "${full_checks[@]}"; do
+            [[ -n "$crate" ]] || continue
+            cargo package -p "$crate" --locked
+          done
+
+          mapfile -t locked_checks < <(
+            python3 scripts/release_artifacts.py list-preflight \
+              --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+              --mode locked
+          )
+          for crate in "${locked_checks[@]}"; do
+            [[ -n "$crate" ]] || continue
+            cargo check -p "$crate" --locked
+          done
+
+  publish-crates:
+    needs: [gate-and-tag, prepare-release-inventory, pre-publish-audit]
+    runs-on: ubuntu-latest
+    environment: crates-io
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate-and-tag.outputs.release_tag }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Publish crates in dependency order (idempotent)
+        shell: bash
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+          version='${{ needs.gate-and-tag.outputs.release_version }}'
+
+          crate_exists() {
+            local crate="$1"
+            local version="$2"
+            cargo search "$crate" --limit 1 | grep -F "${crate} = \"${version}\"" >/dev/null
+          }
+
+          publish_if_missing() {
+            local crate="$1"
+            local wait_seconds="${2:-0}"
+            if crate_exists "$crate" "$version"; then
+              echo "${crate} ${version} already published; skipping"
+              return 0
+            fi
+            cargo publish -p "$crate" --locked
+            if [[ "$wait_seconds" -gt 0 ]]; then
+              sleep "$wait_seconds"
+            fi
+          }
+
+          while IFS='|' read -r crate wait_seconds; do
+            [[ -n "$crate" ]] || continue
+            publish_if_missing "$crate" "${wait_seconds:-0}"
+          done < <(
+            python3 scripts/release_artifacts.py list-publish-plan \
+              --manifest "${RELEASE_ARTIFACT_MANIFEST}"
+          )
+
+  build:
+    needs: gate-and-tag
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            archive: tar.gz
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            archive: tar.gz
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive: zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate-and-tag.outputs.release_tag }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Ensure cross-compilation target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Build release binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin_args="$(python3 scripts/release_artifacts.py cargo-build-bin-args --manifest "${RELEASE_ARTIFACT_MANIFEST}")"
+          cargo build --release --target ${{ matrix.target }} ${bin_args}
+
+      - name: Package (unix)
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION='${{ needs.gate-and-tag.outputs.release_version }}'
+          ARCHIVE="atm_${VERSION}_${{ matrix.target }}.tar.gz"
+          cd target/${{ matrix.target }}/release
+          tar czf "../../../${ARCHIVE}" atm
+          cd ../../..
+          echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
+
+      - name: Package (windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $VERSION = '${{ needs.gate-and-tag.outputs.release_version }}'
+          $ARCHIVE = "atm_${VERSION}_${{ matrix.target }}.zip"
+          Compress-Archive -Path "target/${{ matrix.target }}/release/atm.exe" -DestinationPath $ARCHIVE
+          echo "ARCHIVE=$ARCHIVE" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ env.ARCHIVE }}
+
+  release:
+    needs: [gate-and-tag, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate-and-tag.outputs.release_tag }}
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec mv {} release/ \;
+          ls -la release/
+
+      - name: Generate checksums
+        working-directory: release
+        run: sha256sum * > checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.gate-and-tag.outputs.release_tag }}
+          generate_release_notes: true
+          files: |
+            release/*
+
+  update-homebrew:
+    needs: [gate-and-tag, release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
+        with:
+          repository: randlee/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Compute release tarball SHA256
+        id: sha
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag='${{ needs.gate-and-tag.outputs.release_tag }}'
+          version='${{ needs.gate-and-tag.outputs.release_version }}'
+          tarball_path="${RUNNER_TEMP:?RUNNER_TEMP is required}/release.tar.gz"
+          # Homebrew automation requires HOMEBREW_TAP_TOKEN to be configured on the atm-core repo.
+          tarball_url="https://github.com/randlee/atm-core/releases/download/${tag}/atm_${version}_aarch64-apple-darwin.tar.gz"
+          echo "tarball_url=${tarball_url}" >> "$GITHUB_OUTPUT"
+          curl -fsSL --retry 5 --retry-delay 30 --retry-all-errors -o "${tarball_path}" "${tarball_url}"
+          sha256=$(sha256sum "${tarball_path}" | awk '{print $1}')
+          echo "sha256=${sha256}" >> "$GITHUB_OUTPUT"
+
+      - name: Update Homebrew formulas
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='${{ needs.gate-and-tag.outputs.release_version }}'
+          sha256='${{ steps.sha.outputs.sha256 }}'
+          tarball_url='${{ steps.sha.outputs.tarball_url }}'
+          for formula in homebrew-tap/Formula/agent-team-mail.rb homebrew-tap/Formula/atm.rb; do
+            sed -i "s|version \"[^\"]*\"|version \"${version}\"|g" "$formula"
+            sed -i "s|url \"[^\"]*\"|url \"${tarball_url}\"|g" "$formula"
+            sed -i "s|sha256 \"[^\"]*\"|sha256 \"${sha256}\"|g" "$formula"
+          done
+
+      - name: Commit and push to homebrew-tap
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='${{ needs.gate-and-tag.outputs.release_version }}'
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/agent-team-mail.rb Formula/atm.rb
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          git commit -m "chore: bump agent-team-mail to v${version}"
+          git push
+
+  publish-winget:
+    needs: [gate-and-tag, release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish to winget
+        uses: vedantmgoyal2009/winget-releaser@v2
+        with:
+          # Initial bootstrap still requires a one-time manual manifest submission to microsoft/winget-pkgs.
+          identifier: randlee.agent-team-mail
+          installers-regex: 'atm_.*_x86_64-pc-windows-msvc\.zip$'
+          token: ${{ secrets.GITHUB_TOKEN }}
