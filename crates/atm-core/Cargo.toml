@@ -1,10 +1,20 @@
 [package]
-name = "atm-core"
+name = "agent-team-mail-core"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
+description = "Daemon-free core library for local agent team mail workflows."
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/agent-team-mail-core"
+readme = "../../README.md"
+keywords = ["agent", "mail", "workflow", "teams", "local"]
+categories = ["command-line-utilities", "development-tools"]
+
+[lib]
+name = "atm_core"
 
 [dependencies]
 serde.workspace = true

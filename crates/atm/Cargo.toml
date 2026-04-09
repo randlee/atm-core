@@ -1,13 +1,25 @@
 [package]
-name = "atm"
+name = "agent-team-mail"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
+description = "Daemon-free CLI for local agent team mail workflows."
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/agent-team-mail"
+readme = "../../README.md"
+keywords = ["agent", "mail", "cli", "teams", "workflow"]
+categories = ["command-line-utilities", "development-tools"]
+exclude = ["src/bin/atm_post_send_hook_fixture.rs"]
+
+[[bin]]
+name = "atm"
+path = "src/main.rs"
 
 [dependencies]
-atm-core = { path = "../atm-core" }
+atm-core = { package = "agent-team-mail-core", version = "1.0.0", path = "../atm-core" }
 anyhow.workspace = true
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }

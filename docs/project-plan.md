@@ -1280,8 +1280,9 @@ Status summary:
     additional repo secret
 - this repo currently has only CI and no equivalent release-manifest,
   preflight, release, or publisher-agent infrastructure
-- the new repo currently uses local crate names (`atm`, `atm-core`) that are
-  not the intended public replacement identities
+- the source paths remain `crates/atm` and `crates/atm-core`, but the
+  publishable package identities for this release line must be
+  `agent-team-mail` and `agent-team-mail-core`
 
 #### N.1 — Package Identity And Manifest Replacement
 
