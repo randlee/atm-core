@@ -15,12 +15,13 @@ use atm_core::observability::{
 };
 use chrono::{DateTime, Utc};
 use sc_observability::{
-    ConsoleSink, JsonlFileSink, Logger, LoggerBuilder, LoggerConfig, RetainedSinkFaultInjector,
-    RetentionPolicy, RotationPolicy, SinkRegistration,
+    ConsoleSink, JsonlFileSink, LogSink, Logger, LoggerBuilder, LoggerConfig, RetentionPolicy,
+    RotationPolicy, SinkRegistration,
 };
 use sc_observability_types::{
-    ActionName, CorrelationId, DiagnosticInfo, Level, LogEvent, LogQuery, OutcomeLabel,
-    ProcessIdentity, QueryError, SchemaVersion, ServiceName, TargetCategory, Timestamp,
+    ActionName, CorrelationId, DiagnosticInfo, Level, LogEvent, LogQuery, LogSinkError,
+    OutcomeLabel, ProcessIdentity, QueryError, SchemaVersion, ServiceName, SinkHealth,
+    SinkHealthState, TargetCategory, Timestamp,
 };
 use serde_json::Map;
 use time::OffsetDateTime;
@@ -186,17 +187,47 @@ fn register_retained_sink_fault(
     home_dir: &Path,
     mode: RetainedSinkFaultMode,
 ) {
-    let injector = RetainedSinkFaultInjector::new();
     let sink = Arc::new(JsonlFileSink::new(
         fault_injection_log_path(home_dir),
         RotationPolicy::default(),
         RetentionPolicy::default(),
     ));
-    builder.register_sink(SinkRegistration::new(injector.wrap(sink)));
+    builder.register_sink(SinkRegistration::new(Arc::new(
+        RetainedSinkHealthOverride::new(sink, mode),
+    )));
+}
 
-    match mode {
-        RetainedSinkFaultMode::Degraded => injector.force_degraded(),
-        RetainedSinkFaultMode::Unavailable => injector.force_unavailable(),
+struct RetainedSinkHealthOverride {
+    inner: Arc<dyn LogSink>,
+    mode: RetainedSinkFaultMode,
+}
+
+impl RetainedSinkHealthOverride {
+    fn new(inner: Arc<dyn LogSink>, mode: RetainedSinkFaultMode) -> Self {
+        Self { inner, mode }
+    }
+
+    fn forced_state(&self) -> SinkHealthState {
+        match self.mode {
+            RetainedSinkFaultMode::Degraded => SinkHealthState::DegradedDropping,
+            RetainedSinkFaultMode::Unavailable => SinkHealthState::Unavailable,
+        }
+    }
+}
+
+impl LogSink for RetainedSinkHealthOverride {
+    fn write(&self, event: &LogEvent) -> Result<(), LogSinkError> {
+        self.inner.write(event)
+    }
+
+    fn flush(&self) -> Result<(), LogSinkError> {
+        self.inner.flush()
+    }
+
+    fn health(&self) -> SinkHealth {
+        let mut health = self.inner.health();
+        health.state = self.forced_state();
+        health
     }
 }
 
