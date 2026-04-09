@@ -1,0 +1,37 @@
+[package]
+name = "agent-team-mail-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Daemon-free core library for local agent team mail workflows."
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/agent-team-mail-core"
+readme = "../../README.md"
+keywords = ["agent", "mail", "workflow", "teams", "local"]
+categories = ["command-line-utilities", "development-tools"]
+
+[lib]
+name = "atm_core"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+libc = "0.2"
+chrono = { version = "0.4", features = ["serde"] }
+toml = "0.8"
+ulid = { version = "1.2.1", features = ["serde"] }
+uuid = { version = "1", features = ["serde", "v4"] }
+fs2 = "0.4"
+
+[dev-dependencies]
+serial_test = "3"
+tempfile = "3"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Threading"] }

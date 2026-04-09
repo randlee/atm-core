@@ -1,0 +1,174 @@
+name: Release Preflight
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version candidate (e.g. 1.0.0 or v1.0.0)"
+        required: true
+        type: string
+      run_by_agent:
+        description: "Must be 'publisher' (agent ownership assertion)"
+        required: true
+        default: "publisher"
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_ARTIFACT_MANIFEST: release/publish-artifacts.toml
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce publisher ownership input
+        shell: bash
+        run: |
+          set -euo pipefail
+          runner='${{ github.event.inputs.run_by_agent }}'
+          if [[ "$runner" != "publisher" ]]; then
+            echo "Preflight must be executed by publisher agent. Got run_by_agent='$runner'" >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Normalize version input
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          raw='${{ github.event.inputs.version }}'
+          tag="$raw"
+          [[ "$tag" == v* ]] || tag="v${tag}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version: '$raw' (expected X.Y.Z or vX.Y.Z)" >&2
+            exit 1
+          fi
+          version="${tag#v}"
+          echo "release_tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "release_version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Verify release manifest and helper files exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "${RELEASE_ARTIFACT_MANIFEST}"
+          test -f scripts/release_gate.sh
+          test -f scripts/release_artifacts.py
+          test -f docs/release-inventory-schema.json
+
+      - name: Validate manifest coverage, preflight modes, and publish ordering
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/release_artifacts.py validate-manifest \
+            --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+            --workspace-toml Cargo.toml
+          python3 scripts/release_artifacts.py validate-preflight-checks \
+            --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+            --workspace-toml Cargo.toml
+          python3 scripts/release_artifacts.py validate-publish-order \
+            --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+            --workspace-toml Cargo.toml
+
+      - name: Preflight guard — fail if release version already exists on crates.io
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/release_artifacts.py check-version-unpublished \
+            --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+            --version '${{ steps.meta.outputs.release_version }}'
+
+      - name: Generate preflight release inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='${{ steps.meta.outputs.release_version }}'
+          tag='${{ steps.meta.outputs.release_tag }}'
+          commit="$(git rev-parse HEAD)"
+          generated_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          source_ref="${GITHUB_REF:-refs/heads/develop}"
+          mkdir -p release
+          python3 scripts/release_artifacts.py emit-inventory \
+            --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+            --version "$version" \
+            --tag "$tag" \
+            --commit "$commit" \
+            --source-ref "$source_ref" \
+            --generated-at "$generated_at" \
+            --output release/release-inventory.json
+
+      - name: Validate inventory shape
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          inventory = json.loads(Path("release/release-inventory.json").read_text(encoding="utf-8"))
+          required_top = ["releaseVersion", "releaseTag", "releaseCommit", "generatedAt", "items"]
+          for field in required_top:
+              if field not in inventory:
+                  raise SystemExit(f"inventory missing required field: {field}")
+          items = inventory.get("items", [])
+          if not isinstance(items, list) or not items:
+              raise SystemExit("inventory.items must be a non-empty list")
+          for idx, item in enumerate(items):
+              for field in ["artifact", "version", "sourceRef", "publishTarget", "verifyCommands", "required"]:
+                  if field not in item:
+                      raise SystemExit(f"inventory.items[{idx}] missing {field}")
+          print("release inventory validation passed")
+          PY
+
+      - name: Validate workspace and crate versions match preflight version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION='${{ steps.meta.outputs.release_version }}'
+          python3 - <<'PY' "$VERSION"
+          import sys
+          import tomllib
+          from pathlib import Path
+
+          version = sys.argv[1]
+          root = Path(".")
+          root_toml = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))
+          workspace_version = root_toml.get("workspace", {}).get("package", {}).get("version")
+          if workspace_version != version:
+              raise SystemExit(f"workspace version mismatch: expected {version}, got {workspace_version}")
+          print("workspace version validated")
+          PY
+
+      - name: Run dependency-aware preflight crate checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t full_checks < <(
+            python3 scripts/release_artifacts.py list-preflight \
+              --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+              --mode full
+          )
+          for crate in "${full_checks[@]}"; do
+            [[ -n "$crate" ]] || continue
+            cargo package -p "$crate" --locked --no-verify
+            cargo publish --dry-run -p "$crate" --locked --no-verify
+          done
+
+          mapfile -t locked_checks < <(
+            python3 scripts/release_artifacts.py list-preflight \
+              --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+              --mode locked
+          )
+          for crate in "${locked_checks[@]}"; do
+            [[ -n "$crate" ]] || continue
+            cargo check -p "$crate" --locked
+          done
