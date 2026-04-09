@@ -1,0 +1,26 @@
+schema_version = 1
+
+[[crates]]
+artifact = "agent-team-mail-core"
+package = "agent-team-mail-core"
+cargo_toml = "crates/atm-core/Cargo.toml"
+required = true
+publish = true
+publish_order = 1
+preflight_check = "full"
+wait_after_publish_seconds = 60
+verify_install = false
+
+[[crates]]
+artifact = "agent-team-mail"
+package = "agent-team-mail"
+cargo_toml = "crates/atm/Cargo.toml"
+required = true
+publish = true
+publish_order = 2
+preflight_check = "locked"
+wait_after_publish_seconds = 0
+verify_install = true
+
+[[release_binaries]]
+name = "atm"
