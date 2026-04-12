@@ -6,7 +6,6 @@ pub(crate) mod store;
 pub(crate) mod surface;
 
 use std::fs;
-use std::io::BufRead;
 use std::path::Path;
 
 use serde_json::Value;
@@ -57,58 +56,102 @@ pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
         return Ok(Vec::new());
     }
 
-    let file = fs::File::open(path).map_err(|error| {
+    let raw = fs::read_to_string(path).map_err(|error| {
         AtmError::new(
             AtmErrorKind::MailboxRead,
-            format!("failed to open mailbox file {}: {error}", path.display()),
+            format!("failed to read mailbox file {}: {error}", path.display()),
         )
         .with_recovery("Retry after concurrent ATM activity completes, or verify the mailbox file still exists and is readable.")
         .with_source(error)
     })?;
-    let reader = std::io::BufReader::new(file);
-    let mut messages = Vec::new();
 
-    for (index, line) in reader.lines().enumerate() {
-        let line = line.map_err(|error| {
-            AtmError::new(
-                AtmErrorKind::MailboxRead,
-                format!(
-                    "failed to read mailbox line {} from {}: {error}",
-                    index + 1,
-                    path.display()
-                ),
-            )
-            .with_recovery("Retry after concurrent ATM activity completes, or inspect the mailbox file for truncation or permission issues.")
-            .with_source(error)
-        })?;
-        if line.trim().is_empty() {
-            continue;
-        }
+    parse_mailbox_contents(&raw, path)
+}
 
-        match parse_mailbox_record(&line, path, index + 1) {
-            Ok(Some(message)) => messages.push(message),
-            Ok(None) => {}
-            Err(error) => warn!(
-                line = index + 1,
-                mailbox_path = %path.display(),
-                raw_record = %line,
-                %error,
-                "skipping malformed mailbox record"
-            ),
-        }
+fn parse_mailbox_contents(raw: &str, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
+    match raw.chars().find(|ch| !ch.is_whitespace()) {
+        None => Ok(Vec::new()),
+        Some('[') => parse_mailbox_array(raw, path),
+        Some(_) => Ok(parse_mailbox_jsonl(raw, path)),
     }
+}
 
-    Ok(messages)
+fn parse_mailbox_array(raw: &str, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
+    let records = serde_json::from_str::<Vec<Value>>(raw).map_err(|error| {
+        AtmError::new(
+            AtmErrorKind::MailboxRead,
+            format!("failed to parse mailbox array {}: {error}", path.display()),
+        )
+        .with_recovery(
+            "Inspect the mailbox file for malformed JSON array syntax or partial writes before retrying `atm read`.",
+        )
+        .with_source(error)
+    })?;
+
+    Ok(records
+        .into_iter()
+        .enumerate()
+        .filter_map(
+            |(index, mut value)| match parse_mailbox_value(&mut value, path, index + 1) {
+                Ok(Some(message)) => Some(message),
+                Ok(None) => None,
+                Err(error) => {
+                    warn!(
+                        line = index + 1,
+                        mailbox_path = %path.display(),
+                        raw_record = %value,
+                        %error,
+                        "skipping malformed mailbox record"
+                    );
+                    None
+                }
+            },
+        )
+        .collect())
+}
+
+fn parse_mailbox_jsonl(raw: &str, path: &Path) -> Vec<MessageEnvelope> {
+    raw.lines()
+        .enumerate()
+        .filter_map(|(index, line)| {
+            if line.trim().is_empty() {
+                return None;
+            }
+
+            match parse_mailbox_record(line, path, index + 1) {
+                Ok(Some(message)) => Some(message),
+                Ok(None) => None,
+                Err(error) => {
+                    warn!(
+                        line = index + 1,
+                        mailbox_path = %path.display(),
+                        raw_record = %line,
+                        %error,
+                        "skipping malformed mailbox record"
+                    );
+                    None
+                }
+            }
+        })
+        .collect()
 }
 
 fn parse_mailbox_record(
-    line: &str,
+    raw_record: &str,
     path: &Path,
     line_number: usize,
 ) -> Result<Option<MessageEnvelope>, serde_json::Error> {
-    let mut value = serde_json::from_str::<Value>(line)?;
-    sanitize_legacy_message_id(&mut value, path, line_number);
-    serde_json::from_value::<MessageEnvelope>(value).map(Some)
+    let mut value = serde_json::from_str::<Value>(raw_record)?;
+    parse_mailbox_value(&mut value, path, line_number)
+}
+
+fn parse_mailbox_value(
+    value: &mut Value,
+    path: &Path,
+    line_number: usize,
+) -> Result<Option<MessageEnvelope>, serde_json::Error> {
+    sanitize_legacy_message_id(value, path, line_number);
+    serde_json::from_value::<MessageEnvelope>(value.take()).map(Some)
 }
 
 fn sanitize_legacy_message_id(value: &mut Value, path: &Path, line_number: usize) {
@@ -248,6 +291,41 @@ mod tests {
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].text, "valid body");
         assert!(messages[0].message_id.is_none());
+    }
+
+    #[test]
+    fn read_messages_supports_json_array_mailboxes_without_message_id() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("array-no-message-id.json");
+        let contents = serde_json::json!([
+            {
+                "from": "team-lead",
+                "text": "from claude array",
+                "timestamp": "2026-03-30T00:00:00Z",
+                "read": false
+            }
+        ]);
+        fs::write(&path, serde_json::to_vec(&contents).expect("json")).expect("write");
+
+        let messages = read_messages(&path).expect("read");
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].text, "from claude array");
+        assert!(messages[0].message_id.is_none());
+    }
+
+    #[test]
+    fn read_messages_supports_json_array_mailboxes_with_atm_fields() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("array-with-atm-fields.json");
+        let message = sample_message(Uuid::new_v4(), "array with id");
+        fs::write(
+            &path,
+            serde_json::to_vec(&vec![message.clone()]).expect("json"),
+        )
+        .expect("write");
+
+        let messages = read_messages(&path).expect("read");
+        assert_eq!(messages, vec![message]);
     }
 
     #[test]
