@@ -172,7 +172,7 @@ struct RawAtmSection {
 }
 
 fn reject_retired_post_send_hook_members(
-    _path: &Path,
+    path: &Path,
     raw_toml: &TomlValue,
 ) -> Result<(), AtmError> {
     let retired_present = raw_toml
@@ -183,7 +183,13 @@ fn reject_retired_post_send_hook_members(
         return Err(AtmError::new_with_code(
             AtmErrorCode::ConfigRetiredHookMembersKey,
             AtmErrorKind::Config,
-            "error: '.atm.toml' field 'post_send_hook_members' is no longer supported.\nUse 'post_send_hook_senders' (match on sender identity) and/or\n'post_send_hook_recipients' (match on recipient name) under [atm].\nUse '*' to match all senders or all recipients.",
+            format!(
+                "error: '{}' field 'post_send_hook_members' is no longer supported.",
+                path.display()
+            ),
+        )
+        .with_recovery(
+            "Replace post_send_hook_members with post_send_hook_senders and/or post_send_hook_recipients under [atm]. Use * to match all.",
         ));
     }
     Ok(())
@@ -426,10 +432,18 @@ post_send_hook_members = ["team-lead"]
 
         assert!(error.is_config());
         assert_eq!(error.code, AtmErrorCode::ConfigRetiredHookMembersKey);
+        assert!(
+            error
+                .message
+                .contains(&root.join(".atm.toml").display().to_string())
+        );
         assert!(error.message.contains("post_send_hook_members"));
-        assert!(error.message.contains("post_send_hook_senders"));
-        assert!(error.message.contains("post_send_hook_recipients"));
-        assert!(error.message.contains("Use '*' to match all"));
+        assert_eq!(
+            error.recovery.as_deref(),
+            Some(
+                "Replace post_send_hook_members with post_send_hook_senders and/or post_send_hook_recipients under [atm]. Use * to match all."
+            )
+        );
     }
 
     #[test]
