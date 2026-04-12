@@ -461,14 +461,12 @@ Post-send-hook rules:
 - `post_send_hook` is an ATM-owned helper script/command path list
 - `post_send_hook_senders` matches resolved sender identity, not model name
 - `post_send_hook_recipients` matches the resolved recipient agent name
-- an omitted or empty `post_send_hook_senders` list never matches any sender
-- an omitted or empty `post_send_hook_recipients` list never matches any
-  recipient
+- an omitted or empty `post_send_hook_senders` list passes unconditionally for
+  the sender axis
+- an omitted or empty `post_send_hook_recipients` list passes unconditionally
+  for the recipient axis
 - `*` in either list matches every sender or every recipient respectively,
   unconditionally, including all valid resolved sender/recipient identities
-- if both sender and recipient trigger lists are omitted or empty, the hook is
-  configured-but-disabled and ATM must not emit a user-facing skip warning for
-  that case
 - the hook runs once when either sender or recipient matching succeeds; if both
   match, ATM must not run the hook twice
 - `post_send_hook_members` is not a supported config key in this release line
@@ -497,8 +495,8 @@ Post-send-hook rules:
   - `hook_match.recipient`
     boolean — true if the recipient filter axis matched, false otherwise
 - when a sender or recipient list is omitted or empty, the corresponding
-  `hook_match` field is false because that axis did not match; only `*`
-  represents an unconditional match
+  `hook_match` field is true because that axis passed unconditionally rather
+  than via an explicit filter match
 - example payload:
   ```json
   {
@@ -507,7 +505,7 @@ Post-send-hook rules:
     "message_id": "...",
     "requires_ack": false,
     "hook_match": {
-      "sender": false,
+      "sender": true,
       "recipient": true
     }
   }
@@ -606,10 +604,8 @@ Retired from the current implementation:
 - run `post_send_hook` only after successful non-`dry-run` sends and only when
   the resolved sender matches `post_send_hook_senders` or the resolved
   recipient matches `post_send_hook_recipients`
-- treat omitted or empty sender/recipient trigger lists as `never_match`
-  rather than unconditional pass
-- if both sender/recipient trigger lists are omitted or empty, treat the hook
-  as configured-but-disabled and do not emit a user-facing skip warning
+- treat omitted or empty sender/recipient trigger lists as unconditional axis
+  passes rather than `never_match`
 - support `*` wildcard matching in either post-send-hook filter list
 - run the hook at most once per successful send even when both sender and
   recipient filters match

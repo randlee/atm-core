@@ -164,10 +164,8 @@ Error codes should describe the failure class, not a specific prose message.
     ```
   - delivery channel: user-visible `warn!` / stderr via normal tracing log
     routing; not debug-only and not suppressible
-  - covers explicit no-match outcomes only when at least one sender or
-    recipient filter list is configured; it is not used for hook process
-    failures or for a hook that is configured-but-disabled with both lists
-    omitted/empty
+  - covers explicit no-match outcomes only; it is not used for hook process
+    failures
 
 #### 5.8.3 `ATM_WARNING_HOOK_EXECUTION_FAILED`
 
