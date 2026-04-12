@@ -114,8 +114,12 @@ pub fn load_team_config(team_dir: &Path) -> Result<TeamConfig, AtmError> {
     parse_team_config(&config_path, &raw)
 }
 
+/// Resolves the sender identity for outgoing messages.
+///
+/// The `_config` parameter is reserved for a future config-provided identity
+/// fallback and is currently unused. Identity is resolved exclusively via the
+/// `ATM_IDENTITY` environment variable.
 pub fn resolve_identity(_config: Option<&AtmConfig>) -> Option<String> {
-    // Reserved: config-provided identity fallback is intentionally not implemented.
     env::var("ATM_IDENTITY")
         .ok()
         .filter(|value| !value.is_empty())
