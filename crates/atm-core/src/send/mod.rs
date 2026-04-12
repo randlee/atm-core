@@ -157,6 +157,13 @@ pub fn send_mail(
                 recipient.agent,
                 recipient.team
             ));
+            warn!(
+                code = %AtmErrorCode::WarningMissingTeamConfigFallback,
+                config_path = %team_dir.join("config.json").display(),
+                recipient = %recipient.agent,
+                team = %recipient.team,
+                "send used existing inbox fallback; team config is missing"
+            );
 
             if !request.dry_run {
                 notify_team_lead_missing_config(
