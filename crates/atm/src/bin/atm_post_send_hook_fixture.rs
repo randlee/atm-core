@@ -38,6 +38,35 @@ fn main() -> ExitCode {
             );
             ExitCode::SUCCESS
         }
+        "count" => {
+            let count = fs::read_to_string(&output_path)
+                .ok()
+                .and_then(|raw| raw.trim().parse::<u64>().ok())
+                .unwrap_or(0)
+                + 1;
+            let _ = fs::write(&output_path, count.to_string());
+            ExitCode::SUCCESS
+        }
+        "result-debug" => {
+            let _ = fs::write(&output_path, payload);
+            println!(
+                "{}",
+                json!({
+                    "level": "debug",
+                    "message": "hook fixture captured payload",
+                    "fields": {
+                        "fixture": "atm_post_send_hook_fixture",
+                        "extra_args": extra_args,
+                    }
+                })
+            );
+            ExitCode::SUCCESS
+        }
+        "result-invalid" => {
+            let _ = fs::write(&output_path, payload);
+            println!("not-json");
+            ExitCode::SUCCESS
+        }
         "fail" => ExitCode::from(3),
         "sleep" => {
             let _ = fs::write(&output_path, payload);

@@ -1018,15 +1018,6 @@ The mailbox layer does not own selection policy, display buckets, output formatt
 
 ### 13.1 Hook Matching
 
-Hook-file identity is retained because it is a current non-daemon convenience path for send/read identity resolution.
-
-Only hook identity resolution is required for the rewrite. Session-resolution paths that exist only to bridge runtime/daemon ambiguity are not required.
-
-Repo-local config identity is not retained as a runtime fallback. In the
-multi-agent model, runtime identity must come from explicit CLI override,
-hook identity, or `ATM_IDENTITY`. An obsolete `[atm].identity` field may be
-diagnosed by doctor, but it must not control sender/actor resolution.
-
 When `ATM_POST_SEND` is set for a configured post-send hook, the payload must
 contain:
 - `from`
@@ -1049,6 +1040,19 @@ Supported structured hook-result levels remain:
 - `info`
 - `warn`
 - `error`
+
+### 13.2 Identity Resolution
+
+Hook-file identity is retained because it is a current non-daemon convenience
+path for send/read identity resolution.
+
+Only hook identity resolution is required for the rewrite. Session-resolution
+paths that exist only to bridge runtime/daemon ambiguity are not required.
+
+Repo-local config identity is not retained as a runtime fallback. In the
+multi-agent model, runtime identity must come from explicit CLI override,
+hook identity, or `ATM_IDENTITY`. An obsolete `[atm].identity` field may be
+diagnosed by doctor, but it must not control sender/actor resolution.
 
 ### 13.3 File Policy
 

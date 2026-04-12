@@ -20,7 +20,7 @@ pub fn print_send_result(outcome: &SendOutcome, json: bool) -> Result<()> {
             outcome.agent, outcome.team, outcome.message_id
         );
         for warning in &outcome.warnings {
-            println!("{warning}");
+            eprintln!("{warning}");
         }
     }
 

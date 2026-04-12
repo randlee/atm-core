@@ -11,7 +11,7 @@ use crate::output;
 
 #[derive(Debug, Args)]
 #[command(
-    after_help = "Post-send hooks can be configured in .atm.toml via [atm].post_send_hook and [atm].post_send_hook_members."
+    after_help = "Post-send hooks can be configured in .atm.toml via [atm].post_send_hook plus [atm].post_send_hook_senders and/or [atm].post_send_hook_recipients. Use '*' in either list to match all senders or recipients."
 )]
 /// Send one ATM mailbox message.
 pub struct SendCommand {

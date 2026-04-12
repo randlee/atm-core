@@ -294,6 +294,12 @@ Required identity rules:
   ignores absent or invalid output
 - hook-match evaluation and hook-skip outcomes must remain observable through
   structured diagnostics and actionable user-visible warnings where required
+- when a hook is configured but neither filter axis matched, emit this
+  user-visible warning template:
+  ```text
+  post-send hook skipped: sender {sender} not in post_send_hook_senders {senders}
+  and recipient {recipient} not in post_send_hook_recipients {recipients}
+  ```
 - hook failure or timeout is best-effort only and must not roll back a
   successful send
 - the reserved sender `atm-identity-missing@<team>` is available only for

@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 use serde_json::Value;
+use toml::Value as TomlValue;
 use tracing::warn;
 
 pub use types::AtmConfig;
@@ -36,7 +37,18 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
         .with_recovery("Check .atm.toml permissions and syntax, or run the command from a directory inside the intended ATM workspace.")
         .with_source(error)
     })?;
-    let parsed = toml::from_str::<RawConfigFile>(&contents).map_err(|error| {
+    let raw_toml = toml::from_str::<TomlValue>(&contents).map_err(|error| {
+        AtmError::new(
+            AtmErrorKind::Config,
+            format!("failed to parse config at {}: {error}", path.display()),
+        )
+        .with_recovery(
+            "Repair the .atm.toml syntax or remove malformed ATM config keys before retrying.",
+        )
+        .with_source(error)
+    })?;
+    reject_retired_post_send_hook_members(&path, &raw_toml)?;
+    let parsed = raw_toml.try_into::<RawConfigFile>().map_err(|error| {
         AtmError::new(
             AtmErrorKind::Config,
             format!("failed to parse config at {}: {error}", path.display()),
@@ -58,7 +70,8 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
         team_members: normalize_string_list(parsed.atm.team_members),
         aliases: normalize_aliases(parsed.atm.aliases),
         post_send_hook: normalize_optional_command(parsed.atm.post_send_hook),
-        post_send_hook_members: normalize_string_list(parsed.atm.post_send_hook_members),
+        post_send_hook_senders: normalize_string_list(parsed.atm.post_send_hook_senders),
+        post_send_hook_recipients: normalize_string_list(parsed.atm.post_send_hook_recipients),
         config_root,
         obsolete_identity_present,
     }))
@@ -153,7 +166,27 @@ struct RawAtmSection {
     #[serde(default)]
     post_send_hook: Option<Vec<String>>,
     #[serde(default)]
-    post_send_hook_members: Vec<String>,
+    post_send_hook_senders: Vec<String>,
+    #[serde(default)]
+    post_send_hook_recipients: Vec<String>,
+}
+
+fn reject_retired_post_send_hook_members(
+    _path: &Path,
+    raw_toml: &TomlValue,
+) -> Result<(), AtmError> {
+    let retired_present = raw_toml
+        .get("atm")
+        .and_then(TomlValue::as_table)
+        .is_some_and(|atm| atm.contains_key("post_send_hook_members"));
+    if retired_present {
+        return Err(AtmError::new_with_code(
+            AtmErrorCode::ConfigRetiredHookMembersKey,
+            AtmErrorKind::Config,
+            "error: '.atm.toml' field 'post_send_hook_members' is no longer supported.\nUse 'post_send_hook_senders' (match on sender identity) and/or\n'post_send_hook_recipients' (match on recipient name) under [atm].\nUse '*' to match all senders or all recipients.",
+        ));
+    }
+    Ok(())
 }
 
 fn normalize_string_list(values: Vec<String>) -> Vec<String> {
@@ -317,7 +350,8 @@ mod tests {
 default_team = "atm-dev"
 team_members = ["team-lead", "arch-ctm", " ", "qa"]
 post_send_hook = ["bin/hook", "notify"]
-post_send_hook_members = ["arch-ctm", "", "team-lead"]
+post_send_hook_senders = ["arch-ctm", "", "team-lead"]
+post_send_hook_recipients = ["quality-mgr", "", "*"]
 
 [atm.aliases]
 tl = "team-lead"
@@ -334,8 +368,12 @@ blank = ""
             Some(&["bin/hook".to_string(), "notify".to_string()][..])
         );
         assert_eq!(
-            config.post_send_hook_members,
+            config.post_send_hook_senders,
             vec!["arch-ctm".to_string(), "team-lead".to_string()]
+        );
+        assert_eq!(
+            config.post_send_hook_recipients,
+            vec!["quality-mgr".to_string(), "*".to_string()]
         );
         assert_eq!(
             config.aliases.get("tl").map(String::as_str),
@@ -357,7 +395,8 @@ blank = ""
 default_team = "atm-dev"
 identity = "team-lead"
 post_send_hook = ["bin/hook", "notify"]
-post_send_hook_members = ["team-lead"]
+post_send_hook_senders = ["team-lead"]
+post_send_hook_recipients = ["arch-ctm"]
 "#,
         )
         .expect("config");
@@ -366,8 +405,31 @@ post_send_hook_members = ["team-lead"]
         assert_eq!(config.default_team, None);
         assert_eq!(config.identity, None);
         assert_eq!(config.post_send_hook, None);
-        assert!(config.post_send_hook_members.is_empty());
+        assert!(config.post_send_hook_senders.is_empty());
+        assert!(config.post_send_hook_recipients.is_empty());
         assert!(!config.obsolete_identity_present);
+    }
+
+    #[test]
+    fn load_config_rejects_retired_post_send_hook_members_key() {
+        let root = unique_temp_dir("retired-hook-members");
+        fs::write(
+            root.join(".atm.toml"),
+            r#"[atm]
+post_send_hook = ["bin/hook"]
+post_send_hook_members = ["team-lead"]
+"#,
+        )
+        .expect("config");
+
+        let error = load_config(&root).expect_err("retired key should fail");
+
+        assert!(error.is_config());
+        assert_eq!(error.code, AtmErrorCode::ConfigRetiredHookMembersKey);
+        assert!(error.message.contains("post_send_hook_members"));
+        assert!(error.message.contains("post_send_hook_senders"));
+        assert!(error.message.contains("post_send_hook_recipients"));
+        assert!(error.message.contains("Use '*' to match all"));
     }
 
     #[test]
@@ -506,7 +568,8 @@ post_send_hook_members = ["team-lead"]
             team_members: Vec::new(),
             aliases: Default::default(),
             post_send_hook: None,
-            post_send_hook_members: Vec::new(),
+            post_send_hook_senders: Vec::new(),
+            post_send_hook_recipients: Vec::new(),
             config_root: PathBuf::new(),
             obsolete_identity_present: true,
         };
@@ -530,7 +593,8 @@ post_send_hook_members = ["team-lead"]
             team_members: Vec::new(),
             aliases: Default::default(),
             post_send_hook: None,
-            post_send_hook_members: Vec::new(),
+            post_send_hook_senders: Vec::new(),
+            post_send_hook_recipients: Vec::new(),
             config_root: PathBuf::new(),
             obsolete_identity_present: true,
         };
@@ -551,7 +615,8 @@ post_send_hook_members = ["team-lead"]
             team_members: Vec::new(),
             aliases: Default::default(),
             post_send_hook: None,
-            post_send_hook_members: Vec::new(),
+            post_send_hook_senders: Vec::new(),
+            post_send_hook_recipients: Vec::new(),
             config_root: PathBuf::new(),
             obsolete_identity_present: false,
         };
