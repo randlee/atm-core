@@ -149,6 +149,43 @@ The `teams` command also contains retained team-administration subcommands:
 ATM resolves runtime identity and team context from the current CLI/config
 surface and uses the local Claude team directory layout for mailbox storage.
 
+## Post-Send Hook
+
+`atm send` can run an optional post-send hook configured in `.atm.toml`:
+
+```toml
+[atm]
+post_send_hook = ["scripts/tmux-nudge.sh", "--team", "atm-dev"]
+post_send_hook_members = ["team-lead", "arch-ctm"]
+```
+
+Behavior:
+- `post_send_hook` is a command argv array. If the first entry is a relative path, ATM resolves it relative to the directory containing `.atm.toml`.
+- `post_send_hook_members` is a sender allowlist. The hook runs only when the sending identity is in this list. It is not a recipient filter.
+- ATM sets `ATM_POST_SEND` to a JSON payload with `{from, to, message_id, requires_ack, task_id}`.
+- The hook gets 5 seconds to complete.
+- Hook stdout and stderr are suppressed.
+- If the hook exits non-zero, fails to start, or times out, `atm send` still succeeds and prints a warning.
+
+Example tmux auto-nudge hook for a Codex pane:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+readarray -t fields < <(python3 - <<'PY'
+import json, os
+payload = json.loads(os.environ["ATM_POST_SEND"])
+print(payload["to"].split("@", 1)[0])
+print(payload["to"].split("@", 1)[1])
+PY
+)
+
+recipient="${fields[0]}"
+team="${fields[1]}"
+tmux send-keys -t "$recipient" "You have unread ATM messages. Run: atm read --team $team" Enter
+```
+
 Useful docs in this repo:
 - [requirements.md](docs/requirements.md)
 - [architecture.md](docs/architecture.md)

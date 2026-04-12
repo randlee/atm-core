@@ -485,6 +485,41 @@ fn test_send_post_send_hook_failure_does_not_roll_back_send() {
     assert_eq!(inbox.len(), 1);
 }
 
+#[test]
+fn test_send_skips_post_send_hook_when_sender_not_in_allowlist() {
+    let fixture = Fixture::new("recipient");
+    let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
+    fixture.write_atm_config(&format!(
+        "[atm]\npost_send_hook = ['{}', 'capture', '{}']\npost_send_hook_members = ['team-lead']\n",
+        hook_path.display(),
+        payload_path.display()
+    ));
+
+    let output = fixture.run(&["send", "recipient@atm-dev", "hello skipped hook"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    assert!(!payload_path.exists(), "hook payload unexpectedly created");
+    let inbox = fixture.inbox_contents("recipient");
+    assert_eq!(inbox.len(), 1);
+}
+
+#[test]
+fn test_send_help_mentions_post_send_hook_config() {
+    let output = Command::new(env!("CARGO_BIN_EXE_atm"))
+        .args(["send", "--help"])
+        .output()
+        .expect("run atm send --help");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("stdout utf8");
+    assert!(stdout.contains("post_send_hook"));
+    assert!(stdout.contains(".atm.toml"));
+}
+
 struct Fixture {
     tempdir: tempfile::TempDir,
 }

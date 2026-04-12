@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, json};
-use tracing::warn;
+use tracing::{debug, warn};
 
 use crate::address::AgentAddress;
 use crate::config;
@@ -437,6 +437,12 @@ fn maybe_run_post_send_hook(
         .iter()
         .any(|member| member == context.sender)
     {
+        debug!(
+            sender = context.sender,
+            allowlist = ?config.post_send_hook_members,
+            "post-send hook skipped: sender '{}' is not in post_send_hook_members",
+            context.sender
+        );
         return;
     }
 
