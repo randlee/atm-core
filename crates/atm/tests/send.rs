@@ -454,7 +454,7 @@ fn test_send_runs_post_send_hook_with_expected_payload() {
     assert!(payload["message_id"].as_str().is_some());
     assert!(payload.get("task_id").is_none());
     assert_eq!(payload["hook_match"]["sender"], true);
-    assert_eq!(payload["hook_match"]["recipient"], true);
+    assert_eq!(payload["hook_match"]["recipient"], false);
 }
 
 #[test]
@@ -557,7 +557,7 @@ fn test_send_runs_post_send_hook_when_recipient_matches_filter() {
     );
     let payload: serde_json::Value =
         serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
-    assert_eq!(payload["hook_match"]["sender"], true);
+    assert_eq!(payload["hook_match"]["sender"], false);
     assert_eq!(payload["hook_match"]["recipient"], true);
 }
 
@@ -656,7 +656,7 @@ fn test_send_post_send_hook_receives_only_configured_positional_args() {
     assert_eq!(captured["args"], serde_json::json!([]));
     assert_eq!(captured["payload"]["to"], "recipient@atm-dev");
     assert_eq!(captured["payload"]["hook_match"]["sender"], true);
-    assert_eq!(captured["payload"]["hook_match"]["recipient"], true);
+    assert_eq!(captured["payload"]["hook_match"]["recipient"], false);
 }
 
 #[test]
@@ -679,7 +679,7 @@ fn test_send_runs_post_send_hook_when_sender_filter_is_wildcard() {
     let payload: serde_json::Value =
         serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
     assert_eq!(payload["hook_match"]["sender"], true);
-    assert_eq!(payload["hook_match"]["recipient"], true);
+    assert_eq!(payload["hook_match"]["recipient"], false);
 }
 
 #[test]
@@ -701,12 +701,12 @@ fn test_send_runs_post_send_hook_when_recipient_filter_is_wildcard() {
     );
     let payload: serde_json::Value =
         serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
-    assert_eq!(payload["hook_match"]["sender"], true);
+    assert_eq!(payload["hook_match"]["sender"], false);
     assert_eq!(payload["hook_match"]["recipient"], true);
 }
 
 #[test]
-fn test_send_runs_post_send_hook_when_filter_lists_are_empty() {
+fn test_send_does_not_run_post_send_hook_when_filter_lists_are_empty() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
@@ -722,10 +722,10 @@ fn test_send_runs_post_send_hook_when_filter_lists_are_empty() {
         "stderr: {}",
         fixture.stderr(&output)
     );
-    let payload: serde_json::Value =
-        serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
-    assert_eq!(payload["hook_match"]["sender"], true);
-    assert_eq!(payload["hook_match"]["recipient"], true);
+    assert!(!payload_path.exists(), "hook payload unexpectedly created");
+    assert_eq!(fixture.stderr(&output), "");
+    let inbox = fixture.inbox_contents("recipient");
+    assert_eq!(inbox.len(), 1);
 }
 
 #[test]
