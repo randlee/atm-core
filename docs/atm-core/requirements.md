@@ -80,7 +80,7 @@ Initial crate requirement IDs:
   of:
   `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-CLEAR-001`,
   `REQ-P-WORKFLOW-001`.
-- `REQ-CORE-SEND-001` `atm-core` owns send-path message construction,
+- `REQ-CORE-SEND-003` `atm-core` owns send-path message construction,
   classification, and append-boundary behavior above the mailbox storage
   helpers. Satisfies the send-path service aspects of:
   `REQ-P-SEND-001`, `REQ-P-IDLE-001`.
@@ -245,8 +245,10 @@ Required config rules:
 - `[atm].aliases` may define ATM-owned shorthand names for canonical agent
   identities
 - `[atm].post_send_hook` may define an ATM-owned helper script/command argv
-- `[atm].post_send_hook_members` may define the sender-identity allowlist for
-  that hook
+- `[atm].post_send_hook_senders` may define sender-side hook matching
+- `[atm].post_send_hook_recipients` may define recipient-side hook matching
+- retired `[atm].post_send_hook_members` must fail with migration guidance to
+  the sender/recipient keys rather than being treated as a compatibility alias
 - `[atm].identity` is obsolete and must not participate in runtime identity
   resolution; doctor should report it as configuration drift when present
 
@@ -266,9 +268,17 @@ Required identity rules:
   in `metadata.atm.fromIdentity`
 - canonical sender identity remains the source of truth for validation,
   self-send checks, routing, and audit behavior
-- `post_send_hook_members` matches resolved sender identity, not model name
+- `post_send_hook_senders` matches resolved sender identity, not model name
+- `post_send_hook_recipients` matches resolved recipient identity
+- omitted or empty sender/recipient trigger lists never match on that axis
+- `*` matches all senders or all recipients on the corresponding axis
+- if both sender/recipient trigger lists are omitted or empty, the hook is
+  configured-but-disabled and ATM must not emit a user-facing skip warning for
+  that case
 - `post_send_hook` runs only after a successful non-`dry-run` send and only
-  when the resolved sender identity is included in `post_send_hook_members`
+  when sender or recipient matching succeeds
+- when both sender and recipient matching succeed, ATM still runs the hook only
+  once
 - a relative `post_send_hook` path resolves from the discovered `.atm.toml`
   directory, and the hook executes with that same directory as its working
   directory
@@ -278,7 +288,26 @@ Required identity rules:
   - `to`
   - `message_id`
   - `requires_ack`
-  - optional `task_id`
+  - optional `task_id` when present
+  - `hook_match.sender`
+    boolean — true if the sender filter axis matched, false otherwise
+  - `hook_match.recipient`
+    boolean — true if the recipient filter axis matched, false otherwise
+- omitted or empty sender/recipient trigger lists therefore produce
+  `hook_match` values of `false`; only `*` represents an unconditional match
+- the hook may optionally emit one structured stdout result with `level`,
+  `message`, and optional `fields`; ATM logs it on a best-effort basis and
+  ignores absent or invalid output
+- hook-match evaluation and hook-skip outcomes must remain observable through
+  structured diagnostics and actionable user-visible warnings where required
+- when a hook is configured but neither filter axis matched, emit this
+  user-visible warning template:
+  ```text
+  post-send hook skipped: sender {sender} not in post_send_hook_senders {senders}
+  and recipient {recipient} not in post_send_hook_recipients {recipients}
+  ```
+- the hook-skip warning applies only when at least one sender/recipient filter
+  list is configured and both axes fail to match
 - hook failure or timeout is best-effort only and must not roll back a
   successful send
 - the reserved sender `atm-identity-missing@<team>` is available only for

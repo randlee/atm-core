@@ -1,18 +1,19 @@
+//! Send command service implementation and post-send hook handling.
+
 use std::collections::BTreeSet;
 use std::fs;
 use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, json};
+use serde_json::Map;
 use tracing::warn;
 
 use crate::address::AgentAddress;
 use crate::config;
-use crate::error::AtmError;
+use crate::error::{AtmError, AtmErrorCode};
 use crate::home;
 use crate::identity;
 use crate::mailbox;
@@ -22,6 +23,7 @@ use crate::schema::{LegacyMessageId, MessageEnvelope};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 
 pub(crate) mod file_policy;
+pub(super) mod hook;
 pub(crate) mod input;
 pub(crate) mod summary;
 
@@ -65,6 +67,9 @@ pub struct SendOutcome {
     pub summary: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    // TODO(v1.1.0): Replace this Vec<String> with a structured WarningEntry type
+    // so degraded-mode warnings can carry recovery guidance separately from the
+    // rendered message text.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
     #[serde(default, skip_serializing_if = "is_false")]
@@ -152,6 +157,12 @@ pub fn send_mail(
                 recipient.agent,
                 recipient.team
             ));
+            warn!(code = %AtmErrorCode::WarningMissingTeamConfigFallback,
+                config_path = %team_dir.join("config.json").display(),
+                recipient = %recipient.agent,
+                team = %recipient.team,
+                "send used existing inbox fallback; team config is missing"
+            );
 
             if !request.dry_run {
                 notify_team_lead_missing_config(
@@ -251,12 +262,12 @@ pub fn send_mail(
 }
 
 #[derive(Debug)]
-struct ResolvedRecipient {
+pub(super) struct ResolvedRecipient {
     agent: String,
     team: String,
 }
 
-struct PostSendHookContext<'a> {
+pub(super) struct PostSendHookContext<'a> {
     sender: &'a str,
     sender_team: Option<&'a str>,
     recipient: &'a ResolvedRecipient,
@@ -314,7 +325,12 @@ fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str,
     let team_lead_inbox = match home::inbox_path_from_home(home_dir, team, "team-lead") {
         Ok(path) => path,
         Err(error) => {
-            warn!(%error, team, "failed to resolve team-lead inbox for missing-config notice");
+            warn!(
+                code = %AtmErrorCode::WarningMissingTeamConfigFallback,
+                %error,
+                team,
+                "failed to resolve team-lead inbox for missing-config notice"
+            );
             return;
         }
     };
@@ -357,6 +373,7 @@ fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str,
 
     if let Err(error) = mailbox::append_message(&team_lead_inbox, &notice) {
         warn!(
+            code = %AtmErrorCode::WarningMissingTeamConfigFallback,
             %error,
             path = %team_lead_inbox.display(),
             "failed to append missing-config notice to team-lead inbox"
@@ -388,7 +405,7 @@ fn display_sender_identity(
         .unwrap_or_else(|| canonical_sender.to_string())
 }
 
-fn qualified_sender_identity(sender: &str, sender_team: Option<&str>) -> String {
+pub(super) fn qualified_sender_identity(sender: &str, sender_team: Option<&str>) -> String {
     sender_team
         .map(|team| format!("{sender}@{team}"))
         .unwrap_or_else(|| sender.to_string())
@@ -424,96 +441,7 @@ fn maybe_run_post_send_hook(
     config: Option<&config::AtmConfig>,
     context: PostSendHookContext<'_>,
 ) {
-    const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
-
-    let Some(config) = config else {
-        return;
-    };
-    let Some(command_argv) = config.post_send_hook.as_ref() else {
-        return;
-    };
-    if !config
-        .post_send_hook_members
-        .iter()
-        .any(|member| member == context.sender)
-    {
-        return;
-    }
-
-    let mut argv = command_argv.iter();
-    let Some(command_path) = argv.next() else {
-        return;
-    };
-    let command_path = {
-        let path = PathBuf::from(command_path);
-        if path.is_absolute() {
-            path
-        } else {
-            config.config_root.join(path)
-        }
-    };
-
-    let payload = json!({
-        "from": qualified_sender_identity(context.sender, context.sender_team),
-        "to": format!("{}@{}", context.recipient.agent, context.recipient.team),
-        "message_id": context.message_id.to_string(),
-        "requires_ack": context.requires_ack,
-        "task_id": context.task_id,
-    });
-
-    let mut command = Command::new(&command_path);
-    command
-        .args(argv)
-        .current_dir(&config.config_root)
-        .env("ATM_POST_SEND", payload.to_string())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-
-    let mut child = match command.spawn() {
-        Ok(child) => child,
-        Err(error) => {
-            warnings.push(format!(
-                "warning: post-send hook failed to start from {}: {error}",
-                command_path.display()
-            ));
-            return;
-        }
-    };
-
-    let started_at = Instant::now();
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                if !status.success() {
-                    warnings.push(format!(
-                        "warning: post-send hook exited unsuccessfully from {} with status {status}",
-                        command_path.display()
-                    ));
-                }
-                return;
-            }
-            Ok(None) if started_at.elapsed() < POST_SEND_HOOK_TIMEOUT => {
-                thread::sleep(Duration::from_millis(50));
-            }
-            Ok(None) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                warnings.push(format!(
-                    "warning: post-send hook timed out after {}s for {}",
-                    POST_SEND_HOOK_TIMEOUT.as_secs(),
-                    command_path.display()
-                ));
-                return;
-            }
-            Err(error) => {
-                warnings.push(format!(
-                    "warning: post-send hook status check failed for {}: {error}",
-                    command_path.display()
-                ));
-                return;
-            }
-        }
-    }
+    hook::maybe_run_post_send_hook(warnings, config, context);
 }
 
 fn missing_team_config_alert_key(team_dir: &Path) -> String {
@@ -524,7 +452,7 @@ fn register_missing_team_config_alert(home_dir: &Path, key: &str) -> bool {
     let state_path = send_alert_state_path(home_dir);
     let lock_path = send_alert_lock_path(home_dir);
     let Some(_guard) = acquire_send_alert_lock(&lock_path) else {
-        warn!(
+        warn!(code = %AtmErrorCode::WarningSendAlertStateDegraded,
             path = %lock_path.display(),
             "failed to acquire send alert lock; skipping team-lead notification"
         );
@@ -534,7 +462,7 @@ fn register_missing_team_config_alert(home_dir: &Path, key: &str) -> bool {
     let mut state = match load_send_alert_state(&state_path) {
         Ok(state) => state,
         Err(error) => {
-            warn!(
+            warn!(code = %AtmErrorCode::WarningSendAlertStateDegraded,
                 %error,
                 path = %state_path.display(),
                 "failed to read send state file - defaulting to empty state"
@@ -548,7 +476,11 @@ fn register_missing_team_config_alert(home_dir: &Path, key: &str) -> bool {
 
     state.missing_team_config_keys.insert(key.to_string());
     if let Err(error) = save_send_alert_state(&state_path, &state) {
-        warn!(%error, path = %state_path.display(), "failed to save send alert dedup state");
+        warn!(code = %AtmErrorCode::WarningSendAlertStateDegraded,
+            %error,
+            path = %state_path.display(),
+            "failed to save send alert dedup state"
+        );
     }
     true
 }
@@ -557,7 +489,7 @@ fn clear_missing_team_config_alert(home_dir: &Path, team_dir: &Path) {
     let state_path = send_alert_state_path(home_dir);
     let lock_path = send_alert_lock_path(home_dir);
     let Some(_guard) = acquire_send_alert_lock(&lock_path) else {
-        warn!(
+        warn!(code = %AtmErrorCode::WarningSendAlertStateDegraded,
             path = %lock_path.display(),
             "failed to acquire send alert lock while clearing dedup state"
         );
@@ -574,7 +506,12 @@ fn clear_missing_team_config_alert(home_dir: &Path, team_dir: &Path) {
     }
 
     if let Err(error) = save_send_alert_state(&state_path, &state) {
-        warn!(%error, path = %state_path.display(), "failed to clear send alert dedup state");
+        warn!(
+            code = %AtmErrorCode::WarningSendAlertStateDegraded,
+            %error,
+            path = %state_path.display(),
+            "failed to clear send alert dedup state"
+        );
     }
 }
 
@@ -633,6 +570,7 @@ fn acquire_send_alert_lock(path: &Path) -> Option<SendAlertLock> {
         && let Err(error) = fs::create_dir_all(parent)
     {
         warn!(
+            code = %AtmErrorCode::WarningSendAlertStateDegraded,
             %error,
             path = %parent.display(),
             "failed to create send alert lock directory"
@@ -645,7 +583,12 @@ fn acquire_send_alert_lock(path: &Path) -> Option<SendAlertLock> {
             Ok(mut file) => {
                 let pid = std::process::id().to_string();
                 if let Err(error) = std::io::Write::write_all(&mut file, pid.as_bytes()) {
-                    warn!(%error, path = %path.display(), "failed to write send alert lock pid");
+                    warn!(
+                        code = %AtmErrorCode::WarningSendAlertStateDegraded,
+                        %error,
+                        path = %path.display(),
+                        "failed to write send alert lock pid"
+                    );
                     let _ = fs::remove_file(path);
                     return None;
                 }
@@ -660,7 +603,12 @@ fn acquire_send_alert_lock(path: &Path) -> Option<SendAlertLock> {
                 thread::sleep(Duration::from_millis(10));
             }
             Err(error) => {
-                warn!(%error, path = %path.display(), "failed to create send alert lock");
+                warn!(
+                    code = %AtmErrorCode::WarningSendAlertStateDegraded,
+                    %error,
+                    path = %path.display(),
+                    "failed to create send alert lock"
+                );
                 return None;
             }
         }
@@ -684,7 +632,13 @@ fn evict_stale_send_alert_lock(path: &Path) -> bool {
         Ok(()) => true,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
         Err(error) => {
-            warn!(%error, path = %path.display(), pid, "failed to evict stale send alert lock");
+            warn!(
+                code = %AtmErrorCode::WarningSendAlertStateDegraded,
+                %error,
+                path = %path.display(),
+                pid,
+                "failed to evict stale send alert lock"
+            );
             false
         }
     }
@@ -708,8 +662,6 @@ fn process_is_alive(pid: u32) -> bool {
 
 #[cfg(windows)]
 fn process_is_alive(pid: u32) -> bool {
-    use std::ptr;
-
     use windows_sys::Win32::Foundation::{CloseHandle, STILL_ACTIVE};
     use windows_sys::Win32::System::Threading::{
         GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
@@ -718,7 +670,7 @@ fn process_is_alive(pid: u32) -> bool {
     // SAFETY: OpenProcess is called read-only for process liveness inspection.
     let process_id: u32 = pid;
     let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, process_id) };
-    if handle == ptr::null_mut() {
+    if handle.is_null() {
         return false;
     }
 
@@ -740,6 +692,7 @@ impl Drop for SendAlertLock {
             && error.kind() != std::io::ErrorKind::NotFound
         {
             warn!(
+                code = %AtmErrorCode::WarningSendAlertStateDegraded,
                 %error,
                 path = %self.path.display(),
                 "failed to remove send alert lock"
@@ -751,7 +704,6 @@ impl Drop for SendAlertLock {
 #[cfg(test)]
 mod tests {
     use std::fs;
-
     use tempfile::tempdir;
 
     use super::{

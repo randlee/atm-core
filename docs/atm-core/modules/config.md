@@ -16,7 +16,8 @@ References:
 - `REQ-P-IDENTITY-001`
 - `REQ-P-CONFIG-HEALTH-001`
 - `REQ-CORE-CONFIG-001` for `[atm].team_members`, obsolete `[atm].identity`,
-  and `post_send_hook` / `post_send_hook_members`
+  and `post_send_hook` / `post_send_hook_senders` /
+  `post_send_hook_recipients`
 - `REQ-CORE-CONFIG-002` for `[atm].aliases` resolution and canonical address
   rewrite
 - `REQ-CORE-CONFIG-003`

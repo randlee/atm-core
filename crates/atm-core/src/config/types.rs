@@ -17,7 +17,8 @@ pub struct AtmConfig {
     pub team_members: Vec<String>,
     pub aliases: BTreeMap<String, String>,
     pub post_send_hook: Option<Vec<String>>,
-    pub post_send_hook_members: Vec<String>,
+    pub post_send_hook_senders: Vec<String>,
+    pub post_send_hook_recipients: Vec<String>,
     pub config_root: PathBuf,
     pub(crate) obsolete_identity_present: bool,
 }

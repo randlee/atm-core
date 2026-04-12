@@ -147,7 +147,10 @@ fn test_log_tail_streams_new_records() {
         "25",
     ]);
 
-    thread::sleep(Duration::from_millis(100));
+    // Known timing dependency: give the spawned tail process enough time to
+    // initialize before sending the log-producing command. TODO(v1.1.0): replace
+    // this sleep with a deterministic tail-readiness probe tracked in a follow-up issue.
+    thread::sleep(Duration::from_millis(250));
     fixture.send("recipient@atm-dev", "hello tail");
 
     let records = fixture.read_tail_records(child, 1);

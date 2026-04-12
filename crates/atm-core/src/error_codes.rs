@@ -14,6 +14,8 @@ pub enum AtmErrorCode {
     ConfigHomeUnavailable,
     /// A generic ATM config parse failed.
     ConfigParseFailed,
+    /// `.atm.toml` uses a retired post-send hook key.
+    ConfigRetiredHookMembersKey,
     /// Team config parsing failed.
     ConfigTeamParseFailed,
     /// Team config document is missing.
@@ -36,8 +38,6 @@ pub enum AtmErrorCode {
     MailboxLockFailed,
     /// Acquiring a mailbox lock timed out.
     MailboxLockTimeout,
-    /// A malformed mailbox record was skipped.
-    MailboxRecordSkipped,
     /// Message validation failed.
     MessageValidationFailed,
     /// Serialization or deserialization failed.
@@ -84,6 +84,10 @@ pub enum AtmErrorCode {
     WarningBaselineMemberMissing,
     /// A restore operation left a stale in-progress marker behind.
     WarningRestoreInProgress,
+    /// A configured post-send hook was skipped because no filter matched.
+    WarningHookSkipped,
+    /// A configured post-send hook failed during best-effort execution.
+    WarningHookExecutionFailed,
 }
 
 impl AtmErrorCode {
@@ -91,6 +95,7 @@ impl AtmErrorCode {
         match self {
             Self::ConfigHomeUnavailable => "ATM_CONFIG_HOME_UNAVAILABLE",
             Self::ConfigParseFailed => "ATM_CONFIG_PARSE_FAILED",
+            Self::ConfigRetiredHookMembersKey => "ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY",
             Self::ConfigTeamParseFailed => "ATM_CONFIG_TEAM_PARSE_FAILED",
             Self::ConfigTeamMissing => "ATM_CONFIG_TEAM_MISSING",
             Self::IdentityUnavailable => "ATM_IDENTITY_UNAVAILABLE",
@@ -102,7 +107,6 @@ impl AtmErrorCode {
             Self::MailboxWriteFailed => "ATM_MAILBOX_WRITE_FAILED",
             Self::MailboxLockFailed => "ATM_MAILBOX_LOCK_FAILED",
             Self::MailboxLockTimeout => "ATM_MAILBOX_LOCK_TIMEOUT",
-            Self::MailboxRecordSkipped => "ATM_MAILBOX_RECORD_SKIPPED",
             Self::MessageValidationFailed => "ATM_MESSAGE_VALIDATION_FAILED",
             Self::SerializationFailed => "ATM_SERIALIZATION_FAILED",
             Self::FilePolicyRejected => "ATM_FILE_POLICY_REJECTED",
@@ -126,6 +130,8 @@ impl AtmErrorCode {
             Self::WarningIdentityDrift => "ATM_WARNING_IDENTITY_DRIFT",
             Self::WarningBaselineMemberMissing => "ATM_WARNING_BASELINE_MEMBER_MISSING",
             Self::WarningRestoreInProgress => "ATM_WARNING_RESTORE_IN_PROGRESS",
+            Self::WarningHookSkipped => "ATM_WARNING_HOOK_SKIPPED",
+            Self::WarningHookExecutionFailed => "ATM_WARNING_HOOK_EXECUTION_FAILED",
         }
     }
 }

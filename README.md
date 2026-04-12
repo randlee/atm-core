@@ -149,6 +149,72 @@ The `teams` command also contains retained team-administration subcommands:
 ATM resolves runtime identity and team context from the current CLI/config
 surface and uses the local Claude team directory layout for mailbox storage.
 
+## Post-Send Hook
+
+`atm send` can run an optional post-send hook configured in `.atm.toml`:
+
+```toml
+[atm]
+post_send_hook = ["scripts/tmux-nudge.sh", "--team", "atm-dev"]
+post_send_hook_senders = ["team-lead"]
+post_send_hook_recipients = ["arch-ctm", "*"]
+```
+
+Behavior:
+- `post_send_hook` is a command argv array. If the first entry is a relative path, ATM resolves it relative to the directory containing `.atm.toml`.
+- `post_send_hook_senders` matches the resolved sender identity.
+- `post_send_hook_recipients` matches the resolved recipient agent name.
+- Omitted or empty sender/recipient lists do not match on that axis.
+- `*` in either list matches all senders or all recipients unconditionally.
+- If both sender and recipient lists are omitted or empty, the hook is effectively disabled and ATM does not emit a skip warning for that case.
+- The hook runs once if either sender or recipient matching succeeds.
+- ATM rejects retired `post_send_hook_members` with a migration error.
+- ATM sets `ATM_POST_SEND` to a JSON payload with `{from, to, message_id, requires_ack, hook_match}` plus optional `task_id` when present.
+- The hook gets 5 seconds to complete.
+- Hook stderr is suppressed. Hook stdout may optionally return one JSON object with `level`, `message`, and optional `fields` for ATM to log.
+- For troubleshooting hook diagnostics, combine `--stderr-logs` with `ATM_LOG=debug` to surface debug-level hook results on stderr.
+- If the hook exits non-zero, fails to start, or times out, `atm send` still succeeds and prints a warning.
+
+Example `ATM_POST_SEND` payload:
+
+```json
+{
+  "from": "team-lead@atm-dev",
+  "to": "arch-ctm@atm-dev",
+  "message_id": "550e8400-e29b-41d4-a716-446655440000",
+  "requires_ack": true,
+  "hook_match": {
+    "sender": false,
+    "recipient": true
+  }
+}
+```
+
+Example tmux auto-nudge hook for a Codex pane:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+readarray -t fields < <(python3 - <<'PY'
+import json, os
+payload = json.loads(os.environ["ATM_POST_SEND"])
+print(payload["to"].split("@", 1)[0])
+print(payload["to"].split("@", 1)[1])
+PY
+)
+
+recipient="${fields[0]}"
+team="${fields[1]}"
+tmux send-keys -t "$recipient" "You have unread ATM messages. Run: atm read --team $team" Enter
+```
+
+Optional structured hook result on stdout:
+
+```json
+{"level":"debug","message":"arch-ctm nudged on pane %42","fields":{"pane_id":"%42"}}
+```
+
 Useful docs in this repo:
 - [requirements.md](docs/requirements.md)
 - [architecture.md](docs/architecture.md)

@@ -69,7 +69,6 @@ Error codes should describe the failure class, not a specific prose message.
 - `ATM_MAILBOX_WRITE_FAILED`
 - `ATM_MAILBOX_LOCK_FAILED`
 - `ATM_MAILBOX_LOCK_TIMEOUT`
-- `ATM_MAILBOX_RECORD_SKIPPED`
 - `ATM_MESSAGE_VALIDATION_FAILED`
 - `ATM_SERIALIZATION_FAILED`
 
@@ -120,6 +119,78 @@ Error codes should describe the failure class, not a specific prose message.
 - `ATM_WARNING_MISSING_TEAM_CONFIG_FALLBACK`
 - `ATM_WARNING_SEND_ALERT_STATE_DEGRADED`
 
+### 5.8 Post-Send Hook
+
+- `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`
+- `ATM_WARNING_HOOK_SKIPPED`
+- `ATM_WARNING_HOOK_EXECUTION_FAILED`
+
+#### 5.8.1 `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`
+
+- code: `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`
+- description: `.atm.toml` contains the retired `post_send_hook_members` key
+  instead of the explicit `post_send_hook_senders` /
+  `post_send_hook_recipients` keys
+- HTTP status: `400 Bad Request`
+- context:
+  - emitted during ATM config loading before send execution proceeds
+  - requires migration guidance that explains sender- versus
+    recipient-triggered hook filters and the `*` wildcard
+  - `{config_path}` resolves to the discovered `.atm.toml` path that contained
+    the retired key
+  - expected output split:
+    - message:
+      ```text
+      error: '{config_path}' field 'post_send_hook_members' is no longer supported.
+      ```
+    - recovery:
+      ```text
+      Use 'post_send_hook_senders' (match on sender identity) and/or
+      'post_send_hook_recipients' (match on recipient name) under [atm].
+      Use '*' to match all senders or all recipients.
+      ```
+  - the rendered CLI output may display the message and recovery together, but
+    ATM stores them as separate fields on the structured error
+  - must not be downgraded to a warning because the old key is ambiguous under
+    the redesigned contract
+
+#### 5.8.2 `ATM_WARNING_HOOK_SKIPPED`
+
+- code: `ATM_WARNING_HOOK_SKIPPED`
+- description: a post-send hook was configured, but neither the sender nor the
+  recipient trigger filters matched the current send
+- HTTP status: `200 OK`
+- context:
+  - emitted as a warning/diagnostic only after a successful send
+  - should include the resolved sender, resolved recipient, and configured
+    sender/recipient filter values to make the mismatch actionable
+  - expected message template:
+    ```text
+    post-send hook skipped: sender {sender} not in post_send_hook_senders {senders}
+    and recipient {recipient} not in post_send_hook_recipients {recipients}
+    ```
+  - when a sender or recipient filter list is omitted, the corresponding
+    `{senders}` or `{recipients}` placeholder renders as `(not configured)`
+  - delivery channel: user-visible `warn!` / stderr via normal tracing log
+    routing; not debug-only and not suppressible
+  - covers explicit no-match outcomes only when at least one sender or
+    recipient filter list is configured; it is not used for hook process
+    failures or for a hook that is configured-but-disabled with both lists
+    omitted/empty
+
+#### 5.8.3 `ATM_WARNING_HOOK_EXECUTION_FAILED`
+
+- code: `ATM_WARNING_HOOK_EXECUTION_FAILED`
+- description: a configured post-send hook failed to start, exited non-zero,
+  timed out, or otherwise failed during best-effort execution
+- HTTP status: `200 OK`
+- context:
+  - emitted as a warning/diagnostic only after the mailbox send has already
+    succeeded
+  - must not roll back or convert a successful send into a command failure
+  - may be accompanied by lower-level OS/process details and any structured
+    hook result that was successfully parsed before failure
+
 ## 6. Mapping Rules
 
 Required mapping rules:
@@ -128,6 +199,27 @@ Required mapping rules:
 - the code is more specific than the coarse `AtmErrorKind`
 - warnings that do not become `AtmError` still use a registry code
 - tests should assert the stable code, not only the human-readable message
+
+| `AtmErrorKind` | Default `AtmErrorCode` | Additional implemented codes in the same kind |
+| --- | --- | --- |
+| `Config` | `ATM_CONFIG_PARSE_FAILED` | `ATM_CONFIG_HOME_UNAVAILABLE`, `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`, `ATM_CONFIG_TEAM_PARSE_FAILED` |
+| `MissingDocument` | `ATM_CONFIG_TEAM_MISSING` | none |
+| `Address` | `ATM_ADDRESS_PARSE_FAILED` | none |
+| `Identity` | `ATM_IDENTITY_UNAVAILABLE` | none |
+| `TeamNotFound` | `ATM_TEAM_NOT_FOUND` | `ATM_TEAM_UNAVAILABLE` |
+| `AgentNotFound` | `ATM_AGENT_NOT_FOUND` | none |
+| `MailboxLock` | `ATM_MAILBOX_LOCK_FAILED` | `ATM_MAILBOX_LOCK_TIMEOUT` |
+| `MailboxRead` | `ATM_MAILBOX_READ_FAILED` | none |
+| `MailboxWrite` | `ATM_MAILBOX_WRITE_FAILED` | none |
+| `FilePolicy` | `ATM_FILE_POLICY_REJECTED` | `ATM_FILE_REFERENCE_REWRITE_FAILED` |
+| `Validation` | `ATM_MESSAGE_VALIDATION_FAILED` | `ATM_ACK_INVALID_STATE`, `ATM_CLEAR_INVALID_STATE` |
+| `Serialization` | `ATM_SERIALIZATION_FAILED` | none |
+| `Timeout` | `ATM_WAIT_TIMEOUT` | none |
+| `ObservabilityEmit` | `ATM_OBSERVABILITY_EMIT_FAILED` | none |
+| `ObservabilityBootstrap` | `ATM_OBSERVABILITY_BOOTSTRAP_FAILED` | none |
+| `ObservabilityQuery` | `ATM_OBSERVABILITY_QUERY_FAILED` | none |
+| `ObservabilityFollow` | `ATM_OBSERVABILITY_FOLLOW_FAILED` | none |
+| `ObservabilityHealth` | `ATM_OBSERVABILITY_HEALTH_FAILED` | `ATM_OBSERVABILITY_HEALTH_OK`, `ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED` |
 
 ## 7. Evolution Rules
 

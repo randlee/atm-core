@@ -1,8 +1,5 @@
 pub mod hook;
 
-#[cfg(test)]
-use hook::HookIdentity;
-
 use crate::config::AtmConfig;
 use crate::error::AtmError;
 
@@ -67,11 +64,11 @@ pub fn resolve_runtime_sender_identity(config: Option<&AtmConfig>) -> Result<Str
 pub fn resolve_hook_identity(
     team_override: Option<&str>,
     config: Option<&AtmConfig>,
-) -> Result<HookIdentity, AtmError> {
+) -> Result<(String, String), AtmError> {
     let agent = resolve_runtime_sender_identity(config)?;
     let team = crate::config::resolve_team(team_override, config)
         .ok_or_else(AtmError::team_unavailable)?;
-    Ok(HookIdentity { agent, team })
+    Ok((agent, team))
 }
 
 #[cfg(test)]
@@ -94,13 +91,8 @@ mod tests {
 
         let config = AtmConfig {
             identity: Some("config-agent".into()),
-            default_team: None,
-            team_members: Vec::new(),
-            aliases: Default::default(),
-            post_send_hook: None,
-            post_send_hook_members: Vec::new(),
-            config_root: std::path::PathBuf::new(),
             obsolete_identity_present: true,
+            ..Default::default()
         };
         assert_eq!(
             resolve_runtime_sender_identity(Some(&config)).expect("identity"),
@@ -118,13 +110,8 @@ mod tests {
 
         let config = AtmConfig {
             identity: Some("config-agent".into()),
-            default_team: None,
-            team_members: Vec::new(),
-            aliases: Default::default(),
-            post_send_hook: None,
-            post_send_hook_members: Vec::new(),
-            config_root: std::path::PathBuf::new(),
             obsolete_identity_present: true,
+            ..Default::default()
         };
 
         let error = resolve_runtime_sender_identity(Some(&config)).expect_err("identity error");
@@ -141,9 +128,9 @@ mod tests {
         set_env_var("ATM_IDENTITY", "arch-ctm");
         set_env_var("ATM_TEAM", "atm-dev");
 
-        let identity = resolve_hook_identity(None, None).expect("hook identity");
-        assert_eq!(identity.agent, "arch-ctm");
-        assert_eq!(identity.team, "atm-dev");
+        let (agent, team) = resolve_hook_identity(None, None).expect("hook identity");
+        assert_eq!(agent, "arch-ctm");
+        assert_eq!(team, "atm-dev");
 
         restore("ATM_IDENTITY", original_identity);
         restore("ATM_TEAM", original_team);
@@ -160,12 +147,8 @@ mod tests {
         let config = AtmConfig {
             identity: Some("config-agent".into()),
             default_team: Some("config-team".into()),
-            team_members: Vec::new(),
-            aliases: Default::default(),
-            post_send_hook: None,
-            post_send_hook_members: Vec::new(),
-            config_root: std::path::PathBuf::new(),
             obsolete_identity_present: true,
+            ..Default::default()
         };
 
         let error = resolve_hook_identity(None, Some(&config)).expect_err("hook identity error");
@@ -197,14 +180,8 @@ mod tests {
         let mut aliases = std::collections::BTreeMap::new();
         aliases.insert("lead".to_string(), "team-lead".to_string());
         let config = AtmConfig {
-            identity: None,
-            default_team: None,
-            team_members: Vec::new(),
             aliases,
-            post_send_hook: None,
-            post_send_hook_members: Vec::new(),
-            config_root: std::path::PathBuf::new(),
-            obsolete_identity_present: false,
+            ..Default::default()
         };
 
         assert_eq!(

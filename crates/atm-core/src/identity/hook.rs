@@ -6,13 +6,6 @@ use crate::error::AtmError;
 
 const HOOK_FILE_TTL_SECS: f64 = 5.0;
 
-#[cfg(test)]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HookIdentity {
-    pub agent: String,
-    pub team: String,
-}
-
 #[derive(Debug, Deserialize)]
 struct HookFileData {
     agent_name: Option<String>,
@@ -34,6 +27,9 @@ pub fn read_hook_identity() -> Result<Option<String>, AtmError> {
             format!("failed to read hook file {}: {error}", path.display()),
         )
         .with_source(error)
+        .with_recovery(
+            "The hook identity file is ephemeral. Rerun the triggering hook or ignore if hook identity is optional.",
+        )
     })?;
 
     let data: HookFileData = serde_json::from_str(&raw).map_err(|error| {
@@ -42,6 +38,9 @@ pub fn read_hook_identity() -> Result<Option<String>, AtmError> {
             format!("invalid hook file JSON at {}: {error}", path.display()),
         )
         .with_source(error)
+        .with_recovery(
+            "The hook identity file is ephemeral. Rerun the triggering hook or ignore if hook identity is optional.",
+        )
     })?;
 
     let now = SystemTime::now()
@@ -63,6 +62,7 @@ fn hook_file_path() -> Option<std::path::PathBuf> {
 fn parent_pid() -> Option<u32> {
     #[cfg(unix)]
     {
+        // SAFETY: getppid(2) has no preconditions; it never fails and always returns the parent PID.
         let pid = unsafe { libc::getppid() };
         (pid > 0).then_some(pid as u32)
     }

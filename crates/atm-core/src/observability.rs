@@ -141,8 +141,8 @@ impl AtmJsonNumber {
         &self.raw
     }
 
-    fn to_json_number(&self) -> Result<serde_json::Number, AtmError> {
-        Ok(self.number.clone())
+    fn to_json_number(&self) -> serde_json::Number {
+        self.number.clone()
     }
 }
 
@@ -159,9 +159,7 @@ impl Serialize for AtmJsonNumber {
     where
         S: Serializer,
     {
-        self.to_json_number()
-            .map_err(S::Error::custom)?
-            .serialize(serializer)
+        self.to_json_number().serialize(serializer)
     }
 }
 
@@ -245,7 +243,7 @@ impl LogFieldValue {
             Self::Null => Ok(Value::Null),
             Self::Bool(value) => Ok(Value::Bool(*value)),
             Self::String(value) => Ok(Value::String(value.clone())),
-            Self::Number(value) => Ok(Value::Number(value.to_json_number()?)),
+            Self::Number(value) => Ok(Value::Number(value.to_json_number())),
             Self::Array(values) => values
                 .iter()
                 .map(Self::to_json_value)
@@ -546,7 +544,12 @@ fn normalize_json_number(raw: &str) -> String {
         Some(index) => match unsigned[index + 1..].parse::<i64>() {
             Ok(exponent) => (&unsigned[..index], exponent),
             Err(error) => {
-                warn!(raw, %error, "failed to normalize JSON number exponent; preserving original value");
+                warn!(
+                    code = %AtmErrorCode::WarningMalformedAtmFieldIgnored,
+                    raw,
+                    %error,
+                    "failed to normalize JSON number exponent; preserving original value"
+                );
                 return raw.to_string();
             }
         },
