@@ -115,6 +115,7 @@ pub fn load_team_config(team_dir: &Path) -> Result<TeamConfig, AtmError> {
 }
 
 pub fn resolve_identity(_config: Option<&AtmConfig>) -> Option<String> {
+    // Reserved: config-provided identity fallback is intentionally not implemented.
     env::var("ATM_IDENTITY")
         .ok()
         .filter(|value| !value.is_empty())
@@ -189,7 +190,7 @@ fn reject_retired_post_send_hook_members(
             ),
         )
         .with_recovery(
-            "Replace post_send_hook_members with post_send_hook_senders and/or post_send_hook_recipients under [atm]. Use * to match all.",
+            "Use 'post_send_hook_senders' (match on sender identity) and/or 'post_send_hook_recipients' (match on recipient name) under [atm]. Use '*' to match all senders or all recipients.",
         ));
     }
     Ok(())
@@ -440,7 +441,7 @@ post_send_hook_members = ["team-lead"]
         assert_eq!(
             error.recovery.as_deref(),
             Some(
-                "Replace post_send_hook_members with post_send_hook_senders and/or post_send_hook_recipients under [atm]. Use * to match all."
+                "Use 'post_send_hook_senders' (match on sender identity) and/or 'post_send_hook_recipients' (match on recipient name) under [atm]. Use '*' to match all senders or all recipients."
             )
         );
     }

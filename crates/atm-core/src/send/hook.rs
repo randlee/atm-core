@@ -51,11 +51,23 @@ pub(super) fn maybe_run_post_send_hook(
         return;
     };
 
+    let sender_filters_configured = !config.post_send_hook_senders.is_empty();
+    let recipient_filters_configured = !config.post_send_hook_recipients.is_empty();
     let hook_match = PostSendHookMatch {
         sender: matches_hook_axis(&config.post_send_hook_senders, context.sender),
         recipient: matches_hook_axis(&config.post_send_hook_recipients, &context.recipient.agent),
     };
     if !hook_match.sender && !hook_match.recipient {
+        if !sender_filters_configured && !recipient_filters_configured {
+            debug!(
+                sender = context.sender,
+                recipient = %context.recipient.agent,
+                recipient_team = %context.recipient.team,
+                "post-send hook disabled because no sender or recipient filters are configured"
+            );
+            return;
+        }
+
         let warning = format_post_send_hook_skipped_warning(
             context.sender,
             &context.recipient.agent,
@@ -93,17 +105,19 @@ pub(super) fn maybe_run_post_send_hook(
         return;
     };
     let command_path = resolve_command_path(config, command_path);
-    let payload = json!({
+    let mut payload = json!({
         "from": qualified_sender_identity(context.sender, context.sender_team),
         "to": format!("{}@{}", context.recipient.agent, context.recipient.team),
         "message_id": context.message_id.to_string(),
         "requires_ack": context.requires_ack,
-        "task_id": context.task_id,
         "hook_match": {
             "sender": hook_match.sender,
             "recipient": hook_match.recipient,
         },
     });
+    if let Some(task_id) = context.task_id {
+        payload["task_id"] = Value::String(task_id.to_string());
+    }
 
     let mut command = Command::new(&command_path);
     command
@@ -225,7 +239,7 @@ fn resolve_command_path(config: &config::AtmConfig, command_path: &str) -> PathB
 }
 
 fn matches_hook_axis(filters: &[String], candidate: &str) -> bool {
-    filters.is_empty() || hook_filter_matches(filters, candidate)
+    hook_filter_matches(filters, candidate)
 }
 
 fn hook_filter_matches(filters: &[String], candidate: &str) -> bool {
@@ -247,9 +261,11 @@ fn format_post_send_hook_skipped_warning(
     )
 }
 
+/// Render filters exactly as operators configure them so skip diagnostics make
+/// it clear when a trigger axis is effectively disabled.
 fn display_filter_list(filters: &[String]) -> String {
     if filters.is_empty() {
-        "*".to_string()
+        "[]".to_string()
     } else {
         filters.join(", ")
     }
@@ -422,8 +438,8 @@ mod tests {
     }
 
     #[test]
-    fn matches_hook_axis_treats_empty_filter_list_as_unconditional() {
-        assert!(matches_hook_axis(&[], "arch-ctm"));
+    fn matches_hook_axis_treats_empty_filter_list_as_no_match() {
+        assert!(!matches_hook_axis(&[], "arch-ctm"));
     }
 
     #[test]
@@ -439,6 +455,11 @@ mod tests {
             warning,
             "post-send hook skipped: sender arch-ctm not in post_send_hook_senders team-lead\nand recipient recipient not in post_send_hook_recipients quality-mgr"
         );
+    }
+
+    #[test]
+    fn display_filter_list_renders_empty_as_empty_list() {
+        assert_eq!(super::display_filter_list(&[]), "[]");
     }
 
     #[test]

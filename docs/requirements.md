@@ -461,8 +461,14 @@ Post-send-hook rules:
 - `post_send_hook` is an ATM-owned helper script/command path list
 - `post_send_hook_senders` matches resolved sender identity, not model name
 - `post_send_hook_recipients` matches the resolved recipient agent name
+- an omitted or empty `post_send_hook_senders` list never matches any sender
+- an omitted or empty `post_send_hook_recipients` list never matches any
+  recipient
 - `*` in either list matches every sender or every recipient respectively,
   unconditionally, including all valid resolved sender/recipient identities
+- if both sender and recipient trigger lists are omitted or empty, the hook is
+  configured-but-disabled and ATM must not emit a user-facing skip warning for
+  that case
 - the hook runs once when either sender or recipient matching succeeds; if both
   match, ATM must not run the hook twice
 - `post_send_hook_members` is not a supported config key in this release line
@@ -485,11 +491,14 @@ Post-send-hook rules:
   - `to`
   - `message_id`
   - `requires_ack`
-  - optional `task_id`
+  - optional `task_id` when present
   - `hook_match.sender`
     boolean — true if the sender filter axis matched, false otherwise
   - `hook_match.recipient`
     boolean — true if the recipient filter axis matched, false otherwise
+- when a sender or recipient list is omitted or empty, the corresponding
+  `hook_match` field is false because that axis did not match; only `*`
+  represents an unconditional match
 - example payload:
   ```json
   {
@@ -497,10 +506,9 @@ Post-send-hook rules:
     "to": "recipient@atm-dev",
     "message_id": "...",
     "requires_ack": false,
-    "task_id": null,
     "hook_match": {
-      "sender": true,
-      "recipient": false
+      "sender": false,
+      "recipient": true
     }
   }
   ```
@@ -529,6 +537,8 @@ Post-send-hook rules:
   post-send hook skipped: sender {sender} not in post_send_hook_senders {senders}
   and recipient {recipient} not in post_send_hook_recipients {recipients}
   ```
+- this hook-skip warning applies only when at least one sender/recipient
+  filter list is configured and both axes fail to match
 - this hook-skip warning is emitted through the normal user-visible `warn!`
   channel, rendered to stderr via tracing/log routing, and is not debug-only or
   suppressible
@@ -596,6 +606,10 @@ Retired from the current implementation:
 - run `post_send_hook` only after successful non-`dry-run` sends and only when
   the resolved sender matches `post_send_hook_senders` or the resolved
   recipient matches `post_send_hook_recipients`
+- treat omitted or empty sender/recipient trigger lists as `never_match`
+  rather than unconditional pass
+- if both sender/recipient trigger lists are omitted or empty, treat the hook
+  as configured-but-disabled and do not emit a user-facing skip warning
 - support `*` wildcard matching in either post-send-hook filter list
 - run the hook at most once per successful send even when both sender and
   recipient filters match

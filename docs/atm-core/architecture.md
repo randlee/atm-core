@@ -94,19 +94,26 @@ Identity-specific policy:
   - `to`
   - `message_id`
   - `requires_ack`
-  - optional `task_id`
+  - optional `task_id` when present
   - `hook_match.sender`
     boolean — true if the sender filter axis matched, false otherwise
   - `hook_match.recipient`
     boolean — true if the recipient filter axis matched, false otherwise
+- omitted or empty sender/recipient trigger lists therefore produce
+  `hook_match` values of `false`; only `*` represents an unconditional match
 - sender matching uses `[atm].post_send_hook_senders`
 - recipient matching uses `[atm].post_send_hook_recipients`
+- omitted or empty sender/recipient lists do not match on that axis
+- if both sender/recipient lists are omitted or empty, the hook is effectively
+  disabled and ATM does not emit a user-facing skip warning for that case
 - `*` is a wildcard match on either trigger axis
 - hook execution occurs once when either trigger axis matches
 - hook stdout may optionally carry one structured result object that ATM parses
   on a best-effort basis for post-send diagnostics
 - supported structured hook-result levels are `debug`, `info`, `warn`, and
   `error`
+- user-visible skip warnings apply only when at least one sender/recipient
+  filter list is configured and both axes fail to match
 - hook-decision evaluation and skip reasons must be observable enough for
   troubleshooting without requiring source inspection
 - hook failure or timeout is best-effort only and must not convert a
