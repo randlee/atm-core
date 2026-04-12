@@ -282,7 +282,8 @@ Supported optional config fields:
 - `[atm].team_members`
 - `[atm].aliases`
 - `[atm].post_send_hook`
-- `[atm].post_send_hook_members`
+- `[atm].post_send_hook_senders`
+- `[atm].post_send_hook_recipients`
 
 Runtime identity rules:
 - repo-local `.atm.toml` `[atm].identity` is not a valid runtime identity
@@ -299,7 +300,11 @@ Runtime identity rules:
 - `.atm.toml` may define `[atm].aliases` for ATM-owned shorthand addressing of
   canonical member identities
 - `.atm.toml` may define `[atm].post_send_hook` and
-  `[atm].post_send_hook_members` for sender-scoped post-send automation
+  `[atm].post_send_hook_senders` / `[atm].post_send_hook_recipients` for
+  best-effort post-send automation
+- `[atm].post_send_hook_members` is retired and must be rejected with
+  migration guidance directing operators to
+  `[atm].post_send_hook_senders` and `[atm].post_send_hook_recipients`
 - config sections outside ATM-owned config, such as `[rmux]` or future
   `[scmux]`, are not ATM runtime config and must be ignored by `atm-core`
 
@@ -454,7 +459,12 @@ Alias rules:
 
 Post-send-hook rules:
 - `post_send_hook` is an ATM-owned helper script/command path list
-- `post_send_hook_members` matches resolved sender identity, not model name
+- `post_send_hook_senders` matches resolved sender identity, not model name
+- `post_send_hook_recipients` matches the resolved recipient agent name
+- `*` in either list matches every sender or every recipient respectively
+- the hook runs once when either sender or recipient matching succeeds; if both
+  match, ATM must not run the hook twice
+- `post_send_hook_members` is not a supported config key in this release line
 - a relative hook path must resolve from the directory containing the
   discovered `.atm.toml`
 - the hook must execute with that same config-root directory as its working
@@ -467,6 +477,11 @@ Post-send-hook rules:
   - `message_id`
   - `requires_ack`
   - optional `task_id`
+  - `hook_match.sender`
+  - `hook_match.recipient`
+- when a hook is configured, ATM must emit enough diagnostics to explain
+  whether the hook ran, was skipped, or failed, including the sender,
+  recipient, configured sender/recipient filters, and match outcome
 
 ## 6. `atm send`
 
@@ -526,8 +541,19 @@ Retired from the current implementation:
 - support dry-run without mutation
 - support sender-controlled ack-required messages
 - support optional task metadata on sent messages
+- reject retired `post_send_hook_members` config with actionable migration
+  guidance before send execution proceeds
 - run `post_send_hook` only after successful non-`dry-run` sends and only when
-  the resolved sender identity is listed in `post_send_hook_members`
+  the resolved sender matches `post_send_hook_senders` or the resolved
+  recipient matches `post_send_hook_recipients`
+- support `*` wildcard matching in either post-send-hook filter list
+- run the hook at most once per successful send even when both sender and
+  recipient filters match
+- include sender/recipient match booleans in the `ATM_POST_SEND` payload so a
+  single hook script can branch on the trigger reason
+- emit structured diagnostics for hook-match evaluation and actionable
+  user-facing warnings when a configured hook is skipped because no sender or
+  recipient filter matched
 - treat `post_send_hook` failure or timeout as best-effort diagnostics only; it
   must not roll back or fail an already-successful send
 - write a non-null `message_id` on every ATM-authored message

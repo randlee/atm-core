@@ -349,6 +349,28 @@ blank = ""
     }
 
     #[test]
+    fn load_config_ignores_core_section_hook_keys() {
+        let root = unique_temp_dir("core-config-hook-keys");
+        fs::write(
+            root.join(".atm.toml"),
+            r#"[core]
+default_team = "atm-dev"
+identity = "team-lead"
+post_send_hook = ["bin/hook", "notify"]
+post_send_hook_members = ["team-lead"]
+"#,
+        )
+        .expect("config");
+
+        let config = load_config(&root).expect("config").expect("present");
+        assert_eq!(config.default_team, None);
+        assert_eq!(config.identity, None);
+        assert_eq!(config.post_send_hook, None);
+        assert!(config.post_send_hook_members.is_empty());
+        assert!(!config.obsolete_identity_present);
+    }
+
+    #[test]
     fn parse_team_config_accepts_object_members() {
         let config_path = temp_config_path();
         let config = parse_team_config(

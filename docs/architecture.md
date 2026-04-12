@@ -395,13 +395,24 @@ Architectural rules:
   canonical sender identity in `metadata.atm.fromIdentity`
 - self-send checks, target validation, routing, and audit logic must use the
   canonical sender identity rather than the display-oriented `from` projection
-- ATM-owned post-send hooks are sender-scoped best-effort helpers, not part of
-  the atomic send boundary
+- ATM-owned post-send hooks are best-effort sender/recipient-scoped helpers,
+  not part of the atomic send boundary
 - the hook runs only after a successful non-`dry-run` send
+- sender matching uses `[atm].post_send_hook_senders`
+- recipient matching uses `[atm].post_send_hook_recipients`
+- `*` in either list acts as a wildcard match for that axis
+- the hook executes once when either axis matches and must not duplicate
+  execution when both axes match
 - relative post-send-hook paths resolve from the discovered `.atm.toml`
   directory and execute with that same directory as the working directory
 - the hook receives inherited environment plus one ATM-owned JSON payload in
   `ATM_POST_SEND`
+- the payload includes `hook_match.sender` and `hook_match.recipient` so one
+  script can branch on the trigger source
+- retired `[atm].post_send_hook_members` config is a configuration error, not a
+  compatibility alias
+- hook-decision logging must preserve sender, recipient, configured filters,
+  wildcard use, and final match outcome for troubleshooting
 - hook failure or timeout never rolls back a successful send
 
 ## 5. Persisted Schema
@@ -422,8 +433,10 @@ ATM config and team-launch config are distinct concerns:
 - `[atm].team_members` is the ATM-owned baseline roster for doctor/orchestration
   checks
 - `[atm].aliases` is the ATM-owned shorthand map for canonical agent names
-- `[atm].post_send_hook` and `[atm].post_send_hook_members` are ATM-owned
-  best-effort sender-scoped automation settings
+- `[atm].post_send_hook`, `[atm].post_send_hook_senders`, and
+  `[atm].post_send_hook_recipients` are ATM-owned best-effort automation
+  settings
+- retired `[atm].post_send_hook_members` must fail fast with migration guidance
 - `[atm].identity` is obsolete in the retained multi-agent model and must not
   participate in runtime identity resolution
 

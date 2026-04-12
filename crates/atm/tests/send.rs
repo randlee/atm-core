@@ -508,6 +508,79 @@ fn test_send_skips_post_send_hook_when_sender_not_in_allowlist() {
 }
 
 #[test]
+fn test_send_runs_post_send_hook_for_multiline_message_when_allowlisted() {
+    let fixture = Fixture::new("recipient");
+    let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
+    fixture.write_atm_config(&format!(
+        "[atm]\npost_send_hook = ['{}', 'capture', '{}']\npost_send_hook_members = ['arch-ctm']\n",
+        hook_path.display(),
+        payload_path.display()
+    ));
+
+    let output = fixture.run(&[
+        "send",
+        "recipient@atm-dev",
+        "<atm-task id=\"task-1\">\n  <description>Review the Phase 2 plan.</description>\n</atm-task>",
+    ]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let payload: serde_json::Value =
+        serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
+    assert_eq!(payload["from"], "arch-ctm@atm-dev");
+    assert_eq!(payload["to"], "recipient@atm-dev");
+    assert!(payload["message_id"].as_str().is_some());
+}
+
+#[test]
+fn test_send_ignores_post_send_hook_configured_only_in_core_section() {
+    let fixture = Fixture::new("recipient");
+    let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
+    fixture.write_atm_config(&format!(
+        "[core]\ndefault_team = 'atm-dev'\nidentity = 'team-lead'\npost_send_hook = ['{}', 'capture', '{}']\npost_send_hook_members = ['arch-ctm']\n",
+        hook_path.display(),
+        payload_path.display()
+    ));
+
+    let output = fixture.run(&["send", "recipient@atm-dev", "hello core section"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    assert!(!payload_path.exists(), "hook payload unexpectedly created");
+    let inbox = fixture.inbox_contents("recipient");
+    assert_eq!(inbox.len(), 1);
+}
+
+#[test]
+fn test_send_post_send_hook_receives_only_configured_positional_args() {
+    let fixture = Fixture::new("recipient");
+    let (hook_path, payload_path) = fixture.install_hook_fixture("capture-meta");
+    fixture.write_atm_config(&format!(
+        "[atm]\npost_send_hook = ['{}', 'capture-meta', '{}']\npost_send_hook_members = ['arch-ctm']\n",
+        hook_path.display(),
+        payload_path.display()
+    ));
+
+    let output = fixture.run(&["send", "recipient@atm-dev", "hello args"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let captured: serde_json::Value =
+        serde_json::from_slice(&fs::read(payload_path).expect("hook meta")).expect("json");
+    assert_eq!(captured["args"], serde_json::json!([]));
+    assert_eq!(captured["payload"]["to"], "recipient@atm-dev");
+}
+
+#[test]
 fn test_send_help_mentions_post_send_hook_config() {
     let output = Command::new(env!("CARGO_BIN_EXE_atm"))
         .args(["send", "--help"])
