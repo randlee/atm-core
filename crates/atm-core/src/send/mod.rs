@@ -67,6 +67,9 @@ pub struct SendOutcome {
     pub summary: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    // TODO(v1.1.0): Replace this Vec<String> with a structured WarningEntry type
+    // so degraded-mode warnings can carry recovery guidance separately from the
+    // rendered message text.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
     #[serde(default, skip_serializing_if = "is_false")]

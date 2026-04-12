@@ -539,6 +539,30 @@ fn test_send_emits_post_send_hook_skip_warning_on_stderr_in_json_mode() {
 }
 
 #[test]
+fn test_send_skip_warning_marks_unconfigured_axis_explicitly() {
+    let fixture = Fixture::new("recipient");
+    let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
+    fixture.write_atm_config(&format!(
+        "[atm]\npost_send_hook = ['{}', 'capture', '{}']\npost_send_hook_recipients = ['quality-mgr']\n",
+        hook_path.display(),
+        payload_path.display()
+    ));
+
+    let output = fixture.run(&["send", "recipient@atm-dev", "hello skipped hook"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    assert!(!payload_path.exists(), "hook payload unexpectedly created");
+    assert_eq!(
+        fixture.stderr(&output),
+        "post-send hook skipped: sender arch-ctm not in post_send_hook_senders (not configured)\nand recipient recipient not in post_send_hook_recipients quality-mgr\n"
+    );
+}
+
+#[test]
 fn test_send_runs_post_send_hook_when_recipient_matches_filter() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");

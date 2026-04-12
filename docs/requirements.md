@@ -537,6 +537,8 @@ Post-send-hook rules:
   post-send hook skipped: sender {sender} not in post_send_hook_senders {senders}
   and recipient {recipient} not in post_send_hook_recipients {recipients}
   ```
+- when a sender or recipient filter list is omitted, the corresponding
+  `{senders}` or `{recipients}` placeholder renders as `(not configured)`
 - this hook-skip warning applies only when at least one sender/recipient
   filter list is configured and both axes fail to match
 - this hook-skip warning is emitted through the normal user-visible `warn!`

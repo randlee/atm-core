@@ -265,7 +265,7 @@ fn format_post_send_hook_skipped_warning(
 /// it clear when a trigger axis is effectively disabled.
 fn display_filter_list(filters: &[String]) -> String {
     if filters.is_empty() {
-        "[]".to_string()
+        "(not configured)".to_string()
     } else {
         filters.join(", ")
     }
@@ -458,8 +458,8 @@ mod tests {
     }
 
     #[test]
-    fn display_filter_list_renders_empty_as_empty_list() {
-        assert_eq!(super::display_filter_list(&[]), "[]");
+    fn display_filter_list_renders_empty_as_not_configured() {
+        assert_eq!(super::display_filter_list(&[]), "(not configured)");
     }
 
     #[test]
