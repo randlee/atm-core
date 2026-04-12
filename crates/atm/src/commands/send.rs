@@ -10,6 +10,9 @@ use crate::observability::CliObservability;
 use crate::output;
 
 #[derive(Debug, Args)]
+#[command(
+    after_help = "Post-send hooks can be configured in .atm.toml via [atm].post_send_hook and [atm].post_send_hook_members."
+)]
 /// Send one ATM mailbox message.
 pub struct SendCommand {
     #[arg()]
