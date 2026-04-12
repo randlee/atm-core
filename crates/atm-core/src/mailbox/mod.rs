@@ -1,3 +1,5 @@
+//! Mailbox read/write helpers, compatibility parsing, and lock-scoped mutation.
+
 pub(crate) mod atomic;
 pub(crate) mod hash;
 pub(crate) mod lock;
@@ -11,7 +13,7 @@ use std::path::Path;
 use serde_json::Value;
 use tracing::warn;
 
-use crate::error::{AtmError, AtmErrorKind};
+use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::schema::{LegacyMessageId, MessageEnvelope};
 /// Append one message to a mailbox JSONL file under the mailbox lock.
 ///
@@ -97,6 +99,7 @@ fn parse_mailbox_array(raw: &str, path: &Path) -> Result<Vec<MessageEnvelope>, A
                 Ok(None) => None,
                 Err(error) => {
                     warn!(
+                        code = %AtmErrorCode::WarningMailboxRecordSkipped,
                         line = index + 1,
                         mailbox_path = %path.display(),
                         raw_record = %value,
@@ -123,6 +126,7 @@ fn parse_mailbox_jsonl(raw: &str, path: &Path) -> Vec<MessageEnvelope> {
                 Ok(None) => None,
                 Err(error) => {
                     warn!(
+                        code = %AtmErrorCode::WarningMailboxRecordSkipped,
                         line = index + 1,
                         mailbox_path = %path.display(),
                         raw_record = %line,
@@ -169,6 +173,7 @@ fn sanitize_legacy_message_id(value: &mut Value, path: &Path, line_number: usize
 
     if serde_json::from_value::<LegacyMessageId>(raw_message_id.clone()).is_err() {
         warn!(
+            code = %AtmErrorCode::WarningMalformedAtmFieldIgnored,
             mailbox_path = %path.display(),
             line = line_number,
             field = "message_id",

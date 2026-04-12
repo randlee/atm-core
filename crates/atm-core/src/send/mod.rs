@@ -13,7 +13,7 @@ use tracing::warn;
 
 use crate::address::AgentAddress;
 use crate::config;
-use crate::error::AtmError;
+use crate::error::{AtmError, AtmErrorCode};
 use crate::home;
 use crate::identity;
 use crate::mailbox;
@@ -157,6 +157,13 @@ pub fn send_mail(
                 recipient.agent,
                 recipient.team
             ));
+            warn!(
+                code = %AtmErrorCode::WarningMissingTeamConfigFallback,
+                config_path = %team_dir.join("config.json").display(),
+                recipient = %recipient.agent,
+                team = %recipient.team,
+                "send used existing inbox fallback; team config is missing"
+            );
 
             if !request.dry_run {
                 notify_team_lead_missing_config(
@@ -319,7 +326,12 @@ fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str,
     let team_lead_inbox = match home::inbox_path_from_home(home_dir, team, "team-lead") {
         Ok(path) => path,
         Err(error) => {
-            warn!(%error, team, "failed to resolve team-lead inbox for missing-config notice");
+            warn!(
+                code = %AtmErrorCode::WarningMissingTeamConfigFallback,
+                %error,
+                team,
+                "failed to resolve team-lead inbox for missing-config notice"
+            );
             return;
         }
     };
@@ -362,6 +374,7 @@ fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str,
 
     if let Err(error) = mailbox::append_message(&team_lead_inbox, &notice) {
         warn!(
+            code = %AtmErrorCode::WarningMissingTeamConfigFallback,
             %error,
             path = %team_lead_inbox.display(),
             "failed to append missing-config notice to team-lead inbox"
@@ -441,6 +454,7 @@ fn register_missing_team_config_alert(home_dir: &Path, key: &str) -> bool {
     let lock_path = send_alert_lock_path(home_dir);
     let Some(_guard) = acquire_send_alert_lock(&lock_path) else {
         warn!(
+            code = %AtmErrorCode::WarningSendAlertStateDegraded,
             path = %lock_path.display(),
             "failed to acquire send alert lock; skipping team-lead notification"
         );
@@ -451,6 +465,7 @@ fn register_missing_team_config_alert(home_dir: &Path, key: &str) -> bool {
         Ok(state) => state,
         Err(error) => {
             warn!(
+                code = %AtmErrorCode::WarningSendAlertStateDegraded,
                 %error,
                 path = %state_path.display(),
                 "failed to read send state file - defaulting to empty state"
@@ -464,7 +479,12 @@ fn register_missing_team_config_alert(home_dir: &Path, key: &str) -> bool {
 
     state.missing_team_config_keys.insert(key.to_string());
     if let Err(error) = save_send_alert_state(&state_path, &state) {
-        warn!(%error, path = %state_path.display(), "failed to save send alert dedup state");
+        warn!(
+            code = %AtmErrorCode::WarningSendAlertStateDegraded,
+            %error,
+            path = %state_path.display(),
+            "failed to save send alert dedup state"
+        );
     }
     true
 }
@@ -474,6 +494,7 @@ fn clear_missing_team_config_alert(home_dir: &Path, team_dir: &Path) {
     let lock_path = send_alert_lock_path(home_dir);
     let Some(_guard) = acquire_send_alert_lock(&lock_path) else {
         warn!(
+            code = %AtmErrorCode::WarningSendAlertStateDegraded,
             path = %lock_path.display(),
             "failed to acquire send alert lock while clearing dedup state"
         );
@@ -490,7 +511,12 @@ fn clear_missing_team_config_alert(home_dir: &Path, team_dir: &Path) {
     }
 
     if let Err(error) = save_send_alert_state(&state_path, &state) {
-        warn!(%error, path = %state_path.display(), "failed to clear send alert dedup state");
+        warn!(
+            code = %AtmErrorCode::WarningSendAlertStateDegraded,
+            %error,
+            path = %state_path.display(),
+            "failed to clear send alert dedup state"
+        );
     }
 }
 
@@ -549,6 +575,7 @@ fn acquire_send_alert_lock(path: &Path) -> Option<SendAlertLock> {
         && let Err(error) = fs::create_dir_all(parent)
     {
         warn!(
+            code = %AtmErrorCode::WarningSendAlertStateDegraded,
             %error,
             path = %parent.display(),
             "failed to create send alert lock directory"
@@ -561,7 +588,12 @@ fn acquire_send_alert_lock(path: &Path) -> Option<SendAlertLock> {
             Ok(mut file) => {
                 let pid = std::process::id().to_string();
                 if let Err(error) = std::io::Write::write_all(&mut file, pid.as_bytes()) {
-                    warn!(%error, path = %path.display(), "failed to write send alert lock pid");
+                    warn!(
+                        code = %AtmErrorCode::WarningSendAlertStateDegraded,
+                        %error,
+                        path = %path.display(),
+                        "failed to write send alert lock pid"
+                    );
                     let _ = fs::remove_file(path);
                     return None;
                 }
@@ -576,7 +608,12 @@ fn acquire_send_alert_lock(path: &Path) -> Option<SendAlertLock> {
                 thread::sleep(Duration::from_millis(10));
             }
             Err(error) => {
-                warn!(%error, path = %path.display(), "failed to create send alert lock");
+                warn!(
+                    code = %AtmErrorCode::WarningSendAlertStateDegraded,
+                    %error,
+                    path = %path.display(),
+                    "failed to create send alert lock"
+                );
                 return None;
             }
         }
@@ -600,7 +637,13 @@ fn evict_stale_send_alert_lock(path: &Path) -> bool {
         Ok(()) => true,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
         Err(error) => {
-            warn!(%error, path = %path.display(), pid, "failed to evict stale send alert lock");
+            warn!(
+                code = %AtmErrorCode::WarningSendAlertStateDegraded,
+                %error,
+                path = %path.display(),
+                pid,
+                "failed to evict stale send alert lock"
+            );
             false
         }
     }
@@ -624,8 +667,6 @@ fn process_is_alive(pid: u32) -> bool {
 
 #[cfg(windows)]
 fn process_is_alive(pid: u32) -> bool {
-    use std::ptr;
-
     use windows_sys::Win32::Foundation::{CloseHandle, STILL_ACTIVE};
     use windows_sys::Win32::System::Threading::{
         GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
@@ -634,7 +675,7 @@ fn process_is_alive(pid: u32) -> bool {
     // SAFETY: OpenProcess is called read-only for process liveness inspection.
     let process_id: u32 = pid;
     let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, process_id) };
-    if handle == ptr::null_mut() {
+    if handle.is_null() {
         return false;
     }
 
@@ -656,6 +697,7 @@ impl Drop for SendAlertLock {
             && error.kind() != std::io::ErrorKind::NotFound
         {
             warn!(
+                code = %AtmErrorCode::WarningSendAlertStateDegraded,
                 %error,
                 path = %self.path.display(),
                 "failed to remove send alert lock"

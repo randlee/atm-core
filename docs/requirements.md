@@ -475,11 +475,12 @@ Post-send-hook rules:
 - when retired `post_send_hook_members` is present, ATM must fail with a
   migration-oriented error message following this template:
   ```text
-  error: '.atm.toml' field 'post_send_hook_members' is no longer supported.
+  error: '{config_path}' field 'post_send_hook_members' is no longer supported.
   Use 'post_send_hook_senders' (match on sender identity) and/or
   'post_send_hook_recipients' (match on recipient name) under [atm].
   Use '*' to match all senders or all recipients.
   ```
+- `{config_path}` is the discovered `.atm.toml` path containing the retired key
 - a relative hook path must resolve from the directory containing the
   discovered `.atm.toml`
 - the hook must execute with that same config-root directory as its working

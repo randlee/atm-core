@@ -34,8 +34,10 @@ References:
 - `REQ-CORE-CONFIG-001` for runtime identity precedence and obsolete
   `[atm].identity` handling
 - `REQ-CORE-CONFIG-002` for alias rewrite and canonical target resolution
-- `REQ-CORE-SEND-001`
+- `REQ-CORE-SEND-001` for missing-config fallback and repair notification
 - `REQ-CORE-SEND-002` for `metadata.atm.fromIdentity` placement when
   cross-team alias projection is used
+- `REQ-CORE-SEND-003` for send-path message construction and append-boundary
+  behavior
 - `REQ-CORE-MAILBOX-001`
 - CLI surface: `docs/atm/commands/send.md`

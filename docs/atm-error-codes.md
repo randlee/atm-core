@@ -69,7 +69,6 @@ Error codes should describe the failure class, not a specific prose message.
 - `ATM_MAILBOX_WRITE_FAILED`
 - `ATM_MAILBOX_LOCK_FAILED`
 - `ATM_MAILBOX_LOCK_TIMEOUT`
-- `ATM_MAILBOX_RECORD_SKIPPED`
 - `ATM_MESSAGE_VALIDATION_FAILED`
 - `ATM_SERIALIZATION_FAILED`
 
@@ -137,10 +136,12 @@ Error codes should describe the failure class, not a specific prose message.
   - emitted during ATM config loading before send execution proceeds
   - requires migration guidance that explains sender- versus
     recipient-triggered hook filters and the `*` wildcard
+  - `{config_path}` resolves to the discovered `.atm.toml` path that contained
+    the retired key
   - expected output split:
     - message:
       ```text
-      error: '.atm.toml' field 'post_send_hook_members' is no longer supported.
+      error: '{config_path}' field 'post_send_hook_members' is no longer supported.
       ```
     - recovery:
       ```text

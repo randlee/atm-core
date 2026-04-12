@@ -38,8 +38,6 @@ pub enum AtmErrorCode {
     MailboxLockFailed,
     /// Acquiring a mailbox lock timed out.
     MailboxLockTimeout,
-    /// A malformed mailbox record was skipped.
-    MailboxRecordSkipped,
     /// Message validation failed.
     MessageValidationFailed,
     /// Serialization or deserialization failed.
@@ -109,7 +107,6 @@ impl AtmErrorCode {
             Self::MailboxWriteFailed => "ATM_MAILBOX_WRITE_FAILED",
             Self::MailboxLockFailed => "ATM_MAILBOX_LOCK_FAILED",
             Self::MailboxLockTimeout => "ATM_MAILBOX_LOCK_TIMEOUT",
-            Self::MailboxRecordSkipped => "ATM_MAILBOX_RECORD_SKIPPED",
             Self::MessageValidationFailed => "ATM_MESSAGE_VALIDATION_FAILED",
             Self::SerializationFailed => "ATM_SERIALIZATION_FAILED",
             Self::FilePolicyRejected => "ATM_FILE_POLICY_REJECTED",
