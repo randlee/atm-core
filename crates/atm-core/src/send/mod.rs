@@ -1,3 +1,5 @@
+//! Send command service implementation and post-send hook handling.
+
 use std::collections::BTreeSet;
 use std::fs;
 use std::fs::OpenOptions;
@@ -440,8 +442,7 @@ fn maybe_run_post_send_hook(
         debug!(
             sender = context.sender,
             allowlist = ?config.post_send_hook_members,
-            "post-send hook skipped: sender '{}' is not in post_send_hook_members",
-            context.sender
+            "post-send hook skipped: sender is not in post_send_hook_members"
         );
         return;
     }
@@ -479,7 +480,7 @@ fn maybe_run_post_send_hook(
         Ok(child) => child,
         Err(error) => {
             warnings.push(format!(
-                "warning: post-send hook failed to start from {}: {error}",
+                "warning: post-send hook failed to start from {}: {error}. Check that post_send_hook in .atm.toml points to a valid executable.",
                 command_path.display()
             ));
             return;
@@ -492,7 +493,7 @@ fn maybe_run_post_send_hook(
             Ok(Some(status)) => {
                 if !status.success() {
                     warnings.push(format!(
-                        "warning: post-send hook exited unsuccessfully from {} with status {status}",
+                        "warning: post-send hook exited unsuccessfully from {} with status {status}. Check the hook script for errors; it exited with a non-zero status.",
                         command_path.display()
                     ));
                 }
@@ -505,7 +506,7 @@ fn maybe_run_post_send_hook(
                 let _ = child.kill();
                 let _ = child.wait();
                 warnings.push(format!(
-                    "warning: post-send hook timed out after {}s for {}",
+                    "warning: post-send hook timed out after {}s for {}. The hook script exceeded the 5-second timeout; ensure it exits promptly.",
                     POST_SEND_HOOK_TIMEOUT.as_secs(),
                     command_path.display()
                 ));

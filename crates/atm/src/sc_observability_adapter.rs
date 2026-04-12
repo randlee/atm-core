@@ -1,11 +1,5 @@
-//! Adapter layer bridging ATM CLI observability to `sc_observability`.
-//!
-//! This module is the sole sanctioned import site for `sc_observability`; all
-//! shared observability calls route through this adapter to preserve the
-//! inversion-of-control boundary between `atm` and `atm-core`.
-
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+//! Adapter helpers bridging ATM CLI observability to shared observability
+//! types and queries.
 
 use atm_core::error::AtmError;
 use atm_core::observability::{
@@ -14,51 +8,24 @@ use atm_core::observability::{
     LogOrder, LogTailSession, ObservabilityPort,
 };
 use chrono::{DateTime, Utc};
-use sc_observability::{
-    ConsoleSink, JsonlFileSink, LogSink, Logger, LoggerBuilder, LoggerConfig, RetentionPolicy,
-    RotationPolicy, SinkRegistration,
-};
-use sc_observability_types::{
-    ActionName, CorrelationId, DiagnosticInfo, Level, LogEvent, LogQuery, LogSinkError,
-    OutcomeLabel, ProcessIdentity, QueryError, SchemaVersion, ServiceName, SinkHealth,
-    SinkHealthState, TargetCategory, Timestamp,
-};
 use serde_json::Map;
 use time::OffsetDateTime;
 
-const ATM_SERVICE_NAME: &str = "atm";
-const ATM_COMMAND_TARGET: &str = "atm.command";
-const ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
+type ActionName = sc_observability_types::ActionName;
+type CorrelationId = sc_observability_types::CorrelationId;
+type Level = sc_observability_types::Level;
+type LogEvent = sc_observability_types::LogEvent;
+type LogQuery = sc_observability_types::LogQuery;
+type OutcomeLabel = sc_observability_types::OutcomeLabel;
+type ProcessIdentity = sc_observability_types::ProcessIdentity;
+type QueryError = sc_observability_types::QueryError;
+type SchemaVersion = sc_observability_types::SchemaVersion;
+type ServiceName = sc_observability_types::ServiceName;
+type TargetCategory = sc_observability_types::TargetCategory;
+type Timestamp = sc_observability_types::Timestamp;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ConsoleLogRoute {
-    Disabled,
-    Stderr,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RetainedSinkFaultMode {
-    Degraded,
-    Unavailable,
-}
-
-pub(crate) fn new_sc_observability_adapter(
-    home_dir: &Path,
-    stderr_logs: bool,
-) -> Result<Box<dyn ObservabilityPort + Send + Sync>, AtmError> {
-    let console_log_route = if stderr_logs {
-        ConsoleLogRoute::Stderr
-    } else {
-        ConsoleLogRoute::Disabled
-    };
-    Ok(Box::new(ScObservabilityAdapter::new(
-        home_dir,
-        console_log_route,
-    )?))
-}
-
-struct ScObservabilityAdapter {
-    logger: Logger,
+pub(crate) struct ScObservabilityAdapter {
+    logger: sc_observability::Logger,
     service_name: ServiceName,
     target_category: TargetCategory,
 }
@@ -66,36 +33,16 @@ struct ScObservabilityAdapter {
 impl observability::sealed::Sealed for ScObservabilityAdapter {}
 
 impl ScObservabilityAdapter {
-    fn new(home_dir: &Path, console_log_route: ConsoleLogRoute) -> Result<Self, AtmError> {
-        let service_name = ServiceName::new(ATM_SERVICE_NAME).map_err(|source| {
-            AtmError::observability_bootstrap("failed to validate ATM service name")
-                .with_source(source)
-        })?;
-        let target_category = TargetCategory::new(ATM_COMMAND_TARGET).map_err(|source| {
-            AtmError::observability_bootstrap("failed to validate ATM observability target")
-                .with_source(source)
-        })?;
-        let mut config = LoggerConfig::default_for(service_name.clone(), log_root(home_dir));
-        // ATM CLI owns stdout/stderr UX by default; only opt into a shared
-        // console sink when the CLI routing rule explicitly selects one.
-        config.enable_console_sink = false;
-        let mut builder = Logger::builder(config).map_err(|source| {
-            AtmError::observability_bootstrap("failed to initialize shared observability logger")
-                .with_source(source)
-        })?;
-        if console_log_route == ConsoleLogRoute::Stderr {
-            builder.register_sink(SinkRegistration::new(Arc::new(ConsoleSink::stderr())));
-        }
-        if let Some(mode) = retained_sink_fault_mode()? {
-            register_retained_sink_fault(&mut builder, home_dir, mode);
-        }
-        let logger = builder.build();
-
-        Ok(Self {
+    pub(crate) fn new(
+        logger: sc_observability::Logger,
+        service_name: ServiceName,
+        target_category: TargetCategory,
+    ) -> Self {
+        Self {
             logger,
             service_name,
             target_category,
-        })
+        }
     }
 }
 
@@ -103,7 +50,10 @@ impl ObservabilityPort for ScObservabilityAdapter {
     fn emit(&self, event: CommandEvent) -> Result<(), AtmError> {
         let event = map_command_event(&self.service_name, &self.target_category, event)?;
         self.logger.emit(event).map_err(|source| {
-            let code = source.diagnostic().code.as_str().to_string();
+            let code = sc_observability_types::DiagnosticInfo::diagnostic(&source)
+                .code
+                .as_str()
+                .to_string();
             AtmError::observability_emit(format!("shared observability emit failed ({code})"))
                 .with_source(source)
         })
@@ -148,86 +98,6 @@ impl ObservabilityPort for ScObservabilityAdapter {
                 .map(render_diagnostic_summary)
                 .or(query_detail),
         })
-    }
-}
-
-fn log_root(home_dir: &Path) -> PathBuf {
-    home_dir.join(".local").join("share")
-}
-
-fn fault_injection_log_path(home_dir: &Path) -> PathBuf {
-    log_root(home_dir)
-        .join("logs")
-        .join("atm-fault-injection.log.jsonl")
-}
-
-fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError> {
-    // WARNING: production-reachable diagnostic seam. Phase L intentionally
-    // keeps this env hook available so live degraded/unavailable validation
-    // can exercise the real shared adapter before initial release.
-    let Some(value) = std::env::var(ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV)
-        .ok()
-        .map(|value| value.trim().to_ascii_lowercase())
-        .filter(|value| !value.is_empty())
-    else {
-        return Ok(None);
-    };
-
-    match value.as_str() {
-        "degraded" => Ok(Some(RetainedSinkFaultMode::Degraded)),
-        "unavailable" => Ok(Some(RetainedSinkFaultMode::Unavailable)),
-        _ => Err(AtmError::observability_bootstrap(format!(
-            "invalid {ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV} value `{value}`; use `degraded` or `unavailable`"
-        ))),
-    }
-}
-
-fn register_retained_sink_fault(
-    builder: &mut LoggerBuilder,
-    home_dir: &Path,
-    mode: RetainedSinkFaultMode,
-) {
-    let sink = Arc::new(JsonlFileSink::new(
-        fault_injection_log_path(home_dir),
-        RotationPolicy::default(),
-        RetentionPolicy::default(),
-    ));
-    builder.register_sink(SinkRegistration::new(Arc::new(
-        RetainedSinkHealthOverride::new(sink, mode),
-    )));
-}
-
-struct RetainedSinkHealthOverride {
-    inner: Arc<dyn LogSink>,
-    mode: RetainedSinkFaultMode,
-}
-
-impl RetainedSinkHealthOverride {
-    fn new(inner: Arc<dyn LogSink>, mode: RetainedSinkFaultMode) -> Self {
-        Self { inner, mode }
-    }
-
-    fn forced_state(&self) -> SinkHealthState {
-        match self.mode {
-            RetainedSinkFaultMode::Degraded => SinkHealthState::DegradedDropping,
-            RetainedSinkFaultMode::Unavailable => SinkHealthState::Unavailable,
-        }
-    }
-}
-
-impl LogSink for RetainedSinkHealthOverride {
-    fn write(&self, event: &LogEvent) -> Result<(), LogSinkError> {
-        self.inner.write(event)
-    }
-
-    fn flush(&self) -> Result<(), LogSinkError> {
-        self.inner.flush()
-    }
-
-    fn health(&self) -> SinkHealth {
-        let mut health = self.inner.health();
-        health.state = self.forced_state();
-        health
     }
 }
 
@@ -520,25 +390,51 @@ fn render_diagnostic_summary(summary: sc_observability_types::DiagnosticSummary)
 }
 
 #[cfg(test)]
-mod tests {
-    use sc_observability_types::Level;
+pub(crate) fn new_sc_observability_adapter_for_tests(
+    home_dir: &std::path::Path,
+    stderr_logs: bool,
+) -> Result<Box<dyn ObservabilityPort + Send + Sync>, AtmError> {
+    let service_name = ServiceName::new("atm").map_err(|source| {
+        AtmError::observability_bootstrap("failed to validate ATM service name").with_source(source)
+    })?;
+    let target_category = TargetCategory::new("atm.command").map_err(|source| {
+        AtmError::observability_bootstrap("failed to validate ATM observability target")
+            .with_source(source)
+    })?;
+    let console_log_route = if stderr_logs {
+        crate::ConsoleLogRoute::Stderr
+    } else {
+        crate::ConsoleLogRoute::Disabled
+    };
+    let logger = crate::build_logger(home_dir, console_log_route, &service_name)?;
+    Ok(Box::new(ScObservabilityAdapter::new(
+        logger,
+        service_name,
+        target_category,
+    )))
+}
 
+#[cfg(test)]
+mod tests {
     use super::level_for_outcome;
 
     #[test]
     fn unknown_outcome_maps_to_warn() {
-        assert_eq!(level_for_outcome("future-outcome"), Level::Warn);
+        assert_eq!(
+            level_for_outcome("future-outcome"),
+            sc_observability_types::Level::Warn
+        );
     }
 
     #[test]
     fn level_for_outcome_matches_documented_outcomes() {
         let cases = [
-            ("ok", Level::Info),
-            ("sent", Level::Info),
-            ("dry_run", Level::Info),
-            ("timeout", Level::Warn),
-            ("error", Level::Error),
-            ("failed", Level::Error),
+            ("ok", sc_observability_types::Level::Info),
+            ("sent", sc_observability_types::Level::Info),
+            ("dry_run", sc_observability_types::Level::Info),
+            ("timeout", sc_observability_types::Level::Warn),
+            ("error", sc_observability_types::Level::Error),
+            ("failed", sc_observability_types::Level::Error),
         ];
 
         for (outcome, expected) in cases {

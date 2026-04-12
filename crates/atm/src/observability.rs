@@ -1,7 +1,4 @@
-use std::path::Path;
-
 use atm_core::error::{AtmError, AtmErrorCode};
-use atm_core::home;
 use atm_core::observability::{
     self, AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, CommandEvent, LogTailSession,
     ObservabilityPort,
@@ -12,6 +9,7 @@ use atm_core::observability::{
 /// L.5 intentionally keeps the release surface narrow: one explicit
 /// construction entry point without introducing a broader builder or unified
 /// observer abstraction.
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CliObservabilityOptions {
     pub stderr_logs: bool,
@@ -34,23 +32,22 @@ impl std::fmt::Debug for CliObservability {
 }
 
 impl CliObservability {
-    pub fn new(home_dir: &Path, options: CliObservabilityOptions) -> Result<Self, AtmError> {
-        Ok(Self {
-            inner: crate::sc_observability_adapter::new_sc_observability_adapter(
-                home_dir,
-                options.stderr_logs,
-            )?,
-        })
+    pub(crate) fn from_boxed_port(inner: Box<dyn ObservabilityPort + Send + Sync>) -> Self {
+        Self { inner }
     }
 
     pub fn fallback() -> Self {
-        Self::new(
+        #[cfg(test)]
+        if let Ok(observability) = Self::new(
             &std::env::temp_dir().join("atm-bootstrap-observability"),
             CliObservabilityOptions::default(),
-        )
-        .unwrap_or_else(|_| Self {
+        ) {
+            return observability;
+        }
+
+        Self {
             inner: Box::new(atm_core::observability::NullObservability),
-        })
+        }
     }
 
     pub fn emit_fatal_error(&self, stage: &'static str, error: &(dyn std::error::Error + 'static)) {
@@ -83,16 +80,24 @@ impl CliObservability {
     /// Test-only helper for injecting a synthetic observability port without
     /// exposing the boxed inner field to production callers.
     #[cfg(test)]
-    fn from_port(port: impl ObservabilityPort + Send + Sync + 'static) -> Self {
+    fn from_test_port(port: impl ObservabilityPort + Send + Sync + 'static) -> Self {
         Self {
             inner: Box::new(port),
         }
     }
-}
 
-pub fn init(stderr_logs: bool) -> Result<CliObservability, AtmError> {
-    let home_dir = home::atm_home()?;
-    CliObservability::new(&home_dir, CliObservabilityOptions { stderr_logs })
+    #[cfg(test)]
+    pub fn new(
+        home_dir: &std::path::Path,
+        options: CliObservabilityOptions,
+    ) -> Result<Self, AtmError> {
+        Ok(Self::from_boxed_port(
+            crate::sc_observability_adapter::new_sc_observability_adapter_for_tests(
+                home_dir,
+                options.stderr_logs,
+            )?,
+        ))
+    }
 }
 
 impl ObservabilityPort for CliObservability {
@@ -270,7 +275,8 @@ mod tests {
 
     #[test]
     fn cli_observability_is_debuggable() {
-        let observability = CliObservability::from_port(atm_core::observability::NullObservability);
+        let observability =
+            CliObservability::from_test_port(atm_core::observability::NullObservability);
         let debug = format!("{observability:?}");
         assert!(debug.contains("CliObservability"));
     }
@@ -287,7 +293,7 @@ mod tests {
 
     #[test]
     fn emit_fatal_error_executes_secondary_failure_path_without_panicking() {
-        let observability = CliObservability::from_port(FailingEmitObservability);
+        let observability = CliObservability::from_test_port(FailingEmitObservability);
         observability.emit_fatal_error("service", &AtmError::validation("boom"));
     }
 }
