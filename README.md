@@ -170,6 +170,7 @@ Behavior:
 - ATM sets `ATM_POST_SEND` to a JSON payload with `{from, to, message_id, requires_ack, task_id, hook_match}`.
 - The hook gets 5 seconds to complete.
 - Hook stderr is suppressed. Hook stdout may optionally return one JSON object with `level`, `message`, and optional `fields` for ATM to log.
+- For troubleshooting hook diagnostics, combine `--stderr-logs` with `ATM_LOG=debug` to surface debug-level hook results on stderr.
 - If the hook exits non-zero, fails to start, or times out, `atm send` still succeeds and prints a warning.
 
 Example `ATM_POST_SEND` payload:

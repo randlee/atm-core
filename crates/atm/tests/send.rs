@@ -767,6 +767,47 @@ fn test_send_ignores_invalid_hook_result_stdout() {
 }
 
 #[test]
+fn test_send_logs_structured_hook_result_stdout() {
+    let fixture = Fixture::new("recipient");
+    let (hook_path, payload_path) = fixture.install_hook_fixture("result-debug");
+    fixture.write_atm_config(&format!(
+        "[atm]\npost_send_hook = ['{}', 'result-debug', '{}']\npost_send_hook_senders = ['arch-ctm']\n",
+        hook_path.display(),
+        payload_path.display()
+    ));
+
+    let output = fixture.run_with_env(
+        &[
+            "--stderr-logs",
+            "send",
+            "recipient@atm-dev",
+            "hello hook result",
+            "--json",
+        ],
+        &[("ATM_LOG", "debug")],
+    );
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["agent"], "recipient");
+    assert_eq!(parsed["team"], "atm-dev");
+    let stderr = fixture.stderr(&output);
+    assert!(
+        stderr.contains("hook fixture captured payload"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("atm_post_send_hook_fixture"),
+        "stderr: {stderr}"
+    );
+    assert!(stderr.contains("hook_result_fields"), "stderr: {stderr}");
+}
+
+#[test]
 fn test_send_help_mentions_post_send_hook_config() {
     let output = Command::new(env!("CARGO_BIN_EXE_atm"))
         .args(["send", "--help"])
@@ -778,6 +819,7 @@ fn test_send_help_mentions_post_send_hook_config() {
     assert!(stdout.contains("post_send_hook"));
     assert!(stdout.contains("post_send_hook_senders"));
     assert!(stdout.contains("post_send_hook_recipients"));
+    assert!(stdout.contains("ATM_LOG=debug"));
     assert!(stdout.contains(".atm.toml"));
 }
 
@@ -942,6 +984,10 @@ impl Fixture {
 
     fn stdout(&self, output: &std::process::Output) -> String {
         String::from_utf8(output.stdout.clone()).expect("stdout utf8")
+    }
+
+    fn stdout_json(&self, output: &std::process::Output) -> serde_json::Value {
+        serde_json::from_slice(&output.stdout).expect("valid json")
     }
 
     fn stderr(&self, output: &std::process::Output) -> String {

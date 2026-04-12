@@ -304,12 +304,11 @@ fn parse_team_member(config_path: &Path, index: usize, entry: &Value) -> Option<
 
 #[cfg(test)]
 mod tests {
+    use crate::error_codes::AtmErrorCode;
+    use serde_json::Value;
     use std::env;
     use std::fs;
     use std::path::PathBuf;
-
-    use crate::error_codes::AtmErrorCode;
-    use serde_json::Value;
 
     use super::{AtmConfig, load_config, parse_team_config, resolve_identity, resolve_team};
 
@@ -578,14 +577,8 @@ post_send_hook_members = ["team-lead"]
 
         let config = AtmConfig {
             identity: Some("config-identity".into()),
-            default_team: None,
-            team_members: Vec::new(),
-            aliases: Default::default(),
-            post_send_hook: None,
-            post_send_hook_senders: Vec::new(),
-            post_send_hook_recipients: Vec::new(),
-            config_root: PathBuf::new(),
             obsolete_identity_present: true,
+            ..Default::default()
         };
 
         assert_eq!(
@@ -603,14 +596,8 @@ post_send_hook_members = ["team-lead"]
 
         let config = AtmConfig {
             identity: Some("config-identity".into()),
-            default_team: None,
-            team_members: Vec::new(),
-            aliases: Default::default(),
-            post_send_hook: None,
-            post_send_hook_senders: Vec::new(),
-            post_send_hook_recipients: Vec::new(),
-            config_root: PathBuf::new(),
             obsolete_identity_present: true,
+            ..Default::default()
         };
 
         assert_eq!(resolve_identity(Some(&config)), None);
@@ -624,15 +611,8 @@ post_send_hook_members = ["team-lead"]
         set_env_var("ATM_TEAM", "env-team");
 
         let config = AtmConfig {
-            identity: None,
             default_team: Some("config-team".into()),
-            team_members: Vec::new(),
-            aliases: Default::default(),
-            post_send_hook: None,
-            post_send_hook_senders: Vec::new(),
-            post_send_hook_recipients: Vec::new(),
-            config_root: PathBuf::new(),
-            obsolete_identity_present: false,
+            ..Default::default()
         };
 
         assert_eq!(

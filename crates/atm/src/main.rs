@@ -20,15 +20,17 @@ use sc_observability::{
     RotationPolicy, SinkRegistration,
 };
 use sc_observability_types::{
-    ActionName, CorrelationId, DiagnosticInfo, Level, LogEvent, LogQuery, OutcomeLabel,
-    ProcessIdentity, QueryError, SchemaVersion, ServiceName, SinkHealth, SinkHealthState,
-    TargetCategory, Timestamp,
+    ActionName, CorrelationId, DiagnosticInfo, Level, LevelFilter as SharedLevelFilter, LogEvent,
+    LogQuery, OutcomeLabel, ProcessIdentity, QueryError, SchemaVersion, ServiceName, SinkHealth,
+    SinkHealthState, TargetCategory, Timestamp,
 };
 use serde_json::Map;
 use time::OffsetDateTime;
+use tracing_subscriber::filter::LevelFilter as TracingLevelFilter;
 
 const ATM_SERVICE_NAME: &str = "atm";
 const ATM_COMMAND_TARGET: &str = "atm.command";
+const ATM_LOG_LEVEL_ENV: &str = "ATM_LOG";
 const ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,6 +73,12 @@ fn run() -> anyhow::Result<()> {
             return Err(error.into());
         }
     };
+
+    if let Err(error) = init_tracing(cli.stderr_logs()) {
+        let fallback = observability::CliObservability::fallback();
+        fallback.emit_fatal_error("bootstrap", &error);
+        return Err(error.into());
+    }
 
     let observability = match init_observability(cli.stderr_logs()) {
         Ok(observability) => observability,
@@ -117,6 +125,9 @@ pub(crate) fn build_logger(
     service_name: &ServiceName,
 ) -> Result<Logger, AtmError> {
     let mut config = LoggerConfig::default_for(service_name.clone(), log_root(home_dir));
+    if let Some(level) = logger_level_override()? {
+        config.level = level;
+    }
     // ATM CLI owns stdout/stderr UX by default; only opt into a shared
     // console sink when the CLI routing rule explicitly selects one.
     config.enable_console_sink = false;
@@ -141,6 +152,59 @@ fn fault_injection_log_path(home_dir: &Path) -> PathBuf {
     log_root(home_dir)
         .join("logs")
         .join("atm-fault-injection.log.jsonl")
+}
+
+fn init_tracing(stderr_logs: bool) -> Result<(), AtmError> {
+    if !stderr_logs {
+        return Ok(());
+    }
+
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_ansi(false)
+        .with_max_level(tracing_level_filter(
+            logger_level_override()?.unwrap_or(SharedLevelFilter::Info),
+        ))
+        .without_time()
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber).map_err(|source| {
+        AtmError::observability_bootstrap("failed to initialize ATM tracing subscriber")
+            .with_source(source)
+    })
+}
+
+fn logger_level_override() -> Result<Option<SharedLevelFilter>, AtmError> {
+    let Some(value) = std::env::var(ATM_LOG_LEVEL_ENV)
+        .ok()
+        .map(|value| value.trim().to_ascii_lowercase())
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(None);
+    };
+
+    match value.as_str() {
+        "trace" => Ok(Some(SharedLevelFilter::Trace)),
+        "debug" => Ok(Some(SharedLevelFilter::Debug)),
+        "info" => Ok(Some(SharedLevelFilter::Info)),
+        "warn" => Ok(Some(SharedLevelFilter::Warn)),
+        "error" => Ok(Some(SharedLevelFilter::Error)),
+        "off" => Ok(Some(SharedLevelFilter::Off)),
+        _ => Err(AtmError::observability_bootstrap(format!(
+            "invalid {ATM_LOG_LEVEL_ENV} value `{value}`; use `trace`, `debug`, `info`, `warn`, `error`, or `off`"
+        ))),
+    }
+}
+
+fn tracing_level_filter(level: SharedLevelFilter) -> TracingLevelFilter {
+    match level {
+        SharedLevelFilter::Trace => TracingLevelFilter::TRACE,
+        SharedLevelFilter::Debug => TracingLevelFilter::DEBUG,
+        SharedLevelFilter::Info => TracingLevelFilter::INFO,
+        SharedLevelFilter::Warn => TracingLevelFilter::WARN,
+        SharedLevelFilter::Error => TracingLevelFilter::ERROR,
+        SharedLevelFilter::Off => TracingLevelFilter::OFF,
+    }
 }
 
 fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError> {
@@ -596,7 +660,46 @@ pub(crate) fn new_adapter_port_for_tests(
 
 #[cfg(test)]
 mod adapter_tests {
-    use super::level_for_outcome;
+    use std::sync::{Mutex, OnceLock};
+
+    use sc_observability_types::LevelFilter as SharedLevelFilter;
+    use tracing_subscriber::filter::LevelFilter as TracingLevelFilter;
+
+    use super::{
+        ATM_LOG_LEVEL_ENV, level_for_outcome, logger_level_override, tracing_level_filter,
+    };
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    fn with_env_var<R>(key: &str, value: Option<&str>, f: impl FnOnce() -> R) -> R {
+        let _guard = env_lock().lock().expect("env lock");
+        let previous = std::env::var_os(key);
+        match value {
+            Some(value) => {
+                // SAFETY: this test helper serializes process environment access.
+                unsafe { std::env::set_var(key, value) }
+            }
+            None => {
+                // SAFETY: this test helper serializes process environment access.
+                unsafe { std::env::remove_var(key) }
+            }
+        }
+        let result = f();
+        match previous {
+            Some(value) => {
+                // SAFETY: this test helper serializes process environment access.
+                unsafe { std::env::set_var(key, value) }
+            }
+            None => {
+                // SAFETY: this test helper serializes process environment access.
+                unsafe { std::env::remove_var(key) }
+            }
+        }
+        result
+    }
 
     #[test]
     fn unknown_outcome_maps_to_warn() {
@@ -620,5 +723,36 @@ mod adapter_tests {
         for (outcome, expected) in cases {
             assert_eq!(level_for_outcome(outcome), expected, "outcome={outcome}");
         }
+    }
+
+    #[test]
+    fn logger_level_override_accepts_debug() {
+        with_env_var(ATM_LOG_LEVEL_ENV, Some("debug"), || {
+            assert_eq!(
+                logger_level_override().expect("override"),
+                Some(SharedLevelFilter::Debug)
+            );
+        });
+    }
+
+    #[test]
+    fn logger_level_override_rejects_invalid_values() {
+        with_env_var(ATM_LOG_LEVEL_ENV, Some("verbose"), || {
+            let error = logger_level_override().expect_err("invalid override");
+            assert!(
+                error
+                    .to_string()
+                    .contains("invalid ATM_LOG value `verbose`"),
+                "{error}"
+            );
+        });
+    }
+
+    #[test]
+    fn tracing_level_filter_maps_off() {
+        assert_eq!(
+            tracing_level_filter(SharedLevelFilter::Off),
+            TracingLevelFilter::OFF
+        );
     }
 }

@@ -94,14 +94,8 @@ mod tests {
 
         let config = AtmConfig {
             identity: Some("config-agent".into()),
-            default_team: None,
-            team_members: Vec::new(),
-            aliases: Default::default(),
-            post_send_hook: None,
-            post_send_hook_senders: Vec::new(),
-            post_send_hook_recipients: Vec::new(),
-            config_root: std::path::PathBuf::new(),
             obsolete_identity_present: true,
+            ..Default::default()
         };
         assert_eq!(
             resolve_runtime_sender_identity(Some(&config)).expect("identity"),
@@ -119,14 +113,8 @@ mod tests {
 
         let config = AtmConfig {
             identity: Some("config-agent".into()),
-            default_team: None,
-            team_members: Vec::new(),
-            aliases: Default::default(),
-            post_send_hook: None,
-            post_send_hook_senders: Vec::new(),
-            post_send_hook_recipients: Vec::new(),
-            config_root: std::path::PathBuf::new(),
             obsolete_identity_present: true,
+            ..Default::default()
         };
 
         let error = resolve_runtime_sender_identity(Some(&config)).expect_err("identity error");
@@ -162,13 +150,8 @@ mod tests {
         let config = AtmConfig {
             identity: Some("config-agent".into()),
             default_team: Some("config-team".into()),
-            team_members: Vec::new(),
-            aliases: Default::default(),
-            post_send_hook: None,
-            post_send_hook_senders: Vec::new(),
-            post_send_hook_recipients: Vec::new(),
-            config_root: std::path::PathBuf::new(),
             obsolete_identity_present: true,
+            ..Default::default()
         };
 
         let error = resolve_hook_identity(None, Some(&config)).expect_err("hook identity error");
@@ -200,15 +183,8 @@ mod tests {
         let mut aliases = std::collections::BTreeMap::new();
         aliases.insert("lead".to_string(), "team-lead".to_string());
         let config = AtmConfig {
-            identity: None,
-            default_team: None,
-            team_members: Vec::new(),
             aliases,
-            post_send_hook: None,
-            post_send_hook_senders: Vec::new(),
-            post_send_hook_recipients: Vec::new(),
-            config_root: std::path::PathBuf::new(),
-            obsolete_identity_present: false,
+            ..Default::default()
         };
 
         assert_eq!(
