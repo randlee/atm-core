@@ -153,6 +153,13 @@ surface and uses the local Claude team directory layout for mailbox storage.
 
 `atm send` can run an optional post-send hook configured in `.atm.toml`:
 
+> Design note: the current implementation below still reflects the shipped
+> `post_send_hook_members` behavior. The pending redesign documented in
+> `docs/requirements.md`, `docs/architecture.md`, and `docs/project-plan.md`
+> replaces that key with `post_send_hook_senders` /
+> `post_send_hook_recipients`, adds `hook_match` payload metadata, and allows
+> an optional structured stdout result from the hook.
+
 ```toml
 [atm]
 post_send_hook = ["scripts/tmux-nudge.sh", "--team", "atm-dev"]

@@ -723,6 +723,9 @@ Planned sprints:
         - optional `task_id`
         - `hook_match.sender`
         - `hook_match.recipient`
+      - the hook may optionally return one structured stdout object with
+        `level`, `message`, and optional `fields`; ATM logs it on a best-effort
+        basis and ignores absent/invalid output
       - hook decision logging must make sender/recipient match evaluation easy
         to troubleshoot
       - a configured hook that is skipped because neither axis matched must

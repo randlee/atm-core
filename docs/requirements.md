@@ -479,6 +479,22 @@ Post-send-hook rules:
   - optional `task_id`
   - `hook_match.sender`
   - `hook_match.recipient`
+- the hook may optionally emit one structured result object on stdout for ATM
+  to parse as post-send diagnostics
+- the structured hook-result object must support:
+  - `level`
+  - `message`
+  - optional `fields`
+- supported hook-result levels are:
+  - `debug`
+  - `info`
+  - `warn`
+  - `error`
+- missing stdout, empty stdout, oversized stdout, or invalid hook-result schema
+  must not fail the send or convert a successful hook execution into a command
+  error
+- when a valid hook-result object is returned, ATM must log it with the
+  declared level and preserve any structured fields
 - when a hook is configured, ATM must emit enough diagnostics to explain
   whether the hook ran, was skipped, or failed, including the sender,
   recipient, configured sender/recipient filters, and match outcome
@@ -551,6 +567,9 @@ Retired from the current implementation:
   recipient filters match
 - include sender/recipient match booleans in the `ATM_POST_SEND` payload so a
   single hook script can branch on the trigger reason
+- support an optional structured hook result on stdout so hook scripts can
+  report post-send outcomes such as nudges, no-op conditions, and operator
+  errors without relying on stderr scraping
 - emit structured diagnostics for hook-match evaluation and actionable
   user-facing warnings when a configured hook is skipped because no sender or
   recipient filter matched

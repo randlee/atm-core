@@ -409,6 +409,11 @@ Architectural rules:
   `ATM_POST_SEND`
 - the payload includes `hook_match.sender` and `hook_match.recipient` so one
   script can branch on the trigger source
+- the hook may optionally emit one structured result object on stdout with a
+  declared log level, message, and optional structured fields; ATM parses it
+  on a best-effort basis for post-send diagnostics
+- absent or invalid hook-result stdout is ignored rather than treated as hook
+  failure
 - retired `[atm].post_send_hook_members` config is a configuration error, not a
   compatibility alias
 - hook-decision logging must preserve sender, recipient, configured filters,
@@ -1025,9 +1030,13 @@ contain:
 - `message_id`
 - `requires_ack`
 - optional `task_id`
+- `hook_match.sender`
+- `hook_match.recipient`
 
-The post-send hook runs only after a successful non-`dry-run` send, and hook
-failure or timeout never rolls back a successful send.
+The post-send hook runs only after a successful non-`dry-run` send, executes
+once when sender or recipient matching succeeds, may optionally emit one
+structured stdout result for observability, and never rolls back a successful
+send on failure or timeout.
 
 ### 13.3 File Policy
 
