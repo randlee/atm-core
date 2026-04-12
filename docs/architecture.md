@@ -409,6 +409,10 @@ Architectural rules:
   `ATM_POST_SEND`
 - the payload includes `hook_match.sender` and `hook_match.recipient` so one
   script can branch on the trigger source
+  - `hook_match.sender`
+    boolean — true if the sender filter axis matched, false otherwise
+  - `hook_match.recipient`
+    boolean — true if the recipient filter axis matched, false otherwise
 - the hook may optionally emit one structured result object on stdout with a
   declared log level, message, and optional structured fields; ATM parses it
   on a best-effort basis for post-send diagnostics
@@ -1031,7 +1035,9 @@ contain:
 - `requires_ack`
 - optional `task_id`
 - `hook_match.sender`
+  boolean — true if the sender filter axis matched, false otherwise
 - `hook_match.recipient`
+  boolean — true if the recipient filter axis matched, false otherwise
 
 The post-send hook runs only after a successful non-`dry-run` send, executes
 once when sender or recipient matching succeeds, may optionally emit one

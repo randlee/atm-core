@@ -70,6 +70,9 @@ Initial crate requirement IDs:
 - using the single ATM-owned code registry defined by
   [`../atm-error-codes.md`](../atm-error-codes.md) rather than local ad hoc
   code strings
+- keeping `atm --help` / `atm send --help` aligned with the active post-send
+  hook config surface; the CLI help references the ATM-owned hook semantics,
+  while `atm-core` owns the underlying matching and migration behavior
 
 ## 4. Command Ownership
 

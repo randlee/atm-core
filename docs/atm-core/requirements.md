@@ -286,7 +286,9 @@ Required identity rules:
   - `requires_ack`
   - optional `task_id`
   - `hook_match.sender`
+    boolean — true if the sender filter axis matched, false otherwise
   - `hook_match.recipient`
+    boolean — true if the recipient filter axis matched, false otherwise
 - the hook may optionally emit one structured stdout result with `level`,
   `message`, and optional `fields`; ATM logs it on a best-effort basis and
   ignores absent or invalid output

@@ -478,7 +478,23 @@ Post-send-hook rules:
   - `requires_ack`
   - optional `task_id`
   - `hook_match.sender`
+    boolean — true if the sender filter axis matched, false otherwise
   - `hook_match.recipient`
+    boolean — true if the recipient filter axis matched, false otherwise
+- example payload:
+  ```json
+  {
+    "from": "team-lead",
+    "to": "arch-ctm",
+    "message_id": "...",
+    "requires_ack": false,
+    "task_id": null,
+    "hook_match": {
+      "sender": true,
+      "recipient": false
+    }
+  }
+  ```
 - the hook may optionally emit one structured result object on stdout for ATM
   to parse as post-send diagnostics
 - the structured hook-result object must support:

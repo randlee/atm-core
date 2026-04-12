@@ -96,7 +96,9 @@ Identity-specific policy:
   - `requires_ack`
   - optional `task_id`
   - `hook_match.sender`
+    boolean — true if the sender filter axis matched, false otherwise
   - `hook_match.recipient`
+    boolean — true if the recipient filter axis matched, false otherwise
 - sender matching uses `[atm].post_send_hook_senders`
 - recipient matching uses `[atm].post_send_hook_recipients`
 - `*` is a wildcard match on either trigger axis
