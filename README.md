@@ -156,16 +156,37 @@ surface and uses the local Claude team directory layout for mailbox storage.
 ```toml
 [atm]
 post_send_hook = ["scripts/tmux-nudge.sh", "--team", "atm-dev"]
-post_send_hook_members = ["team-lead", "arch-ctm"]
+post_send_hook_senders = ["team-lead"]
+post_send_hook_recipients = ["arch-ctm", "*"]
 ```
 
 Behavior:
 - `post_send_hook` is a command argv array. If the first entry is a relative path, ATM resolves it relative to the directory containing `.atm.toml`.
-- `post_send_hook_members` is a sender allowlist. The hook runs only when the sending identity is in this list. It is not a recipient filter.
-- ATM sets `ATM_POST_SEND` to a JSON payload with `{from, to, message_id, requires_ack, task_id}`.
+- `post_send_hook_senders` matches the resolved sender identity.
+- `post_send_hook_recipients` matches the resolved recipient agent name.
+- `*` in either list matches all senders or all recipients unconditionally.
+- The hook runs once if either sender or recipient matching succeeds.
+- ATM rejects retired `post_send_hook_members` with a migration error.
+- ATM sets `ATM_POST_SEND` to a JSON payload with `{from, to, message_id, requires_ack, task_id, hook_match}`.
 - The hook gets 5 seconds to complete.
-- Hook stdout and stderr are suppressed.
+- Hook stderr is suppressed. Hook stdout may optionally return one JSON object with `level`, `message`, and optional `fields` for ATM to log.
 - If the hook exits non-zero, fails to start, or times out, `atm send` still succeeds and prints a warning.
+
+Example `ATM_POST_SEND` payload:
+
+```json
+{
+  "from": "team-lead@atm-dev",
+  "to": "arch-ctm@atm-dev",
+  "message_id": "550e8400-e29b-41d4-a716-446655440000",
+  "requires_ack": true,
+  "task_id": "TASK-123",
+  "hook_match": {
+    "sender": true,
+    "recipient": true
+  }
+}
+```
 
 Example tmux auto-nudge hook for a Codex pane:
 
@@ -184,6 +205,12 @@ PY
 recipient="${fields[0]}"
 team="${fields[1]}"
 tmux send-keys -t "$recipient" "You have unread ATM messages. Run: atm read --team $team" Enter
+```
+
+Optional structured hook result on stdout:
+
+```json
+{"level":"debug","message":"arch-ctm nudged on pane %42","fields":{"pane_id":"%42"}}
 ```
 
 Useful docs in this repo:

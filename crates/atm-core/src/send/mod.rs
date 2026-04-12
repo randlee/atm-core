@@ -4,13 +4,12 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, json};
-use tracing::{debug, warn};
+use serde_json::Map;
+use tracing::warn;
 
 use crate::address::AgentAddress;
 use crate::config;
@@ -24,6 +23,7 @@ use crate::schema::{LegacyMessageId, MessageEnvelope};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 
 pub(crate) mod file_policy;
+pub(super) mod hook;
 pub(crate) mod input;
 pub(crate) mod summary;
 
@@ -253,12 +253,12 @@ pub fn send_mail(
 }
 
 #[derive(Debug)]
-struct ResolvedRecipient {
+pub(super) struct ResolvedRecipient {
     agent: String,
     team: String,
 }
 
-struct PostSendHookContext<'a> {
+pub(super) struct PostSendHookContext<'a> {
     sender: &'a str,
     sender_team: Option<&'a str>,
     recipient: &'a ResolvedRecipient,
@@ -390,7 +390,7 @@ fn display_sender_identity(
         .unwrap_or_else(|| canonical_sender.to_string())
 }
 
-fn qualified_sender_identity(sender: &str, sender_team: Option<&str>) -> String {
+pub(super) fn qualified_sender_identity(sender: &str, sender_team: Option<&str>) -> String {
     sender_team
         .map(|team| format!("{sender}@{team}"))
         .unwrap_or_else(|| sender.to_string())
@@ -426,101 +426,7 @@ fn maybe_run_post_send_hook(
     config: Option<&config::AtmConfig>,
     context: PostSendHookContext<'_>,
 ) {
-    const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
-
-    let Some(config) = config else {
-        return;
-    };
-    let Some(command_argv) = config.post_send_hook.as_ref() else {
-        return;
-    };
-    if !config
-        .post_send_hook_members
-        .iter()
-        .any(|member| member == context.sender)
-    {
-        debug!(
-            sender = context.sender,
-            allowlist = ?config.post_send_hook_members,
-            "post-send hook skipped: sender is not in post_send_hook_members"
-        );
-        return;
-    }
-
-    let mut argv = command_argv.iter();
-    let Some(command_path) = argv.next() else {
-        return;
-    };
-    let command_path = {
-        let path = PathBuf::from(command_path);
-        if path.is_absolute() {
-            path
-        } else {
-            config.config_root.join(path)
-        }
-    };
-
-    let payload = json!({
-        "from": qualified_sender_identity(context.sender, context.sender_team),
-        "to": format!("{}@{}", context.recipient.agent, context.recipient.team),
-        "message_id": context.message_id.to_string(),
-        "requires_ack": context.requires_ack,
-        "task_id": context.task_id,
-    });
-
-    let mut command = Command::new(&command_path);
-    command
-        .args(argv)
-        .current_dir(&config.config_root)
-        .env("ATM_POST_SEND", payload.to_string())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-
-    let mut child = match command.spawn() {
-        Ok(child) => child,
-        Err(error) => {
-            warnings.push(format!(
-                "warning: post-send hook failed to start from {}: {error}. Check that post_send_hook in .atm.toml points to a valid executable.",
-                command_path.display()
-            ));
-            return;
-        }
-    };
-
-    let started_at = Instant::now();
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                if !status.success() {
-                    warnings.push(format!(
-                        "warning: post-send hook exited unsuccessfully from {} with status {status}. Check the hook script for errors; it exited with a non-zero status.",
-                        command_path.display()
-                    ));
-                }
-                return;
-            }
-            Ok(None) if started_at.elapsed() < POST_SEND_HOOK_TIMEOUT => {
-                thread::sleep(Duration::from_millis(50));
-            }
-            Ok(None) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                warnings.push(format!(
-                    "warning: post-send hook timed out after {}s for {}. The hook script exceeded the 5-second timeout; ensure it exits promptly.",
-                    POST_SEND_HOOK_TIMEOUT.as_secs(),
-                    command_path.display()
-                ));
-                return;
-            }
-            Err(error) => {
-                warnings.push(format!(
-                    "warning: post-send hook status check failed for {}: {error}. This is an OS-level error; check that the hook process is not being killed externally.",
-                    command_path.display()
-                ));
-                return;
-            }
-        }
-    }
+    hook::maybe_run_post_send_hook(warnings, config, context);
 }
 
 fn missing_team_config_alert_key(team_dir: &Path) -> String {
@@ -758,7 +664,6 @@ impl Drop for SendAlertLock {
 #[cfg(test)]
 mod tests {
     use std::fs;
-
     use tempfile::tempdir;
 
     use super::{

@@ -98,7 +98,8 @@ mod tests {
             team_members: Vec::new(),
             aliases: Default::default(),
             post_send_hook: None,
-            post_send_hook_members: Vec::new(),
+            post_send_hook_senders: Vec::new(),
+            post_send_hook_recipients: Vec::new(),
             config_root: std::path::PathBuf::new(),
             obsolete_identity_present: true,
         };
@@ -122,7 +123,8 @@ mod tests {
             team_members: Vec::new(),
             aliases: Default::default(),
             post_send_hook: None,
-            post_send_hook_members: Vec::new(),
+            post_send_hook_senders: Vec::new(),
+            post_send_hook_recipients: Vec::new(),
             config_root: std::path::PathBuf::new(),
             obsolete_identity_present: true,
         };
@@ -163,7 +165,8 @@ mod tests {
             team_members: Vec::new(),
             aliases: Default::default(),
             post_send_hook: None,
-            post_send_hook_members: Vec::new(),
+            post_send_hook_senders: Vec::new(),
+            post_send_hook_recipients: Vec::new(),
             config_root: std::path::PathBuf::new(),
             obsolete_identity_present: true,
         };
@@ -202,7 +205,8 @@ mod tests {
             team_members: Vec::new(),
             aliases,
             post_send_hook: None,
-            post_send_hook_members: Vec::new(),
+            post_send_hook_senders: Vec::new(),
+            post_send_hook_recipients: Vec::new(),
             config_root: std::path::PathBuf::new(),
             obsolete_identity_present: false,
         };

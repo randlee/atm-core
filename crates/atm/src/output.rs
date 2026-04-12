@@ -19,9 +19,10 @@ pub fn print_send_result(outcome: &SendOutcome, json: bool) -> Result<()> {
             "Sent to {}@{} [message_id: {}]",
             outcome.agent, outcome.team, outcome.message_id
         );
-        for warning in &outcome.warnings {
-            println!("{warning}");
-        }
+    }
+
+    for warning in &outcome.warnings {
+        eprintln!("{warning}");
     }
 
     Ok(())

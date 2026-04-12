@@ -395,13 +395,33 @@ Architectural rules:
   canonical sender identity in `metadata.atm.fromIdentity`
 - self-send checks, target validation, routing, and audit logic must use the
   canonical sender identity rather than the display-oriented `from` projection
-- ATM-owned post-send hooks are sender-scoped best-effort helpers, not part of
-  the atomic send boundary
+- ATM-owned post-send hooks are best-effort sender/recipient-scoped helpers,
+  not part of the atomic send boundary
 - the hook runs only after a successful non-`dry-run` send
+- sender matching uses `[atm].post_send_hook_senders`
+- recipient matching uses `[atm].post_send_hook_recipients`
+- `*` in either list acts as a wildcard match for that axis
+- the hook executes once when either axis matches and must not duplicate
+  execution when both axes match
 - relative post-send-hook paths resolve from the discovered `.atm.toml`
   directory and execute with that same directory as the working directory
 - the hook receives inherited environment plus one ATM-owned JSON payload in
   `ATM_POST_SEND`
+- the payload includes `hook_match.sender` and `hook_match.recipient` so one
+  script can branch on the trigger source
+  - `hook_match.sender`
+    boolean — true if the sender filter axis matched, false otherwise
+  - `hook_match.recipient`
+    boolean — true if the recipient filter axis matched, false otherwise
+- the hook may optionally emit one structured result object on stdout with a
+  declared log level, message, and optional structured fields; ATM parses it
+  on a best-effort basis for post-send diagnostics
+- absent or invalid hook-result stdout is ignored rather than treated as hook
+  failure
+- retired `[atm].post_send_hook_members` config is a configuration error, not a
+  compatibility alias
+- hook-decision logging must preserve sender, recipient, configured filters,
+  wildcard use, and final match outcome for troubleshooting
 - hook failure or timeout never rolls back a successful send
 
 ## 5. Persisted Schema
@@ -422,8 +442,10 @@ ATM config and team-launch config are distinct concerns:
 - `[atm].team_members` is the ATM-owned baseline roster for doctor/orchestration
   checks
 - `[atm].aliases` is the ATM-owned shorthand map for canonical agent names
-- `[atm].post_send_hook` and `[atm].post_send_hook_members` are ATM-owned
-  best-effort sender-scoped automation settings
+- `[atm].post_send_hook`, `[atm].post_send_hook_senders`, and
+  `[atm].post_send_hook_recipients` are ATM-owned best-effort automation
+  settings
+- retired `[atm].post_send_hook_members` must fail fast with migration guidance
 - `[atm].identity` is obsolete in the retained multi-agent model and must not
   participate in runtime identity resolution
 
@@ -994,16 +1016,7 @@ The mailbox layer does not own selection policy, display buckets, output formatt
 
 ## 13. Identity And File Policy
 
-### 13.1 Hook Identity
-
-Hook-file identity is retained because it is a current non-daemon convenience path for send/read identity resolution.
-
-Only hook identity resolution is required for the rewrite. Session-resolution paths that exist only to bridge runtime/daemon ambiguity are not required.
-
-Repo-local config identity is not retained as a runtime fallback. In the
-multi-agent model, runtime identity must come from explicit CLI override,
-hook identity, or `ATM_IDENTITY`. An obsolete `[atm].identity` field may be
-diagnosed by doctor, but it must not control sender/actor resolution.
+### 13.1 Hook Matching
 
 When `ATM_POST_SEND` is set for a configured post-send hook, the payload must
 contain:
@@ -1012,9 +1025,34 @@ contain:
 - `message_id`
 - `requires_ack`
 - optional `task_id`
+- `hook_match.sender`
+  boolean — true if the sender filter axis matched, false otherwise
+- `hook_match.recipient`
+  boolean — true if the recipient filter axis matched, false otherwise
 
-The post-send hook runs only after a successful non-`dry-run` send, and hook
-failure or timeout never rolls back a successful send.
+The post-send hook runs only after a successful non-`dry-run` send, executes
+once when sender or recipient matching succeeds, may optionally emit one
+structured stdout result for observability, and never rolls back a successful
+send on failure or timeout.
+
+Supported structured hook-result levels remain:
+- `debug`
+- `info`
+- `warn`
+- `error`
+
+### 13.2 Identity Resolution
+
+Hook-file identity is retained because it is a current non-daemon convenience
+path for send/read identity resolution.
+
+Only hook identity resolution is required for the rewrite. Session-resolution
+paths that exist only to bridge runtime/daemon ambiguity are not required.
+
+Repo-local config identity is not retained as a runtime fallback. In the
+multi-agent model, runtime identity must come from explicit CLI override,
+hook identity, or `ATM_IDENTITY`. An obsolete `[atm].identity` field may be
+diagnosed by doctor, but it must not control sender/actor resolution.
 
 ### 13.3 File Policy
 

@@ -673,9 +673,9 @@ Planned sprints:
     - retain ATM-owned `aliases` support under the `[atm]` config section for
       shorthand addressing of canonical members, especially cross-team
       communication with roles such as `team-lead`
-    - add ATM-owned `post_send_hook` and `post_send_hook_members` support under
-      the `[atm]` config section for short-term sender-scoped post-send
-      automation
+    - add ATM-owned `post_send_hook`, `post_send_hook_senders`, and
+      `post_send_hook_recipients` support under the `[atm]` config section for
+      best-effort post-send automation
     - historical note:
       - the release-critical `[atm].identity` fallback removal and doctor drift
         warning were pulled forward and closed in `L.6`
@@ -702,8 +702,13 @@ Planned sprints:
         must drive validation, self-send checks, routing, and audit behavior
     - define post-send-hook rules:
       - the hook runs only after a successful non-`dry-run` send
-      - the hook runs only when the resolved sender identity is listed in
-        `post_send_hook_members`
+      - sender-based hook triggering uses `post_send_hook_senders`
+      - recipient-based hook triggering uses `post_send_hook_recipients`
+      - `*` in either list matches all senders or all recipients on that axis
+      - the hook runs once when either axis matches and must not duplicate
+        execution when both axes match
+      - legacy `post_send_hook_members` is rejected with migration guidance to
+        the new sender/recipient config keys
       - the hook path may be relative and must resolve from the directory that
         owns the discovered `.atm.toml`
       - the hook must execute with that same config-root directory as its
@@ -716,8 +721,33 @@ Planned sprints:
         - `message_id`
         - `requires_ack`
         - optional `task_id`
+        - `hook_match.sender`
+          boolean — true if the sender filter axis matched, false otherwise
+        - `hook_match.recipient`
+          boolean — true if the recipient filter axis matched, false otherwise
+      - the hook may optionally return one structured stdout object with
+        `level`, `message`, and optional `fields`; ATM logs it on a best-effort
+        basis and ignores absent/invalid output
+      - hook decision logging must make sender/recipient match evaluation easy
+        to troubleshoot
+      - a configured hook that is skipped because neither axis matched must
+        emit an actionable operator-facing warning
       - hook failure or timeout must never roll back the send; ATM reports the
         failure as post-send-hook diagnostics only
+  - `FIX-82` post-send hook redesign
+    - scope: replace `post_send_hook_members` with
+      `post_send_hook_senders` / `post_send_hook_recipients`, add `*`
+      wildcard support, add `hook_match` metadata to `ATM_POST_SEND`, hard
+      reject the retired key, and improve hook diagnostics
+    - acceptance:
+      - retired `post_send_hook_members` produces a hard config error with
+        migration guidance
+      - sender and recipient trigger lists work independently and together
+      - the hook runs exactly once when either or both axes match
+      - `ATM_POST_SEND` includes `hook_match.sender` and
+        `hook_match.recipient`
+      - actionable warnings exist for configured-but-skipped hooks
+      - docs, help text, and tests cover the migration and new semantics
     - reserve `atm-identity-missing@<team>` for ATM-generated
       repair/diagnostic notices only; it must not become a normal sender
       identity fallback
