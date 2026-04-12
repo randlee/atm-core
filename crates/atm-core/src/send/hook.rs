@@ -391,6 +391,7 @@ fn log_post_send_hook_result(command_path: &Path, result: PostSendHookResult) {
             "post-send hook reported result"
         ),
         Level::WARN => warn!(
+            code = %AtmErrorCode::WarningHookExecutionFailed,
             hook_path = %command_path.display(),
             hook_result_message = %message,
             hook_result_fields = %fields,
