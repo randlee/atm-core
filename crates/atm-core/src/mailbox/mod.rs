@@ -32,6 +32,17 @@ pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), Atm
     })
 }
 
+/// Lock, load, mutate, and atomically rewrite one mailbox file.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::MailboxLockFailed`],
+/// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`],
+/// [`crate::error_codes::AtmErrorCode::MailboxReadFailed`], or
+/// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`] when ATM cannot
+/// acquire the mailbox lock, read the current mailbox contents, or atomically
+/// persist the rewritten file.
 pub(crate) fn locked_read_modify_write<F>(
     path: &Path,
     timeout: std::time::Duration,
