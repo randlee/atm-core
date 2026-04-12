@@ -543,6 +543,60 @@ fn test_read_preserves_none_message_id_records_in_output() {
 }
 
 #[test]
+fn test_read_accepts_json_array_inbox_without_message_id() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_raw_inbox(
+        "arch-ctm",
+        &serde_json::json!([
+            {
+                "from": "team-lead",
+                "text": "array without id",
+                "timestamp": "2026-03-30T00:00:00Z",
+                "read": false
+            }
+        ])
+        .to_string(),
+    );
+
+    let output = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["count"], 1);
+    assert_eq!(parsed["messages"][0]["text"], "array without id");
+    assert!(parsed["messages"][0]["message_id"].is_null());
+}
+
+#[test]
+fn test_read_accepts_json_array_inbox_with_message_id() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    let message = fixture.message("team-lead", "array with id", false, None, None, 0);
+    fixture.write_raw_inbox(
+        "arch-ctm",
+        &serde_json::to_string(&vec![message.clone()]).expect("json"),
+    );
+
+    let output = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["count"], 1);
+    assert_eq!(parsed["messages"][0]["text"], "array with id");
+    assert_eq!(
+        parsed["messages"][0]["message_id"],
+        message.message_id.unwrap().to_string()
+    );
+}
+
+#[test]
 fn test_read_keeps_read_and_unread_idle_notifications_from_different_files() {
     let fixture = Fixture::new(&["arch-ctm"]);
     fixture.write_inbox(
@@ -727,6 +781,14 @@ impl Fixture {
             .collect::<Vec<_>>()
             .join("\n");
         fs::write(inbox_path, format!("{raw}\n")).expect("write inbox");
+    }
+
+    fn write_raw_inbox(&self, agent: &str, raw: &str) {
+        let inbox_path = self.inbox_path(agent);
+        if let Some(parent) = inbox_path.parent() {
+            fs::create_dir_all(parent).expect("inbox dir");
+        }
+        fs::write(inbox_path, raw).expect("write raw inbox");
     }
 
     fn write_seen_state(&self, agent: &str, timestamp: chrono::DateTime<Utc>) {
