@@ -164,10 +164,12 @@ Behavior:
 - `post_send_hook` is a command argv array. If the first entry is a relative path, ATM resolves it relative to the directory containing `.atm.toml`.
 - `post_send_hook_senders` matches the resolved sender identity.
 - `post_send_hook_recipients` matches the resolved recipient agent name.
+- Omitted or empty sender/recipient lists do not match on that axis.
 - `*` in either list matches all senders or all recipients unconditionally.
+- If both sender and recipient lists are omitted or empty, the hook is effectively disabled and ATM does not emit a skip warning for that case.
 - The hook runs once if either sender or recipient matching succeeds.
 - ATM rejects retired `post_send_hook_members` with a migration error.
-- ATM sets `ATM_POST_SEND` to a JSON payload with `{from, to, message_id, requires_ack, task_id, hook_match}`.
+- ATM sets `ATM_POST_SEND` to a JSON payload with `{from, to, message_id, requires_ack, hook_match}` plus optional `task_id` when present.
 - The hook gets 5 seconds to complete.
 - Hook stderr is suppressed. Hook stdout may optionally return one JSON object with `level`, `message`, and optional `fields` for ATM to log.
 - For troubleshooting hook diagnostics, combine `--stderr-logs` with `ATM_LOG=debug` to surface debug-level hook results on stderr.
@@ -181,9 +183,8 @@ Example `ATM_POST_SEND` payload:
   "to": "arch-ctm@atm-dev",
   "message_id": "550e8400-e29b-41d4-a716-446655440000",
   "requires_ack": true,
-  "task_id": "TASK-123",
   "hook_match": {
-    "sender": true,
+    "sender": false,
     "recipient": true
   }
 }

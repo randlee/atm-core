@@ -400,6 +400,10 @@ Architectural rules:
 - the hook runs only after a successful non-`dry-run` send
 - sender matching uses `[atm].post_send_hook_senders`
 - recipient matching uses `[atm].post_send_hook_recipients`
+- omitted or empty sender/recipient lists do not match and therefore do not
+  trigger the hook on their own
+- if both sender/recipient lists are omitted or empty, the hook is effectively
+  disabled and ATM does not emit a user-facing skip warning for that case
 - `*` in either list acts as a wildcard match for that axis
 - the hook executes once when either axis matches and must not duplicate
   execution when both axes match
@@ -418,6 +422,8 @@ Architectural rules:
   on a best-effort basis for post-send diagnostics
 - absent or invalid hook-result stdout is ignored rather than treated as hook
   failure
+- user-visible skip warnings apply only when at least one sender/recipient
+  filter list is configured and both axes fail to match
 - retired `[atm].post_send_hook_members` config is a configuration error, not a
   compatibility alias
 - hook-decision logging must preserve sender, recipient, configured filters,
@@ -1024,11 +1030,13 @@ contain:
 - `to`
 - `message_id`
 - `requires_ack`
-- optional `task_id`
+- optional `task_id` when present
 - `hook_match.sender`
   boolean — true if the sender filter axis matched, false otherwise
 - `hook_match.recipient`
   boolean — true if the recipient filter axis matched, false otherwise
+- omitted or empty sender/recipient lists therefore produce `hook_match`
+  values of `false`; only `*` represents an unconditional match
 
 The post-send hook runs only after a successful non-`dry-run` send, executes
 once when sender or recipient matching succeeds, may optionally emit one

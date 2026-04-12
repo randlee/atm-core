@@ -34,6 +34,9 @@ pub fn read_hook_identity() -> Result<Option<String>, AtmError> {
             format!("failed to read hook file {}: {error}", path.display()),
         )
         .with_source(error)
+        .with_recovery(
+            "The hook identity file is ephemeral. Rerun the triggering hook or ignore if hook identity is optional.",
+        )
     })?;
 
     let data: HookFileData = serde_json::from_str(&raw).map_err(|error| {
@@ -42,6 +45,9 @@ pub fn read_hook_identity() -> Result<Option<String>, AtmError> {
             format!("invalid hook file JSON at {}: {error}", path.display()),
         )
         .with_source(error)
+        .with_recovery(
+            "The hook identity file is ephemeral. Rerun the triggering hook or ignore if hook identity is optional.",
+        )
     })?;
 
     let now = SystemTime::now()

@@ -114,6 +114,11 @@ pub fn load_team_config(team_dir: &Path) -> Result<TeamConfig, AtmError> {
     parse_team_config(&config_path, &raw)
 }
 
+/// Resolves the sender identity for outgoing messages.
+///
+/// The `_config` parameter is reserved for a future config-provided identity
+/// fallback and is currently unused. Identity is resolved exclusively via the
+/// `ATM_IDENTITY` environment variable.
 pub fn resolve_identity(_config: Option<&AtmConfig>) -> Option<String> {
     env::var("ATM_IDENTITY")
         .ok()
@@ -189,7 +194,7 @@ fn reject_retired_post_send_hook_members(
             ),
         )
         .with_recovery(
-            "Replace post_send_hook_members with post_send_hook_senders and/or post_send_hook_recipients under [atm]. Use * to match all.",
+            "Use 'post_send_hook_senders' (match on sender identity) and/or 'post_send_hook_recipients' (match on recipient name) under [atm]. Use '*' to match all senders or all recipients.",
         ));
     }
     Ok(())
@@ -440,7 +445,7 @@ post_send_hook_members = ["team-lead"]
         assert_eq!(
             error.recovery.as_deref(),
             Some(
-                "Replace post_send_hook_members with post_send_hook_senders and/or post_send_hook_recipients under [atm]. Use * to match all."
+                "Use 'post_send_hook_senders' (match on sender identity) and/or 'post_send_hook_recipients' (match on recipient name) under [atm]. Use '*' to match all senders or all recipients."
             )
         );
     }
