@@ -493,8 +493,8 @@ Post-send-hook rules:
 - example payload:
   ```json
   {
-    "from": "team-lead",
-    "to": "arch-ctm",
+    "from": "arch-ctm@atm-dev",
+    "to": "recipient@atm-dev",
     "message_id": "...",
     "requires_ack": false,
     "task_id": null,
