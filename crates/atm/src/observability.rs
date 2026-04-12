@@ -91,12 +91,10 @@ impl CliObservability {
         home_dir: &std::path::Path,
         options: CliObservabilityOptions,
     ) -> Result<Self, AtmError> {
-        Ok(Self::from_boxed_port(
-            crate::sc_observability_adapter::new_sc_observability_adapter_for_tests(
-                home_dir,
-                options.stderr_logs,
-            )?,
-        ))
+        Ok(Self::from_boxed_port(crate::new_adapter_port_for_tests(
+            home_dir,
+            options.stderr_logs,
+        )?))
     }
 }
 

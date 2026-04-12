@@ -514,7 +514,7 @@ fn maybe_run_post_send_hook(
             }
             Err(error) => {
                 warnings.push(format!(
-                    "warning: post-send hook status check failed for {}: {error}",
+                    "warning: post-send hook status check failed for {}: {error}. This is an OS-level error; check that the hook process is not being killed externally.",
                     command_path.display()
                 ));
                 return;
