@@ -675,7 +675,7 @@ fn process_is_alive(pid: u32) -> bool {
     // SAFETY: OpenProcess is called read-only for process liveness inspection.
     let process_id: u32 = pid;
     let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, process_id) };
-    if handle == 0 {
+    if handle.is_null() {
         return false;
     }
 
