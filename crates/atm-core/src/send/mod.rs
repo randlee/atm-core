@@ -157,8 +157,7 @@ pub fn send_mail(
                 recipient.agent,
                 recipient.team
             ));
-            warn!(
-                code = %AtmErrorCode::WarningMissingTeamConfigFallback,
+            warn!(code = %AtmErrorCode::WarningMissingTeamConfigFallback,
                 config_path = %team_dir.join("config.json").display(),
                 recipient = %recipient.agent,
                 team = %recipient.team,
@@ -453,8 +452,7 @@ fn register_missing_team_config_alert(home_dir: &Path, key: &str) -> bool {
     let state_path = send_alert_state_path(home_dir);
     let lock_path = send_alert_lock_path(home_dir);
     let Some(_guard) = acquire_send_alert_lock(&lock_path) else {
-        warn!(
-            code = %AtmErrorCode::WarningSendAlertStateDegraded,
+        warn!(code = %AtmErrorCode::WarningSendAlertStateDegraded,
             path = %lock_path.display(),
             "failed to acquire send alert lock; skipping team-lead notification"
         );
@@ -464,8 +462,7 @@ fn register_missing_team_config_alert(home_dir: &Path, key: &str) -> bool {
     let mut state = match load_send_alert_state(&state_path) {
         Ok(state) => state,
         Err(error) => {
-            warn!(
-                code = %AtmErrorCode::WarningSendAlertStateDegraded,
+            warn!(code = %AtmErrorCode::WarningSendAlertStateDegraded,
                 %error,
                 path = %state_path.display(),
                 "failed to read send state file - defaulting to empty state"
@@ -479,8 +476,7 @@ fn register_missing_team_config_alert(home_dir: &Path, key: &str) -> bool {
 
     state.missing_team_config_keys.insert(key.to_string());
     if let Err(error) = save_send_alert_state(&state_path, &state) {
-        warn!(
-            code = %AtmErrorCode::WarningSendAlertStateDegraded,
+        warn!(code = %AtmErrorCode::WarningSendAlertStateDegraded,
             %error,
             path = %state_path.display(),
             "failed to save send alert dedup state"
@@ -493,8 +489,7 @@ fn clear_missing_team_config_alert(home_dir: &Path, team_dir: &Path) {
     let state_path = send_alert_state_path(home_dir);
     let lock_path = send_alert_lock_path(home_dir);
     let Some(_guard) = acquire_send_alert_lock(&lock_path) else {
-        warn!(
-            code = %AtmErrorCode::WarningSendAlertStateDegraded,
+        warn!(code = %AtmErrorCode::WarningSendAlertStateDegraded,
             path = %lock_path.display(),
             "failed to acquire send alert lock while clearing dedup state"
         );

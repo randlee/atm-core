@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use atm_core::error::AtmError;
+use atm_core::error_codes::AtmErrorCode;
 use atm_core::home;
 use atm_core::observability::{
     AtmLogQuery, AtmLogRecord, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
@@ -603,7 +604,7 @@ fn level_for_outcome(outcome: &str) -> Level {
         "timeout" => Level::Warn,
         "error" | "failed" => Level::Error,
         other => {
-            tracing::warn!(
+            tracing::warn!(code = %AtmErrorCode::ObservabilityEmitFailed,
                 outcome = other,
                 "unknown ATM command outcome for observability level"
             );

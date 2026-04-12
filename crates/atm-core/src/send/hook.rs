@@ -301,8 +301,7 @@ fn finish_post_send_hook_stdout_capture(
     match stdout_reader.join() {
         Ok(Ok(stdout)) => Some(stdout),
         Ok(Err(error)) => {
-            warn!(
-                code = %AtmErrorCode::WarningHookExecutionFailed,
+            warn!(code = %AtmErrorCode::WarningHookExecutionFailed,
                 hook_path = %command_path.display(),
                 %error,
                 "post-send hook stdout capture failed"
@@ -310,8 +309,7 @@ fn finish_post_send_hook_stdout_capture(
             None
         }
         Err(_) => {
-            warn!(
-                code = %AtmErrorCode::WarningHookExecutionFailed,
+            warn!(code = %AtmErrorCode::WarningHookExecutionFailed,
                 hook_path = %command_path.display(),
                 "post-send hook stdout capture panicked"
             );

@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use fs2::FileExt;
 use tracing::warn;
 
-use crate::error::AtmError;
+use crate::error::{AtmError, AtmErrorCode};
 
 pub(crate) const DEFAULT_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
 /// Polling interval between advisory lock acquisition retries.
@@ -35,6 +35,7 @@ impl Drop for MailboxLockGuard {
     fn drop(&mut self) {
         if let Err(error) = self.file.unlock() {
             warn!(
+                code = %AtmErrorCode::MailboxLockFailed,
                 %error,
                 target_path = %self.target_path.display(),
                 lock_path = %self.lock_path.display(),

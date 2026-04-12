@@ -8,7 +8,7 @@ use serde_json::Value;
 use tracing::warn;
 
 use crate::config::{load_config, load_team_config, resolve_team};
-use crate::error::{AtmError, AtmErrorKind};
+use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
 use crate::persistence;
 use crate::schema::{AgentMember, TeamConfig};
@@ -184,6 +184,7 @@ pub fn list_teams(home_dir: PathBuf, current_dir: PathBuf) -> Result<TeamsList, 
                 member_count: config.members.len(),
             }),
             Err(error) => warn!(
+                code = %AtmErrorCode::ConfigTeamParseFailed,
                 path = %path.display(),
                 %error,
                 "skipping malformed team config while listing teams"
@@ -485,6 +486,7 @@ pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> 
     }
     if let Some(error) = marker_cleanup_error {
         warn!(
+            code = %AtmErrorCode::WarningRestoreInProgress,
             %error,
             team = %request.team,
             "restore completed but the stale restore marker could not be removed"

@@ -62,6 +62,7 @@ fn hook_file_path() -> Option<std::path::PathBuf> {
 fn parent_pid() -> Option<u32> {
     #[cfg(unix)]
     {
+        // SAFETY: getppid(2) has no preconditions; it never fails and always returns the parent PID.
         let pid = unsafe { libc::getppid() };
         (pid > 0).then_some(pid as u32)
     }

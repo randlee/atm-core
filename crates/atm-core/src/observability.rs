@@ -544,7 +544,12 @@ fn normalize_json_number(raw: &str) -> String {
         Some(index) => match unsigned[index + 1..].parse::<i64>() {
             Ok(exponent) => (&unsigned[..index], exponent),
             Err(error) => {
-                warn!(raw, %error, "failed to normalize JSON number exponent; preserving original value");
+                warn!(
+                    code = %AtmErrorCode::WarningMalformedAtmFieldIgnored,
+                    raw,
+                    %error,
+                    "failed to normalize JSON number exponent; preserving original value"
+                );
                 return raw.to_string();
             }
         },
