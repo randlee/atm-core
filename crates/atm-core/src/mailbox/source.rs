@@ -2,9 +2,11 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use tracing::warn;
+
 use crate::address::AgentAddress;
 use crate::config;
-use crate::error::{AtmError, AtmErrorKind};
+use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
 use crate::schema::MessageEnvelope;
 use crate::types::SourceIndex;
@@ -89,9 +91,20 @@ pub(crate) fn discover_origin_inboxes(
 
     let mut paths = Vec::new();
     for entry in entries {
-        let path = entry
-            .map_err(|error| origin_inbox_enumeration_error(inboxes_dir, agent, error))?
-            .path();
+        let path = match entry {
+            Ok(entry) => entry.path(),
+            Err(error) => {
+                let enumerated = origin_inbox_enumeration_error(inboxes_dir, agent, error);
+                warn!(
+                    code = %AtmErrorCode::WarningOriginInboxEntrySkipped,
+                    inbox_dir = %inboxes_dir.display(),
+                    agent,
+                    %enumerated,
+                    "failed while enumerating origin inbox entries; aborting source discovery"
+                );
+                return Err(enumerated);
+            }
+        };
         if path
             .file_name()
             .and_then(|value| value.to_str())

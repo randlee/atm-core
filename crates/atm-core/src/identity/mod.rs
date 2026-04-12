@@ -1,8 +1,5 @@
 pub mod hook;
 
-#[cfg(test)]
-use hook::HookIdentity;
-
 use crate::config::AtmConfig;
 use crate::error::AtmError;
 
@@ -67,11 +64,11 @@ pub fn resolve_runtime_sender_identity(config: Option<&AtmConfig>) -> Result<Str
 pub fn resolve_hook_identity(
     team_override: Option<&str>,
     config: Option<&AtmConfig>,
-) -> Result<HookIdentity, AtmError> {
+) -> Result<(String, String), AtmError> {
     let agent = resolve_runtime_sender_identity(config)?;
     let team = crate::config::resolve_team(team_override, config)
         .ok_or_else(AtmError::team_unavailable)?;
-    Ok(HookIdentity { agent, team })
+    Ok((agent, team))
 }
 
 #[cfg(test)]
@@ -131,9 +128,9 @@ mod tests {
         set_env_var("ATM_IDENTITY", "arch-ctm");
         set_env_var("ATM_TEAM", "atm-dev");
 
-        let identity = resolve_hook_identity(None, None).expect("hook identity");
-        assert_eq!(identity.agent, "arch-ctm");
-        assert_eq!(identity.team, "atm-dev");
+        let (agent, team) = resolve_hook_identity(None, None).expect("hook identity");
+        assert_eq!(agent, "arch-ctm");
+        assert_eq!(team, "atm-dev");
 
         restore("ATM_IDENTITY", original_identity);
         restore("ATM_TEAM", original_team);

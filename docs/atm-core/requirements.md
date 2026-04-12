@@ -80,7 +80,7 @@ Initial crate requirement IDs:
   of:
   `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-CLEAR-001`,
   `REQ-P-WORKFLOW-001`.
-- `REQ-CORE-SEND-001` `atm-core` owns send-path message construction,
+- `REQ-CORE-SEND-003` `atm-core` owns send-path message construction,
   classification, and append-boundary behavior above the mailbox storage
   helpers. Satisfies the send-path service aspects of:
   `REQ-P-SEND-001`, `REQ-P-IDLE-001`.

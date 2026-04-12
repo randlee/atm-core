@@ -1,3 +1,5 @@
+//! ATM config discovery, loading, normalization, and team-config parsing.
+
 pub mod aliases;
 pub mod bridge;
 pub mod discovery;
@@ -125,6 +127,7 @@ pub fn resolve_identity(_config: Option<&AtmConfig>) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+/// Resolve the active team from explicit override, environment, or config.
 pub fn resolve_team(team_override: Option<&str>, config: Option<&AtmConfig>) -> Option<String> {
     team_override
         .filter(|value| !value.is_empty())
@@ -295,6 +298,7 @@ fn parse_team_member(config_path: &Path, index: usize, entry: &Value) -> Option<
                     .map(ToOwned::to_owned)
                     .unwrap_or_else(|| format!("#{index}"));
                 warn!(
+                    code = %AtmErrorCode::WarningInvalidTeamMemberSkipped,
                     path = %config_path.display(),
                     member_index = index,
                     member = %member_label,
