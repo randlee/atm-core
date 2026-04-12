@@ -137,6 +137,13 @@ Error codes should describe the failure class, not a specific prose message.
   - emitted during ATM config loading before send execution proceeds
   - requires migration guidance that explains sender- versus
     recipient-triggered hook filters and the `*` wildcard
+  - expected message template:
+    ```text
+    error: '.atm.toml' field 'post_send_hook_members' is no longer supported.
+    Use 'post_send_hook_senders' (match on sender identity) and/or
+    'post_send_hook_recipients' (match on recipient name) under [atm].
+    Use '*' to match all senders or all recipients.
+    ```
   - must not be downgraded to a warning because the old key is ambiguous under
     the redesigned contract
 
@@ -150,6 +157,13 @@ Error codes should describe the failure class, not a specific prose message.
   - emitted as a warning/diagnostic only after a successful send
   - should include the resolved sender, resolved recipient, and configured
     sender/recipient filter values to make the mismatch actionable
+  - expected message template:
+    ```text
+    post-send hook skipped: sender {sender} not in post_send_hook_senders {senders}
+    and recipient {recipient} not in post_send_hook_recipients {recipients}
+    ```
+  - delivery channel: user-visible `warn!` / stderr via normal tracing log
+    routing; not debug-only and not suppressible
   - covers explicit no-match outcomes only; it is not used for hook process
     failures
 

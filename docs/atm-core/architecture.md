@@ -105,6 +105,8 @@ Identity-specific policy:
 - hook execution occurs once when either trigger axis matches
 - hook stdout may optionally carry one structured result object that ATM parses
   on a best-effort basis for post-send diagnostics
+- supported structured hook-result levels are `debug`, `info`, `warn`, and
+  `error`
 - hook-decision evaluation and skip reasons must be observable enough for
   troubleshooting without requiring source inspection
 - hook failure or timeout is best-effort only and must not convert a

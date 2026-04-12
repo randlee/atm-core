@@ -1016,7 +1016,7 @@ The mailbox layer does not own selection policy, display buckets, output formatt
 
 ## 13. Identity And File Policy
 
-### 13.1 Hook Identity
+### 13.1 Hook Matching
 
 Hook-file identity is retained because it is a current non-daemon convenience path for send/read identity resolution.
 
@@ -1043,6 +1043,12 @@ The post-send hook runs only after a successful non-`dry-run` send, executes
 once when sender or recipient matching succeeds, may optionally emit one
 structured stdout result for observability, and never rolls back a successful
 send on failure or timeout.
+
+Supported structured hook-result levels remain:
+- `debug`
+- `info`
+- `warn`
+- `error`
 
 ### 13.3 File Policy
 

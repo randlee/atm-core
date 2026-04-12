@@ -461,10 +461,19 @@ Post-send-hook rules:
 - `post_send_hook` is an ATM-owned helper script/command path list
 - `post_send_hook_senders` matches resolved sender identity, not model name
 - `post_send_hook_recipients` matches the resolved recipient agent name
-- `*` in either list matches every sender or every recipient respectively
+- `*` in either list matches every sender or every recipient respectively,
+  unconditionally, including all valid resolved sender/recipient identities
 - the hook runs once when either sender or recipient matching succeeds; if both
   match, ATM must not run the hook twice
 - `post_send_hook_members` is not a supported config key in this release line
+- when retired `post_send_hook_members` is present, ATM must fail with a
+  migration-oriented error message following this template:
+  ```text
+  error: '.atm.toml' field 'post_send_hook_members' is no longer supported.
+  Use 'post_send_hook_senders' (match on sender identity) and/or
+  'post_send_hook_recipients' (match on recipient name) under [atm].
+  Use '*' to match all senders or all recipients.
+  ```
 - a relative hook path must resolve from the directory containing the
   discovered `.atm.toml`
 - the hook must execute with that same config-root directory as its working
@@ -514,6 +523,15 @@ Post-send-hook rules:
 - when a hook is configured, ATM must emit enough diagnostics to explain
   whether the hook ran, was skipped, or failed, including the sender,
   recipient, configured sender/recipient filters, and match outcome
+- when a hook is configured but neither filter axis matched, ATM must emit a
+  user-facing warning with this template:
+  ```text
+  post-send hook skipped: sender {sender} not in post_send_hook_senders {senders}
+  and recipient {recipient} not in post_send_hook_recipients {recipients}
+  ```
+- this hook-skip warning is emitted through the normal user-visible `warn!`
+  channel, rendered to stderr via tracing/log routing, and is not debug-only or
+  suppressible
 
 ## 6. `atm send`
 
