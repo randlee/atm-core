@@ -2052,6 +2052,6 @@ closed before the 1.0 release.
   eliminated and documented.
 
   Required behavior:
-  - `observability.rs:529` — replace `.expect("valid JSON number exponent")`
+  - `observability.rs:538` — replace `.expect("valid JSON number exponent")`
     with a graceful fallback that returns the raw input string on parse failure
   - a library function must not panic on potentially untrusted input

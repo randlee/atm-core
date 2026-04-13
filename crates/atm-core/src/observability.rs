@@ -739,12 +739,19 @@ mod tests {
 
     #[test]
     fn normalize_json_number_preserves_raw_string_for_large_exponents() {
+        // 1e63 expands to 64 chars (max allowed); 1e64 expands to 65 chars
+        // (one over limit, capped).
         assert_eq!(normalize_json_number("1e1000000000"), "1e1000000000");
         assert_eq!(normalize_json_number("1e64"), "1e64");
         assert_eq!(
             normalize_json_number("1e63"),
             format!("1{}", "0".repeat(63))
         );
+    }
+
+    #[test]
+    fn normalize_json_number_handles_point_index_zero_boundary() {
+        assert_eq!(normalize_json_number("5e-1"), "0.5");
     }
 
     #[test]

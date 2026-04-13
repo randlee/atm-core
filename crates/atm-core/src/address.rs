@@ -21,11 +21,6 @@ impl FromStr for AgentAddress {
             Some((agent, team)) => {
                 validate_path_segment(agent, "agent")?;
                 validate_path_segment(team, "team")?;
-                if team.contains('@') {
-                    return Err(AtmError::address_parse(
-                        "address must contain at most one @ separator",
-                    ));
-                }
 
                 Ok(Self {
                     agent: agent.to_string(),
@@ -119,6 +114,8 @@ mod tests {
         assert!(AgentAddress::from_str("team/subdir").is_err());
         assert!(AgentAddress::from_str(r"team\\subdir").is_err());
         assert!(AgentAddress::from_str(".hidden").is_err());
+        assert!(AgentAddress::from_str("a..b@team").is_err());
+        assert!(AgentAddress::from_str("a...b@team").is_err());
     }
 
     #[test]
