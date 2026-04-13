@@ -19,3 +19,4 @@ anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 tokio = { version = "1", features = ["rt"] }
+uuid = { version = "1", features = ["serde", "v4"] }
