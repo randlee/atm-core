@@ -26,7 +26,7 @@ libc = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
 toml = "0.8"
 ulid = { version = "1.2.1", features = ["serde"] }
-uuid = { version = "1", features = ["serde", "v4"] }
+uuid.workspace = true
 fs2 = "0.4"
 
 [dev-dependencies]
