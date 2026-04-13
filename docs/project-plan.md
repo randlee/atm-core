@@ -1533,3 +1533,74 @@ Phase N completion gate:
   - `winget`
 - `winget` is explicitly documented as a new required Windows install channel,
   not as historical parity
+
+### Phase O: Security And Hardening [PLANNED]
+
+Goal:
+- close the confirmed CR001 findings that affect path safety, allocation
+  bounds, temp-file collision resistance, and send-alert lock behavior before
+  the next post-`1.0.1` hardening cycle begins
+
+Status summary:
+- CR001 confirmed four follow-up fixes that were intentionally left out of the
+  immediate release gate because they need small but focused design + test work
+- Phase O groups those fixes into one input-safety sprint and one
+  filesystem/lock-hardening sprint
+- accepted limitations from CR001 remain documented separately and are not
+  re-opened by this phase
+
+Integration branch: `integrate/phase-O`
+
+#### O.1 — Input Validation And Allocation Safety
+
+Goal:
+- close the two highest-risk confirmed CR001 findings by tightening the trust
+  boundary around path construction and bounding JSON-number normalization
+
+Deliverables:
+- `H-1`: add validated newtypes or one shared validator for team/agent path
+  segments
+  - reject path separators, `..`, empty segments, and platform-specific escapes
+    before any path construction in `address.rs` and `home.rs`
+- `M-2`: cap `normalize_json_number(...)` expansion length
+  - if the normalized form would exceed 64 characters, return the raw string
+    unchanged and emit `warn!` with
+    `code = %AtmErrorCode::WarningMalformedAtmFieldIgnored`
+
+Acceptance criteria:
+- `AgentAddress::from_str(...)` rejects `../evil`, `../../passwd`, and names
+  containing path separators
+- `normalize_json_number(...)` with exponent expansion over 64 characters
+  returns the raw string unchanged and emits the documented warning
+- `cargo test --workspace` passes
+- `cargo clippy --workspace --all-targets -- -D warnings` is clean
+
+#### O.2 — Filesystem Durability And Lock Hardening
+
+Goal:
+- close the remaining confirmed CR001 findings in persistence temp naming and
+  send-alert stale-lock handling
+
+Deliverables:
+- `C-1`: replace the timestamp-nanos temp-file suffix in `persistence.rs` with
+  `Uuid::new_v4()` while keeping the target basename for debuggability
+- `H-2`: add sleep/backoff after successful stale-lock eviction in
+  `acquire_send_alert_lock(...)` so every `AlreadyExists` turn yields at least
+  once
+
+Acceptance criteria:
+- `atomic_write_bytes(...)` uses UUID-based temp names
+- `acquire_send_alert_lock(...)` sleeps on every `AlreadyExists` iteration,
+  regardless of whether stale-lock eviction succeeded
+- `cargo test --workspace` passes
+- `cargo clippy --workspace --all-targets -- -D warnings` is clean
+
+Phase O completion gate:
+- O.1 and O.2 are both merged to `integrate/phase-O`
+- all four confirmed CR001 findings are resolved:
+  - `H-1`
+  - `M-2`
+  - `C-1`
+  - `H-2`
+- CI passes on all platforms
+- `integrate/phase-O` merges to `develop`
