@@ -1,10 +1,9 @@
 use std::fs::{self, File};
 use std::io::Write;
-use std::path::Path;
-
-use chrono::Utc;
+use std::path::{Path, PathBuf};
 
 use crate::error::{AtmError, AtmErrorKind};
+use uuid::Uuid;
 
 /// Atomically replace one shared mutable ATM-owned state file.
 ///
@@ -36,14 +35,7 @@ pub(crate) fn atomic_write_bytes(
         })?;
     }
 
-    let temp_path = path.with_file_name(format!(
-        ".{}.tmp.{}.{}",
-        path.file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or(label),
-        std::process::id(),
-        Utc::now().timestamp_nanos_opt().unwrap_or_default()
-    ));
+    let temp_path = temp_path_for_atomic_write(path, label);
 
     {
         let mut file = File::create(&temp_path).map_err(|error| {
@@ -91,6 +83,17 @@ pub(crate) fn atomic_write_bytes(
     })?;
     sync_parent_directory(path, kind, label, recovery)?;
     Ok(())
+}
+
+fn temp_path_for_atomic_write(path: &Path, label: &str) -> PathBuf {
+    path.with_file_name(format!(
+        ".{}.tmp.{}.{}",
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(label),
+        std::process::id(),
+        Uuid::new_v4()
+    ))
 }
 
 pub(crate) fn atomic_write_string(
@@ -174,7 +177,7 @@ mod tests {
     use serial_test::serial;
     use tempfile::tempdir;
 
-    use super::atomic_write_bytes;
+    use super::{atomic_write_bytes, temp_path_for_atomic_write};
     use crate::error::AtmErrorKind;
 
     fn env_lock() -> &'static Mutex<()> {
@@ -230,6 +233,31 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(&path).expect("state file"),
             r#"{"value":2}"#
+        );
+    }
+
+    #[test]
+    fn atomic_write_temp_paths_are_unique_across_rapid_writes() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = tempdir.path().join("state.json");
+
+        let first = temp_path_for_atomic_write(&path, "state file");
+        let second = temp_path_for_atomic_write(&path, "state file");
+
+        assert_ne!(first, second);
+        assert!(
+            first
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .contains(".tmp.")
+        );
+        assert!(
+            second
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .contains(".tmp.")
         );
     }
 

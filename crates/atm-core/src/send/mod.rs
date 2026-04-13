@@ -598,6 +598,7 @@ fn acquire_send_alert_lock(path: &Path) -> Option<SendAlertLock> {
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
                 if evict_stale_send_alert_lock(path) {
+                    thread::sleep(Duration::from_millis(10));
                     continue;
                 }
                 thread::sleep(Duration::from_millis(10));
