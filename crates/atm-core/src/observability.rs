@@ -536,6 +536,8 @@ impl ObservabilityPort for NullObservability {
 /// This function does not panic on malformed exponents. If exponent parsing
 /// fails unexpectedly, it logs a warning and preserves the original string.
 fn normalize_json_number(raw: &str) -> String {
+    const MAX_NORMALIZED_JSON_NUMBER_LEN: usize = 64;
+
     let (negative, unsigned) = match raw.strip_prefix('-') {
         Some(rest) => (true, rest),
         None => (false, raw),
@@ -578,6 +580,21 @@ fn normalize_json_number(raw: &str) -> String {
         scale += 1;
     }
 
+    if normalized_number_len_exceeds_limit(
+        negative,
+        digits.len(),
+        scale,
+        MAX_NORMALIZED_JSON_NUMBER_LEN,
+    ) {
+        warn!(
+            code = %AtmErrorCode::WarningMalformedAtmFieldIgnored,
+            raw,
+            max_normalized_len = MAX_NORMALIZED_JSON_NUMBER_LEN,
+            "JSON number exponent too large to normalize; preserving original value"
+        );
+        return raw.to_string();
+    }
+
     let unsigned = if scale >= 0 {
         format!("{digits}{}", "0".repeat(scale as usize))
     } else {
@@ -595,6 +612,28 @@ fn normalize_json_number(raw: &str) -> String {
     } else {
         unsigned
     }
+}
+
+fn normalized_number_len_exceeds_limit(
+    negative: bool,
+    digits_len: usize,
+    scale: i64,
+    max_len: usize,
+) -> bool {
+    let unsigned_len = if scale >= 0 {
+        digits_len.saturating_add(scale as usize)
+    } else {
+        let point_index = digits_len as i64 + scale;
+        if point_index > 0 {
+            digits_len.saturating_add(1)
+        } else {
+            digits_len
+                .saturating_add((-point_index) as usize)
+                .saturating_add(2)
+        }
+    };
+    let total_len = unsigned_len.saturating_add(usize::from(negative));
+    total_len > max_len
 }
 
 #[cfg(test)]
@@ -696,6 +735,23 @@ mod tests {
     #[test]
     fn normalize_json_number_preserves_raw_string_for_malformed_exponent() {
         assert_eq!(normalize_json_number("1e-not-a-number"), "1e-not-a-number");
+    }
+
+    #[test]
+    fn normalize_json_number_preserves_raw_string_for_large_exponents() {
+        // 1e63 expands to 64 chars (max allowed); 1e64 expands to 65 chars
+        // (one over limit, capped).
+        assert_eq!(normalize_json_number("1e1000000000"), "1e1000000000");
+        assert_eq!(normalize_json_number("1e64"), "1e64");
+        assert_eq!(
+            normalize_json_number("1e63"),
+            format!("1{}", "0".repeat(63))
+        );
+    }
+
+    #[test]
+    fn normalize_json_number_handles_point_index_zero_boundary() {
+        assert_eq!(normalize_json_number("5e-1"), "0.5");
     }
 
     #[test]
