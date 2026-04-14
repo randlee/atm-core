@@ -1,3 +1,4 @@
+use std::fmt;
 use std::str::FromStr;
 
 use crate::error::AtmError;
@@ -38,7 +39,16 @@ impl FromStr for AgentAddress {
     }
 }
 
-fn validate_path_segment(value: &str, kind: &str) -> Result<(), AtmError> {
+impl fmt::Display for AgentAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.team {
+            Some(team) => write!(f, "{}@{}", self.agent, team),
+            None => f.write_str(&self.agent),
+        }
+    }
+}
+
+pub(crate) fn validate_path_segment(value: &str, kind: &str) -> Result<(), AtmError> {
     if value.is_empty() {
         return Err(AtmError::address_parse(format!(
             "{kind} name must not be empty"
@@ -127,5 +137,21 @@ mod tests {
         let parsed = AgentAddress::from_str("arch-ctm@atm-dev").expect("address");
         assert_eq!(parsed.agent, "arch-ctm");
         assert_eq!(parsed.team.as_deref(), Some("atm-dev"));
+    }
+
+    #[test]
+    fn display_round_trips_bare_and_qualified_addresses() {
+        assert_eq!(
+            AgentAddress::from_str("arch-ctm")
+                .expect("address")
+                .to_string(),
+            "arch-ctm"
+        );
+        assert_eq!(
+            AgentAddress::from_str("arch-ctm@atm-dev")
+                .expect("address")
+                .to_string(),
+            "arch-ctm@atm-dev"
+        );
     }
 }

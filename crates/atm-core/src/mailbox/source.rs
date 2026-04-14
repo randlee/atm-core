@@ -300,4 +300,22 @@ mod tests {
         assert!(error.is_mailbox_lock());
         assert!(error.message.contains("source path set changed"));
     }
+
+    #[test]
+    fn discover_source_paths_rejects_invalid_team_segment() {
+        let tempdir = tempdir().expect("tempdir");
+        let error =
+            super::discover_source_paths(tempdir.path(), "../evil", "arch-ctm").expect_err("team");
+
+        assert!(error.is_address());
+    }
+
+    #[test]
+    fn discover_source_paths_rejects_invalid_agent_segment() {
+        let tempdir = tempdir().expect("tempdir");
+        let error =
+            super::discover_source_paths(tempdir.path(), "atm-dev", "../evil").expect_err("agent");
+
+        assert!(error.is_address());
+    }
 }

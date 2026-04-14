@@ -443,6 +443,36 @@ mod tests {
     }
 
     #[test]
+    fn run_doctor_reports_invalid_team_override_as_address_error() {
+        let paths = TestPaths::new();
+        let report = run_doctor(
+            DoctorQuery {
+                home_dir: paths.home_dir.clone(),
+                current_dir: paths.current_dir.clone(),
+                team_override: Some("../evil".into()),
+            },
+            &StubObservability {
+                health: StubHealth::Ok(AtmObservabilityHealth {
+                    active_log_path: Some(paths.active_log_path.clone()),
+                    logging_state: AtmObservabilityHealthState::Healthy,
+                    query_state: Some(AtmObservabilityHealthState::Healthy),
+                    detail: None,
+                }),
+            },
+        )
+        .expect("doctor report");
+
+        assert!(report.member_roster.is_none());
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|finding| finding.code == AtmErrorCode::AddressParseFailed),
+            "{report:#?}"
+        );
+    }
+
+    #[test]
     fn run_doctor_reports_obsolete_identity_drift_as_warning() {
         let paths = TestPaths::new();
         paths.write_team_layout(&["arch-ctm"]);
