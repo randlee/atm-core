@@ -202,6 +202,42 @@ Required canonical paths:
 - `{ATM_HOME}/.config/atm/state.json`
 - `{ATM_HOME}/.config/atm/share/{team}/`
 
+### 3.1.1 Security And Durability Boundaries
+
+Product requirement IDs:
+- `REQ-SEC-001` All user-supplied team and agent name segments must be
+  validated before path construction.
+- `REQ-SEC-002` JSON number normalization must not allocate unbounded memory.
+- `REQ-DURABILITY-001` Atomic-write temp file names must be globally unique
+  within a process.
+
+Required behavior:
+- valid team/agent path-segment characters are limited to:
+  - alphanumeric
+  - hyphen
+  - underscore
+  - period
+- team/agent segments must reject:
+  - empty strings
+  - path separators
+  - `..` sequences
+  - consecutive periods
+  - leading periods
+  - platform-specific path escapes that could break out of the intended ATM
+    home subtree
+- validation must happen before any path construction in address parsing or
+  home/path helpers
+- JSON number normalization must cap exponent-driven string expansion at 64
+  characters
+- if exponent expansion would exceed 64 characters, ATM must:
+  - return the original raw numeric string unchanged
+  - emit a structured warning using
+    `AtmErrorCode::WarningMalformedAtmFieldIgnored`
+- atomic persistence helpers must use temp-file names that are unique for each
+  write attempt targeting the same destination path from the same process
+- timestamp-only temp-file suffixes are not sufficient for the durability
+  contract because rapid same-process writes can collide
+
 ### 3.2 Team Mail Store
 
 Per-team layout:
@@ -2016,6 +2052,6 @@ closed before the 1.0 release.
   eliminated and documented.
 
   Required behavior:
-  - `observability.rs:529` — replace `.expect("valid JSON number exponent")`
-    with a graceful fallback that returns the raw input string on parse failure
+  - `normalize_json_number(...)` must return the raw input string on exponent
+    parse failure or unsupported exponent range instead of panicking
   - a library function must not panic on potentially untrusted input

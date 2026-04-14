@@ -1,7 +1,7 @@
 /// Acknowledgement workflows for ack-required mailbox messages.
 pub mod ack;
-/// Internal agent-address parsing and normalization helpers.
-pub(crate) mod address;
+/// Public agent-address parsing and normalization helpers.
+pub mod address;
 /// Mailbox cleanup workflows for read and acknowledged messages.
 pub mod clear;
 /// Internal configuration discovery and resolution helpers.

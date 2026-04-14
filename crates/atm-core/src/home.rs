@@ -1,6 +1,7 @@
 use std::env;
 use std::path::{Path, PathBuf};
 
+use crate::address::validate_path_segment;
 use crate::error::AtmError;
 
 /// Resolve the ATM home directory for the current process.
@@ -42,10 +43,12 @@ pub fn inbox_path(team: &str, agent: &str) -> Result<PathBuf, AtmError> {
 ///
 /// # Errors
 ///
-/// This helper is currently infallible after `home_dir` resolution. The
-/// `Result` shape is retained so callers can share one path-construction
-/// contract with helpers that may grow validation in the future.
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::AddressParseFailed`] when `team`
+/// contains path traversal, path separators, or other invalid path-segment
+/// characters.
 pub fn team_dir_from_home(home_dir: &Path, team: &str) -> Result<PathBuf, AtmError> {
+    validate_path_segment(team, "team")?;
     Ok(home_dir.join(".claude").join("teams").join(team))
 }
 
@@ -53,10 +56,12 @@ pub fn team_dir_from_home(home_dir: &Path, team: &str) -> Result<PathBuf, AtmErr
 ///
 /// # Errors
 ///
-/// This helper is currently infallible after `home_dir` resolution. The
-/// `Result` shape is retained so callers can share one path-construction
-/// contract with helpers that may grow validation in the future.
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::AddressParseFailed`] when `team` or
+/// `agent` contains path traversal, path separators, or other invalid
+/// path-segment characters.
 pub fn inbox_path_from_home(home_dir: &Path, team: &str, agent: &str) -> Result<PathBuf, AtmError> {
+    validate_path_segment(agent, "agent")?;
     Ok(team_dir_from_home(home_dir, team)?
         .join("inboxes")
         .join(format!("{agent}.json")))
@@ -81,7 +86,7 @@ mod tests {
 
     use tempfile::TempDir;
 
-    use super::{atm_home, inbox_path, team_dir};
+    use super::{atm_home, inbox_path, inbox_path_from_home, team_dir, team_dir_from_home};
 
     fn env_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -181,5 +186,24 @@ mod tests {
                 .join("inboxes")
                 .join("arch-ctm.json")
         );
+    }
+
+    #[test]
+    fn team_dir_from_home_rejects_path_traversal_segments() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let error = team_dir_from_home(tempdir.path(), "../evil").expect_err("invalid team");
+
+        assert!(error.is_address());
+        assert!(error.message.contains("team name"));
+    }
+
+    #[test]
+    fn inbox_path_from_home_rejects_path_traversal_segments() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let error =
+            inbox_path_from_home(tempdir.path(), "atm-dev", "../evil").expect_err("invalid agent");
+
+        assert!(error.is_address());
+        assert!(error.message.contains("agent name"));
     }
 }

@@ -9,6 +9,10 @@ Also owns send-time resilience behavior that is not generic config parsing:
 - best-effort deduplicated repair notifications to `team-lead`
 - post-send-hook trigger evaluation, payload construction, and diagnostics
 
+Accepted limitations in this module:
+- missing-config repair notifications are best-effort and effectively at-most-once across crash windows because dedup state is recorded before the team-lead inbox append
+- send-alert stale-lock eviction uses PID-only liveness checks, so PID reuse can conservatively preserve a stale lock until manual cleanup or timeout
+
 `SendOutcome.warnings` is part of the stable send API contract:
 - empty during normal sends
 - populated only when send succeeds in a degraded but permitted mode

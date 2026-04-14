@@ -42,7 +42,7 @@ pub struct SendRequest {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
     pub sender_override: Option<AgentName>,
-    pub to: String,
+    pub to: AgentAddress,
     pub team_override: Option<TeamName>,
     pub message_source: SendMessageSource,
     pub summary_override: Option<String>,
@@ -277,18 +277,18 @@ pub(super) struct PostSendHookContext<'a> {
 }
 
 fn resolve_recipient(
-    target_address: &str,
+    target_address: &AgentAddress,
     team_override: Option<&str>,
     config: Option<&config::AtmConfig>,
 ) -> Result<ResolvedRecipient, AtmError> {
-    let parsed: AgentAddress = target_address.parse()?;
-    let team = parsed
+    let team = target_address
         .team
+        .clone()
         .or_else(|| config::resolve_team(team_override, config))
         .ok_or_else(AtmError::team_unavailable)?;
 
     Ok(ResolvedRecipient {
-        agent: config::aliases::resolve_agent(&parsed.agent, config),
+        agent: config::aliases::resolve_agent(&target_address.agent, config),
         team,
     })
 }
@@ -598,6 +598,7 @@ fn acquire_send_alert_lock(path: &Path) -> Option<SendAlertLock> {
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
                 if evict_stale_send_alert_lock(path) {
+                    thread::sleep(Duration::from_millis(10));
                     continue;
                 }
                 thread::sleep(Duration::from_millis(10));

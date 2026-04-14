@@ -1557,10 +1557,10 @@ identity resolution order.
 
 ### 20.3 normalize_json_number Panic Removal
 
-`observability.rs` currently contains `.expect("valid JSON number exponent")` in
-`normalize_json_number(...)` at the exponent parse site. Phase M replaces that panic
-with graceful fallback: on parse failure, return the raw string unchanged and emit
-`tracing::warn!`. A library function must not panic on potentially untrusted input.
+`normalize_json_number(...)` must not panic on untrusted numeric text. Phase M
+replaces the old panic path with graceful fallback: on exponent parse failure or
+unsupported exponent range, return the raw string unchanged and emit `tracing::warn!`.
+A library function must not panic on potentially untrusted input.
 
 ### 20.4 Error-Surface Audit Methodology
 
@@ -1593,3 +1593,28 @@ Phase M builds on the already-landed L.7 runtime surface
 (`team_members`, `aliases`, `post_send_hook`, doctor identity drift warning).
 Phase M does not re-open that feature set; it only adds the remaining concurrency,
 restore, and code-review hardening needed for 1.0.
+
+### 20.6 Security Boundaries (Phase O)
+
+Phase O adds three architecture-level hardening decisions:
+
+1. **Address validation is the trust boundary for path construction**
+   - team and agent names must be validated before any helper constructs
+     `{ATM_HOME}/.claude/teams/{team}` or `{agent}.json`
+   - `address.rs` and `home.rs` together form the boundary; downstream code
+     must not attempt ad hoc sanitization after path joins are already built
+
+2. **PID-file locking remains conservative by design**
+   - the send-alert lock uses a PID-file-style stale-lock check
+   - PID reuse is an accepted limitation: a reused PID can make a stale lock
+     look alive, so ATM may conservatively preserve that stale lock until
+     timeout or manual cleanup
+   - this limitation favors false-alive availability loss over false-dead lock
+     eviction
+
+3. **Atomic writes must use collision-proof temp names**
+   - temp files for atomic replacement must use UUID-based suffixes instead of
+     timestamp-only suffixes
+   - this keeps same-process rapid writes to the same target path from
+     colliding on the temp-file name while preserving the target basename for
+     operator debugging
