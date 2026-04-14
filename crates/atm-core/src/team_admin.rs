@@ -7,6 +7,7 @@ use serde::Serialize;
 use serde_json::Value;
 use tracing::warn;
 
+use crate::address::validate_path_segment;
 use crate::config::{load_config, load_team_config, resolve_team};
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
@@ -312,7 +313,7 @@ pub fn backup_team(request: BackupRequest) -> Result<BackupOutcome, AtmError> {
         )));
     }
 
-    let backup_dir = backup_root_from_home(&request.home_dir, &request.team).join(timestamp_dir());
+    let backup_dir = backup_root_from_home(&request.home_dir, &request.team)?.join(timestamp_dir());
     fs::create_dir_all(backup_dir.join("inboxes")).map_err(|error| {
         AtmError::file_policy(format!(
             "failed to create backup directory {}: {error}",
@@ -334,7 +335,7 @@ pub fn backup_team(request: BackupRequest) -> Result<BackupOutcome, AtmError> {
 
     copy_regular_files(&team_dir.join("inboxes"), &backup_dir.join("inboxes"))?;
     copy_regular_files(
-        &tasks_dir_from_home(&request.home_dir, &request.team),
+        &tasks_dir_from_home(&request.home_dir, &request.team)?,
         &backup_dir.join("tasks"),
     )?;
 
@@ -466,7 +467,7 @@ pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> 
         })?;
     }
 
-    let tasks_dir = tasks_dir_from_home(&request.home_dir, &request.team);
+    let tasks_dir = tasks_dir_from_home(&request.home_dir, &request.team)?;
     restore_task_bucket(&backup_dir.join("tasks"), &tasks_dir)?;
     recompute_highwatermark(&tasks_dir)?;
     write_team_config(&team_dir, &updated_config).map_err(|error| {
@@ -520,12 +521,14 @@ fn teams_root_from_home(home_dir: &Path) -> PathBuf {
     home_dir.join(".claude").join("teams")
 }
 
-fn backup_root_from_home(home_dir: &Path, team: &str) -> PathBuf {
-    teams_root_from_home(home_dir).join(".backups").join(team)
+fn backup_root_from_home(home_dir: &Path, team: &str) -> Result<PathBuf, AtmError> {
+    validate_path_segment(team, "team")?;
+    Ok(teams_root_from_home(home_dir).join(".backups").join(team))
 }
 
-fn tasks_dir_from_home(home_dir: &Path, team: &str) -> PathBuf {
-    home_dir.join(".claude").join("tasks").join(team)
+fn tasks_dir_from_home(home_dir: &Path, team: &str) -> Result<PathBuf, AtmError> {
+    validate_path_segment(team, "team")?;
+    Ok(home_dir.join(".claude").join("tasks").join(team))
 }
 
 fn timestamp_dir() -> String {
@@ -653,7 +656,7 @@ fn locate_backup_dir(
         return Ok(path.to_path_buf());
     }
 
-    let root = backup_root_from_home(home_dir, team);
+    let root = backup_root_from_home(home_dir, team)?;
     if !root.exists() {
         return Err(AtmError::missing_document(format!(
             "no backup found for team '{}'",
@@ -929,4 +932,107 @@ fn clear_restore_marker(team_dir: &Path) -> Result<(), AtmError> {
         .with_source(error)
         .with_recovery("Remove the stale restore marker after verifying the restored team state.")
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::tempdir;
+
+    use super::{
+        AddMemberRequest, BackupRequest, RestoreRequest, add_member, backup_root_from_home,
+        backup_team, restore_team, tasks_dir_from_home,
+    };
+    use crate::error_codes::AtmErrorCode;
+    use crate::schema::TeamConfig;
+
+    fn write_team_config(home_dir: &std::path::Path, team: &str) {
+        let team_dir = home_dir.join(".claude").join("teams").join(team);
+        std::fs::create_dir_all(&team_dir).expect("team dir");
+        std::fs::write(
+            team_dir.join("config.json"),
+            serde_json::to_vec(&TeamConfig::default()).expect("serialize config"),
+        )
+        .expect("write config");
+    }
+
+    #[test]
+    fn add_member_rejects_invalid_member_segment() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(tempdir.path(), "atm-dev");
+
+        let error = add_member(AddMemberRequest {
+            home_dir: tempdir.path().to_path_buf(),
+            team: "atm-dev".to_string(),
+            member: "../evil".to_string(),
+            agent_type: "worker".to_string(),
+            model: "gpt-5".to_string(),
+            cwd: tempdir.path().to_path_buf(),
+            tmux_pane_id: None,
+        })
+        .expect_err("invalid member");
+
+        assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
+    }
+
+    #[test]
+    fn add_member_rejects_invalid_team_segment() {
+        let tempdir = tempdir().expect("tempdir");
+
+        let error = add_member(AddMemberRequest {
+            home_dir: tempdir.path().to_path_buf(),
+            team: "../evil".to_string(),
+            member: "arch-ctm".to_string(),
+            agent_type: "worker".to_string(),
+            model: "gpt-5".to_string(),
+            cwd: tempdir.path().to_path_buf(),
+            tmux_pane_id: None,
+        })
+        .expect_err("invalid team");
+
+        assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
+    }
+
+    #[test]
+    fn backup_team_rejects_invalid_team_segment() {
+        let tempdir = tempdir().expect("tempdir");
+
+        let error = backup_team(BackupRequest {
+            home_dir: tempdir.path().to_path_buf(),
+            team: "../evil".to_string(),
+        })
+        .expect_err("invalid team");
+
+        assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
+    }
+
+    #[test]
+    fn restore_team_rejects_invalid_team_segment() {
+        let tempdir = tempdir().expect("tempdir");
+
+        let error = restore_team(RestoreRequest {
+            home_dir: tempdir.path().to_path_buf(),
+            team: "../evil".to_string(),
+            from: None,
+            dry_run: false,
+        })
+        .expect_err("invalid team");
+
+        assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
+    }
+
+    #[test]
+    fn backup_root_from_home_rejects_invalid_team_segment() {
+        let tempdir = tempdir().expect("tempdir");
+        let error = backup_root_from_home(tempdir.path(), "../evil").expect_err("invalid team");
+
+        assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
+    }
+
+    #[test]
+    fn tasks_dir_from_home_rejects_invalid_team_segment() {
+        let tempdir = tempdir().expect("tempdir");
+        let error = tasks_dir_from_home(tempdir.path(), "../evil").expect_err("invalid team");
+
+        assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
+    }
 }

@@ -3,7 +3,7 @@ members = ["crates/atm-core", "crates/atm"]
 resolver = "2"
 
 [workspace.package]
-version = "1.0.1"
+version = "1.0.2"
 edition = "2024"
 rust-version = "1.94.1"
 authors = ["atm-core contributors"]
@@ -19,3 +19,4 @@ anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 tokio = { version = "1", features = ["rt"] }
+uuid = { version = "1", features = ["serde", "v4"] }

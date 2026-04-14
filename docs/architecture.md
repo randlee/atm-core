@@ -1557,10 +1557,10 @@ identity resolution order.
 
 ### 20.3 normalize_json_number Panic Removal
 
-`observability.rs` currently contains `.expect("valid JSON number exponent")` in
-`normalize_json_number(...)` at the exponent parse site. Phase M replaces that panic
-with graceful fallback: on parse failure, return the raw string unchanged and emit
-`tracing::warn!`. A library function must not panic on potentially untrusted input.
+`normalize_json_number(...)` must not panic on untrusted numeric text. Phase M
+replaces the old panic path with graceful fallback: on exponent parse failure or
+unsupported exponent range, return the raw string unchanged and emit `tracing::warn!`.
+A library function must not panic on potentially untrusted input.
 
 ### 20.4 Error-Surface Audit Methodology
 

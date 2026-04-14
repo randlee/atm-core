@@ -6,6 +6,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use atm_core::ack::{AckRequest, ack_mail};
+use atm_core::address::AgentAddress;
 use atm_core::clear::{ClearQuery, clear_mail};
 use atm_core::error::AtmErrorCode;
 use atm_core::observability::NullObservability;
@@ -563,7 +564,7 @@ impl Fixture {
             home_dir: self.tempdir.path().to_path_buf(),
             current_dir: self.tempdir.path().to_path_buf(),
             sender_override: Some(sender.into()),
-            to: to.to_string(),
+            to: to.parse::<AgentAddress>().expect("address"),
             team_override: Some("atm-dev".into()),
             message_source: SendMessageSource::Inline(text.to_string()),
             summary_override: None,

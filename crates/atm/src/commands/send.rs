@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
+use atm_core::address::AgentAddress;
 use atm_core::home;
 use atm_core::send::{self, SendMessageSource, SendRequest};
 use atm_core::types::{AgentName, TeamName};
@@ -55,13 +56,14 @@ impl SendCommand {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
         let message_source = self.build_message_source()?;
+        let to: AgentAddress = self.to.parse()?;
 
         let outcome = send::send_mail(
             SendRequest {
                 home_dir,
                 current_dir,
                 sender_override: self.from.map(AgentName::from),
-                to: self.to,
+                to,
                 team_override: self.team.map(TeamName::from),
                 message_source,
                 summary_override: self.summary,

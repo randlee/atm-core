@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::address::validate_path_segment;
 use crate::error::{AtmError, AtmErrorKind};
 use crate::persistence;
 use crate::types::IsoTimestamp;
@@ -16,7 +17,7 @@ pub fn load_seen_watermark(
     team: &str,
     agent: &str,
 ) -> Result<Option<IsoTimestamp>, AtmError> {
-    let path = seen_state_path(home_dir, team, agent);
+    let path = seen_state_path(home_dir, team, agent)?;
     if !path.exists() {
         return Ok(None);
     }
@@ -59,7 +60,7 @@ pub fn save_seen_watermark(
     agent: &str,
     timestamp: IsoTimestamp,
 ) -> Result<(), AtmError> {
-    let path = seen_state_path(home_dir, team, agent);
+    let path = seen_state_path(home_dir, team, agent)?;
     persistence::atomic_write_string(
         &path,
         &timestamp.into_inner().to_rfc3339(),
@@ -69,13 +70,15 @@ pub fn save_seen_watermark(
     )
 }
 
-fn seen_state_path(home_dir: &Path, team: &str, agent: &str) -> PathBuf {
-    home_dir
+fn seen_state_path(home_dir: &Path, team: &str, agent: &str) -> Result<PathBuf, AtmError> {
+    validate_path_segment(team, "team")?;
+    validate_path_segment(agent, "agent")?;
+    Ok(home_dir
         .join(".claude")
         .join("teams")
         .join(team)
         .join(".seen")
-        .join(agent)
+        .join(agent))
 }
 
 #[cfg(test)]
@@ -107,5 +110,30 @@ mod tests {
         let loaded = load_seen_watermark(tempdir.path(), "atm-dev", "arch-ctm").expect("load");
 
         assert_eq!(loaded, Some(timestamp));
+    }
+
+    #[test]
+    fn load_seen_state_rejects_invalid_team_segment() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let error =
+            load_seen_watermark(tempdir.path(), "../evil", "arch-ctm").expect_err("invalid team");
+
+        assert!(error.is_address());
+    }
+
+    #[test]
+    fn save_seen_state_rejects_invalid_agent_segment() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let timestamp = IsoTimestamp::from_datetime(
+            chrono::Utc
+                .with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
+                .single()
+                .expect("timestamp"),
+        );
+
+        let error = save_seen_watermark(tempdir.path(), "atm-dev", "../evil", timestamp)
+            .expect_err("invalid agent");
+
+        assert!(error.is_address());
     }
 }
