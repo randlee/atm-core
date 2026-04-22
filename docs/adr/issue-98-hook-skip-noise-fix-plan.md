@@ -102,6 +102,11 @@ That second branch is too broad. It treats these two situations the same:
 - configured filters did not match, which is expected behavior
 - actual hook execution failure, which is the only case that should warn
 
+The concrete issue `#98` reproducer is the single-axis partial-config case:
+`post_send_hook_recipients` is configured, `post_send_hook_senders` is
+unconfigured/empty, and a send to a different recipient still emits a
+caller-visible warning even though the hook was never scheduled to run.
+
 Issue `#98` is the first case. Non-match should be silent at the CLI warning
 layer and visible only in debug diagnostics.
 
@@ -232,6 +237,10 @@ Reasoning:
 - once non-match is no longer a caller-visible warning, the helper may become
   unnecessary
 - keeping dead warning-formatting surface would be needless complexity
+- implementation must also remove or rewrite the existing unit test at
+  `crates/atm-core/src/send/hook.rs:445-457`, which currently asserts the
+  helper's warning template and will otherwise fail to compile if the helper is
+  deleted
 
 ### `display_filter_list(...)`
 
@@ -309,8 +318,11 @@ Update these docs together when implementing:
 - `README.md`
 - `crates/atm/src/commands/send.rs` help text
 - `docs/atm-error-codes.md`
-  - either retire or narrow `ATM_WARNING_HOOK_SKIPPED` so it no longer claims
-    that hook non-match is a user-facing warning path
+  - retire `ATM_WARNING_HOOK_SKIPPED` in section 5.8.2 for this change
+  - section 5.8.2 must no longer describe hook filter non-match as a
+    user-visible warning/stderr path
+  - actual caller-visible hook warnings remain under
+    `ATM_WARNING_HOOK_EXECUTION_FAILED` in section 5.8.3
 
 ## Release / Version Step
 
@@ -318,6 +330,9 @@ Implementation plan must include a release/version step tied to `1.0.2`:
 
 - if the implementation branch starts from a pre-`1.0.2` base, bump the
   workspace version to `1.0.2` and regenerate any lockfile changes
+- update the stale `atm-core = { version = "1.0.1", path = "../atm-core" }`
+  pin in `crates/atm/Cargo.toml` to `1.0.2` as part of the same release-sync
+  pass
 - if the implementation branch already starts at `1.0.2`, retain `1.0.2` and
   do not introduce an additional version bump as part of this fix
 
@@ -335,9 +350,12 @@ not merged with ambiguous release-state assumptions.
    - recipient-only non-match is silent
    - two-axis non-match is silent
    - JSON mode remains silent on non-match
-4. Remove or narrow the skip-warning formatting/helper path.
+4. Remove or narrow the skip-warning formatting/helper path, and remove or
+   rewrite the existing helper-specific unit test in
+   `crates/atm-core/src/send/hook.rs`.
 5. Update product and crate docs listed above.
-6. Apply the explicit `1.0.2` version/release step.
+6. Apply the explicit `1.0.2` version/release step, including the stale
+   `crates/atm/Cargo.toml` path-dependency pin.
 7. Validate with:
    - `cargo test --workspace`
    - `cargo clippy --workspace --all-targets -- -D warnings`
