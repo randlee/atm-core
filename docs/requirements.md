@@ -517,8 +517,12 @@ Post-send-hook rules:
   Use '*' to match all senders or all recipients.
   ```
 - `{config_path}` is the discovered `.atm.toml` path containing the retired key
-- a relative hook path must resolve from the directory containing the
-  discovered `.atm.toml`
+- an absolute hook command path must be used as-is
+- a relative hook command path containing a path separator must resolve from
+  the directory containing the discovered `.atm.toml`
+- a bare hook command name with no path separator, such as `bash`, `python3`,
+  or `tmux`, must be treated as a program name and resolved through normal
+  `PATH` lookup rather than being rewritten under the config root
 - the hook must execute with that same config-root directory as its working
   directory
 - the hook inherits the process environment and also receives one ATM-owned
@@ -568,19 +572,15 @@ Post-send-hook rules:
 - when a hook is configured, ATM must emit enough diagnostics to explain
   whether the hook ran, was skipped, or failed, including the sender,
   recipient, configured sender/recipient filters, and match outcome
-- when a hook is configured but neither filter axis matched, ATM must emit a
-  user-facing warning with this template:
-  ```text
-  post-send hook skipped: sender {sender} not in post_send_hook_senders {senders}
-  and recipient {recipient} not in post_send_hook_recipients {recipients}
-  ```
-- when a sender or recipient filter list is omitted, the corresponding
-  `{senders}` or `{recipients}` placeholder renders as `(not configured)`
-- this hook-skip warning applies only when at least one sender/recipient
-  filter list is configured and both axes fail to match
-- this hook-skip warning is emitted through the normal user-visible `warn!`
-  channel, rendered to stderr via tracing/log routing, and is not debug-only or
-  suppressible
+- when a hook is configured but the sender/recipient filters do not match,
+  ATM must treat that as expected behavior rather than an operator-facing
+  warning
+- hook non-match diagnostics must be debug-level only and must not be pushed
+  into user-visible warning output, stderr warning output, or
+  `SendOutcome.warnings`
+- user-visible hook warnings are reserved for actual hook execution failures,
+  such as spawn failure, non-zero exit, timeout, or OS-level status-check
+  failure
 
 ## 6. `atm send`
 
@@ -652,14 +652,17 @@ Retired from the current implementation:
 - support `*` wildcard matching in either post-send-hook filter list
 - run the hook at most once per successful send even when both sender and
   recipient filters match
+- resolve the first `post_send_hook` argv entry by these rules:
+  - absolute path: use as-is
+  - relative path with a path separator: resolve from config root
+  - bare command name with no path separator: resolve via `PATH`
 - include sender/recipient match booleans in the `ATM_POST_SEND` payload so a
   single hook script can branch on the trigger reason
 - support an optional structured hook result on stdout so hook scripts can
   report post-send outcomes such as nudges, no-op conditions, and operator
   errors without relying on stderr scraping
-- emit structured diagnostics for hook-match evaluation and actionable
-  user-facing warnings when a configured hook is skipped because no sender or
-  recipient filter matched
+- emit structured diagnostics for hook-match evaluation, but treat configured
+  hook non-match as expected behavior rather than a user-facing warning
 - treat `post_send_hook` failure or timeout as best-effort diagnostics only; it
   must not roll back or fail an already-successful send
 - write a non-null `message_id` on every ATM-authored message

@@ -85,8 +85,13 @@ Identity-specific policy:
   validation, routing, and audit use
 - post-send-hook execution is outside the atomic mailbox mutation boundary
 - the hook runs only after a successful non-`dry-run` send
-- a relative hook path resolves from the discovered `.atm.toml` directory and
-  executes with that same directory as working directory
+- an absolute hook command path is used as-is
+- a relative hook command path containing a path separator resolves from the
+  discovered `.atm.toml` directory
+- a bare hook command name with no path separator resolves through normal
+  `PATH` lookup rather than being rewritten under the config root
+- hook processes execute with the discovered `.atm.toml` directory as working
+  directory
 - the hook inherits process environment and receives one ATM-owned JSON
   payload in `ATM_POST_SEND`
 - the `ATM_POST_SEND` payload contains:
@@ -112,12 +117,14 @@ Identity-specific policy:
   on a best-effort basis for post-send diagnostics
 - supported structured hook-result levels are `debug`, `info`, `warn`, and
   `error`
-- user-visible skip warnings apply only when at least one sender/recipient
-  filter list is configured and both axes fail to match
+- hook non-match is expected behavior and produces debug-only diagnostics, not
+  user-facing warnings
 - hook-decision evaluation and skip reasons must be observable enough for
   troubleshooting without requiring source inspection
 - hook failure or timeout is best-effort only and must not convert a
   successful send into a command failure
+- actual hook execution failures remain the only case where caller-visible hook
+  warnings are appropriate
 - the reserved diagnostic sender `atm-identity-missing@<team>` is for
   ATM-generated repair/diagnostic notices only
 - doctor should project the live `config.json` roster in a deterministic order:
