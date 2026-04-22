@@ -68,14 +68,7 @@ pub(super) fn maybe_run_post_send_hook(
             return;
         }
 
-        let warning = format_post_send_hook_skipped_warning(
-            context.sender,
-            &context.recipient.agent,
-            &config.post_send_hook_senders,
-            &config.post_send_hook_recipients,
-        );
-        warn!(
-            code = %AtmErrorCode::WarningHookSkipped,
+        debug!(
             sender = context.sender,
             recipient = %context.recipient.agent,
             recipient_team = %context.recipient.team,
@@ -83,9 +76,8 @@ pub(super) fn maybe_run_post_send_hook(
             recipient_filters = %display_filter_list(&config.post_send_hook_recipients),
             sender_match = hook_match.sender,
             recipient_match = hook_match.recipient,
-            "post-send hook skipped"
+            "post-send hook did not match configured sender or recipient filters"
         );
-        warnings.push(warning);
         return;
     }
 
@@ -246,19 +238,6 @@ fn hook_filter_matches(filters: &[String], candidate: &str) -> bool {
     filters
         .iter()
         .any(|filter| filter == "*" || filter == candidate)
-}
-
-fn format_post_send_hook_skipped_warning(
-    sender: &str,
-    recipient: &str,
-    senders: &[String],
-    recipients: &[String],
-) -> String {
-    format!(
-        "post-send hook skipped: sender {sender} not in post_send_hook_senders {}\nand recipient {recipient} not in post_send_hook_recipients {}",
-        display_filter_list(senders),
-        display_filter_list(recipients)
-    )
 }
 
 /// Render filters exactly as operators configure them so skip diagnostics make
@@ -424,9 +403,8 @@ mod tests {
     use tracing::Level;
 
     use super::{
-        POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel,
-        format_post_send_hook_skipped_warning, hook_filter_matches, hook_result_log_level,
-        matches_hook_axis, parse_post_send_hook_result,
+        POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel, hook_filter_matches,
+        hook_result_log_level, matches_hook_axis, parse_post_send_hook_result,
     };
 
     #[test]
@@ -439,21 +417,6 @@ mod tests {
     #[test]
     fn matches_hook_axis_treats_empty_filter_list_as_no_match() {
         assert!(!matches_hook_axis(&[], "arch-ctm"));
-    }
-
-    #[test]
-    fn format_post_send_hook_skipped_warning_uses_documented_template() {
-        let warning = format_post_send_hook_skipped_warning(
-            "arch-ctm",
-            "recipient",
-            &["team-lead".to_string()],
-            &["quality-mgr".to_string()],
-        );
-
-        assert_eq!(
-            warning,
-            "post-send hook skipped: sender arch-ctm not in post_send_hook_senders team-lead\nand recipient recipient not in post_send_hook_recipients quality-mgr"
-        );
     }
 
     #[test]
