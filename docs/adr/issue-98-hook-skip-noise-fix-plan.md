@@ -1,13 +1,29 @@
-# Issue #98 Fix Plan: Post-Send Hook Skip-Noise Demotion
+# Issue #98 Fix Plan: Hook Command Resolution And Skip-Noise Demotion
 
 ## Scope
 
-This plan covers a targeted behavior change in `crates/atm-core/src/send/hook.rs`
-for issue `#98`: do not emit a warn-level "post-send hook skipped" message when
-only one hook filter axis is configured and that configured axis simply does not
-match the current send.
+This plan covers two related post-send-hook issues:
+
+1. primary: hook command resolution is surprising and incorrect for bare binary
+   names such as `["bash", "-c", ...]`
+2. secondary: ATM emits a warn-level "post-send hook skipped" message when only
+   one hook filter axis is configured and that configured axis simply does not
+   match the current send
 
 The deliverable is planning only. No implementation is included here.
+
+## Priority Correction
+
+The operator priority is:
+
+1. fix hook command resolution so normal executable names work without forcing
+   `"/bin/bash"`-style absolute-path workarounds
+2. then fix the warn-level skip-noise behavior
+
+The warning-noise issue is real, but it is not the primary usability problem.
+The more important product failure is that a natural hook configuration like
+`post_send_hook = ["bash", "-c", "..."]` currently fails because ATM rewrites
+`"bash"` to `{config_root}/bash`.
 
 ## Root Cause
 
@@ -177,6 +193,61 @@ Reasoning:
 - it is still covered by unit tests
 - `(not configured)` remains a useful debug/log rendering even if it is no
   longer surfaced in the CLI warning string for the issue `#98` case
+
+## Related Hook Command Resolution Issue
+
+During investigation, `team-lead` reported a separate but closely related DX
+failure from the raptor team:
+
+- `post_send_hook = ["bash", "-c", "..."]` failed with `ENOENT`
+- ATM resolved the first argv element relative to `config_root`
+- `"bash"` therefore became `{config_root}/bash` instead of using `PATH`
+
+The operational workaround was to use `"/bin/bash"`, but that is not an
+acceptable product fix on its own.
+
+### Required plan note
+
+The issue `#98` implementation should explicitly record that:
+
+- absolute paths must continue to work
+- relative script paths such as `["scripts/tmux-nudge.sh", ...]` must continue
+  to resolve relative to `config_root`
+- bare executable names such as `["bash", ...]`, `["python3", ...]`, or
+  `["tmux", ...]` should be treated as program names and resolved via `PATH`,
+  not rewritten to `{config_root}/{binary}`
+
+### Recommended product fix direction
+
+Adjust `resolve_command_path(...)` so it distinguishes between:
+
+- absolute paths:
+  use as-is
+- relative paths containing a path separator:
+  resolve relative to `config_root`
+- bare command names with no path separator:
+  pass through unchanged so `Command::new(...)` uses normal `PATH` lookup
+
+That gives the expected behavior for both config styles:
+
+```toml
+post_send_hook = ["scripts/tmux-nudge.sh", ...]
+post_send_hook = ["bash", "-c", "..."]
+```
+
+### Follow-up validation/tests to include when implemented
+
+- relative script path resolves from `config_root`
+- bare binary name uses `PATH` resolution and does not join `config_root`
+- startup error text explains the failing hook path/command clearly when launch
+  still fails
+
+### Relationship to issue `#98`
+
+This is not the same bug as the warn-noise problem, but it is part of the same
+operator experience around post-send hooks. It should be carried in the fix plan
+so implementation does not cement the `"/bin/bash"` workaround as the intended
+behavior.
 
 ## Non-Goals
 
