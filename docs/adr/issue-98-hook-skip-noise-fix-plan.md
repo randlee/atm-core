@@ -329,18 +329,14 @@ Update these docs together when implementing:
 
 ## Release / Version Step
 
-Implementation plan must include a release/version step tied to `1.0.2`:
+Implementation must include an explicit patch-release version sync:
 
-- if the implementation branch starts from a pre-`1.0.2` base, bump the
-  workspace version to `1.0.2` and regenerate any lockfile changes
-- update the stale `atm-core = { version = "1.0.1", path = "../atm-core" }`
-  pin in `crates/atm/Cargo.toml` to `1.0.2` as part of the same release-sync
-  pass
-- if the implementation branch already starts at `1.0.2`, retain `1.0.2` and
-  do not introduce an additional version bump as part of this fix
-
-The version step must be explicit in the implementation checklist so the fix is
-not merged with ambiguous release-state assumptions.
+- bump the workspace version to the current patch release and regenerate the
+  lockfile
+- avoid duplicating internal crate version literals where workspace metadata or
+  path dependencies already provide the source of truth
+- keep the version step explicit in the implementation checklist so the fix is
+  not merged with ambiguous release-state assumptions
 
 ## Implementation Checklist
 
@@ -357,8 +353,7 @@ not merged with ambiguous release-state assumptions.
    rewrite the existing helper-specific unit test in
    `crates/atm-core/src/send/hook.rs`.
 5. Update product and crate docs listed above.
-6. Apply the explicit `1.0.2` version/release step, including the stale
-   `crates/atm/Cargo.toml` path-dependency pin.
+6. Apply the explicit patch-release version sync and regenerate the lockfile.
 7. Validate with:
    - `cargo test --workspace`
    - `cargo clippy --workspace --all-targets -- -D warnings`
