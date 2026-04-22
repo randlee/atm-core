@@ -315,6 +315,9 @@ Update these docs together when implementing:
 - `docs/architecture.md`
 - `docs/atm-core/requirements.md`
 - `docs/atm-core/architecture.md`
+- `docs/project-plan.md`
+  - update the `FIX-82` acceptance criteria to remove the operator-facing
+    warning requirement for hook filter non-match
 - `README.md`
 - `crates/atm/src/commands/send.rs` help text
 - `docs/atm-error-codes.md`
