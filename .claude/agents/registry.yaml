@@ -57,6 +57,8 @@ skills:
       rust-architect: 0.x
   quality-management-gh:
     version: 1.0.0
+  sprint-report:
+    version: 3.1.0
   rust-development:
     version: 0.11.0
     depends_on:

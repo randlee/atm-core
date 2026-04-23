@@ -70,6 +70,7 @@
 - [`.claude/skills/codex-orchestration/SKILL.md`](./.claude/skills/codex-orchestration/SKILL.md) - phased Codex sprint orchestration with `quality-mgr`
 - [`.claude/skills/phase-orchestration/SKILL.md`](./.claude/skills/phase-orchestration/SKILL.md) - phased sprint orchestration with fresh `scrum-master` coordinators
 - [`.claude/skills/quality-management-gh/SKILL.md`](./.claude/skills/quality-management-gh/SKILL.md) - multi-pass QA status, CI monitoring, and PR report conventions
+- [`.claude/skills/sprint-report/SKILL.md`](./.claude/skills/sprint-report/SKILL.md) - sprint status reporting templates for current phase and integration PR state
 
 ---
 
