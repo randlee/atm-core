@@ -154,22 +154,24 @@ surface and uses the local Claude team directory layout for mailbox storage.
 `atm send` can run an optional post-send hook configured in `.atm.toml`:
 
 ```toml
-[atm]
-post_send_hook = ["scripts/tmux-nudge.sh", "--team", "atm-dev"]
-post_send_hook_senders = ["team-lead"]
-post_send_hook_recipients = ["arch-ctm", "*"]
+[[atm.post_send_hooks]]
+recipient = "team-lead"
+command = ["scripts/atm-nudge.sh", "team-lead"]
+
+[[atm.post_send_hooks]]
+recipient = "arch-ctm"
+command = ["scripts/atm-nudge.sh", "arch-ctm"]
 ```
 
 Behavior:
-- `post_send_hook` is a command argv array. If the first entry is a relative path, ATM resolves it relative to the directory containing `.atm.toml`.
-- `post_send_hook_senders` matches the resolved sender identity.
-- `post_send_hook_recipients` matches the resolved recipient agent name.
-- Omitted or empty sender/recipient lists do not match on that axis.
-- `*` in either list matches all senders or all recipients unconditionally.
-- If both sender and recipient lists are omitted or empty, the hook is effectively disabled and ATM does not emit a skip warning for that case.
-- The hook runs once if either sender or recipient matching succeeds.
-- ATM rejects retired `post_send_hook_members` with a migration error.
-- ATM sets `ATM_POST_SEND` to a JSON payload with `{from, to, message_id, requires_ack, hook_match}` plus optional `task_id` when present.
+- Each `[[atm.post_send_hooks]]` rule binds one `recipient` and one `command`.
+- `recipient` matches either one exact member name or `*` for all recipients.
+- Multiple matching rules all run, in config order.
+- If `command[0]` is path-like, ATM resolves it relative to the directory containing `.atm.toml`.
+- Bare executables like `bash`, `python3`, or `tmux` use normal `PATH` resolution.
+- Recipient non-match is silent.
+- ATM rejects retired `post_send_hook`, `post_send_hook_senders`, `post_send_hook_recipients`, and `post_send_hook_members` keys with migration guidance.
+- ATM sets `ATM_POST_SEND` to a JSON payload with `{from, to, sender, recipient, team, message_id, requires_ack}` plus optional `task_id` when present.
 - The hook gets 5 seconds to complete.
 - Hook stderr is suppressed. Hook stdout may optionally return one JSON object with `level`, `message`, and optional `fields` for ATM to log.
 - For troubleshooting hook diagnostics, combine `--stderr-logs` with `ATM_LOG=debug` to surface debug-level hook results on stderr.
@@ -181,12 +183,11 @@ Example `ATM_POST_SEND` payload:
 {
   "from": "team-lead@atm-dev",
   "to": "arch-ctm@atm-dev",
+  "sender": "team-lead",
+  "recipient": "arch-ctm",
+  "team": "atm-dev",
   "message_id": "550e8400-e29b-41d4-a716-446655440000",
-  "requires_ack": true,
-  "hook_match": {
-    "sender": false,
-    "recipient": true
-  }
+  "requires_ack": true
 }
 ```
 

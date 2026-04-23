@@ -16,9 +16,14 @@ pub struct AtmConfig {
     pub default_team: Option<String>,
     pub team_members: Vec<String>,
     pub aliases: BTreeMap<String, String>,
-    pub post_send_hook: Option<Vec<String>>,
-    pub post_send_hook_senders: Vec<String>,
-    pub post_send_hook_recipients: Vec<String>,
+    pub post_send_hooks: Vec<PostSendHookRule>,
     pub config_root: PathBuf,
     pub(crate) obsolete_identity_present: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PostSendHookRule {
+    pub recipient: String,
+    pub command: Vec<String>,
 }

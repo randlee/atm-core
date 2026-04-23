@@ -16,6 +16,8 @@ pub enum AtmErrorCode {
     ConfigParseFailed,
     /// `.atm.toml` uses a retired post-send hook key.
     ConfigRetiredHookMembersKey,
+    /// `.atm.toml` uses retired flat post-send hook keys.
+    ConfigRetiredLegacyHookKeys,
     /// Team config parsing failed.
     ConfigTeamParseFailed,
     /// Team config document is missing.
@@ -98,6 +100,7 @@ impl AtmErrorCode {
             Self::ConfigHomeUnavailable => "ATM_CONFIG_HOME_UNAVAILABLE",
             Self::ConfigParseFailed => "ATM_CONFIG_PARSE_FAILED",
             Self::ConfigRetiredHookMembersKey => "ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY",
+            Self::ConfigRetiredLegacyHookKeys => "ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS",
             Self::ConfigTeamParseFailed => "ATM_CONFIG_TEAM_PARSE_FAILED",
             Self::ConfigTeamMissing => "ATM_CONFIG_TEAM_MISSING",
             Self::IdentityUnavailable => "ATM_IDENTITY_UNAVAILABLE",

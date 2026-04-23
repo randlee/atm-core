@@ -395,45 +395,34 @@ Architectural rules:
   canonical sender identity in `metadata.atm.fromIdentity`
 - self-send checks, target validation, routing, and audit logic must use the
   canonical sender identity rather than the display-oriented `from` projection
-- ATM-owned post-send hooks are best-effort sender/recipient-scoped helpers,
-  not part of the atomic send boundary
+- ATM-owned post-send hooks are best-effort recipient-scoped helpers, not part
+  of the atomic send boundary
 - the hook runs only after a successful non-`dry-run` send
-- sender matching uses `[atm].post_send_hook_senders`
-- recipient matching uses `[atm].post_send_hook_recipients`
-- omitted or empty sender/recipient lists do not match and therefore do not
-  trigger the hook on their own
-- if both sender/recipient lists are omitted or empty, the hook is effectively
-  disabled and ATM does not emit a user-facing skip warning for that case
-- `*` in either list acts as a wildcard match for that axis
-- the hook executes once when either axis matches and must not duplicate
-  execution when both axes match
-- absolute post-send-hook command paths are used as-is
-- relative post-send-hook command paths that contain a path separator resolve
-  from the discovered `.atm.toml` directory
-- bare post-send-hook command names with no path separator resolve through
-  normal `PATH` lookup and must not be rewritten under the config root
-- hook processes execute with the discovered `.atm.toml` directory as their
-  working directory
+- each `[[atm.post_send_hooks]]` rule binds one recipient selector and one
+  command argv
+- `recipient = "*"` acts as a wildcard match for all recipients
+- multiple matching rules all execute, in config order
+- relative post-send-hook paths resolve from the discovered `.atm.toml`
+  directory and execute with that same directory as the working directory
+- bare executable names use normal `PATH` lookup
 - the hook receives inherited environment plus one ATM-owned JSON payload in
   `ATM_POST_SEND`
-- the payload includes `hook_match.sender` and `hook_match.recipient` so one
-  script can branch on the trigger source
-  - `hook_match.sender`
-    boolean — true if the sender filter axis matched, false otherwise
-  - `hook_match.recipient`
-    boolean — true if the recipient filter axis matched, false otherwise
+- the payload includes `from`, `to`, `sender`, `recipient`, `team`,
+  `message_id`, `requires_ack`, and optional `task_id`
 - the hook may optionally emit one structured result object on stdout with a
   declared log level, message, and optional structured fields; ATM parses it
   on a best-effort basis for post-send diagnostics
 - absent or invalid hook-result stdout is ignored rather than treated as hook
   failure
-- hook non-match is expected behavior and therefore only produces debug-level
-  diagnostics; it does not create user-visible warnings or send-result warning
-  entries
-- retired `[atm].post_send_hook_members` config is a configuration error, not a
-  compatibility alias
-- hook-decision logging must preserve sender, recipient, configured filters,
-  wildcard use, and final match outcome for troubleshooting
+- recipient non-match is silent
+- retired flat hook keys are configuration errors under
+  `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`, not compatibility aliases
+- retired `[atm].post_send_hook_members` is a configuration error under
+  `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`
+- hook-decision logging must preserve sender, recipient, matched rule selector,
+  and final execution outcome for troubleshooting
+- expected hook non-match must remain debug-only diagnostics rather than
+  caller-visible warnings or send-result warning entries
 - hook failure or timeout never rolls back a successful send and remains the
   only case where caller-visible hook warnings are appropriate
 
@@ -455,10 +444,10 @@ ATM config and team-launch config are distinct concerns:
 - `[atm].team_members` is the ATM-owned baseline roster for doctor/orchestration
   checks
 - `[atm].aliases` is the ATM-owned shorthand map for canonical agent names
-- `[atm].post_send_hook`, `[atm].post_send_hook_senders`, and
-  `[atm].post_send_hook_recipients` are ATM-owned best-effort automation
-  settings
-- retired `[atm].post_send_hook_members` must fail fast with migration guidance
+- `[[atm.post_send_hooks]]` is the ATM-owned best-effort post-send automation
+  surface
+- retired flat hook keys and `[atm].post_send_hook_members` must fail fast
+  with migration guidance
 - `[atm].identity` is obsolete in the retained multi-agent model and must not
   participate in runtime identity resolution
 

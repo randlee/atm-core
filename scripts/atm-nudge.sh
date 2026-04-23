@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # atm-nudge.sh <recipient>
 #
 # Post-send hook for ATM: nudges a named agent's tmux pane when a message

@@ -135,6 +135,7 @@ Error codes should describe the failure class, not a specific prose message.
 ### 5.8 Post-Send Hook
 
 - `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`
+- `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`
 - `ATM_WARNING_HOOK_SKIPPED` (retired for filter non-match)
 - `ATM_WARNING_HOOK_EXECUTION_FAILED`
 
@@ -142,13 +143,12 @@ Error codes should describe the failure class, not a specific prose message.
 
 - code: `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`
 - description: `.atm.toml` contains the retired `post_send_hook_members` key
-  instead of the explicit `post_send_hook_senders` /
-  `post_send_hook_recipients` keys
+  instead of one or more explicit `[[atm.post_send_hooks]]` rules
 - HTTP status: `400 Bad Request`
 - context:
   - emitted during ATM config loading before send execution proceeds
-  - requires migration guidance that explains sender- versus
-    recipient-triggered hook filters and the `*` wildcard
+  - requires migration guidance that explains the recipient-scoped rule shape
+    and the `*` wildcard
   - `{config_path}` resolves to the discovered `.atm.toml` path that contained
     the retired key
   - expected output split:
@@ -158,16 +158,43 @@ Error codes should describe the failure class, not a specific prose message.
       ```
     - recovery:
       ```text
-      Use 'post_send_hook_senders' (match on sender identity) and/or
-      'post_send_hook_recipients' (match on recipient name) under [atm].
-      Use '*' to match all senders or all recipients.
+      Replace 'post_send_hook_members' with one or more [[atm.post_send_hooks]]
+      rules, each containing recipient = "name-or-*" and command = ["argv", ...].
       ```
   - the rendered CLI output may display the message and recovery together, but
     ATM stores them as separate fields on the structured error
   - must not be downgraded to a warning because the old key is ambiguous under
     the redesigned contract
 
-#### 5.8.2 `ATM_WARNING_HOOK_SKIPPED`
+#### 5.8.2 `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`
+
+- code: `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`
+- description: `.atm.toml` contains the retired flat post-send-hook keys
+  `[atm].post_send_hook`, `[atm].post_send_hook_senders`, or
+  `[atm].post_send_hook_recipients` instead of one or more explicit
+  `[[atm.post_send_hooks]]` rules
+- HTTP status: `400 Bad Request`
+- context:
+  - emitted during ATM config loading before send execution proceeds
+  - applies to the legacy flat-key hook shape as a whole, even when only one
+    of the retired keys is present
+  - `{config_path}` resolves to the discovered `.atm.toml` path that contained
+    the retired key set
+  - expected output split:
+    - message:
+      ```text
+      error: '{config_path}' uses retired post-send hook keys. Use [[atm.post_send_hooks]] with recipient and command entries instead.
+      ```
+    - recovery:
+      ```text
+      Replace [atm].post_send_hook, [atm].post_send_hook_senders, and [atm].post_send_hook_recipients with one or more [[atm.post_send_hooks]] rules, each containing recipient = "name-or-*" and command = ["argv", ...].
+      ```
+  - the rendered CLI output may display the message and recovery together, but
+    ATM stores them as separate fields on the structured error
+  - must not be downgraded to a generic config parse failure because callers
+    and tests need a stable migration-specific code
+
+#### 5.8.3 `ATM_WARNING_HOOK_SKIPPED`
 
 - code: `ATM_WARNING_HOOK_SKIPPED`
 - description: retired for the hook filter non-match path; retained only as a
@@ -180,10 +207,10 @@ Error codes should describe the failure class, not a specific prose message.
     entry
   - the old warning template is retired for the filter non-match case and must
     not be emitted after this fix
-  - actual caller-visible hook warnings now live only under
-    `ATM_WARNING_HOOK_EXECUTION_FAILED`
+- actual caller-visible hook warnings now live only under
+  `ATM_WARNING_HOOK_EXECUTION_FAILED`
 
-#### 5.8.3 `ATM_WARNING_HOOK_EXECUTION_FAILED`
+#### 5.8.4 `ATM_WARNING_HOOK_EXECUTION_FAILED`
 
 - code: `ATM_WARNING_HOOK_EXECUTION_FAILED`
 - description: a configured post-send hook failed to start, exited non-zero,
@@ -208,7 +235,7 @@ Required mapping rules:
 
 | `AtmErrorKind` | Default `AtmErrorCode` | Additional implemented codes in the same kind |
 | --- | --- | --- |
-| `Config` | `ATM_CONFIG_PARSE_FAILED` | `ATM_CONFIG_HOME_UNAVAILABLE`, `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`, `ATM_CONFIG_TEAM_PARSE_FAILED` |
+| `Config` | `ATM_CONFIG_PARSE_FAILED` | `ATM_CONFIG_HOME_UNAVAILABLE`, `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`, `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`, `ATM_CONFIG_TEAM_PARSE_FAILED` |
 | `MissingDocument` | `ATM_CONFIG_TEAM_MISSING` | none |
 | `Address` | `ATM_ADDRESS_PARSE_FAILED` | none |
 | `Identity` | `ATM_IDENTITY_UNAVAILABLE` | none |
