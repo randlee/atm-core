@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use chrono::Utc;
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{Value, json};
 use tracing::warn;
 
 use crate::address::validate_path_segment;
@@ -265,15 +265,22 @@ pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmErro
     let inbox_path = home::inbox_path_from_home(&request.home_dir, &request.team, &request.member)?;
     let created_inbox = ensure_inbox_exists(&inbox_path)?;
 
+    let normalized_tmux_pane_id = normalize_tmux_pane_id(request.tmux_pane_id.as_deref())?;
+    let mut extra = serde_json::Map::new();
+    if normalized_tmux_pane_id.is_some() {
+        extra.insert("backendType".to_string(), json!("tmux"));
+        extra.insert("isActive".to_string(), json!(true));
+    }
+
     config.members.push(AgentMember {
         name: request.member.clone(),
         agent_id: format!("{}@{}", request.member, request.team),
         agent_type: request.agent_type,
         model: request.model,
         joined_at: Some(Utc::now().timestamp_millis() as u64),
-        tmux_pane_id: request.tmux_pane_id.unwrap_or_default(),
+        tmux_pane_id: normalized_tmux_pane_id.unwrap_or_default(),
         cwd: request.cwd.display().to_string(),
-        extra: serde_json::Map::new(),
+        extra,
     });
 
     if let Err(error) = write_team_config(&team_dir, &config) {
@@ -841,6 +848,7 @@ fn recompute_highwatermark(tasks_dir: &Path) -> Result<usize, AtmError> {
 fn clear_runtime_member_state(member: &mut AgentMember) {
     member.tmux_pane_id.clear();
     for key in [
+        "backendType",
         "sessionId",
         "activity",
         "status",
@@ -852,6 +860,27 @@ fn clear_runtime_member_state(member: &mut AgentMember) {
     ] {
         member.extra.remove(key);
     }
+}
+
+fn normalize_tmux_pane_id(pane_id: Option<&str>) -> Result<Option<String>, AtmError> {
+    let Some(raw) = pane_id.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+
+    if let Some(rest) = raw.strip_prefix('%') {
+        if !rest.is_empty() && rest.chars().all(|ch| ch.is_ascii_digit()) {
+            return Ok(Some(raw.to_string()));
+        }
+    } else if raw.chars().all(|ch| ch.is_ascii_digit()) {
+        return Ok(Some(format!("%{raw}")));
+    }
+
+    Err(AtmError::validation(format!(
+        "tmux pane id '{raw}' must use the tmux pane format '%<number>' or a bare numeric pane id",
+    ))
+    .with_recovery(
+        "Pass `--pane-id $(tmux display-message -p '#{pane_id}')` or a bare numeric pane id when registering a tmux-backed member.",
+    ))
 }
 
 fn restore_marker_path(team_dir: &Path) -> PathBuf {
@@ -990,6 +1019,58 @@ mod tests {
         .expect_err("invalid team");
 
         assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
+    }
+
+    #[test]
+    fn add_member_normalizes_tmux_shape_when_pane_is_provided() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(tempdir.path(), "atm-dev");
+
+        add_member(AddMemberRequest {
+            home_dir: tempdir.path().to_path_buf(),
+            team: "atm-dev".to_string(),
+            member: "arch-ctm".to_string(),
+            agent_type: "worker".to_string(),
+            model: "gpt-5".to_string(),
+            cwd: tempdir.path().to_path_buf(),
+            tmux_pane_id: Some("7".to_string()),
+        })
+        .expect("add member");
+
+        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        let config: TeamConfig = serde_json::from_slice(
+            &std::fs::read(team_dir.join("config.json")).expect("read config"),
+        )
+        .expect("parse config");
+        let member = config
+            .members
+            .iter()
+            .find(|member| member.name == "arch-ctm")
+            .expect("member");
+
+        assert_eq!(member.tmux_pane_id, "%7");
+        assert_eq!(member.extra["backendType"], serde_json::json!("tmux"));
+        assert_eq!(member.extra["isActive"], serde_json::json!(true));
+    }
+
+    #[test]
+    fn add_member_rejects_non_canonical_tmux_target_syntax() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(tempdir.path(), "atm-dev");
+
+        let error = add_member(AddMemberRequest {
+            home_dir: tempdir.path().to_path_buf(),
+            team: "atm-dev".to_string(),
+            member: "arch-ctm".to_string(),
+            agent_type: "worker".to_string(),
+            model: "gpt-5".to_string(),
+            cwd: tempdir.path().to_path_buf(),
+            tmux_pane_id: Some("session:1.2".to_string()),
+        })
+        .expect_err("invalid pane id");
+
+        assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
+        assert!(error.message.contains("tmux pane id"));
     }
 
     #[test]
