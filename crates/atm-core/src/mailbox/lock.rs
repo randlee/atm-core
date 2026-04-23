@@ -2,6 +2,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -33,7 +34,7 @@ pub(crate) struct MailboxLockGuard {
     target_path: PathBuf,
     lock_path: PathBuf,
     file: Option<File>,
-    owner_pid: u32,
+    owner_record: LockOwnerRecord,
     _in_process_guard: Option<InProcessMailboxLockGuard>,
 }
 
@@ -42,9 +43,9 @@ impl Drop for MailboxLockGuard {
         let active_sentinel = match capture_active_lock_sentinel(
             self.file.as_ref().expect("lock guard file missing"),
             &self.lock_path,
-            self.owner_pid,
+            &self.owner_record,
         ) {
-            Ok(identity) => identity,
+            Ok(active) => active,
             Err(error) => {
                 warn!(
                     code = %AtmErrorCode::MailboxLockFailed,
@@ -53,7 +54,7 @@ impl Drop for MailboxLockGuard {
                     lock_path = %self.lock_path.display(),
                     "failed to evaluate mailbox lock sentinel removal"
                 );
-                None
+                false
             }
         };
 
@@ -72,9 +73,8 @@ impl Drop for MailboxLockGuard {
         }
         drop(file);
 
-        if let Some(identity) = active_sentinel
-            && let Err(error) =
-                remove_active_lock_sentinel(&self.lock_path, &identity, self.owner_pid)
+        if active_sentinel
+            && let Err(error) = remove_active_lock_sentinel(&self.lock_path, &self.owner_record)
             && error.kind() != io::ErrorKind::NotFound
         {
             warn!(
@@ -127,6 +127,7 @@ pub(crate) fn sort_unique_paths(paths: impl IntoIterator<Item = PathBuf>) -> Vec
 pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard, AtmError> {
     let lock_path = sentinel_path(path);
     let owner_pid = std::process::id();
+    let owner_record = LockOwnerRecord::new(owner_pid);
     let deadline = Instant::now() + timeout;
     let in_process_guard = acquire_in_process_lock(path, deadline)?;
     if let Some(parent) = lock_path.parent() {
@@ -156,12 +157,12 @@ pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard
                     thread::sleep(RETRY_INTERVAL);
                     continue;
                 }
-                write_lock_owner_pid(&file, &lock_path, owner_pid)?;
+                write_lock_owner_record(&file, &lock_path, &owner_record)?;
                 return Ok(MailboxLockGuard {
                     target_path: path.to_path_buf(),
                     lock_path,
                     file: Some(file),
-                    owner_pid,
+                    owner_record,
                     _in_process_guard: Some(in_process_guard),
                 });
             }
@@ -270,10 +271,14 @@ fn open_lock_file(lock_path: &Path) -> Result<File, AtmError> {
         })
 }
 
-fn write_lock_owner_pid(file: &File, lock_path: &Path, owner_pid: u32) -> Result<(), AtmError> {
+fn write_lock_owner_record(
+    file: &File,
+    lock_path: &Path,
+    owner_record: &LockOwnerRecord,
+) -> Result<(), AtmError> {
     file.set_len(0).map_err(|error| {
         AtmError::mailbox_lock(format!(
-            "failed to reset mailbox lock {} before writing pid: {error}",
+            "failed to reset mailbox lock {} before writing owner record: {error}",
             lock_path.display()
         ))
         .with_recovery(
@@ -282,9 +287,9 @@ fn write_lock_owner_pid(file: &File, lock_path: &Path, owner_pid: u32) -> Result
         .with_source(error)
     })?;
     let mut writer = file;
-    writer.write_all(owner_pid.to_string().as_bytes()).map_err(|error| {
+    writer.write_all(owner_record.encode().as_bytes()).map_err(|error| {
         AtmError::mailbox_lock(format!(
-            "failed to write mailbox lock owner pid to {}: {error}",
+            "failed to write mailbox lock owner record to {}: {error}",
             lock_path.display()
         ))
         .with_recovery(
@@ -297,40 +302,27 @@ fn write_lock_owner_pid(file: &File, lock_path: &Path, owner_pid: u32) -> Result
 fn capture_active_lock_sentinel(
     file: &File,
     lock_path: &Path,
-    owner_pid: u32,
-) -> io::Result<Option<LockFileIdentity>> {
-    let identity = lock_file_identity_from_file(file)?;
-    if !lock_path_matches_identity(&identity, lock_path)? {
-        return Ok(None);
+    owner_record: &LockOwnerRecord,
+) -> io::Result<bool> {
+    if !lock_path_matches_file_io(file, lock_path)? {
+        return Ok(false);
     }
 
     let raw = match fs::read_to_string(lock_path) {
         Ok(raw) => raw,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
         Err(error) => return Err(error),
     };
-    if raw.trim() != owner_pid.to_string() {
-        return Ok(None);
-    }
-
-    Ok(Some(identity))
+    Ok(raw.trim() == owner_record.encode())
 }
 
-fn remove_active_lock_sentinel(
-    lock_path: &Path,
-    identity: &LockFileIdentity,
-    owner_pid: u32,
-) -> io::Result<()> {
-    if !lock_path_matches_identity(identity, lock_path)? {
-        return Ok(());
-    }
-
+fn remove_active_lock_sentinel(lock_path: &Path, owner_record: &LockOwnerRecord) -> io::Result<()> {
     let raw = match fs::read_to_string(lock_path) {
         Ok(raw) => raw,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
         Err(error) => return Err(error),
     };
-    if raw.trim() != owner_pid.to_string() {
+    if raw.trim() != owner_record.encode() {
         return Ok(());
     }
 
@@ -342,17 +334,7 @@ fn remove_active_lock_sentinel(
 }
 
 fn lock_path_matches_file(file: &File, lock_path: &Path) -> Result<bool, AtmError> {
-    let identity = lock_file_identity_from_file(file).map_err(|error| {
-        AtmError::mailbox_lock(format!(
-            "failed to capture mailbox lock identity for {}: {error}",
-            lock_path.display()
-        ))
-        .with_recovery(
-            "Check mailbox lock-file permissions and filesystem health before retrying the ATM command.",
-        )
-        .with_source(error)
-    })?;
-    lock_path_matches_identity(&identity, lock_path).map_err(|error| {
+    lock_path_matches_file_io(file, lock_path).map_err(|error| {
         AtmError::mailbox_lock(format!(
             "failed to compare mailbox lock identity for {}: {error}",
             lock_path.display()
@@ -362,6 +344,11 @@ fn lock_path_matches_file(file: &File, lock_path: &Path) -> Result<bool, AtmErro
         )
         .with_source(error)
     })
+}
+
+fn lock_path_matches_file_io(file: &File, lock_path: &Path) -> io::Result<bool> {
+    let identity = lock_file_identity_from_file(file)?;
+    lock_path_matches_identity(&identity, lock_path)
 }
 
 type LockFileIdentity = Handle;
@@ -387,7 +374,7 @@ fn evict_stale_lock_sentinel(lock_path: &Path) -> bool {
     let Ok(raw) = fs::read_to_string(lock_path) else {
         return false;
     };
-    let Ok(pid) = raw.trim().parse::<u32>() else {
+    let Some(pid) = parse_lock_owner_pid(&raw) else {
         return false;
     };
     if process_is_alive(pid) {
@@ -444,6 +431,32 @@ fn debug_timeout_override() -> Option<Duration> {
         .ok()
         .and_then(|value| value.parse::<u64>().ok())
         .map(Duration::from_millis)
+}
+
+#[derive(Clone, Debug)]
+struct LockOwnerRecord {
+    pid: u32,
+    token: u64,
+}
+
+impl LockOwnerRecord {
+    fn new(pid: u32) -> Self {
+        static NEXT_LOCK_TOKEN: AtomicU64 = AtomicU64::new(1);
+        Self {
+            pid,
+            token: NEXT_LOCK_TOKEN.fetch_add(1, Ordering::Relaxed),
+        }
+    }
+
+    fn encode(&self) -> String {
+        format!("{}:{}", self.pid, self.token)
+    }
+}
+
+fn parse_lock_owner_pid(raw: &str) -> Option<u32> {
+    raw.trim()
+        .split_once(':')
+        .map_or_else(|| raw.trim().parse().ok(), |(pid, _)| pid.parse().ok())
 }
 
 #[derive(Debug)]

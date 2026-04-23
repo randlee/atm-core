@@ -664,6 +664,7 @@ mod adapter_tests {
     use std::sync::{Mutex, OnceLock};
 
     use sc_observability_types::LevelFilter as SharedLevelFilter;
+    use serial_test::serial;
     use tracing_subscriber::filter::LevelFilter as TracingLevelFilter;
 
     use super::{
@@ -727,6 +728,7 @@ mod adapter_tests {
     }
 
     #[test]
+    #[serial]
     fn logger_level_override_accepts_debug() {
         with_env_var(ATM_LOG_LEVEL_ENV, Some("debug"), || {
             assert_eq!(
@@ -737,6 +739,7 @@ mod adapter_tests {
     }
 
     #[test]
+    #[serial]
     fn logger_level_override_rejects_invalid_values() {
         with_env_var(ATM_LOG_LEVEL_ENV, Some("verbose"), || {
             let error = logger_level_override().expect_err("invalid override");
