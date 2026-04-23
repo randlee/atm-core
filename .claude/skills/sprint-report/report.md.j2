@@ -1,0 +1,20 @@
+---
+name: sprint-report
+version: 3.1.0
+description: Sprint status report for atm-core phases.
+format: markdown
+required_variables:
+  - mode
+  - sprint_rows
+  - integration_row
+---
+{% if mode == "detailed" %}
+{{ sprint_rows }}
+────────────────────────────────────────
+{{ integration_row }}
+{% else %}
+| Sprint | DEV | QA | CI | PR |
+|--------|-----|----|----|-----|
+{{ sprint_rows }}
+{{ integration_row }}
+{% endif %}

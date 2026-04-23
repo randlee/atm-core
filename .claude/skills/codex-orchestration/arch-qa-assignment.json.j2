@@ -1,0 +1,35 @@
+---
+name: arch-qa-assignment
+version: 1.0.0
+description: Render a fenced-JSON assignment for arch-qa.
+format: json
+required_variables:
+  - review_mode
+  - worktree_path
+  - branch
+  - review_targets
+  - reference_docs
+optional_variables:
+  - commit
+  - phase
+  - sprint
+  - notes
+defaults:
+  commit: ""
+  phase: ""
+  sprint: ""
+  notes: ""
+---
+{
+  "review_mode": "{{ review_mode }}",
+  "worktree_path": "{{ worktree_path }}",
+  "branch": "{{ branch }}",
+  "commit": "{{ commit }}",
+  "scope": {
+    "phase": {% if phase %}"{{ phase }}"{% else %}null{% endif %},
+    "sprint": {% if sprint %}"{{ sprint }}"{% else %}null{% endif %}
+  },
+  "review_targets": [{% for target in review_targets %}"{{ target }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "reference_docs": [{% for doc in reference_docs %}"{{ doc }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "notes": "{{ notes }}"
+}

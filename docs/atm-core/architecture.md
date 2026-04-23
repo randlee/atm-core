@@ -106,10 +106,14 @@ Identity-specific policy:
 - supported structured hook-result levels are `debug`, `info`, `warn`, and
   `error`
 - recipient non-match is silent
+- expected hook non-match is debug-only and not a user-facing warning
 - hook-decision evaluation must preserve sender, recipient, matched rule
-  selector, and execution outcome for troubleshooting
+  selector, and execution outcome for troubleshooting without requiring source
+  inspection
 - hook failure or timeout is best-effort only and must not convert a
   successful send into a command failure
+- actual hook execution failures remain the only case where caller-visible hook
+  warnings are appropriate
 - the reserved diagnostic sender `atm-identity-missing@<team>` is for
   ATM-generated repair/diagnostic notices only
 - doctor should project the live `config.json` roster in a deterministic order:
@@ -126,6 +130,15 @@ Current `AgentMember` persisted schema:
 - `cwd: String`, default empty string
 - `extra: serde_json::Map<String, serde_json::Value>` via `#[serde(flatten)]`
   for forward-compatible Claude Code fields
+
+ATM-owned member normalization rules:
+- `agentId`, `name`, `agentType`, `model`, and `cwd` are the persisted routing
+  identity fields ATM writes during `teams add-member`
+- tmux-backed members use canonical `tmuxPaneId` values in `%<number>` form
+- when ATM writes a tmux-backed member, it also sets `backendType = "tmux"` and
+  `isActive = true` in `extra`
+- unsupported tmux target syntax such as `session:window.pane` must be rejected
+  rather than guessed into a pane handle
 
 Observability boundary note:
 - `AgentMember.extra` is intentionally out of scope for the L.4 observability

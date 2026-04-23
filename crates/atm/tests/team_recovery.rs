@@ -99,6 +99,63 @@ fn test_add_member_rejects_duplicates_and_creates_inbox_state() {
 }
 
 #[test]
+fn test_add_member_normalizes_tmux_member_shape() {
+    let fixture = Fixture::new();
+    fixture.write_team_config_value("atm-dev", json!({"members":[{"name":"team-lead"}]}));
+
+    let added = fixture.run(&[
+        "teams",
+        "add-member",
+        "atm-dev",
+        "arch-ctm",
+        "--agent-type",
+        "general-purpose",
+        "--model",
+        "sonnet",
+        "--pane-id",
+        "12",
+        "--json",
+    ]);
+    assert!(added.status.success(), "stderr: {}", fixture.stderr(&added));
+
+    let config = fixture.read_team_config_value("atm-dev");
+    let member = config["members"]
+        .as_array()
+        .expect("members")
+        .iter()
+        .find(|member| member["name"] == "arch-ctm")
+        .expect("arch-ctm member");
+    assert_eq!(member["tmuxPaneId"], "%12");
+    assert_eq!(member["backendType"], "tmux");
+    assert_eq!(member["isActive"], true);
+}
+
+#[test]
+fn test_add_member_rejects_non_canonical_tmux_target_syntax() {
+    let fixture = Fixture::new();
+    fixture.write_team_config_value("atm-dev", json!({"members":[{"name":"team-lead"}]}));
+
+    let output = fixture.run(&[
+        "teams",
+        "add-member",
+        "atm-dev",
+        "arch-ctm",
+        "--agent-type",
+        "general-purpose",
+        "--model",
+        "sonnet",
+        "--pane-id",
+        "session:1.2",
+    ]);
+    assert!(!output.status.success());
+    assert!(
+        fixture.stderr(&output).contains("tmux pane id"),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+}
+
+#[test]
 fn test_add_member_rolls_back_inbox_when_config_write_fails() {
     let fixture = Fixture::new();
     fixture.write_team_config_value("atm-dev", json!({"members":[{"name":"team-lead"}]}));

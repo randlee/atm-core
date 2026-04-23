@@ -1,0 +1,161 @@
+[atm]
+default_team = "atm-dev"
+identity = "team-lead"
+
+[[atm.post_send_hooks]]
+recipient = "team-lead"
+command = ["scripts/atm-nudge.sh", "team-lead"]
+
+[[atm.post_send_hooks]]
+recipient = "arch-ctm"
+command = ["scripts/atm-nudge.sh", "arch-ctm"]
+
+[plugins.atm-agent-mcp]
+codex_bin = "codex"
+identity = "arch-ctm"
+sandbox = "workspace-write"
+approval_policy = "on-failure"
+
+# ── rmux: tmux session launcher ──────────────────────────────────────
+[rmux]
+session = "atm-dev"
+
+[[rmux.windows]]
+name = "agents"
+layout = "even-horizontal"
+
+[[rmux.windows.panes]]
+name = "team-lead"
+model = "sonnet"
+color = "blue"
+env = { ATM_IDENTITY = "team-lead", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
+
+[[rmux.windows.panes]]
+name = "arch-ctm"
+command = "codex -c features.codex_hooks=true --yolo"
+env = { ATM_IDENTITY = "arch-ctm", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
+
+[[rmux.windows.panes]]
+name = "quality-mgr"
+model = "sonnet"
+color = "blue"
+env = { ATM_IDENTITY = "quality-mgr", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
+
+[[rmux.windows]]
+name = "monitoring"
+layout = "even-vertical"
+
+[[rmux.windows.panes]]
+name = "logs"
+command = "tail -f /tmp/atm.log"
+
+[[rmux.windows.panes]]
+name = "atm-monitor"
+model = "haiku"
+agent = "atm-monitor"
+
+[[rmux.windows.panes]]
+name = "arch-ctask"
+command = "codex -c features.codex_hooks=true --yolo"
+env = { ATM_IDENTITY = "arch-ctask", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
+
+[[rmux.windows.panes]]
+name = "atm-term"
+
+[[rmux.windows]]
+name = "schook"
+layout = "even-horizontal"
+
+[[rmux.windows.panes]]
+name = "team-lead"
+model = "sonnet"
+color = "green"
+dir = "/Users/randlee/Documents/github/schook"
+env = { ATM_IDENTITY = "team-lead", ATM_TEAM = "schook", CLAUDE_CODE_TASK_LIST_ID = "schook" }
+
+[[rmux.windows.panes]]
+name = "chook"
+command = "codex -c features.codex_hooks=true --yolo"
+dir = "/Users/randlee/Documents/github/schook"
+env = { ATM_IDENTITY = "chook", ATM_TEAM = "schook", CLAUDE_CODE_TASK_LIST_ID = "schook" }
+
+[[rmux.windows.panes]]
+name = "quality-mgr"
+model = "sonnet"
+color = "green"
+dir = "/Users/randlee/Documents/github/schook"
+env = { ATM_IDENTITY = "quality-mgr", ATM_TEAM = "schook", CLAUDE_CODE_TASK_LIST_ID = "schook" }
+
+[[rmux.windows]]
+name = "scterm"
+layout = "even-horizontal"
+
+[[rmux.windows.panes]]
+name = "team-lead"
+model = "sonnet"
+color = "yellow"
+dir = "/Users/randlee/Documents/github/scterm"
+env = { ATM_IDENTITY = "team-lead", ATM_TEAM = "scterm", CLAUDE_CODE_TASK_LIST_ID = "scterm" }
+
+[[rmux.windows.panes]]
+name = "cterm"
+command = "codex -c features.codex_hooks=true --yolo"
+dir = "/Users/randlee/Documents/github/scterm"
+env = { ATM_IDENTITY = "cterm", ATM_TEAM = "scterm", CLAUDE_CODE_TASK_LIST_ID = "scterm" }
+
+[[rmux.windows.panes]]
+name = "quality-mgr"
+model = "sonnet"
+color = "yellow"
+dir = "/Users/randlee/Documents/github/scterm"
+env = { ATM_IDENTITY = "quality-mgr", ATM_TEAM = "scterm", CLAUDE_CODE_TASK_LIST_ID = "scterm" }
+
+[[rmux.windows]]
+name = "sc-compose"
+layout = "even-horizontal"
+
+[[rmux.windows.panes]]
+name = "team-lead"
+model = "sonnet"
+color = "red"
+dir = "/Users/randlee/Documents/github/sc-compose"
+prompt = "/Users/randlee/Documents/github/sc-compose/pm/arch-comp.md"
+env = { ATM_IDENTITY = "team-lead", ATM_TEAM = "sc-compose", CLAUDE_CODE_TASK_LIST_ID = "sc-compose" }
+
+[[rmux.windows.panes]]
+name = "comp"
+command = "codex -c features.codex_hooks=true --yolo"
+dir = "/Users/randlee/Documents/github/sc-compose"
+env = { ATM_IDENTITY = "comp", ATM_TEAM = "sc-compose", CLAUDE_CODE_TASK_LIST_ID = "sc-compose" }
+
+[[rmux.windows.panes]]
+name = "quality-mgr"
+model = "sonnet"
+color = "red"
+dir = "/Users/randlee/Documents/github/sc-compose"
+env = { ATM_IDENTITY = "quality-mgr", ATM_TEAM = "sc-compose", CLAUDE_CODE_TASK_LIST_ID = "sc-compose" }
+
+[[rmux.windows]]
+name = "sc-observe"
+layout = "even-horizontal"
+
+[[rmux.windows.panes]]
+name = "team-lead"
+model = "sonnet"
+color = "magenta"
+dir = "/Users/randlee/Documents/github/sc-observability"
+prompt = "/Users/randlee/Documents/github/sc-observability/pm/arch-obs.md"
+env = { ATM_IDENTITY = "team-lead", ATM_TEAM = "sc-observability", CLAUDE_CODE_TASK_LIST_ID = "sc-observability" }
+
+[[rmux.windows.panes]]
+name = "cobs"
+command = "codex -c features.codex_hooks=true --yolo"
+dir = "/Users/randlee/Documents/github/sc-observability"
+env = { ATM_IDENTITY = "cobs", ATM_TEAM = "sc-observability", CLAUDE_CODE_TASK_LIST_ID = "sc-observability" }
+
+[[rmux.windows.panes]]
+name = "quality-mgr"
+model = "sonnet"
+color = "magenta"
+dir = "/Users/randlee/Documents/github/sc-observability"
+env = { ATM_IDENTITY = "quality-mgr", ATM_TEAM = "sc-observability", CLAUDE_CODE_TASK_LIST_ID = "sc-observability" }

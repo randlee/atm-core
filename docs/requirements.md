@@ -548,6 +548,11 @@ Post-send-hook rules:
 - when a hook is configured, ATM must emit enough diagnostics to explain
   whether the hook ran or failed, including the sender, recipient, and matched
   hook recipient selector
+- configured non-match must remain debug-level only and must not be pushed into
+  user-visible warning output, stderr warning output, or `SendOutcome.warnings`
+- user-visible hook warnings are reserved for actual hook execution failures,
+  such as spawn failure, non-zero exit, timeout, or OS-level status-check
+  failure
 
 ## 6. `atm send`
 
@@ -1240,6 +1245,13 @@ Bare `atm teams` must:
 - validate that the target team exists
 - reject duplicate member names
 - persist the new member entry deterministically in team config
+- write `tmuxPaneId` in canonical tmux `%<number>` form when `--pane-id` is
+  provided; bare numeric pane ids may be normalized to that form, but
+  `session:window.pane` target syntax must be rejected rather than guessed
+- set `backendType = "tmux"` and `isActive = true` on the persisted member
+  record when `--pane-id` is provided
+- preserve `name`, `agentId`, `agentType`, `model`, and `cwd` as the
+  persisted routing identity fields written by ATM
 - create any required local inbox state atomically with the roster update
 
 `atm teams backup` must:

@@ -419,7 +419,10 @@ Architectural rules:
   errors, not compatibility aliases
 - hook-decision logging must preserve sender, recipient, matched rule selector,
   and final execution outcome for troubleshooting
-- hook failure or timeout never rolls back a successful send
+- expected hook non-match must remain debug-only diagnostics rather than
+  caller-visible warnings or send-result warning entries
+- hook failure or timeout never rolls back a successful send and remains the
+  only case where caller-visible hook warnings are appropriate
 
 ## 5. Persisted Schema
 
@@ -903,6 +906,10 @@ Architectural rules:
   ATM home directory
 - `add-member` is the retained local roster-repair path and must reject
   duplicates before mutating config
+- when `add-member` registers a tmux-backed member, it should persist
+  `tmuxPaneId` in canonical `%<number>` form and set `backendType = "tmux"`
+  plus `isActive = true`; unsupported tmux target syntax should fail fast
+  instead of being guessed into a routing handle
 - `backup` snapshots current team config, inboxes, and the ATM team task
   bucket into a timestamped snapshot directory
 - `restore` is a local recovery path and must:

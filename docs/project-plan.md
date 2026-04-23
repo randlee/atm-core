@@ -729,9 +729,11 @@ Planned sprints:
       - hook decision logging must make recipient-rule evaluation easy to
         troubleshoot
       - expected recipient non-match is silent
+      - configured non-match remains debug-only diagnostics rather than an
+        operator-facing warning
       - hook failure or timeout must never roll back the send; ATM reports the
         failure as post-send-hook diagnostics only
-  - `FIX-82` post-send hook redesign
+   - `FIX-82` post-send hook redesign
     - scope: replace the old multi-axis hook filter design with
       recipient-scoped `[[atm.post_send_hooks]]` rules, hard reject retired
       hook keys, simplify hook diagnostics, and keep only execution-failure
@@ -743,7 +745,9 @@ Planned sprints:
       - expected recipient non-match is silent
       - `ATM_POST_SEND` includes sender/recipient/team context without
         `hook_match` booleans
-      - actionable warnings exist for configured-but-skipped hooks
+      - configured non-match remains debug-only and does not emit
+        caller-visible warnings
+      - actionable warnings exist only for actual hook execution failures
       - docs, help text, and tests cover the migration and new semantics
     - reserve `atm-identity-missing@<team>` for ATM-generated
       repair/diagnostic notices only; it must not become a normal sender
@@ -752,7 +756,7 @@ Planned sprints:
     - config identity/source ambiguity for multi-agent shared repos
     - baseline-roster visibility gap in `atm doctor`
     - cross-team alias ambiguity for baseline roles such as `team-lead`
-    - missing sender-scoped post-send automation contract for repo-root helper
+    - missing recipient-scoped post-send automation contract for repo-root helper
       scripts
     - duplicate permanent-member spawn planning gap for future team-lead /
       hook-driven orchestration

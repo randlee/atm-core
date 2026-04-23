@@ -296,8 +296,12 @@ Required identity rules:
 - hook-rule evaluation and execution outcomes must remain observable through
   structured diagnostics without creating caller-visible warnings for expected
   recipient non-match
+- expected recipient non-match remains debug-only diagnostics and must not emit
+  a caller-visible warning
 - hook failure or timeout is best-effort only and must not roll back a
   successful send
+- actual hook execution failures remain the only case where caller-visible hook
+  warnings are appropriate
 - the reserved sender `atm-identity-missing@<team>` is available only for
   ATM-generated repair/diagnostic notices and must not become a general
   identity fallback
@@ -327,6 +331,11 @@ Required service rules:
   on daemon orchestration or runtime spawning
 - `add-member` must validate team existence and reject duplicate member names
   before mutating local team config
+- when `add-member` receives a pane id, it must persist `tmuxPaneId` in
+  canonical tmux `%<number>` form, set `backendType = "tmux"`, and mark the
+  member `isActive = true`
+- `add-member` must reject unsupported tmux target syntax such as
+  `session:window.pane` rather than guessing a pane handle
 - backup must snapshot:
   - `config.json`
   - team inbox files

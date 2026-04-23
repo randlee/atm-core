@@ -1,0 +1,28 @@
+---
+name: req-qa-assignment
+version: 1.0.0
+description: Render a fenced-JSON assignment for req-qa.
+format: json
+required_variables:
+  - reference_docs
+optional_variables:
+  - phase
+  - sprint
+  - review_targets
+  - notes
+defaults:
+  phase: ""
+  sprint: ""
+  review_targets: []
+  notes: ""
+---
+{
+  "scope": {
+    "phase": {% if phase %}"{{ phase }}"{% else %}null{% endif %},
+    "sprint": {% if sprint %}"{{ sprint }}"{% else %}null{% endif %}
+  },
+  "phase_or_sprint_docs": [{% for doc in reference_docs %}"{{ doc }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "phase_sprint_documents": [{% for doc in reference_docs %}"{{ doc }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "review_targets": [{% for target in review_targets %}"{{ target }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "notes": "{{ notes }}"
+}
