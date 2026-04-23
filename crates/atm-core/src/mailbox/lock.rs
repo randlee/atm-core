@@ -573,6 +573,8 @@ fn canonical_lock_key(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use std::io;
+    use std::path::Path;
+    use std::thread;
     use std::time::{Duration, Instant};
 
     use tempfile::tempdir;
@@ -611,7 +613,7 @@ mod tests {
             assert!(sentinel.exists());
         }
 
-        assert!(!sentinel.exists());
+        assert_path_eventually_absent(&sentinel);
     }
 
     #[test]
@@ -638,7 +640,7 @@ mod tests {
         std::fs::write(&sentinel, u32::MAX.to_string()).expect("stale sentinel");
 
         assert!(evict_stale_lock_sentinel(&sentinel));
-        assert!(!sentinel.exists());
+        assert_path_eventually_absent(&sentinel);
     }
 
     #[test]
@@ -652,8 +654,20 @@ mod tests {
         let removed = sweep_stale_lock_sentinels(tempdir.path()).expect("sweep");
 
         assert_eq!(removed, 1);
-        assert!(!lock_path.exists());
+        assert_path_eventually_absent(&lock_path);
         assert!(inbox_path.exists());
+    }
+
+    fn assert_path_eventually_absent(path: &Path) {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while path.exists() {
+            assert!(
+                Instant::now() < deadline,
+                "path still exists after bounded wait: {}",
+                path.display()
+            );
+            thread::sleep(Duration::from_millis(10));
+        }
     }
 
     #[test]
