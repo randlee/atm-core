@@ -161,6 +161,9 @@ pub fn read_mail(
             || {
                 let poll_paths =
                     discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
+                if poll_paths.is_empty() {
+                    return Ok(Vec::new());
+                }
                 Ok(apply_idle_notification_dedup(
                     dedupe_legacy_message_id_surface(
                         merged_surface(&load_source_files(&poll_paths)?),
@@ -188,17 +191,22 @@ pub fn read_mail(
     let mutation_applied = if timed_out || selected.is_empty() {
         false
     } else {
-        let _locks = mailbox::lock::acquire_many_sorted(
-            source_paths.clone(),
-            mailbox::lock::default_lock_timeout(),
-        )?;
-        let locked_paths = rediscover_and_validate_source_paths(
+        let lock_candidate_paths = rediscover_and_validate_source_paths(
             &source_paths,
             &query.home_dir,
             &target.team,
             &target.agent,
         )?;
-        source_paths = locked_paths;
+        let _locks = mailbox::lock::acquire_many_sorted(
+            lock_candidate_paths.clone(),
+            mailbox::lock::default_lock_timeout(),
+        )?;
+        source_paths = rediscover_and_validate_source_paths(
+            &lock_candidate_paths,
+            &query.home_dir,
+            &target.team,
+            &target.agent,
+        )?;
         (source_files, bucket_counts, selected) =
             load_selection_state(&source_paths, &query, seen_watermark)?;
         sort_and_limit_selected(&mut selected, query.limit);
@@ -318,6 +326,10 @@ fn load_selection_state(
     query: &ReadQuery,
     seen_watermark: Option<IsoTimestamp>,
 ) -> Result<(Vec<SourceFile>, BucketCounts, Vec<ClassifiedMessage>), AtmError> {
+    if source_paths.is_empty() {
+        return Ok((Vec::new(), empty_bucket_counts(), Vec::new()));
+    }
+
     let source_files = load_source_files(source_paths)?;
     let classified_all = classify_all(apply_idle_notification_dedup(
         dedupe_legacy_message_id_surface(
@@ -334,6 +346,14 @@ fn load_selection_state(
     );
     let selected = select_messages(&filtered, query.selection_mode, seen_watermark);
     Ok((source_files, bucket_counts, selected))
+}
+
+fn empty_bucket_counts() -> BucketCounts {
+    BucketCounts {
+        unread: 0,
+        pending_ack: 0,
+        history: 0,
+    }
 }
 
 fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {

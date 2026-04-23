@@ -1602,7 +1602,13 @@ Phase O completion gate:
 - CI passes on all platforms
 - `integrate/phase-O` merges to `develop`
 
-### Phase P: File-I/O Ownership And Single-Write-Path Hardening [PLANNED]
+### Phase P: File-I/O Ownership And Single-Write-Path Hardening [PROPOSED]
+
+Status note:
+- proposal only
+- no Phase P sprint has executed yet
+- until a sprint is accepted and lands, Phase P content is planning guidance
+  rather than current architecture
 
 Goal:
 - make the retained ATM implementation production-ready by applying one
@@ -1653,7 +1659,9 @@ Live write-path inventory:
 - seen-state watermark in:
   - `crates/atm-core/src/read/seen_state.rs`
 - send-alert state and lock in:
-  - `crates/atm-core/src/send/mod.rs`
+  - current implementation location: `crates/atm-core/src/send/mod.rs`
+  - owning helper boundary remains a Phase P.3 design decision until that
+    sprint resolves it
 - team config writes in:
   - `crates/atm-core/src/team_admin.rs`
 - restore marker / restore staging / task bucket / highwatermark in:

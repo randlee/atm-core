@@ -552,9 +552,10 @@ File-ownership rule:
   surface, but those paths must be documented as compatibility behavior rather
   than a general pattern to copy
 - ATM-owned machine state should converge on ATM-owned sidecars or equivalent
-  ATM-owned persisted state when stronger write guarantees are required; the
-  planned mailbox-local target is
-  `.claude/teams/<team>/.atm-state/workflow/<agent>.json`
+  ATM-owned persisted state when stronger write guarantees are required
+- the specific migration target for mailbox-local ATM workflow state remains
+  proposal-only and is tracked in `docs/project-plan.md` rather than treated as
+  current architecture
 
 Canonical read and ack axes are derived from persisted fields and not serialized separately.
 
@@ -1448,77 +1449,12 @@ ATM now treats mailbox access as two distinct patterns:
 This keeps non-mutating reads out of the lock path while preserving a stable
 writeback boundary for commands that actually rewrite inbox files.
 
-### 18.4.3 Read-Only, Read-Possible-Write, And Read-Modify-Write
+### 18.4.3 Proposed File-I/O Hardening Work
 
-The repo-wide file-I/O model is:
-
-1. `read_only`
-   - observational read only
-   - no file lock
-   - no temp file
-   - no persistence side effect
-
-2. `read_possible_write`
-   - perform an unlocked observational read first
-   - decide whether a write is actually needed
-   - if not needed, return immediately
-   - if needed, enter the shared write-commit path
-
-3. `read_modify_write`
-   - mutation is expected
-   - still use the same shared write-commit path rather than bespoke write logic
-
-This taxonomy is intended to be broader than mailbox code. It is the expected
-shape for shared structured-file handling across mailbox, config, task-state,
-and future ATM-owned coordination files.
-
-### 18.4.4 Shared Write-Commit Path
-
-The architectural commit rule is:
-
-1. compute the intended mutation from a concrete snapshot
-2. prove freshness before replacing the live file
-3. commit through the owning atomic helper for that file family
-
-Freshness proof must be one of:
-
-- compare-and-swap against the exact source snapshot that was read earlier, or
-- acquire the required lock, reread current state, recompute the mutation, and
-  then commit
-
-The forbidden pattern is a stale-snapshot blind commit:
-
-1. read old data
-2. compute mutation from old data
-3. take a late lock
-4. rename a temp file over a newer live file without freshness validation
-
-Atomic rename remains necessary, but it is not by itself a freshness proof.
-
-### 18.4.5 Current Live File-I/O Inventory
-
-The current production-path file families are:
-
-| File family | Ownership | Typical operation classes | Current code paths | Owning commit/helper target |
-|--------|--------|--------|--------|--------|
-| Claude team inbox files under `.claude/teams/<team>/inboxes/*.json` | Claude-owned shared compatibility surface | `read_only`, `read_possible_write`, `read_modify_write` | `mailbox/mod.rs`, `mailbox/atomic.rs`, `mailbox/lock.rs`, `mailbox/source.rs`, `read/mod.rs`, `ack/mod.rs`, `clear/mod.rs`, `send/mod.rs` | mailbox owner-layer helpers plus a future ATM-owned workflow sidecar boundary |
-| Mailbox lock sentinels `{inbox}.lock` | ATM-owned coordination artifact | `read_possible_write`, `read_modify_write` | `mailbox/lock.rs`, `doctor/mod.rs`, `team_admin.rs` restore/backup filtering | `mailbox::lock` only |
-| Seen-state watermark `.claude/teams/<team>/.seen/<agent>` | ATM-owned state | `read_only`, `read_modify_write` | `read/seen_state.rs`, `read/mod.rs` | shared persistence helper via one seen-state owner helper |
-| Team config `.claude/teams/<team>/config.json` | ATM-owned state | `read_only`, `read_modify_write` | `config/mod.rs`, `team_admin.rs`, `doctor/mod.rs`, `read/mod.rs`, `send/mod.rs`, `ack/mod.rs`, `clear/mod.rs` | `write_team_config(...)` / team-admin owner helper |
-| Team backup inbox/task copies under `.claude/teams/.backups/...` | ATM-owned backup artifact | `read_only`, staged writes | `team_admin.rs` | backup/restore owner helpers only; no bespoke live-write behavior |
-| Task bucket files `.claude/tasks/<team>/*.json` | ATM-owned state | `read_only`, `read_modify_write` | `team_admin.rs` | task-bucket owner helper layered on shared persistence |
-| Task highwatermark `.claude/tasks/<team>/.highwatermark` | ATM-owned state | `read_only`, `read_modify_write` | `team_admin.rs` | one highwatermark owner helper layered on shared persistence |
-| Restore marker `.claude/teams/<team>/.restore-in-progress` | ATM-owned coordination state | `read_only`, `read_modify_write` | `team_admin.rs`, `doctor/mod.rs` | restore owner helper layered on shared persistence |
-| Restore staging directories/files `.restore-staging/...` | ATM-owned staging artifact | staged write only | `team_admin.rs` | restore owner helpers; staging paths are exempt from live-file commit rules but must remain deterministic |
-| Send-alert state `.config/atm/state.json` | ATM-owned state | `read_only`, `read_modify_write` | `send/mod.rs` | send-alert owner helper layered on shared persistence |
-| Send-alert lock `.config/atm/state.lock` | ATM-owned coordination artifact | `read_possible_write`, `read_modify_write` | `send/mod.rs` | send-alert lock helper only |
-
-Inventory rule:
-
-- any future live file path introduced into production code must be added to
-  this inventory before implementation is considered complete
-- every inventory entry must name one owner-layer write boundary
-- if an entry cannot name that boundary yet, the design is not ready for code
+The broader repo-wide file-I/O taxonomy, ownership inventory, and mailbox-sidecar
+migration are proposal-only for this branch. They are tracked in
+`docs/project-plan.md` Phase P and are intentionally not part of the current
+executed architecture description yet.
 
 ### 18.5 New Error Codes
 
