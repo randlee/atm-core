@@ -912,6 +912,10 @@ Architectural rules:
   ATM home directory
 - `add-member` is the retained local roster-repair path and must reject
   duplicates before mutating config
+- when `add-member` registers a tmux-backed member, it should persist
+  `tmuxPaneId` in canonical `%<number>` form and set `backendType = "tmux"`
+  plus `isActive = true`; unsupported tmux target syntax should fail fast
+  instead of being guessed into a routing handle
 - `backup` snapshots current team config, inboxes, and the ATM team task
   bucket into a timestamped snapshot directory
 - `restore` is a local recovery path and must:

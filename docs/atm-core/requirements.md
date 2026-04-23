@@ -339,6 +339,11 @@ Required service rules:
   on daemon orchestration or runtime spawning
 - `add-member` must validate team existence and reject duplicate member names
   before mutating local team config
+- when `add-member` receives a pane id, it must persist `tmuxPaneId` in
+  canonical tmux `%<number>` form, set `backendType = "tmux"`, and mark the
+  member `isActive = true`
+- `add-member` must reject unsupported tmux target syntax such as
+  `session:window.pane` rather than guessing a pane handle
 - backup must snapshot:
   - `config.json`
   - team inbox files

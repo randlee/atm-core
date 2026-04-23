@@ -135,6 +135,15 @@ Current `AgentMember` persisted schema:
 - `extra: serde_json::Map<String, serde_json::Value>` via `#[serde(flatten)]`
   for forward-compatible Claude Code fields
 
+ATM-owned member normalization rules:
+- `agentId`, `name`, `agentType`, `model`, and `cwd` are the persisted routing
+  identity fields ATM writes during `teams add-member`
+- tmux-backed members use canonical `tmuxPaneId` values in `%<number>` form
+- when ATM writes a tmux-backed member, it also sets `backendType = "tmux"` and
+  `isActive = true` in `extra`
+- unsupported tmux target syntax such as `session:window.pane` must be rejected
+  rather than guessed into a pane handle
+
 Observability boundary note:
 - `AgentMember.extra` is intentionally out of scope for the L.4 observability
   field-model cleanup
