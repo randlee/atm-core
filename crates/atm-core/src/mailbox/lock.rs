@@ -6,6 +6,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use fs2::FileExt;
+use same_file::Handle;
 use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode};
@@ -359,20 +360,7 @@ fn lock_path_matches_file(file: &File, lock_path: &Path) -> Result<bool, AtmErro
     })
 }
 
-#[cfg(unix)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct LockFileIdentity {
-    dev: u64,
-    ino: u64,
-}
-
-#[cfg(windows)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct LockFileIdentity {
-    volume_serial_number: Option<u32>,
-    file_index_high: u32,
-    file_index_low: u32,
-}
+type LockFileIdentity = Handle;
 
 fn lock_path_matches_identity(identity: &LockFileIdentity, lock_path: &Path) -> io::Result<bool> {
     let current = match lock_file_identity_from_path(lock_path) {
@@ -383,50 +371,12 @@ fn lock_path_matches_identity(identity: &LockFileIdentity, lock_path: &Path) -> 
     Ok(&current == identity)
 }
 
-#[cfg(unix)]
 fn lock_file_identity_from_file(file: &File) -> io::Result<LockFileIdentity> {
-    use std::os::unix::fs::MetadataExt;
-
-    let metadata = file.metadata()?;
-    Ok(LockFileIdentity {
-        dev: metadata.dev(),
-        ino: metadata.ino(),
-    })
+    Handle::from_file(file.try_clone()?)
 }
 
-#[cfg(unix)]
 fn lock_file_identity_from_path(path: &Path) -> io::Result<LockFileIdentity> {
-    use std::os::unix::fs::MetadataExt;
-
-    let metadata = fs::metadata(path)?;
-    Ok(LockFileIdentity {
-        dev: metadata.dev(),
-        ino: metadata.ino(),
-    })
-}
-
-#[cfg(windows)]
-fn lock_file_identity_from_file(file: &File) -> io::Result<LockFileIdentity> {
-    use std::os::windows::fs::MetadataExt;
-
-    let metadata = file.metadata()?;
-    Ok(LockFileIdentity {
-        volume_serial_number: metadata.volume_serial_number(),
-        file_index_high: metadata.file_index_high(),
-        file_index_low: metadata.file_index_low(),
-    })
-}
-
-#[cfg(windows)]
-fn lock_file_identity_from_path(path: &Path) -> io::Result<LockFileIdentity> {
-    use std::os::windows::fs::MetadataExt;
-
-    let metadata = fs::metadata(path)?;
-    Ok(LockFileIdentity {
-        volume_serial_number: metadata.volume_serial_number(),
-        file_index_high: metadata.file_index_high(),
-        file_index_low: metadata.file_index_low(),
-    })
+    Handle::from_path(path)
 }
 
 fn evict_stale_lock_sentinel(lock_path: &Path) -> bool {
