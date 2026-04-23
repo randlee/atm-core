@@ -2,6 +2,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -33,6 +34,7 @@ pub(crate) struct MailboxLockGuard {
     lock_path: PathBuf,
     file: Option<File>,
     owner_pid: u32,
+    _in_process_guard: Option<InProcessMailboxLockGuard>,
 }
 
 impl Drop for MailboxLockGuard {
@@ -125,6 +127,8 @@ pub(crate) fn sort_unique_paths(paths: impl IntoIterator<Item = PathBuf>) -> Vec
 pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard, AtmError> {
     let lock_path = sentinel_path(path);
     let owner_pid = std::process::id();
+    let deadline = Instant::now() + timeout;
+    let in_process_guard = acquire_in_process_lock(path, deadline)?;
     if let Some(parent) = lock_path.parent() {
         fs::create_dir_all(parent).map_err(|error| {
             AtmError::mailbox_lock(format!(
@@ -138,7 +142,6 @@ pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard
         })?;
     }
 
-    let deadline = Instant::now() + timeout;
     loop {
         let _ = evict_stale_lock_sentinel(&lock_path);
         let file = open_lock_file(&lock_path)?;
@@ -159,6 +162,7 @@ pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard
                     lock_path,
                     file: Some(file),
                     owner_pid,
+                    _in_process_guard: Some(in_process_guard),
                 });
             }
             Err(error) if is_lock_contention_error(&error) && Instant::now() >= deadline => {
@@ -440,6 +444,83 @@ fn debug_timeout_override() -> Option<Duration> {
         .ok()
         .and_then(|value| value.parse::<u64>().ok())
         .map(Duration::from_millis)
+}
+
+#[derive(Debug)]
+struct InProcessMailboxLockState {
+    held: Mutex<bool>,
+    wake: Condvar,
+}
+
+#[derive(Debug)]
+struct InProcessMailboxLockGuard {
+    state: Arc<InProcessMailboxLockState>,
+}
+
+impl Drop for InProcessMailboxLockGuard {
+    fn drop(&mut self) {
+        let mut held = self.state.held.lock().expect("in-process lock poisoned");
+        *held = false;
+        self.state.wake.notify_one();
+    }
+}
+
+fn acquire_in_process_lock(
+    path: &Path,
+    deadline: Instant,
+) -> Result<InProcessMailboxLockGuard, AtmError> {
+    let key = canonical_lock_key(path);
+    let state = in_process_lock_state(key);
+    let mut held = state
+        .held
+        .lock()
+        .map_err(|_| AtmError::mailbox_lock("in-process mailbox lock state poisoned"))?;
+    loop {
+        if !*held {
+            *held = true;
+            drop(held);
+            return Ok(InProcessMailboxLockGuard { state });
+        }
+
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(AtmError::mailbox_lock_timeout(path));
+        }
+        let (next_held, wait_result) = state
+            .wake
+            .wait_timeout(held, remaining)
+            .map_err(|_| AtmError::mailbox_lock("in-process mailbox lock wait poisoned"))?;
+        held = next_held;
+        if wait_result.timed_out() && *held {
+            return Err(AtmError::mailbox_lock_timeout(path));
+        }
+    }
+}
+
+fn in_process_lock_state(key: String) -> Arc<InProcessMailboxLockState> {
+    static REGISTRY: OnceLock<
+        Mutex<std::collections::HashMap<String, Arc<InProcessMailboxLockState>>>,
+    > = OnceLock::new();
+    let registry = REGISTRY.get_or_init(|| Mutex::new(std::collections::HashMap::new()));
+    let mut registry = registry
+        .lock()
+        .expect("in-process mailbox lock registry poisoned");
+    registry
+        .entry(key)
+        .or_insert_with(|| {
+            Arc::new(InProcessMailboxLockState {
+                held: Mutex::new(false),
+                wake: Condvar::new(),
+            })
+        })
+        .clone()
+}
+
+fn canonical_lock_key(path: &Path) -> String {
+    fs::canonicalize(path)
+        .unwrap_or_else(|_| path.to_path_buf())
+        .to_string_lossy()
+        .into_owned()
 }
 
 #[cfg(test)]
