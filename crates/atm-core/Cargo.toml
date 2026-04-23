@@ -28,6 +28,7 @@ toml = "0.8"
 ulid = { version = "1.2.1", features = ["serde"] }
 uuid.workspace = true
 fs2 = "0.4"
+same-file = "1"
 
 [dev-dependencies]
 serial_test = "3"

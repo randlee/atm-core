@@ -248,6 +248,27 @@ mod tests {
     }
 
     #[test]
+    fn append_message_removes_lock_sentinel_after_write() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("append-removes-lock.jsonl");
+
+        append_message(&path, &sample_message(Uuid::new_v4(), "first")).expect("append");
+
+        assert!(!lock::sentinel_path(&path).exists());
+    }
+
+    #[test]
+    fn append_message_cleans_preexisting_stale_lock_sentinel() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("append-cleans-stale-lock.jsonl");
+        fs::write(lock::sentinel_path(&path), u32::MAX.to_string()).expect("stale lock");
+
+        append_message(&path, &sample_message(Uuid::new_v4(), "first")).expect("append");
+
+        assert!(!lock::sentinel_path(&path).exists());
+    }
+
+    #[test]
     fn read_messages_skips_malformed_lines() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("skip-malformed.jsonl");

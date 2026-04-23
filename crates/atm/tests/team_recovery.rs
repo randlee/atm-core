@@ -165,6 +165,40 @@ fn test_backup_captures_config_inboxes_and_tasks() {
 }
 
 #[test]
+fn test_backup_excludes_mailbox_lock_sentinels() {
+    let fixture = Fixture::new();
+    fixture.write_team_config_value(
+        "atm-dev",
+        json!({"leadSessionId":"lead-1","members":[{"name":"team-lead"},{"name":"arch-ctm"}]}),
+    );
+    fixture.write_inbox("atm-dev", "arch-ctm", "backup me");
+    fixture.write_text(
+        fixture
+            .team_dir("atm-dev")
+            .join("inboxes")
+            .join("arch-ctm.json.lock"),
+        &u32::MAX.to_string(),
+    );
+
+    let output = fixture.run(&["teams", "backup", "atm-dev", "--json"]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+
+    let parsed = fixture.stdout_json(&output);
+    let backup_path = parsed["backup_path"].as_str().expect("backup path");
+    let backup_dir = std::path::Path::new(backup_path);
+    assert!(
+        !backup_dir
+            .join("inboxes")
+            .join("arch-ctm.json.lock")
+            .exists()
+    );
+}
+
+#[test]
 fn test_restore_dry_run_reports_members_inboxes_and_tasks() {
     let fixture = Fixture::new();
     fixture.write_team_config_value(
@@ -313,6 +347,111 @@ fn test_restore_preserves_team_lead_and_recomputes_highwatermark() {
         fs::read_to_string(fixture.inbox_path("atm-dev", "arch-ctm")).expect("restored inbox");
     assert!(restored_inbox.contains("restore worker inbox"));
     assert_eq!(fixture.read_highwatermark("atm-dev"), "82");
+}
+
+#[test]
+fn test_restore_sweeps_stale_mailbox_lock_sentinels() {
+    let fixture = Fixture::new();
+    fixture.write_team_config_value(
+        "atm-dev",
+        json!({"leadSessionId":"lead-current","members":[{"name":"team-lead"}]}),
+    );
+    fixture.write_text(
+        fixture
+            .team_dir("atm-dev")
+            .join("inboxes")
+            .join("arch-ctm.json.lock"),
+        &u32::MAX.to_string(),
+    );
+
+    let backup_dir = fixture.make_backup_dir("atm-dev", "20260407T020304500000000Z");
+    fixture.write_json(
+        backup_dir.join("config.json"),
+        &json!({
+            "leadSessionId":"lead-backup",
+            "members":[
+                {"name":"team-lead"},
+                {"name":"arch-ctm","agentType":"general-purpose","model":"sonnet","cwd":"/repo"}
+            ]
+        }),
+    );
+    fixture.write_inbox_at(
+        backup_dir.join("inboxes").join("arch-ctm.json"),
+        "team-lead",
+        "restore worker inbox",
+    );
+
+    let output = fixture.run(&[
+        "teams",
+        "restore",
+        "atm-dev",
+        "--from",
+        backup_dir.to_str().expect("utf8"),
+        "--json",
+    ]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+
+    assert!(
+        !fixture
+            .team_dir("atm-dev")
+            .join("inboxes")
+            .join("arch-ctm.json.lock")
+            .exists()
+    );
+}
+
+#[test]
+fn test_backup_restore_roundtrip_leaves_zero_mailbox_locks() {
+    let fixture = Fixture::new();
+    fixture.write_team_config_value(
+        "atm-dev",
+        json!({"leadSessionId":"lead-1","members":[{"name":"team-lead"},{"name":"arch-ctm"}]}),
+    );
+    fixture.write_inbox("atm-dev", "arch-ctm", "backup me");
+    fixture.write_text(
+        fixture
+            .team_dir("atm-dev")
+            .join("inboxes")
+            .join("arch-ctm.json.lock"),
+        &u32::MAX.to_string(),
+    );
+
+    let backup_output = fixture.run(&["teams", "backup", "atm-dev", "--json"]);
+    assert!(
+        backup_output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&backup_output)
+    );
+    let backup_path = fixture.stdout_json(&backup_output)["backup_path"]
+        .as_str()
+        .expect("backup path")
+        .to_string();
+
+    let restore_output = fixture.run(&[
+        "teams",
+        "restore",
+        "atm-dev",
+        "--from",
+        backup_path.as_str(),
+        "--json",
+    ]);
+    assert!(
+        restore_output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&restore_output)
+    );
+
+    let lock_files = fs::read_dir(fixture.team_dir("atm-dev").join("inboxes"))
+        .expect("inboxes dir")
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("lock"))
+        .count();
+    assert_eq!(lock_files, 0);
 }
 
 #[test]

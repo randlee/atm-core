@@ -1,13 +1,16 @@
 use std::fs::{self, File, OpenOptions};
 use std::io;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use fs2::FileExt;
+use same_file::Handle;
 use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode};
+use crate::process::process_is_alive;
 
 pub(crate) const DEFAULT_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
 /// Polling interval between advisory lock acquisition retries.
@@ -29,10 +32,21 @@ pub(crate) struct MailboxLockGuard {
     target_path: PathBuf,
     lock_path: PathBuf,
     file: File,
+    owner_pid: u32,
 }
 
 impl Drop for MailboxLockGuard {
     fn drop(&mut self) {
+        if let Err(error) = remove_active_lock_sentinel(&self.file, &self.lock_path, self.owner_pid)
+        {
+            warn!(
+                code = %AtmErrorCode::MailboxLockFailed,
+                %error,
+                target_path = %self.target_path.display(),
+                lock_path = %self.lock_path.display(),
+                "failed to remove mailbox lock sentinel"
+            );
+        }
         if let Err(error) = self.file.unlock() {
             warn!(
                 code = %AtmErrorCode::MailboxLockFailed,
@@ -83,6 +97,7 @@ pub(crate) fn sort_unique_paths(paths: impl IntoIterator<Item = PathBuf>) -> Vec
 /// configured deadline.
 pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard, AtmError> {
     let lock_path = sentinel_path(path);
+    let owner_pid = std::process::id();
     if let Some(parent) = lock_path.parent() {
         fs::create_dir_all(parent).map_err(|error| {
             AtmError::mailbox_lock(format!(
@@ -96,37 +111,34 @@ pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard
         })?;
     }
 
-    let file = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(&lock_path)
-        .map_err(|error| {
-            AtmError::mailbox_lock(format!(
-                "failed to open mailbox lock {}: {error}",
-                lock_path.display()
-            ))
-            .with_recovery(
-                "Ensure the mailbox lock file path is writable and not blocked by permissions before retrying the ATM command.",
-            )
-            .with_source(error)
-        })?;
-
     let deadline = Instant::now() + timeout;
     loop {
+        let _ = evict_stale_lock_sentinel(&lock_path);
+        let file = open_lock_file(&lock_path)?;
         match try_lock_exclusive(&file, &lock_path) {
             Ok(()) => {
+                if !lock_path_matches_file(&file, &lock_path)? {
+                    let _ = file.unlock();
+                    drop(file);
+                    if Instant::now() >= deadline {
+                        return Err(AtmError::mailbox_lock_timeout(path));
+                    }
+                    thread::sleep(RETRY_INTERVAL);
+                    continue;
+                }
+                write_lock_owner_pid(&file, &lock_path, owner_pid)?;
                 return Ok(MailboxLockGuard {
                     target_path: path.to_path_buf(),
                     lock_path,
                     file,
+                    owner_pid,
                 });
             }
             Err(error) if is_lock_contention_error(&error) && Instant::now() >= deadline => {
                 return Err(AtmError::mailbox_lock_timeout(path).with_source(error));
             }
             Err(error) if is_lock_contention_error(&error) => {
+                drop(file);
                 thread::sleep(RETRY_INTERVAL);
             }
             Err(error) => {
@@ -143,6 +155,33 @@ pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard
             }
         }
     }
+}
+
+pub(crate) fn sweep_stale_lock_sentinels(dir: &Path) -> Result<usize, AtmError> {
+    if !dir.exists() {
+        return Ok(0);
+    }
+
+    let entries = fs::read_dir(dir).map_err(|error| {
+        AtmError::mailbox_lock(format!(
+            "failed to read mailbox directory {} for stale lock cleanup: {error}",
+            dir.display()
+        ))
+        .with_recovery("Check mailbox directory permissions and retry the ATM command.")
+        .with_source(error)
+    })?;
+    let mut removed = 0usize;
+    for entry in entries.filter_map(Result::ok) {
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("lock") {
+            continue;
+        }
+        if evict_stale_lock_sentinel(&path) {
+            removed += 1;
+        }
+    }
+
+    Ok(removed)
 }
 
 /// Acquire one sorted, deduplicated lock set under a single total timeout budget.
@@ -179,6 +218,120 @@ fn try_lock_exclusive(file: &File, lock_path: &Path) -> io::Result<()> {
     }
 
     file.try_lock_exclusive()
+}
+
+fn open_lock_file(lock_path: &Path) -> Result<File, AtmError> {
+    OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(lock_path)
+        .map_err(|error| {
+            AtmError::mailbox_lock(format!(
+                "failed to open mailbox lock {}: {error}",
+                lock_path.display()
+            ))
+            .with_recovery(
+                "Ensure the mailbox lock file path is writable and not blocked by permissions before retrying the ATM command.",
+            )
+            .with_source(error)
+        })
+}
+
+fn write_lock_owner_pid(file: &File, lock_path: &Path, owner_pid: u32) -> Result<(), AtmError> {
+    file.set_len(0).map_err(|error| {
+        AtmError::mailbox_lock(format!(
+            "failed to reset mailbox lock {} before writing pid: {error}",
+            lock_path.display()
+        ))
+        .with_recovery(
+            "Check mailbox lock-file permissions and filesystem health before retrying the ATM command.",
+        )
+        .with_source(error)
+    })?;
+    let mut writer = file;
+    writer.write_all(owner_pid.to_string().as_bytes()).map_err(|error| {
+        AtmError::mailbox_lock(format!(
+            "failed to write mailbox lock owner pid to {}: {error}",
+            lock_path.display()
+        ))
+        .with_recovery(
+            "Check mailbox lock-file permissions and filesystem health before retrying the ATM command.",
+        )
+        .with_source(error)
+    })
+}
+
+fn remove_active_lock_sentinel(file: &File, lock_path: &Path, owner_pid: u32) -> io::Result<()> {
+    if !lock_path_matches_file_handle(file, lock_path)? {
+        return Ok(());
+    }
+
+    let raw = match fs::read_to_string(lock_path) {
+        Ok(raw) => raw,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error),
+    };
+    if raw.trim() != owner_pid.to_string() {
+        return Ok(());
+    }
+
+    match fs::remove_file(lock_path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
+fn lock_path_matches_file(file: &File, lock_path: &Path) -> Result<bool, AtmError> {
+    lock_path_matches_file_handle(file, lock_path).map_err(|error| {
+        AtmError::mailbox_lock(format!(
+            "failed to compare mailbox lock identity for {}: {error}",
+            lock_path.display()
+        ))
+        .with_recovery(
+            "Check mailbox lock-file permissions and filesystem health before retrying the ATM command.",
+        )
+        .with_source(error)
+    })
+}
+
+fn lock_path_matches_file_handle(file: &File, lock_path: &Path) -> io::Result<bool> {
+    let held = Handle::from_file(file.try_clone()?)?;
+    let current = match Handle::from_path(lock_path) {
+        Ok(handle) => handle,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error),
+    };
+    Ok(held == current)
+}
+
+fn evict_stale_lock_sentinel(lock_path: &Path) -> bool {
+    let Ok(raw) = fs::read_to_string(lock_path) else {
+        return false;
+    };
+    let Ok(pid) = raw.trim().parse::<u32>() else {
+        return false;
+    };
+    if process_is_alive(pid) {
+        return false;
+    }
+
+    match fs::remove_file(lock_path) {
+        Ok(()) => true,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => true,
+        Err(error) => {
+            warn!(
+                code = %AtmErrorCode::MailboxLockFailed,
+                %error,
+                lock_path = %lock_path.display(),
+                pid,
+                "failed to evict stale mailbox lock sentinel"
+            );
+            false
+        }
+    }
 }
 
 fn is_lock_contention_error(error: &io::Error) -> bool {
@@ -226,7 +379,8 @@ mod tests {
 
     use super::{
         DEFAULT_LOCK_TIMEOUT, acquire, acquire_many_sorted, default_lock_timeout,
-        is_lock_contention_error, sentinel_path,
+        evict_stale_lock_sentinel, is_lock_contention_error, sentinel_path,
+        sweep_stale_lock_sentinels,
     };
     use crate::error::AtmErrorCode;
 
@@ -244,6 +398,62 @@ mod tests {
         let _guard = acquire(&inbox, DEFAULT_LOCK_TIMEOUT).expect("lock");
 
         assert!(sentinel_path(&inbox).exists());
+    }
+
+    #[test]
+    fn dropping_guard_removes_sentinel_file() {
+        let tempdir = tempdir().expect("tempdir");
+        let inbox = tempdir.path().join("arch-ctm.json");
+        let sentinel = sentinel_path(&inbox);
+
+        {
+            let _guard = acquire(&inbox, DEFAULT_LOCK_TIMEOUT).expect("lock");
+            assert!(sentinel.exists());
+        }
+
+        assert!(!sentinel.exists());
+    }
+
+    #[test]
+    fn dropping_guard_skips_removal_when_sentinel_path_rotates() {
+        let tempdir = tempdir().expect("tempdir");
+        let inbox = tempdir.path().join("arch-ctm.json");
+        let sentinel = sentinel_path(&inbox);
+        let rotated = tempdir.path().join("arch-ctm.json.lock.replaced");
+
+        {
+            let _guard = acquire(&inbox, DEFAULT_LOCK_TIMEOUT).expect("lock");
+            std::fs::rename(&sentinel, &rotated).expect("rotate sentinel");
+            std::fs::write(&sentinel, "replacement").expect("replacement sentinel");
+        }
+
+        assert!(sentinel.exists());
+        assert!(rotated.exists());
+    }
+
+    #[test]
+    fn evict_stale_lock_sentinel_removes_dead_pid_file() {
+        let tempdir = tempdir().expect("tempdir");
+        let sentinel = tempdir.path().join("arch-ctm.json.lock");
+        std::fs::write(&sentinel, u32::MAX.to_string()).expect("stale sentinel");
+
+        assert!(evict_stale_lock_sentinel(&sentinel));
+        assert!(!sentinel.exists());
+    }
+
+    #[test]
+    fn sweep_stale_lock_sentinels_removes_only_lock_files_with_dead_pids() {
+        let tempdir = tempdir().expect("tempdir");
+        let lock_path = tempdir.path().join("arch-ctm.json.lock");
+        let inbox_path = tempdir.path().join("arch-ctm.json");
+        std::fs::write(&lock_path, u32::MAX.to_string()).expect("stale sentinel");
+        std::fs::write(&inbox_path, "inbox").expect("inbox");
+
+        let removed = sweep_stale_lock_sentinels(tempdir.path()).expect("sweep");
+
+        assert_eq!(removed, 1);
+        assert!(!lock_path.exists());
+        assert!(inbox_path.exists());
     }
 
     #[test]
