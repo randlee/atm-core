@@ -20,6 +20,8 @@ pub(crate) const DEFAULT_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
 /// A short retry interval keeps contention responsive without spinning hard on
 /// the lock sentinel file.
 const RETRY_INTERVAL: Duration = Duration::from_millis(50);
+const REMOVE_RETRY_INTERVAL: Duration = Duration::from_millis(10);
+const REMOVE_RETRY_ATTEMPTS: usize = 20;
 
 pub(crate) fn default_lock_timeout() -> Duration {
     if let Some(timeout) = debug_timeout_override() {
@@ -326,11 +328,7 @@ fn remove_active_lock_sentinel(lock_path: &Path, owner_record: &LockOwnerRecord)
         return Ok(());
     }
 
-    match fs::remove_file(lock_path) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error),
-    }
+    remove_lock_sentinel_with_retry(lock_path)
 }
 
 fn lock_path_matches_file(file: &File, lock_path: &Path) -> Result<bool, AtmError> {
@@ -381,7 +379,7 @@ fn evict_stale_lock_sentinel(lock_path: &Path) -> bool {
         return false;
     }
 
-    match fs::remove_file(lock_path) {
+    match remove_lock_sentinel_with_retry(lock_path) {
         Ok(()) => true,
         Err(error) if error.kind() == io::ErrorKind::NotFound => true,
         Err(error) => {
@@ -394,6 +392,46 @@ fn evict_stale_lock_sentinel(lock_path: &Path) -> bool {
             );
             false
         }
+    }
+}
+
+fn remove_lock_sentinel_with_retry(lock_path: &Path) -> io::Result<()> {
+    let mut last_error = None;
+    for attempt in 0..REMOVE_RETRY_ATTEMPTS {
+        match fs::remove_file(lock_path) {
+            Ok(()) => return Ok(()),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+            Err(error) if should_retry_remove_lock_sentinel(&error) => {
+                last_error = Some(error);
+                if attempt + 1 < REMOVE_RETRY_ATTEMPTS {
+                    thread::sleep(REMOVE_RETRY_INTERVAL);
+                }
+            }
+            Err(error) => return Err(error),
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| io::Error::other("lock sentinel removal failed")))
+}
+
+fn should_retry_remove_lock_sentinel(error: &io::Error) -> bool {
+    if error.kind() == io::ErrorKind::PermissionDenied {
+        return true;
+    }
+
+    #[cfg(windows)]
+    {
+        return matches!(
+            error.raw_os_error(),
+            Some(code)
+                if code == windows_sys::Win32::Foundation::ERROR_SHARING_VIOLATION as i32
+                    || code == windows_sys::Win32::Foundation::ERROR_ACCESS_DENIED as i32
+        );
+    }
+
+    #[cfg(not(windows))]
+    {
+        false
     }
 }
 
