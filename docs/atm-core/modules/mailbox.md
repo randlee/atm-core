@@ -10,6 +10,9 @@ Primary ownership note:
   - true read-modify-write flows
 - mailbox writes must flow through one owner-layer write boundary rather than
   ad hoc call-site persistence logic
+- the concrete mailbox owner-layer boundaries are
+  `mailbox::store::commit_mailbox_state(...)` for one file and
+  `mailbox::store::commit_source_files(...)` for multi-source writeback
 - current shared-inbox rewrite behavior is a compatibility boundary over a
   Claude-owned surface, not a general license to store new ATM-local source of
   truth in Claude-owned files

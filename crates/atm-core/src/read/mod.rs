@@ -245,7 +245,7 @@ pub fn read_mail(
             own_inbox,
         );
         if mutation_applied {
-            persist_source_files(&source_files)?;
+            mailbox::store::commit_source_files(&source_files)?;
         }
         mutation_applied
     };
@@ -573,12 +573,4 @@ fn transition_displayed_message(
             state::TransitionedMessage::Unchanged(unchanged)
         }
     }
-}
-
-fn persist_source_files(source_files: &[SourceFile]) -> Result<(), AtmError> {
-    for source in source_files {
-        mailbox::atomic::write_messages(&source.path, &source.messages)?;
-    }
-
-    Ok(())
 }
