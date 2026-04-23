@@ -279,8 +279,12 @@ Required identity rules:
   when sender or recipient matching succeeds
 - when both sender and recipient matching succeed, ATM still runs the hook only
   once
-- a relative `post_send_hook` path resolves from the discovered `.atm.toml`
-  directory, and the hook executes with that same directory as its working
+- an absolute `post_send_hook` command path is used as-is
+- a relative `post_send_hook` command path that contains a path separator
+  resolves from the discovered `.atm.toml` directory
+- a bare `post_send_hook` command name with no path separator must be treated
+  as a program name and resolved through `PATH`
+- the hook executes with the discovered `.atm.toml` directory as its working
   directory
 - the hook inherits process environment and also receives one ATM-owned JSON
   payload in `ATM_POST_SEND` with:
@@ -299,17 +303,14 @@ Required identity rules:
   `message`, and optional `fields`; ATM logs it on a best-effort basis and
   ignores absent or invalid output
 - hook-match evaluation and hook-skip outcomes must remain observable through
-  structured diagnostics and actionable user-visible warnings where required
-- when a hook is configured but neither filter axis matched, emit this
-  user-visible warning template:
-  ```text
-  post-send hook skipped: sender {sender} not in post_send_hook_senders {senders}
-  and recipient {recipient} not in post_send_hook_recipients {recipients}
-  ```
-- the hook-skip warning applies only when at least one sender/recipient filter
-  list is configured and both axes fail to match
+  structured diagnostics
+- when a hook is configured but neither filter axis matched, that is expected
+  behavior and must not emit a user-visible warning
+- hook non-match diagnostics are debug-only
 - hook failure or timeout is best-effort only and must not roll back a
   successful send
+- actual hook execution failures remain the only case where caller-visible hook
+  warnings are appropriate
 - the reserved sender `atm-identity-missing@<team>` is available only for
   ATM-generated repair/diagnostic notices and must not become a general
   identity fallback
@@ -342,6 +343,11 @@ Required service rules:
   on daemon orchestration or runtime spawning
 - `add-member` must validate team existence and reject duplicate member names
   before mutating local team config
+- when `add-member` receives a pane id, it must persist `tmuxPaneId` in
+  canonical tmux `%<number>` form, set `backendType = "tmux"`, and mark the
+  member `isActive = true`
+- `add-member` must reject unsupported tmux target syntax such as
+  `session:window.pane` rather than guessing a pane handle
 - backup must snapshot:
   - `config.json`
   - team inbox files, excluding transient `*.lock` sentinels, dotfiles, and

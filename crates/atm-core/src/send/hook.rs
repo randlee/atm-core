@@ -68,14 +68,7 @@ pub(super) fn maybe_run_post_send_hook(
             return;
         }
 
-        let warning = format_post_send_hook_skipped_warning(
-            context.sender,
-            &context.recipient.agent,
-            &config.post_send_hook_senders,
-            &config.post_send_hook_recipients,
-        );
-        warn!(
-            code = %AtmErrorCode::WarningHookSkipped,
+        debug!(
             sender = context.sender,
             recipient = %context.recipient.agent,
             recipient_team = %context.recipient.team,
@@ -83,9 +76,8 @@ pub(super) fn maybe_run_post_send_hook(
             recipient_filters = %display_filter_list(&config.post_send_hook_recipients),
             sender_match = hook_match.sender,
             recipient_match = hook_match.recipient,
-            "post-send hook skipped"
+            "post-send hook did not match configured sender or recipient filters"
         );
-        warnings.push(warning);
         return;
     }
 
@@ -231,11 +223,15 @@ pub(super) fn maybe_run_post_send_hook(
 
 fn resolve_command_path(config: &config::AtmConfig, command_path: &str) -> PathBuf {
     let path = PathBuf::from(command_path);
-    if path.is_absolute() {
+    if path.is_absolute() || !command_path_contains_path_separator(command_path) {
         path
     } else {
         config.config_root.join(path)
     }
+}
+
+fn command_path_contains_path_separator(command_path: &str) -> bool {
+    command_path.contains('/') || command_path.contains('\\')
 }
 
 fn matches_hook_axis(filters: &[String], candidate: &str) -> bool {
@@ -246,19 +242,6 @@ fn hook_filter_matches(filters: &[String], candidate: &str) -> bool {
     filters
         .iter()
         .any(|filter| filter == "*" || filter == candidate)
-}
-
-fn format_post_send_hook_skipped_warning(
-    sender: &str,
-    recipient: &str,
-    senders: &[String],
-    recipients: &[String],
-) -> String {
-    format!(
-        "post-send hook skipped: sender {sender} not in post_send_hook_senders {}\nand recipient {recipient} not in post_send_hook_recipients {}",
-        display_filter_list(senders),
-        display_filter_list(recipients)
-    )
 }
 
 /// Render filters exactly as operators configure them so skip diagnostics make
@@ -425,8 +408,8 @@ mod tests {
 
     use super::{
         POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel,
-        format_post_send_hook_skipped_warning, hook_filter_matches, hook_result_log_level,
-        matches_hook_axis, parse_post_send_hook_result,
+        command_path_contains_path_separator, hook_filter_matches, hook_result_log_level,
+        matches_hook_axis, parse_post_send_hook_result, resolve_command_path,
     };
 
     #[test]
@@ -442,18 +425,46 @@ mod tests {
     }
 
     #[test]
-    fn format_post_send_hook_skipped_warning_uses_documented_template() {
-        let warning = format_post_send_hook_skipped_warning(
-            "arch-ctm",
-            "recipient",
-            &["team-lead".to_string()],
-            &["quality-mgr".to_string()],
-        );
+    fn command_path_contains_path_separator_matches_path_like_commands_only() {
+        assert!(command_path_contains_path_separator("scripts/hook.sh"));
+        assert!(command_path_contains_path_separator(r"scripts\hook.bat"));
+        assert!(!command_path_contains_path_separator("bash"));
+    }
+
+    #[test]
+    fn resolve_command_path_preserves_absolute_paths() {
+        let config = crate::config::AtmConfig {
+            config_root: Path::new("/tmp/atm-config-root").to_path_buf(),
+            ..Default::default()
+        };
 
         assert_eq!(
-            warning,
-            "post-send hook skipped: sender arch-ctm not in post_send_hook_senders team-lead\nand recipient recipient not in post_send_hook_recipients quality-mgr"
+            resolve_command_path(&config, "/usr/local/bin/hook"),
+            Path::new("/usr/local/bin/hook")
         );
+    }
+
+    #[test]
+    fn resolve_command_path_joins_relative_paths_with_separators_under_config_root() {
+        let config = crate::config::AtmConfig {
+            config_root: Path::new("/tmp/atm-config-root").to_path_buf(),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            resolve_command_path(&config, "scripts/hook.sh"),
+            Path::new("/tmp/atm-config-root").join("scripts/hook.sh")
+        );
+    }
+
+    #[test]
+    fn resolve_command_path_preserves_bare_command_names_for_path_lookup() {
+        let config = crate::config::AtmConfig {
+            config_root: Path::new("/tmp/atm-config-root").to_path_buf(),
+            ..Default::default()
+        };
+
+        assert_eq!(resolve_command_path(&config, "bash"), Path::new("bash"));
     }
 
     #[test]

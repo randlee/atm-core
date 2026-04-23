@@ -731,7 +731,7 @@ Planned sprints:
       - hook decision logging must make sender/recipient match evaluation easy
         to troubleshoot
       - a configured hook that is skipped because neither axis matched must
-        emit an actionable operator-facing warning
+        remain debug-only diagnostics rather than an operator-facing warning
       - hook failure or timeout must never roll back the send; ATM reports the
         failure as post-send-hook diagnostics only
   - `FIX-82` post-send hook redesign
@@ -746,7 +746,8 @@ Planned sprints:
       - the hook runs exactly once when either or both axes match
       - `ATM_POST_SEND` includes `hook_match.sender` and
         `hook_match.recipient`
-      - actionable warnings exist for configured-but-skipped hooks
+      - configured-but-skipped hooks remain debug-only and do not emit
+        caller-visible warnings
       - docs, help text, and tests cover the migration and new semantics
     - reserve `atm-identity-missing@<team>` for ATM-generated
       repair/diagnostic notices only; it must not become a normal sender

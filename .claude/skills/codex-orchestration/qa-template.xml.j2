@@ -1,0 +1,52 @@
+---
+name: qa-task
+version: 1.0.0
+description: quality-mgr QA assignment template for codex-orchestration sprint and phase reviews.
+format: xml
+required_variables:
+  - task_id
+  - sprint
+  - review_mode
+  - description
+  - pr_number
+  - branch
+  - worktree_path
+  - commits
+  - review_targets
+  - references
+optional_variables:
+  - changed_files
+defaults:
+  changed_files: ""
+---
+<repo-qa-task id="{{ task_id }}" sprint="{{ sprint }}" assignee="quality-mgr">
+  <description>{{ description }}</description>
+
+  <review-mode>{{ review_mode }}</review-mode>
+  <pr-number>{{ pr_number }}</pr-number>
+  <branch>{{ branch }}</branch>
+  <worktree>{{ worktree_path }}</worktree>
+  <commits>{{ commits }}</commits>
+
+  <review-targets>
+{{ review_targets }}
+  </review-targets>
+
+  <changed-files>
+{{ changed_files }}
+  </changed-files>
+
+  <references>
+{{ references }}
+  </references>
+
+  <workflow>
+    <step id="a">ACK this message immediately.</step>
+    <step id="b">Render structured JSON assignments for `req-qa` and `arch-qa` using the templates in `.claude/skills/codex-orchestration/`. Do not send free-form reviewer prompts.</step>
+    <step id="c">Read `.claude/assets/sc-rust/quality-mgr/quality-mgr.rust.md` and render any required Rust reviewer assignments from `.claude/assets/sc-rust/quality-mgr/templates/`.</step>
+    <step id="d">Spawn every selected reviewer in background mode. Do not run cargo, clippy, or broad QA analysis yourself in the foreground.</step>
+    <step id="e">Collect reviewer outputs and summarize PASS or FAIL, including blocking finding ids and file:line references where available.</step>
+    <step id="f">If a PR number is present and CI is not already green, monitor it with `gh pr checks {{ pr_number }} --watch`.</step>
+    <step id="g">Send the final QA verdict to team-lead. PASS means merge-ready from the QA perspective; FAIL means concrete fixes are required before merge.</step>
+  </workflow>
+</repo-qa-task>

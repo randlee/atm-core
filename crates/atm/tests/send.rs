@@ -489,7 +489,7 @@ fn test_send_post_send_hook_failure_does_not_roll_back_send() {
 }
 
 #[test]
-fn test_send_emits_post_send_hook_skip_warning_when_no_filter_matches() {
+fn test_send_non_matching_hook_filters_are_silent() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
@@ -506,16 +506,17 @@ fn test_send_emits_post_send_hook_skip_warning_when_no_filter_matches() {
         fixture.stderr(&output)
     );
     assert!(!payload_path.exists(), "hook payload unexpectedly created");
-    assert_eq!(
-        fixture.stderr(&output),
-        "post-send hook skipped: sender arch-ctm not in post_send_hook_senders team-lead\nand recipient recipient not in post_send_hook_recipients quality-mgr\n"
+    assert!(
+        fixture.stderr(&output).is_empty(),
+        "stderr: {}",
+        fixture.stderr(&output)
     );
     let inbox = fixture.inbox_contents("recipient");
     assert_eq!(inbox.len(), 1);
 }
 
 #[test]
-fn test_send_emits_post_send_hook_skip_warning_on_stderr_in_json_mode() {
+fn test_send_non_matching_hook_filters_are_silent_in_json_mode() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
@@ -532,14 +533,15 @@ fn test_send_emits_post_send_hook_skip_warning_on_stderr_in_json_mode() {
         fixture.stderr(&output)
     );
     assert!(!payload_path.exists(), "hook payload unexpectedly created");
-    assert_eq!(
-        fixture.stderr(&output),
-        "post-send hook skipped: sender arch-ctm not in post_send_hook_senders team-lead\nand recipient recipient not in post_send_hook_recipients quality-mgr\n"
+    assert!(
+        fixture.stderr(&output).is_empty(),
+        "stderr: {}",
+        fixture.stderr(&output)
     );
 }
 
 #[test]
-fn test_send_skip_warning_marks_unconfigured_axis_explicitly() {
+fn test_send_recipient_only_non_matching_hook_filter_is_silent() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
@@ -556,10 +558,13 @@ fn test_send_skip_warning_marks_unconfigured_axis_explicitly() {
         fixture.stderr(&output)
     );
     assert!(!payload_path.exists(), "hook payload unexpectedly created");
-    assert_eq!(
-        fixture.stderr(&output),
-        "post-send hook skipped: sender arch-ctm not in post_send_hook_senders (not configured)\nand recipient recipient not in post_send_hook_recipients quality-mgr\n"
+    assert!(
+        fixture.stderr(&output).is_empty(),
+        "stderr: {}",
+        fixture.stderr(&output)
     );
+    let inbox = fixture.inbox_contents("recipient");
+    assert_eq!(inbox.len(), 1);
 }
 
 #[test]
@@ -717,6 +722,41 @@ fn test_send_runs_post_send_hook_when_recipient_filter_is_wildcard() {
     ));
 
     let output = fixture.run(&["send", "recipient@atm-dev", "hello wildcard recipient"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let payload: serde_json::Value =
+        serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
+    assert_eq!(payload["hook_match"]["sender"], false);
+    assert_eq!(payload["hook_match"]["recipient"], true);
+}
+
+#[test]
+fn test_send_runs_post_send_hook_with_bare_binary_command_via_path() {
+    let fixture = Fixture::new("recipient");
+    let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
+    let hook_bin_name = hook_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("hook binary filename");
+    fixture.write_atm_config(&format!(
+        "[atm]\npost_send_hook = ['{}', 'capture', '{}']\npost_send_hook_recipients = ['recipient']\n",
+        hook_bin_name,
+        payload_path.display()
+    ));
+
+    let existing_path = std::env::var_os("PATH").unwrap_or_default();
+    let mut path_entries = vec![fixture.tempdir.path().join("bin")];
+    path_entries.extend(std::env::split_paths(&existing_path));
+    let path_value = std::env::join_paths(path_entries).expect("PATH");
+    let path_string = path_value.to_string_lossy().into_owned();
+    let output = fixture.run_with_env(
+        &["send", "recipient@atm-dev", "hello bare path hook"],
+        &[("PATH", path_string.as_str())],
+    );
 
     assert!(
         output.status.success(),

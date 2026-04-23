@@ -1,0 +1,26 @@
+---
+name: flaky-test-qa-assignment
+version: 1.0.0
+description: Render a fenced-JSON assignment for flaky-test-qa.
+format: json
+required_variables:
+  - worktree_path
+  - review_targets
+optional_variables:
+  - phase
+  - sprint
+  - notes
+defaults:
+  phase: ""
+  sprint: ""
+  notes: ""
+---
+{
+  "worktree_path": "{{ worktree_path }}",
+  "scope": {
+    "phase": {% if phase %}"{{ phase }}"{% else %}null{% endif %},
+    "sprint": {% if sprint %}"{{ sprint }}"{% else %}null{% endif %}
+  },
+  "review_targets": [{% for target in review_targets %}"{{ target }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "notes": "{{ notes }}"
+}
