@@ -270,7 +270,6 @@ mod tests {
         drop(guard);
         assert!(!path.exists());
     }
-
     #[test]
     fn acquire_send_alert_lock_evicts_stale_pid_lock_and_reacquires() {
         let tempdir = tempdir().expect("tempdir");
