@@ -302,14 +302,10 @@ fn write_lock_owner_record(
 }
 
 fn capture_active_lock_sentinel(
-    file: &File,
+    _file: &File,
     lock_path: &Path,
     owner_record: &LockOwnerRecord,
 ) -> io::Result<bool> {
-    if !lock_path_matches_file_io(file, lock_path)? {
-        return Ok(false);
-    }
-
     let raw = match fs::read_to_string(lock_path) {
         Ok(raw) => raw,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
