@@ -18,6 +18,7 @@ pub use types::AtmConfig;
 
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::schema::{AgentMember, TeamConfig};
+use discovery::normalize_post_send_hooks;
 
 /// Load `.atm.toml` by walking upward from `start_dir`.
 ///
@@ -49,7 +50,7 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
         )
         .with_source(error)
     })?;
-    reject_retired_post_send_hook_members(&path, &raw_toml)?;
+    reject_legacy_post_send_hook_keys(&path, &raw_toml)?;
     let parsed = raw_toml.try_into::<RawConfigFile>().map_err(|error| {
         AtmError::new(
             AtmErrorKind::Config,
@@ -71,9 +72,7 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
         default_team: parsed.atm.default_team.or(parsed.default_team),
         team_members: normalize_string_list(parsed.atm.team_members),
         aliases: normalize_aliases(parsed.atm.aliases),
-        post_send_hook: normalize_optional_command(parsed.atm.post_send_hook),
-        post_send_hook_senders: normalize_string_list(parsed.atm.post_send_hook_senders),
-        post_send_hook_recipients: normalize_string_list(parsed.atm.post_send_hook_recipients),
+        post_send_hooks: normalize_post_send_hooks(parsed.atm.post_send_hooks, &config_root)?,
         config_root,
         obsolete_identity_present,
     }))
@@ -172,21 +171,15 @@ struct RawAtmSection {
     #[serde(default)]
     aliases: std::collections::BTreeMap<String, String>,
     #[serde(default)]
-    post_send_hook: Option<Vec<String>>,
-    #[serde(default)]
-    post_send_hook_senders: Vec<String>,
-    #[serde(default)]
-    post_send_hook_recipients: Vec<String>,
+    post_send_hooks: Vec<types::PostSendHookRule>,
 }
 
-fn reject_retired_post_send_hook_members(
-    path: &Path,
-    raw_toml: &TomlValue,
-) -> Result<(), AtmError> {
-    let retired_present = raw_toml
-        .get("atm")
-        .and_then(TomlValue::as_table)
-        .is_some_and(|atm| atm.contains_key("post_send_hook_members"));
+fn reject_legacy_post_send_hook_keys(path: &Path, raw_toml: &TomlValue) -> Result<(), AtmError> {
+    let Some(atm) = raw_toml.get("atm").and_then(TomlValue::as_table) else {
+        return Ok(());
+    };
+
+    let retired_present = atm.contains_key("post_send_hook_members");
     if retired_present {
         return Err(AtmError::new_with_code(
             AtmErrorCode::ConfigRetiredHookMembersKey,
@@ -197,7 +190,23 @@ fn reject_retired_post_send_hook_members(
             ),
         )
         .with_recovery(
-            "Use 'post_send_hook_senders' (match on sender identity) and/or 'post_send_hook_recipients' (match on recipient name) under [atm]. Use '*' to match all senders or all recipients.",
+            "Replace 'post_send_hook_members' with one or more [[atm.post_send_hooks]] rules, each containing recipient = \"name-or-*\" and command = [\"argv\", ...].",
+        ));
+    }
+
+    let legacy_shape_present = atm.contains_key("post_send_hook")
+        || atm.contains_key("post_send_hook_senders")
+        || atm.contains_key("post_send_hook_recipients");
+    if legacy_shape_present {
+        return Err(AtmError::new(
+            AtmErrorKind::Config,
+            format!(
+                "error: '{}' uses retired post-send hook keys. Use [[atm.post_send_hooks]] with recipient and command entries instead.",
+                path.display()
+            ),
+        )
+        .with_recovery(
+            "Replace [atm].post_send_hook, [atm].post_send_hook_senders, and [atm].post_send_hook_recipients with one or more [[atm.post_send_hooks]] rules, each containing recipient = \"name-or-*\" and command = [\"argv\", ...].",
         ));
     }
     Ok(())
@@ -219,13 +228,6 @@ fn normalize_aliases(
         .map(|(alias, canonical)| (alias.trim().to_string(), canonical.trim().to_string()))
         .filter(|(alias, canonical)| !alias.is_empty() && !canonical.is_empty())
         .collect()
-}
-
-fn normalize_optional_command(command: Option<Vec<String>>) -> Option<Vec<String>> {
-    command.and_then(|values| {
-        let normalized = normalize_string_list(values);
-        (!normalized.is_empty()).then_some(normalized)
-    })
 }
 
 fn parse_team_config(config_path: &Path, raw: &str) -> Result<TeamConfig, AtmError> {
@@ -356,16 +358,21 @@ mod tests {
     }
 
     #[test]
-    fn load_config_reads_team_members_aliases_and_post_send_hook() {
+    fn load_config_reads_team_members_aliases_and_post_send_hooks() {
         let root = unique_temp_dir("atm-config-surface");
         fs::write(
             root.join(".atm.toml"),
             r#"[atm]
 default_team = "atm-dev"
 team_members = ["team-lead", "arch-ctm", " ", "qa"]
-post_send_hook = ["bin/hook", "notify"]
-post_send_hook_senders = ["arch-ctm", "", "team-lead"]
-post_send_hook_recipients = ["quality-mgr", "", "*"]
+
+[[atm.post_send_hooks]]
+recipient = "team-lead"
+command = ["scripts/atm-nudge.sh", "team-lead"]
+
+[[atm.post_send_hooks]]
+recipient = "*"
+command = ["bash", "-lc", "echo hi"]
 
 [atm.aliases]
 tl = "team-lead"
@@ -377,17 +384,19 @@ blank = ""
 
         let config = load_config(&root).expect("config").expect("present");
         assert_eq!(config.team_members, vec!["team-lead", "arch-ctm", "qa"]);
+        assert_eq!(config.post_send_hooks.len(), 2);
+        assert_eq!(config.post_send_hooks[0].recipient, "team-lead");
         assert_eq!(
-            config.post_send_hook.as_deref(),
-            Some(&["bin/hook".to_string(), "notify".to_string()][..])
+            config.post_send_hooks[0].command,
+            vec![
+                root.join("scripts/atm-nudge.sh").display().to_string(),
+                "team-lead".to_string()
+            ]
         );
+        assert_eq!(config.post_send_hooks[1].recipient, "*");
         assert_eq!(
-            config.post_send_hook_senders,
-            vec!["arch-ctm".to_string(), "team-lead".to_string()]
-        );
-        assert_eq!(
-            config.post_send_hook_recipients,
-            vec!["quality-mgr".to_string(), "*".to_string()]
+            config.post_send_hooks[1].command,
+            vec!["bash".to_string(), "-lc".to_string(), "echo hi".to_string()]
         );
         assert_eq!(
             config.aliases.get("tl").map(String::as_str),
@@ -408,9 +417,10 @@ blank = ""
             r#"[core]
 default_team = "atm-dev"
 identity = "team-lead"
-post_send_hook = ["bin/hook", "notify"]
-post_send_hook_senders = ["team-lead"]
-post_send_hook_recipients = ["arch-ctm"]
+
+[[atm.post_send_hooks]]
+recipient = "arch-ctm"
+command = ["scripts/atm-nudge.sh", "arch-ctm"]
 "#,
         )
         .expect("config");
@@ -418,9 +428,7 @@ post_send_hook_recipients = ["arch-ctm"]
         let config = load_config(&root).expect("config").expect("present");
         assert_eq!(config.default_team, None);
         assert_eq!(config.identity, None);
-        assert_eq!(config.post_send_hook, None);
-        assert!(config.post_send_hook_senders.is_empty());
-        assert!(config.post_send_hook_recipients.is_empty());
+        assert_eq!(config.post_send_hooks.len(), 1);
         assert!(!config.obsolete_identity_present);
     }
 
@@ -430,7 +438,6 @@ post_send_hook_recipients = ["arch-ctm"]
         fs::write(
             root.join(".atm.toml"),
             r#"[atm]
-post_send_hook = ["bin/hook"]
 post_send_hook_members = ["team-lead"]
 "#,
         )
@@ -449,7 +456,32 @@ post_send_hook_members = ["team-lead"]
         assert_eq!(
             error.recovery.as_deref(),
             Some(
-                "Use 'post_send_hook_senders' (match on sender identity) and/or 'post_send_hook_recipients' (match on recipient name) under [atm]. Use '*' to match all senders or all recipients."
+                "Replace 'post_send_hook_members' with one or more [[atm.post_send_hooks]] rules, each containing recipient = \"name-or-*\" and command = [\"argv\", ...]."
+            )
+        );
+    }
+
+    #[test]
+    fn load_config_rejects_legacy_post_send_filter_keys() {
+        let root = unique_temp_dir("legacy-hook-filters");
+        fs::write(
+            root.join(".atm.toml"),
+            r#"[atm]
+post_send_hook = ["bin/hook"]
+post_send_hook_recipients = ["team-lead"]
+"#,
+        )
+        .expect("config");
+
+        let error = load_config(&root).expect_err("legacy hook shape should fail");
+
+        assert!(error.is_config());
+        assert!(error.message.contains("retired post-send hook keys"));
+        assert!(error.message.contains("[[atm.post_send_hooks]]"));
+        assert_eq!(
+            error.recovery.as_deref(),
+            Some(
+                "Replace [atm].post_send_hook, [atm].post_send_hook_senders, and [atm].post_send_hook_recipients with one or more [[atm.post_send_hooks]] rules, each containing recipient = \"name-or-*\" and command = [\"argv\", ...]."
             )
         );
     }

@@ -673,9 +673,8 @@ Planned sprints:
     - retain ATM-owned `aliases` support under the `[atm]` config section for
       shorthand addressing of canonical members, especially cross-team
       communication with roles such as `team-lead`
-    - add ATM-owned `post_send_hook`, `post_send_hook_senders`, and
-      `post_send_hook_recipients` support under the `[atm]` config section for
-      best-effort post-send automation
+    - add ATM-owned post-send-hook automation support under the `[atm]` config
+      section
     - historical note:
       - the release-critical `[atm].identity` fallback removal and doctor drift
         warning were pulled forward and closed in `L.6`
@@ -702,15 +701,15 @@ Planned sprints:
         must drive validation, self-send checks, routing, and audit behavior
     - define post-send-hook rules:
       - the hook runs only after a successful non-`dry-run` send
-      - sender-based hook triggering uses `post_send_hook_senders`
-      - recipient-based hook triggering uses `post_send_hook_recipients`
-      - `*` in either list matches all senders or all recipients on that axis
-      - the hook runs once when either axis matches and must not duplicate
-        execution when both axes match
-      - legacy `post_send_hook_members` is rejected with migration guidance to
-        the new sender/recipient config keys
-      - the hook path may be relative and must resolve from the directory that
-        owns the discovered `.atm.toml`
+      - `[[atm.post_send_hooks]]` is the supported hook shape
+      - each rule binds one recipient selector and one command argv
+      - `recipient = "*"` matches all recipients
+      - matching rules execute in config order
+      - legacy flat hook keys and `post_send_hook_members` are rejected with
+        migration guidance to the new rule shape
+      - path-like `command[0]` values resolve from the directory that owns the
+        discovered `.atm.toml`
+      - bare executable names use normal `PATH` lookup
       - the hook must execute with that same config-root directory as its
         working directory
       - the hook inherits the process environment and also receives one
@@ -718,34 +717,32 @@ Planned sprints:
       - the `ATM_POST_SEND` payload must contain:
         - `from`
         - `to`
+        - `sender`
+        - `recipient`
+        - `team`
         - `message_id`
         - `requires_ack`
         - optional `task_id`
-        - `hook_match.sender`
-          boolean — true if the sender filter axis matched, false otherwise
-        - `hook_match.recipient`
-          boolean — true if the recipient filter axis matched, false otherwise
       - the hook may optionally return one structured stdout object with
         `level`, `message`, and optional `fields`; ATM logs it on a best-effort
         basis and ignores absent/invalid output
-      - hook decision logging must make sender/recipient match evaluation easy
-        to troubleshoot
-      - a configured hook that is skipped because neither axis matched must
-        emit an actionable operator-facing warning
+      - hook decision logging must make recipient-rule evaluation easy to
+        troubleshoot
+      - expected recipient non-match is silent
       - hook failure or timeout must never roll back the send; ATM reports the
         failure as post-send-hook diagnostics only
   - `FIX-82` post-send hook redesign
-    - scope: replace `post_send_hook_members` with
-      `post_send_hook_senders` / `post_send_hook_recipients`, add `*`
-      wildcard support, add `hook_match` metadata to `ATM_POST_SEND`, hard
-      reject the retired key, and improve hook diagnostics
+    - scope: replace the old multi-axis hook filter design with
+      recipient-scoped `[[atm.post_send_hooks]]` rules, hard reject retired
+      hook keys, simplify hook diagnostics, and keep only execution-failure
+      warnings
     - acceptance:
-      - retired `post_send_hook_members` produces a hard config error with
-        migration guidance
-      - sender and recipient trigger lists work independently and together
-      - the hook runs exactly once when either or both axes match
-      - `ATM_POST_SEND` includes `hook_match.sender` and
-        `hook_match.recipient`
+      - retired flat hook keys produce hard config errors with migration
+        guidance
+      - matching recipient rules execute in config order
+      - expected recipient non-match is silent
+      - `ATM_POST_SEND` includes sender/recipient/team context without
+        `hook_match` booleans
       - actionable warnings exist for configured-but-skipped hooks
       - docs, help text, and tests cover the migration and new semantics
     - reserve `atm-identity-missing@<team>` for ATM-generated
