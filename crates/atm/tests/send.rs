@@ -434,7 +434,7 @@ fn test_send_runs_post_send_hook_with_expected_payload() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
-        "[atm]\npost_send_hook = ['{}', 'capture', '{}']\npost_send_hook_senders = ['arch-ctm']\n",
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'capture', '{}']\n",
         hook_path.display(),
         payload_path.display()
     ));
@@ -453,8 +453,8 @@ fn test_send_runs_post_send_hook_with_expected_payload() {
     assert_eq!(payload["requires_ack"], false);
     assert!(payload["message_id"].as_str().is_some());
     assert!(payload.get("task_id").is_none());
-    assert_eq!(payload["hook_match"]["sender"], true);
-    assert_eq!(payload["hook_match"]["recipient"], false);
+    assert_eq!(payload["sender"], "arch-ctm");
+    assert_eq!(payload["recipient"], "recipient");
 }
 
 #[test]
@@ -462,7 +462,7 @@ fn test_send_post_send_hook_failure_does_not_roll_back_send() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("fail");
     fixture.write_atm_config(&format!(
-        "[atm]\npost_send_hook = ['{}', 'fail', '{}']\npost_send_hook_senders = ['arch-ctm']\n",
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'fail', '{}']\n",
         hook_path.display(),
         payload_path.display()
     ));
@@ -489,16 +489,16 @@ fn test_send_post_send_hook_failure_does_not_roll_back_send() {
 }
 
 #[test]
-fn test_send_emits_post_send_hook_skip_warning_when_no_filter_matches() {
+fn test_send_post_send_hook_non_match_is_silent() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
-        "[atm]\npost_send_hook = ['{}', 'capture', '{}']\npost_send_hook_senders = ['team-lead']\npost_send_hook_recipients = ['quality-mgr']\n",
+        "[[atm.post_send_hooks]]\nrecipient = 'quality-mgr'\ncommand = ['{}', 'capture', '{}']\n",
         hook_path.display(),
         payload_path.display()
     ));
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello skipped hook"]);
+    let output = fixture.run(&["send", "recipient@atm-dev", "hello unmatched hook"]);
 
     assert!(
         output.status.success(),
@@ -506,68 +506,67 @@ fn test_send_emits_post_send_hook_skip_warning_when_no_filter_matches() {
         fixture.stderr(&output)
     );
     assert!(!payload_path.exists(), "hook payload unexpectedly created");
-    assert_eq!(
-        fixture.stderr(&output),
-        "post-send hook skipped: sender arch-ctm not in post_send_hook_senders team-lead\nand recipient recipient not in post_send_hook_recipients quality-mgr\n"
-    );
+    assert_eq!(fixture.stderr(&output), "");
     let inbox = fixture.inbox_contents("recipient");
     assert_eq!(inbox.len(), 1);
 }
 
 #[test]
-fn test_send_emits_post_send_hook_skip_warning_on_stderr_in_json_mode() {
+fn test_send_runs_post_send_hook_for_wildcard_recipient() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
-        "[atm]\npost_send_hook = ['{}', 'capture', '{}']\npost_send_hook_senders = ['team-lead']\npost_send_hook_recipients = ['quality-mgr']\n",
+        "[[atm.post_send_hooks]]\nrecipient = '*'\ncommand = ['{}', 'capture', '{}']\n",
         hook_path.display(),
         payload_path.display()
     ));
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello skipped hook", "--json"]);
+    let output = fixture.run(&["send", "recipient@atm-dev", "hello wildcard hook"]);
 
     assert!(
         output.status.success(),
         "stderr: {}",
         fixture.stderr(&output)
     );
-    assert!(!payload_path.exists(), "hook payload unexpectedly created");
-    assert_eq!(
-        fixture.stderr(&output),
-        "post-send hook skipped: sender arch-ctm not in post_send_hook_senders team-lead\nand recipient recipient not in post_send_hook_recipients quality-mgr\n"
-    );
+    let payload: serde_json::Value =
+        serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
+    assert_eq!(payload["recipient"], "recipient");
 }
 
 #[test]
-fn test_send_skip_warning_marks_unconfigured_axis_explicitly() {
+fn test_send_runs_multiple_matching_post_send_hooks_in_config_order() {
     let fixture = Fixture::new("recipient");
-    let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
-    fixture.write_atm_config(&format!(
-        "[atm]\npost_send_hook = ['{}', 'capture', '{}']\npost_send_hook_recipients = ['quality-mgr']\n",
-        hook_path.display(),
-        payload_path.display()
-    ));
+    let order_path = fixture.tempdir.path().join("hook-order.log");
+    fixture.install_executable_script(
+        "scripts/append-order.py",
+        &format!(
+            "#!/usr/bin/env python3\nimport sys\nfrom pathlib import Path\nPath(r\"{}\").open(\"a\", encoding=\"utf-8\").write(sys.argv[1] + \"\\n\")\n",
+            order_path.display()
+        ),
+    );
+    fixture.write_atm_config(
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['python3', 'scripts/append-order.py', 'recipient']\n\n[[atm.post_send_hooks]]\nrecipient = '*'\ncommand = ['python3', 'scripts/append-order.py', 'wildcard']\n",
+    );
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello skipped hook"]);
+    let output = fixture.run(&["send", "recipient@atm-dev", "hello multiple hooks"]);
 
     assert!(
         output.status.success(),
         "stderr: {}",
         fixture.stderr(&output)
     );
-    assert!(!payload_path.exists(), "hook payload unexpectedly created");
     assert_eq!(
-        fixture.stderr(&output),
-        "post-send hook skipped: sender arch-ctm not in post_send_hook_senders (not configured)\nand recipient recipient not in post_send_hook_recipients quality-mgr\n"
+        fs::read_to_string(order_path).expect("hook order log"),
+        "recipient\nwildcard\n"
     );
 }
 
 #[test]
-fn test_send_runs_post_send_hook_when_recipient_matches_filter() {
+fn test_send_runs_post_send_hook_when_recipient_matches_rule() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
-        "[atm]\npost_send_hook = ['{}', 'capture', '{}']\npost_send_hook_recipients = ['recipient']\n",
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'capture', '{}']\n",
         hook_path.display(),
         payload_path.display()
     ));
@@ -581,39 +580,15 @@ fn test_send_runs_post_send_hook_when_recipient_matches_filter() {
     );
     let payload: serde_json::Value =
         serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
-    assert_eq!(payload["hook_match"]["sender"], false);
-    assert_eq!(payload["hook_match"]["recipient"], true);
+    assert_eq!(payload["recipient"], "recipient");
 }
 
 #[test]
-fn test_send_runs_post_send_hook_once_when_sender_and_recipient_both_match() {
-    let fixture = Fixture::new("recipient");
-    let (hook_path, counter_path) = fixture.install_hook_fixture("count");
-    fixture.write_atm_config(&format!(
-        "[atm]\npost_send_hook = ['{}', 'count', '{}']\npost_send_hook_senders = ['arch-ctm']\npost_send_hook_recipients = ['recipient']\n",
-        hook_path.display(),
-        counter_path.display()
-    ));
-
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello both filters"]);
-
-    assert!(
-        output.status.success(),
-        "stderr: {}",
-        fixture.stderr(&output)
-    );
-    assert_eq!(
-        fs::read_to_string(counter_path).expect("counter").trim(),
-        "1"
-    );
-}
-
-#[test]
-fn test_send_runs_post_send_hook_for_multiline_message_when_sender_matches() {
+fn test_send_runs_post_send_hook_for_multiline_message_when_rule_matches() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
-        "[atm]\npost_send_hook = ['{}', 'capture', '{}']\npost_send_hook_senders = ['arch-ctm']\n",
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'capture', '{}']\n",
         hook_path.display(),
         payload_path.display()
     ));
@@ -641,7 +616,7 @@ fn test_send_ignores_post_send_hook_configured_only_in_core_section() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
-        "[core]\ndefault_team = 'atm-dev'\nidentity = 'team-lead'\npost_send_hook = ['{}', 'capture', '{}']\npost_send_hook_senders = ['arch-ctm']\npost_send_hook_recipients = ['recipient']\n",
+        "[core]\ndefault_team = 'atm-dev'\nidentity = 'team-lead'\npost_send_hook = ['{}', 'capture', '{}']\n",
         hook_path.display(),
         payload_path.display()
     ));
@@ -663,7 +638,7 @@ fn test_send_post_send_hook_receives_only_configured_positional_args() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture-meta");
     fixture.write_atm_config(&format!(
-        "[atm]\npost_send_hook = ['{}', 'capture-meta', '{}']\npost_send_hook_senders = ['arch-ctm']\n",
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'capture-meta', '{}']\n",
         hook_path.display(),
         payload_path.display()
     ));
@@ -679,21 +654,25 @@ fn test_send_post_send_hook_receives_only_configured_positional_args() {
         serde_json::from_slice(&fs::read(payload_path).expect("hook meta")).expect("json");
     assert_eq!(captured["args"], serde_json::json!([]));
     assert_eq!(captured["payload"]["to"], "recipient@atm-dev");
-    assert_eq!(captured["payload"]["hook_match"]["sender"], true);
-    assert_eq!(captured["payload"]["hook_match"]["recipient"], false);
 }
 
+#[cfg(unix)]
 #[test]
-fn test_send_runs_post_send_hook_when_sender_filter_is_wildcard() {
+fn test_send_runs_post_send_hook_with_relative_script_command() {
     let fixture = Fixture::new("recipient");
-    let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
-    fixture.write_atm_config(&format!(
-        "[atm]\npost_send_hook = ['{}', 'capture', '{}']\npost_send_hook_senders = ['*']\n",
-        hook_path.display(),
-        payload_path.display()
-    ));
+    let payload_path = fixture.tempdir.path().join("relative-hook.json");
+    fixture.install_executable_script(
+        "scripts/record-hook.sh",
+        &format!(
+            "#!/usr/bin/env bash\nprintf '%s\\n' \"$ATM_POST_SEND\" > '{}'\n",
+            payload_path.display()
+        ),
+    );
+    fixture.write_atm_config(
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['scripts/record-hook.sh']\n",
+    );
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello wildcard sender"]);
+    let output = fixture.run(&["send", "recipient@atm-dev", "hello relative script"]);
 
     assert!(
         output.status.success(),
@@ -702,21 +681,26 @@ fn test_send_runs_post_send_hook_when_sender_filter_is_wildcard() {
     );
     let payload: serde_json::Value =
         serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
-    assert_eq!(payload["hook_match"]["sender"], true);
-    assert_eq!(payload["hook_match"]["recipient"], false);
+    assert_eq!(payload["recipient"], "recipient");
 }
 
+#[cfg(unix)]
 #[test]
-fn test_send_runs_post_send_hook_when_recipient_filter_is_wildcard() {
+fn test_send_runs_post_send_hook_with_bare_bash_command() {
     let fixture = Fixture::new("recipient");
-    let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
-    fixture.write_atm_config(&format!(
-        "[atm]\npost_send_hook = ['{}', 'capture', '{}']\npost_send_hook_recipients = ['*']\n",
-        hook_path.display(),
-        payload_path.display()
-    ));
+    let payload_path = fixture.tempdir.path().join("bash-hook.json");
+    fixture.install_executable_script(
+        "scripts/record-hook.sh",
+        &format!(
+            "#!/usr/bin/env bash\nprintf '%s\\n' \"$ATM_POST_SEND\" > '{}'\n",
+            payload_path.display()
+        ),
+    );
+    fixture.write_atm_config(
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['bash', 'scripts/record-hook.sh']\n",
+    );
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello wildcard recipient"]);
+    let output = fixture.run(&["send", "recipient@atm-dev", "hello bare bash"]);
 
     assert!(
         output.status.success(),
@@ -725,39 +709,40 @@ fn test_send_runs_post_send_hook_when_recipient_filter_is_wildcard() {
     );
     let payload: serde_json::Value =
         serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
-    assert_eq!(payload["hook_match"]["sender"], false);
-    assert_eq!(payload["hook_match"]["recipient"], true);
+    assert_eq!(payload["recipient"], "recipient");
 }
 
 #[test]
-fn test_send_does_not_run_post_send_hook_when_filter_lists_are_empty() {
+fn test_send_runs_post_send_hook_with_python_command() {
     let fixture = Fixture::new("recipient");
-    let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
-    fixture.write_atm_config(&format!(
-        "[atm]\npost_send_hook = ['{}', 'capture', '{}']\n",
-        hook_path.display(),
-        payload_path.display()
-    ));
+    let payload_path = fixture.tempdir.path().join("python-hook.json");
+    fixture.install_executable_script(
+        "scripts/record_hook.py",
+        &format!(
+            "#!/usr/bin/env python3\nimport os\nfrom pathlib import Path\nPath(r\"{}\").write_text(os.environ['ATM_POST_SEND'])\n",
+            payload_path.display()
+        ),
+    );
+    fixture.write_atm_config(
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['python3', 'scripts/record_hook.py']\n",
+    );
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello empty filters"]);
+    let output = fixture.run(&["send", "recipient@atm-dev", "hello python hook"]);
 
     assert!(
         output.status.success(),
         "stderr: {}",
         fixture.stderr(&output)
     );
-    assert!(!payload_path.exists(), "hook payload unexpectedly created");
-    assert_eq!(fixture.stderr(&output), "");
-    let inbox = fixture.inbox_contents("recipient");
-    assert_eq!(inbox.len(), 1);
+    let payload: serde_json::Value =
+        serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
+    assert_eq!(payload["recipient"], "recipient");
 }
 
 #[test]
 fn test_send_rejects_retired_post_send_hook_members_config() {
     let fixture = Fixture::new("recipient");
-    fixture.write_atm_config(
-        "[atm]\npost_send_hook = ['bin/hook']\npost_send_hook_members = ['team-lead']\n",
-    );
+    fixture.write_atm_config("[atm]\npost_send_hook_members = ['team-lead']\n");
 
     let output = fixture.run(&["send", "recipient@atm-dev", "hello retired"]);
 
@@ -765,7 +750,46 @@ fn test_send_rejects_retired_post_send_hook_members_config() {
     let stderr = fixture.stderr(&output);
     assert!(stderr.contains("post_send_hook_members"));
     assert!(stderr.contains(".atm.toml"));
-    assert!(stderr.contains("Use 'post_send_hook_senders' (match on sender identity) and/or 'post_send_hook_recipients' (match on recipient name) under [atm]. Use '*' to match all senders or all recipients."));
+    assert!(stderr.contains("[[atm.post_send_hooks]]"));
+}
+
+#[test]
+fn test_send_rejects_legacy_post_send_filter_shape() {
+    let fixture = Fixture::new("recipient");
+    fixture.write_atm_config(
+        "[atm]\npost_send_hook = ['bin/hook']\npost_send_hook_recipients = ['recipient']\n",
+    );
+
+    let output = fixture.run(&["send", "recipient@atm-dev", "hello retired"]);
+
+    assert!(!output.status.success());
+    let stderr = fixture.stderr(&output);
+    assert!(stderr.contains("retired post-send hook keys"));
+    assert!(stderr.contains("[[atm.post_send_hooks]]"));
+}
+
+#[test]
+fn test_send_rejects_post_send_hook_with_empty_recipient() {
+    let fixture = Fixture::new("recipient");
+    fixture.write_atm_config("[[atm.post_send_hooks]]\nrecipient = '   '\ncommand = ['bash']\n");
+
+    let output = fixture.run(&["send", "recipient@atm-dev", "hello invalid hook"]);
+
+    assert!(!output.status.success());
+    let stderr = fixture.stderr(&output);
+    assert!(stderr.contains("recipient must not be empty"));
+}
+
+#[test]
+fn test_send_rejects_post_send_hook_with_empty_command() {
+    let fixture = Fixture::new("recipient");
+    fixture.write_atm_config("[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = []\n");
+
+    let output = fixture.run(&["send", "recipient@atm-dev", "hello invalid hook"]);
+
+    assert!(!output.status.success());
+    let stderr = fixture.stderr(&output);
+    assert!(stderr.contains("command must not be empty"));
 }
 
 #[test]
@@ -773,7 +797,7 @@ fn test_send_ignores_invalid_hook_result_stdout() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("result-invalid");
     fixture.write_atm_config(&format!(
-        "[atm]\npost_send_hook = ['{}', 'result-invalid', '{}']\npost_send_hook_senders = ['arch-ctm']\n",
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'result-invalid', '{}']\n",
         hook_path.display(),
         payload_path.display()
     ));
@@ -795,7 +819,7 @@ fn test_send_logs_structured_hook_result_stdout() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("result-debug");
     fixture.write_atm_config(&format!(
-        "[atm]\npost_send_hook = ['{}', 'result-debug', '{}']\npost_send_hook_senders = ['arch-ctm']\n",
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'result-debug', '{}']\n",
         hook_path.display(),
         payload_path.display()
     ));
@@ -840,9 +864,9 @@ fn test_send_help_mentions_post_send_hook_config() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8(output.stdout).expect("stdout utf8");
-    assert!(stdout.contains("post_send_hook"));
-    assert!(stdout.contains("post_send_hook_senders"));
-    assert!(stdout.contains("post_send_hook_recipients"));
+    assert!(stdout.contains("[[atm.post_send_hooks]]"));
+    assert!(stdout.contains("recipient = \"name-or-*\""));
+    assert!(stdout.contains("command = [\"argv\", ...]"));
     assert!(stdout.contains("ATM_LOG=debug"));
     assert!(stdout.contains(".atm.toml"));
 }
@@ -1004,6 +1028,23 @@ impl Fixture {
             PathBuf::from("bin").join(hook_path.file_name().expect("copied hook binary filename")),
             payload_path,
         )
+    }
+
+    fn install_executable_script(&self, relative_path: &str, body: &str) -> PathBuf {
+        let path = self.tempdir.path().join(relative_path);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("script dir");
+        }
+        fs::write(&path, body).expect("write script");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            let mut permissions = fs::metadata(&path).expect("script metadata").permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(&path, permissions).expect("script permissions");
+        }
+        path
     }
 
     fn stdout(&self, output: &std::process::Output) -> String {

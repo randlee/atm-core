@@ -122,20 +122,18 @@ Error codes should describe the failure class, not a specific prose message.
 ### 5.8 Post-Send Hook
 
 - `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`
-- `ATM_WARNING_HOOK_SKIPPED`
 - `ATM_WARNING_HOOK_EXECUTION_FAILED`
 
 #### 5.8.1 `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`
 
 - code: `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`
 - description: `.atm.toml` contains the retired `post_send_hook_members` key
-  instead of the explicit `post_send_hook_senders` /
-  `post_send_hook_recipients` keys
+  instead of one or more explicit `[[atm.post_send_hooks]]` rules
 - HTTP status: `400 Bad Request`
 - context:
   - emitted during ATM config loading before send execution proceeds
-  - requires migration guidance that explains sender- versus
-    recipient-triggered hook filters and the `*` wildcard
+  - requires migration guidance that explains the recipient-scoped rule shape
+    and the `*` wildcard
   - `{config_path}` resolves to the discovered `.atm.toml` path that contained
     the retired key
   - expected output split:
@@ -145,40 +143,15 @@ Error codes should describe the failure class, not a specific prose message.
       ```
     - recovery:
       ```text
-      Use 'post_send_hook_senders' (match on sender identity) and/or
-      'post_send_hook_recipients' (match on recipient name) under [atm].
-      Use '*' to match all senders or all recipients.
+      Replace 'post_send_hook_members' with one or more [[atm.post_send_hooks]]
+      rules, each containing recipient = "name-or-*" and command = ["argv", ...].
       ```
   - the rendered CLI output may display the message and recovery together, but
     ATM stores them as separate fields on the structured error
   - must not be downgraded to a warning because the old key is ambiguous under
     the redesigned contract
 
-#### 5.8.2 `ATM_WARNING_HOOK_SKIPPED`
-
-- code: `ATM_WARNING_HOOK_SKIPPED`
-- description: a post-send hook was configured, but neither the sender nor the
-  recipient trigger filters matched the current send
-- HTTP status: `200 OK`
-- context:
-  - emitted as a warning/diagnostic only after a successful send
-  - should include the resolved sender, resolved recipient, and configured
-    sender/recipient filter values to make the mismatch actionable
-  - expected message template:
-    ```text
-    post-send hook skipped: sender {sender} not in post_send_hook_senders {senders}
-    and recipient {recipient} not in post_send_hook_recipients {recipients}
-    ```
-  - when a sender or recipient filter list is omitted, the corresponding
-    `{senders}` or `{recipients}` placeholder renders as `(not configured)`
-  - delivery channel: user-visible `warn!` / stderr via normal tracing log
-    routing; not debug-only and not suppressible
-  - covers explicit no-match outcomes only when at least one sender or
-    recipient filter list is configured; it is not used for hook process
-    failures or for a hook that is configured-but-disabled with both lists
-    omitted/empty
-
-#### 5.8.3 `ATM_WARNING_HOOK_EXECUTION_FAILED`
+#### 5.8.2 `ATM_WARNING_HOOK_EXECUTION_FAILED`
 
 - code: `ATM_WARNING_HOOK_EXECUTION_FAILED`
 - description: a configured post-send hook failed to start, exited non-zero,
