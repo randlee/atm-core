@@ -119,7 +119,10 @@ pub fn send_mail(
 
     match config::load_team_config(&team_dir) {
         Ok(team_config) => {
-            clear_missing_team_config_alert(&request.home_dir, &team_dir);
+            alert_state::clear_missing_team_config_alert(
+                &request.home_dir,
+                &alert_state::missing_team_config_alert_key(&team_dir),
+            );
             if !team_config
                 .members
                 .iter()
@@ -306,8 +309,8 @@ fn is_false(value: &bool) -> bool {
 }
 
 fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str, recipient: &str) {
-    let alert_key = missing_team_config_alert_key(team_dir);
-    if !register_missing_team_config_alert(home_dir, &alert_key) {
+    let alert_key = alert_state::missing_team_config_alert_key(team_dir);
+    if !alert_state::register_missing_team_config_alert(home_dir, &alert_key) {
         return;
     }
 
@@ -431,77 +434,6 @@ fn maybe_run_post_send_hook(
     context: PostSendHookContext<'_>,
 ) {
     hook::maybe_run_post_send_hook(warnings, config, context);
-}
-
-fn missing_team_config_alert_key(team_dir: &Path) -> String {
-    team_dir.join("config.json").display().to_string()
-}
-
-fn register_missing_team_config_alert(home_dir: &Path, key: &str) -> bool {
-    let state_path = alert_state::state_path(home_dir);
-    let lock_path = alert_state::lock_path(home_dir);
-    let Some(_guard) = alert_state::acquire_lock(&lock_path) else {
-        warn!(code = %AtmErrorCode::WarningSendAlertStateDegraded,
-            path = %lock_path.display(),
-            "failed to acquire send alert lock; skipping team-lead notification"
-        );
-        return false;
-    };
-
-    let mut state = match alert_state::load(&state_path) {
-        Ok(state) => state,
-        Err(error) => {
-            warn!(code = %AtmErrorCode::WarningSendAlertStateDegraded,
-                %error,
-                path = %state_path.display(),
-                "failed to read send state file - defaulting to empty state"
-            );
-            alert_state::SendAlertState::default()
-        }
-    };
-    if state.missing_team_config_keys.contains(key) {
-        return false;
-    }
-
-    state.missing_team_config_keys.insert(key.to_string());
-    if let Err(error) = alert_state::save(&state_path, &state) {
-        warn!(code = %AtmErrorCode::WarningSendAlertStateDegraded,
-            %error,
-            path = %state_path.display(),
-            "failed to save send alert dedup state"
-        );
-    }
-    true
-}
-
-fn clear_missing_team_config_alert(home_dir: &Path, team_dir: &Path) {
-    let state_path = alert_state::state_path(home_dir);
-    let lock_path = alert_state::lock_path(home_dir);
-    let Some(_guard) = alert_state::acquire_lock(&lock_path) else {
-        warn!(code = %AtmErrorCode::WarningSendAlertStateDegraded,
-            path = %lock_path.display(),
-            "failed to acquire send alert lock while clearing dedup state"
-        );
-        return;
-    };
-
-    let Ok(mut state) = alert_state::load(&state_path) else {
-        return;
-    };
-
-    let key = missing_team_config_alert_key(team_dir);
-    if !state.missing_team_config_keys.remove(&key) {
-        return;
-    }
-
-    if let Err(error) = alert_state::save(&state_path, &state) {
-        warn!(
-            code = %AtmErrorCode::WarningSendAlertStateDegraded,
-            %error,
-            path = %state_path.display(),
-            "failed to clear send alert dedup state"
-        );
-    }
 }
 
 #[cfg(test)]

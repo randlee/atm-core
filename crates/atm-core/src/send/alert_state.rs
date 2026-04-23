@@ -27,6 +27,10 @@ pub(super) fn lock_path(home_dir: &Path) -> PathBuf {
     home_dir.join(".config").join("atm").join("state.lock")
 }
 
+pub(super) fn missing_team_config_alert_key(team_dir: &Path) -> String {
+    team_dir.join("config.json").display().to_string()
+}
+
 pub(super) fn load(path: &Path) -> Result<SendAlertState, AtmError> {
     if !path.exists() {
         return Ok(SendAlertState::default());
@@ -123,6 +127,75 @@ pub(super) fn acquire_lock(path: &Path) -> Option<SendAlertLock> {
     None
 }
 
+pub(super) fn register_missing_team_config_alert(home_dir: &Path, key: &str) -> bool {
+    let state_path = state_path(home_dir);
+    let lock_path = lock_path(home_dir);
+    let Some(_guard) = acquire_lock(&lock_path) else {
+        warn!(
+            code = %AtmErrorCode::WarningSendAlertStateDegraded,
+            path = %lock_path.display(),
+            "failed to acquire send alert lock; skipping team-lead notification"
+        );
+        return false;
+    };
+
+    let mut state = match load(&state_path) {
+        Ok(state) => state,
+        Err(error) => {
+            warn!(
+                code = %AtmErrorCode::WarningSendAlertStateDegraded,
+                %error,
+                path = %state_path.display(),
+                "failed to read send state file - defaulting to empty state"
+            );
+            SendAlertState::default()
+        }
+    };
+    if state.missing_team_config_keys.contains(key) {
+        return false;
+    }
+
+    state.missing_team_config_keys.insert(key.to_string());
+    if let Err(error) = save(&state_path, &state) {
+        warn!(
+            code = %AtmErrorCode::WarningSendAlertStateDegraded,
+            %error,
+            path = %state_path.display(),
+            "failed to save send alert dedup state"
+        );
+    }
+    true
+}
+
+pub(super) fn clear_missing_team_config_alert(home_dir: &Path, key: &str) {
+    let state_path = state_path(home_dir);
+    let lock_path = lock_path(home_dir);
+    let Some(_guard) = acquire_lock(&lock_path) else {
+        warn!(
+            code = %AtmErrorCode::WarningSendAlertStateDegraded,
+            path = %lock_path.display(),
+            "failed to acquire send alert lock while clearing dedup state"
+        );
+        return;
+    };
+
+    let Ok(mut state) = load(&state_path) else {
+        return;
+    };
+    if !state.missing_team_config_keys.remove(key) {
+        return;
+    }
+
+    if let Err(error) = save(&state_path, &state) {
+        warn!(
+            code = %AtmErrorCode::WarningSendAlertStateDegraded,
+            %error,
+            path = %state_path.display(),
+            "failed to clear send alert dedup state"
+        );
+    }
+}
+
 pub(super) struct SendAlertLock {
     path: PathBuf,
 }
@@ -175,7 +248,10 @@ mod tests {
 
     use tempfile::tempdir;
 
-    use super::{SendAlertState, acquire_lock, load, lock_path, save, state_path};
+    use super::{
+        SendAlertState, acquire_lock, clear_missing_team_config_alert, load, lock_path,
+        missing_team_config_alert_key, register_missing_team_config_alert, save, state_path,
+    };
 
     #[test]
     fn load_send_alert_state_missing_file_returns_default() {
@@ -290,5 +366,30 @@ mod tests {
 
         drop(guard);
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn register_missing_team_config_alert_deduplicates_key() {
+        let tempdir = tempdir().expect("tempdir");
+        let key = missing_team_config_alert_key(tempdir.path());
+
+        assert!(register_missing_team_config_alert(tempdir.path(), &key));
+        assert!(!register_missing_team_config_alert(tempdir.path(), &key));
+
+        let state = load(&state_path(tempdir.path())).expect("state");
+        assert_eq!(state.missing_team_config_keys.len(), 1);
+        assert!(state.missing_team_config_keys.contains(&key));
+    }
+
+    #[test]
+    fn clear_missing_team_config_alert_removes_existing_key() {
+        let tempdir = tempdir().expect("tempdir");
+        let key = missing_team_config_alert_key(tempdir.path());
+        assert!(register_missing_team_config_alert(tempdir.path(), &key));
+
+        clear_missing_team_config_alert(tempdir.path(), &key);
+
+        let state = load(&state_path(tempdir.path())).expect("state");
+        assert!(state.missing_team_config_keys.is_empty());
     }
 }

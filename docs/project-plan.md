@@ -1687,13 +1687,15 @@ helper or retire during the phase:
   - `crates/atm-core/src/clear/mod.rs::persist_source_files(...)`
 - ATM-owned state helpers:
   - `crates/atm-core/src/read/seen_state.rs::save_seen_watermark(...)`
-  - `crates/atm-core/src/send/mod.rs::save_send_alert_state(...)`
-  - `crates/atm-core/src/send/mod.rs::acquire_send_alert_lock(...)`
+  - `crates/atm-core/src/send/alert_state.rs::register_missing_team_config_alert(...)`
+  - `crates/atm-core/src/send/alert_state.rs::clear_missing_team_config_alert(...)`
+  - `crates/atm-core/src/send/alert_state.rs::save(...)`
+  - `crates/atm-core/src/send/alert_state.rs::acquire_lock(...)`
   - `crates/atm-core/src/team_admin.rs::write_team_config(...)`
   - `crates/atm-core/src/team_admin.rs::atomic_write(...)`
-  - `crates/atm-core/src/team_admin.rs::write_restore_marker(...)`
-  - `crates/atm-core/src/team_admin.rs::clear_restore_marker(...)`
-  - `crates/atm-core/src/team_admin.rs::recompute_highwatermark(...)`
+  - `crates/atm-core/src/team_admin/restore.rs::write_restore_marker(...)`
+  - `crates/atm-core/src/team_admin/restore.rs::clear_restore_marker(...)`
+  - `crates/atm-core/src/team_admin/restore.rs::recompute_highwatermark(...)`
 - shared low-level atomic commit primitive:
   - `crates/atm-core/src/persistence.rs::atomic_write_bytes(...)`
   - `crates/atm-core/src/persistence.rs::atomic_write_string(...)`
@@ -1752,11 +1754,13 @@ Concrete implementation targets:
 - keep `read::seen_state::save_seen_watermark(...)` as the seen-state owner
   boundary
 - use `send::alert_state::{load, save, acquire_lock}` as the send-alert state
-  owner boundary
+  owner boundary, with
+  `send::alert_state::{register_missing_team_config_alert,
+  clear_missing_team_config_alert}` as the command-facing mutation helpers
 - keep `team_admin::write_team_config(...)` as the team-config owner boundary
-- use `team_admin::restore_task_state_from_backup(...)` as the task bucket /
+- use `team_admin::restore::restore_task_state_from_backup(...)` as the task bucket /
   `.highwatermark` owner boundary
-- use `team_admin::{prepare_restore_workspace, cleanup_restore_workspace,
+- use `team_admin::restore::{prepare_restore_workspace, cleanup_restore_workspace,
   write_restore_marker, clear_restore_marker}` as the restore workspace and
   restore-marker owner boundaries
 
