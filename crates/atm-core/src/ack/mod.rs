@@ -213,7 +213,7 @@ pub fn ack_mail(
     update_source_message(&mut source_files, &source_message, ack_timestamp)?;
 
     append_reply_message(&mut source_files, &reply_inbox_path, reply_message)?;
-    persist_source_files(&source_files)?;
+    mailbox::store::commit_source_files(&source_files)?;
 
     let outcome = AckOutcome {
         action: "ack",
@@ -393,13 +393,6 @@ fn append_reply_message(
         .messages
         .push(reply_message);
     source_files.sort_by(|left, right| left.path.cmp(&right.path));
-    Ok(())
-}
-
-fn persist_source_files(source_files: &[SourceFile]) -> Result<(), AtmError> {
-    for source in source_files {
-        mailbox::atomic::write_messages(&source.path, &source.messages)?;
-    }
     Ok(())
 }
 
