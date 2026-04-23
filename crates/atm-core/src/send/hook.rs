@@ -223,11 +223,15 @@ pub(super) fn maybe_run_post_send_hook(
 
 fn resolve_command_path(config: &config::AtmConfig, command_path: &str) -> PathBuf {
     let path = PathBuf::from(command_path);
-    if path.is_absolute() {
+    if path.is_absolute() || !command_path_contains_path_separator(command_path) {
         path
     } else {
         config.config_root.join(path)
     }
+}
+
+fn command_path_contains_path_separator(command_path: &str) -> bool {
+    command_path.contains('/') || command_path.contains('\\')
 }
 
 fn matches_hook_axis(filters: &[String], candidate: &str) -> bool {
@@ -403,8 +407,9 @@ mod tests {
     use tracing::Level;
 
     use super::{
-        POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel, hook_filter_matches,
-        hook_result_log_level, matches_hook_axis, parse_post_send_hook_result,
+        POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel,
+        command_path_contains_path_separator, hook_filter_matches, hook_result_log_level,
+        matches_hook_axis, parse_post_send_hook_result, resolve_command_path,
     };
 
     #[test]
@@ -417,6 +422,49 @@ mod tests {
     #[test]
     fn matches_hook_axis_treats_empty_filter_list_as_no_match() {
         assert!(!matches_hook_axis(&[], "arch-ctm"));
+    }
+
+    #[test]
+    fn command_path_contains_path_separator_matches_path_like_commands_only() {
+        assert!(command_path_contains_path_separator("scripts/hook.sh"));
+        assert!(command_path_contains_path_separator(r"scripts\hook.bat"));
+        assert!(!command_path_contains_path_separator("bash"));
+    }
+
+    #[test]
+    fn resolve_command_path_preserves_absolute_paths() {
+        let config = crate::config::AtmConfig {
+            config_root: Path::new("/tmp/atm-config-root").to_path_buf(),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            resolve_command_path(&config, "/usr/local/bin/hook"),
+            Path::new("/usr/local/bin/hook")
+        );
+    }
+
+    #[test]
+    fn resolve_command_path_joins_relative_paths_with_separators_under_config_root() {
+        let config = crate::config::AtmConfig {
+            config_root: Path::new("/tmp/atm-config-root").to_path_buf(),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            resolve_command_path(&config, "scripts/hook.sh"),
+            Path::new("/tmp/atm-config-root").join("scripts/hook.sh")
+        );
+    }
+
+    #[test]
+    fn resolve_command_path_preserves_bare_command_names_for_path_lookup() {
+        let config = crate::config::AtmConfig {
+            config_root: Path::new("/tmp/atm-config-root").to_path_buf(),
+            ..Default::default()
+        };
+
+        assert_eq!(resolve_command_path(&config, "bash"), Path::new("bash"));
     }
 
     #[test]

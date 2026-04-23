@@ -735,6 +735,41 @@ fn test_send_runs_post_send_hook_when_recipient_filter_is_wildcard() {
 }
 
 #[test]
+fn test_send_runs_post_send_hook_with_bare_binary_command_via_path() {
+    let fixture = Fixture::new("recipient");
+    let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
+    let hook_bin_name = hook_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("hook binary filename");
+    fixture.write_atm_config(&format!(
+        "[atm]\npost_send_hook = ['{}', 'capture', '{}']\npost_send_hook_recipients = ['recipient']\n",
+        hook_bin_name,
+        payload_path.display()
+    ));
+
+    let existing_path = std::env::var_os("PATH").unwrap_or_default();
+    let mut path_entries = vec![fixture.tempdir.path().join("bin")];
+    path_entries.extend(std::env::split_paths(&existing_path));
+    let path_value = std::env::join_paths(path_entries).expect("PATH");
+    let path_string = path_value.to_string_lossy().into_owned();
+    let output = fixture.run_with_env(
+        &["send", "recipient@atm-dev", "hello bare path hook"],
+        &[("PATH", path_string.as_str())],
+    );
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let payload: serde_json::Value =
+        serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
+    assert_eq!(payload["hook_match"]["sender"], false);
+    assert_eq!(payload["hook_match"]["recipient"], true);
+}
+
+#[test]
 fn test_send_does_not_run_post_send_hook_when_filter_lists_are_empty() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
