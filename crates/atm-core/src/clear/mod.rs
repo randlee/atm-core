@@ -11,10 +11,7 @@ use crate::error::AtmError;
 use crate::home;
 use crate::identity;
 use crate::mailbox;
-use crate::mailbox::source::{
-    SourceFile, SourcedMessage, discover_source_paths, load_source_files,
-    rediscover_and_validate_source_paths, resolve_target,
-};
+use crate::mailbox::source::{SourceFile, SourcedMessage, resolve_target};
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
@@ -107,75 +104,41 @@ pub fn clear_mail(
     let cutoff = cutoff_timestamp(query.older_than)?;
 
     let (removed_total, remaining_total, removed_by_class) = if query.dry_run {
-        let source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
-        let source_files = load_source_files(&source_paths)?;
+        let source_files =
+            mailbox::store::observe_source_files(&query.home_dir, &target.team, &target.agent)?;
         // Clear intentionally does not apply read-surface idle-notification dedup.
         // Cleanup decisions must inspect the raw merged surface after legacy
         // message_id canonicalization only.
-        let merged = dedupe_legacy_message_id_surface(
-            merged_surface(&source_files),
-            |message: &SourcedMessage| message.envelope.message_id,
-            |message: &SourcedMessage| message.envelope.timestamp,
-        );
-        let mut removed_by_class = RemovedByClass::default();
-        let removable = merged
-            .iter()
-            .filter(|message| is_clearable(message, cutoff, query.idle_only))
-            .inspect(|message| {
-                count_removed(
-                    &mut removed_by_class,
-                    state::classify_message(&message.envelope),
-                )
-            })
-            .map(|message| (message.source_path.clone(), message.source_index))
-            .collect::<HashSet<_>>();
+        let (removable, removed_by_class, merged_len) =
+            removable_messages(&source_files, cutoff, query.idle_only);
         (
             removable.len(),
-            merged.len().saturating_sub(removable.len()),
+            merged_len.saturating_sub(removable.len()),
             removed_by_class,
         )
     } else {
-        let source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
-        let _locks = mailbox::lock::acquire_many_sorted(
-            source_paths.clone(),
-            mailbox::lock::default_lock_timeout(),
-        )?;
-        let source_paths = rediscover_and_validate_source_paths(
-            &source_paths,
+        mailbox::store::commit_source_mutation(
             &query.home_dir,
             &target.team,
             &target.agent,
-        )?;
-        #[cfg(test)]
-        maybe_remove_locked_source_file_for_test(&source_paths)?;
-        let mut source_files = load_source_files(&source_paths)?;
-        let merged = dedupe_legacy_message_id_surface(
-            merged_surface(&source_files),
-            |message: &SourcedMessage| message.envelope.message_id,
-            |message: &SourcedMessage| message.envelope.timestamp,
-        );
-        let mut locked_removed_by_class = RemovedByClass::default();
-        let removable = merged
-            .iter()
-            .filter(|message| is_clearable(message, cutoff, query.idle_only))
-            .inspect(|message| {
-                count_removed(
-                    &mut locked_removed_by_class,
-                    state::classify_message(&message.envelope),
+            std::iter::empty::<PathBuf>(),
+            mailbox::lock::default_lock_timeout(),
+            |_source_paths, source_files| {
+                let (removable, removed_by_class, _) =
+                    removable_messages(source_files, cutoff, query.idle_only);
+                apply_removals(source_files, &removable);
+                let remaining_total = dedupe_legacy_message_id_surface(
+                    merged_surface(source_files),
+                    |message: &SourcedMessage| message.envelope.message_id,
+                    |message: &SourcedMessage| message.envelope.timestamp,
                 )
-            })
-            .map(|message| (message.source_path.clone(), message.source_index))
-            .collect::<HashSet<_>>();
-
-        apply_removals(&mut source_files, &removable);
-        mailbox::store::commit_source_files(&source_files)?;
-        let remaining_total = dedupe_legacy_message_id_surface(
-            merged_surface(&source_files),
-            |message: &SourcedMessage| message.envelope.message_id,
-            |message: &SourcedMessage| message.envelope.timestamp,
-        )
-        .len();
-        (removable.len(), remaining_total, locked_removed_by_class)
+                .len();
+                Ok(mailbox::store::SourceMutation {
+                    output: (removable.len(), remaining_total, removed_by_class),
+                    changed: !removable.is_empty(),
+                })
+            },
+        )?
     };
 
     let outcome = ClearOutcome {
@@ -247,6 +210,32 @@ fn is_clearable(message: &SourcedMessage, cutoff: Option<DateTime<Utc>>, idle_on
         && (!idle_only || is_idle_notification(&message.envelope))
 }
 
+fn removable_messages(
+    source_files: &[SourceFile],
+    cutoff: Option<DateTime<Utc>>,
+    idle_only: bool,
+) -> (HashSet<(PathBuf, SourceIndex)>, RemovedByClass, usize) {
+    let merged = dedupe_legacy_message_id_surface(
+        merged_surface(source_files),
+        |message: &SourcedMessage| message.envelope.message_id,
+        |message: &SourcedMessage| message.envelope.timestamp,
+    );
+    let mut removed_by_class = RemovedByClass::default();
+    let removable = merged
+        .iter()
+        .filter(|message| is_clearable(message, cutoff, idle_only))
+        .inspect(|message| {
+            count_removed(
+                &mut removed_by_class,
+                state::classify_message(&message.envelope),
+            )
+        })
+        .map(|message| (message.source_path.clone(), message.source_index))
+        .collect::<HashSet<_>>();
+
+    (removable, removed_by_class, merged.len())
+}
+
 fn is_idle_notification(message: &MessageEnvelope) -> bool {
     // Claude Code currently defines idle notifications as JSON encoded in the
     // native `text` field. Do not replace this with an ATM-local schema here;
@@ -255,27 +244,6 @@ fn is_idle_notification(message: &MessageEnvelope) -> bool {
         .ok()
         .map(|value| value.get("type").and_then(Value::as_str) == Some("idle_notification"))
         .unwrap_or(false)
-}
-
-#[cfg(test)]
-fn maybe_remove_locked_source_file_for_test(source_paths: &[PathBuf]) -> Result<(), AtmError> {
-    if std::env::var_os("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD").is_none() {
-        return Ok(());
-    }
-
-    let Some(path) = source_paths.first() else {
-        return Ok(());
-    };
-    std::fs::remove_file(path).map_err(|error| {
-        AtmError::mailbox_write(format!(
-            "failed to remove locked inbox {} during test injection: {error}",
-            path.display()
-        ))
-        .with_recovery(
-            "Clear ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD or restore the missing inbox file before retrying the injected test path.",
-        )
-        .with_source(error)
-    })
 }
 
 fn count_removed(counts: &mut RemovedByClass, class: MessageClass) {
@@ -306,22 +274,50 @@ mod tests {
     use serial_test::serial;
     use tempfile::tempdir;
 
-    use super::maybe_remove_locked_source_file_for_test;
-    use crate::mailbox::source::load_source_files;
+    use super::{ClearQuery, clear_mail};
+    use crate::observability::NullObservability;
+    use crate::schema::{AgentMember, TeamConfig};
+    use crate::types::TeamName;
 
     #[test]
     #[serial]
     fn locked_clear_source_removal_reports_disappearing_mailbox() {
         let tempdir = tempdir().expect("tempdir");
-        let path = tempdir.path().join("arch-ctm.json");
-        std::fs::write(&path, "").expect("mailbox");
+        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        let inboxes_dir = team_dir.join("inboxes");
+        std::fs::create_dir_all(&inboxes_dir).expect("inboxes");
+        let config = TeamConfig {
+            members: vec![AgentMember {
+                name: "arch-ctm".to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        std::fs::write(
+            team_dir.join("config.json"),
+            serde_json::to_vec(&config).expect("team config"),
+        )
+        .expect("write config");
+        std::fs::write(inboxes_dir.join("arch-ctm.json"), "").expect("mailbox");
         // Test-only env mutation is scoped to this process and reset below.
         unsafe {
             std::env::set_var("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD", "1");
         }
 
-        maybe_remove_locked_source_file_for_test(std::slice::from_ref(&path)).expect("remove");
-        let error = load_source_files(&[path]).expect_err("missing mailbox");
+        let error = clear_mail(
+            ClearQuery {
+                home_dir: tempdir.path().to_path_buf(),
+                current_dir: tempdir.path().to_path_buf(),
+                actor_override: Some("arch-ctm".into()),
+                target_address: None,
+                team_override: Some(TeamName::from("atm-dev")),
+                older_than: None,
+                idle_only: false,
+                dry_run: false,
+            },
+            &NullObservability,
+        )
+        .expect_err("missing mailbox");
 
         unsafe {
             std::env::remove_var("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD");

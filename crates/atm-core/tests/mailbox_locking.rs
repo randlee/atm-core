@@ -353,6 +353,108 @@ fn send_times_out_under_bounded_lock_contention() {
 
 #[test]
 #[serial]
+fn clear_dry_run_does_not_wait_on_mailbox_lock() {
+    let _env_lock = env_lock().lock().expect("env lock");
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    fixture.write_primary_inbox(
+        "arch-ctm",
+        &[unread_message(
+            "team-lead",
+            "read without lock",
+            LegacyMessageId::from(Uuid::new_v4()),
+        )],
+    );
+    let lock_path = sentinel_path(&fixture.primary_inbox_path("arch-ctm"));
+    let lock_file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&lock_path)
+        .expect("open lock file");
+    lock_file.lock_exclusive().expect("hold mailbox lock");
+
+    let started = Instant::now();
+    let mut clear_query = fixture.clear_query("arch-ctm");
+    clear_query.dry_run = true;
+    let outcome = clear_mail(clear_query, &observability).expect("dry-run clear");
+
+    assert_eq!(outcome.removed_total, 0);
+    assert_eq!(outcome.remaining_total, 1);
+    assert!(
+        started.elapsed() < Duration::from_secs(1),
+        "read-only mailbox query should not wait on the mailbox lock"
+    );
+}
+
+#[test]
+#[serial]
+fn read_possible_write_only_locks_when_display_mutation_is_required() {
+    let _env_lock = env_lock().lock().expect("env lock");
+    let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
+    let observability = NullObservability;
+
+    let mutation_fixture = Fixture::new();
+    mutation_fixture.write_primary_inbox(
+        "arch-ctm",
+        &[unread_message(
+            "team-lead",
+            "needs mark-read",
+            LegacyMessageId::from(Uuid::new_v4()),
+        )],
+    );
+    let mutation_lock_path = sentinel_path(&mutation_fixture.primary_inbox_path("arch-ctm"));
+    let mutation_lock_file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&mutation_lock_path)
+        .expect("open mutation lock file");
+    mutation_lock_file
+        .lock_exclusive()
+        .expect("hold mutation lock");
+    let mut mutation_query = mutation_fixture.read_query("arch-ctm");
+    mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
+    let error = read_mail(mutation_query, &observability).expect_err("lock timeout");
+    assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
+
+    let no_mutation_fixture = Fixture::new();
+    no_mutation_fixture.write_primary_inbox(
+        "arch-ctm",
+        &[read_message(
+            "team-lead",
+            "already read",
+            LegacyMessageId::from(Uuid::new_v4()),
+        )],
+    );
+    let no_mutation_lock_path = sentinel_path(&no_mutation_fixture.primary_inbox_path("arch-ctm"));
+    let no_mutation_lock_file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&no_mutation_lock_path)
+        .expect("open no-mutation lock file");
+    no_mutation_lock_file
+        .lock_exclusive()
+        .expect("hold no-mutation lock");
+    let mut no_mutation_query = no_mutation_fixture.read_query("arch-ctm");
+    no_mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
+    no_mutation_query.selection_mode = ReadSelection::All;
+    let started = Instant::now();
+    let outcome = read_mail(no_mutation_query, &observability).expect("read without mutation");
+    assert_eq!(outcome.count, 1);
+    assert_eq!(outcome.messages[0].envelope.text, "already read");
+    assert!(
+        started.elapsed() < Duration::from_secs(1),
+        "read should skip mailbox locks when no display mutation is needed"
+    );
+}
+
+#[test]
+#[serial]
 fn clear_fails_closed_on_synthetic_source_discovery_fault() {
     let _env_lock = env_lock().lock().expect("env lock");
     let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT", "1");

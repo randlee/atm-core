@@ -14,10 +14,7 @@ use crate::error::AtmError;
 use crate::home;
 use crate::identity;
 use crate::mailbox;
-use crate::mailbox::source::{
-    SourceFile, SourcedMessage, discover_source_paths, load_source_files,
-    rediscover_and_validate_source_paths, resolve_target,
-};
+use crate::mailbox::source::{SourceFile, SourcedMessage, resolve_target};
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::MessageEnvelope;
@@ -138,26 +135,10 @@ pub fn read_mail(
         None
     };
 
-    let mut source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
-    let load_locked_snapshot = |paths: &mut Vec<PathBuf>| -> Result<
-        (Vec<SourceFile>, BucketCounts, Vec<ClassifiedMessage>),
-        AtmError,
-    > {
-        let _locks = mailbox::lock::acquire_many_sorted(
-            paths.clone(),
-            mailbox::lock::default_lock_timeout(),
-        )?;
-        *paths = rediscover_and_validate_source_paths(
-            paths,
-            &query.home_dir,
-            &target.team,
-            &target.agent,
-        )?;
-        load_selection_state(paths, &query, seen_watermark)
-    };
-
-    let (mut source_files, mut bucket_counts, mut selected) =
-        load_locked_snapshot(&mut source_paths)?;
+    let mut source_files =
+        mailbox::store::observe_source_files(&query.home_dir, &target.team, &target.agent)?;
+    let (mut bucket_counts, mut selected) =
+        selection_state_for_source_files(&source_files, &query, seen_watermark);
     let mut timed_out = false;
 
     if selected.is_empty()
@@ -166,21 +147,13 @@ pub fn read_mail(
         let wait_satisfied = wait::wait_for_eligible_message(
             timeout_secs,
             || {
-                let mut poll_paths =
-                    discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
-                let _poll_locks = mailbox::lock::acquire_many_sorted(
-                    poll_paths.clone(),
-                    mailbox::lock::default_lock_timeout(),
-                )?;
-                poll_paths = rediscover_and_validate_source_paths(
-                    &poll_paths,
-                    &query.home_dir,
-                    &target.team,
-                    &target.agent,
-                )?;
                 Ok(apply_idle_notification_dedup(
                     dedupe_legacy_message_id_surface(
-                        merged_surface(&load_source_files(&poll_paths)?),
+                        merged_surface(&mailbox::store::observe_source_files(
+                            &query.home_dir,
+                            &target.team,
+                            &target.agent,
+                        )?),
                         |message: &SourcedMessage| message.envelope.message_id,
                         |message: &SourcedMessage| message.envelope.timestamp,
                     ),
@@ -190,65 +163,50 @@ pub fn read_mail(
         )?;
 
         if wait_satisfied {
-            source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
-            (source_files, bucket_counts, selected) = load_locked_snapshot(&mut source_paths)?;
+            source_files =
+                mailbox::store::observe_source_files(&query.home_dir, &target.team, &target.agent)?;
+            (bucket_counts, selected) =
+                selection_state_for_source_files(&source_files, &query, seen_watermark);
         } else {
             timed_out = true;
         }
     }
 
-    selected.sort_by(|left, right| {
-        right
-            .envelope
-            .timestamp
-            .cmp(&left.envelope.timestamp)
-            .then_with(|| right.envelope.message_id.cmp(&left.envelope.message_id))
-            .then_with(|| right.source_index.cmp(&left.source_index))
-    });
+    sort_and_limit_selected(&mut selected, query.limit);
+    let mutation_needed = displayed_messages_require_mutation(&selected);
 
-    if let Some(limit) = query.limit {
-        selected.truncate(limit);
-    }
-
-    let mutation_applied = if timed_out || selected.is_empty() {
-        false
-    } else {
-        let _locks = mailbox::lock::acquire_many_sorted(
-            source_paths.clone(),
-            mailbox::lock::default_lock_timeout(),
-        )?;
-        source_paths = rediscover_and_validate_source_paths(
-            &source_paths,
-            &query.home_dir,
-            &target.team,
-            &target.agent,
-        )?;
-        (source_files, bucket_counts, selected) =
-            load_selection_state(&source_paths, &query, seen_watermark)?;
-        selected.sort_by(|left, right| {
-            right
-                .envelope
-                .timestamp
-                .cmp(&left.envelope.timestamp)
-                .then_with(|| right.envelope.message_id.cmp(&left.envelope.message_id))
-                .then_with(|| right.source_index.cmp(&left.source_index))
-        });
-
-        if let Some(limit) = query.limit {
-            selected.truncate(limit);
-        }
-
-        let mutation_applied = apply_display_mutations(
-            &mut source_files,
-            &selected,
-            query.ack_activation_mode,
-            own_inbox,
-        );
-        if mutation_applied {
-            mailbox::store::commit_source_files(&source_files)?;
-        }
-        mutation_applied
-    };
+    let (mutation_applied, output_messages, bucket_counts) =
+        if timed_out || selected.is_empty() || !mutation_needed {
+            (
+                false,
+                output_messages_from_selection(&selected, &source_files),
+                bucket_counts,
+            )
+        } else {
+            mailbox::store::commit_source_mutation(
+                &query.home_dir,
+                &target.team,
+                &target.agent,
+                std::iter::empty::<PathBuf>(),
+                mailbox::lock::default_lock_timeout(),
+                |_source_paths, source_files| {
+                    let (bucket_counts, mut selected) =
+                        selection_state_for_source_files(source_files, &query, seen_watermark);
+                    sort_and_limit_selected(&mut selected, query.limit);
+                    let changed = apply_display_mutations(
+                        source_files,
+                        &selected,
+                        query.ack_activation_mode,
+                        own_inbox,
+                    );
+                    let output_messages = output_messages_from_selection(&selected, source_files);
+                    Ok(mailbox::store::SourceMutation {
+                        output: (changed, output_messages, bucket_counts),
+                        changed,
+                    })
+                },
+            )?
+        };
 
     if query.seen_state_update
         && !selected.is_empty()
@@ -264,22 +222,6 @@ pub fn read_mail(
             latest_timestamp,
         )?;
     }
-
-    let output_messages = selected
-        .into_iter()
-        .map(|selected_message| ClassifiedMessage {
-            source_index: selected_message.source_index,
-            source_path: selected_message.source_path.clone(),
-            bucket: selected_message.bucket,
-            class: selected_message.class,
-            envelope: source_files
-                .iter()
-                .find(|source| source.path == selected_message.source_path)
-                .and_then(|source| source.messages.get(selected_message.source_index.get()))
-                .cloned()
-                .unwrap_or(selected_message.envelope),
-        })
-        .collect::<Vec<_>>();
 
     let history_collapsed = query.selection_mode != ReadSelection::All
         && query.selection_mode != ReadSelection::ActionableWithHistory
@@ -315,15 +257,14 @@ pub fn read_mail(
     Ok(outcome)
 }
 
-fn load_selection_state(
-    source_paths: &[PathBuf],
+fn selection_state_for_source_files(
+    source_files: &[SourceFile],
     query: &ReadQuery,
     seen_watermark: Option<IsoTimestamp>,
-) -> Result<(Vec<SourceFile>, BucketCounts, Vec<ClassifiedMessage>), AtmError> {
-    let source_files = load_source_files(source_paths)?;
+) -> (BucketCounts, Vec<ClassifiedMessage>) {
     let classified_all = classify_all(apply_idle_notification_dedup(
         dedupe_legacy_message_id_surface(
-            merged_surface(&source_files),
+            merged_surface(source_files),
             |message: &SourcedMessage| message.envelope.message_id,
             |message: &SourcedMessage| message.envelope.timestamp,
         ),
@@ -335,7 +276,7 @@ fn load_selection_state(
         query.timestamp_filter,
     );
     let selected = select_messages(&filtered, query.selection_mode, seen_watermark);
-    Ok((source_files, bucket_counts, selected))
+    (bucket_counts, selected)
 }
 
 fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
@@ -498,6 +439,49 @@ fn selected_after_filters(
         query.timestamp_filter,
     );
     select_messages(&filtered, query.selection_mode, seen_watermark)
+}
+
+fn sort_and_limit_selected(selected: &mut Vec<ClassifiedMessage>, limit: Option<usize>) {
+    selected.sort_by(|left, right| {
+        right
+            .envelope
+            .timestamp
+            .cmp(&left.envelope.timestamp)
+            .then_with(|| right.envelope.message_id.cmp(&left.envelope.message_id))
+            .then_with(|| right.source_index.cmp(&left.source_index))
+    });
+
+    if let Some(limit) = limit {
+        selected.truncate(limit);
+    }
+}
+
+fn output_messages_from_selection(
+    selected: &[ClassifiedMessage],
+    source_files: &[SourceFile],
+) -> Vec<ClassifiedMessage> {
+    selected
+        .iter()
+        .cloned()
+        .map(|selected_message| ClassifiedMessage {
+            source_index: selected_message.source_index,
+            source_path: selected_message.source_path.clone(),
+            bucket: selected_message.bucket,
+            class: selected_message.class,
+            envelope: source_files
+                .iter()
+                .find(|source| source.path == selected_message.source_path)
+                .and_then(|source| source.messages.get(selected_message.source_index.get()))
+                .cloned()
+                .unwrap_or(selected_message.envelope),
+        })
+        .collect()
+}
+
+fn displayed_messages_require_mutation(displayed_messages: &[ClassifiedMessage]) -> bool {
+    displayed_messages
+        .iter()
+        .any(|message| !message.envelope.read)
 }
 
 fn apply_display_mutations(
