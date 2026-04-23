@@ -1509,8 +1509,11 @@ Single-write-path guardrail:
 
 Current owner-layer boundaries:
 - Claude-owned inbox compatibility surface:
-  `mailbox::store::commit_mailbox_state(...)` and
-  `mailbox::store::commit_source_files(...)`
+  `mailbox::store::observe_source_files(...)` for observational snapshots,
+  `mailbox::store::commit_source_mutation(...)` for shared mailbox
+  read/ack/clear commit orchestration, and
+  `mailbox::store::commit_mailbox_state(...)` /
+  `mailbox::store::commit_source_files(...)` as the persistence leaf
 - ATM-owned source-of-truth state:
   `read::seen_state::save_seen_watermark(...)`,
   `send::alert_state::save(...)`, and

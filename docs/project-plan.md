@@ -1781,25 +1781,29 @@ Goal:
 
 Design details:
 - `read_only` mailbox work:
-  - source discovery
-  - source load
+  - `mailbox::store::observe_source_files(...)`
   - merge/classify/filter/select
   - no mailbox lock
 - `read_possible_write` mailbox work:
-  - unlocked observational snapshot first
-  - only if mutation is needed, enter the shared commit path
+  - unlocked observational snapshot first via
+    `mailbox::store::observe_source_files(...)`
+  - only if mutation is needed, enter
+    `mailbox::store::commit_source_mutation(...)`
 - mailbox commit path:
   - acquire the deterministic lock set
   - re-discover source paths under lock
   - reload current source files
   - recompute the selected mutation from fresh data
-  - persist through the mailbox atomic helper while locks are still held
+  - persist through `mailbox::store::commit_source_files(...)` while locks are
+    still held
 - `ack` continues using the documented two-phase superset lock pattern, but the
   reload/recompute step must be expressed through the shared commit pattern
 
 Implementation patterns:
 - share the unlocked snapshot loader between `read` initial selection and wait
   polling
+- use `mailbox::store::commit_source_mutation(...)` as the only shared
+  read/ack/clear mailbox writeback entry point
 - share sort/limit/selection recomputation utilities where behavior matches
 - keep lock acquisition out of read-only paths entirely
 - use deterministic path ordering and one total timeout budget for every

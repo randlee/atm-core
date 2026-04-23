@@ -1916,8 +1916,10 @@ closed before the 1.0 release.
     helper boundary or a single owner-layer wrapper around it
   - the current owner-layer set is:
     - mailbox compatibility surface:
-      `mailbox::store::commit_mailbox_state(...)` and
-      `mailbox::store::commit_source_files(...)`
+      `mailbox::store::observe_source_files(...)` for lock-free snapshots,
+      `mailbox::store::commit_source_mutation(...)` for shared read/ack/clear
+      commit orchestration, and `mailbox::store::commit_mailbox_state(...)` /
+      `mailbox::store::commit_source_files(...)` as the persistence leaf
     - seen-state watermark:
       `read::seen_state::save_seen_watermark(...)`
     - send-alert state:

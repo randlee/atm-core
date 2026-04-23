@@ -10,10 +10,7 @@ use crate::error::AtmError;
 use crate::home;
 use crate::identity;
 use crate::mailbox;
-use crate::mailbox::source::{
-    SourceFile, SourcedMessage, discover_source_paths, load_source_files,
-    rediscover_and_validate_source_paths,
-};
+use crate::mailbox::source::{SourceFile, SourcedMessage};
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
@@ -87,18 +84,7 @@ pub fn ack_mail(
         return Err(AtmError::agent_not_found(&actor, &team));
     }
 
-    let mut actor_source_paths = discover_source_paths(&request.home_dir, &team, &actor)?;
-    let source_locks = mailbox::lock::acquire_many_sorted(
-        actor_source_paths.clone(),
-        mailbox::lock::default_lock_timeout(),
-    )?;
-    actor_source_paths = rediscover_and_validate_source_paths(
-        &actor_source_paths,
-        &request.home_dir,
-        &team,
-        &actor,
-    )?;
-    let source_files = load_source_files(&actor_source_paths)?;
+    let source_files = mailbox::store::observe_source_files(&request.home_dir, &team, &actor)?;
     // Ack intentionally does not apply read-surface idle-notification dedup.
     // It must preserve the raw merged surface after legacy message_id
     // canonicalization so acknowledgement lookup does not depend on read-only
@@ -166,54 +152,38 @@ pub fn ack_mail(
 
     let reply_inbox_path =
         home::inbox_path_from_home(&request.home_dir, &reply_team, &reply_agent)?;
-    let final_write_paths = if actor_source_paths
-        .iter()
-        .any(|path| path == &reply_inbox_path)
-    {
-        actor_source_paths.clone()
-    } else {
-        let mut final_paths = actor_source_paths.clone();
-        final_paths.push(reply_inbox_path.clone());
-        final_paths
-    };
-    // Drop the initial actor-only locks before re-acquiring the full sorted
-    // set that includes the reply inbox. Holding the subset while trying to
-    // acquire the superset could deadlock if the reply inbox sorts before any
-    // actor path. Re-validation after acquiring `_final_locks` preserves
-    // correctness; see "18.4.1 Cooperative Locking Caveat For `ack_mail`" in
-    // docs/architecture.md.
-    drop(source_locks);
-    let _final_locks = mailbox::lock::acquire_many_sorted(
-        final_write_paths,
-        mailbox::lock::default_lock_timeout(),
-    )?;
-    actor_source_paths = rediscover_and_validate_source_paths(
-        &actor_source_paths,
+    mailbox::store::commit_source_mutation(
         &request.home_dir,
         &team,
         &actor,
+        [reply_inbox_path.clone()],
+        mailbox::lock::default_lock_timeout(),
+        |_source_paths, source_files| {
+            let source_message =
+                find_source_message(source_files, request.message_id, &actor, &team)?;
+            match (
+                state::derive_read_state(&source_message.envelope),
+                state::derive_ack_state(&source_message.envelope),
+            ) {
+                (crate::types::ReadState::Read, crate::types::AckState::PendingAck) => {}
+                _ => {
+                    return Err(AtmError::validation(format!(
+                        "message {} is not in the (read, pending_ack) state",
+                        request.message_id
+                    ))
+                    .with_recovery(
+                        "Refresh the mailbox with `atm read` and retry the acknowledgement if the message is still pending acknowledgement.",
+                    ));
+                }
+            }
+            update_source_message(source_files, &source_message, ack_timestamp)?;
+            append_reply_message(source_files, &reply_inbox_path, reply_message)?;
+            Ok(mailbox::store::SourceMutation {
+                output: (),
+                changed: true,
+            })
+        },
     )?;
-    let mut source_files = load_source_files(&actor_source_paths)?;
-    let source_message = find_source_message(&source_files, request.message_id, &actor, &team)?;
-    match (
-        state::derive_read_state(&source_message.envelope),
-        state::derive_ack_state(&source_message.envelope),
-    ) {
-        (crate::types::ReadState::Read, crate::types::AckState::PendingAck) => {}
-        _ => {
-            return Err(AtmError::validation(format!(
-                "message {} is not in the (read, pending_ack) state",
-                request.message_id
-            ))
-            .with_recovery(
-                "Refresh the mailbox with `atm read` and retry the acknowledgement if the message is still pending acknowledgement.",
-            ));
-        }
-    }
-    update_source_message(&mut source_files, &source_message, ack_timestamp)?;
-
-    append_reply_message(&mut source_files, &reply_inbox_path, reply_message)?;
-    mailbox::store::commit_source_files(&source_files)?;
 
     let outcome = AckOutcome {
         action: "ack",
