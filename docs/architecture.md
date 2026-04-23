@@ -1518,15 +1518,16 @@ Current owner-layer boundaries:
   `mailbox::store::commit_source_files(...)` as the persistence leaf
 - ATM-owned source-of-truth state:
   `read::seen_state::save_seen_watermark(...)`,
-  `send::alert_state::save(...)`, and
+  `send::alert_state::{register_missing_team_config_alert(...),
+  clear_missing_team_config_alert(...), save(...)}`, and
   `team_admin::write_team_config(...)`
 - ATM-owned restore/task state:
-  `team_admin::restore_task_state_from_backup(...)`,
-  `team_admin::write_restore_marker(...)`, and
-  `team_admin::clear_restore_marker(...)`
+  `team_admin::restore::restore_task_state_from_backup(...)`,
+  `team_admin::restore::write_restore_marker(...)`, and
+  `team_admin::restore::clear_restore_marker(...)`
 - staging/scratch artifacts:
-  `team_admin::prepare_restore_workspace(...)` and
-  `team_admin::cleanup_restore_workspace(...)`
+  `team_admin::restore::prepare_restore_workspace(...)` and
+  `team_admin::restore::cleanup_restore_workspace(...)`
 
 Current architectural limitation:
 - mailbox replacement is atomic and lock-coordinated for concurrent ATM
