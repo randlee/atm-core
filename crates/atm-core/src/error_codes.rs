@@ -84,6 +84,8 @@ pub enum AtmErrorCode {
     WarningBaselineMemberMissing,
     /// A restore operation left a stale in-progress marker behind.
     WarningRestoreInProgress,
+    /// A mailbox lock sentinel persisted for the full doctor run.
+    WarningStaleMailboxLock,
     /// A configured post-send hook was skipped because no filter matched.
     WarningHookSkipped,
     /// A configured post-send hook failed during best-effort execution.
@@ -130,6 +132,7 @@ impl AtmErrorCode {
             Self::WarningIdentityDrift => "ATM_WARNING_IDENTITY_DRIFT",
             Self::WarningBaselineMemberMissing => "ATM_WARNING_BASELINE_MEMBER_MISSING",
             Self::WarningRestoreInProgress => "ATM_WARNING_RESTORE_IN_PROGRESS",
+            Self::WarningStaleMailboxLock => "ATM_WARNING_STALE_MAILBOX_LOCK",
             Self::WarningHookSkipped => "ATM_WARNING_HOOK_SKIPPED",
             Self::WarningHookExecutionFailed => "ATM_WARNING_HOOK_EXECUTION_FAILED",
         }

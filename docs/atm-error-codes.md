@@ -110,6 +110,7 @@ Error codes should describe the failure class, not a specific prose message.
 
 - `ATM_WARNING_INVALID_TEAM_MEMBER_SKIPPED`
 - `ATM_WARNING_RESTORE_IN_PROGRESS`
+- `ATM_WARNING_STALE_MAILBOX_LOCK`
 - `ATM_WARNING_IDENTITY_DRIFT`
 - `ATM_WARNING_BASELINE_MEMBER_MISSING`
 - `ATM_WARNING_MAILBOX_RECORD_SKIPPED`
@@ -118,6 +119,18 @@ Error codes should describe the failure class, not a specific prose message.
 - `ATM_WARNING_ORIGIN_INBOX_ENTRY_SKIPPED`
 - `ATM_WARNING_MISSING_TEAM_CONFIG_FALLBACK`
 - `ATM_WARNING_SEND_ALERT_STATE_DEGRADED`
+
+#### 5.7.1 `ATM_WARNING_STALE_MAILBOX_LOCK`
+
+- code: `ATM_WARNING_STALE_MAILBOX_LOCK`
+- description: `atm doctor` observed the same mailbox `.lock` sentinel at the
+  start and end of the run, so the lock is likely stale
+- HTTP status: `200 OK`
+- context:
+  - emitted as a warning finding during `atm doctor`
+  - the message should include the persisted lock path
+  - recovery guidance should tell the user to confirm no live ATM process owns
+    the mailbox and then run `rm -f <path>`
 
 ### 5.8 Post-Send Hook
 

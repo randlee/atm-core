@@ -893,6 +893,9 @@ Roster output rules:
 - show baseline `[atm].team_members` first
 - show `team-lead` first among the baseline members when present
 - show extra runtime members after the baseline set
+- snapshot `~/.claude/teams/*/inboxes/*.lock` at doctor start and end; any lock
+  path present in both snapshots is stale and should surface as
+  `ATM_WARNING_STALE_MAILBOX_LOCK` with `rm -f <path>` recovery guidance
 
 ### 6.8 Team Recovery Services
 
@@ -914,11 +917,14 @@ Architectural rules:
   duplicates before mutating config
 - `backup` snapshots current team config, inboxes, and the ATM team task
   bucket into a timestamped snapshot directory
+- inbox backup excludes transient mailbox `*.lock` sentinels, dotfiles, and
+  restore markers
 - `restore` is a local recovery path and must:
   - preserve the current team-lead entry and `leadSessionId`
   - restore only missing non-lead members
   - clear runtime-only restored-member state before persistence
   - restore non-lead inboxes from the chosen snapshot
+  - sweep stale mailbox `*.lock` sentinels before restored inbox files are copied in
   - recompute `.highwatermark` from the maximum restored task id
   - support a dry-run path without making changes
 - Claude Code project task-list restoration remains separate from the retained
@@ -1308,12 +1314,13 @@ duplicates what `fs2` already provides correctly.
     Unix: flock(fd, LOCK_EX)           Windows: LockFileEx(handle)
 ```
 
-- **Sentinel**: `{inbox_path}.lock` — zero-byte file, created lazily, persists across
-  process lifetimes (stale sentinels are harmless; OS releases lock on fd close/exit)
+- **Sentinel**: `{inbox_path}.lock` — pid-bearing runtime artifact, created lazily,
+  removed on `MailboxLockGuard` drop, and best-effort evicted when the recorded pid
+  is no longer alive
 - **Granularity**: per-inbox-file — concurrent sends to different recipients never contend
 - **Lock lifetime**: acquired before `read_messages`, held through `atomic::write_messages`
   durability boundary (temp-file write, rename, and any parent-directory sync),
-  released on `MailboxLockGuard` drop
+  then the sentinel is unlinked and the guard is released
 - **Timeout**: bounded retry loop with `try_lock_exclusive()` + 50ms sleep, default 5s;
   on expiry returns `AtmError { code: MailboxLockTimeout }`
 - **Error classification**: only genuine "lock busy" results participate in the

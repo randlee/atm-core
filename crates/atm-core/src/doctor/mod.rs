@@ -37,6 +37,7 @@ pub fn run_doctor(
 ) -> Result<DoctorReport, crate::error::AtmError> {
     let config = config::load_config(&query.current_dir)?;
     let home_dir = query.home_dir.clone();
+    let initial_lock_snapshot = snapshot_mailbox_lock_paths(&home_dir);
     let resolved_team = config::resolve_team(query.team_override.as_deref(), config.as_ref());
 
     let environment = health::environment_visibility(query.home_dir, query.team_override);
@@ -70,6 +71,11 @@ pub fn run_doctor(
     let member_roster = resolved_team
         .as_deref()
         .and_then(|team| load_member_roster(&home_dir, team, config.as_ref(), &mut findings));
+    push_stale_mailbox_lock_findings(
+        &initial_lock_snapshot,
+        &snapshot_mailbox_lock_paths(&home_dir),
+        &mut findings,
+    );
     findings.push(finding);
     let recommendations = findings
         .iter()
@@ -243,6 +249,57 @@ fn check_restore_marker(team: &str, team_dir: &Path, findings: &mut Vec<DoctorFi
             team_dir.display()
         )),
     });
+}
+
+fn snapshot_mailbox_lock_paths(home_dir: &Path) -> BTreeSet<PathBuf> {
+    let teams_root = home_dir.join(".claude").join("teams");
+    let Ok(team_entries) = fs::read_dir(&teams_root) else {
+        return BTreeSet::new();
+    };
+
+    let mut locks = BTreeSet::new();
+    for team_entry in team_entries.filter_map(Result::ok) {
+        let inboxes_dir = team_entry.path().join("inboxes");
+        let Ok(lock_entries) = fs::read_dir(inboxes_dir) else {
+            continue;
+        };
+        for lock_entry in lock_entries.filter_map(Result::ok) {
+            let path = lock_entry.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("lock") {
+                continue;
+            }
+            if !lock_entry
+                .file_type()
+                .is_ok_and(|file_type| file_type.is_file())
+            {
+                continue;
+            }
+            locks.insert(path);
+        }
+    }
+
+    locks
+}
+
+fn push_stale_mailbox_lock_findings(
+    initial: &BTreeSet<PathBuf>,
+    final_snapshot: &BTreeSet<PathBuf>,
+    findings: &mut Vec<DoctorFinding>,
+) {
+    for path in initial.intersection(final_snapshot) {
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::WarningStaleMailboxLock,
+            message: format!(
+                "mailbox lock sentinel persisted for the full doctor run at {}; the lock is likely stale",
+                path.display()
+            ),
+            remediation: Some(format!(
+                "Confirm no live ATM process still owns the mailbox, then remove the stale sentinel with `rm -f {}`.",
+                path.display()
+            )),
+        });
+    }
 }
 
 fn probe_directory_writable(directory: &Path) -> Result<(), std::io::Error> {
@@ -662,6 +719,35 @@ mod tests {
                 .findings
                 .iter()
                 .any(|finding| finding.code == AtmErrorCode::MailboxWriteFailed),
+            "{report:#?}"
+        );
+    }
+
+    #[test]
+    fn run_doctor_reports_stale_mailbox_lock_as_warning() {
+        let paths = TestPaths::new();
+        paths.write_team_layout(&["arch-ctm"]);
+        let stale_lock = paths.team_dir().join("inboxes").join("arch-ctm.json.lock");
+        std::fs::write(&stale_lock, u32::MAX.to_string()).expect("stale lock");
+        let report = run_doctor(
+            query(&paths),
+            &StubObservability {
+                health: StubHealth::Ok(AtmObservabilityHealth {
+                    active_log_path: Some(paths.active_log_path.clone()),
+                    logging_state: AtmObservabilityHealthState::Healthy,
+                    query_state: Some(AtmObservabilityHealthState::Healthy),
+                    detail: None,
+                }),
+            },
+        )
+        .expect("doctor report");
+
+        assert_eq!(report.summary.status, DoctorStatus::Warning);
+        assert!(
+            report.findings.iter().any(|finding| {
+                finding.code == AtmErrorCode::WarningStaleMailboxLock
+                    && finding.message.contains(&stale_lock.display().to_string())
+            }),
             "{report:#?}"
         );
     }
