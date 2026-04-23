@@ -1203,6 +1203,9 @@ The initial doctor implementation must cover:
 - team directory existence
 - team config existence and parse health
 - inbox directory existence and writability
+- stale mailbox lock detection across `~/.claude/teams/*/inboxes/*.lock` using
+  start-of-run and end-of-run snapshots; a lock present in both snapshots is
+  stale and must be reported with `ATM_WARNING_STALE_MAILBOX_LOCK`
 - hook identity availability
 - `ATM_HOME`, `ATM_TEAM`, and `ATM_IDENTITY` override visibility
 - `sc-observability` initialization health
@@ -1294,7 +1297,8 @@ Bare `atm teams` must:
 `atm teams backup` must:
 - create a timestamped snapshot under the ATM team backup area
 - capture the current `config.json`
-- capture team inbox files
+- capture team inbox files, excluding transient `*.lock` sentinels, dotfiles,
+  and restore markers
 - capture the ATM team task bucket
 - report the created backup path in human and JSON output
 - not claim to back up the separate Claude Code project task list
@@ -1308,6 +1312,8 @@ Bare `atm teams` must:
 - clear runtime-only restored-member fields such as session, activity, and
   pane state before persisting them
 - restore non-lead inbox files from the chosen snapshot deterministically
+- sweep stale inbox `*.lock` sentinels before copying restored inbox files as a
+  self-heal step
 - restore the ATM team task bucket and recompute `.highwatermark` from the
   maximum restored task id
 - fail with a structured error when backup material is missing or malformed
@@ -1753,8 +1759,9 @@ closed before the 1.0 release.
   - lock acquisition must use a bounded timeout (default 5 seconds) and fail
     with a structured `AtmError` carrying `AtmErrorCode::MailboxLockTimeout`
     when the timeout expires
-  - the lock file may exist as a zero-byte sentinel but must tolerate stale lock
-    files from crashed processes
+  - the lock sentinel path is a transient runtime artifact: ATM writes the
+    owner pid while the lock is held, unlinks the sentinel on guard drop, and
+    must tolerate stale pid-bearing sentinels from crashed processes
   - advisory locking is cooperative: only concurrent ATM processes coordinate
 
 - `REQ-CORE-MAILBOX-LOCK-002` Mailbox locking must work on macOS, Linux, and

@@ -130,6 +130,9 @@ Identity-specific policy:
 - doctor should project the live `config.json` roster in a deterministic order:
   baseline `[atm].team_members` first, `team-lead` first among that baseline,
   then extra runtime members
+- doctor should snapshot `~/.claude/teams/*/inboxes/*.lock` at start and end;
+  any lock path present in both snapshots is stale and should surface as
+  `ATM_WARNING_STALE_MAILBOX_LOCK` with `rm -f <path>` recovery guidance
 
 Current `AgentMember` persisted schema:
 - `name: String` required for roster membership checks
@@ -194,10 +197,14 @@ Architectural rules:
   - local team restore
 - historical orchestration-heavy team commands remain outside the retained
   `atm-core` boundary for initial release
+- backup excludes transient mailbox `*.lock` sentinels, dotfiles, and restore
+  markers from the inbox copy set
 - restore preserves the current team-lead record and current `leadSessionId`
   rather than replaying stale lead-session state from backup
 - restored non-lead members must have runtime-only state cleared before they
   are written back to local config
+- restore sweeps stale mailbox `*.lock` sentinels before restored inbox files
+  are copied back into place
 - restored ATM task buckets must recompute `.highwatermark` from the maximum
   restored task id
 - the local `members` view is config-first; richer hook/session state may be

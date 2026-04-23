@@ -323,6 +323,9 @@ Required doctor rules:
 - extra runtime members in `config.json` are allowed
 - doctor roster output must show all `config.json` members, with baseline
   members first and `team-lead` first among the baseline set
+- `atm doctor` must snapshot `~/.claude/teams/*/inboxes/*.lock` at start and
+  end of the run; any lock path present in both snapshots is stale and must be
+  reported with `ATM_WARNING_STALE_MAILBOX_LOCK` plus `rm -f <path>` recovery guidance
 
 ## 9. Retained Team Recovery Surface
 
@@ -347,13 +350,15 @@ Required service rules:
   `session:window.pane` rather than guessing a pane handle
 - backup must snapshot:
   - `config.json`
-  - team inbox files
+  - team inbox files, excluding transient `*.lock` sentinels, dotfiles, and
+    restore markers
   - the ATM team task bucket
 - restore must:
   - preserve the current team-lead entry and current `leadSessionId`
   - add only missing non-lead members from the snapshot
   - clear runtime-only restored-member fields such as session or pane state
   - restore non-lead inboxes
+  - sweep stale inbox `*.lock` sentinels before copying restored inbox files
   - recompute `.highwatermark` from the maximum restored task id
   - support a dry-run path without making changes
 - malformed or missing snapshot material must fail with structured errors

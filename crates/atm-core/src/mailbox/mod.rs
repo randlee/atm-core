@@ -201,6 +201,7 @@ mod tests {
     use std::fs;
     use std::sync::{Arc, Barrier};
     use std::thread;
+    use std::time::{Duration, Instant};
 
     use chrono::{TimeZone, Utc};
     use tempfile::TempDir;
@@ -245,6 +246,39 @@ mod tests {
         assert_eq!(messages.len(), 2);
         assert!(messages[0].read);
         assert_eq!(messages[1].text, "second");
+    }
+
+    #[test]
+    fn append_message_removes_lock_sentinel_after_write() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("append-removes-lock.jsonl");
+
+        append_message(&path, &sample_message(Uuid::new_v4(), "first")).expect("append");
+
+        assert_path_eventually_absent(&lock::sentinel_path(&path));
+    }
+
+    #[test]
+    fn append_message_cleans_preexisting_stale_lock_sentinel() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("append-cleans-stale-lock.jsonl");
+        fs::write(lock::sentinel_path(&path), u32::MAX.to_string()).expect("stale lock");
+
+        append_message(&path, &sample_message(Uuid::new_v4(), "first")).expect("append");
+
+        assert_path_eventually_absent(&lock::sentinel_path(&path));
+    }
+
+    fn assert_path_eventually_absent(path: &std::path::Path) {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while path.exists() {
+            assert!(
+                Instant::now() < deadline,
+                "path still exists after bounded wait: {}",
+                path.display()
+            );
+            thread::sleep(Duration::from_millis(10));
+        }
     }
 
     #[test]

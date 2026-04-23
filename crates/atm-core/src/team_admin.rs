@@ -11,6 +11,7 @@ use crate::address::validate_path_segment;
 use crate::config::{load_config, load_team_config, resolve_team};
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
+use crate::mailbox::lock;
 use crate::persistence;
 use crate::schema::{AgentMember, TeamConfig};
 use crate::types::{AgentName, TeamName};
@@ -340,10 +341,15 @@ pub fn backup_team(request: BackupRequest) -> Result<BackupOutcome, AtmError> {
         .with_recovery("Check source and backup directory permissions and retry the backup.")
     })?;
 
-    copy_regular_files(&team_dir.join("inboxes"), &backup_dir.join("inboxes"))?;
+    copy_regular_files(
+        &team_dir.join("inboxes"),
+        &backup_dir.join("inboxes"),
+        |name| !name.starts_with('.') && !name.ends_with(".lock"),
+    )?;
     copy_regular_files(
         &tasks_dir_from_home(&request.home_dir, &request.team)?,
         &backup_dir.join("tasks"),
+        |name| name == ".highwatermark" || name.ends_with(".json"),
     )?;
 
     Ok(BackupOutcome {
@@ -437,6 +443,9 @@ pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> 
         ))
         .with_source(error)
         .with_recovery("Check inbox directory permissions and rerun `atm teams restore`.")
+    })?;
+    lock::sweep_stale_lock_sentinels(&inboxes_dir).map_err(|error| {
+        error.with_recovery("Check inbox directory permissions and rerun `atm teams restore`.")
     })?;
     let inbox_staging_dir = restore_staging_inboxes_dir(&team_dir);
     fs::create_dir_all(&inbox_staging_dir).map_err(|error| {
@@ -604,7 +613,10 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), AtmError> {
     )
 }
 
-fn copy_regular_files(src: &Path, dst: &Path) -> Result<(), AtmError> {
+fn copy_regular_files<F>(src: &Path, dst: &Path, include: F) -> Result<(), AtmError>
+where
+    F: Fn(&str) -> bool,
+{
     if !src.exists() {
         return Ok(());
     }
@@ -628,6 +640,7 @@ fn copy_regular_files(src: &Path, dst: &Path) -> Result<(), AtmError> {
         })?
         .filter_map(Result::ok)
         .filter(|entry| entry.path().is_file())
+        .filter(|entry| include(&entry.file_name().to_string_lossy()))
         .collect::<Vec<_>>();
     entries.sort_by_key(|entry| entry.file_name());
 
@@ -770,7 +783,9 @@ fn restore_task_bucket(src: &Path, dst: &Path) -> Result<(), AtmError> {
             .with_recovery("Check task staging directory permissions and rerun the restore.")
         })?;
     }
-    copy_regular_files(src, &staging)?;
+    copy_regular_files(src, &staging, |name| {
+        name == ".highwatermark" || name.ends_with(".json")
+    })?;
 
     if dst.exists() {
         fs::remove_dir_all(dst).map_err(|error| {
