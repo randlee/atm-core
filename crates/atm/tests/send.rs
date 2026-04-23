@@ -555,10 +555,10 @@ fn test_send_runs_multiple_matching_post_send_hooks_in_config_order() {
         "stderr: {}",
         fixture.stderr(&output)
     );
-    assert_eq!(
-        fs::read_to_string(order_path).expect("hook order log"),
-        "recipient\nwildcard\n"
-    );
+    let hook_order = fs::read_to_string(order_path)
+        .expect("hook order log")
+        .replace("\r\n", "\n");
+    assert_eq!(hook_order, "recipient\nwildcard\n");
 }
 
 #[test]
