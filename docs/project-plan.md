@@ -1796,8 +1796,9 @@ Design details:
   - recompute the selected mutation from fresh data
   - persist through `mailbox::store::commit_source_files(...)` while locks are
     still held
-- `ack` continues using the documented two-phase superset lock pattern, but the
-  reload/recompute step must be expressed through the shared commit pattern
+- `ack` resolves the reply inbox from an unlocked preflight, then uses one
+  final sorted superset lock for reload/recompute/persist through the shared
+  commit pattern
 
 Implementation patterns:
 - share the unlocked snapshot loader between `read` initial selection and wait
@@ -1820,8 +1821,9 @@ Files expected in scope:
 Concrete implementation targets:
 - consolidate the current per-command mailbox rewrite helpers so `read`,
   `ack`, and `clear` do not each own a separate final persist step
-- keep the two-phase superset lock behavior in `ack`, but move any duplicated
-  reload/recompute/persist shape behind shared mailbox owner helpers
+- keep `ack` on the documented unlocked-preflight plus final-superset-lock
+  behavior, and move any duplicated reload/recompute/persist shape behind
+  shared mailbox owner helpers
 - preserve the current Windows-safe sentinel cleanup behavior already present
   from `fix/issue-104-inbox-locks`; no sprint in Phase P may regress that
 
