@@ -1,0 +1,81 @@
+---
+name: quality-report
+version: 1.0.0
+description: Final QA closeout report template for PASS verdicts.
+format: markdown
+required_variables:
+  - generated_at
+  - qa_pass
+  - sprint_id
+  - task_id
+  - branch
+  - commit
+  - pr_number
+  - verdict
+  - validated_scope_md
+  - findings_blocking
+  - findings_important
+  - findings_minor
+  - residual_risks_md
+  - merge_readiness
+  - merge_reason
+  - recommendation
+---
+# Final Quality Report
+
+Generated: {{ generated_at }}
+QA Pass: {{ qa_pass }}
+Sprint/Task: {{ sprint_id }} / {{ task_id }}
+Branch: `{{ branch }}`
+Commit: `{{ commit }}`
+PR: #{{ pr_number }}
+Final Verdict: **{{ verdict }}**
+
+## Machine Status (JSON)
+```json
+{
+  "sprint": "{{ sprint_id }}",
+  "task": "{{ task_id }}",
+  "branch": "{{ branch }}",
+  "commit": "{{ commit }}",
+  "pr": "{{ pr_number }}",
+  "verdict": "{{ verdict }}",
+  "findings": {
+    "blocking": "{{ findings_blocking }}",
+    "important": "{{ findings_important }}",
+    "minor": "{{ findings_minor }}"
+  },
+  "blocking_ids": "",
+  "merge_readiness": "{{ merge_readiness }}",
+  "merge_reason": "{{ merge_reason }}",
+  "next_action": "none",
+  "action_owner": "none",
+  "recommendation": "{{ recommendation }}"
+}
+```
+
+## Validated Scope
+{% if validated_scope_md -%}
+{{ validated_scope_md }}
+{% else -%}
+- not specified
+{% endif %}
+
+## Findings Summary (Final)
+- Blocking: {{ findings_blocking }}
+- Important: {{ findings_important }}
+- Minor: {{ findings_minor }}
+
+## Residual Risks
+{% if residual_risks_md -%}
+{{ residual_risks_md }}
+{% else -%}
+- none
+{% endif %}
+
+## Merge Readiness
+- Status: **{{ merge_readiness }}**
+- Reason: {{ merge_reason }}
+
+## Recommendation
+{{ recommendation }}
