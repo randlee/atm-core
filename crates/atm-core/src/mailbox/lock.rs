@@ -42,24 +42,6 @@ pub(crate) struct MailboxLockGuard {
 
 impl Drop for MailboxLockGuard {
     fn drop(&mut self) {
-        let active_sentinel = match capture_active_lock_sentinel(
-            self.file.as_ref().expect("lock guard file missing"),
-            &self.lock_path,
-            &self.owner_record,
-        ) {
-            Ok(active) => active,
-            Err(error) => {
-                warn!(
-                    code = %AtmErrorCode::MailboxLockFailed,
-                    %error,
-                    target_path = %self.target_path.display(),
-                    lock_path = %self.lock_path.display(),
-                    "failed to evaluate mailbox lock sentinel removal"
-                );
-                false
-            }
-        };
-
         let Some(file) = self.file.take() else {
             return;
         };
@@ -75,8 +57,7 @@ impl Drop for MailboxLockGuard {
         }
         drop(file);
 
-        if active_sentinel
-            && let Err(error) = remove_active_lock_sentinel(&self.lock_path, &self.owner_record)
+        if let Err(error) = remove_active_lock_sentinel(&self.lock_path, &self.owner_record)
             && error.kind() != io::ErrorKind::NotFound
         {
             warn!(
@@ -299,19 +280,6 @@ fn write_lock_owner_record(
         )
         .with_source(error)
     })
-}
-
-fn capture_active_lock_sentinel(
-    _file: &File,
-    lock_path: &Path,
-    owner_record: &LockOwnerRecord,
-) -> io::Result<bool> {
-    let raw = match fs::read_to_string(lock_path) {
-        Ok(raw) => raw,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
-        Err(error) => return Err(error),
-    };
-    Ok(raw.trim() == owner_record.encode())
 }
 
 fn remove_active_lock_sentinel(lock_path: &Path, owner_record: &LockOwnerRecord) -> io::Result<()> {
