@@ -198,7 +198,8 @@ fn reject_legacy_post_send_hook_keys(path: &Path, raw_toml: &TomlValue) -> Resul
         || atm.contains_key("post_send_hook_senders")
         || atm.contains_key("post_send_hook_recipients");
     if legacy_shape_present {
-        return Err(AtmError::new(
+        return Err(AtmError::new_with_code(
+            AtmErrorCode::ConfigRetiredLegacyHookKeys,
             AtmErrorKind::Config,
             format!(
                 "error: '{}' uses retired post-send hook keys. Use [[atm.post_send_hooks]] with recipient and command entries instead.",
@@ -476,6 +477,7 @@ post_send_hook_recipients = ["team-lead"]
         let error = load_config(&root).expect_err("legacy hook shape should fail");
 
         assert!(error.is_config());
+        assert_eq!(error.code, AtmErrorCode::ConfigRetiredLegacyHookKeys);
         assert!(error.message.contains("retired post-send hook keys"));
         assert!(error.message.contains("[[atm.post_send_hooks]]"));
         assert_eq!(

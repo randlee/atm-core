@@ -415,8 +415,10 @@ Architectural rules:
 - absent or invalid hook-result stdout is ignored rather than treated as hook
   failure
 - recipient non-match is silent
-- retired flat hook keys and `[atm].post_send_hook_members` are configuration
-  errors, not compatibility aliases
+- retired flat hook keys are configuration errors under
+  `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`, not compatibility aliases
+- retired `[atm].post_send_hook_members` is a configuration error under
+  `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`
 - hook-decision logging must preserve sender, recipient, matched rule selector,
   and final execution outcome for troubleshooting
 - expected hook non-match must remain debug-only diagnostics rather than

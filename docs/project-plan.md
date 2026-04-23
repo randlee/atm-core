@@ -705,8 +705,12 @@ Planned sprints:
       - each rule binds one recipient selector and one command argv
       - `recipient = "*"` matches all recipients
       - matching rules execute in config order
-      - legacy flat hook keys and `post_send_hook_members` are rejected with
-        migration guidance to the new rule shape
+      - legacy flat hook keys are rejected with
+        `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`
+      - `post_send_hook_members` is rejected with
+        `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`
+      - both retired config paths must provide migration guidance to the new
+        rule shape
       - path-like `command[0]` values resolve from the directory that owns the
         discovered `.atm.toml`
       - bare executable names use normal `PATH` lookup
