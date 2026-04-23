@@ -152,6 +152,10 @@ pub fn ack_mail(
 
     let reply_inbox_path =
         home::inbox_path_from_home(&request.home_dir, &reply_team, &reply_agent)?;
+    // Ack intentionally does not hold a subset lock and then upgrade it.
+    // Resolve the reply target from an unlocked preflight, then let the shared
+    // commit helper acquire the final sorted superset, reload, and re-validate
+    // before mutating either inbox.
     mailbox::store::commit_source_mutation(
         &request.home_dir,
         &team,
