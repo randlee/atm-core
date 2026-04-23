@@ -91,6 +91,25 @@ fn test_read_no_mark() {
 }
 
 #[test]
+fn test_read_timeout_polling_skips_mailbox_lock_acquisition() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+
+    let output = fixture.run_with_env(
+        &["read", "--timeout", "1", "--json"],
+        &[("ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR", "1")],
+    );
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["count"], 0);
+    assert_eq!(parsed["mutation_applied"], false);
+}
+
+#[test]
 fn test_read_unread_only() {
     let fixture = Fixture::new(&["arch-ctm"]);
     fixture.write_inbox(
@@ -739,6 +758,10 @@ impl Fixture {
     }
 
     fn run(&self, args: &[&str]) -> std::process::Output {
+        self.run_with_env(args, &[])
+    }
+
+    fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
         Command::new(env!("CARGO_BIN_EXE_atm"))
             .args(args)
             .env("ATM_HOME", self.tempdir.path())
@@ -746,6 +769,7 @@ impl Fixture {
             .env("ATM_IDENTITY", "arch-ctm")
             .env("ATM_TEAM", "atm-dev")
             .current_dir(self.tempdir.path())
+            .envs(extra_env.iter().copied())
             .output()
             .expect("run atm")
     }

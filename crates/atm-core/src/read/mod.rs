@@ -79,6 +79,13 @@ pub struct ReadOutcome {
     pub bucket_counts: BucketCounts,
 }
 
+struct ReadSnapshot {
+    source_paths: Vec<PathBuf>,
+    source_files: Vec<SourceFile>,
+    bucket_counts: BucketCounts,
+    selected: Vec<ClassifiedMessage>,
+}
+
 /// Read one mailbox surface, optionally marking displayed messages as read.
 ///
 /// # Errors
@@ -94,8 +101,8 @@ pub struct ReadOutcome {
 /// [`crate::error_codes::AtmErrorCode::MailboxLockFailed`], or
 /// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`] when actor or
 /// target resolution fails, the team or agent cannot be validated, shared
-/// mailbox locks cannot be acquired, or the selected mailbox state cannot be
-/// reloaded or persisted safely.
+/// mailbox locks cannot be acquired for a writeback path, or the selected
+/// mailbox state cannot be reloaded or persisted safely.
 pub fn read_mail(
     query: ReadQuery,
     observability: &dyn ObservabilityPort,
@@ -138,26 +145,12 @@ pub fn read_mail(
         None
     };
 
-    let mut source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
-    let load_locked_snapshot = |paths: &mut Vec<PathBuf>| -> Result<
-        (Vec<SourceFile>, BucketCounts, Vec<ClassifiedMessage>),
-        AtmError,
-    > {
-        let _locks = mailbox::lock::acquire_many_sorted(
-            paths.clone(),
-            mailbox::lock::default_lock_timeout(),
-        )?;
-        *paths = rediscover_and_validate_source_paths(
-            paths,
-            &query.home_dir,
-            &target.team,
-            &target.agent,
-        )?;
-        load_selection_state(paths, &query, seen_watermark)
-    };
-
-    let (mut source_files, mut bucket_counts, mut selected) =
-        load_locked_snapshot(&mut source_paths)?;
+    let ReadSnapshot {
+        mut source_paths,
+        mut source_files,
+        mut bucket_counts,
+        mut selected,
+    } = load_observational_snapshot(&query, &target, seen_watermark)?;
     let mut timed_out = false;
 
     if selected.is_empty()
@@ -166,18 +159,8 @@ pub fn read_mail(
         let wait_satisfied = wait::wait_for_eligible_message(
             timeout_secs,
             || {
-                let mut poll_paths =
+                let poll_paths =
                     discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
-                let _poll_locks = mailbox::lock::acquire_many_sorted(
-                    poll_paths.clone(),
-                    mailbox::lock::default_lock_timeout(),
-                )?;
-                poll_paths = rediscover_and_validate_source_paths(
-                    &poll_paths,
-                    &query.home_dir,
-                    &target.team,
-                    &target.agent,
-                )?;
                 Ok(apply_idle_notification_dedup(
                     dedupe_legacy_message_id_surface(
                         merged_surface(&load_source_files(&poll_paths)?),
@@ -190,25 +173,17 @@ pub fn read_mail(
         )?;
 
         if wait_satisfied {
-            source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
-            (source_files, bucket_counts, selected) = load_locked_snapshot(&mut source_paths)?;
+            let snapshot = load_observational_snapshot(&query, &target, seen_watermark)?;
+            source_paths = snapshot.source_paths;
+            source_files = snapshot.source_files;
+            bucket_counts = snapshot.bucket_counts;
+            selected = snapshot.selected;
         } else {
             timed_out = true;
         }
     }
 
-    selected.sort_by(|left, right| {
-        right
-            .envelope
-            .timestamp
-            .cmp(&left.envelope.timestamp)
-            .then_with(|| right.envelope.message_id.cmp(&left.envelope.message_id))
-            .then_with(|| right.source_index.cmp(&left.source_index))
-    });
-
-    if let Some(limit) = query.limit {
-        selected.truncate(limit);
-    }
+    sort_and_limit_selected(&mut selected, query.limit);
 
     let mutation_applied = if timed_out || selected.is_empty() {
         false
@@ -217,26 +192,16 @@ pub fn read_mail(
             source_paths.clone(),
             mailbox::lock::default_lock_timeout(),
         )?;
-        source_paths = rediscover_and_validate_source_paths(
+        let locked_paths = rediscover_and_validate_source_paths(
             &source_paths,
             &query.home_dir,
             &target.team,
             &target.agent,
         )?;
+        source_paths = locked_paths;
         (source_files, bucket_counts, selected) =
             load_selection_state(&source_paths, &query, seen_watermark)?;
-        selected.sort_by(|left, right| {
-            right
-                .envelope
-                .timestamp
-                .cmp(&left.envelope.timestamp)
-                .then_with(|| right.envelope.message_id.cmp(&left.envelope.message_id))
-                .then_with(|| right.source_index.cmp(&left.source_index))
-        });
-
-        if let Some(limit) = query.limit {
-            selected.truncate(limit);
-        }
+        sort_and_limit_selected(&mut selected, query.limit);
 
         let mutation_applied = apply_display_mutations(
             &mut source_files,
@@ -313,6 +278,39 @@ pub fn read_mail(
     });
 
     Ok(outcome)
+}
+
+fn load_observational_snapshot(
+    query: &ReadQuery,
+    target: &crate::mailbox::source::ResolvedTarget,
+    seen_watermark: Option<IsoTimestamp>,
+) -> Result<ReadSnapshot, AtmError> {
+    // The observational read phase stays unlocked. Any later writeback must
+    // reload under the owning lock set before persisting.
+    let source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
+    let (source_files, bucket_counts, selected) =
+        load_selection_state(&source_paths, query, seen_watermark)?;
+    Ok(ReadSnapshot {
+        source_paths,
+        source_files,
+        bucket_counts,
+        selected,
+    })
+}
+
+fn sort_and_limit_selected(selected: &mut Vec<ClassifiedMessage>, limit: Option<usize>) {
+    selected.sort_by(|left, right| {
+        right
+            .envelope
+            .timestamp
+            .cmp(&left.envelope.timestamp)
+            .then_with(|| right.envelope.message_id.cmp(&left.envelope.message_id))
+            .then_with(|| right.source_index.cmp(&left.source_index))
+    });
+
+    if let Some(limit) = limit {
+        selected.truncate(limit);
+    }
 }
 
 fn load_selection_state(

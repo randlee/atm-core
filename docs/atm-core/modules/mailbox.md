@@ -4,6 +4,15 @@ Owns mailbox file discovery, atomic read/write helpers, locking, duplicate
 suppression, and origin-inbox merge primitives.
 
 Primary ownership note:
+- mailbox code must distinguish:
+  - read-only snapshot helpers
+  - read-possible-write flows
+  - true read-modify-write flows
+- mailbox writes must flow through one owner-layer write boundary rather than
+  ad hoc call-site persistence logic
+- current shared-inbox rewrite behavior is a compatibility boundary over a
+  Claude-owned surface, not a general license to store new ATM-local source of
+  truth in Claude-owned files
 - the mailbox append boundary owns the atomic sender-scoped idle-notification
   dedup-and-replace rule: when a newly appended message is classified as an
   idle notification, remove any older unread idle notification from the same

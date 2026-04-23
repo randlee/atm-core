@@ -16,6 +16,10 @@ use crate::schema::MessageEnvelope;
 /// additional parent-directory sync because the standard library does not
 /// expose a portable directory-sync operation there.
 ///
+/// This helper guarantees atomic replacement durability semantics only. It is
+/// not by itself a freshness proof against a concurrently changed source file;
+/// callers must establish lock/freshness preconditions before invoking it.
+///
 /// # Errors
 ///
 /// Returns [`AtmError`] with
