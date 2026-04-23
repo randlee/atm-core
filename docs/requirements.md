@@ -302,6 +302,59 @@ Current-phase migration constraint:
   §2.2 and §3.3 for forward ATM alert-field placement and sender-side dedup
   semantics
 
+### 3.2.2 Shared File Ownership And Mutation Classes
+
+Product requirement ID:
+- `REQ-P-FILEIO-001` Every live file operation must declare file ownership,
+  mutation class, and the single commit path used for persistence.
+
+Required rules:
+
+- every live file path must be classified as one of:
+  - Claude-owned
+  - ATM-owned
+  - shared/de-facto interoperable
+- ownership determines whether ATM is allowed to treat the file as writable
+  source-of-truth state
+- ATM-owned machine state must have one documented write path per file family
+- ad hoc write logic at leaf call sites is prohibited for live shared state
+
+Operation classes:
+
+- `read_only`
+  - no lock acquisition
+  - no temp-file write
+  - no persistence side effect
+- `read_possible_write`
+  - initial unlocked read is allowed
+  - if the read determines no change is needed, return without locking
+  - if the read determines a change is needed, the operation must enter the
+    shared write-commit path before persisting anything
+- `read_modify_write`
+  - mutation is expected
+  - persistence must still flow through the shared write-commit path
+
+Shared write-commit path requirements:
+
+- the mutation plan must be computed from a concrete input snapshot
+- before replacing the live file, ATM must prove source freshness by either:
+  - compare-and-swap against the exact snapshot identity/content that was read,
+    or
+  - lock, reread current state, recompute the mutation from the fresh state,
+    then commit
+- `read -> mutate -> lock -> blind rename` is not a valid write path
+- every successful commit of shared mutable structured state must use the
+  documented atomic replacement helper family
+
+Source-of-truth guardrails:
+
+- ATM must not rely on full-file rewrite of Claude-owned files as the long-term
+  source of truth for ATM-local workflow state
+- if ATM-local semantics need durability independent of Claude’s native writes,
+  that state must move to ATM-owned sidecars or an equivalent ATM-owned store
+- when a legacy compatibility path still rewrites a non-ATM-owned shared file,
+  the requirements and architecture docs must call out the limitation
+
 ### 3.3 Configuration Resolution
 
 Configuration resolution order:
@@ -548,11 +601,6 @@ Post-send-hook rules:
 - when a hook is configured, ATM must emit enough diagnostics to explain
   whether the hook ran or failed, including the sender, recipient, and matched
   hook recipient selector
-- configured non-match must remain debug-level only and must not be pushed into
-  user-visible warning output, stderr warning output, or `SendOutcome.warnings`
-- user-visible hook warnings are reserved for actual hook execution failures,
-  such as spawn failure, non-zero exit, timeout, or OS-level status-check
-  failure
 
 ## 6. `atm send`
 
@@ -1248,13 +1296,6 @@ Bare `atm teams` must:
 - validate that the target team exists
 - reject duplicate member names
 - persist the new member entry deterministically in team config
-- write `tmuxPaneId` in canonical tmux `%<number>` form when `--pane-id` is
-  provided; bare numeric pane ids may be normalized to that form, but
-  `session:window.pane` target syntax must be rejected rather than guessed
-- set `backendType = "tmux"` and `isActive = true` on the persisted member
-  record when `--pane-id` is provided
-- preserve `name`, `agentId`, `agentType`, `model`, and `cwd` as the
-  persisted routing identity fields written by ATM
 - create any required local inbox state atomically with the roster update
 
 `atm teams backup` must:
@@ -1726,6 +1767,8 @@ closed before the 1.0 release.
     owner pid while the lock is held, unlinks the sentinel on guard drop, and
     must tolerate stale pid-bearing sentinels from crashed processes
   - advisory locking is cooperative: only concurrent ATM processes coordinate
+  - the sentinel lock must not block Claude Code's native inbox appends because
+    Claude does not participate in ATM's cooperative lock protocol
 
 - `REQ-CORE-MAILBOX-LOCK-002` Mailbox locking must work on macOS, Linux, and
   Windows without platform-specific feature flags in consuming code.
@@ -1840,6 +1883,52 @@ closed before the 1.0 release.
   - no live shared structured file may be truncated and rewritten in place
   - mailbox locking does not replace atomic persistence; both are required for
     mailbox files
+  - temp-file + rename atomicity alone is not a source-unchanged compare-and-swap
+    against non-cooperating writers, so ATM must not claim mailbox rewrite
+    safety for concurrent Claude Code appends
+
+- `REQ-CORE-PERSIST-ATOMIC-001A` Shared mutable file commits must use one of
+  the documented mutation classes and the shared commit protocol.
+
+  Required behavior:
+  - `read_only` paths must not acquire mailbox/file locks
+  - `read_possible_write` paths may do an initial unlocked read, but any actual
+    commit must prove source freshness before replacing the live file
+  - `read_modify_write` paths must also prove source freshness before replacing
+    the live file
+  - acceptable freshness proofs are limited to:
+    - compare-and-swap against the exact earlier snapshot, or
+    - lock, reread current state, recompute, and then commit
+  - a stale-snapshot rename after late lock acquisition is forbidden even if
+    the rename itself is atomic
+
+- `REQ-CORE-PERSIST-ATOMIC-001B` Every shared mutable file family must have one
+  documented write path and one owning helper boundary.
+
+  Required behavior:
+  - mailbox file replacement must go through the mailbox atomic helper family
+  - shared generic state replacement must go through the shared persistence
+    helper family
+  - new live structured files must not introduce bespoke `fs::write`,
+    truncate-and-rewrite, or ad hoc temp-file logic at individual call sites
+  - if a file family needs special preconditions such as lock ordering or
+    freshness validation, those preconditions must be enforced at the shared
+    helper boundary or a single owner-layer wrapper around it
+
+- `REQ-CORE-PERSIST-ATOMIC-001C` ATM must not claim rewrite safety for
+  non-cooperating external writers.
+
+  Required behavior:
+  - if a live file can be concurrently changed by a writer outside ATM’s lock
+    protocol, ATM must document whether that file is:
+    - read-only from ATM’s perspective, or
+    - a legacy compatibility surface with known overwrite risk, or
+    - protected by real freshness validation/CAS
+  - for Claude-owned inbox files, advisory lock correctness applies only to
+    concurrent ATM writers
+  - ATM-local workflow state that requires stronger guarantees must move to an
+    ATM-owned source-of-truth path rather than relying on full-file rewrite of
+    the Claude-owned inbox surface
 
 - `REQ-CORE-PERSIST-ATOMIC-002` Phase M must treat atomic persistence as a
   cross-cutting invariant, not a mailbox-only or restore-only rule.
@@ -1866,7 +1955,27 @@ closed before the 1.0 release.
     equivalent in-place rewrites of live shared mutable structured files and
     either remove them or document why the path is not in scope
 
-### 20.2.1 Locking Failure-Path Test Contract
+### 20.2.1 Shared Commit And Freshness Validation
+
+The required shared commit protocol is:
+
+1. classify the operation as `read_only`, `read_possible_write`, or
+   `read_modify_write`
+2. perform any unlocked observational read allowed by that class
+3. compute whether a write is necessary
+4. if no write is needed, return without locking
+5. if a write is needed, enter the owning write path for that file family
+6. prove source freshness by CAS or by lock + reread + recompute
+7. write the temp file, fsync, rename, and perform any required directory sync
+
+The intentionally forbidden shape is:
+
+- read old snapshot
+- compute mutation from old snapshot
+- acquire late lock
+- rename blindly over a newer live file
+
+### 20.2.2 Locking Failure-Path Test Contract
 
 - `REQ-CORE-MAILBOX-TEST-001` Phase M follow-up coverage must include
   deterministic failure-path locking tests in addition to success-path
@@ -1899,6 +2008,11 @@ closed before the 1.0 release.
     guards/channels even when the assertion path fails
   - crash-durability helper tests should verify sequencing and error propagation
     through deterministic seams; they must not rely on real crash simulation
+  - forbidden test patterns:
+    - open-ended polling waiting for "eventual" success
+    - indefinite `join()` or blocking wait with no timeout
+    - sleeps used as the primary correctness mechanism
+    - race-dependent stress loops expected to pass only "most of the time"
 
 ### 20.3 Restore Transaction Atomicity
 

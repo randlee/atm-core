@@ -705,12 +705,8 @@ Planned sprints:
       - each rule binds one recipient selector and one command argv
       - `recipient = "*"` matches all recipients
       - matching rules execute in config order
-      - legacy flat hook keys are rejected with
-        `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`
-      - `post_send_hook_members` is rejected with
-        `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`
-      - both retired config paths must provide migration guidance to the new
-        rule shape
+      - legacy flat hook keys and `post_send_hook_members` are rejected with
+        migration guidance to the new rule shape
       - path-like `command[0]` values resolve from the directory that owns the
         discovered `.atm.toml`
       - bare executable names use normal `PATH` lookup
@@ -733,11 +729,9 @@ Planned sprints:
       - hook decision logging must make recipient-rule evaluation easy to
         troubleshoot
       - expected recipient non-match is silent
-      - configured non-match remains debug-only diagnostics rather than an
-        operator-facing warning
       - hook failure or timeout must never roll back the send; ATM reports the
         failure as post-send-hook diagnostics only
-   - `FIX-82` post-send hook redesign
+  - `FIX-82` post-send hook redesign
     - scope: replace the old multi-axis hook filter design with
       recipient-scoped `[[atm.post_send_hooks]]` rules, hard reject retired
       hook keys, simplify hook diagnostics, and keep only execution-failure
@@ -749,9 +743,7 @@ Planned sprints:
       - expected recipient non-match is silent
       - `ATM_POST_SEND` includes sender/recipient/team context without
         `hook_match` booleans
-      - configured non-match remains debug-only and does not emit
-        caller-visible warnings
-      - actionable warnings exist only for actual hook execution failures
+      - actionable warnings exist for configured-but-skipped hooks
       - docs, help text, and tests cover the migration and new semantics
     - reserve `atm-identity-missing@<team>` for ATM-generated
       repair/diagnostic notices only; it must not become a normal sender
@@ -760,7 +752,7 @@ Planned sprints:
     - config identity/source ambiguity for multi-agent shared repos
     - baseline-roster visibility gap in `atm doctor`
     - cross-team alias ambiguity for baseline roles such as `team-lead`
-    - missing recipient-scoped post-send automation contract for repo-root helper
+    - missing sender-scoped post-send automation contract for repo-root helper
       scripts
     - duplicate permanent-member spawn planning gap for future team-lead /
       hook-driven orchestration
@@ -1609,3 +1601,398 @@ Phase O completion gate:
   - `H-2`
 - CI passes on all platforms
 - `integrate/phase-O` merges to `develop`
+
+### Phase P: File-I/O Ownership And Single-Write-Path Hardening [PROPOSED]
+
+Status note:
+- proposal only
+- no Phase P sprint has executed yet
+- until a sprint is accepted and lands, Phase P content is planning guidance
+  rather than current architecture
+
+Goal:
+- make the retained ATM implementation production-ready by applying one
+  explicit file-I/O model across every live file family:
+  - `read_only`
+  - `read_possible_write`
+  - `read_modify_write`
+- eliminate ad hoc write paths
+- minimize lock hold time without permitting stale-snapshot overwrites
+- stop treating Claude-owned inbox files as the long-term source of truth for
+  ATM-local workflow durability
+
+Non-negotiable constraints:
+- no production code path may introduce a second write path for a live file
+  family when an owner-layer helper already exists
+- no stale-snapshot `read -> mutate -> lock -> blind rename` flow is allowed
+- no new ATM-local durable state may be placed in Claude-owned inbox files
+- no tolerance for flaky tests
+
+Integration branch: `integrate/phase-P`
+
+#### P.0 — Audited Production File-I/O Inventory
+
+The implementation phase must treat this as the starting inventory of affected
+production-path files and modules.
+
+Read-path inventory:
+- `crates/atm-core/src/config/mod.rs`
+- `crates/atm-core/src/mailbox/mod.rs`
+- `crates/atm-core/src/mailbox/source.rs`
+- `crates/atm-core/src/mailbox/lock.rs`
+- `crates/atm-core/src/read/mod.rs`
+- `crates/atm-core/src/read/seen_state.rs`
+- `crates/atm-core/src/ack/mod.rs`
+- `crates/atm-core/src/clear/mod.rs`
+- `crates/atm-core/src/send/mod.rs`
+- `crates/atm-core/src/team_admin.rs`
+- `crates/atm-core/src/doctor/mod.rs`
+- `crates/atm-core/src/identity/hook.rs`
+- `crates/atm-core/src/send/input.rs`
+
+Live write-path inventory:
+- mailbox replacement through:
+  - `crates/atm-core/src/mailbox/atomic.rs`
+  - callers in `mailbox/mod.rs`, `read/mod.rs`, `ack/mod.rs`, `clear/mod.rs`
+- mailbox lock sentinel lifecycle in:
+  - `crates/atm-core/src/mailbox/lock.rs`
+- seen-state watermark in:
+  - `crates/atm-core/src/read/seen_state.rs`
+- send-alert state and lock in:
+  - current implementation location: `crates/atm-core/src/send/mod.rs`
+  - owning helper boundary remains a Phase P.3 design decision until that
+    sprint resolves it
+- team config writes in:
+  - `crates/atm-core/src/team_admin.rs`
+- restore marker / restore staging / task bucket / highwatermark in:
+  - `crates/atm-core/src/team_admin.rs`
+- shared atomic commit boundary in:
+  - `crates/atm-core/src/persistence.rs`
+
+Supporting path/ownership surfaces that must stay aligned:
+- `docs/requirements.md`
+- `docs/architecture.md`
+- `docs/atm-core/modules/mailbox.md`
+- `docs/atm-message-schema.md`
+- `docs/claude-code-message-schema.md`
+- `docs/legacy-atm-message-schema.md`
+- `docs/atm-error-codes.md`
+
+Current concrete boundaries to review and either retain as the one owning
+helper or retire during the phase:
+- mailbox rewrite helpers:
+  - `crates/atm-core/src/mailbox/mod.rs::locked_read_modify_write(...)`
+  - `crates/atm-core/src/read/mod.rs::persist_source_files(...)`
+  - `crates/atm-core/src/ack/mod.rs::persist_source_files(...)`
+  - `crates/atm-core/src/clear/mod.rs::persist_source_files(...)`
+- ATM-owned state helpers:
+  - `crates/atm-core/src/read/seen_state.rs::save_seen_watermark(...)`
+  - `crates/atm-core/src/send/mod.rs::save_send_alert_state(...)`
+  - `crates/atm-core/src/send/mod.rs::acquire_send_alert_lock(...)`
+  - `crates/atm-core/src/team_admin.rs::write_team_config(...)`
+  - `crates/atm-core/src/team_admin.rs::atomic_write(...)`
+  - `crates/atm-core/src/team_admin.rs::write_restore_marker(...)`
+  - `crates/atm-core/src/team_admin.rs::clear_restore_marker(...)`
+  - `crates/atm-core/src/team_admin.rs::recompute_highwatermark(...)`
+- shared low-level atomic commit primitive:
+  - `crates/atm-core/src/persistence.rs::atomic_write_bytes(...)`
+  - `crates/atm-core/src/persistence.rs::atomic_write_string(...)`
+
+Inventory rule:
+- every sprint must update this inventory if new production-path live I/O
+  surfaces are introduced
+- code review for the phase is not complete until each inventory entry has an
+  identified mutation class and one owner-layer commit boundary
+
+#### P.1 — File Ownership Classification And Helper Boundaries
+
+Goal:
+- classify every live file family by ownership and mutation class
+- extract or confirm one owner-layer write boundary per file family before
+  deeper behavior changes land
+
+Design details:
+- introduce an internal file-I/O taxonomy used in docs and code review:
+  - Claude-owned compatibility surface
+  - ATM-owned source of truth
+  - staging/scratch artifact
+- define one owner-layer boundary for each live file family:
+  - mailbox owner helper
+  - seen-state owner helper
+  - send-alert state owner helper
+  - team-config owner helper
+  - task/highwatermark owner helper
+  - restore-marker owner helper
+- low-level atomic replacement stays in `persistence.rs`; file-family semantics
+  stay out of command handlers
+- no public API ceremony is required if a small internal helper layer keeps the
+  ownership boundary explicit
+
+Implementation patterns:
+- prefer typed owner helpers over generic closure-heavy abstractions when the
+  file family has domain-specific preconditions
+- call sites should say "save seen watermark", "write team config", or
+  "commit mailbox state" instead of assembling temp-file mechanics locally
+- staging directories are not live source-of-truth files, but their creation
+  and cleanup must still be deterministic and owned by one restore helper path
+
+Files expected in scope:
+- `crates/atm-core/src/persistence.rs`
+- `crates/atm-core/src/read/seen_state.rs`
+- `crates/atm-core/src/send/mod.rs`
+- `crates/atm-core/src/team_admin.rs`
+- `crates/atm-core/src/mailbox/atomic.rs`
+- `crates/atm-core/src/mailbox/mod.rs`
+- `crates/atm-core/src/lib.rs` if new owner modules/helpers are factored out
+
+Concrete implementation targets:
+- keep `persistence.rs` as the low-level atomic primitive layer
+- decide explicitly whether `team_admin.rs::atomic_write(...)` survives as a
+  thin team-config owner wrapper or is renamed/replaced for clarity
+- decide explicitly whether send-alert state/lock helpers stay in `send/mod.rs`
+  or move to a narrower owner module; do not leave that as an accidental
+  byproduct of code motion
+
+Tests required:
+- unit coverage for each owner helper boundary
+- deterministic tests proving owner helpers preserve existing on-disk shape
+- deterministic tests proving owner helpers are the only commit path used by
+  production call sites added in the sprint
+
+Acceptance criteria:
+- every live file family in `P.0` names one owner-layer write boundary
+- no new direct `fs::write`, truncate-and-rewrite, or ad hoc temp-file logic is
+  introduced in production code
+- the docs and module ownership notes match the helper boundaries
+
+#### P.2 — Mailbox Read Path Classification And Shared Commit Flow
+
+Goal:
+- make mailbox command behavior conform exactly to the three operation classes
+- share the observational read path and the commit path across read/ack/clear
+  wherever the behavior is identical
+
+Design details:
+- `read_only` mailbox work:
+  - source discovery
+  - source load
+  - merge/classify/filter/select
+  - no mailbox lock
+- `read_possible_write` mailbox work:
+  - unlocked observational snapshot first
+  - only if mutation is needed, enter the shared commit path
+- mailbox commit path:
+  - acquire the deterministic lock set
+  - re-discover source paths under lock
+  - reload current source files
+  - recompute the selected mutation from fresh data
+  - persist through the mailbox atomic helper while locks are still held
+- `ack` continues using the documented two-phase superset lock pattern, but the
+  reload/recompute step must be expressed through the shared commit pattern
+
+Implementation patterns:
+- share the unlocked snapshot loader between `read` initial selection and wait
+  polling
+- share sort/limit/selection recomputation utilities where behavior matches
+- keep lock acquisition out of read-only paths entirely
+- use deterministic path ordering and one total timeout budget for every
+  multi-file commit path
+
+Files expected in scope:
+- `crates/atm-core/src/read/mod.rs`
+- `crates/atm-core/src/ack/mod.rs`
+- `crates/atm-core/src/clear/mod.rs`
+- `crates/atm-core/src/mailbox/mod.rs`
+- `crates/atm-core/src/mailbox/source.rs`
+- `crates/atm-core/src/mailbox/lock.rs`
+
+Concrete implementation targets:
+- consolidate the current per-command mailbox rewrite helpers so `read`,
+  `ack`, and `clear` do not each own a separate final persist step
+- keep the two-phase superset lock behavior in `ack`, but move any duplicated
+  reload/recompute/persist shape behind shared mailbox owner helpers
+- preserve the current Windows-safe sentinel cleanup behavior already present
+  from `fix/issue-104-inbox-locks`; no sprint in Phase P may regress that
+
+Tests required:
+- deterministic success-path and failure-path tests for:
+  - read timeout polling without mailbox lock acquisition
+  - writeback path lock acquisition only when mutation is actually needed
+  - overlapping-origin `read`/`ack`/`clear` no-deadlock behavior
+  - source-set drift under lock causing clean abort instead of partial write
+- no test may rely on open-ended sleep loops, background polling races, or
+  indefinite `join()` behavior
+
+Acceptance criteria:
+- observational mailbox reads are lock-free
+- every mailbox writeback path uses the shared commit pattern
+- `ack`/`clear`/`read` do not each carry bespoke stale-snapshot writeback logic
+
+#### P.3 — ATM-Owned State Families: Seen-State, Send-Alert, Restore, Tasks
+
+Goal:
+- harden every ATM-owned state family outside the mailbox surface so each one
+  follows the same mutation taxonomy and one-owner write rule
+
+Design details:
+- seen-state:
+  - `read_only` load
+  - `read_modify_write` save through one seen-state helper
+- send-alert state:
+  - state JSON and lock file treated as one owner-managed state family
+  - lock semantics and stale-lock handling documented and isolated from command
+    logic
+- restore/task/highwatermark state:
+  - restore marker, task bucket install, and `.highwatermark` recompute all go
+    through typed owner helpers
+  - staging directories remain staging-only and are never treated as live
+    source-of-truth files
+- team config:
+  - continue config-last semantics
+  - write path remains singular and helper-owned
+
+Implementation patterns:
+- prefer one helper per file family over one mega-helper that obscures domain
+  rules
+- keep PID/stale-lock handling deterministic and isolated
+- avoid mixed responsibility functions that both plan restore state and commit
+  several file families ad hoc
+
+Files expected in scope:
+- `crates/atm-core/src/read/seen_state.rs`
+- `crates/atm-core/src/send/mod.rs`
+- `crates/atm-core/src/team_admin.rs`
+- `crates/atm-core/src/doctor/mod.rs`
+- `crates/atm-core/src/persistence.rs`
+
+Concrete implementation targets:
+- remove any remaining direct knowledge of send-alert JSON file shape from
+  non-owner call sites
+- keep restore staging helpers separate from live-file commit helpers so review
+  can distinguish staging-only writes from source-of-truth writes
+- if team-admin remains the owner for multiple file families, factor internal
+  helper sections or submodules so each file family still has one obvious write
+  boundary in code review
+
+Tests required:
+- deterministic round-trip tests for each ATM-owned state family
+- deterministic stale-lock eviction tests for send-alert state
+- deterministic restore-marker/task/highwatermark tests with no timing races
+- explicit regression tests that staging cleanup and restore-marker cleanup do
+  not hang or depend on filesystem timing quirks
+
+Acceptance criteria:
+- every ATM-owned non-mailbox state family in `P.0` uses one owner-layer write
+  boundary
+- no command handler directly manipulates the underlying JSON/state file shape
+  when a helper exists
+
+#### P.4 — Claude-Owned Inbox Compatibility Retirement
+
+Goal:
+- remove ATM-local workflow durability from the Claude-owned inbox rewrite path
+- move toward an ATM-owned source-of-truth for ATM workflow state
+
+Design details:
+- introduce an ATM-owned workflow sidecar family under:
+  - `.claude/teams/<team>/.atm-state/workflow/<agent>.json`
+- the sidecar is the ATM-owned source of truth for mailbox-local ATM workflow
+  state rather than storing new durable ATM semantics by rewriting
+  Claude-owned inbox records
+- sidecar records are keyed by stable ATM message identity string:
+  - ULID for forward ATM-authored messages
+  - legacy UUID `message_id` for compatibility records that already have one
+- Phase P.4 does not invent durable ATM-local workflow state for Claude-native
+  records that lack ATM message identity; those remain compatibility-only until
+  a later explicit enrichment/migration decision lands
+- initial target data to move behind the sidecar boundary:
+  - read state
+  - ack-required / acknowledged state
+  - ATM message identity metadata when ATM authors the message
+- `send` remains allowed to append a new Claude-native inbox record, but ATM
+  workflow durability should be committed to ATM-owned state
+- `read`, `ack`, and `clear` should project mailbox display state by joining:
+  - Claude-owned inbox records
+  - ATM-owned workflow sidecar state
+- legacy top-level ATM compatibility fields remain readable during migration,
+  but new source-of-truth behavior must not depend on rewriting them in place
+
+Implementation patterns:
+- design the sidecar keying and join semantics before migration code lands
+- use one owner-layer helper for sidecar load/project/save rather than letting
+  `read`, `ack`, and `clear` each shape sidecar JSON independently
+- prefer lazy backfill or compatibility projection over one risky bulk rewrite
+- keep the join deterministic and bounded; no background repair daemon
+
+Files expected in scope:
+- `crates/atm-core/src/schema/inbox_message.rs`
+- `crates/atm-core/src/mailbox/*`
+- `crates/atm-core/src/read/mod.rs`
+- `crates/atm-core/src/ack/mod.rs`
+- `crates/atm-core/src/clear/mod.rs`
+- `crates/atm-core/src/send/mod.rs`
+- `docs/atm-message-schema.md`
+- `docs/claude-code-message-schema.md`
+
+Concrete implementation targets:
+- define one owner helper for sidecar load/project/save before modifying `read`,
+  `ack`, or `clear` to consume it
+- make sidecar projection deterministic over mixed legacy and forward ATM
+  records before any inbox rewrite retirement code lands
+- keep message-schema docs and code keyed to the exact same identity contract;
+  no sprint may silently broaden the key space without doc updates
+
+Tests required:
+- deterministic projection tests over mixed legacy and sidecar-backed data
+- deterministic compatibility tests proving Claude-only appends are preserved
+- deterministic tests proving sidecar updates are keyed by ATM message identity
+  and do not require rewriting the source inbox record
+- no test may rely on concurrent unbounded polling or external background
+  repair to reach a passing state
+
+Acceptance criteria:
+- ATM no longer depends on full-file rewrite of Claude-owned inbox files for
+  new durable ATM workflow state
+- architecture docs can truthfully say ATM-local workflow durability lives in
+  an ATM-owned source-of-truth path
+- the sidecar file path and key format are documented and covered by tests
+
+#### P.5 — Cleanup, Audit Closure, And Production Gate
+
+Goal:
+- close the phase only when the documented model is actually enforceable in
+  code review and CI
+
+Deliverables:
+- rerun the explicit `P.0` inventory audit against the current source tree
+- remove any leftover parallel write paths
+- update module ownership docs if helpers moved
+- add code comments at the owner-layer boundaries where future contributors are
+  most likely to slip back into stale-snapshot or bespoke-write habits
+
+Deterministic test policy:
+- every new failure-path test must have a bounded completion path
+- allowed patterns:
+  - barrier/channel readiness handshakes
+  - short bounded lock timeout values
+  - deterministic fault-injection seams
+  - elapsed-time upper bounds with generous CI margins
+- forbidden patterns:
+  - open-ended polling loops waiting for "eventual" state
+  - indefinite `join()` waits
+  - sleeps used as the primary synchronization mechanism
+  - tests that only fail under scheduler luck or filesystem timing luck
+  - stress tests that are expected to pass "most of the time"
+
+Verification required:
+- `cargo fmt --check`
+- `cargo clippy --workspace --all-targets -- -D warnings`
+- `cargo test --workspace`
+
+Phase P completion gate:
+- every live file family in `P.0` is classified and owned
+- every live write path goes through one owner-layer write boundary
+- requirements, architecture, project plan, and module ownership docs agree
+- the test suite for the phase is explicitly deterministic and CI-safe
+- the remaining external-writer limitations, if any, are documented as accepted
+  compatibility boundaries rather than hidden assumptions

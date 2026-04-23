@@ -415,16 +415,11 @@ Architectural rules:
 - absent or invalid hook-result stdout is ignored rather than treated as hook
   failure
 - recipient non-match is silent
-- retired flat hook keys are configuration errors under
-  `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`, not compatibility aliases
-- retired `[atm].post_send_hook_members` is a configuration error under
-  `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`
+- retired flat hook keys and `[atm].post_send_hook_members` are configuration
+  errors, not compatibility aliases
 - hook-decision logging must preserve sender, recipient, matched rule selector,
   and final execution outcome for troubleshooting
-- expected hook non-match must remain debug-only diagnostics rather than
-  caller-visible warnings or send-result warning entries
-- hook failure or timeout never rolls back a successful send and remains the
-  only case where caller-visible hook warnings are appropriate
+- hook failure or timeout never rolls back a successful send
 
 ## 5. Persisted Schema
 
@@ -548,6 +543,20 @@ Current-phase constraint:
 - the owning design rationale for this migration remains
   [`atm-core/design/dedup-metadata-schema.md`](./atm-core/design/dedup-metadata-schema.md)
   §2.2 and §3.3
+
+File-ownership rule:
+
+- Claude-owned inbox content is not an ATM-owned source of truth for ATM-local
+  workflow durability
+- ATM may still have legacy compatibility write paths on the shared inbox
+  surface, but those paths must be documented as compatibility behavior rather
+  than a general pattern to copy
+- ATM-owned machine state should converge on ATM-owned sidecars or equivalent
+  ATM-owned persisted state when stronger write guarantees are required
+- the specific migration target for mailbox-local ATM workflow state remains
+  proposal-only and is tracked in `docs/project-plan.md` rather than treated as
+  current architecture
+
 Canonical read and ack axes are derived from persisted fields and not serialized separately.
 
 Invariant:
@@ -911,10 +920,6 @@ Architectural rules:
   ATM home directory
 - `add-member` is the retained local roster-repair path and must reject
   duplicates before mutating config
-- when `add-member` registers a tmux-backed member, it should persist
-  `tmuxPaneId` in canonical `%<number>` form and set `backendType = "tmux"`
-  plus `isActive = true`; unsupported tmux target syntax should fail fast
-  instead of being guessed into a routing handle
 - `backup` snapshots current team config, inboxes, and the ATM team task
   bucket into a timestamped snapshot directory
 - inbox backup excludes transient mailbox `*.lock` sentinels, dotfiles, and
@@ -1420,10 +1425,36 @@ stale snapshot.
 | `append_message` | `locked_read_modify_write` |
 | `send` missing-config notice append | `append_message` coverage |
 | source discovery fault (`read` / `ack` / `clear`) | abort before lock acquisition; no partial lock set attempted |
-| `read` writeback | multi-file lock set held from first read through persist |
+| `read` writeback | initial selection load is unlocked; acquire the multi-file lock set only for the reload + writeback phase |
 | `ack` transition + reply | two-phase cooperative lock — actor-source set acquired, dropped, re-acquired as full superset including reply inbox; see §18.4.1 |
 | `clear` set replacement | multi-file lock set held from first read through persist |
 | `read_messages` (read-only, no writeback) | No |
+
+### 18.4.2 Read-Only Vs Read-Modify-Write
+
+ATM now treats mailbox access as two distinct patterns:
+
+1. Read-only snapshot:
+   - discover source inbox paths
+   - load and classify the current merged surface without mailbox locks
+   - use this for display-only selection and timeout polling
+
+2. Read-modify-write:
+   - re-acquire the deterministic source lock set only when a command is about to
+     persist mailbox state
+   - re-discover and re-validate the source path set under lock
+   - reload the mailbox state, recompute selection, apply transitions, and
+     persist while the lock set is still held
+
+This keeps non-mutating reads out of the lock path while preserving a stable
+writeback boundary for commands that actually rewrite inbox files.
+
+### 18.4.3 Proposed File-I/O Hardening Work
+
+The broader repo-wide file-I/O taxonomy, ownership inventory, and mailbox-sidecar
+migration are proposal-only for this branch. They are tracked in
+`docs/project-plan.md` Phase P and are intentionally not part of the current
+executed architecture description yet.
 
 ### 18.5 New Error Codes
 
@@ -1464,6 +1495,25 @@ Architectural rule:
   state added by Phase M should extend that helper pattern with typed helpers
   for task-bucket, highwatermark, and shared coordination files instead of
   open-coding direct `fs::write(...)` mutations
+
+Single-write-path guardrail:
+- each live file family should have one owning write boundary
+- low-level atomic replacement belongs in `persistence.rs`
+- file-family semantics belong in one owner-layer helper such as mailbox or
+  team-admin
+- command handlers should express intent and call the owner-layer helper rather
+  than assemble write mechanics locally
+- if a new write precondition appears, the default response should be to extend
+  the shared helper or owner-layer helper rather than introducing a parallel
+  write path
+
+Current architectural limitation:
+- mailbox replacement is atomic and lock-coordinated for concurrent ATM
+  writers, but it is not yet compare-and-swap against non-cooperating Claude
+  writers
+- therefore the current shared-inbox rewrite path is still a compatibility
+  boundary, not the ideal long-term source-of-truth architecture for ATM-local
+  workflow state
 
 This rule intentionally applies beyond mailbox files so future work does not
 reintroduce partial-write or torn-state risks through backup/restore or shared
