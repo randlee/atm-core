@@ -12,7 +12,7 @@ use crate::output;
 
 #[derive(Debug, Args)]
 #[command(
-    after_help = "Post-send hooks can be configured in .atm.toml via [atm].post_send_hook plus [atm].post_send_hook_senders and/or [atm].post_send_hook_recipients. Omitted or empty sender/recipient lists do not match; if both lists are omitted or empty, the hook stays disabled. Use '*' in either list to match all senders or recipients. For hook troubleshooting, combine --stderr-logs with ATM_LOG=debug to surface debug-level hook diagnostics on stderr."
+    after_help = "Post-send hooks can be configured in .atm.toml via one or more [[atm.post_send_hooks]] rules with recipient = \"name-or-*\" and command = [\"argv\", ...]. Matching rules run after a successful non-dry-run send, in config order. Path-like command[0] values resolve relative to the declaring .atm.toml; bare executables like bash or python3 use normal PATH resolution. Recipient non-match is silent. For hook troubleshooting, combine --stderr-logs with ATM_LOG=debug to surface debug-level hook diagnostics on stderr."
 )]
 /// Send one ATM mailbox message.
 pub struct SendCommand {

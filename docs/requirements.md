@@ -317,9 +317,7 @@ Required config fields:
 Supported optional config fields:
 - `[atm].team_members`
 - `[atm].aliases`
-- `[atm].post_send_hook`
-- `[atm].post_send_hook_senders`
-- `[atm].post_send_hook_recipients`
+- `[[atm.post_send_hooks]]`
 
 Runtime identity rules:
 - repo-local `.atm.toml` `[atm].identity` is not a valid runtime identity
@@ -335,12 +333,12 @@ Runtime identity rules:
   should always be present in `config.json`
 - `.atm.toml` may define `[atm].aliases` for ATM-owned shorthand addressing of
   canonical member identities
-- `.atm.toml` may define `[atm].post_send_hook` and
-  `[atm].post_send_hook_senders` / `[atm].post_send_hook_recipients` for
-  best-effort post-send automation
-- `[atm].post_send_hook_members` is retired and must be rejected with
-  migration guidance directing operators to
-  `[atm].post_send_hook_senders` and `[atm].post_send_hook_recipients`
+- `.atm.toml` may define one or more `[[atm.post_send_hooks]]` rules for
+  best-effort recipient-scoped post-send automation
+- retired `[atm].post_send_hook`, `[atm].post_send_hook_senders`,
+  `[atm].post_send_hook_recipients`, and `[atm].post_send_hook_members` keys
+  must be rejected with migration guidance directing operators to
+  `[[atm.post_send_hooks]]`
 - config sections outside ATM-owned config, such as `[rmux]` or future
   `[scmux]`, are not ATM runtime config and must be ignored by `atm-core`
 
@@ -494,59 +492,41 @@ Alias rules:
   `metadata.atm.fromIdentity`
 
 Post-send-hook rules:
-- `post_send_hook` is an ATM-owned helper script/command path list
-- `post_send_hook_senders` matches resolved sender identity, not model name
-- `post_send_hook_recipients` matches the resolved recipient agent name
-- an omitted or empty `post_send_hook_senders` list never matches any sender
-- an omitted or empty `post_send_hook_recipients` list never matches any
-  recipient
-- `*` in either list matches every sender or every recipient respectively,
-  unconditionally, including all valid resolved sender/recipient identities
-- if both sender and recipient trigger lists are omitted or empty, the hook is
-  configured-but-disabled and ATM must not emit a user-facing skip warning for
-  that case
-- the hook runs once when either sender or recipient matching succeeds; if both
-  match, ATM must not run the hook twice
-- `post_send_hook_members` is not a supported config key in this release line
-- when retired `post_send_hook_members` is present, ATM must fail with a
-  migration-oriented error message following this template:
-  ```text
-  error: '{config_path}' field 'post_send_hook_members' is no longer supported.
-  Use 'post_send_hook_senders' (match on sender identity) and/or
-  'post_send_hook_recipients' (match on recipient name) under [atm].
-  Use '*' to match all senders or all recipients.
-  ```
-- `{config_path}` is the discovered `.atm.toml` path containing the retired key
+- `[[atm.post_send_hooks]]` is the only supported post-send hook shape in this
+  release line
+- each rule binds exactly one `recipient` selector and one `command` argv
+- `recipient` must be either one concrete team member name or `*`
+- multiple matching rules may run for a single send, in config order
+- retired `[atm].post_send_hook`, `[atm].post_send_hook_senders`,
+  `[atm].post_send_hook_recipients`, and `[atm].post_send_hook_members` keys
+  must fail with migration-oriented guidance to `[[atm.post_send_hooks]]`
 - a relative hook path must resolve from the directory containing the
   discovered `.atm.toml`
-- the hook must execute with that same config-root directory as its working
-  directory
+- bare executable names such as `bash`, `python3`, or `tmux` must use normal
+  `PATH` resolution
+- the hook must execute with the config-root directory as its working directory
+- recipient non-match is expected behavior and must be silent
 - the hook inherits the process environment and also receives one ATM-owned
   JSON payload in `ATM_POST_SEND`
 - the `ATM_POST_SEND` payload must contain:
   - `from`
   - `to`
+  - `sender`
+  - `recipient`
+  - `team`
   - `message_id`
   - `requires_ack`
   - optional `task_id` when present
-  - `hook_match.sender`
-    boolean — true if the sender filter axis matched, false otherwise
-  - `hook_match.recipient`
-    boolean — true if the recipient filter axis matched, false otherwise
-- when a sender or recipient list is omitted or empty, the corresponding
-  `hook_match` field is false because that axis did not match; only `*`
-  represents an unconditional match
 - example payload:
   ```json
   {
     "from": "arch-ctm@atm-dev",
     "to": "recipient@atm-dev",
+    "sender": "arch-ctm",
+    "recipient": "recipient",
+    "team": "atm-dev",
     "message_id": "...",
-    "requires_ack": false,
-    "hook_match": {
-      "sender": false,
-      "recipient": true
-    }
+    "requires_ack": false
   }
   ```
 - the hook may optionally emit one structured result object on stdout for ATM
@@ -566,21 +546,13 @@ Post-send-hook rules:
 - when a valid hook-result object is returned, ATM must log it with the
   declared level and preserve any structured fields
 - when a hook is configured, ATM must emit enough diagnostics to explain
-  whether the hook ran, was skipped, or failed, including the sender,
-  recipient, configured sender/recipient filters, and match outcome
-- when a hook is configured but neither filter axis matched, ATM must emit a
-  user-facing warning with this template:
-  ```text
-  post-send hook skipped: sender {sender} not in post_send_hook_senders {senders}
-  and recipient {recipient} not in post_send_hook_recipients {recipients}
-  ```
-- when a sender or recipient filter list is omitted, the corresponding
-  `{senders}` or `{recipients}` placeholder renders as `(not configured)`
-- this hook-skip warning applies only when at least one sender/recipient
-  filter list is configured and both axes fail to match
-- this hook-skip warning is emitted through the normal user-visible `warn!`
-  channel, rendered to stderr via tracing/log routing, and is not debug-only or
-  suppressible
+  whether the hook ran or failed, including the sender, recipient, and matched
+  hook recipient selector
+- configured non-match must remain debug-level only and must not be pushed into
+  user-visible warning output, stderr warning output, or `SendOutcome.warnings`
+- user-visible hook warnings are reserved for actual hook execution failures,
+  such as spawn failure, non-zero exit, timeout, or OS-level status-check
+  failure
 
 ## 6. `atm send`
 
@@ -642,24 +614,18 @@ Retired from the current implementation:
 - support optional task metadata on sent messages
 - reject retired `post_send_hook_members` config with actionable migration
   guidance before send execution proceeds
-- run `post_send_hook` only after successful non-`dry-run` sends and only when
-  the resolved sender matches `post_send_hook_senders` or the resolved
-  recipient matches `post_send_hook_recipients`
-- treat omitted or empty sender/recipient trigger lists as `never_match`
-  rather than unconditional pass
-- if both sender/recipient trigger lists are omitted or empty, treat the hook
-  as configured-but-disabled and do not emit a user-facing skip warning
-- support `*` wildcard matching in either post-send-hook filter list
-- run the hook at most once per successful send even when both sender and
-  recipient filters match
-- include sender/recipient match booleans in the `ATM_POST_SEND` payload so a
-  single hook script can branch on the trigger reason
+- reject retired flat post-send-hook config keys with actionable migration
+  guidance before send execution proceeds
+- run matching `[[atm.post_send_hooks]]` rules only after successful
+  non-`dry-run` sends
+- match rules only by resolved recipient identity
+- support `recipient = "*"` wildcard matching for all recipients
+- execute all matching post-send-hook rules in config order
 - support an optional structured hook result on stdout so hook scripts can
   report post-send outcomes such as nudges, no-op conditions, and operator
   errors without relying on stderr scraping
-- emit structured diagnostics for hook-match evaluation and actionable
-  user-facing warnings when a configured hook is skipped because no sender or
-  recipient filter matched
+- emit structured diagnostics for hook-rule evaluation and actionable warnings
+  only when a configured hook execution fails
 - treat `post_send_hook` failure or timeout as best-effort diagnostics only; it
   must not roll back or fail an already-successful send
 - write a non-null `message_id` on every ATM-authored message
@@ -1200,6 +1166,9 @@ The initial doctor implementation must cover:
 - team directory existence
 - team config existence and parse health
 - inbox directory existence and writability
+- stale mailbox lock detection across `~/.claude/teams/*/inboxes/*.lock` using
+  start-of-run and end-of-run snapshots; a lock present in both snapshots is
+  stale and must be reported with `ATM_WARNING_STALE_MAILBOX_LOCK`
 - hook identity availability
 - `ATM_HOME`, `ATM_TEAM`, and `ATM_IDENTITY` override visibility
 - `sc-observability` initialization health
@@ -1279,12 +1248,20 @@ Bare `atm teams` must:
 - validate that the target team exists
 - reject duplicate member names
 - persist the new member entry deterministically in team config
+- write `tmuxPaneId` in canonical tmux `%<number>` form when `--pane-id` is
+  provided; bare numeric pane ids may be normalized to that form, but
+  `session:window.pane` target syntax must be rejected rather than guessed
+- set `backendType = "tmux"` and `isActive = true` on the persisted member
+  record when `--pane-id` is provided
+- preserve `name`, `agentId`, `agentType`, `model`, and `cwd` as the
+  persisted routing identity fields written by ATM
 - create any required local inbox state atomically with the roster update
 
 `atm teams backup` must:
 - create a timestamped snapshot under the ATM team backup area
 - capture the current `config.json`
-- capture team inbox files
+- capture team inbox files, excluding transient `*.lock` sentinels, dotfiles,
+  and restore markers
 - capture the ATM team task bucket
 - report the created backup path in human and JSON output
 - not claim to back up the separate Claude Code project task list
@@ -1298,6 +1275,8 @@ Bare `atm teams` must:
 - clear runtime-only restored-member fields such as session, activity, and
   pane state before persisting them
 - restore non-lead inbox files from the chosen snapshot deterministically
+- sweep stale inbox `*.lock` sentinels before copying restored inbox files as a
+  self-heal step
 - restore the ATM team task bucket and recompute `.highwatermark` from the
   maximum restored task id
 - fail with a structured error when backup material is missing or malformed
@@ -1743,8 +1722,9 @@ closed before the 1.0 release.
   - lock acquisition must use a bounded timeout (default 5 seconds) and fail
     with a structured `AtmError` carrying `AtmErrorCode::MailboxLockTimeout`
     when the timeout expires
-  - the lock file may exist as a zero-byte sentinel but must tolerate stale lock
-    files from crashed processes
+  - the lock sentinel path is a transient runtime artifact: ATM writes the
+    owner pid while the lock is held, unlinks the sentinel on guard drop, and
+    must tolerate stale pid-bearing sentinels from crashed processes
   - advisory locking is cooperative: only concurrent ATM processes coordinate
 
 - `REQ-CORE-MAILBOX-LOCK-002` Mailbox locking must work on macOS, Linux, and

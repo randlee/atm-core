@@ -19,6 +19,7 @@ use crate::identity;
 use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::persistence;
+use crate::process::process_is_alive;
 use crate::schema::{LegacyMessageId, MessageEnvelope};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 
@@ -645,44 +646,6 @@ fn evict_stale_send_alert_lock(path: &Path) -> bool {
     }
 }
 
-#[cfg(unix)]
-fn process_is_alive(pid: u32) -> bool {
-    let pid: libc::pid_t = match pid.try_into() {
-        Ok(pid) => pid,
-        Err(_) => return false,
-    };
-    // SAFETY: libc::kill with signal 0 performs an existence/permission check
-    // only and does not deliver a signal.
-    let result = unsafe { libc::kill(pid, 0) };
-    if result == 0 {
-        return true;
-    }
-
-    std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
-}
-
-#[cfg(windows)]
-fn process_is_alive(pid: u32) -> bool {
-    use windows_sys::Win32::Foundation::{CloseHandle, STILL_ACTIVE};
-    use windows_sys::Win32::System::Threading::{
-        GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
-    };
-
-    // SAFETY: OpenProcess is called read-only for process liveness inspection.
-    let process_id: u32 = pid;
-    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, process_id) };
-    if handle.is_null() {
-        return false;
-    }
-
-    let mut exit_code = 0u32;
-    // SAFETY: handle was returned by OpenProcess and remains valid until CloseHandle below.
-    let ok = unsafe { GetExitCodeProcess(handle, &mut exit_code) };
-    // SAFETY: handle was opened successfully above and must be closed once.
-    unsafe { CloseHandle(handle) };
-    ok != 0 && exit_code == STILL_ACTIVE as u32
-}
-
 struct SendAlertLock {
     path: PathBuf,
 }
@@ -708,9 +671,10 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        SendAlertState, acquire_send_alert_lock, load_send_alert_state, process_is_alive,
-        save_send_alert_state, send_alert_lock_path, send_alert_state_path,
+        SendAlertState, acquire_send_alert_lock, load_send_alert_state, save_send_alert_state,
+        send_alert_lock_path, send_alert_state_path,
     };
+    use crate::process::process_is_alive;
 
     #[test]
     fn load_send_alert_state_parse_errors_are_config_errors() {

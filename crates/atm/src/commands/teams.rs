@@ -39,7 +39,10 @@ struct AddMemberCommand {
     #[arg(long)]
     cwd: Option<PathBuf>,
 
-    #[arg(long = "pane-id")]
+    #[arg(
+        long = "pane-id",
+        help = "tmux pane id in '%<number>' form or a bare numeric pane id"
+    )]
     pane_id: Option<String>,
 
     #[arg(long)]

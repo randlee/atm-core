@@ -1,0 +1,45 @@
+---
+name: dev-task
+version: 1.0.0
+description: team-lead sprint assignment template for codex-orchestration development work.
+format: xml
+required_variables:
+  - task_id
+  - sprint
+  - description
+  - worktree_path
+  - branch
+  - pr_target
+  - deliverables
+  - acceptance_criteria
+  - references
+---
+<atm-task id="{{ task_id }}" sprint="{{ sprint }}" assignee="arch-ctm">
+  <description>{{ description }}</description>
+
+  <worktree>{{ worktree_path }}</worktree>
+  <branch>{{ branch }}</branch>
+  <pr-target>{{ pr_target }}</pr-target>
+
+  <deliverables>
+{{ deliverables }}
+  </deliverables>
+
+  <acceptance-criteria>
+{{ acceptance_criteria }}
+  </acceptance-criteria>
+
+  <references>
+{{ references }}
+  </references>
+
+  <workflow>
+    <step id="a">ACK this message immediately. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
+    <step id="b">Immediately after ACK, begin executing the task in the same work session.</step>
+    <step id="c">Before coding, update the worktree from the sprint target branch and include prior fixes already merged to that target.</step>
+    <step id="d">As soon as the development changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away so PR work and QA preparation can begin in parallel.</step>
+    <step id="e">After the push report, run the required validation and tests. Do not wait for PR creation before starting validation.</step>
+    <step id="f">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required.</step>
+    <step id="g">After the validation report, read ATM again for follow-up work.</step>
+  </workflow>
+</atm-task>

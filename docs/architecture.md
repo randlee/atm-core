@@ -395,40 +395,36 @@ Architectural rules:
   canonical sender identity in `metadata.atm.fromIdentity`
 - self-send checks, target validation, routing, and audit logic must use the
   canonical sender identity rather than the display-oriented `from` projection
-- ATM-owned post-send hooks are best-effort sender/recipient-scoped helpers,
-  not part of the atomic send boundary
+- ATM-owned post-send hooks are best-effort recipient-scoped helpers, not part
+  of the atomic send boundary
 - the hook runs only after a successful non-`dry-run` send
-- sender matching uses `[atm].post_send_hook_senders`
-- recipient matching uses `[atm].post_send_hook_recipients`
-- omitted or empty sender/recipient lists do not match and therefore do not
-  trigger the hook on their own
-- if both sender/recipient lists are omitted or empty, the hook is effectively
-  disabled and ATM does not emit a user-facing skip warning for that case
-- `*` in either list acts as a wildcard match for that axis
-- the hook executes once when either axis matches and must not duplicate
-  execution when both axes match
+- each `[[atm.post_send_hooks]]` rule binds one recipient selector and one
+  command argv
+- `recipient = "*"` acts as a wildcard match for all recipients
+- multiple matching rules all execute, in config order
 - relative post-send-hook paths resolve from the discovered `.atm.toml`
   directory and execute with that same directory as the working directory
+- bare executable names use normal `PATH` lookup
 - the hook receives inherited environment plus one ATM-owned JSON payload in
   `ATM_POST_SEND`
-- the payload includes `hook_match.sender` and `hook_match.recipient` so one
-  script can branch on the trigger source
-  - `hook_match.sender`
-    boolean — true if the sender filter axis matched, false otherwise
-  - `hook_match.recipient`
-    boolean — true if the recipient filter axis matched, false otherwise
+- the payload includes `from`, `to`, `sender`, `recipient`, `team`,
+  `message_id`, `requires_ack`, and optional `task_id`
 - the hook may optionally emit one structured result object on stdout with a
   declared log level, message, and optional structured fields; ATM parses it
   on a best-effort basis for post-send diagnostics
 - absent or invalid hook-result stdout is ignored rather than treated as hook
   failure
-- user-visible skip warnings apply only when at least one sender/recipient
-  filter list is configured and both axes fail to match
-- retired `[atm].post_send_hook_members` config is a configuration error, not a
-  compatibility alias
-- hook-decision logging must preserve sender, recipient, configured filters,
-  wildcard use, and final match outcome for troubleshooting
-- hook failure or timeout never rolls back a successful send
+- recipient non-match is silent
+- retired flat hook keys are configuration errors under
+  `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`, not compatibility aliases
+- retired `[atm].post_send_hook_members` is a configuration error under
+  `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`
+- hook-decision logging must preserve sender, recipient, matched rule selector,
+  and final execution outcome for troubleshooting
+- expected hook non-match must remain debug-only diagnostics rather than
+  caller-visible warnings or send-result warning entries
+- hook failure or timeout never rolls back a successful send and remains the
+  only case where caller-visible hook warnings are appropriate
 
 ## 5. Persisted Schema
 
@@ -448,10 +444,10 @@ ATM config and team-launch config are distinct concerns:
 - `[atm].team_members` is the ATM-owned baseline roster for doctor/orchestration
   checks
 - `[atm].aliases` is the ATM-owned shorthand map for canonical agent names
-- `[atm].post_send_hook`, `[atm].post_send_hook_senders`, and
-  `[atm].post_send_hook_recipients` are ATM-owned best-effort automation
-  settings
-- retired `[atm].post_send_hook_members` must fail fast with migration guidance
+- `[[atm.post_send_hooks]]` is the ATM-owned best-effort post-send automation
+  surface
+- retired flat hook keys and `[atm].post_send_hook_members` must fail fast
+  with migration guidance
 - `[atm].identity` is obsolete in the retained multi-agent model and must not
   participate in runtime identity resolution
 
@@ -893,6 +889,9 @@ Roster output rules:
 - show baseline `[atm].team_members` first
 - show `team-lead` first among the baseline members when present
 - show extra runtime members after the baseline set
+- snapshot `~/.claude/teams/*/inboxes/*.lock` at doctor start and end; any lock
+  path present in both snapshots is stale and should surface as
+  `ATM_WARNING_STALE_MAILBOX_LOCK` with `rm -f <path>` recovery guidance
 
 ### 6.8 Team Recovery Services
 
@@ -912,13 +911,20 @@ Architectural rules:
   ATM home directory
 - `add-member` is the retained local roster-repair path and must reject
   duplicates before mutating config
+- when `add-member` registers a tmux-backed member, it should persist
+  `tmuxPaneId` in canonical `%<number>` form and set `backendType = "tmux"`
+  plus `isActive = true`; unsupported tmux target syntax should fail fast
+  instead of being guessed into a routing handle
 - `backup` snapshots current team config, inboxes, and the ATM team task
   bucket into a timestamped snapshot directory
+- inbox backup excludes transient mailbox `*.lock` sentinels, dotfiles, and
+  restore markers
 - `restore` is a local recovery path and must:
   - preserve the current team-lead entry and `leadSessionId`
   - restore only missing non-lead members
   - clear runtime-only restored-member state before persistence
   - restore non-lead inboxes from the chosen snapshot
+  - sweep stale mailbox `*.lock` sentinels before restored inbox files are copied in
   - recompute `.highwatermark` from the maximum restored task id
   - support a dry-run path without making changes
 - Claude Code project task-list restoration remains separate from the retained
@@ -1026,17 +1032,14 @@ The mailbox layer does not own selection policy, display buckets, output formatt
 
 When `ATM_POST_SEND` is set for a configured post-send hook, the payload must
 contain:
+- `sender`
+- `recipient`
+- `team`
 - `from`
 - `to`
 - `message_id`
 - `requires_ack`
 - optional `task_id` when present
-- `hook_match.sender`
-  boolean — true if the sender filter axis matched, false otherwise
-- `hook_match.recipient`
-  boolean — true if the recipient filter axis matched, false otherwise
-- omitted or empty sender/recipient lists therefore produce `hook_match`
-  values of `false`; only `*` represents an unconditional match
 
 The post-send hook runs only after a successful non-`dry-run` send, executes
 once when sender or recipient matching succeeds, may optionally emit one
@@ -1308,12 +1311,13 @@ duplicates what `fs2` already provides correctly.
     Unix: flock(fd, LOCK_EX)           Windows: LockFileEx(handle)
 ```
 
-- **Sentinel**: `{inbox_path}.lock` — zero-byte file, created lazily, persists across
-  process lifetimes (stale sentinels are harmless; OS releases lock on fd close/exit)
+- **Sentinel**: `{inbox_path}.lock` — pid-bearing runtime artifact, created lazily,
+  removed on `MailboxLockGuard` drop, and best-effort evicted when the recorded pid
+  is no longer alive
 - **Granularity**: per-inbox-file — concurrent sends to different recipients never contend
 - **Lock lifetime**: acquired before `read_messages`, held through `atomic::write_messages`
   durability boundary (temp-file write, rename, and any parent-directory sync),
-  released on `MailboxLockGuard` drop
+  then the sentinel is unlinked and the guard is released
 - **Timeout**: bounded retry loop with `try_lock_exclusive()` + 50ms sleep, default 5s;
   on expiry returns `AtmError { code: MailboxLockTimeout }`
 - **Error classification**: only genuine "lock busy" results participate in the

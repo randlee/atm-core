@@ -1,0 +1,49 @@
+---
+name: review-task
+version: 1.0.0
+description: team-lead phase-ending code review template for codex-orchestration phases.
+format: xml
+required_variables:
+  - task_id
+  - phase
+  - branch
+  - commit
+  - worktree_path
+  - review_focus
+  - review_questions
+  - references
+---
+<atm-review id="{{ task_id }}" phase="{{ phase }}" assignee="arch-ctm">
+  <description>Phase-ending code review. Read-only analysis only; no code changes.</description>
+
+  <branch>{{ branch }}</branch>
+  <commit>{{ commit }}</commit>
+  <worktree>{{ worktree_path }}</worktree>
+
+  <review-focus>
+{{ review_focus }}
+  </review-focus>
+
+  <review-questions>
+{{ review_questions }}
+  </review-questions>
+
+  <references>
+{{ references }}
+  </references>
+
+  <output-format>
+    Structured findings report with sections:
+    1. SUMMARY — one-paragraph verdict
+    2. FINDINGS — numbered list, each with severity, location, finding, recommendation
+    3. EXTRACTION-READINESS — score 1-5 per relevant module with rationale
+    4. RECOMMENDED-NEXT-SPRINTS — concrete follow-up work items
+  </output-format>
+
+  <workflow>
+    <step id="a">ACK this message immediately.</step>
+    <step id="b">Read the relevant source and doc files in the specified worktree and commit context.</step>
+    <step id="c">Do not make any code changes.</step>
+    <step id="d">Send the structured findings report directly in the ATM message.</step>
+  </workflow>
+</atm-review>

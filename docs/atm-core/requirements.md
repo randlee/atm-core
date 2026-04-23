@@ -244,11 +244,12 @@ Required config rules:
   present in `config.json`
 - `[atm].aliases` may define ATM-owned shorthand names for canonical agent
   identities
-- `[atm].post_send_hook` may define an ATM-owned helper script/command argv
-- `[atm].post_send_hook_senders` may define sender-side hook matching
-- `[atm].post_send_hook_recipients` may define recipient-side hook matching
-- retired `[atm].post_send_hook_members` must fail with migration guidance to
-  the sender/recipient keys rather than being treated as a compatibility alias
+- `[[atm.post_send_hooks]]` may define ATM-owned best-effort post-send
+  automation rules
+- retired `[atm].post_send_hook`, `[atm].post_send_hook_senders`,
+  `[atm].post_send_hook_recipients`, and `[atm].post_send_hook_members` must
+  fail with migration guidance to `[[atm.post_send_hooks]]` rather than being
+  treated as compatibility aliases
 - `[atm].identity` is obsolete and must not participate in runtime identity
   resolution; doctor should report it as configuration drift when present
 
@@ -268,48 +269,39 @@ Required identity rules:
   in `metadata.atm.fromIdentity`
 - canonical sender identity remains the source of truth for validation,
   self-send checks, routing, and audit behavior
-- `post_send_hook_senders` matches resolved sender identity, not model name
-- `post_send_hook_recipients` matches resolved recipient identity
-- omitted or empty sender/recipient trigger lists never match on that axis
-- `*` matches all senders or all recipients on the corresponding axis
-- if both sender/recipient trigger lists are omitted or empty, the hook is
-  configured-but-disabled and ATM must not emit a user-facing skip warning for
-  that case
-- `post_send_hook` runs only after a successful non-`dry-run` send and only
-  when sender or recipient matching succeeds
-- when both sender and recipient matching succeed, ATM still runs the hook only
-  once
-- a relative `post_send_hook` path resolves from the discovered `.atm.toml`
+- each `[[atm.post_send_hooks]]` rule binds one `recipient` selector and one
+  `command` argv
+- `recipient` must be one concrete recipient name or `*`
+- rules with empty recipient or empty command must fail during config loading
+- multiple matching rules may run for one send, in config order
+- recipient non-match is expected behavior and must be silent
+- a relative hook command path resolves from the discovered `.atm.toml`
   directory, and the hook executes with that same directory as its working
   directory
+- bare executable names such as `bash`, `python3`, or `tmux` must use normal
+  `PATH` resolution
 - the hook inherits process environment and also receives one ATM-owned JSON
   payload in `ATM_POST_SEND` with:
   - `from`
   - `to`
+  - `sender`
+  - `recipient`
+  - `team`
   - `message_id`
   - `requires_ack`
   - optional `task_id` when present
-  - `hook_match.sender`
-    boolean — true if the sender filter axis matched, false otherwise
-  - `hook_match.recipient`
-    boolean — true if the recipient filter axis matched, false otherwise
-- omitted or empty sender/recipient trigger lists therefore produce
-  `hook_match` values of `false`; only `*` represents an unconditional match
 - the hook may optionally emit one structured stdout result with `level`,
   `message`, and optional `fields`; ATM logs it on a best-effort basis and
   ignores absent or invalid output
-- hook-match evaluation and hook-skip outcomes must remain observable through
-  structured diagnostics and actionable user-visible warnings where required
-- when a hook is configured but neither filter axis matched, emit this
-  user-visible warning template:
-  ```text
-  post-send hook skipped: sender {sender} not in post_send_hook_senders {senders}
-  and recipient {recipient} not in post_send_hook_recipients {recipients}
-  ```
-- the hook-skip warning applies only when at least one sender/recipient filter
-  list is configured and both axes fail to match
+- hook-rule evaluation and execution outcomes must remain observable through
+  structured diagnostics without creating caller-visible warnings for expected
+  recipient non-match
+- expected recipient non-match remains debug-only diagnostics and must not emit
+  a caller-visible warning
 - hook failure or timeout is best-effort only and must not roll back a
   successful send
+- actual hook execution failures remain the only case where caller-visible hook
+  warnings are appropriate
 - the reserved sender `atm-identity-missing@<team>` is available only for
   ATM-generated repair/diagnostic notices and must not become a general
   identity fallback
@@ -322,6 +314,9 @@ Required doctor rules:
 - extra runtime members in `config.json` are allowed
 - doctor roster output must show all `config.json` members, with baseline
   members first and `team-lead` first among the baseline set
+- `atm doctor` must snapshot `~/.claude/teams/*/inboxes/*.lock` at start and
+  end of the run; any lock path present in both snapshots is stale and must be
+  reported with `ATM_WARNING_STALE_MAILBOX_LOCK` plus `rm -f <path>` recovery guidance
 
 ## 9. Retained Team Recovery Surface
 
@@ -339,15 +334,22 @@ Required service rules:
   on daemon orchestration or runtime spawning
 - `add-member` must validate team existence and reject duplicate member names
   before mutating local team config
+- when `add-member` receives a pane id, it must persist `tmuxPaneId` in
+  canonical tmux `%<number>` form, set `backendType = "tmux"`, and mark the
+  member `isActive = true`
+- `add-member` must reject unsupported tmux target syntax such as
+  `session:window.pane` rather than guessing a pane handle
 - backup must snapshot:
   - `config.json`
-  - team inbox files
+  - team inbox files, excluding transient `*.lock` sentinels, dotfiles, and
+    restore markers
   - the ATM team task bucket
 - restore must:
   - preserve the current team-lead entry and current `leadSessionId`
   - add only missing non-lead members from the snapshot
   - clear runtime-only restored-member fields such as session or pane state
   - restore non-lead inboxes
+  - sweep stale inbox `*.lock` sentinels before copying restored inbox files
   - recompute `.highwatermark` from the maximum restored task id
   - support a dry-run path without making changes
 - malformed or missing snapshot material must fail with structured errors

@@ -16,6 +16,8 @@ pub enum AtmErrorCode {
     ConfigParseFailed,
     /// `.atm.toml` uses a retired post-send hook key.
     ConfigRetiredHookMembersKey,
+    /// `.atm.toml` uses retired flat post-send hook keys.
+    ConfigRetiredLegacyHookKeys,
     /// Team config parsing failed.
     ConfigTeamParseFailed,
     /// Team config document is missing.
@@ -84,6 +86,8 @@ pub enum AtmErrorCode {
     WarningBaselineMemberMissing,
     /// A restore operation left a stale in-progress marker behind.
     WarningRestoreInProgress,
+    /// A mailbox lock sentinel persisted for the full doctor run.
+    WarningStaleMailboxLock,
     /// A configured post-send hook was skipped because no filter matched.
     WarningHookSkipped,
     /// A configured post-send hook failed during best-effort execution.
@@ -96,6 +100,7 @@ impl AtmErrorCode {
             Self::ConfigHomeUnavailable => "ATM_CONFIG_HOME_UNAVAILABLE",
             Self::ConfigParseFailed => "ATM_CONFIG_PARSE_FAILED",
             Self::ConfigRetiredHookMembersKey => "ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY",
+            Self::ConfigRetiredLegacyHookKeys => "ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS",
             Self::ConfigTeamParseFailed => "ATM_CONFIG_TEAM_PARSE_FAILED",
             Self::ConfigTeamMissing => "ATM_CONFIG_TEAM_MISSING",
             Self::IdentityUnavailable => "ATM_IDENTITY_UNAVAILABLE",
@@ -130,6 +135,7 @@ impl AtmErrorCode {
             Self::WarningIdentityDrift => "ATM_WARNING_IDENTITY_DRIFT",
             Self::WarningBaselineMemberMissing => "ATM_WARNING_BASELINE_MEMBER_MISSING",
             Self::WarningRestoreInProgress => "ATM_WARNING_RESTORE_IN_PROGRESS",
+            Self::WarningStaleMailboxLock => "ATM_WARNING_STALE_MAILBOX_LOCK",
             Self::WarningHookSkipped => "ATM_WARNING_HOOK_SKIPPED",
             Self::WarningHookExecutionFailed => "ATM_WARNING_HOOK_EXECUTION_FAILED",
         }

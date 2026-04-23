@@ -54,12 +54,11 @@ ATM-owned `.atm.toml` semantics for the retained multi-agent model:
 - `[atm].team_members` is the baseline roster used for doctor and future
   orchestration-safety checks
 - `[atm].aliases` is an ATM-owned shorthand map for canonical agent names
-- `[atm].post_send_hook` is an ATM-owned helper command definition for
-  best-effort post-send automation
-- `[atm].post_send_hook_senders` and `[atm].post_send_hook_recipients` are the
-  sender/recipient trigger lists for that helper
-- retired `[atm].post_send_hook_members` is a configuration error with
-  migration guidance, not a compatibility alias
+- `[[atm.post_send_hooks]]` is the ATM-owned best-effort post-send automation
+  surface
+- each rule binds one recipient selector and one command argv
+- retired flat hook keys and `[atm].post_send_hook_members` are configuration
+  errors with migration guidance, not compatibility aliases
 - `[atm].identity` is obsolete and ignored by runtime identity resolution
 - launcher-owned sections such as `[rmux]` and future `[scmux]` are outside the
   `atm-core` runtime boundary and are intentionally ignored
@@ -85,44 +84,44 @@ Identity-specific policy:
   validation, routing, and audit use
 - post-send-hook execution is outside the atomic mailbox mutation boundary
 - the hook runs only after a successful non-`dry-run` send
+- hook matching is recipient-scoped only
+- `recipient = "*"` matches all recipients
+- multiple matching rules execute in config order
 - a relative hook path resolves from the discovered `.atm.toml` directory and
   executes with that same directory as working directory
+- bare executable names use normal `PATH` lookup
 - the hook inherits process environment and receives one ATM-owned JSON
   payload in `ATM_POST_SEND`
 - the `ATM_POST_SEND` payload contains:
   - `from`
   - `to`
+  - `sender`
+  - `recipient`
+  - `team`
   - `message_id`
   - `requires_ack`
   - optional `task_id` when present
-  - `hook_match.sender`
-    boolean — true if the sender filter axis matched, false otherwise
-  - `hook_match.recipient`
-    boolean — true if the recipient filter axis matched, false otherwise
-- omitted or empty sender/recipient trigger lists therefore produce
-  `hook_match` values of `false`; only `*` represents an unconditional match
-- sender matching uses `[atm].post_send_hook_senders`
-- recipient matching uses `[atm].post_send_hook_recipients`
-- omitted or empty sender/recipient lists do not match on that axis
-- if both sender/recipient lists are omitted or empty, the hook is effectively
-  disabled and ATM does not emit a user-facing skip warning for that case
-- `*` is a wildcard match on either trigger axis
-- hook execution occurs once when either trigger axis matches
 - hook stdout may optionally carry one structured result object that ATM parses
   on a best-effort basis for post-send diagnostics
 - supported structured hook-result levels are `debug`, `info`, `warn`, and
   `error`
-- user-visible skip warnings apply only when at least one sender/recipient
-  filter list is configured and both axes fail to match
-- hook-decision evaluation and skip reasons must be observable enough for
-  troubleshooting without requiring source inspection
+- recipient non-match is silent
+- expected hook non-match is debug-only and not a user-facing warning
+- hook-decision evaluation must preserve sender, recipient, matched rule
+  selector, and execution outcome for troubleshooting without requiring source
+  inspection
 - hook failure or timeout is best-effort only and must not convert a
   successful send into a command failure
+- actual hook execution failures remain the only case where caller-visible hook
+  warnings are appropriate
 - the reserved diagnostic sender `atm-identity-missing@<team>` is for
   ATM-generated repair/diagnostic notices only
 - doctor should project the live `config.json` roster in a deterministic order:
   baseline `[atm].team_members` first, `team-lead` first among that baseline,
   then extra runtime members
+- doctor should snapshot `~/.claude/teams/*/inboxes/*.lock` at start and end;
+  any lock path present in both snapshots is stale and should surface as
+  `ATM_WARNING_STALE_MAILBOX_LOCK` with `rm -f <path>` recovery guidance
 
 Current `AgentMember` persisted schema:
 - `name: String` required for roster membership checks
@@ -134,6 +133,15 @@ Current `AgentMember` persisted schema:
 - `cwd: String`, default empty string
 - `extra: serde_json::Map<String, serde_json::Value>` via `#[serde(flatten)]`
   for forward-compatible Claude Code fields
+
+ATM-owned member normalization rules:
+- `agentId`, `name`, `agentType`, `model`, and `cwd` are the persisted routing
+  identity fields ATM writes during `teams add-member`
+- tmux-backed members use canonical `tmuxPaneId` values in `%<number>` form
+- when ATM writes a tmux-backed member, it also sets `backendType = "tmux"` and
+  `isActive = true` in `extra`
+- unsupported tmux target syntax such as `session:window.pane` must be rejected
+  rather than guessed into a pane handle
 
 Observability boundary note:
 - `AgentMember.extra` is intentionally out of scope for the L.4 observability
@@ -178,10 +186,14 @@ Architectural rules:
   - local team restore
 - historical orchestration-heavy team commands remain outside the retained
   `atm-core` boundary for initial release
+- backup excludes transient mailbox `*.lock` sentinels, dotfiles, and restore
+  markers from the inbox copy set
 - restore preserves the current team-lead record and current `leadSessionId`
   rather than replaying stale lead-session state from backup
 - restored non-lead members must have runtime-only state cleared before they
   are written back to local config
+- restore sweeps stale mailbox `*.lock` sentinels before restored inbox files
+  are copied back into place
 - restored ATM task buckets must recompute `.highwatermark` from the maximum
   restored task id
 - the local `members` view is config-first; richer hook/session state may be

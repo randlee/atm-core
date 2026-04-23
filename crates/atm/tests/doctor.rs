@@ -233,6 +233,41 @@ fn test_doctor_reports_stale_restore_marker_warning() {
     );
 }
 
+#[test]
+fn test_doctor_reports_stale_mailbox_lock_across_team_inboxes() {
+    let fixture = Fixture::new(&["team-lead", "arch-ctm"]);
+    let stale_lock = fixture
+        .tempdir
+        .path()
+        .join(".claude")
+        .join("teams")
+        .join("ops")
+        .join("inboxes")
+        .join("worker.json.lock");
+    fs::create_dir_all(stale_lock.parent().expect("lock parent")).expect("inboxes dir");
+    fs::write(&stale_lock, u32::MAX.to_string()).expect("stale lock");
+
+    let output = fixture.run(&["doctor", "--json"], &[]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    let findings = parsed["findings"].as_array().expect("findings array");
+    assert!(
+        findings.iter().any(|finding| {
+            finding["code"] == "ATM_WARNING_STALE_MAILBOX_LOCK"
+                && finding["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains(&stale_lock.display().to_string()))
+        }),
+        "stdout: {}",
+        String::from_utf8(output.stdout.clone()).expect("stdout utf8")
+    );
+}
+
 struct Fixture {
     tempdir: tempfile::TempDir,
 }
