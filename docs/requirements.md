@@ -1914,6 +1914,24 @@ closed before the 1.0 release.
   - if a file family needs special preconditions such as lock ordering or
     freshness validation, those preconditions must be enforced at the shared
     helper boundary or a single owner-layer wrapper around it
+  - the current owner-layer set is:
+    - mailbox compatibility surface:
+      `mailbox::store::commit_mailbox_state(...)` and
+      `mailbox::store::commit_source_files(...)`
+    - seen-state watermark:
+      `read::seen_state::save_seen_watermark(...)`
+    - send-alert state:
+      `send::alert_state::save(...)` with
+      `send::alert_state::acquire_lock(...)`
+    - team config:
+      `team_admin::write_team_config(...)`
+    - task bucket and `.highwatermark`:
+      `team_admin::restore_task_state_from_backup(...)`
+    - restore marker and restore staging:
+      `team_admin::write_restore_marker(...)`,
+      `team_admin::clear_restore_marker(...)`,
+      `team_admin::prepare_restore_workspace(...)`, and
+      `team_admin::cleanup_restore_workspace(...)`
 
 - `REQ-CORE-PERSIST-ATOMIC-001C` ATM must not claim rewrite safety for
   non-cooperating external writers.

@@ -411,8 +411,7 @@ pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> 
         }));
     }
 
-    prepare_restore_staging_dir(&team_dir)?;
-    write_restore_marker(&team_dir, &backup_dir)?;
+    prepare_restore_workspace(&team_dir, &backup_dir)?;
     let mut updated_config = current_config.clone();
     for member in &backup_config.members {
         if member.name == "team-lead" {
@@ -435,72 +434,15 @@ pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> 
             .insert("leadSessionId".to_string(), value.clone());
     }
 
-    let inboxes_dir = team_dir.join("inboxes");
-    fs::create_dir_all(&inboxes_dir).map_err(|error| {
-        AtmError::mailbox_write(format!(
-            "failed to create inbox directory {}: {error}",
-            inboxes_dir.display()
-        ))
-        .with_source(error)
-        .with_recovery("Check inbox directory permissions and rerun `atm teams restore`.")
-    })?;
-    lock::sweep_stale_lock_sentinels(&inboxes_dir).map_err(|error| {
-        error.with_recovery("Check inbox directory permissions and rerun `atm teams restore`.")
-    })?;
-    let inbox_staging_dir = restore_staging_inboxes_dir(&team_dir);
-    fs::create_dir_all(&inbox_staging_dir).map_err(|error| {
-        AtmError::mailbox_write(format!(
-            "failed to create inbox restore staging directory {}: {error}",
-            inbox_staging_dir.display()
-        ))
-        .with_source(error)
-        .with_recovery("Check inbox staging permissions and rerun `atm teams restore`.")
-    })?;
-    for inbox_name in &inboxes_to_restore {
-        let from = backup_dir.join("inboxes").join(inbox_name);
-        let staged = inbox_staging_dir.join(inbox_name);
-        copy_restored_inbox_to_staging(&from, &staged).map_err(|error| {
-            AtmError::mailbox_write(format!(
-                "failed to stage restored inbox {} from {}: {error}",
-                staged.display(),
-                from.display()
-            ))
-            .with_source(error)
-            .with_recovery("Check inbox permissions and backup integrity, then rerun the restore.")
-        })?;
-    }
-    for inbox_name in &inboxes_to_restore {
-        let staged = inbox_staging_dir.join(inbox_name);
-        let to = inboxes_dir.join(inbox_name);
-        fs::rename(&staged, &to).map_err(|error| {
-            AtmError::mailbox_write(format!(
-                "failed to install restored inbox {} from {}: {error}",
-                to.display(),
-                staged.display()
-            ))
-            .with_source(error)
-            .with_recovery("Check inbox permissions and rerun `atm teams restore`.")
-        })?;
-    }
+    apply_restored_inboxes(&team_dir, &backup_dir, &inboxes_to_restore)?;
 
     let tasks_dir = tasks_dir_from_home(&request.home_dir, &request.team)?;
-    restore_task_bucket(&backup_dir.join("tasks"), &tasks_dir)?;
-    recompute_highwatermark(&tasks_dir)?;
+    restore_task_state_from_backup(&backup_dir.join("tasks"), &tasks_dir)?;
     write_team_config(&team_dir, &updated_config).map_err(|error| {
         error.with_recovery("Check team config permissions and rerun `atm teams restore`.")
     })?;
     let marker_cleanup_error = clear_restore_marker(&team_dir).err();
-    let staging_root = restore_staging_dir(&team_dir);
-    if staging_root.exists() {
-        fs::remove_dir_all(&staging_root).map_err(|error| {
-            AtmError::file_policy(format!(
-                "failed to remove restore staging directory {}: {error}",
-                staging_root.display()
-            ))
-            .with_source(error)
-            .with_recovery("Remove the restore staging directory after confirming the restore completed successfully.")
-        })?;
-    }
+    cleanup_restore_workspace(&team_dir)?;
     if let Some(error) = marker_cleanup_error {
         warn!(
             code = %AtmErrorCode::WarningRestoreInProgress,
@@ -933,6 +875,91 @@ fn copy_restored_inbox_to_staging(from: &Path, staged: &Path) -> Result<u64, std
         )));
     }
     fs::copy(from, staged)
+}
+
+fn prepare_restore_workspace(team_dir: &Path, backup_dir: &Path) -> Result<(), AtmError> {
+    prepare_restore_staging_dir(team_dir)?;
+    write_restore_marker(team_dir, backup_dir)
+}
+
+fn cleanup_restore_workspace(team_dir: &Path) -> Result<(), AtmError> {
+    let staging_root = restore_staging_dir(team_dir);
+    if !staging_root.exists() {
+        return Ok(());
+    }
+
+    fs::remove_dir_all(&staging_root).map_err(|error| {
+        AtmError::file_policy(format!(
+            "failed to remove restore staging directory {}: {error}",
+            staging_root.display()
+        ))
+        .with_source(error)
+        .with_recovery("Remove the restore staging directory after confirming the restore completed successfully.")
+    })
+}
+
+fn apply_restored_inboxes(
+    team_dir: &Path,
+    backup_dir: &Path,
+    inboxes_to_restore: &[String],
+) -> Result<(), AtmError> {
+    let inboxes_dir = team_dir.join("inboxes");
+    fs::create_dir_all(&inboxes_dir).map_err(|error| {
+        AtmError::mailbox_write(format!(
+            "failed to create inbox directory {}: {error}",
+            inboxes_dir.display()
+        ))
+        .with_source(error)
+        .with_recovery("Check inbox directory permissions and rerun `atm teams restore`.")
+    })?;
+    lock::sweep_stale_lock_sentinels(&inboxes_dir).map_err(|error| {
+        error.with_recovery("Check inbox directory permissions and rerun `atm teams restore`.")
+    })?;
+
+    let inbox_staging_dir = restore_staging_inboxes_dir(team_dir);
+    fs::create_dir_all(&inbox_staging_dir).map_err(|error| {
+        AtmError::mailbox_write(format!(
+            "failed to create inbox restore staging directory {}: {error}",
+            inbox_staging_dir.display()
+        ))
+        .with_source(error)
+        .with_recovery("Check inbox staging permissions and rerun `atm teams restore`.")
+    })?;
+    for inbox_name in inboxes_to_restore {
+        let from = backup_dir.join("inboxes").join(inbox_name);
+        let staged = inbox_staging_dir.join(inbox_name);
+        copy_restored_inbox_to_staging(&from, &staged).map_err(|error| {
+            AtmError::mailbox_write(format!(
+                "failed to stage restored inbox {} from {}: {error}",
+                staged.display(),
+                from.display()
+            ))
+            .with_source(error)
+            .with_recovery("Check inbox permissions and backup integrity, then rerun the restore.")
+        })?;
+    }
+    for inbox_name in inboxes_to_restore {
+        let staged = inbox_staging_dir.join(inbox_name);
+        let to = inboxes_dir.join(inbox_name);
+        fs::rename(&staged, &to).map_err(|error| {
+            AtmError::mailbox_write(format!(
+                "failed to install restored inbox {} from {}: {error}",
+                to.display(),
+                staged.display()
+            ))
+            .with_source(error)
+            .with_recovery("Check inbox permissions and rerun `atm teams restore`.")
+        })?;
+    }
+    Ok(())
+}
+
+fn restore_task_state_from_backup(
+    backup_tasks_dir: &Path,
+    tasks_dir: &Path,
+) -> Result<usize, AtmError> {
+    restore_task_bucket(backup_tasks_dir, tasks_dir)?;
+    recompute_highwatermark(tasks_dir)
 }
 
 fn write_restore_marker(team_dir: &Path, backup_dir: &Path) -> Result<(), AtmError> {
