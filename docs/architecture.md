@@ -407,8 +407,13 @@ Architectural rules:
 - `*` in either list acts as a wildcard match for that axis
 - the hook executes once when either axis matches and must not duplicate
   execution when both axes match
-- relative post-send-hook paths resolve from the discovered `.atm.toml`
-  directory and execute with that same directory as the working directory
+- absolute post-send-hook command paths are used as-is
+- relative post-send-hook command paths that contain a path separator resolve
+  from the discovered `.atm.toml` directory
+- bare post-send-hook command names with no path separator resolve through
+  normal `PATH` lookup and must not be rewritten under the config root
+- hook processes execute with the discovered `.atm.toml` directory as their
+  working directory
 - the hook receives inherited environment plus one ATM-owned JSON payload in
   `ATM_POST_SEND`
 - the payload includes `hook_match.sender` and `hook_match.recipient` so one
@@ -422,13 +427,15 @@ Architectural rules:
   on a best-effort basis for post-send diagnostics
 - absent or invalid hook-result stdout is ignored rather than treated as hook
   failure
-- user-visible skip warnings apply only when at least one sender/recipient
-  filter list is configured and both axes fail to match
+- hook non-match is expected behavior and therefore only produces debug-level
+  diagnostics; it does not create user-visible warnings or send-result warning
+  entries
 - retired `[atm].post_send_hook_members` config is a configuration error, not a
   compatibility alias
 - hook-decision logging must preserve sender, recipient, configured filters,
   wildcard use, and final match outcome for troubleshooting
-- hook failure or timeout never rolls back a successful send
+- hook failure or timeout never rolls back a successful send and remains the
+  only case where caller-visible hook warnings are appropriate
 
 ## 5. Persisted Schema
 

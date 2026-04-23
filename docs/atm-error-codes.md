@@ -122,7 +122,7 @@ Error codes should describe the failure class, not a specific prose message.
 ### 5.8 Post-Send Hook
 
 - `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`
-- `ATM_WARNING_HOOK_SKIPPED`
+- `ATM_WARNING_HOOK_SKIPPED` (retired for filter non-match)
 - `ATM_WARNING_HOOK_EXECUTION_FAILED`
 
 #### 5.8.1 `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`
@@ -157,26 +157,18 @@ Error codes should describe the failure class, not a specific prose message.
 #### 5.8.2 `ATM_WARNING_HOOK_SKIPPED`
 
 - code: `ATM_WARNING_HOOK_SKIPPED`
-- description: a post-send hook was configured, but neither the sender nor the
-  recipient trigger filters matched the current send
+- description: retired for the hook filter non-match path; retained only as a
+  historical registry entry for pre-fix behavior
 - HTTP status: `200 OK`
 - context:
-  - emitted as a warning/diagnostic only after a successful send
-  - should include the resolved sender, resolved recipient, and configured
-    sender/recipient filter values to make the mismatch actionable
-  - expected message template:
-    ```text
-    post-send hook skipped: sender {sender} not in post_send_hook_senders {senders}
-    and recipient {recipient} not in post_send_hook_recipients {recipients}
-    ```
-  - when a sender or recipient filter list is omitted, the corresponding
-    `{senders}` or `{recipients}` placeholder renders as `(not configured)`
-  - delivery channel: user-visible `warn!` / stderr via normal tracing log
-    routing; not debug-only and not suppressible
-  - covers explicit no-match outcomes only when at least one sender or
-    recipient filter list is configured; it is not used for hook process
-    failures or for a hook that is configured-but-disabled with both lists
-    omitted/empty
+  - hook filter non-match is expected behavior, not an operator-facing warning
+  - delivery channel for filter non-match is debug-only structured diagnostics;
+    it is not a caller-visible `warn!`, stderr warning, or send-result warning
+    entry
+  - the old warning template is retired for the filter non-match case and must
+    not be emitted after this fix
+  - actual caller-visible hook warnings now live only under
+    `ATM_WARNING_HOOK_EXECUTION_FAILED`
 
 #### 5.8.3 `ATM_WARNING_HOOK_EXECUTION_FAILED`
 
@@ -187,6 +179,7 @@ Error codes should describe the failure class, not a specific prose message.
 - context:
   - emitted as a warning/diagnostic only after the mailbox send has already
     succeeded
+  - this is the sole remaining caller-visible post-send-hook warning
   - must not roll back or convert a successful send into a command failure
   - may be accompanied by lower-level OS/process details and any structured
     hook result that was successfully parsed before failure
