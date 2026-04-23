@@ -6,7 +6,6 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use fs2::FileExt;
-use same_file::Handle;
 use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode};
@@ -31,13 +30,49 @@ pub(crate) fn default_lock_timeout() -> Duration {
 pub(crate) struct MailboxLockGuard {
     target_path: PathBuf,
     lock_path: PathBuf,
-    file: File,
+    file: Option<File>,
     owner_pid: u32,
 }
 
 impl Drop for MailboxLockGuard {
     fn drop(&mut self) {
-        if let Err(error) = remove_active_lock_sentinel(&self.file, &self.lock_path, self.owner_pid)
+        let active_sentinel = match capture_active_lock_sentinel(
+            self.file.as_ref().expect("lock guard file missing"),
+            &self.lock_path,
+            self.owner_pid,
+        ) {
+            Ok(identity) => identity,
+            Err(error) => {
+                warn!(
+                    code = %AtmErrorCode::MailboxLockFailed,
+                    %error,
+                    target_path = %self.target_path.display(),
+                    lock_path = %self.lock_path.display(),
+                    "failed to evaluate mailbox lock sentinel removal"
+                );
+                None
+            }
+        };
+
+        let Some(file) = self.file.take() else {
+            return;
+        };
+
+        if let Err(error) = file.unlock() {
+            warn!(
+                code = %AtmErrorCode::MailboxLockFailed,
+                %error,
+                target_path = %self.target_path.display(),
+                lock_path = %self.lock_path.display(),
+                "failed to release mailbox lock"
+            );
+        }
+        drop(file);
+
+        if let Some(identity) = active_sentinel
+            && let Err(error) =
+                remove_active_lock_sentinel(&self.lock_path, &identity, self.owner_pid)
+            && error.kind() != io::ErrorKind::NotFound
         {
             warn!(
                 code = %AtmErrorCode::MailboxLockFailed,
@@ -45,15 +80,6 @@ impl Drop for MailboxLockGuard {
                 target_path = %self.target_path.display(),
                 lock_path = %self.lock_path.display(),
                 "failed to remove mailbox lock sentinel"
-            );
-        }
-        if let Err(error) = self.file.unlock() {
-            warn!(
-                code = %AtmErrorCode::MailboxLockFailed,
-                %error,
-                target_path = %self.target_path.display(),
-                lock_path = %self.lock_path.display(),
-                "failed to release mailbox lock"
             );
         }
     }
@@ -130,7 +156,7 @@ pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard
                 return Ok(MailboxLockGuard {
                     target_path: path.to_path_buf(),
                     lock_path,
-                    file,
+                    file: Some(file),
                     owner_pid,
                 });
             }
@@ -263,8 +289,34 @@ fn write_lock_owner_pid(file: &File, lock_path: &Path, owner_pid: u32) -> Result
     })
 }
 
-fn remove_active_lock_sentinel(file: &File, lock_path: &Path, owner_pid: u32) -> io::Result<()> {
-    if !lock_path_matches_file_handle(file, lock_path)? {
+fn capture_active_lock_sentinel(
+    file: &File,
+    lock_path: &Path,
+    owner_pid: u32,
+) -> io::Result<Option<LockFileIdentity>> {
+    let identity = lock_file_identity_from_file(file)?;
+    if !lock_path_matches_identity(&identity, lock_path)? {
+        return Ok(None);
+    }
+
+    let raw = match fs::read_to_string(lock_path) {
+        Ok(raw) => raw,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    if raw.trim() != owner_pid.to_string() {
+        return Ok(None);
+    }
+
+    Ok(Some(identity))
+}
+
+fn remove_active_lock_sentinel(
+    lock_path: &Path,
+    identity: &LockFileIdentity,
+    owner_pid: u32,
+) -> io::Result<()> {
+    if !lock_path_matches_identity(identity, lock_path)? {
         return Ok(());
     }
 
@@ -285,7 +337,17 @@ fn remove_active_lock_sentinel(file: &File, lock_path: &Path, owner_pid: u32) ->
 }
 
 fn lock_path_matches_file(file: &File, lock_path: &Path) -> Result<bool, AtmError> {
-    lock_path_matches_file_handle(file, lock_path).map_err(|error| {
+    let identity = lock_file_identity_from_file(file).map_err(|error| {
+        AtmError::mailbox_lock(format!(
+            "failed to capture mailbox lock identity for {}: {error}",
+            lock_path.display()
+        ))
+        .with_recovery(
+            "Check mailbox lock-file permissions and filesystem health before retrying the ATM command.",
+        )
+        .with_source(error)
+    })?;
+    lock_path_matches_identity(&identity, lock_path).map_err(|error| {
         AtmError::mailbox_lock(format!(
             "failed to compare mailbox lock identity for {}: {error}",
             lock_path.display()
@@ -297,14 +359,74 @@ fn lock_path_matches_file(file: &File, lock_path: &Path) -> Result<bool, AtmErro
     })
 }
 
-fn lock_path_matches_file_handle(file: &File, lock_path: &Path) -> io::Result<bool> {
-    let held = Handle::from_file(file.try_clone()?)?;
-    let current = match Handle::from_path(lock_path) {
-        Ok(handle) => handle,
+#[cfg(unix)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct LockFileIdentity {
+    dev: u64,
+    ino: u64,
+}
+
+#[cfg(windows)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct LockFileIdentity {
+    volume_serial_number: Option<u32>,
+    file_index_high: u32,
+    file_index_low: u32,
+}
+
+fn lock_path_matches_identity(identity: &LockFileIdentity, lock_path: &Path) -> io::Result<bool> {
+    let current = match lock_file_identity_from_path(lock_path) {
+        Ok(identity) => identity,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
         Err(error) => return Err(error),
     };
-    Ok(held == current)
+    Ok(&current == identity)
+}
+
+#[cfg(unix)]
+fn lock_file_identity_from_file(file: &File) -> io::Result<LockFileIdentity> {
+    use std::os::unix::fs::MetadataExt;
+
+    let metadata = file.metadata()?;
+    Ok(LockFileIdentity {
+        dev: metadata.dev(),
+        ino: metadata.ino(),
+    })
+}
+
+#[cfg(unix)]
+fn lock_file_identity_from_path(path: &Path) -> io::Result<LockFileIdentity> {
+    use std::os::unix::fs::MetadataExt;
+
+    let metadata = fs::metadata(path)?;
+    Ok(LockFileIdentity {
+        dev: metadata.dev(),
+        ino: metadata.ino(),
+    })
+}
+
+#[cfg(windows)]
+fn lock_file_identity_from_file(file: &File) -> io::Result<LockFileIdentity> {
+    use std::os::windows::fs::MetadataExt;
+
+    let metadata = file.metadata()?;
+    Ok(LockFileIdentity {
+        volume_serial_number: metadata.volume_serial_number(),
+        file_index_high: metadata.file_index_high(),
+        file_index_low: metadata.file_index_low(),
+    })
+}
+
+#[cfg(windows)]
+fn lock_file_identity_from_path(path: &Path) -> io::Result<LockFileIdentity> {
+    use std::os::windows::fs::MetadataExt;
+
+    let metadata = fs::metadata(path)?;
+    Ok(LockFileIdentity {
+        volume_serial_number: metadata.volume_serial_number(),
+        file_index_high: metadata.file_index_high(),
+        file_index_low: metadata.file_index_low(),
+    })
 }
 
 fn evict_stale_lock_sentinel(lock_path: &Path) -> bool {
