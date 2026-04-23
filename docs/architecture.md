@@ -1032,17 +1032,14 @@ The mailbox layer does not own selection policy, display buckets, output formatt
 
 When `ATM_POST_SEND` is set for a configured post-send hook, the payload must
 contain:
+- `sender`
+- `recipient`
+- `team`
 - `from`
 - `to`
 - `message_id`
 - `requires_ack`
 - optional `task_id` when present
-- `hook_match.sender`
-  boolean — true if the sender filter axis matched, false otherwise
-- `hook_match.recipient`
-  boolean — true if the recipient filter axis matched, false otherwise
-- omitted or empty sender/recipient lists therefore produce `hook_match`
-  values of `false`; only `*` represents an unconditional match
 
 The post-send hook runs only after a successful non-`dry-run` send, executes
 once when sender or recipient matching succeeds, may optionally emit one
