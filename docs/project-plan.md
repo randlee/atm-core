@@ -1747,11 +1747,18 @@ Files expected in scope:
 
 Concrete implementation targets:
 - keep `persistence.rs` as the low-level atomic primitive layer
-- decide explicitly whether `team_admin.rs::atomic_write(...)` survives as a
-  thin team-config owner wrapper or is renamed/replaced for clarity
-- decide explicitly whether send-alert state/lock helpers stay in `send/mod.rs`
-  or move to a narrower owner module; do not leave that as an accidental
-  byproduct of code motion
+- use `mailbox::store::commit_mailbox_state(...)` and
+  `mailbox::store::commit_source_files(...)` as the mailbox owner boundary
+- keep `read::seen_state::save_seen_watermark(...)` as the seen-state owner
+  boundary
+- use `send::alert_state::{load, save, acquire_lock}` as the send-alert state
+  owner boundary
+- keep `team_admin::write_team_config(...)` as the team-config owner boundary
+- use `team_admin::restore_task_state_from_backup(...)` as the task bucket /
+  `.highwatermark` owner boundary
+- use `team_admin::{prepare_restore_workspace, cleanup_restore_workspace,
+  write_restore_marker, clear_restore_marker}` as the restore workspace and
+  restore-marker owner boundaries
 
 Tests required:
 - unit coverage for each owner helper boundary

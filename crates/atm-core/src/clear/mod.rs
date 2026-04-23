@@ -168,7 +168,7 @@ pub fn clear_mail(
             .collect::<HashSet<_>>();
 
         apply_removals(&mut source_files, &removable);
-        persist_source_files(&source_files)?;
+        mailbox::store::commit_source_files(&source_files)?;
         let remaining_total = dedupe_legacy_message_id_surface(
             merged_surface(&source_files),
             |message: &SourcedMessage| message.envelope.message_id,
@@ -299,13 +299,6 @@ fn apply_removals(source_files: &mut [SourceFile], removable: &HashSet<(PathBuf,
             })
             .collect();
     }
-}
-
-fn persist_source_files(source_files: &[SourceFile]) -> Result<(), AtmError> {
-    for source in source_files {
-        mailbox::atomic::write_messages(&source.path, &source.messages)?;
-    }
-    Ok(())
 }
 
 #[cfg(test)]

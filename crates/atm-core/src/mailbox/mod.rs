@@ -54,7 +54,7 @@ where
     let _guard = lock::acquire_many_sorted([path.to_path_buf()], timeout)?;
     let mut messages = read_messages(path)?;
     mutate(&mut messages)?;
-    atomic::write_messages(path, &messages)
+    store::commit_mailbox_state(path, &messages)
 }
 
 /// Read all valid mailbox records from a mailbox JSONL file.

@@ -1507,6 +1507,22 @@ Single-write-path guardrail:
   the shared helper or owner-layer helper rather than introducing a parallel
   write path
 
+Current owner-layer boundaries:
+- Claude-owned inbox compatibility surface:
+  `mailbox::store::commit_mailbox_state(...)` and
+  `mailbox::store::commit_source_files(...)`
+- ATM-owned source-of-truth state:
+  `read::seen_state::save_seen_watermark(...)`,
+  `send::alert_state::save(...)`, and
+  `team_admin::write_team_config(...)`
+- ATM-owned restore/task state:
+  `team_admin::restore_task_state_from_backup(...)`,
+  `team_admin::write_restore_marker(...)`, and
+  `team_admin::clear_restore_marker(...)`
+- staging/scratch artifacts:
+  `team_admin::prepare_restore_workspace(...)` and
+  `team_admin::cleanup_restore_workspace(...)`
+
 Current architectural limitation:
 - mailbox replacement is atomic and lock-coordinated for concurrent ATM
   writers, but it is not yet compare-and-swap against non-cooperating Claude
