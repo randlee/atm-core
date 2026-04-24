@@ -67,10 +67,7 @@ if [[ -z "${PANE_ID:-}" ]]; then
     exit 0
 fi
 
-BUFFER="atm-nudge-$$"
-tmux set-buffer -b "$BUFFER" -- "$MESSAGE"
-tmux paste-buffer -b "$BUFFER" -t "$PANE_ID"
+tmux send-keys -t "$PANE_ID" -l "$MESSAGE"
 tmux send-keys -t "$PANE_ID" Enter
-tmux delete-buffer -b "$BUFFER" >/dev/null 2>&1 || true
 
 printf '%s nudged recipient=%s pane=%s\n' "$TIMESTAMP" "$RECIPIENT" "$PANE_ID" >> "$LOG_FILE"
