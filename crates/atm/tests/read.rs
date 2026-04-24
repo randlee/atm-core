@@ -82,6 +82,41 @@ fn test_send_then_read_updates_sidecar_without_mutating_claude_inbox_record() {
 }
 
 #[test]
+fn test_read_ulid_authored_inbox_message_updates_sidecar_without_mutating_inbox() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    let (atm_message_id, timestamp) = AtmMessageId::new_with_timestamp();
+    let mut message = fixture.message("team-lead", "hello ulid sidecar", false, None, None, 0);
+    message.message_id = None;
+    message.timestamp = timestamp;
+    message.extra = serde_json::json!({
+        "metadata": {
+            "atm": {
+                "messageId": atm_message_id,
+                "sourceTeam": "atm-dev"
+            }
+        }
+    })
+    .as_object()
+    .expect("metadata object")
+    .clone();
+    fixture.write_inbox("arch-ctm", &[message]);
+    let before_read = fs::read_to_string(fixture.inbox_path("arch-ctm")).expect("raw inbox");
+
+    let read = fixture.run(&["read", "--json"]);
+    assert!(read.status.success(), "stderr: {}", fixture.stderr(&read));
+
+    let after_read = fs::read_to_string(fixture.inbox_path("arch-ctm")).expect("raw inbox");
+    assert_eq!(after_read, before_read);
+    let workflow = fixture
+        .workflow_state_contents("arch-ctm")
+        .expect("workflow state");
+    assert_eq!(
+        workflow["messages"][format!("atm:{atm_message_id}")]["read"],
+        true
+    );
+}
+
+#[test]
 fn test_read_ack_activation() {
     let fixture = Fixture::new(&["arch-ctm"]);
     let message = fixture.message("team-lead", "hello", false, None, None, 0);
