@@ -1605,10 +1605,17 @@ Phase O completion gate:
 ### Phase P: File-I/O Ownership And Single-Write-Path Hardening [PROPOSED]
 
 Status note:
-- proposal only
-- no Phase P sprint has executed yet
-- until a sprint is accepted and lands, Phase P content is planning guidance
-  rather than current architecture
+- P.1 completed on `feature/pP-s1-ownership-classification` via PR `#111`
+  at `git#2e90a97`
+- P.2 completed on `feature/pP-s2-mailbox-read-path` via PR `#112`
+  at `git#f230ef4`
+- P.3 completed on `feature/pP-s3-atm-owned-state` via PR `#115`
+  at `git#ecb774a`
+- P.4 completed on `feature/pP-s4-claude-inbox-compat` via PR `#113`
+  at `git#9d5729b`
+- P.5 is the active closure gate; the remaining content in this phase section is
+  now implementation history plus the final closure work, not proposal-only
+  planning guidance
 
 Goal:
 - make the retained ATM implementation production-ready by applying one
@@ -1687,13 +1694,15 @@ helper or retire during the phase:
   - `crates/atm-core/src/clear/mod.rs::persist_source_files(...)`
 - ATM-owned state helpers:
   - `crates/atm-core/src/read/seen_state.rs::save_seen_watermark(...)`
-  - `crates/atm-core/src/send/mod.rs::save_send_alert_state(...)`
-  - `crates/atm-core/src/send/mod.rs::acquire_send_alert_lock(...)`
+  - `crates/atm-core/src/send/alert_state.rs::register_missing_team_config_alert(...)`
+  - `crates/atm-core/src/send/alert_state.rs::clear_missing_team_config_alert(...)`
+  - `crates/atm-core/src/send/alert_state.rs::save(...)`
+  - `crates/atm-core/src/send/alert_state.rs::acquire_lock(...)`
   - `crates/atm-core/src/team_admin.rs::write_team_config(...)`
   - `crates/atm-core/src/team_admin.rs::atomic_write(...)`
-  - `crates/atm-core/src/team_admin.rs::write_restore_marker(...)`
-  - `crates/atm-core/src/team_admin.rs::clear_restore_marker(...)`
-  - `crates/atm-core/src/team_admin.rs::recompute_highwatermark(...)`
+  - `crates/atm-core/src/team_admin/restore.rs::write_restore_marker(...)`
+  - `crates/atm-core/src/team_admin/restore.rs::clear_restore_marker(...)`
+  - `crates/atm-core/src/team_admin/restore.rs::recompute_highwatermark(...)`
 - shared low-level atomic commit primitive:
   - `crates/atm-core/src/persistence.rs::atomic_write_bytes(...)`
   - `crates/atm-core/src/persistence.rs::atomic_write_string(...)`
@@ -1752,11 +1761,13 @@ Concrete implementation targets:
 - keep `read::seen_state::save_seen_watermark(...)` as the seen-state owner
   boundary
 - use `send::alert_state::{load, save, acquire_lock}` as the send-alert state
-  owner boundary
+  owner boundary, with
+  `send::alert_state::{register_missing_team_config_alert,
+  clear_missing_team_config_alert}` as the command-facing mutation helpers
 - keep `team_admin::write_team_config(...)` as the team-config owner boundary
-- use `team_admin::restore_task_state_from_backup(...)` as the task bucket /
+- use `team_admin::restore::restore_task_state_from_backup(...)` as the task bucket /
   `.highwatermark` owner boundary
-- use `team_admin::{prepare_restore_workspace, cleanup_restore_workspace,
+- use `team_admin::restore::{prepare_restore_workspace, cleanup_restore_workspace,
   write_restore_marker, clear_restore_marker}` as the restore workspace and
   restore-marker owner boundaries
 
@@ -1788,7 +1799,7 @@ Design details:
   - unlocked observational snapshot first via
     `mailbox::store::observe_source_files(...)`
   - only if mutation is needed, enter
-    `mailbox::store::commit_source_mutation(...)`
+    `mailbox::store::with_locked_source_files(...)`
 - mailbox commit path:
   - acquire the deterministic lock set
   - re-discover source paths under lock
@@ -1803,8 +1814,10 @@ Design details:
 Implementation patterns:
 - share the unlocked snapshot loader between `read` initial selection and wait
   polling
-- use `mailbox::store::commit_source_mutation(...)` as the only shared
-  read/ack/clear mailbox writeback entry point
+- use `mailbox::store::with_locked_source_files(...)` as the shared
+  read/ack/clear lock+reload entry point and
+  `mailbox::store::commit_source_files(...)` as the shared mailbox persistence
+  leaf
 - share sort/limit/selection recomputation utilities where behavior matches
 - keep lock acquisition out of read-only paths entirely
 - use deterministic path ordering and one total timeout budget for every

@@ -17,6 +17,7 @@ use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
 use crate::schema::MessageEnvelope;
 use crate::types::{AgentName, MessageClass, SourceIndex, TeamName};
+use crate::workflow;
 
 /// Parameters for clearing read or acknowledged mailbox messages.
 #[derive(Debug, Clone)]
@@ -102,41 +103,57 @@ pub fn clear_mail(
     }
 
     let cutoff = cutoff_timestamp(query.older_than)?;
+    let workflow_path =
+        home::workflow_state_path_from_home(&query.home_dir, &target.team, &target.agent)?;
 
     let (removed_total, remaining_total, removed_by_class) = if query.dry_run {
+        let workflow_state =
+            workflow::load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
         let source_files =
             mailbox::store::observe_source_files(&query.home_dir, &target.team, &target.agent)?;
         // Clear intentionally does not apply read-surface idle-notification dedup.
         // Cleanup decisions must inspect the raw merged surface after legacy
         // message_id canonicalization only.
         let (removable, removed_by_class, merged_len) =
-            removable_messages(&source_files, cutoff, query.idle_only);
+            removable_messages(&source_files, &workflow_state, cutoff, query.idle_only);
         (
             removable.len(),
             merged_len.saturating_sub(removable.len()),
             removed_by_class,
         )
     } else {
-        mailbox::store::commit_source_mutation(
+        mailbox::store::with_locked_source_files(
             &query.home_dir,
             &target.team,
             &target.agent,
-            std::iter::empty::<PathBuf>(),
+            [workflow_path],
             mailbox::lock::default_lock_timeout(),
             |_source_paths, source_files| {
+                let mut workflow_state =
+                    workflow::load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
                 let (removable, removed_by_class, _) =
-                    removable_messages(source_files, cutoff, query.idle_only);
+                    removable_messages(source_files, &workflow_state, cutoff, query.idle_only);
+                let workflow_changed =
+                    remove_workflow_state_entries(&mut workflow_state, source_files, &removable);
                 apply_removals(source_files, &removable);
+                if !removable.is_empty() {
+                    mailbox::store::commit_source_files(source_files)?;
+                }
+                if workflow_changed {
+                    workflow::save_workflow_state(
+                        &query.home_dir,
+                        &target.team,
+                        &target.agent,
+                        &workflow_state,
+                    )?;
+                }
                 let remaining_total = dedupe_legacy_message_id_surface(
-                    merged_surface(source_files),
+                    merged_surface(source_files, &workflow_state),
                     |message: &SourcedMessage| message.envelope.message_id,
                     |message: &SourcedMessage| message.envelope.timestamp,
                 )
                 .len();
-                Ok(mailbox::store::SourceMutation {
-                    output: (removable.len(), remaining_total, removed_by_class),
-                    changed: !removable.is_empty(),
-                })
+                Ok((removable.len(), remaining_total, removed_by_class))
             },
         )?
     };
@@ -168,7 +185,10 @@ pub fn clear_mail(
     Ok(outcome)
 }
 
-fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
+fn merged_surface(
+    source_files: &[SourceFile],
+    workflow_state: &workflow::WorkflowStateFile,
+) -> Vec<SourcedMessage> {
     source_files
         .iter()
         .flat_map(|source| {
@@ -178,7 +198,7 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
                 .cloned()
                 .enumerate()
                 .map(|(source_index, envelope)| SourcedMessage {
-                    envelope,
+                    envelope: workflow::project_envelope(&envelope, workflow_state),
                     source_path: source.path.clone(),
                     source_index: source_index.into(),
                 })
@@ -212,11 +232,12 @@ fn is_clearable(message: &SourcedMessage, cutoff: Option<DateTime<Utc>>, idle_on
 
 fn removable_messages(
     source_files: &[SourceFile],
+    workflow_state: &workflow::WorkflowStateFile,
     cutoff: Option<DateTime<Utc>>,
     idle_only: bool,
 ) -> (HashSet<(PathBuf, SourceIndex)>, RemovedByClass, usize) {
     let merged = dedupe_legacy_message_id_surface(
-        merged_surface(source_files),
+        merged_surface(source_files, workflow_state),
         |message: &SourcedMessage| message.envelope.message_id,
         |message: &SourcedMessage| message.envelope.timestamp,
     );
@@ -234,6 +255,22 @@ fn removable_messages(
         .collect::<HashSet<_>>();
 
     (removable, removed_by_class, merged.len())
+}
+
+fn remove_workflow_state_entries(
+    workflow_state: &mut workflow::WorkflowStateFile,
+    source_files: &[SourceFile],
+    removable: &HashSet<(PathBuf, SourceIndex)>,
+) -> bool {
+    let mut changed = false;
+    for source in source_files {
+        for (index, message) in source.messages.iter().enumerate() {
+            if removable.contains(&(source.path.clone(), index.into())) {
+                changed |= workflow::remove_message_state(workflow_state, message);
+            }
+        }
+    }
+    changed
 }
 
 fn is_idle_notification(message: &MessageEnvelope) -> bool {

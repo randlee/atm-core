@@ -48,8 +48,19 @@ fn test_ack_transitions_pending_ack_and_appends_reply() {
     let inbox = fixture.inbox_contents("arch-ctm");
     assert_eq!(inbox.len(), 1);
     assert!(inbox[0].read);
-    assert!(inbox[0].pending_ack_at.is_none());
-    assert!(inbox[0].acknowledged_at.is_some());
+    assert!(inbox[0].pending_ack_at.is_some());
+    assert!(inbox[0].acknowledged_at.is_none());
+    let workflow = fixture.workflow_state_contents("arch-ctm");
+    assert_eq!(
+        workflow["messages"][format!("legacy:{message_id}")]["read"],
+        true
+    );
+    assert!(workflow["messages"][format!("legacy:{message_id}")]["pendingAckAt"].is_null());
+    assert!(
+        workflow["messages"][format!("legacy:{message_id}")]["acknowledgedAt"]
+            .as_str()
+            .is_some()
+    );
 
     let replies = fixture.inbox_contents("team-lead");
     assert_eq!(replies.len(), 1);
@@ -87,8 +98,14 @@ fn test_ack_updates_origin_inbox_file() {
 
     let origin = fixture.origin_inbox_contents("arch-ctm", "host-a");
     assert_eq!(origin.len(), 1);
-    assert!(origin[0].pending_ack_at.is_none());
-    assert!(origin[0].acknowledged_at.is_some());
+    assert!(origin[0].pending_ack_at.is_some());
+    assert!(origin[0].acknowledged_at.is_none());
+    let workflow = fixture.workflow_state_contents("arch-ctm");
+    assert!(
+        workflow["messages"][format!("legacy:{message_id}")]["acknowledgedAt"]
+            .as_str()
+            .is_some()
+    );
 }
 
 #[test]
@@ -271,6 +288,17 @@ impl Fixture {
         raw.lines()
             .map(|line| serde_json::from_str(line).expect("json line"))
             .collect()
+    }
+
+    fn workflow_state_contents(&self, agent: &str) -> Value {
+        let raw = fs::read_to_string(
+            self.team_dir()
+                .join(".atm-state")
+                .join("workflow")
+                .join(format!("{agent}.json")),
+        )
+        .expect("workflow state contents");
+        serde_json::from_str(&raw).expect("workflow json")
     }
 
     fn stdout_json(&self, output: &std::process::Output) -> Value {

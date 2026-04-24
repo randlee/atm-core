@@ -553,9 +553,13 @@ File-ownership rule:
   than a general pattern to copy
 - ATM-owned machine state should converge on ATM-owned sidecars or equivalent
   ATM-owned persisted state when stronger write guarantees are required
-- the specific migration target for mailbox-local ATM workflow state remains
-  proposal-only and is tracked in `docs/project-plan.md` rather than treated as
-  current architecture
+- mailbox-local ATM workflow state now lives in the ATM-owned sidecar family at
+  `.claude/teams/<team>/.atm-state/workflow/<agent>.json`
+- `read`, `ack`, and `clear` project mailbox display state by joining
+  Claude-owned inbox records with the ATM-owned workflow sidecar
+- messages without a stable ATM identity remain compatibility-only and may
+  still use the legacy inbox-local workflow fields until a later enrichment
+  phase lands
 
 Canonical read and ack axes are derived from persisted fields and not serialized separately.
 
@@ -1451,12 +1455,22 @@ ATM now treats mailbox access as two distinct patterns:
 This keeps non-mutating reads out of the lock path while preserving a stable
 writeback boundary for commands that actually rewrite inbox files.
 
-### 18.4.3 Proposed File-I/O Hardening Work
+### 18.4.3 Executed Mailbox Workflow Migration
 
-The broader repo-wide file-I/O taxonomy, ownership inventory, and mailbox-sidecar
-migration are proposal-only for this branch. They are tracked in
-`docs/project-plan.md` Phase P and are intentionally not part of the current
-executed architecture description yet.
+Phase P.4 executes the mailbox workflow-state migration on this branch.
+
+Current executed rule:
+- ATM-owned workflow durability for identified mailbox messages is written to
+  `.claude/teams/<team>/.atm-state/workflow/<agent>.json`
+- `send` authors forward `metadata.atm.messageId` ULIDs for ATM-authored
+  records and seeds the corresponding sidecar entry
+- `read` projects mailbox display state from the sidecar and only rewrites the
+  inbox file for legacy compatibility records that still lack a stable ATM
+  identity
+- `ack` writes the reply inbox file plus the source/reply workflow-state files
+  under one deterministic lock plan
+- `clear` classifies removable messages from the projected workflow view and
+  removes matching workflow-state entries when the inbox record is deleted
 
 ### 18.5 New Error Codes
 
@@ -1512,21 +1526,25 @@ Single-write-path guardrail:
 Current owner-layer boundaries:
 - Claude-owned inbox compatibility surface:
   `mailbox::store::observe_source_files(...)` for observational snapshots,
-  `mailbox::store::commit_source_mutation(...)` for shared mailbox
-  read/ack/clear commit orchestration, and
+  `mailbox::store::with_locked_source_files(...)` for shared mailbox
+  read/ack/clear lock+reload orchestration, and
   `mailbox::store::commit_mailbox_state(...)` /
   `mailbox::store::commit_source_files(...)` as the persistence leaf
 - ATM-owned source-of-truth state:
+  `workflow::{load_workflow_state(...), save_workflow_state(...),
+  project_envelope(...), remember_initial_state(...),
+  apply_projected_state(...), remove_message_state(...)}`,
   `read::seen_state::save_seen_watermark(...)`,
-  `send::alert_state::save(...)`, and
+  `send::alert_state::{register_missing_team_config_alert(...),
+  clear_missing_team_config_alert(...), save(...)}`, and
   `team_admin::write_team_config(...)`
 - ATM-owned restore/task state:
-  `team_admin::restore_task_state_from_backup(...)`,
-  `team_admin::write_restore_marker(...)`, and
-  `team_admin::clear_restore_marker(...)`
+  `team_admin::restore::restore_task_state_from_backup(...)`,
+  `team_admin::restore::write_restore_marker(...)`, and
+  `team_admin::restore::clear_restore_marker(...)`
 - staging/scratch artifacts:
-  `team_admin::prepare_restore_workspace(...)` and
-  `team_admin::cleanup_restore_workspace(...)`
+  `team_admin::restore::prepare_restore_workspace(...)` and
+  `team_admin::restore::cleanup_restore_workspace(...)`
 
 Current architectural limitation:
 - mailbox replacement is atomic and lock-coordinated for concurrent ATM

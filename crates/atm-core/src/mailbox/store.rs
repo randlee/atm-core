@@ -11,12 +11,6 @@ use crate::mailbox::source::{
 };
 use crate::schema::MessageEnvelope;
 
-#[derive(Debug)]
-pub(crate) struct SourceMutation<T> {
-    pub output: T,
-    pub changed: bool,
-}
-
 /// Commit one mailbox file through the mailbox-layer write boundary.
 ///
 /// The mailbox layer owns writes to the Claude-owned inbox compatibility
@@ -47,19 +41,19 @@ pub(crate) fn observe_source_files(
     load_source_files(&source_paths)
 }
 
-/// Reload one mailbox source set under the deterministic mailbox lock plan and
-/// commit only if the mutation closure reports a change.
-pub(crate) fn commit_source_mutation<T, I, F>(
+/// Reload one mailbox source set under the deterministic mailbox lock plan
+/// without forcing the caller into an inbox rewrite.
+pub(crate) fn with_locked_source_files<T, I, F>(
     home_dir: &Path,
     team: &str,
     agent: &str,
     extra_write_paths: I,
     timeout: Duration,
-    mutate: F,
+    body: F,
 ) -> Result<T, AtmError>
 where
     I: IntoIterator<Item = PathBuf>,
-    F: FnOnce(&[PathBuf], &mut Vec<SourceFile>) -> Result<SourceMutation<T>, AtmError>,
+    F: FnOnce(&[PathBuf], &mut Vec<SourceFile>) -> Result<T, AtmError>,
 {
     let source_paths = discover_source_paths(home_dir, team, agent)?;
     let mut write_paths = source_paths.clone();
@@ -69,11 +63,7 @@ where
     #[cfg(test)]
     maybe_remove_locked_source_file_for_test(&source_paths)?;
     let mut source_files = load_source_files(&source_paths)?;
-    let mutation = mutate(&source_paths, &mut source_files)?;
-    if mutation.changed {
-        commit_source_files(&source_files)?;
-    }
-    Ok(mutation.output)
+    body(&source_paths, &mut source_files)
 }
 
 #[cfg(test)]
@@ -96,4 +86,113 @@ fn maybe_remove_locked_source_file_for_test(source_paths: &[PathBuf]) -> Result<
         )
         .with_source(error)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::tempdir;
+    use uuid::Uuid;
+
+    use super::{commit_mailbox_state, commit_source_files};
+    use crate::mailbox::read_messages;
+    use crate::mailbox::source::SourceFile;
+    use crate::schema::{LegacyMessageId, MessageEnvelope};
+    use crate::types::IsoTimestamp;
+
+    #[test]
+    fn commit_mailbox_state_rewrites_mailbox_jsonl_with_only_new_messages() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = tempdir.path().join("arch-ctm.json");
+        std::fs::write(&path, "{\"stale\":true}\n").expect("seed mailbox");
+        let messages = vec![
+            sample_message("team-lead", "first replacement"),
+            sample_message("qa", "second replacement"),
+        ];
+
+        commit_mailbox_state(&path, &messages).expect("commit mailbox");
+
+        let raw = std::fs::read_to_string(&path).expect("mailbox contents");
+        assert!(!raw.contains("stale"));
+        assert_eq!(raw.lines().count(), 2);
+        assert!(raw.ends_with('\n'));
+        assert_eq!(read_messages(&path).expect("read mailbox"), messages);
+    }
+
+    #[test]
+    fn commit_source_files_commits_each_source_path() {
+        let tempdir = tempdir().expect("tempdir");
+        let left_path = tempdir.path().join("arch-ctm.json");
+        let right_path = tempdir.path().join("qa.json");
+        let left_messages = vec![sample_message("team-lead", "left message")];
+        let right_messages = vec![
+            sample_message("arch-ctm", "right first"),
+            sample_message("team-lead", "right second"),
+        ];
+
+        commit_source_files(&[
+            SourceFile {
+                path: left_path.clone(),
+                messages: left_messages.clone(),
+            },
+            SourceFile {
+                path: right_path.clone(),
+                messages: right_messages.clone(),
+            },
+        ])
+        .expect("commit source files");
+
+        assert_eq!(
+            read_messages(&left_path).expect("left inbox"),
+            left_messages
+        );
+        assert_eq!(
+            read_messages(&right_path).expect("right inbox"),
+            right_messages
+        );
+    }
+
+    #[test]
+    fn commit_source_files_stops_after_first_write_error() {
+        let tempdir = tempdir().expect("tempdir");
+        let first_path = tempdir.path().join("first.json");
+        let invalid_path = tempdir.path().to_path_buf();
+        let later_path = tempdir.path().join("later.json");
+
+        let error = commit_source_files(&[
+            SourceFile {
+                path: first_path.clone(),
+                messages: vec![sample_message("team-lead", "first")],
+            },
+            SourceFile {
+                path: invalid_path,
+                messages: vec![sample_message("qa", "broken")],
+            },
+            SourceFile {
+                path: later_path.clone(),
+                messages: vec![sample_message("arch-ctm", "later")],
+            },
+        ])
+        .expect_err("write failure");
+
+        assert!(error.is_mailbox_write());
+        assert_eq!(read_messages(&first_path).expect("first inbox").len(), 1);
+        assert!(!later_path.exists());
+    }
+
+    fn sample_message(from: &str, text: &str) -> MessageEnvelope {
+        MessageEnvelope {
+            from: from.to_string(),
+            text: text.to_string(),
+            timestamp: IsoTimestamp::now(),
+            read: false,
+            source_team: Some("atm-dev".to_string()),
+            summary: None,
+            message_id: Some(LegacyMessageId::from(Uuid::new_v4())),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            task_id: None,
+            extra: serde_json::Map::new(),
+        }
+    }
 }
