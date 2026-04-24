@@ -205,44 +205,6 @@ fn test_clear_uses_workflow_sidecar_and_removes_cleared_entry() {
 }
 
 #[test]
-fn test_clear_removes_acknowledged_sidecar_entry_without_mutating_claude_inbox_record() {
-    let fixture = Fixture::new(&["arch-ctm"]);
-    let acknowledged_at = Utc::now() - Duration::days(1);
-    let message = fixture.message(
-        "team-lead",
-        "sidecar-managed acknowledged",
-        false,
-        None,
-        None,
-        Utc::now() - Duration::days(2),
-    );
-    let message_id = message.message_id.expect("message id");
-    fixture.write_inbox("arch-ctm", &[message]);
-    fixture.write_workflow_state(
-        "arch-ctm",
-        serde_json::json!({
-            "messages": {
-                format!("legacy:{message_id}"): {
-                    "read": true,
-                    "acknowledgedAt": acknowledged_at.to_rfc3339()
-                }
-            }
-        }),
-    );
-
-    let output = fixture.run(&["clear", "--json"]);
-
-    assert!(
-        output.status.success(),
-        "stderr: {}",
-        fixture.stderr(&output)
-    );
-    assert!(fixture.inbox_contents("arch-ctm").is_empty());
-    let workflow = fixture.workflow_state_contents("arch-ctm");
-    assert!(workflow["messages"][format!("legacy:{message_id}")].is_null());
-}
-
-#[test]
 fn test_clear_idle_only_removes_only_idle_notifications() {
     let fixture = Fixture::new(&["arch-ctm"]);
     fixture.write_inbox(

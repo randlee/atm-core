@@ -82,13 +82,38 @@ pub(super) fn restore_team(request: RestoreRequest) -> Result<RestoreResult, Atm
             .insert("leadSessionId".to_string(), value.clone());
     }
 
-    apply_restored_inboxes(&team_dir, &backup_dir, &inboxes_to_restore)?;
+    let restore_result = (|| {
+        apply_restored_inboxes(&team_dir, &backup_dir, &inboxes_to_restore)?;
 
-    let tasks_dir = super::tasks_dir_from_home(&request.home_dir, &request.team)?;
-    restore_task_state_from_backup(&backup_dir.join("tasks"), &tasks_dir)?;
-    super::write_team_config(&team_dir, &updated_config).map_err(|error| {
-        error.with_recovery("Check team config permissions and rerun `atm teams restore`.")
-    })?;
+        let tasks_dir = super::tasks_dir_from_home(&request.home_dir, &request.team)?;
+        restore_task_state_from_backup(&backup_dir.join("tasks"), &tasks_dir)?;
+        super::write_team_config(&team_dir, &updated_config).map_err(|error| {
+            error.with_recovery("Check team config permissions and rerun `atm teams restore`.")
+        })?;
+
+        Ok::<RestoreOutcome, AtmError>(RestoreOutcome {
+            action: "restore",
+            team: request.team.clone().into(),
+            backup_path: backup_dir.clone(),
+            members_restored: members_to_restore.len(),
+            inboxes_restored: inboxes_to_restore.len(),
+            tasks_restored: tasks_to_restore,
+        })
+    })();
+    let outcome = match restore_result {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            if let Err(cleanup_error) = cleanup_restore_workspace(&team_dir) {
+                warn!(
+                    team = %request.team,
+                    %cleanup_error,
+                    "restore failed and cleanup of the restore staging directory also failed"
+                );
+            }
+            return Err(error);
+        }
+    };
+
     let marker_cleanup_error = clear_restore_marker(&team_dir).err();
     cleanup_restore_workspace(&team_dir)?;
     if let Some(error) = marker_cleanup_error {
@@ -100,14 +125,7 @@ pub(super) fn restore_team(request: RestoreRequest) -> Result<RestoreResult, Atm
         );
     }
 
-    Ok(RestoreResult::Applied(RestoreOutcome {
-        action: "restore",
-        team: request.team.into(),
-        backup_path: backup_dir,
-        members_restored: members_to_restore.len(),
-        inboxes_restored: inboxes_to_restore.len(),
-        tasks_restored: tasks_to_restore,
-    }))
+    Ok(RestoreResult::Applied(outcome))
 }
 
 fn locate_backup_dir(
@@ -141,7 +159,16 @@ fn locate_backup_dir(
             .with_source(error)
             .with_recovery("Check backup directory permissions or pass an explicit --from path.")
         })?
-        .filter_map(Result::ok)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
+            AtmError::file_policy(format!(
+                "failed to read backup directory entry under {}: {error}",
+                root.display()
+            ))
+            .with_source(error)
+            .with_recovery("Check backup directory permissions or pass an explicit --from path.")
+        })?
+        .into_iter()
         .map(|entry| entry.path())
         .filter(|path| path.is_dir())
         .collect::<Vec<_>>();
@@ -166,7 +193,16 @@ pub(super) fn list_backup_inboxes(backup_dir: &Path) -> Result<Vec<String>, AtmE
             .with_source(error)
             .with_recovery("Check backup inbox permissions and retry the restore.")
         })?
-        .filter_map(Result::ok)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
+            AtmError::mailbox_read(format!(
+                "failed to read backup inbox directory entry under {}: {error}",
+                inbox_dir.display()
+            ))
+            .with_source(error)
+            .with_recovery("Check backup inbox permissions and retry the restore.")
+        })?
+        .into_iter()
         .filter(|entry| entry.path().is_file())
         .map(|entry| entry.file_name().to_string_lossy().to_string())
         .collect::<Vec<_>>();
@@ -187,7 +223,16 @@ pub(super) fn count_numeric_task_files(tasks_dir: &Path) -> Result<usize, AtmErr
             .with_source(error)
             .with_recovery("Check task directory permissions and retry the restore.")
         })?
-        .filter_map(Result::ok)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
+            AtmError::file_policy(format!(
+                "failed to read task directory entry under {}: {error}",
+                tasks_dir.display()
+            ))
+            .with_source(error)
+            .with_recovery("Check task directory permissions and retry the restore.")
+        })?
+        .into_iter()
         .map(|entry| entry.path())
         .filter(|path| {
             path.is_file()
@@ -249,7 +294,7 @@ fn restore_task_bucket(src: &Path, dst: &Path) -> Result<(), AtmError> {
             .with_recovery("Check task staging directory permissions and rerun the restore.")
         })?;
     }
-    super::copy_regular_files(src, &staging, |name| {
+    super::copy_regular_files_strict(src, &staging, |name| {
         name == ".highwatermark" || name.ends_with(".json")
     })?;
 
@@ -303,7 +348,16 @@ fn recompute_highwatermark(tasks_dir: &Path) -> Result<usize, AtmError> {
             .with_source(error)
             .with_recovery("Check task directory permissions and rerun the restore.")
         })?
-        .filter_map(Result::ok)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
+            AtmError::file_policy(format!(
+                "failed to read task directory entry under {}: {error}",
+                tasks_dir.display()
+            ))
+            .with_source(error)
+            .with_recovery("Check task directory permissions and rerun the restore.")
+        })?
+        .into_iter()
         .map(|entry| entry.path())
         .filter(|path| {
             path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("json")
@@ -341,14 +395,13 @@ fn restore_staging_inboxes_dir(team_dir: &Path) -> PathBuf {
 fn prepare_restore_staging_dir(team_dir: &Path) -> Result<(), AtmError> {
     let staging_root = restore_staging_dir(team_dir);
     if staging_root.exists() {
-        fs::remove_dir_all(&staging_root).map_err(|error| {
-            AtmError::file_policy(format!(
-                "failed to clear restore staging directory {}: {error}",
-                staging_root.display()
-            ))
-            .with_source(error)
-            .with_recovery("Check restore staging permissions and rerun `atm teams restore`.")
-        })?;
+        return Err(AtmError::file_policy(format!(
+            "restore staging directory already exists at {}",
+            staging_root.display()
+        ))
+        .with_recovery(
+            "Inspect the stale restore staging directory, remove it after confirming no restore is running, and rerun `atm teams restore`.",
+        ));
     }
     Ok(())
 }
@@ -492,4 +545,326 @@ pub(super) fn clear_restore_marker(team_dir: &Path) -> Result<(), AtmError> {
         .with_source(error)
         .with_recovery("Remove the stale restore marker after verifying the restored team state.")
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::Path;
+    use std::sync::{Mutex, OnceLock};
+
+    use chrono::Utc;
+    use serde_json::json;
+    use serial_test::serial;
+    use tempfile::tempdir;
+
+    use super::{
+        clear_restore_marker, prepare_restore_workspace, restore_marker_path, restore_staging_dir,
+        restore_task_state_from_backup, restore_team,
+    };
+    use crate::schema::TeamConfig;
+    use crate::team_admin::RestoreRequest;
+
+    fn write_team_config(home_dir: &Path, team: &str, value: serde_json::Value) {
+        write_json(
+            &home_dir
+                .join(".claude")
+                .join("teams")
+                .join(team)
+                .join("config.json"),
+            &value,
+        );
+    }
+
+    fn write_backup_config(backup_dir: &Path, value: serde_json::Value) {
+        write_json(&backup_dir.join("config.json"), &value);
+    }
+
+    fn write_text(path: &Path, value: &str) {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("parent dir");
+        }
+        fs::write(path, value).expect("write text");
+    }
+
+    fn write_json(path: &Path, value: &serde_json::Value) {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("parent dir");
+        }
+        fs::write(path, serde_json::to_vec_pretty(value).expect("json")).expect("write json");
+    }
+
+    fn write_inbox(path: &Path, text: &str) {
+        let envelope = crate::schema::MessageEnvelope {
+            from: "team-lead".to_string(),
+            text: text.to_string(),
+            timestamp: crate::types::IsoTimestamp::from_datetime(Utc::now()),
+            read: false,
+            source_team: Some("atm-dev".to_string()),
+            summary: None,
+            message_id: None,
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            task_id: None,
+            extra: serde_json::Map::new(),
+        };
+        write_text(
+            path,
+            &format!("{}\n", serde_json::to_string(&envelope).expect("envelope")),
+        );
+    }
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    fn with_env_var_serial<T>(key: &str, value: &str, body: impl FnOnce() -> T) -> T {
+        let _guard = env_lock().lock().expect("env lock");
+        // SAFETY: restore tests that mutate process environment run under
+        // `serial_test` and hold the shared env lock for the full mutation
+        // window.
+        unsafe { std::env::set_var(key, value) };
+        let result = body();
+        // SAFETY: same serialization guarantee as above.
+        unsafe { std::env::remove_var(key) };
+        result
+    }
+
+    #[test]
+    fn prepare_restore_workspace_rejects_preexisting_staging_dir() {
+        let tempdir = tempdir().expect("tempdir");
+        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        let backup_dir = tempdir.path().join("backup");
+        fs::create_dir_all(restore_staging_dir(&team_dir)).expect("staging dir");
+        fs::create_dir_all(&backup_dir).expect("backup dir");
+
+        let error = prepare_restore_workspace(&team_dir, &backup_dir).expect_err("staging error");
+
+        assert!(error.is_file_policy());
+        assert!(
+            error
+                .message
+                .contains("restore staging directory already exists")
+        );
+        assert!(!restore_marker_path(&team_dir).exists());
+    }
+
+    #[test]
+    fn restore_task_state_from_backup_round_trips_highwatermark() {
+        let tempdir = tempdir().expect("tempdir");
+        let backup_tasks_dir = tempdir.path().join("backup").join("tasks");
+        let tasks_dir = tempdir.path().join(".claude").join("tasks").join("atm-dev");
+        write_json(
+            &backup_tasks_dir.join("2.json"),
+            &json!({"id":"2","status":"open"}),
+        );
+        write_json(
+            &backup_tasks_dir.join("9.json"),
+            &json!({"id":"9","status":"open"}),
+        );
+        write_text(&backup_tasks_dir.join(".highwatermark"), "1\n");
+        write_json(
+            &tasks_dir.join("1.json"),
+            &json!({"id":"1","status":"open"}),
+        );
+        write_text(&tasks_dir.join(".highwatermark"), "1\n");
+
+        let highwatermark =
+            restore_task_state_from_backup(&backup_tasks_dir, &tasks_dir).expect("restore tasks");
+
+        assert_eq!(highwatermark, 9);
+        assert!(!tasks_dir.join("1.json").exists());
+        assert!(tasks_dir.join("2.json").is_file());
+        assert!(tasks_dir.join("9.json").is_file());
+        assert_eq!(
+            fs::read_to_string(tasks_dir.join(".highwatermark")).expect("highwatermark"),
+            "9\n"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn restore_team_keeps_config_last_and_marker_on_config_write_failure() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(
+            tempdir.path(),
+            "atm-dev",
+            json!({"leadSessionId":"lead-current","members":[{"name":"team-lead"}]}),
+        );
+        let backup_dir = tempdir
+            .path()
+            .join(".claude")
+            .join("teams")
+            .join(".backups")
+            .join("atm-dev")
+            .join("20260423T010203000000000Z");
+        write_backup_config(
+            &backup_dir,
+            json!({
+                "leadSessionId":"lead-backup",
+                "members":[
+                    {"name":"team-lead"},
+                    {"name":"arch-ctm","agentType":"general-purpose","model":"sonnet","cwd":"/repo"}
+                ]
+            }),
+        );
+        write_inbox(
+            &backup_dir.join("inboxes").join("arch-ctm.json"),
+            "restored worker inbox",
+        );
+        write_json(
+            &backup_dir.join("tasks").join("80.json"),
+            &json!({"id":"80"}),
+        );
+
+        let result = with_env_var_serial("ATM_TEST_FAIL_TEAM_CONFIG_WRITE", "1", || {
+            restore_team(RestoreRequest {
+                home_dir: tempdir.path().to_path_buf(),
+                team: "atm-dev".to_string(),
+                from: Some(backup_dir.clone()),
+                dry_run: false,
+            })
+        });
+
+        let error = result.expect_err("restore failure");
+        assert!(error.is_file_policy());
+        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        let config: TeamConfig =
+            serde_json::from_slice(&fs::read(team_dir.join("config.json")).expect("config"))
+                .expect("parse config");
+        assert_eq!(config.members.len(), 1);
+        assert_eq!(config.members[0].name, "team-lead");
+        assert!(team_dir.join("inboxes").join("arch-ctm.json").is_file());
+        assert!(
+            tempdir
+                .path()
+                .join(".claude")
+                .join("tasks")
+                .join("atm-dev")
+                .join("80.json")
+                .is_file()
+        );
+        assert!(restore_marker_path(&team_dir).is_file());
+    }
+
+    #[test]
+    #[serial]
+    fn restore_team_treats_marker_cleanup_failure_as_warning_only() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(
+            tempdir.path(),
+            "atm-dev",
+            json!({"leadSessionId":"lead-current","members":[{"name":"team-lead"}]}),
+        );
+        let backup_dir = tempdir
+            .path()
+            .join(".claude")
+            .join("teams")
+            .join(".backups")
+            .join("atm-dev")
+            .join("20260423T020304000000000Z");
+        write_backup_config(
+            &backup_dir,
+            json!({
+                "leadSessionId":"lead-backup",
+                "members":[
+                    {"name":"team-lead"},
+                    {"name":"arch-ctm","agentType":"general-purpose","model":"sonnet","cwd":"/repo"}
+                ]
+            }),
+        );
+        write_inbox(
+            &backup_dir.join("inboxes").join("arch-ctm.json"),
+            "restored worker inbox",
+        );
+
+        let result = with_env_var_serial("ATM_TEST_FAIL_RESTORE_MARKER_REMOVE", "1", || {
+            restore_team(RestoreRequest {
+                home_dir: tempdir.path().to_path_buf(),
+                team: "atm-dev".to_string(),
+                from: Some(backup_dir.clone()),
+                dry_run: false,
+            })
+        });
+
+        assert!(
+            result.is_ok(),
+            "restore should succeed despite marker cleanup"
+        );
+        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        assert!(restore_marker_path(&team_dir).is_file());
+        let config: TeamConfig =
+            serde_json::from_slice(&fs::read(team_dir.join("config.json")).expect("config"))
+                .expect("parse config");
+        assert!(
+            config
+                .members
+                .iter()
+                .any(|member| member.name == "arch-ctm")
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn restore_team_cleans_staging_and_preserves_live_config_on_inbox_stage_failure() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(
+            tempdir.path(),
+            "atm-dev",
+            json!({"leadSessionId":"lead-current","members":[{"name":"team-lead"}]}),
+        );
+        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        let backup_dir = tempdir
+            .path()
+            .join(".claude")
+            .join("teams")
+            .join(".backups")
+            .join("atm-dev")
+            .join("20260424T022700000000000Z");
+        write_backup_config(
+            &backup_dir,
+            json!({
+                "leadSessionId":"lead-backup",
+                "members":[
+                    {"name":"team-lead"},
+                    {"name":"arch-ctm","agentType":"general-purpose","model":"sonnet","cwd":"/repo"}
+                ]
+            }),
+        );
+        write_inbox(
+            &backup_dir.join("inboxes").join("arch-ctm.json"),
+            "restored worker inbox",
+        );
+
+        let result = with_env_var_serial("ATM_TEST_FAIL_RESTORE_INBOX_STAGE", "1", || {
+            restore_team(RestoreRequest {
+                home_dir: tempdir.path().to_path_buf(),
+                team: "atm-dev".to_string(),
+                from: Some(backup_dir.clone()),
+                dry_run: false,
+            })
+        });
+
+        let error = result.expect_err("restore should fail on injected inbox stage error");
+        assert!(error.is_mailbox_write());
+        assert!(!restore_staging_dir(&team_dir).exists());
+        let config: TeamConfig =
+            serde_json::from_slice(&fs::read(team_dir.join("config.json")).expect("config"))
+                .expect("parse config");
+        assert_eq!(config.members.len(), 1);
+        assert_eq!(config.members[0].name, "team-lead");
+        assert!(!team_dir.join("inboxes").join("arch-ctm.json").exists());
+        assert!(restore_marker_path(&team_dir).is_file());
+    }
+
+    #[test]
+    fn clear_restore_marker_missing_file_is_ok() {
+        let tempdir = tempdir().expect("tempdir");
+        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        fs::create_dir_all(&team_dir).expect("team dir");
+
+        clear_restore_marker(&team_dir).expect("missing marker should be ok");
+    }
 }
