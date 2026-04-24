@@ -1923,17 +1923,17 @@ closed before the 1.0 release.
     - seen-state watermark:
       `read::seen_state::save_seen_watermark(...)`
     - send-alert state:
-      `send::alert_state::{register_missing_team_config_alert(...),
-      clear_missing_team_config_alert(...), save(...), acquire_lock(...)}`
+      `send::alert_state::save(...)` with
+      `send::alert_state::acquire_lock(...)`
     - team config:
       `team_admin::write_team_config(...)`
     - task bucket and `.highwatermark`:
-      `team_admin::restore::restore_task_state_from_backup(...)`
+      `team_admin::restore_task_state_from_backup(...)`
     - restore marker and restore staging:
-      `team_admin::restore::write_restore_marker(...)`,
-      `team_admin::restore::clear_restore_marker(...)`,
-      `team_admin::restore::prepare_restore_workspace(...)`, and
-      `team_admin::restore::cleanup_restore_workspace(...)`
+      `team_admin::write_restore_marker(...)`,
+      `team_admin::clear_restore_marker(...)`,
+      `team_admin::prepare_restore_workspace(...)`, and
+      `team_admin::cleanup_restore_workspace(...)`
 
 - `REQ-CORE-PERSIST-ATOMIC-001C` ATM must not claim rewrite safety for
   non-cooperating external writers.

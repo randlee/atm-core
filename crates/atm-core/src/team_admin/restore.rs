@@ -159,7 +159,16 @@ fn locate_backup_dir(
             .with_source(error)
             .with_recovery("Check backup directory permissions or pass an explicit --from path.")
         })?
-        .filter_map(Result::ok)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
+            AtmError::file_policy(format!(
+                "failed to read backup directory entry under {}: {error}",
+                root.display()
+            ))
+            .with_source(error)
+            .with_recovery("Check backup directory permissions or pass an explicit --from path.")
+        })?
+        .into_iter()
         .map(|entry| entry.path())
         .filter(|path| path.is_dir())
         .collect::<Vec<_>>();
@@ -184,7 +193,16 @@ pub(super) fn list_backup_inboxes(backup_dir: &Path) -> Result<Vec<String>, AtmE
             .with_source(error)
             .with_recovery("Check backup inbox permissions and retry the restore.")
         })?
-        .filter_map(Result::ok)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
+            AtmError::mailbox_read(format!(
+                "failed to read backup inbox directory entry under {}: {error}",
+                inbox_dir.display()
+            ))
+            .with_source(error)
+            .with_recovery("Check backup inbox permissions and retry the restore.")
+        })?
+        .into_iter()
         .filter(|entry| entry.path().is_file())
         .map(|entry| entry.file_name().to_string_lossy().to_string())
         .collect::<Vec<_>>();
@@ -205,7 +223,16 @@ pub(super) fn count_numeric_task_files(tasks_dir: &Path) -> Result<usize, AtmErr
             .with_source(error)
             .with_recovery("Check task directory permissions and retry the restore.")
         })?
-        .filter_map(Result::ok)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
+            AtmError::file_policy(format!(
+                "failed to read task directory entry under {}: {error}",
+                tasks_dir.display()
+            ))
+            .with_source(error)
+            .with_recovery("Check task directory permissions and retry the restore.")
+        })?
+        .into_iter()
         .map(|entry| entry.path())
         .filter(|path| {
             path.is_file()
@@ -321,7 +348,16 @@ fn recompute_highwatermark(tasks_dir: &Path) -> Result<usize, AtmError> {
             .with_source(error)
             .with_recovery("Check task directory permissions and rerun the restore.")
         })?
-        .filter_map(Result::ok)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
+            AtmError::file_policy(format!(
+                "failed to read task directory entry under {}: {error}",
+                tasks_dir.display()
+            ))
+            .with_source(error)
+            .with_recovery("Check task directory permissions and rerun the restore.")
+        })?
+        .into_iter()
         .map(|entry| entry.path())
         .filter(|path| {
             path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("json")
@@ -768,6 +804,59 @@ mod tests {
                 .iter()
                 .any(|member| member.name == "arch-ctm")
         );
+    }
+
+    #[test]
+    #[serial]
+    fn restore_team_cleans_staging_and_preserves_live_config_on_inbox_stage_failure() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(
+            tempdir.path(),
+            "atm-dev",
+            json!({"leadSessionId":"lead-current","members":[{"name":"team-lead"}]}),
+        );
+        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        let backup_dir = tempdir
+            .path()
+            .join(".claude")
+            .join("teams")
+            .join(".backups")
+            .join("atm-dev")
+            .join("20260424T022700000000000Z");
+        write_backup_config(
+            &backup_dir,
+            json!({
+                "leadSessionId":"lead-backup",
+                "members":[
+                    {"name":"team-lead"},
+                    {"name":"arch-ctm","agentType":"general-purpose","model":"sonnet","cwd":"/repo"}
+                ]
+            }),
+        );
+        write_inbox(
+            &backup_dir.join("inboxes").join("arch-ctm.json"),
+            "restored worker inbox",
+        );
+
+        let result = with_env_var_serial("ATM_TEST_FAIL_RESTORE_INBOX_STAGE", "1", || {
+            restore_team(RestoreRequest {
+                home_dir: tempdir.path().to_path_buf(),
+                team: "atm-dev".to_string(),
+                from: Some(backup_dir.clone()),
+                dry_run: false,
+            })
+        });
+
+        let error = result.expect_err("restore should fail on injected inbox stage error");
+        assert!(error.is_mailbox_write());
+        assert!(!restore_staging_dir(&team_dir).exists());
+        let config: TeamConfig =
+            serde_json::from_slice(&fs::read(team_dir.join("config.json")).expect("config"))
+                .expect("parse config");
+        assert_eq!(config.members.len(), 1);
+        assert_eq!(config.members[0].name, "team-lead");
+        assert!(!team_dir.join("inboxes").join("arch-ctm.json").exists());
+        assert!(restore_marker_path(&team_dir).is_file());
     }
 
     #[test]
