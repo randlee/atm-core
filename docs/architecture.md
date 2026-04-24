@@ -1464,6 +1464,9 @@ Current executed rule:
   `.claude/teams/<team>/.atm-state/workflow/<agent>.json`
 - `send` authors forward `metadata.atm.messageId` ULIDs for ATM-authored
   records and seeds the corresponding sidecar entry
+  - QA criterion (a) for ULID assignment is verified through `send_mail`
+    coverage; the helper that writes `metadata.atm.messageId` remains an
+    internal `pub(crate)` workflow API and is not exposed to integration tests
 - `read` projects mailbox display state from the sidecar and only rewrites the
   inbox file for legacy compatibility records that still lack a stable ATM
   identity

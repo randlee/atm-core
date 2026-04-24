@@ -60,13 +60,11 @@ where
     write_paths.extend(extra_write_paths);
     let _locks = lock::acquire_many_sorted(write_paths, timeout)?;
     let source_paths = rediscover_and_validate_source_paths(&source_paths, home_dir, team, agent)?;
-    #[cfg(test)]
     maybe_remove_locked_source_file_for_test(&source_paths)?;
     let mut source_files = load_source_files(&source_paths)?;
     body(&source_paths, &mut source_files)
 }
 
-#[cfg(test)]
 fn maybe_remove_locked_source_file_for_test(source_paths: &[PathBuf]) -> Result<(), AtmError> {
     if std::env::var_os("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD").is_none() {
         return Ok(());
