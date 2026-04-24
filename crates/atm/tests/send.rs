@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use atm_core::schema::{AgentMember, MessageEnvelope, TeamConfig};
+use serde_json::Value;
 
 #[test]
 fn test_send_creates_inbox_file() {
@@ -124,6 +125,19 @@ fn test_send_requires_ack() {
     let inbox = fixture.inbox_contents("recipient");
     assert_eq!(inbox.len(), 1);
     assert!(inbox[0].pending_ack_at.is_some());
+    let atm_message_id = inbox[0].extra["metadata"]["atm"]["messageId"]
+        .as_str()
+        .expect("atm message id");
+    let workflow = fixture.workflow_state_contents("atm-dev", "recipient");
+    assert!(
+        workflow["messages"][format!("atm:{atm_message_id}")]["read"].is_null()
+            || workflow["messages"][format!("atm:{atm_message_id}")]["read"] == false
+    );
+    assert!(
+        workflow["messages"][format!("atm:{atm_message_id}")]["pendingAckAt"]
+            .as_str()
+            .is_some()
+    );
 }
 
 #[test]
@@ -1005,6 +1019,21 @@ impl Fixture {
             .join(".claude")
             .join("teams")
             .join("atm-dev")
+    }
+
+    fn workflow_state_contents(&self, team: &str, agent: &str) -> Value {
+        let raw = fs::read_to_string(
+            self.tempdir
+                .path()
+                .join(".claude")
+                .join("teams")
+                .join(team)
+                .join(".atm-state")
+                .join("workflow")
+                .join(format!("{agent}.json")),
+        )
+        .expect("workflow state contents");
+        serde_json::from_str(&raw).expect("workflow json")
     }
 
     fn install_hook_fixture(&self, mode: &str) -> (PathBuf, PathBuf) {

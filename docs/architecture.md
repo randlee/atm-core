@@ -415,16 +415,11 @@ Architectural rules:
 - absent or invalid hook-result stdout is ignored rather than treated as hook
   failure
 - recipient non-match is silent
-- retired flat hook keys are configuration errors under
-  `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`, not compatibility aliases
-- retired `[atm].post_send_hook_members` is a configuration error under
-  `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`
+- retired flat hook keys and `[atm].post_send_hook_members` are configuration
+  errors, not compatibility aliases
 - hook-decision logging must preserve sender, recipient, matched rule selector,
   and final execution outcome for troubleshooting
-- expected hook non-match must remain debug-only diagnostics rather than
-  caller-visible warnings or send-result warning entries
-- hook failure or timeout never rolls back a successful send and remains the
-  only case where caller-visible hook warnings are appropriate
+- hook failure or timeout never rolls back a successful send
 
 ## 5. Persisted Schema
 
@@ -548,6 +543,24 @@ Current-phase constraint:
 - the owning design rationale for this migration remains
   [`atm-core/design/dedup-metadata-schema.md`](./atm-core/design/dedup-metadata-schema.md)
   §2.2 and §3.3
+
+File-ownership rule:
+
+- Claude-owned inbox content is not an ATM-owned source of truth for ATM-local
+  workflow durability
+- ATM may still have legacy compatibility write paths on the shared inbox
+  surface, but those paths must be documented as compatibility behavior rather
+  than a general pattern to copy
+- ATM-owned machine state should converge on ATM-owned sidecars or equivalent
+  ATM-owned persisted state when stronger write guarantees are required
+- mailbox-local ATM workflow state now lives in the ATM-owned sidecar family at
+  `.claude/teams/<team>/.atm-state/workflow/<agent>.json`
+- `read`, `ack`, and `clear` project mailbox display state by joining
+  Claude-owned inbox records with the ATM-owned workflow sidecar
+- messages without a stable ATM identity remain compatibility-only and may
+  still use the legacy inbox-local workflow fields until a later enrichment
+  phase lands
+
 Canonical read and ack axes are derived from persisted fields and not serialized separately.
 
 Invariant:
@@ -911,10 +924,6 @@ Architectural rules:
   ATM home directory
 - `add-member` is the retained local roster-repair path and must reject
   duplicates before mutating config
-- when `add-member` registers a tmux-backed member, it should persist
-  `tmuxPaneId` in canonical `%<number>` form and set `backendType = "tmux"`
-  plus `isActive = true`; unsupported tmux target syntax should fail fast
-  instead of being guessed into a routing handle
 - `backup` snapshots current team config, inboxes, and the ATM team task
   bucket into a timestamped snapshot directory
 - inbox backup excludes transient mailbox `*.lock` sentinels, dotfiles, and
@@ -1391,36 +1400,77 @@ for `read`, `ack`, and `clear`. Those commands are not allowed to degrade into
 partial-lock best-effort mutation, because doing so would mix snapshots from
 different logical times and make writeback correctness nondeterministic.
 
-### 18.4.1 Cooperative Locking Caveat For `ack_mail`
+### 18.4.1 Cooperative Locking Contract For `ack_mail`
 
 `ack_mail` sometimes needs to mutate a source inbox set and append the reply to
-another inbox that was not part of the initial actor-source set. In that case
-it follows a documented two-phase lock pattern:
+another inbox that was not part of the initial actor-source set. The accepted
+implementation does not use a subset-lock then upgrade-to-superset sequence.
+Instead it uses:
 
-1. acquire the actor-source lock set
-2. validate state and compute the reply inbox path
-3. drop the initial subset lock set
-4. re-acquire the full sorted superset that includes the reply inbox
-5. re-discover source paths, reload state, and re-validate before mutation
-6. persist both the updated source message and reply while the superset locks
-   are still held
+1. an unlocked observational snapshot of the actor-source set
+2. unlocked validation of the pending-ack state and reply inbox path
+3. one final acquisition of the full sorted superset that includes the reply
+   inbox
+4. re-discovery of source paths, reload of current source files, and
+   re-validation of the pending-ack state under that final lock set
+5. persistence of both the updated source message and reply while the superset
+   locks are still held
 
-This is required because trying to acquire the superset while still holding the
-subset can deadlock if the reply inbox sorts before any of the already-held
-actor inbox paths. The temporary unlock gap is acceptable only because
-`ack_mail` re-validates both the source-path set and the pending-ack state
-after the final lock acquisition and aborts on drift instead of mutating a
-stale snapshot.
+This avoids the deadlock risk of trying to expand a held subset into a larger
+sorted lock set. The unlocked preflight is acceptable only because `ack_mail`
+does not mutate from that preflight snapshot: the shared commit helper reloads
+and re-validates both the source-path set and the pending-ack state under the
+final superset lock before writing anything. If the state drifted, `ack_mail`
+aborts instead of mutating a stale snapshot.
 
 | Caller | Lock required |
 |--------|--------------|
 | `append_message` | `locked_read_modify_write` |
 | `send` missing-config notice append | `append_message` coverage |
 | source discovery fault (`read` / `ack` / `clear`) | abort before lock acquisition; no partial lock set attempted |
-| `read` writeback | multi-file lock set held from first read through persist |
-| `ack` transition + reply | two-phase cooperative lock — actor-source set acquired, dropped, re-acquired as full superset including reply inbox; see §18.4.1 |
+| `read` writeback | initial selection load is unlocked; acquire the multi-file lock set only for the reload + writeback phase |
+| `ack` transition + reply | unlocked preflight, then one final cooperative superset lock including reply inbox; see §18.4.1 |
 | `clear` set replacement | multi-file lock set held from first read through persist |
 | `read_messages` (read-only, no writeback) | No |
+
+### 18.4.2 Read-Only Vs Read-Modify-Write
+
+ATM now treats mailbox access as two distinct patterns:
+
+1. Read-only snapshot:
+   - discover source inbox paths
+   - load and classify the current merged surface without mailbox locks
+   - use this for display-only selection and timeout polling
+
+2. Read-modify-write:
+   - re-acquire the deterministic source lock set only when a command is about to
+     persist mailbox state
+   - re-discover and re-validate the source path set under lock
+   - reload the mailbox state, recompute selection, apply transitions, and
+     persist while the lock set is still held
+
+This keeps non-mutating reads out of the lock path while preserving a stable
+writeback boundary for commands that actually rewrite inbox files.
+
+### 18.4.3 Executed Mailbox Workflow Migration
+
+Phase P.4 executes the mailbox workflow-state migration on this branch.
+
+Current executed rule:
+- ATM-owned workflow durability for identified mailbox messages is written to
+  `.claude/teams/<team>/.atm-state/workflow/<agent>.json`
+- `send` authors forward `metadata.atm.messageId` ULIDs for ATM-authored
+  records and seeds the corresponding sidecar entry
+  - QA criterion (a) for ULID assignment is verified through `send_mail`
+    coverage; the helper that writes `metadata.atm.messageId` remains an
+    internal `pub(crate)` workflow API and is not exposed to integration tests
+- `read` projects mailbox display state from the sidecar and only rewrites the
+  inbox file for legacy compatibility records that still lack a stable ATM
+  identity
+- `ack` writes the reply inbox file plus the source/reply workflow-state files
+  under one deterministic lock plan
+- `clear` classifies removable messages from the projected workflow view and
+  removes matching workflow-state entries when the inbox record is deleted
 
 ### 18.5 New Error Codes
 
@@ -1461,6 +1511,48 @@ Architectural rule:
   state added by Phase M should extend that helper pattern with typed helpers
   for task-bucket, highwatermark, and shared coordination files instead of
   open-coding direct `fs::write(...)` mutations
+
+Single-write-path guardrail:
+- each live file family should have one owning write boundary
+- low-level atomic replacement belongs in `persistence.rs`
+- file-family semantics belong in one owner-layer helper such as mailbox or
+  team-admin
+- command handlers should express intent and call the owner-layer helper rather
+  than assemble write mechanics locally
+- if a new write precondition appears, the default response should be to extend
+  the shared helper or owner-layer helper rather than introducing a parallel
+  write path
+
+Current owner-layer boundaries:
+- Claude-owned inbox compatibility surface:
+  `mailbox::store::observe_source_files(...)` for observational snapshots,
+  `mailbox::store::with_locked_source_files(...)` for shared mailbox
+  read/ack/clear lock+reload orchestration, and
+  `mailbox::store::commit_mailbox_state(...)` /
+  `mailbox::store::commit_source_files(...)` as the persistence leaf
+- ATM-owned source-of-truth state:
+  `workflow::{load_workflow_state(...), save_workflow_state(...),
+  project_envelope(...), remember_initial_state(...),
+  apply_projected_state(...), remove_message_state(...)}`,
+  `read::seen_state::save_seen_watermark(...)`,
+  `send::alert_state::{register_missing_team_config_alert(...),
+  clear_missing_team_config_alert(...), save(...)}`, and
+  `team_admin::write_team_config(...)`
+- ATM-owned restore/task state:
+  `team_admin::restore::restore_task_state_from_backup(...)`,
+  `team_admin::restore::write_restore_marker(...)`, and
+  `team_admin::restore::clear_restore_marker(...)`
+- staging/scratch artifacts:
+  `team_admin::restore::prepare_restore_workspace(...)` and
+  `team_admin::restore::cleanup_restore_workspace(...)`
+
+Current architectural limitation:
+- mailbox replacement is atomic and lock-coordinated for concurrent ATM
+  writers, but it is not yet compare-and-swap against non-cooperating Claude
+  writers
+- therefore the current shared-inbox rewrite path is still a compatibility
+  boundary, not the ideal long-term source-of-truth architecture for ATM-local
+  workflow state
 
 This rule intentionally applies beyond mailbox files so future work does not
 reintroduce partial-write or torn-state risks through backup/restore or shared

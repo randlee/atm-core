@@ -134,6 +134,8 @@ Identifier rules:
   ATM message identity for the acknowledged message
 - for ATM-authored forward records, ATM generates the ULID first and derives
   the persisted Claude-native `timestamp` from that ULID creation time
+- when present, `metadata.atm.messageId` is also the primary workflow-sidecar
+  key for `.claude/teams/<team>/.atm-state/workflow/<agent>.json`
 - write-path enforcement may reject wrong-format ATM-owned identifiers for the
   active schema revision
 - read-path validation failure for wrong-format ATM-owned identifiers must warn,

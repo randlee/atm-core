@@ -14,10 +14,7 @@ use crate::error::AtmError;
 use crate::home;
 use crate::identity;
 use crate::mailbox;
-use crate::mailbox::source::{
-    SourceFile, SourcedMessage, discover_source_paths, load_source_files,
-    rediscover_and_validate_source_paths, resolve_target,
-};
+use crate::mailbox::source::{SourceFile, SourcedMessage, resolve_target};
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::MessageEnvelope;
@@ -25,6 +22,7 @@ use crate::types::{
     AckActivationMode, AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
     SourceIndex, TeamName,
 };
+use crate::workflow;
 
 /// Parameters for querying and optionally mutating one mailbox display surface.
 #[derive(Debug, Clone)]
@@ -138,26 +136,14 @@ pub fn read_mail(
         None
     };
 
-    let mut source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
-    let load_locked_snapshot = |paths: &mut Vec<PathBuf>| -> Result<
-        (Vec<SourceFile>, BucketCounts, Vec<ClassifiedMessage>),
-        AtmError,
-    > {
-        let _locks = mailbox::lock::acquire_many_sorted(
-            paths.clone(),
-            mailbox::lock::default_lock_timeout(),
-        )?;
-        *paths = rediscover_and_validate_source_paths(
-            paths,
-            &query.home_dir,
-            &target.team,
-            &target.agent,
-        )?;
-        load_selection_state(paths, &query, seen_watermark)
-    };
-
-    let (mut source_files, mut bucket_counts, mut selected) =
-        load_locked_snapshot(&mut source_paths)?;
+    let workflow_path =
+        home::workflow_state_path_from_home(&query.home_dir, &target.team, &target.agent)?;
+    let mut workflow_state =
+        workflow::load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
+    let mut source_files =
+        mailbox::store::observe_source_files(&query.home_dir, &target.team, &target.agent)?;
+    let (mut bucket_counts, mut selected) =
+        selection_state_for_source_files(&source_files, &workflow_state, &query, seen_watermark);
     let mut timed_out = false;
 
     if selected.is_empty()
@@ -166,88 +152,93 @@ pub fn read_mail(
         let wait_satisfied = wait::wait_for_eligible_message(
             timeout_secs,
             || {
-                let mut poll_paths =
-                    discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
-                let _poll_locks = mailbox::lock::acquire_many_sorted(
-                    poll_paths.clone(),
-                    mailbox::lock::default_lock_timeout(),
-                )?;
-                poll_paths = rediscover_and_validate_source_paths(
-                    &poll_paths,
-                    &query.home_dir,
-                    &target.team,
-                    &target.agent,
-                )?;
                 Ok(apply_idle_notification_dedup(
                     dedupe_legacy_message_id_surface(
-                        merged_surface(&load_source_files(&poll_paths)?),
+                        merged_surface(&mailbox::store::observe_source_files(
+                            &query.home_dir,
+                            &target.team,
+                            &target.agent,
+                        )?),
                         |message: &SourcedMessage| message.envelope.message_id,
                         |message: &SourcedMessage| message.envelope.timestamp,
                     ),
+                    &workflow_state,
                 ))
             },
-            |messages| !selected_after_filters(messages, &query, seen_watermark).is_empty(),
+            |messages| {
+                !selected_after_filters(messages, &workflow_state, &query, seen_watermark)
+                    .is_empty()
+            },
         )?;
 
         if wait_satisfied {
-            source_paths = discover_source_paths(&query.home_dir, &target.team, &target.agent)?;
-            (source_files, bucket_counts, selected) = load_locked_snapshot(&mut source_paths)?;
+            workflow_state =
+                workflow::load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
+            source_files =
+                mailbox::store::observe_source_files(&query.home_dir, &target.team, &target.agent)?;
+            (bucket_counts, selected) = selection_state_for_source_files(
+                &source_files,
+                &workflow_state,
+                &query,
+                seen_watermark,
+            );
         } else {
             timed_out = true;
         }
     }
 
-    selected.sort_by(|left, right| {
-        right
-            .envelope
-            .timestamp
-            .cmp(&left.envelope.timestamp)
-            .then_with(|| right.envelope.message_id.cmp(&left.envelope.message_id))
-            .then_with(|| right.source_index.cmp(&left.source_index))
-    });
+    sort_and_limit_selected(&mut selected, query.limit);
+    let mutation_needed = displayed_messages_require_mutation(&selected);
 
-    if let Some(limit) = query.limit {
-        selected.truncate(limit);
-    }
-
-    let mutation_applied = if timed_out || selected.is_empty() {
-        false
+    let (mutation_applied, output_messages, bucket_counts) = if timed_out
+        || selected.is_empty()
+        || !mutation_needed
+    {
+        (
+            false,
+            output_messages_from_selection(&selected, &source_files, &workflow_state),
+            bucket_counts,
+        )
     } else {
-        let _locks = mailbox::lock::acquire_many_sorted(
-            source_paths.clone(),
-            mailbox::lock::default_lock_timeout(),
-        )?;
-        source_paths = rediscover_and_validate_source_paths(
-            &source_paths,
+        mailbox::store::with_locked_source_files(
             &query.home_dir,
             &target.team,
             &target.agent,
-        )?;
-        (source_files, bucket_counts, selected) =
-            load_selection_state(&source_paths, &query, seen_watermark)?;
-        selected.sort_by(|left, right| {
-            right
-                .envelope
-                .timestamp
-                .cmp(&left.envelope.timestamp)
-                .then_with(|| right.envelope.message_id.cmp(&left.envelope.message_id))
-                .then_with(|| right.source_index.cmp(&left.source_index))
-        });
-
-        if let Some(limit) = query.limit {
-            selected.truncate(limit);
-        }
-
-        let mutation_applied = apply_display_mutations(
-            &mut source_files,
-            &selected,
-            query.ack_activation_mode,
-            own_inbox,
-        );
-        if mutation_applied {
-            persist_source_files(&source_files)?;
-        }
-        mutation_applied
+            [workflow_path],
+            mailbox::lock::default_lock_timeout(),
+            |_source_paths, source_files| {
+                let mut workflow_state =
+                    workflow::load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
+                let (bucket_counts, mut selected) = selection_state_for_source_files(
+                    source_files,
+                    &workflow_state,
+                    &query,
+                    seen_watermark,
+                );
+                sort_and_limit_selected(&mut selected, query.limit);
+                let mutation = apply_display_mutations(
+                    source_files,
+                    &mut workflow_state,
+                    &selected,
+                    query.ack_activation_mode,
+                    own_inbox,
+                );
+                if mutation.mailbox_changed {
+                    mailbox::store::commit_source_files(source_files)?;
+                }
+                if mutation.workflow_changed {
+                    workflow::save_workflow_state(
+                        &query.home_dir,
+                        &target.team,
+                        &target.agent,
+                        &workflow_state,
+                    )?;
+                }
+                let output_messages =
+                    output_messages_from_selection(&selected, source_files, &workflow_state);
+                Ok((mutation.any_changed, output_messages, bucket_counts))
+            },
+        )?
     };
 
     if query.seen_state_update
@@ -264,22 +255,6 @@ pub fn read_mail(
             latest_timestamp,
         )?;
     }
-
-    let output_messages = selected
-        .into_iter()
-        .map(|selected_message| ClassifiedMessage {
-            source_index: selected_message.source_index,
-            source_path: selected_message.source_path.clone(),
-            bucket: selected_message.bucket,
-            class: selected_message.class,
-            envelope: source_files
-                .iter()
-                .find(|source| source.path == selected_message.source_path)
-                .and_then(|source| source.messages.get(selected_message.source_index.get()))
-                .cloned()
-                .unwrap_or(selected_message.envelope),
-        })
-        .collect::<Vec<_>>();
 
     let history_collapsed = query.selection_mode != ReadSelection::All
         && query.selection_mode != ReadSelection::ActionableWithHistory
@@ -315,19 +290,23 @@ pub fn read_mail(
     Ok(outcome)
 }
 
-fn load_selection_state(
-    source_paths: &[PathBuf],
+fn selection_state_for_source_files(
+    source_files: &[SourceFile],
+    workflow_state: &workflow::WorkflowStateFile,
     query: &ReadQuery,
     seen_watermark: Option<IsoTimestamp>,
-) -> Result<(Vec<SourceFile>, BucketCounts, Vec<ClassifiedMessage>), AtmError> {
-    let source_files = load_source_files(source_paths)?;
-    let classified_all = classify_all(apply_idle_notification_dedup(
-        dedupe_legacy_message_id_surface(
-            merged_surface(&source_files),
-            |message: &SourcedMessage| message.envelope.message_id,
-            |message: &SourcedMessage| message.envelope.timestamp,
+) -> (BucketCounts, Vec<ClassifiedMessage>) {
+    let classified_all = classify_all(
+        apply_idle_notification_dedup(
+            dedupe_legacy_message_id_surface(
+                merged_surface(source_files),
+                |message: &SourcedMessage| message.envelope.message_id,
+                |message: &SourcedMessage| message.envelope.timestamp,
+            ),
+            workflow_state,
         ),
-    ));
+        workflow_state,
+    );
     let bucket_counts = bucket_counts_for(&classified_all);
     let filtered = apply_filters(
         classified_all.clone(),
@@ -335,7 +314,7 @@ fn load_selection_state(
         query.timestamp_filter,
     );
     let selected = select_messages(&filtered, query.selection_mode, seen_watermark);
-    Ok((source_files, bucket_counts, selected))
+    (bucket_counts, selected)
 }
 
 fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
@@ -356,10 +335,21 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
         .collect()
 }
 
-fn apply_idle_notification_dedup(deduped: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
-    let latest_idle_for_sender = messages_from_idle_sender(&deduped);
+fn apply_idle_notification_dedup(
+    deduped: Vec<SourcedMessage>,
+    workflow_state: &workflow::WorkflowStateFile,
+) -> Vec<SourcedMessage> {
+    let projected = deduped
+        .into_iter()
+        .map(|message| SourcedMessage {
+            envelope: workflow::project_envelope(&message.envelope, workflow_state),
+            source_path: message.source_path,
+            source_index: message.source_index,
+        })
+        .collect::<Vec<_>>();
+    let latest_idle_for_sender = messages_from_idle_sender(&projected);
 
-    deduped
+    projected
         .into_iter()
         .enumerate()
         .filter_map(|(index, message)| {
@@ -425,11 +415,15 @@ fn idle_notification_sender(message: &MessageEnvelope) -> Option<String> {
         })
 }
 
-fn classify_all(messages: Vec<SourcedMessage>) -> Vec<ClassifiedMessage> {
+fn classify_all(
+    messages: Vec<SourcedMessage>,
+    workflow_state: &workflow::WorkflowStateFile,
+) -> Vec<ClassifiedMessage> {
     messages
         .into_iter()
         .map(|message| {
-            let class = state::classify_message(&message.envelope);
+            let projected = workflow::project_envelope(&message.envelope, workflow_state);
+            let class = state::classify_message(&projected);
             let bucket = state::display_bucket_for_class(class);
 
             ClassifiedMessage {
@@ -437,7 +431,7 @@ fn classify_all(messages: Vec<SourcedMessage>) -> Vec<ClassifiedMessage> {
                 source_path: message.source_path,
                 bucket,
                 class,
-                envelope: message.envelope,
+                envelope: projected,
             }
         })
         .collect()
@@ -488,10 +482,11 @@ fn select_messages(
 
 fn selected_after_filters(
     messages: &[SourcedMessage],
+    workflow_state: &workflow::WorkflowStateFile,
     query: &ReadQuery,
     seen_watermark: Option<IsoTimestamp>,
 ) -> Vec<ClassifiedMessage> {
-    let classified = classify_all(messages.to_vec());
+    let classified = classify_all(messages.to_vec(), workflow_state);
     let filtered = apply_filters(
         classified,
         query.sender_filter.as_deref(),
@@ -500,13 +495,65 @@ fn selected_after_filters(
     select_messages(&filtered, query.selection_mode, seen_watermark)
 }
 
+fn sort_and_limit_selected(selected: &mut Vec<ClassifiedMessage>, limit: Option<usize>) {
+    selected.sort_by(|left, right| {
+        right
+            .envelope
+            .timestamp
+            .cmp(&left.envelope.timestamp)
+            .then_with(|| right.envelope.message_id.cmp(&left.envelope.message_id))
+            .then_with(|| right.source_index.cmp(&left.source_index))
+    });
+
+    if let Some(limit) = limit {
+        selected.truncate(limit);
+    }
+}
+
+fn output_messages_from_selection(
+    selected: &[ClassifiedMessage],
+    source_files: &[SourceFile],
+    workflow_state: &workflow::WorkflowStateFile,
+) -> Vec<ClassifiedMessage> {
+    selected
+        .iter()
+        .cloned()
+        .map(|selected_message| ClassifiedMessage {
+            source_index: selected_message.source_index,
+            source_path: selected_message.source_path.clone(),
+            bucket: selected_message.bucket,
+            class: selected_message.class,
+            envelope: source_files
+                .iter()
+                .find(|source| source.path == selected_message.source_path)
+                .and_then(|source| source.messages.get(selected_message.source_index.get()))
+                .map(|message| workflow::project_envelope(message, workflow_state))
+                .unwrap_or(selected_message.envelope),
+        })
+        .collect()
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+struct DisplayMutationResult {
+    any_changed: bool,
+    mailbox_changed: bool,
+    workflow_changed: bool,
+}
+
+fn displayed_messages_require_mutation(displayed_messages: &[ClassifiedMessage]) -> bool {
+    displayed_messages
+        .iter()
+        .any(|message| !message.envelope.read)
+}
+
 fn apply_display_mutations(
     source_files: &mut [SourceFile],
+    workflow_state: &mut workflow::WorkflowStateFile,
     displayed_messages: &[ClassifiedMessage],
     ack_activation_mode: AckActivationMode,
     own_inbox: bool,
-) -> bool {
-    let mut mutation_applied = false;
+) -> DisplayMutationResult {
+    let mut mutation = DisplayMutationResult::default();
     let promote_unread =
         own_inbox && ack_activation_mode == AckActivationMode::PromoteDisplayedUnread;
     let now = IsoTimestamp::now();
@@ -514,18 +561,26 @@ fn apply_display_mutations(
     for message in displayed_messages {
         let transitioned = transition_displayed_message(message, promote_unread, now);
         let updated = transitioned.into_envelope();
-        if updated != message.envelope
-            && let Some(source_file) = source_files
-                .iter_mut()
-                .find(|source| source.path == message.source_path)
+        if updated == message.envelope {
+            continue;
+        }
+        if workflow::apply_projected_state(workflow_state, &message.envelope, &updated) {
+            mutation.any_changed = true;
+            mutation.workflow_changed = true;
+            continue;
+        }
+        if let Some(source_file) = source_files
+            .iter_mut()
+            .find(|source| source.path == message.source_path)
             && let Some(stored) = source_file.messages.get_mut(message.source_index.get())
         {
             *stored = updated;
-            mutation_applied = true;
+            mutation.any_changed = true;
+            mutation.mailbox_changed = true;
         }
     }
 
-    mutation_applied
+    mutation
 }
 
 fn transition_displayed_message(
@@ -573,12 +628,4 @@ fn transition_displayed_message(
             state::TransitionedMessage::Unchanged(unchanged)
         }
     }
-}
-
-fn persist_source_files(source_files: &[SourceFile]) -> Result<(), AtmError> {
-    for source in source_files {
-        mailbox::atomic::write_messages(&source.path, &source.messages)?;
-    }
-
-    Ok(())
 }

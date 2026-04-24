@@ -220,10 +220,17 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
     );
     assert!(
         arch_inbox.iter().any(|message| {
-            message.message_id == Some(pending_message_id) && message.acknowledged_at.is_some()
+            message.message_id == Some(pending_message_id) && message.acknowledged_at.is_none()
         }),
         "pending message was not acknowledged: {:?}",
         arch_inbox
+    );
+    let arch_workflow = ack_fixture.workflow_state_contents("arch-ctm");
+    assert!(
+        arch_workflow["messages"][format!("legacy:{pending_message_id}")]["acknowledgedAt"]
+            .as_str()
+            .is_some(),
+        "pending message was not acknowledged in workflow state: {arch_workflow:?}"
     );
     let qa_inbox = ack_fixture.inbox_contents("qa");
     assert!(
@@ -348,6 +355,202 @@ fn send_times_out_under_bounded_lock_contention() {
     assert!(
         started.elapsed() < Duration::from_secs(1),
         "lock-timeout coverage exceeded the deterministic budget"
+    );
+}
+
+#[test]
+#[serial]
+fn clear_dry_run_does_not_wait_on_mailbox_lock() {
+    let _env_lock = env_lock().lock().expect("env lock");
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    fixture.write_primary_inbox(
+        "arch-ctm",
+        &[unread_message(
+            "team-lead",
+            "read without lock",
+            LegacyMessageId::from(Uuid::new_v4()),
+        )],
+    );
+    let lock_path = sentinel_path(&fixture.primary_inbox_path("arch-ctm"));
+    let lock_file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&lock_path)
+        .expect("open lock file");
+    lock_file.lock_exclusive().expect("hold mailbox lock");
+
+    let started = Instant::now();
+    let mut clear_query = fixture.clear_query("arch-ctm");
+    clear_query.dry_run = true;
+    let outcome = clear_mail(clear_query, &observability).expect("dry-run clear");
+
+    assert_eq!(outcome.removed_total, 0);
+    assert_eq!(outcome.remaining_total, 1);
+    assert!(
+        started.elapsed() < Duration::from_secs(1),
+        "read-only mailbox query should not wait on the mailbox lock"
+    );
+}
+
+#[test]
+#[serial]
+fn read_possible_write_only_locks_when_display_mutation_is_required() {
+    let _env_lock = env_lock().lock().expect("env lock");
+    let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
+    let observability = NullObservability;
+
+    let mutation_fixture = Fixture::new();
+    mutation_fixture.write_primary_inbox(
+        "arch-ctm",
+        &[unread_message(
+            "team-lead",
+            "needs mark-read",
+            LegacyMessageId::from(Uuid::new_v4()),
+        )],
+    );
+    let mutation_lock_path = sentinel_path(&mutation_fixture.primary_inbox_path("arch-ctm"));
+    let mutation_lock_file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&mutation_lock_path)
+        .expect("open mutation lock file");
+    mutation_lock_file
+        .lock_exclusive()
+        .expect("hold mutation lock");
+    let mut mutation_query = mutation_fixture.read_query("arch-ctm");
+    mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
+    let error = read_mail(mutation_query, &observability).expect_err("lock timeout");
+    assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
+
+    let no_mutation_fixture = Fixture::new();
+    no_mutation_fixture.write_primary_inbox(
+        "arch-ctm",
+        &[read_message(
+            "team-lead",
+            "already read",
+            LegacyMessageId::from(Uuid::new_v4()),
+        )],
+    );
+    let no_mutation_lock_path = sentinel_path(&no_mutation_fixture.primary_inbox_path("arch-ctm"));
+    let no_mutation_lock_file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&no_mutation_lock_path)
+        .expect("open no-mutation lock file");
+    no_mutation_lock_file
+        .lock_exclusive()
+        .expect("hold no-mutation lock");
+    let mut no_mutation_query = no_mutation_fixture.read_query("arch-ctm");
+    no_mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
+    no_mutation_query.selection_mode = ReadSelection::All;
+    let started = Instant::now();
+    let outcome = read_mail(no_mutation_query, &observability).expect("read without mutation");
+    assert_eq!(outcome.count, 1);
+    assert_eq!(outcome.messages[0].envelope.text, "already read");
+    assert!(
+        started.elapsed() < Duration::from_secs(1),
+        "read should skip mailbox locks when no display mutation is needed"
+    );
+}
+
+#[test]
+#[serial]
+fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+
+    // Criterion (a) is verified through the standard send path rather than a
+    // direct helper call: send_mail internally assigns metadata.atm.messageId
+    // via the private workflow::set_atm_message_id path before read_mail runs.
+    send_mail(
+        fixture.send_request("team-lead", "arch-ctm@atm-dev", "hello sidecar"),
+        &observability,
+    )
+    .expect("send ULID-authored message");
+
+    let inbox_before =
+        fs::read_to_string(fixture.primary_inbox_path("arch-ctm")).expect("raw inbox before read");
+    let physical_before = find_inbox_json_line(&inbox_before, "hello sidecar");
+    let atm_message_id = physical_before["metadata"]["atm"]["messageId"]
+        .as_str()
+        .expect("atm message id")
+        .to_string();
+    assert_eq!(physical_before["read"], false);
+
+    let mut read_query = fixture.read_query("arch-ctm");
+    read_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
+    let outcome = read_mail(read_query, &observability).expect("read mail");
+    assert!(
+        outcome
+            .messages
+            .iter()
+            .any(|message| message.envelope.text == "hello sidecar"),
+        "read outcome should include the ULID-authored message"
+    );
+
+    let inbox_after =
+        fs::read_to_string(fixture.primary_inbox_path("arch-ctm")).expect("raw inbox after read");
+    assert_eq!(inbox_after, inbox_before);
+    let physical_after = find_inbox_json_line(&inbox_after, "hello sidecar");
+    assert_eq!(
+        physical_after["metadata"]["atm"]["messageId"],
+        atm_message_id
+    );
+    assert_eq!(physical_after["read"], false);
+
+    let workflow = fixture.workflow_state_contents("arch-ctm");
+    assert_eq!(
+        workflow["messages"][format!("atm:{atm_message_id}")]["read"],
+        true
+    );
+}
+
+#[test]
+#[serial]
+fn clear_remove_locked_inbox_seam_fails_closed_without_mutating_surviving_state() {
+    let _env_lock = env_lock().lock().expect("env lock");
+    let _fault = EnvGuard::set_raw("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD", "1");
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let origin_message_id = LegacyMessageId::from(Uuid::new_v4());
+    fixture.write_origin_inbox(
+        "arch-ctm",
+        "zzz",
+        &[read_message("qa", "origin read a", origin_message_id)],
+    );
+    fixture.write_workflow_state(
+        "arch-ctm",
+        serde_json::json!({
+            "messages": {
+                format!("legacy:{origin_message_id}"): {
+                    "read": true
+                }
+            }
+        }),
+    );
+    let before_origin = fs::read_to_string(fixture.origin_inbox_path("arch-ctm", "zzz"))
+        .expect("origin inbox before");
+    let before_workflow =
+        fs::read_to_string(fixture.workflow_state_path("arch-ctm")).expect("workflow before");
+
+    let error = clear_mail(fixture.clear_query("arch-ctm"), &observability).expect_err("fault");
+
+    assert!(error.is_mailbox_read());
+    assert_eq!(
+        fs::read_to_string(fixture.origin_inbox_path("arch-ctm", "zzz"))
+            .expect("origin inbox after"),
+        before_origin
+    );
+    assert_eq!(
+        fs::read_to_string(fixture.workflow_state_path("arch-ctm")).expect("workflow after"),
+        before_workflow
     );
 }
 
@@ -582,6 +785,20 @@ impl Fixture {
         read_jsonl(self.origin_inbox_path(agent, suffix))
     }
 
+    fn workflow_state_contents(&self, agent: &str) -> serde_json::Value {
+        let raw = fs::read_to_string(self.workflow_state_path(agent)).expect("workflow contents");
+        serde_json::from_str(&raw).expect("workflow json")
+    }
+
+    fn write_workflow_state(&self, agent: &str, value: serde_json::Value) {
+        let path = self.workflow_state_path(agent);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("workflow dir");
+        }
+        fs::write(path, serde_json::to_vec(&value).expect("workflow json"))
+            .expect("write workflow");
+    }
+
     fn write_primary_inbox(&self, agent: &str, messages: &[MessageEnvelope]) {
         write_inbox(&self.primary_inbox_path(agent), messages);
     }
@@ -609,6 +826,17 @@ impl Fixture {
             .join("inboxes")
             .join(format!("{agent}.{suffix}.json"))
     }
+
+    fn workflow_state_path(&self, agent: &str) -> std::path::PathBuf {
+        self.tempdir
+            .path()
+            .join(".claude")
+            .join("teams")
+            .join("atm-dev")
+            .join(".atm-state")
+            .join("workflow")
+            .join(format!("{agent}.json"))
+    }
 }
 
 fn read_jsonl(path: std::path::PathBuf) -> Vec<MessageEnvelope> {
@@ -616,6 +844,13 @@ fn read_jsonl(path: std::path::PathBuf) -> Vec<MessageEnvelope> {
     raw.lines()
         .map(|line| serde_json::from_str(line).expect("json line"))
         .collect()
+}
+
+fn find_inbox_json_line(raw: &str, text: &str) -> serde_json::Value {
+    raw.lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("json line"))
+        .find(|line| line["text"] == text)
+        .expect("matching inbox json line")
 }
 
 fn write_inbox(path: &std::path::Path, messages: &[MessageEnvelope]) {
