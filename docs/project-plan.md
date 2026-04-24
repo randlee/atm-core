@@ -1792,7 +1792,7 @@ Design details:
   - unlocked observational snapshot first via
     `mailbox::store::observe_source_files(...)`
   - only if mutation is needed, enter
-    `mailbox::store::commit_source_mutation(...)`
+    `mailbox::store::with_locked_source_files(...)`
 - mailbox commit path:
   - acquire the deterministic lock set
   - re-discover source paths under lock
@@ -1807,8 +1807,10 @@ Design details:
 Implementation patterns:
 - share the unlocked snapshot loader between `read` initial selection and wait
   polling
-- use `mailbox::store::commit_source_mutation(...)` as the only shared
-  read/ack/clear mailbox writeback entry point
+- use `mailbox::store::with_locked_source_files(...)` as the shared
+  read/ack/clear lock+reload entry point and
+  `mailbox::store::commit_source_files(...)` as the shared mailbox persistence
+  leaf
 - share sort/limit/selection recomputation utilities where behavior matches
 - keep lock acquisition out of read-only paths entirely
 - use deterministic path ordering and one total timeout budget for every

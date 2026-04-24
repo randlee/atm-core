@@ -12,10 +12,13 @@ Primary ownership note:
   ad hoc call-site persistence logic
 - the concrete mailbox helper boundaries are
   `mailbox::store::observe_source_files(...)` for lock-free snapshots,
-  `mailbox::store::commit_source_mutation(...)` for shared read/ack/clear
-  writeback orchestration,
+  `mailbox::store::with_locked_source_files(...)` for shared read/ack/clear
+  lock+reload orchestration,
   `mailbox::store::commit_mailbox_state(...)` for one file, and
   `mailbox::store::commit_source_files(...)` for multi-source persistence
+- ATM-owned mailbox workflow durability is not owned by `mailbox`; it lives in
+  `workflow.rs` and is joined onto the Claude-owned inbox surface by the
+  higher-level read/ack/clear services
 - current shared-inbox rewrite behavior is a compatibility boundary over a
   Claude-owned surface, not a general license to store new ATM-local source of
   truth in Claude-owned files

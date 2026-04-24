@@ -1,3 +1,10 @@
+//! ATM-owned mailbox workflow sidecar helpers.
+//!
+//! This module owns the workflow source-of-truth file family under
+//! `.claude/teams/<team>/.atm-state/workflow/<agent>.json`. Read/ack/clear may
+//! project these fields onto the Claude-owned inbox surface, but command-layer
+//! code must not shape or persist workflow JSON directly.
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
@@ -96,6 +103,9 @@ pub(crate) fn project_envelope(
     envelope: &MessageEnvelope,
     workflow_state: &WorkflowStateFile,
 ) -> MessageEnvelope {
+    // Projection is the guardrail: higher-level services classify mailbox
+    // state from this joined view instead of re-deriving workflow durability
+    // from the Claude-owned inbox record.
     let Some(key) = workflow_key(envelope) else {
         return envelope.clone();
     };
@@ -115,6 +125,9 @@ pub(crate) fn apply_projected_state(
     original: &MessageEnvelope,
     projected: &MessageEnvelope,
 ) -> bool {
+    // Persist only the projected workflow axes here. Callers keep any inbox
+    // compatibility rewrite separate so the workflow sidecar stays the single
+    // owner-layer write boundary for ATM-local durability.
     let Some(key) = workflow_key(original) else {
         return false;
     };
