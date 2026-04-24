@@ -462,6 +462,52 @@ fn read_possible_write_only_locks_when_display_mutation_is_required() {
 
 #[test]
 #[serial]
+fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+
+    send_mail(
+        fixture.send_request("team-lead", "arch-ctm@atm-dev", "hello sidecar"),
+        &observability,
+    )
+    .expect("send ULID-authored message");
+
+    let inbox_before =
+        fs::read_to_string(fixture.primary_inbox_path("arch-ctm")).expect("raw inbox before read");
+    let inbox = fixture.inbox_contents("arch-ctm");
+    let atm_message_id = inbox
+        .iter()
+        .find(|message| message.text == "hello sidecar")
+        .expect("sent inbox message")
+        .extra["metadata"]["atm"]["messageId"]
+        .as_str()
+        .expect("atm message id")
+        .to_string();
+
+    let mut read_query = fixture.read_query("arch-ctm");
+    read_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
+    let outcome = read_mail(read_query, &observability).expect("read mail");
+    assert!(
+        outcome
+            .messages
+            .iter()
+            .any(|message| message.envelope.text == "hello sidecar"),
+        "read outcome should include the ULID-authored message"
+    );
+
+    let inbox_after =
+        fs::read_to_string(fixture.primary_inbox_path("arch-ctm")).expect("raw inbox after read");
+    assert_eq!(inbox_after, inbox_before);
+
+    let workflow = fixture.workflow_state_contents("arch-ctm");
+    assert_eq!(
+        workflow["messages"][format!("atm:{atm_message_id}")]["read"],
+        true
+    );
+}
+
+#[test]
+#[serial]
 fn clear_fails_closed_on_synthetic_source_discovery_fault() {
     let _env_lock = env_lock().lock().expect("env lock");
     let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT", "1");
