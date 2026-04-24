@@ -270,4 +270,26 @@ mod tests {
         drop(guard);
         assert!(!path.exists());
     }
+
+    #[test]
+    fn acquire_send_alert_lock_evicts_stale_pid_lock_and_reacquires() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = lock_path(tempdir.path());
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("lock dir");
+        }
+        fs::write(&path, u32::MAX.to_string()).expect("stale pid lock");
+
+        let guard = acquire_lock(&path).expect("reacquired lock");
+
+        assert_eq!(
+            fs::read_to_string(&path)
+                .expect("lock contents after eviction")
+                .trim(),
+            std::process::id().to_string()
+        );
+
+        drop(guard);
+        assert!(!path.exists());
+    }
 }
