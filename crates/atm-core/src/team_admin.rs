@@ -468,6 +468,30 @@ fn copy_regular_files<F>(src: &Path, dst: &Path, include: F) -> Result<(), AtmEr
 where
     F: Fn(&str) -> bool,
 {
+    copy_regular_files_with_policy(src, dst, include, DirEntryErrorPolicy::WarnAndSkip)
+}
+
+fn copy_regular_files_strict<F>(src: &Path, dst: &Path, include: F) -> Result<(), AtmError>
+where
+    F: Fn(&str) -> bool,
+{
+    copy_regular_files_with_policy(src, dst, include, DirEntryErrorPolicy::FailClosed)
+}
+
+enum DirEntryErrorPolicy {
+    WarnAndSkip,
+    FailClosed,
+}
+
+fn copy_regular_files_with_policy<F>(
+    src: &Path,
+    dst: &Path,
+    include: F,
+    dir_entry_error_policy: DirEntryErrorPolicy,
+) -> Result<(), AtmError>
+where
+    F: Fn(&str) -> bool,
+{
     if !src.exists() {
         return Ok(());
     }
@@ -480,19 +504,40 @@ where
         .with_recovery("Check destination directory permissions and retry the copy.")
     })?;
 
-    let mut entries = fs::read_dir(src)
-        .map_err(|error| {
-            AtmError::file_policy(format!(
-                "failed to read source directory {}: {error}",
-                src.display()
-            ))
-            .with_source(error)
-            .with_recovery("Check source directory permissions and retry the copy.")
-        })?
-        .filter_map(Result::ok)
-        .filter(|entry| entry.path().is_file())
-        .filter(|entry| include(&entry.file_name().to_string_lossy()))
-        .collect::<Vec<_>>();
+    let mut entries = Vec::new();
+    for entry in fs::read_dir(src).map_err(|error| {
+        AtmError::file_policy(format!(
+            "failed to read source directory {}: {error}",
+            src.display()
+        ))
+        .with_source(error)
+        .with_recovery("Check source directory permissions and retry the copy.")
+    })? {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(error) => match dir_entry_error_policy {
+                DirEntryErrorPolicy::WarnAndSkip => {
+                    warn!(
+                        source = %src.display(),
+                        %error,
+                        "skipping unreadable source directory entry during backup copy"
+                    );
+                    continue;
+                }
+                DirEntryErrorPolicy::FailClosed => {
+                    return Err(AtmError::file_policy(format!(
+                        "failed to read source directory entry under {}: {error}",
+                        src.display()
+                    ))
+                    .with_source(error)
+                    .with_recovery("Check source directory permissions and retry the restore."));
+                }
+            },
+        };
+        if entry.path().is_file() && include(&entry.file_name().to_string_lossy()) {
+            entries.push(entry);
+        }
+    }
     entries.sort_by_key(|entry| entry.file_name());
 
     for entry in entries {
