@@ -474,15 +474,12 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
 
     let inbox_before =
         fs::read_to_string(fixture.primary_inbox_path("arch-ctm")).expect("raw inbox before read");
-    let inbox = fixture.inbox_contents("arch-ctm");
-    let atm_message_id = inbox
-        .iter()
-        .find(|message| message.text == "hello sidecar")
-        .expect("sent inbox message")
-        .extra["metadata"]["atm"]["messageId"]
+    let physical_before = find_inbox_json_line(&inbox_before, "hello sidecar");
+    let atm_message_id = physical_before["metadata"]["atm"]["messageId"]
         .as_str()
         .expect("atm message id")
         .to_string();
+    assert_eq!(physical_before["read"], false);
 
     let mut read_query = fixture.read_query("arch-ctm");
     read_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
@@ -498,11 +495,59 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
     let inbox_after =
         fs::read_to_string(fixture.primary_inbox_path("arch-ctm")).expect("raw inbox after read");
     assert_eq!(inbox_after, inbox_before);
+    let physical_after = find_inbox_json_line(&inbox_after, "hello sidecar");
+    assert_eq!(
+        physical_after["metadata"]["atm"]["messageId"],
+        atm_message_id
+    );
+    assert_eq!(physical_after["read"], false);
 
     let workflow = fixture.workflow_state_contents("arch-ctm");
     assert_eq!(
         workflow["messages"][format!("atm:{atm_message_id}")]["read"],
         true
+    );
+}
+
+#[test]
+#[serial]
+fn clear_remove_locked_inbox_seam_fails_closed_without_mutating_surviving_state() {
+    let _env_lock = env_lock().lock().expect("env lock");
+    let _fault = EnvGuard::set_raw("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD", "1");
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let origin_message_id = LegacyMessageId::from(Uuid::new_v4());
+    fixture.write_origin_inbox(
+        "arch-ctm",
+        "zzz",
+        &[read_message("qa", "origin read a", origin_message_id)],
+    );
+    fixture.write_workflow_state(
+        "arch-ctm",
+        serde_json::json!({
+            "messages": {
+                format!("legacy:{origin_message_id}"): {
+                    "read": true
+                }
+            }
+        }),
+    );
+    let before_origin = fs::read_to_string(fixture.origin_inbox_path("arch-ctm", "zzz"))
+        .expect("origin inbox before");
+    let before_workflow =
+        fs::read_to_string(fixture.workflow_state_path("arch-ctm")).expect("workflow before");
+
+    let error = clear_mail(fixture.clear_query("arch-ctm"), &observability).expect_err("fault");
+
+    assert!(error.is_mailbox_read());
+    assert_eq!(
+        fs::read_to_string(fixture.origin_inbox_path("arch-ctm", "zzz"))
+            .expect("origin inbox after"),
+        before_origin
+    );
+    assert_eq!(
+        fs::read_to_string(fixture.workflow_state_path("arch-ctm")).expect("workflow after"),
+        before_workflow
     );
 }
 
@@ -738,18 +783,17 @@ impl Fixture {
     }
 
     fn workflow_state_contents(&self, agent: &str) -> serde_json::Value {
-        let raw = fs::read_to_string(
-            self.tempdir
-                .path()
-                .join(".claude")
-                .join("teams")
-                .join("atm-dev")
-                .join(".atm-state")
-                .join("workflow")
-                .join(format!("{agent}.json")),
-        )
-        .expect("workflow contents");
+        let raw = fs::read_to_string(self.workflow_state_path(agent)).expect("workflow contents");
         serde_json::from_str(&raw).expect("workflow json")
+    }
+
+    fn write_workflow_state(&self, agent: &str, value: serde_json::Value) {
+        let path = self.workflow_state_path(agent);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("workflow dir");
+        }
+        fs::write(path, serde_json::to_vec(&value).expect("workflow json"))
+            .expect("write workflow");
     }
 
     fn write_primary_inbox(&self, agent: &str, messages: &[MessageEnvelope]) {
@@ -779,6 +823,17 @@ impl Fixture {
             .join("inboxes")
             .join(format!("{agent}.{suffix}.json"))
     }
+
+    fn workflow_state_path(&self, agent: &str) -> std::path::PathBuf {
+        self.tempdir
+            .path()
+            .join(".claude")
+            .join("teams")
+            .join("atm-dev")
+            .join(".atm-state")
+            .join("workflow")
+            .join(format!("{agent}.json"))
+    }
 }
 
 fn read_jsonl(path: std::path::PathBuf) -> Vec<MessageEnvelope> {
@@ -786,6 +841,13 @@ fn read_jsonl(path: std::path::PathBuf) -> Vec<MessageEnvelope> {
     raw.lines()
         .map(|line| serde_json::from_str(line).expect("json line"))
         .collect()
+}
+
+fn find_inbox_json_line(raw: &str, text: &str) -> serde_json::Value {
+    raw.lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("json line"))
+        .find(|line| line["text"] == text)
+        .expect("matching inbox json line")
 }
 
 fn write_inbox(path: &std::path::Path, messages: &[MessageEnvelope]) {
