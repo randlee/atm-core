@@ -574,7 +574,7 @@ fn test_restore_does_not_overwrite_existing_member_inbox() {
 }
 
 #[test]
-fn test_restore_cleans_preexisting_staging_before_restore() {
+fn test_restore_rejects_preexisting_staging_before_restore() {
     let fixture = Fixture::new();
     fixture.write_team_config_value(
         "atm-dev",
@@ -623,21 +623,25 @@ fn test_restore_cleans_preexisting_staging_before_restore() {
         "--json",
     ]);
     assert!(
-        output.status.success(),
+        !output.status.success(),
+        "stdout: {}",
+        fixture.stderr(&output)
+    );
+    assert!(
+        fixture
+            .stderr(&output)
+            .contains("restore staging directory already exists"),
         "stderr: {}",
         fixture.stderr(&output)
     );
     assert!(
-        !fixture
+        fixture
             .team_dir("atm-dev")
             .join(".restore-staging")
             .exists()
     );
+    assert!(!fixture.inbox_path("atm-dev", "arch-ctm").exists());
     assert!(!fixture.inbox_path("atm-dev", "stale").exists());
-    let restored_inbox =
-        fs::read_to_string(fixture.inbox_path("atm-dev", "arch-ctm")).expect("restored inbox");
-    assert!(restored_inbox.contains("fresh restored inbox"));
-    assert!(!restored_inbox.contains("stale inbox content"));
 }
 
 #[test]
