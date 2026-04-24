@@ -3,10 +3,6 @@ default_team = "atm-dev"
 identity = "team-lead"
 
 [[atm.post_send_hooks]]
-recipient = "team-lead"
-command = ["scripts/atm-nudge.sh", "team-lead"]
-
-[[atm.post_send_hooks]]
 recipient = "arch-ctm"
 command = ["scripts/atm-nudge.sh", "arch-ctm"]
 
