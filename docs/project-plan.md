@@ -1781,25 +1781,30 @@ Goal:
 
 Design details:
 - `read_only` mailbox work:
-  - source discovery
-  - source load
+  - `mailbox::store::observe_source_files(...)`
   - merge/classify/filter/select
   - no mailbox lock
 - `read_possible_write` mailbox work:
-  - unlocked observational snapshot first
-  - only if mutation is needed, enter the shared commit path
+  - unlocked observational snapshot first via
+    `mailbox::store::observe_source_files(...)`
+  - only if mutation is needed, enter
+    `mailbox::store::commit_source_mutation(...)`
 - mailbox commit path:
   - acquire the deterministic lock set
   - re-discover source paths under lock
   - reload current source files
   - recompute the selected mutation from fresh data
-  - persist through the mailbox atomic helper while locks are still held
-- `ack` continues using the documented two-phase superset lock pattern, but the
-  reload/recompute step must be expressed through the shared commit pattern
+  - persist through `mailbox::store::commit_source_files(...)` while locks are
+    still held
+- `ack` resolves the reply inbox from an unlocked preflight, then uses one
+  final sorted superset lock for reload/recompute/persist through the shared
+  commit pattern
 
 Implementation patterns:
 - share the unlocked snapshot loader between `read` initial selection and wait
   polling
+- use `mailbox::store::commit_source_mutation(...)` as the only shared
+  read/ack/clear mailbox writeback entry point
 - share sort/limit/selection recomputation utilities where behavior matches
 - keep lock acquisition out of read-only paths entirely
 - use deterministic path ordering and one total timeout budget for every
@@ -1816,8 +1821,9 @@ Files expected in scope:
 Concrete implementation targets:
 - consolidate the current per-command mailbox rewrite helpers so `read`,
   `ack`, and `clear` do not each own a separate final persist step
-- keep the two-phase superset lock behavior in `ack`, but move any duplicated
-  reload/recompute/persist shape behind shared mailbox owner helpers
+- keep `ack` on the documented unlocked-preflight plus final-superset-lock
+  behavior, and move any duplicated reload/recompute/persist shape behind
+  shared mailbox owner helpers
 - preserve the current Windows-safe sentinel cleanup behavior already present
   from `fix/issue-104-inbox-locks`; no sprint in Phase P may regress that
 
