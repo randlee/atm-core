@@ -580,6 +580,7 @@ fn normalize_tmux_pane_id(pane_id: Option<&str>) -> Result<Option<String>, AtmEr
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
     use tempfile::tempdir;
 
     use super::{
@@ -637,6 +638,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn add_member_normalizes_tmux_shape_when_pane_is_provided() {
         let tempdir = tempdir().expect("tempdir");
         write_team_config(tempdir.path(), "atm-dev");
