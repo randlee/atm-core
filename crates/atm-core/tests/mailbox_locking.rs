@@ -466,6 +466,9 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
     let fixture = Fixture::new();
     let observability = NullObservability;
 
+    // Criterion (a) is verified through the standard send path rather than a
+    // direct helper call: send_mail internally assigns metadata.atm.messageId
+    // via the private workflow::set_atm_message_id path before read_mail runs.
     send_mail(
         fixture.send_request("team-lead", "arch-ctm@atm-dev", "hello sidecar"),
         &observability,
