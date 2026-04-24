@@ -26,13 +26,13 @@ Primary ownership note:
   dedup-and-replace rule: when a newly appended message is classified as an
   idle notification, remove any older unread idle notification from the same
   sender in the same inbox and append the new record in one atomic sequence
-- this behavior satisfies `REQ-P-IDLE-001` through `REQ-CORE-MAILBOX-001`
+- this behavior satisfies the sender-scoped idle-notification dedup contract
+  in `docs/requirements.md` alongside `REQ-CORE-MAILBOX-001`
 
 References:
 
 - Product requirements: `docs/requirements.md` §3.2 and §14
 - `REQ-P-CONTRACT-001`
-- `REQ-P-IDLE-001` (sender-scoped idle-notification dedup)
 - `REQ-P-WORKFLOW-001`
 - `REQ-CORE-MAILBOX-001`
 - Migration artifact: `docs/archive/file-migration-plan.md`

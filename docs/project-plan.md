@@ -1605,10 +1605,17 @@ Phase O completion gate:
 ### Phase P: File-I/O Ownership And Single-Write-Path Hardening [PROPOSED]
 
 Status note:
-- proposal only
-- no Phase P sprint has executed yet
-- until a sprint is accepted and lands, Phase P content is planning guidance
-  rather than current architecture
+- P.1 completed on `feature/pP-s1-ownership-classification` via PR `#111`
+  at `git#2e90a97`
+- P.2 completed on `feature/pP-s2-mailbox-read-path` via PR `#112`
+  at `git#f230ef4`
+- P.3 completed on `feature/pP-s3-atm-owned-state` via PR `#115`
+  at `git#ecb774a`
+- P.4 completed on `feature/pP-s4-claude-inbox-compat` via PR `#113`
+  at `git#9d5729b`
+- P.5 is the active closure gate; the remaining content in this phase section is
+  now implementation history plus the final closure work, not proposal-only
+  planning guidance
 
 Goal:
 - make the retained ATM implementation production-ready by applying one

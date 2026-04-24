@@ -201,7 +201,6 @@ mod tests {
     use std::fs;
     use std::sync::{Arc, Barrier};
     use std::thread;
-    use std::time::{Duration, Instant};
 
     use chrono::{TimeZone, Utc};
     use tempfile::TempDir;
@@ -255,7 +254,7 @@ mod tests {
 
         append_message(&path, &sample_message(Uuid::new_v4(), "first")).expect("append");
 
-        assert_path_eventually_absent(&lock::sentinel_path(&path));
+        assert!(!lock::sentinel_path(&path).exists());
     }
 
     #[test]
@@ -266,19 +265,7 @@ mod tests {
 
         append_message(&path, &sample_message(Uuid::new_v4(), "first")).expect("append");
 
-        assert_path_eventually_absent(&lock::sentinel_path(&path));
-    }
-
-    fn assert_path_eventually_absent(path: &std::path::Path) {
-        let deadline = Instant::now() + Duration::from_secs(2);
-        while path.exists() {
-            assert!(
-                Instant::now() < deadline,
-                "path still exists after bounded wait: {}",
-                path.display()
-            );
-            thread::sleep(Duration::from_millis(10));
-        }
+        assert!(!lock::sentinel_path(&path).exists());
     }
 
     #[test]
