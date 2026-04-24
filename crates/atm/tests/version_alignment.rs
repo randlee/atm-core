@@ -36,9 +36,7 @@ fn atm_core_dep_version_matches_workspace_version() {
     for crate_name in ["agent-team-mail", "agent-team-mail-core"] {
         let lock_version = cargo_lock
             .split("\n[[package]]")
-            .find(|chunk| {
-                chunk.contains(&format!("name = \"{crate_name}\""))
-            })
+            .find(|chunk| chunk.contains(&format!("name = \"{crate_name}\"")))
             .and_then(|chunk| {
                 chunk
                     .lines()
