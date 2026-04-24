@@ -35,10 +35,9 @@ fn test_read_own_inbox_default() {
 #[test]
 fn test_read_marks_read() {
     let fixture = Fixture::new(&["arch-ctm"]);
-    fixture.write_inbox(
-        "arch-ctm",
-        &[fixture.message("team-lead", "hello", false, None, None, 0)],
-    );
+    let message = fixture.message("team-lead", "hello", false, None, None, 0);
+    let workflow_key = format!("legacy:{}", message.message_id.expect("message id"));
+    fixture.write_inbox("arch-ctm", &[message]);
 
     let output = fixture.run(&["read", "--json"]);
 
@@ -48,16 +47,19 @@ fn test_read_marks_read() {
         fixture.stderr(&output)
     );
     let inbox = fixture.inbox_contents("arch-ctm");
-    assert!(inbox[0].read);
+    assert!(!inbox[0].read);
+    let workflow = fixture
+        .workflow_state_contents("arch-ctm")
+        .expect("workflow state");
+    assert_eq!(workflow["messages"][&workflow_key]["read"], true);
 }
 
 #[test]
 fn test_read_ack_activation() {
     let fixture = Fixture::new(&["arch-ctm"]);
-    fixture.write_inbox(
-        "arch-ctm",
-        &[fixture.message("team-lead", "hello", false, None, None, 0)],
-    );
+    let message = fixture.message("team-lead", "hello", false, None, None, 0);
+    let workflow_key = format!("legacy:{}", message.message_id.expect("message id"));
+    fixture.write_inbox("arch-ctm", &[message]);
 
     let output = fixture.run(&["read", "--json"]);
 
@@ -67,16 +69,23 @@ fn test_read_ack_activation() {
         fixture.stderr(&output)
     );
     let inbox = fixture.inbox_contents("arch-ctm");
-    assert!(inbox[0].pending_ack_at.is_some());
+    assert!(inbox[0].pending_ack_at.is_none());
+    let workflow = fixture
+        .workflow_state_contents("arch-ctm")
+        .expect("workflow state");
+    assert!(
+        workflow["messages"][&workflow_key]["pendingAckAt"]
+            .as_str()
+            .is_some()
+    );
 }
 
 #[test]
 fn test_read_no_mark() {
     let fixture = Fixture::new(&["arch-ctm"]);
-    fixture.write_inbox(
-        "arch-ctm",
-        &[fixture.message("team-lead", "hello", false, None, None, 0)],
-    );
+    let message = fixture.message("team-lead", "hello", false, None, None, 0);
+    let workflow_key = format!("legacy:{}", message.message_id.expect("message id"));
+    fixture.write_inbox("arch-ctm", &[message]);
 
     let output = fixture.run(&["read", "--no-mark", "--json"]);
 
@@ -86,8 +95,13 @@ fn test_read_no_mark() {
         fixture.stderr(&output)
     );
     let inbox = fixture.inbox_contents("arch-ctm");
-    assert!(inbox[0].read);
+    assert!(!inbox[0].read);
     assert!(inbox[0].pending_ack_at.is_none());
+    let workflow = fixture
+        .workflow_state_contents("arch-ctm")
+        .expect("workflow state");
+    assert_eq!(workflow["messages"][&workflow_key]["read"], true);
+    assert!(workflow["messages"][&workflow_key]["pendingAckAt"].is_null());
 }
 
 #[test]
@@ -837,6 +851,16 @@ impl Fixture {
         raw.lines()
             .map(|line| serde_json::from_str(line).expect("json line"))
             .collect()
+    }
+
+    fn workflow_state_contents(&self, agent: &str) -> Option<Value> {
+        let path = self
+            .team_dir()
+            .join(".atm-state")
+            .join("workflow")
+            .join(format!("{agent}.json"));
+        let raw = fs::read_to_string(path).ok()?;
+        Some(serde_json::from_str(&raw).expect("workflow json"))
     }
 
     fn stdout_json(&self, output: &std::process::Output) -> Value {

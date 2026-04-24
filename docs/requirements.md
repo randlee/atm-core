@@ -1917,9 +1917,13 @@ closed before the 1.0 release.
   - the current owner-layer set is:
     - mailbox compatibility surface:
       `mailbox::store::observe_source_files(...)` for lock-free snapshots,
-      `mailbox::store::commit_source_mutation(...)` for shared read/ack/clear
-      commit orchestration, and `mailbox::store::commit_mailbox_state(...)` /
-      `mailbox::store::commit_source_files(...)` as the persistence leaf
+      `mailbox::store::with_locked_source_files(...)` for shared read/ack/clear
+      lock+reload orchestration, and `mailbox::store::commit_mailbox_state(...)`
+      / `mailbox::store::commit_source_files(...)` as the persistence leaf
+    - workflow-state sidecar:
+      `workflow::{load_workflow_state(...), save_workflow_state(...),
+      project_envelope(...), remember_initial_state(...),
+      apply_projected_state(...), remove_message_state(...)}`
     - seen-state watermark:
       `read::seen_state::save_seen_watermark(...)`
     - send-alert state:

@@ -13,8 +13,9 @@ use crate::home;
 use crate::identity;
 use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
-use crate::schema::{LegacyMessageId, MessageEnvelope};
-use crate::types::{AgentName, IsoTimestamp, TeamName};
+use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
+use crate::types::{AgentName, TeamName};
+use crate::workflow;
 
 mod alert_state;
 pub(crate) mod file_policy;
@@ -178,10 +179,11 @@ pub fn send_mail(
     )?;
     let summary = summary::build_summary(&body, request.summary_override);
     let message_id = LegacyMessageId::new();
-    let timestamp = IsoTimestamp::now();
+    let (atm_message_id, timestamp) = AtmMessageId::new_with_timestamp();
 
     if !request.dry_run {
         let mut extra = Map::new();
+        workflow::set_atm_message_id(&mut extra, atm_message_id);
         if sender != canonical_sender {
             set_canonical_sender_metadata(
                 &mut extra,
@@ -203,6 +205,16 @@ pub fn send_mail(
             extra,
         };
         mailbox::append_message(&inbox_path, &envelope)?;
+        let mut workflow_state =
+            workflow::load_workflow_state(&request.home_dir, &recipient.team, &recipient.agent)?;
+        if workflow::remember_initial_state(&mut workflow_state, &envelope) {
+            workflow::save_workflow_state(
+                &request.home_dir,
+                &recipient.team,
+                &recipient.agent,
+                &workflow_state,
+            )?;
+        }
     }
 
     let mut outcome = SendOutcome {
@@ -332,8 +344,9 @@ fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str,
     }
 
     let config_path = team_dir.join("config.json");
-    let timestamp = IsoTimestamp::now();
+    let (atm_message_id, timestamp) = AtmMessageId::new_with_timestamp();
     let mut extra = Map::new();
+    workflow::set_atm_message_id(&mut extra, atm_message_id);
     extra.insert(
         "atmAlertKind".into(),
         serde_json::Value::String("missing_team_config".into()),
@@ -369,6 +382,31 @@ fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str,
             %error,
             path = %team_lead_inbox.display(),
             "failed to append missing-config notice to team-lead inbox"
+        );
+        return;
+    }
+
+    let mut workflow_state = match workflow::load_workflow_state(home_dir, team, "team-lead") {
+        Ok(state) => state,
+        Err(error) => {
+            warn!(
+                code = %AtmErrorCode::WarningMissingTeamConfigFallback,
+                %error,
+                team,
+                "failed to load workflow state for missing-config notice"
+            );
+            return;
+        }
+    };
+    if workflow::remember_initial_state(&mut workflow_state, &notice)
+        && let Err(error) =
+            workflow::save_workflow_state(home_dir, team, "team-lead", &workflow_state)
+    {
+        warn!(
+            code = %AtmErrorCode::WarningMissingTeamConfigFallback,
+            %error,
+            team,
+            "failed to save workflow state for missing-config notice"
         );
     }
 }

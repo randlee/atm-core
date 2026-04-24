@@ -220,10 +220,17 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
     );
     assert!(
         arch_inbox.iter().any(|message| {
-            message.message_id == Some(pending_message_id) && message.acknowledged_at.is_some()
+            message.message_id == Some(pending_message_id) && message.acknowledged_at.is_none()
         }),
         "pending message was not acknowledged: {:?}",
         arch_inbox
+    );
+    let arch_workflow = ack_fixture.workflow_state_contents("arch-ctm");
+    assert!(
+        arch_workflow["messages"][format!("legacy:{pending_message_id}")]["acknowledgedAt"]
+            .as_str()
+            .is_some(),
+        "pending message was not acknowledged in workflow state: {arch_workflow:?}"
     );
     let qa_inbox = ack_fixture.inbox_contents("qa");
     assert!(
@@ -682,6 +689,21 @@ impl Fixture {
 
     fn origin_inbox_contents(&self, agent: &str, suffix: &str) -> Vec<MessageEnvelope> {
         read_jsonl(self.origin_inbox_path(agent, suffix))
+    }
+
+    fn workflow_state_contents(&self, agent: &str) -> serde_json::Value {
+        let raw = fs::read_to_string(
+            self.tempdir
+                .path()
+                .join(".claude")
+                .join("teams")
+                .join("atm-dev")
+                .join(".atm-state")
+                .join("workflow")
+                .join(format!("{agent}.json")),
+        )
+        .expect("workflow contents");
+        serde_json::from_str(&raw).expect("workflow json")
     }
 
     fn write_primary_inbox(&self, agent: &str, messages: &[MessageEnvelope]) {

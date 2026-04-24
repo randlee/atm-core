@@ -169,6 +169,42 @@ fn test_clear_never_removes_pending_ack() {
 }
 
 #[test]
+fn test_clear_uses_workflow_sidecar_and_removes_cleared_entry() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    let message = fixture.message(
+        "team-lead",
+        "sidecar-managed read",
+        false,
+        None,
+        None,
+        Utc::now() - Duration::days(2),
+    );
+    let message_id = message.message_id.expect("message id");
+    fixture.write_inbox("arch-ctm", &[message]);
+    fixture.write_workflow_state(
+        "arch-ctm",
+        serde_json::json!({
+            "messages": {
+                format!("legacy:{message_id}"): {
+                    "read": true
+                }
+            }
+        }),
+    );
+
+    let output = fixture.run(&["clear", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    assert!(fixture.inbox_contents("arch-ctm").is_empty());
+    let workflow = fixture.workflow_state_contents("arch-ctm");
+    assert!(workflow["messages"][format!("legacy:{message_id}")].is_null());
+}
+
+#[test]
 fn test_clear_idle_only_removes_only_idle_notifications() {
     let fixture = Fixture::new(&["arch-ctm"]);
     fixture.write_inbox(
@@ -435,6 +471,30 @@ impl Fixture {
         raw.lines()
             .map(|line| serde_json::from_str(line).expect("json line"))
             .collect()
+    }
+
+    fn write_workflow_state(&self, agent: &str, value: Value) {
+        let path = self
+            .team_dir()
+            .join(".atm-state")
+            .join("workflow")
+            .join(format!("{agent}.json"));
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("workflow dir");
+        }
+        fs::write(path, serde_json::to_vec(&value).expect("workflow json"))
+            .expect("write workflow");
+    }
+
+    fn workflow_state_contents(&self, agent: &str) -> Value {
+        let raw = fs::read_to_string(
+            self.team_dir()
+                .join(".atm-state")
+                .join("workflow")
+                .join(format!("{agent}.json")),
+        )
+        .expect("workflow state contents");
+        serde_json::from_str(&raw).expect("workflow json")
     }
 
     fn write_origin_inbox(&self, agent: &str, origin: &str, messages: &[MessageEnvelope]) {

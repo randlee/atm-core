@@ -11,12 +11,6 @@ use crate::mailbox::source::{
 };
 use crate::schema::MessageEnvelope;
 
-#[derive(Debug)]
-pub(crate) struct SourceMutation<T> {
-    pub output: T,
-    pub changed: bool,
-}
-
 /// Commit one mailbox file through the mailbox-layer write boundary.
 ///
 /// The mailbox layer owns writes to the Claude-owned inbox compatibility
@@ -47,19 +41,19 @@ pub(crate) fn observe_source_files(
     load_source_files(&source_paths)
 }
 
-/// Reload one mailbox source set under the deterministic mailbox lock plan and
-/// commit only if the mutation closure reports a change.
-pub(crate) fn commit_source_mutation<T, I, F>(
+/// Reload one mailbox source set under the deterministic mailbox lock plan
+/// without forcing the caller into an inbox rewrite.
+pub(crate) fn with_locked_source_files<T, I, F>(
     home_dir: &Path,
     team: &str,
     agent: &str,
     extra_write_paths: I,
     timeout: Duration,
-    mutate: F,
+    body: F,
 ) -> Result<T, AtmError>
 where
     I: IntoIterator<Item = PathBuf>,
-    F: FnOnce(&[PathBuf], &mut Vec<SourceFile>) -> Result<SourceMutation<T>, AtmError>,
+    F: FnOnce(&[PathBuf], &mut Vec<SourceFile>) -> Result<T, AtmError>,
 {
     let source_paths = discover_source_paths(home_dir, team, agent)?;
     let mut write_paths = source_paths.clone();
@@ -69,11 +63,7 @@ where
     #[cfg(test)]
     maybe_remove_locked_source_file_for_test(&source_paths)?;
     let mut source_files = load_source_files(&source_paths)?;
-    let mutation = mutate(&source_paths, &mut source_files)?;
-    if mutation.changed {
-        commit_source_files(&source_files)?;
-    }
-    Ok(mutation.output)
+    body(&source_paths, &mut source_files)
 }
 
 #[cfg(test)]
