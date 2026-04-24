@@ -68,6 +68,7 @@ if [[ -z "${PANE_ID:-}" ]]; then
 fi
 
 tmux send-keys -t "$PANE_ID" -l "$MESSAGE"
+sleep 0.5
 tmux send-keys -t "$PANE_ID" Enter
 
 printf '%s nudged recipient=%s pane=%s\n' "$TIMESTAMP" "$RECIPIENT" "$PANE_ID" >> "$LOG_FILE"
