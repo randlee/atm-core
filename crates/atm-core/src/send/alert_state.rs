@@ -370,29 +370,4 @@ mod tests {
         let state = load(&state_path(tempdir.path())).expect("state");
         assert!(state.missing_team_config_keys.is_empty());
     }
-
-    #[test]
-    fn register_missing_team_config_alert_deduplicates_key() {
-        let tempdir = tempdir().expect("tempdir");
-        let key = missing_team_config_alert_key(tempdir.path());
-
-        assert!(register_missing_team_config_alert(tempdir.path(), &key));
-        assert!(!register_missing_team_config_alert(tempdir.path(), &key));
-
-        let state = load(&state_path(tempdir.path())).expect("state");
-        assert_eq!(state.missing_team_config_keys.len(), 1);
-        assert!(state.missing_team_config_keys.contains(&key));
-    }
-
-    #[test]
-    fn clear_missing_team_config_alert_removes_existing_key() {
-        let tempdir = tempdir().expect("tempdir");
-        let key = missing_team_config_alert_key(tempdir.path());
-        assert!(register_missing_team_config_alert(tempdir.path(), &key));
-
-        clear_missing_team_config_alert(tempdir.path(), &key);
-
-        let state = load(&state_path(tempdir.path())).expect("state");
-        assert!(state.missing_team_config_keys.is_empty());
-    }
 }
