@@ -308,6 +308,8 @@ fn apply_removals(source_files: &mut [SourceFile], removable: &HashSet<(PathBuf,
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::{OsStr, OsString};
+
     use serial_test::serial;
     use tempfile::tempdir;
 
@@ -336,10 +338,7 @@ mod tests {
         )
         .expect("write config");
         std::fs::write(inboxes_dir.join("arch-ctm.json"), "").expect("mailbox");
-        // Test-only env mutation is scoped to this process and reset below.
-        unsafe {
-            std::env::set_var("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD", "1");
-        }
+        let _guard = EnvGuard::set_raw("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD", "1");
 
         let error = clear_mail(
             ClearQuery {
@@ -356,10 +355,41 @@ mod tests {
         )
         .expect_err("missing mailbox");
 
-        unsafe {
-            std::env::remove_var("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD");
-        }
         assert!(error.is_mailbox_read());
         assert!(error.message.contains("disappeared"));
+    }
+
+    struct EnvGuard {
+        key: &'static str,
+        original: Option<OsString>,
+    }
+
+    impl EnvGuard {
+        fn set_raw(key: &'static str, value: &str) -> Self {
+            let original = std::env::var_os(key);
+            set_env_var(key, value);
+            Self { key, original }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match self.original.take() {
+                Some(value) => set_env_var(self.key, value),
+                None => remove_env_var(self.key),
+            }
+        }
+    }
+
+    fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
+        // SAFETY: this test module uses #[serial] before mutating the process
+        // environment, so these mutations are serialized within this process.
+        unsafe { std::env::set_var(key, value) }
+    }
+
+    fn remove_env_var<K: AsRef<OsStr>>(key: K) {
+        // SAFETY: this test module uses #[serial] before mutating the process
+        // environment, so these mutations are serialized within this process.
+        unsafe { std::env::remove_var(key) }
     }
 }
