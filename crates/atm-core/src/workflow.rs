@@ -73,6 +73,19 @@ pub(crate) fn save_workflow_state(
     state: &WorkflowStateFile,
 ) -> Result<(), AtmError> {
     let path = home::workflow_state_path_from_home(home_dir, team, agent)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            AtmError::new(
+                AtmErrorKind::MailboxWrite,
+                format!(
+                    "failed to create workflow-state directory {}: {error}",
+                    parent.display()
+                ),
+            )
+            .with_recovery("Check workflow-state directory permissions and retry the ATM command.")
+            .with_source(error)
+        })?;
+    }
     let encoded = serde_json::to_string_pretty(state).map_err(|error| {
         AtmError::new(
             AtmErrorKind::Serialization,
@@ -269,6 +282,34 @@ mod tests {
     }
 
     #[test]
+    fn save_workflow_state_creates_parent_directories() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let mut state = super::WorkflowStateFile::default();
+        state.messages.insert(
+            "legacy:test".to_string(),
+            WorkflowMessageState {
+                read: true,
+                pending_ack_at: None,
+                acknowledged_at: None,
+            },
+        );
+
+        save_workflow_state(tempdir.path(), "atm-dev", "arch-ctm", &state).expect("save state");
+
+        assert!(
+            tempdir
+                .path()
+                .join(".claude")
+                .join("teams")
+                .join("atm-dev")
+                .join(".atm-state")
+                .join("workflow")
+                .join("arch-ctm.json")
+                .is_file()
+        );
+    }
+
+    #[test]
     fn workflow_key_prefers_forward_atm_message_id() {
         let mut message = sample_message();
         let atm_id = AtmMessageId::new();
@@ -325,5 +366,20 @@ mod tests {
 
         assert!(remember_initial_state(&mut state, &message));
         assert_eq!(state.messages.len(), 1);
+    }
+
+    #[test]
+    fn remember_initial_state_uses_atm_key_prefix_when_atm_message_id_exists() {
+        let mut message = sample_message();
+        let atm_id = AtmMessageId::new();
+        set_atm_message_id(&mut message.extra, atm_id);
+        let mut state = super::WorkflowStateFile::default();
+
+        assert!(remember_initial_state(&mut state, &message));
+        assert!(state.messages.contains_key(&format!("atm:{atm_id}")));
+        assert!(!state.messages.contains_key(&format!(
+            "legacy:{}",
+            message.message_id.expect("legacy id")
+        )));
     }
 }

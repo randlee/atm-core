@@ -55,6 +55,33 @@ fn test_read_marks_read() {
 }
 
 #[test]
+fn test_send_then_read_updates_sidecar_without_mutating_claude_inbox_record() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+
+    let send = fixture.run(&["send", "arch-ctm@atm-dev", "hello sidecar", "--json"]);
+    assert!(send.status.success(), "stderr: {}", fixture.stderr(&send));
+    let before_read = fs::read_to_string(fixture.inbox_path("arch-ctm")).expect("raw inbox");
+    let inbox = fixture.inbox_contents("arch-ctm");
+    let atm_message_id = inbox[0].extra["metadata"]["atm"]["messageId"]
+        .as_str()
+        .expect("atm message id")
+        .to_string();
+
+    let read = fixture.run(&["read", "--json"]);
+    assert!(read.status.success(), "stderr: {}", fixture.stderr(&read));
+
+    let after_read = fs::read_to_string(fixture.inbox_path("arch-ctm")).expect("raw inbox");
+    assert_eq!(after_read, before_read);
+    let workflow = fixture
+        .workflow_state_contents("arch-ctm")
+        .expect("workflow state");
+    assert_eq!(
+        workflow["messages"][format!("atm:{atm_message_id}")]["read"],
+        true
+    );
+}
+
+#[test]
 fn test_read_ack_activation() {
     let fixture = Fixture::new(&["arch-ctm"]);
     let message = fixture.message("team-lead", "hello", false, None, None, 0);
