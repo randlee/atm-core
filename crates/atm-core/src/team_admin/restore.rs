@@ -82,13 +82,38 @@ pub(super) fn restore_team(request: RestoreRequest) -> Result<RestoreResult, Atm
             .insert("leadSessionId".to_string(), value.clone());
     }
 
-    apply_restored_inboxes(&team_dir, &backup_dir, &inboxes_to_restore)?;
+    let restore_result = (|| {
+        apply_restored_inboxes(&team_dir, &backup_dir, &inboxes_to_restore)?;
 
-    let tasks_dir = super::tasks_dir_from_home(&request.home_dir, &request.team)?;
-    restore_task_state_from_backup(&backup_dir.join("tasks"), &tasks_dir)?;
-    super::write_team_config(&team_dir, &updated_config).map_err(|error| {
-        error.with_recovery("Check team config permissions and rerun `atm teams restore`.")
-    })?;
+        let tasks_dir = super::tasks_dir_from_home(&request.home_dir, &request.team)?;
+        restore_task_state_from_backup(&backup_dir.join("tasks"), &tasks_dir)?;
+        super::write_team_config(&team_dir, &updated_config).map_err(|error| {
+            error.with_recovery("Check team config permissions and rerun `atm teams restore`.")
+        })?;
+
+        Ok::<RestoreOutcome, AtmError>(RestoreOutcome {
+            action: "restore",
+            team: request.team.clone().into(),
+            backup_path: backup_dir.clone(),
+            members_restored: members_to_restore.len(),
+            inboxes_restored: inboxes_to_restore.len(),
+            tasks_restored: tasks_to_restore,
+        })
+    })();
+    let outcome = match restore_result {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            if let Err(cleanup_error) = cleanup_restore_workspace(&team_dir) {
+                warn!(
+                    team = %request.team,
+                    %cleanup_error,
+                    "restore failed and cleanup of the restore staging directory also failed"
+                );
+            }
+            return Err(error);
+        }
+    };
+
     let marker_cleanup_error = clear_restore_marker(&team_dir).err();
     cleanup_restore_workspace(&team_dir)?;
     if let Some(error) = marker_cleanup_error {
@@ -100,14 +125,7 @@ pub(super) fn restore_team(request: RestoreRequest) -> Result<RestoreResult, Atm
         );
     }
 
-    Ok(RestoreResult::Applied(RestoreOutcome {
-        action: "restore",
-        team: request.team.into(),
-        backup_path: backup_dir,
-        members_restored: members_to_restore.len(),
-        inboxes_restored: inboxes_to_restore.len(),
-        tasks_restored: tasks_to_restore,
-    }))
+    Ok(RestoreResult::Applied(outcome))
 }
 
 fn locate_backup_dir(
