@@ -168,3 +168,128 @@ fn evict_stale_send_alert_lock(path: &Path) -> bool {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use tempfile::tempdir;
+
+    use super::{SendAlertState, acquire_lock, load, lock_path, save, state_path};
+
+    #[test]
+    fn load_send_alert_state_missing_file_returns_default() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = state_path(tempdir.path());
+
+        let state = load(&path).expect("default state");
+
+        assert!(state.missing_team_config_keys.is_empty());
+    }
+
+    #[test]
+    fn load_send_alert_state_defaults_missing_keys_field() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = state_path(tempdir.path());
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("state dir");
+        }
+        fs::write(&path, "{}").expect("state file");
+
+        let state = load(&path).expect("compat state");
+
+        assert!(state.missing_team_config_keys.is_empty());
+    }
+
+    #[test]
+    fn load_send_alert_state_read_errors_are_config_errors() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = state_path(tempdir.path());
+        fs::create_dir_all(&path).expect("directory instead of file");
+
+        let error = load(&path).expect_err("read error");
+
+        assert!(error.is_config());
+        assert!(error.message.contains("failed to read send alert state"));
+    }
+
+    #[test]
+    fn save_send_alert_state_writes_expected_json_shape() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = state_path(tempdir.path());
+        let mut state = SendAlertState::default();
+        state
+            .missing_team_config_keys
+            .insert("teams/zeta/config.json".to_string());
+        state
+            .missing_team_config_keys
+            .insert("teams/alpha/config.json".to_string());
+
+        save(&path, &state).expect("save");
+
+        let raw = fs::read_to_string(&path).expect("saved state");
+        assert_eq!(
+            raw,
+            "{\"missing_team_config_keys\":[\"teams/alpha/config.json\",\"teams/zeta/config.json\"]}"
+        );
+    }
+
+    #[test]
+    fn acquire_send_alert_lock_creates_parent_writes_pid_and_cleans_up_on_drop() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = lock_path(tempdir.path());
+
+        let guard = acquire_lock(&path).expect("lock guard");
+
+        assert!(
+            path.parent().expect("lock parent").exists(),
+            "lock parent directory should be created"
+        );
+        assert_eq!(
+            fs::read_to_string(&path).expect("lock contents").trim(),
+            std::process::id().to_string()
+        );
+        drop(guard);
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn acquire_send_alert_lock_returns_none_while_live_pid_lock_exists() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = lock_path(tempdir.path());
+
+        let guard = acquire_lock(&path).expect("first lock");
+        let initial_contents = fs::read_to_string(&path).expect("initial lock contents");
+
+        assert!(acquire_lock(&path).is_none());
+        assert_eq!(
+            fs::read_to_string(&path).expect("lock contents after second attempt"),
+            initial_contents
+        );
+
+        drop(guard);
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn acquire_send_alert_lock_evicts_stale_pid_lock_and_reacquires() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = lock_path(tempdir.path());
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("lock dir");
+        }
+        fs::write(&path, u32::MAX.to_string()).expect("stale pid lock");
+
+        let guard = acquire_lock(&path).expect("reacquired lock");
+
+        assert_eq!(
+            fs::read_to_string(&path)
+                .expect("lock contents after eviction")
+                .trim(),
+            std::process::id().to_string()
+        );
+
+        drop(guard);
+        assert!(!path.exists());
+    }
+}
