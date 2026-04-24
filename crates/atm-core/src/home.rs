@@ -67,6 +67,26 @@ pub fn inbox_path_from_home(home_dir: &Path, team: &str, agent: &str) -> Result<
         .join(format!("{agent}.json")))
 }
 
+/// Resolve the ATM-owned workflow-state path for `agent` in `team`.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::AddressParseFailed`] when `team` or
+/// `agent` contains path traversal, path separators, or other invalid
+/// path-segment characters.
+pub fn workflow_state_path_from_home(
+    home_dir: &Path,
+    team: &str,
+    agent: &str,
+) -> Result<PathBuf, AtmError> {
+    validate_path_segment(agent, "agent")?;
+    Ok(team_dir_from_home(home_dir, team)?
+        .join(".atm-state")
+        .join("workflow")
+        .join(format!("{agent}.json")))
+}
+
 fn resolve_user_home() -> Result<PathBuf, AtmError> {
     env::var_os("HOME")
         .filter(|value| !value.is_empty())
@@ -86,7 +106,10 @@ mod tests {
 
     use tempfile::TempDir;
 
-    use super::{atm_home, inbox_path, inbox_path_from_home, team_dir, team_dir_from_home};
+    use super::{
+        atm_home, inbox_path, inbox_path_from_home, team_dir, team_dir_from_home,
+        workflow_state_path_from_home,
+    };
 
     fn env_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -205,5 +228,23 @@ mod tests {
 
         assert!(error.is_address());
         assert!(error.message.contains("agent name"));
+    }
+
+    #[test]
+    fn workflow_state_path_uses_atm_state_layout() {
+        let tempdir = TempDir::new().expect("tempdir");
+
+        assert_eq!(
+            workflow_state_path_from_home(tempdir.path(), "atm-dev", "arch-ctm")
+                .expect("workflow state path"),
+            tempdir
+                .path()
+                .join(".claude")
+                .join("teams")
+                .join("atm-dev")
+                .join(".atm-state")
+                .join("workflow")
+                .join("arch-ctm.json")
+        );
     }
 }

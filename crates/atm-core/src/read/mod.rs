@@ -22,6 +22,7 @@ use crate::types::{
     AckActivationMode, AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
     SourceIndex, TeamName,
 };
+use crate::workflow;
 
 /// Parameters for querying and optionally mutating one mailbox display surface.
 #[derive(Debug, Clone)]
@@ -135,10 +136,14 @@ pub fn read_mail(
         None
     };
 
+    let workflow_path =
+        home::workflow_state_path_from_home(&query.home_dir, &target.team, &target.agent)?;
+    let mut workflow_state =
+        workflow::load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
     let mut source_files =
         mailbox::store::observe_source_files(&query.home_dir, &target.team, &target.agent)?;
     let (mut bucket_counts, mut selected) =
-        selection_state_for_source_files(&source_files, &query, seen_watermark);
+        selection_state_for_source_files(&source_files, &workflow_state, &query, seen_watermark);
     let mut timed_out = false;
 
     if selected.is_empty()
@@ -157,16 +162,26 @@ pub fn read_mail(
                         |message: &SourcedMessage| message.envelope.message_id,
                         |message: &SourcedMessage| message.envelope.timestamp,
                     ),
+                    &workflow_state,
                 ))
             },
-            |messages| !selected_after_filters(messages, &query, seen_watermark).is_empty(),
+            |messages| {
+                !selected_after_filters(messages, &workflow_state, &query, seen_watermark)
+                    .is_empty()
+            },
         )?;
 
         if wait_satisfied {
+            workflow_state =
+                workflow::load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
             source_files =
                 mailbox::store::observe_source_files(&query.home_dir, &target.team, &target.agent)?;
-            (bucket_counts, selected) =
-                selection_state_for_source_files(&source_files, &query, seen_watermark);
+            (bucket_counts, selected) = selection_state_for_source_files(
+                &source_files,
+                &workflow_state,
+                &query,
+                seen_watermark,
+            );
         } else {
             timed_out = true;
         }
@@ -175,38 +190,56 @@ pub fn read_mail(
     sort_and_limit_selected(&mut selected, query.limit);
     let mutation_needed = displayed_messages_require_mutation(&selected);
 
-    let (mutation_applied, output_messages, bucket_counts) =
-        if timed_out || selected.is_empty() || !mutation_needed {
-            (
-                false,
-                output_messages_from_selection(&selected, &source_files),
-                bucket_counts,
-            )
-        } else {
-            mailbox::store::commit_source_mutation(
-                &query.home_dir,
-                &target.team,
-                &target.agent,
-                std::iter::empty::<PathBuf>(),
-                mailbox::lock::default_lock_timeout(),
-                |_source_paths, source_files| {
-                    let (bucket_counts, mut selected) =
-                        selection_state_for_source_files(source_files, &query, seen_watermark);
-                    sort_and_limit_selected(&mut selected, query.limit);
-                    let changed = apply_display_mutations(
-                        source_files,
-                        &selected,
-                        query.ack_activation_mode,
-                        own_inbox,
-                    );
-                    let output_messages = output_messages_from_selection(&selected, source_files);
-                    Ok(mailbox::store::SourceMutation {
-                        output: (changed, output_messages, bucket_counts),
-                        changed,
-                    })
-                },
-            )?
-        };
+    let (mutation_applied, output_messages, bucket_counts) = if timed_out
+        || selected.is_empty()
+        || !mutation_needed
+    {
+        (
+            false,
+            output_messages_from_selection(&selected, &source_files, &workflow_state),
+            bucket_counts,
+        )
+    } else {
+        mailbox::store::with_locked_source_files(
+            &query.home_dir,
+            &target.team,
+            &target.agent,
+            [workflow_path],
+            mailbox::lock::default_lock_timeout(),
+            |_source_paths, source_files| {
+                let mut workflow_state =
+                    workflow::load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
+                let (bucket_counts, mut selected) = selection_state_for_source_files(
+                    source_files,
+                    &workflow_state,
+                    &query,
+                    seen_watermark,
+                );
+                sort_and_limit_selected(&mut selected, query.limit);
+                let mutation = apply_display_mutations(
+                    source_files,
+                    &mut workflow_state,
+                    &selected,
+                    query.ack_activation_mode,
+                    own_inbox,
+                );
+                if mutation.mailbox_changed {
+                    mailbox::store::commit_source_files(source_files)?;
+                }
+                if mutation.workflow_changed {
+                    workflow::save_workflow_state(
+                        &query.home_dir,
+                        &target.team,
+                        &target.agent,
+                        &workflow_state,
+                    )?;
+                }
+                let output_messages =
+                    output_messages_from_selection(&selected, source_files, &workflow_state);
+                Ok((mutation.any_changed, output_messages, bucket_counts))
+            },
+        )?
+    };
 
     if query.seen_state_update
         && !selected.is_empty()
@@ -259,16 +292,21 @@ pub fn read_mail(
 
 fn selection_state_for_source_files(
     source_files: &[SourceFile],
+    workflow_state: &workflow::WorkflowStateFile,
     query: &ReadQuery,
     seen_watermark: Option<IsoTimestamp>,
 ) -> (BucketCounts, Vec<ClassifiedMessage>) {
-    let classified_all = classify_all(apply_idle_notification_dedup(
-        dedupe_legacy_message_id_surface(
-            merged_surface(source_files),
-            |message: &SourcedMessage| message.envelope.message_id,
-            |message: &SourcedMessage| message.envelope.timestamp,
+    let classified_all = classify_all(
+        apply_idle_notification_dedup(
+            dedupe_legacy_message_id_surface(
+                merged_surface(source_files),
+                |message: &SourcedMessage| message.envelope.message_id,
+                |message: &SourcedMessage| message.envelope.timestamp,
+            ),
+            workflow_state,
         ),
-    ));
+        workflow_state,
+    );
     let bucket_counts = bucket_counts_for(&classified_all);
     let filtered = apply_filters(
         classified_all.clone(),
@@ -297,10 +335,21 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
         .collect()
 }
 
-fn apply_idle_notification_dedup(deduped: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
-    let latest_idle_for_sender = messages_from_idle_sender(&deduped);
+fn apply_idle_notification_dedup(
+    deduped: Vec<SourcedMessage>,
+    workflow_state: &workflow::WorkflowStateFile,
+) -> Vec<SourcedMessage> {
+    let projected = deduped
+        .into_iter()
+        .map(|message| SourcedMessage {
+            envelope: workflow::project_envelope(&message.envelope, workflow_state),
+            source_path: message.source_path,
+            source_index: message.source_index,
+        })
+        .collect::<Vec<_>>();
+    let latest_idle_for_sender = messages_from_idle_sender(&projected);
 
-    deduped
+    projected
         .into_iter()
         .enumerate()
         .filter_map(|(index, message)| {
@@ -366,11 +415,15 @@ fn idle_notification_sender(message: &MessageEnvelope) -> Option<String> {
         })
 }
 
-fn classify_all(messages: Vec<SourcedMessage>) -> Vec<ClassifiedMessage> {
+fn classify_all(
+    messages: Vec<SourcedMessage>,
+    workflow_state: &workflow::WorkflowStateFile,
+) -> Vec<ClassifiedMessage> {
     messages
         .into_iter()
         .map(|message| {
-            let class = state::classify_message(&message.envelope);
+            let projected = workflow::project_envelope(&message.envelope, workflow_state);
+            let class = state::classify_message(&projected);
             let bucket = state::display_bucket_for_class(class);
 
             ClassifiedMessage {
@@ -378,7 +431,7 @@ fn classify_all(messages: Vec<SourcedMessage>) -> Vec<ClassifiedMessage> {
                 source_path: message.source_path,
                 bucket,
                 class,
-                envelope: message.envelope,
+                envelope: projected,
             }
         })
         .collect()
@@ -429,10 +482,11 @@ fn select_messages(
 
 fn selected_after_filters(
     messages: &[SourcedMessage],
+    workflow_state: &workflow::WorkflowStateFile,
     query: &ReadQuery,
     seen_watermark: Option<IsoTimestamp>,
 ) -> Vec<ClassifiedMessage> {
-    let classified = classify_all(messages.to_vec());
+    let classified = classify_all(messages.to_vec(), workflow_state);
     let filtered = apply_filters(
         classified,
         query.sender_filter.as_deref(),
@@ -459,6 +513,7 @@ fn sort_and_limit_selected(selected: &mut Vec<ClassifiedMessage>, limit: Option<
 fn output_messages_from_selection(
     selected: &[ClassifiedMessage],
     source_files: &[SourceFile],
+    workflow_state: &workflow::WorkflowStateFile,
 ) -> Vec<ClassifiedMessage> {
     selected
         .iter()
@@ -472,10 +527,17 @@ fn output_messages_from_selection(
                 .iter()
                 .find(|source| source.path == selected_message.source_path)
                 .and_then(|source| source.messages.get(selected_message.source_index.get()))
-                .cloned()
+                .map(|message| workflow::project_envelope(message, workflow_state))
                 .unwrap_or(selected_message.envelope),
         })
         .collect()
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+struct DisplayMutationResult {
+    any_changed: bool,
+    mailbox_changed: bool,
+    workflow_changed: bool,
 }
 
 fn displayed_messages_require_mutation(displayed_messages: &[ClassifiedMessage]) -> bool {
@@ -486,11 +548,12 @@ fn displayed_messages_require_mutation(displayed_messages: &[ClassifiedMessage])
 
 fn apply_display_mutations(
     source_files: &mut [SourceFile],
+    workflow_state: &mut workflow::WorkflowStateFile,
     displayed_messages: &[ClassifiedMessage],
     ack_activation_mode: AckActivationMode,
     own_inbox: bool,
-) -> bool {
-    let mut mutation_applied = false;
+) -> DisplayMutationResult {
+    let mut mutation = DisplayMutationResult::default();
     let promote_unread =
         own_inbox && ack_activation_mode == AckActivationMode::PromoteDisplayedUnread;
     let now = IsoTimestamp::now();
@@ -498,18 +561,26 @@ fn apply_display_mutations(
     for message in displayed_messages {
         let transitioned = transition_displayed_message(message, promote_unread, now);
         let updated = transitioned.into_envelope();
-        if updated != message.envelope
-            && let Some(source_file) = source_files
-                .iter_mut()
-                .find(|source| source.path == message.source_path)
+        if updated == message.envelope {
+            continue;
+        }
+        if workflow::apply_projected_state(workflow_state, &message.envelope, &updated) {
+            mutation.any_changed = true;
+            mutation.workflow_changed = true;
+            continue;
+        }
+        if let Some(source_file) = source_files
+            .iter_mut()
+            .find(|source| source.path == message.source_path)
             && let Some(stored) = source_file.messages.get_mut(message.source_index.get())
         {
             *stored = updated;
-            mutation_applied = true;
+            mutation.any_changed = true;
+            mutation.mailbox_changed = true;
         }
     }
 
-    mutation_applied
+    mutation
 }
 
 fn transition_displayed_message(

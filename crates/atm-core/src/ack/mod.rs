@@ -14,9 +14,10 @@ use crate::mailbox::source::{SourceFile, SourcedMessage};
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
-use crate::schema::{LegacyMessageId, MessageEnvelope};
+use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
 use crate::send::{input, summary};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
+use crate::workflow;
 
 /// Parameters for acknowledging one pending-ack mailbox message.
 #[derive(Debug, Clone)]
@@ -84,12 +85,21 @@ pub fn ack_mail(
         return Err(AtmError::agent_not_found(&actor, &team));
     }
 
+    let source_workflow_path =
+        home::workflow_state_path_from_home(&request.home_dir, &team, &actor)?;
+    let source_workflow_state = workflow::load_workflow_state(&request.home_dir, &team, &actor)?;
     let source_files = mailbox::store::observe_source_files(&request.home_dir, &team, &actor)?;
     // Ack intentionally does not apply read-surface idle-notification dedup.
     // It must preserve the raw merged surface after legacy message_id
     // canonicalization so acknowledgement lookup does not depend on read-only
     // inbox clutter policy.
-    let source_message = find_source_message(&source_files, request.message_id, &actor, &team)?;
+    let source_message = find_source_message(
+        &source_files,
+        &source_workflow_state,
+        request.message_id,
+        &actor,
+        &team,
+    )?;
 
     match (
         state::derive_read_state(&source_message.envelope),
@@ -131,10 +141,12 @@ pub fn ack_mail(
         return Err(AtmError::agent_not_found(&reply_agent, &reply_team));
     }
 
-    let ack_timestamp = IsoTimestamp::now();
+    let (reply_atm_message_id, ack_timestamp) = AtmMessageId::new_with_timestamp();
     let reply_text = input::validate_message_text(request.reply_body)?;
     let reply_message_id = LegacyMessageId::new();
     let source_task_id = source_message.envelope.task_id.clone();
+    let mut reply_extra = Map::new();
+    workflow::set_atm_message_id(&mut reply_extra, reply_atm_message_id);
     let reply_message = MessageEnvelope {
         from: actor.clone(),
         text: reply_text.clone(),
@@ -147,24 +159,44 @@ pub fn ack_mail(
         acknowledged_at: None,
         acknowledges_message_id: Some(request.message_id),
         task_id: None,
-        extra: Map::new(),
+        extra: reply_extra,
     };
 
     let reply_inbox_path =
         home::inbox_path_from_home(&request.home_dir, &reply_team, &reply_agent)?;
+    let reply_workflow_path =
+        home::workflow_state_path_from_home(&request.home_dir, &reply_team, &reply_agent)?;
+    let reply_targets_source_mailbox =
+        reply_team.as_str() == team.as_str() && reply_agent.as_str() == actor.as_str();
     // Ack intentionally does not hold a subset lock and then upgrade it.
     // Resolve the reply target from an unlocked preflight, then let the shared
     // commit helper acquire the final sorted superset, reload, and re-validate
     // before mutating either inbox.
-    mailbox::store::commit_source_mutation(
+    mailbox::store::with_locked_source_files(
         &request.home_dir,
         &team,
         &actor,
-        [reply_inbox_path.clone()],
+        [
+            reply_inbox_path.clone(),
+            source_workflow_path,
+            reply_workflow_path,
+        ],
         mailbox::lock::default_lock_timeout(),
         |_source_paths, source_files| {
-            let source_message =
-                find_source_message(source_files, request.message_id, &actor, &team)?;
+            let mut source_workflow_state =
+                workflow::load_workflow_state(&request.home_dir, &team, &actor)?;
+            let mut reply_workflow_state = (!reply_targets_source_mailbox)
+                .then(|| {
+                    workflow::load_workflow_state(&request.home_dir, &reply_team, &reply_agent)
+                })
+                .transpose()?;
+            let source_message = find_source_message(
+                source_files,
+                &source_workflow_state,
+                request.message_id,
+                &actor,
+                &team,
+            )?;
             match (
                 state::derive_read_state(&source_message.envelope),
                 state::derive_ack_state(&source_message.envelope),
@@ -180,12 +212,40 @@ pub fn ack_mail(
                     ));
                 }
             }
-            update_source_message(source_files, &source_message, ack_timestamp)?;
-            append_reply_message(source_files, &reply_inbox_path, reply_message)?;
-            Ok(mailbox::store::SourceMutation {
-                output: (),
-                changed: true,
-            })
+            let mailbox_changed = update_source_message(
+                source_files,
+                &mut source_workflow_state,
+                &source_message,
+                ack_timestamp,
+            )?;
+            append_reply_message(source_files, &reply_inbox_path, reply_message.clone())?;
+            mailbox::store::commit_source_files(source_files)?;
+            if reply_targets_source_mailbox {
+                workflow::remember_initial_state(&mut source_workflow_state, &reply_message);
+                workflow::save_workflow_state(
+                    &request.home_dir,
+                    &team,
+                    &actor,
+                    &source_workflow_state,
+                )?;
+            } else {
+                workflow::save_workflow_state(
+                    &request.home_dir,
+                    &team,
+                    &actor,
+                    &source_workflow_state,
+                )?;
+            }
+            if let Some(reply_workflow_state) = reply_workflow_state.as_mut() {
+                workflow::remember_initial_state(reply_workflow_state, &reply_message);
+                workflow::save_workflow_state(
+                    &request.home_dir,
+                    &reply_team,
+                    &reply_agent,
+                    reply_workflow_state,
+                )?;
+            }
+            Ok(mailbox_changed)
         },
     )?;
 
@@ -256,7 +316,10 @@ fn canonical_sender_identity(message: &MessageEnvelope) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
-fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
+fn merged_surface(
+    source_files: &[SourceFile],
+    workflow_state: &workflow::WorkflowStateFile,
+) -> Vec<SourcedMessage> {
     source_files
         .iter()
         .flat_map(|source| {
@@ -266,7 +329,7 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
                 .cloned()
                 .enumerate()
                 .map(|(source_index, envelope)| SourcedMessage {
-                    envelope,
+                    envelope: workflow::project_envelope(&envelope, workflow_state),
                     source_path: source.path.clone(),
                     source_index: source_index.into(),
                 })
@@ -276,12 +339,13 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
 
 fn find_source_message(
     source_files: &[SourceFile],
+    workflow_state: &workflow::WorkflowStateFile,
     message_id: LegacyMessageId,
     actor: &str,
     team: &str,
 ) -> Result<SourcedMessage, AtmError> {
     dedupe_legacy_message_id_surface(
-        merged_surface(source_files),
+        merged_surface(source_files, workflow_state),
         |message: &SourcedMessage| message.envelope.message_id,
         |message: &SourcedMessage| message.envelope.timestamp,
     )
@@ -311,9 +375,21 @@ fn find_source_message(
 
 fn update_source_message(
     source_files: &mut [SourceFile],
+    workflow_state: &mut workflow::WorkflowStateFile,
     source_message: &SourcedMessage,
     acknowledged_at: IsoTimestamp,
-) -> Result<(), AtmError> {
+) -> Result<bool, AtmError> {
+    let transitioned = state::StoredMessage::<
+        crate::types::ReadReadState,
+        crate::types::PendingAckState,
+    >::read_pending_ack(source_message.envelope.clone())
+    .acknowledge(acknowledged_at)
+    .envelope;
+
+    if workflow::apply_projected_state(workflow_state, &source_message.envelope, &transitioned) {
+        return Ok(false);
+    }
+
     let source_file = source_files
         .iter_mut()
         .find(|source| source.path == source_message.source_path)
@@ -333,15 +409,8 @@ fn update_source_message(
                 usize::from(source_message.source_index)
             ))
         })?;
-
-    let transitioned = state::StoredMessage::<
-        crate::types::ReadReadState,
-        crate::types::PendingAckState,
-    >::read_pending_ack(stored.clone())
-    .acknowledge(acknowledged_at)
-    .envelope;
     *stored = transitioned;
-    Ok(())
+    Ok(true)
 }
 
 fn append_reply_message(

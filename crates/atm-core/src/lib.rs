@@ -40,3 +40,5 @@ pub mod team_admin;
 pub(crate) mod text;
 /// Shared enums and semantic newtypes used across ATM core workflows.
 pub mod types;
+/// Internal ATM-owned workflow-state helpers shared across mailbox services.
+pub(crate) mod workflow;
