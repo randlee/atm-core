@@ -650,15 +650,19 @@ fn canonical_lock_key(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::{OsStr, OsString};
     use std::io;
+    use std::sync::{Mutex, OnceLock};
     use std::time::{Duration, Instant};
 
+    use serial_test::serial;
     use tempfile::tempdir;
 
     use super::{
         DEFAULT_LOCK_TIMEOUT, FORCED_READONLY_FILESYSTEM_TEST_OVERRIDE, StaleLockSentinelEviction,
         acquire, acquire_many_sorted, default_lock_timeout, evict_stale_lock_sentinel,
-        is_lock_contention_error, sentinel_path, sweep_stale_lock_sentinels,
+        is_lock_contention_error, is_lock_sentinel_candidate, sentinel_path,
+        sweep_stale_lock_sentinels,
     };
     use crate::error::AtmErrorCode;
 
@@ -684,12 +688,14 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn sentinel_path_appends_lock_suffix() {
         let path = PathBuf::from("team-lead.json");
         assert_eq!(sentinel_path(&path), PathBuf::from("team-lead.json.lock"));
     }
 
     #[test]
+    #[serial]
     fn acquire_creates_sentinel_file() {
         let tempdir = tempdir().expect("tempdir");
         let inbox = tempdir.path().join("arch-ctm.json");
@@ -700,6 +706,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn dropping_guard_removes_sentinel_file() {
         let tempdir = tempdir().expect("tempdir");
         let inbox = tempdir.path().join("arch-ctm.json");
@@ -714,6 +721,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn dropping_guard_skips_removal_when_sentinel_path_rotates() {
         let tempdir = tempdir().expect("tempdir");
         let inbox = tempdir.path().join("arch-ctm.json");
@@ -731,6 +739,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn evict_stale_lock_sentinel_removes_dead_pid_file() {
         let tempdir = tempdir().expect("tempdir");
         let sentinel = tempdir.path().join("arch-ctm.json.lock");
@@ -744,6 +753,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn sweep_stale_lock_sentinels_removes_only_lock_files_with_dead_pids() {
         let tempdir = tempdir().expect("tempdir");
         let lock_path = tempdir.path().join("arch-ctm.json.lock");
@@ -759,6 +769,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn sweep_stale_lock_sentinels_removes_rotated_dead_pid_sentinels_only() {
         let tempdir = tempdir().expect("tempdir");
         let rotated = tempdir.path().join("arch-ctm.json.lock.old");
@@ -777,6 +788,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn sweep_stale_lock_sentinels_skips_malformed_rotated_sentinels() {
         let tempdir = tempdir().expect("tempdir");
         let rotated = tempdir.path().join("arch-ctm.json.lock.old");
@@ -789,6 +801,18 @@ mod tests {
     }
 
     #[test]
+    #[serial]
+    fn is_lock_sentinel_candidate_rejects_partial_lock_suffixes() {
+        assert!(!is_lock_sentinel_candidate(&PathBuf::from(
+            "inbox.json.lockold",
+        )));
+        assert!(!is_lock_sentinel_candidate(&PathBuf::from(
+            "inbox.locksmith.json",
+        )));
+    }
+
+    #[test]
+    #[serial]
     fn acquire_many_sorted_dedupes_and_sorts_paths() {
         let tempdir = tempdir().expect("tempdir");
         let a = tempdir.path().join("dir").join("..").join("b.json");
@@ -805,6 +829,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn acquire_reports_mailbox_lock_timeout_code() {
         let tempdir = tempdir().expect("tempdir");
         let inbox = tempdir.path().join("arch-ctm.json");
@@ -815,6 +840,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn acquire_many_sorted_releases_prior_guards_on_failure() {
         let tempdir = tempdir().expect("tempdir");
         let free = tempdir.path().join("free.json");
@@ -832,6 +858,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn acquire_many_sorted_uses_total_timeout_budget() {
         let tempdir = tempdir().expect("tempdir");
         let first = tempdir.path().join("first.json");
@@ -846,6 +873,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn sort_unique_paths_dedupes_same_canonical_path() {
         let tempdir = tempdir().expect("tempdir");
         let real = tempdir.path().join("arch-ctm.json");
@@ -864,6 +892,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn acquire_many_sorted_orders_paths_deterministically() {
         let tempdir = tempdir().expect("tempdir");
         let a = tempdir.path().join("c.json");
@@ -878,17 +907,20 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn default_lock_timeout_uses_default_without_override() {
         assert_eq!(default_lock_timeout(), DEFAULT_LOCK_TIMEOUT);
     }
 
     #[test]
+    #[serial]
     fn would_block_is_classified_as_lock_contention() {
         let error = io::Error::from(io::ErrorKind::WouldBlock);
         assert!(is_lock_contention_error(&error));
     }
 
     #[test]
+    #[serial]
     fn acquire_reports_read_only_filesystem_for_open_failure() {
         let _readonly = ReadOnlyFilesystemGuard::set("open");
         let tempdir = tempdir().expect("tempdir");
@@ -901,6 +933,21 @@ mod tests {
     }
 
     #[test]
+    #[serial]
+    fn acquire_reports_read_only_filesystem_for_open_failure_via_env_var_seam() {
+        let _env_lock = env_lock().lock().expect("env lock");
+        let _guard = EnvGuard::set_raw("ATM_TEST_FORCE_LOCK_READONLY_FS", "open");
+        let tempdir = tempdir().expect("tempdir");
+        let inbox = tempdir.path().join("arch-ctm.json");
+
+        let error = acquire(&inbox, DEFAULT_LOCK_TIMEOUT).expect_err("read-only open");
+
+        assert_eq!(error.code, AtmErrorCode::MailboxLockReadOnlyFilesystem);
+        assert!(error.message.contains("mailbox lock open failed"));
+    }
+
+    #[test]
+    #[serial]
     fn acquire_reports_read_only_filesystem_for_owner_record_write_failure() {
         let _readonly = ReadOnlyFilesystemGuard::set("write_owner");
         let tempdir = tempdir().expect("tempdir");
@@ -917,6 +964,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn sweep_reports_read_only_filesystem_for_stale_sentinel_removal() {
         let _readonly = ReadOnlyFilesystemGuard::set("remove");
         let tempdir = tempdir().expect("tempdir");
@@ -930,6 +978,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn dropping_guard_tolerates_read_only_cleanup_failure() {
         let tempdir = tempdir().expect("tempdir");
         let inbox = tempdir.path().join("arch-ctm.json");
@@ -940,6 +989,45 @@ mod tests {
         drop(guard);
 
         assert!(sentinel.exists());
+    }
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    struct EnvGuard {
+        key: &'static str,
+        original: Option<OsString>,
+    }
+
+    impl EnvGuard {
+        fn set_raw(key: &'static str, value: &str) -> Self {
+            let original = std::env::var_os(key);
+            set_env_var(key, value);
+            Self { key, original }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match self.original.take() {
+                Some(value) => set_env_var(self.key, value),
+                None => remove_env_var(self.key),
+            }
+        }
+    }
+
+    fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
+        // SAFETY: this test module uses #[serial] before mutating the process
+        // environment, so these mutations are serialized within this process.
+        unsafe { std::env::set_var(key, value) }
+    }
+
+    fn remove_env_var<K: AsRef<OsStr>>(key: K) {
+        // SAFETY: this test module uses #[serial] before mutating the process
+        // environment, so these mutations are serialized within this process.
+        unsafe { std::env::remove_var(key) }
     }
 
     use std::path::PathBuf;
