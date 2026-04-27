@@ -1027,7 +1027,8 @@ Tests required:
 Acceptance criteria:
 - `lock.rs` is no longer a placeholder stub
 - all mailbox read-modify-write paths hold an exclusive lock
-- `read`, `ack`, and `clear` lock their entire source-file set before reading any source inbox
+- `read`, `ack`, and `clear` use one deterministic full-source lock plan for
+  every mutating reread and writeback
 - no shared mutable structured file touched by M.1 is rewritten in place
 - concurrent `atm send` to the same inbox from two processes does not lose messages
 - CI passes on macOS, Linux, Windows
@@ -1602,7 +1603,7 @@ Phase O completion gate:
 - CI passes on all platforms
 - `integrate/phase-O` merges to `develop`
 
-### Phase P: File-I/O Ownership And Single-Write-Path Hardening [PROPOSED]
+### Phase P: File-I/O Ownership And Single-Write-Path Hardening [MERGED / HARDENING FOLLOW-UP]
 
 Status note:
 - P.1 completed on `feature/pP-s1-ownership-classification` via PR `#111`
@@ -1613,13 +1614,12 @@ Status note:
   at `git#ecb774a`
 - P.4 completed on `feature/pP-s4-claude-inbox-compat` via PR `#113`
   at `git#9d5729b`
-- P.5 closure merged to `develop` via PR `#120` at `git#ad49336`
-- until Sprint 3 reconciles the heading and requirement text, this phase
-  section intentionally mixes executed history with follow-up stabilization
-  planning
-- `integrate/phase-P` must stay fast-forwarded to `develop` before any
-  follow-up stabilization sprint starts; the current planning baseline is
-  `develop@ad49336`
+- P.5 closure gate completed on `feature/pP-s5-closure-gate` via PR `#114`
+- final Phase P integration merged to `develop` via PR `#120` at `git#ad49336`
+- this phase section now records both the executed P.1-P.5 history and the
+  remaining hardening continuation work needed before a publish-quality close
+- `integrate/phase-P` is currently rebased onto `develop@628e176`; refresh it
+  again if `develop` advances before the next hardening slice begins
 
 Goal:
 - make the retained ATM implementation production-ready by applying one
@@ -1641,25 +1641,25 @@ Non-negotiable constraints:
 
 Integration branch: `integrate/phase-P`
 
-#### P.F — Post-Merge Stabilization Sprints
+#### P.6-P.8 — Post-Merge Hardening Continuation
 
 Goal:
 - close the remaining Phase P publish-risk gaps after the merge to `develop`
 - keep follow-up work split into deterministic, reviewable sprint slices:
-  - Sprint 1: workflow-sidecar concurrency and typed boundary cleanup
-  - Sprint 2: test hygiene and observability cleanup
-  - Sprint 3: requirements/plan reconciliation
+  - P.6: workflow-sidecar concurrency and typed boundary cleanup
+  - P.7: test hygiene and observability cleanup
+  - P.8: requirements/architecture/project-plan reconciliation
 
 Planning rule:
-- each stabilization sprint must start from the latest `develop` on
+- each hardening continuation sprint must start from the latest `develop` on
   `integrate/phase-P`
-- if `develop` advances between sprints, fast-forward `integrate/phase-P`
+- if `develop` advances between sprints, refresh `integrate/phase-P` from it
   before opening the next sprint branch
 - no sprint may rely on timing-based tests, unlocked ATM-owned state rewrites,
   or new raw `String`/parse-later request surfaces for agent/team/address
   identifiers
 
-##### Sprint 1 — Workflow-Sidecar Concurrency And Typed Boundary Cleanup
+##### P.6 — Workflow-Sidecar Concurrency And Typed Boundary Cleanup
 
 Goals:
 - make workflow-sidecar seeding in `send` safe for concurrent same-recipient
@@ -1714,7 +1714,7 @@ Required coverage:
 - request-construction tests showing invalid team/agent/address input is
   rejected before command execution enters the core implementation
 
-##### Sprint 2 — Test Hygiene And Observability Cleanup
+##### P.7 — Test Hygiene And Observability Cleanup
 
 Goals:
 - remove the remaining timing-dependent and process-environment test seams
@@ -1756,11 +1756,11 @@ Required coverage:
 - read-path coverage proving malformed idle-notification JSON is observable in
   logs/diagnostics and does not panic or change mailbox state
 
-##### Sprint 3 — Requirements And Plan Reconciliation
+##### P.8 — Requirements, Architecture, And Plan Reconciliation
 
 Goals:
-- bring the written Phase P requirements and plan text into alignment with the
-  landed implementation and the follow-up sprint results
+- bring the written Phase P requirements, architecture, and plan text into
+  alignment with the landed implementation and the follow-up hardening results
 - close the remaining documentation ambiguity before a final publish decision
 
 Files expected in scope:
@@ -1776,15 +1776,16 @@ Design details:
   - `read_only`: no locks
   - `read_possible_write`: unlocked observation is allowed, but any commit must
     reload/prove freshness under the final lock set
-  - `read_modify_write`: lock before the mutating snapshot and hold through
-    commit
+  - `read_modify_write`: acquire the final lock plan before the mutating
+    snapshot and hold it through commit
 - explicitly document that `read`, `ack`, and `clear` do not all share the same
   pre-lock read behavior anymore; the requirement should describe the
   command-specific executed pattern instead of the pre-Phase-P rule
-- rename the Phase P heading from `[PROPOSED]` to a closed/executed label that
-  matches the merged state on `develop`
-- record the Sprint 1 and Sprint 2 fixes in the Phase P closure history so the
-  plan reads as executed release evidence rather than mixed proposal/history
+- keep `docs/requirements.md` and `docs/architecture.md` as the always-valid
+  enforced source of truth for the post-P.5 system state rather than a phase
+  narrative
+- record the P.6 and P.7 fixes in the Phase P closure history so the plan
+  reads as executed release evidence rather than mixed proposal/history
 
 Acceptance criteria:
 - requirements, architecture, and project-plan text all describe the same

@@ -1452,9 +1452,22 @@ ATM now treats mailbox access as two distinct patterns:
 This keeps non-mutating reads out of the lock path while preserving a stable
 writeback boundary for commands that actually rewrite inbox files.
 
+Executed command mapping:
+- `read` uses an unlocked observational snapshot for display selection and
+  timeout polling, then enters the shared lock+reload+recompute path only when
+  display-state mutation is actually required
+- `ack` uses an unlocked preflight to resolve the reply target and candidate
+  source message, then acquires one final sorted superset lock and re-validates
+  the pending-ack state under that lock set before writing source/reply state
+- mutating `clear` acquires the shared lock plan before its mutating reread and
+  holds it through removal computation, mailbox replacement, and workflow-state
+  updates; `clear --dry-run` remains observational only
+
 ### 18.4.3 Executed Mailbox Workflow Migration
 
-Phase P.4 executes the mailbox workflow-state migration on this branch.
+Phase P completed the mailbox workflow-state migration. P.4 delivered the
+sidecar move, and the current architecture documents the post-P.5 executed
+state.
 
 Current executed rule:
 - ATM-owned workflow durability for identified mailbox messages is written to
