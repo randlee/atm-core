@@ -127,7 +127,7 @@ pub fn send_mail(
             if !team_config
                 .members
                 .iter()
-                .any(|member| member.name == recipient.agent)
+                .any(|member| member.name == recipient.agent.as_str())
             {
                 return Err(AtmError::agent_not_found(&recipient.agent, &recipient.team));
             }
@@ -195,7 +195,9 @@ pub fn send_mail(
             text: body.clone(),
             timestamp,
             read: false,
-            source_team: sender_team.clone().or(Some(recipient.team.clone())),
+            source_team: sender_team
+                .clone()
+                .or_else(|| Some(recipient.team.to_string())),
             summary: Some(summary.clone()),
             message_id: Some(message_id),
             pending_ack_at: requires_ack.then_some(timestamp),
@@ -267,8 +269,8 @@ pub fn send_mail(
 
 #[derive(Debug)]
 pub(super) struct ResolvedRecipient {
-    agent: String,
-    team: String,
+    agent: AgentName,
+    team: TeamName,
 }
 
 pub(super) struct PostSendHookContext<'a> {
@@ -292,8 +294,8 @@ fn resolve_recipient(
         .ok_or_else(AtmError::team_unavailable)?;
 
     Ok(ResolvedRecipient {
-        agent: config::aliases::resolve_agent(&target_address.agent, config),
-        team,
+        agent: AgentName::from(config::aliases::resolve_agent(&target_address.agent, config)),
+        team: TeamName::from(team),
     })
 }
 
