@@ -221,8 +221,8 @@ pub fn send_mail(
 
     let mut outcome = SendOutcome {
         action: "send",
-        team: recipient.team.clone().into(),
-        agent: recipient.agent.clone().into(),
+        team: recipient.team.clone(),
+        agent: recipient.agent.clone(),
         sender: sender.clone(),
         outcome: if request.dry_run { "dry_run" } else { "sent" },
         message_id,
