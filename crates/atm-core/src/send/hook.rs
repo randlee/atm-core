@@ -6,9 +6,12 @@ use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
-use tracing::{Level, debug, error, info, warn};
+#[cfg(test)]
+use tracing::Level;
+use tracing::{debug, error, info, warn};
 
 use crate::config;
+use crate::config::types::HookRecipient;
 use crate::error::AtmErrorCode;
 
 use super::{PostSendHookContext, qualified_sender_identity};
@@ -50,7 +53,7 @@ pub(super) fn maybe_run_post_send_hook(
 
     if matching_rules.is_empty() {
         debug!(
-            sender = context.sender,
+            sender = %context.sender,
             recipient = %context.recipient.agent,
             recipient_team = %context.recipient.team,
             "post-send hook had no matching recipient rules"
@@ -75,9 +78,9 @@ fn execute_post_send_hook(
     };
     let command_path = resolve_command_path(config, command_path);
     let mut payload = json!({
-        "from": qualified_sender_identity(context.sender, context.sender_team),
+        "from": qualified_sender_identity(context.sender, context.sender_team.map(|team| team.as_str())),
         "to": format!("{}@{}", context.recipient.agent, context.recipient.team),
-        "sender": context.sender,
+        "sender": context.sender.as_str(),
         "recipient": context.recipient.agent,
         "team": context.recipient.team,
         "message_id": context.message_id.to_string(),
@@ -88,7 +91,7 @@ fn execute_post_send_hook(
     }
 
     debug!(
-        sender = context.sender,
+        sender = %context.sender,
         recipient = %context.recipient.agent,
         recipient_team = %context.recipient.team,
         hook_recipient = %rule.recipient,
@@ -113,7 +116,7 @@ fn execute_post_send_hook(
             );
             warn!(
                 code = %AtmErrorCode::WarningHookExecutionFailed,
-                sender = context.sender,
+                sender = %context.sender,
                 recipient = %context.recipient.agent,
                 recipient_team = %context.recipient.team,
                 hook_recipient = %rule.recipient,
@@ -142,7 +145,7 @@ fn execute_post_send_hook(
                     );
                     warn!(
                         code = %AtmErrorCode::WarningHookExecutionFailed,
-                        sender = context.sender,
+                        sender = %context.sender,
                         recipient = %context.recipient.agent,
                         recipient_team = %context.recipient.team,
                         hook_recipient = %rule.recipient,
@@ -171,7 +174,7 @@ fn execute_post_send_hook(
                 );
                 warn!(
                     code = %AtmErrorCode::WarningHookExecutionFailed,
-                    sender = context.sender,
+                    sender = %context.sender,
                     recipient = %context.recipient.agent,
                     recipient_team = %context.recipient.team,
                     hook_recipient = %rule.recipient,
@@ -195,7 +198,7 @@ fn execute_post_send_hook(
                 );
                 warn!(
                     code = %AtmErrorCode::WarningHookExecutionFailed,
-                    sender = context.sender,
+                    sender = %context.sender,
                     recipient = %context.recipient.agent,
                     recipient_team = %context.recipient.team,
                     hook_recipient = %rule.recipient,
@@ -219,8 +222,8 @@ fn resolve_command_path(config: &config::AtmConfig, command_path: &str) -> PathB
     }
 }
 
-fn hook_matches_recipient(configured: &str, candidate: &str) -> bool {
-    configured == "*" || configured == candidate
+fn hook_matches_recipient(configured: &HookRecipient, candidate: &crate::types::AgentName) -> bool {
+    configured.matches(candidate)
 }
 
 fn spawn_post_send_hook_stdout_reader(
@@ -331,36 +334,36 @@ fn log_post_send_hook_result(command_path: &Path, result: PostSendHookResult) {
     } = result;
     let fields = Value::Object(fields);
 
-    match hook_result_log_level(level) {
-        Level::DEBUG => debug!(
+    match level {
+        PostSendHookResultLevel::Debug => debug!(
             hook_path = %command_path.display(),
             hook_result_message = %message,
             hook_result_fields = %fields,
             "post-send hook reported result"
         ),
-        Level::INFO => info!(
+        PostSendHookResultLevel::Info => info!(
             hook_path = %command_path.display(),
             hook_result_message = %message,
             hook_result_fields = %fields,
             "post-send hook reported result"
         ),
-        Level::WARN => warn!(
+        PostSendHookResultLevel::Warn => warn!(
             code = %AtmErrorCode::WarningHookExecutionFailed,
             hook_path = %command_path.display(),
             hook_result_message = %message,
             hook_result_fields = %fields,
             "post-send hook reported warning"
         ),
-        Level::ERROR => error!(
+        PostSendHookResultLevel::Error => error!(
             hook_path = %command_path.display(),
             hook_result_message = %message,
             hook_result_fields = %fields,
             "post-send hook reported error"
         ),
-        _ => unreachable!("all tracing levels are covered"),
     }
 }
 
+#[cfg(test)]
 fn hook_result_log_level(level: PostSendHookResultLevel) -> Level {
     match level {
         PostSendHookResultLevel::Debug => Level::DEBUG,
@@ -381,12 +384,22 @@ mod tests {
         POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel, hook_matches_recipient,
         hook_result_log_level, parse_post_send_hook_result,
     };
+    use crate::config::types::HookRecipient;
 
     #[test]
     fn hook_matches_recipient_exact_and_wildcard_values() {
-        assert!(hook_matches_recipient("arch-ctm", "arch-ctm"));
-        assert!(hook_matches_recipient("*", "arch-ctm"));
-        assert!(!hook_matches_recipient("team-lead", "arch-ctm"));
+        assert!(hook_matches_recipient(
+            &HookRecipient::Named("arch-ctm".parse().expect("recipient")),
+            &"arch-ctm".parse().expect("candidate")
+        ));
+        assert!(hook_matches_recipient(
+            &HookRecipient::Wildcard,
+            &"arch-ctm".parse().expect("candidate")
+        ));
+        assert!(!hook_matches_recipient(
+            &HookRecipient::Named("team-lead".parse().expect("recipient")),
+            &"arch-ctm".parse().expect("candidate")
+        ));
     }
 
     #[test]

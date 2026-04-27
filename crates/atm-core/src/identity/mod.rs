@@ -146,7 +146,7 @@ mod tests {
 
         let config = AtmConfig {
             identity: Some("config-agent".into()),
-            default_team: Some("config-team".into()),
+            default_team: Some("config-team".parse().expect("team")),
             obsolete_identity_present: true,
             ..Default::default()
         };

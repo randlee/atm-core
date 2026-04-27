@@ -16,7 +16,7 @@ use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
 use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
 use crate::send::{input, summary};
-use crate::types::{AgentName, IsoTimestamp, TeamName};
+use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use crate::workflow;
 
 /// Parameters for acknowledging one pending-ack mailbox message.
@@ -38,7 +38,7 @@ pub struct AckOutcome {
     pub agent: AgentName,
     pub message_id: LegacyMessageId,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub task_id: Option<String>,
+    pub task_id: Option<TaskId>,
     pub reply_target: String,
     pub reply_message_id: LegacyMessageId,
     pub reply_text: String,

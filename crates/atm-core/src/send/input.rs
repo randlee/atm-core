@@ -1,6 +1,7 @@
 use std::io::Read;
 
 use crate::error::{AtmError, AtmErrorKind};
+use crate::types::TaskId;
 
 /// Read a message body from stdin.
 ///
@@ -46,12 +47,6 @@ pub fn validate_message_text(message: impl Into<String>) -> Result<String, AtmEr
 /// Returns [`AtmError`] with
 /// [`crate::error_codes::AtmErrorCode::MessageValidationFailed`] when a task id
 /// is present but blank.
-pub fn validate_task_id(task_id: Option<String>) -> Result<Option<String>, AtmError> {
-    match task_id {
-        Some(task_id) if task_id.trim().is_empty() => {
-            Err(AtmError::validation("task id must not be blank"))
-        }
-        Some(task_id) => Ok(Some(task_id)),
-        None => Ok(None),
-    }
+pub fn validate_task_id(task_id: Option<TaskId>) -> Result<Option<TaskId>, AtmError> {
+    Ok(task_id)
 }

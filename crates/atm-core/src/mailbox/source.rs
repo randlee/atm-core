@@ -254,7 +254,7 @@ mod tests {
         let mut aliases = BTreeMap::new();
         aliases.insert("tl".to_string(), "team-lead".to_string());
         let config = AtmConfig {
-            default_team: Some("atm-dev".to_string()),
+            default_team: Some("atm-dev".parse().expect("team")),
             aliases,
             ..Default::default()
         };

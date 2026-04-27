@@ -235,7 +235,7 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() 
     let plain_request = fixture.send_request("team-lead", "arch-ctm@atm-dev", "plain payload");
     let mut task_request = fixture.send_request("qa", "arch-ctm@atm-dev", "task payload");
     task_request.requires_ack = true;
-    task_request.task_id = Some("TASK-123".to_string());
+    task_request.task_id = Some("TASK-123".parse().expect("task id"));
     task_request.summary_override = Some("manual summary".to_string());
 
     for (label, request) in [("plain", plain_request), ("task", task_request)] {

@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use atm_core::home;
 use atm_core::send::{self, SendMessageSource, SendRequest};
+use atm_core::types::TaskId;
 use clap::Args;
 
 use crate::observability::CliObservability;
@@ -39,7 +40,7 @@ pub struct SendCommand {
     requires_ack: bool,
 
     #[arg(long = "task-id")]
-    task_id: Option<String>,
+    task_id: Option<TaskId>,
 
     #[arg(long)]
     dry_run: bool,
