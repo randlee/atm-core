@@ -622,6 +622,53 @@ fn apply_display_mutations(
     mutation
 }
 
+fn transition_displayed_message(
+    message: &ClassifiedMessage,
+    promote_unread: bool,
+    now: IsoTimestamp,
+) -> state::TransitionedMessage {
+    let read_state = state::derive_read_state(&message.envelope);
+    let ack_state = state::derive_ack_state(&message.envelope);
+
+    match (read_state, ack_state) {
+        (crate::types::ReadState::Unread, crate::types::AckState::NoAckRequired) if promote_unread => {
+            state::TransitionedMessage::ReadPendingAck(
+                state::StoredMessage::<crate::types::UnreadReadState, crate::types::NoAckState>::unread_no_ack(
+                    message.envelope.clone(),
+                )
+                .display_and_require_ack(now),
+            )
+        }
+        (crate::types::ReadState::Unread, crate::types::AckState::NoAckRequired) => {
+            state::TransitionedMessage::ReadNoAck(
+                state::StoredMessage::<crate::types::UnreadReadState, crate::types::NoAckState>::unread_no_ack(
+                    message.envelope.clone(),
+                )
+                .display_without_ack(),
+            )
+        }
+        (crate::types::ReadState::Unread, crate::types::AckState::PendingAck) => {
+            state::TransitionedMessage::ReadPendingAck(
+                state::StoredMessage::<
+                    crate::types::UnreadReadState,
+                    crate::types::PendingAckState,
+                >::unread_pending_ack(message.envelope.clone())
+                .mark_read_pending_ack(),
+            )
+        }
+        (crate::types::ReadState::Unread, crate::types::AckState::Acknowledged)
+        | (crate::types::ReadState::Read, crate::types::AckState::NoAckRequired)
+        | (crate::types::ReadState::Read, crate::types::AckState::PendingAck)
+        | (crate::types::ReadState::Read, crate::types::AckState::Acknowledged) => {
+            let mut unchanged = message.envelope.clone();
+            if !unchanged.read {
+                unchanged.read = true;
+            }
+            state::TransitionedMessage::Unchanged(unchanged)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use tempfile::tempdir;
@@ -673,52 +720,5 @@ mod tests {
         .expect_err("invalid actor");
 
         assert!(error.message.contains("agent name"));
-    }
-}
-
-fn transition_displayed_message(
-    message: &ClassifiedMessage,
-    promote_unread: bool,
-    now: IsoTimestamp,
-) -> state::TransitionedMessage {
-    let read_state = state::derive_read_state(&message.envelope);
-    let ack_state = state::derive_ack_state(&message.envelope);
-
-    match (read_state, ack_state) {
-        (crate::types::ReadState::Unread, crate::types::AckState::NoAckRequired) if promote_unread => {
-            state::TransitionedMessage::ReadPendingAck(
-                state::StoredMessage::<crate::types::UnreadReadState, crate::types::NoAckState>::unread_no_ack(
-                    message.envelope.clone(),
-                )
-                .display_and_require_ack(now),
-            )
-        }
-        (crate::types::ReadState::Unread, crate::types::AckState::NoAckRequired) => {
-            state::TransitionedMessage::ReadNoAck(
-                state::StoredMessage::<crate::types::UnreadReadState, crate::types::NoAckState>::unread_no_ack(
-                    message.envelope.clone(),
-                )
-                .display_without_ack(),
-            )
-        }
-        (crate::types::ReadState::Unread, crate::types::AckState::PendingAck) => {
-            state::TransitionedMessage::ReadPendingAck(
-                state::StoredMessage::<
-                    crate::types::UnreadReadState,
-                    crate::types::PendingAckState,
-                >::unread_pending_ack(message.envelope.clone())
-                .mark_read_pending_ack(),
-            )
-        }
-        (crate::types::ReadState::Unread, crate::types::AckState::Acknowledged)
-        | (crate::types::ReadState::Read, crate::types::AckState::NoAckRequired)
-        | (crate::types::ReadState::Read, crate::types::AckState::PendingAck)
-        | (crate::types::ReadState::Read, crate::types::AckState::Acknowledged) => {
-            let mut unchanged = message.envelope.clone();
-            if !unchanged.read {
-                unchanged.read = true;
-            }
-            state::TransitionedMessage::Unchanged(unchanged)
-        }
     }
 }
