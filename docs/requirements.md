@@ -288,11 +288,11 @@ Required rules:
 - a separate ATM-native inbox is explicitly deferred and must not be assumed by
   the current live design
 
-Current-phase migration constraint:
+Current compatibility rule:
 
-- Phase J sprint J.4 is documentation and planning only
-- existing runtime write/read behavior for legacy top-level alert fields remains
-  stable until a later implementation sprint performs the actual migration
+- existing runtime write/read behavior for legacy top-level alert fields
+  remains stable until a later compatibility-migration implementation changes
+  that persisted shape
 `REQ-P-SCHEMA-001` is owned by:
 
 - [`claude-code-message-schema.md`](./claude-code-message-schema.md)
@@ -1808,17 +1808,20 @@ closed before the 1.0 release.
   the final write step would still allow stale reads and lost updates.
 
   Required behavior:
-  - `read` may take an unlocked observational snapshot of the source inbox set,
+  - `read` is a `read_possible_write` path: it may take an unlocked
+    observational snapshot of the source inbox set,
     but if display-state mutation is needed it must re-discover the current
     source-file set, dedupe duplicate paths, sort the resulting paths
     deterministically by canonical path string, acquire the full lock set, then
     reload and recompute under that lock set before persisting
-  - `ack` may resolve the reply target and candidate source message from an
-    unlocked preflight, but it must acquire the final sorted superset lock plan
-    before the mutating source reread, then re-read and re-validate the pending
+  - `ack` uses an unlocked preflight plus one final superset lock: it may
+    resolve the reply target and candidate source message from an unlocked
+    preflight, but it must acquire the final sorted superset lock plan before
+    the mutating source reread, then re-read and re-validate the pending
     acknowledgement state under that final lock set before writing either the
     source or reply mailbox state
-  - mutating `clear` must acquire the deterministic lock set before its
+  - mutating `clear` is a full-lock-through-persist path: it must acquire the
+    deterministic lock set before its
     mutating source reread and must hold that lock set through removal
     computation, mailbox replacement, and workflow-sidecar updates; `clear
     --dry-run` remains observational and lock-free
@@ -1918,7 +1921,7 @@ closed before the 1.0 release.
   - a stale-snapshot rename after late lock acquisition is forbidden even if
     the rename itself is atomic
 
-  Current limitation:
+  Open hardening gap — `P.6` send-side workflow freshness:
   - mailbox read/ack/clear paths satisfy this through
     `mailbox::store::with_locked_source_files(...)`
   - workflow-sidecar writes performed during `send` and the missing-config

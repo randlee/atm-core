@@ -19,14 +19,17 @@ restructured, product docs remain in `docs/` and crate-local detail moves into
 `docs/atm/` and `docs/atm-core/`.
 
 Status:
-- Phases 0 through F and J are complete.
-- Phase K is complete and ready to roll forward into shared 1.0 release
-  alignment work.
-- Phase L is now the latest release-alignment and retained-surface follow-on
-  phase and the next active delivery focus.
-- Phases G and H remain retained-command phases, but their implementation work
-  depends on the concrete `sc-observability` integration delivered in Phase K
-  and the release-alignment work planned in Phase L.
+- Phases 0 through P have executed on the retained rewrite line.
+- Phases G and H are complete retained-command phases, closed through the
+  shared observability and release-alignment work delivered in later phases.
+- Phase K completed the shared `sc-observability` integration boundary.
+- Phase L completed the retained release-surface and team-recovery closeout.
+- Phase M completed mailbox locking and review-finding fixes.
+- Phase N completed publish-replacement and distribution-parity planning and
+  implementation merge work.
+- Phase O completed the security and hardening follow-up line.
+- Phase P implementation is merged; follow-up hardening remains open for
+  `P.6` and `P.7`, while `P.8` documentation reconciliation is complete.
 - Message schema ownership and metadata normalization are now implemented well
   enough for live shared-inbox adoption, while a separate ATM-native inbox
   remains deferred to a later version.
@@ -454,7 +457,7 @@ Acceptance:
 - any generic shared-crate usability gaps discovered during implementation are
   filed upstream in `sc-observability`
 
-### Phase L: 1.0 Alignment And Release Surface Cleanup [NEXT / LATEST]
+### Phase L: 1.0 Alignment And Release Surface Cleanup [COMPLETE]
 
 Status summary:
 - Phase K delivered the full sc-observability integration against a pre-publish
@@ -1280,7 +1283,9 @@ Acceptance criteria:
 
 ---
 
-### Phase N: Publish Replacement And Distribution Parity [PLANNED]
+### Phase N: Publish Replacement And Distribution Parity [COMPLETE]
+
+Status: COMPLETE
 
 Goal:
 - ship the retained `1.0` release from this repo as the direct replacement for
@@ -1532,7 +1537,9 @@ Phase N completion gate:
 - `winget` is explicitly documented as a new required Windows install channel,
   not as historical parity
 
-### Phase O: Security And Hardening [PLANNED]
+### Phase O: Security And Hardening [COMPLETE]
+
+Status: COMPLETE
 
 Goal:
 - close the confirmed CR001 findings that affect path safety, allocation
@@ -1659,7 +1666,7 @@ Planning rule:
   or new raw `String`/parse-later request surfaces for agent/team/address
   identifiers
 
-##### P.6 — Workflow-Sidecar Concurrency And Typed Boundary Cleanup
+##### P.6 — Workflow-Sidecar Concurrency And Typed Boundary Cleanup [PLANNED]
 
 Goals:
 - make workflow-sidecar seeding in `send` safe for concurrent same-recipient
@@ -1745,7 +1752,7 @@ Required coverage:
   and summary generation, proving the seeded sidecar state tracks the correct
   message identity rather than whichever writer saves last
 
-##### P.7 — Test Hygiene And Observability Cleanup
+##### P.7 — Test Hygiene And Observability Cleanup [PLANNED]
 
 Goals:
 - remove the remaining timing-dependent and process-environment test seams
@@ -1809,7 +1816,7 @@ Required coverage:
 - env-guard teardown is verified on early-return/failure paths so one test's
   injected state cannot leak into the next test process
 
-##### P.8 — Requirements, Architecture, And Plan Reconciliation
+##### P.8 — Requirements, Architecture, And Plan Reconciliation [COMPLETE]
 
 Goals:
 - bring the written Phase P requirements, architecture, and plan text into

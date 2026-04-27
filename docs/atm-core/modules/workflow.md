@@ -27,6 +27,6 @@ Primary ownership note:
 
 References:
 
-- Product requirements: `docs/requirements.md` §14 and §18
+- Product requirements: `docs/requirements.md` §3.2.2, §14, and §20.2
 - Architecture: `docs/architecture.md` §5 and §18.4.3
 - Message schema: `docs/atm-message-schema.md` §3

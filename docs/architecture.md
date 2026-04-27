@@ -50,7 +50,7 @@ Crate-local boundary detail is owned by:
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm/architecture.md`](./atm/architecture.md)
 
-### 2.4 Release Publication Boundary
+### 2.3 Release Publication Boundary
 
 The `1.0` retained-surface release is a source-repo replacement of the old
 `agent-team-mail` CLI/core publication path, not a new public package family.
@@ -123,7 +123,7 @@ Schema ownership references:
   `tools/schema_models/atm_message_schema.py` and
   `tools/schema_models/legacy_atm_message_schema.py`
 
-### 2.3 Shared Observability Boundary
+### 2.4 Shared Observability Boundary
 
 `atm-core` must not import `sc-observability` directly.
 
@@ -463,7 +463,7 @@ Diagnostics for team config failures must preserve:
 - parser line and column when available
 - original parser cause for operator repair
 
-### 13.2 Deprecated `[atm].identity`
+### 5.1.1 Deprecated `[atm].identity`
 
 `[atm].identity` remains parse-compatible only as an obsolete migration field.
 It is no longer part of runtime sender or actor resolution.
@@ -533,7 +533,7 @@ Forward architectural rules:
 - the current live design still uses a shared inbox surface; a separate
   ATM-native inbox is intentionally deferred to a later architecture phase
 
-Current-phase constraint:
+Current compatibility rule:
 
 - the current runtime send/alert write path may continue writing legacy
   top-level alert fields during the compatibility period
