@@ -321,6 +321,7 @@ mod tests {
     use std::env;
     use std::fs;
     use std::path::PathBuf;
+    use tempfile::tempdir;
 
     use super::{AtmConfig, load_config, parse_team_config, resolve_identity, resolve_team};
 
@@ -683,7 +684,12 @@ post_send_hook_recipients = ["team-lead"]
     }
 
     fn temp_config_path() -> PathBuf {
-        env::temp_dir().join("config.json")
+        let tempdir = tempdir().expect("tempdir");
+        let root = tempdir.path().to_path_buf();
+        let nested = root.join("atm config root").join("nested config dir");
+        fs::create_dir_all(&nested).expect("nested config dir");
+        std::mem::forget(tempdir);
+        nested.join("config.json")
     }
 
     fn restore(key: &str, value: Option<std::ffi::OsString>) {

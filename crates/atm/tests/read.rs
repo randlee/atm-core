@@ -658,6 +658,90 @@ fn test_read_keeps_read_and_unread_idle_notifications_from_different_files() {
 }
 
 #[test]
+fn test_read_logs_malformed_idle_notification_json_without_dropping_valid_records() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[
+            fixture.message(
+                "daemon",
+                r#"{"type":"idle_notification","from":"team-lead""#,
+                false,
+                None,
+                None,
+                0,
+            ),
+            fixture.message("team-lead", "normal unread", false, None, None, 1),
+        ],
+    );
+
+    let output = fixture.run_with_env(
+        &["--stderr-logs", "read", "--all", "--no-mark", "--json"],
+        &[("ATM_LOG", "debug")],
+    );
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["count"], 2);
+    let messages = parsed["messages"].as_array().expect("messages array");
+    assert!(
+        messages
+            .iter()
+            .any(|message| message["text"] == "normal unread")
+    );
+    assert!(
+        messages.iter().any(|message| {
+            message["text"] == r#"{"type":"idle_notification","from":"team-lead""#
+        })
+    );
+    let stderr = fixture.stderr(&output);
+    assert!(
+        stderr.contains("ignoring malformed idle-notification JSON while classifying read surface"),
+        "stderr: {stderr}"
+    );
+}
+
+#[test]
+fn test_read_logs_idle_notification_missing_sender_without_changing_mailbox_state() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    let malformed = serde_json::json!({
+        "type": "idle_notification",
+        "timestamp": "2026-03-30T00:00:00Z",
+        "idleReason": "available"
+    })
+    .to_string();
+    fixture.write_inbox(
+        "arch-ctm",
+        &[
+            fixture.message("daemon", &malformed, false, None, None, 0),
+            fixture.message("team-lead", "normal unread", false, None, None, 1),
+        ],
+    );
+    let before = fixture.inbox_contents("arch-ctm");
+
+    let output = fixture.run_with_env(
+        &["--stderr-logs", "read", "--all", "--no-mark", "--json"],
+        &[("ATM_LOG", "debug")],
+    );
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    assert_eq!(fixture.inbox_contents("arch-ctm"), before);
+    let stderr = fixture.stderr(&output);
+    assert!(
+        stderr.contains("ignoring malformed idle-notification payload missing string `from`"),
+        "stderr: {stderr}"
+    );
+}
+
+#[test]
 fn test_forward_metadata_message_id_timestamp_matches_persisted_timestamp() {
     let (message_id, timestamp) = AtmMessageId::new_with_timestamp();
     let envelope = ForwardMetadataEnvelope {
@@ -753,12 +837,17 @@ impl Fixture {
     }
 
     fn run(&self, args: &[&str]) -> std::process::Output {
+        self.run_with_env(args, &[])
+    }
+
+    fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
         Command::new(env!("CARGO_BIN_EXE_atm"))
             .args(args)
             .env("ATM_HOME", self.tempdir.path())
             .env("ATM_CONFIG_HOME", self.tempdir.path())
             .env("ATM_IDENTITY", "arch-ctm")
             .env("ATM_TEAM", "atm-dev")
+            .envs(extra_env.iter().copied())
             .current_dir(self.tempdir.path())
             .output()
             .expect("run atm")
