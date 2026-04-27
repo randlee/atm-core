@@ -1706,6 +1706,30 @@ Implementation patterns:
 - keep concurrent coverage deterministic by using channels/barriers with bounded
   waits; do not use sleeps to try to overlap sends
 
+Reference shape:
+
+```rust
+// Pseudocode shape, not a final required signature.
+let envelope = mailbox::append_message(...)?;
+workflow::commit_state(home, team, recipient, |state| {
+    state.remember_initial_state(&envelope);
+})?;
+```
+
+```rust
+// Pseudocode shape for the final freshness boundary.
+workflow::commit_state(home, team, recipient, |state| {
+    let fresh = state.reload_or_validate()?;
+    fresh.remember_initial_state(&envelope);
+    Ok(())
+})?;
+```
+
+The hardening requirement is not the helper name; it is that `send` and the
+missing-config team-lead notice path must stop open-coding `load -> mutate ->
+save` against the workflow sidecar and must commit from a freshness-proven
+owner-layer boundary.
+
 Required coverage:
 - concurrent same-recipient send/send test proving two ATM-authored messages
   both seed workflow state without lost updates
@@ -1713,6 +1737,13 @@ Required coverage:
   workflow owner helper
 - request-construction tests showing invalid team/agent/address input is
   rejected before command execution enters the core implementation
+- concurrent send where one path is a normal recipient send and the other is the
+  missing-config team-lead notice path for the same workflow file family
+- contention case where one sender observes an older workflow snapshot, loses
+  the race, reloads, and recomputes without dropping the winning sender's entry
+- mixed payload case where concurrent sends differ on `requires_ack`, `task_id`,
+  and summary generation, proving the seeded sidecar state tracks the correct
+  message identity rather than whichever writer saves last
 
 ##### P.7 — Test Hygiene And Observability Cleanup
 
@@ -1747,6 +1778,22 @@ Implementation patterns:
 - malformed JSON handling should remain fail-soft for Claude-owned inbox data,
   but it must not silently disappear; trace/debug logging is required
 
+Reference shape:
+
+```rust
+// Pseudocode shape, not a required concrete helper name.
+let ready = readiness.wait_until_ready(timeout)?;
+assert!(ready);
+let records = log_tail.read_after(ready.cursor())?;
+```
+
+```rust
+let _guard = test_env::scoped_var(
+    "ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD",
+    "1",
+);
+```
+
 Required coverage:
 - deterministic log-tail readiness test with no fixed-duration sleep
 - `config/discovery.rs` tests rewritten to tempdir fixtures with no `/tmp`
@@ -1755,6 +1802,12 @@ Required coverage:
   state through scoped guard teardown
 - read-path coverage proving malformed idle-notification JSON is observable in
   logs/diagnostics and does not panic or change mailbox state
+- malformed idle-notification JSON adjacent to valid mailbox records still
+  leaves the valid records readable and classifiable
+- tempdir-backed discovery tests cover paths with spaces and nested directories
+  so platform path handling is exercised instead of assuming `/tmp` semantics
+- env-guard teardown is verified on early-return/failure paths so one test's
+  injected state cannot leak into the next test process
 
 ##### P.8 — Requirements, Architecture, And Plan Reconciliation
 
@@ -1790,6 +1843,8 @@ Design details:
 Acceptance criteria:
 - requirements, architecture, and project-plan text all describe the same
   mailbox-read taxonomy and lock acquisition model
+- the docs explicitly name the remaining P.6 send-side workflow freshness gap
+  rather than implying it is already solved
 - the Phase P heading and status note clearly show merged/executed state
 - no Phase P document still implies that the merged implementation is
   proposal-only

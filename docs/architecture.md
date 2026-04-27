@@ -1485,6 +1485,15 @@ Current executed rule:
 - `clear` classifies removable messages from the projected workflow view and
   removes matching workflow-state entries when the inbox record is deleted
 
+Current executed limitation:
+- `send` and the missing-config team-lead notice path still seed workflow state
+  via an atomic owner-routed `load -> mutate -> save` sequence instead of a
+  dedicated freshness-proving helper
+- that means the sidecar family is already the source of truth, but concurrent
+  same-recipient send-side seeding is not yet hardened to the same
+  lock/reload/recompute standard used by mailbox read/ack/clear
+- P.6 is the tracked hardening continuation for that specific gap
+
 ### 18.5 New Error Codes
 
 - `MailboxLockFailed` / `ATM_MAILBOX_LOCK_FAILED` — lock-path creation,
@@ -1566,6 +1575,10 @@ Current architectural limitation:
 - therefore the current shared-inbox rewrite path is still a compatibility
   boundary, not the ideal long-term source-of-truth architecture for ATM-local
   workflow state
+- separately, send-side workflow seeding still lacks a dedicated freshness
+  boundary across concurrent same-recipient sends; that is a post-P.5 hardening
+  gap rather than a reason to move workflow durability back into Claude-owned
+  inbox records
 
 This rule intentionally applies beyond mailbox files so future work does not
 reintroduce partial-write or torn-state risks through backup/restore or shared

@@ -28,6 +28,15 @@ Primary ownership note:
   sender in the same inbox and append the new record in one atomic sequence
 - this behavior satisfies the sender-scoped idle-notification dedup contract
   in `docs/requirements.md` alongside `REQ-CORE-MAILBOX-001`
+- mailbox ownership stops at the Claude-owned inbox compatibility surface; a
+  mailbox append that implies workflow-sidecar seeding must hand off to the
+  workflow owner boundary rather than persisting sidecar JSON itself
+- review-sensitive corner cases for this boundary are:
+  - `read` observational snapshot differs from the eventual under-lock reread
+  - `ack` reply-target expansion requires a larger final lock set than the
+    unlocked preflight saw
+  - `clear --dry-run` must remain observational while mutating `clear` uses the
+    shared lock+reload+persist path
 
 References:
 
