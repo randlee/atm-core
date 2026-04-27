@@ -302,6 +302,21 @@ mod tests {
     }
 
     #[test]
+    fn blank_task_id_is_rejected() {
+        let json = json!({
+            "from": "team-lead",
+            "text": "hello",
+            "timestamp": "2026-03-30T00:00:00Z",
+            "read": false,
+            "taskId": "   "
+        });
+
+        let error = serde_json::from_value::<MessageEnvelope>(json).expect_err("blank task id");
+
+        assert!(error.to_string().contains("task id must not be blank"));
+    }
+
+    #[test]
     fn pending_ack_round_trips() {
         let pending_ack = PendingAck {
             message_id: LegacyMessageId::new(),
