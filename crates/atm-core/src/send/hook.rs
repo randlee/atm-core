@@ -425,9 +425,10 @@ mod tests {
             ..Default::default()
         };
 
+        let abs = std::env::temp_dir().join("hook");
         assert_eq!(
-            resolve_command_path(&config, "/usr/local/bin/hook"),
-            Path::new("/usr/local/bin/hook")
+            resolve_command_path(&config, abs.to_str().unwrap()),
+            abs.as_path()
         );
     }
 
