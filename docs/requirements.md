@@ -1902,6 +1902,16 @@ closed before the 1.0 release.
     lock handle; rotated-name sweeping exists to clean up post-crash or
     externally renamed artifacts, not to coordinate live-lock handoff
 
+  Acceptance Criteria:
+  - positive predicate cases: `inbox.json.lock`, `inbox.json.lock.old`, and
+    `inbox.json.lock.replaced` are all treated as stale-sentinel candidates
+  - negative predicate cases: malformed or unrelated names such as
+    `inbox.json.lockold`, `locksmith.txt`, and `inbox.locksmith.json` are not
+    treated as stale-sentinel candidates
+  - malformed rotated candidates that do match the filename predicate but do
+    not contain a parseable `pid[:token]` owner record remain in place and are
+    not deleted speculatively
+
 - `REQ-CORE-MAILBOX-LOCK-009` Read-only filesystem failures on the mailbox-lock
   path must surface as a dedicated non-contention diagnostic.
 
@@ -1917,6 +1927,10 @@ closed before the 1.0 release.
     operator guidance stay consistent
   - read-only filesystem errors must not participate in the lock-contention
     retry loop and must not be retried by sentinel-removal backoff logic
+  - on every lock-acquisition retry iteration, read-only-filesystem
+    classification must run before any timeout-budget decision; a classified
+    `EROFS` / `ERROR_WRITE_PROTECT` failure must never fall through to
+    `MailboxLockTimeout`
   - mutation-path failures caused by a read-only filesystem must return
     `MailboxLockReadOnlyFilesystem`
     / `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM`, not `MailboxLockFailed` or
@@ -1925,9 +1939,25 @@ closed before the 1.0 release.
     path plus the specific attempted operation (`open`, `write owner record`,
     or `remove stale sentinel`) so operators can distinguish remount/media
     failures from ACL or contention issues
+  - other non-contention lock-path filesystem failures, including `ENOSPC`,
+    `EMFILE`, and `ESTALE`, remain `MailboxLockFailed` and are not retried
   - best-effort drop-time cleanup remains warn-only because the command has
     already completed, but public sweep or acquisition paths must surface the
     read-only diagnosis instead of silently suppressing it
+
+  Acceptance Criteria:
+  - `ATM_TEST_FORCE_LOCK_READONLY_FS=open` injects a synthetic platform-correct
+    read-only-filesystem error into the lock open/create path only; owner-record
+    write and sentinel-removal paths continue to run normally
+  - `ATM_TEST_FORCE_LOCK_READONLY_FS=write_owner` injects a synthetic
+    read-only-filesystem error into the owner-record truncate/write path only
+  - `ATM_TEST_FORCE_LOCK_READONLY_FS=remove` injects a synthetic
+    read-only-filesystem error into the stale-sentinel removal path only
+  - when the seam is unset or set to any other value, no synthetic read-only
+    filesystem failure is injected
+  - read-only failures injected through any of the three seam values surface as
+    `MailboxLockReadOnlyFilesystem`
+    / `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM`, never as `MailboxLockTimeout`
 
 ### 20.2 Shared Mutable File Atomicity
 

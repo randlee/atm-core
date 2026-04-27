@@ -1978,6 +1978,11 @@ Test simulation pattern:
   - `ATM_TEST_FORCE_LOCK_READONLY_FS=open`
   - `ATM_TEST_FORCE_LOCK_READONLY_FS=write_owner`
   - `ATM_TEST_FORCE_LOCK_READONLY_FS=remove`
+- operation scoping is strict:
+  - `open` affects only the lock open/create path; owner-record write and
+    sentinel removal continue to execute normally
+  - `write_owner` affects only owner-record truncate/write
+  - `remove` affects only stale-sentinel removal / cleanup
 - the seam must synthesize the platform-correct raw OS error so the production
   classification logic is what the tests exercise
 

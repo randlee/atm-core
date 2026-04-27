@@ -934,6 +934,9 @@ Architectural rules:
   - clear runtime-only restored-member state before persistence
   - restore non-lead inboxes from the chosen snapshot
   - sweep stale mailbox `*.lock` sentinels before restored inbox files are copied in
+  - treat stale-sentinel sweep as result-bearing: if that cleanup hits a
+    read-only-filesystem failure, restore must stop and surface
+    `MailboxLockReadOnlyFilesystem` instead of warning and continuing
   - recompute `.highwatermark` from the maximum restored task id
   - support a dry-run path without making changes
 - Claude Code project task-list restoration remains separate from the retained
@@ -1414,7 +1417,12 @@ Call-graph decisions:
   the caller rather than logging and continuing
 - pre-acquisition stale eviction inside `acquire(...)` propagates the
   read-only diagnostic when the cleanup path hits it, because subsequent owner
-  record writes cannot succeed on the same mount
+  record writes cannot succeed on the same mount; this early-exit happens
+  before any later `try_lock_exclusive()` attempt
+- each retry iteration must classify raw OS errors before consulting the
+  timeout budget: `EROFS` / `ERROR_WRITE_PROTECT` exits immediately as
+  `MailboxLockReadOnlyFilesystem`, while non-contention path failures such as
+  `ENOSPC`, `EMFILE`, and `ESTALE` exit immediately as `MailboxLockFailed`
 - `MailboxLockGuard::drop` still warns only, because the successful mailbox
   mutation has already completed and `Drop` cannot change the command result
 
@@ -1731,6 +1739,8 @@ exist with no detection mechanism.
 
 Key properties:
 - crash at steps 2-6: config.json unchanged, extra inbox files harmless, marker signals re-run
+- read-only failure during the pre-copy stale-sentinel sweep aborts before live
+  inbox replacement begins, preserving the pre-restore team state
 - crash at step 7: config write is itself atomic via the existing `write_team_config(...)`
   temp-file + rename path, so no partial config write is possible
 - crash at step 8: config is written, stale marker cleaned up by next doctor/restore run
