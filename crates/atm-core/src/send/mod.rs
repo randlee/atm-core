@@ -206,17 +206,13 @@ pub fn send_mail(
             task_id: task_id.clone(),
             extra,
         };
-        mailbox::append_message(&inbox_path, &envelope)?;
-        let mut workflow_state =
-            workflow::load_workflow_state(&request.home_dir, &recipient.team, &recipient.agent)?;
-        if workflow::remember_initial_state(&mut workflow_state, &envelope) {
-            workflow::save_workflow_state(
-                &request.home_dir,
-                &recipient.team,
-                &recipient.agent,
-                &workflow_state,
-            )?;
-        }
+        append_mailbox_message_and_seed_workflow(
+            &request.home_dir,
+            &recipient.team,
+            &recipient.agent,
+            &inbox_path,
+            &envelope,
+        )?;
     }
 
     let mut outcome = SendOutcome {
@@ -273,6 +269,7 @@ pub(super) struct ResolvedRecipient {
     team: TeamName,
 }
 
+#[derive(Clone, Copy)]
 pub(super) struct PostSendHookContext<'a> {
     sender: &'a str,
     sender_team: Option<&'a str>,
@@ -381,39 +378,46 @@ fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str,
         extra,
     };
 
-    if let Err(error) = mailbox::append_message(&team_lead_inbox, &notice) {
+    if let Err(error) = append_mailbox_message_and_seed_workflow(
+        home_dir,
+        team,
+        "team-lead",
+        &team_lead_inbox,
+        &notice,
+    ) {
         warn!(
             code = %AtmErrorCode::WarningMissingTeamConfigFallback,
             %error,
             path = %team_lead_inbox.display(),
-            "failed to append missing-config notice to team-lead inbox"
-        );
-        return;
-    }
-
-    let mut workflow_state = match workflow::load_workflow_state(home_dir, team, "team-lead") {
-        Ok(state) => state,
-        Err(error) => {
-            warn!(
-                code = %AtmErrorCode::WarningMissingTeamConfigFallback,
-                %error,
-                team,
-                "failed to load workflow state for missing-config notice"
-            );
-            return;
-        }
-    };
-    if workflow::remember_initial_state(&mut workflow_state, &notice)
-        && let Err(error) =
-            workflow::save_workflow_state(home_dir, team, "team-lead", &workflow_state)
-    {
-        warn!(
-            code = %AtmErrorCode::WarningMissingTeamConfigFallback,
-            %error,
             team,
-            "failed to save workflow state for missing-config notice"
+            "failed to persist missing-config notice via shared mailbox/workflow commit path"
         );
     }
+}
+
+fn append_mailbox_message_and_seed_workflow(
+    home_dir: &Path,
+    team: &str,
+    agent: &str,
+    inbox_path: &Path,
+    envelope: &MessageEnvelope,
+) -> Result<(), AtmError> {
+    workflow::commit_workflow_state(
+        home_dir,
+        team,
+        agent,
+        [inbox_path.to_path_buf()],
+        mailbox::lock::default_lock_timeout(),
+        |workflow_state| {
+            let mut inbox_messages = mailbox::read_messages(inbox_path)?;
+            inbox_messages.push(envelope.clone());
+            mailbox::store::commit_mailbox_state(inbox_path, &inbox_messages)?;
+            Ok((
+                (),
+                workflow::remember_initial_state(workflow_state, envelope),
+            ))
+        },
+    )
 }
 
 fn display_sender_identity(

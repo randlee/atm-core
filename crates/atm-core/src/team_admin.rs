@@ -64,8 +64,8 @@ pub struct MembersQuery {
 #[derive(Debug, Clone)]
 pub struct AddMemberRequest {
     pub home_dir: PathBuf,
-    pub team: String,
-    pub member: String,
+    pub team: TeamName,
+    pub member: AgentName,
     pub agent_type: String,
     pub model: String,
     pub cwd: PathBuf,
@@ -256,7 +256,7 @@ pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmErro
     if config
         .members
         .iter()
-        .any(|member| member.name == request.member)
+        .any(|member| member.name == request.member.as_str())
     {
         return Err(AtmError::validation(format!(
             "member '{}' already exists in team '{}'",
@@ -275,7 +275,7 @@ pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmErro
     }
 
     config.members.push(AgentMember {
-        name: request.member.clone(),
+        name: request.member.to_string(),
         agent_id: format!("{}@{}", request.member, request.team),
         agent_type: request.agent_type,
         model: request.model,
@@ -296,8 +296,8 @@ pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmErro
 
     Ok(AddMemberOutcome {
         action: "add-member",
-        team: request.team.into(),
-        member: request.member.into(),
+        team: request.team,
+        member: request.member,
         created_inbox,
     })
 }
@@ -602,37 +602,18 @@ mod tests {
 
     #[test]
     fn add_member_rejects_invalid_member_segment() {
-        let tempdir = tempdir().expect("tempdir");
-        write_team_config(tempdir.path(), "atm-dev");
-
-        let error = add_member(AddMemberRequest {
-            home_dir: tempdir.path().to_path_buf(),
-            team: "atm-dev".to_string(),
-            member: "../evil".to_string(),
-            agent_type: "worker".to_string(),
-            model: "gpt-5".to_string(),
-            cwd: tempdir.path().to_path_buf(),
-            tmux_pane_id: None,
-        })
-        .expect_err("invalid member");
+        let error = "../evil"
+            .parse::<crate::types::AgentName>()
+            .expect_err("invalid member");
 
         assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
     }
 
     #[test]
     fn add_member_rejects_invalid_team_segment() {
-        let tempdir = tempdir().expect("tempdir");
-
-        let error = add_member(AddMemberRequest {
-            home_dir: tempdir.path().to_path_buf(),
-            team: "../evil".to_string(),
-            member: "arch-ctm".to_string(),
-            agent_type: "worker".to_string(),
-            model: "gpt-5".to_string(),
-            cwd: tempdir.path().to_path_buf(),
-            tmux_pane_id: None,
-        })
-        .expect_err("invalid team");
+        let error = "../evil"
+            .parse::<crate::types::TeamName>()
+            .expect_err("invalid team");
 
         assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
     }
@@ -645,8 +626,8 @@ mod tests {
 
         add_member(AddMemberRequest {
             home_dir: tempdir.path().to_path_buf(),
-            team: "atm-dev".to_string(),
-            member: "arch-ctm".to_string(),
+            team: "atm-dev".parse().expect("team"),
+            member: "arch-ctm".parse().expect("member"),
             agent_type: "worker".to_string(),
             model: "gpt-5".to_string(),
             cwd: tempdir.path().to_path_buf(),
@@ -677,8 +658,8 @@ mod tests {
 
         let error = add_member(AddMemberRequest {
             home_dir: tempdir.path().to_path_buf(),
-            team: "atm-dev".to_string(),
-            member: "arch-ctm".to_string(),
+            team: "atm-dev".parse().expect("team"),
+            member: "arch-ctm".parse().expect("member"),
             agent_type: "worker".to_string(),
             model: "gpt-5".to_string(),
             cwd: tempdir.path().to_path_buf(),

@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use atm_core::address::AgentAddress;
 use atm_core::clear::{self, ClearQuery};
 use atm_core::home;
 use atm_core::types::{AgentName, TeamName};
@@ -38,23 +39,35 @@ impl ClearCommand {
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
+        let dry_run = self.dry_run;
+        let json = self.json;
+        let query = self.build_query(home_dir, current_dir)?;
+        let outcome = clear::clear_mail(query, observability)?;
+        output::print_clear_result(&outcome, dry_run, json)
+    }
+
+    fn build_query(
+        self,
+        home_dir: std::path::PathBuf,
+        current_dir: std::path::PathBuf,
+    ) -> Result<ClearQuery> {
         let older_than = self.older_than.as_deref().map(parse_duration).transpose()?;
+        let target_address = self
+            .target
+            .as_deref()
+            .map(str::parse::<AgentAddress>)
+            .transpose()?;
 
-        let outcome = clear::clear_mail(
-            ClearQuery {
-                home_dir,
-                current_dir,
-                actor_override: self.actor_override.map(AgentName::from),
-                target_address: self.target,
-                team_override: self.team.map(TeamName::from),
-                older_than,
-                idle_only: self.idle_only,
-                dry_run: self.dry_run,
-            },
-            observability,
-        )?;
-
-        output::print_clear_result(&outcome, self.dry_run, self.json)
+        Ok(ClearQuery {
+            home_dir,
+            current_dir,
+            actor_override: self.actor_override.map(AgentName::from),
+            target_address,
+            team_override: self.team.map(TeamName::from),
+            older_than,
+            idle_only: self.idle_only,
+            dry_run: self.dry_run,
+        })
     }
 }
 
@@ -90,4 +103,28 @@ fn parse_duration(raw: &str) -> Result<Duration> {
     };
 
     Ok(Duration::from_secs(secs))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ClearCommand;
+
+    #[test]
+    fn build_query_rejects_invalid_target_before_core() {
+        let command = ClearCommand {
+            target: Some("../evil".to_string()),
+            actor_override: None,
+            team: None,
+            older_than: None,
+            idle_only: false,
+            dry_run: false,
+            json: false,
+        };
+
+        let error = command
+            .build_query(".".into(), ".".into())
+            .expect_err("invalid target");
+
+        assert!(error.to_string().contains("agent name"));
+    }
 }

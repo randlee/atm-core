@@ -16,12 +16,6 @@ use super::{PostSendHookContext, qualified_sender_identity};
 const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 const POST_SEND_HOOK_MAX_STDOUT_BYTES: usize = 8 * 1024;
 
-#[derive(Debug, Clone, Copy)]
-struct PostSendHookMatch {
-    sender: bool,
-    recipient: bool,
-}
-
 #[derive(Debug, Deserialize)]
 struct PostSendHookResult {
     level: PostSendHookResultLevel,
@@ -47,53 +41,64 @@ pub(super) fn maybe_run_post_send_hook(
     let Some(config) = config else {
         return;
     };
-    let Some(command_argv) = config.post_send_hook.as_ref() else {
-        return;
-    };
-
-    let sender_filters_configured = !config.post_send_hook_senders.is_empty();
-    let recipient_filters_configured = !config.post_send_hook_recipients.is_empty();
-    let hook_match = PostSendHookMatch {
-        sender: matches_hook_axis(&config.post_send_hook_senders, context.sender),
-        recipient: matches_hook_axis(&config.post_send_hook_recipients, &context.recipient.agent),
-    };
-    if !hook_match.sender && !hook_match.recipient {
-        if !sender_filters_configured && !recipient_filters_configured {
-            debug!(
-                sender = context.sender,
-                recipient = %context.recipient.agent,
-                recipient_team = %context.recipient.team,
-                "post-send hook disabled because no sender or recipient filters are configured"
-            );
-            return;
-        }
-
+    if config.post_send_hooks.is_empty() {
         debug!(
             sender = context.sender,
             recipient = %context.recipient.agent,
             recipient_team = %context.recipient.team,
-            sender_filters = %display_filter_list(&config.post_send_hook_senders),
-            recipient_filters = %display_filter_list(&config.post_send_hook_recipients),
-            sender_match = hook_match.sender,
-            recipient_match = hook_match.recipient,
-            "post-send hook did not match configured sender or recipient filters"
+            "post-send hook disabled because no recipient-scoped rules are configured"
         );
         return;
     }
 
-    debug!(
-        sender = context.sender,
-        recipient = %context.recipient.agent,
-        recipient_team = %context.recipient.team,
-        sender_filters = %display_filter_list(&config.post_send_hook_senders),
-        recipient_filters = %display_filter_list(&config.post_send_hook_recipients),
-        sender_match = hook_match.sender,
-        recipient_match = hook_match.recipient,
-        "post-send hook matched"
-    );
+    let mut matched = false;
+    for rule in &config.post_send_hooks {
+        if !recipient_rule_matches(&rule.recipient, context.recipient.agent.as_str()) {
+            continue;
+        }
 
-    let mut argv = command_argv.iter();
-    let Some(command_path) = argv.next() else {
+        matched = true;
+        debug!(
+            sender = context.sender,
+            recipient = %context.recipient.agent,
+            recipient_team = %context.recipient.team,
+            rule_recipient = rule.recipient,
+            "post-send hook matched recipient rule"
+        );
+        run_post_send_hook_rule(warnings, config, context, &rule.command);
+    }
+
+    if !matched {
+        debug!(
+            sender = context.sender,
+            recipient = %context.recipient.agent,
+            recipient_team = %context.recipient.team,
+            configured_recipients = %display_rule_recipients(&config.post_send_hooks),
+            "post-send hook did not match any configured recipient rule"
+        );
+    }
+}
+
+fn resolve_command_path(config: &config::AtmConfig, command_path: &str) -> PathBuf {
+    let path = PathBuf::from(command_path);
+    if path.is_absolute() || !command_path_contains_path_separator(command_path) {
+        path
+    } else {
+        config.config_root.join(path)
+    }
+}
+
+fn command_path_contains_path_separator(command_path: &str) -> bool {
+    command_path.contains('/') || command_path.contains('\\')
+}
+
+fn run_post_send_hook_rule(
+    warnings: &mut Vec<String>,
+    config: &config::AtmConfig,
+    context: PostSendHookContext<'_>,
+    command_argv: &[String],
+) {
+    let Some((command_path, argv)) = command_argv.split_first() else {
         return;
     };
     let command_path = resolve_command_path(config, command_path);
@@ -122,7 +127,7 @@ pub(super) fn maybe_run_post_send_hook(
         Ok(child) => child,
         Err(error) => {
             let warning = format!(
-                "warning: post-send hook failed to start from {}: {error}. Check that post_send_hook in .atm.toml points to a valid executable.",
+                "warning: post-send hook failed to start from {}: {error}. Check that [[atm.post_send_hooks]].command points to a valid executable.",
                 command_path.display()
             );
             warn!(
@@ -220,36 +225,19 @@ pub(super) fn maybe_run_post_send_hook(
     }
 }
 
-fn resolve_command_path(config: &config::AtmConfig, command_path: &str) -> PathBuf {
-    let path = PathBuf::from(command_path);
-    if path.is_absolute() || !command_path_contains_path_separator(command_path) {
-        path
-    } else {
-        config.config_root.join(path)
-    }
+fn recipient_rule_matches(recipient_rule: &str, candidate: &str) -> bool {
+    recipient_rule == "*" || recipient_rule == candidate
 }
 
-fn command_path_contains_path_separator(command_path: &str) -> bool {
-    command_path.contains('/') || command_path.contains('\\')
-}
-
-fn matches_hook_axis(filters: &[String], candidate: &str) -> bool {
-    hook_filter_matches(filters, candidate)
-}
-
-fn hook_filter_matches(filters: &[String], candidate: &str) -> bool {
-    filters
-        .iter()
-        .any(|filter| filter == "*" || filter == candidate)
-}
-
-/// Render filters exactly as operators configure them so skip diagnostics make
-/// it clear when a trigger axis is effectively disabled.
-fn display_filter_list(filters: &[String]) -> String {
-    if filters.is_empty() {
+fn display_rule_recipients(rules: &[config::types::PostSendHookRule]) -> String {
+    if rules.is_empty() {
         "(not configured)".to_string()
     } else {
-        filters.join(", ")
+        rules
+            .iter()
+            .map(|rule| rule.recipient.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 }
 
@@ -408,8 +396,8 @@ mod tests {
 
     use super::{
         POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel,
-        command_path_contains_path_separator, hook_filter_matches, hook_result_log_level,
-        matches_hook_axis, parse_post_send_hook_result, resolve_command_path,
+        command_path_contains_path_separator, display_rule_recipients, hook_result_log_level,
+        parse_post_send_hook_result, recipient_rule_matches, resolve_command_path,
     };
 
     fn test_config_root() -> std::path::PathBuf {
@@ -417,15 +405,10 @@ mod tests {
     }
 
     #[test]
-    fn hook_filter_matches_exact_and_wildcard_values() {
-        assert!(hook_filter_matches(&["arch-ctm".to_string()], "arch-ctm"));
-        assert!(hook_filter_matches(&["*".to_string()], "arch-ctm"));
-        assert!(!hook_filter_matches(&["team-lead".to_string()], "arch-ctm"));
-    }
-
-    #[test]
-    fn matches_hook_axis_treats_empty_filter_list_as_no_match() {
-        assert!(!matches_hook_axis(&[], "arch-ctm"));
+    fn recipient_rule_matches_exact_and_wildcard_values() {
+        assert!(recipient_rule_matches("arch-ctm", "arch-ctm"));
+        assert!(recipient_rule_matches("*", "arch-ctm"));
+        assert!(!recipient_rule_matches("team-lead", "arch-ctm"));
     }
 
     #[test]
@@ -472,8 +455,8 @@ mod tests {
     }
 
     #[test]
-    fn display_filter_list_renders_empty_as_not_configured() {
-        assert_eq!(super::display_filter_list(&[]), "(not configured)");
+    fn display_rule_recipients_renders_empty_as_not_configured() {
+        assert_eq!(display_rule_recipients(&[]), "(not configured)");
     }
 
     #[test]

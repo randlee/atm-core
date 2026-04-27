@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use atm_core::home;
 use atm_core::team_admin::{self, AddMemberRequest, BackupRequest, RestoreRequest, RestoreResult};
+use atm_core::types::{AgentName, TeamName};
 use clap::{Args, Subcommand};
 
 use crate::observability::CliObservability;
@@ -89,20 +90,26 @@ impl TeamsCommand {
 
 impl AddMemberCommand {
     fn run(self, home_dir: PathBuf) -> Result<()> {
-        let cwd = match self.cwd {
+        let json = self.json;
+        let cwd = match self.cwd.clone() {
             Some(path) => path,
             None => std::env::current_dir()?,
         };
-        let outcome = team_admin::add_member(AddMemberRequest {
+        let request = self.build_request(home_dir, cwd)?;
+        let outcome = team_admin::add_member(request)?;
+        output::print_add_member_result(&outcome, json)
+    }
+
+    fn build_request(self, home_dir: PathBuf, cwd: PathBuf) -> Result<AddMemberRequest> {
+        Ok(AddMemberRequest {
             home_dir,
-            team: self.team,
-            member: self.member,
+            team: self.team.parse::<TeamName>()?,
+            member: self.member.parse::<AgentName>()?,
             agent_type: self.agent_type,
             model: self.model,
             cwd,
             tmux_pane_id: self.pane_id,
-        })?;
-        output::print_add_member_result(&outcome, self.json)
+        })
     }
 }
 
@@ -127,5 +134,48 @@ impl RestoreCommand {
             RestoreResult::Applied(outcome) => output::print_restore_result(&outcome, self.json),
             RestoreResult::DryRun(plan) => output::print_restore_plan(&plan, self.json),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AddMemberCommand;
+
+    #[test]
+    fn build_request_rejects_invalid_team_before_core() {
+        let command = AddMemberCommand {
+            team: "../evil".to_string(),
+            member: "arch-ctm".to_string(),
+            agent_type: "worker".to_string(),
+            model: "gpt-5".to_string(),
+            cwd: None,
+            pane_id: None,
+            json: false,
+        };
+
+        let error = command
+            .build_request(".".into(), ".".into())
+            .expect_err("invalid team");
+
+        assert!(error.to_string().contains("team name"));
+    }
+
+    #[test]
+    fn build_request_rejects_invalid_member_before_core() {
+        let command = AddMemberCommand {
+            team: "atm-dev".to_string(),
+            member: "../evil".to_string(),
+            agent_type: "worker".to_string(),
+            model: "gpt-5".to_string(),
+            cwd: None,
+            pane_id: None,
+            json: false,
+        };
+
+        let error = command
+            .build_request(".".into(), ".".into())
+            .expect_err("invalid member");
+
+        assert!(error.to_string().contains("agent name"));
     }
 }

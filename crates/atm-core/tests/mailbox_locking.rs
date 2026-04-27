@@ -242,6 +242,166 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
 
 #[test]
 #[serial]
+fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() {
+    let fixture = Fixture::new();
+    let observability = Arc::new(NullObservability);
+    let barrier = Arc::new(Barrier::new(3));
+    let (tx, rx) = mpsc::channel();
+
+    let plain_request = fixture.send_request("team-lead", "arch-ctm@atm-dev", "plain payload");
+    let mut task_request = fixture.send_request("qa", "arch-ctm@atm-dev", "task payload");
+    task_request.requires_ack = true;
+    task_request.task_id = Some("TASK-123".to_string());
+    task_request.summary_override = Some("manual summary".to_string());
+
+    for (label, request) in [("plain", plain_request), ("task", task_request)] {
+        let barrier = Arc::clone(&barrier);
+        let tx = tx.clone();
+        let observability = Arc::clone(&observability);
+        thread::spawn(move || {
+            barrier.wait();
+            tx.send((label, send_mail(request, observability.as_ref())))
+                .expect("send result");
+        });
+    }
+    drop(tx);
+
+    barrier.wait();
+    let first = rx
+        .recv_timeout(Duration::from_secs(4))
+        .expect("first send result");
+    let second = rx
+        .recv_timeout(Duration::from_secs(4))
+        .expect("second send result");
+    assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
+    assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
+
+    let inbox = fixture.inbox_contents("arch-ctm");
+    let plain_message = inbox
+        .iter()
+        .find(|message| message.text == "plain payload")
+        .expect("plain inbox message");
+    let task_message = inbox
+        .iter()
+        .find(|message| message.text == "task payload")
+        .expect("task inbox message");
+    assert_eq!(task_message.task_id.as_deref(), Some("TASK-123"));
+    assert_eq!(task_message.summary.as_deref(), Some("manual summary"));
+    assert!(task_message.pending_ack_at.is_some());
+    assert!(plain_message.task_id.is_none());
+    assert!(plain_message.pending_ack_at.is_none());
+
+    let plain_atm_id = message_atm_id(plain_message);
+    let task_atm_id = message_atm_id(task_message);
+    let workflow = fixture.workflow_state_contents("arch-ctm");
+    assert!(
+        workflow["messages"][format!("atm:{plain_atm_id}")]
+            .as_object()
+            .is_some(),
+        "plain workflow entry missing: {workflow:?}"
+    );
+    assert!(
+        workflow["messages"][format!("atm:{plain_atm_id}")]["pendingAckAt"].is_null(),
+        "plain workflow state should not require ack: {workflow:?}"
+    );
+    assert!(
+        workflow["messages"][format!("atm:{task_atm_id}")]["pendingAckAt"]
+            .as_str()
+            .is_some(),
+        "task workflow state should preserve pending ack: {workflow:?}"
+    );
+}
+
+#[test]
+#[serial]
+fn missing_config_notice_seeds_team_lead_workflow_state() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    fixture.create_team_without_config("broken-dev");
+    fixture.write_primary_inbox_for_team("broken-dev", "recipient", &[]);
+    fixture.write_primary_inbox_for_team("broken-dev", "team-lead", &[]);
+
+    send_mail(
+        fixture.send_request("team-lead", "recipient@broken-dev", "broken send"),
+        &observability,
+    )
+    .expect("missing-config send");
+
+    let notices = fixture.inbox_contents_for_team("broken-dev", "team-lead");
+    let notice = notices.first().expect("missing-config notice");
+    assert_eq!(notice.from, "atm-identity-missing@broken-dev");
+    let workflow = fixture.workflow_state_contents_for_team("broken-dev", "team-lead");
+    let notice_atm_id = message_atm_id(notice);
+    assert!(
+        workflow["messages"][format!("atm:{notice_atm_id}")]
+            .as_object()
+            .is_some(),
+        "missing-config workflow entry missing: {workflow:?}"
+    );
+}
+
+#[test]
+#[serial]
+fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss() {
+    let fixture = Fixture::new();
+    let observability = Arc::new(NullObservability);
+    fixture.create_team_without_config("broken-dev");
+    fixture.write_primary_inbox_for_team("broken-dev", "recipient", &[]);
+    fixture.write_primary_inbox_for_team("broken-dev", "team-lead", &[]);
+
+    let barrier = Arc::new(Barrier::new(3));
+    let (tx, rx) = mpsc::channel();
+    let normal_request = fixture.send_request("team-lead", "arch-ctm@atm-dev", "normal send");
+    let broken_request = fixture.send_request("qa", "recipient@broken-dev", "broken send");
+
+    for (label, request) in [("normal", normal_request), ("broken", broken_request)] {
+        let barrier = Arc::clone(&barrier);
+        let tx = tx.clone();
+        let observability = Arc::clone(&observability);
+        thread::spawn(move || {
+            barrier.wait();
+            tx.send((label, send_mail(request, observability.as_ref())))
+                .expect("send result");
+        });
+    }
+    drop(tx);
+
+    barrier.wait();
+    let first = rx
+        .recv_timeout(Duration::from_secs(4))
+        .expect("first send result");
+    let second = rx
+        .recv_timeout(Duration::from_secs(4))
+        .expect("second send result");
+    assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
+    assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
+
+    assert!(
+        fixture
+            .inbox_contents("arch-ctm")
+            .iter()
+            .any(|message| message.text == "normal send"),
+        "normal send missing from primary team inbox"
+    );
+    assert!(
+        fixture
+            .inbox_contents_for_team("broken-dev", "recipient")
+            .iter()
+            .any(|message| message.text == "broken send"),
+        "missing-config recipient send was not persisted"
+    );
+    let notices = fixture.inbox_contents_for_team("broken-dev", "team-lead");
+    let notice = notices.first().expect("missing-config notice");
+    let workflow = fixture.workflow_state_contents_for_team("broken-dev", "team-lead");
+    let notice_atm_id = message_atm_id(notice);
+    assert!(
+        workflow["messages"][format!("atm:{notice_atm_id}")]["pendingAckAt"].is_null(),
+        "missing-config notice workflow state missing after concurrent send: {workflow:?}"
+    );
+}
+
+#[test]
+#[serial]
 fn multi_source_read_and_clear_complete_without_deadlock() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
@@ -666,24 +826,7 @@ struct Fixture {
 impl Fixture {
     fn new() -> Self {
         let tempdir = tempfile::tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
-        fs::create_dir_all(team_dir.join("inboxes")).expect("inboxes");
-
-        let config = TeamConfig {
-            members: ["team-lead", "arch-ctm", "qa"]
-                .into_iter()
-                .map(|name| AgentMember {
-                    name: name.to_string(),
-                    ..Default::default()
-                })
-                .collect(),
-            ..Default::default()
-        };
-        fs::write(
-            team_dir.join("config.json"),
-            serde_json::to_vec(&config).expect("team config"),
-        )
-        .expect("write team config");
+        create_team_with_config(tempdir.path(), "atm-dev", &["team-lead", "arch-ctm", "qa"]);
 
         let arch_message_id = LegacyMessageId::from(Uuid::new_v4());
         let qa_message_id = LegacyMessageId::from(Uuid::new_v4());
@@ -778,7 +921,7 @@ impl Fixture {
     }
 
     fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {
-        read_jsonl(self.primary_inbox_path(agent))
+        self.inbox_contents_for_team("atm-dev", agent)
     }
 
     fn origin_inbox_contents(&self, agent: &str, suffix: &str) -> Vec<MessageEnvelope> {
@@ -786,7 +929,16 @@ impl Fixture {
     }
 
     fn workflow_state_contents(&self, agent: &str) -> serde_json::Value {
-        let raw = fs::read_to_string(self.workflow_state_path(agent)).expect("workflow contents");
+        self.workflow_state_contents_for_team("atm-dev", agent)
+    }
+
+    fn inbox_contents_for_team(&self, team: &str, agent: &str) -> Vec<MessageEnvelope> {
+        read_jsonl(self.primary_inbox_path_for_team(team, agent))
+    }
+
+    fn workflow_state_contents_for_team(&self, team: &str, agent: &str) -> serde_json::Value {
+        let raw = fs::read_to_string(self.workflow_state_path_for_team(team, agent))
+            .expect("workflow contents");
         serde_json::from_str(&raw).expect("workflow json")
     }
 
@@ -803,16 +955,20 @@ impl Fixture {
         write_inbox(&self.primary_inbox_path(agent), messages);
     }
 
+    fn write_primary_inbox_for_team(&self, team: &str, agent: &str, messages: &[MessageEnvelope]) {
+        write_inbox(&self.primary_inbox_path_for_team(team, agent), messages);
+    }
+
     fn write_origin_inbox(&self, agent: &str, suffix: &str, messages: &[MessageEnvelope]) {
         write_inbox(&self.origin_inbox_path(agent, suffix), messages);
     }
 
     fn primary_inbox_path(&self, agent: &str) -> std::path::PathBuf {
-        self.tempdir
-            .path()
-            .join(".claude")
-            .join("teams")
-            .join("atm-dev")
+        self.primary_inbox_path_for_team("atm-dev", agent)
+    }
+
+    fn primary_inbox_path_for_team(&self, team: &str, agent: &str) -> std::path::PathBuf {
+        self.team_dir_for(team)
             .join("inboxes")
             .join(format!("{agent}.json"))
     }
@@ -828,15 +984,50 @@ impl Fixture {
     }
 
     fn workflow_state_path(&self, agent: &str) -> std::path::PathBuf {
-        self.tempdir
-            .path()
-            .join(".claude")
-            .join("teams")
-            .join("atm-dev")
+        self.workflow_state_path_for_team("atm-dev", agent)
+    }
+
+    fn workflow_state_path_for_team(&self, team: &str, agent: &str) -> std::path::PathBuf {
+        self.team_dir_for(team)
             .join(".atm-state")
             .join("workflow")
             .join(format!("{agent}.json"))
     }
+
+    fn team_dir_for(&self, team: &str) -> std::path::PathBuf {
+        self.tempdir.path().join(".claude").join("teams").join(team)
+    }
+
+    fn create_team_without_config(&self, team: &str) {
+        fs::create_dir_all(self.team_dir_for(team).join("inboxes")).expect("team inboxes");
+    }
+}
+
+fn create_team_with_config(home_dir: &std::path::Path, team: &str, members: &[&str]) {
+    let team_dir = home_dir.join(".claude").join("teams").join(team);
+    fs::create_dir_all(team_dir.join("inboxes")).expect("inboxes");
+    let config = TeamConfig {
+        members: members
+            .iter()
+            .map(|name| AgentMember {
+                name: (*name).to_string(),
+                ..Default::default()
+            })
+            .collect(),
+        ..Default::default()
+    };
+    fs::write(
+        team_dir.join("config.json"),
+        serde_json::to_vec(&config).expect("team config"),
+    )
+    .expect("write team config");
+}
+
+fn message_atm_id(message: &MessageEnvelope) -> String {
+    message.extra["metadata"]["atm"]["messageId"]
+        .as_str()
+        .expect("atm message id")
+        .to_string()
 }
 
 fn read_jsonl(path: std::path::PathBuf) -> Vec<MessageEnvelope> {

@@ -1,8 +1,12 @@
 use std::fmt;
 use std::ops::Deref;
+use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+
+use crate::address::validate_path_segment;
+use crate::error::AtmError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -54,6 +58,16 @@ impl From<String> for AgentName {
 impl From<&str> for AgentName {
     fn from(value: &str) -> Self {
         Self(value.to_string())
+    }
+}
+
+impl FromStr for AgentName {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let trimmed = value.trim();
+        validate_path_segment(trimmed, "agent")?;
+        Ok(Self(trimmed.to_string()))
     }
 }
 
@@ -115,6 +129,16 @@ impl From<String> for TeamName {
 impl From<&str> for TeamName {
     fn from(value: &str) -> Self {
         Self(value.to_string())
+    }
+}
+
+impl FromStr for TeamName {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let trimmed = value.trim();
+        validate_path_segment(trimmed, "team")?;
+        Ok(Self(trimmed.to_string()))
     }
 }
 
