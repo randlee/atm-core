@@ -16,6 +16,12 @@ use super::{PostSendHookContext, qualified_sender_identity};
 const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 const POST_SEND_HOOK_MAX_STDOUT_BYTES: usize = 8 * 1024;
 
+#[derive(Debug, Clone, Copy)]
+struct PostSendHookMatch {
+    sender: bool,
+    recipient: bool,
+}
+
 #[derive(Debug, Deserialize)]
 struct PostSendHookResult {
     level: PostSendHookResultLevel,
@@ -41,35 +47,52 @@ pub(super) fn maybe_run_post_send_hook(
     let Some(config) = config else {
         return;
     };
+    let Some(command_argv) = config.post_send_hook.as_ref() else {
+        return;
+    };
 
-    let matching_rules: Vec<_> = config
-        .post_send_hooks
-        .iter()
-        .filter(|rule| hook_matches_recipient(&rule.recipient, &context.recipient.agent))
-        .collect();
+    let sender_filters_configured = !config.post_send_hook_senders.is_empty();
+    let recipient_filters_configured = !config.post_send_hook_recipients.is_empty();
+    let hook_match = PostSendHookMatch {
+        sender: matches_hook_axis(&config.post_send_hook_senders, context.sender),
+        recipient: matches_hook_axis(&config.post_send_hook_recipients, &context.recipient.agent),
+    };
+    if !hook_match.sender && !hook_match.recipient {
+        if !sender_filters_configured && !recipient_filters_configured {
+            debug!(
+                sender = context.sender,
+                recipient = %context.recipient.agent,
+                recipient_team = %context.recipient.team,
+                "post-send hook disabled because no sender or recipient filters are configured"
+            );
+            return;
+        }
 
-    if matching_rules.is_empty() {
         debug!(
             sender = context.sender,
             recipient = %context.recipient.agent,
             recipient_team = %context.recipient.team,
-            "post-send hook had no matching recipient rules"
+            sender_filters = %display_filter_list(&config.post_send_hook_senders),
+            recipient_filters = %display_filter_list(&config.post_send_hook_recipients),
+            sender_match = hook_match.sender,
+            recipient_match = hook_match.recipient,
+            "post-send hook did not match configured sender or recipient filters"
         );
         return;
     }
 
-    for rule in matching_rules {
-        execute_post_send_hook(warnings, config, rule, &context);
-    }
-}
+    debug!(
+        sender = context.sender,
+        recipient = %context.recipient.agent,
+        recipient_team = %context.recipient.team,
+        sender_filters = %display_filter_list(&config.post_send_hook_senders),
+        recipient_filters = %display_filter_list(&config.post_send_hook_recipients),
+        sender_match = hook_match.sender,
+        recipient_match = hook_match.recipient,
+        "post-send hook matched"
+    );
 
-fn execute_post_send_hook(
-    warnings: &mut Vec<String>,
-    config: &config::AtmConfig,
-    rule: &config::types::PostSendHookRule,
-    context: &PostSendHookContext<'_>,
-) {
-    let mut argv = rule.command.iter();
+    let mut argv = command_argv.iter();
     let Some(command_path) = argv.next() else {
         return;
     };
@@ -78,23 +101,14 @@ fn execute_post_send_hook(
         "from": qualified_sender_identity(context.sender, context.sender_team),
         "to": format!("{}@{}", context.recipient.agent, context.recipient.team),
         "sender": context.sender,
-        "recipient": context.recipient.agent,
-        "team": context.recipient.team,
+        "recipient": context.recipient.agent.as_str(),
+        "team": context.recipient.team.as_str(),
         "message_id": context.message_id.to_string(),
         "requires_ack": context.requires_ack,
     });
     if let Some(task_id) = context.task_id {
         payload["task_id"] = Value::String(task_id.to_string());
     }
-
-    debug!(
-        sender = context.sender,
-        recipient = %context.recipient.agent,
-        recipient_team = %context.recipient.team,
-        hook_recipient = %rule.recipient,
-        hook_path = %command_path.display(),
-        "post-send hook matched recipient rule"
-    );
 
     let mut command = Command::new(&command_path);
     command
@@ -108,7 +122,7 @@ fn execute_post_send_hook(
         Ok(child) => child,
         Err(error) => {
             let warning = format!(
-                "warning: post-send hook failed to start from {}: {error}. Check that the hook command in .atm.toml points to a valid executable.",
+                "warning: post-send hook failed to start from {}: {error}. Check that post_send_hook in .atm.toml points to a valid executable.",
                 command_path.display()
             );
             warn!(
@@ -116,7 +130,6 @@ fn execute_post_send_hook(
                 sender = context.sender,
                 recipient = %context.recipient.agent,
                 recipient_team = %context.recipient.team,
-                hook_recipient = %rule.recipient,
                 hook_path = %command_path.display(),
                 %error,
                 "post-send hook failed to start"
@@ -145,7 +158,6 @@ fn execute_post_send_hook(
                         sender = context.sender,
                         recipient = %context.recipient.agent,
                         recipient_team = %context.recipient.team,
-                        hook_recipient = %rule.recipient,
                         hook_path = %command_path.display(),
                         %status,
                         "post-send hook exited unsuccessfully"
@@ -174,7 +186,6 @@ fn execute_post_send_hook(
                     sender = context.sender,
                     recipient = %context.recipient.agent,
                     recipient_team = %context.recipient.team,
-                    hook_recipient = %rule.recipient,
                     hook_path = %command_path.display(),
                     timeout_seconds = POST_SEND_HOOK_TIMEOUT.as_secs(),
                     "post-send hook timed out"
@@ -198,7 +209,6 @@ fn execute_post_send_hook(
                     sender = context.sender,
                     recipient = %context.recipient.agent,
                     recipient_team = %context.recipient.team,
-                    hook_recipient = %rule.recipient,
                     hook_path = %command_path.display(),
                     %error,
                     "post-send hook status check failed"
@@ -212,15 +222,35 @@ fn execute_post_send_hook(
 
 fn resolve_command_path(config: &config::AtmConfig, command_path: &str) -> PathBuf {
     let path = PathBuf::from(command_path);
-    if path.is_absolute() || !config::discovery::command_looks_like_path(command_path) {
+    if path.is_absolute() || !command_path_contains_path_separator(command_path) {
         path
     } else {
         config.config_root.join(path)
     }
 }
 
-fn hook_matches_recipient(configured: &str, candidate: &str) -> bool {
-    configured == "*" || configured == candidate
+fn command_path_contains_path_separator(command_path: &str) -> bool {
+    command_path.contains('/') || command_path.contains('\\')
+}
+
+fn matches_hook_axis(filters: &[String], candidate: &str) -> bool {
+    hook_filter_matches(filters, candidate)
+}
+
+fn hook_filter_matches(filters: &[String], candidate: &str) -> bool {
+    filters
+        .iter()
+        .any(|filter| filter == "*" || filter == candidate)
+}
+
+/// Render filters exactly as operators configure them so skip diagnostics make
+/// it clear when a trigger axis is effectively disabled.
+fn display_filter_list(filters: &[String]) -> String {
+    if filters.is_empty() {
+        "(not configured)".to_string()
+    } else {
+        filters.join(", ")
+    }
 }
 
 fn spawn_post_send_hook_stdout_reader(
@@ -253,8 +283,7 @@ fn finish_post_send_hook_stdout_capture(
     match stdout_reader.join() {
         Ok(Ok(stdout)) => Some(stdout),
         Ok(Err(error)) => {
-            warn!(
-                code = %AtmErrorCode::WarningHookExecutionFailed,
+            warn!(code = %AtmErrorCode::WarningHookExecutionFailed,
                 hook_path = %command_path.display(),
                 %error,
                 "post-send hook stdout capture failed"
@@ -262,8 +291,7 @@ fn finish_post_send_hook_stdout_capture(
             None
         }
         Err(_) => {
-            warn!(
-                code = %AtmErrorCode::WarningHookExecutionFailed,
+            warn!(code = %AtmErrorCode::WarningHookExecutionFailed,
                 hook_path = %command_path.display(),
                 "post-send hook stdout capture panicked"
             );
@@ -372,21 +400,80 @@ fn hook_result_log_level(level: PostSendHookResultLevel) -> Level {
 
 #[cfg(test)]
 mod tests {
+    use std::env;
     use std::path::Path;
 
     use serde_json::json;
     use tracing::Level;
 
     use super::{
-        POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel, hook_matches_recipient,
-        hook_result_log_level, parse_post_send_hook_result,
+        POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel,
+        command_path_contains_path_separator, hook_filter_matches, hook_result_log_level,
+        matches_hook_axis, parse_post_send_hook_result, resolve_command_path,
     };
 
+    fn test_config_root() -> std::path::PathBuf {
+        env::temp_dir().join("atm-config-root")
+    }
+
     #[test]
-    fn hook_matches_recipient_exact_and_wildcard_values() {
-        assert!(hook_matches_recipient("arch-ctm", "arch-ctm"));
-        assert!(hook_matches_recipient("*", "arch-ctm"));
-        assert!(!hook_matches_recipient("team-lead", "arch-ctm"));
+    fn hook_filter_matches_exact_and_wildcard_values() {
+        assert!(hook_filter_matches(&["arch-ctm".to_string()], "arch-ctm"));
+        assert!(hook_filter_matches(&["*".to_string()], "arch-ctm"));
+        assert!(!hook_filter_matches(&["team-lead".to_string()], "arch-ctm"));
+    }
+
+    #[test]
+    fn matches_hook_axis_treats_empty_filter_list_as_no_match() {
+        assert!(!matches_hook_axis(&[], "arch-ctm"));
+    }
+
+    #[test]
+    fn command_path_contains_path_separator_matches_path_like_commands_only() {
+        assert!(command_path_contains_path_separator("scripts/hook.sh"));
+        assert!(command_path_contains_path_separator(r"scripts\hook.bat"));
+        assert!(!command_path_contains_path_separator("bash"));
+    }
+
+    #[test]
+    fn resolve_command_path_preserves_absolute_paths() {
+        let config = crate::config::AtmConfig {
+            config_root: test_config_root(),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            resolve_command_path(&config, "/usr/local/bin/hook"),
+            Path::new("/usr/local/bin/hook")
+        );
+    }
+
+    #[test]
+    fn resolve_command_path_joins_relative_paths_with_separators_under_config_root() {
+        let config = crate::config::AtmConfig {
+            config_root: test_config_root(),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            resolve_command_path(&config, "scripts/hook.sh"),
+            test_config_root().join("scripts/hook.sh")
+        );
+    }
+
+    #[test]
+    fn resolve_command_path_preserves_bare_command_names_for_path_lookup() {
+        let config = crate::config::AtmConfig {
+            config_root: test_config_root(),
+            ..Default::default()
+        };
+
+        assert_eq!(resolve_command_path(&config, "bash"), Path::new("bash"));
+    }
+
+    #[test]
+    fn display_filter_list_renders_empty_as_not_configured() {
+        assert_eq!(super::display_filter_list(&[]), "(not configured)");
     }
 
     #[test]

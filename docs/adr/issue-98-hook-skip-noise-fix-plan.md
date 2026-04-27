@@ -26,6 +26,28 @@ The more important product failure is that a natural hook configuration like
 `post_send_hook = ["bash", "-c", "..."]` currently fails because ATM rewrites
 `"bash"` to `{config_root}/bash`.
 
+## Legacy Flat-Key Scope
+
+This fix is intentionally scoped to the legacy flat-key hook layer:
+
+- `post_send_hook`
+- `post_send_hook_senders`
+- `post_send_hook_recipients`
+
+The requirements/architecture target for recipient-scoped
+`[[atm.post_send_hooks]]` table-array rules remains a separate tracked item in
+Phase L.7 / `FIX-82`.
+
+This sprint must not implement `[[atm.post_send_hooks]]`.
+
+Scope constraint:
+
+- no new code paths are added for the legacy hook shape
+- the backward-compat patch here is limited to:
+  - bare-command PATH resolution
+  - silencing expected non-match warnings
+  - correcting the emitted `ATM_POST_SEND` payload shape
+
 ## Problem A: Hook Command Resolution
 
 In `resolve_command_path(...)`, the current command-resolution rule is too
