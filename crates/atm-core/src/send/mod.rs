@@ -294,7 +294,10 @@ fn resolve_recipient(
         .ok_or_else(AtmError::team_unavailable)?;
 
     Ok(ResolvedRecipient {
-        agent: AgentName::from(config::aliases::resolve_agent(&target_address.agent, config)),
+        agent: AgentName::from(config::aliases::resolve_agent(
+            &target_address.agent,
+            config,
+        )),
         team: TeamName::from(team),
     })
 }
