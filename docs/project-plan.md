@@ -19,14 +19,17 @@ restructured, product docs remain in `docs/` and crate-local detail moves into
 `docs/atm/` and `docs/atm-core/`.
 
 Status:
-- Phases 0 through F and J are complete.
-- Phase K is complete and ready to roll forward into shared 1.0 release
-  alignment work.
-- Phase L is now the latest release-alignment and retained-surface follow-on
-  phase and the next active delivery focus.
-- Phases G and H remain retained-command phases, but their implementation work
-  depends on the concrete `sc-observability` integration delivered in Phase K
-  and the release-alignment work planned in Phase L.
+- Phases 0 through P have executed on the retained rewrite line.
+- Phases G and H are complete retained-command phases, closed through the
+  shared observability and release-alignment work delivered in later phases.
+- Phase K completed the shared `sc-observability` integration boundary.
+- Phase L completed the retained release-surface and team-recovery closeout.
+- Phase M completed mailbox locking and review-finding fixes.
+- Phase N completed publish-replacement and distribution-parity planning and
+  implementation merge work.
+- Phase O completed the security and hardening follow-up line.
+- Phase P implementation is merged; follow-up hardening remains open for
+  `P.6` and `P.7`, while `P.8` documentation reconciliation is complete.
 - Message schema ownership and metadata normalization are now implemented well
   enough for live shared-inbox adoption, while a separate ATM-native inbox
   remains deferred to a later version.
@@ -454,7 +457,7 @@ Acceptance:
 - any generic shared-crate usability gaps discovered during implementation are
   filed upstream in `sc-observability`
 
-### Phase L: 1.0 Alignment And Release Surface Cleanup [NEXT / LATEST]
+### Phase L: 1.0 Alignment And Release Surface Cleanup [COMPLETE]
 
 Status summary:
 - Phase K delivered the full sc-observability integration against a pre-publish
@@ -1027,7 +1030,8 @@ Tests required:
 Acceptance criteria:
 - `lock.rs` is no longer a placeholder stub
 - all mailbox read-modify-write paths hold an exclusive lock
-- `read`, `ack`, and `clear` lock their entire source-file set before reading any source inbox
+- `read`, `ack`, and `clear` use one deterministic full-source lock plan for
+  every mutating reread and writeback
 - no shared mutable structured file touched by M.1 is rewritten in place
 - concurrent `atm send` to the same inbox from two processes does not lose messages
 - CI passes on macOS, Linux, Windows
@@ -1279,7 +1283,9 @@ Acceptance criteria:
 
 ---
 
-### Phase N: Publish Replacement And Distribution Parity [PLANNED]
+### Phase N: Publish Replacement And Distribution Parity [COMPLETE]
+
+Status: COMPLETE
 
 Goal:
 - ship the retained `1.0` release from this repo as the direct replacement for
@@ -1531,7 +1537,9 @@ Phase N completion gate:
 - `winget` is explicitly documented as a new required Windows install channel,
   not as historical parity
 
-### Phase O: Security And Hardening [PLANNED]
+### Phase O: Security And Hardening [COMPLETE]
+
+Status: COMPLETE
 
 Goal:
 - close the confirmed CR001 findings that affect path safety, allocation
@@ -1602,7 +1610,7 @@ Phase O completion gate:
 - CI passes on all platforms
 - `integrate/phase-O` merges to `develop`
 
-### Phase P: File-I/O Ownership And Single-Write-Path Hardening [PROPOSED]
+### Phase P: File-I/O Ownership And Single-Write-Path Hardening [MERGED / HARDENING FOLLOW-UP]
 
 Status note:
 - P.1 completed on `feature/pP-s1-ownership-classification` via PR `#111`
@@ -1613,9 +1621,12 @@ Status note:
   at `git#ecb774a`
 - P.4 completed on `feature/pP-s4-claude-inbox-compat` via PR `#113`
   at `git#9d5729b`
-- P.5 is the active closure gate; the remaining content in this phase section is
-  now implementation history plus the final closure work, not proposal-only
-  planning guidance
+- P.5 closure gate completed on `feature/pP-s5-closure-gate` via PR `#114`
+- final Phase P integration merged to `develop` via PR `#120` at `git#ad49336`
+- this phase section now records both the executed P.1-P.5 history and the
+  remaining hardening continuation work needed before a publish-quality close
+- `integrate/phase-P` is currently rebased onto `develop@628e176`; refresh it
+  again if `develop` advances before the next hardening slice begins
 
 Goal:
 - make the retained ATM implementation production-ready by applying one
@@ -1636,6 +1647,214 @@ Non-negotiable constraints:
 - no tolerance for flaky tests
 
 Integration branch: `integrate/phase-P`
+
+#### P.6-P.8 — Post-Merge Hardening Continuation
+
+Goal:
+- close the remaining Phase P publish-risk gaps after the merge to `develop`
+- keep follow-up work split into deterministic, reviewable sprint slices:
+  - P.6: workflow-sidecar concurrency and typed boundary cleanup
+  - P.7: test hygiene and observability cleanup
+  - P.8: requirements/architecture/project-plan reconciliation
+
+Planning rule:
+- each hardening continuation sprint must start from the latest `develop` on
+  `integrate/phase-P`
+- if `develop` advances between sprints, refresh `integrate/phase-P` from it
+  before opening the next sprint branch
+- no sprint may rely on timing-based tests, unlocked ATM-owned state rewrites,
+  or new raw `String`/parse-later request surfaces for agent/team/address
+  identifiers
+
+##### P.6 — Workflow-Sidecar Concurrency And Typed Boundary Cleanup [PLANNED]
+
+Goals:
+- make workflow-sidecar seeding in `send` safe for concurrent same-recipient
+  sends
+- remove the remaining raw-string request/target boundaries called out by the
+  Phase P rust-best-practices review
+
+Files expected in scope:
+- `crates/atm-core/src/send/mod.rs`
+- `crates/atm-core/src/workflow.rs`
+- `crates/atm-core/src/mailbox/source.rs`
+- `crates/atm-core/src/read/mod.rs`
+- `crates/atm-core/src/team_admin.rs`
+- `crates/atm-core/tests/mailbox_locking.rs`
+- command-layer constructors/parsers that build these request types
+
+Design details:
+- introduce one owner-layer workflow commit path for `.atm-state/workflow` that
+  proves freshness before replacing the live file
+- `send_mail(...)` and the missing-config team-lead notice path must stop using
+  unlocked `load -> mutate -> save` on workflow state
+- same-recipient send/send concurrency must either:
+  - lock the workflow sidecar and reload under that lock before persisting, or
+  - use a compare-and-swap equivalent at the workflow owner boundary
+- mailbox append plus workflow seed must be treated as one coordinated
+  persistence plan for send-owned writes; no parallel ad hoc sidecar mutation
+  path is allowed
+- request/target parsing must move to construction time for the remaining
+  boundary types:
+  - `AddMemberRequest.team` and `.member` use `TeamName` / `AgentName`
+    instead of raw `String` (`RBP-F001`)
+  - `ReadQuery.target_address` uses `Option<AgentAddress>` instead of
+    `Option<String>` (`RBP-F002`)
+  - `ResolvedTarget.agent` / `.team` carry `AgentName` / `TeamName`
+    rather than raw `String` (`RBP-F003`)
+
+Implementation patterns:
+- prefer a typed workflow helper such as
+  `workflow::with_locked_state(...)` or `workflow::commit_state(...)`
+  over reimplementing lock/CAS logic inside `send/mod.rs`
+- keep validation at the API boundary: constructors, CLI parsing, and resolver
+  outputs should carry validated newtypes rather than validating deep in the
+  implementation
+- keep concurrent coverage deterministic by using channels/barriers with bounded
+  waits; do not use sleeps to try to overlap sends
+
+Reference shape:
+
+```rust
+// Pseudocode shape, not a final required signature.
+let envelope = mailbox::append_message(...)?;
+workflow::commit_state(home, team, recipient, |state| {
+    state.remember_initial_state(&envelope);
+})?;
+```
+
+```rust
+// Pseudocode shape for the final freshness boundary.
+workflow::commit_state(home, team, recipient, |state| {
+    let fresh = state.reload_or_validate()?;
+    fresh.remember_initial_state(&envelope);
+    Ok(())
+})?;
+```
+
+The hardening requirement is not the helper name; it is that `send` and the
+missing-config team-lead notice path must stop open-coding `load -> mutate ->
+save` against the workflow sidecar and must commit from a freshness-proven
+owner-layer boundary.
+
+Required coverage:
+- concurrent same-recipient send/send test proving two ATM-authored messages
+  both seed workflow state without lost updates
+- coverage for the missing-config team-lead notice path using the shared
+  workflow owner helper
+- request-construction tests showing invalid team/agent/address input is
+  rejected before command execution enters the core implementation
+- concurrent send where one path is a normal recipient send and the other is the
+  missing-config team-lead notice path for the same workflow file family
+- contention case where one sender observes an older workflow snapshot, loses
+  the race, reloads, and recomputes without dropping the winning sender's entry
+- mixed payload case where concurrent sends differ on `requires_ack`, `task_id`,
+  and summary generation, proving the seeded sidecar state tracks the correct
+  message identity rather than whichever writer saves last
+
+##### P.7 — Test Hygiene And Observability Cleanup [PLANNED]
+
+Goals:
+- remove the remaining timing-dependent and process-environment test seams
+- stop silently discarding malformed idle-notification JSON during read-path
+  classification
+
+Files expected in scope:
+- `crates/atm/tests/log.rs`
+- `crates/atm-core/src/config/discovery.rs`
+- `crates/atm-core/src/clear/mod.rs`
+- `crates/atm-core/src/read/mod.rs`
+- any shared test fixture/helper file needed to make readiness deterministic
+
+Design details:
+- replace the fixed `thread::sleep(Duration::from_millis(250))` in log-tail
+  coverage with an explicit readiness handshake or bounded polling barrier
+- replace all hardcoded `/tmp/atm-config-root` test roots in
+  `config/discovery.rs` with `tempdir()`-backed paths
+- scope `ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD` with an RAII env guard under
+  `#[serial]` in `clear/mod.rs`
+- replace `idle_notification_sender(...).ok().and_then(...)` with explicit
+  malformed-JSON handling that preserves non-fatal behavior but emits traceable
+  diagnostics and recovery context (`RBP-F004`)
+
+Implementation patterns:
+- any new helper introduced for log-tail readiness must expose a positive-ready
+  signal; it must not sleep "long enough"
+- process-environment mutation in tests must use one repo-standard pattern:
+  shared env lock plus scoped guard plus `#[serial]`
+- malformed JSON handling should remain fail-soft for Claude-owned inbox data,
+  but it must not silently disappear; trace/debug logging is required
+
+Reference shape:
+
+```rust
+// Pseudocode shape, not a required concrete helper name.
+let ready = readiness.wait_until_ready(timeout)?;
+assert!(ready);
+let records = log_tail.read_after(ready.cursor())?;
+```
+
+```rust
+let _guard = test_env::scoped_var(
+    "ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD",
+    "1",
+);
+```
+
+Required coverage:
+- deterministic log-tail readiness test with no fixed-duration sleep
+- `config/discovery.rs` tests rewritten to tempdir fixtures with no `/tmp`
+  assumptions
+- `clear/mod.rs` regression showing the injected disappearing-inbox path resets
+  state through scoped guard teardown
+- read-path coverage proving malformed idle-notification JSON is observable in
+  logs/diagnostics and does not panic or change mailbox state
+- malformed idle-notification JSON adjacent to valid mailbox records still
+  leaves the valid records readable and classifiable
+- tempdir-backed discovery tests cover paths with spaces and nested directories
+  so platform path handling is exercised instead of assuming `/tmp` semantics
+- env-guard teardown is verified on early-return/failure paths so one test's
+  injected state cannot leak into the next test process
+
+##### P.8 — Requirements, Architecture, And Plan Reconciliation [COMPLETE]
+
+Goals:
+- bring the written Phase P requirements, architecture, and plan text into
+  alignment with the landed implementation and the follow-up hardening results
+- close the remaining documentation ambiguity before a final publish decision
+
+Files expected in scope:
+- `docs/requirements.md`
+- `docs/project-plan.md`
+- `docs/architecture.md`
+- `docs/atm-core/modules/mailbox.md`
+- `docs/atm-core/modules/workflow.md`
+
+Design details:
+- rewrite `REQ-CORE-MAILBOX-LOCK-005` so it matches the executed mutation
+  taxonomy:
+  - `read_only`: no locks
+  - `read_possible_write`: unlocked observation is allowed, but any commit must
+    reload/prove freshness under the final lock set
+  - `read_modify_write`: acquire the final lock plan before the mutating
+    snapshot and hold it through commit
+- explicitly document that `read`, `ack`, and `clear` do not all share the same
+  pre-lock read behavior anymore; the requirement should describe the
+  command-specific executed pattern instead of the pre-Phase-P rule
+- keep `docs/requirements.md` and `docs/architecture.md` as the always-valid
+  enforced source of truth for the post-P.5 system state rather than a phase
+  narrative
+- record the P.6 and P.7 fixes in the Phase P closure history so the plan
+  reads as executed release evidence rather than mixed proposal/history
+
+Acceptance criteria:
+- requirements, architecture, and project-plan text all describe the same
+  mailbox-read taxonomy and lock acquisition model
+- the docs explicitly name the remaining P.6 send-side workflow freshness gap
+  rather than implying it is already solved
+- the Phase P heading and status note clearly show merged/executed state
+- no Phase P document still implies that the merged implementation is
+  proposal-only
 
 #### P.0 — Audited Production File-I/O Inventory
 

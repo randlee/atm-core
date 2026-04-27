@@ -288,11 +288,11 @@ Required rules:
 - a separate ATM-native inbox is explicitly deferred and must not be assumed by
   the current live design
 
-Current-phase migration constraint:
+Current compatibility rule:
 
-- Phase J sprint J.4 is documentation and planning only
-- existing runtime write/read behavior for legacy top-level alert fields remains
-  stable until a later implementation sprint performs the actual migration
+- existing runtime write/read behavior for legacy top-level alert fields
+  remains stable until a later compatibility-migration implementation changes
+  that persisted shape
 `REQ-P-SCHEMA-001` is owned by:
 
 - [`claude-code-message-schema.md`](./claude-code-message-schema.md)
@@ -1796,45 +1796,64 @@ closed before the 1.0 release.
 
   Read-only `read_messages` calls with no following writeback do not require locking.
 
-- `REQ-CORE-MAILBOX-LOCK-005` Multi-source mailbox commands must acquire all
-  required locks before reading any source inbox, and must do so in deterministic
-  path order.
+- `REQ-CORE-MAILBOX-LOCK-005` Multi-source mailbox commands must acquire their
+  final required lock set before any mutating source reread, and must do so in
+  deterministic path order.
 
   Rationale: `read`, `ack`, and `clear` do not operate on a single inbox file.
-  They call `load_source_files(...)`, which reads the requested inbox plus any
-  origin inboxes, compute a merged surface from those snapshots, and then write
-  one or more source files back. Taking a lock only during the final write step
-  would still allow stale reads and lost updates.
+  The executed Phase P design permits unlocked observational snapshots when no
+  mutation is committed from that snapshot, but any state-changing path must
+  reacquire the full deterministic lock set, reload fresh source files under
+  that lock set, recompute the mutation, and then persist. Locking only during
+  the final write step would still allow stale reads and lost updates.
 
   Required behavior:
-  - `read`, `ack`, and `clear` must discover their full source-file set, dedupe
-    duplicate paths, sort the resulting paths deterministically by canonical path
-    string, acquire all locks, then call `load_source_files(...)`
-  - source-file discovery must happen before any source inbox read and must use
-    the command's existing requested-inbox plus origin-inbox resolution logic
+  - `read` is a `read_possible_write` path: it may take an unlocked
+    observational snapshot of the source inbox set,
+    but if display-state mutation is needed it must re-discover the current
+    source-file set, dedupe duplicate paths, sort the resulting paths
+    deterministically by canonical path string, acquire the full lock set, then
+    reload and recompute under that lock set before persisting
+  - `ack` uses an unlocked preflight plus one final superset lock: it may
+    resolve the reply target and candidate source message from an unlocked
+    preflight, but it must acquire the final sorted superset lock plan before
+    the mutating source reread, then re-read and re-validate the pending
+    acknowledgement state under that final lock set before writing either the
+    source or reply mailbox state
+  - mutating `clear` is a full-lock-through-persist path: it must acquire the
+    deterministic lock set before its
+    mutating source reread and must hold that lock set through removal
+    computation, mailbox replacement, and workflow-sidecar updates; `clear
+    --dry-run` remains observational and lock-free
+  - final source-file discovery for a mutating path must use the command's
+    existing requested-inbox plus origin-inbox resolution logic
   - legitimately absent inbox paths at discovery time are excluded from the
     lock set rather than locked speculatively
   - source enumeration faults are not treated as absent paths; if origin inbox
     discovery cannot enumerate the candidate directory completely, the command
     must fail closed instead of continuing with a partial source set
-  - those locks must remain held through surface computation, state transition,
-    and final writeback
+  - for any mutating path, those locks must remain held through the fresh
+    surface computation, state transition, and final writeback
   - deterministic ordering must prevent deadlock when two commands contend on the
     same pair of inbox files in opposite discovery order
   - lock acquisition uses one total timeout budget for the full lock set, not a
     fresh timeout per file
   - if any lock in the set cannot be acquired, every previously acquired lock in
     that attempt must be released immediately and the command must fail without
-    reading or mutating any source inbox
+    mutating any source inbox from a partially locked snapshot
   - partial lock acquisition must never degrade into a best-effort state-changing
     command result for `read`, `ack`, or `clear`
-  - source discovery for mutation commands must fail closed: if directory
+  - the unlocked observational snapshot used by `read`, `ack`, or dry-run
+    `clear` must never be the snapshot from which a later mutating commit is
+    persisted
+  - source discovery for mutating commands must fail closed: if directory
     enumeration itself fails or if any directory entry in the candidate inbox
-    directory cannot be enumerated reliably, the command must abort before lock
-    acquisition instead of warning and continuing with a partial source set
-  - if a discovered file disappears or becomes unreadable after lock planning but
-    before or during source-file load, the command must fail as a normal
-    operator-actionable file-read error and must not persist any partial state
+    directory cannot be enumerated reliably, the command must abort before the
+    mutating reread instead of warning and continuing with a partial source set
+  - if a discovered file disappears or becomes unreadable after lock planning
+    but before or during the under-lock source-file load, the command must fail
+    as a normal operator-actionable file-read error and must not persist any
+    partial state
 
 - `REQ-CORE-MAILBOX-LOCK-006` Single-process single-threaded usage must not
   regress measurably due to lock acquisition.
@@ -1902,6 +1921,14 @@ closed before the 1.0 release.
   - a stale-snapshot rename after late lock acquisition is forbidden even if
     the rename itself is atomic
 
+  Open hardening gap — `P.6` send-side workflow freshness:
+  - mailbox read/ack/clear paths satisfy this through
+    `mailbox::store::with_locked_source_files(...)`
+  - workflow-sidecar writes performed during `send` and the missing-config
+    team-lead notice path are already atomic and owner-routed, but they do not
+    yet provide a dedicated freshness proof across concurrent same-recipient
+    sends; P.6 is the tracked hardening item for that gap
+
 - `REQ-CORE-PERSIST-ATOMIC-001B` Every shared mutable file family must have one
   documented write path and one owning helper boundary.
 
@@ -1938,6 +1965,9 @@ closed before the 1.0 release.
       `team_admin::restore::clear_restore_marker(...)`,
       `team_admin::restore::prepare_restore_workspace(...)`, and
       `team_admin::restore::cleanup_restore_workspace(...)`
+  - send-side workflow seeding must not continue indefinitely as an open-coded
+    `load -> mutate -> save` sequence in command-layer logic; P.6 exists to
+    converge that path onto a dedicated owner-layer freshness boundary
 
 - `REQ-CORE-PERSIST-ATOMIC-001C` ATM must not claim rewrite safety for
   non-cooperating external writers.

@@ -50,7 +50,7 @@ Crate-local boundary detail is owned by:
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm/architecture.md`](./atm/architecture.md)
 
-### 2.4 Release Publication Boundary
+### 2.3 Release Publication Boundary
 
 The `1.0` retained-surface release is a source-repo replacement of the old
 `agent-team-mail` CLI/core publication path, not a new public package family.
@@ -123,7 +123,7 @@ Schema ownership references:
   `tools/schema_models/atm_message_schema.py` and
   `tools/schema_models/legacy_atm_message_schema.py`
 
-### 2.3 Shared Observability Boundary
+### 2.4 Shared Observability Boundary
 
 `atm-core` must not import `sc-observability` directly.
 
@@ -463,7 +463,7 @@ Diagnostics for team config failures must preserve:
 - parser line and column when available
 - original parser cause for operator repair
 
-### 13.2 Deprecated `[atm].identity`
+### 5.1.1 Deprecated `[atm].identity`
 
 `[atm].identity` remains parse-compatible only as an obsolete migration field.
 It is no longer part of runtime sender or actor resolution.
@@ -533,7 +533,7 @@ Forward architectural rules:
 - the current live design still uses a shared inbox surface; a separate
   ATM-native inbox is intentionally deferred to a later architecture phase
 
-Current-phase constraint:
+Current compatibility rule:
 
 - the current runtime send/alert write path may continue writing legacy
   top-level alert fields during the compatibility period
@@ -1452,9 +1452,22 @@ ATM now treats mailbox access as two distinct patterns:
 This keeps non-mutating reads out of the lock path while preserving a stable
 writeback boundary for commands that actually rewrite inbox files.
 
+Executed command mapping:
+- `read` uses an unlocked observational snapshot for display selection and
+  timeout polling, then enters the shared lock+reload+recompute path only when
+  display-state mutation is actually required
+- `ack` uses an unlocked preflight to resolve the reply target and candidate
+  source message, then acquires one final sorted superset lock and re-validates
+  the pending-ack state under that lock set before writing source/reply state
+- mutating `clear` acquires the shared lock plan before its mutating reread and
+  holds it through removal computation, mailbox replacement, and workflow-state
+  updates; `clear --dry-run` remains observational only
+
 ### 18.4.3 Executed Mailbox Workflow Migration
 
-Phase P.4 executes the mailbox workflow-state migration on this branch.
+Phase P completed the mailbox workflow-state migration. P.4 delivered the
+sidecar move, and the current architecture documents the post-P.5 executed
+state.
 
 Current executed rule:
 - ATM-owned workflow durability for identified mailbox messages is written to
@@ -1471,6 +1484,15 @@ Current executed rule:
   under one deterministic lock plan
 - `clear` classifies removable messages from the projected workflow view and
   removes matching workflow-state entries when the inbox record is deleted
+
+Current executed limitation:
+- `send` and the missing-config team-lead notice path still seed workflow state
+  via an atomic owner-routed `load -> mutate -> save` sequence instead of a
+  dedicated freshness-proving helper
+- that means the sidecar family is already the source of truth, but concurrent
+  same-recipient send-side seeding is not yet hardened to the same
+  lock/reload/recompute standard used by mailbox read/ack/clear
+- P.6 is the tracked hardening continuation for that specific gap
 
 ### 18.5 New Error Codes
 
@@ -1553,6 +1575,10 @@ Current architectural limitation:
 - therefore the current shared-inbox rewrite path is still a compatibility
   boundary, not the ideal long-term source-of-truth architecture for ATM-local
   workflow state
+- separately, send-side workflow seeding still lacks a dedicated freshness
+  boundary across concurrent same-recipient sends; that is a post-P.5 hardening
+  gap rather than a reason to move workflow durability back into Claude-owned
+  inbox records
 
 This rule intentionally applies beyond mailbox files so future work does not
 reintroduce partial-write or torn-state risks through backup/restore or shared
