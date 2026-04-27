@@ -652,3 +652,92 @@ fn transition_displayed_message(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use serde_json::Map;
+
+    use super::{ReadQuery, idle_notification_sender, selected_after_filters};
+    use crate::mailbox::source::SourcedMessage;
+    use crate::schema::{LegacyMessageId, MessageEnvelope};
+    use crate::types::{
+        AckActivationMode, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
+    };
+    use crate::workflow;
+
+    fn sourced_message(index: usize, text: &str) -> SourcedMessage {
+        SourcedMessage {
+            envelope: MessageEnvelope {
+                from: "team-lead".to_string(),
+                text: text.to_string(),
+                timestamp: IsoTimestamp::now(),
+                read: false,
+                source_team: Some("atm-dev".to_string()),
+                summary: None,
+                message_id: Some(LegacyMessageId::new()),
+                pending_ack_at: None,
+                acknowledged_at: None,
+                acknowledges_message_id: None,
+                task_id: None,
+                extra: Map::new(),
+            },
+            source_path: PathBuf::from("arch-ctm.json"),
+            source_index: index.into(),
+        }
+    }
+
+    #[test]
+    fn idle_notification_sender_returns_none_for_malformed_json() {
+        let message = sourced_message(0, r#"{"type":"idle_notification","from":"team-lead""#);
+
+        assert_eq!(idle_notification_sender(&message.envelope), None);
+    }
+
+    #[test]
+    fn malformed_idle_notification_adjacent_to_valid_records_remains_readable_and_classifiable() {
+        let workflow_state = workflow::WorkflowStateFile::default();
+        let messages = vec![
+            sourced_message(0, r#"{"type":"idle_notification","from":"team-lead""#),
+            sourced_message(1, "normal unread"),
+        ];
+        let query = ReadQuery {
+            home_dir: PathBuf::new(),
+            current_dir: PathBuf::new(),
+            actor_override: None,
+            target_address: None,
+            team_override: None,
+            selection_mode: ReadSelection::All,
+            seen_state_filter: false,
+            seen_state_update: false,
+            ack_activation_mode: AckActivationMode::ReadOnly,
+            limit: None,
+            sender_filter: None,
+            timestamp_filter: None,
+            timeout_secs: None,
+        };
+
+        let selected = std::panic::catch_unwind(|| {
+            selected_after_filters(&messages, &workflow_state, &query, None)
+        })
+        .expect("malformed idle notification should not panic");
+
+        assert_eq!(selected.len(), 2);
+        let valid = selected
+            .iter()
+            .find(|message| message.envelope.text == "normal unread")
+            .expect("valid record");
+        assert_eq!(valid.class, MessageClass::Unread);
+        assert_eq!(valid.bucket, DisplayBucket::Unread);
+
+        let malformed = selected
+            .iter()
+            .find(|message| {
+                message.envelope.text == r#"{"type":"idle_notification","from":"team-lead""#
+            })
+            .expect("malformed record");
+        assert_eq!(malformed.class, MessageClass::Unread);
+        assert_eq!(malformed.bucket, DisplayBucket::Unread);
+    }
+}

@@ -145,9 +145,7 @@ fn test_log_tail_streams_new_records() {
         "--poll-interval-ms",
         "25",
     ]);
-    fixture.send("recipient@atm-dev", "tail readiness barrier");
-    let ready = tail.read_record();
-    assert_eq!(ready["fields"]["command"], "send");
+    fixture.wait_for_tail_ready(&mut tail, "recipient@atm-dev");
 
     fixture.send("recipient@atm-dev", "hello tail");
     let record = tail.read_record();
@@ -312,6 +310,18 @@ impl Fixture {
         TailReader { child, rx }
     }
 
+    fn wait_for_tail_ready(&self, tail: &mut TailReader, target: &str) {
+        for attempt in 0..20 {
+            self.send(target, &format!("tail readiness barrier {attempt}"));
+            if let Some(record) = tail.try_read_record(Duration::from_millis(250)) {
+                assert_eq!(record["fields"]["command"], "send");
+                return;
+            }
+        }
+
+        panic!("tail never produced a readiness record after repeated barrier sends");
+    }
+
     fn send(&self, target: &str, body: &str) {
         let output = self.run(&["send", target, body, "--json"]);
         assert!(output.status.success(), "stderr: {}", self.stderr(&output));
@@ -373,20 +383,29 @@ struct TailReader {
 }
 
 impl TailReader {
-    fn read_record(&mut self) -> serde_json::Value {
+    fn try_read_record(&mut self, timeout: Duration) -> Option<serde_json::Value> {
         loop {
-            let line = self
-                .rx
-                .recv_timeout(Duration::from_secs(5))
-                .unwrap_or_else(|_| {
+            let line = match self.rx.recv_timeout(timeout) {
+                Ok(line) => line,
+                Err(mpsc::RecvTimeoutError::Timeout) => return None,
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
                     let _ = self.child.kill();
-                    panic!("tail timed out before producing enough output");
-                });
+                    panic!("tail exited before producing enough output");
+                }
+            };
             if line.trim().is_empty() {
                 continue;
             }
-            return serde_json::from_str(line.trim()).expect("json line");
+            return Some(serde_json::from_str(line.trim()).expect("json line"));
         }
+    }
+
+    fn read_record(&mut self) -> serde_json::Value {
+        self.try_read_record(Duration::from_secs(5))
+            .unwrap_or_else(|| {
+                let _ = self.child.kill();
+                panic!("tail timed out before producing enough output");
+            })
     }
 
     fn finish(mut self) {

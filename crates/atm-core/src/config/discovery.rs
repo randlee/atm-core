@@ -141,7 +141,7 @@ mod tests {
     #[test]
     fn normalize_post_send_hooks_preserves_absolute_paths() {
         let (_tempdir, config_root) = config_root_fixture();
-        let absolute = PathBuf::from("/usr/local/bin/hook");
+        let absolute = config_root.join("absolute hook.cmd");
         let hooks = vec![PostSendHookRule {
             recipient: "*".into(),
             command: vec![absolute.display().to_string()],

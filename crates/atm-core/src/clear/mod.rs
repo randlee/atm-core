@@ -5,6 +5,7 @@ use std::time::Duration;
 use chrono::{DateTime, TimeDelta, Utc};
 use serde::Serialize;
 use serde_json::Value;
+use tracing::debug;
 
 use crate::address::AgentAddress;
 use crate::config;
@@ -281,10 +282,20 @@ fn is_idle_notification(message: &MessageEnvelope) -> bool {
     // Claude Code currently defines idle notifications as JSON encoded in the
     // native `text` field. Do not replace this with an ATM-local schema here;
     // any ownership change must be documented in docs/claude-code-message-schema.md.
-    serde_json::from_str::<Value>(&message.text)
-        .ok()
-        .map(|value| value.get("type").and_then(Value::as_str) == Some("idle_notification"))
-        .unwrap_or(false)
+    match serde_json::from_str::<Value>(&message.text) {
+        Ok(value) => value.get("type").and_then(Value::as_str) == Some("idle_notification"),
+        Err(error) => {
+            if message.text.contains("idle_notification") {
+                debug!(
+                    %error,
+                    recovery = "Repair or remove the malformed Claude idle-notification JSON. ATM clear will continue treating the record as a normal mailbox message.",
+                    message_text = %message.text,
+                    "ignoring malformed idle-notification JSON while classifying clear surface"
+                );
+            }
+            false
+        }
+    }
 }
 
 fn count_removed(counts: &mut RemovedByClass, class: MessageClass) {
@@ -314,6 +325,7 @@ fn apply_removals(source_files: &mut [SourceFile], removable: &HashSet<(PathBuf,
 mod tests {
     use std::ffi::{OsStr, OsString};
     use std::sync::{Mutex, OnceLock};
+    use std::{panic, panic::AssertUnwindSafe};
 
     use serial_test::serial;
     use tempfile::tempdir;
@@ -368,6 +380,28 @@ mod tests {
             std::env::var_os("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD").is_none(),
             "scoped env guard leaked after failure path"
         );
+    }
+
+    #[test]
+    #[serial]
+    fn env_guard_restores_original_value_after_panic() {
+        let _env_lock = env_lock().lock().expect("env lock");
+        set_env_var("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD", "original");
+
+        let result = panic::catch_unwind(AssertUnwindSafe(|| {
+            let _guard = EnvGuard::set_raw("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD", "1");
+            panic!("boom");
+        }));
+
+        assert!(
+            result.is_err(),
+            "panic should propagate through catch_unwind"
+        );
+        assert_eq!(
+            std::env::var_os("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD"),
+            Some(OsString::from("original"))
+        );
+        remove_env_var("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD");
     }
 
     fn env_lock() -> &'static Mutex<()> {
