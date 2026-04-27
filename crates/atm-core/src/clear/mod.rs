@@ -75,7 +75,7 @@ pub fn clear_mail(
     observability: &dyn ObservabilityPort,
 ) -> Result<ClearOutcome, AtmError> {
     let config = config::load_config(&query.current_dir)?;
-    let actor = AgentName::from(identity::resolve_actor_identity(
+    let actor = AgentName::from_validated(identity::resolve_actor_identity(
         query.actor_override.as_deref(),
         config.as_ref(),
     )?);
@@ -333,7 +333,6 @@ mod tests {
     use super::{ClearQuery, clear_mail};
     use crate::observability::NullObservability;
     use crate::schema::{AgentMember, TeamConfig};
-    use crate::types::TeamName;
 
     #[test]
     #[serial]
@@ -362,9 +361,9 @@ mod tests {
                 ClearQuery {
                     home_dir: tempdir.path().to_path_buf(),
                     current_dir: tempdir.path().to_path_buf(),
-                    actor_override: Some("arch-ctm".into()),
+                    actor_override: Some("arch-ctm".parse().expect("actor")),
                     target_address: None,
-                    team_override: Some(TeamName::from("atm-dev")),
+                    team_override: Some("atm-dev".parse().expect("team")),
                     older_than: None,
                     idle_only: false,
                     dry_run: false,

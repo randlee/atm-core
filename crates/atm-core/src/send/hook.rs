@@ -420,15 +420,16 @@ mod tests {
 
     #[test]
     fn resolve_command_path_preserves_absolute_paths() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let absolute = tempdir.path().join("hook");
         let config = crate::config::AtmConfig {
             config_root: test_config_root(),
             ..Default::default()
         };
 
-        let abs = std::env::temp_dir().join("hook");
         assert_eq!(
-            resolve_command_path(&config, abs.to_str().unwrap()),
-            abs.as_path()
+            resolve_command_path(&config, absolute.to_str().expect("utf-8 path")),
+            absolute
         );
     }
 

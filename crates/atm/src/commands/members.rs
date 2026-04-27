@@ -1,7 +1,6 @@
 use anyhow::Result;
 use atm_core::home;
 use atm_core::team_admin::{self, MembersQuery};
-use atm_core::types::TeamName;
 use clap::Args;
 
 use crate::observability::CliObservability;
@@ -25,7 +24,7 @@ impl MembersCommand {
         let outcome = team_admin::list_members(MembersQuery {
             home_dir,
             current_dir,
-            team_override: self.team.map(TeamName::from),
+            team_override: self.team.map(|value| value.parse()).transpose()?,
         })?;
         output::print_members_result(&outcome, self.json)
     }

@@ -47,6 +47,35 @@ pub struct SendRequest {
     pub dry_run: bool,
 }
 
+impl SendRequest {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        home_dir: PathBuf,
+        current_dir: PathBuf,
+        sender_override: Option<&str>,
+        to: &str,
+        team_override: Option<&str>,
+        message_source: SendMessageSource,
+        summary_override: Option<String>,
+        requires_ack: bool,
+        task_id: Option<String>,
+        dry_run: bool,
+    ) -> Result<Self, AtmError> {
+        Ok(Self {
+            home_dir,
+            current_dir,
+            sender_override: sender_override.map(str::parse).transpose()?,
+            to: to.parse()?,
+            team_override: team_override.map(str::parse).transpose()?,
+            message_source,
+            summary_override,
+            requires_ack,
+            task_id,
+            dry_run,
+        })
+    }
+}
+
 /// Result of sending one ATM mailbox message.
 #[derive(Debug, Clone, Serialize)]
 pub struct SendOutcome {
@@ -291,11 +320,11 @@ fn resolve_recipient(
         .ok_or_else(AtmError::team_unavailable)?;
 
     Ok(ResolvedRecipient {
-        agent: AgentName::from(config::aliases::resolve_agent(
+        agent: AgentName::from_validated(config::aliases::resolve_agent(
             &target_address.agent,
             config,
         )),
-        team: TeamName::from(team),
+        team: TeamName::from_validated(team),
     })
 }
 
@@ -490,6 +519,7 @@ mod tests {
 
     use super::alert_state;
     use crate::process::process_is_alive;
+    use crate::send::{SendMessageSource, SendRequest};
 
     #[test]
     fn load_send_alert_state_parse_errors_are_config_errors() {
@@ -540,5 +570,45 @@ mod tests {
         assert_eq!(pid.trim(), std::process::id().to_string());
         drop(guard);
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn send_request_new_rejects_invalid_recipient_before_command_execution() {
+        let tempdir = tempdir().expect("tempdir");
+        let error = SendRequest::new(
+            tempdir.path().to_path_buf(),
+            tempdir.path().to_path_buf(),
+            Some("team-lead"),
+            "../evil",
+            Some("atm-dev"),
+            SendMessageSource::Inline("hello".to_string()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect_err("invalid address");
+
+        assert!(error.message.contains("agent name"));
+    }
+
+    #[test]
+    fn send_request_new_rejects_invalid_team_override_before_command_execution() {
+        let tempdir = tempdir().expect("tempdir");
+        let error = SendRequest::new(
+            tempdir.path().to_path_buf(),
+            tempdir.path().to_path_buf(),
+            Some("team-lead"),
+            "arch-ctm",
+            Some("../evil"),
+            SendMessageSource::Inline("hello".to_string()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect_err("invalid team");
+
+        assert!(error.message.contains("team name"));
     }
 }

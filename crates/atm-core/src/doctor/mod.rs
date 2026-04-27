@@ -11,7 +11,7 @@ use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
 use crate::schema::AgentMember;
 use crate::team_admin::{MemberSummary, MembersList};
-use crate::types::TeamName;
+use crate::types::{AgentName, TeamName};
 
 pub use report::{
     DoctorEnvironmentVisibility, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
@@ -179,7 +179,7 @@ fn load_member_roster(
     }
 
     Some(MembersList {
-        team: team.to_string().into(),
+        team: TeamName::from_validated(team.to_string()),
         members: ordered_member_summaries(&team_config.members, baseline),
     })
 }
@@ -355,7 +355,7 @@ fn ordered_member_summaries(members: &[AgentMember], baseline: &[String]) -> Vec
 
 fn member_summary(member: &AgentMember) -> MemberSummary {
     MemberSummary {
-        name: member.name.clone().into(),
+        name: AgentName::from_validated(member.name.clone()),
         agent_id: member.agent_id.clone(),
         agent_type: member.agent_type.clone(),
         model: member.model.clone(),
@@ -473,7 +473,7 @@ mod tests {
         DoctorQuery {
             home_dir: paths.home_dir.clone(),
             current_dir: paths.current_dir.clone(),
-            team_override: Some("atm-dev".into()),
+            team_override: Some("atm-dev".parse().expect("team")),
         }
     }
 
@@ -506,7 +506,7 @@ mod tests {
             DoctorQuery {
                 home_dir: paths.home_dir.clone(),
                 current_dir: paths.current_dir.clone(),
-                team_override: Some("../evil".into()),
+                team_override: Some(crate::types::TeamName::from_validated("../evil")),
             },
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {

@@ -4,7 +4,6 @@ use anyhow::{Context, Result};
 use atm_core::address::AgentAddress;
 use atm_core::clear::{self, ClearQuery};
 use atm_core::home;
-use atm_core::types::{AgentName, TeamName};
 use clap::Args;
 
 use crate::observability::CliObservability;
@@ -61,9 +60,9 @@ impl ClearCommand {
         Ok(ClearQuery {
             home_dir,
             current_dir,
-            actor_override: self.actor_override.map(AgentName::from),
+            actor_override: self.actor_override.map(|value| value.parse()).transpose()?,
             target_address,
-            team_override: self.team.map(TeamName::from),
+            team_override: self.team.map(|value| value.parse()).transpose()?,
             older_than,
             idle_only: self.idle_only,
             dry_run: self.dry_run,

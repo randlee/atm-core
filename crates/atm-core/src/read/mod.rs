@@ -44,6 +44,41 @@ pub struct ReadQuery {
     pub timeout_secs: Option<u64>,
 }
 
+impl ReadQuery {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        home_dir: PathBuf,
+        current_dir: PathBuf,
+        actor_override: Option<&str>,
+        target_address: Option<&str>,
+        team_override: Option<&str>,
+        selection_mode: ReadSelection,
+        seen_state_filter: bool,
+        seen_state_update: bool,
+        ack_activation_mode: AckActivationMode,
+        limit: Option<usize>,
+        sender_filter: Option<String>,
+        timestamp_filter: Option<IsoTimestamp>,
+        timeout_secs: Option<u64>,
+    ) -> Result<Self, AtmError> {
+        Ok(Self {
+            home_dir,
+            current_dir,
+            actor_override: actor_override.map(str::parse).transpose()?,
+            target_address: target_address.map(str::parse).transpose()?,
+            team_override: team_override.map(str::parse).transpose()?,
+            selection_mode,
+            seen_state_filter,
+            seen_state_update,
+            ack_activation_mode,
+            limit,
+            sender_filter,
+            timestamp_filter,
+            timeout_secs,
+        })
+    }
+}
+
 /// Bucket counts for one classified mailbox surface.
 #[derive(Debug, Clone, Serialize)]
 pub struct BucketCounts {
@@ -101,7 +136,7 @@ pub fn read_mail(
     observability: &dyn ObservabilityPort,
 ) -> Result<ReadOutcome, AtmError> {
     let config = config::load_config(&query.current_dir)?;
-    let actor = AgentName::from(identity::resolve_actor_identity(
+    let actor = AgentName::from_validated(identity::resolve_actor_identity(
         query.actor_override.as_deref(),
         config.as_ref(),
     )?);
@@ -658,6 +693,7 @@ mod tests {
     use std::path::PathBuf;
 
     use serde_json::Map;
+    use tempfile::tempdir;
 
     use super::{ReadQuery, idle_notification_sender, selected_after_filters};
     use crate::mailbox::source::SourcedMessage;
@@ -739,5 +775,51 @@ mod tests {
             .expect("malformed record");
         assert_eq!(malformed.class, MessageClass::Unread);
         assert_eq!(malformed.bucket, DisplayBucket::Unread);
+    }
+
+    #[test]
+    fn read_query_new_rejects_invalid_target_before_command_execution() {
+        let tempdir = tempdir().expect("tempdir");
+        let error = ReadQuery::new(
+            tempdir.path().to_path_buf(),
+            tempdir.path().to_path_buf(),
+            Some("arch-ctm"),
+            Some("../evil"),
+            Some("atm-dev"),
+            ReadSelection::Actionable,
+            false,
+            false,
+            AckActivationMode::ReadOnly,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect_err("invalid target");
+
+        assert!(error.message.contains("agent name"));
+    }
+
+    #[test]
+    fn read_query_new_rejects_invalid_actor_before_command_execution() {
+        let tempdir = tempdir().expect("tempdir");
+        let error = ReadQuery::new(
+            tempdir.path().to_path_buf(),
+            tempdir.path().to_path_buf(),
+            Some("../evil"),
+            None,
+            Some("atm-dev"),
+            ReadSelection::Actionable,
+            false,
+            false,
+            AckActivationMode::ReadOnly,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect_err("invalid actor");
+
+        assert!(error.message.contains("agent name"));
     }
 }

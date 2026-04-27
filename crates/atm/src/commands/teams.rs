@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use anyhow::Result;
 use atm_core::home;
 use atm_core::team_admin::{self, AddMemberRequest, BackupRequest, RestoreRequest, RestoreResult};
-use atm_core::types::{AgentName, TeamName};
 use clap::{Args, Subcommand};
 
 use crate::observability::CliObservability;
@@ -101,36 +100,34 @@ impl AddMemberCommand {
     }
 
     fn build_request(self, home_dir: PathBuf, cwd: PathBuf) -> Result<AddMemberRequest> {
-        Ok(AddMemberRequest {
+        AddMemberRequest::new(
             home_dir,
-            team: self.team.parse::<TeamName>()?,
-            member: self.member.parse::<AgentName>()?,
-            agent_type: self.agent_type,
-            model: self.model,
+            &self.team,
+            &self.member,
+            self.agent_type,
+            self.model,
             cwd,
-            tmux_pane_id: self.pane_id,
-        })
+            self.pane_id,
+        )
+        .map_err(Into::into)
     }
 }
 
 impl BackupCommand {
     fn run(self, home_dir: PathBuf) -> Result<()> {
-        let outcome = team_admin::backup_team(BackupRequest {
-            home_dir,
-            team: self.team,
-        })?;
+        let outcome = team_admin::backup_team(BackupRequest::new(home_dir, &self.team)?)?;
         output::print_backup_result(&outcome, self.json)
     }
 }
 
 impl RestoreCommand {
     fn run(self, home_dir: PathBuf) -> Result<()> {
-        match team_admin::restore_team(RestoreRequest {
+        match team_admin::restore_team(RestoreRequest::new(
             home_dir,
-            team: self.team,
-            from: self.from,
-            dry_run: self.dry_run,
-        })? {
+            &self.team,
+            self.from,
+            self.dry_run,
+        )?)? {
             RestoreResult::Applied(outcome) => output::print_restore_result(&outcome, self.json),
             RestoreResult::DryRun(plan) => output::print_restore_plan(&plan, self.json),
         }

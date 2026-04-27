@@ -251,8 +251,8 @@ pub fn ack_mail(
 
     let outcome = AckOutcome {
         action: "ack",
-        team: team.clone().into(),
-        agent: actor.clone().into(),
+        team: TeamName::from_validated(team.clone()),
+        agent: AgentName::from_validated(actor.clone()),
         message_id: request.message_id,
         task_id: source_task_id.clone(),
         reply_target: format!("{reply_agent}@{reply_team}"),
@@ -285,7 +285,10 @@ fn resolve_reply_target(
     if let Some(identity) = canonical_sender_identity(message) {
         let parsed: AgentAddress = identity.parse()?;
         let team = parsed.team.ok_or_else(AtmError::team_unavailable)?;
-        return Ok((parsed.agent.into(), team.into()));
+        return Ok((
+            AgentName::from_validated(parsed.agent),
+            TeamName::from_validated(team),
+        ));
     }
 
     let parsed: AgentAddress = if message.from.contains('@') {
@@ -301,7 +304,10 @@ fn resolve_reply_target(
     };
 
     let team = parsed.team.ok_or_else(AtmError::team_unavailable)?;
-    Ok((parsed.agent.into(), team.into()))
+    Ok((
+        AgentName::from_validated(parsed.agent),
+        TeamName::from_validated(team),
+    ))
 }
 
 fn canonical_sender_identity(message: &MessageEnvelope) -> Option<String> {
@@ -488,6 +494,12 @@ mod tests {
         );
 
         let target = resolve_reply_target(&message, "atm-dev").expect("reply target");
-        assert_eq!(target, ("team-lead".into(), "src-gen".into()));
+        assert_eq!(
+            target,
+            (
+                "team-lead".parse().expect("agent"),
+                "src-gen".parse().expect("team"),
+            )
+        );
     }
 }
