@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use serde::Serialize;
 use serde_json::Value;
 
+use crate::address::AgentAddress;
 use crate::config;
 use crate::error::AtmError;
 use crate::home;
@@ -30,7 +31,7 @@ pub struct ReadQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
     pub actor_override: Option<AgentName>,
-    pub target_address: Option<String>,
+    pub target_address: Option<AgentAddress>,
     pub team_override: Option<TeamName>,
     pub selection_mode: ReadSelection,
     pub seen_state_filter: bool,
@@ -40,6 +41,41 @@ pub struct ReadQuery {
     pub sender_filter: Option<String>,
     pub timestamp_filter: Option<IsoTimestamp>,
     pub timeout_secs: Option<u64>,
+}
+
+impl ReadQuery {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        home_dir: PathBuf,
+        current_dir: PathBuf,
+        actor_override: Option<&str>,
+        target_address: Option<&str>,
+        team_override: Option<&str>,
+        selection_mode: ReadSelection,
+        seen_state_filter: bool,
+        seen_state_update: bool,
+        ack_activation_mode: AckActivationMode,
+        limit: Option<usize>,
+        sender_filter: Option<String>,
+        timestamp_filter: Option<IsoTimestamp>,
+        timeout_secs: Option<u64>,
+    ) -> Result<Self, AtmError> {
+        Ok(Self {
+            home_dir,
+            current_dir,
+            actor_override: actor_override.map(str::parse).transpose()?,
+            target_address: target_address.map(str::parse).transpose()?,
+            team_override: team_override.map(str::parse).transpose()?,
+            selection_mode,
+            seen_state_filter,
+            seen_state_update,
+            ack_activation_mode,
+            limit,
+            sender_filter,
+            timestamp_filter,
+            timeout_secs,
+        })
+    }
 }
 
 /// Bucket counts for one classified mailbox surface.
@@ -99,12 +135,15 @@ pub fn read_mail(
     observability: &dyn ObservabilityPort,
 ) -> Result<ReadOutcome, AtmError> {
     let config = config::load_config(&query.current_dir)?;
-    let actor = identity::resolve_actor_identity(query.actor_override.as_deref(), config.as_ref())?;
+    let actor = AgentName::from_validated(identity::resolve_actor_identity(
+        query.actor_override.as_deref(),
+        config.as_ref(),
+    )?);
     let actor_team = config::resolve_team(query.team_override.as_deref(), config.as_ref());
     let target = resolve_target(
-        query.target_address.as_deref(),
+        query.target_address.as_ref(),
         &actor,
-        query.team_override.as_deref(),
+        query.team_override.as_ref(),
         config.as_ref(),
     )?;
 
@@ -120,7 +159,7 @@ pub fn read_mail(
         && !team_config
             .members
             .iter()
-            .any(|member| member.name == target.agent)
+            .any(|member| member.name == target.agent.as_str())
     {
         return Err(
             AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
@@ -262,8 +301,8 @@ pub fn read_mail(
 
     let outcome = ReadOutcome {
         action: "read",
-        team: target.team.clone().into(),
-        agent: target.agent.clone().into(),
+        team: target.team.clone(),
+        agent: target.agent.clone(),
         selection_mode: query.selection_mode,
         history_collapsed,
         mutation_applied,
@@ -278,7 +317,7 @@ pub fn read_mail(
         outcome: if timed_out { "timeout" } else { "ok" },
         team: outcome.team.to_string(),
         agent: outcome.agent.to_string(),
-        sender: actor,
+        sender: actor.to_string(),
         message_id: None,
         requires_ack: false,
         dry_run: false,
@@ -627,5 +666,59 @@ fn transition_displayed_message(
             }
             state::TransitionedMessage::Unchanged(unchanged)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::tempdir;
+
+    use super::ReadQuery;
+    use crate::types::{AckActivationMode, ReadSelection};
+
+    #[test]
+    fn read_query_new_rejects_invalid_target_before_command_execution() {
+        let tempdir = tempdir().expect("tempdir");
+        let error = ReadQuery::new(
+            tempdir.path().to_path_buf(),
+            tempdir.path().to_path_buf(),
+            Some("arch-ctm"),
+            Some("../evil"),
+            Some("atm-dev"),
+            ReadSelection::Actionable,
+            false,
+            false,
+            AckActivationMode::ReadOnly,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect_err("invalid target");
+
+        assert!(error.message.contains("agent name"));
+    }
+
+    #[test]
+    fn read_query_new_rejects_invalid_actor_before_command_execution() {
+        let tempdir = tempdir().expect("tempdir");
+        let error = ReadQuery::new(
+            tempdir.path().to_path_buf(),
+            tempdir.path().to_path_buf(),
+            Some("../evil"),
+            None,
+            Some("atm-dev"),
+            ReadSelection::Actionable,
+            false,
+            false,
+            AckActivationMode::ReadOnly,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect_err("invalid actor");
+
+        assert!(error.message.contains("agent name"));
     }
 }

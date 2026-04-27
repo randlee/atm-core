@@ -9,7 +9,7 @@ use crate::config;
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
 use crate::schema::MessageEnvelope;
-use crate::types::SourceIndex;
+use crate::types::{AgentName, SourceIndex, TeamName};
 
 #[derive(Debug, Clone)]
 pub(crate) struct SourceFile {
@@ -26,37 +26,37 @@ pub(crate) struct SourcedMessage {
 
 #[derive(Debug)]
 pub(crate) struct ResolvedTarget {
-    pub agent: String,
-    pub team: String,
+    pub agent: AgentName,
+    pub team: TeamName,
     pub explicit: bool,
 }
 
 pub(crate) fn resolve_target(
-    target_address: Option<&str>,
-    actor: &str,
-    team_override: Option<&str>,
+    target_address: Option<&AgentAddress>,
+    actor: &AgentName,
+    team_override: Option<&TeamName>,
     config: Option<&config::AtmConfig>,
 ) -> Result<ResolvedTarget, AtmError> {
     let Some(target_address) = target_address else {
-        let team =
-            config::resolve_team(team_override, config).ok_or_else(AtmError::team_unavailable)?;
+        let team = config::resolve_team(team_override.map(TeamName::as_str), config)
+            .ok_or_else(AtmError::team_unavailable)?;
         return Ok(ResolvedTarget {
-            agent: actor.to_string(),
-            team,
+            agent: actor.clone(),
+            team: TeamName::from_validated(team),
             explicit: false,
         });
     };
 
-    let parsed: AgentAddress = target_address.parse()?;
-    let team = parsed
+    let team = target_address
         .team
-        .or_else(|| config::resolve_team(team_override, config))
+        .clone()
+        .or_else(|| config::resolve_team(team_override.map(TeamName::as_str), config))
         .ok_or_else(AtmError::team_unavailable)?;
-    let agent = config::aliases::resolve_agent(&parsed.agent, config);
+    let agent = config::aliases::resolve_agent(&target_address.agent, config);
 
     Ok(ResolvedTarget {
-        agent,
-        team,
+        agent: AgentName::from_validated(agent),
+        team: TeamName::from_validated(team),
         explicit: true,
     })
 }
@@ -259,7 +259,13 @@ mod tests {
             ..Default::default()
         };
 
-        let target = resolve_target(Some("tl"), "arch-ctm", None, Some(&config)).expect("target");
+        let target = resolve_target(
+            Some(&"tl".parse().expect("address")),
+            &"arch-ctm".parse().expect("agent"),
+            None,
+            Some(&config),
+        )
+        .expect("target");
         assert_eq!(target.agent, "team-lead");
         assert_eq!(target.team, "atm-dev");
         assert!(target.explicit);
