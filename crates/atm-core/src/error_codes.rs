@@ -38,6 +38,8 @@ pub enum AtmErrorCode {
     MailboxWriteFailed,
     /// Acquiring or releasing a mailbox lock failed.
     MailboxLockFailed,
+    /// The mailbox lock path lives on a read-only filesystem.
+    MailboxLockReadOnlyFilesystem,
     /// Acquiring a mailbox lock timed out.
     MailboxLockTimeout,
     /// Message validation failed.
@@ -111,6 +113,7 @@ impl AtmErrorCode {
             Self::MailboxReadFailed => "ATM_MAILBOX_READ_FAILED",
             Self::MailboxWriteFailed => "ATM_MAILBOX_WRITE_FAILED",
             Self::MailboxLockFailed => "ATM_MAILBOX_LOCK_FAILED",
+            Self::MailboxLockReadOnlyFilesystem => "ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM",
             Self::MailboxLockTimeout => "ATM_MAILBOX_LOCK_TIMEOUT",
             Self::MessageValidationFailed => "ATM_MESSAGE_VALIDATION_FAILED",
             Self::SerializationFailed => "ATM_SERIALIZATION_FAILED",

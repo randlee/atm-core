@@ -218,6 +218,23 @@ impl AtmError {
         )
     }
 
+    pub fn mailbox_lock_read_only_filesystem(
+        operation: &'static str,
+        path: &std::path::Path,
+    ) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::MailboxLockReadOnlyFilesystem,
+            AtmErrorKind::MailboxLock,
+            format!(
+                "mailbox lock {operation} failed for {}: filesystem is read-only",
+                path.display()
+            ),
+        )
+        .with_recovery(
+            "Remount or move the ATM home to a writable filesystem, then retry the ATM command.",
+        )
+    }
+
     pub fn mailbox_lock_timeout(path: &std::path::Path) -> Self {
         Self::new_with_code(
             AtmErrorCode::MailboxLockTimeout,
