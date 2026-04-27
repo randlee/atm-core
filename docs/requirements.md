@@ -1877,6 +1877,58 @@ closed before the 1.0 release.
   - operator recovery guidance must distinguish "wait and retry" from
     "repair filesystem/permissions state"
 
+- `REQ-CORE-MAILBOX-LOCK-008` Stale-lock sweeping must identify rotated lock
+  sentinels conservatively and must evict only verifiable orphaned candidates.
+
+  Required behavior:
+  - candidate matching is based on the basename, not the full path
+  - the accepted sentinel predicate is:
+    `file_name.ends_with(".lock") || file_name.contains(".lock.")`
+  - the sweep must not use `path.extension() == "lock"` because that misses
+    rotated sentinels such as `inbox.json.lock.old`
+  - the sweep must not broaden to arbitrary substring matching such as
+    `contains("lock")`; non-sentinel files like `locksmith.txt` must not be
+    considered
+  - a matched candidate is evictable only when its contents parse as the
+    documented `pid[:token]` owner record format and `process_is_alive(pid)`
+    returns false
+  - malformed or unreadable candidate contents are treated as non-evictable and
+    must be left in place for explicit operator cleanup instead of speculative
+    deletion
+  - the sweep is a best-effort stale-artifact cleanup path, not a second lock
+    authority; it must not claim ownership without the existing advisory-lock
+    acquisition succeeding afterward
+  - Windows rename semantics must not be assumed to match Unix for a live held
+    lock handle; rotated-name sweeping exists to clean up post-crash or
+    externally renamed artifacts, not to coordinate live-lock handoff
+
+- `REQ-CORE-MAILBOX-LOCK-009` Read-only filesystem failures on the mailbox-lock
+  path must surface as a dedicated non-contention diagnostic.
+
+  Required behavior:
+  - ATM must classify read-only filesystem errors by raw OS error code rather
+    than treating them as generic permission failures
+  - the required platform mappings are:
+    - Linux: `EROFS` (`30`)
+    - macOS: `EROFS` (`30`)
+    - Windows: `ERROR_WRITE_PROTECT` (`19`)
+  - the same classification helper must be used for lock-path open/create,
+    owner-record truncate/write, and sentinel removal so retry behavior and
+    operator guidance stay consistent
+  - read-only filesystem errors must not participate in the lock-contention
+    retry loop and must not be retried by sentinel-removal backoff logic
+  - mutation-path failures caused by a read-only filesystem must return
+    `MailboxLockReadOnlyFilesystem`
+    / `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM`, not `MailboxLockFailed` or
+    `MailboxLockTimeout`
+  - the structured error message and recovery guidance must include the lock
+    path plus the specific attempted operation (`open`, `write owner record`,
+    or `remove stale sentinel`) so operators can distinguish remount/media
+    failures from ACL or contention issues
+  - best-effort drop-time cleanup remains warn-only because the command has
+    already completed, but public sweep or acquisition paths must surface the
+    read-only diagnosis instead of silently suppressing it
+
 ### 20.2 Shared Mutable File Atomicity
 
 - `REQ-CORE-PERSIST-ATOMIC-001` Every shared mutable ATM-owned structured state
