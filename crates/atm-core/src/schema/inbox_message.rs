@@ -6,7 +6,7 @@ use serde_json::{Map, Value};
 use ulid::Ulid;
 use uuid::Uuid;
 
-use crate::types::IsoTimestamp;
+use crate::types::{IsoTimestamp, TaskId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -205,7 +205,7 @@ pub struct MessageEnvelope {
     pub acknowledges_message_id: Option<LegacyMessageId>,
 
     #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]
-    pub task_id: Option<String>,
+    pub task_id: Option<TaskId>,
 
     // Preserve unknown producer-owned fields so ATM does not accidentally
     // redefine external schemas by dropping or rewriting them.
@@ -257,7 +257,7 @@ mod tests {
             )),
             acknowledged_at: None,
             acknowledges_message_id: None,
-            task_id: Some("TASK-123".into()),
+            task_id: Some("TASK-123".parse().expect("task id")),
             extra: Map::new(),
         };
 
@@ -299,6 +299,21 @@ mod tests {
         let decoded: MessageEnvelope = serde_json::from_value(json).expect("decode");
         assert!(decoded.message_id.is_none());
         assert!(decoded.task_id.is_none());
+    }
+
+    #[test]
+    fn blank_task_id_is_rejected() {
+        let json = json!({
+            "from": "team-lead",
+            "text": "hello",
+            "timestamp": "2026-03-30T00:00:00Z",
+            "read": false,
+            "taskId": "   "
+        });
+
+        let error = serde_json::from_value::<MessageEnvelope>(json).expect_err("blank task id");
+
+        assert!(error.to_string().contains("task id must not be blank"));
     }
 
     #[test]

@@ -14,7 +14,7 @@ use crate::identity;
 use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
-use crate::types::{AgentName, TeamName};
+use crate::types::{AgentName, TaskId, TeamName};
 use crate::workflow;
 
 mod alert_state;
@@ -43,7 +43,7 @@ pub struct SendRequest {
     pub message_source: SendMessageSource,
     pub summary_override: Option<String>,
     pub requires_ack: bool,
-    pub task_id: Option<String>,
+    pub task_id: Option<TaskId>,
     pub dry_run: bool,
 }
 
@@ -58,7 +58,7 @@ impl SendRequest {
         message_source: SendMessageSource,
         summary_override: Option<String>,
         requires_ack: bool,
-        task_id: Option<String>,
+        task_id: Option<TaskId>,
         dry_run: bool,
     ) -> Result<Self, AtmError> {
         Ok(Self {
@@ -82,12 +82,14 @@ pub struct SendOutcome {
     pub action: &'static str,
     pub team: TeamName,
     pub agent: AgentName,
+    // Preserve the rendered sender identity surface here because cross-team
+    // sends may intentionally emit a qualified alias like `team-lead@src-gen`.
     pub sender: String,
     pub outcome: &'static str,
     pub message_id: LegacyMessageId,
     pub requires_ack: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub task_id: Option<String>,
+    pub task_id: Option<TaskId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -122,14 +124,16 @@ pub fn send_mail(
     observability: &dyn ObservabilityPort,
 ) -> Result<SendOutcome, AtmError> {
     let config = config::load_config(&request.current_dir)?;
-    let canonical_sender =
-        identity::resolve_sender_identity(request.sender_override.as_deref(), config.as_ref())?;
+    let canonical_sender = AgentName::from_validated(identity::resolve_sender_identity(
+        request.sender_override.as_deref(),
+        config.as_ref(),
+    )?);
     let recipient = resolve_recipient(
         &request.to,
         request.team_override.as_deref(),
         config.as_ref(),
     )?;
-    let sender_team = config::resolve_team(None, config.as_ref());
+    let sender_team = config::resolve_team(None, config.as_ref()).map(TeamName::from_validated);
     let sender = display_sender_identity(
         &canonical_sender,
         request.sender_override.as_deref(),
@@ -213,7 +217,7 @@ pub fn send_mail(
     if !request.dry_run {
         let mut extra = Map::new();
         workflow::set_atm_message_id(&mut extra, atm_message_id);
-        if sender != canonical_sender {
+        if sender != canonical_sender.as_str() {
             set_canonical_sender_metadata(
                 &mut extra,
                 &qualified_sender_identity(&canonical_sender, sender_team.as_deref()),
@@ -226,6 +230,7 @@ pub fn send_mail(
             read: false,
             source_team: sender_team
                 .clone()
+                .map(|team| team.to_string())
                 .or_else(|| Some(recipient.team.to_string())),
             summary: Some(summary.clone()),
             message_id: Some(message_id),
@@ -265,11 +270,11 @@ pub fn send_mail(
             config.as_ref(),
             PostSendHookContext {
                 sender: &canonical_sender,
-                sender_team: sender_team.as_deref(),
+                sender_team: sender_team.as_ref(),
                 recipient: &recipient,
                 message_id,
                 requires_ack,
-                task_id: task_id.as_deref(),
+                task_id: task_id.as_ref(),
             },
         );
     }
@@ -280,7 +285,7 @@ pub fn send_mail(
         outcome: outcome.outcome,
         team: outcome.team.to_string(),
         agent: outcome.agent.to_string(),
-        sender: canonical_sender,
+        sender: canonical_sender.to_string(),
         message_id: Some(outcome.message_id),
         requires_ack: outcome.requires_ack,
         dry_run: outcome.dry_run,
@@ -300,12 +305,12 @@ pub(super) struct ResolvedRecipient {
 
 #[derive(Clone, Copy)]
 pub(super) struct PostSendHookContext<'a> {
-    sender: &'a str,
-    sender_team: Option<&'a str>,
+    sender: &'a AgentName,
+    sender_team: Option<&'a TeamName>,
     recipient: &'a ResolvedRecipient,
     message_id: LegacyMessageId,
     requires_ack: bool,
-    task_id: Option<&'a str>,
+    task_id: Option<&'a TaskId>,
 }
 
 fn resolve_recipient(
@@ -450,7 +455,7 @@ fn append_mailbox_message_and_seed_workflow(
 }
 
 fn display_sender_identity(
-    canonical_sender: &str,
+    canonical_sender: &AgentName,
     sender_override: Option<&str>,
     sender_team: Option<&str>,
     recipient_team: &str,
@@ -464,16 +469,16 @@ fn display_sender_identity(
     if let Some(sender_override) = sender_override
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        && config::aliases::resolve_agent(sender_override, config) == canonical_sender
+        && config::aliases::resolve_agent(sender_override, config) == canonical_sender.as_str()
     {
         return sender_override.to_string();
     }
 
-    config::aliases::preferred_alias(canonical_sender, config)
+    config::aliases::preferred_alias(canonical_sender.as_str(), config)
         .unwrap_or_else(|| canonical_sender.to_string())
 }
 
-pub(super) fn qualified_sender_identity(sender: &str, sender_team: Option<&str>) -> String {
+pub(super) fn qualified_sender_identity(sender: &AgentName, sender_team: Option<&str>) -> String {
     sender_team
         .map(|team| format!("{sender}@{team}"))
         .unwrap_or_else(|| sender.to_string())

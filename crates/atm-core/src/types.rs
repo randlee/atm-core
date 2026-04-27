@@ -3,7 +3,7 @@ use std::ops::Deref;
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::address::validate_path_segment;
 use crate::error::AtmError;
@@ -155,6 +155,87 @@ impl fmt::Display for TeamName {
 impl PartialEq<&str> for TeamName {
     fn eq(&self, other: &&str) -> bool {
         self.as_str() == *other
+    }
+}
+
+/// Validated ATM task id carried across command, schema, and hook boundaries.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(transparent)]
+pub struct TaskId(String);
+
+impl TaskId {
+    /// Borrow the wrapped task id as `&str`.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Consume the wrapper and return the inner owned task id.
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl FromStr for TaskId {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return Err(
+                AtmError::validation("task id must not be blank").with_recovery(
+                    "Provide a non-empty --task-id value or omit --task-id for non-task messages.",
+                ),
+            );
+        }
+        Ok(Self(trimmed.to_string()))
+    }
+}
+
+impl<'de> Deserialize<'de> for TaskId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        value.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+impl From<TaskId> for String {
+    fn from(value: TaskId) -> Self {
+        value.0
+    }
+}
+
+impl AsRef<str> for TaskId {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl Deref for TaskId {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl fmt::Display for TaskId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TaskId;
+
+    #[test]
+    fn task_id_rejects_blank_deserialization() {
+        let error = serde_json::from_str::<TaskId>("\"   \"").expect_err("blank task id");
+
+        assert!(error.to_string().contains("task id must not be blank"));
     }
 }
 

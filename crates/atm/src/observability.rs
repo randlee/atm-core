@@ -197,7 +197,7 @@ mod tests {
             message_id: message_id.map(|value| value.parse().expect("legacy message id")),
             requires_ack: false,
             dry_run: false,
-            task_id: Some("TASK-1".to_string()),
+            task_id: Some("TASK-1".parse().expect("task id")),
             error_code: None,
             error_message: None,
         }

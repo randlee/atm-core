@@ -18,6 +18,7 @@ pub use types::AtmConfig;
 
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::schema::{AgentMember, TeamConfig};
+use crate::types::TeamName;
 use discovery::normalize_post_send_hooks;
 
 /// Load `.atm.toml` by walking upward from `start_dir`.
@@ -69,7 +70,22 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
 
     Ok(Some(AtmConfig {
         identity: parsed.atm.identity.or(parsed.identity),
-        default_team: parsed.atm.default_team.or(parsed.default_team),
+        default_team: parsed
+            .atm
+            .default_team
+            .or(parsed.default_team)
+            .map(|team| {
+                team.parse::<TeamName>().map_err(|error| {
+                    AtmError::new(
+                        AtmErrorKind::Config,
+                        format!("invalid default team in {}: {}", path.display(), error.message),
+                    )
+                    .with_recovery(
+                        "Use a valid ATM team name in [atm].default_team or default_team without path separators or surrounding whitespace.",
+                    )
+                })
+            })
+            .transpose()?,
         team_members: normalize_string_list(parsed.atm.team_members),
         aliases: normalize_aliases(parsed.atm.aliases),
         post_send_hooks: normalize_post_send_hooks(parsed.atm.post_send_hooks, &config_root)?,
@@ -132,7 +148,7 @@ pub fn resolve_team(team_override: Option<&str>, config: Option<&AtmConfig>) -> 
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
         .or_else(|| env::var("ATM_TEAM").ok().filter(|value| !value.is_empty()))
-        .or_else(|| config.and_then(|cfg| cfg.default_team.clone()))
+        .or_else(|| config.and_then(|cfg| cfg.default_team.as_ref().map(ToString::to_string)))
 }
 
 fn find_config_path(start_dir: &Path) -> Option<PathBuf> {
@@ -171,7 +187,14 @@ struct RawAtmSection {
     #[serde(default)]
     aliases: std::collections::BTreeMap<String, String>,
     #[serde(default)]
-    post_send_hooks: Vec<types::PostSendHookRule>,
+    post_send_hooks: Vec<RawPostSendHookRule>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawPostSendHookRule {
+    recipient: String,
+    command: Vec<String>,
 }
 
 fn reject_legacy_post_send_hook_keys(path: &Path, raw_toml: &TomlValue) -> Result<(), AtmError> {
@@ -316,6 +339,7 @@ fn parse_team_member(config_path: &Path, index: usize, entry: &Value) -> Option<
 
 #[cfg(test)]
 mod tests {
+    use crate::config::types::HookRecipient;
     use crate::error_codes::AtmErrorCode;
     use serde_json::Value;
     use std::env;
@@ -387,7 +411,10 @@ blank = ""
         let config = load_config(&root).expect("config").expect("present");
         assert_eq!(config.team_members, vec!["team-lead", "arch-ctm", "qa"]);
         assert_eq!(config.post_send_hooks.len(), 2);
-        assert_eq!(config.post_send_hooks[0].recipient, "team-lead");
+        assert_eq!(
+            config.post_send_hooks[0].recipient,
+            HookRecipient::Named("team-lead".parse().expect("recipient"))
+        );
         assert_eq!(
             config.post_send_hooks[0].command,
             vec![
@@ -395,7 +422,7 @@ blank = ""
                 "team-lead".to_string()
             ]
         );
-        assert_eq!(config.post_send_hooks[1].recipient, "*");
+        assert_eq!(config.post_send_hooks[1].recipient, HookRecipient::Wildcard);
         assert_eq!(
             config.post_send_hooks[1].command,
             vec!["bash".to_string(), "-lc".to_string(), "echo hi".to_string()]
@@ -655,7 +682,7 @@ post_send_hook_recipients = ["team-lead"]
         set_env_var("ATM_TEAM", "env-team");
 
         let config = AtmConfig {
-            default_team: Some("config-team".into()),
+            default_team: Some("config-team".parse().expect("team")),
             ..Default::default()
         };
 

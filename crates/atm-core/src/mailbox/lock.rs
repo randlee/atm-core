@@ -23,6 +23,47 @@ const RETRY_INTERVAL: Duration = Duration::from_millis(50);
 const REMOVE_RETRY_INTERVAL: Duration = Duration::from_millis(10);
 const REMOVE_RETRY_ATTEMPTS: usize = 20;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LockOperation {
+    CreateDirectory,
+    Open,
+    WriteOwnerRecord,
+    Remove,
+    RemoveStaleSentinel,
+}
+
+impl LockOperation {
+    const fn test_override_token(self) -> &'static str {
+        match self {
+            Self::CreateDirectory => "create_directory",
+            Self::Open => "open",
+            Self::WriteOwnerRecord => "write_owner",
+            Self::Remove => "remove",
+            Self::RemoveStaleSentinel => "remove_stale_sentinel",
+        }
+    }
+}
+
+impl std::fmt::Display for LockOperation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::CreateDirectory => "create",
+            Self::Open => "open",
+            Self::WriteOwnerRecord => "write owner record",
+            Self::Remove => "remove",
+            Self::RemoveStaleSentinel => "remove stale sentinel",
+        })
+    }
+}
+
+/// Canonical in-process registry key for one mailbox lock target.
+///
+/// The key uses the canonical path when available and otherwise falls back to
+/// the provided path. This mirrors `sort_unique_paths()` so the in-process
+/// registry and multi-lock planner share the same identity semantics.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct CanonicalLockKey(String);
+
 pub(crate) fn default_lock_timeout() -> Duration {
     if let Some(timeout) = debug_timeout_override() {
         return timeout;
@@ -37,7 +78,7 @@ pub(crate) struct MailboxLockGuard {
     lock_path: PathBuf,
     file: Option<File>,
     owner_record: LockOwnerRecord,
-    _in_process_guard: Option<InProcessMailboxLockGuard>,
+    _in_process_guard: InProcessMailboxLockGuard,
 }
 
 impl Drop for MailboxLockGuard {
@@ -114,8 +155,9 @@ pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard
     let deadline = Instant::now() + timeout;
     let in_process_guard = acquire_in_process_lock(path, deadline)?;
     if let Some(parent) = lock_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|error| mailbox_lock_path_error("create", parent, error))?;
+        fs::create_dir_all(parent).map_err(|error| {
+            mailbox_lock_path_error(LockOperation::CreateDirectory, parent, error)
+        })?;
     }
 
     loop {
@@ -123,7 +165,7 @@ pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard
             Ok(_) => {}
             Err(error) if is_readonly_filesystem_error(&error) => {
                 return Err(mailbox_lock_path_error(
-                    "remove stale sentinel",
+                    LockOperation::RemoveStaleSentinel,
                     &lock_path,
                     error,
                 ));
@@ -155,7 +197,7 @@ pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard
                     lock_path,
                     file: Some(file),
                     owner_record,
-                    _in_process_guard: Some(in_process_guard),
+                    _in_process_guard: in_process_guard,
                 });
             }
             Err(error) if is_lock_contention_error(&error) && Instant::now() >= deadline => {
@@ -181,6 +223,14 @@ pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard
     }
 }
 
+/// Sweep one mailbox directory for stale `.lock` sentinels.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] only when directory enumeration fails or when stale
+/// sentinel cleanup hits a read-only filesystem. Other per-sentinel eviction
+/// failures are logged and skipped so recovery commands can continue scanning
+/// the rest of the mailbox directory.
 pub(crate) fn sweep_stale_lock_sentinels(dir: &Path) -> Result<usize, AtmError> {
     if !dir.exists() {
         return Ok(0);
@@ -205,7 +255,7 @@ pub(crate) fn sweep_stale_lock_sentinels(dir: &Path) -> Result<usize, AtmError> 
             Ok(StaleLockSentinelEviction::Skipped) => {}
             Err(error) if is_readonly_filesystem_error(&error) => {
                 return Err(mailbox_lock_path_error(
-                    "remove stale sentinel",
+                    LockOperation::RemoveStaleSentinel,
                     &path,
                     error,
                 ));
@@ -261,8 +311,12 @@ fn try_lock_exclusive(file: &File, lock_path: &Path) -> io::Result<()> {
 }
 
 fn open_lock_file(lock_path: &Path) -> Result<File, AtmError> {
-    if let Some(error) = forced_readonly_filesystem_error("open") {
-        return Err(mailbox_lock_path_error("open", lock_path, error));
+    if let Some(error) = forced_readonly_filesystem_error(LockOperation::Open) {
+        return Err(mailbox_lock_path_error(
+            LockOperation::Open,
+            lock_path,
+            error,
+        ));
     }
 
     OpenOptions::new()
@@ -271,7 +325,7 @@ fn open_lock_file(lock_path: &Path) -> Result<File, AtmError> {
         .read(true)
         .write(true)
         .open(lock_path)
-        .map_err(|error| mailbox_lock_path_error("open", lock_path, error))
+        .map_err(|error| mailbox_lock_path_error(LockOperation::Open, lock_path, error))
 }
 
 fn write_lock_owner_record(
@@ -279,20 +333,21 @@ fn write_lock_owner_record(
     lock_path: &Path,
     owner_record: &LockOwnerRecord,
 ) -> Result<(), AtmError> {
-    if let Some(error) = forced_readonly_filesystem_error("write_owner") {
+    if let Some(error) = forced_readonly_filesystem_error(LockOperation::WriteOwnerRecord) {
         return Err(mailbox_lock_path_error(
-            "write owner record",
+            LockOperation::WriteOwnerRecord,
             lock_path,
             error,
         ));
     }
 
-    file.set_len(0)
-        .map_err(|error| mailbox_lock_path_error("write owner record", lock_path, error))?;
+    file.set_len(0).map_err(|error| {
+        mailbox_lock_path_error(LockOperation::WriteOwnerRecord, lock_path, error)
+    })?;
     let mut writer = file;
     writer
         .write_all(owner_record.encode().as_bytes())
-        .map_err(|error| mailbox_lock_path_error("write owner record", lock_path, error))
+        .map_err(|error| mailbox_lock_path_error(LockOperation::WriteOwnerRecord, lock_path, error))
 }
 
 fn remove_active_lock_sentinel(lock_path: &Path, owner_record: &LockOwnerRecord) -> io::Result<()> {
@@ -378,7 +433,7 @@ fn evict_stale_lock_sentinel(lock_path: &Path) -> io::Result<StaleLockSentinelEv
 fn remove_lock_sentinel_with_retry(lock_path: &Path) -> io::Result<()> {
     let mut last_error = None;
     for attempt in 0..REMOVE_RETRY_ATTEMPTS {
-        if let Some(error) = forced_readonly_filesystem_error("remove") {
+        if let Some(error) = forced_readonly_filesystem_error(LockOperation::Remove) {
             return Err(error);
         }
         match fs::remove_file(lock_path) {
@@ -394,7 +449,7 @@ fn remove_lock_sentinel_with_retry(lock_path: &Path) -> io::Result<()> {
         }
     }
 
-    Err(last_error.unwrap_or_else(|| io::Error::other("lock sentinel removal failed")))
+    Err(last_error.expect("last_error must be Some after retry exhaustion"))
 }
 
 fn should_retry_remove_lock_sentinel(error: &io::Error) -> bool {
@@ -437,7 +492,7 @@ fn mailbox_lock_error_code(error: &io::Error) -> AtmErrorCode {
 }
 
 fn mailbox_lock_path_error(
-    operation: &'static str,
+    operation: LockOperation,
     lock_path: &Path,
     error: io::Error,
 ) -> AtmError {
@@ -456,6 +511,9 @@ fn mailbox_lock_path_error(
 }
 
 fn is_readonly_filesystem_error(error: &io::Error) -> bool {
+    // Keep this predicate in sync with `readonly_filesystem_raw_os_error()`.
+    // Tests inject the raw OS code through that helper and expect this logic to
+    // classify the injected error as read-only on every supported platform.
     #[cfg(windows)]
     {
         matches!(
@@ -470,7 +528,7 @@ fn is_readonly_filesystem_error(error: &io::Error) -> bool {
     }
 }
 
-fn forced_readonly_filesystem_error(operation: &'static str) -> Option<io::Error> {
+fn forced_readonly_filesystem_error(operation: LockOperation) -> Option<io::Error> {
     #[cfg(test)]
     if forced_readonly_filesystem_test_override() == Some(operation) {
         return Some(io::Error::from_raw_os_error(
@@ -479,24 +537,13 @@ fn forced_readonly_filesystem_error(operation: &'static str) -> Option<io::Error
     }
 
     let forced = std::env::var("ATM_TEST_FORCE_LOCK_READONLY_FS").ok()?;
-    if forced != operation {
+    if forced != operation.test_override_token() {
         return None;
     }
 
     Some(io::Error::from_raw_os_error(
         readonly_filesystem_raw_os_error(),
     ))
-}
-
-#[cfg(test)]
-thread_local! {
-    static FORCED_READONLY_FILESYSTEM_TEST_OVERRIDE: std::cell::Cell<Option<&'static str>> =
-        const { std::cell::Cell::new(None) };
-}
-
-#[cfg(test)]
-fn forced_readonly_filesystem_test_override() -> Option<&'static str> {
-    FORCED_READONLY_FILESYSTEM_TEST_OVERRIDE.with(|operation| operation.get())
 }
 
 #[cfg(windows)]
@@ -553,6 +600,9 @@ struct LockOwnerRecord {
 
 impl LockOwnerRecord {
     fn new(pid: u32) -> Self {
+        // Relaxed is sufficient because the token only needs process-local
+        // uniqueness for sentinel ownership records; it does not synchronize any
+        // shared memory access across threads.
         static NEXT_LOCK_TOKEN: AtomicU64 = AtomicU64::new(1);
         Self {
             pid,
@@ -571,6 +621,11 @@ fn parse_lock_owner_pid(raw: &str) -> Option<u32> {
         .map_or_else(|| raw.trim().parse().ok(), |(pid, _)| pid.parse().ok())
 }
 
+/// Process-local lock state used to serialize repeated lock attempts on the
+/// same mailbox path before the advisory file lock is reached.
+///
+/// The `held` boolean tracks only whether this process currently owns the local
+/// gate. The outer registry keeps one shared state per canonical mailbox path.
 #[derive(Debug)]
 struct InProcessMailboxLockState {
     held: Mutex<bool>,
@@ -584,7 +639,13 @@ struct InProcessMailboxLockGuard {
 
 impl Drop for InProcessMailboxLockGuard {
     fn drop(&mut self) {
-        let mut held = self.state.held.lock().expect("in-process lock poisoned");
+        // If the mutex is poisoned during teardown, prefer releasing the local
+        // gate over panicking in Drop and aborting the process.
+        let mut held = self
+            .state
+            .held
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         *held = false;
         self.state.wake.notify_one();
     }
@@ -595,11 +656,15 @@ fn acquire_in_process_lock(
     deadline: Instant,
 ) -> Result<InProcessMailboxLockGuard, AtmError> {
     let key = canonical_lock_key(path);
-    let state = in_process_lock_state(key);
+    let state = in_process_lock_state(key)?;
     let mut held = state
         .held
         .lock()
-        .map_err(|_| AtmError::mailbox_lock("in-process mailbox lock state poisoned"))?;
+        .map_err(|_| {
+            AtmError::mailbox_lock("in-process mailbox lock state poisoned").with_recovery(
+                "Retry the ATM command. If the error persists, restart the current ATM process so the in-process mailbox lock gate is rebuilt.",
+            )
+        })?;
     loop {
         if !*held {
             *held = true;
@@ -614,7 +679,11 @@ fn acquire_in_process_lock(
         let (next_held, wait_result) = state
             .wake
             .wait_timeout(held, remaining)
-            .map_err(|_| AtmError::mailbox_lock("in-process mailbox lock wait poisoned"))?;
+            .map_err(|_| {
+                AtmError::mailbox_lock("in-process mailbox lock wait poisoned").with_recovery(
+                    "Retry the ATM command. If the error persists, restart the current ATM process so the in-process mailbox lock gate is rebuilt.",
+                )
+            })?;
         held = next_held;
         if wait_result.timed_out() && *held {
             return Err(AtmError::mailbox_lock_timeout(path));
@@ -622,15 +691,25 @@ fn acquire_in_process_lock(
     }
 }
 
-fn in_process_lock_state(key: String) -> Arc<InProcessMailboxLockState> {
+fn in_process_lock_state(
+    key: CanonicalLockKey,
+) -> Result<Arc<InProcessMailboxLockState>, AtmError> {
     static REGISTRY: OnceLock<
-        Mutex<std::collections::HashMap<String, Arc<InProcessMailboxLockState>>>,
+        Mutex<std::collections::HashMap<CanonicalLockKey, Arc<InProcessMailboxLockState>>>,
     > = OnceLock::new();
+    // A coarse process-wide registry mutex is acceptable here because mailbox
+    // lock acquisition already goes through retry sleeps and filesystem I/O; the
+    // registry only guards short-lived HashMap access before threads block on
+    // the per-path condvar.
     let registry = REGISTRY.get_or_init(|| Mutex::new(std::collections::HashMap::new()));
     let mut registry = registry
         .lock()
-        .expect("in-process mailbox lock registry poisoned");
-    registry
+        .map_err(|_| {
+            AtmError::mailbox_lock("in-process mailbox lock registry poisoned").with_recovery(
+                "Retry the ATM command. If the error persists, restart the current ATM process so the in-process mailbox lock registry is rebuilt.",
+            )
+        })?;
+    Ok(registry
         .entry(key)
         .or_insert_with(|| {
             Arc::new(InProcessMailboxLockState {
@@ -638,14 +717,44 @@ fn in_process_lock_state(key: String) -> Arc<InProcessMailboxLockState> {
                 wake: Condvar::new(),
             })
         })
-        .clone()
+        .clone())
 }
 
-fn canonical_lock_key(path: &Path) -> String {
-    fs::canonicalize(path)
-        .unwrap_or_else(|_| path.to_path_buf())
-        .to_string_lossy()
-        .into_owned()
+fn canonical_lock_key(path: &Path) -> CanonicalLockKey {
+    CanonicalLockKey(
+        fs::canonicalize(path)
+            .unwrap_or_else(|_| path.to_path_buf())
+            .to_string_lossy()
+            .into_owned(),
+    )
+}
+
+#[cfg(test)]
+mod readonly_test_override {
+    use std::cell::Cell;
+
+    use super::LockOperation;
+
+    thread_local! {
+        static OVERRIDE: Cell<Option<LockOperation>> = const { Cell::new(None) };
+    }
+
+    pub(super) fn get() -> Option<LockOperation> {
+        OVERRIDE.with(|operation| operation.get())
+    }
+
+    pub(super) fn set(operation: Option<LockOperation>) -> Option<LockOperation> {
+        OVERRIDE.with(|cell| {
+            let original = cell.get();
+            cell.set(operation);
+            original
+        })
+    }
+}
+
+#[cfg(test)]
+fn forced_readonly_filesystem_test_override() -> Option<LockOperation> {
+    readonly_test_override::get()
 }
 
 #[cfg(test)]
@@ -659,31 +768,27 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        DEFAULT_LOCK_TIMEOUT, FORCED_READONLY_FILESYSTEM_TEST_OVERRIDE, StaleLockSentinelEviction,
-        acquire, acquire_many_sorted, default_lock_timeout, evict_stale_lock_sentinel,
-        is_lock_contention_error, is_lock_sentinel_candidate, sentinel_path,
-        sweep_stale_lock_sentinels,
+        DEFAULT_LOCK_TIMEOUT, LockOperation, StaleLockSentinelEviction, acquire,
+        acquire_many_sorted, default_lock_timeout, evict_stale_lock_sentinel,
+        is_lock_contention_error, is_lock_sentinel_candidate, readonly_test_override,
+        sentinel_path, sweep_stale_lock_sentinels,
     };
     use crate::error::AtmErrorCode;
 
     struct ReadOnlyFilesystemGuard {
-        original: Option<&'static str>,
+        original: Option<LockOperation>,
     }
 
     impl ReadOnlyFilesystemGuard {
-        fn set(operation: &'static str) -> Self {
-            let original = FORCED_READONLY_FILESYSTEM_TEST_OVERRIDE.with(|cell| {
-                let original = cell.get();
-                cell.set(Some(operation));
-                original
-            });
+        fn set(operation: LockOperation) -> Self {
+            let original = readonly_test_override::set(Some(operation));
             Self { original }
         }
     }
 
     impl Drop for ReadOnlyFilesystemGuard {
         fn drop(&mut self) {
-            FORCED_READONLY_FILESYSTEM_TEST_OVERRIDE.with(|cell| cell.set(self.original));
+            readonly_test_override::set(self.original);
         }
     }
 
@@ -922,7 +1027,7 @@ mod tests {
     #[test]
     #[serial]
     fn acquire_reports_read_only_filesystem_for_open_failure() {
-        let _readonly = ReadOnlyFilesystemGuard::set("open");
+        let _readonly = ReadOnlyFilesystemGuard::set(LockOperation::Open);
         let tempdir = tempdir().expect("tempdir");
         let inbox = tempdir.path().join("arch-ctm.json");
 
@@ -949,7 +1054,7 @@ mod tests {
     #[test]
     #[serial]
     fn acquire_reports_read_only_filesystem_for_owner_record_write_failure() {
-        let _readonly = ReadOnlyFilesystemGuard::set("write_owner");
+        let _readonly = ReadOnlyFilesystemGuard::set(LockOperation::WriteOwnerRecord);
         let tempdir = tempdir().expect("tempdir");
         let inbox = tempdir.path().join("arch-ctm.json");
 
@@ -966,7 +1071,7 @@ mod tests {
     #[test]
     #[serial]
     fn sweep_reports_read_only_filesystem_for_stale_sentinel_removal() {
-        let _readonly = ReadOnlyFilesystemGuard::set("remove");
+        let _readonly = ReadOnlyFilesystemGuard::set(LockOperation::Remove);
         let tempdir = tempdir().expect("tempdir");
         let rotated = tempdir.path().join("arch-ctm.json.lock.old");
         std::fs::write(&rotated, u32::MAX.to_string()).expect("stale rotated");
@@ -984,7 +1089,7 @@ mod tests {
         let inbox = tempdir.path().join("arch-ctm.json");
         let sentinel = sentinel_path(&inbox);
         let guard = acquire(&inbox, DEFAULT_LOCK_TIMEOUT).expect("lock");
-        let _readonly = ReadOnlyFilesystemGuard::set("remove");
+        let _readonly = ReadOnlyFilesystemGuard::set(LockOperation::Remove);
 
         drop(guard);
 

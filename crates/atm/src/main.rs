@@ -419,7 +419,7 @@ fn map_command_event(
     if let Some(task_id) = &event.task_id {
         fields.insert(
             "task_id".to_string(),
-            serde_json::Value::String(task_id.clone()),
+            serde_json::Value::String(task_id.to_string()),
         );
     }
     if let Some(error_code) = event.error_code {
