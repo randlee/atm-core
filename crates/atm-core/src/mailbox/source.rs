@@ -42,7 +42,7 @@ pub(crate) fn resolve_target(
             .ok_or_else(AtmError::team_unavailable)?;
         return Ok(ResolvedTarget {
             agent: actor.clone(),
-            team: TeamName::from(team),
+            team: TeamName::from_validated(team),
             explicit: false,
         });
     };
@@ -55,8 +55,8 @@ pub(crate) fn resolve_target(
     let agent = config::aliases::resolve_agent(&target_address.agent, config);
 
     Ok(ResolvedTarget {
-        agent: AgentName::from(agent),
-        team: TeamName::from(team),
+        agent: AgentName::from_validated(agent),
+        team: TeamName::from_validated(team),
         explicit: true,
     })
 }

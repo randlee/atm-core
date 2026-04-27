@@ -1,7 +1,6 @@
 use anyhow::Result;
 use atm_core::doctor::{self, DoctorQuery};
 use atm_core::home;
-use atm_core::types::TeamName;
 use clap::Args;
 
 use crate::observability::CliObservability;
@@ -30,7 +29,7 @@ impl DoctorCommand {
             DoctorQuery {
                 home_dir,
                 current_dir,
-                team_override: self.team.map(TeamName::from),
+                team_override: self.team.map(|value| value.parse()).transpose()?,
             },
             observability,
         )?;

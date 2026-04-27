@@ -1,8 +1,7 @@
 use anyhow::{Context, Result};
-use atm_core::address::AgentAddress;
 use atm_core::home;
 use atm_core::read::{self, ReadQuery};
-use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
+use atm_core::types::{AckActivationMode, IsoTimestamp, ReadSelection};
 use clap::Args;
 
 use crate::observability::CliObservability;
@@ -79,31 +78,26 @@ impl ReadCommand {
         let _ = self.since_last_seen;
         let selection_mode = self.selection_mode();
         let timestamp_filter = self.since.as_deref().map(parse_timestamp).transpose()?;
-        let target_address = self
-            .target
-            .as_deref()
-            .map(str::parse::<AgentAddress>)
-            .transpose()?;
-
-        Ok(ReadQuery {
+        ReadQuery::new(
             home_dir,
             current_dir,
-            actor_override: self.actor.map(AgentName::from),
-            target_address,
-            team_override: self.team.map(TeamName::from),
+            self.actor.as_deref(),
+            self.target.as_deref(),
+            self.team.as_deref(),
             selection_mode,
-            seen_state_filter: !self.no_since_last_seen,
-            seen_state_update: !self.no_update_seen,
-            ack_activation_mode: if self.no_mark {
+            !self.no_since_last_seen,
+            !self.no_update_seen,
+            if self.no_mark {
                 AckActivationMode::ReadOnly
             } else {
                 AckActivationMode::PromoteDisplayedUnread
             },
-            limit: self.limit,
-            sender_filter: self.from,
+            self.limit,
+            self.from,
             timestamp_filter,
-            timeout_secs: self.timeout,
-        })
+            self.timeout,
+        )
+        .map_err(Into::into)
     }
 
     fn selection_mode(&self) -> ReadSelection {

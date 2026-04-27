@@ -47,17 +47,9 @@ impl AgentName {
     pub fn into_inner(self) -> String {
         self.0
     }
-}
 
-impl From<String> for AgentName {
-    fn from(value: String) -> Self {
-        Self(value)
-    }
-}
-
-impl From<&str> for AgentName {
-    fn from(value: &str) -> Self {
-        Self(value.to_string())
+    pub(crate) fn from_validated(value: impl Into<String>) -> Self {
+        Self(value.into())
     }
 }
 
@@ -118,17 +110,9 @@ impl TeamName {
     pub fn into_inner(self) -> String {
         self.0
     }
-}
 
-impl From<String> for TeamName {
-    fn from(value: String) -> Self {
-        Self(value)
-    }
-}
-
-impl From<&str> for TeamName {
-    fn from(value: &str) -> Self {
-        Self(value.to_string())
+    pub(crate) fn from_validated(value: impl Into<String>) -> Self {
+        Self(value.into())
     }
 }
 
