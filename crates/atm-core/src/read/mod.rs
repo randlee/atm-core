@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 use serde_json::Value;
+use tracing::debug;
 
 use crate::address::AgentAddress;
 use crate::config;
@@ -405,18 +406,36 @@ fn idle_sender(message: &MessageEnvelope) -> Option<String> {
 }
 
 fn idle_notification_sender(message: &MessageEnvelope) -> Option<String> {
-    serde_json::from_str::<Value>(&message.text)
-        .ok()
-        .and_then(|value| {
-            (value.get("type").and_then(Value::as_str) == Some("idle_notification"))
-                .then(|| {
-                    value
-                        .get("from")
-                        .and_then(Value::as_str)
-                        .map(str::to_string)
-                })
-                .flatten()
-        })
+    let value = match serde_json::from_str::<Value>(&message.text) {
+        Ok(value) => value,
+        Err(error) => {
+            if message.text.contains("idle_notification") {
+                debug!(
+                    %error,
+                    recovery = "Repair or remove the malformed Claude idle-notification JSON. ATM will continue treating the record as a normal mailbox message.",
+                    message_text = %message.text,
+                    "ignoring malformed idle-notification JSON while classifying read surface"
+                );
+            }
+            return None;
+        }
+    };
+
+    if value.get("type").and_then(Value::as_str) != Some("idle_notification") {
+        return None;
+    }
+
+    match value.get("from").and_then(Value::as_str) {
+        Some(sender) => Some(sender.to_string()),
+        None => {
+            debug!(
+                recovery = "Ensure Claude idle-notification payloads include a string `from` field. ATM will continue treating the record as a normal mailbox message.",
+                message_text = %message.text,
+                "ignoring malformed idle-notification payload missing string `from`"
+            );
+            None
+        }
+    }
 }
 
 fn classify_all(

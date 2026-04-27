@@ -313,6 +313,7 @@ fn apply_removals(source_files: &mut [SourceFile], removable: &HashSet<(PathBuf,
 #[cfg(test)]
 mod tests {
     use std::ffi::{OsStr, OsString};
+    use std::sync::{Mutex, OnceLock};
 
     use serial_test::serial;
     use tempfile::tempdir;
@@ -325,6 +326,7 @@ mod tests {
     #[test]
     #[serial]
     fn locked_clear_source_removal_reports_disappearing_mailbox() {
+        let _env_lock = env_lock().lock().expect("env lock");
         let tempdir = tempdir().expect("tempdir");
         let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
         let inboxes_dir = team_dir.join("inboxes");
@@ -342,25 +344,35 @@ mod tests {
         )
         .expect("write config");
         std::fs::write(inboxes_dir.join("arch-ctm.json"), "").expect("mailbox");
-        let _guard = EnvGuard::set_raw("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD", "1");
-
-        let error = clear_mail(
-            ClearQuery {
-                home_dir: tempdir.path().to_path_buf(),
-                current_dir: tempdir.path().to_path_buf(),
-                actor_override: Some("arch-ctm".into()),
-                target_address: None,
-                team_override: Some(TeamName::from("atm-dev")),
-                older_than: None,
-                idle_only: false,
-                dry_run: false,
-            },
-            &NullObservability,
-        )
-        .expect_err("missing mailbox");
+        let error = {
+            let _guard = EnvGuard::set_raw("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD", "1");
+            clear_mail(
+                ClearQuery {
+                    home_dir: tempdir.path().to_path_buf(),
+                    current_dir: tempdir.path().to_path_buf(),
+                    actor_override: Some("arch-ctm".into()),
+                    target_address: None,
+                    team_override: Some(TeamName::from("atm-dev")),
+                    older_than: None,
+                    idle_only: false,
+                    dry_run: false,
+                },
+                &NullObservability,
+            )
+            .expect_err("missing mailbox")
+        };
 
         assert!(error.is_mailbox_read());
         assert!(error.message.contains("disappeared"));
+        assert!(
+            std::env::var_os("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD").is_none(),
+            "scoped env guard leaked after failure path"
+        );
+    }
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
     }
 
     struct EnvGuard {

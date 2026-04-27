@@ -1,8 +1,7 @@
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
-use std::sync::mpsc;
-use std::thread;
+use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
 use atm_core::schema::{AgentMember, TeamConfig};
@@ -137,7 +136,7 @@ fn test_log_filter_combines_level_and_match() {
 #[test]
 fn test_log_tail_streams_new_records() {
     let fixture = Fixture::new(&["arch-ctm", "recipient"]);
-    let child = fixture.spawn(&[
+    let mut tail = fixture.spawn_tail(&[
         "log",
         "tail",
         "--match",
@@ -146,23 +145,14 @@ fn test_log_tail_streams_new_records() {
         "--poll-interval-ms",
         "25",
     ]);
+    fixture.send("recipient@atm-dev", "tail readiness barrier");
+    let ready = tail.read_record();
+    assert_eq!(ready["fields"]["command"], "send");
 
-    // Known timing dependency: give the spawned tail process enough time to
-    // initialize before sending the log-producing command. TODO(v1.1.0): replace
-    // this sleep with a deterministic tail-readiness probe tracked in a follow-up issue.
-    thread::sleep(Duration::from_millis(250));
     fixture.send("recipient@atm-dev", "hello tail");
-
-    let records = fixture.read_tail_records(child, 1);
-    assert!(
-        !records.is_empty(),
-        "tail should produce at least one record"
-    );
-    assert!(
-        records
-            .iter()
-            .any(|record| record["fields"]["command"] == "send")
-    );
+    let record = tail.read_record();
+    assert_eq!(record["fields"]["command"], "send");
+    tail.finish();
 }
 
 #[test]
@@ -290,8 +280,8 @@ impl Fixture {
             .expect("run atm")
     }
 
-    fn spawn(&self, args: &[&str]) -> std::process::Child {
-        Command::new(env!("CARGO_BIN_EXE_atm"))
+    fn spawn_tail(&self, args: &[&str]) -> TailReader {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_atm"))
             .args(args)
             .env("ATM_HOME", self.tempdir.path())
             .env("ATM_CONFIG_HOME", self.tempdir.path())
@@ -301,17 +291,10 @@ impl Fixture {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .expect("spawn atm")
-    }
-
-    fn read_tail_records(
-        &self,
-        mut child: std::process::Child,
-        count: usize,
-    ) -> Vec<serde_json::Value> {
+            .expect("spawn atm");
         let stdout = child.stdout.take().expect("tail stdout");
         let (tx, rx) = mpsc::channel();
-        thread::spawn(move || {
+        std::thread::spawn(move || {
             let mut reader = BufReader::new(stdout);
             loop {
                 let mut line = String::new();
@@ -326,23 +309,7 @@ impl Fixture {
                 }
             }
         });
-        let mut records = Vec::new();
-
-        while records.len() < count {
-            let line = rx.recv_timeout(Duration::from_secs(5)).unwrap_or_else(|_| {
-                let _ = child.kill();
-                panic!("tail timed out before producing enough output");
-            });
-            if line.trim().is_empty() {
-                continue;
-            }
-            records.push(serde_json::from_str(line.trim()).expect("json line"));
-        }
-
-        child.kill().expect("kill tail");
-        let _ = child.wait_with_output().expect("tail output");
-
-        records
+        TailReader { child, rx }
     }
 
     fn send(&self, target: &str, body: &str) {
@@ -397,5 +364,33 @@ impl Fixture {
 
     fn stderr(&self, output: &std::process::Output) -> String {
         String::from_utf8(output.stderr.clone()).expect("stderr utf8")
+    }
+}
+
+struct TailReader {
+    child: std::process::Child,
+    rx: Receiver<String>,
+}
+
+impl TailReader {
+    fn read_record(&mut self) -> serde_json::Value {
+        loop {
+            let line = self
+                .rx
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap_or_else(|_| {
+                    let _ = self.child.kill();
+                    panic!("tail timed out before producing enough output");
+                });
+            if line.trim().is_empty() {
+                continue;
+            }
+            return serde_json::from_str(line.trim()).expect("json line");
+        }
+    }
+
+    fn finish(mut self) {
+        self.child.kill().expect("kill tail");
+        let _ = self.child.wait_with_output().expect("tail output");
     }
 }
