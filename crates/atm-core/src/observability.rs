@@ -10,7 +10,7 @@ use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode};
 use crate::schema::LegacyMessageId;
-use crate::types::IsoTimestamp;
+use crate::types::{IsoTimestamp, TaskId};
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct CommandEvent {
@@ -23,7 +23,7 @@ pub struct CommandEvent {
     pub message_id: Option<LegacyMessageId>,
     pub requires_ack: bool,
     pub dry_run: bool,
-    pub task_id: Option<String>,
+    pub task_id: Option<TaskId>,
     pub error_code: Option<AtmErrorCode>,
     pub error_message: Option<String>,
 }

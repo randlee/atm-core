@@ -197,19 +197,27 @@ impl AtmError {
     }
 
     pub fn validation(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::Validation, message)
+        Self::new(AtmErrorKind::Validation, message).with_recovery(
+            "Correct the invalid ATM input or mailbox state, then retry the command with a valid target or argument.",
+        )
     }
 
     pub fn missing_document(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::MissingDocument, message)
+        Self::new(AtmErrorKind::MissingDocument, message).with_recovery(
+            "Restore the missing ATM document or recreate it through the documented team-management workflow before retrying.",
+        )
     }
 
     pub fn file_policy(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::FilePolicy, message)
+        Self::new(AtmErrorKind::FilePolicy, message).with_recovery(
+            "Update the referenced file, path, or policy inputs so they satisfy ATM file-policy rules before retrying the command.",
+        )
     }
 
     pub fn mailbox_read(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::MailboxRead, message)
+        Self::new(AtmErrorKind::MailboxRead, message).with_recovery(
+            "Check ATM_HOME, mailbox file permissions, and mailbox JSON syntax before retrying the ATM command.",
+        )
     }
 
     pub fn mailbox_lock(message: impl Into<String>) -> Self {
@@ -219,7 +227,7 @@ impl AtmError {
     }
 
     pub fn mailbox_lock_read_only_filesystem(
-        operation: &'static str,
+        operation: impl fmt::Display,
         path: &std::path::Path,
     ) -> Self {
         Self::new_with_code(
@@ -231,7 +239,7 @@ impl AtmError {
             ),
         )
         .with_recovery(
-            "Remount or move the ATM home to a writable filesystem, then retry the ATM command.",
+            "Remount the filesystem read-write or point ATM at a writable home with ATM_HOME or --home, then retry the ATM command.",
         )
     }
 
@@ -288,7 +296,7 @@ impl fmt::Display for AtmError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.message)?;
         if let Some(recovery) = &self.recovery {
-            write!(f, " Recovery: {recovery}")?;
+            write!(f, "\n  Recovery: {recovery}")?;
         }
         Ok(())
     }

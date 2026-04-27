@@ -158,6 +158,65 @@ impl PartialEq<&str> for TeamName {
     }
 }
 
+/// Validated ATM task id carried across command, schema, and hook boundaries.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct TaskId(String);
+
+impl TaskId {
+    /// Borrow the wrapped task id as `&str`.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Consume the wrapper and return the inner owned task id.
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl FromStr for TaskId {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return Err(
+                AtmError::validation("task id must not be blank").with_recovery(
+                    "Provide a non-empty --task-id value or omit --task-id for non-task messages.",
+                ),
+            );
+        }
+        Ok(Self(trimmed.to_string()))
+    }
+}
+
+impl From<TaskId> for String {
+    fn from(value: TaskId) -> Self {
+        value.0
+    }
+}
+
+impl AsRef<str> for TaskId {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl Deref for TaskId {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl fmt::Display for TaskId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// Index of one message within its source mailbox file.
 #[derive(
     Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,

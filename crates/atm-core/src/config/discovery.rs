@@ -4,21 +4,23 @@ use std::path::{Path, PathBuf};
 
 use crate::address::validate_path_segment;
 use crate::error::{AtmError, AtmErrorKind};
+use crate::types::AgentName;
 
-use super::types::PostSendHookRule;
+use super::RawPostSendHookRule;
+use super::types::{HookRecipient, PostSendHookRule};
 
 /// Normalize recipient hook rules relative to the declaring config directory.
 ///
 /// Path-like `command[0]` values resolve from `config_root`. Bare executable
 /// names remain unchanged so the OS can resolve them through `PATH`.
-pub fn normalize_post_send_hooks(
-    hooks: Vec<PostSendHookRule>,
+pub(super) fn normalize_post_send_hooks(
+    hooks: Vec<RawPostSendHookRule>,
     config_root: &Path,
 ) -> Result<Vec<PostSendHookRule>, AtmError> {
     hooks.into_iter()
         .map(|mut hook| {
-            hook.recipient = hook.recipient.trim().to_string();
-            if hook.recipient.is_empty() {
+            let recipient = hook.recipient.trim();
+            if recipient.is_empty() {
                 return Err(AtmError::new(
                     AtmErrorKind::Config,
                     "post-send hook recipient must not be empty".to_string(),
@@ -27,13 +29,16 @@ pub fn normalize_post_send_hooks(
                     "Set [[atm.post_send_hooks]].recipient to one concrete recipient name or '*'.",
                 ));
             }
-            if hook.recipient != "*" {
-                validate_path_segment(&hook.recipient, "hook recipient").map_err(|error| {
+            let recipient = if recipient == "*" {
+                HookRecipient::Wildcard
+            } else {
+                validate_path_segment(recipient, "hook recipient").map_err(|error| {
                     AtmError::new(AtmErrorKind::Config, error.message).with_recovery(
                         "Use one concrete recipient name or '*' in [[atm.post_send_hooks]].recipient.",
                     )
                 })?;
-            }
+                HookRecipient::Named(AgentName::from_validated(recipient))
+            };
 
             let Some(program) = hook.command.first_mut() else {
                 return Err(AtmError::new(
@@ -73,7 +78,10 @@ pub fn normalize_post_send_hooks(
                     })?
                     .to_string();
             }
-            Ok(hook)
+            Ok(PostSendHookRule {
+                recipient,
+                command: hook.command,
+            })
         })
         .collect()
 }
@@ -89,7 +97,8 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{command_looks_like_path, normalize_post_send_hooks};
-    use crate::config::types::PostSendHookRule;
+    use crate::config::RawPostSendHookRule;
+    use crate::config::types::HookRecipient;
 
     fn config_root_fixture() -> (tempfile::TempDir, PathBuf) {
         let tempdir = tempdir().expect("tempdir");
@@ -101,7 +110,7 @@ mod tests {
     #[test]
     fn normalize_post_send_hooks_resolves_relative_script_commands() {
         let (_tempdir, config_root) = config_root_fixture();
-        let hooks = vec![PostSendHookRule {
+        let hooks = vec![RawPostSendHookRule {
             recipient: "team-lead".into(),
             command: vec!["scripts/atm-nudge.sh".into(), "team-lead".into()],
         }];
@@ -115,12 +124,16 @@ mod tests {
                 .display()
                 .to_string()
         );
+        assert_eq!(
+            hooks[0].recipient,
+            HookRecipient::Named("team-lead".parse().expect("recipient"))
+        );
     }
 
     #[test]
     fn normalize_post_send_hooks_keeps_bare_executables_for_path_lookup() {
         let (_tempdir, config_root) = config_root_fixture();
-        let hooks = vec![PostSendHookRule {
+        let hooks = vec![RawPostSendHookRule {
             recipient: "*".into(),
             command: vec!["bash".into(), "-lc".into(), "echo hi".into()],
         }];
@@ -128,6 +141,7 @@ mod tests {
         let hooks = normalize_post_send_hooks(hooks, &config_root).expect("hooks");
 
         assert_eq!(hooks[0].command[0], "bash");
+        assert_eq!(hooks[0].recipient, HookRecipient::Wildcard);
     }
 
     #[test]
@@ -142,7 +156,7 @@ mod tests {
     fn normalize_post_send_hooks_preserves_absolute_paths() {
         let (_tempdir, config_root) = config_root_fixture();
         let absolute = config_root.join("absolute hook.cmd");
-        let hooks = vec![PostSendHookRule {
+        let hooks = vec![RawPostSendHookRule {
             recipient: "*".into(),
             command: vec![absolute.display().to_string()],
         }];
@@ -156,7 +170,7 @@ mod tests {
     fn normalize_post_send_hooks_rejects_empty_recipient() {
         let (_tempdir, config_root) = config_root_fixture();
         let error = normalize_post_send_hooks(
-            vec![PostSendHookRule {
+            vec![RawPostSendHookRule {
                 recipient: "   ".into(),
                 command: vec!["bash".into()],
             }],
@@ -171,7 +185,7 @@ mod tests {
     fn normalize_post_send_hooks_rejects_invalid_recipient_selector() {
         let (_tempdir, config_root) = config_root_fixture();
         let error = normalize_post_send_hooks(
-            vec![PostSendHookRule {
+            vec![RawPostSendHookRule {
                 recipient: "bad/name".into(),
                 command: vec!["bash".into()],
             }],
@@ -190,7 +204,7 @@ mod tests {
     fn normalize_post_send_hooks_rejects_empty_command_array() {
         let (_tempdir, config_root) = config_root_fixture();
         let error = normalize_post_send_hooks(
-            vec![PostSendHookRule {
+            vec![RawPostSendHookRule {
                 recipient: "team-lead".into(),
                 command: Vec::new(),
             }],
@@ -205,7 +219,7 @@ mod tests {
     fn normalize_post_send_hooks_rejects_blank_program_name() {
         let (_tempdir, config_root) = config_root_fixture();
         let error = normalize_post_send_hooks(
-            vec![PostSendHookRule {
+            vec![RawPostSendHookRule {
                 recipient: "team-lead".into(),
                 command: vec!["   ".into(), "arg".into()],
             }],
