@@ -7,13 +7,15 @@
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::error::{AtmError, AtmErrorKind};
 use crate::home;
+use crate::mailbox::lock;
 use crate::persistence;
 use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::types::IsoTimestamp;
@@ -97,6 +99,30 @@ pub(crate) fn save_workflow_state(
         "workflow state",
         "Check workflow-state directory permissions and retry the ATM command.",
     )
+}
+
+pub(crate) fn commit_workflow_state<T, I, F>(
+    home_dir: &Path,
+    team: &str,
+    agent: &str,
+    extra_write_paths: I,
+    timeout: Duration,
+    body: F,
+) -> Result<T, AtmError>
+where
+    I: IntoIterator<Item = PathBuf>,
+    F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
+{
+    let workflow_path = home::workflow_state_path_from_home(home_dir, team, agent)?;
+    let mut write_paths = vec![workflow_path];
+    write_paths.extend(extra_write_paths);
+    let _locks = lock::acquire_many_sorted(write_paths, timeout)?;
+    let mut workflow_state = load_workflow_state(home_dir, team, agent)?;
+    let (result, changed) = body(&mut workflow_state)?;
+    if changed {
+        save_workflow_state(home_dir, team, agent, &workflow_state)?;
+    }
+    Ok(result)
 }
 
 pub(crate) fn project_envelope(

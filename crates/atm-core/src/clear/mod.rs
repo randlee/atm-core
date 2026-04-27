@@ -6,6 +6,7 @@ use chrono::{DateTime, TimeDelta, Utc};
 use serde::Serialize;
 use serde_json::Value;
 
+use crate::address::AgentAddress;
 use crate::config;
 use crate::error::AtmError;
 use crate::home;
@@ -25,7 +26,7 @@ pub struct ClearQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
     pub actor_override: Option<AgentName>,
-    pub target_address: Option<String>,
+    pub target_address: Option<AgentAddress>,
     pub team_override: Option<TeamName>,
     pub older_than: Option<Duration>,
     pub idle_only: bool,
@@ -73,11 +74,14 @@ pub fn clear_mail(
     observability: &dyn ObservabilityPort,
 ) -> Result<ClearOutcome, AtmError> {
     let config = config::load_config(&query.current_dir)?;
-    let actor = identity::resolve_actor_identity(query.actor_override.as_deref(), config.as_ref())?;
+    let actor = AgentName::from_validated(identity::resolve_actor_identity(
+        query.actor_override.as_deref(),
+        config.as_ref(),
+    )?);
     let target = resolve_target(
-        query.target_address.as_deref(),
+        query.target_address.as_ref(),
         &actor,
-        query.team_override.as_deref(),
+        query.team_override.as_ref(),
         config.as_ref(),
     )?;
 
@@ -93,7 +97,7 @@ pub fn clear_mail(
         && !team_config
             .members
             .iter()
-            .any(|member| member.name == target.agent)
+            .any(|member| member.name == target.agent.as_str())
     {
         return Err(
             AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
@@ -160,8 +164,8 @@ pub fn clear_mail(
 
     let outcome = ClearOutcome {
         action: "clear",
-        team: target.team.clone().into(),
-        agent: target.agent.clone().into(),
+        team: target.team.clone(),
+        agent: target.agent.clone(),
         removed_total,
         remaining_total,
         removed_by_class,
@@ -173,7 +177,7 @@ pub fn clear_mail(
         outcome: if query.dry_run { "dry_run" } else { "ok" },
         team: outcome.team.to_string(),
         agent: outcome.agent.to_string(),
-        sender: actor,
+        sender: actor.to_string(),
         message_id: None,
         requires_ack: false,
         dry_run: query.dry_run,
@@ -316,7 +320,6 @@ mod tests {
     use super::{ClearQuery, clear_mail};
     use crate::observability::NullObservability;
     use crate::schema::{AgentMember, TeamConfig};
-    use crate::types::TeamName;
 
     #[test]
     #[serial]
@@ -344,9 +347,9 @@ mod tests {
             ClearQuery {
                 home_dir: tempdir.path().to_path_buf(),
                 current_dir: tempdir.path().to_path_buf(),
-                actor_override: Some("arch-ctm".into()),
+                actor_override: Some("arch-ctm".parse().expect("actor")),
                 target_address: None,
-                team_override: Some(TeamName::from("atm-dev")),
+                team_override: Some("atm-dev".parse().expect("team")),
                 older_than: None,
                 idle_only: false,
                 dry_run: false,
