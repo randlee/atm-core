@@ -478,6 +478,8 @@ fn should_retry_remove_lock_sentinel(error: &io::Error) -> bool {
 }
 
 fn is_lock_sentinel_candidate(path: &Path) -> bool {
+    // Sweep both the live `.lock` sentinel and rotated leftovers such as
+    // `.lock.old` so crash/recovery cleanup does not miss renamed stale files.
     path.file_name()
         .and_then(|name| name.to_str())
         .is_some_and(|name| name.ends_with(".lock") || name.contains(".lock."))
@@ -592,6 +594,11 @@ fn debug_timeout_override() -> Option<Duration> {
         .map(Duration::from_millis)
 }
 
+/// Per-acquisition sentinel ownership record written into the `.lock` file.
+///
+/// The `(pid, token)` pair lets ATM distinguish the active guard from stale or
+/// replaced lock files when deciding whether this process should remove a
+/// sentinel during cleanup.
 #[derive(Clone, Debug)]
 struct LockOwnerRecord {
     pid: u32,

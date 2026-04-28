@@ -202,7 +202,7 @@ pub fn send_mail(
         Err(error) => return Err(error),
     }
 
-    let task_id = input::validate_task_id(request.task_id)?;
+    let task_id = request.task_id;
     let requires_ack = request.requires_ack || task_id.is_some();
     let body = resolve_message_body(
         &request.message_source,
@@ -283,8 +283,8 @@ pub fn send_mail(
         command: "send",
         action: "send",
         outcome: outcome.outcome,
-        team: outcome.team.to_string(),
-        agent: outcome.agent.to_string(),
+        team: outcome.team.clone(),
+        agent: outcome.agent.clone(),
         sender: canonical_sender.to_string(),
         message_id: Some(outcome.message_id),
         requires_ack: outcome.requires_ack,

@@ -258,7 +258,9 @@ impl AtmError {
     }
 
     pub fn mailbox_write(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::MailboxWrite, message)
+        Self::new(AtmErrorKind::MailboxWrite, message).with_recovery(
+            "Check that the mailbox/workflow path is writable, has free space, and was not modified concurrently before retrying the ATM command.",
+        )
     }
 
     pub fn observability_emit(message: impl Into<String>) -> Self {
@@ -374,6 +376,19 @@ mod tests {
         assert_eq!(
             AtmError::observability_health("health failed").code,
             AtmErrorCode::ObservabilityHealthFailed
+        );
+    }
+
+    #[test]
+    fn mailbox_write_helper_includes_recovery_guidance() {
+        let error = AtmError::mailbox_write("write failed");
+
+        assert!(error.is_mailbox_write());
+        assert!(
+            error
+                .recovery
+                .as_deref()
+                .is_some_and(|value| value.contains("writable"))
         );
     }
 

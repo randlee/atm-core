@@ -163,7 +163,7 @@ fn load_member_roster(
         .map(|member| member.name.clone())
         .collect::<BTreeSet<_>>();
     for member in baseline {
-        if present.contains(member) {
+        if present.contains(member.as_str()) {
             continue;
         }
         findings.push(DoctorFinding {
@@ -320,11 +320,11 @@ fn probe_directory_writable(directory: &Path) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-fn ordered_member_summaries(members: &[AgentMember], baseline: &[String]) -> Vec<MemberSummary> {
+fn ordered_member_summaries(members: &[AgentMember], baseline: &[TeamName]) -> Vec<MemberSummary> {
     let mut ordered = Vec::new();
     let mut included = BTreeSet::new();
 
-    if baseline.iter().any(|member| member == "team-lead")
+    if baseline.iter().any(|member| member.as_str() == "team-lead")
         && let Some(team_lead) = members.iter().find(|member| member.name == "team-lead")
     {
         ordered.push(member_summary(team_lead));
@@ -332,12 +332,12 @@ fn ordered_member_summaries(members: &[AgentMember], baseline: &[String]) -> Vec
     }
 
     for baseline_member in baseline {
-        if baseline_member == "team-lead" {
+        if baseline_member.as_str() == "team-lead" {
             continue;
         }
         if let Some(member) = members
             .iter()
-            .find(|member| member.name == *baseline_member)
+            .find(|member| member.name == baseline_member.as_str())
         {
             ordered.push(member_summary(member));
             included.insert(member.name.clone());

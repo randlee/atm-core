@@ -29,9 +29,9 @@ Status:
   implementation merge work.
 - Phase O completed the security and hardening follow-up line.
 - Phase P implementation is merged; follow-up hardening remains open for
-  `P.6`, `P.7`, and `P.10`, while `P.8` documentation reconciliation and the
-  `P.9` lock-sentinel design review are complete. `P.10` implements the
-  hardened fix from P.9's recommendations.
+  `P.6` and later cleanup/fix branches, while `P.8` documentation
+  reconciliation and the `P.9`/`P.10` lock-sentinel design and implementation
+  work are complete on the merged Phase P line.
 - Message schema ownership and metadata normalization are now implemented well
   enough for live shared-inbox adoption, while a separate ATM-native inbox
   remains deferred to a later version.

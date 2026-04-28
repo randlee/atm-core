@@ -1,6 +1,10 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -34,6 +38,19 @@ enum PostSendHookResultLevel {
     Info,
     Warn,
     Error,
+}
+
+#[derive(Clone, Default)]
+struct HookCancellationToken(Arc<AtomicBool>);
+
+impl HookCancellationToken {
+    fn cancel(&self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+
+    fn is_cancelled(&self) -> bool {
+        self.0.load(Ordering::SeqCst)
+    }
 }
 
 pub(super) fn maybe_run_post_send_hook(
@@ -128,7 +145,9 @@ fn execute_post_send_hook(
             return;
         }
     };
-    let mut stdout_reader = spawn_post_send_hook_stdout_reader(&mut child);
+    let stdout_cancellation = HookCancellationToken::default();
+    let mut stdout_reader =
+        spawn_post_send_hook_stdout_reader(&mut child, stdout_cancellation.clone());
 
     let started_at = Instant::now();
     loop {
@@ -163,10 +182,7 @@ fn execute_post_send_hook(
             Ok(None) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                maybe_log_post_send_hook_result(
-                    &command_path,
-                    finish_post_send_hook_stdout_capture(stdout_reader.take(), &command_path),
-                );
+                abandon_post_send_hook_stdout_capture(stdout_reader.take(), &stdout_cancellation);
                 let warning = format!(
                     "warning: post-send hook timed out after {}s for {}. The hook script exceeded the 5-second timeout; ensure it exits promptly.",
                     POST_SEND_HOOK_TIMEOUT.as_secs(),
@@ -188,10 +204,7 @@ fn execute_post_send_hook(
             Err(error) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                maybe_log_post_send_hook_result(
-                    &command_path,
-                    finish_post_send_hook_stdout_capture(stdout_reader.take(), &command_path),
-                );
+                abandon_post_send_hook_stdout_capture(stdout_reader.take(), &stdout_cancellation);
                 let warning = format!(
                     "warning: post-send hook status check failed for {}: {error}. This is an OS-level error; check that the hook process is not being killed externally.",
                     command_path.display()
@@ -228,12 +241,16 @@ fn hook_matches_recipient(configured: &HookRecipient, candidate: &crate::types::
 
 fn spawn_post_send_hook_stdout_reader(
     child: &mut std::process::Child,
+    cancellation: HookCancellationToken,
 ) -> Option<thread::JoinHandle<std::io::Result<Vec<u8>>>> {
     let mut stdout = child.stdout.take()?;
     Some(thread::spawn(move || {
         let mut captured = Vec::new();
         let mut chunk = [0_u8; 1024];
         loop {
+            if cancellation.is_cancelled() {
+                break;
+            }
             let read = stdout.read(&mut chunk)?;
             if read == 0 {
                 break;
@@ -246,6 +263,17 @@ fn spawn_post_send_hook_stdout_reader(
         }
         Ok(captured)
     }))
+}
+
+fn abandon_post_send_hook_stdout_capture(
+    stdout_reader: Option<thread::JoinHandle<std::io::Result<Vec<u8>>>>,
+    cancellation: &HookCancellationToken,
+) {
+    // The timeout/error paths must not block on stdout capture. Cancelling the
+    // reader lets the detached helper exit as soon as the killed child closes
+    // stdout, while the command path returns immediately with the warning.
+    cancellation.cancel();
+    drop(stdout_reader);
 }
 
 fn finish_post_send_hook_stdout_capture(
@@ -381,8 +409,8 @@ mod tests {
     use tracing::Level;
 
     use super::{
-        POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel, hook_matches_recipient,
-        hook_result_log_level, parse_post_send_hook_result,
+        HookCancellationToken, POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel,
+        hook_matches_recipient, hook_result_log_level, parse_post_send_hook_result,
     };
     use crate::config::types::HookRecipient;
 
@@ -436,5 +464,15 @@ mod tests {
             hook_result_log_level(PostSendHookResultLevel::Error),
             Level::ERROR
         );
+    }
+
+    #[test]
+    fn hook_cancellation_token_tracks_cancelled_state() {
+        let token = HookCancellationToken::default();
+        assert!(!token.is_cancelled());
+
+        token.cancel();
+
+        assert!(token.is_cancelled());
     }
 }

@@ -33,7 +33,7 @@ impl From<DateTime<Utc>> for IsoTimestamp {
 }
 
 /// Canonical ATM agent/member name at a public API boundary.
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct AgentName(String);
 
@@ -60,6 +60,16 @@ impl FromStr for AgentName {
         let trimmed = value.trim();
         validate_path_segment(trimmed, "agent")?;
         Ok(Self(trimmed.to_string()))
+    }
+}
+
+impl<'de> Deserialize<'de> for AgentName {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        value.parse().map_err(serde::de::Error::custom)
     }
 }
 
@@ -96,7 +106,7 @@ impl PartialEq<&str> for AgentName {
 }
 
 /// Canonical ATM team name at a public API boundary.
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct TeamName(String);
 
@@ -123,6 +133,16 @@ impl FromStr for TeamName {
         let trimmed = value.trim();
         validate_path_segment(trimmed, "team")?;
         Ok(Self(trimmed.to_string()))
+    }
+}
+
+impl<'de> Deserialize<'de> for TeamName {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        value.parse().map_err(serde::de::Error::custom)
     }
 }
 
@@ -229,13 +249,27 @@ impl fmt::Display for TaskId {
 
 #[cfg(test)]
 mod tests {
-    use super::TaskId;
+    use super::{AgentName, TaskId, TeamName};
 
     #[test]
     fn task_id_rejects_blank_deserialization() {
         let error = serde_json::from_str::<TaskId>("\"   \"").expect_err("blank task id");
 
         assert!(error.to_string().contains("task id must not be blank"));
+    }
+
+    #[test]
+    fn agent_name_rejects_blank_deserialization() {
+        let error = serde_json::from_str::<AgentName>("\"   \"").expect_err("blank agent name");
+
+        assert!(error.to_string().contains("agent"));
+    }
+
+    #[test]
+    fn team_name_rejects_blank_deserialization() {
+        let error = serde_json::from_str::<TeamName>("\"   \"").expect_err("blank team name");
+
+        assert!(error.to_string().contains("team"));
     }
 }
 

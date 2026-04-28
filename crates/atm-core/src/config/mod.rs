@@ -86,7 +86,7 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
                 })
             })
             .transpose()?,
-        team_members: normalize_string_list(parsed.atm.team_members),
+        team_members: normalize_team_members(parsed.atm.team_members, &path)?,
         aliases: normalize_aliases(parsed.atm.aliases),
         post_send_hooks: normalize_post_send_hooks(parsed.atm.post_send_hooks, &config_root)?,
         config_root,
@@ -236,11 +236,22 @@ fn reject_legacy_post_send_hook_keys(path: &Path, raw_toml: &TomlValue) -> Resul
     Ok(())
 }
 
-fn normalize_string_list(values: Vec<String>) -> Vec<String> {
+fn normalize_team_members(values: Vec<String>, path: &Path) -> Result<Vec<TeamName>, AtmError> {
     values
         .into_iter()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
+        .map(|value| {
+            value.parse::<TeamName>().map_err(|error| {
+                AtmError::new(
+                    AtmErrorKind::Config,
+                    format!("invalid [atm].team_members entry in {}: {error}", path.display()),
+                )
+                .with_recovery(
+                    "Use valid ATM team-member names in [atm].team_members without path separators or surrounding whitespace.",
+                )
+            })
+        })
         .collect()
 }
 
@@ -341,6 +352,7 @@ fn parse_team_member(config_path: &Path, index: usize, entry: &Value) -> Option<
 mod tests {
     use crate::config::types::HookRecipient;
     use crate::error_codes::AtmErrorCode;
+    use crate::types::TeamName;
     use serde_json::Value;
     use std::env;
     use std::fs;
@@ -409,7 +421,14 @@ blank = ""
         .expect("config");
 
         let config = load_config(&root).expect("config").expect("present");
-        assert_eq!(config.team_members, vec!["team-lead", "arch-ctm", "qa"]);
+        assert_eq!(
+            config.team_members,
+            vec![
+                "team-lead".parse::<TeamName>().expect("team member"),
+                "arch-ctm".parse::<TeamName>().expect("team member"),
+                "qa".parse::<TeamName>().expect("team member"),
+            ]
+        );
         assert_eq!(config.post_send_hooks.len(), 2);
         assert_eq!(
             config.post_send_hooks[0].recipient,
@@ -436,6 +455,20 @@ blank = ""
             Some("quality-mgr")
         );
         assert!(!config.aliases.contains_key("blank"));
+    }
+
+    #[test]
+    fn load_config_rejects_invalid_team_member_name() {
+        let root = unique_temp_dir("atm-config-invalid-team-member");
+        fs::write(
+            root.join(".atm.toml"),
+            "[atm]\nteam_members = [\"team-lead\", \"bad/name\"]\n",
+        )
+        .expect("config");
+
+        let error = load_config(&root).expect_err("invalid team member");
+
+        assert!(error.message.contains("[atm].team_members"));
     }
 
     #[test]

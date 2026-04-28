@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use serde_json::Map;
 use tracing::trace;
 
@@ -39,9 +39,36 @@ pub struct AckOutcome {
     pub message_id: LegacyMessageId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
-    pub reply_target: String,
+    pub reply_target: ReplyTarget,
     pub reply_message_id: LegacyMessageId,
     pub reply_text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplyTarget {
+    agent: AgentName,
+    team: TeamName,
+}
+
+impl ReplyTarget {
+    fn new(agent: AgentName, team: TeamName) -> Self {
+        Self { agent, team }
+    }
+}
+
+impl std::fmt::Display for ReplyTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}@{}", self.agent, self.team)
+    }
+}
+
+impl Serialize for ReplyTarget {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
 }
 
 /// Acknowledge one previously read pending-ack message and append a reply.
@@ -255,7 +282,10 @@ pub fn ack_mail(
         agent: AgentName::from_validated(actor.clone()),
         message_id: request.message_id,
         task_id: source_task_id.clone(),
-        reply_target: format!("{reply_agent}@{reply_team}"),
+        reply_target: ReplyTarget::new(
+            AgentName::from_validated(reply_agent),
+            TeamName::from_validated(reply_team),
+        ),
         reply_message_id,
         reply_text: reply_text.clone(),
     };
@@ -264,8 +294,8 @@ pub fn ack_mail(
         command: "ack",
         action: "ack",
         outcome: "ok",
-        team,
-        agent: actor.clone(),
+        team: TeamName::from_validated(team),
+        agent: AgentName::from_validated(actor.clone()),
         sender: actor,
         message_id: Some(request.message_id),
         requires_ack: false,
