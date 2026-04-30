@@ -45,6 +45,11 @@ TeamCreate(team_name="atm-dev", description="ATM development team", agent_type="
 
 Verify that the returned team name is exactly `atm-dev`. If it is not, stop.
 
+Note: this same `TeamCreate` call is also required on the Step 1 fast path when
+the session id still matches but Claude Code's in-memory routing was wiped by
+context compaction. In that case it repairs teammate communications without
+doing the destructive backup/delete/restore sequence above.
+
 ## Step 5 — Restore Team Members And Inboxes
 
 ```bash

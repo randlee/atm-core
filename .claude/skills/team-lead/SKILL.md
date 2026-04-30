@@ -28,8 +28,12 @@ Get the current session id from the `SessionStart` hook output in context
 python3 -c "import json; print(json.load(open('/Users/randlee/.claude/teams/atm-dev/config.json'))['leadSessionId'])"
 ```
 
-- Match: the team is already initialized for this session. Proceed directly to
-  reading `docs/project-plan.md` and outputting project status.
+- Match: the team is already initialized for this session, so no full ATM
+  restore is needed. Before reading `docs/project-plan.md`, run
+  `TeamCreate(team_name="atm-dev", description="ATM development team", agent_type="team-lead")`
+  once to re-establish Claude Code's in-memory team routing if context
+  compaction wiped it. This is a communications repair step, not a destructive
+  restore.
 - Mismatch or missing config: follow the full restore procedure in
   `.claude/skills/team-lead/backup-and-restore-team.md`.
 
