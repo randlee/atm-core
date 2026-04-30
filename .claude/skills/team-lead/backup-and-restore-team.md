@@ -1,7 +1,13 @@
 # Team Backup And Restore Procedure
 
 Follow this procedure when Step 1 of the `team-lead` skill detects a session id
-mismatch and a full team restore is required.
+mismatch and a full team restore is required. This is the startup or `clear`
+path where the live `SESSION_ID` changed and no longer matches
+`leadSessionId`.
+
+Do not use this procedure for same-session compaction or resume when the
+session id still matches. Use `/restore-team-communications` for that lighter
+repair path.
 
 ## Step 2 — Backup Current State
 
@@ -45,10 +51,10 @@ TeamCreate(team_name="atm-dev", description="ATM development team", agent_type="
 
 Verify that the returned team name is exactly `atm-dev`. If it is not, stop.
 
-Note: this same `TeamCreate` call is also required on the Step 1 fast path when
-the session id still matches but Claude Code's in-memory routing was wiped by
-context compaction. In that case it repairs teammate communications without
-doing the destructive backup/delete/restore sequence above.
+Note: `/restore-team-communications` reuses this same `TeamCreate` primitive
+when communications are broken after compaction or resume, but that path should
+prove the failure first and avoid this destructive backup/delete/restore flow
+unless the lighter repair fails.
 
 ## Step 5 — Restore Team Members And Inboxes
 
@@ -108,6 +114,11 @@ atm inbox
 atm gh pr list
 ```
 
+Communication verification is also mandatory:
+1. `SendMessage` to another Claude teammate to prove Claude-side routing works.
+2. `atm send` to a non-Claude model to prove ATM mailbox routing works.
+3. `atm send` to Codex and confirm the Codex-side nudge fires.
+
 ## Step 8 — Read Project Context
 
 1. Read `docs/project-plan.md`.
@@ -124,11 +135,18 @@ atm gh pr list
 atm send arch-ctm "New session (session-id: <SESSION_ID>). Team atm-dev restored. Please acknowledge and confirm status."
 ```
 
-If no response arrives within about 60 seconds, nudge via tmux:
+If no response arrives within about 60 seconds, nudge via tmux. Preferred
+structured nudge payload when task metadata is available:
+
+```text
+<atm><action>read atm</action><action>ack <TASK-ID></action><action>execute assigned task</action><when idle="immediate" busy="after-current-task"/><console announce="concise" pause="false"/></atm>
+```
+
+Fallback plain-text nudge:
 
 ```bash
 tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index} #{pane_title}'
-tmux send-keys -t <pane-id> "You have unread ATM messages. Run: atm read --team atm-dev" Enter
+tmux send-keys -t <pane-id> "read atm for task <TASK-ID> and complete it before stopping" Enter
 ```
 
 ## Common Failure Modes

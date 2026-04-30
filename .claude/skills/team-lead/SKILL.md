@@ -9,7 +9,9 @@ description: >
 
 # Team Lead Skill
 
-Trigger: run at the start of every session where `ATM_IDENTITY=team-lead`.
+Trigger: run at the start of every fresh session where `ATM_IDENTITY=team-lead`.
+Do not use this skill for same-session compaction or resume unless the session id
+has changed.
 
 ## Step 0 — Confirm Identity
 
@@ -28,13 +30,14 @@ Get the current session id from the `SessionStart` hook output in context
 python3 -c "import json; print(json.load(open('/Users/randlee/.claude/teams/atm-dev/config.json'))['leadSessionId'])"
 ```
 
-- Match: the team is already initialized for this session, so no full ATM
-  restore is needed. Before reading `docs/project-plan.md`, run
-  `TeamCreate(team_name="atm-dev", description="ATM development team", agent_type="team-lead")`
-  once to re-establish Claude Code's in-memory team routing if context
-  compaction wiped it. This is a communications repair step, not a destructive
-  restore.
-- Mismatch or missing config: follow the full restore procedure in
+- Match: the current session already matches the persisted team state. Proceed to
+  reading `docs/project-plan.md` and outputting project status. Stay silent in
+  ATM unless teammate action is required. If teammate communications are broken
+  despite a match, stop and use `/restore-team-communications` instead of the
+  full restore flow.
+- Mismatch or missing config: this is the normal startup or `clear` case where
+  the live `SESSION_ID` changed and the saved `leadSessionId` no longer
+  matches. Follow the full restore procedure in
   `.claude/skills/team-lead/backup-and-restore-team.md`.
 
 ## Team-Lead Responsibilities
@@ -46,6 +49,7 @@ After initialization, use these repo-local skills to coordinate work:
 | `/phase-orchestration` | Orchestrate a multi-sprint phase with fresh scrum-masters |
 | `/codex-orchestration` | Run phases where arch-ctm is sole dev, with pipelined QA via quality-mgr |
 | `/quality-management-gh` | Multi-pass QA on GitHub PRs; CI monitoring; findings/final quality reports |
+| `/restore-team-communications` | Repair same-session Claude teammate routing after compaction or resume without invoking full startup/clear restore |
 
 Additional orchestration guides live in `.claude/skills/*/SKILL.md`.
 
