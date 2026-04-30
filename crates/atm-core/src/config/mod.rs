@@ -1,4 +1,12 @@
 //! ATM config discovery, loading, normalization, and team-config parsing.
+//!
+//! # Deprecated
+//!
+//! `[atm].identity` and the legacy top-level `identity` key remain
+//! compatibility-only parsing inputs so ATM can emit
+//! `ATM_WARNING_IDENTITY_DRIFT` for obsolete configs. They no longer control
+//! runtime sender identity resolution. Set `ATM_IDENTITY` instead and remove
+//! the deprecated config keys once the environment-based identity is in place.
 
 pub mod aliases;
 pub mod bridge;
@@ -551,7 +559,7 @@ post_send_hook_recipients = ["team-lead"]
 
     #[test]
     fn parse_team_config_accepts_object_members() {
-        let config_path = temp_config_path();
+        let (_tempdir, config_path) = temp_config_path();
         let config = parse_team_config(
             &config_path,
             r#"{"members":[{"name":"arch-ctm"},{"name":"team-lead"}]}"#,
@@ -566,7 +574,7 @@ post_send_hook_recipients = ["team-lead"]
 
     #[test]
     fn parse_team_config_accepts_string_member_compatibility() {
-        let config_path = temp_config_path();
+        let (_tempdir, config_path) = temp_config_path();
         let config = parse_team_config(
             &config_path,
             r#"{"members":["arch-ctm",{"name":"team-lead"}]}"#,
@@ -581,7 +589,7 @@ post_send_hook_recipients = ["team-lead"]
 
     #[test]
     fn parse_team_config_skips_invalid_member_records() {
-        let config_path = temp_config_path();
+        let (_tempdir, config_path) = temp_config_path();
         let config = parse_team_config(
             &config_path,
             r#"{"members":[{"name":"arch-ctm"},{"broken":true},17,{"name":"team-lead"}]}"#,
@@ -596,7 +604,7 @@ post_send_hook_recipients = ["team-lead"]
 
     #[test]
     fn parse_team_config_defaults_missing_members_to_empty() {
-        let config_path = temp_config_path();
+        let (_tempdir, config_path) = temp_config_path();
         let config = parse_team_config(&config_path, r#"{}"#).expect("team config");
 
         assert!(config.members.is_empty());
@@ -605,7 +613,7 @@ post_send_hook_recipients = ["team-lead"]
 
     #[test]
     fn parse_team_config_preserves_root_extra_fields() {
-        let config_path = temp_config_path();
+        let (_tempdir, config_path) = temp_config_path();
         let config = parse_team_config(
             &config_path,
             r#"{"leadSessionId":"lead-123","members":[{"name":"team-lead"}]}"#,
@@ -621,7 +629,7 @@ post_send_hook_recipients = ["team-lead"]
 
     #[test]
     fn parse_team_config_reports_json_syntax_errors_with_detail() {
-        let config_path = temp_config_path();
+        let (_tempdir, config_path) = temp_config_path();
         let error = parse_team_config(&config_path, r#"{"members":[{"name":"arch-ctm"}"#)
             .expect_err("syntax error");
 
@@ -634,7 +642,7 @@ post_send_hook_recipients = ["team-lead"]
 
     #[test]
     fn parse_team_config_rejects_non_object_root() {
-        let config_path = temp_config_path();
+        let (_tempdir, config_path) = temp_config_path();
         let error =
             parse_team_config(&config_path, r#"["arch-ctm"]"#).expect_err("root shape error");
 
@@ -646,7 +654,7 @@ post_send_hook_recipients = ["team-lead"]
 
     #[test]
     fn parse_team_config_rejects_non_array_members() {
-        let config_path = temp_config_path();
+        let (_tempdir, config_path) = temp_config_path();
         let error = parse_team_config(&config_path, r#"{"members":{"name":"arch-ctm"}}"#)
             .expect_err("members shape error");
 
@@ -743,13 +751,12 @@ post_send_hook_recipients = ["team-lead"]
         path
     }
 
-    fn temp_config_path() -> PathBuf {
+    fn temp_config_path() -> (tempfile::TempDir, PathBuf) {
         let tempdir = tempdir().expect("tempdir");
         let root = tempdir.path().to_path_buf();
         let nested = root.join("atm config root").join("nested config dir");
         fs::create_dir_all(&nested).expect("nested config dir");
-        std::mem::forget(tempdir);
-        nested.join("config.json")
+        (tempdir, nested.join("config.json"))
     }
 
     fn restore(key: &str, value: Option<std::ffi::OsString>) {

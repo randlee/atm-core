@@ -4,6 +4,7 @@ use std::process::{Command, Stdio};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
+    mpsc,
 };
 use std::thread;
 use std::time::{Duration, Instant};
@@ -22,6 +23,7 @@ use super::{PostSendHookContext, qualified_sender_identity};
 
 const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 const POST_SEND_HOOK_MAX_STDOUT_BYTES: usize = 8 * 1024;
+const POST_SEND_HOOK_STDOUT_JOIN_TIMEOUT: Duration = Duration::from_millis(500);
 
 #[derive(Debug, Deserialize)]
 struct PostSendHookResult {
@@ -182,7 +184,11 @@ fn execute_post_send_hook(
             Ok(None) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                abandon_post_send_hook_stdout_capture(stdout_reader.take(), &stdout_cancellation);
+                abandon_post_send_hook_stdout_capture(
+                    stdout_reader.take(),
+                    &stdout_cancellation,
+                    &command_path,
+                );
                 let warning = format!(
                     "warning: post-send hook timed out after {}s for {}. The hook script exceeded the 5-second timeout; ensure it exits promptly.",
                     POST_SEND_HOOK_TIMEOUT.as_secs(),
@@ -204,7 +210,11 @@ fn execute_post_send_hook(
             Err(error) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                abandon_post_send_hook_stdout_capture(stdout_reader.take(), &stdout_cancellation);
+                abandon_post_send_hook_stdout_capture(
+                    stdout_reader.take(),
+                    &stdout_cancellation,
+                    &command_path,
+                );
                 let warning = format!(
                     "warning: post-send hook status check failed for {}: {error}. This is an OS-level error; check that the hook process is not being killed externally.",
                     command_path.display()
@@ -268,12 +278,59 @@ fn spawn_post_send_hook_stdout_reader(
 fn abandon_post_send_hook_stdout_capture(
     stdout_reader: Option<thread::JoinHandle<std::io::Result<Vec<u8>>>>,
     cancellation: &HookCancellationToken,
+    command_path: &Path,
 ) {
     // The timeout/error paths must not block on stdout capture. Cancelling the
-    // reader lets the detached helper exit as soon as the killed child closes
-    // stdout, while the command path returns immediately with the warning.
+    // reader lets the helper exit as soon as the killed child closes stdout.
+    // We still give the reader a short bounded join window so it does not
+    // outlive the command path under normal teardown.
     cancellation.cancel();
-    drop(stdout_reader);
+    finish_abandoned_post_send_hook_stdout_capture(stdout_reader, command_path);
+}
+
+fn finish_abandoned_post_send_hook_stdout_capture(
+    stdout_reader: Option<thread::JoinHandle<std::io::Result<Vec<u8>>>>,
+    command_path: &Path,
+) {
+    let Some(stdout_reader) = stdout_reader else {
+        return;
+    };
+    let (tx, rx) = mpsc::sync_channel(1);
+    thread::spawn(move || {
+        let _ = tx.send(stdout_reader.join());
+    });
+
+    match rx.recv_timeout(POST_SEND_HOOK_STDOUT_JOIN_TIMEOUT) {
+        Ok(Ok(Ok(_))) => {}
+        Ok(Ok(Err(error))) => {
+            warn!(
+                code = %AtmErrorCode::WarningHookExecutionFailed,
+                hook_path = %command_path.display(),
+                %error,
+                "post-send hook stdout capture failed during bounded teardown"
+            );
+        }
+        Ok(Err(_)) => {
+            warn!(
+                code = %AtmErrorCode::WarningHookExecutionFailed,
+                hook_path = %command_path.display(),
+                "post-send hook stdout capture panicked during bounded teardown"
+            );
+        }
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            debug!(
+                hook_path = %command_path.display(),
+                join_timeout_ms = POST_SEND_HOOK_STDOUT_JOIN_TIMEOUT.as_millis(),
+                "post-send hook stdout reader did not exit before the bounded teardown deadline"
+            );
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            debug!(
+                hook_path = %command_path.display(),
+                "post-send hook stdout join waiter disconnected before reporting a result"
+            );
+        }
+    }
 }
 
 fn finish_post_send_hook_stdout_capture(
@@ -404,12 +461,14 @@ fn hook_result_log_level(level: PostSendHookResultLevel) -> Level {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
+    use std::time::Duration;
 
     use serde_json::json;
     use tracing::Level;
 
     use super::{
-        HookCancellationToken, POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel,
+        HookCancellationToken, POST_SEND_HOOK_MAX_STDOUT_BYTES, POST_SEND_HOOK_STDOUT_JOIN_TIMEOUT,
+        PostSendHookResultLevel, finish_abandoned_post_send_hook_stdout_capture,
         hook_matches_recipient, hook_result_log_level, parse_post_send_hook_result,
     };
     use crate::config::types::HookRecipient;
@@ -474,5 +533,17 @@ mod tests {
         token.cancel();
 
         assert!(token.is_cancelled());
+    }
+
+    #[test]
+    fn bounded_stdout_teardown_returns_promptly_for_completed_reader() {
+        let handle = std::thread::spawn(|| Ok::<Vec<u8>, std::io::Error>(Vec::new()));
+        let started_at = std::time::Instant::now();
+
+        finish_abandoned_post_send_hook_stdout_capture(Some(handle), Path::new("hook"));
+
+        assert!(
+            started_at.elapsed() < POST_SEND_HOOK_STDOUT_JOIN_TIMEOUT + Duration::from_millis(100)
+        );
     }
 }

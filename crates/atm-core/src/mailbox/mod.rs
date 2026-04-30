@@ -25,7 +25,7 @@ use crate::schema::{LegacyMessageId, MessageEnvelope};
 /// [`crate::error_codes::AtmErrorCode::MailboxLockFailed`], or
 /// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`] when the mailbox
 /// cannot be loaded, locked, or atomically replaced.
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), AtmError> {
     locked_read_modify_write(path, lock::default_lock_timeout(), |messages| {
         messages.push(envelope.clone());
@@ -44,7 +44,7 @@ pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), Atm
 /// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`] when ATM cannot
 /// acquire the mailbox lock, read the current mailbox contents, or atomically
 /// persist the rewritten file.
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) fn locked_read_modify_write<F>(
     path: &Path,
     timeout: std::time::Duration,

@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 
 use crate::error::{AtmError, AtmErrorKind};
 
+const MAX_FILE_REFERENCE_BYTES: u64 = 10 * 1024 * 1024;
+
 /// Process a send `--file` reference under the ATM file-policy rules.
 ///
 /// # Errors
@@ -26,6 +28,27 @@ pub fn process_file_reference(
 
     if is_file_in_repo(file_path, current_dir) {
         return Ok(render_reference_message(message_text, file_path));
+    }
+
+    let file_size = fs::metadata(file_path).map_err(|error| {
+        AtmError::new(
+            AtmErrorKind::FilePolicy,
+            format!("failed to inspect file {}: {error}", file_path.display()),
+        )
+        .with_source(error)
+        .with_recovery(
+            "Check that the source file still exists and is readable, then retry the send.",
+        )
+    })?;
+    if file_size.len() > MAX_FILE_REFERENCE_BYTES {
+        return Err(AtmError::file_policy(format!(
+            "file reference exceeds the {}-byte limit: {}",
+            MAX_FILE_REFERENCE_BYTES,
+            file_path.display()
+        ))
+        .with_recovery(
+            "Use a file no larger than 10 MiB or move the content into the repository so ATM can reference it without copying.",
+        ));
     }
 
     let share_dir = home_dir
@@ -93,4 +116,53 @@ fn find_git_root(start_dir: &Path) -> Option<PathBuf> {
         current = dir.parent();
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs::{self, File};
+
+    use tempfile::tempdir;
+
+    use super::{MAX_FILE_REFERENCE_BYTES, process_file_reference};
+
+    #[test]
+    fn rejects_oversized_non_repo_file_references_before_copying() {
+        let source_dir = tempdir().expect("source tempdir");
+        let current_dir = tempdir().expect("current tempdir");
+        let home_dir = tempdir().expect("home tempdir");
+        let oversized_path = source_dir.path().join("large.bin");
+        File::create(&oversized_path)
+            .and_then(|file| file.set_len(MAX_FILE_REFERENCE_BYTES + 1))
+            .expect("oversized file");
+
+        let error = process_file_reference(
+            &oversized_path,
+            Some("see attached"),
+            "atm-dev",
+            current_dir.path(),
+            home_dir.path(),
+        )
+        .expect_err("oversized file should fail");
+
+        assert!(error.is_file_policy());
+        assert!(error.message.contains("exceeds"));
+        assert!(
+            error
+                .recovery
+                .as_deref()
+                .is_some_and(|value| value.contains("10 MiB"))
+        );
+        assert!(
+            fs::read_dir(
+                home_dir
+                    .path()
+                    .join(".config")
+                    .join("atm")
+                    .join("share")
+                    .join("atm-dev")
+            )
+            .is_err()
+        );
+    }
 }
