@@ -15,6 +15,8 @@ use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::schema::{LegacyMessageId, MessageEnvelope};
+
+const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
 /// Append one message to a mailbox JSONL file under the mailbox lock.
 ///
 /// # Errors
@@ -69,6 +71,32 @@ where
 pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
     if !path.exists() {
         return Ok(Vec::new());
+    }
+
+    let file_size = fs::metadata(path).map_err(|error| {
+        AtmError::new(
+            AtmErrorKind::MailboxRead,
+            format!("failed to inspect mailbox file {}: {error}", path.display()),
+        )
+        .with_recovery(
+            "Retry after concurrent ATM activity completes, or verify the mailbox file still exists and is readable.",
+        )
+        .with_source(error)
+    })?;
+    if file_size.len() > MAX_MAILBOX_READ_BYTES {
+        return Err(
+            AtmError::new(
+                AtmErrorKind::MailboxRead,
+                format!(
+                    "mailbox file {} exceeds the {}-byte read limit",
+                    path.display(),
+                    MAX_MAILBOX_READ_BYTES
+                ),
+            )
+            .with_recovery(
+                "Trim or archive oversized mailbox contents before retrying `atm read` so ATM does not load an unbounded mailbox into memory.",
+            ),
+        );
     }
 
     let raw = fs::read_to_string(path).map_err(|error| {
@@ -200,7 +228,7 @@ fn sanitize_legacy_message_id(value: &mut Value, path: &Path, line_number: usize
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::fs::{self, File};
     use std::sync::{Arc, Barrier};
     use std::thread;
 
@@ -211,7 +239,7 @@ mod tests {
     use crate::schema::MessageEnvelope;
     use crate::types::IsoTimestamp;
 
-    use super::{append_message, locked_read_modify_write, read_messages};
+    use super::{MAX_MAILBOX_READ_BYTES, append_message, locked_read_modify_write, read_messages};
     use crate::mailbox::lock;
 
     #[test]
@@ -281,6 +309,26 @@ mod tests {
         let messages = read_messages(&path).expect("read");
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].text, "valid");
+    }
+
+    #[test]
+    fn read_messages_rejects_oversized_mailbox_before_loading_contents() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("oversized-mailbox.jsonl");
+        File::create(&path)
+            .and_then(|file| file.set_len(MAX_MAILBOX_READ_BYTES + 1))
+            .expect("oversized mailbox");
+
+        let error = read_messages(&path).expect_err("oversized mailbox should fail");
+
+        assert!(error.is_mailbox_read());
+        assert!(error.message.contains("exceeds"));
+        assert!(
+            error
+                .recovery
+                .as_deref()
+                .is_some_and(|value| value.contains("oversized mailbox"))
+        );
     }
 
     #[test]

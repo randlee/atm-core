@@ -38,7 +38,10 @@ pub fn run_doctor(
     let config = config::load_config(&query.current_dir)?;
     let home_dir = query.home_dir.clone();
     let initial_lock_snapshot = snapshot_mailbox_lock_paths(&home_dir);
-    let resolved_team = config::resolve_team(query.team_override.as_deref(), config.as_ref());
+    let resolved_team = query
+        .team_override
+        .clone()
+        .or_else(|| config::resolve_team(None, config.as_ref()));
 
     let environment = health::environment_visibility(query.home_dir, query.team_override);
     let (observability_health, finding) = match observability.health() {

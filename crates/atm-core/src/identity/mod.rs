@@ -2,6 +2,7 @@ pub mod hook;
 
 use crate::config::AtmConfig;
 use crate::error::AtmError;
+use crate::types::AgentName;
 
 /// Resolve the active actor identity for commands that allow an explicit override.
 ///
@@ -22,7 +23,7 @@ pub(crate) fn resolve_actor_identity(
         return Ok(identity);
     }
 
-    resolve_runtime_sender_identity(config)
+    resolve_runtime_sender_identity(config).map(AgentName::into_inner)
 }
 
 /// Resolve the sender identity for `send`, preserving sender-override and
@@ -56,7 +57,7 @@ pub(crate) fn resolve_sender_identity(
 /// Returns [`AtmError`] with
 /// [`crate::error_codes::AtmErrorCode::IdentityUnavailable`] when
 /// `ATM_IDENTITY` is not set in the current environment.
-pub fn resolve_runtime_sender_identity(config: Option<&AtmConfig>) -> Result<String, AtmError> {
+pub fn resolve_runtime_sender_identity(config: Option<&AtmConfig>) -> Result<AgentName, AtmError> {
     crate::config::resolve_identity(config).ok_or_else(AtmError::identity_unavailable)
 }
 
@@ -68,7 +69,7 @@ pub fn resolve_hook_identity(
     let agent = resolve_runtime_sender_identity(config)?;
     let team = crate::config::resolve_team(team_override, config)
         .ok_or_else(AtmError::team_unavailable)?;
-    Ok((agent, team))
+    Ok((agent.into_inner(), team.into_inner()))
 }
 
 #[cfg(test)]
@@ -80,11 +81,12 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use crate::config::AtmConfig;
+    use crate::types::AgentName;
 
     use super::{resolve_hook_identity, resolve_runtime_sender_identity, resolve_sender_identity};
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn resolves_sender_identity_from_environment() {
         let original_identity = env::var_os("ATM_IDENTITY");
         set_env_var("ATM_IDENTITY", "arch-ctm");
@@ -96,14 +98,14 @@ mod tests {
         };
         assert_eq!(
             resolve_runtime_sender_identity(Some(&config)).expect("identity"),
-            "arch-ctm"
+            AgentName::from_validated("arch-ctm")
         );
 
         restore("ATM_IDENTITY", original_identity);
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn sender_identity_does_not_fall_back_to_config_when_env_missing() {
         let original_identity = env::var_os("ATM_IDENTITY");
         remove_env_var("ATM_IDENTITY");
@@ -121,7 +123,7 @@ mod tests {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn resolves_hook_identity_from_environment() {
         let original_identity = env::var_os("ATM_IDENTITY");
         let original_team = env::var_os("ATM_TEAM");
@@ -137,7 +139,7 @@ mod tests {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn hook_identity_requires_runtime_identity_when_env_missing() {
         let original_identity = env::var_os("ATM_IDENTITY");
         let original_team = env::var_os("ATM_TEAM");
@@ -160,7 +162,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn send_sender_identity_applies_alias_to_hook_identity() {
         let original_identity = env::var_os("ATM_IDENTITY");
         remove_env_var("ATM_IDENTITY");
@@ -201,14 +203,14 @@ mod tests {
     }
 
     fn set_env_var<K: AsRef<std::ffi::OsStr>, V: AsRef<std::ffi::OsStr>>(key: K, value: V) {
-        // SAFETY: these tests use serial_test to ensure process environment
-        // mutations are not performed concurrently.
+        // SAFETY: these tests use #[serial_test::serial(env)] to ensure process
+        // environment mutations are not performed concurrently.
         unsafe { env::set_var(key, value) }
     }
 
     fn remove_env_var<K: AsRef<std::ffi::OsStr>>(key: K) {
-        // SAFETY: these tests use serial_test to ensure process environment
-        // mutations are not performed concurrently.
+        // SAFETY: these tests use #[serial_test::serial(env)] to ensure process
+        // environment mutations are not performed concurrently.
         unsafe { env::remove_var(key) }
     }
 }

@@ -133,7 +133,7 @@ pub fn send_mail(
         request.team_override.as_deref(),
         config.as_ref(),
     )?;
-    let sender_team = config::resolve_team(None, config.as_ref()).map(TeamName::from_validated);
+    let sender_team = config::resolve_team(None, config.as_ref());
     let sender = display_sender_identity(
         &canonical_sender,
         request.sender_override.as_deref(),
@@ -320,7 +320,8 @@ fn resolve_recipient(
 ) -> Result<ResolvedRecipient, AtmError> {
     let team = target_address
         .team
-        .clone()
+        .as_deref()
+        .and_then(|team| team.parse().ok())
         .or_else(|| config::resolve_team(team_override, config))
         .ok_or_else(AtmError::team_unavailable)?;
 
@@ -329,7 +330,7 @@ fn resolve_recipient(
             &target_address.agent,
             config,
         )),
-        team: TeamName::from_validated(team),
+        team,
     })
 }
 

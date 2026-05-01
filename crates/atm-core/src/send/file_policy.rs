@@ -20,10 +20,11 @@ pub fn process_file_reference(
     home_dir: &Path,
 ) -> Result<String, AtmError> {
     if !file_path.is_file() {
-        return Err(AtmError::file_policy(format!(
-            "file not found: {}",
-            file_path.display()
-        )));
+        return Err(
+            AtmError::file_policy(format!("file not found: {}", file_path.display())).with_recovery(
+                "Pass an existing file to `atm send --file`, or verify that the file was not moved or deleted before retrying.",
+            ),
+        );
     }
 
     if is_file_in_repo(file_path, current_dir) {
@@ -76,13 +77,24 @@ pub fn process_file_reference(
         )
     })?;
     let share_copy = share_dir.join(file_name);
-    fs::copy(file_path, &share_copy).map_err(|error| {
+    let copied_bytes = fs::copy(file_path, &share_copy).map_err(|error| {
         AtmError::file_policy(format!("failed to copy file into share directory: {error}"))
             .with_source(error)
             .with_recovery(
                 "Check source/share permissions and available disk space, then retry the send.",
             )
     })?;
+    if copied_bytes > MAX_FILE_REFERENCE_BYTES {
+        let _ = fs::remove_file(&share_copy);
+        return Err(AtmError::file_policy(format!(
+            "file reference exceeds the {}-byte limit after copy: {}",
+            MAX_FILE_REFERENCE_BYTES,
+            file_path.display()
+        ))
+        .with_recovery(
+            "Use a file no larger than 10 MiB or move the content into the repository so ATM can reference it without copying.",
+        ));
+    }
 
     Ok(render_reference_message(message_text, &share_copy))
 }

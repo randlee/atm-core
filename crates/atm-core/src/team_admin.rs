@@ -195,7 +195,7 @@ pub fn list_teams(home_dir: PathBuf, current_dir: PathBuf) -> Result<TeamsList, 
     if !teams_root.exists() {
         return Ok(TeamsList {
             action: "list".to_string(),
-            team: TeamName::from_validated(current_team),
+            team: current_team,
             teams: Vec::new(),
         });
     }
@@ -245,7 +245,7 @@ pub fn list_teams(home_dir: PathBuf, current_dir: PathBuf) -> Result<TeamsList, 
     teams.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(TeamsList {
         action: "list".to_string(),
-        team: TeamName::from_validated(current_team),
+        team: current_team,
         teams,
     })
 }
@@ -281,10 +281,7 @@ pub fn list_members(query: MembersQuery) -> Result<MembersList, AtmError> {
         members.push(member_summary(member));
     }
 
-    Ok(MembersList {
-        team: TeamName::from_validated(team),
-        members,
-    })
+    Ok(MembersList { team, members })
 }
 
 /// Add one member record and inbox file to a team.

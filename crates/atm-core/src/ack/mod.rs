@@ -179,7 +179,7 @@ pub fn ack_mail(
         text: reply_text.clone(),
         timestamp: ack_timestamp,
         read: false,
-        source_team: Some(team.clone()),
+        source_team: Some(team.to_string()),
         summary: Some(summary::build_summary(&reply_text, None)),
         message_id: Some(reply_message_id),
         pending_ack_at: None,
@@ -278,14 +278,11 @@ pub fn ack_mail(
 
     let outcome = AckOutcome {
         action: "ack",
-        team: TeamName::from_validated(team.clone()),
+        team: team.clone(),
         agent: AgentName::from_validated(actor.clone()),
         message_id: request.message_id,
         task_id: source_task_id.clone(),
-        reply_target: ReplyTarget::new(
-            AgentName::from_validated(reply_agent),
-            TeamName::from_validated(reply_team),
-        ),
+        reply_target: ReplyTarget::new(AgentName::from_validated(reply_agent), reply_team),
         reply_message_id,
         reply_text: reply_text.clone(),
     };
@@ -294,7 +291,7 @@ pub fn ack_mail(
         command: "ack",
         action: "ack",
         outcome: "ok",
-        team: TeamName::from_validated(team),
+        team,
         agent: AgentName::from_validated(actor.clone()),
         sender: actor,
         message_id: Some(request.message_id),
