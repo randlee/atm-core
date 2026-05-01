@@ -355,7 +355,12 @@ fn is_false(value: &bool) -> bool {
     !*value
 }
 
-fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str, recipient: &str) {
+fn notify_team_lead_missing_config(
+    home_dir: &Path,
+    team_dir: &Path,
+    team: &TeamName,
+    recipient: &AgentName,
+) {
     let alert_key = alert_state::missing_team_config_alert_key(team_dir);
     if !alert_state::register_missing_team_config_alert(home_dir, &alert_key) {
         return;
@@ -367,7 +372,7 @@ fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str,
             warn!(
                 code = %AtmErrorCode::WarningMissingTeamConfigFallback,
                 %error,
-                team,
+                team = %team,
                 "failed to resolve team-lead inbox for missing-config notice"
             );
             return;
@@ -414,7 +419,7 @@ fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str,
     if let Err(error) = append_mailbox_message_and_seed_workflow(
         home_dir,
         team,
-        "team-lead",
+        &AgentName::from_validated("team-lead"),
         &team_lead_inbox,
         &notice,
     ) {
@@ -422,7 +427,7 @@ fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str,
             code = %AtmErrorCode::WarningMissingTeamConfigFallback,
             %error,
             path = %team_lead_inbox.display(),
-            team,
+            team = %team,
             "failed to persist missing-config notice via shared mailbox/workflow commit path"
         );
     }
@@ -430,8 +435,8 @@ fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str,
 
 fn append_mailbox_message_and_seed_workflow(
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
     inbox_path: &Path,
     envelope: &MessageEnvelope,
 ) -> Result<(), AtmError> {
