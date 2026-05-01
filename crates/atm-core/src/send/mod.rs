@@ -336,7 +336,7 @@ fn resolve_message_body(
     source: &SendMessageSource,
     current_dir: &Path,
     home_dir: &Path,
-    team_name: &str,
+    team_name: &TeamName,
 ) -> Result<String, AtmError> {
     match source {
         SendMessageSource::Inline(message) => input::validate_message_text(message.clone()),

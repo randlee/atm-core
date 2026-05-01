@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::error::{AtmError, AtmErrorKind};
+use crate::types::TeamName;
 
 const MAX_FILE_REFERENCE_BYTES: u64 = 10 * 1024 * 1024;
 
@@ -17,7 +18,7 @@ const MAX_FILE_REFERENCE_BYTES: u64 = 10 * 1024 * 1024;
 pub fn process_file_reference(
     file_path: &Path,
     message_text: Option<&str>,
-    team_name: &str,
+    team_name: &TeamName,
     current_dir: &Path,
     home_dir: &Path,
 ) -> Result<String, AtmError> {
@@ -58,7 +59,7 @@ pub fn process_file_reference(
         .join(".config")
         .join("atm")
         .join("share")
-        .join(team_name);
+        .join(team_name.as_str());
     fs::create_dir_all(&share_dir).map_err(|error| {
         AtmError::new(
             AtmErrorKind::FilePolicy,
@@ -153,7 +154,7 @@ mod tests {
         let error = process_file_reference(
             &oversized_path,
             Some("see attached"),
-            "atm-dev",
+            &"atm-dev".parse().expect("team"),
             current_dir.path(),
             home_dir.path(),
         )

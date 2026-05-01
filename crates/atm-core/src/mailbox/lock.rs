@@ -770,7 +770,6 @@ fn forced_readonly_filesystem_test_override() -> Option<LockOperation> {
 mod tests {
     use std::ffi::{OsStr, OsString};
     use std::io;
-    use std::sync::{Mutex, OnceLock};
     use std::time::Duration;
 
     use serial_test::serial;
@@ -979,8 +978,9 @@ mod tests {
         let blocked = tempdir.path().join("blocked.json");
         let _blocked_guard = acquire(&blocked, DEFAULT_LOCK_TIMEOUT).expect("blocked");
 
-        let _ = acquire_many_sorted(vec![first, blocked], Duration::from_millis(50))
+        let error = acquire_many_sorted(vec![first, blocked], Duration::from_millis(50))
             .expect_err("timeout");
+        assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
     }
 
     #[test]
@@ -1046,7 +1046,6 @@ mod tests {
     #[test]
     #[serial(env)]
     fn acquire_reports_read_only_filesystem_for_open_failure_via_env_var_seam() {
-        let _env_lock = env_lock().lock().expect("env lock");
         let _guard = EnvGuard::set_raw("ATM_TEST_FORCE_LOCK_READONLY_FS", "open");
         let tempdir = tempdir().expect("tempdir");
         let inbox = tempdir.path().join("arch-ctm.json");
@@ -1100,11 +1099,6 @@ mod tests {
         drop(guard);
 
         assert!(sentinel.exists());
-    }
-
-    fn env_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
     }
 
     struct EnvGuard {
