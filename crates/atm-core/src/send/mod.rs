@@ -124,10 +124,8 @@ pub fn send_mail(
     observability: &dyn ObservabilityPort,
 ) -> Result<SendOutcome, AtmError> {
     let config = config::load_config(&request.current_dir)?;
-    let canonical_sender = AgentName::from_validated(identity::resolve_sender_identity(
-        request.sender_override.as_deref(),
-        config.as_ref(),
-    )?);
+    let canonical_sender =
+        identity::resolve_sender_identity(request.sender_override.as_deref(), config.as_ref())?;
     let recipient = resolve_recipient(
         &request.to,
         request.team_override.as_deref(),

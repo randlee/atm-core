@@ -141,9 +141,10 @@ pub fn load_team_config(team_dir: &Path) -> Result<TeamConfig, AtmError> {
 
 /// Resolves the sender identity for outgoing messages.
 ///
-/// The `_config` parameter is reserved for a future config-provided identity
-/// fallback and is currently unused. Identity is resolved exclusively via the
-/// `ATM_IDENTITY` environment variable.
+/// The `_config` parameter is retained only to preserve the shared config-aware
+/// helper signature used across command code paths. Identity is resolved
+/// exclusively via the `ATM_IDENTITY` environment variable and will never fall
+/// back to deprecated config identity fields.
 pub fn resolve_identity(_config: Option<&AtmConfig>) -> Option<AgentName> {
     env::var("ATM_IDENTITY")
         .ok()

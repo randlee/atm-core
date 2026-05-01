@@ -16,7 +16,10 @@ pub struct AtmConfig {
     /// use `ATM_IDENTITY` or an explicit sender override instead. `atm doctor`
     /// surfaces `ATM_WARNING_IDENTITY_DRIFT` when this obsolete field is still
     /// present. Migration path: remove `[atm].identity` from `.atm.toml` and
-    /// inject `ATM_IDENTITY` in the active agent environment.
+    /// inject `ATM_IDENTITY` in the active agent environment. This field
+    /// intentionally remains `Option<String>` because ATM preserves the raw
+    /// deprecated token only for compatibility reporting, not runtime identity
+    /// resolution.
     pub identity: Option<String>,
     pub default_team: Option<TeamName>,
     pub team_members: Vec<TeamName>,

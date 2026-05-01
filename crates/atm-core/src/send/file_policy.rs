@@ -9,9 +9,11 @@ const MAX_FILE_REFERENCE_BYTES: u64 = 10 * 1024 * 1024;
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when the source file is missing, the team share
-/// directory cannot be created, the source path has no terminal file name, or
-/// copying the file into the share directory fails.
+/// Returns [`AtmError`] with [`crate::error_codes::AtmErrorCode::FilePolicyViolation`]
+/// when the source file is missing, metadata inspection fails, the source file
+/// exceeds the 10 MiB copy limit, the team share directory cannot be created,
+/// the source path has no terminal file name, or copying the file into the
+/// share directory fails.
 pub fn process_file_reference(
     file_path: &Path,
     message_text: Option<&str>,

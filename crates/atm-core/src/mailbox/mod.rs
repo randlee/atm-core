@@ -19,6 +19,10 @@ use crate::schema::{LegacyMessageId, MessageEnvelope};
 const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
 /// Append one message to a mailbox JSONL file under the mailbox lock.
 ///
+/// Production send flows use the same lock discipline through
+/// `mailbox::store::append_mailbox_message_and_seed_workflow()`. This helper is
+/// test-only because production callers must also coordinate workflow seeding.
+///
 /// # Errors
 ///
 /// Returns [`AtmError`] with
@@ -36,6 +40,12 @@ pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), Atm
 }
 
 /// Lock, load, mutate, and atomically rewrite one mailbox file.
+///
+/// Production mutation paths use equivalent lock coverage through
+/// `mailbox::store::with_locked_source_files()` plus
+/// `mailbox::store::commit_source_files()`. This helper stays test-only so unit
+/// tests can exercise the shared mailbox lock contract directly without the
+/// workflow/state sidecars required in production commands.
 ///
 /// # Errors
 ///

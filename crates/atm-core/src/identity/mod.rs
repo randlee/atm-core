@@ -14,16 +14,16 @@ use crate::types::AgentName;
 pub(crate) fn resolve_actor_identity(
     actor_override: Option<&str>,
     config: Option<&AtmConfig>,
-) -> Result<String, AtmError> {
+) -> Result<AgentName, AtmError> {
     if let Some(actor) = actor_override.filter(|value| !value.trim().is_empty()) {
-        return Ok(crate::config::aliases::resolve_agent(actor, config));
+        return resolve_aliased_agent(actor, config);
     }
 
     if let Some(identity) = hook::read_hook_identity()? {
         return Ok(identity);
     }
 
-    resolve_runtime_sender_identity(config).map(AgentName::into_inner)
+    resolve_runtime_sender_identity(config)
 }
 
 /// Resolve the sender identity for `send`, preserving sender-override and
@@ -37,17 +37,16 @@ pub(crate) fn resolve_actor_identity(
 pub(crate) fn resolve_sender_identity(
     sender_override: Option<&str>,
     config: Option<&AtmConfig>,
-) -> Result<String, AtmError> {
+) -> Result<AgentName, AtmError> {
     if let Some(sender) = sender_override.filter(|value| !value.trim().is_empty()) {
-        return Ok(crate::config::aliases::resolve_agent(sender.trim(), config));
+        return resolve_aliased_agent(sender.trim(), config);
     }
 
     if let Some(identity) = hook::read_hook_identity()? {
-        return Ok(crate::config::aliases::resolve_agent(&identity, config));
+        return resolve_aliased_agent(identity.as_str(), config);
     }
 
     resolve_runtime_sender_identity(config)
-        .map(|identity| crate::config::aliases::resolve_agent(&identity, config))
 }
 
 /// Resolve the canonical runtime sender identity for the current ATM process.
@@ -59,6 +58,10 @@ pub(crate) fn resolve_sender_identity(
 /// `ATM_IDENTITY` is not set in the current environment.
 pub fn resolve_runtime_sender_identity(config: Option<&AtmConfig>) -> Result<AgentName, AtmError> {
     crate::config::resolve_identity(config).ok_or_else(AtmError::identity_unavailable)
+}
+
+fn resolve_aliased_agent(value: &str, config: Option<&AtmConfig>) -> Result<AgentName, AtmError> {
+    crate::config::aliases::resolve_agent(value, config).parse()
 }
 
 #[cfg(test)]
@@ -188,7 +191,7 @@ mod tests {
 
         assert_eq!(
             resolve_sender_identity(None, Some(&config)).expect("send identity"),
-            "team-lead"
+            AgentName::from_validated("team-lead")
         );
 
         let _ = fs::remove_file(hook_path);

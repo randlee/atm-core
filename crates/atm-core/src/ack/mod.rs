@@ -107,7 +107,7 @@ pub fn ack_mail(
     if !team_config
         .members
         .iter()
-        .any(|member| member.name == actor)
+        .any(|member| member.name == actor.as_str())
     {
         return Err(AtmError::agent_not_found(&actor, &team));
     }
@@ -175,7 +175,7 @@ pub fn ack_mail(
     let mut reply_extra = Map::new();
     workflow::set_atm_message_id(&mut reply_extra, reply_atm_message_id);
     let reply_message = MessageEnvelope {
-        from: actor.clone(),
+        from: actor.to_string(),
         text: reply_text.clone(),
         timestamp: ack_timestamp,
         read: false,
@@ -279,7 +279,7 @@ pub fn ack_mail(
     let outcome = AckOutcome {
         action: "ack",
         team: team.clone(),
-        agent: AgentName::from_validated(actor.clone()),
+        agent: actor.clone(),
         message_id: request.message_id,
         task_id: source_task_id.clone(),
         reply_target: ReplyTarget::new(AgentName::from_validated(reply_agent), reply_team),
@@ -292,8 +292,8 @@ pub fn ack_mail(
         action: "ack",
         outcome: "ok",
         team,
-        agent: AgentName::from_validated(actor.clone()),
-        sender: actor,
+        agent: actor.clone(),
+        sender: actor.to_string(),
         message_id: Some(request.message_id),
         requires_ack: false,
         dry_run: false,

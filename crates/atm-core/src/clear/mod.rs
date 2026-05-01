@@ -75,10 +75,7 @@ pub fn clear_mail(
     observability: &dyn ObservabilityPort,
 ) -> Result<ClearOutcome, AtmError> {
     let config = config::load_config(&query.current_dir)?;
-    let actor = AgentName::from_validated(identity::resolve_actor_identity(
-        query.actor_override.as_deref(),
-        config.as_ref(),
-    )?);
+    let actor = identity::resolve_actor_identity(query.actor_override.as_deref(), config.as_ref())?;
     let target = resolve_target(
         query.target_address.as_ref(),
         &actor,
