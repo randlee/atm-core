@@ -1,6 +1,6 @@
 ---
 name: team-lead
-version: 0.1.0
+version: 0.2.0
 description: >
   Session initialization for the team-lead identity. Confirms identity and
   detects whether a full team restore is needed. Only run when
