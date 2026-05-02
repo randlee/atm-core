@@ -82,9 +82,7 @@ pub struct SendOutcome {
     pub action: &'static str,
     pub team: TeamName,
     pub agent: AgentName,
-    // Preserve the rendered sender identity surface here because cross-team
-    // sends may intentionally emit a qualified alias like `team-lead@src-gen`.
-    pub sender: String,
+    pub sender: AgentName,
     pub outcome: &'static str,
     pub message_id: LegacyMessageId,
     pub requires_ack: bool,
@@ -132,7 +130,7 @@ pub fn send_mail(
         config.as_ref(),
     )?;
     let sender_team = config::resolve_team(None, config.as_ref());
-    let sender = display_sender_identity(
+    let display_sender = display_sender_identity(
         &canonical_sender,
         request.sender_override.as_deref(),
         sender_team.as_deref(),
@@ -215,14 +213,14 @@ pub fn send_mail(
     if !request.dry_run {
         let mut extra = Map::new();
         workflow::set_atm_message_id(&mut extra, atm_message_id);
-        if sender != canonical_sender.as_str() {
+        if display_sender != canonical_sender.as_str() {
             set_canonical_sender_metadata(
                 &mut extra,
                 &qualified_sender_identity(&canonical_sender, sender_team.as_deref()),
             );
         }
         let envelope = MessageEnvelope {
-            from: sender.clone(),
+            from: display_sender.clone(),
             text: body.clone(),
             timestamp,
             read: false,
@@ -251,7 +249,7 @@ pub fn send_mail(
         action: "send",
         team: recipient.team.clone(),
         agent: recipient.agent.clone(),
-        sender: sender.clone(),
+        sender: canonical_sender.clone(),
         outcome: if request.dry_run { "dry_run" } else { "sent" },
         message_id,
         requires_ack,

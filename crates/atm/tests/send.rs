@@ -444,6 +444,26 @@ fn test_send_cross_team_projects_alias_and_persists_canonical_from_identity() {
 }
 
 #[test]
+fn test_send_json_reports_canonical_sender_identity() {
+    let fixture = Fixture::new("recipient");
+    fixture.write_team_config_for_team("other-team", "recipient");
+    fixture.write_atm_config("[atm]\n[atm.aliases]\nlead = \"arch-ctm\"\n");
+
+    let output = fixture.run_with_env(
+        &["send", "recipient@other-team", "hello cross-team", "--json"],
+        &[("ATM_TEAM", "atm-dev")],
+    );
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["sender"], "arch-ctm");
+}
+
+#[test]
 fn test_send_runs_post_send_hook_with_expected_payload() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
