@@ -2484,7 +2484,7 @@ mail correctness.
     - transport listeners
     - route selection
     - live-status cache
-    - watch/reconcile loop if enabled
+    - watch/reconcile loop
   - the daemon must not become the only place where ATM mail semantics are
     implemented
 

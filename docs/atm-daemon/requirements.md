@@ -21,7 +21,7 @@ in the pre-Phase-Q workspace yet.
 - cross-host daemon-to-daemon transport
 - runtime composition of `atm-core` service boundaries
 - live agent status cache
-- runtime watch/reconcile loop if enabled
+- runtime watch/reconcile loop
 - daemon-side `sc-observability` emission
 
 `atm-daemon` does not own:

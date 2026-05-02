@@ -19,7 +19,7 @@ The `atm-daemon` crate is responsible for:
 - remote daemon-to-daemon transport listener/client
 - runtime wiring of `atm-core` service boundaries
 - live agent-status cache
-- optional watch/reconcile runtime loop
+- watch/reconcile runtime loop
 - daemon/runtime observability emission
 - daemon health/status query surface for `atm doctor`
 
@@ -138,6 +138,25 @@ Dispatcher/handler rule:
   contract
 - the dispatcher itself stays thin and must not absorb request-family business
   logic
+
+Illustrative daemon-side shape:
+
+```rust
+pub trait Dispatcher: sealed::Sealed {
+    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError>;
+}
+
+pub trait MessageHandler: sealed::Sealed {
+    fn handle_send(&self, request: SendRequest) -> Result<SendResponse, AtmError>;
+    fn handle_ack(&self, request: AckRequest) -> Result<AckResponse, AtmError>;
+}
+```
+
+The point of this sample is boundary placement:
+- transport calls `dispatch(...)`
+- dispatcher routes only
+- request-family handlers own behavior
+- neither Unix-domain nor TCP/TLS adapters own send/ack semantics
 
 ## 3.1.1 Graceful Shutdown
 

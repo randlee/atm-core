@@ -1130,10 +1130,10 @@ contain:
 - optional `recipient_pane_id` when ATM already knows the authoritative pane
   mapping for the recipient
 
-The post-send hook runs only after a successful non-`dry-run` send, executes
-once when sender or recipient matching succeeds, may optionally emit one
-structured stdout result for observability, and never rolls back a successful
-send on failure or timeout.
+In the retained pre-Phase-Q line, the post-send hook runs only after a
+successful non-`dry-run` send, executes once when sender or recipient matching
+succeeds, may optionally emit one structured stdout result for observability,
+and never rolls back a successful send on failure or timeout.
 
 Phase Q hook-note:
 - the Phase Q target runtime supersedes the old CLI-owned send-only hook path
@@ -2130,7 +2130,7 @@ Daemon responsibilities:
 - route selection
 - live status cache
 - daemon-facing diagnostics and health queries used by `atm doctor`
-- watch/reconcile runtime if enabled
+- watch/reconcile runtime
 
 Daemon non-responsibility:
 - it must not become the only home of ATM business logic
@@ -2159,6 +2159,28 @@ Privacy rule:
 
 Each I/O-owning subsystem needs one explicit architectural boundary.
 
+Illustrative Phase Q boundary sample:
+
+```rust
+pub enum DurableInsertOutcome {
+    Created {
+        message_key: MessageKey,
+        hook_eligible: bool,
+        is_ack: bool,
+        origin: EventOrigin,
+    },
+    DuplicateEntry {
+        message_key: MessageKey,
+    },
+}
+```
+
+Rules illustrated by this shape:
+- the store reports durable outcomes, not hooks
+- `DuplicateEntry` is explicit
+- hook eligibility is decided above the store boundary
+- canonical event emission happens only on `Created`
+
 #### MailStore
 
 Dispatch model:
@@ -2186,6 +2208,22 @@ Scope rule:
 - duplicate attempts for an already-known immutable ATM-authored
   `message_id`/`message_key` return a typed duplicate result/error such as
   `DuplicateEntry`
+
+Illustrative trait shape:
+
+```rust
+pub trait MailStore: sealed::Sealed {
+    fn insert_message(
+        &self,
+        input: NewMessage,
+    ) -> Result<DurableInsertOutcome, StoreError>;
+
+    fn load_message(
+        &self,
+        key: &MessageKey,
+    ) -> Result<Option<MessageRecord>, StoreError>;
+}
+```
 
 #### TaskStore
 
@@ -2272,6 +2310,18 @@ Dispatcher rule:
 - request-family behavior lives in injectable handlers behind that dispatcher
 - adding a new request type must not require embedding business logic into
   Unix-socket or TCP/TLS adapter code
+
+Illustrative transport/dispatcher split:
+
+```rust
+pub trait Transport: sealed::Sealed {
+    fn serve(&self, dispatcher: &dyn Dispatcher) -> Result<(), TransportError>;
+}
+
+pub trait Dispatcher: sealed::Sealed {
+    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError>;
+}
+```
 
 Socket receive loop rule:
 - the receive loop must stay intentionally small

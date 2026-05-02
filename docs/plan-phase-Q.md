@@ -166,7 +166,7 @@ Hard requirements:
 Runtime responsibility:
 - socket listeners
 - local/remote transport adapters
-- filesystem watch/reconcile runtime if enabled
+- filesystem watch/reconcile runtime
 - live agent status cache
 
 Non-responsibility:
