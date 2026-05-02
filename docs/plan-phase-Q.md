@@ -532,6 +532,13 @@ Implementation details:
   available
 - ingest/export paths must emit structured `sc-observability` events for import
   success, degradation, and export failure
+- ingest/export/store failure handling in this sprint must stay within typed
+  error families rather than panic/unwrap paths:
+  - ingest
+  - export
+  - store
+- durable row shape, Claude export shape, and hook payload shape must be
+  compared explicitly for compatibility before the sprint is considered done
 - after Q.1, this slice can proceed in parallel with transport and
   watcher/reconcile implementation because it depends only on the locked
   ingress/store/export contracts
@@ -550,6 +557,8 @@ Acceptance:
   - `config.json` roster changes updating SQLite roster truth deterministically
   - `ATM_POST_SEND.recipient_pane_id` populated from roster truth when the
     recipient pane mapping is known
+  - compatibility mapping between SQLite row shape, Claude export shape, and
+    hook payload shape
   - structured ingest/export error variants and observability events for the
     degraded paths above
 
@@ -574,6 +583,11 @@ Implementation details:
 - existing workflow sidecar state is read only for migration/backfill once
   SQLite is authoritative
 - ack/task failure modes must remain typed across service and export boundaries
+- ack/task transition and hook paths must emit structured `sc-observability`
+  events for success, duplicate rejection, export degradation, and hook
+  degradation
+- ack/task/store/export failure handling must stay within typed error families
+  rather than panic/unwrap paths
 - after Q.1, this slice can proceed in parallel with transport/runtime work so
   long as it stays within the locked store/export/handler contracts
 
@@ -616,6 +630,8 @@ Implementation details:
 - live status cache is daemon-memory truth
 - daemon emits structured runtime and transport events through
   `sc-observability`
+- runtime/store/transport/daemon-client failures in this sprint must stay
+  within typed error families rather than panic/unwrap paths
 - daemon graceful shutdown sequence:
   - stop accepts
   - drain inflight work for `5s`
@@ -691,6 +707,10 @@ Implementation details:
   rather than the old file-truth lock model
 - remaining compatibility-only lock logic must be diagnosable but non-blocking
   for normal mail correctness
+- doctor/restore/ops degraded compatibility findings must emit structured
+  `sc-observability` diagnostics
+- remaining compatibility-only failure handling must stay within typed error
+  families and explicit doctor findings rather than panic/unwrap paths
 
 Acceptance:
 - mail flows do not require the 5-minute stale-lock sweep
@@ -762,6 +782,11 @@ Implementation details:
   - daemon runtime
   - daemon singleton
   - daemon client
+- validate explicit compatibility mapping across:
+  - SQLite durable row shapes
+  - daemon request/response interfaces
+  - Claude export envelope
+  - post-send-hook payload
 - validate the production result is observably and operationally better than
   the current ATM runtime rather than merely equivalent
 - bump workspace/package versions for the Phase Q release target

@@ -2034,6 +2034,41 @@ Architectural rule:
 `config.json` remains a team-ingress surface, but roster truth moves to
 SQLite.
 
+Compatibility-shape rule:
+- durable row shapes, daemon request/response shapes, Claude export shapes, and
+  post-send-hook payload shapes must stay explicitly mappable
+- no compatibility path may depend on ad hoc field reconstruction hidden in one
+  adapter
+
+Illustrative compatibility mapping:
+
+```rust
+pub struct HookPayload {
+    pub from: String,
+    pub to: String,
+    pub sender: AgentName,
+    pub recipient: AgentName,
+    pub team: TeamName,
+    pub message_id: MessageId,
+    pub requires_ack: bool,
+    pub is_ack: bool,
+    pub task_id: Option<TaskId>,
+    pub recipient_pane_id: Option<PaneId>,
+}
+```
+
+Required mapping relationships:
+- `messages.message_key` is the durable identity key used by daemon services
+- `messages.atm_message_id` / forward `metadata.atm.messageId` remains the
+  Claude/export-facing ATM message id when present
+- `ack_state.ack_reply_message_key` links reply export and hook payload for ack
+  transitions
+- `team_roster.recipient_pane_id` is the authoritative source for
+  `HookPayload.recipient_pane_id`
+- exported Claude JSONL remains Claude-native at top level plus `metadata.atm`
+- hook payloads are derived from durable committed state, not transport-local
+  request data
+
 ### 21.3 Information Flow
 
 There are three distinct paths:
@@ -2323,6 +2358,26 @@ pub trait Dispatcher: sealed::Sealed {
 }
 ```
 
+Illustrative request/response shape:
+
+```rust
+pub enum RequestEnvelope {
+    Send(SendRequest),
+    Ack(AckRequest),
+    Read(ReadRequest),
+    Clear(ClearRequest),
+    Doctor(DoctorHealthQuery),
+}
+
+pub enum ResponseEnvelope {
+    Send(SendResponse),
+    Ack(AckResponse),
+    Read(ReadResponse),
+    Clear(ClearResponse),
+    Doctor(DoctorHealthReport),
+}
+```
+
 Socket receive loop rule:
 - the receive loop must stay intentionally small
 - allowed responsibilities:
@@ -2439,6 +2494,24 @@ Architectural rules:
   - SQLite readiness/openability as observed by the runtime
 - CLI code must not inspect private daemon state directly to synthesize health
   answers
+
+Illustrative health-query shape:
+
+```rust
+pub struct DoctorHealthQuery {
+    pub include_runtime: bool,
+    pub include_ingest: bool,
+    pub include_store: bool,
+}
+
+pub struct DoctorHealthReport {
+    pub daemon_reachable: bool,
+    pub singleton_owner: Option<String>,
+    pub store_ready: bool,
+    pub ingest_degraded: bool,
+    pub live_status_summary: StatusSummary,
+}
+```
 
 ### 21.6.4 Shutdown, Signals, Timeouts, And Resource Caps
 
