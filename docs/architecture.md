@@ -1929,6 +1929,20 @@ Required invariants:
 - no normal command path relies on implicit autocommit as its correctness
   model
 
+### 21.1.3 Crash Recovery And Replay
+
+Crash recovery must preserve durable truth before compatibility export.
+
+Required architectural rules:
+- the ordering rule is `SQLite commit -> export / remote handoff`
+- re-export/replay is keyed by durable `message_key`
+- if daemon-managed retry/re-export state must survive crash, it is stored in
+  SQLite with a bounded expiry/deadline rather than remaining RAM-only
+- WAL checkpoint is part of graceful shutdown, but recovery correctness must
+  not depend on graceful shutdown having succeeded
+- persisted retry state must not become a long-lived remote outbox; expired
+  retry rows fail closed during replay
+
 ### 21.2 Compatibility Surfaces
 
 Claude-owned inbox JSONL files remain required for:
@@ -2018,7 +2032,87 @@ Privacy rule:
   stay private to the owning module unless a later crate extraction makes the
   boundary stricter
 
-### 21.6.1 Structured Error And Observability Boundaries
+### 21.6.1 Boundary Shapes
+
+Each I/O-owning subsystem needs one explicit architectural boundary.
+
+#### MailStore
+
+Dispatch model:
+- synchronous request/response from service code
+- transaction-scoped mutating calls
+
+Object-safety rule:
+- callers depend on an object-safe store trait or façade, not concrete SQLite
+  types
+
+Minimum method set:
+- open/bootstrap store
+- run transaction
+- upsert/load message rows
+- upsert/load ack/task/visibility state
+- replace/load roster rows
+- record/load ingest replay state
+- return health/readiness snapshot
+
+#### InboxIngress
+
+Dispatch model:
+- batch import from one changed inbox source
+
+Object-safety rule:
+- callers depend on an object-safe ingress trait or façade, not direct JSONL
+  parser structs
+
+Minimum method set:
+- import changed inbox source
+- compute canonical imported identity/fingerprint
+- report degraded/skipped rows with structured diagnostics
+
+#### InboxExport
+
+Dispatch model:
+- one-way export / re-export after durable commit
+
+Object-safety rule:
+- callers depend on an object-safe export trait or façade, not direct file
+  writer implementations
+
+Minimum method set:
+- export ATM-authored Claude-compatible record
+- re-export by durable `message_key`
+- return typed export failure / retry-needed result
+
+#### Transport
+
+Dispatch model:
+- request/response for same-host and remote daemon traffic
+
+Object-safety rule:
+- callers depend on an object-safe transport trait or façade so local and
+  remote adapters remain swappable
+
+Minimum method set:
+- serve local daemon API
+- send remote daemon request
+- query daemon health
+- shut down listener/connection set gracefully
+
+#### Plugin / Notifier
+
+Dispatch model:
+- one-way notification plus status-reporting callbacks
+
+Object-safety rule:
+- callers depend on an object-safe notifier/plugin boundary, not agent-specific
+  concrete implementations
+
+Minimum method set:
+- notify message/task delivery
+- report live status update
+- return typed backpressure / unavailable results
+
+### 21.6.2 Structured Error And Observability Boundaries
 
 Phase Q must keep production runtime failure handling and observability
 structured at compile time.
@@ -2036,7 +2130,7 @@ Architectural rules:
 - production runtime diagnostics must not collapse into ad hoc stdout/stderr
   debugging
 
-### 21.6.2 Doctor Health Interface
+### 21.6.3 Doctor Health Interface
 
 `atm doctor` remains a CLI command, but the Phase Q architecture requires one
 explicit daemon health interface.
@@ -2051,6 +2145,34 @@ Architectural rules:
   - SQLite readiness/openability as observed by the runtime
 - CLI code must not inspect private daemon state directly to synthesize health
   answers
+
+### 21.6.4 Shutdown, Signals, Timeouts, And Resource Caps
+
+The daemon runtime must use one documented operational contract.
+
+Required architectural defaults:
+- graceful shutdown drain deadline: `5s`
+- force-cancel deadline: `10s` total
+- same-host daemon request deadline: `3s`
+- per-leg TCP/TLS connect deadline: `5s`
+- per-leg TCP/TLS read/write deadline: `5s`
+- total remote retry budget: `30s`
+- SQLite `busy_timeout`: `1500ms`
+- ingest batch processing slice: `2s`
+- doctor health query deadline: `3s`
+
+Required caps:
+- max concurrent accepted connections: `64`
+- max per-connection inflight requests: `32`
+- ingest queue depth: `1024`
+- retry queue depth: `256`
+- SQLite handle budget: `1..=4`
+- status-cache cap: `4096`
+
+Required signal behavior:
+- install `SIGINT`/`SIGTERM`/`SIGHUP` handling before listeners accept
+- `SIGINT` and `SIGTERM` enter graceful shutdown
+- `SIGHUP` triggers bounded rescan/reload without dropping singleton ownership
 
 ### 21.7 Test Strategy
 

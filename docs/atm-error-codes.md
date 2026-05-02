@@ -218,6 +218,44 @@ Error codes should describe the failure class, not a specific prose message.
     - message:
       ```text
       error: mailbox lock {operation} failed for {lock_path}: filesystem is read-only.
+
+### 5.10 Phase Q Reserved Families
+
+The following families are reserved for the Phase Q runtime line and must be
+materialized in `crates/atm-core/src/error_codes.rs` when the implementation
+lands.
+
+#### 5.10.1 Store
+
+- `ATM_STORE_BOOTSTRAP_FAILED`
+- `ATM_STORE_SCHEMA_FAILED`
+- `ATM_STORE_TRANSACTION_FAILED`
+- `ATM_STORE_BUSY_TIMEOUT`
+
+#### 5.10.2 Ingest / Export
+
+- `ATM_INGEST_FAILED`
+- `ATM_WARNING_INGEST_BACKPRESSURE`
+- `ATM_WARNING_INGEST_RECORD_SKIPPED`
+- `ATM_EXPORT_FAILED`
+- `ATM_EXPORT_REPLAY_FAILED`
+
+#### 5.10.3 Transport
+
+- `ATM_TRANSPORT_CONNECT_FAILED`
+- `ATM_TRANSPORT_TIMEOUT`
+- `ATM_TRANSPORT_PROTOCOL_FAILED`
+- `ATM_TRANSPORT_REMOTE_UNREACHABLE`
+
+#### 5.10.4 Daemon Runtime / Singleton / Client
+
+- `ATM_DAEMON_ALREADY_RUNNING`
+- `ATM_DAEMON_SINGLETON_RELEASE_FAILED`
+- `ATM_DAEMON_RUNTIME_OVER_CAPACITY`
+- `ATM_DAEMON_SHUTDOWN_TIMEOUT`
+- `ATM_DAEMON_SIGNAL_RELOAD_FAILED`
+- `ATM_DAEMON_UNAVAILABLE`
+- `ATM_DAEMON_CLIENT_TIMEOUT`
       ```
     - recovery:
       ```text

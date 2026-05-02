@@ -231,6 +231,18 @@ Rules:
   be able to query daemon/runtime state rather than assuming a daemon-free
   environment
 
+Required Phase Q error families:
+- store
+- ingest
+- export
+- transport
+- daemon runtime
+- daemon singleton
+- daemon client
+
+Each family must map to concrete `AtmErrorCode` variants before the Phase Q
+implementation is considered complete.
+
 ## Schema Design
 
 Phase Q should start with a deliberately small schema.
@@ -363,6 +375,8 @@ Important runtime note:
 - add SQLite implementation and schema bootstrap
 - add the explicit I/O trait boundaries needed for store, inbox ingress/export,
   config ingress, transport, and notification
+- define crash-recovery ordering and durable replay state with the schema,
+  rather than deferring those rules to the final lock-retirement sprint
 - no user-visible command behavior change yet
 
 ### Stage 2: Ingest + Dual Write
@@ -430,6 +444,10 @@ Implementation details:
 - define the canonical `message_key` model here before command cutover begins
 - define typed error enums for store/bootstrap failures before command cutover
   spreads ad hoc error translation
+- define crash-recovery durable state now:
+  - ordering rule `SQLite commit -> export`
+  - re-export keyed by `message_key`
+  - bounded retry/replay state durable in SQLite with expiry
 
 Acceptance:
 - database opens under `.atm-state/mail.db`
@@ -537,6 +555,31 @@ Implementation details:
 - live status cache is daemon-memory truth
 - daemon emits structured runtime and transport events through
   `sc-observability`
+- daemon graceful shutdown sequence:
+  - stop accepts
+  - drain inflight work for `5s`
+  - force-cancel remaining inflight by `10s`
+  - checkpoint WAL
+  - release singleton artifacts
+- signal handling:
+  - install before listen
+  - `SIGINT`/`SIGTERM` trigger graceful shutdown
+  - `SIGHUP` triggers bounded reload/rescan
+- timeout defaults:
+  - same-host daemon request `3s`
+  - TCP/TLS connect `5s`
+  - TCP/TLS read/write `5s`
+  - remote retry budget `30s`
+  - SQLite `busy_timeout` `1500ms`
+  - ingest batch slice `2s`
+  - doctor query `3s`
+- resource caps:
+  - max accepts `64`
+  - max per-connection inflight `32`
+  - ingest queue `1024`
+  - retry queue `256`
+  - SQLite handles `1..=4`
+  - status cache `4096`
 - remote delivery success is defined by remote daemon acceptance within the
   bounded retry window
 - daemon-unavailable client calls must fail clearly without hidden fallback or
@@ -580,6 +623,8 @@ Implementation details:
   class; keep adapters thin and private behind the protocol boundary
 - doctor/restore/backup documentation must describe SQLite + daemon ownership
   rather than the old file-truth lock model
+- remaining compatibility-only lock logic must be diagnosable but non-blocking
+  for normal mail correctness
 
 Acceptance:
 - mail flows do not require the 5-minute stale-lock sweep

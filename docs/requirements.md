@@ -1658,6 +1658,38 @@ Minimum error categories:
 - mailbox read
 - mailbox write
 - message validation
+- store
+- ingest
+- export
+- transport
+- daemon runtime
+- daemon singleton
+- daemon client
+
+Phase Q required families:
+- store:
+  - SQLite bootstrap/open
+  - schema/transaction
+  - busy-timeout / saturation
+- ingest:
+  - replay/import failure
+  - backpressure/degraded ingest
+- export:
+  - Claude compatibility export failure
+  - re-export/replay failure
+- transport:
+  - local daemon request failure
+  - remote connect/timeout/protocol failure
+- daemon runtime:
+  - shutdown timeout
+  - signal/reload failure
+  - runtime over-capacity
+- daemon singleton:
+  - already-running daemon
+  - stale-artifact cleanup/release failure
+- daemon client:
+  - daemon unavailable
+  - daemon health-query timeout
 - serialization
 - file policy
 - wait timeout
@@ -2388,6 +2420,16 @@ mail correctness.
   - roster/config ingest must apply one deterministic last-write-wins policy
     for replacing roster truth in SQLite
 
+- `REQ-CORE-RUNTIME-003` Crash recovery and replay must preserve the durable
+  ordering rule for daemon-managed export work.
+
+  Required behavior:
+  - the ordering rule is `SQLite commit -> export / remote handoff`
+  - re-export/replay must be keyed by durable `message_key`
+  - if daemon-managed retry/re-export state survives crash, it must be stored
+    durably with a bounded expiry/deadline
+  - persisted retry state must not become a long-lived remote outbox
+
 - `REQ-CORE-RUNTIME-002` Live agent status must not use SQLite as its
   authoritative live truth.
 
@@ -2434,6 +2476,17 @@ mail correctness.
 
   Satisfies:
   - `REQ-P-RUNTIME-001`
+
+- `REQ-CORE-DAEMON-004` The daemon must implement one documented graceful
+  shutdown and signal-handling contract.
+
+  Required behavior:
+  - `SIGINT` and `SIGTERM` begin graceful shutdown
+  - `SIGHUP` triggers bounded runtime rescan/reload without releasing singleton
+    ownership
+  - signal handlers install before listeners begin accepting
+  - graceful shutdown must stop accepts, drain inflight work, checkpoint WAL,
+    and release singleton ownership in order
 
 ### 21.3 Strict I/O Ownership Boundaries
 
@@ -2503,6 +2556,26 @@ mail correctness.
     remote daemon accepts it
   - if the bounded retry window expires without remote acceptance, the send
     fails and must not leave durable delivered-message state behind
+
+- `REQ-CORE-TRANSPORT-005` The daemon runtime must use concrete timeout and
+  capacity limits for transport/store/health operations.
+
+  Required behavior:
+  - same-host daemon request deadline: `3s`
+  - per-leg TCP/TLS connect deadline: `5s`
+  - per-leg TCP/TLS read/write deadline: `5s`
+  - total remote retry budget: `30s`
+  - SQLite `busy_timeout`: `1500ms`
+  - ingest batch processing slice: `2s`
+  - doctor health query deadline: `3s`
+  - max concurrent accepts: `64`
+  - max per-connection inflight requests: `32`
+  - ingest queue depth: `1024`
+  - retry queue depth: `256`
+  - SQLite handle budget: `1..=4`
+  - live status-cache cap: `4096`
+  - saturation behavior must fail with typed errors or structured degradation,
+    never silent drop
 
 ### 21.5 Claude Compatibility And Native Agent Path
 

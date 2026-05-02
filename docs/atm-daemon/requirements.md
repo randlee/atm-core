@@ -43,6 +43,7 @@ Initial allocation:
 - `REQ-DAEMON-STATUS-*`
 - `REQ-DAEMON-TEST-*`
 - `REQ-DAEMON-OBS-*`
+- `REQ-DAEMON-SIGNAL-*`
 
 Initial crate requirement IDs:
 
@@ -53,6 +54,15 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-RUNTIME-002` `atm-daemon` owns runtime composition only and must
   remain a thin wrapper over `atm-core` service boundaries. Satisfies:
   `REQ-CORE-DAEMON-002`, `REQ-CORE-BOUNDARY-001`.
+- `REQ-DAEMON-RUNTIME-003` `atm-daemon` owns graceful shutdown sequencing for
+  the singleton runtime. Satisfies:
+  `REQ-CORE-DAEMON-001`, `REQ-CORE-DOCTOR-002`.
+- `REQ-DAEMON-RUNTIME-004` `atm-daemon` owns concrete resource-cap and
+  saturation policy for runtime queues, accepts, and store handles. Satisfies:
+  `REQ-CORE-QA-RUNTIME-001`.
+- `REQ-DAEMON-RUNTIME-005` `atm-daemon` owns crash-recovery and replay policy
+  around daemon-managed delivery/export work. Satisfies:
+  `REQ-CORE-TRANSPORT-004`, `REQ-CORE-LOCK-RETIRE-001`.
 - `REQ-DAEMON-TRANSPORT-001` `atm-daemon` owns one protocol with two transport
   implementations:
   - Unix domain socket for same-host
@@ -63,6 +73,10 @@ Initial crate requirement IDs:
   remote delivery and must not create a durable long-lived remote outbox.
   Satisfies:
   `REQ-CORE-TRANSPORT-003`, `REQ-CORE-TRANSPORT-004`.
+- `REQ-DAEMON-TRANSPORT-003` `atm-daemon` owns the concrete timeout budget
+  policy for transport, store busy timeout, ingest batch, retry, and doctor
+  query operations. Satisfies:
+  `REQ-CORE-TRANSPORT-003`, `REQ-CORE-DOCTOR-002`.
 - `REQ-DAEMON-STATUS-001` `atm-daemon` owns the live agent-status cache and
   must keep it separate from SQLite roster/mail truth. Satisfies:
   `REQ-CORE-RUNTIME-002`.
@@ -76,6 +90,9 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-HEALTH-001` `atm-daemon` owns the daemon health interface
   consumed by `atm doctor`. Satisfies:
   `REQ-CORE-DOCTOR-002`.
+- `REQ-DAEMON-SIGNAL-001` `atm-daemon` owns signal installation and handling
+  for daemon lifecycle transitions. Satisfies:
+  `REQ-CORE-DAEMON-001`, `REQ-CORE-DOCTOR-002`.
 
 ## 4. Required References
 
@@ -94,20 +111,33 @@ The `atm-daemon` crate docs must remain aligned with:
 Requirement IDs:
 - `REQ-DAEMON-RUNTIME-001`
 - `REQ-DAEMON-RUNTIME-002`
+- `REQ-DAEMON-RUNTIME-003`
+- `REQ-DAEMON-RUNTIME-004`
+- `REQ-DAEMON-RUNTIME-005`
 - `REQ-DAEMON-TRANSPORT-001`
 - `REQ-DAEMON-TRANSPORT-002`
+- `REQ-DAEMON-TRANSPORT-003`
 - `REQ-DAEMON-STATUS-001`
 - `REQ-DAEMON-TEST-001`
 - `REQ-DAEMON-OBS-001`
 - `REQ-DAEMON-HEALTH-001`
+- `REQ-DAEMON-SIGNAL-001`
 
 Required runtime rules:
 - exactly one daemon may be active on a host at a time
 - daemon startup must fail deterministically if a live daemon already owns the
   runtime
 - stale ownership cleanup must never allow two live daemons
+- graceful shutdown must stop accepts, drain or cancel inflight work within one
+  bounded deadline, checkpoint WAL, and release singleton ownership
+- signal handlers must be installed before listeners are opened
 - remote delivery must be daemon-to-daemon only
+- transport/store/health operations must obey one documented timeout budget
+- runtime queues and handles must obey one documented concrete cap policy
 - daemon memory is the live truth for agent status
+- crash recovery must preserve the ordering rule `SQLite commit -> export`
+  and any retry/re-export state needed after daemon crash must be durable rather
+  than RAM-only
 - daemon code must not bypass `atm-core` subsystem boundaries
 - daemon tests must not become the normal mechanism for validating core ATM
   correctness
