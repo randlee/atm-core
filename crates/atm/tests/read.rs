@@ -749,7 +749,7 @@ fn test_forward_metadata_message_id_timestamp_matches_persisted_timestamp() {
         metadata: MessageMetadata {
             atm: Some(AtmMetadataFields {
                 message_id: Some(message_id),
-                source_team: Some("atm-dev".into()),
+                source_team: Some("atm-dev".parse().expect("team")),
                 pending_ack_at: None,
                 acknowledged_at: None,
                 acknowledges_message_id: None,

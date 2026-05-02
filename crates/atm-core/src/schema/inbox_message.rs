@@ -6,7 +6,7 @@ use serde_json::{Map, Value};
 use ulid::Ulid;
 use uuid::Uuid;
 
-use crate::types::{IsoTimestamp, TaskId};
+use crate::types::{IsoTimestamp, TaskId, TeamName};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -120,7 +120,7 @@ pub struct AtmMetadataFields {
     pub message_id: Option<AtmMessageId>,
 
     #[serde(rename = "sourceTeam", skip_serializing_if = "Option::is_none")]
-    pub source_team: Option<String>,
+    pub source_team: Option<TeamName>,
 
     #[serde(rename = "pendingAckAt", skip_serializing_if = "Option::is_none")]
     pub pending_ack_at: Option<IsoTimestamp>,
@@ -343,7 +343,7 @@ mod tests {
             metadata: MessageMetadata {
                 atm: Some(AtmMetadataFields {
                     message_id: Some(message_id),
-                    source_team: Some("atm-dev".into()),
+                    source_team: Some("atm-dev".parse().expect("team name")),
                     pending_ack_at: None,
                     acknowledged_at: None,
                     acknowledges_message_id: None,
@@ -358,6 +358,23 @@ mod tests {
         let encoded = serde_json::to_string(&envelope).expect("encode");
         let decoded: ForwardMetadataEnvelope = serde_json::from_str(&encoded).expect("decode");
         assert_eq!(decoded, envelope);
+    }
+
+    #[test]
+    fn forward_metadata_source_team_rejects_blank_team_name() {
+        let json = json!({
+            "timestamp": "2026-03-30T00:00:00Z",
+            "metadata": {
+                "atm": {
+                    "sourceTeam": "   "
+                }
+            }
+        });
+
+        let error =
+            serde_json::from_value::<ForwardMetadataEnvelope>(json).expect_err("blank sourceTeam");
+
+        assert!(error.to_string().contains("team"));
     }
 
     #[test]

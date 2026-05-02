@@ -3,7 +3,6 @@ use atm_core::observability::{
     self, AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, CommandEvent, LogTailSession,
     ObservabilityPort,
 };
-
 /// Structured CLI-owned observability construction options.
 ///
 /// L.5 intentionally keeps the release surface narrow: one explicit
@@ -63,8 +62,12 @@ impl CliObservability {
             command: "atm",
             action: stage,
             outcome: "error",
-            team,
-            agent: identity.clone(),
+            team: team
+                .parse()
+                .unwrap_or_else(|_| "unknown".parse().expect("team")),
+            agent: identity
+                .parse()
+                .unwrap_or_else(|_| "unknown".parse().expect("agent")),
             sender: identity,
             message_id: None,
             requires_ack: false,
@@ -191,8 +194,8 @@ mod tests {
             command: "send",
             action: "send",
             outcome: "sent",
-            team: "atm-dev".to_string(),
-            agent: "arch-ctm".to_string(),
+            team: "atm-dev".parse().expect("team"),
+            agent: "arch-ctm".parse().expect("agent"),
             sender: "arch-ctm".to_string(),
             message_id: message_id.map(|value| value.parse().expect("legacy message id")),
             requires_ack: false,

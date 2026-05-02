@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use serde_json::Map;
 use tracing::trace;
 
@@ -39,9 +39,36 @@ pub struct AckOutcome {
     pub message_id: LegacyMessageId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
-    pub reply_target: String,
+    pub reply_target: ReplyTarget,
     pub reply_message_id: LegacyMessageId,
     pub reply_text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplyTarget {
+    agent: AgentName,
+    team: TeamName,
+}
+
+impl ReplyTarget {
+    fn new(agent: AgentName, team: TeamName) -> Self {
+        Self { agent, team }
+    }
+}
+
+impl std::fmt::Display for ReplyTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}@{}", self.agent, self.team)
+    }
+}
+
+impl Serialize for ReplyTarget {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
 }
 
 /// Acknowledge one previously read pending-ack message and append a reply.
@@ -80,7 +107,7 @@ pub fn ack_mail(
     if !team_config
         .members
         .iter()
-        .any(|member| member.name == actor)
+        .any(|member| member.name == actor.as_str())
     {
         return Err(AtmError::agent_not_found(&actor, &team));
     }
@@ -148,11 +175,11 @@ pub fn ack_mail(
     let mut reply_extra = Map::new();
     workflow::set_atm_message_id(&mut reply_extra, reply_atm_message_id);
     let reply_message = MessageEnvelope {
-        from: actor.clone(),
+        from: actor.to_string(),
         text: reply_text.clone(),
         timestamp: ack_timestamp,
         read: false,
-        source_team: Some(team.clone()),
+        source_team: Some(team.to_string()),
         summary: Some(summary::build_summary(&reply_text, None)),
         message_id: Some(reply_message_id),
         pending_ack_at: None,
@@ -251,11 +278,11 @@ pub fn ack_mail(
 
     let outcome = AckOutcome {
         action: "ack",
-        team: TeamName::from_validated(team.clone()),
-        agent: AgentName::from_validated(actor.clone()),
+        team: team.clone(),
+        agent: actor.clone(),
         message_id: request.message_id,
         task_id: source_task_id.clone(),
-        reply_target: format!("{reply_agent}@{reply_team}"),
+        reply_target: ReplyTarget::new(AgentName::from_validated(reply_agent), reply_team),
         reply_message_id,
         reply_text: reply_text.clone(),
     };
@@ -266,7 +293,7 @@ pub fn ack_mail(
         outcome: "ok",
         team,
         agent: actor.clone(),
-        sender: actor,
+        sender: actor.to_string(),
         message_id: Some(request.message_id),
         requires_ack: false,
         dry_run: false,
