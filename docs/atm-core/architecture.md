@@ -186,6 +186,7 @@ Identity-specific policy:
   - `team`
   - `message_id`
   - `requires_ack`
+  - `is_ack`
   - optional `task_id` when present
   - optional `recipient_pane_id` when ATM already knows the authoritative pane
     mapping for the recipient
@@ -198,6 +199,8 @@ Identity-specific policy:
   selector, and execution outcome for troubleshooting
 - hook failure or timeout is best-effort only and must not convert a
   successful send into a command failure
+- the Phase Q target runtime supersedes the old CLI-owned send-only hook path
+  with one daemon-owned post-store hook trigger for eligible outbound messages
 - after Phase Q roster migration, the send path should populate
   `ATM_POST_SEND.recipient_pane_id` from the authoritative roster/store record
   so hook scripts do not need to rediscover pane mappings from file state

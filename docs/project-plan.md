@@ -752,6 +752,7 @@ Planned sprints:
         - `team`
         - `message_id`
         - `requires_ack`
+        - `is_ack`
         - optional `task_id`
         - optional `recipient_pane_id` when authoritative roster truth knows it
       - the hook may optionally return one structured stdout object with
@@ -774,6 +775,8 @@ Planned sprints:
       - expected recipient non-match is silent
       - `ATM_POST_SEND` includes sender/recipient/team context without
         `hook_match` booleans
+      - `ATM_POST_SEND` includes `is_ack` so daemon-owned hook handling can
+        distinguish `send` from `ack`
       - once roster truth migrates to SQLite, `ATM_POST_SEND` also carries the
         authoritative `recipient_pane_id` when known so hooks can consume it
         directly

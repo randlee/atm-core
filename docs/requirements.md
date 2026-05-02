@@ -597,6 +597,7 @@ Post-send-hook rules:
   - `team`
   - `message_id`
   - `requires_ack`
+  - `is_ack`
   - optional `task_id` when present
   - optional `recipient_pane_id` when ATM has an authoritative pane mapping for
     the recipient
@@ -610,6 +611,7 @@ Post-send-hook rules:
     "team": "atm-dev",
     "message_id": "...",
     "requires_ack": false,
+    "is_ack": false,
     "recipient_pane_id": "%1"
   }
   ```
@@ -632,6 +634,12 @@ Post-send-hook rules:
 - when a hook is configured, ATM must emit enough diagnostics to explain
   whether the hook ran or failed, including the sender, recipient, and matched
   hook recipient selector
+- Phase Q supersession note:
+  - the retained release-line hook rules above describe the current
+    command-triggered contract
+  - the Phase Q target runtime supersedes this with one daemon-owned
+    post-store hook trigger for eligible outbound messages, as defined in
+    Section 21
 
 ## 6. `atm send`
 

@@ -444,6 +444,7 @@ Required identity rules:
   - `team`
   - `message_id`
   - `requires_ack`
+  - `is_ack`
   - optional `task_id` when present
   - optional `recipient_pane_id` when authoritative roster truth includes a
     pane mapping for the recipient
@@ -453,6 +454,8 @@ Required identity rules:
 - hook-rule evaluation and execution outcomes must remain observable through
   structured diagnostics without creating caller-visible warnings for expected
   recipient non-match
+- the Phase Q target runtime supersedes the old CLI-owned send-only hook path
+  with one daemon-owned post-store hook trigger for eligible outbound messages
 - once Phase Q roster truth is stored in SQLite, `atm-core` must source
   `recipient_pane_id` from the authoritative roster/store boundary rather than
   forcing hooks to rediscover it from local files
