@@ -482,8 +482,13 @@ Implementation details:
   - `TaskId`
   - `TeamName`
   - `AgentName`
+  - `HostName`
+  - `SourceFingerprint`
   - `PaneId`
 - define the canonical `message_key` model here before command cutover begins
+- decision: `MessageKey` is an opaque validated wrapper newtype over the
+  canonical `atm:` / `legacy:` / `ext:` durable identity string forms, not a
+  public discriminated enum
 - `message_key` must remain a semantic newtype throughout service/store/request
   boundaries; conversion to/from raw `String` is an adapter concern only
 - define typed error enums for store/bootstrap failures before command cutover
@@ -971,6 +976,11 @@ state:
   - `CHANGELOG.md` update
 - the release gate proves the result is production-ready and better than the
   current ATM runtime
+- every public `AtmErrorCode` variant carries the four-part contract:
+  - stable code
+  - cause summary
+  - operator/developer recovery steps
+  - docs link
 
 ## Risk Register
 
@@ -1117,6 +1127,11 @@ Phase Q should be considered complete only when:
   - `cargo clippy --workspace --all-targets -- -D warnings`
   - `cargo audit`
   - `cargo deny`
+- every public `AtmErrorCode` variant carries the four-part contract:
+  - stable code
+  - cause summary
+  - operator/developer recovery steps
+  - docs link
 - crates.io publish succeeds for the publishable crates
 - a GitHub release exists with tag and binary artifacts
 - `CHANGELOG.md` is updated for the Phase Q release

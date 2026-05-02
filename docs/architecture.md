@@ -2630,19 +2630,23 @@ relief. The target Phase Q architecture removes mailbox-lock dependence from
 ATM mail correctness by moving durable state ownership to SQLite and treating
 JSONL as compatibility ingress/egress only.
 
-### 21.9 Five-Stage Migration Model
+### 21.9 Six-Stage Migration Model
 
-Phase Q follows five architectural migration stages:
+Phase Q follows six architectural migration stages:
 
 1. store and boundary foundation
-2. compatibility ingest/export
-3. ack/task migration
-4. read/clear cutover plus thin daemon runtime
-5. lock retirement and production gate
+2. ingest plus send dual write
+3. read/ack/clear cutover
+4. thin daemon runtime
+5. compatibility cleanup and lock retirement
+6. production-readiness gate and release
 
 This ordering is intentional:
 - durable truth moves first
-- compatibility paths stay owned and explicit
-- daemon runtime arrives only after service boundaries are proven
-- lock retirement closes the phase after the daemon/runtime and store model are
-  already in place
+- compatibility paths stay owned and explicit while command cutover proceeds
+- daemon runtime arrives only after service boundaries and durable truth are
+  proven
+- compatibility cleanup and lock retirement happen after runtime ownership is
+  established
+- the production-readiness gate remains a distinct final stage rather than
+  being collapsed into lock retirement
