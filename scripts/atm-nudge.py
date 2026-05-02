@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""atm-nudge.py <recipient>
+"""atm-nudge.py [--pane <id>] <recipient>
 
 Post-send hook for ATM: nudges a named agent's tmux pane when a message is
 delivered to them.
 
 Pane resolution: reads BOTH .atm.toml [[rmux.windows.panes]] tmux_pane_id AND
 ~/.claude/teams/<team>/config.json tmuxPaneId. If they disagree or either is
-missing, exits with an error indicating which source has the problem.
+missing, exits with an error indicating which source has the problem and prints
+a ready-to-run command to nudge with the known pane.
+
+Use --pane <id> to bypass config lookup and nudge a specific pane directly.
 
 CLAUDE_PROJECT_DIR env var is used to locate .atm.toml; falls back to PWD then
 os.getcwd() so hooks fired from worktree dirs still find the config.
@@ -159,11 +162,17 @@ def nudge_pane(pane_id: str, message: str, recipient: str) -> None:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) < 2 or not argv[1].strip():
-        print("usage: atm-nudge.py <recipient>", file=sys.stderr)
+    args = argv[1:]
+    pane_override: str | None = None
+    if len(args) >= 2 and args[0] == "--pane":
+        pane_override = args[1].strip()
+        args = args[2:]
+
+    if not args or not args[0].strip():
+        print("usage: atm-nudge.py [--pane <id>] <recipient>", file=sys.stderr)
         return 1
 
-    recipient = argv[1].strip()
+    recipient = args[0].strip()
     team = resolve_team()
     message = (
         f"<atm><action>read atm --team {team}</action>"
@@ -172,6 +181,10 @@ def main(argv: list[str]) -> int:
         f'<when idle="immediate" busy="after-current-task"/>'
         f'<console announce="concise" pause="false"/></atm>'
     )
+
+    if pane_override:
+        nudge_pane(pane_override, message, recipient)
+        return 0
 
     pane_toml, err_toml = read_pane_from_toml(recipient)
     pane_config, err_config = read_pane_from_config(recipient, team)
@@ -183,8 +196,10 @@ def main(argv: list[str]) -> int:
                 f"  .atm.toml       tmux_pane_id = {pane_toml}",
                 f"  config.json     tmuxPaneId   = {pane_config}",
                 f"",
-                f"Manual nudge (pick the correct pane ID):",
-                f"  tmux send-keys -t {pane_toml} -l '{message}' && sleep 0.25 && tmux send-keys -t {pane_toml} Enter",
+                f"To nudge using the .atm.toml pane:",
+                f"```bash",
+                f"python3 scripts/atm-nudge.py --pane {pane_toml} {recipient}",
+                f"```",
                 f"",
                 f"Fix: update tmux_pane_id in .atm.toml [[rmux.windows.panes]] name='{recipient}'",
                 f"     and/or tmuxPaneId in ~/.claude/teams/{team}/config.json",
@@ -202,8 +217,10 @@ def main(argv: list[str]) -> int:
             f"ERROR: '{recipient}@{team}' pane found in .atm.toml ({pane_toml}) but missing from config.json.",
             f"  config.json error: {err_config}",
             f"",
-            f"Manual nudge:",
-            f"  tmux send-keys -t {pane_toml} -l '{message}' && sleep 0.25 && tmux send-keys -t {pane_toml} Enter",
+            f"To nudge using the .atm.toml pane:",
+            f"```bash",
+            f"python3 scripts/atm-nudge.py --pane {pane_toml} {recipient}",
+            f"```",
             f"",
             f"Fix: add or update tmuxPaneId = \"{pane_toml}\" for '{recipient}'",
             f"     in ~/.claude/teams/{team}/config.json members array.",
@@ -218,8 +235,10 @@ def main(argv: list[str]) -> int:
             f"ERROR: '{recipient}@{team}' pane found in config.json ({pane_config}) but missing from .atm.toml.",
             f"  .atm.toml error: {err_toml}",
             f"",
-            f"Manual nudge:",
-            f"  tmux send-keys -t {pane_config} -l '{message}' && sleep 0.25 && tmux send-keys -t {pane_config} Enter",
+            f"To nudge using the config.json pane:",
+            f"```bash",
+            f"python3 scripts/atm-nudge.py --pane {pane_config} {recipient}",
+            f"```",
             f"",
             f"Fix: add tmux_pane_id = \"{pane_config}\" to [[rmux.windows.panes]] name='{recipient}'",
             f"     in .atm.toml.",
@@ -234,8 +253,10 @@ def main(argv: list[str]) -> int:
         f"  .atm.toml   error: {err_toml}",
         f"  config.json error: {err_config}",
         f"",
-        f"Manual nudge (once you know the correct pane ID):",
-        f"  tmux send-keys -t <PANE_ID> -l '{message}' && sleep 0.25 && tmux send-keys -t <PANE_ID> Enter",
+        f"Once you know the correct pane ID:",
+        f"```bash",
+        f"python3 scripts/atm-nudge.py --pane <PANE_ID> {recipient}",
+        f"```",
         f"",
         f"Fix: add tmux_pane_id = \"<PANE_ID>\" to [[rmux.windows.panes]] name='{recipient}' in .atm.toml",
         f"     and tmuxPaneId = \"<PANE_ID>\" for '{recipient}' in ~/.claude/teams/{team}/config.json.",
