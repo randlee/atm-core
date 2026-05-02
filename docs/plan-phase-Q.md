@@ -416,6 +416,13 @@ Important runtime note:
 - retire stale-lock cron sweep for mail flows
 - keep only any compatibility code still required for non-mail paths
 
+### Stage 6: Production-Readiness Gate And Release
+
+- prove the daemon-owned Phase Q runtime is production-ready, not merely
+  architecture-complete
+- validate release-gate, publish, and operational-readiness checks
+- ship the released Phase Q runtime as the new production baseline
+
 ## Backward Compatibility
 
 Phase Q must preserve:
@@ -467,9 +474,26 @@ Implementation details:
 - keep business logic depending on abstract `MailStore`, `TaskStore`, and
   `RosterStore` traits defined in `atm-core`
 - keep schema bootstrap/migrations centralized
+- define semantic newtypes here rather than propagating raw `String` at
+  service/store/request boundaries for durable identities and routing
+  identifiers:
+  - `MessageKey`
+  - `MessageId`
+  - `TaskId`
+  - `TeamName`
+  - `AgentName`
+  - `PaneId`
 - define the canonical `message_key` model here before command cutover begins
+- `message_key` must remain a semantic newtype throughout service/store/request
+  boundaries; conversion to/from raw `String` is an adapter concern only
 - define typed error enums for store/bootstrap failures before command cutover
   spreads ad hoc error translation
+- if the runtime uses Tokio or another async executor, direct SQLite calls must
+  run under `spawn_blocking` or a dedicated blocking pool owned by the store
+  adapter; async dispatcher, accept-loop, watcher, and notifier tasks must not
+  perform blocking SQLite calls inline
+- schema bootstrap, migration, and store-open paths must emit structured
+  `sc-observability` events for success, upgrade, and degraded-open outcomes
 - define crash-recovery durable state now:
   - ordering rule `SQLite commit -> export`
   - re-export keyed by `message_key`
@@ -495,6 +519,7 @@ Acceptance:
   - transactional rollback on mid-operation failure
   - uniqueness of `message_key`, `legacy_message_id`, and `atm_message_id`
   - roster row replacement/update behavior
+  - blocking-store isolation from async runtime tasks
   - structured store/bootstrap errors remain discriminated and do not panic on
     routine failure
 
@@ -632,6 +657,9 @@ Implementation details:
   `sc-observability`
 - runtime/store/transport/daemon-client failures in this sprint must stay
   within typed error families rather than panic/unwrap paths
+- daemon startup must validate required config before binding listeners or
+  accepting requests; invalid config must fail deterministically with typed
+  startup diagnostics
 - daemon graceful shutdown sequence:
   - stop accepts
   - drain inflight work for `5s`
@@ -657,8 +685,22 @@ Implementation details:
   - retry queue `256`
   - SQLite handles `1..=4`
   - status cache `4096`
+- saturation policy:
+  - accept cap `64`: shed new accepts with typed over-capacity error; do not
+    await unboundedly in the accept loop
+  - per-connection inflight `32`: shed excess requests on that connection with
+    typed over-capacity error
+  - ingest queue `1024`: degrade with structured backlog/health reporting and
+    fail the enqueue; never silently drop
+  - retry queue `256`: shed the retry attempt with typed remote-delivery
+    saturation failure rather than growing unbounded
 - remote delivery success is defined by remote daemon acceptance within the
   bounded retry window
+- remote retry policy:
+  - applies only to idempotent remote delivery attempts
+  - uses bounded exponential backoff with jitter
+  - enforces one per-message max-attempt bound inside the `30s` total retry
+    budget
 - daemon-unavailable client calls must fail clearly without hidden fallback or
   auto-spawn
 - `atm doctor` must start consuming daemon/runtime state through the same
@@ -686,6 +728,9 @@ Acceptance:
   - daemon-unavailable path returns typed error with recovery guidance
   - `atm doctor` can surface daemon/runtime availability without direct socket
     or SQLite bypasses in CLI code
+  - invalid daemon config fails before listener bind
+  - saturation behavior matches the documented shed/degrade semantics for each
+    bounded queue/cap
 
 ### Q.5 — Lock Retirement + Ops Cleanup
 
@@ -728,7 +773,8 @@ Acceptance:
 
 Scope:
 - prove the Phase Q daemon/runtime is production-ready end-to-end
-- prove `atm send` and `atm ack` both route through the daemon production path
+- prove `atm send`, `atm ack`, `atm read`, and `atm clear` all route through
+  the daemon production path
 - validate every boundary rule listed in the Phase Q QA invariants
 - validate every item in the Production-Readiness Checklist
 - validate every Phase Q release-gate criterion
@@ -758,6 +804,8 @@ Implementation details:
   - release singleton artifacts
 - validate `atm send` and `atm ack` through the daemon production path rather
   than direct CLI/store mutation
+- validate `atm read` and `atm clear` through the daemon production path rather
+  than direct CLI/store or direct SQLite access
 - validate canonical event emission only from the daemon-owned post-store
   boundary
 - validate no canonical event or external hook execution on `DuplicateEntry`,
@@ -782,14 +830,36 @@ Implementation details:
   - daemon runtime
   - daemon singleton
   - daemon client
+- validate every public `AtmErrorCode` variant contract includes:
+  - stable code
+  - cause summary
+  - operator/developer recovery steps
+  - docs link
 - validate explicit compatibility mapping across:
   - SQLite durable row shapes
   - daemon request/response interfaces
   - Claude export envelope
   - post-send-hook payload
+- validate daemon startup rejects invalid required config before binding
+  listeners
+- validate queue saturation behavior against the documented shed/degrade rules
+  for:
+  - accept cap
+  - per-connection inflight cap
+  - ingest queue
+  - retry queue
+- validate no async dispatcher, accept loop, watcher, or notifier task performs
+  blocking SQLite calls inline
+- validate timeout conformance so no transport, store, ingest, doctor, or
+  remote-delivery path can wait indefinitely
 - validate the production result is observably and operationally better than
   the current ATM runtime rather than merely equivalent
 - bump workspace/package versions for the Phase Q release target
+- run release-blocking validation:
+  - `cargo fmt --check`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
+  - `cargo audit`
+  - `cargo deny`
 - run `cargo publish --dry-run` validation for the publishable crates
 - plan for crates.io publish and GitHub release creation with binary artifacts
 - update `CHANGELOG.md` for the Phase Q release
@@ -800,16 +870,29 @@ Acceptance:
 - every item in the Production-Readiness Checklist is explicitly proven by
   implementation, tests, or release validation
 - every Phase Q QA invariant has listed conformance/integration coverage
-- `atm send` and `atm ack` are both proven on the daemon production path
+- `atm send`, `atm ack`, `atm read`, and `atm clear` are all proven on the
+  daemon production path
 - daemon singleton, graceful shutdown, stale-artifact cleanup, and daemon
   unavailability behavior are all validated
+- invalid required config is proven to fail before listener bind
+- queue saturation behavior is validated with explicit shed/degrade semantics
 - structured `sc-observability` coverage is validated at CLI and daemon layers
 - typed error families are validated across store/ingest/export/transport/
   daemon-runtime/daemon-singleton/daemon-client surfaces
+- no transport, store, ingest, doctor, or remote-delivery path waits
+  indefinitely under timeout-conformance tests
+- `atm doctor` distinguishes liveness from readiness and exposes queue-depth /
+  backlog metrics needed for daemon-health diagnosis
+- no async dispatcher, accept-loop, watcher, or notifier task performs
+  blocking SQLite work inline
 - the release gate is satisfied as written, including the “better than current
   ATM runtime” criterion
 - workspace/package version bump plan is explicit for the Phase Q release
 - publish/release steps are documented, including:
+  - `cargo fmt --check`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
+  - `cargo audit`
+  - `cargo deny`
   - `cargo publish --dry-run`
   - crates.io publish for the publishable crates
   - GitHub release/tag creation
@@ -843,6 +926,8 @@ state:
   architecture slice
 - `atm send` goes through the daemon production path
 - `atm ack` goes through the daemon production path
+- `atm read` goes through the daemon production path
+- `atm clear` goes through the daemon production path
 - post-send-hook execution is daemon-owned
 - canonical system events are emitted only after a successful SSOT transition
   on the daemon side of the store boundary
@@ -865,13 +950,21 @@ state:
 - watcher/reconcile behavior is explicit and isolated
 - daemon-to-daemon routing and remote acceptance semantics are explicit
 - `atm doctor` daemon health surface is explicit
+- liveness vs readiness semantics and queue-depth metrics are explicit for
+  daemon health/doctor reporting
 - structured `sc-observability` is explicit at CLI and daemon layers
 - typed error handling is explicit, wildcard/catch-all codes are forbidden,
   and panic/unwrap are not the normal production strategy
+- important request/response, hook-payload, durable-insert, and health-report
+  shapes are expressed explicitly enough to compare interface compatibility
 - conformance/integration tests are listed for edge cases and boundary rules
 - every boundary violation is an immediate QA failure
 - the publish/release path is explicit:
   - workspace/package version bump
+  - `cargo fmt --check`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
+  - `cargo audit`
+  - `cargo deny`
   - `cargo publish --dry-run`
   - crates.io publish for the publishable crates
   - GitHub release with tag and binary artifacts
@@ -964,7 +1057,8 @@ Mitigation:
 The following must be checked on every QA pass for Phase Q:
 
 - it is impossible for two active ATM daemons to run on one host
-- `atm send` and `atm ack` both use the daemon production path
+- `atm send`, `atm ack`, `atm read`, and `atm clear` all use the daemon
+  production path
 - every subsystem performs all of its external I/O only through its owning
   trait boundary
 - any SQL, watcher, notifier, or socket-boundary bypass is an immediate QA
@@ -985,7 +1079,11 @@ The following must be checked on every QA pass for Phase Q:
 - CLI and daemon both retain structured `sc-observability` coverage
 - typed runtime errors remain discriminated across service, daemon, and CLI
   boundaries
+- no async dispatcher, accept loop, watcher, or notifier path performs
+  blocking SQLite calls inline
 - roster truth lives in SQLite; live status truth lives in daemon memory
+- daemon health reporting distinguishes liveness from readiness and exposes the
+  queue-depth/backlog metrics needed for diagnosis
 - Claude compatibility continues to use Claude-native top-level fields plus
   `metadata.atm`
 
@@ -996,6 +1094,8 @@ Phase Q should be considered complete only when:
 - the daemon is production-ready and required for the normal runtime path
 - `atm send` works through the daemon production path
 - `atm ack` works through the daemon production path
+- `atm read` works through the daemon production path
+- `atm clear` works through the daemon production path
 - post-send-hook execution is daemon-owned and fires only from the canonical
   daemon-side post-store event boundary
 - ATM mail correctness no longer depends on mailbox `.lock` files
@@ -1005,6 +1105,18 @@ Phase Q should be considered complete only when:
   durable database truth
 - Claude inbox files remain a compatible export/ingest surface only
 - stale lock cleanup can no longer wedge normal ATM mail flows
+- invalid required config fails before listener bind
+- queue saturation behavior matches the documented shed/degrade semantics
+- `atm doctor` exposes liveness vs readiness and queue-depth/backlog metrics
+- no transport, store, ingest, doctor, or remote-delivery path waits
+  indefinitely under timeout-conformance coverage
+- no async dispatcher, accept-loop, watcher, or notifier path performs
+  blocking SQLite calls inline
+- release-blocking validation passes:
+  - `cargo fmt --check`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
+  - `cargo audit`
+  - `cargo deny`
 - crates.io publish succeeds for the publishable crates
 - a GitHub release exists with tag and binary artifacts
 - `CHANGELOG.md` is updated for the Phase Q release

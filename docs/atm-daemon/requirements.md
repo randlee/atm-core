@@ -128,17 +128,22 @@ Required runtime rules:
 - exactly one daemon may be active on a host at a time
 - daemon startup must fail deterministically if a live daemon already owns the
   runtime
+- required config must validate before listeners bind; invalid config fails
+  deterministically with typed startup diagnostics
 - stale ownership cleanup must never allow two live daemons
 - graceful shutdown must stop accepts, drain or cancel inflight work within one
   bounded deadline, checkpoint WAL, and release singleton ownership
 - signal handlers must be installed before listeners are opened
 - remote delivery must be daemon-to-daemon only
-- `atm send` and `atm ack` must both use the daemon production path rather
-  than direct CLI/store mutation in the Phase Q runtime
+- `atm send`, `atm ack`, `atm read`, and `atm clear` must all use the daemon
+  production path rather than direct CLI/store mutation in the Phase Q runtime
 - the same transport protocol must be exercisable through an in-process
   `test-socket` without changing handler/business logic
 - transport/store/health operations must obey one documented timeout budget
 - runtime queues and handles must obey one documented concrete cap policy
+- no async dispatcher, accept loop, watcher, notifier, or health-query path
+  may perform blocking SQLite calls inline; direct SQLite work stays behind
+  `spawn_blocking` or a dedicated blocking pool owned by the store adapter
 - daemon memory is the live truth for agent status
 - crash recovery must preserve the ordering rule `SQLite commit -> export`
   and any retry/re-export state needed after daemon crash must be durable rather
@@ -176,3 +181,5 @@ Required runtime rules:
   rather than collapsing into panic/unwrap control flow
 - daemon runtime and transport paths must emit structured observability events
 - daemon must expose one explicit health/status query interface for `atm doctor`
+- daemon health/status must distinguish liveness from readiness and expose the
+  queue-depth/backlog metrics needed to diagnose readiness pressure

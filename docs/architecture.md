@@ -2021,6 +2021,19 @@ Required architectural rules:
 - persisted retry state must not become a long-lived remote outbox; expired
   retry rows fail closed during replay
 
+### 21.1.4 Migration Stages
+
+The migration model is six-stage and the production release gate is part of the
+target architecture, not a follow-on note.
+
+Stages:
+1. store and boundary foundation
+2. ingest plus send dual write
+3. read/ack/clear cutover
+4. thin daemon runtime
+5. compatibility cleanup and lock retirement
+6. production-readiness gate and release
+
 ### 21.2 Compatibility Surfaces
 
 Claude-owned inbox JSONL files remain required for:
@@ -2376,6 +2389,23 @@ pub enum ResponseEnvelope {
     Clear(ClearResponse),
     Doctor(DoctorHealthReport),
 }
+
+pub struct SendRequest {
+    pub from: AgentName,
+    pub to: AgentName,
+    pub team: TeamName,
+    pub message_id: MessageId,
+    pub task_id: Option<TaskId>,
+    pub requires_ack: bool,
+    pub body: String,
+}
+
+pub struct AckRequest {
+    pub team: TeamName,
+    pub message_key: MessageKey,
+    pub task_id: Option<TaskId>,
+    pub body: Option<String>,
+}
 ```
 
 Socket receive loop rule:
@@ -2506,12 +2536,32 @@ pub struct DoctorHealthQuery {
 
 pub struct DoctorHealthReport {
     pub daemon_reachable: bool,
+    pub daemon_ready: bool,
     pub singleton_owner: Option<String>,
     pub store_ready: bool,
     pub ingest_degraded: bool,
+    pub queue_depths: QueueDepthSnapshot,
     pub live_status_summary: StatusSummary,
 }
+
+pub struct QueueDepthSnapshot {
+    pub accepts: u32,
+    pub per_connection_inflight: u32,
+    pub ingest_queue: u32,
+    pub retry_queue: u32,
+}
 ```
+
+Health-report rules:
+- liveness and readiness are distinct:
+  - liveness answers whether the daemon is reachable and responsive
+  - readiness answers whether it can safely serve normal runtime traffic
+- queue/backlog metrics are part of readiness diagnosis and must cover at
+  least:
+  - accept pressure
+  - ingest backlog
+  - retry backlog
+  - per-connection inflight saturation when relevant
 
 ### 21.6.4 Shutdown, Signals, Timeouts, And Resource Caps
 
@@ -2536,10 +2586,30 @@ Required caps:
 - SQLite handle budget: `1..=4`
 - status-cache cap: `4096`
 
+Required saturation policy:
+- accept cap exceeded: shed new accepts with typed over-capacity error
+- per-connection inflight exceeded: shed excess requests for that connection
+  with typed over-capacity error
+- ingest queue full: degrade with structured backlog/health reporting and fail
+  the enqueue; never silently drop
+- retry queue full: shed the retry attempt with typed remote-delivery
+  saturation error rather than growing unboundedly
+
 Required signal behavior:
 - install `SIGINT`/`SIGTERM`/`SIGHUP` handling before listeners accept
 - `SIGINT` and `SIGTERM` enter graceful shutdown
 - `SIGHUP` triggers bounded rescan/reload without dropping singleton ownership
+
+Blocking-I/O isolation rule:
+- if the runtime uses Tokio or another async executor, direct SQLite work must
+  remain behind `spawn_blocking` or a dedicated blocking pool owned by the
+  store adapter
+- async dispatcher, accept-loop, watcher, notifier, and health-query tasks
+  must not perform blocking SQLite calls inline
+
+Timeout-conformance rule:
+- transport, store, ingest, doctor, and remote-delivery paths must each have
+  timeout-conformance coverage proving they do not wait indefinitely
 
 ### 21.7 Test Strategy
 

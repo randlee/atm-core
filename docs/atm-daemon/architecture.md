@@ -37,8 +37,8 @@ The `atm-daemon` crate must remain thin.
   - TCP/TLS
   - in-process `test-socket`
 - cross-host delivery is daemon-to-daemon only.
-- `atm send` and `atm ack` both route through the daemon in the Phase Q
-  production runtime.
+- `atm send`, `atm ack`, `atm read`, and `atm clear` all route through the
+  daemon in the Phase Q production runtime.
 - remote delivery may use bounded transient retry, but not a durable long-lived
   remote outbox.
 - remote send success is defined by remote daemon acceptance within the bounded
@@ -73,6 +73,8 @@ Hard invariant:
 Architectural rule:
 - singleton enforcement belongs in the runtime wrapper only
 - the runtime must fail closed rather than allowing split ownership
+- required config must validate before listeners bind; invalid config fails
+  deterministically with typed startup diagnostics
 
 Lifecycle state model:
 - the daemon runtime must explicitly model:
@@ -225,6 +227,8 @@ Required saturation behavior:
 - retry queue full: fail remote send attempt rather than enqueueing unbounded
 - status-cache cap exceeded: evict least-recently-updated noncritical entries
   to `unknown` with structured warning emission
+- health/report surfaces must distinguish liveness from readiness and expose
+  queue-depth/backlog metrics needed to diagnose the saturation states above
 
 ## 3.2.2 Timeouts
 
@@ -236,6 +240,12 @@ Required timeout defaults:
 - SQLite `busy_timeout`: `1500ms`
 - ingest batch processing slice: `2s` max before yielding
 - daemon health query used by `atm doctor`: `3s`
+- timeout-conformance coverage must prove that transport, store, ingest,
+  doctor, and remote-delivery paths do not wait indefinitely
+- if the runtime uses Tokio or another async executor, direct SQLite work must
+  stay behind `spawn_blocking` or a dedicated blocking pool; async dispatcher,
+  accept-loop, watcher, notifier, and health-query tasks must not block on
+  SQLite inline
 
 ## 3.3 Test Strategy
 

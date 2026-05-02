@@ -2507,6 +2507,8 @@ mail correctness.
     wiring, not in the production path
   - `atm send` must route through the daemon in the Phase Q production path
   - `atm ack` must route through the daemon in the Phase Q production path
+  - `atm read` must route through the daemon in the Phase Q production path
+  - `atm clear` must route through the daemon in the Phase Q production path
 
   Satisfies:
   - `REQ-P-RUNTIME-001`
@@ -2515,6 +2517,8 @@ mail correctness.
   shutdown and signal-handling contract.
 
   Required behavior:
+  - required config must validate before listeners bind; invalid config fails
+    deterministically with typed startup diagnostics
   - `SIGINT` and `SIGTERM` begin graceful shutdown
   - `SIGHUP` triggers bounded runtime rescan/reload without releasing singleton
     ownership
@@ -2562,6 +2566,8 @@ mail correctness.
   - the `AtmErrorCode` registry must not use wildcard or catch-all variants in
     place of specific codes
   - every public `AtmErrorCode` must document one recoverability class
+  - every public `AtmErrorCode` must document one docs link and stable
+    cause/recovery contract in the central registry
   - the `AtmErrorCode` registry is centralized and read-only from the
     perspective of feature/service code; subsystems consume codes from the
     registry and do not mint local alternatives
@@ -2666,8 +2672,17 @@ mail correctness.
   - retry queue depth: `256`
   - SQLite handle budget: `1..=4`
   - live status-cache cap: `4096`
-  - saturation behavior must fail with typed errors or structured degradation,
-    never silent drop
+  - accept-cap saturation sheds new accepts with typed over-capacity error
+  - per-connection inflight saturation sheds excess requests for that
+    connection with typed over-capacity error
+  - ingest-queue saturation degrades with structured backlog/health reporting
+    and fails the enqueue; it never silently drops
+  - retry-queue saturation sheds the retry attempt with typed
+    remote-delivery saturation error rather than growing unboundedly
+  - no async dispatcher, accept loop, watcher, notifier, or health-query path
+    may perform blocking SQLite calls inline; direct SQLite work must stay
+    behind `spawn_blocking` or a dedicated blocking pool owned by the store
+    adapter
 
 ### 21.5 Claude Compatibility And Native Agent Path
 
@@ -2777,11 +2792,15 @@ mail correctness.
   - daemon/runtime health information must be obtained through an explicit
     daemon-facing interface rather than direct CLI inspection of private daemon
     state
+  - daemon reachability (liveness) and daemon readiness must remain distinct
+    health answers
   - the health interface must be able to report at least:
     - daemon reachability
+    - daemon readiness
     - singleton ownership status
     - live status-cache summary
     - ingest backlog / degraded-ingest state when present
+    - queue-depth / backlog metrics needed to diagnose readiness pressure
     - SQLite open/readiness state
 
 ### 21.9 QA Invariants
@@ -2799,13 +2818,18 @@ mail correctness.
     of panic/unwrap for fallible runtime paths
   - daemon/runtime code remains thin and does not accumulate business logic
   - daemon spawning is not the test strategy
-  - `atm send` and `atm ack` both use the daemon production path
+  - `atm send`, `atm ack`, `atm read`, and `atm clear` all use the daemon
+    production path
   - canonical system events fire only from the daemon-owned post-store
     transition boundary
   - duplicate durable insert attempts do not create duplicate events or
     post-send-hook execution
+  - no async dispatcher, accept loop, watcher, notifier, or health-query path
+    performs blocking SQLite calls inline
   - SQLite remains the source of truth for mail and roster
   - live agent status remains runtime-owned state
+  - daemon health reporting distinguishes liveness from readiness and exposes
+    queue-depth/backlog metrics
   - structured `sc-observability` coverage remains present at both CLI and
     daemon layers
   - Claude compatibility export remains Claude-native top-level plus

@@ -2462,8 +2462,8 @@ Core design decisions:
   - read/clear visibility state
   - team roster
 - daemon memory is the live truth for agent status
-- `atm send` and `atm ack` both use the daemon production path in the final
-  Phase Q runtime
+- `atm send`, `atm ack`, `atm read`, and `atm clear` all use the daemon
+  production path in the final Phase Q runtime
 - `atm doctor` remains a CLI command but must query daemon/runtime state in the
   Phase Q target architecture
 - Claude inbox JSONL remains compatibility ingress/egress only
@@ -2604,24 +2604,46 @@ Acceptance:
 
 Scope:
 - prove the daemon/runtime is production-ready end-to-end
-- prove `atm send` and `atm ack` both use the daemon production path
+- prove `atm send`, `atm ack`, `atm read`, and `atm clear` all use the daemon
+  production path
 - validate every Phase Q QA invariant and every Production-Readiness Checklist
   item
 - validate the release gate criteria and prepare the line for production
   release rather than architecture-only completion
+- run release-blocking validation:
+  - `cargo fmt --check`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
+  - `cargo audit`
+  - `cargo deny`
 
 Acceptance:
 - every checklist item is proven by implementation, tests, or release
   validation
 - every QA invariant has explicit conformance/integration coverage
+- `atm send`, `atm ack`, `atm read`, and `atm clear` are all proven on the
+  daemon path
 - daemon singleton, graceful shutdown, stale-artifact cleanup, daemon
   unavailability, and canonical post-store event behavior are validated
+- invalid required config is proven to fail before listener bind
+- queue saturation behavior is validated with the documented shed/degrade
+  semantics
 - structured `sc-observability` coverage is validated at CLI and daemon layers
 - typed error families are validated across store/ingest/export/transport/
   daemon-runtime/daemon-singleton/daemon-client boundaries
+- no transport, store, ingest, doctor, or remote-delivery path waits
+  indefinitely under timeout-conformance tests
+- `atm doctor` distinguishes liveness from readiness and reports queue-depth /
+  backlog metrics
+- no async dispatcher, accept-loop, watcher, or notifier path performs
+  blocking SQLite calls inline
 - workspace/package version bump and publish/release steps are explicit
 - the release gate explicitly requires crates.io publish success, GitHub
   release/tag plus binary artifacts, and `CHANGELOG.md` update
+- release-blocking validation includes:
+  - `cargo fmt --check`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
+  - `cargo audit`
+  - `cargo deny`
 - the docs and release materials describe the final production-ready runtime,
   not an in-progress migration
 
@@ -2629,7 +2651,8 @@ QA invariants for every Phase Q pass:
 - impossible to run two active daemons on one host
 - daemon unavailability fails clearly without hidden fallback to direct store or
   inbox access
-- `atm send` and `atm ack` both use the daemon production path
+- `atm send`, `atm ack`, `atm read`, and `atm clear` all use the daemon
+  production path
 - every subsystem performs I/O only through its owning trait boundary
 - any observed SQL, watcher, notifier, or socket-boundary bypass is an
   immediate QA failure
