@@ -2,14 +2,14 @@
 """atm-nudge.py <recipient>
 
 Post-send hook for ATM: nudges a named agent's tmux pane when a message is
-delivered to them. Resolves the team name from `.atm.toml` in the repo folder
-by walking up from the caller's launch directory, falling back to `ATM_TEAM`
-env var.
+delivered to them.
 
 Pane resolution order:
-  1. .atm.toml [[rmux.windows.panes]] tmux_pane_id field (zero tmux calls)
-  2. ~/.claude/teams/<team>/config.json tmuxPaneId field (with warning)
-  3. Scan all panes for one whose title matches recipient (last resort)
+  1. .atm.toml [[rmux.windows.panes]] tmux_pane_id field (preferred)
+  2. ~/.claude/teams/<team>/config.json tmuxPaneId field
+
+CLAUDE_PROJECT_DIR env var is used to locate .atm.toml; falls back to PWD then
+os.getcwd() so hooks fired from worktree dirs still find the config.
 
 Usage (from [[atm.post_send_hooks]] in .atm.toml):
   command = ["scripts/atm-nudge.py", "team-lead"]
@@ -43,44 +43,6 @@ def log(message: str) -> None:
         f.write(f"{timestamp} {message}\n")
 
 
-def read_team_from_toml(toml_path: Path) -> str | None:
-    if tomllib is None:
-        return None
-    try:
-        with toml_path.open("rb") as f:
-            config = tomllib.load(f)
-        for section in ("atm", "core"):
-            team = config.get(section, {}).get("default_team")
-            if team:
-                return str(team)
-    except Exception:
-        pass
-    return None
-
-
-def read_post_send_payload() -> dict[str, object]:
-    raw = os.environ.get("ATM_POST_SEND", "").strip()
-    if not raw:
-        return {}
-    try:
-        payload = json.loads(raw)
-    except Exception:
-        return {}
-    return payload if isinstance(payload, dict) else {}
-
-
-def find_atm_toml(start_dir: Path) -> Path | None:
-    current = start_dir.resolve()
-    while True:
-        candidate = current / ".atm.toml"
-        if candidate.is_file():
-            return candidate
-        parent = current.parent
-        if parent == current:
-            return None
-        current = parent
-
-
 def candidate_start_dirs() -> list[Path]:
     candidates: list[Path] = []
     seen: set[Path] = set()
@@ -101,78 +63,53 @@ def candidate_start_dirs() -> list[Path]:
     return candidates
 
 
+def find_atm_toml(start_dir: Path) -> Path | None:
+    current = start_dir.resolve()
+    while True:
+        candidate = current / ".atm.toml"
+        if candidate.is_file():
+            return candidate
+        parent = current.parent
+        if parent == current:
+            return None
+        current = parent
+
+
+def read_post_send_payload() -> dict[str, object]:
+    raw = os.environ.get("ATM_POST_SEND", "").strip()
+    if not raw:
+        return {}
+    try:
+        payload = json.loads(raw)
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
 def resolve_team() -> str:
     payload = read_post_send_payload()
     payload_team = payload.get("team")
     if isinstance(payload_team, str) and payload_team.strip():
         return payload_team.strip()
-
-    for start_dir in candidate_start_dirs():
-        toml_path = find_atm_toml(start_dir)
-        if toml_path is None:
-            continue
-        team = read_team_from_toml(toml_path)
-        if team:
-            return team
+    if tomllib is not None:
+        for start_dir in candidate_start_dirs():
+            toml_path = find_atm_toml(start_dir)
+            if toml_path is None:
+                continue
+            try:
+                with toml_path.open("rb") as f:
+                    config = tomllib.load(f)
+                for section in ("atm", "core"):
+                    team = config.get(section, {}).get("default_team")
+                    if team:
+                        return str(team)
+            except Exception:
+                continue
     return os.environ.get("ATM_TEAM", "atm-dev")
 
 
-def pane_exists(pane_id: str) -> bool:
-    try:
-        output = subprocess.check_output(
-            ["tmux", "list-panes", "-a", "-F", "#{pane_id}"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-        )
-        return pane_id in output.splitlines()
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return False
-
-
-def find_pane_via_config(recipient: str, team: str) -> tuple[str | None, str | None]:
-    """Return (pane_id, actionable_error). pane_id is None on any failure."""
-    config_path = Path.home() / ".claude" / "teams" / team / "config.json"
-    if not config_path.exists():
-        return None, (
-            f"Team '{team}' has no config.json. Register {recipient} with a pane ID:\n"
-            f"  atm add-member {recipient} --team {team} "
-            f"--pane-id $(tmux display-message -p '#{{pane_id}}')"
-        )
-    try:
-        config = json.loads(config_path.read_text())
-    except Exception as exc:
-        return None, f"Cannot parse {config_path}: {exc}"
-
-    member = next(
-        (m for m in config.get("members", []) if m.get("name") == recipient), None
-    )
-    if member is None:
-        return None, (
-            f"Agent '{recipient}' not in team '{team}'. Add with:\n"
-            f"  atm add-member {recipient} --team {team} "
-            f"--pane-id $(tmux display-message -p '#{{pane_id}}')"
-        )
-
-    pane_id = member.get("tmuxPaneId", "").strip()
-    if not pane_id:
-        return None, (
-            f"No pane ID stored for '{recipient}' in team '{team}'. Set with:\n"
-            f"  atm update-member {recipient} --team {team} "
-            f"--pane-id $(tmux display-message -p '#{{pane_id}}')"
-        )
-
-    if not pane_exists(pane_id):
-        return None, (
-            f"Pane {pane_id} for '{recipient}' no longer exists (stale). Update with:\n"
-            f"  atm update-member {recipient} --team {team} "
-            f"--pane-id $(tmux display-message -p '#{{pane_id}}')"
-        )
-
-    return pane_id, None
-
-
 def find_pane_via_toml(recipient: str) -> str | None:
-    """Read tmux_pane_id from .atm.toml rmux panes. Zero tmux calls."""
+    """Read tmux_pane_id from .atm.toml [[rmux.windows.panes]] entries."""
     if tomllib is None:
         return None
     for start_dir in candidate_start_dirs():
@@ -193,22 +130,24 @@ def find_pane_via_toml(recipient: str) -> str | None:
     return None
 
 
-def find_pane_via_title(recipient: str) -> str | None:
-    """Fallback: scan all panes for one whose title matches recipient."""
+def find_pane_via_config(recipient: str, team: str) -> tuple[str | None, str | None]:
+    """Return (pane_id, error_msg). Looks up tmuxPaneId in team config.json."""
+    config_path = Path.home() / ".claude" / "teams" / team / "config.json"
+    if not config_path.exists():
+        return None, f"No config.json for team '{team}'"
     try:
-        output = subprocess.check_output(
-            ["tmux", "list-panes", "-a", "-F", "#{pane_title}\t#{pane_id}"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return None
-
-    for line in output.splitlines():
-        parts = line.split("\t", 1)
-        if len(parts) == 2 and parts[0] == recipient:
-            return parts[1]
-    return None
+        config = json.loads(config_path.read_text())
+    except Exception as exc:
+        return None, f"Cannot parse {config_path}: {exc}"
+    member = next(
+        (m for m in config.get("members", []) if m.get("name") == recipient), None
+    )
+    if member is None:
+        return None, f"Agent '{recipient}' not in team '{team}'"
+    pane_id = member.get("tmuxPaneId", "").strip()
+    if not pane_id:
+        return None, f"No tmuxPaneId for '{recipient}' in team '{team}'"
+    return pane_id, None
 
 
 def nudge_pane(pane_id: str, message: str, recipient: str) -> None:
@@ -225,39 +164,28 @@ def main(argv: list[str]) -> int:
 
     recipient = argv[1].strip()
     team = resolve_team()
-    message = f"<atm><action>read atm --team {team}</action><action>ack the message</action><action>execute the assigned task</action><when idle=\"immediate\" busy=\"after-current-task\"/><console announce=\"concise\" pause=\"false\"/></atm>"
+    message = (
+        f"<atm><action>read atm --team {team}</action>"
+        f"<action>ack the message</action>"
+        f"<action>execute the assigned task</action>"
+        f'<when idle="immediate" busy="after-current-task"/>'
+        f'<console announce="concise" pause="false"/></atm>'
+    )
 
-    # 1. Try .atm.toml rmux panes (zero tmux calls, preferred)
+    # 1. .atm.toml rmux panes (preferred — zero extra subprocess calls)
     pane_id = find_pane_via_toml(recipient)
 
-    # 2. Fall back to config.json with warning
-    config_error = None
+    # 2. config.json fallback
     if pane_id is None:
-        warn = f"warn: {recipient} not in .atm.toml rmux panes, falling back to config.json"
+        warn = f"warn: {recipient} not in .atm.toml rmux panes, trying config.json"
         log(warn)
         print(warn, file=sys.stderr)
         pane_id, config_error = find_pane_via_config(recipient, team)
-
-    # 3. Last resort: pane title scan
-    if pane_id is None:
-        warn = f"warn: {recipient} not in config.json, falling back to pane title scan"
-        log(warn)
-        print(warn, file=sys.stderr)
-        pane_id = find_pane_via_title(recipient)
-
-    if pane_id is None:
-        if config_error:
+        if pane_id is None:
             error_msg = f"Cannot nudge {recipient}@{team}: {config_error}"
-        else:
-            error_msg = (
-                f"Cannot nudge {recipient}@{team}: pane not found by any method.\n"
-                f"Register the agent with:\n"
-                f"  atm add-member {recipient} --team {team} "
-                f"--pane-id $(tmux display-message -p '#{{pane_id}}')"
-            )
-        log(f"error: {error_msg}")
-        print(error_msg, file=sys.stderr)
-        return 1
+            log(f"error: {error_msg}")
+            print(error_msg, file=sys.stderr)
+            return 1
 
     nudge_pane(pane_id, message, recipient)
     return 0
