@@ -2,7 +2,8 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
-use atm_core::schema::{AgentMember, MessageEnvelope, TeamConfig};
+use atm_core::schema::{AgentMember, AtmMessageId, LegacyMessageId, MessageEnvelope, TeamConfig};
+use serde_json::Value;
 
 #[test]
 fn test_send_creates_inbox_file() {
@@ -28,6 +29,12 @@ fn test_send_creates_inbox_file() {
     assert_eq!(inbox[0].text, "hello from test");
     assert_eq!(inbox[0].from, "arch-ctm");
     assert!(inbox[0].message_id.is_some());
+    let raw = fixture.inbox_json_lines("recipient");
+    assert_eq!(raw.len(), 1);
+    assert!(raw[0]["metadata"]["atm"]["messageId"].as_str().is_some());
+    assert_eq!(raw[0]["metadata"]["atm"]["sourceTeam"], "atm-dev");
+    assert!(raw[0].get("message_id").is_none());
+    assert!(raw[0].get("source_team").is_none());
 }
 
 #[test]
@@ -124,6 +131,22 @@ fn test_send_requires_ack() {
     let inbox = fixture.inbox_contents("recipient");
     assert_eq!(inbox.len(), 1);
     assert!(inbox[0].pending_ack_at.is_some());
+    let raw = fixture.inbox_json_lines("recipient");
+    assert!(raw[0]["metadata"]["atm"]["pendingAckAt"].as_str().is_some());
+    assert!(raw[0].get("pendingAckAt").is_none());
+    let atm_message_id = inbox[0].extra["metadata"]["atm"]["messageId"]
+        .as_str()
+        .expect("atm message id");
+    let workflow = fixture.workflow_state_contents("atm-dev", "recipient");
+    assert!(
+        workflow["messages"][format!("atm:{atm_message_id}")]["read"].is_null()
+            || workflow["messages"][format!("atm:{atm_message_id}")]["read"] == false
+    );
+    assert!(
+        workflow["messages"][format!("atm:{atm_message_id}")]["pendingAckAt"]
+            .as_str()
+            .is_some()
+    );
 }
 
 #[test]
@@ -147,6 +170,9 @@ fn test_send_persists_task_id() {
     let inbox = fixture.inbox_contents("recipient");
     assert_eq!(inbox.len(), 1);
     assert_eq!(inbox[0].task_id.as_deref(), Some("TASK-123"));
+    let raw = fixture.inbox_json_lines("recipient");
+    assert_eq!(raw[0]["metadata"]["atm"]["taskId"], "TASK-123");
+    assert!(raw[0].get("taskId").is_none());
 }
 
 #[test]
@@ -430,6 +456,26 @@ fn test_send_cross_team_projects_alias_and_persists_canonical_from_identity() {
 }
 
 #[test]
+fn test_send_json_reports_canonical_sender_identity() {
+    let fixture = Fixture::new("recipient");
+    fixture.write_team_config_for_team("other-team", "recipient");
+    fixture.write_atm_config("[atm]\n[atm.aliases]\nlead = \"arch-ctm\"\n");
+
+    let output = fixture.run_with_env(
+        &["send", "recipient@other-team", "hello cross-team", "--json"],
+        &[("ATM_TEAM", "atm-dev")],
+    );
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["sender"], "arch-ctm");
+}
+
+#[test]
 fn test_send_runs_post_send_hook_with_expected_payload() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
@@ -451,6 +497,7 @@ fn test_send_runs_post_send_hook_with_expected_payload() {
     assert_eq!(payload["from"], "arch-ctm@atm-dev");
     assert_eq!(payload["to"], "recipient@atm-dev");
     assert_eq!(payload["requires_ack"], false);
+    assert_eq!(payload["is_ack"], false);
     assert!(payload["message_id"].as_str().is_some());
     assert!(payload.get("task_id").is_none());
     assert_eq!(payload["sender"], "arch-ctm");
@@ -988,7 +1035,26 @@ impl Fixture {
         self.inbox_contents_in_team("atm-dev", recipient)
     }
 
+    fn inbox_json_lines(&self, recipient: &str) -> Vec<Value> {
+        self.inbox_json_lines_in_team("atm-dev", recipient)
+    }
+
     fn inbox_contents_in_team(&self, team: &str, recipient: &str) -> Vec<MessageEnvelope> {
+        let inbox_path = self.inbox_path_in_team(team, recipient);
+        let raw = fs::read_to_string(&inbox_path).expect("inbox contents");
+        if raw.trim().is_empty() {
+            return Vec::new();
+        }
+        raw.lines()
+            .map(|line| {
+                let mut value: Value = serde_json::from_str(line).expect("json line");
+                hydrate_legacy_fields_from_metadata(&mut value);
+                serde_json::from_value(value).expect("message envelope")
+            })
+            .collect()
+    }
+
+    fn inbox_json_lines_in_team(&self, team: &str, recipient: &str) -> Vec<Value> {
         let inbox_path = self.inbox_path_in_team(team, recipient);
         let raw = fs::read_to_string(&inbox_path).expect("inbox contents");
         if raw.trim().is_empty() {
@@ -1005,6 +1071,21 @@ impl Fixture {
             .join(".claude")
             .join("teams")
             .join("atm-dev")
+    }
+
+    fn workflow_state_contents(&self, team: &str, agent: &str) -> Value {
+        let raw = fs::read_to_string(
+            self.tempdir
+                .path()
+                .join(".claude")
+                .join("teams")
+                .join(team)
+                .join(".atm-state")
+                .join("workflow")
+                .join(format!("{agent}.json")),
+        )
+        .expect("workflow state contents");
+        serde_json::from_str(&raw).expect("workflow json")
     }
 
     fn install_hook_fixture(&self, mode: &str) -> (PathBuf, PathBuf) {
@@ -1057,5 +1138,64 @@ impl Fixture {
 
     fn stderr(&self, output: &std::process::Output) -> String {
         String::from_utf8(output.stderr.clone()).expect("stderr utf8")
+    }
+}
+
+fn hydrate_legacy_fields_from_metadata(value: &mut Value) {
+    let Some(object) = value.as_object_mut() else {
+        return;
+    };
+    let Some(atm) = object
+        .get("metadata")
+        .and_then(Value::as_object)
+        .and_then(|metadata| metadata.get("atm"))
+        .and_then(Value::as_object)
+        .cloned()
+    else {
+        return;
+    };
+
+    if !object.contains_key("message_id")
+        && let Some(raw) = atm.get("messageId").and_then(Value::as_str)
+        && let Ok(message_id) = raw.parse::<AtmMessageId>()
+    {
+        object.insert(
+            "message_id".to_string(),
+            Value::String(LegacyMessageId::from_atm_message_id(message_id).to_string()),
+        );
+    }
+
+    if !object.contains_key("source_team")
+        && let Some(value) = atm.get("sourceTeam")
+    {
+        object.insert("source_team".to_string(), value.clone());
+    }
+
+    if !object.contains_key("pendingAckAt")
+        && let Some(value) = atm.get("pendingAckAt")
+    {
+        object.insert("pendingAckAt".to_string(), value.clone());
+    }
+
+    if !object.contains_key("acknowledgedAt")
+        && let Some(value) = atm.get("acknowledgedAt")
+    {
+        object.insert("acknowledgedAt".to_string(), value.clone());
+    }
+
+    if !object.contains_key("acknowledgesMessageId")
+        && let Some(raw) = atm.get("acknowledgesMessageId").and_then(Value::as_str)
+        && let Ok(message_id) = raw.parse::<AtmMessageId>()
+    {
+        object.insert(
+            "acknowledgesMessageId".to_string(),
+            Value::String(LegacyMessageId::from_atm_message_id(message_id).to_string()),
+        );
+    }
+
+    if !object.contains_key("taskId")
+        && let Some(value) = atm.get("taskId")
+    {
+        object.insert("taskId".to_string(), value.clone());
     }
 }

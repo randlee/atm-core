@@ -35,6 +35,9 @@ Required rules:
 - warning diagnostics emitted during degraded recovery must also use
   `AtmErrorCode`
 - logs must not hardcode free-form code strings outside the central registry
+- the registry is centralized and read-only from the perspective of
+  feature/service code; subsystems consume codes from this registry and do not
+  mint local alternatives
 
 ## 4. Naming Rules
 
@@ -135,7 +138,6 @@ Error codes should describe the failure class, not a specific prose message.
 ### 5.8 Post-Send Hook
 
 - `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`
-- `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`
 - `ATM_WARNING_HOOK_SKIPPED` (retired for filter non-match)
 - `ATM_WARNING_HOOK_EXECUTION_FAILED`
 
@@ -166,35 +168,7 @@ Error codes should describe the failure class, not a specific prose message.
   - must not be downgraded to a warning because the old key is ambiguous under
     the redesigned contract
 
-#### 5.8.2 `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`
-
-- code: `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`
-- description: `.atm.toml` contains the retired flat post-send-hook keys
-  `[atm].post_send_hook`, `[atm].post_send_hook_senders`, or
-  `[atm].post_send_hook_recipients` instead of one or more explicit
-  `[[atm.post_send_hooks]]` rules
-- HTTP status: `400 Bad Request`
-- context:
-  - emitted during ATM config loading before send execution proceeds
-  - applies to the legacy flat-key hook shape as a whole, even when only one
-    of the retired keys is present
-  - `{config_path}` resolves to the discovered `.atm.toml` path that contained
-    the retired key set
-  - expected output split:
-    - message:
-      ```text
-      error: '{config_path}' uses retired post-send hook keys. Use [[atm.post_send_hooks]] with recipient and command entries instead.
-      ```
-    - recovery:
-      ```text
-      Replace [atm].post_send_hook, [atm].post_send_hook_senders, and [atm].post_send_hook_recipients with one or more [[atm.post_send_hooks]] rules, each containing recipient = "name-or-*" and command = ["argv", ...].
-      ```
-  - the rendered CLI output may display the message and recovery together, but
-    ATM stores them as separate fields on the structured error
-  - must not be downgraded to a generic config parse failure because callers
-    and tests need a stable migration-specific code
-
-#### 5.8.3 `ATM_WARNING_HOOK_SKIPPED`
+#### 5.8.2 `ATM_WARNING_HOOK_SKIPPED`
 
 - code: `ATM_WARNING_HOOK_SKIPPED`
 - description: retired for the hook filter non-match path; retained only as a
@@ -207,10 +181,10 @@ Error codes should describe the failure class, not a specific prose message.
     entry
   - the old warning template is retired for the filter non-match case and must
     not be emitted after this fix
-- actual caller-visible hook warnings now live only under
-  `ATM_WARNING_HOOK_EXECUTION_FAILED`
+  - actual caller-visible hook warnings now live only under
+    `ATM_WARNING_HOOK_EXECUTION_FAILED`
 
-#### 5.8.4 `ATM_WARNING_HOOK_EXECUTION_FAILED`
+#### 5.8.3 `ATM_WARNING_HOOK_EXECUTION_FAILED`
 
 - code: `ATM_WARNING_HOOK_EXECUTION_FAILED`
 - description: a configured post-send hook failed to start, exited non-zero,
@@ -224,6 +198,76 @@ Error codes should describe the failure class, not a specific prose message.
   - may be accompanied by lower-level OS/process details and any structured
     hook result that was successfully parsed before failure
 
+### 5.9 Mailbox Lock Read-Only Filesystem
+
+- `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM`
+
+#### 5.9.1 `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM`
+
+- code: `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM`
+- description: ATM could not create, update, or remove the mailbox lock
+  sentinel because the underlying filesystem is read-only
+- HTTP status: `500 Internal Server Error`
+- context:
+  - emitted for lock-path `open`, owner-record truncate/write, or stale-sentinel
+    removal when the underlying OS reports a read-only filesystem
+  - this is more specific than `ATM_MAILBOX_LOCK_FAILED` because the operator
+    remediation is to restore writability or move the ATM home, not to wait for
+    lock contention or adjust discretionary permissions
+  - required platform classification:
+    - Linux/macOS: raw OS error `EROFS` (`30`)
+    - Windows: raw OS error `ERROR_WRITE_PROTECT` (`19`)
+  - required output split:
+    - message:
+      ```text
+      error: mailbox lock {operation} failed for {lock_path}: filesystem is read-only.
+
+### 5.10 Phase Q Reserved Families
+
+The following families are reserved for the Phase Q runtime line and must be
+materialized in `crates/atm-core/src/error_codes.rs` when the implementation
+lands.
+
+#### 5.10.1 Store
+
+- `ATM_STORE_BOOTSTRAP_FAILED`
+- `ATM_STORE_SCHEMA_FAILED`
+- `ATM_STORE_TRANSACTION_FAILED`
+- `ATM_STORE_BUSY_TIMEOUT`
+
+#### 5.10.2 Ingest / Export
+
+- `ATM_INGEST_FAILED`
+- `ATM_WARNING_INGEST_BACKPRESSURE`
+- `ATM_WARNING_INGEST_RECORD_SKIPPED`
+- `ATM_EXPORT_FAILED`
+- `ATM_EXPORT_REPLAY_FAILED`
+
+#### 5.10.3 Transport
+
+- `ATM_TRANSPORT_CONNECT_FAILED`
+- `ATM_TRANSPORT_TIMEOUT`
+- `ATM_TRANSPORT_PROTOCOL_FAILED`
+- `ATM_TRANSPORT_REMOTE_UNREACHABLE`
+
+#### 5.10.4 Daemon Runtime / Singleton / Client
+
+- `ATM_DAEMON_ALREADY_RUNNING`
+- `ATM_DAEMON_SINGLETON_RELEASE_FAILED`
+- `ATM_DAEMON_RUNTIME_OVER_CAPACITY`
+- `ATM_DAEMON_SHUTDOWN_TIMEOUT`
+- `ATM_DAEMON_SIGNAL_RELOAD_FAILED`
+- `ATM_DAEMON_UNAVAILABLE`
+- `ATM_DAEMON_CLIENT_TIMEOUT`
+      ```
+    - recovery:
+      ```text
+      Remount or move the ATM home to a writable filesystem, then retry the ATM command.
+      ```
+  - drop-time best-effort cleanup may log the code as a warning because the
+    mailbox command has already succeeded, but public acquisition/sweep paths
+    must return the structured error directly
+
 ## 6. Mapping Rules
 
 Required mapping rules:
@@ -235,13 +279,13 @@ Required mapping rules:
 
 | `AtmErrorKind` | Default `AtmErrorCode` | Additional implemented codes in the same kind |
 | --- | --- | --- |
-| `Config` | `ATM_CONFIG_PARSE_FAILED` | `ATM_CONFIG_HOME_UNAVAILABLE`, `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`, `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`, `ATM_CONFIG_TEAM_PARSE_FAILED` |
+| `Config` | `ATM_CONFIG_PARSE_FAILED` | `ATM_CONFIG_HOME_UNAVAILABLE`, `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`, `ATM_CONFIG_TEAM_PARSE_FAILED` |
 | `MissingDocument` | `ATM_CONFIG_TEAM_MISSING` | none |
 | `Address` | `ATM_ADDRESS_PARSE_FAILED` | none |
 | `Identity` | `ATM_IDENTITY_UNAVAILABLE` | none |
 | `TeamNotFound` | `ATM_TEAM_NOT_FOUND` | `ATM_TEAM_UNAVAILABLE` |
 | `AgentNotFound` | `ATM_AGENT_NOT_FOUND` | none |
-| `MailboxLock` | `ATM_MAILBOX_LOCK_FAILED` | `ATM_MAILBOX_LOCK_TIMEOUT` |
+| `MailboxLock` | `ATM_MAILBOX_LOCK_FAILED` | `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM`, `ATM_MAILBOX_LOCK_TIMEOUT` |
 | `MailboxRead` | `ATM_MAILBOX_READ_FAILED` | none |
 | `MailboxWrite` | `ATM_MAILBOX_WRITE_FAILED` | none |
 | `FilePolicy` | `ATM_FILE_POLICY_REJECTED` | `ATM_FILE_REFERENCE_REWRITE_FAILED` |
@@ -254,7 +298,91 @@ Required mapping rules:
 | `ObservabilityFollow` | `ATM_OBSERVABILITY_FOLLOW_FAILED` | none |
 | `ObservabilityHealth` | `ATM_OBSERVABILITY_HEALTH_FAILED` | `ATM_OBSERVABILITY_HEALTH_OK`, `ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED` |
 
-## 7. Evolution Rules
+## 7. Recoverability Classification
+
+Every documented `AtmErrorCode` must carry one recoverability classification.
+
+Allowed classes:
+- `retryable`
+- `operator_actionable`
+- `fail_closed`
+- `warning_only`
+
+Classification rules:
+- warning-prefixed codes default to `warning_only`
+- configuration and validation failures that require user change default to
+  `operator_actionable`
+- transport/store/runtime saturation and timeout failures default to
+  `retryable` unless the documented recovery requires operator intervention
+- invariant-preserving hard stops default to `fail_closed`
+
+### 7.1 Classification By Code
+
+| `AtmErrorCode` | Classification |
+| --- | --- |
+| `ATM_CONFIG_HOME_UNAVAILABLE` | `operator_actionable` |
+| `ATM_CONFIG_PARSE_FAILED` | `operator_actionable` |
+| `ATM_CONFIG_TEAM_PARSE_FAILED` | `operator_actionable` |
+| `ATM_CONFIG_TEAM_MISSING` | `operator_actionable` |
+| `ATM_IDENTITY_UNAVAILABLE` | `operator_actionable` |
+| `ATM_ADDRESS_PARSE_FAILED` | `operator_actionable` |
+| `ATM_TEAM_UNAVAILABLE` | `operator_actionable` |
+| `ATM_TEAM_NOT_FOUND` | `operator_actionable` |
+| `ATM_AGENT_NOT_FOUND` | `operator_actionable` |
+| `ATM_MAILBOX_READ_FAILED` | `operator_actionable` |
+| `ATM_MAILBOX_WRITE_FAILED` | `operator_actionable` |
+| `ATM_MAILBOX_LOCK_FAILED` | `operator_actionable` |
+| `ATM_MAILBOX_LOCK_TIMEOUT` | `retryable` |
+| `ATM_MESSAGE_VALIDATION_FAILED` | `operator_actionable` |
+| `ATM_SERIALIZATION_FAILED` | `fail_closed` |
+| `ATM_FILE_POLICY_REJECTED` | `operator_actionable` |
+| `ATM_FILE_REFERENCE_REWRITE_FAILED` | `operator_actionable` |
+| `ATM_WAIT_TIMEOUT` | `retryable` |
+| `ATM_ACK_INVALID_STATE` | `operator_actionable` |
+| `ATM_CLEAR_INVALID_STATE` | `operator_actionable` |
+| `ATM_OBSERVABILITY_HEALTH_OK` | `warning_only` |
+| `ATM_OBSERVABILITY_EMIT_FAILED` | `operator_actionable` |
+| `ATM_OBSERVABILITY_QUERY_FAILED` | `operator_actionable` |
+| `ATM_OBSERVABILITY_FOLLOW_FAILED` | `operator_actionable` |
+| `ATM_OBSERVABILITY_HEALTH_FAILED` | `operator_actionable` |
+| `ATM_OBSERVABILITY_BOOTSTRAP_FAILED` | `operator_actionable` |
+| `ATM_WARNING_INVALID_TEAM_MEMBER_SKIPPED` | `warning_only` |
+| `ATM_WARNING_RESTORE_IN_PROGRESS` | `warning_only` |
+| `ATM_WARNING_STALE_MAILBOX_LOCK` | `warning_only` |
+| `ATM_WARNING_IDENTITY_DRIFT` | `warning_only` |
+| `ATM_WARNING_BASELINE_MEMBER_MISSING` | `warning_only` |
+| `ATM_WARNING_MAILBOX_RECORD_SKIPPED` | `warning_only` |
+| `ATM_WARNING_MALFORMED_ATM_FIELD_IGNORED` | `warning_only` |
+| `ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED` | `warning_only` |
+| `ATM_WARNING_ORIGIN_INBOX_ENTRY_SKIPPED` | `warning_only` |
+| `ATM_WARNING_MISSING_TEAM_CONFIG_FALLBACK` | `warning_only` |
+| `ATM_WARNING_SEND_ALERT_STATE_DEGRADED` | `warning_only` |
+| `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY` | `operator_actionable` |
+| `ATM_WARNING_HOOK_SKIPPED` | `warning_only` |
+| `ATM_WARNING_HOOK_EXECUTION_FAILED` | `warning_only` |
+| `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM` | `operator_actionable` |
+| `ATM_STORE_BOOTSTRAP_FAILED` | `operator_actionable` |
+| `ATM_STORE_SCHEMA_FAILED` | `fail_closed` |
+| `ATM_STORE_TRANSACTION_FAILED` | `retryable` |
+| `ATM_STORE_BUSY_TIMEOUT` | `retryable` |
+| `ATM_INGEST_FAILED` | `operator_actionable` |
+| `ATM_WARNING_INGEST_BACKPRESSURE` | `warning_only` |
+| `ATM_WARNING_INGEST_RECORD_SKIPPED` | `warning_only` |
+| `ATM_EXPORT_FAILED` | `operator_actionable` |
+| `ATM_EXPORT_REPLAY_FAILED` | `retryable` |
+| `ATM_TRANSPORT_CONNECT_FAILED` | `retryable` |
+| `ATM_TRANSPORT_TIMEOUT` | `retryable` |
+| `ATM_TRANSPORT_PROTOCOL_FAILED` | `fail_closed` |
+| `ATM_TRANSPORT_REMOTE_UNREACHABLE` | `retryable` |
+| `ATM_DAEMON_ALREADY_RUNNING` | `operator_actionable` |
+| `ATM_DAEMON_SINGLETON_RELEASE_FAILED` | `operator_actionable` |
+| `ATM_DAEMON_RUNTIME_OVER_CAPACITY` | `retryable` |
+| `ATM_DAEMON_SHUTDOWN_TIMEOUT` | `operator_actionable` |
+| `ATM_DAEMON_SIGNAL_RELOAD_FAILED` | `operator_actionable` |
+| `ATM_DAEMON_UNAVAILABLE` | `operator_actionable` |
+| `ATM_DAEMON_CLIENT_TIMEOUT` | `retryable` |
+
+## 8. Evolution Rules
 
 - Add new codes here before implementation lands.
 - Do not reuse an existing code for a different failure meaning.

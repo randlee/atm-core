@@ -3,6 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Deserialize;
 
 use crate::error::AtmError;
+use crate::types::AgentName;
 
 const HOOK_FILE_TTL_SECS: f64 = 5.0;
 
@@ -12,7 +13,7 @@ struct HookFileData {
     created_at: f64,
 }
 
-pub fn read_hook_identity() -> Result<Option<String>, AtmError> {
+pub fn read_hook_identity() -> Result<Option<AgentName>, AtmError> {
     let Some(path) = hook_file_path() else {
         return Ok(None);
     };
@@ -51,7 +52,21 @@ pub fn read_hook_identity() -> Result<Option<String>, AtmError> {
         return Ok(None);
     }
 
-    Ok(data.agent_name.filter(|value| !value.trim().is_empty()))
+    data.agent_name
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| {
+            value.parse().map_err(|error: AtmError| {
+                AtmError::new(
+                    crate::error::AtmErrorKind::Identity,
+                    format!("invalid hook agent_name in {}: {}", path.display(), error.message),
+                )
+                .with_recovery(
+                    "The hook identity file is ephemeral. Rerun the triggering hook or ignore if hook identity is optional.",
+                )
+                .with_source(error)
+            })
+        })
+        .transpose()
 }
 
 fn hook_file_path() -> Option<std::path::PathBuf> {

@@ -113,6 +113,7 @@ class SchemaModelTests(unittest.TestCase):
                 "messageId": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
                 "sourceTeam": "atm-dev",
                 "pendingAckAt": "2026-04-04T18:49:59.525Z",
+                "taskId": "TASK-123",
             }
         )
         self.assertEqual(metadata.sourceTeam, "atm-dev")
@@ -128,12 +129,34 @@ class SchemaModelTests(unittest.TestCase):
                     "atm": {
                         "messageId": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
                         "sourceTeam": "atm-dev",
+                        "taskId": "TASK-123",
                     }
                 },
             }
         )
         self.assertIsInstance(envelope.metadata, MessageMetadata)
         self.assertEqual(envelope.metadata.atm.sourceTeam, "atm-dev")
+        self.assertEqual(envelope.metadata.atm.taskId, "TASK-123")
+
+    def test_forward_metadata_rejects_top_level_atm_machine_fields(self) -> None:
+        """Write-path: top-level ATM machine fields are forbidden on forward inbox writes."""
+
+        with self.assertRaises(Exception):
+            AtmMetadataEnvelope.model_validate(
+                {
+                    "from": "team-lead",
+                    "text": "ping",
+                    "timestamp": "2026-04-04T18:49:59.525Z",
+                    "read": True,
+                    "summary": "ping",
+                    "message_id": "81286baa-e783-4f0c-bfea-82d070750fae",
+                    "metadata": {
+                        "atm": {
+                            "sourceTeam": "atm-dev",
+                        }
+                    },
+                }
+            )
 
     def test_legacy_top_level_message_id_rejects_ulid(self) -> None:
         """Write-path: guards docs/atm-message-schema.md legacy top-level UUID placement."""

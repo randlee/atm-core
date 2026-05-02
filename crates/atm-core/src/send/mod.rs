@@ -1,13 +1,8 @@
 //! Send command service implementation and post-send hook handling.
 
-use std::collections::BTreeSet;
-use std::fs;
-use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
-use std::thread;
-use std::time::Duration;
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Map;
 use tracing::warn;
 
@@ -18,11 +13,11 @@ use crate::home;
 use crate::identity;
 use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
-use crate::persistence;
-use crate::process::process_is_alive;
-use crate::schema::{LegacyMessageId, MessageEnvelope};
-use crate::types::{AgentName, IsoTimestamp, TeamName};
+use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
+use crate::types::{AgentName, TaskId, TeamName};
+use crate::workflow;
 
+mod alert_state;
 pub(crate) mod file_policy;
 pub(super) mod hook;
 pub(crate) mod input;
@@ -48,8 +43,37 @@ pub struct SendRequest {
     pub message_source: SendMessageSource,
     pub summary_override: Option<String>,
     pub requires_ack: bool,
-    pub task_id: Option<String>,
+    pub task_id: Option<TaskId>,
     pub dry_run: bool,
+}
+
+impl SendRequest {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        home_dir: PathBuf,
+        current_dir: PathBuf,
+        sender_override: Option<&str>,
+        to: &str,
+        team_override: Option<&str>,
+        message_source: SendMessageSource,
+        summary_override: Option<String>,
+        requires_ack: bool,
+        task_id: Option<TaskId>,
+        dry_run: bool,
+    ) -> Result<Self, AtmError> {
+        Ok(Self {
+            home_dir,
+            current_dir,
+            sender_override: sender_override.map(str::parse).transpose()?,
+            to: to.parse()?,
+            team_override: team_override.map(str::parse).transpose()?,
+            message_source,
+            summary_override,
+            requires_ack,
+            task_id,
+            dry_run,
+        })
+    }
 }
 
 /// Result of sending one ATM mailbox message.
@@ -58,12 +82,12 @@ pub struct SendOutcome {
     pub action: &'static str,
     pub team: TeamName,
     pub agent: AgentName,
-    pub sender: String,
+    pub sender: AgentName,
     pub outcome: &'static str,
     pub message_id: LegacyMessageId,
     pub requires_ack: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub task_id: Option<String>,
+    pub task_id: Option<TaskId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -75,12 +99,6 @@ pub struct SendOutcome {
     pub warnings: Vec<String>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub dry_run: bool,
-}
-
-#[derive(Debug, Default, Serialize, Deserialize)]
-struct SendAlertState {
-    #[serde(default)]
-    missing_team_config_keys: BTreeSet<String>,
 }
 
 /// Send one mailbox message to a team member.
@@ -112,7 +130,7 @@ pub fn send_mail(
         config.as_ref(),
     )?;
     let sender_team = config::resolve_team(None, config.as_ref());
-    let sender = display_sender_identity(
+    let display_sender = display_sender_identity(
         &canonical_sender,
         request.sender_override.as_deref(),
         sender_team.as_deref(),
@@ -131,11 +149,14 @@ pub fn send_mail(
 
     match config::load_team_config(&team_dir) {
         Ok(team_config) => {
-            clear_missing_team_config_alert(&request.home_dir, &team_dir);
+            alert_state::clear_missing_team_config_alert(
+                &request.home_dir,
+                &alert_state::missing_team_config_alert_key(&team_dir),
+            );
             if !team_config
                 .members
                 .iter()
-                .any(|member| member.name == recipient.agent)
+                .any(|member| member.name == recipient.agent.as_str())
             {
                 return Err(AtmError::agent_not_found(&recipient.agent, &recipient.team));
             }
@@ -177,7 +198,7 @@ pub fn send_mail(
         Err(error) => return Err(error),
     }
 
-    let task_id = input::validate_task_id(request.task_id)?;
+    let task_id = request.task_id;
     let requires_ack = request.requires_ack || task_id.is_some();
     let body = resolve_message_body(
         &request.message_source,
@@ -187,22 +208,26 @@ pub fn send_mail(
     )?;
     let summary = summary::build_summary(&body, request.summary_override);
     let message_id = LegacyMessageId::new();
-    let timestamp = IsoTimestamp::now();
+    let (atm_message_id, timestamp) = AtmMessageId::new_with_timestamp();
 
     if !request.dry_run {
         let mut extra = Map::new();
-        if sender != canonical_sender {
+        workflow::set_atm_message_id(&mut extra, atm_message_id);
+        if display_sender != canonical_sender.as_str() {
             set_canonical_sender_metadata(
                 &mut extra,
                 &qualified_sender_identity(&canonical_sender, sender_team.as_deref()),
             );
         }
         let envelope = MessageEnvelope {
-            from: sender.clone(),
+            from: display_sender.clone(),
             text: body.clone(),
             timestamp,
             read: false,
-            source_team: sender_team.clone().or(Some(recipient.team.clone())),
+            source_team: sender_team
+                .clone()
+                .map(|team| team.to_string())
+                .or_else(|| Some(recipient.team.to_string())),
             summary: Some(summary.clone()),
             message_id: Some(message_id),
             pending_ack_at: requires_ack.then_some(timestamp),
@@ -211,14 +236,20 @@ pub fn send_mail(
             task_id: task_id.clone(),
             extra,
         };
-        mailbox::append_message(&inbox_path, &envelope)?;
+        append_mailbox_message_and_seed_workflow(
+            &request.home_dir,
+            &recipient.team,
+            &recipient.agent,
+            &inbox_path,
+            &envelope,
+        )?;
     }
 
     let mut outcome = SendOutcome {
         action: "send",
-        team: recipient.team.clone().into(),
-        agent: recipient.agent.clone().into(),
-        sender: sender.clone(),
+        team: recipient.team.clone(),
+        agent: recipient.agent.clone(),
+        sender: canonical_sender.clone(),
         outcome: if request.dry_run { "dry_run" } else { "sent" },
         message_id,
         requires_ack,
@@ -235,11 +266,12 @@ pub fn send_mail(
             config.as_ref(),
             PostSendHookContext {
                 sender: &canonical_sender,
-                sender_team: sender_team.as_deref(),
+                sender_team: sender_team.as_ref(),
                 recipient: &recipient,
                 message_id,
                 requires_ack,
-                task_id: task_id.as_deref(),
+                is_ack: false,
+                task_id: task_id.as_ref(),
             },
         );
     }
@@ -248,9 +280,9 @@ pub fn send_mail(
         command: "send",
         action: "send",
         outcome: outcome.outcome,
-        team: outcome.team.to_string(),
-        agent: outcome.agent.to_string(),
-        sender: canonical_sender,
+        team: outcome.team.clone(),
+        agent: outcome.agent.clone(),
+        sender: canonical_sender.to_string(),
         message_id: Some(outcome.message_id),
         requires_ack: outcome.requires_ack,
         dry_run: outcome.dry_run,
@@ -263,18 +295,20 @@ pub fn send_mail(
 }
 
 #[derive(Debug)]
-pub(super) struct ResolvedRecipient {
-    agent: String,
-    team: String,
+pub(crate) struct ResolvedRecipient {
+    pub(crate) agent: AgentName,
+    pub(crate) team: TeamName,
 }
 
-pub(super) struct PostSendHookContext<'a> {
-    sender: &'a str,
-    sender_team: Option<&'a str>,
-    recipient: &'a ResolvedRecipient,
-    message_id: LegacyMessageId,
-    requires_ack: bool,
-    task_id: Option<&'a str>,
+#[derive(Clone, Copy)]
+pub(crate) struct PostSendHookContext<'a> {
+    pub(crate) sender: &'a AgentName,
+    pub(crate) sender_team: Option<&'a TeamName>,
+    pub(crate) recipient: &'a ResolvedRecipient,
+    pub(crate) message_id: LegacyMessageId,
+    pub(crate) requires_ack: bool,
+    pub(crate) is_ack: bool,
+    pub(crate) task_id: Option<&'a TaskId>,
 }
 
 fn resolve_recipient(
@@ -284,12 +318,16 @@ fn resolve_recipient(
 ) -> Result<ResolvedRecipient, AtmError> {
     let team = target_address
         .team
-        .clone()
+        .as_deref()
+        .and_then(|team| team.parse().ok())
         .or_else(|| config::resolve_team(team_override, config))
         .ok_or_else(AtmError::team_unavailable)?;
 
     Ok(ResolvedRecipient {
-        agent: config::aliases::resolve_agent(&target_address.agent, config),
+        agent: AgentName::from_validated(config::aliases::resolve_agent(
+            &target_address.agent,
+            config,
+        )),
         team,
     })
 }
@@ -298,7 +336,7 @@ fn resolve_message_body(
     source: &SendMessageSource,
     current_dir: &Path,
     home_dir: &Path,
-    team_name: &str,
+    team_name: &TeamName,
 ) -> Result<String, AtmError> {
     match source {
         SendMessageSource::Inline(message) => input::validate_message_text(message.clone()),
@@ -317,9 +355,14 @@ fn is_false(value: &bool) -> bool {
     !*value
 }
 
-fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str, recipient: &str) {
-    let alert_key = missing_team_config_alert_key(team_dir);
-    if !register_missing_team_config_alert(home_dir, &alert_key) {
+fn notify_team_lead_missing_config(
+    home_dir: &Path,
+    team_dir: &Path,
+    team: &TeamName,
+    recipient: &AgentName,
+) {
+    let alert_key = alert_state::missing_team_config_alert_key(team_dir);
+    if !alert_state::register_missing_team_config_alert(home_dir, &alert_key) {
         return;
     }
 
@@ -329,7 +372,7 @@ fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str,
             warn!(
                 code = %AtmErrorCode::WarningMissingTeamConfigFallback,
                 %error,
-                team,
+                team = %team,
                 "failed to resolve team-lead inbox for missing-config notice"
             );
             return;
@@ -341,8 +384,9 @@ fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str,
     }
 
     let config_path = team_dir.join("config.json");
-    let timestamp = IsoTimestamp::now();
+    let (atm_message_id, timestamp) = AtmMessageId::new_with_timestamp();
     let mut extra = Map::new();
+    workflow::set_atm_message_id(&mut extra, atm_message_id);
     extra.insert(
         "atmAlertKind".into(),
         serde_json::Value::String("missing_team_config".into()),
@@ -372,18 +416,50 @@ fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str,
         extra,
     };
 
-    if let Err(error) = mailbox::append_message(&team_lead_inbox, &notice) {
+    if let Err(error) = append_mailbox_message_and_seed_workflow(
+        home_dir,
+        team,
+        &AgentName::from_validated("team-lead"),
+        &team_lead_inbox,
+        &notice,
+    ) {
         warn!(
             code = %AtmErrorCode::WarningMissingTeamConfigFallback,
             %error,
             path = %team_lead_inbox.display(),
-            "failed to append missing-config notice to team-lead inbox"
+            team = %team,
+            "failed to persist missing-config notice via shared mailbox/workflow commit path"
         );
     }
 }
 
+fn append_mailbox_message_and_seed_workflow(
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &AgentName,
+    inbox_path: &Path,
+    envelope: &MessageEnvelope,
+) -> Result<(), AtmError> {
+    workflow::commit_workflow_state(
+        home_dir,
+        team,
+        agent,
+        [inbox_path.to_path_buf()],
+        mailbox::lock::default_lock_timeout(),
+        |workflow_state| {
+            let mut inbox_messages = mailbox::read_messages(inbox_path)?;
+            inbox_messages.push(envelope.clone());
+            mailbox::store::commit_mailbox_state(inbox_path, &inbox_messages)?;
+            Ok((
+                (),
+                workflow::remember_initial_state(workflow_state, envelope),
+            ))
+        },
+    )
+}
+
 fn display_sender_identity(
-    canonical_sender: &str,
+    canonical_sender: &AgentName,
     sender_override: Option<&str>,
     sender_team: Option<&str>,
     recipient_team: &str,
@@ -397,16 +473,16 @@ fn display_sender_identity(
     if let Some(sender_override) = sender_override
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        && config::aliases::resolve_agent(sender_override, config) == canonical_sender
+        && config::aliases::resolve_agent(sender_override, config) == canonical_sender.as_str()
     {
         return sender_override.to_string();
     }
 
-    config::aliases::preferred_alias(canonical_sender, config)
+    config::aliases::preferred_alias(canonical_sender.as_str(), config)
         .unwrap_or_else(|| canonical_sender.to_string())
 }
 
-pub(super) fn qualified_sender_identity(sender: &str, sender_team: Option<&str>) -> String {
+pub(super) fn qualified_sender_identity(sender: &AgentName, sender_team: Option<&str>) -> String {
     sender_team
         .map(|team| format!("{sender}@{team}"))
         .unwrap_or_else(|| sender.to_string())
@@ -437,7 +513,7 @@ fn set_canonical_sender_metadata(extra: &mut Map<String, serde_json::Value>, can
     );
 }
 
-fn maybe_run_post_send_hook(
+pub(crate) fn maybe_run_post_send_hook(
     warnings: &mut Vec<String>,
     config: Option<&config::AtmConfig>,
     context: PostSendHookContext<'_>,
@@ -445,261 +521,39 @@ fn maybe_run_post_send_hook(
     hook::maybe_run_post_send_hook(warnings, config, context);
 }
 
-fn missing_team_config_alert_key(team_dir: &Path) -> String {
-    team_dir.join("config.json").display().to_string()
-}
-
-fn register_missing_team_config_alert(home_dir: &Path, key: &str) -> bool {
-    let state_path = send_alert_state_path(home_dir);
-    let lock_path = send_alert_lock_path(home_dir);
-    let Some(_guard) = acquire_send_alert_lock(&lock_path) else {
-        warn!(code = %AtmErrorCode::WarningSendAlertStateDegraded,
-            path = %lock_path.display(),
-            "failed to acquire send alert lock; skipping team-lead notification"
-        );
-        return false;
-    };
-
-    let mut state = match load_send_alert_state(&state_path) {
-        Ok(state) => state,
-        Err(error) => {
-            warn!(code = %AtmErrorCode::WarningSendAlertStateDegraded,
-                %error,
-                path = %state_path.display(),
-                "failed to read send state file - defaulting to empty state"
-            );
-            SendAlertState::default()
-        }
-    };
-    if state.missing_team_config_keys.contains(key) {
-        return false;
-    }
-
-    state.missing_team_config_keys.insert(key.to_string());
-    if let Err(error) = save_send_alert_state(&state_path, &state) {
-        warn!(code = %AtmErrorCode::WarningSendAlertStateDegraded,
-            %error,
-            path = %state_path.display(),
-            "failed to save send alert dedup state"
-        );
-    }
-    true
-}
-
-fn clear_missing_team_config_alert(home_dir: &Path, team_dir: &Path) {
-    let state_path = send_alert_state_path(home_dir);
-    let lock_path = send_alert_lock_path(home_dir);
-    let Some(_guard) = acquire_send_alert_lock(&lock_path) else {
-        warn!(code = %AtmErrorCode::WarningSendAlertStateDegraded,
-            path = %lock_path.display(),
-            "failed to acquire send alert lock while clearing dedup state"
-        );
-        return;
-    };
-
-    let Ok(mut state) = load_send_alert_state(&state_path) else {
-        return;
-    };
-
-    let key = missing_team_config_alert_key(team_dir);
-    if !state.missing_team_config_keys.remove(&key) {
-        return;
-    }
-
-    if let Err(error) = save_send_alert_state(&state_path, &state) {
-        warn!(
-            code = %AtmErrorCode::WarningSendAlertStateDegraded,
-            %error,
-            path = %state_path.display(),
-            "failed to clear send alert dedup state"
-        );
-    }
-}
-
-fn send_alert_state_path(home_dir: &Path) -> PathBuf {
-    home_dir.join(".config").join("atm").join("state.json")
-}
-
-fn send_alert_lock_path(home_dir: &Path) -> PathBuf {
-    home_dir.join(".config").join("atm").join("state.lock")
-}
-
-fn load_send_alert_state(path: &Path) -> Result<SendAlertState, AtmError> {
-    if !path.exists() {
-        return Ok(SendAlertState::default());
-    }
-
-    let raw = fs::read_to_string(path).map_err(|error| {
-        AtmError::new(
-            crate::error::AtmErrorKind::Config,
-            format!(
-                "failed to read send alert state at {}: {error}",
-                path.display()
-            ),
-        )
-        .with_recovery("Check ATM config-state permissions or remove the damaged state file before retrying the send command.")
-        .with_source(error)
-    })?;
-    serde_json::from_str(&raw).map_err(|error| {
-        AtmError::new(
-            crate::error::AtmErrorKind::Config,
-            format!(
-                "failed to parse send alert state at {}: {error}",
-                path.display()
-            ),
-        )
-        .with_recovery(
-            "Remove the malformed send alert state file so ATM can recreate it on the next send.",
-        )
-        .with_source(error)
-    })
-}
-
-fn save_send_alert_state(path: &Path, state: &SendAlertState) -> Result<(), AtmError> {
-    let data = serde_json::to_vec(state)?;
-    persistence::atomic_write_bytes(
-        path,
-        &data,
-        crate::error::AtmErrorKind::Config,
-        "send alert state",
-        "Check ATM config-state directory permissions and rerun the send operation.",
-    )
-}
-
-fn acquire_send_alert_lock(path: &Path) -> Option<SendAlertLock> {
-    if let Some(parent) = path.parent()
-        && let Err(error) = fs::create_dir_all(parent)
-    {
-        warn!(
-            code = %AtmErrorCode::WarningSendAlertStateDegraded,
-            %error,
-            path = %parent.display(),
-            "failed to create send alert lock directory"
-        );
-        return None;
-    }
-
-    for _ in 0..100 {
-        match OpenOptions::new().write(true).create_new(true).open(path) {
-            Ok(mut file) => {
-                let pid = std::process::id().to_string();
-                if let Err(error) = std::io::Write::write_all(&mut file, pid.as_bytes()) {
-                    warn!(
-                        code = %AtmErrorCode::WarningSendAlertStateDegraded,
-                        %error,
-                        path = %path.display(),
-                        "failed to write send alert lock pid"
-                    );
-                    let _ = fs::remove_file(path);
-                    return None;
-                }
-                return Some(SendAlertLock {
-                    path: path.to_path_buf(),
-                });
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                if evict_stale_send_alert_lock(path) {
-                    thread::sleep(Duration::from_millis(10));
-                    continue;
-                }
-                thread::sleep(Duration::from_millis(10));
-            }
-            Err(error) => {
-                warn!(
-                    code = %AtmErrorCode::WarningSendAlertStateDegraded,
-                    %error,
-                    path = %path.display(),
-                    "failed to create send alert lock"
-                );
-                return None;
-            }
-        }
-    }
-
-    None
-}
-
-fn evict_stale_send_alert_lock(path: &Path) -> bool {
-    let Ok(raw) = fs::read_to_string(path) else {
-        return false;
-    };
-    let Ok(pid) = raw.trim().parse::<u32>() else {
-        return false;
-    };
-    if process_is_alive(pid) {
-        return false;
-    }
-
-    match fs::remove_file(path) {
-        Ok(()) => true,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
-        Err(error) => {
-            warn!(
-                code = %AtmErrorCode::WarningSendAlertStateDegraded,
-                %error,
-                path = %path.display(),
-                pid,
-                "failed to evict stale send alert lock"
-            );
-            false
-        }
-    }
-}
-
-struct SendAlertLock {
-    path: PathBuf,
-}
-
-impl Drop for SendAlertLock {
-    fn drop(&mut self) {
-        if let Err(error) = fs::remove_file(&self.path)
-            && error.kind() != std::io::ErrorKind::NotFound
-        {
-            warn!(
-                code = %AtmErrorCode::WarningSendAlertStateDegraded,
-                %error,
-                path = %self.path.display(),
-                "failed to remove send alert lock"
-            );
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::fs;
     use tempfile::tempdir;
 
-    use super::{
-        SendAlertState, acquire_send_alert_lock, load_send_alert_state, save_send_alert_state,
-        send_alert_lock_path, send_alert_state_path,
-    };
+    use super::alert_state;
     use crate::process::process_is_alive;
+    use crate::send::{SendMessageSource, SendRequest};
 
     #[test]
     fn load_send_alert_state_parse_errors_are_config_errors() {
         let tempdir = tempdir().expect("tempdir");
-        let path = send_alert_state_path(tempdir.path());
+        let path = alert_state::state_path(tempdir.path());
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).expect("state dir");
         }
         fs::write(&path, "{not-json").expect("state file");
 
-        let error = load_send_alert_state(&path).expect_err("malformed state");
+        let error = alert_state::load(&path).expect_err("malformed state");
         assert!(error.is_config());
     }
 
     #[test]
     fn save_send_alert_state_round_trips() {
         let tempdir = tempdir().expect("tempdir");
-        let path = send_alert_state_path(tempdir.path());
-        let mut state = SendAlertState::default();
+        let path = alert_state::state_path(tempdir.path());
+        let mut state = alert_state::SendAlertState::default();
         state
             .missing_team_config_keys
             .insert("teams/atm-dev/config.json".to_string());
 
-        save_send_alert_state(&path, &state).expect("save");
-        let loaded = load_send_alert_state(&path).expect("load");
+        alert_state::save(&path, &state).expect("save");
+        let loaded = alert_state::load(&path).expect("load");
         assert_eq!(
             loaded.missing_team_config_keys,
             state.missing_team_config_keys
@@ -714,16 +568,56 @@ mod tests {
     #[test]
     fn acquire_send_alert_lock_evicts_stale_pid_lock() {
         let tempdir = tempdir().expect("tempdir");
-        let path = send_alert_lock_path(tempdir.path());
+        let path = alert_state::lock_path(tempdir.path());
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).expect("lock dir");
         }
         fs::write(&path, u32::MAX.to_string()).expect("stale lock");
 
-        let guard = acquire_send_alert_lock(&path).expect("acquire lock");
+        let guard = alert_state::acquire_lock(&path).expect("acquire lock");
         let pid = fs::read_to_string(&path).expect("lock contents");
         assert_eq!(pid.trim(), std::process::id().to_string());
         drop(guard);
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn send_request_new_rejects_invalid_recipient_before_command_execution() {
+        let tempdir = tempdir().expect("tempdir");
+        let error = SendRequest::new(
+            tempdir.path().to_path_buf(),
+            tempdir.path().to_path_buf(),
+            Some("team-lead"),
+            "../evil",
+            Some("atm-dev"),
+            SendMessageSource::Inline("hello".to_string()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect_err("invalid address");
+
+        assert!(error.message.contains("agent name"));
+    }
+
+    #[test]
+    fn send_request_new_rejects_invalid_team_override_before_command_execution() {
+        let tempdir = tempdir().expect("tempdir");
+        let error = SendRequest::new(
+            tempdir.path().to_path_buf(),
+            tempdir.path().to_path_buf(),
+            Some("team-lead"),
+            "arch-ctm",
+            Some("../evil"),
+            SendMessageSource::Inline("hello".to_string()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect_err("invalid team");
+
+        assert!(error.message.contains("team name"));
     }
 }

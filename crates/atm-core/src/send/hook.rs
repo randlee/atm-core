@@ -1,20 +1,28 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
-use tracing::{Level, debug, error, info, warn};
+#[cfg(test)]
+use tracing::Level;
+use tracing::{debug, error, info, warn};
 
 use crate::config;
+use crate::config::types::HookRecipient;
 use crate::error::AtmErrorCode;
 
 use super::{PostSendHookContext, qualified_sender_identity};
 
 const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 const POST_SEND_HOOK_MAX_STDOUT_BYTES: usize = 8 * 1024;
+const POST_SEND_HOOK_STDOUT_JOIN_TIMEOUT: Duration = Duration::from_millis(500);
 
 #[derive(Debug, Deserialize)]
 struct PostSendHookResult {
@@ -33,11 +41,27 @@ enum PostSendHookResultLevel {
     Error,
 }
 
+#[derive(Clone, Default)]
+struct HookCancellationToken(Arc<AtomicBool>);
+
+impl HookCancellationToken {
+    fn cancel(&self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+
+    fn is_cancelled(&self) -> bool {
+        self.0.load(Ordering::SeqCst)
+    }
+}
+
 pub(super) fn maybe_run_post_send_hook(
     warnings: &mut Vec<String>,
     config: Option<&config::AtmConfig>,
     context: PostSendHookContext<'_>,
 ) {
+    // This helper is intentionally synchronous and may block the caller thread
+    // for up to POST_SEND_HOOK_TIMEOUT while supervising one child process.
+    // Keep it on the CLI path; do not call it from an async runtime thread.
     let Some(config) = config else {
         return;
     };
@@ -50,7 +74,7 @@ pub(super) fn maybe_run_post_send_hook(
 
     if matching_rules.is_empty() {
         debug!(
-            sender = context.sender,
+            sender = %context.sender,
             recipient = %context.recipient.agent,
             recipient_team = %context.recipient.team,
             "post-send hook had no matching recipient rules"
@@ -69,26 +93,30 @@ fn execute_post_send_hook(
     rule: &config::types::PostSendHookRule,
     context: &PostSendHookContext<'_>,
 ) {
+    // This function performs blocking child-process supervision with short
+    // sleeps. It is safe for the current CLI call path and must stay off async
+    // runtime threads unless wrapped in spawn_blocking by the caller.
     let mut argv = rule.command.iter();
     let Some(command_path) = argv.next() else {
         return;
     };
     let command_path = resolve_command_path(config, command_path);
     let mut payload = json!({
-        "from": qualified_sender_identity(context.sender, context.sender_team),
+        "from": qualified_sender_identity(context.sender, context.sender_team.map(|team| team.as_str())),
         "to": format!("{}@{}", context.recipient.agent, context.recipient.team),
-        "sender": context.sender,
+        "sender": context.sender.as_str(),
         "recipient": context.recipient.agent,
         "team": context.recipient.team,
         "message_id": context.message_id.to_string(),
         "requires_ack": context.requires_ack,
+        "is_ack": context.is_ack,
     });
     if let Some(task_id) = context.task_id {
         payload["task_id"] = Value::String(task_id.to_string());
     }
 
     debug!(
-        sender = context.sender,
+        sender = %context.sender,
         recipient = %context.recipient.agent,
         recipient_team = %context.recipient.team,
         hook_recipient = %rule.recipient,
@@ -113,7 +141,7 @@ fn execute_post_send_hook(
             );
             warn!(
                 code = %AtmErrorCode::WarningHookExecutionFailed,
-                sender = context.sender,
+                sender = %context.sender,
                 recipient = %context.recipient.agent,
                 recipient_team = %context.recipient.team,
                 hook_recipient = %rule.recipient,
@@ -125,7 +153,9 @@ fn execute_post_send_hook(
             return;
         }
     };
-    let mut stdout_reader = spawn_post_send_hook_stdout_reader(&mut child);
+    let stdout_cancellation = HookCancellationToken::default();
+    let mut stdout_reader =
+        spawn_post_send_hook_stdout_reader(&mut child, stdout_cancellation.clone());
 
     let started_at = Instant::now();
     loop {
@@ -142,7 +172,7 @@ fn execute_post_send_hook(
                     );
                     warn!(
                         code = %AtmErrorCode::WarningHookExecutionFailed,
-                        sender = context.sender,
+                        sender = %context.sender,
                         recipient = %context.recipient.agent,
                         recipient_team = %context.recipient.team,
                         hook_recipient = %rule.recipient,
@@ -158,11 +188,11 @@ fn execute_post_send_hook(
                 thread::sleep(Duration::from_millis(50));
             }
             Ok(None) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                maybe_log_post_send_hook_result(
+                terminate_post_send_hook_process(&mut child, &command_path);
+                abandon_post_send_hook_stdout_capture(
+                    stdout_reader.take(),
+                    &stdout_cancellation,
                     &command_path,
-                    finish_post_send_hook_stdout_capture(stdout_reader.take(), &command_path),
                 );
                 let warning = format!(
                     "warning: post-send hook timed out after {}s for {}. The hook script exceeded the 5-second timeout; ensure it exits promptly.",
@@ -171,7 +201,7 @@ fn execute_post_send_hook(
                 );
                 warn!(
                     code = %AtmErrorCode::WarningHookExecutionFailed,
-                    sender = context.sender,
+                    sender = %context.sender,
                     recipient = %context.recipient.agent,
                     recipient_team = %context.recipient.team,
                     hook_recipient = %rule.recipient,
@@ -183,11 +213,11 @@ fn execute_post_send_hook(
                 return;
             }
             Err(error) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                maybe_log_post_send_hook_result(
+                terminate_post_send_hook_process(&mut child, &command_path);
+                abandon_post_send_hook_stdout_capture(
+                    stdout_reader.take(),
+                    &stdout_cancellation,
                     &command_path,
-                    finish_post_send_hook_stdout_capture(stdout_reader.take(), &command_path),
                 );
                 let warning = format!(
                     "warning: post-send hook status check failed for {}: {error}. This is an OS-level error; check that the hook process is not being killed externally.",
@@ -195,7 +225,7 @@ fn execute_post_send_hook(
                 );
                 warn!(
                     code = %AtmErrorCode::WarningHookExecutionFailed,
-                    sender = context.sender,
+                    sender = %context.sender,
                     recipient = %context.recipient.agent,
                     recipient_team = %context.recipient.team,
                     hook_recipient = %rule.recipient,
@@ -210,6 +240,28 @@ fn execute_post_send_hook(
     }
 }
 
+fn terminate_post_send_hook_process(child: &mut std::process::Child, command_path: &Path) {
+    if let Err(error) = child.kill()
+        && error.kind() != std::io::ErrorKind::InvalidInput
+    {
+        warn!(
+            code = %AtmErrorCode::WarningHookExecutionFailed,
+            hook_path = %command_path.display(),
+            %error,
+            "failed to terminate post-send hook child process"
+        );
+    }
+
+    if let Err(error) = child.wait() {
+        warn!(
+            code = %AtmErrorCode::WarningHookExecutionFailed,
+            hook_path = %command_path.display(),
+            %error,
+            "failed to reap post-send hook child process"
+        );
+    }
+}
+
 fn resolve_command_path(config: &config::AtmConfig, command_path: &str) -> PathBuf {
     let path = PathBuf::from(command_path);
     if path.is_absolute() || !config::discovery::command_looks_like_path(command_path) {
@@ -219,18 +271,22 @@ fn resolve_command_path(config: &config::AtmConfig, command_path: &str) -> PathB
     }
 }
 
-fn hook_matches_recipient(configured: &str, candidate: &str) -> bool {
-    configured == "*" || configured == candidate
+fn hook_matches_recipient(configured: &HookRecipient, candidate: &crate::types::AgentName) -> bool {
+    configured.matches(candidate)
 }
 
 fn spawn_post_send_hook_stdout_reader(
     child: &mut std::process::Child,
+    cancellation: HookCancellationToken,
 ) -> Option<thread::JoinHandle<std::io::Result<Vec<u8>>>> {
     let mut stdout = child.stdout.take()?;
     Some(thread::spawn(move || {
         let mut captured = Vec::new();
         let mut chunk = [0_u8; 1024];
         loop {
+            if cancellation.is_cancelled() {
+                break;
+            }
             let read = stdout.read(&mut chunk)?;
             if read == 0 {
                 break;
@@ -243,6 +299,64 @@ fn spawn_post_send_hook_stdout_reader(
         }
         Ok(captured)
     }))
+}
+
+fn abandon_post_send_hook_stdout_capture(
+    stdout_reader: Option<thread::JoinHandle<std::io::Result<Vec<u8>>>>,
+    cancellation: &HookCancellationToken,
+    command_path: &Path,
+) {
+    // The timeout/error paths must not block on stdout capture. Cancelling the
+    // reader lets the helper exit as soon as the killed child closes stdout.
+    // We still give the reader a short bounded join window so it does not
+    // outlive the command path under normal teardown.
+    cancellation.cancel();
+    finish_abandoned_post_send_hook_stdout_capture(stdout_reader, command_path);
+}
+
+fn finish_abandoned_post_send_hook_stdout_capture(
+    mut stdout_reader: Option<thread::JoinHandle<std::io::Result<Vec<u8>>>>,
+    command_path: &Path,
+) {
+    let Some(handle) = stdout_reader.as_ref() else {
+        return;
+    };
+
+    let deadline = Instant::now() + POST_SEND_HOOK_STDOUT_JOIN_TIMEOUT;
+    while !handle.is_finished() && Instant::now() < deadline {
+        thread::sleep(Duration::from_millis(10));
+    }
+
+    let Some(stdout_reader) = stdout_reader.take() else {
+        return;
+    };
+    if !stdout_reader.is_finished() {
+        debug!(
+            hook_path = %command_path.display(),
+            join_timeout_ms = POST_SEND_HOOK_STDOUT_JOIN_TIMEOUT.as_millis(),
+            "post-send hook stdout reader did not exit before the bounded teardown deadline"
+        );
+        return;
+    }
+
+    match stdout_reader.join() {
+        Ok(Ok(_)) => {}
+        Ok(Err(error)) => {
+            warn!(
+                code = %AtmErrorCode::WarningHookExecutionFailed,
+                hook_path = %command_path.display(),
+                %error,
+                "post-send hook stdout capture failed during bounded teardown"
+            );
+        }
+        Err(_) => {
+            warn!(
+                code = %AtmErrorCode::WarningHookExecutionFailed,
+                hook_path = %command_path.display(),
+                "post-send hook stdout capture panicked during bounded teardown"
+            );
+        }
+    }
 }
 
 fn finish_post_send_hook_stdout_capture(
@@ -331,36 +445,36 @@ fn log_post_send_hook_result(command_path: &Path, result: PostSendHookResult) {
     } = result;
     let fields = Value::Object(fields);
 
-    match hook_result_log_level(level) {
-        Level::DEBUG => debug!(
+    match level {
+        PostSendHookResultLevel::Debug => debug!(
             hook_path = %command_path.display(),
             hook_result_message = %message,
             hook_result_fields = %fields,
             "post-send hook reported result"
         ),
-        Level::INFO => info!(
+        PostSendHookResultLevel::Info => info!(
             hook_path = %command_path.display(),
             hook_result_message = %message,
             hook_result_fields = %fields,
             "post-send hook reported result"
         ),
-        Level::WARN => warn!(
+        PostSendHookResultLevel::Warn => warn!(
             code = %AtmErrorCode::WarningHookExecutionFailed,
             hook_path = %command_path.display(),
             hook_result_message = %message,
             hook_result_fields = %fields,
             "post-send hook reported warning"
         ),
-        Level::ERROR => error!(
+        PostSendHookResultLevel::Error => error!(
             hook_path = %command_path.display(),
             hook_result_message = %message,
             hook_result_fields = %fields,
             "post-send hook reported error"
         ),
-        _ => unreachable!("all tracing levels are covered"),
     }
 }
 
+#[cfg(test)]
 fn hook_result_log_level(level: PostSendHookResultLevel) -> Level {
     match level {
         PostSendHookResultLevel::Debug => Level::DEBUG,
@@ -378,15 +492,26 @@ mod tests {
     use tracing::Level;
 
     use super::{
-        POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel, hook_matches_recipient,
+        HookCancellationToken, POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel,
+        finish_abandoned_post_send_hook_stdout_capture, hook_matches_recipient,
         hook_result_log_level, parse_post_send_hook_result,
     };
+    use crate::config::types::HookRecipient;
 
     #[test]
     fn hook_matches_recipient_exact_and_wildcard_values() {
-        assert!(hook_matches_recipient("arch-ctm", "arch-ctm"));
-        assert!(hook_matches_recipient("*", "arch-ctm"));
-        assert!(!hook_matches_recipient("team-lead", "arch-ctm"));
+        assert!(hook_matches_recipient(
+            &HookRecipient::Named("arch-ctm".parse().expect("recipient")),
+            &"arch-ctm".parse().expect("candidate")
+        ));
+        assert!(hook_matches_recipient(
+            &HookRecipient::Wildcard,
+            &"arch-ctm".parse().expect("candidate")
+        ));
+        assert!(!hook_matches_recipient(
+            &HookRecipient::Named("team-lead".parse().expect("recipient")),
+            &"arch-ctm".parse().expect("candidate")
+        ));
     }
 
     #[test]
@@ -423,5 +548,21 @@ mod tests {
             hook_result_log_level(PostSendHookResultLevel::Error),
             Level::ERROR
         );
+    }
+
+    #[test]
+    fn hook_cancellation_token_tracks_cancelled_state() {
+        let token = HookCancellationToken::default();
+        assert!(!token.is_cancelled());
+
+        token.cancel();
+
+        assert!(token.is_cancelled());
+    }
+
+    #[test]
+    fn bounded_stdout_teardown_returns_promptly_for_completed_reader() {
+        let handle = std::thread::spawn(|| Ok::<Vec<u8>, std::io::Error>(Vec::new()));
+        finish_abandoned_post_send_hook_stdout_capture(Some(handle), Path::new("hook"));
     }
 }

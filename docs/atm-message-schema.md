@@ -134,13 +134,15 @@ Identifier rules:
   ATM message identity for the acknowledged message
 - for ATM-authored forward records, ATM generates the ULID first and derives
   the persisted Claude-native `timestamp` from that ULID creation time
+- when present, `metadata.atm.messageId` is also the primary workflow-sidecar
+  key for `.claude/teams/<team>/.atm-state/workflow/<agent>.json`
 - write-path enforcement may reject wrong-format ATM-owned identifiers for the
   active schema revision
 - read-path validation failure for wrong-format ATM-owned identifiers must warn,
   preserve the message when the Claude-native envelope is still usable, and
   treat the malformed ATM-owned field as absent for ATM semantics
 
-## 4. ATM-Interpreted Shared Or De Facto Fields
+## 4. ATM-Interpreted Shared Fields And Forward Write Rule
 
 ATM currently interprets the following field when present:
 
@@ -165,6 +167,17 @@ Current evidence note:
 
 - `taskId` is documented and interpreted by ATM, but it was not present in the
   current live `atm-dev` inbox data sampled during this design sprint
+
+Forward write rule:
+
+- ATM-authored shared-inbox writes must keep the Claude-native top level intact
+- ATM machine fields, including `taskId`, must be written under `metadata.atm`
+- legacy top-level ATM fields remain read-compatible only
+- forward writes must not emit legacy top-level ATM machine fields
+
+Forward placement map addition:
+
+- legacy top-level `taskId` migrates to `metadata.atm.taskId`
 
 ## 5. ATM-Specific Alert Metadata
 

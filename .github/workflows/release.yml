@@ -406,4 +406,5 @@ jobs:
           # Initial bootstrap still requires a one-time manual manifest submission to microsoft/winget-pkgs.
           identifier: randlee.agent-team-mail
           installers-regex: 'atm_.*_x86_64-pc-windows-msvc\.zip$'
+          release-tag: ${{ needs.gate-and-tag.outputs.release_tag }}
           token: ${{ secrets.GITHUB_TOKEN }}

@@ -11,7 +11,7 @@ use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
 use crate::schema::AgentMember;
 use crate::team_admin::{MemberSummary, MembersList};
-use crate::types::TeamName;
+use crate::types::{AgentName, TeamName};
 
 pub use report::{
     DoctorEnvironmentVisibility, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
@@ -38,7 +38,10 @@ pub fn run_doctor(
     let config = config::load_config(&query.current_dir)?;
     let home_dir = query.home_dir.clone();
     let initial_lock_snapshot = snapshot_mailbox_lock_paths(&home_dir);
-    let resolved_team = config::resolve_team(query.team_override.as_deref(), config.as_ref());
+    let resolved_team = query
+        .team_override
+        .clone()
+        .or_else(|| config::resolve_team(None, config.as_ref()));
 
     let environment = health::environment_visibility(query.home_dir, query.team_override);
     let (observability_health, finding) = match observability.health() {
@@ -163,7 +166,7 @@ fn load_member_roster(
         .map(|member| member.name.clone())
         .collect::<BTreeSet<_>>();
     for member in baseline {
-        if present.contains(member) {
+        if present.contains(member.as_str()) {
             continue;
         }
         findings.push(DoctorFinding {
@@ -179,7 +182,7 @@ fn load_member_roster(
     }
 
     Some(MembersList {
-        team: team.to_string().into(),
+        team: TeamName::from_validated(team.to_string()),
         members: ordered_member_summaries(&team_config.members, baseline),
     })
 }
@@ -320,11 +323,11 @@ fn probe_directory_writable(directory: &Path) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-fn ordered_member_summaries(members: &[AgentMember], baseline: &[String]) -> Vec<MemberSummary> {
+fn ordered_member_summaries(members: &[AgentMember], baseline: &[TeamName]) -> Vec<MemberSummary> {
     let mut ordered = Vec::new();
     let mut included = BTreeSet::new();
 
-    if baseline.iter().any(|member| member == "team-lead")
+    if baseline.iter().any(|member| member.as_str() == "team-lead")
         && let Some(team_lead) = members.iter().find(|member| member.name == "team-lead")
     {
         ordered.push(member_summary(team_lead));
@@ -332,12 +335,12 @@ fn ordered_member_summaries(members: &[AgentMember], baseline: &[String]) -> Vec
     }
 
     for baseline_member in baseline {
-        if baseline_member == "team-lead" {
+        if baseline_member.as_str() == "team-lead" {
             continue;
         }
         if let Some(member) = members
             .iter()
-            .find(|member| member.name == *baseline_member)
+            .find(|member| member.name == baseline_member.as_str())
         {
             ordered.push(member_summary(member));
             included.insert(member.name.clone());
@@ -355,7 +358,7 @@ fn ordered_member_summaries(members: &[AgentMember], baseline: &[String]) -> Vec
 
 fn member_summary(member: &AgentMember) -> MemberSummary {
     MemberSummary {
-        name: member.name.clone().into(),
+        name: AgentName::from_validated(member.name.clone()),
         agent_id: member.agent_id.clone(),
         agent_type: member.agent_type.clone(),
         model: member.model.clone(),
@@ -473,7 +476,7 @@ mod tests {
         DoctorQuery {
             home_dir: paths.home_dir.clone(),
             current_dir: paths.current_dir.clone(),
-            team_override: Some("atm-dev".into()),
+            team_override: Some("atm-dev".parse().expect("team")),
         }
     }
 
@@ -506,7 +509,7 @@ mod tests {
             DoctorQuery {
                 home_dir: paths.home_dir.clone(),
                 current_dir: paths.current_dir.clone(),
-                team_override: Some("../evil".into()),
+                team_override: Some(crate::types::TeamName::from_validated("../evil")),
             },
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {

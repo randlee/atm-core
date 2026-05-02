@@ -1,8 +1,12 @@
 use std::fmt;
 use std::ops::Deref;
+use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+
+use crate::address::validate_path_segment;
+use crate::error::AtmError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -29,7 +33,7 @@ impl From<DateTime<Utc>> for IsoTimestamp {
 }
 
 /// Canonical ATM agent/member name at a public API boundary.
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct AgentName(String);
 
@@ -43,17 +47,29 @@ impl AgentName {
     pub fn into_inner(self) -> String {
         self.0
     }
-}
 
-impl From<String> for AgentName {
-    fn from(value: String) -> Self {
-        Self(value)
+    pub(crate) fn from_validated(value: impl Into<String>) -> Self {
+        Self(value.into())
     }
 }
 
-impl From<&str> for AgentName {
-    fn from(value: &str) -> Self {
-        Self(value.to_string())
+impl FromStr for AgentName {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let trimmed = value.trim();
+        validate_path_segment(trimmed, "agent")?;
+        Ok(Self(trimmed.to_string()))
+    }
+}
+
+impl<'de> Deserialize<'de> for AgentName {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        value.parse().map_err(serde::de::Error::custom)
     }
 }
 
@@ -90,7 +106,7 @@ impl PartialEq<&str> for AgentName {
 }
 
 /// Canonical ATM team name at a public API boundary.
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct TeamName(String);
 
@@ -104,17 +120,29 @@ impl TeamName {
     pub fn into_inner(self) -> String {
         self.0
     }
-}
 
-impl From<String> for TeamName {
-    fn from(value: String) -> Self {
-        Self(value)
+    pub(crate) fn from_validated(value: impl Into<String>) -> Self {
+        Self(value.into())
     }
 }
 
-impl From<&str> for TeamName {
-    fn from(value: &str) -> Self {
-        Self(value.to_string())
+impl FromStr for TeamName {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let trimmed = value.trim();
+        validate_path_segment(trimmed, "team")?;
+        Ok(Self(trimmed.to_string()))
+    }
+}
+
+impl<'de> Deserialize<'de> for TeamName {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        value.parse().map_err(serde::de::Error::custom)
     }
 }
 
@@ -147,6 +175,101 @@ impl fmt::Display for TeamName {
 impl PartialEq<&str> for TeamName {
     fn eq(&self, other: &&str) -> bool {
         self.as_str() == *other
+    }
+}
+
+/// Validated ATM task id carried across command, schema, and hook boundaries.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(transparent)]
+pub struct TaskId(String);
+
+impl TaskId {
+    /// Borrow the wrapped task id as `&str`.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Consume the wrapper and return the inner owned task id.
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl FromStr for TaskId {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return Err(
+                AtmError::validation("task id must not be blank").with_recovery(
+                    "Provide a non-empty --task-id value or omit --task-id for non-task messages.",
+                ),
+            );
+        }
+        Ok(Self(trimmed.to_string()))
+    }
+}
+
+impl<'de> Deserialize<'de> for TaskId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        value.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+impl From<TaskId> for String {
+    fn from(value: TaskId) -> Self {
+        value.0
+    }
+}
+
+impl AsRef<str> for TaskId {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl Deref for TaskId {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl fmt::Display for TaskId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AgentName, TaskId, TeamName};
+
+    #[test]
+    fn task_id_rejects_blank_deserialization() {
+        let error = serde_json::from_str::<TaskId>("\"   \"").expect_err("blank task id");
+
+        assert!(error.to_string().contains("task id must not be blank"));
+    }
+
+    #[test]
+    fn agent_name_rejects_blank_deserialization() {
+        let error = serde_json::from_str::<AgentName>("\"   \"").expect_err("blank agent name");
+
+        assert!(error.to_string().contains("agent"));
+    }
+
+    #[test]
+    fn team_name_rejects_blank_deserialization() {
+        let error = serde_json::from_str::<TeamName>("\"   \"").expect_err("blank team name");
+
+        assert!(error.to_string().contains("team"));
     }
 }
 
