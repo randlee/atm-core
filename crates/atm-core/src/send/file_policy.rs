@@ -2,37 +2,64 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::error::{AtmError, AtmErrorKind};
+use crate::types::TeamName;
+
+const MAX_FILE_REFERENCE_BYTES: u64 = 10 * 1024 * 1024;
 
 /// Process a send `--file` reference under the ATM file-policy rules.
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when the source file is missing, the team share
-/// directory cannot be created, the source path has no terminal file name, or
-/// copying the file into the share directory fails.
+/// Returns [`AtmError`] with [`crate::error_codes::AtmErrorCode::FilePolicyRejected`]
+/// when the source file is missing, metadata inspection fails, the source file
+/// exceeds the 10 MiB copy limit, the team share directory cannot be created,
+/// the source path has no terminal file name, or copying the file into the
+/// share directory fails.
 pub fn process_file_reference(
     file_path: &Path,
     message_text: Option<&str>,
-    team_name: &str,
+    team_name: &TeamName,
     current_dir: &Path,
     home_dir: &Path,
 ) -> Result<String, AtmError> {
     if !file_path.is_file() {
-        return Err(AtmError::file_policy(format!(
-            "file not found: {}",
-            file_path.display()
-        )));
+        return Err(
+            AtmError::file_policy(format!("file not found: {}", file_path.display())).with_recovery(
+                "Pass an existing file to `atm send --file`, or verify that the file was not moved or deleted before retrying.",
+            ),
+        );
     }
 
     if is_file_in_repo(file_path, current_dir) {
         return Ok(render_reference_message(message_text, file_path));
     }
 
+    let file_size = fs::metadata(file_path).map_err(|error| {
+        AtmError::new(
+            AtmErrorKind::FilePolicy,
+            format!("failed to inspect file {}: {error}", file_path.display()),
+        )
+        .with_source(error)
+        .with_recovery(
+            "Check that the source file still exists and is readable, then retry the send.",
+        )
+    })?;
+    if file_size.len() > MAX_FILE_REFERENCE_BYTES {
+        return Err(AtmError::file_policy(format!(
+            "file reference exceeds the {}-byte limit: {}",
+            MAX_FILE_REFERENCE_BYTES,
+            file_path.display()
+        ))
+        .with_recovery(
+            "Use a file no larger than 10 MiB or move the content into the repository so ATM can reference it without copying.",
+        ));
+    }
+
     let share_dir = home_dir
         .join(".config")
         .join("atm")
         .join("share")
-        .join(team_name);
+        .join(team_name.as_str());
     fs::create_dir_all(&share_dir).map_err(|error| {
         AtmError::new(
             AtmErrorKind::FilePolicy,
@@ -53,13 +80,24 @@ pub fn process_file_reference(
         )
     })?;
     let share_copy = share_dir.join(file_name);
-    fs::copy(file_path, &share_copy).map_err(|error| {
+    let copied_bytes = fs::copy(file_path, &share_copy).map_err(|error| {
         AtmError::file_policy(format!("failed to copy file into share directory: {error}"))
             .with_source(error)
             .with_recovery(
                 "Check source/share permissions and available disk space, then retry the send.",
             )
     })?;
+    if copied_bytes > MAX_FILE_REFERENCE_BYTES {
+        let _ = fs::remove_file(&share_copy);
+        return Err(AtmError::file_policy(format!(
+            "file reference exceeds the {}-byte limit after copy: {}",
+            MAX_FILE_REFERENCE_BYTES,
+            file_path.display()
+        ))
+        .with_recovery(
+            "Use a file no larger than 10 MiB or move the content into the repository so ATM can reference it without copying.",
+        ));
+    }
 
     Ok(render_reference_message(message_text, &share_copy))
 }
@@ -93,4 +131,53 @@ fn find_git_root(start_dir: &Path) -> Option<PathBuf> {
         current = dir.parent();
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs::{self, File};
+
+    use tempfile::tempdir;
+
+    use super::{MAX_FILE_REFERENCE_BYTES, process_file_reference};
+
+    #[test]
+    fn rejects_oversized_non_repo_file_references_before_copying() {
+        let source_dir = tempdir().expect("source tempdir");
+        let current_dir = tempdir().expect("current tempdir");
+        let home_dir = tempdir().expect("home tempdir");
+        let oversized_path = source_dir.path().join("large.bin");
+        File::create(&oversized_path)
+            .and_then(|file| file.set_len(MAX_FILE_REFERENCE_BYTES + 1))
+            .expect("oversized file");
+
+        let error = process_file_reference(
+            &oversized_path,
+            Some("see attached"),
+            &"atm-dev".parse().expect("team"),
+            current_dir.path(),
+            home_dir.path(),
+        )
+        .expect_err("oversized file should fail");
+
+        assert!(error.is_file_policy());
+        assert!(error.message.contains("exceeds"));
+        assert!(
+            error
+                .recovery
+                .as_deref()
+                .is_some_and(|value| value.contains("10 MiB"))
+        );
+        assert!(
+            fs::read_dir(
+                home_dir
+                    .path()
+                    .join(".config")
+                    .join("atm")
+                    .join("share")
+                    .join("atm-dev")
+            )
+            .is_err()
+        );
+    }
 }

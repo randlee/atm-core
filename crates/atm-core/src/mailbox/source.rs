@@ -42,21 +42,22 @@ pub(crate) fn resolve_target(
             .ok_or_else(AtmError::team_unavailable)?;
         return Ok(ResolvedTarget {
             agent: actor.clone(),
-            team: TeamName::from_validated(team),
+            team,
             explicit: false,
         });
     };
 
     let team = target_address
         .team
-        .clone()
+        .as_deref()
+        .and_then(|team| team.parse().ok())
         .or_else(|| config::resolve_team(team_override.map(TeamName::as_str), config))
         .ok_or_else(AtmError::team_unavailable)?;
     let agent = config::aliases::resolve_agent(&target_address.agent, config);
 
     Ok(ResolvedTarget {
         agent: AgentName::from_validated(agent),
-        team: TeamName::from_validated(team),
+        team,
         explicit: true,
     })
 }
@@ -254,7 +255,7 @@ mod tests {
         let mut aliases = BTreeMap::new();
         aliases.insert("tl".to_string(), "team-lead".to_string());
         let config = AtmConfig {
-            default_team: Some("atm-dev".to_string()),
+            default_team: Some("atm-dev".parse().expect("team")),
             aliases,
             ..Default::default()
         };

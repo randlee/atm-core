@@ -19,7 +19,7 @@ fn test_ack_transitions_pending_ack_and_appends_reply() {
         None,
         message_id,
     );
-    message.task_id = Some("TASK-123".into());
+    message.task_id = Some("TASK-123".parse().expect("task id"));
     fixture.write_inbox("arch-ctm", &[message]);
 
     let output = fixture.run(&[
