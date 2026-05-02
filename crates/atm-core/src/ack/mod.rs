@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use serde::{Serialize, Serializer};
+use serde::Serialize;
 use serde_json::Map;
 use tracing::trace;
 
@@ -16,7 +16,7 @@ use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
 use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
 use crate::send::{input, summary};
-use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+use crate::types::{AgentName, IsoTimestamp, TeamName};
 use crate::workflow;
 
 /// Parameters for acknowledging one pending-ack mailbox message.
@@ -38,37 +38,10 @@ pub struct AckOutcome {
     pub agent: AgentName,
     pub message_id: LegacyMessageId,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub task_id: Option<TaskId>,
-    pub reply_target: ReplyTarget,
+    pub task_id: Option<String>,
+    pub reply_target: String,
     pub reply_message_id: LegacyMessageId,
     pub reply_text: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReplyTarget {
-    agent: AgentName,
-    team: TeamName,
-}
-
-impl ReplyTarget {
-    fn new(agent: AgentName, team: TeamName) -> Self {
-        Self { agent, team }
-    }
-}
-
-impl std::fmt::Display for ReplyTarget {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}@{}", self.agent, self.team)
-    }
-}
-
-impl Serialize for ReplyTarget {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&self.to_string())
-    }
 }
 
 /// Acknowledge one previously read pending-ack message and append a reply.
@@ -107,7 +80,7 @@ pub fn ack_mail(
     if !team_config
         .members
         .iter()
-        .any(|member| member.name == actor.as_str())
+        .any(|member| member.name == actor)
     {
         return Err(AtmError::agent_not_found(&actor, &team));
     }
@@ -175,11 +148,11 @@ pub fn ack_mail(
     let mut reply_extra = Map::new();
     workflow::set_atm_message_id(&mut reply_extra, reply_atm_message_id);
     let reply_message = MessageEnvelope {
-        from: actor.to_string(),
+        from: actor.clone(),
         text: reply_text.clone(),
         timestamp: ack_timestamp,
         read: false,
-        source_team: Some(team.to_string()),
+        source_team: Some(team.clone()),
         summary: Some(summary::build_summary(&reply_text, None)),
         message_id: Some(reply_message_id),
         pending_ack_at: None,
@@ -278,11 +251,11 @@ pub fn ack_mail(
 
     let outcome = AckOutcome {
         action: "ack",
-        team: team.clone(),
-        agent: actor.clone(),
+        team: team.clone().into(),
+        agent: actor.clone().into(),
         message_id: request.message_id,
         task_id: source_task_id.clone(),
-        reply_target: ReplyTarget::new(AgentName::from_validated(reply_agent), reply_team),
+        reply_target: format!("{reply_agent}@{reply_team}"),
         reply_message_id,
         reply_text: reply_text.clone(),
     };
@@ -293,7 +266,7 @@ pub fn ack_mail(
         outcome: "ok",
         team,
         agent: actor.clone(),
-        sender: actor.to_string(),
+        sender: actor,
         message_id: Some(request.message_id),
         requires_ack: false,
         dry_run: false,
@@ -312,10 +285,7 @@ fn resolve_reply_target(
     if let Some(identity) = canonical_sender_identity(message) {
         let parsed: AgentAddress = identity.parse()?;
         let team = parsed.team.ok_or_else(AtmError::team_unavailable)?;
-        return Ok((
-            AgentName::from_validated(parsed.agent),
-            TeamName::from_validated(team),
-        ));
+        return Ok((parsed.agent.into(), team.into()));
     }
 
     let parsed: AgentAddress = if message.from.contains('@') {
@@ -331,10 +301,7 @@ fn resolve_reply_target(
     };
 
     let team = parsed.team.ok_or_else(AtmError::team_unavailable)?;
-    Ok((
-        AgentName::from_validated(parsed.agent),
-        TeamName::from_validated(team),
-    ))
+    Ok((parsed.agent.into(), team.into()))
 }
 
 fn canonical_sender_identity(message: &MessageEnvelope) -> Option<String> {
@@ -521,12 +488,6 @@ mod tests {
         );
 
         let target = resolve_reply_target(&message, "atm-dev").expect("reply target");
-        assert_eq!(
-            target,
-            (
-                "team-lead".parse().expect("agent"),
-                "src-gen".parse().expect("team"),
-            )
-        );
+        assert_eq!(target, ("team-lead".into(), "src-gen".into()));
     }
 }

@@ -10,20 +10,20 @@ use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode};
 use crate::schema::LegacyMessageId;
-use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+use crate::types::IsoTimestamp;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct CommandEvent {
     pub command: &'static str,
     pub action: &'static str,
     pub outcome: &'static str,
-    pub team: TeamName,
-    pub agent: AgentName,
+    pub team: String,
+    pub agent: String,
     pub sender: String,
     pub message_id: Option<LegacyMessageId>,
     pub requires_ack: bool,
     pub dry_run: bool,
-    pub task_id: Option<TaskId>,
+    pub task_id: Option<String>,
     pub error_code: Option<AtmErrorCode>,
     pub error_message: Option<String>,
 }

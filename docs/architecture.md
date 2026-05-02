@@ -934,9 +934,6 @@ Architectural rules:
   - clear runtime-only restored-member state before persistence
   - restore non-lead inboxes from the chosen snapshot
   - sweep stale mailbox `*.lock` sentinels before restored inbox files are copied in
-  - treat stale-sentinel sweep as result-bearing: if that cleanup hits a
-    read-only-filesystem failure, restore must stop and surface
-    `MailboxLockReadOnlyFilesystem` instead of warning and continuing
   - recompute `.highwatermark` from the maximum restored task id
   - support a dry-run path without making changes
 - Claude Code project task-list restoration remains separate from the retained
@@ -1341,102 +1338,6 @@ duplicates what `fs2` already provides correctly.
   other tools that bypass ATM locking are outside the protection boundary. This
   is an accepted limitation for the ATM shared-inbox model.
 
-### 18.3.1 Stale-Sentinel Sweep Predicate
-
-The current `path.extension() == "lock"` filter is too narrow because it misses
-rotated sentinels such as `inbox.json.lock.old`. The executed P.10 design must
-match only filenames that still carry the sentinel suffix chain:
-
-```rust
-let is_lock_sentinel_candidate = path
-    .file_name()
-    .and_then(|name| name.to_str())
-    .is_some_and(|name| name.ends_with(".lock") || name.contains(".lock."));
-```
-
-Why this exact predicate:
-- `ends_with(".lock")` preserves the ordinary live sentinel path
-- `contains(".lock.")` catches rotated forms such as `.lock.old` and
-  `.lock.replaced`
-- basename-only matching avoids broad false positives from parent directories
-- rejecting generic `contains("lock")` avoids matching unrelated files such as
-  `locksmith.txt`
-
-Eviction remains conservative:
-- read the candidate contents as the documented `pid[:token]` owner record
-- if parsing fails, leave the file in place
-- if `process_is_alive(pid)` is true, leave the file in place
-- only then attempt removal
-
-This is still best-effort cleanup, not a second ownership protocol. The actual
-authority boundary remains the later `fs2` advisory lock plus the existing
-`lock_path_matches_file(...)` identity recheck after acquisition.
-
-Platform note:
-- Windows may not permit renaming a live locked sentinel the same way Unix
-  does, so the broadened sweep is not a live-handoff mechanism
-- the predicate exists to clean up crash leftovers, repair leftovers, or
-  externally rotated sentinel artifacts that otherwise evade the old exact
-  `.lock` extension test
-
-### 18.3.2 Read-Only Filesystem Classification
-
-P.10 should add a dedicated read-only-filesystem mailbox-lock code instead of
-overloading the generic non-contention lock failure bucket.
-
-Required platform mapping:
-- Linux: `libc::EROFS` (`30`)
-- macOS: `libc::EROFS` (`30`)
-- Windows: `windows_sys::Win32::Foundation::ERROR_WRITE_PROTECT` (`19`)
-
-The classification helper belongs at the lock-path error-conversion boundary,
-not duplicated ad hoc at individual call sites. The intended shape is:
-
-```rust
-fn is_readonly_filesystem_error(error: &io::Error) -> bool
-```
-
-and then a shared mapper such as:
-
-```rust
-fn mailbox_lock_path_error(
-    operation: &'static str,
-    lock_path: &Path,
-    error: io::Error,
-) -> AtmError
-```
-
-Call-graph decisions:
-- `open_lock_file(...)` maps read-only failures directly to
-  `MailboxLockReadOnlyFilesystem`
-- `write_lock_owner_record(...)` maps both truncate and write failures through
-  the same helper
-- `remove_lock_sentinel_with_retry(...)` explicitly does not retry read-only
-  failures before the current permission-denied/backoff logic
-- public `sweep_stale_lock_sentinels(...)` surfaces the read-only diagnostic to
-  the caller rather than logging and continuing
-- pre-acquisition stale eviction inside `acquire(...)` propagates the
-  read-only diagnostic when the cleanup path hits it, because subsequent owner
-  record writes cannot succeed on the same mount; this early-exit happens
-  before any later `try_lock_exclusive()` attempt
-- each retry iteration must classify raw OS errors before consulting the
-  timeout budget: `EROFS` / `ERROR_WRITE_PROTECT` exits immediately as
-  `MailboxLockReadOnlyFilesystem`, while non-contention path failures such as
-  `ENOSPC`, `EMFILE`, and `ESTALE` exit immediately as `MailboxLockFailed`
-- `MailboxLockGuard::drop` still warns only, because the successful mailbox
-  mutation has already completed and `Drop` cannot change the command result
-
-Recommended recovery text:
-- message includes the attempted operation and lock path
-- recovery tells the operator to remount or move the ATM home to a writable
-  filesystem before retrying, not merely to wait for another process
-
-Reason for a new code instead of enriching `MailboxLockFailed`:
-- read-only filesystem state is a stable, operator-actionable class with
-  different remediation from ACL failures or transient path I/O
-- the retry policy must branch on this distinction
-- QA and integration tests need a stable machine-readable contract for it
-
 ### 18.4 Integration: Single-File Helper + Multi-File Lock Set
 
 `append_message` is a true single-file read-modify-write and should use one shared helper:
@@ -1597,10 +1498,6 @@ Current executed limitation:
 
 - `MailboxLockFailed` / `ATM_MAILBOX_LOCK_FAILED` — lock-path creation,
   open, or acquisition failed for a non-contention filesystem or OS reason
-- `MailboxLockReadOnlyFilesystem`
-  / `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM` — the lock path or lock sentinel
-  lives on a read-only filesystem, so ATM cannot create, update, or remove the
-  required mailbox-lock artifact
 - `MailboxLockTimeout` / `ATM_MAILBOX_LOCK_TIMEOUT` — lock not acquired within timeout
 - New `AtmErrorKind::MailboxLock` variant in `error.rs`
 
@@ -1739,8 +1636,6 @@ exist with no detection mechanism.
 
 Key properties:
 - crash at steps 2-6: config.json unchanged, extra inbox files harmless, marker signals re-run
-- read-only failure during the pre-copy stale-sentinel sweep aborts before live
-  inbox replacement begins, preserving the pre-restore team state
 - crash at step 7: config write is itself atomic via the existing `write_team_config(...)`
   temp-file + rename path, so no partial config write is possible
 - crash at step 8: config is written, stale marker cleaned up by next doctor/restore run

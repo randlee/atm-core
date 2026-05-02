@@ -6,7 +6,7 @@ use serde_json::{Map, Value};
 use ulid::Ulid;
 use uuid::Uuid;
 
-use crate::types::{IsoTimestamp, TaskId, TeamName};
+use crate::types::IsoTimestamp;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -120,7 +120,7 @@ pub struct AtmMetadataFields {
     pub message_id: Option<AtmMessageId>,
 
     #[serde(rename = "sourceTeam", skip_serializing_if = "Option::is_none")]
-    pub source_team: Option<TeamName>,
+    pub source_team: Option<String>,
 
     #[serde(rename = "pendingAckAt", skip_serializing_if = "Option::is_none")]
     pub pending_ack_at: Option<IsoTimestamp>,
@@ -205,7 +205,7 @@ pub struct MessageEnvelope {
     pub acknowledges_message_id: Option<LegacyMessageId>,
 
     #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]
-    pub task_id: Option<TaskId>,
+    pub task_id: Option<String>,
 
     // Preserve unknown producer-owned fields so ATM does not accidentally
     // redefine external schemas by dropping or rewriting them.
@@ -257,7 +257,7 @@ mod tests {
             )),
             acknowledged_at: None,
             acknowledges_message_id: None,
-            task_id: Some("TASK-123".parse().expect("task id")),
+            task_id: Some("TASK-123".into()),
             extra: Map::new(),
         };
 
@@ -302,21 +302,6 @@ mod tests {
     }
 
     #[test]
-    fn blank_task_id_is_rejected() {
-        let json = json!({
-            "from": "team-lead",
-            "text": "hello",
-            "timestamp": "2026-03-30T00:00:00Z",
-            "read": false,
-            "taskId": "   "
-        });
-
-        let error = serde_json::from_value::<MessageEnvelope>(json).expect_err("blank task id");
-
-        assert!(error.to_string().contains("task id must not be blank"));
-    }
-
-    #[test]
     fn pending_ack_round_trips() {
         let pending_ack = PendingAck {
             message_id: LegacyMessageId::new(),
@@ -343,7 +328,7 @@ mod tests {
             metadata: MessageMetadata {
                 atm: Some(AtmMetadataFields {
                     message_id: Some(message_id),
-                    source_team: Some("atm-dev".parse().expect("team name")),
+                    source_team: Some("atm-dev".into()),
                     pending_ack_at: None,
                     acknowledged_at: None,
                     acknowledges_message_id: None,
@@ -358,23 +343,6 @@ mod tests {
         let encoded = serde_json::to_string(&envelope).expect("encode");
         let decoded: ForwardMetadataEnvelope = serde_json::from_str(&encoded).expect("decode");
         assert_eq!(decoded, envelope);
-    }
-
-    #[test]
-    fn forward_metadata_source_team_rejects_blank_team_name() {
-        let json = json!({
-            "timestamp": "2026-03-30T00:00:00Z",
-            "metadata": {
-                "atm": {
-                    "sourceTeam": "   "
-                }
-            }
-        });
-
-        let error =
-            serde_json::from_value::<ForwardMetadataEnvelope>(json).expect_err("blank sourceTeam");
-
-        assert!(error.to_string().contains("team"));
     }
 
     #[test]

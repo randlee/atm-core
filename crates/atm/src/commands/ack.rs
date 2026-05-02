@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use atm_core::ack::{self, AckRequest};
 use atm_core::home;
 use atm_core::schema::LegacyMessageId;
+use atm_core::types::{AgentName, TeamName};
 use clap::Args;
 
 use crate::observability::CliObservability;
@@ -37,8 +38,8 @@ impl AckCommand {
             AckRequest {
                 home_dir,
                 current_dir,
-                actor_override: self.actor.map(|value| value.parse()).transpose()?,
-                team_override: self.team.map(|value| value.parse()).transpose()?,
+                actor_override: self.actor.map(AgentName::from),
+                team_override: self.team.map(TeamName::from),
                 message_id,
                 reply_body: self.reply,
             },

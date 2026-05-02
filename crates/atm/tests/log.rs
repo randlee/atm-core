@@ -1,7 +1,8 @@
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc;
+use std::thread;
 use std::time::Duration;
 
 use atm_core::schema::{AgentMember, TeamConfig};
@@ -136,7 +137,7 @@ fn test_log_filter_combines_level_and_match() {
 #[test]
 fn test_log_tail_streams_new_records() {
     let fixture = Fixture::new(&["arch-ctm", "recipient"]);
-    let mut tail = fixture.spawn_tail(&[
+    let child = fixture.spawn(&[
         "log",
         "tail",
         "--match",
@@ -145,12 +146,23 @@ fn test_log_tail_streams_new_records() {
         "--poll-interval-ms",
         "25",
     ]);
-    fixture.wait_for_tail_ready(&mut tail, "recipient@atm-dev");
 
+    // Known timing dependency: give the spawned tail process enough time to
+    // initialize before sending the log-producing command. TODO(v1.1.0): replace
+    // this sleep with a deterministic tail-readiness probe tracked in a follow-up issue.
+    thread::sleep(Duration::from_millis(250));
     fixture.send("recipient@atm-dev", "hello tail");
-    let record = tail.read_record();
-    assert_eq!(record["fields"]["command"], "send");
-    tail.finish();
+
+    let records = fixture.read_tail_records(child, 1);
+    assert!(
+        !records.is_empty(),
+        "tail should produce at least one record"
+    );
+    assert!(
+        records
+            .iter()
+            .any(|record| record["fields"]["command"] == "send")
+    );
 }
 
 #[test]
@@ -278,8 +290,8 @@ impl Fixture {
             .expect("run atm")
     }
 
-    fn spawn_tail(&self, args: &[&str]) -> TailReader {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_atm"))
+    fn spawn(&self, args: &[&str]) -> std::process::Child {
+        Command::new(env!("CARGO_BIN_EXE_atm"))
             .args(args)
             .env("ATM_HOME", self.tempdir.path())
             .env("ATM_CONFIG_HOME", self.tempdir.path())
@@ -289,10 +301,17 @@ impl Fixture {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .expect("spawn atm");
+            .expect("spawn atm")
+    }
+
+    fn read_tail_records(
+        &self,
+        mut child: std::process::Child,
+        count: usize,
+    ) -> Vec<serde_json::Value> {
         let stdout = child.stdout.take().expect("tail stdout");
         let (tx, rx) = mpsc::channel();
-        std::thread::spawn(move || {
+        thread::spawn(move || {
             let mut reader = BufReader::new(stdout);
             loop {
                 let mut line = String::new();
@@ -307,19 +326,23 @@ impl Fixture {
                 }
             }
         });
-        TailReader { child, rx }
-    }
+        let mut records = Vec::new();
 
-    fn wait_for_tail_ready(&self, tail: &mut TailReader, target: &str) {
-        for attempt in 0..20 {
-            self.send(target, &format!("tail readiness barrier {attempt}"));
-            if let Some(record) = tail.try_read_record(Duration::from_millis(250)) {
-                assert_eq!(record["fields"]["command"], "send");
-                return;
+        while records.len() < count {
+            let line = rx.recv_timeout(Duration::from_secs(5)).unwrap_or_else(|_| {
+                let _ = child.kill();
+                panic!("tail timed out before producing enough output");
+            });
+            if line.trim().is_empty() {
+                continue;
             }
+            records.push(serde_json::from_str(line.trim()).expect("json line"));
         }
 
-        panic!("tail never produced a readiness record after repeated barrier sends");
+        child.kill().expect("kill tail");
+        let _ = child.wait_with_output().expect("tail output");
+
+        records
     }
 
     fn send(&self, target: &str, body: &str) {
@@ -374,42 +397,5 @@ impl Fixture {
 
     fn stderr(&self, output: &std::process::Output) -> String {
         String::from_utf8(output.stderr.clone()).expect("stderr utf8")
-    }
-}
-
-struct TailReader {
-    child: std::process::Child,
-    rx: Receiver<String>,
-}
-
-impl TailReader {
-    fn try_read_record(&mut self, timeout: Duration) -> Option<serde_json::Value> {
-        loop {
-            let line = match self.rx.recv_timeout(timeout) {
-                Ok(line) => line,
-                Err(mpsc::RecvTimeoutError::Timeout) => return None,
-                Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    let _ = self.child.kill();
-                    panic!("tail exited before producing enough output");
-                }
-            };
-            if line.trim().is_empty() {
-                continue;
-            }
-            return Some(serde_json::from_str(line.trim()).expect("json line"));
-        }
-    }
-
-    fn read_record(&mut self) -> serde_json::Value {
-        self.try_read_record(Duration::from_secs(5))
-            .unwrap_or_else(|| {
-                let _ = self.child.kill();
-                panic!("tail timed out before producing enough output");
-            })
-    }
-
-    fn finish(mut self) {
-        self.child.kill().expect("kill tail");
-        let _ = self.child.wait_with_output().expect("tail output");
     }
 }

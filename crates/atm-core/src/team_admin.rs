@@ -64,34 +64,12 @@ pub struct MembersQuery {
 #[derive(Debug, Clone)]
 pub struct AddMemberRequest {
     pub home_dir: PathBuf,
-    pub team: TeamName,
-    pub member: AgentName,
+    pub team: String,
+    pub member: String,
     pub agent_type: String,
     pub model: String,
     pub cwd: PathBuf,
     pub tmux_pane_id: Option<String>,
-}
-
-impl AddMemberRequest {
-    pub fn new(
-        home_dir: PathBuf,
-        team: &str,
-        member: &str,
-        agent_type: String,
-        model: String,
-        cwd: PathBuf,
-        tmux_pane_id: Option<String>,
-    ) -> Result<Self, AtmError> {
-        Ok(Self {
-            home_dir,
-            team: team.parse()?,
-            member: member.parse()?,
-            agent_type,
-            model,
-            cwd,
-            tmux_pane_id,
-        })
-    }
 }
 
 /// Result of adding one member and optional inbox to a team.
@@ -107,16 +85,7 @@ pub struct AddMemberOutcome {
 #[derive(Debug, Clone)]
 pub struct BackupRequest {
     pub home_dir: PathBuf,
-    pub team: TeamName,
-}
-
-impl BackupRequest {
-    pub fn new(home_dir: PathBuf, team: &str) -> Result<Self, AtmError> {
-        Ok(Self {
-            home_dir,
-            team: team.parse()?,
-        })
-    }
+    pub team: String,
 }
 
 /// Result of one successful team backup.
@@ -131,25 +100,9 @@ pub struct BackupOutcome {
 #[derive(Debug, Clone)]
 pub struct RestoreRequest {
     pub home_dir: PathBuf,
-    pub team: TeamName,
+    pub team: String,
     pub from: Option<PathBuf>,
     pub dry_run: bool,
-}
-
-impl RestoreRequest {
-    pub fn new(
-        home_dir: PathBuf,
-        team: &str,
-        from: Option<PathBuf>,
-        dry_run: bool,
-    ) -> Result<Self, AtmError> {
-        Ok(Self {
-            home_dir,
-            team: team.parse()?,
-            from,
-            dry_run,
-        })
-    }
 }
 
 /// Dry-run restore plan for one backup restore attempt.
@@ -195,7 +148,7 @@ pub fn list_teams(home_dir: PathBuf, current_dir: PathBuf) -> Result<TeamsList, 
     if !teams_root.exists() {
         return Ok(TeamsList {
             action: "list".to_string(),
-            team: current_team,
+            team: current_team.into(),
             teams: Vec::new(),
         });
     }
@@ -230,7 +183,7 @@ pub fn list_teams(home_dir: PathBuf, current_dir: PathBuf) -> Result<TeamsList, 
 
         match load_team_config(&path) {
             Ok(config) => teams.push(TeamSummary {
-                name: TeamName::from_validated(entry.file_name().to_string_lossy().to_string()),
+                name: entry.file_name().to_string_lossy().to_string().into(),
                 member_count: config.members.len(),
             }),
             Err(error) => warn!(
@@ -245,7 +198,7 @@ pub fn list_teams(home_dir: PathBuf, current_dir: PathBuf) -> Result<TeamsList, 
     teams.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(TeamsList {
         action: "list".to_string(),
-        team: current_team,
+        team: current_team.into(),
         teams,
     })
 }
@@ -281,7 +234,10 @@ pub fn list_members(query: MembersQuery) -> Result<MembersList, AtmError> {
         members.push(member_summary(member));
     }
 
-    Ok(MembersList { team, members })
+    Ok(MembersList {
+        team: team.into(),
+        members,
+    })
 }
 
 /// Add one member record and inbox file to a team.
@@ -300,7 +256,7 @@ pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmErro
     if config
         .members
         .iter()
-        .any(|member| member.name == request.member.as_str())
+        .any(|member| member.name == request.member)
     {
         return Err(AtmError::validation(format!(
             "member '{}' already exists in team '{}'",
@@ -319,7 +275,7 @@ pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmErro
     }
 
     config.members.push(AgentMember {
-        name: request.member.to_string(),
+        name: request.member.clone(),
         agent_id: format!("{}@{}", request.member, request.team),
         agent_type: request.agent_type,
         model: request.model,
@@ -340,8 +296,8 @@ pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmErro
 
     Ok(AddMemberOutcome {
         action: "add-member",
-        team: request.team,
-        member: request.member,
+        team: request.team.into(),
+        member: request.member.into(),
         created_inbox,
     })
 }
@@ -399,7 +355,7 @@ pub fn backup_team(request: BackupRequest) -> Result<BackupOutcome, AtmError> {
 
     Ok(BackupOutcome {
         action: "backup",
-        team: request.team,
+        team: request.team.into(),
         backup_path: backup_dir,
     })
 }
@@ -417,7 +373,7 @@ pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> 
 
 fn member_summary(member: &AgentMember) -> MemberSummary {
     MemberSummary {
-        name: AgentName::from_validated(member.name.clone()),
+        name: member.name.clone().into(),
         agent_id: member.agent_id.clone(),
         agent_type: member.agent_type.clone(),
         model: member.model.clone(),
@@ -629,7 +585,7 @@ mod tests {
 
     use super::{
         AddMemberRequest, BackupRequest, RestoreRequest, add_member, backup_root_from_home,
-        tasks_dir_from_home,
+        backup_team, restore_team, tasks_dir_from_home,
     };
     use crate::error_codes::AtmErrorCode;
     use crate::schema::TeamConfig;
@@ -647,15 +603,17 @@ mod tests {
     #[test]
     fn add_member_rejects_invalid_member_segment() {
         let tempdir = tempdir().expect("tempdir");
-        let error = AddMemberRequest::new(
-            tempdir.path().to_path_buf(),
-            "atm-dev",
-            "../evil",
-            "worker".to_string(),
-            "gpt-5".to_string(),
-            tempdir.path().to_path_buf(),
-            None,
-        )
+        write_team_config(tempdir.path(), "atm-dev");
+
+        let error = add_member(AddMemberRequest {
+            home_dir: tempdir.path().to_path_buf(),
+            team: "atm-dev".to_string(),
+            member: "../evil".to_string(),
+            agent_type: "worker".to_string(),
+            model: "gpt-5".to_string(),
+            cwd: tempdir.path().to_path_buf(),
+            tmux_pane_id: None,
+        })
         .expect_err("invalid member");
 
         assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
@@ -664,15 +622,16 @@ mod tests {
     #[test]
     fn add_member_rejects_invalid_team_segment() {
         let tempdir = tempdir().expect("tempdir");
-        let error = AddMemberRequest::new(
-            tempdir.path().to_path_buf(),
-            "../evil",
-            "arch-ctm",
-            "worker".to_string(),
-            "gpt-5".to_string(),
-            tempdir.path().to_path_buf(),
-            None,
-        )
+
+        let error = add_member(AddMemberRequest {
+            home_dir: tempdir.path().to_path_buf(),
+            team: "../evil".to_string(),
+            member: "arch-ctm".to_string(),
+            agent_type: "worker".to_string(),
+            model: "gpt-5".to_string(),
+            cwd: tempdir.path().to_path_buf(),
+            tmux_pane_id: None,
+        })
         .expect_err("invalid team");
 
         assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
@@ -686,8 +645,8 @@ mod tests {
 
         add_member(AddMemberRequest {
             home_dir: tempdir.path().to_path_buf(),
-            team: "atm-dev".parse().expect("team"),
-            member: "arch-ctm".parse().expect("member"),
+            team: "atm-dev".to_string(),
+            member: "arch-ctm".to_string(),
             agent_type: "worker".to_string(),
             model: "gpt-5".to_string(),
             cwd: tempdir.path().to_path_buf(),
@@ -718,8 +677,8 @@ mod tests {
 
         let error = add_member(AddMemberRequest {
             home_dir: tempdir.path().to_path_buf(),
-            team: "atm-dev".parse().expect("team"),
-            member: "arch-ctm".parse().expect("member"),
+            team: "atm-dev".to_string(),
+            member: "arch-ctm".to_string(),
             agent_type: "worker".to_string(),
             model: "gpt-5".to_string(),
             cwd: tempdir.path().to_path_buf(),
@@ -735,8 +694,11 @@ mod tests {
     fn backup_team_rejects_invalid_team_segment() {
         let tempdir = tempdir().expect("tempdir");
 
-        let error =
-            BackupRequest::new(tempdir.path().to_path_buf(), "../evil").expect_err("invalid team");
+        let error = backup_team(BackupRequest {
+            home_dir: tempdir.path().to_path_buf(),
+            team: "../evil".to_string(),
+        })
+        .expect_err("invalid team");
 
         assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
     }
@@ -745,8 +707,13 @@ mod tests {
     fn restore_team_rejects_invalid_team_segment() {
         let tempdir = tempdir().expect("tempdir");
 
-        let error = RestoreRequest::new(tempdir.path().to_path_buf(), "../evil", None, false)
-            .expect_err("invalid team");
+        let error = restore_team(RestoreRequest {
+            home_dir: tempdir.path().to_path_buf(),
+            team: "../evil".to_string(),
+            from: None,
+            dry_run: false,
+        })
+        .expect_err("invalid team");
 
         assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
     }

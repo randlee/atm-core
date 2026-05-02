@@ -195,38 +195,6 @@ Error codes should describe the failure class, not a specific prose message.
   - may be accompanied by lower-level OS/process details and any structured
     hook result that was successfully parsed before failure
 
-### 5.9 Mailbox Lock Read-Only Filesystem
-
-- `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM`
-
-#### 5.9.1 `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM`
-
-- code: `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM`
-- description: ATM could not create, update, or remove the mailbox lock
-  sentinel because the underlying filesystem is read-only
-- HTTP status: `500 Internal Server Error`
-- context:
-  - emitted for lock-path `open`, owner-record truncate/write, or stale-sentinel
-    removal when the underlying OS reports a read-only filesystem
-  - this is more specific than `ATM_MAILBOX_LOCK_FAILED` because the operator
-    remediation is to restore writability or move the ATM home, not to wait for
-    lock contention or adjust discretionary permissions
-  - required platform classification:
-    - Linux/macOS: raw OS error `EROFS` (`30`)
-    - Windows: raw OS error `ERROR_WRITE_PROTECT` (`19`)
-  - required output split:
-    - message:
-      ```text
-      error: mailbox lock {operation} failed for {lock_path}: filesystem is read-only.
-      ```
-    - recovery:
-      ```text
-      Remount or move the ATM home to a writable filesystem, then retry the ATM command.
-      ```
-  - drop-time best-effort cleanup may log the code as a warning because the
-    mailbox command has already succeeded, but public acquisition/sweep paths
-    must return the structured error directly
-
 ## 6. Mapping Rules
 
 Required mapping rules:
@@ -244,7 +212,7 @@ Required mapping rules:
 | `Identity` | `ATM_IDENTITY_UNAVAILABLE` | none |
 | `TeamNotFound` | `ATM_TEAM_NOT_FOUND` | `ATM_TEAM_UNAVAILABLE` |
 | `AgentNotFound` | `ATM_AGENT_NOT_FOUND` | none |
-| `MailboxLock` | `ATM_MAILBOX_LOCK_FAILED` | `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM`, `ATM_MAILBOX_LOCK_TIMEOUT` |
+| `MailboxLock` | `ATM_MAILBOX_LOCK_FAILED` | `ATM_MAILBOX_LOCK_TIMEOUT` |
 | `MailboxRead` | `ATM_MAILBOX_READ_FAILED` | none |
 | `MailboxWrite` | `ATM_MAILBOX_WRITE_FAILED` | none |
 | `FilePolicy` | `ATM_FILE_POLICY_REJECTED` | `ATM_FILE_REFERENCE_REWRITE_FAILED` |
