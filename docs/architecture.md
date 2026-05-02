@@ -2307,7 +2307,16 @@ structured at compile time.
 Architectural rules:
 - fallible production paths return typed `Result` / discriminated error enums
   across crate boundaries rather than relying on panic or unwrap
+- pattern matches over `AtmErrorCode` at module/crate boundary surfaces must be
+  exhaustive; wildcard `_` match arms are not permitted
 - adapter layers may translate errors, but must preserve structured identity
+- when reviewing transitional compatibility paths, apply these structured-error
+  rules together with the Phase Q supersession notes for the pre-Phase-Q Ack
+  and Clear pipeline stage lists in Sections 8 and 9
+- SQLite-specific transaction, busy-timeout, shutdown-checkpoint, and
+  `rusqlite` blocking-I/O rules are defined in
+  [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
+  Sections 4, 5, and 6 and are part of this same Phase Q error boundary
 - `atm` owns CLI-side `sc-observability` bootstrap and CLI event emission
 - `atm-daemon` owns daemon/runtime/transport `sc-observability` emission
 - `atm-core` owns ATM event and error models above the shared observability
