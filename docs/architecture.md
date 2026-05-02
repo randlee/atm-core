@@ -4,11 +4,15 @@
 
 The current target architecture keeps the ATM CLI surface, but moves durable
 mail and roster ownership to SQLite and reintroduces one tightly-bounded
-singleton daemon runtime for routing, notification, and transport.
+singleton daemon runtime for routing, notification, transport, and runtime
+health/state queries.
 
-The workspace remains intentionally small:
-- `atm-core`: reusable library
+The current workspace contains:
+- `atm-core`: reusable service library
 - `atm`: CLI binary
+
+The Phase Q target workspace remains intentionally small and adds:
+- `atm-daemon`: daemon runtime binary / transport host
 
 The CLI stays thin. Product logic moves into `atm-core`.
 
@@ -32,6 +36,7 @@ moved into:
 
 - [`docs/atm/architecture.md`](./atm/architecture.md)
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
+- [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
 
 Phase-Q supersession note:
 - earlier daemon-free architecture statements in this file are historical from
@@ -41,23 +46,28 @@ Phase-Q supersession note:
 
 ## 2. Crate Boundaries
 
-The product is implemented by two crates:
+The post-Q product runtime is implemented by three crates:
 
 - `atm-core`
 - `atm`
+- `atm-daemon`
 
 Product-level boundary rules:
 
 - `atm-core` owns ATM business logic and the strict I/O boundaries that Phase Q
   routes through a daemon runtime.
 - `atm` owns CLI parsing, dispatch, rendering, and bootstrap.
+- `atm-daemon` owns runtime composition, transport adapters, singleton
+  enforcement, and live-status runtime state.
 - `atm-core` must not own clap or terminal-formatting concerns.
 - `atm` must not own mailbox, workflow, log-query, or doctor business logic.
+- `atm-daemon` must not become a second business-logic crate.
 
 Crate-local boundary detail is owned by:
 
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm/architecture.md`](./atm/architecture.md)
+- [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
 
 ### 2.3 Release Publication Boundary
 
@@ -904,7 +914,9 @@ Public entrypoint:
 - message
 - remediation
 
-The report model should reuse the current doctor command’s severity/finding structure where useful, but local checks replace daemon checks.
+The report model should reuse the current doctor command’s severity/finding
+structure where useful, but in the Phase Q target architecture it must include
+daemon/runtime checks rather than assuming a daemon-free local-only model.
 
 Roster output rules:
 - show all current `config.json` members in doctor output
@@ -1907,6 +1919,7 @@ There are three distinct paths:
    - cross-host delivery is daemon-to-daemon only
    - routing expands from `agent@team` to `agent@team.host`
    - sender-side daemons do not write remote host JSONL directly
+   - successful remote delivery requires remote daemon acceptance
 
 ### 21.4 One Interface, Two Transport Implementations
 
@@ -1922,6 +1935,8 @@ Remote-delivery semantics:
 - there is no durable long-lived remote outbox
 - if the remote host remains unreachable after the bounded retry window, send
   fails rather than leaving stale pending delivery behind
+- sender-side daemons do not treat a remote send as delivered until the remote
+  daemon accepts it
 
 ### 21.5 Singleton Daemon
 
@@ -1935,6 +1950,7 @@ Daemon responsibilities:
 - transport listeners
 - route selection
 - live status cache
+- daemon-facing diagnostics and health queries used by `atm doctor`
 - watch/reconcile runtime if enabled
 
 Daemon non-responsibility:
@@ -1953,6 +1969,28 @@ Required ownership model:
 
 This is the architectural mechanism intended to prevent the boundary leakage
 that made the old daemon line unmaintainable.
+
+Privacy rule:
+- each boundary must expose only the trait or façade needed by callers
+- concrete implementations, helper constructors, and storage/transport details
+  stay private to the owning module unless a later crate extraction makes the
+  boundary stricter
+
+### 21.6.1 Structured Error And Observability Boundaries
+
+Phase Q must keep production runtime failure handling and observability
+structured at compile time.
+
+Architectural rules:
+- fallible production paths return typed `Result` / discriminated error enums
+  across crate boundaries rather than relying on panic or unwrap
+- adapter layers may translate errors, but must preserve structured identity
+- `atm` owns CLI-side `sc-observability` bootstrap and CLI event emission
+- `atm-daemon` owns daemon/runtime/transport `sc-observability` emission
+- `atm-core` owns ATM event and error models above the shared observability
+  boundary
+- production runtime diagnostics must not collapse into ad hoc stdout/stderr
+  debugging
 
 ### 21.7 Test Strategy
 

@@ -144,6 +144,7 @@ Remote host failure semantics:
 - bounded transient retry is allowed only for short intermittent failures
 - if the remote host remains unreachable after the bounded retry window,
   `send` fails and the message is not left queued for days
+- a remote send is not considered successful until the remote daemon accepts it
 
 ## Daemon Model
 
@@ -168,6 +169,8 @@ Runtime responsibility:
 Non-responsibility:
 - daemon must not own unique business logic that is unavailable to in-process
   service callers
+- daemon unavailability must surface as an explicit runtime failure, not as
+  hidden direct SQLite/JSONL fallback or auto-spawn
 
 ## Plugin Model
 
@@ -203,12 +206,30 @@ No exceptions:
 - no direct SQLite access outside the owning subsystem
 - no direct socket access outside the owning subsystem
 - no business logic in adapter code
+- no public concrete adapter internals when a private implementation behind a
+  trait/façade boundary can enforce the same behavior
 
 Enforcement approach:
 - prefer strict module privacy and hidden concrete implementations even before
   crate extraction
 - use one trait boundary per I/O-owning subsystem
 - if a boundary proves fragile, extract it into a separate crate later
+
+## Observability And Error Model
+
+Phase Q must keep observability and failure handling structured.
+
+Rules:
+- CLI and daemon both emit structured events through `sc-observability`
+- `atm-core` owns ATM event and error models; adapters emit them through the
+  shared observability boundary
+- fallible runtime behavior uses typed `Result`/error-enum boundaries rather
+  than panic/unwrap as the normal control flow
+- production panic is reserved for invariant corruption or unreachable code,
+  not routine I/O, parse, or transport failure
+- `atm doctor` remains a CLI command, but in the Phase Q target runtime it must
+  be able to query daemon/runtime state rather than assuming a daemon-free
+  environment
 
 ## Schema Design
 
@@ -348,6 +369,8 @@ Important runtime note:
 
 - ingest mailbox JSONL into SQLite on command entry
 - ingest team `config.json` into SQLite roster state
+- import existing workflow sidecar state into SQLite during first-run migration
+  so ack/read/clear semantics do not regress during cutover
 - `send` and ack replies write to SQLite first, then export to inbox
 - keep existing read behavior available for comparison/debug only
 - SQLite becomes authoritative for new ATM-authored rows
@@ -358,13 +381,7 @@ Important runtime note:
 - stop correctness-critical full-file inbox rewrites
 - keep export-only inbox append for Claude delivery
 
-### Stage 4: Compatibility Cleanup
-
-- remove mailbox-lock dependence from runtime correctness
-- retire stale-lock cron sweep for mail flows
-- keep only any compatibility code still required for non-mail paths
-
-### Stage 5: Thin Daemon Runtime
+### Stage 4: Thin Daemon Runtime
 
 - add the singleton daemon runtime only after the service boundary is proven
 - implement one daemon API with two transport adapters:
@@ -372,6 +389,12 @@ Important runtime note:
   - TCP/TLS
 - keep live status in daemon memory
 - keep cross-host routing daemon-to-daemon only
+
+### Stage 5: Compatibility Cleanup
+
+- remove mailbox-lock dependence from runtime correctness
+- retire stale-lock cron sweep for mail flows
+- keep only any compatibility code still required for non-mail paths
 
 ## Backward Compatibility
 
@@ -396,22 +419,69 @@ Scope:
 - add SQLite bootstrap, migrations, and schema
 - add transaction helpers
 
+Expected files / crates:
+- `crates/atm-core/src/mail_store/*`
+- `crates/atm-core/src/service/*` or equivalent service boundary module
+- `crates/atm-daemon/*` not yet required beyond placeholder boundary docs
+
+Implementation details:
+- keep SQL hidden behind one store trait boundary
+- keep schema bootstrap/migrations centralized
+- define the canonical `message_key` model here before command cutover begins
+- define typed error enums for store/bootstrap failures before command cutover
+  spreads ad hoc error translation
+
 Acceptance:
 - database opens under `.atm-state/mail.db`
 - schema bootstrap is deterministic and idempotent
 - store-layer tests cover create/read/update transaction basics
+- tests cover:
+  - repeated bootstrap
+  - transactional rollback on mid-operation failure
+  - uniqueness of `message_key`, `legacy_message_id`, and `atm_message_id`
+  - roster row replacement/update behavior
+  - structured store/bootstrap errors remain discriminated and do not panic on
+    routine failure
 
 ### Q.2 — Inbox Ingest + Send Dual Write
 
 Scope:
 - ingest external inbox rows into SQLite
+- ingest existing workflow sidecar state into SQLite
+- ingest `config.json` roster updates into SQLite
 - move ATM `send` to SQLite-first plus inbox export
 - keep exported envelope Claude-native + `metadata.atm`
+
+Expected files / crates:
+- `crates/atm-core/src/inbox_ingress/*`
+- `crates/atm-core/src/inbox_export/*`
+- `crates/atm-core/src/team_ingress/*`
+- `crates/atm-core/src/send/*`
+
+Implementation details:
+- inbox import must be idempotent
+- import must support:
+  - `metadata.atm.messageId`
+  - legacy top-level `message_id`
+  - deterministic fallback fingerprint for external messages without ATM ids
+- malformed external records must degrade safely rather than corrupting SQLite
+- workflow sidecar import must preserve current ack/read/clear semantics for
+  already-known messages
+- ingest/export paths must emit structured `sc-observability` events for import
+  success, degradation, and export failure
 
 Acceptance:
 - `send` inserts authoritative rows in SQLite
 - ATM-authored inbox export still works for Claude recipients
 - repeated ingest does not duplicate imported records
+- tests cover:
+  - duplicate import suppression for ATM-authored and Claude-native rows
+  - malformed JSONL record handling without panic
+  - malformed `metadata.atm` handling without message loss when Claude fields are usable
+  - partial workflow-sidecar import / missing sidecar rows
+  - `config.json` roster changes updating SQLite roster truth deterministically
+  - structured ingest/export error variants and observability events for the
+    degraded paths above
 
 ### Q.3 — Ack/Task Migration
 
@@ -420,22 +490,77 @@ Scope:
 - append reply exports after SQLite commit
 - stop treating inbox mutation as authoritative ack state
 
+Expected files / crates:
+- `crates/atm-core/src/ack/*`
+- `crates/atm-core/src/tasks/*` or equivalent
+- `crates/atm-core/src/workflow/*` migration helpers
+
+Implementation details:
+- reply export happens only after SQLite commit succeeds
+- ack/task transitions must not require rewriting the source inbox record
+- existing workflow sidecar state is read only for migration/backfill once
+  SQLite is authoritative
+- ack/task failure modes must remain typed across service and export boundaries
+
 Acceptance:
 - ack-required messages are authoritative in SQLite
 - task linkage and acknowledged state survive restart without inbox rewrites
 - reply export still lands in Claude inbox correctly
+- tests cover:
+  - ack-required imported legacy message
+  - task-linked imported message
+  - reply export failure after commit surfaces clearly and does not corrupt SQLite
+  - duplicate ack attempt rejection against SQLite truth
+  - no ack/task runtime failure path relies on panic/unwrap
 
-### Q.4 — Read/Clear Cutover
+### Q.4 — Read/Clear Cutover + Thin Daemon Runtime
 
 Scope:
 - `read` projects from SQLite after ingest
 - `clear` updates SQLite visibility state
 - remove correctness-critical full-file mailbox rewrites from these paths
 
+Expected files / crates:
+- `crates/atm-core/src/read/*`
+- `crates/atm-core/src/clear/*`
+- projection helpers in `crates/atm-core/src/service/*` or equivalent
+- `crates/atm-daemon/src/*`
+- `crates/atm/src/*` daemon client wiring
+
+Implementation details:
+- `read` must reconcile new external inbox writes before projection
+- `clear` becomes SQLite visibility mutation, not inbox truth mutation
+- imported legacy messages and forward ATM messages must project consistently
+- `atm-daemon` owns singleton enforcement and transport only
+- local transport uses Unix domain socket
+- remote transport uses TCP/TLS daemon-to-daemon only
+- live status cache is daemon-memory truth
+- daemon emits structured runtime and transport events through
+  `sc-observability`
+- remote delivery success is defined by remote daemon acceptance within the
+  bounded retry window
+- daemon-unavailable client calls must fail clearly without hidden fallback or
+  auto-spawn
+- `atm doctor` must start consuming daemon/runtime state through the same
+  request/response boundaries used by production
+
 Acceptance:
 - `read` and `clear` no longer require mailbox rewrite correctness
 - lock contention on inbox files does not block SQLite-owned state transitions
 - existing CLI output remains compatible
+- tests cover:
+  - mixed imported legacy + forward ATM rows
+  - repeated `read` after external Claude append
+  - clear of ack-pending message remains forbidden
+  - clear of already-cleared message is idempotent
+  - second daemon startup fails deterministically
+  - stale singleton artifact cleanup does not allow double-start
+  - local same-host daemon API flow
+  - bounded remote host unreachable behavior
+  - remote acceptance required for send success
+  - daemon-unavailable path returns typed error with recovery guidance
+  - `atm doctor` can surface daemon/runtime availability without direct socket
+    or SQLite bypasses in CLI code
 
 ### Q.5 — Lock Retirement + Ops Cleanup
 
@@ -443,13 +568,30 @@ Scope:
 - remove mail-flow dependence on mailbox lock cron sweep
 - update doctor/restore/backup docs and tooling
 - remove or quarantine obsolete mailbox-lock behaviors for mail state
-- if daemon runtime is in scope by this point, keep it as a thin wrapper only
+
+Expected files / crates:
+- `crates/atm-core/src/doctor/*`
+- `crates/atm-core/src/team_admin/*`
+
+Implementation details:
+- mailbox locks may remain only for transitional compatibility paths outside
+  normal mail correctness
+- no single transport/runtime file should become a catch-all business-logic
+  class; keep adapters thin and private behind the protocol boundary
+- doctor/restore/backup documentation must describe SQLite + daemon ownership
+  rather than the old file-truth lock model
 
 Acceptance:
 - mail flows do not require the 5-minute stale-lock sweep
 - operational docs match SQLite ownership
 - Phase Q release gate proves normal mail operation without mailbox-lock
   correctness dependence
+- tests cover:
+  - stale lock artifacts no longer wedge normal mail flows
+  - doctor/restore paths behave correctly with SQLite-owned durable state
+  - compatibility-only remaining lock artifacts surface as diagnostics rather
+    than correctness blockers
+  - no core test requires daemon process spawning
 
 ## Testing Constraints
 
@@ -558,6 +700,9 @@ The following must be checked on every QA pass for Phase Q:
 - daemon spawning is not part of the core test strategy
 - transport/runtime code remains thin and does not collapse into a giant socket
   class
+- CLI and daemon both retain structured `sc-observability` coverage
+- typed runtime errors remain discriminated across service, daemon, and CLI
+  boundaries
 - roster truth lives in SQLite; live status truth lives in daemon memory
 - Claude compatibility continues to use Claude-native top-level fields plus
   `metadata.atm`

@@ -16,7 +16,7 @@ This plan sequences the work. File-level migration decisions live in
 Documentation organization and cleanup are governed by
 [`documentation-guidelines.md`](./documentation-guidelines.md). As the docs are
 restructured, product docs remain in `docs/` and crate-local detail moves into
-`docs/atm/` and `docs/atm-core/`.
+`docs/atm/`, `docs/atm-core/`, and `docs/atm-daemon/`.
 
 Phase-Q supersession note:
 - earlier daemon-free phases in this plan remain historical execution records
@@ -42,10 +42,13 @@ Status:
   remains deferred to a later version.
 - Phase Q planning is active on the SQLite source-of-truth and daemon-boundary
   line; this phase supersedes mailbox-lock architecture as the target design.
+- The current workspace still contains `crates/atm-core` and `crates/atm`
+  only; `crates/atm-daemon` is introduced by the Phase Q implementation line.
 
 ## 2. Deliverables
 
-- Rust workspace with `crates/atm-core` and `crates/atm`
+- Rust workspace expanded from `crates/atm-core` + `crates/atm` to include
+  `crates/atm-daemon`
 - retained implementation of `send`, `read`, `ack`, `clear`, `log`,
   `doctor`, `teams`, and `members`
 - SQLite-backed mail and roster source of truth
@@ -61,10 +64,11 @@ Status:
 
 ## 3. Crates
 
-The implementation remains split across:
+The Phase Q target implementation is split across:
 
 - `crates/atm-core`
 - `crates/atm`
+- `crates/atm-daemon`
 
 Crate-local scope detail is owned by:
 
@@ -72,6 +76,8 @@ Crate-local scope detail is owned by:
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm/requirements.md`](./atm/requirements.md)
 - [`docs/atm/architecture.md`](./atm/architecture.md)
+- [`docs/atm-daemon/requirements.md`](./atm-daemon/requirements.md)
+- [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
 
 ## 4. Work Sequence
 
@@ -178,7 +184,8 @@ Port send command and support files:
 - observability emission
 
 Acceptance:
-- `atm send` feature set works without daemon support
+- historical pre-Phase-Q acceptance: `atm send` feature set worked without
+  daemon support
 - send JSON and human output match the documented contract
 
 ### Phase E: Read Path [COMPLETE]
@@ -198,7 +205,8 @@ Port read command and support files:
 - command output
 
 Acceptance:
-- `atm read` feature set works without daemon support
+- historical pre-Phase-Q acceptance: `atm read` feature set worked without
+  daemon support
 - workflow axes and display buckets match the requirements
 - seen-state semantics match the documented contract
 
@@ -217,7 +225,8 @@ Port ack and clear command support files:
 - command output
 
 Acceptance:
-- `atm ack` feature set works without daemon support
+- historical pre-Phase-Q acceptance: `atm ack` feature set worked without
+  daemon support
 - `atm clear` removes only clearable messages
 - pending-ack messages remain visible until acknowledgement
 
@@ -255,7 +264,8 @@ Port and redesign the doctor command:
 - command output
 
 Acceptance:
-- `atm doctor` works without daemon support
+- historical pre-Phase-Q acceptance: `atm doctor` worked without daemon
+  support
 
 ### Phase I: Cleanup And Hardening
 
@@ -877,15 +887,17 @@ Cross-document invariants that must stay locked during implementation:
 ## 6. Done Definition
 
 The rewrite is ready when:
-- `atm send` works without daemon support
-- `atm read` works without daemon support
-- `atm ack` works without daemon support
-- `atm clear` works without daemon support
+- `atm send` works through the documented production runtime path
+- `atm read` works through the documented production runtime path
+- `atm ack` works through the documented production runtime path
+- `atm clear` works through the documented production runtime path
 - `atm log` works through shared observability APIs
-- `atm doctor` works as a local diagnostics command
+- `atm doctor` works as a local diagnostics command with daemon/runtime
+  visibility in the Phase Q target architecture
 - `atm teams` provides the retained local team recovery surface
 - `atm members` provides retained local roster verification
-- retained non-daemon functionality is preserved or intentionally documented as changed
+- retained command behavior is preserved, and any Phase Q runtime-shape changes
+  are intentionally documented
 - task-linked mail remains pending until acknowledged
 - the file-by-file migration plan is complete enough to implement directly
 - the retained command tests pass against the new crate layout
@@ -1486,9 +1498,9 @@ Deliverables:
   - `winget`
 - state that `agent-team-mail` and `agent-team-mail-core` are now published
   from this repo
-- explain that the retained `1.0` replacement scope covers the daemon-free
-  CLI/core pair and continues to consume the published `sc-observability`
-  family
+- explain that the retained `1.0` replacement scope historically covered the
+  pre-Phase-Q CLI/core pair and continues to consume the published
+  `sc-observability` family
 - explain that `winget` is a new required `1.0` Windows channel rather than a
   historical parity channel
 
@@ -2423,6 +2435,10 @@ Hard architectural constraints:
 - every subsystem is behind a strict trait boundary for all external I/O
 - daemon/runtime code stays thin and does not absorb business logic
 - daemon spawning is not the core test strategy
+- structured `sc-observability` remains first-class at both CLI and daemon
+  layers
+- production fallible paths use typed error unions / `Result` propagation
+  rather than panic/unwrap as the normal error strategy
 
 Core design decisions:
 - SQLite is the source of truth for:
@@ -2431,6 +2447,8 @@ Core design decisions:
   - read/clear visibility state
   - team roster
 - daemon memory is the live truth for agent status
+- `atm doctor` remains a CLI command but must query daemon/runtime state in the
+  Phase Q target architecture
 - Claude inbox JSONL remains compatibility ingress/egress only
 - native agent/plugin traffic does not use JSONL
 - one daemon API, two transport implementations:
@@ -2439,6 +2457,8 @@ Core design decisions:
 - remote address model expands to `agent@team.host`
 - bounded transient retry is allowed for remote delivery, but there is no
   durable long-lived remote outbox
+- successful remote delivery requires remote daemon acceptance inside the
+  bounded retry window
 
 Planned sprint sequence:
 
@@ -2467,26 +2487,31 @@ Acceptance:
 - export compatibility remains intact
 - roster truth no longer depends on `config.json` as the durable source
 
-### Q.3 — Command Cutover To SQLite
+### Q.3 — Ack/Task Migration
 
 Scope:
-- move `send`, `read`, `ack`, and `clear` to SQLite-owned mail semantics
-- retain JSONL only for compatibility ingress/egress
+- move ack-required state and task state to SQLite-owned semantics
+- keep reply export behind SQLite commit success
 
 Acceptance:
-- ATM mail correctness no longer depends on mailbox JSON rewrite correctness
-- ack/task/read/clear state is authoritative in SQLite
+- ack/task state is authoritative in SQLite
+- reply export remains compatible for Claude recipients
 
-### Q.4 — Thin Daemon Runtime
+### Q.4 — Read/Clear Cutover + Thin Daemon Runtime
 
 Scope:
+- move `read` and `clear` to SQLite-owned mail semantics
 - add the singleton daemon runtime
 - implement one protocol with Unix socket and TCP/TLS adapters
 - keep live agent status in daemon memory
+- add daemon-query support needed by `atm doctor`
 
 Acceptance:
+- `read` and `clear` no longer require mailbox JSON rewrite correctness
 - second daemon startup fails deterministically
 - remote traffic is daemon-to-daemon only
+- remote send success depends on remote daemon acceptance
+- daemon-unavailable CLI/runtime calls fail clearly without auto-spawn
 - daemon code remains a thin runtime wrapper over the service boundaries
 
 ### Q.5 — Lock Retirement And Production Gate
@@ -2503,9 +2528,14 @@ Acceptance:
 
 QA invariants for every Phase Q pass:
 - impossible to run two active daemons on one host
+- daemon unavailability fails clearly without hidden fallback to direct store or
+  inbox access
 - every subsystem performs I/O only through its owning trait boundary
 - daemon/runtime code remains thin
 - daemon spawning is not the core test strategy
+- typed errors are preserved across CLI, daemon, and core boundaries for
+  fallible runtime paths
+- structured `sc-observability` remains present at both CLI and daemon layers
 - SQLite remains the source of truth for mail and roster
 - live status remains daemon-memory truth
 - Claude compatibility remains Claude-native top-level plus `metadata.atm`

@@ -19,6 +19,10 @@ service boundaries.
   reusable across CLI contexts.
 - `atm-core` owns persisted config/team loading policy, including compatibility
   defaults, recovery boundaries, and precise parse diagnostics.
+- `atm-core` must keep all external I/O behind explicit boundary traits or
+  façade interfaces with hidden implementations.
+- `atm-core` must keep production failure handling structured with typed
+  `Result`/error-enum boundaries rather than routine panic/unwrap paths.
 
 Observability release boundary rules:
 - raw `serde_json::Value` / `serde_json::Map` remain internal translation types
@@ -30,6 +34,38 @@ Observability release boundary rules:
   - `LogFieldMap`
 - CLI JSON output remains wire-compatible with the current retained-log output
   shape after the boundary cleanup
+
+## 2.1 Phase Q Boundary Model
+
+Phase Q makes `atm-core` the owner of the service-layer boundaries while the
+daemon remains a runtime wrapper only.
+
+Required subsystem boundaries:
+- store boundary
+- inbox-ingress boundary
+- inbox-export boundary
+- config-ingress boundary
+- notifier-facing service boundary
+
+Required architectural rules:
+- business logic must live in service modules, not in concrete adapters
+- concrete I/O implementations stay private behind the owning boundary
+- module privacy and hidden constructors are the first enforcement tool even
+  before crate extraction
+- if a boundary proves fragile, the next step is crate extraction rather than
+  boundary bypass
+- typed error translation happens at the boundary layer, but must preserve
+  discriminated error identity across store/ingress/export/service calls
+- `atm-core` owns ATM event and error models used by both CLI and daemon
+  `sc-observability` emitters
+
+`atm-core` does not own:
+- daemon lifecycle
+- socket listener loops
+- live runtime status cache
+- singleton enforcement
+
+Those belong to the `atm-daemon` crate.
 
 ## 3. Config Loading Boundary
 
@@ -62,6 +98,8 @@ ATM-owned `.atm.toml` semantics for the retained multi-agent model:
 - `[atm].identity` is obsolete and ignored by runtime identity resolution
 - launcher-owned sections such as `[rmux]` and future `[scmux]` are outside the
   `atm-core` runtime boundary and are intentionally ignored
+- `config.json` remains an ingress surface for roster updates, but it is not
+  the durable source of truth for roster state in the Phase Q target model
 
 Send-specific policy remains layered above the loader:
 - send may use a narrowly defined missing-document fallback when the product
@@ -185,6 +223,22 @@ Architectural rules:
   restored task id
 - the local `members` view is config-first; richer hook/session state may be
   layered later without changing the base recovery contract
+
+## 3.3 Phase Q Mail And Roster Ownership
+
+`atm-core` must structure the mail system around these ownership rules:
+
+- SQLite is the durable source of truth for:
+  - messages
+  - ack/task state
+  - read/clear visibility state
+  - team roster
+- daemon memory is the live source of truth for agent status
+- Claude inbox JSONL is ingress/egress compatibility only
+
+Migration implication:
+- current mailbox/workflow-sidecar logic is transitional and must converge onto
+  the store boundary instead of remaining long-term source-of-truth logic
 
 ## 4. ADR Namespace
 

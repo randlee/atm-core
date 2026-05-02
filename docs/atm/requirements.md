@@ -4,9 +4,10 @@
 
 This document defines the `atm` crate requirements.
 
-The `atm` crate owns the CLI layer only. Product behavior remains defined in
-[`../requirements.md`](../requirements.md). `atm` must satisfy those product
-requirements without re-owning `atm-core` business logic.
+The `atm` crate owns the CLI layer and the CLI-side daemon client only.
+Product behavior remains defined in [`../requirements.md`](../requirements.md).
+`atm` must satisfy those product requirements without re-owning `atm-core`
+business logic or `atm-daemon` runtime behavior.
 
 ## 2. Ownership
 
@@ -18,6 +19,7 @@ requirements without re-owning `atm-core` business logic.
 - process exit behavior
 - one-time observability bootstrap
 - concrete implementation of the `atm-core` observability boundary
+- CLI-side request mapping into the daemon/service API
 
 `atm` does not own:
 
@@ -26,6 +28,9 @@ requirements without re-owning `atm-core` business logic.
 - config resolution policy
 - log query business logic
 - doctor business logic
+- singleton daemon lifecycle
+- direct SQLite access
+- direct inbox JSONL parsing or writes
 
 ## 3. Requirement Namespace
 
@@ -36,6 +41,8 @@ Initial allocation:
 - `REQ-ATM-CMD-*` for command-entry requirements
 - `REQ-ATM-OUT-*` for output/rendering requirements
 - `REQ-ATM-OBS-*` for observability-bootstrap requirements
+- `REQ-ATM-RUNTIME-*` for daemon-client/runtime-entry requirements
+- `REQ-ATM-ERROR-*` for CLI/runtime error-presentation requirements
 
 Initial crate requirement IDs:
 
@@ -53,6 +60,16 @@ Initial crate requirement IDs:
 - `REQ-ATM-OBS-001` `atm` owns concrete observability bootstrap and injection
   into `atm-core`. Satisfies the CLI bootstrap/injection aspects of:
   `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-OBS-001`.
+- `REQ-ATM-RUNTIME-001` `atm` owns CLI-to-runtime request mapping and daemon
+  client use in production while preserving in-process testability. Satisfies
+  the CLI/runtime-entry aspects of:
+  `REQ-CORE-DAEMON-002`, `REQ-CORE-TEST-RUNTIME-001`.
+- `REQ-ATM-RUNTIME-002` `atm` owns production daemon-unavailable behavior and
+  must not auto-spawn the daemon. Satisfies:
+  `REQ-CORE-DAEMON-003`.
+- `REQ-ATM-ERROR-001` `atm` owns CLI-side rendering/preservation of typed
+  runtime errors from `atm-core` and `atm-daemon`. Satisfies:
+  `REQ-CORE-BOUNDARY-002`.
 
 `REQ-ATM-OBS-001` additionally requires:
 
@@ -103,3 +120,24 @@ The `atm` crate docs must remain aligned with:
 - [`../atm-error-codes.md`](../atm-error-codes.md)
 - [`../project-plan.md`](../project-plan.md)
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
+- [`../plan-phase-Q.md`](../plan-phase-Q.md)
+
+## 6. Phase Q CLI Runtime Rules
+
+Requirement ID:
+- `REQ-ATM-RUNTIME-001`
+
+Required Phase Q rules:
+- in production, `atm` acts as a client of the runtime/daemon API rather than
+  talking to SQLite or inbox JSONL directly
+- `atm` must not contain business logic that duplicates `atm-core`
+- `atm` test coverage must be able to use in-process harnesses rather than
+  depending on daemon process spawning
+- if a direct in-process service harness exists for tests, it must not become a
+  second production path with divergent semantics
+- if the daemon is unavailable in production, `atm` must fail clearly with
+  recovery guidance rather than auto-spawning or silently bypassing the daemon
+- `atm doctor` remains a CLI command, but its production runtime checks may
+  query daemon state through the runtime boundary
+- CLI runtime failures must preserve typed error identity until the rendering
+  boundary instead of collapsing into ad hoc panic/unwrap behavior
