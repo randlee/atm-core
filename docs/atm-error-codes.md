@@ -35,6 +35,9 @@ Required rules:
 - warning diagnostics emitted during degraded recovery must also use
   `AtmErrorCode`
 - logs must not hardcode free-form code strings outside the central registry
+- the registry is centralized and read-only from the perspective of
+  feature/service code; subsystems consume codes from this registry and do not
+  mint local alternatives
 
 ## 4. Naming Rules
 
@@ -295,7 +298,91 @@ Required mapping rules:
 | `ObservabilityFollow` | `ATM_OBSERVABILITY_FOLLOW_FAILED` | none |
 | `ObservabilityHealth` | `ATM_OBSERVABILITY_HEALTH_FAILED` | `ATM_OBSERVABILITY_HEALTH_OK`, `ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED` |
 
-## 7. Evolution Rules
+## 7. Recoverability Classification
+
+Every documented `AtmErrorCode` must carry one recoverability classification.
+
+Allowed classes:
+- `retryable`
+- `operator_actionable`
+- `fail_closed`
+- `warning_only`
+
+Classification rules:
+- warning-prefixed codes default to `warning_only`
+- configuration and validation failures that require user change default to
+  `operator_actionable`
+- transport/store/runtime saturation and timeout failures default to
+  `retryable` unless the documented recovery requires operator intervention
+- invariant-preserving hard stops default to `fail_closed`
+
+### 7.1 Classification By Code
+
+| `AtmErrorCode` | Classification |
+| --- | --- |
+| `ATM_CONFIG_HOME_UNAVAILABLE` | `operator_actionable` |
+| `ATM_CONFIG_PARSE_FAILED` | `operator_actionable` |
+| `ATM_CONFIG_TEAM_PARSE_FAILED` | `operator_actionable` |
+| `ATM_CONFIG_TEAM_MISSING` | `operator_actionable` |
+| `ATM_IDENTITY_UNAVAILABLE` | `operator_actionable` |
+| `ATM_ADDRESS_PARSE_FAILED` | `operator_actionable` |
+| `ATM_TEAM_UNAVAILABLE` | `operator_actionable` |
+| `ATM_TEAM_NOT_FOUND` | `operator_actionable` |
+| `ATM_AGENT_NOT_FOUND` | `operator_actionable` |
+| `ATM_MAILBOX_READ_FAILED` | `operator_actionable` |
+| `ATM_MAILBOX_WRITE_FAILED` | `operator_actionable` |
+| `ATM_MAILBOX_LOCK_FAILED` | `operator_actionable` |
+| `ATM_MAILBOX_LOCK_TIMEOUT` | `retryable` |
+| `ATM_MESSAGE_VALIDATION_FAILED` | `operator_actionable` |
+| `ATM_SERIALIZATION_FAILED` | `fail_closed` |
+| `ATM_FILE_POLICY_REJECTED` | `operator_actionable` |
+| `ATM_FILE_REFERENCE_REWRITE_FAILED` | `operator_actionable` |
+| `ATM_WAIT_TIMEOUT` | `retryable` |
+| `ATM_ACK_INVALID_STATE` | `operator_actionable` |
+| `ATM_CLEAR_INVALID_STATE` | `operator_actionable` |
+| `ATM_OBSERVABILITY_HEALTH_OK` | `warning_only` |
+| `ATM_OBSERVABILITY_EMIT_FAILED` | `operator_actionable` |
+| `ATM_OBSERVABILITY_QUERY_FAILED` | `operator_actionable` |
+| `ATM_OBSERVABILITY_FOLLOW_FAILED` | `operator_actionable` |
+| `ATM_OBSERVABILITY_HEALTH_FAILED` | `operator_actionable` |
+| `ATM_OBSERVABILITY_BOOTSTRAP_FAILED` | `operator_actionable` |
+| `ATM_WARNING_INVALID_TEAM_MEMBER_SKIPPED` | `warning_only` |
+| `ATM_WARNING_RESTORE_IN_PROGRESS` | `warning_only` |
+| `ATM_WARNING_STALE_MAILBOX_LOCK` | `warning_only` |
+| `ATM_WARNING_IDENTITY_DRIFT` | `warning_only` |
+| `ATM_WARNING_BASELINE_MEMBER_MISSING` | `warning_only` |
+| `ATM_WARNING_MAILBOX_RECORD_SKIPPED` | `warning_only` |
+| `ATM_WARNING_MALFORMED_ATM_FIELD_IGNORED` | `warning_only` |
+| `ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED` | `warning_only` |
+| `ATM_WARNING_ORIGIN_INBOX_ENTRY_SKIPPED` | `warning_only` |
+| `ATM_WARNING_MISSING_TEAM_CONFIG_FALLBACK` | `warning_only` |
+| `ATM_WARNING_SEND_ALERT_STATE_DEGRADED` | `warning_only` |
+| `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY` | `operator_actionable` |
+| `ATM_WARNING_HOOK_SKIPPED` | `warning_only` |
+| `ATM_WARNING_HOOK_EXECUTION_FAILED` | `warning_only` |
+| `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM` | `operator_actionable` |
+| `ATM_STORE_BOOTSTRAP_FAILED` | `operator_actionable` |
+| `ATM_STORE_SCHEMA_FAILED` | `fail_closed` |
+| `ATM_STORE_TRANSACTION_FAILED` | `retryable` |
+| `ATM_STORE_BUSY_TIMEOUT` | `retryable` |
+| `ATM_INGEST_FAILED` | `operator_actionable` |
+| `ATM_WARNING_INGEST_BACKPRESSURE` | `warning_only` |
+| `ATM_WARNING_INGEST_RECORD_SKIPPED` | `warning_only` |
+| `ATM_EXPORT_FAILED` | `operator_actionable` |
+| `ATM_EXPORT_REPLAY_FAILED` | `retryable` |
+| `ATM_TRANSPORT_CONNECT_FAILED` | `retryable` |
+| `ATM_TRANSPORT_TIMEOUT` | `retryable` |
+| `ATM_TRANSPORT_PROTOCOL_FAILED` | `fail_closed` |
+| `ATM_TRANSPORT_REMOTE_UNREACHABLE` | `retryable` |
+| `ATM_DAEMON_ALREADY_RUNNING` | `operator_actionable` |
+| `ATM_DAEMON_SINGLETON_RELEASE_FAILED` | `operator_actionable` |
+| `ATM_DAEMON_RUNTIME_OVER_CAPACITY` | `retryable` |
+| `ATM_DAEMON_SHUTDOWN_TIMEOUT` | `operator_actionable` |
+| `ATM_DAEMON_SIGNAL_RELOAD_FAILED` | `operator_actionable` |
+| `ATM_DAEMON_UNAVAILABLE` | `operator_actionable` |
+| `ATM_DAEMON_CLIENT_TIMEOUT` | `retryable` |
+
+## 8. Evolution Rules
 
 - Add new codes here before implementation lands.
 - Do not reuse an existing code for a different failure meaning.

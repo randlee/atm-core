@@ -14,7 +14,7 @@ defined in [`../requirements.md`](../requirements.md).
 
 - path and config resolution policy
 - address parsing and validation
-- SQLite store contracts and service semantics
+- store contracts and service semantics
 - inbox ingress/export contracts
 - config ingress contracts
 - workflow and typestate rules
@@ -113,10 +113,9 @@ Initial crate requirement IDs:
   local team-surface aspects of:
   `REQ-P-TEAMS-001`, `REQ-P-MEMBERS-001`.
 - `REQ-CORE-RUNTIME-001` `atm-core` owns the service-layer contracts for the
-  SQLite mail/roster store and the command semantics above that store.
-  Satisfies the store-ownership aspects of:
-  `REQ-CORE-RUNTIME-001`, `REQ-CORE-COMPAT-001`,
-  `REQ-CORE-LOCK-RETIRE-001`.
+  durable store family and the command semantics above those stores.
+  Refines the product-level store-ownership and lock-retirement requirements
+  in [`../requirements.md`](../requirements.md) Section 21.
 - `REQ-CORE-STORE-001` `atm-core` owns the SQLite schema contract, canonical
   `message_key` identity model, and required lookup/dedupe constraints.
   Satisfies:
@@ -129,8 +128,8 @@ Initial crate requirement IDs:
   Satisfies:
   `REQ-CORE-INGEST-001`.
 - `REQ-CORE-BOUNDARY-001` `atm-core` owns the strict trait boundaries for
-  store, inbox ingress/export, config ingress, and notifier-facing service
-  calls. Satisfies the subsystem-boundary aspects of:
+  store, inbox ingress/export, config ingress, watcher/reconcile, and
+  notifier-facing service calls. Satisfies the subsystem-boundary aspects of:
   `REQ-CORE-BOUNDARY-001`, `REQ-CORE-TEST-RUNTIME-001`.
 - `REQ-CORE-BOUNDARY-002` `atm-core` owns the typed error-model contracts used
   by service boundaries. Satisfies the structured-error aspects of:
@@ -193,12 +192,15 @@ Required `atm-core` crate rules:
   - read/clear visibility persistence
   - team roster persistence
 - `atm-core` owns the trait boundaries for:
-  - store
+  - `MailStore`
+  - `TaskStore`
+  - `RosterStore`
   - inbox ingress
   - inbox export
   - config ingress
+  - watcher / reconcile
   - notifier-facing service integration
-- `atm-core` owns the canonical SQLite schema contract including:
+- `atm-core` owns the canonical durable-store contract including:
   - `messages`
   - `ack_state`
   - `message_visibility`
@@ -207,10 +209,20 @@ Required `atm-core` crate rules:
   - `inbox_ingest`
 - `atm-core` owns the canonical `message_key` identity format and the required
   dedupe / lookup indexes above the store boundary
+- `atm-core` must model `message_key` as a semantic newtype at the service and
+  store boundaries; durable identities must not remain raw `String` values
+- `atm-core` must model resource-cap and timeout settings with typed wrappers
+  rather than passing raw integer literals through the service boundary
 - `atm-core` owns the ingest replay/degradation contract and must not silently
   drop parseable external rows
 - `atm-core` must not let command/service code access SQLite, inbox JSONL,
   `config.json`, or sockets except through the owning boundary
+- `atm-core` must not let watcher/reconcile logic bypass the owned ingress or
+  store boundaries
+- `atm-core` boundary traits are sealed by default; any boundary that must
+  remain externally implementable requires an explicit ADR and crate-doc note
+- `atm-core` must keep concrete adapter implementations and constructors
+  private unless public exposure is required by a documented boundary contract
 - `atm-core` must keep business logic testable in-process without daemon
   process spawning
 - `atm-core` must model fallible runtime behavior with typed error enums and
@@ -219,6 +231,8 @@ Required `atm-core` crate rules:
   CLI and daemon layers emit through `sc-observability`
 - `atm-core` store implementations must enforce WAL-mode, foreign-key, and
   explicit-transaction policy through the owning store boundary
+- `atm-core` defines the store contracts; the first concrete SQLite
+  implementation lives in `atm-rusqlite`
 
 Phase-Q crate-local supersession note:
 - earlier daemon-free phrasing in this file is historical from the prior line

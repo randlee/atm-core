@@ -32,9 +32,10 @@ The `atm-daemon` crate must remain thin.
   boundary.
 - `atm-daemon` must not parse or write inbox JSONL except through the
   `atm-core` ingress/export boundaries.
-- `atm-daemon` owns one protocol with two transport adapters:
+- `atm-daemon` owns one protocol with multiple transport implementations:
   - Unix domain socket
   - TCP/TLS
+  - in-process `test-socket`
 - cross-host delivery is daemon-to-daemon only.
 - remote delivery may use bounded transient retry, but not a durable long-lived
   remote outbox.
@@ -46,6 +47,14 @@ The `atm-daemon` crate must remain thin.
   debug-only runtime path replaces it in production.
 - plugin-local observability does not replace daemon-owned runtime/transport
   sinks; daemon-owned events stay daemon-owned.
+- runtime subsystems stay fully isolated:
+  - SQL/store calls belong only to the store boundary
+  - file-watch/reconcile logic belongs only to the watcher/reconcile boundary
+  - notification delivery belongs only to the notifier/plugin boundary
+  - socket I/O belongs only to the transport boundary
+- watcher/reconcile adapters remain crate-private and dispatch through owned
+  ingress/service handlers rather than touching store/transport/notifier
+  internals directly
 
 ## 3.1 Singleton Runtime
 
@@ -56,6 +65,54 @@ Hard invariant:
 Architectural rule:
 - singleton enforcement belongs in the runtime wrapper only
 - the runtime must fail closed rather than allowing split ownership
+
+Lifecycle state model:
+- the daemon runtime must explicitly model:
+  - `Starting`
+  - `Running`
+  - `Draining`
+  - `Stopped`
+- the implementation may use typestate or one internal state enum, but the
+  legal lifecycle transitions must remain explicit rather than inferred from
+  loosely-coupled booleans
+- accepted transition graph:
+  - `Starting -> Running`
+  - `Starting -> Stopped` on failed startup/rollback
+  - `Running -> Draining`
+  - `Draining -> Stopped`
+- illegal transitions such as `Running -> Starting` or `Stopped -> Running`
+  without reinitialization must be prevented by the runtime boundary
+
+Privacy boundary:
+- the lifecycle state type and transport/runtime adapter internals remain
+  crate-private implementation details
+- public callers interact through daemon request/response surfaces and health
+  queries, not through direct state mutation
+
+Socket dispatcher rule:
+- listener/connection receive loops are deliberately tiny
+- they may:
+  - read a framed request
+  - parse a qualified request type
+  - dispatch through one injected dispatcher boundary
+  - encode a typed response
+- they may not:
+  - run SQL directly
+  - invoke watcher reconciliation directly
+  - emit notifications directly
+  - embed workflow/business-state transitions
+- the same dispatcher/handler contract must back the in-process `test-socket`
+  transport so handler behavior is testable without Unix/TCP socket code
+
+Dispatcher/handler rule:
+- request-kind routing belongs to the dispatcher boundary, not to the socket
+  adapter
+- concrete request-family behavior belongs to injectable handlers behind that
+  dispatcher
+- Unix domain socket and TCP/TLS adapters share the same dispatcher/handler
+  contract
+- the dispatcher itself stays thin and must not absorb request-family business
+  logic
 
 ## 3.1.1 Graceful Shutdown
 

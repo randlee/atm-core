@@ -66,6 +66,8 @@ Crate-local ownership docs live under:
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm-daemon/requirements.md`](./atm-daemon/requirements.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
+- [`docs/atm-rusqlite/requirements.md`](./atm-rusqlite/requirements.md)
+- [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 
 During the cleanup/restructure phase, product requirements stay here while
 crate-local ownership is moved out of this file into the crate directories.
@@ -2498,10 +2500,18 @@ mail correctness.
   - only the owning inbox ingress/export subsystem may parse or write inbox
     JSONL
   - only the owning config-ingress subsystem may parse team `config.json`
+  - only the owning watcher/reconcile subsystem may consume filesystem watch
+    events or drive watch-triggered rescan/reconcile logic
   - only the owning transport subsystem may touch sockets
   - only the owning notifier/plugin subsystem may talk to agent processes
   - no business logic may live in I/O adapter code
   - no "just this one call site" bypasses are allowed
+  - I/O-owning boundary traits are sealed by default; opening a boundary for
+    external implementation requires explicit architectural approval
+  - concrete I/O adapter types and constructors remain private unless a
+    documented boundary contract requires wider visibility
+  - violation of any ownership rule above is a direct QA failure for the Phase
+    Q implementation line
 
 ### 21.3.1 Structured Error Boundaries
 
@@ -2517,17 +2527,67 @@ mail correctness.
     paths, not routine I/O, parse, transport, or store failures
   - CLI, daemon, and core service layers must preserve structured error
     identity when translating between boundaries
+  - the `AtmErrorCode` registry must not use wildcard or catch-all variants in
+    place of specific codes
+  - every public `AtmErrorCode` must document one recoverability class
+  - the `AtmErrorCode` registry is centralized and read-only from the
+    perspective of feature/service code; subsystems consume codes from the
+    registry and do not mint local alternatives
+  - violation of these structured-error rules is a direct QA failure for the
+    Phase Q implementation line
 
 ### 21.4 Transport And Routing Model
 
 - `REQ-CORE-TRANSPORT-001` ATM must use one logical daemon API with two
-  transport implementations.
+  production transport implementations and one test transport.
 
   Required behavior:
   - same-host transport: Unix domain socket
   - cross-host transport: TCP/TLS
-  - these are two implementations of one protocol/interface, not two separate
-    systems
+  - test transport: in-process `test-socket` implementation of the same
+    protocol/interface for subsystem and daemon-boundary tests
+  - these are implementations of one protocol/interface, not separate systems
+  - socket receive logic must remain a small framed-message loop that:
+    - reads one request frame
+    - parses it into a qualified request enum/value
+    - dispatches immediately to the owning handler boundary
+    - returns a typed response
+  - request-kind routing must live behind one dispatcher boundary with
+    injectable typed handlers for request families
+  - adding a new request family must not require embedding business logic into
+    Unix-domain or TCP/TLS transport adapters
+  - socket receive logic must not perform SQL, watcher, or notification
+    business logic inline
+  - any violation of this transport isolation rule is a direct QA failure for
+    the Phase Q implementation line
+  - subsystem and runtime tests must be able to replace Unix/TCP transport
+    adapters with the `test-socket` transport without changing business logic
+
+- `REQ-CORE-TRANSPORT-001B` Request routing must live behind one explicit
+  dispatcher boundary with injectable typed handlers.
+
+  Required behavior:
+  - transport adapters hand parsed qualified requests to the dispatcher
+  - the dispatcher owns request-kind routing only
+  - concrete request-family behavior lives in injectable handlers behind the
+    dispatcher
+  - adding a new request family must not require transport-adapter logic
+    growth beyond decode + dispatch
+  - any violation of this dispatcher/handler rule is a direct QA failure for
+    the Phase Q implementation line
+
+- `REQ-CORE-TRANSPORT-001A` Filesystem watch/reconcile logic must remain a
+  separate owned subsystem from transport, store, and notifier logic.
+
+  Required behavior:
+  - watch event ingestion, debounce, and reconcile triggering must stay behind
+    one owned watcher/reconcile boundary
+  - the watcher boundary may request work from ingress/store/notifier
+    handlers, but it must not inline SQL, socket, or notification delivery
+    logic
+  - the transport boundary must not absorb watcher responsibilities
+  - any violation of this watcher isolation rule is a direct QA failure for
+    the Phase Q implementation line
 
 - `REQ-CORE-TRANSPORT-002` Cross-host traffic must be daemon-to-daemon only.
 

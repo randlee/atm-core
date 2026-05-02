@@ -123,11 +123,14 @@ There must be one logical daemon API for:
 
 - same-host transport: Unix domain socket
 - cross-host transport: TCP/TLS
+- test transport: in-process `test-socket`
 
 Rules:
 - one protocol/interface
-- two transport implementations
+- multiple transport implementations
 - not two separate systems
+- `test-socket` uses the same dispatcher/handler contract so boundary tests do
+  not depend on real socket implementations
 
 ### Daemon-To-Daemon Remote Delivery
 
@@ -198,6 +201,8 @@ Meaning:
 - only the store subsystem may touch SQLite
 - only the inbox ingress/export subsystem may parse or write inbox JSONL
 - only the config ingress subsystem may parse team `config.json`
+- only the watcher/reconcile subsystem may consume watch events or drive
+  reconcile scheduling
 - only the transport subsystem may touch sockets
 - only the notifier/plugin subsystem may talk to agent processes
 
@@ -398,7 +403,8 @@ Important runtime note:
 ### Stage 4: Thin Daemon Runtime
 
 - add the singleton daemon runtime only after the service boundary is proven
-- implement one daemon API with two transport adapters:
+- implement one daemon API with two production transport adapters plus one
+  in-process `test-socket`:
   - Unix domain socket
   - TCP/TLS
 - keep live status in daemon memory
@@ -429,17 +435,37 @@ Compatibility rules:
 ### Q.1 — SQLite Store Foundation
 
 Scope:
-- add `mail_store` abstraction
+- add the store boundary family:
+  - `MailStore`
+  - `TaskStore`
+  - `RosterStore`
+- keep room for later optional boundaries such as `OrchestrationStore`
 - add SQLite bootstrap, migrations, and schema
 - add transaction helpers
+- add explicit watcher/reconcile boundary alongside store/ingress/export
+- add explicit dispatcher boundary alongside transport/handlers
+
+Parallelization rule:
+- Q.1 defines the lock-in point for the core boundary traits, request/response
+  contracts, typed errors, dispatcher/handler seams, and store-family split
+- transport, watcher/reconcile, and command-migration work must not proceed as
+  parallel implementation slices until those contracts are stable
+- after the Q.1 contracts are stable, later work should be split in parallel
+  against those boundaries rather than serializing all implementation in one
+  stream
 
 Expected files / crates:
 - `crates/atm-core/src/mail_store/*`
+- `crates/atm-core/src/task_store/*` or equivalent
+- `crates/atm-core/src/roster_store/*` or equivalent
+- `crates/atm-rusqlite/src/*`
 - `crates/atm-core/src/service/*` or equivalent service boundary module
 - `crates/atm-daemon/*` not yet required beyond placeholder boundary docs
 
 Implementation details:
-- keep SQL hidden behind one store trait boundary
+- keep SQL hidden behind the `atm-rusqlite` crate
+- keep business logic depending on abstract `MailStore`, `TaskStore`, and
+  `RosterStore` traits defined in `atm-core`
 - keep schema bootstrap/migrations centralized
 - define the canonical `message_key` model here before command cutover begins
 - define typed error enums for store/bootstrap failures before command cutover
@@ -453,6 +479,17 @@ Acceptance:
 - database opens under `.atm-state/mail.db`
 - schema bootstrap is deterministic and idempotent
 - store-layer tests cover create/read/update transaction basics
+- only `atm-rusqlite` owns direct SQLite calls in the first implementation
+- `MailStore` is not used as the long-term owner of task-only or roster-only
+  domains
+- watcher/reconcile logic is isolated behind its own boundary and does not
+  bypass ingress/store/notifier ownership
+- transport-boundary tests can use `test-socket` without changing handler
+  business logic
+- the boundary traits and request/result contracts are stable enough to allow
+  parallel follow-on implementation without transport or handler drift
+- the dispatcher/handler contract is explicit enough that Unix, TCP/TLS, and
+  `test-socket` adapters can evolve without absorbing request-family logic
 - tests cover:
   - repeated bootstrap
   - transactional rollback on mid-operation failure
@@ -487,6 +524,9 @@ Implementation details:
   already-known messages
 - ingest/export paths must emit structured `sc-observability` events for import
   success, degradation, and export failure
+- after Q.1, this slice can proceed in parallel with transport and
+  watcher/reconcile implementation because it depends only on the locked
+  ingress/store/export contracts
 
 Acceptance:
 - `send` inserts authoritative rows in SQLite
@@ -519,6 +559,8 @@ Implementation details:
 - existing workflow sidecar state is read only for migration/backfill once
   SQLite is authoritative
 - ack/task failure modes must remain typed across service and export boundaries
+- after Q.1, this slice can proceed in parallel with transport/runtime work so
+  long as it stays within the locked store/export/handler contracts
 
 Acceptance:
 - ack-required messages are authoritative in SQLite
@@ -552,6 +594,7 @@ Implementation details:
 - `atm-daemon` owns singleton enforcement and transport only
 - local transport uses Unix domain socket
 - remote transport uses TCP/TLS daemon-to-daemon only
+- transport-boundary tests use the in-process `test-socket`
 - live status cache is daemon-memory truth
 - daemon emits structured runtime and transport events through
   `sc-observability`
@@ -586,6 +629,9 @@ Implementation details:
   auto-spawn
 - `atm doctor` must start consuming daemon/runtime state through the same
   request/response boundaries used by production
+- after Q.1, Unix transport, TCP/TLS transport, `test-socket`,
+  watcher/reconcile, and daemon-query plumbing should be split into parallel
+  implementation slices against the shared dispatcher/handler contracts
 
 Acceptance:
 - `read` and `clear` no longer require mailbox rewrite correctness
@@ -599,6 +645,7 @@ Acceptance:
   - second daemon startup fails deterministically
   - stale singleton artifact cleanup does not allow double-start
   - local same-host daemon API flow
+  - local handler flow through `test-socket`
   - bounded remote host unreachable behavior
   - remote acceptance required for send success
   - daemon-unavailable path returns typed error with recovery guidance
@@ -741,10 +788,17 @@ The following must be checked on every QA pass for Phase Q:
 - it is impossible for two active ATM daemons to run on one host
 - every subsystem performs all of its external I/O only through its owning
   trait boundary
+- any SQL, watcher, notifier, or socket-boundary bypass is an immediate QA
+  failure
 - no business logic has leaked into transport/runtime adapter code
 - daemon spawning is not part of the core test strategy
 - transport/runtime code remains thin and does not collapse into a giant socket
   class
+- socket receive loops are tiny dispatcher loops only
+- any socket loop that performs SQL, watcher, notifier, or workflow logic is
+  an immediate QA failure
+- any watcher/reconcile implementation that performs SQL, socket, or notifier
+  logic inline is an immediate QA failure
 - CLI and daemon both retain structured `sc-observability` coverage
 - typed runtime errors remain discriminated across service, daemon, and CLI
   boundaries

@@ -63,10 +63,11 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-RUNTIME-005` `atm-daemon` owns crash-recovery and replay policy
   around daemon-managed delivery/export work. Satisfies:
   `REQ-CORE-TRANSPORT-004`, `REQ-CORE-LOCK-RETIRE-001`.
-- `REQ-DAEMON-TRANSPORT-001` `atm-daemon` owns one protocol with two transport
-  implementations:
+- `REQ-DAEMON-TRANSPORT-001` `atm-daemon` owns one protocol with two
+  production transport implementations plus one test transport:
   - Unix domain socket for same-host
   - TCP/TLS for cross-host daemon-to-daemon traffic
+  - `test-socket` for in-process transport-boundary tests
   Satisfies:
   `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`.
 - `REQ-DAEMON-TRANSPORT-002` `atm-daemon` owns bounded transient retry for
@@ -132,6 +133,8 @@ Required runtime rules:
   bounded deadline, checkpoint WAL, and release singleton ownership
 - signal handlers must be installed before listeners are opened
 - remote delivery must be daemon-to-daemon only
+- the same transport protocol must be exercisable through an in-process
+  `test-socket` without changing handler/business logic
 - transport/store/health operations must obey one documented timeout budget
 - runtime queues and handles must obey one documented concrete cap policy
 - daemon memory is the live truth for agent status
@@ -139,6 +142,27 @@ Required runtime rules:
   and any retry/re-export state needed after daemon crash must be durable rather
   than RAM-only
 - daemon code must not bypass `atm-core` subsystem boundaries
+- daemon transport/runtime adapter implementations must remain private to the
+  crate or tightly-scoped internal surfaces; public callers must not depend on
+  concrete socket/runtime adapter types
+- daemon boundary traits are sealed by default; opening a runtime/transport
+  extension point requires explicit architecture review
+- watcher/reconcile runtime code must remain isolated from transport, store,
+  and notifier implementations behind its own owned boundary
+- the socket receive loop must remain a thin dispatcher only:
+  - read framed request
+  - parse qualified request type
+  - dispatch through the owning dispatcher/handler boundary
+  - return typed response
+- request-kind routing must stay in the dispatcher boundary, not in concrete
+  Unix-domain or TCP/TLS adapter code
+- handler implementations for request families must be injectable behind that
+  dispatcher
+- the dispatcher boundary itself must remain thin and must not absorb request
+  family business logic
+- the socket receive loop must not perform SQL, watcher, notifier, or
+  workflow/state-transition logic inline
+- any violation of these daemon boundary rules is a direct QA failure
 - daemon tests must not become the normal mechanism for validating core ATM
   correctness
 - daemon runtime failures must remain typed across transport/runtime boundaries

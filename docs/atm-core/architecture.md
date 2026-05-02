@@ -41,10 +41,13 @@ Phase Q makes `atm-core` the owner of the service-layer boundaries while the
 daemon remains a runtime wrapper only.
 
 Required subsystem boundaries:
-- store boundary
+- `MailStore` boundary
+- `TaskStore` boundary
+- `RosterStore` boundary
 - inbox-ingress boundary
 - inbox-export boundary
 - config-ingress boundary
+- watcher/reconcile boundary
 - notifier-facing service boundary
 
 Required architectural rules:
@@ -59,6 +62,26 @@ Required architectural rules:
 - `atm-core` owns ATM event and error models used by both CLI and daemon
   `sc-observability` emitters
 
+Sealing posture per boundary:
+- `MailStore`: sealed by default
+- `TaskStore`: sealed by default
+- `RosterStore`: sealed by default
+- `InboxIngress`: sealed by default
+- `InboxExport`: sealed by default
+- `ConfigIngress`: sealed by default
+- watcher/reconcile adapters: sealed by default
+- notifier-facing service adapters: sealed by default unless an ADR explicitly
+  opens the boundary
+- `ObservabilityPort`: sealed
+
+Privacy rule:
+- concrete adapter types and their constructors remain private or
+  tightly-scoped `pub(crate)` implementation details
+- public callers depend on traits, façade structs, or request/result APIs
+  rather than concrete I/O adapter types
+- widening any boundary to public concrete adapter access requires explicit
+  architecture review
+
 `atm-core` does not own:
 - daemon lifecycle
 - socket listener loops
@@ -66,6 +89,31 @@ Required architectural rules:
 - singleton enforcement
 
 Those belong to the `atm-daemon` crate.
+
+## 2.2 Phase Q Semantic Wrapper Policy
+
+Phase Q should keep durable identifiers and runtime-cap settings typed across
+the service boundary.
+
+Required wrappers:
+- `MessageKey`
+- `ConnectionCap`
+- `QueueDepth`
+- `RetryBudget`
+- `BusyTimeout`
+- `RequestDeadline`
+
+Architectural rule:
+- these values must not flow through the service/store boundary as raw
+  `String`, `usize`, or integer timeout primitives once the Phase Q
+  implementation lands
+
+Store-family rule:
+- `MailStore` owns message lifecycle state
+- `TaskStore` owns task-domain state and task metadata
+- `RosterStore` owns durable roster membership state
+- `MailStore` must not become the catch-all owner for unrelated future domains
+  such as orchestration or daemon-live-status state
 
 ## 3. Config Loading Boundary
 

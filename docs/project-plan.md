@@ -16,7 +16,8 @@ This plan sequences the work. File-level migration decisions live in
 Documentation organization and cleanup are governed by
 [`documentation-guidelines.md`](./documentation-guidelines.md). As the docs are
 restructured, product docs remain in `docs/` and crate-local detail moves into
-`docs/atm/`, `docs/atm-core/`, and `docs/atm-daemon/`.
+`docs/atm/`, `docs/atm-core/`, `docs/atm-daemon/`, and
+`docs/atm-rusqlite/`.
 
 Phase-Q supersession note:
 - earlier daemon-free phases in this plan remain historical execution records
@@ -43,16 +44,18 @@ Status:
 - Phase Q planning is active on the SQLite source-of-truth and daemon-boundary
   line; this phase supersedes mailbox-lock architecture as the target design.
 - The current workspace still contains `crates/atm-core` and `crates/atm`
-  only; `crates/atm-daemon` is introduced by the Phase Q implementation line.
+  only; `crates/atm-daemon` and `crates/atm-rusqlite` are introduced by the
+  Phase Q implementation line.
 
 ## 2. Deliverables
 
 - Rust workspace expanded from `crates/atm-core` + `crates/atm` to include
-  `crates/atm-daemon`
+  `crates/atm-daemon` and `crates/atm-rusqlite`
 - retained implementation of `send`, `read`, `ack`, `clear`, `log`,
   `doctor`, `teams`, and `members`
 - SQLite-backed mail and roster source of truth
-- singleton daemon runtime with one protocol and two transport adapters
+- singleton daemon runtime with one protocol, two production transport
+  adapters, and one in-process `test-socket`
 - elimination of mailbox-lock dependence from ATM mail correctness
 - explicit two-axis workflow model with three display buckets
 - task-linked message metadata with mandatory ack behavior
@@ -69,6 +72,7 @@ The Phase Q target implementation is split across:
 - `crates/atm-core`
 - `crates/atm`
 - `crates/atm-daemon`
+- `crates/atm-rusqlite`
 
 Crate-local scope detail is owned by:
 
@@ -78,6 +82,8 @@ Crate-local scope detail is owned by:
 - [`docs/atm/architecture.md`](./atm/architecture.md)
 - [`docs/atm-daemon/requirements.md`](./atm-daemon/requirements.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
+- [`docs/atm-rusqlite/requirements.md`](./atm-rusqlite/requirements.md)
+- [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 
 ## 4. Work Sequence
 
@@ -2451,9 +2457,10 @@ Core design decisions:
   Phase Q target architecture
 - Claude inbox JSONL remains compatibility ingress/egress only
 - native agent/plugin traffic does not use JSONL
-- one daemon API, two transport implementations:
+- one daemon API, two production transport implementations:
   - Unix domain socket for same-host
   - TCP/TLS for cross-host daemon-to-daemon traffic
+- one in-process `test-socket` transport for transport-boundary tests
 - remote address model expands to `agent@team.host`
 - bounded transient retry is allowed for remote delivery, but there is no
   durable long-lived remote outbox
@@ -2465,15 +2472,40 @@ Planned sprint sequence:
 ### Q.1 — Store And Boundary Foundation
 
 Scope:
-- add the SQLite mail/roster store boundary
+- add the SQLite store boundary family:
+  - `MailStore`
+  - `TaskStore`
+  - `RosterStore`
+- add the first concrete SQLite implementation crate: `atm-rusqlite`
 - add the strict I/O trait boundaries for store, inbox ingress/export, config
-  ingress, transport, and notification
+  ingress, watcher/reconcile, transport, dispatcher, and notification
 - keep service logic fully testable in-process
+
+Parallelization rule:
+- Q.1 is the convergence point
+- Unix/TCP/test-socket transport work, watcher/reconcile work, and
+  command-handler migration must not branch into parallel implementation until
+  the core boundary traits, dispatcher/handler seams, and request/result
+  contracts are defined and reviewed
+- once those contracts are stable, follow-on sprints may execute in parallel
+  against the shared boundary set
 
 Acceptance:
 - SQLite opens under `.claude/teams/<team>/.atm-state/mail.db`
+- `atm-rusqlite` is the only crate that owns direct SQLite calls in the first
+  implementation line
 - core logic is reachable without daemon process spawning
 - no direct SQLite or filesystem bypasses outside the owning boundaries
+- watcher/reconcile logic exists behind its own boundary and does not bypass
+  ingress/store/notifier ownership rules
+- transport-boundary tests can replace Unix/TCP with the in-process
+  `test-socket` transport
+- the core boundary traits and request/result contracts are explicit enough to
+  allow parallel follow-on implementation without transport/business-logic
+  drift
+- the dispatcher/handler contract is explicit enough that Unix, TCP/TLS, and
+  `test-socket` implementations can proceed without owning request-family
+  behavior
 
 ### Q.2 — Compatibility Ingress And Export
 
@@ -2481,6 +2513,13 @@ Scope:
 - import Claude/legacy inbox JSONL into SQLite
 - import roster updates from `config.json` into SQLite
 - keep ATM export Claude-native at the top level with `metadata.atm`
+
+Parallel execution after Q.1:
+- inbox ingress/export can proceed in parallel with:
+  - transport adapter work
+  - watcher/reconcile implementation
+  - handler/service migration
+  once the Q.1 boundary contracts are locked
 
 Acceptance:
 - external Claude writes become durable in SQLite through one owned ingress path
@@ -2493,6 +2532,11 @@ Scope:
 - move ack-required state and task state to SQLite-owned semantics
 - keep reply export behind SQLite commit success
 
+Parallel execution after Q.1:
+- ack/task migration can proceed in parallel with Q.2/Q.4 transport and
+  watcher work so long as it stays within the locked service/store/export
+  contracts
+
 Acceptance:
 - ack/task state is authoritative in SQLite
 - reply export remains compatible for Claude recipients
@@ -2503,8 +2547,14 @@ Scope:
 - move `read` and `clear` to SQLite-owned mail semantics
 - add the singleton daemon runtime
 - implement one protocol with Unix socket and TCP/TLS adapters
+- add the in-process `test-socket` transport for transport-boundary tests
 - keep live agent status in daemon memory
 - add daemon-query support needed by `atm doctor`
+
+Parallel execution after Q.1:
+- Unix transport, TCP/TLS transport, `test-socket`, watcher/reconcile, and
+  daemon-query plumbing may proceed in parallel as separate slices once the
+  shared dispatcher/handler and boundary contracts are stable
 
 Acceptance:
 - `read` and `clear` no longer require mailbox JSON rewrite correctness
@@ -2513,6 +2563,7 @@ Acceptance:
 - remote send success depends on remote daemon acceptance
 - daemon-unavailable CLI/runtime calls fail clearly without auto-spawn
 - daemon code remains a thin runtime wrapper over the service boundaries
+- handler behavior is testable through the in-process `test-socket` transport
 
 ### Q.5 — Lock Retirement And Production Gate
 
@@ -2531,10 +2582,19 @@ QA invariants for every Phase Q pass:
 - daemon unavailability fails clearly without hidden fallback to direct store or
   inbox access
 - every subsystem performs I/O only through its owning trait boundary
+- any observed SQL, watcher, notifier, or socket-boundary bypass is an
+  immediate QA failure
 - daemon/runtime code remains thin
+- socket receive loops remain tiny dispatcher loops only
+- any socket loop that performs SQL, watcher, notifier, or workflow logic is
+  an immediate QA failure
+- any watcher/reconcile implementation that performs SQL, socket, or notifier
+  logic inline is an immediate QA failure
 - daemon spawning is not the core test strategy
 - typed errors are preserved across CLI, daemon, and core boundaries for
   fallible runtime paths
+- `AtmErrorCode` remains a centralized read-only registry with no subsystem
+  local alternatives
 - structured `sc-observability` remains present at both CLI and daemon layers
 - SQLite remains the source of truth for mail and roster
 - live status remains daemon-memory truth

@@ -13,6 +13,7 @@ The current workspace contains:
 
 The Phase Q target workspace remains intentionally small and adds:
 - `atm-daemon`: daemon runtime binary / transport host
+- `atm-rusqlite`: first concrete SQLite store implementation
 
 The CLI stays thin. Product logic moves into `atm-core`.
 
@@ -37,6 +38,7 @@ moved into:
 - [`docs/atm/architecture.md`](./atm/architecture.md)
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
+- [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 
 Phase-Q supersession note:
 - earlier daemon-free architecture statements in this file are historical from
@@ -46,11 +48,12 @@ Phase-Q supersession note:
 
 ## 2. Crate Boundaries
 
-The post-Q product runtime is implemented by three crates:
+The post-Q product runtime is implemented by four crates:
 
 - `atm-core`
 - `atm`
 - `atm-daemon`
+- `atm-rusqlite`
 
 Product-level boundary rules:
 
@@ -59,15 +62,20 @@ Product-level boundary rules:
 - `atm` owns CLI parsing, dispatch, rendering, and bootstrap.
 - `atm-daemon` owns runtime composition, transport adapters, singleton
   enforcement, and live-status runtime state.
+- `atm-rusqlite` owns the first concrete SQLite implementation of the durable
+  store boundaries.
 - `atm-core` must not own clap or terminal-formatting concerns.
 - `atm` must not own mailbox, workflow, log-query, or doctor business logic.
 - `atm-daemon` must not become a second business-logic crate.
+- `atm-rusqlite` must not absorb workflow or command logic; it implements store
+  contracts only.
 
 Crate-local boundary detail is owned by:
 
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm/architecture.md`](./atm/architecture.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
+- [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 
 ### 2.3 Release Publication Boundary
 
@@ -202,6 +210,14 @@ Product-level constraints that remain relevant here:
   - `teams restore`
 - broader historical team lifecycle/orchestration commands remain out of scope
 
+Supersession note:
+- `no daemon client` and `no runtime spawning layer` describe the pre-Phase-Q
+  retained CLI/runtime line only
+- the Phase Q target architecture in §21 supersedes those constraints with:
+  - one explicit daemon runtime
+  - no hidden direct SQLite fallback
+  - no hidden daemon auto-spawn path
+
 ## 4. Core Types
 
 ### 4.1 Semantic Newtypes
@@ -212,12 +228,20 @@ Required public newtypes:
 - `TeamName`
 - `AgentName`
 - `IdentityName`
+- `MessageKey`
 - `MessageId`
 - `MessageBody`
 - `MessageSummary`
 - `IsoTimestamp`
 - `MailAddress`
 - `TaskId`
+
+Required resource/config wrappers:
+- `ConnectionCap`
+- `QueueDepth`
+- `RetryBudget`
+- `BusyTimeout`
+- `RequestDeadline`
 - `HomeDir`
 - `AbsolutePath`
 - `LogFieldKey`
@@ -601,6 +625,13 @@ Invariant:
 
 ### 6.1 Send Service
 
+Supersession note:
+- the API shape in this section remains relevant
+- the file-append-first ordering details below are compatibility-line behavior
+  for the pre-Phase-Q runtime
+- the authoritative Phase Q send ordering is defined in §21 as:
+  `SQLite commit -> Claude export / remote daemon handoff`
+
 Public entrypoint:
 
 `send::send_mail(request: SendRequest, observability: &dyn ObservabilityPort) -> Result<SendOutcome, AtmError>`
@@ -978,6 +1009,13 @@ Architectural rules:
 
 ## 7. Read Pipeline
 
+Supersession note:
+- the stage list below describes the retained file-backed line
+- the Phase Q target pipeline is `ingest/reconcile -> SQLite projection ->
+  optional state mutation -> return outcome`
+- once Phase Q lands, SQLite projection rather than merged file truth becomes
+  authoritative for `read`
+
 The read pipeline stages are:
 1. resolve actor and target inbox
 2. build the hostname registry for configured origin inboxes
@@ -1046,6 +1084,13 @@ The doctor pipeline stages are:
 10. render report
 
 ## 12. Mailbox Storage
+
+Supersession note:
+- this section describes the retained mailbox/file-storage line
+- Phase Q supersedes it as the target architecture with SQLite durable truth
+  and Claude inbox files as compatibility ingress/export only
+- any mailbox-lock or file-truth rule in this section is transitional unless
+  restated in §21
 
 The mailbox layer owns:
 - tolerant reads
@@ -1246,6 +1291,13 @@ The single source of truth for ATM-owned error codes is:
 Persisted-data errors should additionally carry file/entity/parser context so
 CLI surfaces can report the exact failing document and scope.
 
+Phase Q error-model rules:
+- `AtmErrorCode` must not use wildcard or catch-all variants where a more
+  specific code can be named
+- every documented `AtmErrorCode` must carry one recoverability classification
+  in the central registry so CLI, daemon, and doctor surfaces can reason about
+  retry vs operator-action vs fail-closed behavior
+
 ## 16. Trait Policy
 
 The initial rewrite should avoid public extension traits.
@@ -1253,6 +1305,11 @@ The initial rewrite should avoid public extension traits.
 If a trait becomes necessary:
 - prefer a sealed trait
 - verify object safety before stabilization
+
+Phase Q boundary rule:
+- all I/O-owning boundary traits are sealed by default
+- opening a boundary for external implementation requires explicit design
+  review and crate-level documentation of the exception
 
 ## 17. Testing Strategy
 
@@ -1979,12 +2036,19 @@ There are three distinct paths:
 
 ### 21.4 One Interface, Two Transport Implementations
 
-Phase Q uses one daemon API with two transport adapters:
+Phase Q uses one daemon API with two production transport adapters plus one
+test transport:
 
 - same-host: Unix domain socket
 - cross-host: TCP/TLS
+- tests: in-process `test-socket`
 
-This is one protocol with two implementations, not two systems.
+This is one protocol with multiple implementations, not multiple systems.
+
+Test-transport rule:
+- `test-socket` implements the same dispatcher/handler contract without real
+  socket I/O so subsystem and daemon-boundary tests can exercise the transport
+  boundary in process
 
 Remote-delivery semantics:
 - bounded transient retry is acceptable for short intermittent failures
@@ -2050,10 +2114,47 @@ Minimum method set:
 - open/bootstrap store
 - run transaction
 - upsert/load message rows
-- upsert/load ack/task/visibility state
-- replace/load roster rows
+- upsert/load ack/visibility state
 - record/load ingest replay state
 - return health/readiness snapshot
+
+Scope rule:
+- `MailStore` owns message rows plus read/ack/visibility state tied directly to
+  message lifecycle
+- `MailStore` is not the long-term owner of generic task-orchestration or
+  daemon-status domains
+
+#### TaskStore
+
+Dispatch model:
+- synchronous request/response from service or task-handling code
+- transaction-scoped mutating calls where task and mail state must commit
+  together
+
+Object-safety rule:
+- callers depend on an object-safe task-store trait or façade, not concrete
+  SQLite types
+
+Minimum method set:
+- create/load/update task rows
+- attach/detach task linkage to `message_key`
+- record acknowledgement-related task transitions
+- query task metadata needed by mail/CLI projections
+
+#### RosterStore
+
+Dispatch model:
+- synchronous request/response for roster replacement, lookup, and readiness
+  checks
+
+Object-safety rule:
+- callers depend on an object-safe roster-store trait or façade, not concrete
+  SQLite types
+
+Minimum method set:
+- replace/load roster rows
+- query roster membership for routing/validation
+- return roster health/readiness snapshot
 
 #### InboxIngress
 
@@ -2087,6 +2188,8 @@ Minimum method set:
 
 Dispatch model:
 - request/response for same-host and remote daemon traffic
+- the same dispatch contract must also support the in-process `test-socket`
+  transport used by tests
 
 Object-safety rule:
 - callers depend on an object-safe transport trait or façade so local and
@@ -2097,6 +2200,72 @@ Minimum method set:
 - send remote daemon request
 - query daemon health
 - shut down listener/connection set gracefully
+- construct or bind an in-process `test-socket` endpoint for transport-boundary
+  tests
+
+Dispatcher rule:
+- transport hands off to one injected dispatcher boundary
+- the dispatcher owns request-kind routing only
+- request-family behavior lives in injectable handlers behind that dispatcher
+- adding a new request type must not require embedding business logic into
+  Unix-socket or TCP/TLS adapter code
+
+Socket receive loop rule:
+- the receive loop must stay intentionally small
+- allowed responsibilities:
+  - read one framed request
+  - parse it into a qualified request enum/value
+  - validate/authenticate the transport envelope
+  - dispatch immediately to the owning handler boundary
+  - serialize one typed response
+- forbidden responsibilities inside the receive loop:
+  - direct SQL/store logic
+  - watcher/reconcile logic
+  - notifier/plugin delivery logic
+  - embedded workflow/business-state transitions
+
+#### Dispatcher
+
+Dispatch model:
+- qualified request -> handler routing inside the daemon/runtime service layer
+
+Object-safety rule:
+- transport adapters depend on an object-safe dispatcher trait or façade, not
+  on concrete request-family handler implementations
+
+Minimum method set:
+- dispatch parsed request to the correct request-family handler
+- return one typed response or typed error
+
+Boundary rule:
+- dispatcher owns routing, not business logic
+- request-family behavior lives in injectable handlers behind the dispatcher
+- adding a new request family should be an additive handler/registration
+  change, not transport-adapter logic growth
+
+#### Watcher / Reconcile
+
+Dispatch model:
+- watch-event/debounce driven trigger into owned reconcile handlers
+
+Object-safety rule:
+- callers depend on an object-safe watcher/reconcile trait or façade, not
+  concrete filesystem watcher implementations
+
+Minimum method set:
+- subscribe/start watch set
+- accept changed-path event
+- debounce/coalesce reconcile request
+- trigger owned ingress/reconcile handler
+- shut down watcher cleanly
+
+Boundary rule:
+- the watcher/reconcile subsystem owns filesystem watch events only
+- it must not perform SQL directly
+- it must not send socket traffic directly
+- it must not deliver notifier/plugin events directly
+- it may dispatch to the owning ingress/store/notifier handlers through their
+  boundaries only
 
 #### Plugin / Notifier
 
