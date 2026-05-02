@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
 
 from .claude_code_message_schema import ClaudeCodeInboxMessage
 
@@ -42,6 +42,7 @@ class AtmMetadataFields(BaseModel):
     pendingAckAt: str | None = None
     acknowledgedAt: str | None = None
     acknowledgesMessageId: UlidString | None = None
+    taskId: str | None = None
     alertKind: str | None = None
 
 
@@ -59,6 +60,28 @@ class AtmMetadataEnvelope(ClaudeCodeInboxMessage):
     model_config = ConfigDict(extra="allow")
 
     metadata: MessageMetadata | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_top_level_atm_machine_fields(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+
+        forbidden = {
+            "message_id",
+            "source_team",
+            "pendingAckAt",
+            "acknowledgedAt",
+            "acknowledgesMessageId",
+            "taskId",
+        }
+        leaked = sorted(forbidden.intersection(value.keys()))
+        if leaked:
+            raise ValueError(
+                "ATM machine fields must not appear at top level for forward writes: "
+                + ", ".join(leaked)
+            )
+        return value
 
 
 class AtmMissingTeamConfigAlertMessage(AtmInboxMessage):

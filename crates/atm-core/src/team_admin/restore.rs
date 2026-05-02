@@ -50,10 +50,13 @@ pub(super) fn restore_team(request: RestoreRequest) -> Result<RestoreResult, Atm
     if request.dry_run {
         return Ok(RestoreResult::DryRun(RestorePlan {
             action: "restore",
-            team: request.team.into(),
+            team: request.team.clone(),
             backup_path: backup_dir,
             dry_run: true,
-            would_restore_members: members_to_restore.into_iter().map(Into::into).collect(),
+            would_restore_members: members_to_restore
+                .into_iter()
+                .map(crate::types::AgentName::from_validated)
+                .collect(),
             would_restore_inboxes: inboxes_to_restore,
             would_restore_tasks: tasks_to_restore,
         }));
@@ -93,7 +96,7 @@ pub(super) fn restore_team(request: RestoreRequest) -> Result<RestoreResult, Atm
 
         Ok::<RestoreOutcome, AtmError>(RestoreOutcome {
             action: "restore",
-            team: request.team.clone().into(),
+            team: request.team.clone(),
             backup_path: backup_dir.clone(),
             members_restored: members_to_restore.len(),
             inboxes_restored: inboxes_to_restore.len(),
@@ -750,7 +753,7 @@ mod tests {
         let result = with_env_var_serial("ATM_TEST_FAIL_TEAM_CONFIG_WRITE", "1", || {
             restore_team(RestoreRequest {
                 home_dir: tempdir.path().to_path_buf(),
-                team: "atm-dev".to_string(),
+                team: "atm-dev".parse().expect("team"),
                 from: Some(backup_dir.clone()),
                 dry_run: false,
             })
@@ -811,7 +814,7 @@ mod tests {
         let result = with_env_var_serial("ATM_TEST_FAIL_RESTORE_MARKER_REMOVE", "1", || {
             restore_team(RestoreRequest {
                 home_dir: tempdir.path().to_path_buf(),
-                team: "atm-dev".to_string(),
+                team: "atm-dev".parse().expect("team"),
                 from: Some(backup_dir.clone()),
                 dry_run: false,
             })
@@ -869,7 +872,7 @@ mod tests {
         let result = with_env_var_serial("ATM_TEST_FAIL_RESTORE_INBOX_STAGE", "1", || {
             restore_team(RestoreRequest {
                 home_dir: tempdir.path().to_path_buf(),
-                team: "atm-dev".to_string(),
+                team: "atm-dev".parse().expect("team"),
                 from: Some(backup_dir.clone()),
                 dry_run: false,
             })

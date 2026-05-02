@@ -29,9 +29,9 @@ Status:
   implementation merge work.
 - Phase O completed the security and hardening follow-up line.
 - Phase P implementation is merged; follow-up hardening remains open for
-  `P.6` and `P.7`, while `P.8` documentation reconciliation is complete.
-  `P.9` is an arch-ctm design review of the two residual lock-sentinel gaps.
-  `P.10` implements the hardened fix from P.9's recommendations.
+  `P.6` and later cleanup/fix branches, while `P.8` documentation
+  reconciliation and the `P.9`/`P.10` lock-sentinel design and implementation
+  work are complete on the merged Phase P line.
 - Message schema ownership and metadata normalization are now implemented well
   enough for live shared-inbox adoption, while a separate ATM-native inbox
   remains deferred to a later version.
@@ -1858,108 +1858,159 @@ Acceptance criteria:
 - no Phase P document still implies that the merged implementation is
   proposal-only
 
-##### P.9 — Lock Sentinel Gap: Detailed Design And Doc Updates [PLANNED]
+##### P.9 — Lock Sentinel Gap: Detailed Design And Doc Updates [COMPLETE]
 
 Goals:
 - produce a complete, implementation-ready design for the P.10 coding sprint
-- update `docs/requirements.md` and `docs/architecture.md` to reflect the
-  planned GAP-1 and GAP-2 changes before a single line of implementation code
-  is written
-- the design output becomes the authoritative specification arch-ctm follows
-  in P.10
+- update `docs/requirements.md`, `docs/architecture.md`, and
+  `docs/atm-error-codes.md` so the production contract is settled before code
+  changes begin
+- make the design output itself the authoritative specification for P.10
 
-Files expected in scope:
-- `docs/requirements.md` (add/update lock sentinel requirements for GAP-1 and GAP-2)
-- `docs/architecture.md` (update lock design section to reflect sweep predicate change and EROFS error path)
-- `docs/atm-error-codes.md` (define MailboxLockReadOnlyFilesystem or document enriched MailboxLockFailed)
-- `docs/project-plan.md` §P.10 (populate design details from this review)
-- `crates/atm-core/src/mailbox/lock.rs` (read-only analysis only; no code changes)
+Files in scope:
+- `docs/requirements.md`
+- `docs/architecture.md`
+- `docs/atm-error-codes.md`
+- `docs/project-plan.md`
+- `crates/atm-core/src/mailbox/lock.rs` (read-only analysis only; no code
+  changes in P.9)
 
-Design details:
+Design outcomes:
+- GAP-1 uses a conservative basename predicate instead of
+  `path.extension() == "lock"`
+- GAP-2 uses a dedicated
+  `AtmErrorCode::MailboxLockReadOnlyFilesystem`
+  / `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM`
+  instead of overloading `MailboxLockFailed`
+- read-only filesystem classification is based on raw OS error codes, not
+  generic `PermissionDenied` handling
+- read-only failures surface directly from public sweep/acquire paths and do
+  not enter retry loops
+- drop-time cleanup remains warn-only because the mailbox mutation has already
+  completed successfully
 
-**GAP-1 — Renamed sentinel not swept by `sweep_stale_lock_sentinels`**
+P.9 deliverables:
+1. Updated `docs/requirements.md` with explicit GAP-1 and GAP-2 lock
+   requirements
+2. Updated `docs/architecture.md` with the final sweep predicate, call-graph
+   decisions, and error-code rationale
+3. Updated `docs/atm-error-codes.md` with
+   `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM`
+4. Populated `docs/project-plan.md` §P.10 with the exact implementation
+   contract
+5. ATM status report to `team-lead` with the five design-question answers and
+   a summary of the doc changes
 
-`sweep_stale_lock_sentinels` matches files with extension `.lock`
-(`path.extension() == Some("lock")`). A sentinel that has been externally
-renamed (e.g., `inbox.json.lock.old`) has extension `old` and is silently
-skipped. The orphaned file is inert — no flock is held on it — but it
-accumulates on disk indefinitely.
-
-Fix: broaden the sweep predicate to match any file whose name contains
-`.lock` as a component (e.g., ends with `.lock` or contains `.lock.`),
-or match by the full sentinel-path pattern (`{base}.lock{optional-suffix}`).
-The sweep must not remove active sentinel files (those whose owning PID is
-still alive).
-
-**GAP-2 — Read-only filesystem surfaces as generic `MailboxLockFailed`**
-
-If the filesystem becomes read-only after a sentinel is created, both
-`remove_active_lock_sentinel` in Drop and `evict_stale_lock_sentinel` in
-the acquire loop fail with `EROFS`. `EROFS` is not handled by
-`should_retry_remove_lock_sentinel` (only `PermissionDenied` and Windows
-sharing-violation are retried), so the error surfaces immediately. The
-flock is released by the kernel, but the sentinel cannot be removed and
-`open_lock_file` (create=true) also fails — the lock mechanism breaks
-completely on a read-only filesystem.
-
-Fix: detect `EROFS` (and the Windows equivalent `ERROR_WRITE_PROTECT`) in
-`open_lock_file`, `remove_lock_sentinel_with_retry`, and
-`evict_stale_lock_sentinel`, and surface a dedicated
-`AtmErrorCode::MailboxLockReadOnlyFilesystem` with a recovery message that
-names the filesystem path and advises on remounting. The behavior must
-remain fail-soft where the flock is already released (no liveness
-regression); the improvement is diagnostic clarity only.
-
-Implementation patterns:
-- GAP-1 fix must not change sweep behavior for normally-named `.lock` files
-- GAP-2 fix must not retry `EROFS` — it is permanent until remount; return
-  the specific error immediately after the first attempt
-- add `AtmErrorCode::MailboxLockReadOnlyFilesystem` to `error_codes.rs` and
-  `docs/atm-error-codes.md`
-
-Required coverage:
-- sweep test: sentinel renamed to `.lock.old` is matched and evicted when
-  its PID is dead; active `.lock.old` for a live PID is not removed
-- EROFS test (simulated via `EPERM` or a read-only tempdir mount): confirms
-  that `MailboxLockReadOnlyFilesystem` error code is returned and message
-  includes the path
-
-P.9 deliverables (design sprint — no implementation code):
-1. Updated `docs/requirements.md`: add or update lock sentinel requirements
-   covering the sweep predicate contract (GAP-1) and read-only filesystem
-   behavior (GAP-2)
-2. Updated `docs/architecture.md`: update the lock design section to describe
-   the broadened sweep predicate, the EROFS detection call graph, and the
-   new/enriched error code
-3. Updated `docs/atm-error-codes.md`: define `MailboxLockReadOnlyFilesystem`
-   (or document the enriched `MailboxLockFailed` decision with rationale)
-4. Populated `docs/project-plan.md` §P.10 design details: the exact Rust
-   expressions, OS error codes, test simulation pattern, and call-graph
-   decisions that arch-ctm will implement in P.10
-5. ATM message to team-lead with the five design-question answers and a
-   summary of all document changes made
-
-##### P.10 — Lock Sentinel Gap Implementation [PLANNED]
+##### P.10 — Lock Sentinel Residual Gap Closure [PLANNED]
 
 Goals:
-- implement the hardened fixes for GAP-1 and GAP-2 as specified by the P.9
-  design review output from arch-ctm
+- implement the hardened fixes for GAP-1 and GAP-2 exactly as specified by the
+  completed P.9 design output
+- close the remaining mailbox-lock residual risks without broadening scope into
+  unrelated refactors
 
 Files expected in scope:
 - `crates/atm-core/src/mailbox/lock.rs`
+- `crates/atm-core/src/error.rs`
 - `crates/atm-core/src/error_codes.rs`
-- `docs/atm-error-codes.md`
+- `crates/atm-core/src/ack/mod.rs`
+- `crates/atm-core/src/send/mod.rs`
+- `crates/atm-core/src/schema/inbox_message.rs`
+- docs already updated in P.9
 
-Design details:
-- implementation spec will be populated from arch-ctm's P.9 review findings
-  before this sprint opens; do not begin coding until P.9 findings are
-  incorporated here
+Exact GAP-1 predicate:
 
-Planning rule:
-- P.10 branch opens from `integrate/phase-P` after P.9 findings are reviewed
-  and accepted by team-lead
-- the P.9 review output must be merged into this plan section before the
-  dev-template assignment is sent
+```rust
+let is_lock_sentinel_candidate = path
+    .file_name()
+    .and_then(|name| name.to_str())
+    .is_some_and(|name| name.ends_with(".lock") || name.contains(".lock."));
+```
+
+Why this expression:
+- `ends_with(".lock")` keeps the ordinary live sentinel path
+- `contains(".lock.")` catches rotated artifacts such as `.lock.old` and
+  `.lock.replaced`
+- basename-only matching avoids matching parent directories
+- generic `contains("lock")` is forbidden because it creates unrelated-file
+  false positives
+
+Exact GAP-2 platform classification:
+- Linux: `libc::EROFS` (`30`)
+- macOS: `libc::EROFS` (`30`)
+- Windows: `windows_sys::Win32::Foundation::ERROR_WRITE_PROTECT as i32` (`19`)
+
+Recommended helper shape:
+
+```rust
+fn is_readonly_filesystem_error(error: &io::Error) -> bool
+```
+
+```rust
+fn mailbox_lock_path_error(
+    operation: &'static str,
+    lock_path: &Path,
+    error: io::Error,
+) -> AtmError
+```
+
+Required call-graph decisions:
+- `open_lock_file(...)` maps read-only failures to
+  `MailboxLockReadOnlyFilesystem`
+- `write_lock_owner_record(...)` maps both truncate and write failures through
+  the same helper
+- `remove_lock_sentinel_with_retry(...)` checks read-only first and returns the
+  error immediately instead of entering the permission-denied retry loop
+- `evict_stale_lock_sentinel(...)` must become result-bearing enough for public
+  sweep/acquire call sites to surface read-only failures instead of only
+  warning
+- `MailboxLockGuard::drop` keeps warning-only cleanup on read-only failure
+
+Recommended result-shape change:
+- change stale-sentinel eviction from a bare `bool` outcome to a richer result
+  that distinguishes:
+  - removed
+  - skipped (live owner / malformed / not found)
+  - failed (`io::Error`)
+
+Test simulation pattern:
+- do not require a real read-only mount
+- add a deterministic synthetic seam patterned after
+  `ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR`
+- recommended env var contract:
+  - `ATM_TEST_FORCE_LOCK_READONLY_FS=open`
+  - `ATM_TEST_FORCE_LOCK_READONLY_FS=write_owner`
+  - `ATM_TEST_FORCE_LOCK_READONLY_FS=remove`
+- operation scoping is strict:
+  - `open` affects only the lock open/create path; owner-record write and
+    sentinel removal continue to execute normally
+  - `write_owner` affects only owner-record truncate/write
+  - `remove` affects only stale-sentinel removal / cleanup
+- the seam must synthesize the platform-correct raw OS error so the production
+  classification logic is what the tests exercise
+
+Required coverage:
+- unit: rotated sentinel names such as `inbox.json.lock.old` are considered
+  sweep candidates, while unrelated filenames are ignored
+- unit: malformed rotated sentinel contents are skipped, not deleted
+- unit: read-only `open` returns
+  `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM`
+- unit: read-only owner-record write returns
+  `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM`
+- unit: read-only sentinel removal is not retried as permission-denied
+- unit or focused integration: public stale-sentinel sweep surfaces the
+  read-only error instead of logging and continuing
+- regression: drop-time cleanup remains non-fatal even when read-only cleanup
+  fails after a successful command
+
+Acceptance criteria:
+- no rotated stale sentinel escapes the sweep solely because it no longer ends
+  with the literal `.lock` extension
+- read-only filesystem failures are machine-readable and operator-distinct from
+  contention and generic path I/O
+- retry loops are reserved for genuine contention or documented transient
+  sharing failures, not persistent read-only mounts
+- tests remain deterministic and mount-free
 
 #### P.0 — Audited Production File-I/O Inventory
 
