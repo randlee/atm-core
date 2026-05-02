@@ -88,6 +88,14 @@ Satisfied by:
 - intentionally undecomposed product requirement; this governs overall rewrite
   scope and is enforced across the workspace rather than by one crate-local ID
 
+- `REQ-P-RUNTIME-001` Production ATM commands must not auto-spawn the daemon.
+
+  Required behavior:
+  - the production CLI/runtime path connects to an already-running daemon
+  - if the daemon is unavailable, ATM must fail clearly with recovery guidance
+  - no production path may silently bypass the daemon by talking directly to
+    SQLite or inbox files
+
 ### 2.1 In Scope
 
 - one binary: `atm`
@@ -2339,6 +2347,47 @@ mail correctness.
     not ATM's authoritative durable mail store
   - `config.json` becomes a roster-ingress source, not the durable roster truth
 
+- `REQ-CORE-STORE-001` The Phase Q SQLite store must use one documented schema
+  contract with stable keys, constraints, and indexes.
+
+  Required behavior:
+  - the authoritative schema must define at least:
+    - `messages`
+    - `ack_state`
+    - `message_visibility`
+    - `tasks`
+    - `team_roster`
+    - `inbox_ingest`
+  - `message_key` is the canonical ATM durable message identity
+  - `message_key` format must be deterministic and typed by source family:
+    - `atm:<ulid>` for ATM-authored durable rows
+    - `ext:<fingerprint>` for imported external rows without ATM ids
+  - schema constraints must forbid duplicate authoritative identities
+  - the schema must document the required lookup indexes for message lookup,
+    task lookup, visibility projection, and ingest dedupe
+
+- `REQ-CORE-STORE-002` The Phase Q SQLite store must enforce WAL and explicit
+  transaction policy.
+
+  Required behavior:
+  - `journal_mode = WAL`
+  - `foreign_keys = ON`
+  - mutating ATM command flows must use explicit transactions
+  - no production mutating path may rely on implicit per-statement autocommit
+    as the normal correctness model
+
+- `REQ-CORE-INGEST-001` Inbox/config ingest must use one owned contract for
+  replay, backpressure, and degradation.
+
+  Required behavior:
+  - ingest must be idempotent
+  - parseable external rows must not be silently dropped
+  - malformed external rows must emit structured diagnostics rather than panic
+  - backlog/slow-ingest conditions must surface through structured diagnostics
+    or health findings rather than dropping records silently
+  - roster/config ingest must apply one deterministic last-write-wins policy
+    for replacing roster truth in SQLite
+
 - `REQ-CORE-RUNTIME-002` Live agent status must not use SQLite as its
   authoritative live truth.
 
@@ -2382,6 +2431,9 @@ mail correctness.
     rather than silently falling back to direct SQLite or inbox-file access
   - in-process test harnesses may bypass the daemon only inside explicit test
     wiring, not in the production path
+
+  Satisfies:
+  - `REQ-P-RUNTIME-001`
 
 ### 21.3 Strict I/O Ownership Boundaries
 
@@ -2510,8 +2562,28 @@ mail correctness.
     - `atm` owns CLI bootstrap and presentation concerns
     - `atm-daemon` owns daemon/runtime event emission
     - `atm-core` owns ATM event and error models above the shared boundary
+    - native plugins may emit plugin-local diagnostics, but daemon-owned
+      runtime/transport/store/ingest events must be emitted by the daemon and
+      not delegated to plugin code
   - observability must not be implemented as ad hoc println/debug output in
     production paths
+
+### 21.8.1 Doctor Health Interface
+
+- `REQ-CORE-DOCTOR-002` The Phase Q runtime must expose a daemon health query
+  interface consumable by `atm doctor`.
+
+  Required behavior:
+  - `atm doctor` remains a CLI command
+  - daemon/runtime health information must be obtained through an explicit
+    daemon-facing interface rather than direct CLI inspection of private daemon
+    state
+  - the health interface must be able to report at least:
+    - daemon reachability
+    - singleton ownership status
+    - live status-cache summary
+    - ingest backlog / degraded-ingest state when present
+    - SQLite open/readiness state
 
 ### 21.9 QA Invariants
 

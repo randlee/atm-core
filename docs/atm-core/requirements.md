@@ -51,6 +51,8 @@ Initial allocation:
 - `REQ-CORE-OBS-*`
 - `REQ-CORE-TEAM-*`
 - `REQ-CORE-RUNTIME-*`
+- `REQ-CORE-STORE-*`
+- `REQ-CORE-INGEST-*`
 - `REQ-CORE-BOUNDARY-*`
 - `REQ-CORE-TRANSPORT-*`
 
@@ -115,6 +117,17 @@ Initial crate requirement IDs:
   Satisfies the store-ownership aspects of:
   `REQ-CORE-RUNTIME-001`, `REQ-CORE-COMPAT-001`,
   `REQ-CORE-LOCK-RETIRE-001`.
+- `REQ-CORE-STORE-001` `atm-core` owns the SQLite schema contract, canonical
+  `message_key` identity model, and required lookup/dedupe constraints.
+  Satisfies:
+  `REQ-CORE-STORE-001`.
+- `REQ-CORE-STORE-002` `atm-core` owns WAL / foreign-key / explicit
+  transaction policy at the store boundary. Satisfies:
+  `REQ-CORE-STORE-002`.
+- `REQ-CORE-INGEST-001` `atm-core` owns the inbox/config ingest contract for
+  replay, backpressure/degradation behavior, and no-silent-drop policy.
+  Satisfies:
+  `REQ-CORE-INGEST-001`.
 - `REQ-CORE-BOUNDARY-001` `atm-core` owns the strict trait boundaries for
   store, inbox ingress/export, config ingress, and notifier-facing service
   calls. Satisfies the subsystem-boundary aspects of:
@@ -168,6 +181,9 @@ The `atm-core` crate docs must remain aligned with:
 
 Requirement IDs:
 - `REQ-CORE-RUNTIME-001`
+- `REQ-CORE-STORE-001`
+- `REQ-CORE-STORE-002`
+- `REQ-CORE-INGEST-001`
 - `REQ-CORE-BOUNDARY-001`
 
 Required `atm-core` crate rules:
@@ -182,6 +198,17 @@ Required `atm-core` crate rules:
   - inbox export
   - config ingress
   - notifier-facing service integration
+- `atm-core` owns the canonical SQLite schema contract including:
+  - `messages`
+  - `ack_state`
+  - `message_visibility`
+  - `tasks`
+  - `team_roster`
+  - `inbox_ingest`
+- `atm-core` owns the canonical `message_key` identity format and the required
+  dedupe / lookup indexes above the store boundary
+- `atm-core` owns the ingest replay/degradation contract and must not silently
+  drop parseable external rows
 - `atm-core` must not let command/service code access SQLite, inbox JSONL,
   `config.json`, or sockets except through the owning boundary
 - `atm-core` must keep business logic testable in-process without daemon
@@ -190,6 +217,8 @@ Required `atm-core` crate rules:
   `Result` propagation rather than panic/unwrap on routine failure paths
 - `atm-core` must define ATM-owned structured event/error models that both the
   CLI and daemon layers emit through `sc-observability`
+- `atm-core` store implementations must enforce WAL-mode, foreign-key, and
+  explicit-transaction policy through the owning store boundary
 
 Phase-Q crate-local supersession note:
 - earlier daemon-free phrasing in this file is historical from the prior line

@@ -1888,6 +1888,47 @@ ATM moves to a split state model:
 SQLite may persist last-observed status for diagnostics, but that snapshot is
 not the live truth.
 
+### 21.1.1 SQLite Schema Contract
+
+The Phase Q target architecture uses one authoritative schema contract.
+
+Minimum tables:
+- `messages`
+- `ack_state`
+- `message_visibility`
+- `tasks`
+- `team_roster`
+- `inbox_ingest`
+
+Minimum key rules:
+- `message_key` is the canonical ATM durable message identity
+- `message_key` must be source-typed:
+  - `atm:<ulid>` for ATM-authored rows
+  - `ext:<fingerprint>` for imported external rows without ATM ids
+- imported legacy `message_id` / forward `metadata.atm.messageId` values map
+  into that canonical identity model rather than replacing it
+
+Minimum index/constraint rules:
+- unique identity enforcement on `message_key`
+- dedupe index for imported external/legacy identities
+- lookup indexes for:
+  - recipient/team mailbox projection
+  - task lookup
+  - visibility projection
+  - ingest replay/high-water tracking
+
+### 21.1.2 SQLite Runtime Invariants
+
+The SQLite runtime contract is part of the architecture, not an implementation
+detail.
+
+Required invariants:
+- `journal_mode = WAL`
+- `foreign_keys = ON`
+- mutating ATM flows use explicit transactions
+- no normal command path relies on implicit autocommit as its correctness
+  model
+
 ### 21.2 Compatibility Surfaces
 
 Claude-owned inbox JSONL files remain required for:
@@ -1909,6 +1950,7 @@ There are three distinct paths:
    - Claude or legacy writers append JSONL
    - ATM imports through one owned inbox-ingress boundary
    - imported records become durable in SQLite
+   - replay is idempotent and parseable rows are not silently dropped
 
 2. Native agent path
    - native agent/plugin traffic does not use JSONL
@@ -1989,8 +2031,26 @@ Architectural rules:
 - `atm-daemon` owns daemon/runtime/transport `sc-observability` emission
 - `atm-core` owns ATM event and error models above the shared observability
   boundary
+- native plugins may emit plugin-local diagnostics, but daemon-owned runtime,
+  store, ingest, and transport events remain daemon-owned observability sinks
 - production runtime diagnostics must not collapse into ad hoc stdout/stderr
   debugging
+
+### 21.6.2 Doctor Health Interface
+
+`atm doctor` remains a CLI command, but the Phase Q architecture requires one
+explicit daemon health interface.
+
+Architectural rules:
+- CLI doctor code queries daemon/runtime state through one explicit request /
+  response boundary
+- the daemon owns collection of runtime-only health such as:
+  - singleton ownership state
+  - live status-cache health
+  - ingest backlog / degraded-ingest state
+  - SQLite readiness/openability as observed by the runtime
+- CLI code must not inspect private daemon state directly to synthesize health
+  answers
 
 ### 21.7 Test Strategy
 
@@ -2010,3 +2070,20 @@ The lock-release gate proved the file-based line is acceptable only as interim
 relief. The target Phase Q architecture removes mailbox-lock dependence from
 ATM mail correctness by moving durable state ownership to SQLite and treating
 JSONL as compatibility ingress/egress only.
+
+### 21.9 Five-Stage Migration Model
+
+Phase Q follows five architectural migration stages:
+
+1. store and boundary foundation
+2. compatibility ingest/export
+3. ack/task migration
+4. read/clear cutover plus thin daemon runtime
+5. lock retirement and production gate
+
+This ordering is intentional:
+- durable truth moves first
+- compatibility paths stay owned and explicit
+- daemon runtime arrives only after service boundaries are proven
+- lock retirement closes the phase after the daemon/runtime and store model are
+  already in place

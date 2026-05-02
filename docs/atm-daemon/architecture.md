@@ -21,6 +21,7 @@ The `atm-daemon` crate is responsible for:
 - live agent-status cache
 - optional watch/reconcile runtime loop
 - daemon/runtime observability emission
+- daemon health/status query surface for `atm doctor`
 
 The `atm-daemon` crate must remain thin.
 
@@ -43,6 +44,8 @@ The `atm-daemon` crate must remain thin.
   panic/unwrap for routine transport, socket, or store-boundary failure.
 - daemon observability remains structured through `sc-observability`; no ad hoc
   debug-only runtime path replaces it in production.
+- plugin-local observability does not replace daemon-owned runtime/transport
+  sinks; daemon-owned events stay daemon-owned.
 
 ## 3.1 Singleton Runtime
 

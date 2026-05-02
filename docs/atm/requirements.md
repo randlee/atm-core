@@ -66,7 +66,7 @@ Initial crate requirement IDs:
   `REQ-CORE-DAEMON-002`, `REQ-CORE-TEST-RUNTIME-001`.
 - `REQ-ATM-RUNTIME-002` `atm` owns production daemon-unavailable behavior and
   must not auto-spawn the daemon. Satisfies:
-  `REQ-CORE-DAEMON-003`.
+  `REQ-P-RUNTIME-001`, `REQ-CORE-DAEMON-003`.
 - `REQ-ATM-ERROR-001` `atm` owns CLI-side rendering/preservation of typed
   runtime errors from `atm-core` and `atm-daemon`. Satisfies:
   `REQ-CORE-BOUNDARY-002`.

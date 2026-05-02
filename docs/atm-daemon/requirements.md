@@ -73,6 +73,9 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-OBS-001` `atm-daemon` owns daemon/runtime/transport structured
   event emission through `sc-observability`. Satisfies:
   `REQ-CORE-OBS-002`.
+- `REQ-DAEMON-HEALTH-001` `atm-daemon` owns the daemon health interface
+  consumed by `atm doctor`. Satisfies:
+  `REQ-CORE-DOCTOR-002`.
 
 ## 4. Required References
 
@@ -96,6 +99,7 @@ Requirement IDs:
 - `REQ-DAEMON-STATUS-001`
 - `REQ-DAEMON-TEST-001`
 - `REQ-DAEMON-OBS-001`
+- `REQ-DAEMON-HEALTH-001`
 
 Required runtime rules:
 - exactly one daemon may be active on a host at a time
@@ -110,3 +114,4 @@ Required runtime rules:
 - daemon runtime failures must remain typed across transport/runtime boundaries
   rather than collapsing into panic/unwrap control flow
 - daemon runtime and transport paths must emit structured observability events
+- daemon must expose one explicit health/status query interface for `atm doctor`
