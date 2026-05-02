@@ -2311,8 +2311,9 @@ Architectural rules:
   exhaustive; wildcard `_` match arms are not permitted
 - adapter layers may translate errors, but must preserve structured identity
 - when reviewing transitional compatibility paths, apply these structured-error
-  rules together with the Phase Q supersession notes for the pre-Phase-Q Ack
-  and Clear pipeline stage lists in Sections 8 and 9
+  rules together with the pre-Phase-Q pipeline stage lists and their
+  supersession notes; see Sections 8 and 9 for the Ack and Clear pipeline stage
+  lists and the inline notes that supersede them under Phase Q
 - SQLite-specific transaction, busy-timeout, shutdown-checkpoint, and
   `rusqlite` blocking-I/O rules are defined in
   [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
