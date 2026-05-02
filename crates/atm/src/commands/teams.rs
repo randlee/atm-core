@@ -89,90 +89,43 @@ impl TeamsCommand {
 
 impl AddMemberCommand {
     fn run(self, home_dir: PathBuf) -> Result<()> {
-        let json = self.json;
-        let cwd = match self.cwd.clone() {
+        let cwd = match self.cwd {
             Some(path) => path,
             None => std::env::current_dir()?,
         };
-        let request = self.build_request(home_dir, cwd)?;
-        let outcome = team_admin::add_member(request)?;
-        output::print_add_member_result(&outcome, json)
-    }
-
-    fn build_request(self, home_dir: PathBuf, cwd: PathBuf) -> Result<AddMemberRequest> {
-        AddMemberRequest::new(
+        let outcome = team_admin::add_member(AddMemberRequest {
             home_dir,
-            &self.team,
-            &self.member,
-            self.agent_type,
-            self.model,
+            team: self.team,
+            member: self.member,
+            agent_type: self.agent_type,
+            model: self.model,
             cwd,
-            self.pane_id,
-        )
-        .map_err(Into::into)
+            tmux_pane_id: self.pane_id,
+        })?;
+        output::print_add_member_result(&outcome, self.json)
     }
 }
 
 impl BackupCommand {
     fn run(self, home_dir: PathBuf) -> Result<()> {
-        let outcome = team_admin::backup_team(BackupRequest::new(home_dir, &self.team)?)?;
+        let outcome = team_admin::backup_team(BackupRequest {
+            home_dir,
+            team: self.team,
+        })?;
         output::print_backup_result(&outcome, self.json)
     }
 }
 
 impl RestoreCommand {
     fn run(self, home_dir: PathBuf) -> Result<()> {
-        match team_admin::restore_team(RestoreRequest::new(
+        match team_admin::restore_team(RestoreRequest {
             home_dir,
-            &self.team,
-            self.from,
-            self.dry_run,
-        )?)? {
+            team: self.team,
+            from: self.from,
+            dry_run: self.dry_run,
+        })? {
             RestoreResult::Applied(outcome) => output::print_restore_result(&outcome, self.json),
             RestoreResult::DryRun(plan) => output::print_restore_plan(&plan, self.json),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::AddMemberCommand;
-
-    #[test]
-    fn build_request_rejects_invalid_team_before_core() {
-        let command = AddMemberCommand {
-            team: "../evil".to_string(),
-            member: "arch-ctm".to_string(),
-            agent_type: "worker".to_string(),
-            model: "gpt-5".to_string(),
-            cwd: None,
-            pane_id: None,
-            json: false,
-        };
-
-        let error = command
-            .build_request(".".into(), ".".into())
-            .expect_err("invalid team");
-
-        assert!(error.to_string().contains("team name"));
-    }
-
-    #[test]
-    fn build_request_rejects_invalid_member_before_core() {
-        let command = AddMemberCommand {
-            team: "atm-dev".to_string(),
-            member: "../evil".to_string(),
-            agent_type: "worker".to_string(),
-            model: "gpt-5".to_string(),
-            cwd: None,
-            pane_id: None,
-            json: false,
-        };
-
-        let error = command
-            .build_request(".".into(), ".".into())
-            .expect_err("invalid member");
-
-        assert!(error.to_string().contains("agent name"));
     }
 }

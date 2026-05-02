@@ -197,49 +197,24 @@ impl AtmError {
     }
 
     pub fn validation(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::Validation, message).with_recovery(
-            "Correct the invalid ATM input or mailbox state, then retry the command with a valid target or argument.",
-        )
+        Self::new(AtmErrorKind::Validation, message)
     }
 
     pub fn missing_document(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::MissingDocument, message).with_recovery(
-            "Restore the missing ATM document or recreate it through the documented team-management workflow before retrying.",
-        )
+        Self::new(AtmErrorKind::MissingDocument, message)
     }
 
     pub fn file_policy(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::FilePolicy, message).with_recovery(
-            "Update the referenced file, path, or policy inputs so they satisfy ATM file-policy rules before retrying the command.",
-        )
+        Self::new(AtmErrorKind::FilePolicy, message)
     }
 
     pub fn mailbox_read(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::MailboxRead, message).with_recovery(
-            "Check ATM_HOME, mailbox file permissions, and mailbox JSON syntax before retrying the ATM command.",
-        )
+        Self::new(AtmErrorKind::MailboxRead, message)
     }
 
     pub fn mailbox_lock(message: impl Into<String>) -> Self {
         Self::new(AtmErrorKind::MailboxLock, message).with_recovery(
             "Retry after other ATM mailbox activity completes, or wait for the competing process to release its mailbox lock.",
-        )
-    }
-
-    pub fn mailbox_lock_read_only_filesystem(
-        operation: impl fmt::Display,
-        path: &std::path::Path,
-    ) -> Self {
-        Self::new_with_code(
-            AtmErrorCode::MailboxLockReadOnlyFilesystem,
-            AtmErrorKind::MailboxLock,
-            format!(
-                "mailbox lock {operation} failed for {}: filesystem is read-only",
-                path.display()
-            ),
-        )
-        .with_recovery(
-            "Remount the filesystem read-write or point ATM at a writable home with ATM_HOME or --home, then retry the ATM command.",
         )
     }
 
@@ -258,9 +233,7 @@ impl AtmError {
     }
 
     pub fn mailbox_write(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::MailboxWrite, message).with_recovery(
-            "Check that the mailbox/workflow path is writable, has free space, and was not modified concurrently before retrying the ATM command.",
-        )
+        Self::new(AtmErrorKind::MailboxWrite, message)
     }
 
     pub fn observability_emit(message: impl Into<String>) -> Self {
@@ -298,7 +271,7 @@ impl fmt::Display for AtmError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.message)?;
         if let Some(recovery) = &self.recovery {
-            write!(f, "\n  Recovery: {recovery}")?;
+            write!(f, " Recovery: {recovery}")?;
         }
         Ok(())
     }
@@ -376,19 +349,6 @@ mod tests {
         assert_eq!(
             AtmError::observability_health("health failed").code,
             AtmErrorCode::ObservabilityHealthFailed
-        );
-    }
-
-    #[test]
-    fn mailbox_write_helper_includes_recovery_guidance() {
-        let error = AtmError::mailbox_write("write failed");
-
-        assert!(error.is_mailbox_write());
-        assert!(
-            error
-                .recovery
-                .as_deref()
-                .is_some_and(|value| value.contains("writable"))
         );
     }
 

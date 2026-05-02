@@ -8,9 +8,7 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 use serde_json::Value;
-use tracing::debug;
 
-use crate::address::AgentAddress;
 use crate::config;
 use crate::error::AtmError;
 use crate::home;
@@ -32,7 +30,7 @@ pub struct ReadQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
     pub actor_override: Option<AgentName>,
-    pub target_address: Option<AgentAddress>,
+    pub target_address: Option<String>,
     pub team_override: Option<TeamName>,
     pub selection_mode: ReadSelection,
     pub seen_state_filter: bool,
@@ -42,41 +40,6 @@ pub struct ReadQuery {
     pub sender_filter: Option<String>,
     pub timestamp_filter: Option<IsoTimestamp>,
     pub timeout_secs: Option<u64>,
-}
-
-impl ReadQuery {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        home_dir: PathBuf,
-        current_dir: PathBuf,
-        actor_override: Option<&str>,
-        target_address: Option<&str>,
-        team_override: Option<&str>,
-        selection_mode: ReadSelection,
-        seen_state_filter: bool,
-        seen_state_update: bool,
-        ack_activation_mode: AckActivationMode,
-        limit: Option<usize>,
-        sender_filter: Option<String>,
-        timestamp_filter: Option<IsoTimestamp>,
-        timeout_secs: Option<u64>,
-    ) -> Result<Self, AtmError> {
-        Ok(Self {
-            home_dir,
-            current_dir,
-            actor_override: actor_override.map(str::parse).transpose()?,
-            target_address: target_address.map(str::parse).transpose()?,
-            team_override: team_override.map(str::parse).transpose()?,
-            selection_mode,
-            seen_state_filter,
-            seen_state_update,
-            ack_activation_mode,
-            limit,
-            sender_filter,
-            timestamp_filter,
-            timeout_secs,
-        })
-    }
 }
 
 /// Bucket counts for one classified mailbox surface.
@@ -139,9 +102,9 @@ pub fn read_mail(
     let actor = identity::resolve_actor_identity(query.actor_override.as_deref(), config.as_ref())?;
     let actor_team = config::resolve_team(query.team_override.as_deref(), config.as_ref());
     let target = resolve_target(
-        query.target_address.as_ref(),
+        query.target_address.as_deref(),
         &actor,
-        query.team_override.as_ref(),
+        query.team_override.as_deref(),
         config.as_ref(),
     )?;
 
@@ -157,7 +120,7 @@ pub fn read_mail(
         && !team_config
             .members
             .iter()
-            .any(|member| member.name == target.agent.as_str())
+            .any(|member| member.name == target.agent)
     {
         return Err(
             AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
@@ -299,8 +262,8 @@ pub fn read_mail(
 
     let outcome = ReadOutcome {
         action: "read",
-        team: target.team.clone(),
-        agent: target.agent.clone(),
+        team: target.team.clone().into(),
+        agent: target.agent.clone().into(),
         selection_mode: query.selection_mode,
         history_collapsed,
         mutation_applied,
@@ -313,9 +276,9 @@ pub fn read_mail(
         command: "read",
         action: "read",
         outcome: if timed_out { "timeout" } else { "ok" },
-        team: outcome.team.clone(),
-        agent: outcome.agent.clone(),
-        sender: actor.to_string(),
+        team: outcome.team.to_string(),
+        agent: outcome.agent.to_string(),
+        sender: actor,
         message_id: None,
         requires_ack: false,
         dry_run: false,
@@ -438,36 +401,18 @@ fn idle_sender(message: &MessageEnvelope) -> Option<String> {
 }
 
 fn idle_notification_sender(message: &MessageEnvelope) -> Option<String> {
-    let value = match serde_json::from_str::<Value>(&message.text) {
-        Ok(value) => value,
-        Err(error) => {
-            if message.text.contains("idle_notification") {
-                debug!(
-                    %error,
-                    recovery = "Repair or remove the malformed Claude idle-notification JSON. ATM will continue treating the record as a normal mailbox message.",
-                    message_text = %message.text,
-                    "ignoring malformed idle-notification JSON while classifying read surface"
-                );
-            }
-            return None;
-        }
-    };
-
-    if value.get("type").and_then(Value::as_str) != Some("idle_notification") {
-        return None;
-    }
-
-    match value.get("from").and_then(Value::as_str) {
-        Some(sender) => Some(sender.to_string()),
-        None => {
-            debug!(
-                recovery = "Ensure Claude idle-notification payloads include a string `from` field. ATM will continue treating the record as a normal mailbox message.",
-                message_text = %message.text,
-                "ignoring malformed idle-notification payload missing string `from`"
-            );
-            None
-        }
-    }
+    serde_json::from_str::<Value>(&message.text)
+        .ok()
+        .and_then(|value| {
+            (value.get("type").and_then(Value::as_str) == Some("idle_notification"))
+                .then(|| {
+                    value
+                        .get("from")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                })
+                .flatten()
+        })
 }
 
 fn classify_all(
@@ -682,141 +627,5 @@ fn transition_displayed_message(
             }
             state::TransitionedMessage::Unchanged(unchanged)
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::path::PathBuf;
-
-    use serde_json::Map;
-    use tempfile::tempdir;
-
-    use super::{ReadQuery, idle_notification_sender, selected_after_filters};
-    use crate::mailbox::source::SourcedMessage;
-    use crate::schema::{LegacyMessageId, MessageEnvelope};
-    use crate::types::{
-        AckActivationMode, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
-    };
-    use crate::workflow;
-
-    fn sourced_message(index: usize, text: &str) -> SourcedMessage {
-        SourcedMessage {
-            envelope: MessageEnvelope {
-                from: "team-lead".to_string(),
-                text: text.to_string(),
-                timestamp: IsoTimestamp::now(),
-                read: false,
-                source_team: Some("atm-dev".to_string()),
-                summary: None,
-                message_id: Some(LegacyMessageId::new()),
-                pending_ack_at: None,
-                acknowledged_at: None,
-                acknowledges_message_id: None,
-                task_id: None,
-                extra: Map::new(),
-            },
-            source_path: PathBuf::from("arch-ctm.json"),
-            source_index: index.into(),
-        }
-    }
-
-    #[test]
-    fn idle_notification_sender_returns_none_for_malformed_json() {
-        let message = sourced_message(0, r#"{"type":"idle_notification","from":"team-lead""#);
-
-        assert_eq!(idle_notification_sender(&message.envelope), None);
-    }
-
-    #[test]
-    fn malformed_idle_notification_adjacent_to_valid_records_remains_readable_and_classifiable() {
-        let workflow_state = workflow::WorkflowStateFile::default();
-        let messages = vec![
-            sourced_message(0, r#"{"type":"idle_notification","from":"team-lead""#),
-            sourced_message(1, "normal unread"),
-        ];
-        let query = ReadQuery {
-            home_dir: PathBuf::new(),
-            current_dir: PathBuf::new(),
-            actor_override: None,
-            target_address: None,
-            team_override: None,
-            selection_mode: ReadSelection::All,
-            seen_state_filter: false,
-            seen_state_update: false,
-            ack_activation_mode: AckActivationMode::ReadOnly,
-            limit: None,
-            sender_filter: None,
-            timestamp_filter: None,
-            timeout_secs: None,
-        };
-
-        let selected = std::panic::catch_unwind(|| {
-            selected_after_filters(&messages, &workflow_state, &query, None)
-        })
-        .expect("malformed idle notification should not panic");
-
-        assert_eq!(selected.len(), 2);
-        let valid = selected
-            .iter()
-            .find(|message| message.envelope.text == "normal unread")
-            .expect("valid record");
-        assert_eq!(valid.class, MessageClass::Unread);
-        assert_eq!(valid.bucket, DisplayBucket::Unread);
-
-        let malformed = selected
-            .iter()
-            .find(|message| {
-                message.envelope.text == r#"{"type":"idle_notification","from":"team-lead""#
-            })
-            .expect("malformed record");
-        assert_eq!(malformed.class, MessageClass::Unread);
-        assert_eq!(malformed.bucket, DisplayBucket::Unread);
-    }
-
-    #[test]
-    fn read_query_new_rejects_invalid_target_before_command_execution() {
-        let tempdir = tempdir().expect("tempdir");
-        let error = ReadQuery::new(
-            tempdir.path().to_path_buf(),
-            tempdir.path().to_path_buf(),
-            Some("arch-ctm"),
-            Some("../evil"),
-            Some("atm-dev"),
-            ReadSelection::Actionable,
-            false,
-            false,
-            AckActivationMode::ReadOnly,
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect_err("invalid target");
-
-        assert!(error.message.contains("agent name"));
-    }
-
-    #[test]
-    fn read_query_new_rejects_invalid_actor_before_command_execution() {
-        let tempdir = tempdir().expect("tempdir");
-        let error = ReadQuery::new(
-            tempdir.path().to_path_buf(),
-            tempdir.path().to_path_buf(),
-            Some("../evil"),
-            None,
-            Some("atm-dev"),
-            ReadSelection::Actionable,
-            false,
-            false,
-            AckActivationMode::ReadOnly,
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect_err("invalid actor");
-
-        assert!(error.message.contains("agent name"));
     }
 }

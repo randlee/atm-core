@@ -1,12 +1,4 @@
 //! ATM config discovery, loading, normalization, and team-config parsing.
-//!
-//! # Deprecated
-//!
-//! `[atm].identity` and the legacy top-level `identity` key remain
-//! compatibility-only parsing inputs so ATM can emit
-//! `ATM_WARNING_IDENTITY_DRIFT` for obsolete configs. They no longer control
-//! runtime sender identity resolution. Set `ATM_IDENTITY` instead and remove
-//! the deprecated config keys once the environment-based identity is in place.
 
 pub mod aliases;
 pub mod bridge;
@@ -26,7 +18,6 @@ pub use types::AtmConfig;
 
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::schema::{AgentMember, TeamConfig};
-use crate::types::{AgentName, TeamName};
 use discovery::normalize_post_send_hooks;
 
 /// Load `.atm.toml` by walking upward from `start_dir`.
@@ -78,23 +69,8 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
 
     Ok(Some(AtmConfig {
         identity: parsed.atm.identity.or(parsed.identity),
-        default_team: parsed
-            .atm
-            .default_team
-            .or(parsed.default_team)
-            .map(|team| {
-                team.parse::<TeamName>().map_err(|error| {
-                    AtmError::new(
-                        AtmErrorKind::Config,
-                        format!("invalid default team in {}: {}", path.display(), error.message),
-                    )
-                    .with_recovery(
-                        "Use a valid ATM team name in [atm].default_team or default_team without path separators or surrounding whitespace.",
-                    )
-                })
-            })
-            .transpose()?,
-        team_members: normalize_team_members(parsed.atm.team_members, &path)?,
+        default_team: parsed.atm.default_team.or(parsed.default_team),
+        team_members: normalize_string_list(parsed.atm.team_members),
         aliases: normalize_aliases(parsed.atm.aliases),
         post_send_hooks: normalize_post_send_hooks(parsed.atm.post_send_hooks, &config_root)?,
         config_root,
@@ -141,28 +117,21 @@ pub fn load_team_config(team_dir: &Path) -> Result<TeamConfig, AtmError> {
 
 /// Resolves the sender identity for outgoing messages.
 ///
-/// The `_config` parameter is retained only to preserve the shared config-aware
-/// helper signature used across command code paths. Identity is resolved
-/// exclusively via the `ATM_IDENTITY` environment variable and will never fall
-/// back to deprecated config identity fields.
-pub fn resolve_identity(_config: Option<&AtmConfig>) -> Option<AgentName> {
+/// The `_config` parameter is reserved for a future config-provided identity
+/// fallback and is currently unused. Identity is resolved exclusively via the
+/// `ATM_IDENTITY` environment variable.
+pub fn resolve_identity(_config: Option<&AtmConfig>) -> Option<String> {
     env::var("ATM_IDENTITY")
         .ok()
         .filter(|value| !value.is_empty())
-        .and_then(|value| value.parse().ok())
 }
 
 /// Resolve the active team from explicit override, environment, or config.
-pub fn resolve_team(team_override: Option<&str>, config: Option<&AtmConfig>) -> Option<TeamName> {
+pub fn resolve_team(team_override: Option<&str>, config: Option<&AtmConfig>) -> Option<String> {
     team_override
         .filter(|value| !value.is_empty())
-        .and_then(|value| value.parse().ok())
-        .or_else(|| {
-            env::var("ATM_TEAM")
-                .ok()
-                .filter(|value| !value.is_empty())
-                .and_then(|value| value.parse().ok())
-        })
+        .map(ToOwned::to_owned)
+        .or_else(|| env::var("ATM_TEAM").ok().filter(|value| !value.is_empty()))
         .or_else(|| config.and_then(|cfg| cfg.default_team.clone()))
 }
 
@@ -202,14 +171,7 @@ struct RawAtmSection {
     #[serde(default)]
     aliases: std::collections::BTreeMap<String, String>,
     #[serde(default)]
-    post_send_hooks: Vec<RawPostSendHookRule>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct RawPostSendHookRule {
-    recipient: String,
-    command: Vec<String>,
+    post_send_hooks: Vec<types::PostSendHookRule>,
 }
 
 fn reject_legacy_post_send_hook_keys(path: &Path, raw_toml: &TomlValue) -> Result<(), AtmError> {
@@ -251,22 +213,11 @@ fn reject_legacy_post_send_hook_keys(path: &Path, raw_toml: &TomlValue) -> Resul
     Ok(())
 }
 
-fn normalize_team_members(values: Vec<String>, path: &Path) -> Result<Vec<TeamName>, AtmError> {
+fn normalize_string_list(values: Vec<String>) -> Vec<String> {
     values
         .into_iter()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
-        .map(|value| {
-            value.parse::<TeamName>().map_err(|error| {
-                AtmError::new(
-                    AtmErrorKind::Config,
-                    format!("invalid [atm].team_members entry in {}: {error}", path.display()),
-                )
-                .with_recovery(
-                    "Use valid ATM team-member names in [atm].team_members without path separators or surrounding whitespace.",
-                )
-            })
-        })
         .collect()
 }
 
@@ -365,24 +316,21 @@ fn parse_team_member(config_path: &Path, index: usize, entry: &Value) -> Option<
 
 #[cfg(test)]
 mod tests {
-    use crate::config::types::HookRecipient;
     use crate::error_codes::AtmErrorCode;
-    use crate::types::TeamName;
     use serde_json::Value;
     use std::env;
     use std::fs;
     use std::path::PathBuf;
-    use tempfile::tempdir;
 
     use super::{AtmConfig, load_config, parse_team_config, resolve_identity, resolve_team};
 
     #[test]
     fn load_config_walks_upward_for_dot_atm_toml() {
         let root = unique_temp_dir("config-discovery");
-        let nested = root.path().join("workspace").join("nested");
+        let nested = root.join("workspace").join("nested");
         fs::create_dir_all(&nested).expect("nested dir");
         fs::write(
-            root.path().join(".atm.toml"),
+            root.join(".atm.toml"),
             "[atm]\nidentity = \"arch-ctm\"\ndefault_team = \"atm-dev\"\n",
         )
         .expect("config");
@@ -390,7 +338,7 @@ mod tests {
         let config = load_config(&nested).expect("config").expect("present");
         assert_eq!(config.identity.as_deref(), Some("arch-ctm"));
         assert_eq!(config.default_team.as_deref(), Some("atm-dev"));
-        assert_eq!(config.config_root, root.path());
+        assert_eq!(config.config_root, root);
         assert!(config.obsolete_identity_present);
     }
 
@@ -398,15 +346,15 @@ mod tests {
     fn load_config_accepts_legacy_top_level_keys_for_compatibility() {
         let root = unique_temp_dir("legacy-config");
         fs::write(
-            root.path().join(".atm.toml"),
+            root.join(".atm.toml"),
             "identity = \"arch-ctm\"\ndefault_team = \"atm-dev\"\n",
         )
         .expect("config");
 
-        let config = load_config(root.path()).expect("config").expect("present");
+        let config = load_config(&root).expect("config").expect("present");
         assert_eq!(config.identity.as_deref(), Some("arch-ctm"));
         assert_eq!(config.default_team.as_deref(), Some("atm-dev"));
-        assert_eq!(config.config_root, root.path());
+        assert_eq!(config.config_root, root);
         assert!(config.obsolete_identity_present);
     }
 
@@ -414,7 +362,7 @@ mod tests {
     fn load_config_reads_team_members_aliases_and_post_send_hooks() {
         let root = unique_temp_dir("atm-config-surface");
         fs::write(
-            root.path().join(".atm.toml"),
+            root.join(".atm.toml"),
             r#"[atm]
 default_team = "atm-dev"
 team_members = ["team-lead", "arch-ctm", " ", "qa"]
@@ -435,31 +383,18 @@ blank = ""
         )
         .expect("config");
 
-        let config = load_config(root.path()).expect("config").expect("present");
-        assert_eq!(
-            config.team_members,
-            vec![
-                "team-lead".parse::<TeamName>().expect("team member"),
-                "arch-ctm".parse::<TeamName>().expect("team member"),
-                "qa".parse::<TeamName>().expect("team member"),
-            ]
-        );
+        let config = load_config(&root).expect("config").expect("present");
+        assert_eq!(config.team_members, vec!["team-lead", "arch-ctm", "qa"]);
         assert_eq!(config.post_send_hooks.len(), 2);
-        assert_eq!(
-            config.post_send_hooks[0].recipient,
-            HookRecipient::Named("team-lead".parse().expect("recipient"))
-        );
+        assert_eq!(config.post_send_hooks[0].recipient, "team-lead");
         assert_eq!(
             config.post_send_hooks[0].command,
             vec![
-                root.path()
-                    .join("scripts/atm-nudge.sh")
-                    .display()
-                    .to_string(),
+                root.join("scripts/atm-nudge.sh").display().to_string(),
                 "team-lead".to_string()
             ]
         );
-        assert_eq!(config.post_send_hooks[1].recipient, HookRecipient::Wildcard);
+        assert_eq!(config.post_send_hooks[1].recipient, "*");
         assert_eq!(
             config.post_send_hooks[1].command,
             vec!["bash".to_string(), "-lc".to_string(), "echo hi".to_string()]
@@ -476,24 +411,10 @@ blank = ""
     }
 
     #[test]
-    fn load_config_rejects_invalid_team_member_name() {
-        let root = unique_temp_dir("atm-config-invalid-team-member");
-        fs::write(
-            root.path().join(".atm.toml"),
-            "[atm]\nteam_members = [\"team-lead\", \"bad/name\"]\n",
-        )
-        .expect("config");
-
-        let error = load_config(root.path()).expect_err("invalid team member");
-
-        assert!(error.message.contains("[atm].team_members"));
-    }
-
-    #[test]
     fn load_config_ignores_core_section_hook_keys() {
         let root = unique_temp_dir("core-config-hook-keys");
         fs::write(
-            root.path().join(".atm.toml"),
+            root.join(".atm.toml"),
             r#"[core]
 default_team = "atm-dev"
 identity = "team-lead"
@@ -505,7 +426,7 @@ command = ["scripts/atm-nudge.sh", "arch-ctm"]
         )
         .expect("config");
 
-        let config = load_config(root.path()).expect("config").expect("present");
+        let config = load_config(&root).expect("config").expect("present");
         assert_eq!(config.default_team, None);
         assert_eq!(config.identity, None);
         assert_eq!(config.post_send_hooks.len(), 1);
@@ -516,21 +437,21 @@ command = ["scripts/atm-nudge.sh", "arch-ctm"]
     fn load_config_rejects_retired_post_send_hook_members_key() {
         let root = unique_temp_dir("retired-hook-members");
         fs::write(
-            root.path().join(".atm.toml"),
+            root.join(".atm.toml"),
             r#"[atm]
 post_send_hook_members = ["team-lead"]
 "#,
         )
         .expect("config");
 
-        let error = load_config(root.path()).expect_err("retired key should fail");
+        let error = load_config(&root).expect_err("retired key should fail");
 
         assert!(error.is_config());
         assert_eq!(error.code, AtmErrorCode::ConfigRetiredHookMembersKey);
         assert!(
             error
                 .message
-                .contains(&root.path().join(".atm.toml").display().to_string())
+                .contains(&root.join(".atm.toml").display().to_string())
         );
         assert!(error.message.contains("post_send_hook_members"));
         assert_eq!(
@@ -545,7 +466,7 @@ post_send_hook_members = ["team-lead"]
     fn load_config_rejects_legacy_post_send_filter_keys() {
         let root = unique_temp_dir("legacy-hook-filters");
         fs::write(
-            root.path().join(".atm.toml"),
+            root.join(".atm.toml"),
             r#"[atm]
 post_send_hook = ["bin/hook"]
 post_send_hook_recipients = ["team-lead"]
@@ -553,7 +474,7 @@ post_send_hook_recipients = ["team-lead"]
         )
         .expect("config");
 
-        let error = load_config(root.path()).expect_err("legacy hook shape should fail");
+        let error = load_config(&root).expect_err("legacy hook shape should fail");
 
         assert!(error.is_config());
         assert_eq!(error.code, AtmErrorCode::ConfigRetiredLegacyHookKeys);
@@ -569,7 +490,7 @@ post_send_hook_recipients = ["team-lead"]
 
     #[test]
     fn parse_team_config_accepts_object_members() {
-        let (_tempdir, config_path) = temp_config_path();
+        let config_path = temp_config_path();
         let config = parse_team_config(
             &config_path,
             r#"{"members":[{"name":"arch-ctm"},{"name":"team-lead"}]}"#,
@@ -584,7 +505,7 @@ post_send_hook_recipients = ["team-lead"]
 
     #[test]
     fn parse_team_config_accepts_string_member_compatibility() {
-        let (_tempdir, config_path) = temp_config_path();
+        let config_path = temp_config_path();
         let config = parse_team_config(
             &config_path,
             r#"{"members":["arch-ctm",{"name":"team-lead"}]}"#,
@@ -599,7 +520,7 @@ post_send_hook_recipients = ["team-lead"]
 
     #[test]
     fn parse_team_config_skips_invalid_member_records() {
-        let (_tempdir, config_path) = temp_config_path();
+        let config_path = temp_config_path();
         let config = parse_team_config(
             &config_path,
             r#"{"members":[{"name":"arch-ctm"},{"broken":true},17,{"name":"team-lead"}]}"#,
@@ -614,7 +535,7 @@ post_send_hook_recipients = ["team-lead"]
 
     #[test]
     fn parse_team_config_defaults_missing_members_to_empty() {
-        let (_tempdir, config_path) = temp_config_path();
+        let config_path = temp_config_path();
         let config = parse_team_config(&config_path, r#"{}"#).expect("team config");
 
         assert!(config.members.is_empty());
@@ -623,7 +544,7 @@ post_send_hook_recipients = ["team-lead"]
 
     #[test]
     fn parse_team_config_preserves_root_extra_fields() {
-        let (_tempdir, config_path) = temp_config_path();
+        let config_path = temp_config_path();
         let config = parse_team_config(
             &config_path,
             r#"{"leadSessionId":"lead-123","members":[{"name":"team-lead"}]}"#,
@@ -639,7 +560,7 @@ post_send_hook_recipients = ["team-lead"]
 
     #[test]
     fn parse_team_config_reports_json_syntax_errors_with_detail() {
-        let (_tempdir, config_path) = temp_config_path();
+        let config_path = temp_config_path();
         let error = parse_team_config(&config_path, r#"{"members":[{"name":"arch-ctm"}"#)
             .expect_err("syntax error");
 
@@ -652,7 +573,7 @@ post_send_hook_recipients = ["team-lead"]
 
     #[test]
     fn parse_team_config_rejects_non_object_root() {
-        let (_tempdir, config_path) = temp_config_path();
+        let config_path = temp_config_path();
         let error =
             parse_team_config(&config_path, r#"["arch-ctm"]"#).expect_err("root shape error");
 
@@ -664,7 +585,7 @@ post_send_hook_recipients = ["team-lead"]
 
     #[test]
     fn parse_team_config_rejects_non_array_members() {
-        let (_tempdir, config_path) = temp_config_path();
+        let config_path = temp_config_path();
         let error = parse_team_config(&config_path, r#"{"members":{"name":"arch-ctm"}}"#)
             .expect_err("members shape error");
 
@@ -681,7 +602,7 @@ post_send_hook_recipients = ["team-lead"]
     #[test]
     fn load_team_config_reports_missing_document_distinctly() {
         let root = unique_temp_dir("missing-team-config");
-        let team_dir = root.path().join("team");
+        let team_dir = root.join("team");
         fs::create_dir_all(&team_dir).expect("team dir");
 
         let error = super::load_team_config(&team_dir).expect_err("missing config");
@@ -692,7 +613,7 @@ post_send_hook_recipients = ["team-lead"]
     }
 
     #[test]
-    #[serial_test::serial(env)]
+    #[serial_test::serial]
     fn identity_prefers_environment_over_config() {
         let original_identity = env::var_os("ATM_IDENTITY");
         set_env_var("ATM_IDENTITY", "env-identity");
@@ -711,7 +632,7 @@ post_send_hook_recipients = ["team-lead"]
     }
 
     #[test]
-    #[serial_test::serial(env)]
+    #[serial_test::serial]
     fn identity_ignores_obsolete_config_field_when_env_missing() {
         let original_identity = env::var_os("ATM_IDENTITY");
         remove_env_var("ATM_IDENTITY");
@@ -727,13 +648,13 @@ post_send_hook_recipients = ["team-lead"]
     }
 
     #[test]
-    #[serial_test::serial(env)]
+    #[serial_test::serial]
     fn team_resolution_prefers_flag_then_env_then_config() {
         let original_team = env::var_os("ATM_TEAM");
         set_env_var("ATM_TEAM", "env-team");
 
         let config = AtmConfig {
-            default_team: Some("config-team".parse().expect("team")),
+            default_team: Some("config-team".into()),
             ..Default::default()
         };
 
@@ -755,19 +676,14 @@ post_send_hook_recipients = ["team-lead"]
         restore("ATM_TEAM", original_team);
     }
 
-    fn unique_temp_dir(label: &str) -> tempfile::TempDir {
-        tempfile::Builder::new()
-            .prefix(label)
-            .tempdir()
-            .expect("temp dir")
+    fn unique_temp_dir(label: &str) -> PathBuf {
+        let path = env::temp_dir().join(format!("{label}-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&path).expect("temp dir");
+        path
     }
 
-    fn temp_config_path() -> (tempfile::TempDir, PathBuf) {
-        let tempdir = tempdir().expect("tempdir");
-        let root = tempdir.path().to_path_buf();
-        let nested = root.join("atm config root").join("nested config dir");
-        fs::create_dir_all(&nested).expect("nested config dir");
-        (tempdir, nested.join("config.json"))
+    fn temp_config_path() -> PathBuf {
+        env::temp_dir().join("config.json")
     }
 
     fn restore(key: &str, value: Option<std::ffi::OsString>) {
