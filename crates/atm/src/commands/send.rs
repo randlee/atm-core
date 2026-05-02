@@ -1,10 +1,9 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use atm_core::address::AgentAddress;
 use atm_core::home;
 use atm_core::send::{self, SendMessageSource, SendRequest};
-use atm_core::types::{AgentName, TeamName};
+use atm_core::types::TaskId;
 use clap::Args;
 
 use crate::observability::CliObservability;
@@ -41,7 +40,7 @@ pub struct SendCommand {
     requires_ack: bool,
 
     #[arg(long = "task-id")]
-    task_id: Option<String>,
+    task_id: Option<TaskId>,
 
     #[arg(long)]
     dry_run: bool,
@@ -55,26 +54,28 @@ impl SendCommand {
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
+        let json = self.json;
+        let request = self.build_request(home_dir, current_dir)?;
+        let outcome = send::send_mail(request, observability)?;
+
+        output::print_send_result(&outcome, json)
+    }
+
+    fn build_request(self, home_dir: PathBuf, current_dir: PathBuf) -> Result<SendRequest> {
         let message_source = self.build_message_source()?;
-        let to: AgentAddress = self.to.parse()?;
-
-        let outcome = send::send_mail(
-            SendRequest {
-                home_dir,
-                current_dir,
-                sender_override: self.from.map(AgentName::from),
-                to,
-                team_override: self.team.map(TeamName::from),
-                message_source,
-                summary_override: self.summary,
-                requires_ack: self.requires_ack,
-                task_id: self.task_id,
-                dry_run: self.dry_run,
-            },
-            observability,
-        )?;
-
-        output::print_send_result(&outcome, self.json)
+        SendRequest::new(
+            home_dir,
+            current_dir,
+            self.from.as_deref(),
+            &self.to,
+            self.team.as_deref(),
+            message_source,
+            self.summary,
+            self.requires_ack,
+            self.task_id,
+            self.dry_run,
+        )
+        .map_err(Into::into)
     }
 
     fn build_message_source(&self) -> Result<SendMessageSource> {
@@ -99,5 +100,33 @@ impl SendCommand {
             (Some(_), true, _) => unreachable!("validated above"),
             (None, true, Some(_)) => unreachable!("validated above"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SendCommand;
+
+    #[test]
+    fn build_request_rejects_invalid_target_before_core() {
+        let command = SendCommand {
+            to: "../evil".to_string(),
+            message: Some("hello".to_string()),
+            from: Some("team-lead".to_string()),
+            team: Some("atm-dev".to_string()),
+            file: None,
+            stdin: false,
+            summary: None,
+            requires_ack: false,
+            task_id: None,
+            dry_run: false,
+            json: false,
+        };
+
+        let error = command
+            .build_request(".".into(), ".".into())
+            .expect_err("invalid target");
+
+        assert!(error.to_string().contains("agent name"));
     }
 }

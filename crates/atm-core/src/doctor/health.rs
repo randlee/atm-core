@@ -28,11 +28,11 @@ pub fn environment_visibility(
         atm_team: std::env::var("ATM_TEAM")
             .ok()
             .filter(|value| !value.is_empty())
-            .map(TeamName::from),
+            .map(TeamName::from_validated),
         atm_identity: std::env::var("ATM_IDENTITY")
             .ok()
             .filter(|value| !value.is_empty())
-            .map(AgentName::from),
+            .map(AgentName::from_validated),
         team_override,
     }
 }

@@ -392,11 +392,11 @@ fn map_command_event(
     );
     fields.insert(
         "team".to_string(),
-        serde_json::Value::String(event.team.clone()),
+        serde_json::Value::String(event.team.to_string()),
     );
     fields.insert(
         "agent".to_string(),
-        serde_json::Value::String(event.agent.clone()),
+        serde_json::Value::String(event.agent.to_string()),
     );
     fields.insert(
         "sender".to_string(),
@@ -419,7 +419,7 @@ fn map_command_event(
     if let Some(task_id) = &event.task_id {
         fields.insert(
             "task_id".to_string(),
-            serde_json::Value::String(task_id.clone()),
+            serde_json::Value::String(task_id.to_string()),
         );
     }
     if let Some(error_code) = event.error_code {
