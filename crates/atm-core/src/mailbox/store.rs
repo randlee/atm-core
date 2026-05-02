@@ -178,6 +178,21 @@ mod tests {
     }
 
     fn sample_message(from: &str, text: &str) -> MessageEnvelope {
+        let message_id = LegacyMessageId::from(Uuid::new_v4());
+        let mut extra = serde_json::Map::new();
+        let mut metadata = serde_json::Map::new();
+        let mut atm = serde_json::Map::new();
+        atm.insert(
+            "messageId".to_string(),
+            serde_json::Value::String(message_id.into_atm_message_id().to_string()),
+        );
+        atm.insert(
+            "sourceTeam".to_string(),
+            serde_json::Value::String("atm-dev".to_string()),
+        );
+        metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
+        extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
+
         MessageEnvelope {
             from: from.to_string(),
             text: text.to_string(),
@@ -185,12 +200,12 @@ mod tests {
             read: false,
             source_team: Some("atm-dev".to_string()),
             summary: None,
-            message_id: Some(LegacyMessageId::from(Uuid::new_v4())),
+            message_id: Some(message_id),
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
             task_id: None,
-            extra: serde_json::Map::new(),
+            extra,
         }
     }
 }

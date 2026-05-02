@@ -18,8 +18,16 @@ impl LegacyMessageId {
         Self(Uuid::new_v4())
     }
 
+    pub fn from_atm_message_id(value: AtmMessageId) -> Self {
+        Self(Uuid::from_bytes(value.into_ulid().to_bytes()))
+    }
+
     pub fn into_uuid(self) -> Uuid {
         self.0
+    }
+
+    pub fn into_atm_message_id(self) -> AtmMessageId {
+        AtmMessageId::from(Ulid::from_bytes(self.0.into_bytes()))
     }
 }
 
@@ -134,6 +142,9 @@ pub struct AtmMetadataFields {
     )]
     pub acknowledges_message_id: Option<AtmMessageId>,
 
+    #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]
+    pub task_id: Option<TaskId>,
+
     #[serde(rename = "alertKind", skip_serializing_if = "Option::is_none")]
     pub alert_kind: Option<String>,
 
@@ -221,16 +232,149 @@ pub struct PendingAck {
     pub acked_at: Option<IsoTimestamp>,
 }
 
+fn ensure_object<'a>(parent: &'a mut Map<String, Value>, key: &str) -> &'a mut Map<String, Value> {
+    let entry = parent
+        .entry(key.to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+    if !entry.is_object() {
+        *entry = Value::Object(Map::new());
+    }
+    entry.as_object_mut().expect("entry forced to object")
+}
+
+pub(crate) fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, serde_json::Error> {
+    let mut value = serde_json::to_value(message)?;
+    let object = value
+        .as_object_mut()
+        .expect("message envelope serializes to object");
+    let message_id = object.remove("message_id").and_then(|value| match value {
+        Value::String(_) => message
+            .message_id
+            .map(LegacyMessageId::into_atm_message_id)
+            .map(|message_id| Value::String(message_id.to_string())),
+        _ => None,
+    });
+    let source_team = object.remove("source_team");
+    let pending_ack_at = object.remove("pendingAckAt");
+    let acknowledged_at = object.remove("acknowledgedAt");
+    let acknowledges_message_id =
+        object
+            .remove("acknowledgesMessageId")
+            .and_then(|value| match value {
+                Value::String(_) => message
+                    .acknowledges_message_id
+                    .map(LegacyMessageId::into_atm_message_id)
+                    .map(|message_id| Value::String(message_id.to_string())),
+                _ => None,
+            });
+    let task_id = object.remove("taskId");
+    let alert_kind = object.remove("atmAlertKind");
+    let missing_config_path = object.remove("missingConfigPath");
+
+    let metadata = ensure_object(object, "metadata");
+    let atm = ensure_object(metadata, "atm");
+
+    if let Some(value) = message_id {
+        atm.entry("messageId".to_string()).or_insert(value);
+    }
+    if let Some(value) = source_team {
+        atm.entry("sourceTeam".to_string()).or_insert(value);
+    }
+    if let Some(value) = pending_ack_at {
+        atm.entry("pendingAckAt".to_string()).or_insert(value);
+    }
+    if let Some(value) = acknowledged_at {
+        atm.entry("acknowledgedAt".to_string()).or_insert(value);
+    }
+    if let Some(value) = acknowledges_message_id {
+        atm.entry("acknowledgesMessageId".to_string())
+            .or_insert(value);
+    }
+    if let Some(value) = task_id {
+        atm.entry("taskId".to_string()).or_insert(value);
+    }
+    if let Some(value) = alert_kind {
+        atm.entry("alertKind".to_string()).or_insert(value);
+    }
+    if let Some(value) = missing_config_path {
+        atm.entry("missingConfigPath".to_string()).or_insert(value);
+    }
+
+    Ok(value)
+}
+
+pub(crate) fn hydrate_legacy_fields_from_metadata(value: &mut Value) {
+    let Some(object) = value.as_object_mut() else {
+        return;
+    };
+    let Some(atm) = object
+        .get("metadata")
+        .and_then(Value::as_object)
+        .and_then(|metadata| metadata.get("atm"))
+        .and_then(Value::as_object)
+        .cloned()
+    else {
+        return;
+    };
+
+    if !object.contains_key("message_id") {
+        if let Some(raw) = atm.get("messageId").and_then(Value::as_str) {
+            if let Ok(message_id) = raw.parse::<AtmMessageId>() {
+                object.insert(
+                    "message_id".to_string(),
+                    Value::String(LegacyMessageId::from_atm_message_id(message_id).to_string()),
+                );
+            }
+        }
+    }
+
+    if !object.contains_key("source_team") {
+        if let Some(value) = atm.get("sourceTeam") {
+            object.insert("source_team".to_string(), value.clone());
+        }
+    }
+
+    if !object.contains_key("pendingAckAt") {
+        if let Some(value) = atm.get("pendingAckAt") {
+            object.insert("pendingAckAt".to_string(), value.clone());
+        }
+    }
+
+    if !object.contains_key("acknowledgedAt") {
+        if let Some(value) = atm.get("acknowledgedAt") {
+            object.insert("acknowledgedAt".to_string(), value.clone());
+        }
+    }
+
+    if !object.contains_key("acknowledgesMessageId") {
+        if let Some(raw) = atm.get("acknowledgesMessageId").and_then(Value::as_str) {
+            if let Ok(message_id) = raw.parse::<AtmMessageId>() {
+                object.insert(
+                    "acknowledgesMessageId".to_string(),
+                    Value::String(LegacyMessageId::from_atm_message_id(message_id).to_string()),
+                );
+            }
+        }
+    }
+
+    if !object.contains_key("taskId") {
+        if let Some(value) = atm.get("taskId") {
+            object.insert("taskId".to_string(), value.clone());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::TimeZone;
-    use serde_json::{Map, json};
+    use serde_json::{Map, Value, json};
 
     use chrono::Utc;
 
     use super::{
         AtmMessageId, AtmMetadataFields, ForwardMetadataEnvelope, IsoTimestamp, LegacyMessageId,
-        MessageEnvelope, MessageMetadata, PendingAck,
+        MessageEnvelope, MessageMetadata, PendingAck, hydrate_legacy_fields_from_metadata,
+        to_shared_inbox_value,
     };
 
     #[test]
@@ -347,6 +491,7 @@ mod tests {
                     pending_ack_at: None,
                     acknowledged_at: None,
                     acknowledges_message_id: None,
+                    task_id: None,
                     alert_kind: None,
                     missing_config_path: None,
                     extra: Map::new(),
@@ -396,5 +541,73 @@ mod tests {
         let (message_id, _) = AtmMessageId::new_with_timestamp();
         let parsed: AtmMessageId = message_id.to_string().parse().expect("parse atm id");
         assert_eq!(parsed, message_id);
+    }
+
+    #[test]
+    fn shared_inbox_write_shape_moves_machine_fields_into_metadata() {
+        let envelope = MessageEnvelope {
+            from: "arch-ctm".into(),
+            text: "hello".into(),
+            timestamp: IsoTimestamp::from_datetime(
+                Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
+                    .single()
+                    .expect("timestamp"),
+            ),
+            read: false,
+            source_team: Some("atm-dev".into()),
+            summary: Some("hello".into()),
+            message_id: Some(LegacyMessageId::new()),
+            pending_ack_at: Some(IsoTimestamp::from_datetime(
+                Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 1)
+                    .single()
+                    .expect("timestamp"),
+            )),
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            task_id: Some("TASK-123".parse().expect("task id")),
+            extra: Map::new(),
+        };
+
+        let encoded = to_shared_inbox_value(&envelope).expect("encode");
+        let object = encoded.as_object().expect("object");
+        assert!(!object.contains_key("message_id"));
+        assert!(!object.contains_key("source_team"));
+        assert!(!object.contains_key("pendingAckAt"));
+        assert!(!object.contains_key("taskId"));
+
+        let atm = object
+            .get("metadata")
+            .and_then(Value::as_object)
+            .and_then(|metadata| metadata.get("atm"))
+            .and_then(Value::as_object)
+            .expect("metadata.atm");
+        assert!(atm.contains_key("messageId"));
+        assert_eq!(atm.get("sourceTeam"), Some(&json!("atm-dev")));
+        assert_eq!(atm.get("taskId"), Some(&json!("TASK-123")));
+    }
+
+    #[test]
+    fn metadata_fields_hydrate_legacy_internal_shape() {
+        let mut value = json!({
+            "from": "arch-ctm",
+            "text": "hello",
+            "timestamp": "2026-03-30T00:00:00Z",
+            "read": false,
+            "summary": "hello",
+            "metadata": {
+                "atm": {
+                    "messageId": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
+                    "sourceTeam": "atm-dev",
+                    "pendingAckAt": "2026-03-30T00:00:01Z",
+                    "taskId": "TASK-123"
+                }
+            }
+        });
+
+        hydrate_legacy_fields_from_metadata(&mut value);
+        let object = value.as_object().expect("object");
+        assert!(object.contains_key("message_id"));
+        assert_eq!(object.get("source_team"), Some(&json!("atm-dev")));
+        assert_eq!(object.get("taskId"), Some(&json!("TASK-123")));
     }
 }
