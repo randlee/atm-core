@@ -17,6 +17,10 @@ Cargo.toml.ci
 # Contains mutation testing data
 **/mutants.out*/
 
+# Local session artifacts and compose logs from sc tooling
+.sc/sessions/
+.sc-compose/logs/
+
 # RustRover
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
