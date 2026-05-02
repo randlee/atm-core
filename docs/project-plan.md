@@ -2600,6 +2600,31 @@ Acceptance:
 - requirements, architecture, and project plan all match the final design
 - the full production-readiness checklist is satisfied, not partially deferred
 
+### Q.6 — Production-Readiness Gate + Release Sprint
+
+Scope:
+- prove the daemon/runtime is production-ready end-to-end
+- prove `atm send` and `atm ack` both use the daemon production path
+- validate every Phase Q QA invariant and every Production-Readiness Checklist
+  item
+- validate the release gate criteria and prepare the line for production
+  release rather than architecture-only completion
+
+Acceptance:
+- every checklist item is proven by implementation, tests, or release
+  validation
+- every QA invariant has explicit conformance/integration coverage
+- daemon singleton, graceful shutdown, stale-artifact cleanup, daemon
+  unavailability, and canonical post-store event behavior are validated
+- structured `sc-observability` coverage is validated at CLI and daemon layers
+- typed error families are validated across store/ingest/export/transport/
+  daemon-runtime/daemon-singleton/daemon-client boundaries
+- workspace/package version bump and publish/release steps are explicit
+- the release gate explicitly requires crates.io publish success, GitHub
+  release/tag plus binary artifacts, and `CHANGELOG.md` update
+- the docs and release materials describe the final production-ready runtime,
+  not an in-progress migration
+
 QA invariants for every Phase Q pass:
 - impossible to run two active daemons on one host
 - daemon unavailability fails clearly without hidden fallback to direct store or

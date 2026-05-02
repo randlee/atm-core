@@ -704,6 +704,95 @@ Acceptance:
     than correctness blockers
   - no core test requires daemon process spawning
 
+### Q.6 — Production-Readiness Gate + Release Sprint
+
+Scope:
+- prove the Phase Q daemon/runtime is production-ready end-to-end
+- prove `atm send` and `atm ack` both route through the daemon production path
+- validate every boundary rule listed in the Phase Q QA invariants
+- validate every item in the Production-Readiness Checklist
+- validate every Phase Q release-gate criterion
+- prepare the Phase Q line for production release rather than architecture-only
+  completion
+
+Expected files / crates:
+- `crates/atm/src/*`
+- `crates/atm-core/src/*`
+- `crates/atm-daemon/src/*`
+- `crates/atm-rusqlite/src/*`
+- `crates/atm-core/tests/*`
+- `crates/atm/tests/*`
+- `Cargo.toml`
+- `CHANGELOG.md`
+- `.github/workflows/*`
+- release / packaging docs and scripts as needed
+
+Implementation details:
+- validate daemon singleton enforcement under repeated start, clean shutdown,
+  and stale-artifact recovery conditions
+- validate graceful shutdown ordering:
+  - stop accepts
+  - drain inflight work
+  - force-cancel remaining inflight at the deadline
+  - checkpoint WAL
+  - release singleton artifacts
+- validate `atm send` and `atm ack` through the daemon production path rather
+  than direct CLI/store mutation
+- validate canonical event emission only from the daemon-owned post-store
+  boundary
+- validate no canonical event or external hook execution on `DuplicateEntry`,
+  replay, reconcile, imported inbound JSONL, or remote inbound delivery
+- validate every strict boundary rule with explicit conformance/integration
+  coverage:
+  - store / SQL
+  - inbox ingress/export
+  - config ingress
+  - watcher/reconcile
+  - transport
+  - dispatcher/handlers
+  - notifier/plugin
+  - doctor health query
+- validate structured `sc-observability` coverage at both CLI and daemon
+  layers, including degraded/failed paths
+- validate typed error families and `AtmErrorCode` coverage for:
+  - store
+  - ingest
+  - export
+  - transport
+  - daemon runtime
+  - daemon singleton
+  - daemon client
+- validate the production result is observably and operationally better than
+  the current ATM runtime rather than merely equivalent
+- bump workspace/package versions for the Phase Q release target
+- run `cargo publish --dry-run` validation for the publishable crates
+- plan for crates.io publish and GitHub release creation with binary artifacts
+- update `CHANGELOG.md` for the Phase Q release
+- update docs to reflect the production-ready released state rather than
+  planned-only state
+
+Acceptance:
+- every item in the Production-Readiness Checklist is explicitly proven by
+  implementation, tests, or release validation
+- every Phase Q QA invariant has listed conformance/integration coverage
+- `atm send` and `atm ack` are both proven on the daemon production path
+- daemon singleton, graceful shutdown, stale-artifact cleanup, and daemon
+  unavailability behavior are all validated
+- structured `sc-observability` coverage is validated at CLI and daemon layers
+- typed error families are validated across store/ingest/export/transport/
+  daemon-runtime/daemon-singleton/daemon-client surfaces
+- the release gate is satisfied as written, including the “better than current
+  ATM runtime” criterion
+- workspace/package version bump plan is explicit for the Phase Q release
+- publish/release steps are documented, including:
+  - `cargo publish --dry-run`
+  - crates.io publish for the publishable crates
+  - GitHub release/tag creation
+  - binary artifact validation
+  - `CHANGELOG.md` update
+- docs match the final production-ready runtime and release shape
+  rather than an implementation-in-progress shape
+
 ## Testing Constraints
 
 Phase Q must explicitly avoid the daemon failures that sank the earlier design.
@@ -756,6 +845,12 @@ state:
   and panic/unwrap are not the normal production strategy
 - conformance/integration tests are listed for edge cases and boundary rules
 - every boundary violation is an immediate QA failure
+- the publish/release path is explicit:
+  - workspace/package version bump
+  - `cargo publish --dry-run`
+  - crates.io publish for the publishable crates
+  - GitHub release with tag and binary artifacts
+  - `CHANGELOG.md` update
 - the release gate proves the result is production-ready and better than the
   current ATM runtime
 
@@ -885,5 +980,8 @@ Phase Q should be considered complete only when:
   durable database truth
 - Claude inbox files remain a compatible export/ingest surface only
 - stale lock cleanup can no longer wedge normal ATM mail flows
+- crates.io publish succeeds for the publishable crates
+- a GitHub release exists with tag and binary artifacts
+- `CHANGELOG.md` is updated for the Phase Q release
 - the result is observably and operationally better than the current ATM
   runtime rather than simply equivalent with new internals
