@@ -178,34 +178,71 @@ def main(argv: list[str]) -> int:
 
     if pane_toml and pane_config:
         if pane_toml != pane_config:
-            msg = (
-                f"Pane mismatch for '{recipient}@{team}': "
-                f".atm.toml={pane_toml}, config.json={pane_config} — fix the mismatch"
-            )
-            log(f"error: {msg}")
-            print(msg, file=sys.stderr)
+            lines = [
+                f"ERROR: Pane mismatch for '{recipient}@{team}':",
+                f"  .atm.toml       tmux_pane_id = {pane_toml}",
+                f"  config.json     tmuxPaneId   = {pane_config}",
+                f"",
+                f"Manual nudge (pick the correct pane ID):",
+                f"  tmux send-keys -t {pane_toml} -l '{message}' && sleep 0.25 && tmux send-keys -t {pane_toml} Enter",
+                f"",
+                f"Fix: update tmux_pane_id in .atm.toml [[rmux.windows.panes]] name='{recipient}'",
+                f"     and/or tmuxPaneId in ~/.claude/teams/{team}/config.json",
+                f"     so both agree on the correct pane.",
+            ]
+            out = "\n".join(lines)
+            log(f"error: pane mismatch for {recipient}@{team} toml={pane_toml} config={pane_config}")
+            print(out, file=sys.stderr)
             return 1
         nudge_pane(pane_toml, message, recipient)
         return 0
 
     if pane_toml and not pane_config:
-        msg = f"'{recipient}@{team}': .atm.toml has pane={pane_toml} but config.json error: {err_config}"
-        log(f"error: {msg}")
-        print(msg, file=sys.stderr)
+        lines = [
+            f"ERROR: '{recipient}@{team}' pane found in .atm.toml ({pane_toml}) but missing from config.json.",
+            f"  config.json error: {err_config}",
+            f"",
+            f"Manual nudge:",
+            f"  tmux send-keys -t {pane_toml} -l '{message}' && sleep 0.25 && tmux send-keys -t {pane_toml} Enter",
+            f"",
+            f"Fix: add or update tmuxPaneId = \"{pane_toml}\" for '{recipient}'",
+            f"     in ~/.claude/teams/{team}/config.json members array.",
+        ]
+        out = "\n".join(lines)
+        log(f"error: {recipient}@{team} toml={pane_toml} config missing: {err_config}")
+        print(out, file=sys.stderr)
         return 1
 
     if pane_config and not pane_toml:
-        msg = f"'{recipient}@{team}': config.json has pane={pane_config} but .atm.toml error: {err_toml}"
-        log(f"error: {msg}")
-        print(msg, file=sys.stderr)
+        lines = [
+            f"ERROR: '{recipient}@{team}' pane found in config.json ({pane_config}) but missing from .atm.toml.",
+            f"  .atm.toml error: {err_toml}",
+            f"",
+            f"Manual nudge:",
+            f"  tmux send-keys -t {pane_config} -l '{message}' && sleep 0.25 && tmux send-keys -t {pane_config} Enter",
+            f"",
+            f"Fix: add tmux_pane_id = \"{pane_config}\" to [[rmux.windows.panes]] name='{recipient}'",
+            f"     in .atm.toml.",
+        ]
+        out = "\n".join(lines)
+        log(f"error: {recipient}@{team} config={pane_config} toml missing: {err_toml}")
+        print(out, file=sys.stderr)
         return 1
 
-    msg = (
-        f"Pane not found for '{recipient}@{team}': "
-        f".atm.toml: {err_toml}; config.json: {err_config}"
-    )
-    log(f"error: {msg}")
-    print(msg, file=sys.stderr)
+    lines = [
+        f"ERROR: Pane not configured for '{recipient}@{team}' in either source.",
+        f"  .atm.toml   error: {err_toml}",
+        f"  config.json error: {err_config}",
+        f"",
+        f"Manual nudge (once you know the correct pane ID):",
+        f"  tmux send-keys -t <PANE_ID> -l '{message}' && sleep 0.25 && tmux send-keys -t <PANE_ID> Enter",
+        f"",
+        f"Fix: add tmux_pane_id = \"<PANE_ID>\" to [[rmux.windows.panes]] name='{recipient}' in .atm.toml",
+        f"     and tmuxPaneId = \"<PANE_ID>\" for '{recipient}' in ~/.claude/teams/{team}/config.json.",
+    ]
+    out = "\n".join(lines)
+    log(f"error: pane not found for {recipient}@{team}: toml={err_toml} config={err_config}")
+    print(out, file=sys.stderr)
     return 1
 
 
