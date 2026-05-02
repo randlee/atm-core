@@ -15,7 +15,9 @@ use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
 use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
-use crate::send::{input, summary};
+use crate::send::{
+    PostSendHookContext, ResolvedRecipient, input, maybe_run_post_send_hook, summary,
+};
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use crate::workflow;
 
@@ -42,6 +44,8 @@ pub struct AckOutcome {
     pub reply_target: ReplyTarget,
     pub reply_message_id: LegacyMessageId,
     pub reply_text: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -276,7 +280,9 @@ pub fn ack_mail(
         },
     )?;
 
-    let outcome = AckOutcome {
+    let hook_reply_agent = reply_agent.clone();
+    let hook_reply_team = reply_team.clone();
+    let mut outcome = AckOutcome {
         action: "ack",
         team: team.clone(),
         agent: actor.clone(),
@@ -285,7 +291,26 @@ pub fn ack_mail(
         reply_target: ReplyTarget::new(AgentName::from_validated(reply_agent), reply_team),
         reply_message_id,
         reply_text: reply_text.clone(),
+        warnings: Vec::new(),
     };
+
+    let hook_reply_recipient = ResolvedRecipient {
+        agent: hook_reply_agent,
+        team: hook_reply_team,
+    };
+    maybe_run_post_send_hook(
+        &mut outcome.warnings,
+        config.as_ref(),
+        PostSendHookContext {
+            sender: &actor,
+            sender_team: Some(&team),
+            recipient: &hook_reply_recipient,
+            message_id: reply_message_id,
+            requires_ack: false,
+            is_ack: true,
+            task_id: outcome.task_id.as_ref(),
+        },
+    );
 
     let _ = observability.emit(CommandEvent {
         command: "ack",

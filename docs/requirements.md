@@ -597,9 +597,14 @@ Post-send-hook rules:
   - `team`
   - `message_id`
   - `requires_ack`
+  - `is_ack`
   - optional `task_id` when present
   - optional `recipient_pane_id` when ATM has an authoritative pane mapping for
     the recipient
+- the post-send hook must run after successful non-`dry-run` `atm send`
+- the post-send hook must also run after successful `atm ack`, using the
+  reply message as the hook subject
+- `is_ack` must be `false` for `atm send` and `true` for `atm ack`
 - example payload:
   ```json
   {
@@ -610,6 +615,7 @@ Post-send-hook rules:
     "team": "atm-dev",
     "message_id": "...",
     "requires_ack": false,
+    "is_ack": false,
     "recipient_pane_id": "%1"
   }
   ```

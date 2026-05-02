@@ -1125,14 +1125,16 @@ contain:
 - `to`
 - `message_id`
 - `requires_ack`
+- `is_ack`
 - optional `task_id` when present
 - optional `recipient_pane_id` when ATM already knows the authoritative pane
   mapping for the recipient
 
-The post-send hook runs only after a successful non-`dry-run` send, executes
-once when sender or recipient matching succeeds, may optionally emit one
-structured stdout result for observability, and never rolls back a successful
-send on failure or timeout.
+The post-send hook runs only after a successful outbound mailbox write from
+`atm send` or `atm ack`. It executes once when recipient matching succeeds,
+uses `is_ack = false` for `atm send` and `is_ack = true` for `atm ack`, may
+optionally emit one structured stdout result for observability, and never rolls
+back a successful message write on failure or timeout.
 
 Phase Q hook-note:
 - once roster and pane mapping truth move to SQLite, the send path should place
