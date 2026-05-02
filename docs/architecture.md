@@ -451,7 +451,9 @@ Architectural rules:
 - the hook receives inherited environment plus one ATM-owned JSON payload in
   `ATM_POST_SEND`
 - the payload includes `from`, `to`, `sender`, `recipient`, `team`,
-  `message_id`, `requires_ack`, `is_ack`, and optional `task_id`
+  `message_id`, `requires_ack`, `is_ack`, and optional `recipient_pane_id`
+  when ATM already knows the authoritative pane mapping for the recipient, and
+  optional `task_id`
 - the hook may optionally emit one structured result object on stdout with a
   declared log level, message, and optional structured fields; ATM parses it
   on a best-effort basis for post-send diagnostics
