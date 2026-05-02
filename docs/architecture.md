@@ -2,7 +2,9 @@
 
 ## 1. Overview
 
-The rewrite keeps ATM as a file-based mail CLI and removes daemon architecture.
+The current target architecture keeps the ATM CLI surface, but moves durable
+mail and roster ownership to SQLite and reintroduces one tightly-bounded
+singleton daemon runtime for routing, notification, and transport.
 
 The workspace remains intentionally small:
 - `atm-core`: reusable library
@@ -31,6 +33,12 @@ moved into:
 - [`docs/atm/architecture.md`](./atm/architecture.md)
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 
+Phase-Q supersession note:
+- earlier daemon-free architecture statements in this file are historical from
+  the prior rewrite line
+- for the current mail/runtime target architecture, Section 21 is
+  authoritative
+
 ## 2. Crate Boundaries
 
 The product is implemented by two crates:
@@ -40,7 +48,8 @@ The product is implemented by two crates:
 
 Product-level boundary rules:
 
-- `atm-core` owns daemon-free ATM business logic.
+- `atm-core` owns ATM business logic and the strict I/O boundaries that Phase Q
+  routes through a daemon runtime.
 - `atm` owns CLI parsing, dispatch, rendering, and bootstrap.
 - `atm-core` must not own clap or terminal-formatting concerns.
 - `atm` must not own mailbox, workflow, log-query, or doctor business logic.
@@ -1845,3 +1854,121 @@ Phase O adds three architecture-level hardening decisions:
    - this keeps same-process rapid writes to the same target path from
      colliding on the temp-file name while preserving the target basename for
      operator debugging
+
+## 21. Phase Q Runtime Architecture
+
+Phase Q supersedes the mailbox-lock architecture as the target design for ATM
+mail correctness. The file-based mailbox line remains an interim compatibility
+surface only.
+
+### 21.1 Authoritative State
+
+ATM moves to a split state model:
+
+- SQLite is the authoritative durable store for:
+  - messages
+  - ack/task state
+  - read/clear visibility state
+  - team roster
+- daemon memory is the authoritative live runtime view for:
+  - current agent status
+
+SQLite may persist last-observed status for diagnostics, but that snapshot is
+not the live truth.
+
+### 21.2 Compatibility Surfaces
+
+Claude-owned inbox JSONL files remain required for:
+- Claude context injection
+- compatibility with direct Claude-native writers
+
+Architectural rule:
+- JSONL is ingress/egress compatibility only
+- JSONL is not ATM's authoritative durable mail state
+
+`config.json` remains a team-ingress surface, but roster truth moves to
+SQLite.
+
+### 21.3 Information Flow
+
+There are three distinct paths:
+
+1. Claude / compatibility path
+   - Claude or legacy writers append JSONL
+   - ATM imports through one owned inbox-ingress boundary
+   - imported records become durable in SQLite
+
+2. Native agent path
+   - native agent/plugin traffic does not use JSONL
+   - native agents talk to the local daemon API
+   - the daemon commits through the SQLite store boundary
+
+3. Remote host path
+   - cross-host delivery is daemon-to-daemon only
+   - routing expands from `agent@team` to `agent@team.host`
+   - sender-side daemons do not write remote host JSONL directly
+
+### 21.4 One Interface, Two Transport Implementations
+
+Phase Q uses one daemon API with two transport adapters:
+
+- same-host: Unix domain socket
+- cross-host: TCP/TLS
+
+This is one protocol with two implementations, not two systems.
+
+Remote-delivery semantics:
+- bounded transient retry is acceptable for short intermittent failures
+- there is no durable long-lived remote outbox
+- if the remote host remains unreachable after the bounded retry window, send
+  fails rather than leaving stale pending delivery behind
+
+### 21.5 Singleton Daemon
+
+The daemon is required at runtime, but it must remain thin.
+
+Hard invariant:
+- it must be impossible for two active ATM daemons to run on one host at the
+  same time
+
+Daemon responsibilities:
+- transport listeners
+- route selection
+- live status cache
+- watch/reconcile runtime if enabled
+
+Daemon non-responsibility:
+- it must not become the only home of ATM business logic
+
+### 21.6 Strict I/O Ownership
+
+Phase Q's key architectural rule is strict ownership of all external I/O.
+
+Required ownership model:
+- only the store subsystem touches SQLite
+- only the inbox ingress/export subsystem parses or writes inbox JSONL
+- only the config-ingress subsystem parses team `config.json`
+- only the transport subsystem touches sockets
+- only the notifier/plugin subsystem talks to agent processes
+
+This is the architectural mechanism intended to prevent the boundary leakage
+that made the old daemon line unmaintainable.
+
+### 21.7 Test Strategy
+
+The daemon is not the test strategy.
+
+Phase Q test architecture must keep:
+- core service logic testable in-process
+- transport/watch/runtime logic testable through fakes or harnesses
+- daemon process spawning out of the core test path
+
+If a capability cannot be tested without real daemon spawning, that is treated
+as a design smell rather than the default approach.
+
+### 21.8 Lock Elimination
+
+The lock-release gate proved the file-based line is acceptable only as interim
+relief. The target Phase Q architecture removes mailbox-lock dependence from
+ATM mail correctness by moving durable state ownership to SQLite and treating
+JSONL as compatibility ingress/egress only.

@@ -2,9 +2,9 @@
 
 ## 1. Goal
 
-Implement a daemon-free ATM rewrite in this repo that preserves retained
-`send`, `read`, `ack`, `clear`, `log`, and `doctor` functionality and restores
-the minimum release-critical team recovery surface through `teams` and
+Implement the retained ATM CLI surface while migrating mail/runtime ownership
+from filesystem JSON plus mailbox locks to SQLite plus a singleton daemon,
+preserving `send`, `read`, `ack`, `clear`, `log`, `doctor`, `teams`, and
 `members`.
 
 The authoritative migration document is:
@@ -17,6 +17,11 @@ Documentation organization and cleanup are governed by
 [`documentation-guidelines.md`](./documentation-guidelines.md). As the docs are
 restructured, product docs remain in `docs/` and crate-local detail moves into
 `docs/atm/` and `docs/atm-core/`.
+
+Phase-Q supersession note:
+- earlier daemon-free phases in this plan remain historical execution records
+- the current target line is Section 21 and the detailed design in
+  `docs/plan-phase-Q.md`
 
 Status:
 - Phases 0 through P have executed on the retained rewrite line.
@@ -35,13 +40,17 @@ Status:
 - Message schema ownership and metadata normalization are now implemented well
   enough for live shared-inbox adoption, while a separate ATM-native inbox
   remains deferred to a later version.
+- Phase Q planning is active on the SQLite source-of-truth and daemon-boundary
+  line; this phase supersedes mailbox-lock architecture as the target design.
 
 ## 2. Deliverables
 
 - Rust workspace with `crates/atm-core` and `crates/atm`
-- daemon-free implementation of `send`, `read`, `ack`, `clear`, `log`,
+- retained implementation of `send`, `read`, `ack`, `clear`, `log`,
   `doctor`, `teams`, and `members`
-- preserved non-daemon mail functionality from the current codebase
+- SQLite-backed mail and roster source of truth
+- singleton daemon runtime with one protocol and two transport adapters
+- elimination of mailbox-lock dependence from ATM mail correctness
 - explicit two-axis workflow model with three display buckets
 - task-linked message metadata with mandatory ack behavior
 - structured errors with recovery guidance
@@ -2397,3 +2406,106 @@ Phase P completion gate:
 - the test suite for the phase is explicitly deterministic and CI-safe
 - the remaining external-writer limitations, if any, are documented as accepted
   compatibility boundaries rather than hidden assumptions
+
+## 21. Phase Q — SQLite Mail SSOT And Runtime Boundary [PLANNED]
+
+Detailed design source:
+- [`docs/plan-phase-Q.md`](./plan-phase-Q.md)
+
+Goal:
+- replace filesystem JSON as ATM's mail source of truth with SQLite
+- reintroduce one tightly-bounded singleton daemon runtime
+- eliminate mailbox-lock dependence from ATM mail correctness
+
+Hard architectural constraints:
+- exactly one daemon per host
+- impossible for two active daemons to run at the same time
+- every subsystem is behind a strict trait boundary for all external I/O
+- daemon/runtime code stays thin and does not absorb business logic
+- daemon spawning is not the core test strategy
+
+Core design decisions:
+- SQLite is the source of truth for:
+  - messages
+  - ack/task state
+  - read/clear visibility state
+  - team roster
+- daemon memory is the live truth for agent status
+- Claude inbox JSONL remains compatibility ingress/egress only
+- native agent/plugin traffic does not use JSONL
+- one daemon API, two transport implementations:
+  - Unix domain socket for same-host
+  - TCP/TLS for cross-host daemon-to-daemon traffic
+- remote address model expands to `agent@team.host`
+- bounded transient retry is allowed for remote delivery, but there is no
+  durable long-lived remote outbox
+
+Planned sprint sequence:
+
+### Q.1 — Store And Boundary Foundation
+
+Scope:
+- add the SQLite mail/roster store boundary
+- add the strict I/O trait boundaries for store, inbox ingress/export, config
+  ingress, transport, and notification
+- keep service logic fully testable in-process
+
+Acceptance:
+- SQLite opens under `.claude/teams/<team>/.atm-state/mail.db`
+- core logic is reachable without daemon process spawning
+- no direct SQLite or filesystem bypasses outside the owning boundaries
+
+### Q.2 — Compatibility Ingress And Export
+
+Scope:
+- import Claude/legacy inbox JSONL into SQLite
+- import roster updates from `config.json` into SQLite
+- keep ATM export Claude-native at the top level with `metadata.atm`
+
+Acceptance:
+- external Claude writes become durable in SQLite through one owned ingress path
+- export compatibility remains intact
+- roster truth no longer depends on `config.json` as the durable source
+
+### Q.3 — Command Cutover To SQLite
+
+Scope:
+- move `send`, `read`, `ack`, and `clear` to SQLite-owned mail semantics
+- retain JSONL only for compatibility ingress/egress
+
+Acceptance:
+- ATM mail correctness no longer depends on mailbox JSON rewrite correctness
+- ack/task/read/clear state is authoritative in SQLite
+
+### Q.4 — Thin Daemon Runtime
+
+Scope:
+- add the singleton daemon runtime
+- implement one protocol with Unix socket and TCP/TLS adapters
+- keep live agent status in daemon memory
+
+Acceptance:
+- second daemon startup fails deterministically
+- remote traffic is daemon-to-daemon only
+- daemon code remains a thin runtime wrapper over the service boundaries
+
+### Q.5 — Lock Retirement And Production Gate
+
+Scope:
+- retire mailbox-lock dependence from ATM mail correctness
+- remove reliance on the 5-minute stale-lock sweep for normal mail flows
+- align doctor/restore/ops docs to SQLite ownership
+
+Acceptance:
+- mailbox locks are no longer part of the normal mail correctness contract
+- stale lock artifacts can no longer wedge ATM mail flows
+- requirements, architecture, and project plan all match the final design
+
+QA invariants for every Phase Q pass:
+- impossible to run two active daemons on one host
+- every subsystem performs I/O only through its owning trait boundary
+- daemon/runtime code remains thin
+- daemon spawning is not the core test strategy
+- SQLite remains the source of truth for mail and roster
+- live status remains daemon-memory truth
+- Claude compatibility remains Claude-native top-level plus `metadata.atm`
