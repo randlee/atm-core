@@ -3,8 +3,10 @@
 ## 1. Product Definition
 
 Product requirement ID:
-- `REQ-P-PRODUCT-001` The retained daemon-free ATM product surface consists of
-  `send`, `read`, `ack`, `clear`, `log`, `doctor`, `teams`, and `members`.
+- `REQ-P-PRODUCT-001` The retained ATM product surface consists of
+  `send`, `read`, `ack`, `clear`, `log`, `doctor`, `teams`, and `members`,
+  backed by a singleton daemon runtime and SQLite source-of-truth for mail and
+  roster state in the Phase Q architecture.
 
 Satisfied by:
 - intentionally undecomposed product requirement; this governs overall retained
@@ -12,7 +14,11 @@ Satisfied by:
 
 The product is a local command-line tool named `atm`.
 
-This rewrite removes daemon architecture. It does not intentionally remove core non-daemon ATM functionality.
+The current target architecture no longer treats daemon removal as a product
+goal. Phase Q reintroduces a tightly-bounded singleton daemon runtime because
+mail routing, native agent notification, and cross-host transport need one
+coordinating process, while ATM command behavior remains the user-facing
+surface.
 
 The retained product surface is:
 - `atm send`
@@ -24,7 +30,8 @@ The retained product surface is:
 - `atm teams`
 - `atm members`
 
-The rewritten system must preserve usable non-daemon behavior already present in the retained commands unless these requirements explicitly retire or change it.
+The system must preserve the retained command behavior unless these
+requirements explicitly retire or change it.
 
 The system uses structured logging through `sc-observability`.
 
@@ -57,40 +64,61 @@ Crate-local ownership docs live under:
 - [`docs/atm/architecture.md`](./atm/architecture.md)
 - [`docs/atm-core/requirements.md`](./atm-core/requirements.md)
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
+- [`docs/atm-daemon/requirements.md`](./atm-daemon/requirements.md)
+- [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
+- [`docs/atm-rusqlite/requirements.md`](./atm-rusqlite/requirements.md)
+- [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 
 During the cleanup/restructure phase, product requirements stay here while
 crate-local ownership is moved out of this file into the crate directories.
+
+Phase-Q supersession note:
+- earlier daemon-free assumptions in this file are historical requirements from
+  the prior rewrite line
+- for mail/runtime architecture, the current authoritative direction is Section
+  21
 
 ## 2. Scope
 
 Product requirement ID:
 - `REQ-P-SCOPE-001` The rewrite retains the documented command surface and
-  removes daemon architecture without intentionally removing retained
+  migrates ATM mail/runtime ownership from filesystem JSON plus mailbox locks
+  to SQLite plus a singleton daemon without intentionally removing retained
   functionality.
 
 Satisfied by:
 - intentionally undecomposed product requirement; this governs overall rewrite
   scope and is enforced across the workspace rather than by one crate-local ID
 
+- `REQ-P-RUNTIME-001` Production ATM commands must not auto-spawn the daemon.
+
+  Required behavior:
+  - the production CLI/runtime path connects to an already-running daemon
+  - if the daemon is unavailable, ATM must fail clearly with recovery guidance
+  - no production path may silently bypass the daemon by talking directly to
+    SQLite or inbox files
+
 ### 2.1 In Scope
 
 - one binary: `atm`
 - one primary library: `atm-core`
-- file-based mail delivery
-- file-based inbox reads
-- file-based acknowledgement workflow
-- file-based inbox clearing
+- SQLite-backed ATM mail source of truth
+- SQLite-backed team roster source of truth
+- singleton daemon runtime
+- same-host daemon API over Unix domain socket
+- cross-host daemon API over TCP/TLS
+- Claude-compatible JSONL inbox ingress and export
 - configuration resolution
 - hook-based identity fallback
 - file-reference policy handling for `send --file`
-- origin-inbox merge for `read` when bridge remotes are configured
-- seen-state tracking for `read`
-- timeout-based waiting for `read --timeout`
+- origin-inbox merge / ingest compatibility for Claude-owned inbox files
+- ATM-owned read/ack/clear/task state in SQLite
 - structured logging through `sc-observability`
 - log query and follow through `sc-observability`
 - local diagnostics through `atm doctor`
 - local team discovery and recovery through `atm teams`
 - local roster verification through `atm members`
+- native agent/plugin notification interface
 - the retained local team recovery surface:
   - `atm teams`
   - `atm members`
@@ -103,13 +131,12 @@ Satisfied by:
 
 ### 2.2 Out Of Scope
 
-- daemon support
-- daemon sockets
-- daemon launch or supervision
-- plugin host framework
+- long-lived durable remote-delivery queueing
+- broad plugin host framework beyond the ATM agent notification/runtime
+  interface
 - CI monitoring
 - TUI and MCP features
-- runtime spawning and launch commands
+- daemon auto-spawn from CLI commands or tests
 - `atm status` in the initial rewrite
 - separate `atm tail` command in the initial rewrite
 - team lifecycle management outside the retained local recovery surface
@@ -178,11 +205,12 @@ Required behavior:
 
 Product requirement ID:
 - `REQ-P-CONTRACT-001` External path/config/store/observability contracts must
-  match the documented daemon-free behavior.
+  match the documented retained ATM behavior for the active architecture line.
 
 Satisfied by:
-- `REQ-CORE-CONFIG-001` for daemon-free home/path/config resolution aspects
-- `REQ-CORE-MAILBOX-001` for daemon-free mail-store persistence aspects
+- `REQ-CORE-CONFIG-001` for home/path/config resolution aspects
+- `REQ-CORE-RUNTIME-001` for durable mail/roster store ownership aspects
+- `REQ-CORE-COMPAT-001` for Claude inbox compatibility-surface aspects
 - `REQ-ATM-OBS-001` for CLI observability bootstrap/integration aspects
 - `REQ-CORE-OBS-001` for ATM observability boundary/query-model aspects
 
@@ -489,7 +517,7 @@ Product requirement ID:
   precedence rules.
 
 Satisfied by:
-- `REQ-CORE-CONFIG-001` for daemon-free identity resolution policy
+- `REQ-CORE-CONFIG-001` for identity resolution policy
 
 ### 4.1 Send Identity Resolution Order
 
@@ -570,6 +598,8 @@ Post-send-hook rules:
   - `message_id`
   - `requires_ack`
   - optional `task_id` when present
+  - optional `recipient_pane_id` when ATM has an authoritative pane mapping for
+    the recipient
 - example payload:
   ```json
   {
@@ -579,7 +609,8 @@ Post-send-hook rules:
     "recipient": "recipient",
     "team": "atm-dev",
     "message_id": "...",
-    "requires_ack": false
+    "requires_ack": false,
+    "recipient_pane_id": "%1"
   }
   ```
 - the hook may optionally emit one structured result object on stdout for ATM
@@ -1194,9 +1225,11 @@ Satisfied by:
 
 ### 11.1 Purpose
 
-Run local ATM diagnostics for the retained daemon-free system.
+Run local ATM diagnostics for the retained ATM runtime.
 
-`atm doctor` in the rewrite is a local diagnostics command. It is not a daemon-health report.
+`atm doctor` remains a local diagnostics command, but in the Phase Q target
+architecture it must also report daemon/runtime availability because normal ATM
+mail behavior depends on the singleton daemon being present.
 
 ### 11.2 Supported Flags
 
@@ -1210,13 +1243,19 @@ The initial doctor implementation must cover:
 - effective team resolution
 - identity resolution inputs and fallbacks
 - obsolete `[atm].identity` configuration drift detection
+- daemon control-socket existence and reachability
+- singleton daemon ownership health
+- SQLite mail-store path visibility and openability when Phase Q runtime is
+  active
 - baseline `[atm].team_members` coverage against `config.json.members`
 - team directory existence
 - team config existence and parse health
 - inbox directory existence and writability
 - stale mailbox lock detection across `~/.claude/teams/*/inboxes/*.lock` using
   start-of-run and end-of-run snapshots; a lock present in both snapshots is
-  stale and must be reported with `ATM_WARNING_STALE_MAILBOX_LOCK`
+  stale and must be reported with `ATM_WARNING_STALE_MAILBOX_LOCK` as a
+  transitional compatibility finding rather than a normal mail-correctness
+  dependency in the Phase Q target architecture
 - hook identity availability
 - `ATM_HOME`, `ATM_TEAM`, and `ATM_IDENTITY` override visibility
 - `sc-observability` initialization health
@@ -1624,6 +1663,38 @@ Minimum error categories:
 - mailbox read
 - mailbox write
 - message validation
+- store
+- ingest
+- export
+- transport
+- daemon runtime
+- daemon singleton
+- daemon client
+
+Phase Q required families:
+- store:
+  - SQLite bootstrap/open
+  - schema/transaction
+  - busy-timeout / saturation
+- ingest:
+  - replay/import failure
+  - backpressure/degraded ingest
+- export:
+  - Claude compatibility export failure
+  - re-export/replay failure
+- transport:
+  - local daemon request failure
+  - remote connect/timeout/protocol failure
+- daemon runtime:
+  - shutdown timeout
+  - signal/reload failure
+  - runtime over-capacity
+- daemon singleton:
+  - already-running daemon
+  - stale-artifact cleanup/release failure
+- daemon client:
+  - daemon unavailable
+  - daemon health-query timeout
 - serialization
 - file policy
 - wait timeout
@@ -1710,15 +1781,17 @@ Satisfied by:
   completion gates rather than a single crate-local obligation
 
 The rewrite is ready when:
-- `atm send` works without daemon support
-- `atm read` works without daemon support
-- `atm ack` works without daemon support
-- `atm clear` works without daemon support
+- `atm send` works through the documented production runtime path
+- `atm read` works through the documented production runtime path
+- `atm ack` works through the documented production runtime path
+- `atm clear` works through the documented production runtime path
 - `atm log` works through shared `sc-observability` APIs
-- `atm doctor` works as a local diagnostics command
+- `atm doctor` works as a local diagnostics command with daemon/runtime
+  visibility in the Phase Q target architecture
 - `atm teams` provides the retained local team recovery surface
 - `atm members` provides the retained local roster verification surface
-- retained commands preserve documented non-daemon behavior
+- retained commands preserve documented behavior, and any Phase Q runtime-shape
+  changes are explicit in the requirements and architecture
 - workflow-axis classification is correct
 - workflow-axis transitions are encoded in implementation structure
 - display buckets are derived consistently from the two-axis model
@@ -2285,3 +2358,393 @@ The intentionally forbidden shape is:
   - `normalize_json_number(...)` must return the raw input string on exponent
     parse failure or unsupported exponent range instead of panicking
   - a library function must not panic on potentially untrusted input
+
+## 21. Phase Q: SQLite Mail SSOT, Runtime Boundaries, And Lock Elimination
+
+Phase Q supersedes the mailbox-lock line as the target architecture for ATM
+mail correctness. The `REQ-CORE-MAILBOX-LOCK-*` requirements remain
+transitional compatibility constraints only for the interim file-based line.
+The release-complete target is elimination of mailbox-lock dependence from ATM
+mail correctness.
+
+### 21.1 SQLite Mail And Roster Ownership
+
+- `REQ-CORE-RUNTIME-001` ATM mail and team roster state must move to SQLite as
+  the authoritative source of truth.
+
+  Required behavior:
+  - SQLite is the durable source of truth for:
+    - message records
+    - read/unread state
+    - ack-required / acknowledged state
+    - clear/visibility state
+    - task linkage and task metadata
+    - team roster
+  - Claude-owned inbox JSONL files are compatibility ingress/export surfaces,
+    not ATM's authoritative durable mail store
+  - `config.json` becomes a roster-ingress source, not the durable roster truth
+
+- `REQ-CORE-STORE-001` The Phase Q SQLite store must use one documented schema
+  contract with stable keys, constraints, and indexes.
+
+  Required behavior:
+  - the authoritative schema must define at least:
+    - `messages`
+    - `ack_state`
+    - `message_visibility`
+    - `tasks`
+    - `team_roster`
+    - `inbox_ingest`
+  - `message_key` is the canonical ATM durable message identity
+  - `message_key` format must be deterministic and typed by source family:
+    - `atm:<ulid>` for ATM-authored durable rows
+    - `ext:<fingerprint>` for imported external rows without ATM ids
+  - schema constraints must forbid duplicate authoritative identities
+  - the schema must document the required lookup indexes for message lookup,
+    task lookup, visibility projection, and ingest dedupe
+
+- `REQ-CORE-STORE-002` The Phase Q SQLite store must enforce WAL and explicit
+  transaction policy.
+
+  Required behavior:
+  - `journal_mode = WAL`
+  - `foreign_keys = ON`
+  - mutating ATM command flows must use explicit transactions
+  - no production mutating path may rely on implicit per-statement autocommit
+    as the normal correctness model
+
+- `REQ-CORE-INGEST-001` Inbox/config ingest must use one owned contract for
+  replay, backpressure, and degradation.
+
+  Required behavior:
+  - ingest must be idempotent
+  - parseable external rows must not be silently dropped
+  - malformed external rows must emit structured diagnostics rather than panic
+  - backlog/slow-ingest conditions must surface through structured diagnostics
+    or health findings rather than dropping records silently
+  - roster/config ingest must apply one deterministic last-write-wins policy
+    for replacing roster truth in SQLite
+
+- `REQ-CORE-RUNTIME-003` Crash recovery and replay must preserve the durable
+  ordering rule for daemon-managed export work.
+
+  Required behavior:
+  - the ordering rule is `SQLite commit -> export / remote handoff`
+  - re-export/replay must be keyed by durable `message_key`
+  - if daemon-managed retry/re-export state survives crash, it must be stored
+    durably with a bounded expiry/deadline
+  - persisted retry state must not become a long-lived remote outbox
+
+- `REQ-CORE-RUNTIME-002` Live agent status must not use SQLite as its
+  authoritative live truth.
+
+  Required behavior:
+  - live status is runtime-owned daemon state
+  - SQLite may store a diagnostic or last-observed snapshot only
+  - roster truth and live-status truth must remain distinct
+
+### 21.2 Singleton Daemon Runtime
+
+- `REQ-CORE-DAEMON-001` ATM must run exactly one daemon per host in the Phase Q
+  runtime.
+
+  Required behavior:
+  - it must be impossible for two active ATM daemons to run on one host at the
+    same time
+  - daemon startup must fail deterministically when a live daemon already owns
+    the host runtime
+  - stale daemon ownership artifacts may be cleaned up only when they are
+    proven stale
+  - stale cleanup must never allow two live daemons
+
+- `REQ-CORE-DAEMON-002` The daemon must be a thin runtime wrapper rather than a
+  unique business-logic layer.
+
+  Required behavior:
+  - daemon responsibility is limited to runtime orchestration such as:
+    - transport listeners
+    - route selection
+    - live-status cache
+    - watch/reconcile loop if enabled
+  - the daemon must not become the only place where ATM mail semantics are
+    implemented
+
+- `REQ-CORE-DAEMON-003` Production ATM commands must use an already-running
+  daemon and must fail clearly when it is unavailable.
+
+  Required behavior:
+  - production CLI/runtime calls must not auto-spawn the daemon
+  - when the daemon is unavailable, ATM must fail with a clear recovery message
+    rather than silently falling back to direct SQLite or inbox-file access
+  - in-process test harnesses may bypass the daemon only inside explicit test
+    wiring, not in the production path
+
+  Satisfies:
+  - `REQ-P-RUNTIME-001`
+
+- `REQ-CORE-DAEMON-004` The daemon must implement one documented graceful
+  shutdown and signal-handling contract.
+
+  Required behavior:
+  - `SIGINT` and `SIGTERM` begin graceful shutdown
+  - `SIGHUP` triggers bounded runtime rescan/reload without releasing singleton
+    ownership
+  - signal handlers install before listeners begin accepting
+  - graceful shutdown must stop accepts, drain inflight work, checkpoint WAL,
+    and release singleton ownership in order
+
+### 21.3 Strict I/O Ownership Boundaries
+
+- `REQ-CORE-BOUNDARY-001` Every subsystem must be behind a strict trait
+  boundary for all external I/O.
+
+  Required behavior:
+  - only the owning store subsystem may touch SQLite
+  - only the owning inbox ingress/export subsystem may parse or write inbox
+    JSONL
+  - only the owning config-ingress subsystem may parse team `config.json`
+  - only the owning watcher/reconcile subsystem may consume filesystem watch
+    events or drive watch-triggered rescan/reconcile logic
+  - only the owning transport subsystem may touch sockets
+  - only the owning notifier/plugin subsystem may talk to agent processes
+  - no business logic may live in I/O adapter code
+  - no "just this one call site" bypasses are allowed
+  - I/O-owning boundary traits are sealed by default; opening a boundary for
+    external implementation requires explicit architectural approval
+  - concrete I/O adapter types and constructors remain private unless a
+    documented boundary contract requires wider visibility
+  - violation of any ownership rule above is a direct QA failure for the Phase
+    Q implementation line
+
+### 21.3.1 Structured Error Boundaries
+
+- `REQ-CORE-BOUNDARY-002` Production Phase Q code must model fallible runtime
+  behavior with discriminated error unions and explicit `Result` propagation.
+
+  Required behavior:
+  - fallible production paths must prefer typed error enums/unions over panic,
+    `unwrap`, or `expect`
+  - compile-time-visible error types must remain the primary enforcement
+    mechanism for runtime failure handling
+  - panic is reserved for invariant corruption or explicitly unreachable code
+    paths, not routine I/O, parse, transport, or store failures
+  - CLI, daemon, and core service layers must preserve structured error
+    identity when translating between boundaries
+  - the `AtmErrorCode` registry must not use wildcard or catch-all variants in
+    place of specific codes
+  - every public `AtmErrorCode` must document one recoverability class
+  - the `AtmErrorCode` registry is centralized and read-only from the
+    perspective of feature/service code; subsystems consume codes from the
+    registry and do not mint local alternatives
+  - violation of these structured-error rules is a direct QA failure for the
+    Phase Q implementation line
+
+### 21.4 Transport And Routing Model
+
+- `REQ-CORE-TRANSPORT-001` ATM must use one logical daemon API with two
+  production transport implementations and one test transport.
+
+  Required behavior:
+  - same-host transport: Unix domain socket
+  - cross-host transport: TCP/TLS
+  - test transport: in-process `test-socket` implementation of the same
+    protocol/interface for subsystem and daemon-boundary tests
+  - these are implementations of one protocol/interface, not separate systems
+  - socket receive logic must remain a small framed-message loop that:
+    - reads one request frame
+    - parses it into a qualified request enum/value
+    - dispatches immediately to the owning handler boundary
+    - returns a typed response
+  - request-kind routing must live behind one dispatcher boundary with
+    injectable typed handlers for request families
+  - adding a new request family must not require embedding business logic into
+    Unix-domain or TCP/TLS transport adapters
+  - socket receive logic must not perform SQL, watcher, or notification
+    business logic inline
+  - any violation of this transport isolation rule is a direct QA failure for
+    the Phase Q implementation line
+  - subsystem and runtime tests must be able to replace Unix/TCP transport
+    adapters with the `test-socket` transport without changing business logic
+
+- `REQ-CORE-TRANSPORT-001B` Request routing must live behind one explicit
+  dispatcher boundary with injectable typed handlers.
+
+  Required behavior:
+  - transport adapters hand parsed qualified requests to the dispatcher
+  - the dispatcher owns request-kind routing only
+  - concrete request-family behavior lives in injectable handlers behind the
+    dispatcher
+  - adding a new request family must not require transport-adapter logic
+    growth beyond decode + dispatch
+  - any violation of this dispatcher/handler rule is a direct QA failure for
+    the Phase Q implementation line
+
+- `REQ-CORE-TRANSPORT-001A` Filesystem watch/reconcile logic must remain a
+  separate owned subsystem from transport, store, and notifier logic.
+
+  Required behavior:
+  - watch event ingestion, debounce, and reconcile triggering must stay behind
+    one owned watcher/reconcile boundary
+  - the watcher boundary may request work from ingress/store/notifier
+    handlers, but it must not inline SQL, socket, or notification delivery
+    logic
+  - the transport boundary must not absorb watcher responsibilities
+  - any violation of this watcher isolation rule is a direct QA failure for
+    the Phase Q implementation line
+
+- `REQ-CORE-TRANSPORT-002` Cross-host traffic must be daemon-to-daemon only.
+
+  Required behavior:
+  - native agent/plugin code talks only to the local daemon
+  - cross-host delivery happens only between daemons
+  - remote routing uses an address form equivalent to `agent@team.host`
+  - sender-side daemons must not write remote host inbox JSONL directly
+
+- `REQ-CORE-TRANSPORT-003` Remote delivery must not leave durable long-lived
+  pending messages behind when a host is unreachable.
+
+  Required behavior:
+  - bounded transient retry is allowed for short intermittent failures
+  - after the bounded retry window expires, the send fails
+  - ATM must not keep a durable remote outbox that can leave stale messages
+    queued for days
+
+- `REQ-CORE-TRANSPORT-004` Remote send success must require remote daemon
+  acceptance within the bounded retry window.
+
+  Required behavior:
+  - sender-side daemons may record observability/audit information locally
+    while attempting remote delivery
+  - a remote send must not be reported as successfully delivered until the
+    remote daemon accepts it
+  - if the bounded retry window expires without remote acceptance, the send
+    fails and must not leave durable delivered-message state behind
+
+- `REQ-CORE-TRANSPORT-005` The daemon runtime must use concrete timeout and
+  capacity limits for transport/store/health operations.
+
+  Required behavior:
+  - same-host daemon request deadline: `3s`
+  - per-leg TCP/TLS connect deadline: `5s`
+  - per-leg TCP/TLS read/write deadline: `5s`
+  - total remote retry budget: `30s`
+  - SQLite `busy_timeout`: `1500ms`
+  - ingest batch processing slice: `2s`
+  - doctor health query deadline: `3s`
+  - max concurrent accepts: `64`
+  - max per-connection inflight requests: `32`
+  - ingest queue depth: `1024`
+  - retry queue depth: `256`
+  - SQLite handle budget: `1..=4`
+  - live status-cache cap: `4096`
+  - saturation behavior must fail with typed errors or structured degradation,
+    never silent drop
+
+### 21.5 Claude Compatibility And Native Agent Path
+
+- `REQ-CORE-COMPAT-001` Claude inbox JSONL remains the required compatibility
+  path for Claude context injection.
+
+  Required behavior:
+  - ATM-authored Claude inbox exports must remain Claude-native at the top
+    level with ATM machine fields under `metadata.atm`
+  - Claude-native external writes must be importable into SQLite through one
+    owned ingress boundary
+  - once team roster and pane mapping truth move to SQLite, ATM-owned
+    post-send-hook payloads must carry the authoritative `recipient_pane_id`
+    from roster truth when known
+  - post-send hooks must be able to rely on that payload field instead of
+    rediscovering pane mappings from local files once the Phase Q migration is
+    complete
+
+- `REQ-CORE-COMPAT-002` Native agent/plugin traffic must not use JSONL.
+
+  Required behavior:
+  - native agent/plugin delivery and notification uses the daemon API instead
+    of JSONL
+  - the later agent plugin crate must align to this daemon API rather than
+    introducing a parallel message transport
+
+### 21.6 Lock Elimination Target
+
+- `REQ-CORE-LOCK-RETIRE-001` ATM mail correctness must stop depending on
+  mailbox lock artifacts.
+
+  Required behavior:
+  - mailbox locks may remain only as transitional compatibility machinery for
+    the interim file-based line
+  - the Phase Q target architecture must eliminate mailbox-lock dependence from
+    normal ATM mail correctness
+  - Phase Q completion requires that stale lock artifacts can no longer wedge
+    normal ATM mail flows
+
+### 21.7 Test Strategy Constraints
+
+- `REQ-CORE-TEST-RUNTIME-001` Core Phase Q behavior must be testable without
+  daemon process spawning.
+
+  Required behavior:
+  - daemon spawning is not part of the core test strategy
+  - core service behavior must be testable in-process
+  - transport/watch/runtime logic must be testable with fakes or in-process
+    harnesses
+  - no default test path may depend on daemon process lifecycle to validate ATM
+    mail correctness
+
+### 21.8 Observability Requirements
+
+- `REQ-CORE-OBS-002` Phase Q must keep structured observability first-class at
+  both CLI and daemon boundaries.
+
+  Required behavior:
+  - CLI entry, daemon runtime, transport, ingest/export, and service
+    orchestration must emit structured events through the shared
+    `sc-observability` boundary
+  - observability wiring must remain layered:
+    - `atm` owns CLI bootstrap and presentation concerns
+    - `atm-daemon` owns daemon/runtime event emission
+    - `atm-core` owns ATM event and error models above the shared boundary
+    - native plugins may emit plugin-local diagnostics, but daemon-owned
+      runtime/transport/store/ingest events must be emitted by the daemon and
+      not delegated to plugin code
+  - observability must not be implemented as ad hoc println/debug output in
+    production paths
+
+### 21.8.1 Doctor Health Interface
+
+- `REQ-CORE-DOCTOR-002` The Phase Q runtime must expose a daemon health query
+  interface consumable by `atm doctor`.
+
+  Required behavior:
+  - `atm doctor` remains a CLI command
+  - daemon/runtime health information must be obtained through an explicit
+    daemon-facing interface rather than direct CLI inspection of private daemon
+    state
+  - the health interface must be able to report at least:
+    - daemon reachability
+    - singleton ownership status
+    - live status-cache summary
+    - ingest backlog / degraded-ingest state when present
+    - SQLite open/readiness state
+
+### 21.9 QA Invariants
+
+- `REQ-CORE-QA-RUNTIME-001` Every QA pass for Phase Q must verify the daemon
+  and boundary invariants.
+
+  Required behavior:
+  - impossible to run two active ATM daemons on one host
+  - daemon unavailability fails clearly without auto-spawn or hidden direct I/O
+    fallback
+  - every subsystem performs external I/O only through its owning trait
+    boundary
+  - production error handling uses typed `Result`/error-enum boundaries instead
+    of panic/unwrap for fallible runtime paths
+  - daemon/runtime code remains thin and does not accumulate business logic
+  - daemon spawning is not the test strategy
+  - SQLite remains the source of truth for mail and roster
+  - live agent status remains runtime-owned state
+  - structured `sc-observability` coverage remains present at both CLI and
+    daemon layers
+  - Claude compatibility export remains Claude-native top-level plus
+    `metadata.atm`

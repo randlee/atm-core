@@ -2,11 +2,18 @@
 
 ## 1. Overview
 
-The rewrite keeps ATM as a file-based mail CLI and removes daemon architecture.
+The current target architecture keeps the ATM CLI surface, but moves durable
+mail and roster ownership to SQLite and reintroduces one tightly-bounded
+singleton daemon runtime for routing, notification, transport, and runtime
+health/state queries.
 
-The workspace remains intentionally small:
-- `atm-core`: reusable library
+The current workspace contains:
+- `atm-core`: reusable service library
 - `atm`: CLI binary
+
+The Phase Q target workspace remains intentionally small and adds:
+- `atm-daemon`: daemon runtime binary / transport host
+- `atm-rusqlite`: first concrete SQLite store implementation
 
 The CLI stays thin. Product logic moves into `atm-core`.
 
@@ -30,25 +37,45 @@ moved into:
 
 - [`docs/atm/architecture.md`](./atm/architecture.md)
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
+- [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
+- [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
+
+Phase-Q supersession note:
+- earlier daemon-free architecture statements in this file are historical from
+  the prior rewrite line
+- for the current mail/runtime target architecture, Section 21 is
+  authoritative
 
 ## 2. Crate Boundaries
 
-The product is implemented by two crates:
+The post-Q product runtime is implemented by four crates:
 
 - `atm-core`
 - `atm`
+- `atm-daemon`
+- `atm-rusqlite`
 
 Product-level boundary rules:
 
-- `atm-core` owns daemon-free ATM business logic.
+- `atm-core` owns ATM business logic and the strict I/O boundaries that Phase Q
+  routes through a daemon runtime.
 - `atm` owns CLI parsing, dispatch, rendering, and bootstrap.
+- `atm-daemon` owns runtime composition, transport adapters, singleton
+  enforcement, and live-status runtime state.
+- `atm-rusqlite` owns the first concrete SQLite implementation of the durable
+  store boundaries.
 - `atm-core` must not own clap or terminal-formatting concerns.
 - `atm` must not own mailbox, workflow, log-query, or doctor business logic.
+- `atm-daemon` must not become a second business-logic crate.
+- `atm-rusqlite` must not absorb workflow or command logic; it implements store
+  contracts only.
 
 Crate-local boundary detail is owned by:
 
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm/architecture.md`](./atm/architecture.md)
+- [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
+- [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 
 ### 2.3 Release Publication Boundary
 
@@ -183,6 +210,14 @@ Product-level constraints that remain relevant here:
   - `teams restore`
 - broader historical team lifecycle/orchestration commands remain out of scope
 
+Supersession note:
+- `no daemon client` and `no runtime spawning layer` describe the pre-Phase-Q
+  retained CLI/runtime line only
+- the Phase Q target architecture in §21 supersedes those constraints with:
+  - one explicit daemon runtime
+  - no hidden direct SQLite fallback
+  - no hidden daemon auto-spawn path
+
 ## 4. Core Types
 
 ### 4.1 Semantic Newtypes
@@ -193,12 +228,20 @@ Required public newtypes:
 - `TeamName`
 - `AgentName`
 - `IdentityName`
+- `MessageKey`
 - `MessageId`
 - `MessageBody`
 - `MessageSummary`
 - `IsoTimestamp`
 - `MailAddress`
 - `TaskId`
+
+Required resource/config wrappers:
+- `ConnectionCap`
+- `QueueDepth`
+- `RetryBudget`
+- `BusyTimeout`
+- `RequestDeadline`
 - `HomeDir`
 - `AbsolutePath`
 - `LogFieldKey`
@@ -582,6 +625,13 @@ Invariant:
 
 ### 6.1 Send Service
 
+Supersession note:
+- the API shape in this section remains relevant
+- the file-append-first ordering details below are compatibility-line behavior
+  for the pre-Phase-Q runtime
+- the authoritative Phase Q send ordering is defined in §21 as:
+  `SQLite commit -> Claude export / remote daemon handoff`
+
 Public entrypoint:
 
 `send::send_mail(request: SendRequest, observability: &dyn ObservabilityPort) -> Result<SendOutcome, AtmError>`
@@ -895,7 +945,9 @@ Public entrypoint:
 - message
 - remediation
 
-The report model should reuse the current doctor command’s severity/finding structure where useful, but local checks replace daemon checks.
+The report model should reuse the current doctor command’s severity/finding
+structure where useful, but in the Phase Q target architecture it must include
+daemon/runtime checks rather than assuming a daemon-free local-only model.
 
 Roster output rules:
 - show all current `config.json` members in doctor output
@@ -957,6 +1009,13 @@ Architectural rules:
 
 ## 7. Read Pipeline
 
+Supersession note:
+- the stage list below describes the retained file-backed line
+- the Phase Q target pipeline is `ingest/reconcile -> SQLite projection ->
+  optional state mutation -> return outcome`
+- once Phase Q lands, SQLite projection rather than merged file truth becomes
+  authoritative for `read`
+
 The read pipeline stages are:
 1. resolve actor and target inbox
 2. build the hostname registry for configured origin inboxes
@@ -987,6 +1046,10 @@ The ack pipeline stages are:
 7. emit command lifecycle records
 8. return outcome
 
+This stage list describes the pre-Phase-Q compatibility line. The Phase Q
+target pipeline is superseded by the SQLite SSOT and daemon-boundary design in
+Section 21.
+
 ## 9. Clear Pipeline
 
 The clear pipeline stages are:
@@ -998,6 +1061,10 @@ The clear pipeline stages are:
 6. atomically persist the kept set when not in dry-run mode
 7. emit command lifecycle records
 8. return outcome
+
+This stage list describes the pre-Phase-Q compatibility line. The Phase Q
+target pipeline is superseded by the SQLite SSOT and daemon-boundary design in
+Section 21.
 
 ## 10. Log Pipeline
 
@@ -1026,6 +1093,13 @@ The doctor pipeline stages are:
 
 ## 12. Mailbox Storage
 
+Supersession note:
+- this section describes the retained mailbox/file-storage line
+- Phase Q supersedes it as the target architecture with SQLite durable truth
+  and Claude inbox files as compatibility ingress/export only
+- any mailbox-lock or file-truth rule in this section is transitional unless
+  restated in §21
+
 The mailbox layer owns:
 - tolerant reads
 - atomic append
@@ -1052,11 +1126,19 @@ contain:
 - `message_id`
 - `requires_ack`
 - optional `task_id` when present
+- optional `recipient_pane_id` when ATM already knows the authoritative pane
+  mapping for the recipient
 
 The post-send hook runs only after a successful non-`dry-run` send, executes
 once when sender or recipient matching succeeds, may optionally emit one
 structured stdout result for observability, and never rolls back a successful
 send on failure or timeout.
+
+Phase Q hook-note:
+- once roster and pane mapping truth move to SQLite, the send path should place
+  the authoritative recipient pane id into `ATM_POST_SEND.recipient_pane_id`
+- post-send hook implementations should prefer that payload field over local
+  file rediscovery when it is present
 
 Supported structured hook-result levels remain:
 - `debug`
@@ -1225,6 +1307,15 @@ The single source of truth for ATM-owned error codes is:
 Persisted-data errors should additionally carry file/entity/parser context so
 CLI surfaces can report the exact failing document and scope.
 
+Phase Q error-model rules:
+- `AtmErrorCode` must not use wildcard or catch-all variants where a more
+  specific code can be named
+- every documented `AtmErrorCode` must carry one recoverability classification
+  in the central registry so CLI, daemon, and doctor surfaces can reason about
+  retry vs operator-action vs fail-closed behavior
+- pattern matches over `AtmErrorCode` at module/crate boundary surfaces must be
+  exhaustive; wildcard `_` match arms are not permitted
+
 ## 16. Trait Policy
 
 The initial rewrite should avoid public extension traits.
@@ -1232,6 +1323,11 @@ The initial rewrite should avoid public extension traits.
 If a trait becomes necessary:
 - prefer a sealed trait
 - verify object safety before stabilization
+
+Phase Q boundary rule:
+- all I/O-owning boundary traits are sealed by default
+- opening a boundary for external implementation requires explicit design
+  review and crate-level documentation of the exception
 
 ## 17. Testing Strategy
 
@@ -1845,3 +1941,468 @@ Phase O adds three architecture-level hardening decisions:
    - this keeps same-process rapid writes to the same target path from
      colliding on the temp-file name while preserving the target basename for
      operator debugging
+
+## 21. Phase Q Runtime Architecture
+
+Phase Q supersedes the mailbox-lock architecture as the target design for ATM
+mail correctness. The file-based mailbox line remains an interim compatibility
+surface only.
+
+### 21.1 Authoritative State
+
+ATM moves to a split state model:
+
+- SQLite is the authoritative durable store for:
+  - messages
+  - ack/task state
+  - read/clear visibility state
+  - team roster
+- daemon memory is the authoritative live runtime view for:
+  - current agent status
+
+SQLite may persist last-observed status for diagnostics, but that snapshot is
+not the live truth.
+
+### 21.1.1 SQLite Schema Contract
+
+The Phase Q target architecture uses one authoritative schema contract.
+
+Minimum tables:
+- `messages`
+- `ack_state`
+- `message_visibility`
+- `tasks`
+- `team_roster`
+- `inbox_ingest`
+
+Minimum key rules:
+- `message_key` is the canonical ATM durable message identity
+- `message_key` must be source-typed:
+  - `atm:<ulid>` for ATM-authored rows
+  - `ext:<fingerprint>` for imported external rows without ATM ids
+- imported legacy `message_id` / forward `metadata.atm.messageId` values map
+  into that canonical identity model rather than replacing it
+
+Minimum index/constraint rules:
+- unique identity enforcement on `message_key`
+- dedupe index for imported external/legacy identities
+- lookup indexes for:
+  - recipient/team mailbox projection
+  - task lookup
+  - visibility projection
+  - ingest replay/high-water tracking
+
+### 21.1.2 SQLite Runtime Invariants
+
+The SQLite runtime contract is part of the architecture, not an implementation
+detail.
+
+Required invariants:
+- `journal_mode = WAL`
+- `foreign_keys = ON`
+- mutating ATM flows use explicit transactions
+- no normal command path relies on implicit autocommit as its correctness
+  model
+
+### 21.1.3 Crash Recovery And Replay
+
+Crash recovery must preserve durable truth before compatibility export.
+
+Required architectural rules:
+- the ordering rule is `SQLite commit -> export / remote handoff`
+- re-export/replay is keyed by durable `message_key`
+- if daemon-managed retry/re-export state must survive crash, it is stored in
+  SQLite with a bounded expiry/deadline rather than remaining RAM-only
+- WAL checkpoint is part of graceful shutdown, but recovery correctness must
+  not depend on graceful shutdown having succeeded
+- persisted retry state must not become a long-lived remote outbox; expired
+  retry rows fail closed during replay
+
+### 21.2 Compatibility Surfaces
+
+Claude-owned inbox JSONL files remain required for:
+- Claude context injection
+- compatibility with direct Claude-native writers
+
+Architectural rule:
+- JSONL is ingress/egress compatibility only
+- JSONL is not ATM's authoritative durable mail state
+
+`config.json` remains a team-ingress surface, but roster truth moves to
+SQLite.
+
+### 21.3 Information Flow
+
+There are three distinct paths:
+
+1. Claude / compatibility path
+   - Claude or legacy writers append JSONL
+   - ATM imports through one owned inbox-ingress boundary
+   - imported records become durable in SQLite
+   - replay is idempotent and parseable rows are not silently dropped
+
+2. Native agent path
+   - native agent/plugin traffic does not use JSONL
+   - native agents talk to the local daemon API
+   - the daemon commits through the SQLite store boundary
+
+3. Remote host path
+   - cross-host delivery is daemon-to-daemon only
+   - routing expands from `agent@team` to `agent@team.host`
+   - sender-side daemons do not write remote host JSONL directly
+   - successful remote delivery requires remote daemon acceptance
+
+### 21.4 One Interface, Two Transport Implementations
+
+Phase Q uses one daemon API with two production transport adapters plus one
+test transport:
+
+- same-host: Unix domain socket
+- cross-host: TCP/TLS
+- tests: in-process `test-socket`
+
+This is one protocol with multiple implementations, not multiple systems.
+
+Test-transport rule:
+- `test-socket` implements the same dispatcher/handler contract without real
+  socket I/O so subsystem and daemon-boundary tests can exercise the transport
+  boundary in process
+
+Remote-delivery semantics:
+- bounded transient retry is acceptable for short intermittent failures
+- there is no durable long-lived remote outbox
+- if the remote host remains unreachable after the bounded retry window, send
+  fails rather than leaving stale pending delivery behind
+- sender-side daemons do not treat a remote send as delivered until the remote
+  daemon accepts it
+
+### 21.5 Singleton Daemon
+
+The daemon is required at runtime, but it must remain thin.
+
+Hard invariant:
+- it must be impossible for two active ATM daemons to run on one host at the
+  same time
+
+Daemon responsibilities:
+- transport listeners
+- route selection
+- live status cache
+- daemon-facing diagnostics and health queries used by `atm doctor`
+- watch/reconcile runtime if enabled
+
+Daemon non-responsibility:
+- it must not become the only home of ATM business logic
+
+### 21.6 Strict I/O Ownership
+
+Phase Q's key architectural rule is strict ownership of all external I/O.
+
+Required ownership model:
+- only the store subsystem touches SQLite
+- only the inbox ingress/export subsystem parses or writes inbox JSONL
+- only the config-ingress subsystem parses team `config.json`
+- only the transport subsystem touches sockets
+- only the notifier/plugin subsystem talks to agent processes
+
+This is the architectural mechanism intended to prevent the boundary leakage
+that made the old daemon line unmaintainable.
+
+Privacy rule:
+- each boundary must expose only the trait or façade needed by callers
+- concrete implementations, helper constructors, and storage/transport details
+  stay private to the owning module unless a later crate extraction makes the
+  boundary stricter
+
+### 21.6.1 Boundary Shapes
+
+Each I/O-owning subsystem needs one explicit architectural boundary.
+
+#### MailStore
+
+Dispatch model:
+- synchronous request/response from service code
+- transaction-scoped mutating calls
+
+Object-safety rule:
+- callers depend on an object-safe store trait or façade, not concrete SQLite
+  types
+
+Minimum method set:
+- open/bootstrap store
+- run transaction
+- upsert/load message rows
+- upsert/load ack/visibility state
+- record/load ingest replay state
+- return health/readiness snapshot
+
+Scope rule:
+- `MailStore` owns message rows plus read/ack/visibility state tied directly to
+  message lifecycle
+- `MailStore` is not the long-term owner of generic task-orchestration or
+  daemon-status domains
+
+#### TaskStore
+
+Dispatch model:
+- synchronous request/response from service or task-handling code
+- transaction-scoped mutating calls where task and mail state must commit
+  together
+
+Object-safety rule:
+- callers depend on an object-safe task-store trait or façade, not concrete
+  SQLite types
+
+Minimum method set:
+- create/load/update task rows
+- attach/detach task linkage to `message_key`
+- record acknowledgement-related task transitions
+- query task metadata needed by mail/CLI projections
+
+#### RosterStore
+
+Dispatch model:
+- synchronous request/response for roster replacement, lookup, and readiness
+  checks
+
+Object-safety rule:
+- callers depend on an object-safe roster-store trait or façade, not concrete
+  SQLite types
+
+Minimum method set:
+- replace/load roster rows
+- query roster membership for routing/validation
+- return roster health/readiness snapshot
+
+#### InboxIngress
+
+Dispatch model:
+- batch import from one changed inbox source
+
+Object-safety rule:
+- callers depend on an object-safe ingress trait or façade, not direct JSONL
+  parser structs
+
+Minimum method set:
+- import changed inbox source
+- compute canonical imported identity/fingerprint
+- report degraded/skipped rows with structured diagnostics
+
+#### InboxExport
+
+Dispatch model:
+- one-way export / re-export after durable commit
+
+Object-safety rule:
+- callers depend on an object-safe export trait or façade, not direct file
+  writer implementations
+
+Minimum method set:
+- export ATM-authored Claude-compatible record
+- re-export by durable `message_key`
+- return typed export failure / retry-needed result
+
+#### Transport
+
+Dispatch model:
+- request/response for same-host and remote daemon traffic
+- the same dispatch contract must also support the in-process `test-socket`
+  transport used by tests
+
+Object-safety rule:
+- callers depend on an object-safe transport trait or façade so local and
+  remote adapters remain swappable
+
+Minimum method set:
+- serve local daemon API
+- send remote daemon request
+- query daemon health
+- shut down listener/connection set gracefully
+- construct or bind an in-process `test-socket` endpoint for transport-boundary
+  tests
+
+Dispatcher rule:
+- transport hands off to one injected dispatcher boundary
+- the dispatcher owns request-kind routing only
+- request-family behavior lives in injectable handlers behind that dispatcher
+- adding a new request type must not require embedding business logic into
+  Unix-socket or TCP/TLS adapter code
+
+Socket receive loop rule:
+- the receive loop must stay intentionally small
+- allowed responsibilities:
+  - read one framed request
+  - parse it into a qualified request enum/value
+  - validate/authenticate the transport envelope
+  - dispatch immediately to the owning handler boundary
+  - serialize one typed response
+- forbidden responsibilities inside the receive loop:
+  - direct SQL/store logic
+  - watcher/reconcile logic
+  - notifier/plugin delivery logic
+  - embedded workflow/business-state transitions
+
+#### Dispatcher
+
+Dispatch model:
+- qualified request -> handler routing inside the daemon/runtime service layer
+
+Object-safety rule:
+- transport adapters depend on an object-safe dispatcher trait or façade, not
+  on concrete request-family handler implementations
+
+Minimum method set:
+- dispatch parsed request to the correct request-family handler
+- return one typed response or typed error
+
+Boundary rule:
+- dispatcher owns routing, not business logic
+- request-family behavior lives in injectable handlers behind the dispatcher
+- adding a new request family should be an additive handler/registration
+  change, not transport-adapter logic growth
+
+#### Watcher / Reconcile
+
+Dispatch model:
+- watch-event/debounce driven trigger into owned reconcile handlers
+
+Object-safety rule:
+- callers depend on an object-safe watcher/reconcile trait or façade, not
+  concrete filesystem watcher implementations
+
+Minimum method set:
+- subscribe/start watch set
+- accept changed-path event
+- debounce/coalesce reconcile request
+- trigger owned ingress/reconcile handler
+- shut down watcher cleanly
+
+Boundary rule:
+- the watcher/reconcile subsystem owns filesystem watch events only
+- it must not perform SQL directly
+- it must not send socket traffic directly
+- it must not deliver notifier/plugin events directly
+- it may dispatch to the owning ingress/store/notifier handlers through their
+  boundaries only
+
+#### Plugin / Notifier
+
+Dispatch model:
+- one-way notification plus status-reporting callbacks
+
+Object-safety rule:
+- callers depend on an object-safe notifier/plugin boundary, not agent-specific
+  concrete implementations
+
+Minimum method set:
+- notify message/task delivery
+- report live status update
+- return typed backpressure / unavailable results
+
+### 21.6.2 Structured Error And Observability Boundaries
+
+Phase Q must keep production runtime failure handling and observability
+structured at compile time.
+
+Architectural rules:
+- fallible production paths return typed `Result` / discriminated error enums
+  across crate boundaries rather than relying on panic or unwrap
+- pattern matches over `AtmErrorCode` at module/crate boundary surfaces must be
+  exhaustive; wildcard `_` match arms are not permitted
+- adapter layers may translate errors, but must preserve structured identity
+- when reviewing transitional compatibility paths, apply these structured-error
+  rules together with the pre-Phase-Q pipeline stage lists and their
+  supersession notes; see Sections 8 and 9 for the Ack and Clear pipeline stage
+  lists and the inline notes that supersede them under Phase Q
+- SQLite-specific transaction, busy-timeout, shutdown-checkpoint, and
+  `rusqlite` blocking-I/O rules are defined in
+  [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
+  Sections 4, 5, and 6 and are part of this same Phase Q error boundary
+- `atm` owns CLI-side `sc-observability` bootstrap and CLI event emission
+- `atm-daemon` owns daemon/runtime/transport `sc-observability` emission
+- `atm-core` owns ATM event and error models above the shared observability
+  boundary
+- native plugins may emit plugin-local diagnostics, but daemon-owned runtime,
+  store, ingest, and transport events remain daemon-owned observability sinks
+- production runtime diagnostics must not collapse into ad hoc stdout/stderr
+  debugging
+
+### 21.6.3 Doctor Health Interface
+
+`atm doctor` remains a CLI command, but the Phase Q architecture requires one
+explicit daemon health interface.
+
+Architectural rules:
+- CLI doctor code queries daemon/runtime state through one explicit request /
+  response boundary
+- the daemon owns collection of runtime-only health such as:
+  - singleton ownership state
+  - live status-cache health
+  - ingest backlog / degraded-ingest state
+  - SQLite readiness/openability as observed by the runtime
+- CLI code must not inspect private daemon state directly to synthesize health
+  answers
+
+### 21.6.4 Shutdown, Signals, Timeouts, And Resource Caps
+
+The daemon runtime must use one documented operational contract.
+
+Required architectural defaults:
+- graceful shutdown drain deadline: `5s`
+- force-cancel deadline: `10s` total
+- same-host daemon request deadline: `3s`
+- per-leg TCP/TLS connect deadline: `5s`
+- per-leg TCP/TLS read/write deadline: `5s`
+- total remote retry budget: `30s`
+- SQLite `busy_timeout`: `1500ms`
+- ingest batch processing slice: `2s`
+- doctor health query deadline: `3s`
+
+Required caps:
+- max concurrent accepted connections: `64`
+- max per-connection inflight requests: `32`
+- ingest queue depth: `1024`
+- retry queue depth: `256`
+- SQLite handle budget: `1..=4`
+- status-cache cap: `4096`
+
+Required signal behavior:
+- install `SIGINT`/`SIGTERM`/`SIGHUP` handling before listeners accept
+- `SIGINT` and `SIGTERM` enter graceful shutdown
+- `SIGHUP` triggers bounded rescan/reload without dropping singleton ownership
+
+### 21.7 Test Strategy
+
+The daemon is not the test strategy.
+
+Phase Q test architecture must keep:
+- core service logic testable in-process
+- transport/watch/runtime logic testable through fakes or harnesses
+- daemon process spawning out of the core test path
+
+If a capability cannot be tested without real daemon spawning, that is treated
+as a design smell rather than the default approach.
+
+### 21.8 Lock Elimination
+
+The lock-release gate proved the file-based line is acceptable only as interim
+relief. The target Phase Q architecture removes mailbox-lock dependence from
+ATM mail correctness by moving durable state ownership to SQLite and treating
+JSONL as compatibility ingress/egress only.
+
+### 21.9 Five-Stage Migration Model
+
+Phase Q follows five architectural migration stages:
+
+1. store and boundary foundation
+2. compatibility ingest/export
+3. ack/task migration
+4. read/clear cutover plus thin daemon runtime
+5. lock retirement and production gate
+
+This ordering is intentional:
+- durable truth moves first
+- compatibility paths stay owned and explicit
+- daemon runtime arrives only after service boundaries are proven
+- lock retirement closes the phase after the daemon/runtime and store model are
+  already in place
