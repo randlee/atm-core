@@ -753,6 +753,7 @@ fn test_forward_metadata_message_id_timestamp_matches_persisted_timestamp() {
                 pending_ack_at: None,
                 acknowledged_at: None,
                 acknowledges_message_id: None,
+                task_id: None,
                 alert_kind: None,
                 missing_config_path: None,
                 extra: serde_json::Map::new(),

@@ -3,6 +3,7 @@ use std::path::Path;
 use crate::error::{AtmError, AtmErrorKind};
 use crate::persistence;
 use crate::schema::MessageEnvelope;
+use crate::schema::inbox_message::to_shared_inbox_value;
 
 /// Atomically replace one mailbox JSONL file from fully serialized records.
 ///
@@ -25,7 +26,8 @@ use crate::schema::MessageEnvelope;
 pub fn write_messages(path: &Path, messages: &[MessageEnvelope]) -> Result<(), AtmError> {
     let mut bytes = Vec::new();
     for message in messages {
-        serde_json::to_writer(&mut bytes, message)?;
+        let encoded = to_shared_inbox_value(message)?;
+        serde_json::to_writer(&mut bytes, &encoded)?;
         bytes.push(b'\n');
     }
 

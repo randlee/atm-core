@@ -14,6 +14,7 @@ use serde_json::Value;
 use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
+use crate::schema::inbox_message::hydrate_legacy_fields_from_metadata;
 use crate::schema::{LegacyMessageId, MessageEnvelope};
 
 const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
@@ -205,6 +206,7 @@ fn parse_mailbox_value(
     path: &Path,
     line_number: usize,
 ) -> Result<Option<MessageEnvelope>, serde_json::Error> {
+    hydrate_legacy_fields_from_metadata(value);
     sanitize_legacy_message_id(value, path, line_number);
     serde_json::from_value::<MessageEnvelope>(value.take()).map(Some)
 }
@@ -264,6 +266,20 @@ mod tests {
         assert!(raw.contains("\"text\":\"first\""));
         let read_back = read_messages(&path).expect("read back");
         assert_eq!(read_back, vec![envelope]);
+    }
+
+    #[test]
+    fn append_message_serializes_metadata_atm_without_top_level_machine_fields() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("append-message-metadata.jsonl");
+        let envelope = sample_message(Uuid::new_v4(), "first");
+
+        append_message(&path, &envelope).expect("append");
+
+        let raw = fs::read_to_string(&path).expect("raw contents");
+        assert!(raw.contains("\"metadata\":{\"atm\":{"));
+        assert!(!raw.contains("\"message_id\""));
+        assert!(!raw.contains("\"source_team\""));
     }
 
     #[test]
@@ -426,6 +442,27 @@ mod tests {
     }
 
     #[test]
+    fn read_messages_hydrates_fields_from_metadata_atm() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("metadata-atm.json");
+        fs::write(
+            &path,
+            r#"{"from":"team-lead","text":"hello","timestamp":"2026-03-30T00:00:00Z","read":false,"summary":"hello","metadata":{"atm":{"messageId":"01JQYVB6W51Q2E7E6T3Y4Q9N2M","sourceTeam":"atm-dev","pendingAckAt":"2026-03-30T00:00:01Z","taskId":"TASK-123"}}}"#,
+        )
+        .expect("write");
+
+        let messages = read_messages(&path).expect("read");
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].message_id.is_some());
+        assert_eq!(messages[0].source_team.as_deref(), Some("atm-dev"));
+        assert!(messages[0].pending_ack_at.is_some());
+        assert_eq!(
+            messages[0].task_id.as_ref().map(|task_id| task_id.as_str()),
+            Some("TASK-123")
+        );
+    }
+
+    #[test]
     fn append_message_preserves_both_records_under_concurrent_writers() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("append-message-concurrent.jsonl");
@@ -454,6 +491,24 @@ mod tests {
     }
 
     fn sample_message(message_id: Uuid, body: &str) -> MessageEnvelope {
+        let mut extra = serde_json::Map::new();
+        let mut metadata = serde_json::Map::new();
+        let mut atm = serde_json::Map::new();
+        atm.insert(
+            "messageId".to_string(),
+            serde_json::Value::String(
+                crate::schema::LegacyMessageId::from(message_id)
+                    .into_atm_message_id()
+                    .to_string(),
+            ),
+        );
+        atm.insert(
+            "sourceTeam".to_string(),
+            serde_json::Value::String("atm-dev".to_string()),
+        );
+        metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
+        extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
+
         MessageEnvelope {
             from: "arch-ctm".into(),
             text: body.into(),
@@ -470,7 +525,7 @@ mod tests {
             acknowledged_at: None,
             acknowledges_message_id: None,
             task_id: None,
-            extra: serde_json::Map::new(),
+            extra,
         }
     }
 }

@@ -1913,6 +1913,9 @@ Files expected in scope:
 - `crates/atm-core/src/mailbox/lock.rs`
 - `crates/atm-core/src/error.rs`
 - `crates/atm-core/src/error_codes.rs`
+- `crates/atm-core/src/ack/mod.rs`
+- `crates/atm-core/src/send/mod.rs`
+- `crates/atm-core/src/schema/inbox_message.rs`
 - docs already updated in P.9
 
 Exact GAP-1 predicate:
