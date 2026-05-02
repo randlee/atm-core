@@ -3,10 +3,6 @@ default_team = "atm-dev"
 identity = "team-lead"
 
 [[atm.post_send_hooks]]
-recipient = "team-lead"
-command = ["atm-nudge-xml-1.py", "team-lead"]
-
-[[atm.post_send_hooks]]
 recipient = "arch-ctm"
 command = ["atm-nudge-xml-1.py", "arch-ctm"]
 

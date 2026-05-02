@@ -1,3 +1,8 @@
+---
+name: backup-and-restore-team
+version: 0.2.0
+description: Procedure for backing up and restoring an ATM team. Referenced by the team-lead skill when a session ID mismatch is detected.
+---
 # Team Backup And Restore Procedure
 
 Follow this procedure when Step 1 of the `team-lead` skill detects a session id
