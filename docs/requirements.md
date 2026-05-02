@@ -598,6 +598,8 @@ Post-send-hook rules:
   - `message_id`
   - `requires_ack`
   - optional `task_id` when present
+  - optional `recipient_pane_id` when ATM has an authoritative pane mapping for
+    the recipient
 - example payload:
   ```json
   {
@@ -607,7 +609,8 @@ Post-send-hook rules:
     "recipient": "recipient",
     "team": "atm-dev",
     "message_id": "...",
-    "requires_ack": false
+    "requires_ack": false,
+    "recipient_pane_id": "%1"
   }
   ```
 - the hook may optionally emit one structured result object on stdout for ATM
@@ -2647,6 +2650,12 @@ mail correctness.
     level with ATM machine fields under `metadata.atm`
   - Claude-native external writes must be importable into SQLite through one
     owned ingress boundary
+  - once team roster and pane mapping truth move to SQLite, ATM-owned
+    post-send-hook payloads must carry the authoritative `recipient_pane_id`
+    from roster truth when known
+  - post-send hooks must be able to rely on that payload field instead of
+    rediscovering pane mappings from local files once the Phase Q migration is
+    complete
 
 - `REQ-CORE-COMPAT-002` Native agent/plugin traffic must not use JSONL.
 

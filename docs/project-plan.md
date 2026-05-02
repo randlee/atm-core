@@ -753,6 +753,7 @@ Planned sprints:
         - `message_id`
         - `requires_ack`
         - optional `task_id`
+        - optional `recipient_pane_id` when authoritative roster truth knows it
       - the hook may optionally return one structured stdout object with
         `level`, `message`, and optional `fields`; ATM logs it on a best-effort
         basis and ignores absent/invalid output
@@ -773,6 +774,9 @@ Planned sprints:
       - expected recipient non-match is silent
       - `ATM_POST_SEND` includes sender/recipient/team context without
         `hook_match` booleans
+      - once roster truth migrates to SQLite, `ATM_POST_SEND` also carries the
+        authoritative `recipient_pane_id` when known so hooks can consume it
+        directly
       - actionable warnings exist for configured-but-skipped hooks
       - docs, help text, and tests cover the migration and new semantics
     - reserve `atm-identity-missing@<team>` for ATM-generated

@@ -187,6 +187,8 @@ Identity-specific policy:
   - `message_id`
   - `requires_ack`
   - optional `task_id` when present
+  - optional `recipient_pane_id` when ATM already knows the authoritative pane
+    mapping for the recipient
 - hook stdout may optionally carry one structured result object that ATM parses
   on a best-effort basis for post-send diagnostics
 - supported structured hook-result levels are `debug`, `info`, `warn`, and
@@ -196,6 +198,9 @@ Identity-specific policy:
   selector, and execution outcome for troubleshooting
 - hook failure or timeout is best-effort only and must not convert a
   successful send into a command failure
+- after Phase Q roster migration, the send path should populate
+  `ATM_POST_SEND.recipient_pane_id` from the authoritative roster/store record
+  so hook scripts do not need to rediscover pane mappings from file state
 - the reserved diagnostic sender `atm-identity-missing@<team>` is for
   ATM-generated repair/diagnostic notices only
 - doctor should project the live `config.json` roster in a deterministic order:

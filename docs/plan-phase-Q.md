@@ -522,6 +522,12 @@ Implementation details:
 - malformed external records must degrade safely rather than corrupting SQLite
 - workflow sidecar import must preserve current ack/read/clear semantics for
   already-known messages
+- once roster truth is authoritative in SQLite, the send path must include the
+  authoritative `recipient_pane_id` in `ATM_POST_SEND` for post-send hooks when
+  that pane mapping is known
+- post-send hook implementations should consume `ATM_POST_SEND.recipient_pane_id`
+  instead of rediscovering pane mappings from local files once this field is
+  available
 - ingest/export paths must emit structured `sc-observability` events for import
   success, degradation, and export failure
 - after Q.1, this slice can proceed in parallel with transport and
@@ -538,6 +544,8 @@ Acceptance:
   - malformed `metadata.atm` handling without message loss when Claude fields are usable
   - partial workflow-sidecar import / missing sidecar rows
   - `config.json` roster changes updating SQLite roster truth deterministically
+  - `ATM_POST_SEND.recipient_pane_id` populated from roster truth when the
+    recipient pane mapping is known
   - structured ingest/export error variants and observability events for the
     degraded paths above
 

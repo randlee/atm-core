@@ -1126,11 +1126,19 @@ contain:
 - `message_id`
 - `requires_ack`
 - optional `task_id` when present
+- optional `recipient_pane_id` when ATM already knows the authoritative pane
+  mapping for the recipient
 
 The post-send hook runs only after a successful non-`dry-run` send, executes
 once when sender or recipient matching succeeds, may optionally emit one
 structured stdout result for observability, and never rolls back a successful
 send on failure or timeout.
+
+Phase Q hook-note:
+- once roster and pane mapping truth move to SQLite, the send path should place
+  the authoritative recipient pane id into `ATM_POST_SEND.recipient_pane_id`
+- post-send hook implementations should prefer that payload field over local
+  file rediscovery when it is present
 
 Supported structured hook-result levels remain:
 - `debug`

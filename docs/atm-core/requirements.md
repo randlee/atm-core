@@ -432,12 +432,17 @@ Required identity rules:
   - `message_id`
   - `requires_ack`
   - optional `task_id` when present
+  - optional `recipient_pane_id` when authoritative roster truth includes a
+    pane mapping for the recipient
 - the hook may optionally emit one structured stdout result with `level`,
   `message`, and optional `fields`; ATM logs it on a best-effort basis and
   ignores absent or invalid output
 - hook-rule evaluation and execution outcomes must remain observable through
   structured diagnostics without creating caller-visible warnings for expected
   recipient non-match
+- once Phase Q roster truth is stored in SQLite, `atm-core` must source
+  `recipient_pane_id` from the authoritative roster/store boundary rather than
+  forcing hooks to rediscover it from local files
 - hook failure or timeout is best-effort only and must not roll back a
   successful send
 - the reserved sender `atm-identity-missing@<team>` is available only for
