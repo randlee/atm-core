@@ -43,6 +43,7 @@ Architectural rule:
 - enforcement of:
   - `journal_mode = WAL`
   - `foreign_keys = ON`
+  - `busy_timeout = 1500ms`
   - explicit transactions for mutating operations
 
 `atm-rusqlite` does not own:
@@ -60,8 +61,32 @@ Rules:
   primary failure type
 - ATM-owned `AtmErrorCode` remains the public code vocabulary
 - the crate must not invent local ad hoc error-code strings
+- connection open/configuration is not complete until `journal_mode = WAL`,
+  `foreign_keys = ON`, and `busy_timeout = 1500ms` have all been enforced
+- `SQLITE_BUSY` must map to a typed retry-able ATM store error rather than
+  leaking as a raw driver failure
+- `SQLITE_BUSY_SNAPSHOT` must map to a typed retry-able or replay-required ATM
+  store error according to the calling contract
+- WAL checkpoint failure during graceful shutdown is best-effort only: the
+  failure must be logged with structured context and the daemon must still
+  proceed with shutdown
+- disk-full / `IOERR_WRITE` class failures must map to typed non-retryable
+  persistence errors unless a narrower retry contract is explicitly documented
 
-## 6. Testability
+## 6. Blocking I/O And Async Runtime Interaction
+
+`rusqlite` is synchronous blocking I/O.
+
+Rules:
+- if `atm-daemon` runs on a Tokio async runtime, direct `rusqlite` calls must
+  execute on `tokio::task::spawn_blocking` or an equivalent dedicated blocking
+  thread pool
+- direct invocation of `rusqlite` calls from an async task is not permitted in
+  production because it can block the runtime under mailbox or ingest load
+- the dedicated blocking execution path must respect the Phase Q SQLite handle
+  budget of `1..=4`
+
+## 7. Testability
 
 `atm-rusqlite` must be testable entirely in process.
 

@@ -88,6 +88,23 @@ Privacy boundary:
   crate-private implementation details
 - public callers interact through daemon request/response surfaces and health
   queries, not through direct state mutation
+- transport submodules expose only the listener/client boundary types required
+  for runtime composition; frame codecs, connection state, and socket helpers
+  remain crate-private
+- dispatcher submodules expose only the dispatcher trait/boundary and typed
+  request/response contracts; routing tables and handler wiring remain
+  crate-private
+- status-cache submodules expose only the boundary needed for daemon health and
+  routing decisions; cache internals and mutation helpers remain crate-private
+- watcher/reconcile submodules expose only the owned watch/reconcile boundary;
+  debounce state, scan cursors, and filesystem adapter details remain
+  crate-private
+- plugin/notifier submodules expose only notifier/plugin boundary traits or
+  façades required by runtime composition; delivery internals remain
+  crate-private
+- observability submodules expose only the daemon-owned event sink façade used
+  by runtime composition; sink plumbing and field-shaping helpers remain
+  crate-private
 
 Socket dispatcher rule:
 - listener/connection receive loops are deliberately tiny

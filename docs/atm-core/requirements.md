@@ -55,6 +55,10 @@ Initial allocation:
 - `REQ-CORE-INGEST-*`
 - `REQ-CORE-BOUNDARY-*`
 - `REQ-CORE-TRANSPORT-*`
+- `REQ-CORE-DAEMON-*`
+- `REQ-CORE-LOCK-*`
+- `REQ-CORE-TEST-*`
+- `REQ-CORE-QA-*`
 
 Initial crate requirement IDs:
 
@@ -116,27 +120,63 @@ Initial crate requirement IDs:
   durable store family and the command semantics above those stores.
   Refines the product-level store-ownership and lock-retirement requirements
   in [`../requirements.md`](../requirements.md) Section 21.
+- `REQ-CORE-RUNTIME-002` `atm-core` owns the service-layer contract that keeps
+  durable roster truth separate from live daemon-status truth. Satisfies the
+  state-separation and reliability aspects of:
+  `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-STORE-001` `atm-core` owns the SQLite schema contract, canonical
   `message_key` identity model, and required lookup/dedupe constraints.
   Satisfies:
-  `REQ-CORE-STORE-001`.
+  `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-STORE-002` `atm-core` owns WAL / foreign-key / explicit
   transaction policy at the store boundary. Satisfies:
-  `REQ-CORE-STORE-002`.
+  `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-INGEST-001` `atm-core` owns the inbox/config ingest contract for
   replay, backpressure/degradation behavior, and no-silent-drop policy.
   Satisfies:
-  `REQ-CORE-INGEST-001`.
+  `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-BOUNDARY-001` `atm-core` owns the strict trait boundaries for
   store, inbox ingress/export, config ingress, watcher/reconcile, and
   notifier-facing service calls. Satisfies the subsystem-boundary aspects of:
-  `REQ-CORE-BOUNDARY-001`, `REQ-CORE-TEST-RUNTIME-001`.
+  `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
 - `REQ-CORE-BOUNDARY-002` `atm-core` owns the typed error-model contracts used
   by service boundaries. Satisfies the structured-error aspects of:
-  `REQ-CORE-BOUNDARY-002`.
+  `REQ-P-ERROR-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-OBS-002` `atm-core` owns ATM event and error models above the
   shared observability boundary for both CLI and daemon callers. Satisfies:
-  `REQ-CORE-OBS-002`.
+  `REQ-P-OBS-001`, `REQ-P-DOCTOR-001`.
+- `REQ-CORE-DAEMON-001` `atm-core` owns the daemon-facing singleton/runtime
+  service contract that callers depend on, including no-hidden-direct-I/O
+  fallback behavior. Satisfies:
+  `REQ-P-RUNTIME-001`, `REQ-P-RELIABILITY-001`.
+- `REQ-CORE-DAEMON-002` `atm-core` owns the contract that daemon runtime
+  orchestration stays outside mail business semantics. Satisfies:
+  `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
+- `REQ-CORE-TRANSPORT-001` `atm-core` owns the typed daemon API contract shared
+  by Unix domain socket, TCP/TLS, and in-process test transport. Satisfies:
+  `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
+- `REQ-CORE-TRANSPORT-002` `atm-core` owns route-selection semantics between
+  local and cross-host daemon paths. Satisfies:
+  `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
+- `REQ-CORE-TRANSPORT-003` `atm-core` owns the typed transport timeout and
+  retry semantics exposed at service boundaries. Satisfies:
+  `REQ-P-RELIABILITY-001`.
+- `REQ-CORE-TRANSPORT-004` `atm-core` owns the remote-acceptance and
+  no-durable-remote-outbox semantics above transport implementations. Satisfies:
+  `REQ-P-RELIABILITY-001`.
+- `REQ-CORE-LOCK-RETIRE-001` `atm-core` owns the service-layer rule that normal
+  ATM mail correctness must not depend on mailbox locks in the Phase Q target
+  architecture. Satisfies:
+  `REQ-P-RELIABILITY-001`.
+- `REQ-CORE-DOCTOR-002` `atm-core` owns the daemon-health query contract
+  consumed by `atm doctor`. Satisfies:
+  `REQ-P-DOCTOR-001`, `REQ-P-OBS-001`.
+- `REQ-CORE-TEST-RUNTIME-001` `atm-core` owns the rule that core correctness is
+  testable in process without daemon spawning. Satisfies:
+  `REQ-P-TEST-001`.
+- `REQ-CORE-QA-RUNTIME-001` `atm-core` owns the Phase Q QA invariants for
+  daemon singleton/runtime and boundary enforcement. Satisfies:
+  `REQ-P-ACCEPTANCE-001`, `REQ-P-TEST-001`.
 
 ## 4. Module Ownership
 

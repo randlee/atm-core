@@ -1046,6 +1046,10 @@ The ack pipeline stages are:
 7. emit command lifecycle records
 8. return outcome
 
+This stage list describes the pre-Phase-Q compatibility line. The Phase Q
+target pipeline is superseded by the SQLite SSOT and daemon-boundary design in
+Section 21.
+
 ## 9. Clear Pipeline
 
 The clear pipeline stages are:
@@ -1057,6 +1061,10 @@ The clear pipeline stages are:
 6. atomically persist the kept set when not in dry-run mode
 7. emit command lifecycle records
 8. return outcome
+
+This stage list describes the pre-Phase-Q compatibility line. The Phase Q
+target pipeline is superseded by the SQLite SSOT and daemon-boundary design in
+Section 21.
 
 ## 10. Log Pipeline
 
@@ -1297,6 +1305,8 @@ Phase Q error-model rules:
 - every documented `AtmErrorCode` must carry one recoverability classification
   in the central registry so CLI, daemon, and doctor surfaces can reason about
   retry vs operator-action vs fail-closed behavior
+- pattern matches over `AtmErrorCode` at module/crate boundary surfaces must be
+  exhaustive; wildcard `_` match arms are not permitted
 
 ## 16. Trait Policy
 
