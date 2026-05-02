@@ -2402,6 +2402,11 @@ mail correctness.
   - schema constraints must forbid duplicate authoritative identities
   - the schema must document the required lookup indexes for message lookup,
     task lookup, visibility projection, and ingest dedupe
+  - ATM-authored message identity is immutable; the same ATM-authored
+    `message_id` / `message_key` must never be reused for a different durable
+    message
+  - an attempted durable insert of an already-known immutable ATM message must
+    return a typed duplicate result/error such as `DuplicateEntry`
 
 - `REQ-CORE-STORE-002` The Phase Q SQLite store must enforce WAL and explicit
   transaction policy.
@@ -2443,6 +2448,20 @@ mail correctness.
   - SQLite may store a diagnostic or last-observed snapshot only
   - roster truth and live-status truth must remain distinct
 
+- `REQ-CORE-RUNTIME-004` Canonical system events must be emitted only on the
+  daemon side of the durable store boundary.
+
+  Required behavior:
+  - CLI, transport, watcher/reconcile, ingress adapters, and SQLite/store code
+    must not fire system events or external post-send hooks directly
+  - those layers may only submit work, return typed results, or emit
+    diagnostics
+  - one daemon-owned core service boundary interprets durable write results and
+    determines whether an event-producing transition occurred
+  - internal daemon-local hook sites may exist for logging, testing, and
+    notifier fanout, but the external post-send hook remains a single canonical
+    downstream effect of the daemon-owned event boundary
+
 ### 21.2 Singleton Daemon Runtime
 
 - `REQ-CORE-DAEMON-001` ATM must run exactly one daemon per host in the Phase Q
@@ -2478,6 +2497,8 @@ mail correctness.
     rather than silently falling back to direct SQLite or inbox-file access
   - in-process test harnesses may bypass the daemon only inside explicit test
     wiring, not in the production path
+  - `atm send` must route through the daemon in the Phase Q production path
+  - `atm ack` must route through the daemon in the Phase Q production path
 
   Satisfies:
   - `REQ-P-RUNTIME-001`
@@ -2665,6 +2686,34 @@ mail correctness.
   - the later agent plugin crate must align to this daemon API rather than
     introducing a parallel message transport
 
+- `REQ-CORE-COMPAT-003` The post-send hook must execute on the daemon side of
+  the durable store boundary in the Phase Q production runtime.
+
+  Required behavior:
+  - the external post-send hook fires only after a successful new SSOT insert
+    for a hook-eligible locally-originated outbound message
+  - post-send-hook execution is daemon-owned downstream behavior, not store
+    behavior and not CLI behavior
+  - hook execution must never roll back a durable message commit
+  - hook failure remains a typed best-effort warning/diagnostic outcome
+  - the daemon-owned hook payload must include whether the outbound message is
+    an ack reply (`is_ack`)
+
+- `REQ-CORE-COMPAT-004` Hook eligibility must be explicit and origin-based.
+
+  Required behavior:
+  - hook-eligible origins are:
+    - locally-originated `atm send`
+    - locally-originated `atm ack`
+    - later locally-originated daemon/plugin outbound send operations
+  - non-hook-eligible origins are:
+    - imported inbound Claude/legacy JSONL rows
+    - remote inbound daemon deliveries
+    - replay/re-export/reconcile paths
+    - duplicate durable insert attempts rejected as `DuplicateEntry`
+  - one successful eligible durable insert may fire the external post-send hook
+    at most once
+
 ### 21.6 Lock Elimination Target
 
 - `REQ-CORE-LOCK-RETIRE-001` ATM mail correctness must stop depending on
@@ -2742,6 +2791,11 @@ mail correctness.
     of panic/unwrap for fallible runtime paths
   - daemon/runtime code remains thin and does not accumulate business logic
   - daemon spawning is not the test strategy
+  - `atm send` and `atm ack` both use the daemon production path
+  - canonical system events fire only from the daemon-owned post-store
+    transition boundary
+  - duplicate durable insert attempts do not create duplicate events or
+    post-send-hook execution
   - SQLite remains the source of truth for mail and roster
   - live agent status remains runtime-owned state
   - structured `sc-observability` coverage remains present at both CLI and

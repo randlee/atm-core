@@ -504,7 +504,7 @@ Scope:
 - ingest external inbox rows into SQLite
 - ingest existing workflow sidecar state into SQLite
 - ingest `config.json` roster updates into SQLite
-- move ATM `send` to SQLite-first plus inbox export
+- move ATM `send` to daemon-owned SQLite-first plus inbox export
 - keep exported envelope Claude-native + `metadata.atm`
 
 Expected files / crates:
@@ -525,6 +525,8 @@ Implementation details:
 - once roster truth is authoritative in SQLite, the send path must include the
   authoritative `recipient_pane_id` in `ATM_POST_SEND` for post-send hooks when
   that pane mapping is known
+- post-send-hook execution for `send` must happen only on the daemon side of
+  the store boundary after a successful new durable insert
 - post-send hook implementations should consume `ATM_POST_SEND.recipient_pane_id`
   instead of rediscovering pane mappings from local files once this field is
   available
@@ -536,6 +538,8 @@ Implementation details:
 
 Acceptance:
 - `send` inserts authoritative rows in SQLite
+- the production `send` path routes through the daemon rather than direct CLI
+  store mutation
 - ATM-authored inbox export still works for Claude recipients
 - repeated ingest does not duplicate imported records
 - tests cover:
@@ -555,6 +559,7 @@ Scope:
 - move ack state and task state to SQLite
 - append reply exports after SQLite commit
 - stop treating inbox mutation as authoritative ack state
+- move `ack` to the daemon-owned production path
 
 Expected files / crates:
 - `crates/atm-core/src/ack/*`
@@ -564,6 +569,8 @@ Expected files / crates:
 Implementation details:
 - reply export happens only after SQLite commit succeeds
 - ack/task transitions must not require rewriting the source inbox record
+- post-send-hook execution for `ack` must happen only on the daemon side of
+  the store boundary after a successful eligible durable insert
 - existing workflow sidecar state is read only for migration/backfill once
   SQLite is authoritative
 - ack/task failure modes must remain typed across service and export boundaries
@@ -572,6 +579,8 @@ Implementation details:
 
 Acceptance:
 - ack-required messages are authoritative in SQLite
+- the production `ack` path routes through the daemon rather than direct CLI
+  store mutation
 - task linkage and acknowledged state survive restart without inbox rewrites
 - reply export still lands in Claude inbox correctly
 - tests cover:
@@ -579,6 +588,7 @@ Acceptance:
   - task-linked imported message
   - reply export failure after commit surfaces clearly and does not corrupt SQLite
   - duplicate ack attempt rejection against SQLite truth
+  - duplicate durable insert / `DuplicateEntry` does not fire post-send hooks
   - no ack/task runtime failure path relies on panic/unwrap
 
 ### Q.4 — Read/Clear Cutover + Thin Daemon Runtime
@@ -645,6 +655,7 @@ Acceptance:
 - `read` and `clear` no longer require mailbox rewrite correctness
 - lock contention on inbox files does not block SQLite-owned state transitions
 - existing CLI output remains compatible
+- canonical system events fire only from the daemon-owned post-store boundary
 - tests cover:
   - mixed imported legacy + forward ATM rows
   - repeated `read` after external Claude append
@@ -708,6 +719,45 @@ Hard requirements:
 Non-negotiable constraint:
 - no test architecture may depend on daemon process spawning to validate core
   mail correctness
+
+## Production-Readiness Checklist
+
+Phase Q is not complete unless every item below is true in the documented end
+state:
+
+- the phase exit condition is a production-ready daemon, not a preparatory
+  architecture slice
+- `atm send` goes through the daemon production path
+- `atm ack` goes through the daemon production path
+- post-send-hook execution is daemon-owned
+- canonical system events are emitted only after a successful SSOT transition
+  on the daemon side of the store boundary
+- CLI, transport, watcher/reconcile, ingress adapters, and SQLite/store do not
+  emit canonical system events directly
+- hook-eligible origins are explicit
+- non-hook-eligible origins are explicit
+- immutable ATM-authored `message_id` / `message_key` reuse is rejected as
+  `DuplicateEntry`
+- duplicate durable insert attempts do not produce duplicate events or hook
+  execution
+- SQLite is the SSOT for mail, ack/task, visibility, and roster
+- live agent status remains daemon-memory truth
+- strict trait/I-O boundaries are explicit and QA-enforced
+- concrete adapters remain private behind those boundaries
+- Unix domain socket and TCP/TLS share one tiny dispatcher/handler contract
+- `test-socket` exists for isolated transport-boundary tests
+- daemon singleton, startup, shutdown, crash recovery, and stale-artifact
+  rules are explicit
+- watcher/reconcile behavior is explicit and isolated
+- daemon-to-daemon routing and remote acceptance semantics are explicit
+- `atm doctor` daemon health surface is explicit
+- structured `sc-observability` is explicit at CLI and daemon layers
+- typed error handling is explicit, wildcard/catch-all codes are forbidden,
+  and panic/unwrap are not the normal production strategy
+- conformance/integration tests are listed for edge cases and boundary rules
+- every boundary violation is an immediate QA failure
+- the release gate proves the result is production-ready and better than the
+  current ATM runtime
 
 ## Risk Register
 
@@ -794,10 +844,15 @@ Mitigation:
 The following must be checked on every QA pass for Phase Q:
 
 - it is impossible for two active ATM daemons to run on one host
+- `atm send` and `atm ack` both use the daemon production path
 - every subsystem performs all of its external I/O only through its owning
   trait boundary
 - any SQL, watcher, notifier, or socket-boundary bypass is an immediate QA
   failure
+- canonical system events are emitted only from the daemon-owned post-store
+  boundary
+- duplicate durable insert attempts do not create duplicate events or external
+  hook execution
 - no business logic has leaked into transport/runtime adapter code
 - daemon spawning is not part of the core test strategy
 - transport/runtime code remains thin and does not collapse into a giant socket
@@ -817,6 +872,12 @@ The following must be checked on every QA pass for Phase Q:
 ## Release Gate For Phase Q
 
 Phase Q should be considered complete only when:
+- the result is production-ready, not merely architecture-prepared
+- the daemon is production-ready and required for the normal runtime path
+- `atm send` works through the daemon production path
+- `atm ack` works through the daemon production path
+- post-send-hook execution is daemon-owned and fires only from the canonical
+  daemon-side post-store event boundary
 - ATM mail correctness no longer depends on mailbox `.lock` files
 - SQLite is the authoritative store for read/ack/clear/task semantics
 - SQLite is the authoritative store for team roster
@@ -824,3 +885,5 @@ Phase Q should be considered complete only when:
   durable database truth
 - Claude inbox files remain a compatible export/ingest surface only
 - stale lock cleanup can no longer wedge normal ATM mail flows
+- the result is observably and operationally better than the current ATM
+  runtime rather than simply equivalent with new internals

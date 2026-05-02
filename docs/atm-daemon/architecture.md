@@ -37,6 +37,8 @@ The `atm-daemon` crate must remain thin.
   - TCP/TLS
   - in-process `test-socket`
 - cross-host delivery is daemon-to-daemon only.
+- `atm send` and `atm ack` both route through the daemon in the Phase Q
+  production runtime.
 - remote delivery may use bounded transient retry, but not a durable long-lived
   remote outbox.
 - remote send success is defined by remote daemon acceptance within the bounded
@@ -47,6 +49,9 @@ The `atm-daemon` crate must remain thin.
   debug-only runtime path replaces it in production.
 - plugin-local observability does not replace daemon-owned runtime/transport
   sinks; daemon-owned events stay daemon-owned.
+- canonical system events and external post-send-hook execution happen only
+  after the daemon-owned core service receives a successful eligible durable
+  insert result from the store boundary.
 - runtime subsystems stay fully isolated:
   - SQL/store calls belong only to the store boundary
   - file-watch/reconcile logic belongs only to the watcher/reconcile boundary
@@ -55,6 +60,9 @@ The `atm-daemon` crate must remain thin.
 - watcher/reconcile adapters remain crate-private and dispatch through owned
   ingress/service handlers rather than touching store/transport/notifier
   internals directly
+- duplicate durable insert attempts rejected by the store as `DuplicateEntry`
+  do not produce canonical downstream message events or post-send-hook
+  execution
 
 ## 3.1 Singleton Runtime
 

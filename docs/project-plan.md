@@ -2438,6 +2438,8 @@ Goal:
 - replace filesystem JSON as ATM's mail source of truth with SQLite
 - reintroduce one tightly-bounded singleton daemon runtime
 - eliminate mailbox-lock dependence from ATM mail correctness
+- exit the phase only with a production-ready daemon/runtime that is better
+  than the current ATM runtime, not with architecture groundwork alone
 
 Hard architectural constraints:
 - exactly one daemon per host
@@ -2457,6 +2459,8 @@ Core design decisions:
   - read/clear visibility state
   - team roster
 - daemon memory is the live truth for agent status
+- `atm send` and `atm ack` both use the daemon production path in the final
+  Phase Q runtime
 - `atm doctor` remains a CLI command but must query daemon/runtime state in the
   Phase Q target architecture
 - Claude inbox JSONL remains compatibility ingress/egress only
@@ -2470,6 +2474,9 @@ Core design decisions:
   durable long-lived remote outbox
 - successful remote delivery requires remote daemon acceptance inside the
   bounded retry window
+- external post-send-hook execution is daemon-owned and fires only from the
+  daemon-side post-store transition boundary for eligible locally-originated
+  outbound messages
 
 Planned sprint sequence:
 
@@ -2510,6 +2517,9 @@ Acceptance:
 - the dispatcher/handler contract is explicit enough that Unix, TCP/TLS, and
   `test-socket` implementations can proceed without owning request-family
   behavior
+- the production-readiness checklist is explicit and traceable in
+  requirements, architecture, and project-plan text before parallel
+  implementation begins
 
 ### Q.2 — Compatibility Ingress And Export
 
@@ -2517,6 +2527,7 @@ Scope:
 - import Claude/legacy inbox JSONL into SQLite
 - import roster updates from `config.json` into SQLite
 - keep ATM export Claude-native at the top level with `metadata.atm`
+- move `send` to the daemon-owned production path
 
 Parallel execution after Q.1:
 - inbox ingress/export can proceed in parallel with:
@@ -2527,6 +2538,7 @@ Parallel execution after Q.1:
 
 Acceptance:
 - external Claude writes become durable in SQLite through one owned ingress path
+- `send` enters SSOT through the daemon production path
 - export compatibility remains intact
 - roster truth no longer depends on `config.json` as the durable source
 
@@ -2535,6 +2547,7 @@ Acceptance:
 Scope:
 - move ack-required state and task state to SQLite-owned semantics
 - keep reply export behind SQLite commit success
+- move `ack` to the daemon-owned production path
 
 Parallel execution after Q.1:
 - ack/task migration can proceed in parallel with Q.2/Q.4 transport and
@@ -2543,6 +2556,7 @@ Parallel execution after Q.1:
 
 Acceptance:
 - ack/task state is authoritative in SQLite
+- `ack` enters SSOT through the daemon production path
 - reply export remains compatible for Claude recipients
 
 ### Q.4 — Read/Clear Cutover + Thin Daemon Runtime
@@ -2568,6 +2582,7 @@ Acceptance:
 - daemon-unavailable CLI/runtime calls fail clearly without auto-spawn
 - daemon code remains a thin runtime wrapper over the service boundaries
 - handler behavior is testable through the in-process `test-socket` transport
+- canonical system events fire only from the daemon-owned post-store boundary
 
 ### Q.5 — Lock Retirement And Production Gate
 
@@ -2580,14 +2595,20 @@ Acceptance:
 - mailbox locks are no longer part of the normal mail correctness contract
 - stale lock artifacts can no longer wedge ATM mail flows
 - requirements, architecture, and project plan all match the final design
+- the full production-readiness checklist is satisfied, not partially deferred
 
 QA invariants for every Phase Q pass:
 - impossible to run two active daemons on one host
 - daemon unavailability fails clearly without hidden fallback to direct store or
   inbox access
+- `atm send` and `atm ack` both use the daemon production path
 - every subsystem performs I/O only through its owning trait boundary
 - any observed SQL, watcher, notifier, or socket-boundary bypass is an
   immediate QA failure
+- canonical system events are emitted only from the daemon-owned post-store
+  transition boundary
+- duplicate durable insert attempts do not create duplicate events or external
+  hook execution
 - daemon/runtime code remains thin
 - socket receive loops remain tiny dispatcher loops only
 - any socket loop that performs SQL, watcher, notifier, or workflow logic is

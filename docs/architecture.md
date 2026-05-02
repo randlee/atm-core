@@ -1125,6 +1125,7 @@ contain:
 - `to`
 - `message_id`
 - `requires_ack`
+- `is_ack`
 - optional `task_id` when present
 - optional `recipient_pane_id` when ATM already knows the authoritative pane
   mapping for the recipient
@@ -1135,6 +1136,8 @@ structured stdout result for observability, and never rolls back a successful
 send on failure or timeout.
 
 Phase Q hook-note:
+- the Phase Q target runtime supersedes the old CLI-owned send-only hook path
+  with one daemon-owned post-store hook trigger for eligible outbound messages
 - once roster and pane mapping truth move to SQLite, the send path should place
   the authoritative recipient pane id into `ATM_POST_SEND.recipient_pane_id`
 - post-send hook implementations should prefer that payload field over local
@@ -2052,6 +2055,44 @@ There are three distinct paths:
    - sender-side daemons do not write remote host JSONL directly
    - successful remote delivery requires remote daemon acceptance
 
+### 21.3.1 Canonical Event Boundary
+
+Phase Q emits canonical system events from one place only: the daemon-owned
+core service boundary after a successful SSOT transition.
+
+Rules:
+- CLI, transport, watcher/reconcile, ingress adapters, and SQLite/store code
+  do not fire canonical system events or external post-send hooks directly
+- those layers only submit work, return typed results, or emit diagnostics
+- the daemon-owned core service interprets durable write results and decides
+  whether an event-producing transition occurred
+- internal daemon-local hook sites may exist for logging, testing, notifier
+  fanout, and observability, but they are not additional external hook
+  boundaries
+- duplicate durable insert attempts do not produce canonical events
+
+### 21.3.2 Hook Eligibility
+
+External post-send-hook execution is one downstream effect of the canonical
+daemon event boundary.
+
+Eligible origins:
+- locally-originated `atm send`
+- locally-originated `atm ack`
+- later locally-originated daemon/plugin outbound send operations
+
+Ineligible origins:
+- imported inbound Claude/legacy JSONL rows
+- remote inbound daemon deliveries
+- replay/re-export/reconcile paths
+- duplicate durable insert attempts rejected as `DuplicateEntry`
+
+Hook trigger rule:
+- one successful eligible durable insert may trigger the external post-send
+  hook at most once
+- hook execution happens only after the durable insert succeeds
+- hook execution never rolls back the durable insert
+
 ### 21.4 One Interface, Two Transport Implementations
 
 Phase Q uses one daemon API with two production transport adapters plus one
@@ -2141,6 +2182,10 @@ Scope rule:
   message lifecycle
 - `MailStore` is not the long-term owner of generic task-orchestration or
   daemon-status domains
+- `MailStore` enforces immutable durable identity uniqueness
+- duplicate attempts for an already-known immutable ATM-authored
+  `message_id`/`message_key` return a typed duplicate result/error such as
+  `DuplicateEntry`
 
 #### TaskStore
 
@@ -2326,6 +2371,8 @@ Architectural rules:
   store, ingest, and transport events remain daemon-owned observability sinks
 - production runtime diagnostics must not collapse into ad hoc stdout/stderr
   debugging
+- external post-send-hook execution is a daemon-owned downstream effect of the
+  canonical event boundary, not a store, ingress, or transport concern
 
 ### 21.6.3 Doctor Health Interface
 

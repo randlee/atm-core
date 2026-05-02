@@ -133,6 +133,8 @@ Required runtime rules:
   bounded deadline, checkpoint WAL, and release singleton ownership
 - signal handlers must be installed before listeners are opened
 - remote delivery must be daemon-to-daemon only
+- `atm send` and `atm ack` must both use the daemon production path rather
+  than direct CLI/store mutation in the Phase Q runtime
 - the same transport protocol must be exercisable through an in-process
   `test-socket` without changing handler/business logic
 - transport/store/health operations must obey one documented timeout budget
@@ -149,6 +151,11 @@ Required runtime rules:
   extension point requires explicit architecture review
 - watcher/reconcile runtime code must remain isolated from transport, store,
   and notifier implementations behind its own owned boundary
+- canonical system events and external post-send-hook execution happen only on
+  the daemon side of the store boundary after a successful eligible durable
+  insert
+- duplicate durable insert attempts rejected as `DuplicateEntry` must not fire
+  post-send hooks or other canonical downstream message events
 - the socket receive loop must remain a thin dispatcher only:
   - read framed request
   - parse qualified request type
