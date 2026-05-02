@@ -387,6 +387,7 @@ fn lock_path_matches_identity(identity: &LockFileIdentity, lock_path: &Path) -> 
     let current = match lock_file_identity_from_path(lock_path) {
         Ok(identity) => identity,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(error) if is_transient_lock_identity_error(&error) => return Ok(false),
         Err(error) => return Err(error),
     };
     Ok(&current == identity)
@@ -397,7 +398,37 @@ fn lock_file_identity_from_file(file: &File) -> io::Result<LockFileIdentity> {
 }
 
 fn lock_file_identity_from_path(path: &Path) -> io::Result<LockFileIdentity> {
+    #[cfg(all(test, windows))]
+    if transient_lock_identity_test_override() {
+        return Err(io::Error::from_raw_os_error(
+            transient_lock_identity_raw_os_error(),
+        ));
+    }
+
     Handle::from_path(path)
+}
+
+fn is_transient_lock_identity_error(error: &io::Error) -> bool {
+    #[cfg(windows)]
+    {
+        return matches!(
+            error.raw_os_error(),
+            Some(code)
+                if code == windows_sys::Win32::Foundation::ERROR_ACCESS_DENIED as i32
+                    || code == windows_sys::Win32::Foundation::ERROR_SHARING_VIOLATION as i32
+        );
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = error;
+        false
+    }
+}
+
+#[cfg(all(test, windows))]
+const fn transient_lock_identity_raw_os_error() -> i32 {
+    windows_sys::Win32::Foundation::ERROR_ACCESS_DENIED as i32
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -740,12 +771,17 @@ fn canonical_lock_key(path: &Path) -> CanonicalLockKey {
 mod readonly_test_override {
     use std::cell::Cell;
 
+    #[cfg(windows)]
+    use std::cell::RefCell;
+
     use super::LockOperation;
 
     thread_local! {
         // Test-only seam for forcing one filesystem operation to fail without
         // introducing shared mutable state across concurrent test threads.
         static OVERRIDE: Cell<Option<LockOperation>> = const { Cell::new(None) };
+        #[cfg(windows)]
+        static TRANSIENT_LOCK_IDENTITY_ERRORS: RefCell<usize> = const { RefCell::new(0) };
     }
 
     pub(super) fn get() -> Option<LockOperation> {
@@ -759,11 +795,38 @@ mod readonly_test_override {
             original
         })
     }
+
+    #[cfg(windows)]
+    pub(super) fn take_transient_lock_identity_error() -> bool {
+        TRANSIENT_LOCK_IDENTITY_ERRORS.with(|cell| {
+            let mut remaining = cell.borrow_mut();
+            if *remaining == 0 {
+                return false;
+            }
+            *remaining -= 1;
+            true
+        })
+    }
+
+    #[cfg(windows)]
+    pub(super) fn set_transient_lock_identity_errors(count: usize) -> usize {
+        TRANSIENT_LOCK_IDENTITY_ERRORS.with(|cell| {
+            let mut remaining = cell.borrow_mut();
+            let original = *remaining;
+            *remaining = count;
+            original
+        })
+    }
 }
 
 #[cfg(test)]
 fn forced_readonly_filesystem_test_override() -> Option<LockOperation> {
     readonly_test_override::get()
+}
+
+#[cfg(all(test, windows))]
+fn transient_lock_identity_test_override() -> bool {
+    readonly_test_override::take_transient_lock_identity_error()
 }
 
 #[cfg(test)]
@@ -797,6 +860,26 @@ mod tests {
     impl Drop for ReadOnlyFilesystemGuard {
         fn drop(&mut self) {
             readonly_test_override::set(self.original);
+        }
+    }
+
+    #[cfg(windows)]
+    struct TransientLockIdentityGuard {
+        original: usize,
+    }
+
+    #[cfg(windows)]
+    impl TransientLockIdentityGuard {
+        fn set(count: usize) -> Self {
+            let original = readonly_test_override::set_transient_lock_identity_errors(count);
+            Self { original }
+        }
+    }
+
+    #[cfg(windows)]
+    impl Drop for TransientLockIdentityGuard {
+        fn drop(&mut self) {
+            readonly_test_override::set_transient_lock_identity_errors(self.original);
         }
     }
 
@@ -849,6 +932,19 @@ mod tests {
 
         assert!(sentinel.exists());
         assert!(rotated.exists());
+    }
+
+    #[test]
+    #[cfg(windows)]
+    #[serial(env)]
+    fn acquire_retries_when_lock_identity_compare_hits_transient_access_denied() {
+        let tempdir = tempdir().expect("tempdir");
+        let inbox = tempdir.path().join("arch-ctm.json");
+        let _guard = TransientLockIdentityGuard::set(1);
+
+        let _lock = acquire(&inbox, DEFAULT_LOCK_TIMEOUT).expect("lock after transient compare");
+
+        assert!(sentinel_path(&inbox).exists());
     }
 
     #[test]
