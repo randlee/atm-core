@@ -392,11 +392,11 @@ fn map_command_event(
     );
     fields.insert(
         "team".to_string(),
-        serde_json::Value::String(event.team.clone()),
+        serde_json::Value::String(event.team.to_string()),
     );
     fields.insert(
         "agent".to_string(),
-        serde_json::Value::String(event.agent.clone()),
+        serde_json::Value::String(event.agent.to_string()),
     );
     fields.insert(
         "sender".to_string(),

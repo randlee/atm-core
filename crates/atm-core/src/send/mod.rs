@@ -122,16 +122,14 @@ pub fn send_mail(
     observability: &dyn ObservabilityPort,
 ) -> Result<SendOutcome, AtmError> {
     let config = config::load_config(&request.current_dir)?;
-    let canonical_sender = AgentName::from_validated(identity::resolve_sender_identity(
-        request.sender_override.as_deref(),
-        config.as_ref(),
-    )?);
+    let canonical_sender =
+        identity::resolve_sender_identity(request.sender_override.as_deref(), config.as_ref())?;
     let recipient = resolve_recipient(
         &request.to,
         request.team_override.as_deref(),
         config.as_ref(),
     )?;
-    let sender_team = config::resolve_team(None, config.as_ref()).map(TeamName::from_validated);
+    let sender_team = config::resolve_team(None, config.as_ref());
     let display_sender = display_sender_identity(
         &canonical_sender,
         request.sender_override.as_deref(),
@@ -200,7 +198,7 @@ pub fn send_mail(
         Err(error) => return Err(error),
     }
 
-    let task_id = input::validate_task_id(request.task_id)?;
+    let task_id = request.task_id;
     let requires_ack = request.requires_ack || task_id.is_some();
     let body = resolve_message_body(
         &request.message_source,
@@ -281,8 +279,8 @@ pub fn send_mail(
         command: "send",
         action: "send",
         outcome: outcome.outcome,
-        team: outcome.team.to_string(),
-        agent: outcome.agent.to_string(),
+        team: outcome.team.clone(),
+        agent: outcome.agent.clone(),
         sender: canonical_sender.to_string(),
         message_id: Some(outcome.message_id),
         requires_ack: outcome.requires_ack,
@@ -318,7 +316,8 @@ fn resolve_recipient(
 ) -> Result<ResolvedRecipient, AtmError> {
     let team = target_address
         .team
-        .clone()
+        .as_deref()
+        .and_then(|team| team.parse().ok())
         .or_else(|| config::resolve_team(team_override, config))
         .ok_or_else(AtmError::team_unavailable)?;
 
@@ -327,7 +326,7 @@ fn resolve_recipient(
             &target_address.agent,
             config,
         )),
-        team: TeamName::from_validated(team),
+        team,
     })
 }
 
@@ -335,7 +334,7 @@ fn resolve_message_body(
     source: &SendMessageSource,
     current_dir: &Path,
     home_dir: &Path,
-    team_name: &str,
+    team_name: &TeamName,
 ) -> Result<String, AtmError> {
     match source {
         SendMessageSource::Inline(message) => input::validate_message_text(message.clone()),
@@ -354,7 +353,12 @@ fn is_false(value: &bool) -> bool {
     !*value
 }
 
-fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str, recipient: &str) {
+fn notify_team_lead_missing_config(
+    home_dir: &Path,
+    team_dir: &Path,
+    team: &TeamName,
+    recipient: &AgentName,
+) {
     let alert_key = alert_state::missing_team_config_alert_key(team_dir);
     if !alert_state::register_missing_team_config_alert(home_dir, &alert_key) {
         return;
@@ -366,7 +370,7 @@ fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str,
             warn!(
                 code = %AtmErrorCode::WarningMissingTeamConfigFallback,
                 %error,
-                team,
+                team = %team,
                 "failed to resolve team-lead inbox for missing-config notice"
             );
             return;
@@ -413,7 +417,7 @@ fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str,
     if let Err(error) = append_mailbox_message_and_seed_workflow(
         home_dir,
         team,
-        "team-lead",
+        &AgentName::from_validated("team-lead"),
         &team_lead_inbox,
         &notice,
     ) {
@@ -421,7 +425,7 @@ fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str,
             code = %AtmErrorCode::WarningMissingTeamConfigFallback,
             %error,
             path = %team_lead_inbox.display(),
-            team,
+            team = %team,
             "failed to persist missing-config notice via shared mailbox/workflow commit path"
         );
     }
@@ -429,8 +433,8 @@ fn notify_team_lead_missing_config(home_dir: &Path, team_dir: &Path, team: &str,
 
 fn append_mailbox_message_and_seed_workflow(
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
     inbox_path: &Path,
     envelope: &MessageEnvelope,
 ) -> Result<(), AtmError> {
