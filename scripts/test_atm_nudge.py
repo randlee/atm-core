@@ -47,6 +47,7 @@ def _run_with_mocked_lookups(
         patch.object(_MOD, "read_pane_from_toml", return_value=toml),
         patch.object(_MOD, "read_pane_from_config", return_value=cfg),
         patch.object(_MOD, "resolve_team", return_value=team),
+        patch.object(_MOD, "read_post_send_payload", return_value={}),
         patch.object(_MOD, "nudge_pane") as mock_nudge,
         patch.object(_MOD, "log"),
         patch("sys.stderr", stderr_buf),
@@ -295,6 +296,7 @@ class TestOverrideMode(unittest.TestCase):
         with (
             patch.object(_MOD, "nudge_pane") as mock_nudge,
             patch.object(_MOD, "resolve_team", return_value="atm-dev"),
+            patch.object(_MOD, "read_post_send_payload", return_value={}),
             patch.object(_MOD, "read_pane_from_toml"),
             patch.object(_MOD, "read_pane_from_config"),
         ):
@@ -303,6 +305,28 @@ class TestOverrideMode(unittest.TestCase):
         _, recipient, message = mock_nudge.call_args[0]
         self.assertEqual(recipient, "arch-ctm")
         self.assertIn("read atm --team atm-dev", message)
+
+
+class TestBuildMessage(unittest.TestCase):
+    def test_default_send_message_requests_assigned_task_execution(self):
+        message = _MOD.build_message("atm-dev", {})
+        self.assertIn("read atm --team atm-dev", message)
+        self.assertIn("execute the assigned task", message)
+        self.assertIn('busy="after-current-task"', message)
+
+    def test_ack_message_requests_immediate_work_with_message_context(self):
+        message = _MOD.build_message(
+            "atm-dev",
+            {"is_ack": True, "message_id": "01JACKTEST00000000000000000"},
+        )
+        self.assertIn("read atm --team atm-dev", message)
+        self.assertIn("message 01JACKTEST00000000000000000 acknowledged", message)
+        self.assertIn("complete associated work immediately", message)
+        self.assertIn(
+            'busy="complete tasks based on established priority"',
+            message,
+        )
+        self.assertNotIn("execute the assigned task", message)
 
 
 class TestMainBehavior(unittest.TestCase):

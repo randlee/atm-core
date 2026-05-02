@@ -431,9 +431,14 @@ Required identity rules:
   - `team`
   - `message_id`
   - `requires_ack`
+  - `is_ack`
   - optional `task_id` when present
   - optional `recipient_pane_id` when authoritative roster truth includes a
     pane mapping for the recipient
+- the hook must run after successful non-`dry-run` `atm send`
+- the hook must also run after successful `atm ack`, using the reply message as
+  the hook subject
+- `is_ack` must be `false` for `atm send` and `true` for `atm ack`
 - the hook may optionally emit one structured stdout result with `level`,
   `message`, and optional `fields`; ATM logs it on a best-effort basis and
   ignores absent or invalid output
