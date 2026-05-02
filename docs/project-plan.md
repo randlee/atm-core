@@ -2462,8 +2462,11 @@ Core design decisions:
   - read/clear visibility state
   - team roster
 - daemon memory is the live truth for agent status
-- `atm send`, `atm ack`, `atm read`, and `atm clear` all use the daemon
-  production path in the final Phase Q runtime
+- daemon memory also owns `last_active_at` used for optional live read overlays
+- `atm send`, `atm ack`, and `atm clear` use the daemon production path in the
+  final Phase Q runtime
+- `atm read` remains SQLite-backed and may optionally request daemon-supplied
+  live overlays
 - `atm doctor` remains a CLI command but must query daemon/runtime state in the
   Phase Q target architecture
 - Claude inbox JSONL remains compatibility ingress/egress only
@@ -2582,7 +2585,8 @@ Acceptance:
 - second daemon startup fails deterministically
 - remote traffic is daemon-to-daemon only
 - remote send success depends on remote daemon acceptance
-- daemon-unavailable CLI/runtime calls fail clearly without auto-spawn
+- daemon-unavailable CLI/runtime calls use only the documented connect/start
+  path and fail clearly if it cannot succeed
 - daemon code remains a thin runtime wrapper over the service boundaries
 - handler behavior is testable through the in-process `test-socket` transport
 - canonical system events fire only from the daemon-owned post-store boundary
@@ -2604,8 +2608,9 @@ Acceptance:
 
 Scope:
 - prove the daemon/runtime is production-ready end-to-end
-- prove `atm send`, `atm ack`, `atm read`, and `atm clear` all use the daemon
-  production path
+- prove `atm send`, `atm ack`, and `atm clear` use the daemon production path
+- prove `atm read` remains correct from SQLite truth and that any daemon live
+  overlay path is accurate and optional
 - validate every Phase Q QA invariant and every Production-Readiness Checklist
   item
 - validate the release gate criteria and prepare the line for production
@@ -2620,8 +2625,9 @@ Acceptance:
 - every checklist item is proven by implementation, tests, or release
   validation
 - every QA invariant has explicit conformance/integration coverage
-- `atm send`, `atm ack`, `atm read`, and `atm clear` are all proven on the
-  daemon path
+- `atm send`, `atm ack`, and `atm clear` are proven on the daemon path
+- `atm read` is proven correct from SQLite truth, and any daemon live overlay
+  path is proven accurate and optional
 - daemon singleton, graceful shutdown, stale-artifact cleanup, daemon
   unavailability, and canonical post-store event behavior are validated
 - invalid required config is proven to fail before listener bind
@@ -2651,8 +2657,9 @@ QA invariants for every Phase Q pass:
 - impossible to run two active daemons on one host
 - daemon unavailability fails clearly without hidden fallback to direct store or
   inbox access
-- `atm send`, `atm ack`, `atm read`, and `atm clear` all use the daemon
-  production path
+- `atm send`, `atm ack`, and `atm clear` use the daemon production path
+- `atm read` remains correct from SQLite truth, with daemon use limited to
+  documented live overlays/runtime-only data
 - every subsystem performs I/O only through its owning trait boundary
 - any observed SQL, watcher, notifier, or socket-boundary bypass is an
   immediate QA failure

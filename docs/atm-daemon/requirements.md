@@ -135,8 +135,11 @@ Required runtime rules:
   bounded deadline, checkpoint WAL, and release singleton ownership
 - signal handlers must be installed before listeners are opened
 - remote delivery must be daemon-to-daemon only
-- `atm send`, `atm ack`, `atm read`, and `atm clear` must all use the daemon
-  production path rather than direct CLI/store mutation in the Phase Q runtime
+- `atm send`, `atm ack`, and `atm clear` must use the daemon production path
+  rather than direct CLI/store mutation in the Phase Q runtime
+- `atm read` must not be documented as daemon-owned by default; daemon
+  participation is limited to explicitly requested live overlays or other
+  documented runtime-only data
 - the same transport protocol must be exercisable through an in-process
   `test-socket` without changing handler/business logic
 - transport/store/health operations must obey one documented timeout budget
@@ -145,6 +148,20 @@ Required runtime rules:
   may perform blocking SQLite calls inline; direct SQLite work stays behind
   `spawn_blocking` or a dedicated blocking pool owned by the store adapter
 - daemon memory is the live truth for agent status
+- daemon memory must also retain `last_active_at` for each known active agent
+- daemon memory must retain the current agent `pid` as a first-class liveness
+  field, cached from SQLite; `pid` is not advisory metadata
+- the daemon-managed member fields (`pid`, `last_active_at`, `state`) must
+  update only through one documented heartbeat socket handler shared by ATM CLI
+  and hook/runtime producers; see `docs/team-member-state.md`
+- until `schooks 1.0` is released, pid/activity updates may arrive through the
+  interim Python hooks installed from `../agent-team-mail`
+- after `schooks 1.0` is released, `schooks` becomes the controlled hook
+  environment layer and reports pid/activity updates to `atm-daemon`
+- if a heartbeat reports a different pid while the stored pid is still alive,
+  the daemon must reject the update unless the explicit admin takeover path
+  documented in `docs/team-member-state.md` is active
+- accepted pid changes must update SQLite and emit `AgentPidChanged`
 - crash recovery must preserve the ordering rule `SQLite commit -> export`
   and any retry/re-export state needed after daemon crash must be durable rather
   than RAM-only
@@ -183,3 +200,6 @@ Required runtime rules:
 - daemon must expose one explicit health/status query interface for `atm doctor`
 - daemon health/status must distinguish liveness from readiness and expose the
   queue-depth/backlog metrics needed to diagnose readiness pressure
+- when `atm read` requests live runtime overlays, daemon responses must be able
+  to supply relative activity strings derived from `last_active_at`, such as
+  `active 3 seconds ago` or `idle for 30 minutes`

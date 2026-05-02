@@ -37,8 +37,10 @@ The `atm-daemon` crate must remain thin.
   - TCP/TLS
   - in-process `test-socket`
 - cross-host delivery is daemon-to-daemon only.
-- `atm send`, `atm ack`, `atm read`, and `atm clear` all route through the
-  daemon in the Phase Q production runtime.
+- `atm send`, `atm ack`, and `atm clear` route through the daemon in the Phase
+  Q production runtime.
+- `atm read` remains SQLite-backed and may request daemon-supplied live
+  overlays without making inbox-read logic daemon-owned by default.
 - remote delivery may use bounded transient retry, but not a durable long-lived
   remote outbox.
 - remote send success is defined by remote daemon acceptance within the bounded
@@ -203,9 +205,20 @@ The daemon owns the live runtime view of agent status.
 
 Architectural rules:
 - live status remains in daemon memory
+- current agent `pid` remains in daemon memory as a primary liveness field
+- `last_active_at` remains in daemon memory alongside live status
+- daemon-managed team-member fields update only through the documented heartbeat
+  socket handler in `docs/team-member-state.md`
 - SQLite may retain a diagnostic snapshot only
 - status cache rebuild after restart begins from `unknown` and refreshes through
   runtime events
+- read-time overlays such as `active 3 seconds ago` or `idle for 30 minutes`
+  are derived from daemon-memory `last_active_at`, not from durable roster
+  rows
+- until `schooks 1.0` is released, pid/activity updates may arrive through the
+  installed Python hooks from `../agent-team-mail`
+- after `schooks 1.0` is released, `schooks` becomes the controlled hook
+  environment layer and reports pid/activity updates to `atm-daemon`
 
 ## 3.2.1 Resource Caps And Saturation
 

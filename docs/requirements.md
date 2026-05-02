@@ -90,11 +90,15 @@ Satisfied by:
 - intentionally undecomposed product requirement; this governs overall rewrite
   scope and is enforced across the workspace rather than by one crate-local ID
 
-- `REQ-P-RUNTIME-001` Production ATM commands must not auto-spawn the daemon.
+- `REQ-P-RUNTIME-001` Production ATM commands must connect to the active daemon
+  and auto-start it when absent.
 
   Required behavior:
-  - the production CLI/runtime path connects to an already-running daemon
-  - if the daemon is unavailable, ATM must fail clearly with recovery guidance
+  - the production CLI/runtime path first attempts to connect to an
+    already-running daemon
+  - if the daemon is unavailable, CLI must attempt one bounded background
+    auto-start for the active team daemon and then retry the connection once
+  - if auto-start still fails, ATM must fail clearly with recovery guidance
   - no production path may silently bypass the daemon by talking directly to
     SQLite or inbox files
 
@@ -136,7 +140,7 @@ Satisfied by:
   interface
 - CI monitoring
 - TUI and MCP features
-- daemon auto-spawn from CLI commands or tests
+- daemon auto-spawn from tests
 - `atm status` in the initial rewrite
 - separate `atm tail` command in the initial rewrite
 - team lifecycle management outside the retained local recovery surface
@@ -2388,6 +2392,7 @@ mail correctness.
     - clear/visibility state
     - task linkage and task metadata
     - team roster
+    - current per-member pid
   - Claude-owned inbox JSONL files are compatibility ingress/export surfaces,
     not ATM's authoritative durable mail store
   - `config.json` becomes a roster-ingress source, not the durable roster truth
@@ -2453,8 +2458,43 @@ mail correctness.
 
   Required behavior:
   - live status is runtime-owned daemon state
+  - SQLite stores the current durable `pid` for each member, and daemon memory
+    caches it as the primary liveness field
+  - daemon runtime state must include `last_active_at` for each known active
+    agent/member entry
+  - the runtime-managed member fields (`pid`, `last_active_at`, `state`) must
+    update only through one documented heartbeat socket handler, as defined in
+    `docs/team-member-state.md`
+  - for Claude hook-driven sessions, the current pid capture mechanism must use
+    the stable parent agent PID (`current-thread.parent.pid` / hook
+    `os.getppid()` equivalent), not the short-lived hook subprocess PID
+  - for Codex-style sessions without Claude hooks, the current pid capture
+    mechanism must use the agent process PID itself
+  - until `schooks 1.0` is released, the installed Python hooks from
+    `../agent-team-mail` are the supported interim mechanism for sourcing the
+    Claude-side pid/activity heartbeat inputs
+  - once `schooks 1.0` is released, `schooks` becomes the controlled hook
+    environment layer and must report pid/activity updates to `atm-daemon`
+  - `atm-daemon` remains the owner of live `last_active_at` and state truth
+    even after `schooks` takes over environment control
+  - if a heartbeat reports a new pid while the stored old pid is still alive,
+    the daemon must reject the new pid unless the explicit admin takeover path
+    documented in `docs/team-member-state.md` is active
+  - a successful pid replacement must update SQLite and emit
+    `AgentPidChanged`
+  - runtime member-state transitions must follow the minimal transition model
+    in `docs/team-member-state.md`
+  - illegal runtime member-state transitions must be prevented by one closed
+    transition API and encoded with typestate or equivalent compile-time
+    structure where practical (`RBP-002`)
+  - `atm read` may consume daemon-owned live-status overlays such as
+    `active 3 seconds ago` or `idle for 30 minutes`, but this does not make
+    daemon-owned inbox-read logic mandatory
   - SQLite may store a diagnostic or last-observed snapshot only
   - roster truth and live-status truth must remain distinct
+  - all allowed update paths for durable roster fields and runtime-only
+    team-member fields must be listed in `docs/team-member-state.md`; no other
+    update paths are permitted
 
 - `REQ-CORE-RUNTIME-004` Canonical system events must be emitted only on the
   daemon side of the durable store boundary.
@@ -2496,19 +2536,24 @@ mail correctness.
   - the daemon must not become the only place where ATM mail semantics are
     implemented
 
-- `REQ-CORE-DAEMON-003` Production ATM commands must use an already-running
-  daemon and must fail clearly when it is unavailable.
+- `REQ-CORE-DAEMON-003` Production ATM commands must connect to the active
+  daemon, auto-start it when absent, and fail clearly only when connect/start
+  cannot succeed.
 
   Required behavior:
-  - production CLI/runtime calls must not auto-spawn the daemon
-  - when the daemon is unavailable, ATM must fail with a clear recovery message
+  - production CLI/runtime calls must first attempt to connect to the active
+    daemon
+  - if the daemon is unavailable, ATM must attempt one bounded background
+    daemon start for the active team and then retry the connection once
+  - if connect/start still fails, ATM must fail with a clear recovery message
     rather than silently falling back to direct SQLite or inbox-file access
   - in-process test harnesses may bypass the daemon only inside explicit test
     wiring, not in the production path
   - `atm send` must route through the daemon in the Phase Q production path
   - `atm ack` must route through the daemon in the Phase Q production path
-  - `atm read` must route through the daemon in the Phase Q production path
   - `atm clear` must route through the daemon in the Phase Q production path
+  - `atm read` may request daemon-supplied live overlays, but correct mailbox
+    projection must not depend on daemon-owned inbox-read logic
 
   Satisfies:
   - `REQ-P-RUNTIME-001`
@@ -2810,16 +2855,17 @@ mail correctness.
 
   Required behavior:
   - impossible to run two active ATM daemons on one host
-  - daemon unavailability fails clearly without auto-spawn or hidden direct I/O
-    fallback
+  - daemon unavailability uses only the documented connect/start path and fails
+    clearly if that path cannot succeed, with no hidden direct I/O fallback
   - every subsystem performs external I/O only through its owning trait
     boundary
   - production error handling uses typed `Result`/error-enum boundaries instead
     of panic/unwrap for fallible runtime paths
   - daemon/runtime code remains thin and does not accumulate business logic
   - daemon spawning is not the test strategy
-  - `atm send`, `atm ack`, `atm read`, and `atm clear` all use the daemon
-    production path
+  - `atm send`, `atm ack`, and `atm clear` use the daemon production path
+  - `atm read` uses daemon participation only for explicitly requested live
+    overlays or other documented runtime-only data
   - canonical system events fire only from the daemon-owned post-store
     transition boundary
   - duplicate durable insert attempts do not create duplicate events or

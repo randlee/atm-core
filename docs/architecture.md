@@ -216,7 +216,7 @@ Supersession note:
 - the Phase Q target architecture in §21 supersedes those constraints with:
   - one explicit daemon runtime
   - no hidden direct SQLite fallback
-  - no hidden daemon auto-spawn path
+  - one documented daemon connect/start path only
 
 ## 4. Core Types
 
@@ -1962,11 +1962,42 @@ ATM moves to a split state model:
   - ack/task state
   - read/clear visibility state
   - team roster
+  - current per-member pid
 - daemon memory is the authoritative live runtime view for:
   - current agent status
+  - per-agent `last_active_at` timestamps used for live read-time overlays
 
 SQLite may persist last-observed status for diagnostics, but that snapshot is
-not the live truth.
+not the live truth. When `atm read` includes live runtime overlays, those
+overlays come from daemon memory after durable mailbox projection and do not
+require daemon ownership of inbox-read logic itself. The daemon caches current
+pid from SQLite as the primary liveness field and updates the durable pid only
+through the documented heartbeat handler.
+
+The complete field ownership and update-path contract for team-member state is
+defined in `docs/team-member-state.md`.
+
+The runtime member-state transition model must stay minimal and closed:
+- one documented activity-state machine
+- one documented pid-ownership/change state machine
+- one documented identity-conflict state machine
+- no additional hidden fallback transitions
+- implementation should use typestate or equivalent compile-time structure
+  where practical per `RBP-002`
+
+Interim pid-capture path:
+- until `schooks 1.0` is released, ATM relies on the already-installed Python
+  hooks from `../agent-team-mail`
+- for Claude sessions, those hooks capture the stable parent agent pid via
+  `current-thread.parent.pid` / hook `os.getppid()`
+- for Codex-style sessions, ATM CLI/runtime sends the agent process pid through
+  the same daemon heartbeat socket path used by hooks
+- once `schooks 1.0` is released, `schooks` becomes the controlled hook
+  environment layer and reports pid/activity updates to `atm-daemon`
+- if a heartbeat reports a different pid while the stored pid is still alive,
+  the daemon must treat that as an identity conflict and reject the update
+  unless the explicit admin takeover path documented in
+  `docs/team-member-state.md` is active
 
 ### 21.1.1 SQLite Schema Contract
 

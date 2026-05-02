@@ -173,7 +173,7 @@ Non-responsibility:
 - daemon must not own unique business logic that is unavailable to in-process
   service callers
 - daemon unavailability must surface as an explicit runtime failure, not as
-  hidden direct SQLite/JSONL fallback or auto-spawn
+  hidden direct SQLite/JSONL fallback or any undocumented daemon-start path
 
 ## Plugin Model
 
@@ -409,6 +409,22 @@ Important runtime note:
   - Unix domain socket
   - TCP/TLS
 - keep live status in daemon memory
+- keep current agent `pid` durable in SQLite and cached in daemon memory as the
+  primary liveness field
+- track daemon-memory `last_active_at` per agent
+- route all runtime-only team-member updates through one heartbeat socket
+  handler shared by ATM CLI and hook/runtime producers; see
+  `docs/team-member-state.md`
+- keep the team-member runtime state machines minimal and auditable as defined
+  in `docs/team-member-state.md`
+- until `schooks 1.0` is released, use the already-installed Python hooks from
+  `../agent-team-mail` as the interim pid/activity injection path
+- after `schooks 1.0` is released, move the controlled environment injection
+  and pid/activity reporting path into `schooks`, which then reports to
+  `atm-daemon`
+- allow `atm read` to consume daemon-supplied live activity overlays such as
+  `active 3 seconds ago` or `idle for 30 minutes` without making daemon-owned
+  inbox-read logic a Phase Q requirement
 - keep cross-host routing daemon-to-daemon only
 
 ### Stage 5: Compatibility Cleanup
@@ -653,7 +669,8 @@ Expected files / crates:
 - `crates/atm/src/*` daemon client wiring
 
 Implementation details:
-- `read` must reconcile new external inbox writes before projection
+- `read` must return correct SQLite-backed mailbox projection whether or not a
+  daemon-supplied live overlay is requested
 - `clear` becomes SQLite visibility mutation, not inbox truth mutation
 - imported legacy messages and forward ATM messages must project consistently
 - `atm-daemon` owns singleton enforcement and transport only
@@ -661,6 +678,13 @@ Implementation details:
 - remote transport uses TCP/TLS daemon-to-daemon only
 - transport-boundary tests use the in-process `test-socket`
 - live status cache is daemon-memory truth
+- current agent `pid` is durable SQLite truth and the primary liveness field,
+  cached in daemon memory
+- `last_active_at` is daemon-memory truth
+- runtime-only team-member state updates are constrained by
+  `docs/team-member-state.md`
+- team-member runtime transitions must remain minimal and follow the documented
+  state machines in `docs/team-member-state.md`
 - daemon emits structured runtime and transport events through
   `sc-observability`
 - runtime/store/transport/daemon-client failures in this sprint must stay
@@ -705,12 +729,12 @@ Implementation details:
 - remote delivery success is defined by remote daemon acceptance within the
   bounded retry window
 - remote retry policy:
-  - applies only to idempotent remote delivery attempts
+- applies only to idempotent remote delivery attempts
   - uses bounded exponential backoff with jitter
   - enforces one per-message max-attempt bound inside the `30s` total retry
     budget
-- daemon-unavailable client calls must fail clearly without hidden fallback or
-  auto-spawn
+- daemon-unavailable client calls must fail clearly without hidden fallback and
+  must use only the documented connect/start behavior
 - `atm doctor` must start consuming daemon/runtime state through the same
   request/response boundaries used by production
 - after Q.1, Unix transport, TCP/TLS transport, `test-socket`,
@@ -781,8 +805,10 @@ Acceptance:
 
 Scope:
 - prove the Phase Q daemon/runtime is production-ready end-to-end
-- prove `atm send`, `atm ack`, `atm read`, and `atm clear` all route through
-  the daemon production path
+- prove `atm send`, `atm ack`, and `atm clear` route through the daemon
+  production path
+- prove `atm read` remains correct from SQLite truth and that any daemon live
+  overlay path is accurate and optional
 - validate every boundary rule listed in the Phase Q QA invariants
 - validate every item in the Production-Readiness Checklist
 - validate every Phase Q release-gate criterion
@@ -812,8 +838,10 @@ Implementation details:
   - release singleton artifacts
 - validate `atm send` and `atm ack` through the daemon production path rather
   than direct CLI/store mutation
-- validate `atm read` and `atm clear` through the daemon production path rather
-  than direct CLI/store or direct SQLite access
+- validate `atm clear` through the daemon production path rather than direct
+  CLI/store mutation
+- validate `atm read` correctness against SQLite projection, plus any optional
+  daemon-supplied live overlay path
 - validate canonical event emission only from the daemon-owned post-store
   boundary
 - validate no canonical event or external hook execution on `DuplicateEntry`,
@@ -878,8 +906,10 @@ Acceptance:
 - every item in the Production-Readiness Checklist is explicitly proven by
   implementation, tests, or release validation
 - every Phase Q QA invariant has listed conformance/integration coverage
-- `atm send`, `atm ack`, `atm read`, and `atm clear` are all proven on the
-  daemon production path
+- `atm send`, `atm ack`, and `atm clear` are proven on the daemon production
+  path
+- `atm read` is proven correct from SQLite truth, and any daemon live overlay
+  path is proven accurate and optional
 - daemon singleton, graceful shutdown, stale-artifact cleanup, and daemon
   unavailability behavior are all validated
 - invalid required config is proven to fail before listener bind
@@ -934,8 +964,9 @@ state:
   architecture slice
 - `atm send` goes through the daemon production path
 - `atm ack` goes through the daemon production path
-- `atm read` goes through the daemon production path
 - `atm clear` goes through the daemon production path
+- `atm read` remains correct from SQLite truth and may add daemon-supplied live
+  overlays when requested
 - post-send-hook execution is daemon-owned
 - canonical system events are emitted only after a successful SSOT transition
   on the daemon side of the store boundary
@@ -1070,8 +1101,9 @@ Mitigation:
 The following must be checked on every QA pass for Phase Q:
 
 - it is impossible for two active ATM daemons to run on one host
-- `atm send`, `atm ack`, `atm read`, and `atm clear` all use the daemon
-  production path
+- `atm send`, `atm ack`, and `atm clear` use the daemon production path
+- `atm read` stays correct from SQLite truth and any daemon use is limited to
+  documented live overlays/runtime-only data
 - every subsystem performs all of its external I/O only through its owning
   trait boundary
 - any SQL, watcher, notifier, or socket-boundary bypass is an immediate QA
@@ -1094,7 +1126,8 @@ The following must be checked on every QA pass for Phase Q:
   boundaries
 - no async dispatcher, accept loop, watcher, or notifier path performs
   blocking SQLite calls inline
-- roster truth lives in SQLite; live status truth lives in daemon memory
+- roster truth and current `pid` truth live in SQLite; live status truth and
+  `last_active_at` truth live in daemon memory
 - daemon health reporting distinguishes liveness from readiness and exposes the
   queue-depth/backlog metrics needed for diagnosis
 - Claude compatibility continues to use Claude-native top-level fields plus
@@ -1107,8 +1140,10 @@ Phase Q should be considered complete only when:
 - the daemon is production-ready and required for the normal runtime path
 - `atm send` works through the daemon production path
 - `atm ack` works through the daemon production path
-- `atm read` works through the daemon production path
 - `atm clear` works through the daemon production path
+- if `atm read` requests daemon-supplied live overlays, those overlays are
+  correct and derived from daemon-memory state without making daemon-owned
+  inbox-read logic a required Phase Q ownership boundary
 - post-send-hook execution is daemon-owned and fires only from the canonical
   daemon-side post-store event boundary
 - ATM mail correctness no longer depends on mailbox `.lock` files
