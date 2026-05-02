@@ -5,34 +5,33 @@ import importlib.util
 import io
 import json
 import os
-import sys
+import shlex
+import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 # Load the module from file path (hyphenated name, not importable as-is).
 _SCRIPT = Path(__file__).parent / "atm-nudge.py"
-_spec = importlib.util.spec_from_file_location("atm_nudge", _SCRIPT)
-_mod = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_mod)
+_SPEC = importlib.util.spec_from_file_location("atm_nudge", _SCRIPT)
+_MOD = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(_MOD)
 
-PaneLookup = _mod.PaneLookup
-ERR_FILE_MISSING = _mod.ERR_FILE_MISSING
-ERR_NOT_FOUND = _mod.ERR_NOT_FOUND
-ERR_EMPTY_PANE = _mod.ERR_EMPTY_PANE
-CODEX_DEFAULT_PANE = _mod.CODEX_DEFAULT_PANE
+PaneLookup = _MOD.PaneLookup
+ERR_AMBIGUOUS = _MOD.ERR_AMBIGUOUS
+ERR_EMPTY_PANE = _MOD.ERR_EMPTY_PANE
+ERR_FILE_MISSING = _MOD.ERR_FILE_MISSING
+ERR_INVALID_STRUCTURE = _MOD.ERR_INVALID_STRUCTURE
+ERR_NOT_FOUND = _MOD.ERR_NOT_FOUND
+ERR_PARSE_ERROR = _MOD.ERR_PARSE_ERROR
+CODEX_DEFAULT_PANE = _MOD.CODEX_DEFAULT_PANE
 
 
-def _run(args: list[str], *, env: dict[str, str] | None = None) -> tuple[int, dict]:
-    """Run main() with mocked subprocess and env; return (exit_code, stderr_json)."""
-    stderr_buf = io.StringIO()
-    with patch.object(_mod, "nudge_pane") as mock_nudge, \
-         patch.dict(os.environ, env or {}, clear=False), \
-         patch("sys.stderr", stderr_buf):
-        rc = _mod.main(["atm-nudge.py"] + args)
-    stderr_val = stderr_buf.getvalue().strip()
-    parsed = json.loads(stderr_val) if stderr_val and stderr_val.startswith("{") else {}
-    return rc, parsed, mock_nudge
+def _parse_json(text: str) -> dict:
+    stripped = text.strip()
+    if not stripped.startswith("{"):
+        return {}
+    return json.loads(stripped)
 
 
 def _run_with_mocked_lookups(
@@ -41,30 +40,32 @@ def _run_with_mocked_lookups(
     cfg: PaneLookup,
     *,
     team: str = "atm-dev",
-) -> tuple[int, dict, MagicMock]:
+) -> tuple[int, dict, dict, MagicMock]:
     stderr_buf = io.StringIO()
-    with patch.object(_mod, "read_pane_from_toml", return_value=toml), \
-         patch.object(_mod, "read_pane_from_config", return_value=cfg), \
-         patch.object(_mod, "resolve_team", return_value=team), \
-         patch.object(_mod, "nudge_pane") as mock_nudge, \
-         patch.object(_mod, "log"), \
-         patch("sys.stderr", stderr_buf):
-        rc = _mod.main(["atm-nudge.py"] + args)
-    stderr_val = stderr_buf.getvalue().strip()
-    parsed = json.loads(stderr_val) if stderr_val and stderr_val.startswith("{") else {}
-    return rc, parsed, mock_nudge
+    stdout_buf = io.StringIO()
+    with (
+        patch.object(_MOD, "read_pane_from_toml", return_value=toml),
+        patch.object(_MOD, "read_pane_from_config", return_value=cfg),
+        patch.object(_MOD, "resolve_team", return_value=team),
+        patch.object(_MOD, "nudge_pane") as mock_nudge,
+        patch.object(_MOD, "log"),
+        patch("sys.stderr", stderr_buf),
+        patch("sys.stdout", stdout_buf),
+    ):
+        rc = _MOD.main(["atm-nudge.py"] + args)
+    return rc, _parse_json(stderr_buf.getvalue()), _parse_json(stdout_buf.getvalue()), mock_nudge
 
 
 class TestNudgePane(unittest.TestCase):
     """nudge_pane validates inputs before touching subprocess."""
 
     def _call(self, pane_id, recipient, message):
-        with patch("subprocess.run"), patch.object(_mod, "log"):
-            _mod.nudge_pane(pane_id, recipient, message)
+        with patch("subprocess.run"), patch.object(_MOD, "log"):
+            _MOD.nudge_pane(pane_id, recipient, message)
 
     def test_valid_inputs_accepted(self):
-        with patch("subprocess.run") as mock_run, patch.object(_mod, "log"):
-            _mod.nudge_pane("%1", "arch-ctm", "<atm/>")
+        with patch("subprocess.run") as mock_run, patch.object(_MOD, "log"):
+            _MOD.nudge_pane("%1", "arch-ctm", "<atm/>")
         self.assertEqual(mock_run.call_count, 2)
 
     def test_empty_pane_raises(self):
@@ -88,298 +89,301 @@ class TestNudgePane(unittest.TestCase):
             self._call(None, "arch-ctm", "<atm/>")
 
     def test_tmux_calls_order(self):
-        with patch("subprocess.run") as mock_run, patch.object(_mod, "log"):
-            _mod.nudge_pane("%2", "quality-mgr", "hello")
+        with patch("subprocess.run") as mock_run, patch.object(_MOD, "log"):
+            _MOD.nudge_pane("%2", "quality-mgr", "hello")
         calls = mock_run.call_args_list
         self.assertIn("-l", calls[0][0][0])
         self.assertIn("Enter", calls[1][0][0])
 
 
-class TestCandidateStartDirs(unittest.TestCase):
-    """CLAUDE_PROJECT_DIR is first candidate; PWD and cwd follow."""
+class TestBuildNudgeCommand(unittest.TestCase):
+    def test_build_nudge_command_round_trips_with_single_quote_message(self):
+        message = "<atm><action>it's urgent</action></atm>"
+        command = _MOD.build_nudge_command("%7", "quality-mgr", message)
+        argv = shlex.split(command)
+        self.assertEqual(
+            argv,
+            [
+                _MOD.sys.executable or "python3",
+                str(_SCRIPT.resolve()),
+                "--pane",
+                "%7",
+                "quality-mgr",
+                message,
+            ],
+        )
 
+
+class TestCandidateStartDirs(unittest.TestCase):
     def test_claude_project_dir_first(self):
         with patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": "/tmp/proj", "PWD": "/tmp/other"}):
-            dirs = _mod.candidate_start_dirs()
+            with patch("os.getcwd", return_value="/tmp/cwd"):
+                dirs = _MOD.candidate_start_dirs()
         self.assertEqual(dirs[0], Path("/tmp/proj").resolve())
 
     def test_pwd_used_when_no_claude_project_dir(self):
         env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"}
         env["PWD"] = "/tmp/other"
         with patch.dict(os.environ, env, clear=True):
-            dirs = _mod.candidate_start_dirs()
+            with patch("os.getcwd", return_value="/tmp/cwd"):
+                dirs = _MOD.candidate_start_dirs()
         self.assertIn(Path("/tmp/other").resolve(), dirs)
 
     def test_deduplication(self):
         with patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": "/tmp/same", "PWD": "/tmp/same"}):
-            dirs = _mod.candidate_start_dirs()
+            with patch("os.getcwd", return_value="/tmp/same"):
+                dirs = _MOD.candidate_start_dirs()
         self.assertEqual(dirs.count(Path("/tmp/same").resolve()), 1)
+
+    def test_ignores_getcwd_failure(self):
+        with patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": "/tmp/proj"}, clear=True):
+            with patch("os.getcwd", side_effect=OSError("gone")):
+                dirs = _MOD.candidate_start_dirs()
+        self.assertEqual(dirs, [Path("/tmp/proj").resolve()])
+
+
+class TestReadPaneFromToml(unittest.TestCase):
+    def _with_project(self, toml_text: str, fn):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "repo" / "nested"
+            project.mkdir(parents=True)
+            (root / "repo" / ".atm.toml").write_text(toml_text, encoding="utf-8")
+            with patch.dict(
+                os.environ,
+                {"CLAUDE_PROJECT_DIR": str(project), "PWD": str(project)},
+                clear=False,
+            ):
+                with patch("os.getcwd", return_value=str(project)):
+                    fn(root / "repo" / ".atm.toml")
+
+    def test_reads_team_specific_match(self):
+        def run(path: Path):
+            result = _MOD.read_pane_from_toml("quality-mgr", "atm-dev")
+            self.assertEqual(result.pane_id, "%2")
+            self.assertEqual(Path(result.source_path), path.resolve())
+
+        self._with_project(
+            """
+[atm]
+default_team = "atm-dev"
+
+[rmux]
+
+[[rmux.windows]]
+name = "agents"
+[[rmux.windows.panes]]
+name = "quality-mgr"
+tmux_pane_id = "%2"
+env = { ATM_TEAM = "atm-dev" }
+[[rmux.windows.panes]]
+name = "quality-mgr"
+tmux_pane_id = "%9"
+env = { ATM_TEAM = "schook" }
+""",
+            run,
+        )
+
+    def test_falls_back_to_single_unscoped_match(self):
+        def run(_path: Path):
+            result = _MOD.read_pane_from_toml("arch-ctm", "atm-dev")
+            self.assertEqual(result.pane_id, "%1")
+
+        self._with_project(
+            """
+[atm]
+default_team = "atm-dev"
+
+[rmux]
+
+[[rmux.windows]]
+name = "agents"
+[[rmux.windows.panes]]
+name = "arch-ctm"
+tmux_pane_id = "%1"
+""",
+            run,
+        )
+
+    def test_reports_ambiguous_same_team_match(self):
+        def run(_path: Path):
+            result = _MOD.read_pane_from_toml("quality-mgr", "atm-dev")
+            self.assertEqual(result.error_code, ERR_AMBIGUOUS)
+            self.assertIn("%2", result.error_msg)
+            self.assertIn("%7", result.error_msg)
+
+        self._with_project(
+            """
+[atm]
+default_team = "atm-dev"
+
+[rmux]
+
+[[rmux.windows]]
+name = "agents"
+[[rmux.windows.panes]]
+name = "quality-mgr"
+tmux_pane_id = "%2"
+env = { ATM_TEAM = "atm-dev" }
+[[rmux.windows.panes]]
+name = "quality-mgr"
+tmux_pane_id = "%7"
+env = { ATM_TEAM = "atm-dev" }
+""",
+            run,
+        )
+
+    def test_reports_parse_error(self):
+        def run(path: Path):
+            result = _MOD.read_pane_from_toml("arch-ctm", "atm-dev")
+            self.assertEqual(result.error_code, ERR_PARSE_ERROR)
+            self.assertIn(str(path), result.error_msg)
+
+        self._with_project("not valid toml =", run)
+
+    def test_reports_file_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": str(root), "PWD": str(root)}, clear=False):
+                with patch("os.getcwd", return_value=str(root)):
+                    result = _MOD.read_pane_from_toml("arch-ctm", "atm-dev")
+        self.assertEqual(result.error_code, ERR_FILE_MISSING)
+
+
+class TestReadPaneFromConfig(unittest.TestCase):
+    def test_reports_invalid_members_structure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            cfg = home / ".claude" / "teams" / "atm-dev"
+            cfg.mkdir(parents=True)
+            (cfg / "config.json").write_text('{"members": {}}', encoding="utf-8")
+            with patch.object(Path, "home", return_value=home):
+                result = _MOD.read_pane_from_config("arch-ctm", "atm-dev")
+        self.assertEqual(result.error_code, ERR_INVALID_STRUCTURE)
 
 
 class TestUsage(unittest.TestCase):
     def test_no_args_exits_1(self):
         stderr_buf = io.StringIO()
         with patch("sys.stderr", stderr_buf):
-            rc = _mod.main(["atm-nudge.py"])
+            rc = _MOD.main(["atm-nudge.py"])
         self.assertEqual(rc, 1)
         self.assertIn("usage", stderr_buf.getvalue().lower())
 
     def test_blank_recipient_exits_1(self):
         stderr_buf = io.StringIO()
         with patch("sys.stderr", stderr_buf):
-            rc = _mod.main(["atm-nudge.py", "   "])
+            rc = _MOD.main(["atm-nudge.py", "   "])
         self.assertEqual(rc, 1)
 
 
 class TestOverrideMode(unittest.TestCase):
-    """--pane <id> <recipient> <message> bypasses config lookup entirely."""
-
     def test_override_calls_nudge_directly(self):
-        with patch.object(_mod, "nudge_pane") as mock_nudge, \
-             patch.object(_mod, "read_pane_from_toml") as mock_toml, \
-             patch.object(_mod, "read_pane_from_config") as mock_cfg, \
-             patch.object(_mod, "resolve_team", return_value="atm-dev"):
-            rc = _mod.main(["atm-nudge.py", "--pane", "%1", "arch-ctm", "<atm/>"])
+        with (
+            patch.object(_MOD, "nudge_pane") as mock_nudge,
+            patch.object(_MOD, "read_pane_from_toml") as mock_toml,
+            patch.object(_MOD, "read_pane_from_config") as mock_cfg,
+            patch.object(_MOD, "resolve_team", return_value="atm-dev"),
+        ):
+            rc = _MOD.main(["atm-nudge.py", "--pane", "%1", "arch-ctm", "<atm/>"])
         self.assertEqual(rc, 0)
         mock_nudge.assert_called_once_with("%1", "arch-ctm", "<atm/>")
         mock_toml.assert_not_called()
         mock_cfg.assert_not_called()
 
     def test_override_without_message_builds_default(self):
-        with patch.object(_mod, "nudge_pane") as mock_nudge, \
-             patch.object(_mod, "resolve_team", return_value="atm-dev"), \
-             patch.object(_mod, "read_pane_from_toml"), \
-             patch.object(_mod, "read_pane_from_config"):
-            rc = _mod.main(["atm-nudge.py", "--pane", "%1", "arch-ctm"])
+        with (
+            patch.object(_MOD, "nudge_pane") as mock_nudge,
+            patch.object(_MOD, "resolve_team", return_value="atm-dev"),
+            patch.object(_MOD, "read_pane_from_toml"),
+            patch.object(_MOD, "read_pane_from_config"),
+        ):
+            rc = _MOD.main(["atm-nudge.py", "--pane", "%1", "arch-ctm"])
         self.assertEqual(rc, 0)
         _, recipient, message = mock_nudge.call_args[0]
         self.assertEqual(recipient, "arch-ctm")
         self.assertIn("read atm --team atm-dev", message)
 
 
-class TestHappyPath(unittest.TestCase):
-    def test_matching_panes_nudges_and_exits_0(self):
-        toml = PaneLookup("%1", None, None)
-        cfg = PaneLookup("%1", None, None)
-        rc, parsed, mock_nudge = _run_with_mocked_lookups(["arch-ctm"], toml, cfg)
+class TestMainBehavior(unittest.TestCase):
+    def test_matching_panes_nudges_without_warning(self):
+        rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
+            ["arch-ctm"],
+            PaneLookup("%1", None, None, "/repo/.atm.toml"),
+            PaneLookup("%1", None, None, "/home/config.json"),
+        )
         self.assertEqual(rc, 0)
-        mock_nudge.assert_called_once()
-        self.assertEqual(parsed, {})  # no JSON output on success
+        mock_nudge.assert_called_once_with("%1", "arch-ctm", unittest.mock.ANY)
+        self.assertEqual(stderr_json, {})
+        self.assertEqual(stdout_json, {})
 
+    def test_config_mismatch_still_nudges_and_warns(self):
+        rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
+            ["arch-ctm"],
+            PaneLookup("%1", None, None, "/repo/.atm.toml"),
+            PaneLookup("%9", None, None, "/home/config.json"),
+        )
+        self.assertEqual(rc, 0)
+        mock_nudge.assert_called_once_with("%1", "arch-ctm", unittest.mock.ANY)
+        self.assertEqual(stderr_json["status"], "warning")
+        self.assertIn("pane %1", " ".join(stderr_json["call_to_action"]))
+        self.assertIn("config.json", " ".join(stderr_json["call_to_action"]))
+        self.assertIn("--pane %1", stderr_json["nudge_command"])
+        self.assertEqual(stderr_json["pane_resolution"]["delivered_pane"], "%1")
+        self.assertEqual(stdout_json["level"], "warn")
+        self.assertEqual(stdout_json["fields"]["delivered_pane"], "%1")
 
-class TestPaneMismatch(unittest.TestCase):
-    def test_error_code(self):
-        toml = PaneLookup("%1", None, None)
-        cfg = PaneLookup("%9", None, None)
-        rc, parsed, mock_nudge = _run_with_mocked_lookups(["arch-ctm"], toml, cfg)
+    def test_config_missing_still_nudges_and_warns(self):
+        rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
+            ["quality-mgr"],
+            PaneLookup("%2", None, None, "/repo/.atm.toml"),
+            PaneLookup(None, ERR_FILE_MISSING, "missing", "/home/config.json"),
+        )
+        self.assertEqual(rc, 0)
+        mock_nudge.assert_called_once_with("%2", "quality-mgr", unittest.mock.ANY)
+        self.assertEqual(stderr_json["status"], "warning")
+        self.assertIn("already sent to pane %2", " ".join(stderr_json["call_to_action"]))
+        self.assertTrue(any("Create /home/config.json" in item for item in stderr_json["fix"]))
+        self.assertEqual(stdout_json["fields"]["config_error_code"], ERR_FILE_MISSING)
+
+    def test_toml_failure_emits_manual_nudge_and_fix_call_to_action(self):
+        rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
+            ["quality-mgr"],
+            PaneLookup(None, ERR_PARSE_ERROR, "bad toml", "/repo/.atm.toml"),
+            PaneLookup("%2", None, None, "/home/config.json"),
+        )
         self.assertEqual(rc, 1)
-        self.assertEqual(parsed["error_code"], "pane_mismatch")
-
-    def test_nudge_not_called(self):
-        toml = PaneLookup("%1", None, None)
-        cfg = PaneLookup("%9", None, None)
-        rc, parsed, mock_nudge = _run_with_mocked_lookups(["arch-ctm"], toml, cfg)
         mock_nudge.assert_not_called()
+        self.assertEqual(stdout_json, {})
+        self.assertEqual(stderr_json["status"], "error")
+        self.assertIn("Run nudge_command NOW", " ".join(stderr_json["call_to_action"]))
+        self.assertIn("VERIFY the pane id", " ".join(stderr_json["call_to_action"]))
+        self.assertIn("--pane %2", stderr_json["nudge_command"])
+        self.assertIn("Fix or restore the repo-local .atm.toml", " ".join(stderr_json["fix"]))
 
-    def test_nudge_command_uses_toml_pane(self):
-        toml = PaneLookup("%1", None, None)
-        cfg = PaneLookup("%9", None, None)
-        _, parsed, _ = _run_with_mocked_lookups(["arch-ctm"], toml, cfg)
-        self.assertIn("--pane %1", parsed["nudge_command"])
-
-    def test_call_to_action_present_and_nonempty(self):
-        toml = PaneLookup("%1", None, None)
-        cfg = PaneLookup("%9", None, None)
-        _, parsed, _ = _run_with_mocked_lookups(["arch-ctm"], toml, cfg)
-        self.assertIsInstance(parsed["call_to_action"], list)
-        self.assertTrue(all(s.strip() for s in parsed["call_to_action"]))
-
-    def test_call_to_action_says_stop(self):
-        toml = PaneLookup("%1", None, None)
-        cfg = PaneLookup("%9", None, None)
-        _, parsed, _ = _run_with_mocked_lookups(["arch-ctm"], toml, cfg)
-        self.assertTrue(any("STOP" in line for line in parsed["call_to_action"]))
-
-    def test_fix_mentions_both_configs(self):
-        toml = PaneLookup("%1", None, None)
-        cfg = PaneLookup("%9", None, None)
-        _, parsed, _ = _run_with_mocked_lookups(["arch-ctm"], toml, cfg)
-        fix_text = " ".join(parsed["fix"])
-        self.assertIn(".atm.toml", fix_text)
-        self.assertIn("config.json", fix_text)
-
-
-class TestConfigFileMissing(unittest.TestCase):
-    """TOML pane known; config.json file does not exist."""
-
-    def setUp(self):
-        self.toml = PaneLookup("%1", None, None)
-        self.cfg = PaneLookup(None, ERR_FILE_MISSING, "config.json not found for team 'atm-dev'")
-
-    def test_error_code(self):
-        rc, parsed, _ = _run_with_mocked_lookups(["arch-ctm"], self.toml, self.cfg)
-        self.assertEqual(rc, 1)
-        self.assertEqual(parsed["error_code"], "config_file_missing")
-
-    def test_nudge_command_uses_toml_pane(self):
-        _, parsed, _ = _run_with_mocked_lookups(["arch-ctm"], self.toml, self.cfg)
-        self.assertIn("--pane %1", parsed["nudge_command"])
-
-    def test_call_to_action_mentions_missing_file(self):
-        _, parsed, _ = _run_with_mocked_lookups(["arch-ctm"], self.toml, self.cfg)
-        cta = " ".join(parsed["call_to_action"])
-        self.assertIn("missing", cta.lower())
-
-    def test_fix_says_create(self):
-        _, parsed, _ = _run_with_mocked_lookups(["arch-ctm"], self.toml, self.cfg)
-        self.assertTrue(any("Create" in f or "create" in f for f in parsed["fix"]))
-
-
-class TestRecipientNotInConfig(unittest.TestCase):
-    """TOML pane known; recipient missing from existing config.json."""
-
-    def setUp(self):
-        self.toml = PaneLookup("%1", None, None)
-        self.cfg = PaneLookup(None, ERR_NOT_FOUND, "'arch-ctm' not in team 'atm-dev' members")
-
-    def test_error_code(self):
-        rc, parsed, _ = _run_with_mocked_lookups(["arch-ctm"], self.toml, self.cfg)
-        self.assertEqual(rc, 1)
-        self.assertEqual(parsed["error_code"], "recipient_not_in_config")
-
-    def test_nudge_command_uses_toml_pane(self):
-        _, parsed, _ = _run_with_mocked_lookups(["arch-ctm"], self.toml, self.cfg)
-        self.assertIn("--pane %1", parsed["nudge_command"])
-
-    def test_fix_says_add(self):
-        _, parsed, _ = _run_with_mocked_lookups(["arch-ctm"], self.toml, self.cfg)
-        self.assertTrue(any("Add" in f for f in parsed["fix"]))
-
-
-class TestTomlFileMissing(unittest.TestCase):
-    """.atm.toml not found; config.json pane known."""
-
-    def setUp(self):
-        self.toml = PaneLookup(None, ERR_FILE_MISSING, ".atm.toml not found in any parent directory")
-        self.cfg = PaneLookup("%2", None, None)
-
-    def test_error_code(self):
-        rc, parsed, _ = _run_with_mocked_lookups(["quality-mgr"], self.toml, self.cfg)
-        self.assertEqual(rc, 1)
-        self.assertEqual(parsed["error_code"], "toml_file_missing")
-
-    def test_nudge_command_uses_config_pane(self):
-        _, parsed, _ = _run_with_mocked_lookups(["quality-mgr"], self.toml, self.cfg)
-        self.assertIn("--pane %2", parsed["nudge_command"])
-
-    def test_call_to_action_mentions_missing_file(self):
-        _, parsed, _ = _run_with_mocked_lookups(["quality-mgr"], self.toml, self.cfg)
-        cta = " ".join(parsed["call_to_action"])
-        self.assertIn("missing", cta.lower())
-
-
-class TestRecipientNotInToml(unittest.TestCase):
-    """Config pane known; recipient missing from existing .atm.toml."""
-
-    def setUp(self):
-        self.toml = PaneLookup(None, ERR_NOT_FOUND, "'quality-mgr' not found in .atm.toml")
-        self.cfg = PaneLookup("%2", None, None)
-
-    def test_error_code(self):
-        rc, parsed, _ = _run_with_mocked_lookups(["quality-mgr"], self.toml, self.cfg)
-        self.assertEqual(rc, 1)
-        self.assertEqual(parsed["error_code"], "recipient_not_in_toml")
-
-    def test_nudge_command_uses_config_pane(self):
-        _, parsed, _ = _run_with_mocked_lookups(["quality-mgr"], self.toml, self.cfg)
-        self.assertIn("--pane %2", parsed["nudge_command"])
-
-
-class TestNeitherFound(unittest.TestCase):
-    """Neither source has a pane for recipient; falls back to CODEX_DEFAULT_PANE."""
-
-    def setUp(self):
-        self.toml = PaneLookup(None, ERR_NOT_FOUND, "'arch-ctm' not found")
-        self.cfg = PaneLookup(None, ERR_NOT_FOUND, "'arch-ctm' not in team 'atm-dev' members")
-
-    def test_error_code(self):
-        rc, parsed, _ = _run_with_mocked_lookups(["arch-ctm"], self.toml, self.cfg)
-        self.assertEqual(rc, 1)
-        self.assertEqual(parsed["error_code"], "pane_not_configured")
-
-    def test_nudge_command_uses_codex_default_pane(self):
-        _, parsed, _ = _run_with_mocked_lookups(["arch-ctm"], self.toml, self.cfg)
-        self.assertIn(f"--pane {CODEX_DEFAULT_PANE}", parsed["nudge_command"])
-
-    def test_call_to_action_mentions_default_pane(self):
-        _, parsed, _ = _run_with_mocked_lookups(["arch-ctm"], self.toml, self.cfg)
-        cta = " ".join(parsed["call_to_action"])
-        self.assertIn(CODEX_DEFAULT_PANE, cta)
-
-    def test_fix_mentions_both_configs(self):
-        _, parsed, _ = _run_with_mocked_lookups(["arch-ctm"], self.toml, self.cfg)
-        fix_text = " ".join(parsed["fix"])
-        self.assertIn(".atm.toml", fix_text)
-        self.assertIn("config.json", fix_text)
-
-
-class TestJsonStructure(unittest.TestCase):
-    """All error paths emit valid JSON with required fields."""
-
-    REQUIRED_FIELDS = {"status", "error_code", "recipient", "team", "detail",
-                       "call_to_action", "nudge_command", "fix"}
-
-    def _assert_required_fields(self, parsed: dict) -> None:
-        for field in self.REQUIRED_FIELDS:
-            self.assertIn(field, parsed, f"Missing field: {field}")
-        self.assertEqual(parsed["status"], "error")
-        self.assertIsInstance(parsed["call_to_action"], list)
-        self.assertGreater(len(parsed["call_to_action"]), 0)
-        self.assertIsInstance(parsed["fix"], list)
-        self.assertGreater(len(parsed["fix"]), 0)
-        self.assertIn("--pane", parsed["nudge_command"])
-        self.assertIn("atm-nudge.py", parsed["nudge_command"])
-
-    def test_mismatch_has_required_fields(self):
-        _, parsed, _ = _run_with_mocked_lookups(
+    def test_neither_source_found_uses_default_pane(self):
+        rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
             ["arch-ctm"],
-            PaneLookup("%1", None, None),
-            PaneLookup("%9", None, None),
+            PaneLookup(None, ERR_NOT_FOUND, "missing recipient", "/repo/.atm.toml"),
+            PaneLookup(None, ERR_NOT_FOUND, "missing member", "/home/config.json"),
         )
-        self._assert_required_fields(parsed)
+        self.assertEqual(rc, 1)
+        mock_nudge.assert_not_called()
+        self.assertEqual(stdout_json, {})
+        self.assertIn(f"--pane {CODEX_DEFAULT_PANE}", stderr_json["nudge_command"])
+        self.assertIn("VERIFY the pane id", " ".join(stderr_json["call_to_action"]))
 
-    def test_config_file_missing_has_required_fields(self):
-        _, parsed, _ = _run_with_mocked_lookups(
+    def test_error_payload_includes_input_and_resolution_context(self):
+        rc, stderr_json, _, _ = _run_with_mocked_lookups(
             ["arch-ctm"],
-            PaneLookup("%1", None, None),
-            PaneLookup(None, ERR_FILE_MISSING, "not found"),
+            PaneLookup(None, ERR_FILE_MISSING, "missing", None),
+            PaneLookup(None, ERR_FILE_MISSING, "missing", "/home/config.json"),
         )
-        self._assert_required_fields(parsed)
-
-    def test_toml_file_missing_has_required_fields(self):
-        _, parsed, _ = _run_with_mocked_lookups(
-            ["arch-ctm"],
-            PaneLookup(None, ERR_FILE_MISSING, "not found"),
-            PaneLookup("%1", None, None),
-        )
-        self._assert_required_fields(parsed)
-
-    def test_neither_found_has_required_fields(self):
-        _, parsed, _ = _run_with_mocked_lookups(
-            ["arch-ctm"],
-            PaneLookup(None, ERR_NOT_FOUND, "not found"),
-            PaneLookup(None, ERR_NOT_FOUND, "not found"),
-        )
-        self._assert_required_fields(parsed)
-
-    def test_nudge_command_contains_full_xml_message(self):
-        _, parsed, _ = _run_with_mocked_lookups(
-            ["arch-ctm"],
-            PaneLookup(None, ERR_NOT_FOUND, "not found"),
-            PaneLookup(None, ERR_NOT_FOUND, "not found"),
-        )
-        self.assertIn("<atm>", parsed["nudge_command"])
-        self.assertIn("read atm --team", parsed["nudge_command"])
+        self.assertEqual(rc, 1)
+        self.assertIn("input", stderr_json)
+        self.assertIn("pane_resolution", stderr_json)
+        self.assertEqual(stderr_json["input"]["recipient"], "arch-ctm")
+        self.assertEqual(stderr_json["pane_resolution"]["authoritative_source"], ".atm.toml")
 
 
 if __name__ == "__main__":
