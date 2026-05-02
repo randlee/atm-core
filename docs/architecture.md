@@ -440,7 +440,8 @@ Architectural rules:
   canonical sender identity rather than the display-oriented `from` projection
 - ATM-owned post-send hooks are best-effort recipient-scoped helpers, not part
   of the atomic send boundary
-- the hook runs only after a successful non-`dry-run` send
+- the hook runs only after a successful non-`dry-run` send or ack; it fires
+  after both `atm send` and `atm ack`
 - each `[[atm.post_send_hooks]]` rule binds one recipient selector and one
   command argv
 - `recipient = "*"` acts as a wildcard match for all recipients
@@ -451,7 +452,7 @@ Architectural rules:
 - the hook receives inherited environment plus one ATM-owned JSON payload in
   `ATM_POST_SEND`
 - the payload includes `from`, `to`, `sender`, `recipient`, `team`,
-  `message_id`, `requires_ack`, and optional `task_id`
+  `message_id`, `requires_ack`, `is_ack` (bool), and optional `task_id`
 - the hook may optionally emit one structured result object on stdout with a
   declared log level, message, and optional structured fields; ATM parses it
   on a best-effort basis for post-send diagnostics
@@ -836,6 +837,7 @@ Public entrypoint:
 - reply target
 - reply message id
 - reply text
+- warnings: Vec<String>
 
 The ack service is responsible for the legal transition from `(Read, PendingAck)` to `(Read, Acknowledged)` plus the reply append.
 

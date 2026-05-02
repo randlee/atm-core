@@ -1067,6 +1067,7 @@ Acknowledge a pending-ack message in the caller's own inbox and send a visible r
   - append a reply message to the original sender's inbox
 - preserve `acknowledgesMessageId` on the emitted reply
 - reject duplicate acknowledgement of an already acknowledged message
+- run matching `[[atm.post_send_hooks]]` rules after a successful ack, using the reply message as the hook subject
 
 ### 8.4 Output Contract
 
@@ -1079,6 +1080,7 @@ JSON output must include:
 - `reply_text` (String body of the reply message sent)
 - `task_id` (optional String, present when the source message has `taskId`)
 - `reply_target`
+- `warnings` (array of strings, omitted when empty)
 
 ## 9. `atm clear`
 

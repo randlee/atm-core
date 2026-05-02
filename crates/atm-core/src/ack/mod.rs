@@ -288,7 +288,7 @@ pub fn ack_mail(
         agent: actor.clone(),
         message_id: request.message_id,
         task_id: source_task_id.clone(),
-        reply_target: ReplyTarget::new(AgentName::from_validated(reply_agent), reply_team),
+        reply_target: ReplyTarget::new(reply_agent, reply_team),
         reply_message_id,
         reply_text: reply_text.clone(),
         warnings: Vec::new(),
