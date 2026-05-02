@@ -4,15 +4,14 @@
 Post-send hook for ATM: nudges a named agent's tmux pane when a message is
 delivered to them.
 
-Pane resolution order:
-  1. .atm.toml [[rmux.windows.panes]] tmux_pane_id field (preferred)
-  2. ~/.claude/teams/<team>/config.json tmuxPaneId field
+Pane resolution: reads BOTH .atm.toml [[rmux.windows.panes]] tmux_pane_id AND
+~/.claude/teams/<team>/config.json tmuxPaneId. If they disagree or either is
+missing, exits with an error indicating which source has the problem.
 
 CLAUDE_PROJECT_DIR env var is used to locate .atm.toml; falls back to PWD then
 os.getcwd() so hooks fired from worktree dirs still find the config.
 
 Usage (from [[atm.post_send_hooks]] in .atm.toml):
-  command = ["scripts/atm-nudge.py", "team-lead"]
   command = ["scripts/atm-nudge.py", "arch-ctm"]
 """
 from __future__ import annotations
@@ -108,10 +107,10 @@ def resolve_team() -> str:
     return os.environ.get("ATM_TEAM", "atm-dev")
 
 
-def find_pane_via_toml(recipient: str) -> str | None:
-    """Read tmux_pane_id from .atm.toml [[rmux.windows.panes]] entries."""
+def read_pane_from_toml(recipient: str) -> tuple[str | None, str | None]:
+    """Return (pane_id, error_msg) from .atm.toml [[rmux.windows.panes]]."""
     if tomllib is None:
-        return None
+        return None, "tomllib not available (install tomli for Python < 3.11)"
     for start_dir in candidate_start_dirs():
         toml_path = find_atm_toml(start_dir)
         if toml_path is None:
@@ -119,22 +118,24 @@ def find_pane_via_toml(recipient: str) -> str | None:
         try:
             with toml_path.open("rb") as f:
                 config = tomllib.load(f)
-        except Exception:
-            continue
+        except Exception as exc:
+            return None, f"Cannot parse {toml_path}: {exc}"
         for window in config.get("rmux", {}).get("windows", []):
             for pane in window.get("panes", []):
                 if pane.get("name") == recipient:
                     pane_id = pane.get("tmux_pane_id", "").strip()
                     if pane_id:
-                        return pane_id
-    return None
+                        return pane_id, None
+                    return None, f"'{recipient}' found in .atm.toml but tmux_pane_id is empty"
+        return None, f"'{recipient}' not found in .atm.toml [[rmux.windows.panes]]"
+    return None, ".atm.toml not found in any parent directory"
 
 
-def find_pane_via_config(recipient: str, team: str) -> tuple[str | None, str | None]:
-    """Return (pane_id, error_msg). Looks up tmuxPaneId in team config.json."""
+def read_pane_from_config(recipient: str, team: str) -> tuple[str | None, str | None]:
+    """Return (pane_id, error_msg) from ~/.claude/teams/<team>/config.json."""
     config_path = Path.home() / ".claude" / "teams" / team / "config.json"
     if not config_path.exists():
-        return None, f"No config.json for team '{team}'"
+        return None, f"config.json not found for team '{team}' at {config_path}"
     try:
         config = json.loads(config_path.read_text())
     except Exception as exc:
@@ -143,10 +144,10 @@ def find_pane_via_config(recipient: str, team: str) -> tuple[str | None, str | N
         (m for m in config.get("members", []) if m.get("name") == recipient), None
     )
     if member is None:
-        return None, f"Agent '{recipient}' not in team '{team}'"
+        return None, f"'{recipient}' not in team '{team}' members"
     pane_id = member.get("tmuxPaneId", "").strip()
     if not pane_id:
-        return None, f"No tmuxPaneId for '{recipient}' in team '{team}'"
+        return None, f"'{recipient}' in team '{team}' has empty tmuxPaneId"
     return pane_id, None
 
 
@@ -172,23 +173,40 @@ def main(argv: list[str]) -> int:
         f'<console announce="concise" pause="false"/></atm>'
     )
 
-    # 1. .atm.toml rmux panes (preferred — zero extra subprocess calls)
-    pane_id = find_pane_via_toml(recipient)
+    pane_toml, err_toml = read_pane_from_toml(recipient)
+    pane_config, err_config = read_pane_from_config(recipient, team)
 
-    # 2. config.json fallback
-    if pane_id is None:
-        warn = f"warn: {recipient} not in .atm.toml rmux panes, trying config.json"
-        log(warn)
-        print(warn, file=sys.stderr)
-        pane_id, config_error = find_pane_via_config(recipient, team)
-        if pane_id is None:
-            error_msg = f"Cannot nudge {recipient}@{team}: {config_error}"
-            log(f"error: {error_msg}")
-            print(error_msg, file=sys.stderr)
+    if pane_toml and pane_config:
+        if pane_toml != pane_config:
+            msg = (
+                f"Pane mismatch for '{recipient}@{team}': "
+                f".atm.toml={pane_toml}, config.json={pane_config} — fix the mismatch"
+            )
+            log(f"error: {msg}")
+            print(msg, file=sys.stderr)
             return 1
+        nudge_pane(pane_toml, message, recipient)
+        return 0
 
-    nudge_pane(pane_id, message, recipient)
-    return 0
+    if pane_toml and not pane_config:
+        msg = f"'{recipient}@{team}': .atm.toml has pane={pane_toml} but config.json error: {err_config}"
+        log(f"error: {msg}")
+        print(msg, file=sys.stderr)
+        return 1
+
+    if pane_config and not pane_toml:
+        msg = f"'{recipient}@{team}': config.json has pane={pane_config} but .atm.toml error: {err_toml}"
+        log(f"error: {msg}")
+        print(msg, file=sys.stderr)
+        return 1
+
+    msg = (
+        f"Pane not found for '{recipient}@{team}': "
+        f".atm.toml: {err_toml}; config.json: {err_config}"
+    )
+    log(f"error: {msg}")
+    print(msg, file=sys.stderr)
+    return 1
 
 
 if __name__ == "__main__":
