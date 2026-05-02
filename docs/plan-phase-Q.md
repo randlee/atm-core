@@ -343,6 +343,7 @@ Suggested columns:
 - `role TEXT NULL`
 - `transport_kind TEXT NULL`
 - `host_name TEXT NULL`
+- `recipient_pane_id TEXT NULL`
 - `metadata_json TEXT NULL`
 
 Primary key:
@@ -524,6 +525,8 @@ Acceptance:
   - transactional rollback on mid-operation failure
   - uniqueness of `message_key`, `legacy_message_id`, and `atm_message_id`
   - roster row replacement/update behavior
+  - `recipient_pane_id` round-trips through roster storage and is present in
+    `ATM_POST_SEND` when hook payload projection has authoritative pane truth
   - blocking-store isolation from async runtime tasks
   - structured store/bootstrap errors remain discriminated and do not panic on
     routine failure
