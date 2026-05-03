@@ -770,7 +770,7 @@ fn test_forward_metadata_message_id_timestamp_matches_persisted_timestamp() {
                 acknowledges_message_id: None,
                 task_id: None,
                 alert_kind: None,
-                missing_config_path: None,
+                missing_config_path: None::<std::path::PathBuf>,
                 extra: serde_json::Map::new(),
             }),
             extra: serde_json::Map::new(),

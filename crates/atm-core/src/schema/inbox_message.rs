@@ -144,7 +144,7 @@ pub struct AtmMetadataFields {
     pub source_team: Option<TeamName>,
 
     #[serde(rename = "fromIdentity", skip_serializing_if = "Option::is_none")]
-    pub from_identity: Option<String>,
+    pub from_identity: Option<AgentName>,
 
     #[serde(rename = "pendingAckAt", skip_serializing_if = "Option::is_none")]
     pub pending_ack_at: Option<IsoTimestamp>,
@@ -165,7 +165,7 @@ pub struct AtmMetadataFields {
     pub alert_kind: Option<String>,
 
     #[serde(rename = "missingConfigPath", skip_serializing_if = "Option::is_none")]
-    pub missing_config_path: Option<String>,
+    pub missing_config_path: Option<std::path::PathBuf>,
 
     #[serde(flatten)]
     pub extra: Map<String, Value>,
@@ -277,6 +277,9 @@ pub(crate) fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, 
                 message.from, message.timestamp
             ))
         })?;
+    // The legacy UUID `message_id` is stripped here but deliberately not
+    // forwarded. Forwarded ATM message ids must remain ULID-authored per
+    // architecture §5.2 rather than being derived from compatibility UUIDs.
     let _ = object.remove("message_id");
     let source_team = object.remove("source_team");
     let pending_ack_at = object.remove("pendingAckAt");
@@ -287,6 +290,9 @@ pub(crate) fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, 
             .and_then(|value| match value {
                 Value::String(_) => message
                     .acknowledges_message_id
+                    // This forwarding path is lossy: the top-level field is a
+                    // legacy UUID, so the shared inbox export can only emit a
+                    // ULID approximation rather than the original ATM ULID.
                     .map(LegacyMessageId::into_lossy_atm_message_id_approximation)
                     .map(|message_id| Value::String(message_id.to_string())),
                 _ => None,

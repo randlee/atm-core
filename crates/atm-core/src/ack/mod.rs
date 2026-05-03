@@ -335,12 +335,12 @@ fn resolve_reply_target(
     current_team: &str,
 ) -> Result<(AgentName, TeamName), AtmError> {
     if let Some(identity) = canonical_sender_identity(message) {
-        let parsed: AgentAddress = identity.parse()?;
-        let team = parsed.team.ok_or_else(AtmError::team_unavailable)?;
-        return Ok((
-            AgentName::from_validated(parsed.agent),
-            TeamName::from_validated(team),
-        ));
+        let team = message
+            .source_team
+            .clone()
+            .or_else(|| Some(current_team.parse().expect("validated team")))
+            .ok_or_else(AtmError::team_unavailable)?;
+        return Ok((identity, team));
     }
 
     let parsed: AgentAddress = if message.from.contains('@') {
@@ -363,7 +363,7 @@ fn resolve_reply_target(
     ))
 }
 
-fn canonical_sender_identity(message: &MessageEnvelope) -> Option<String> {
+fn canonical_sender_identity(message: &MessageEnvelope) -> Option<AgentName> {
     message
         .extra
         .get("metadata")
@@ -371,8 +371,8 @@ fn canonical_sender_identity(message: &MessageEnvelope) -> Option<String> {
         .and_then(|metadata| metadata.get("atm"))
         .and_then(serde_json::Value::as_object)
         .and_then(|atm| atm.get("fromIdentity"))
-        .and_then(serde_json::Value::as_str)
-        .map(ToOwned::to_owned)
+        .cloned()
+        .and_then(|value| serde_json::from_value(value).ok())
 }
 
 fn merged_surface(
@@ -528,12 +528,12 @@ mod tests {
         let mut message = message_with_from("lead");
         message.extra.insert(
             "metadata".to_string(),
-            json!({"atm": {"fromIdentity": "team-lead@src-gen"}}),
+            json!({"atm": {"fromIdentity": "team-lead"}}),
         );
 
         assert_eq!(
             canonical_sender_identity(&message).as_deref(),
-            Some("team-lead@src-gen")
+            Some("team-lead")
         );
     }
 
@@ -543,7 +543,7 @@ mod tests {
         message.source_team = Some("atm-dev".parse::<TeamName>().expect("team"));
         message.extra.insert(
             "metadata".to_string(),
-            json!({"atm": {"fromIdentity": "team-lead@src-gen"}}),
+            json!({"atm": {"fromIdentity": "team-lead"}}),
         );
 
         let target = resolve_reply_target(&message, "atm-dev").expect("reply target");
@@ -551,7 +551,7 @@ mod tests {
             target,
             (
                 "team-lead".parse().expect("agent"),
-                "src-gen".parse().expect("team"),
+                "atm-dev".parse().expect("team"),
             )
         );
     }

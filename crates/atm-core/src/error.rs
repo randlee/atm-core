@@ -317,13 +317,21 @@ impl StdError for AtmError {
 
 impl From<serde_json::Error> for AtmError {
     fn from(source: serde_json::Error) -> Self {
-        Self::new(AtmErrorKind::Serialization, format!("json error: {source}")).with_source(source)
+        Self::new(AtmErrorKind::Serialization, format!("json error: {source}"))
+            .with_recovery(
+                "Inspect the JSON payload for structural errors and verify the schema matches the expected format.",
+            )
+            .with_source(source)
     }
 }
 
 impl From<toml::de::Error> for AtmError {
     fn from(source: toml::de::Error) -> Self {
-        Self::new(AtmErrorKind::Config, format!("toml error: {source}")).with_source(source)
+        Self::new(AtmErrorKind::Config, format!("toml error: {source}"))
+            .with_recovery(
+                "Inspect the TOML file for syntax errors and verify all required fields are present.",
+            )
+            .with_source(source)
     }
 }
 

@@ -468,7 +468,7 @@ fn test_send_cross_team_projects_alias_and_persists_canonical_from_identity() {
     assert_eq!(inbox[0].from, "lead");
     assert_eq!(
         inbox[0].extra["metadata"]["atm"]["fromIdentity"],
-        "arch-ctm@atm-dev"
+        "arch-ctm"
     );
 }
 

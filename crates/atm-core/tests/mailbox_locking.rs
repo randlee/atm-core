@@ -22,7 +22,7 @@ use serial_test::serial;
 use tempfile::TempDir;
 use uuid::Uuid;
 
-const NON_BLOCKING_LOCK_BUDGET: Duration = Duration::from_secs(10);
+const NON_BLOCKING_LOCK_BUDGET: Duration = Duration::from_secs(2);
 
 #[test]
 #[serial]
@@ -728,6 +728,10 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
         atm_message_id
     );
     assert_eq!(physical_after["read"], false);
+    assert!(
+        !sentinel_path(&fixture.primary_inbox_path("arch-ctm")).exists(),
+        "read-only ULID sidecar path must not leave a lock sentinel behind",
+    );
 
     let workflow = fixture.workflow_state_contents("arch-ctm");
     assert_eq!(
