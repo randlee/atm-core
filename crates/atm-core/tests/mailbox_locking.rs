@@ -863,7 +863,9 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
 }
 
 #[test]
+#[serial]
 fn read_mail_via_store_repeated_after_external_append_reconciles_new_rows() {
+    let _env_lock = acquire_env_lock();
     let fixture = Fixture::new();
     let observability = NullObservability;
     let store = RusqliteStore::open_for_team_home(
@@ -917,7 +919,9 @@ fn read_mail_via_store_repeated_after_external_append_reconciles_new_rows() {
 }
 
 #[test]
+#[serial]
 fn read_mail_via_store_projects_mixed_legacy_and_forward_rows() {
+    let _env_lock = acquire_env_lock();
     let fixture = Fixture::new();
     let observability = NullObservability;
     let store = RusqliteStore::open_for_team_home(
@@ -967,7 +971,9 @@ fn read_mail_via_store_projects_mixed_legacy_and_forward_rows() {
 }
 
 #[test]
+#[serial]
 fn clear_mail_via_store_leaves_pending_ack_visible() {
+    let _env_lock = acquire_env_lock();
     let fixture = Fixture::new();
     let observability = NullObservability;
     let store = RusqliteStore::open_for_team_home(
@@ -998,7 +1004,9 @@ fn clear_mail_via_store_leaves_pending_ack_visible() {
 }
 
 #[test]
+#[serial]
 fn clear_mail_via_store_is_idempotent_for_second_clear() {
+    let _env_lock = acquire_env_lock();
     let fixture = Fixture::new();
     let observability = NullObservability;
     let store = RusqliteStore::open_for_team_home(
