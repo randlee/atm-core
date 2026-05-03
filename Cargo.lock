@@ -18,6 +18,7 @@ dependencies = [
  "serial_test",
  "tempfile",
  "time",
+ "toml",
  "tracing",
  "tracing-subscriber",
  "uuid",

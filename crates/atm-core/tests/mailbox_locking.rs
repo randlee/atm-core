@@ -6,13 +6,16 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use atm_core::ack::{AckMessageId, AckRequest, ack_mail};
-use atm_core::clear::{ClearQuery, clear_mail};
+use atm_core::clear::{ClearQuery, clear_mail, clear_mail_via_store};
 use atm_core::error::AtmErrorCode;
+use atm_core::inbox_ingress::default_inbox_ingress;
 use atm_core::mail_store::MailStore;
 use atm_core::observability::NullObservability;
 #[allow(deprecated)]
-use atm_core::read::{ReadQuery, read_mail};
-use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
+use atm_core::read::{ReadQuery, read_mail, read_mail_via_store};
+use atm_core::schema::{
+    AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig, to_shared_inbox_value,
+};
 use atm_core::send::{SendMessageSource, SendRequest, send_mail};
 use atm_core::task_store::TaskStore;
 use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
@@ -860,6 +863,179 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
 }
 
 #[test]
+fn read_mail_via_store_repeated_after_external_append_reconciles_new_rows() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let store = RusqliteStore::open_for_team_home(
+        fixture.tempdir.path(),
+        &"atm-dev".parse().expect("team"),
+    )
+    .expect("open store");
+    let ingress = default_inbox_ingress();
+    fixture.write_primary_inbox(
+        "arch-ctm",
+        &[unread_message(
+            "team-lead",
+            "initial",
+            LegacyMessageId::from(Uuid::new_v4()),
+        )],
+    );
+
+    let mut first_query = fixture.read_query("arch-ctm");
+    first_query.selection_mode = ReadSelection::All;
+    first_query.ack_activation_mode = AckActivationMode::ReadOnly;
+    let first =
+        read_mail_via_store(first_query, &store, &ingress, &observability).expect("first read");
+    assert_eq!(first.count, 1);
+
+    let mut inbox = fixture.inbox_contents("arch-ctm");
+    inbox.push(unread_message(
+        "team-lead",
+        "appended later",
+        LegacyMessageId::from(Uuid::new_v4()),
+    ));
+    fixture.write_primary_inbox("arch-ctm", &inbox);
+
+    let mut second_query = fixture.read_query("arch-ctm");
+    second_query.selection_mode = ReadSelection::All;
+    second_query.ack_activation_mode = AckActivationMode::ReadOnly;
+    let second =
+        read_mail_via_store(second_query, &store, &ingress, &observability).expect("second read");
+    assert_eq!(second.count, 2);
+    assert!(
+        second
+            .messages
+            .iter()
+            .any(|message| message.envelope.text == "initial")
+    );
+    assert!(
+        second
+            .messages
+            .iter()
+            .any(|message| message.envelope.text == "appended later")
+    );
+}
+
+#[test]
+fn read_mail_via_store_projects_mixed_legacy_and_forward_rows() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let store = RusqliteStore::open_for_team_home(
+        fixture.tempdir.path(),
+        &"atm-dev".parse().expect("team"),
+    )
+    .expect("open store");
+    let ingress = default_inbox_ingress();
+    let legacy = unread_message(
+        "legacy-sender",
+        "legacy row",
+        LegacyMessageId::from(Uuid::new_v4()),
+    );
+    let forward = unread_message(
+        "forward-sender",
+        "forward row",
+        LegacyMessageId::from(Uuid::new_v4()),
+    );
+    fixture.write_primary_inbox_values(
+        "arch-ctm",
+        &[
+            serde_json::to_value(&legacy).expect("legacy json"),
+            to_shared_inbox_value(&forward).expect("forward json"),
+        ],
+    );
+
+    let outcome = read_mail_via_store(
+        fixture.read_query("arch-ctm"),
+        &store,
+        &ingress,
+        &observability,
+    )
+    .expect("read");
+    assert_eq!(outcome.count, 2);
+    assert!(
+        outcome
+            .messages
+            .iter()
+            .any(|message| message.envelope.text == "legacy row")
+    );
+    assert!(
+        outcome
+            .messages
+            .iter()
+            .any(|message| message.envelope.text == "forward row")
+    );
+}
+
+#[test]
+fn clear_mail_via_store_leaves_pending_ack_visible() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let store = RusqliteStore::open_for_team_home(
+        fixture.tempdir.path(),
+        &"atm-dev".parse().expect("team"),
+    )
+    .expect("open store");
+    let ingress = default_inbox_ingress();
+    fixture.write_primary_inbox(
+        "arch-ctm",
+        &[pending_ack_message(
+            "team-lead",
+            "pending ack",
+            LegacyMessageId::from(Uuid::new_v4()),
+            "atm-dev",
+        )],
+    );
+
+    let outcome = clear_mail_via_store(
+        fixture.clear_query("arch-ctm"),
+        &store,
+        &ingress,
+        &observability,
+    )
+    .expect("clear");
+    assert_eq!(outcome.removed_total, 0);
+    assert_eq!(outcome.remaining_total, 1);
+}
+
+#[test]
+fn clear_mail_via_store_is_idempotent_for_second_clear() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let store = RusqliteStore::open_for_team_home(
+        fixture.tempdir.path(),
+        &"atm-dev".parse().expect("team"),
+    )
+    .expect("open store");
+    let ingress = default_inbox_ingress();
+    fixture.write_primary_inbox(
+        "arch-ctm",
+        &[read_message(
+            "team-lead",
+            "read only",
+            LegacyMessageId::from(Uuid::new_v4()),
+        )],
+    );
+
+    let first = clear_mail_via_store(
+        fixture.clear_query("arch-ctm"),
+        &store,
+        &ingress,
+        &observability,
+    )
+    .expect("first clear");
+    assert_eq!(first.removed_total, 1);
+
+    let second = clear_mail_via_store(
+        fixture.clear_query("arch-ctm"),
+        &store,
+        &ingress,
+        &observability,
+    )
+    .expect("second clear");
+    assert_eq!(second.removed_total, 0);
+}
+
+#[test]
 #[serial]
 fn clear_fails_closed_on_synthetic_source_discovery_fault() {
     let _env_lock = acquire_env_lock();
@@ -1115,6 +1291,15 @@ impl Fixture {
 
     fn write_primary_inbox_for_team(&self, team: &str, agent: &str, messages: &[MessageEnvelope]) {
         write_inbox(&self.primary_inbox_path_for_team(team, agent), messages);
+    }
+
+    fn write_primary_inbox_values(&self, agent: &str, values: &[serde_json::Value]) {
+        let path = self.primary_inbox_path(agent);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("inbox dir");
+        }
+        fs::write(path, serde_json::to_vec(values).expect("raw inbox values"))
+            .expect("write raw inbox values");
     }
 
     fn write_origin_inbox(&self, agent: &str, suffix: &str, messages: &[MessageEnvelope]) {

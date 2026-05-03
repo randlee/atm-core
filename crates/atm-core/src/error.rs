@@ -24,6 +24,9 @@ pub(crate) enum AtmErrorKind {
     ObservabilityQuery,
     ObservabilityFollow,
     ObservabilityHealth,
+    DaemonRuntime,
+    DaemonClient,
+    DaemonSingleton,
 }
 
 #[derive(Debug)]
@@ -208,7 +211,7 @@ impl AtmError {
     pub fn daemon_unavailable(message: impl Into<String>) -> Self {
         Self::new_with_code(
             AtmErrorCode::DaemonUnavailable,
-            AtmErrorKind::Validation,
+            AtmErrorKind::DaemonClient,
             message,
         )
         .with_recovery(
@@ -219,7 +222,7 @@ impl AtmError {
     pub fn daemon_start_failed(message: impl Into<String>) -> Self {
         Self::new_with_code(
             AtmErrorCode::DaemonStartFailed,
-            AtmErrorKind::Validation,
+            AtmErrorKind::DaemonRuntime,
             message,
         )
         .with_recovery(
@@ -230,7 +233,7 @@ impl AtmError {
     pub fn daemon_already_running(message: impl Into<String>) -> Self {
         Self::new_with_code(
             AtmErrorCode::DaemonAlreadyRunning,
-            AtmErrorKind::Validation,
+            AtmErrorKind::DaemonSingleton,
             message,
         )
         .with_recovery(
@@ -241,7 +244,7 @@ impl AtmError {
     pub fn daemon_request_timeout(message: impl Into<String>) -> Self {
         Self::new_with_code(
             AtmErrorCode::DaemonRequestTimeout,
-            AtmErrorKind::Timeout,
+            AtmErrorKind::DaemonClient,
             message,
         )
         .with_recovery(
@@ -252,7 +255,7 @@ impl AtmError {
     pub fn daemon_protocol(message: impl Into<String>) -> Self {
         Self::new_with_code(
             AtmErrorCode::DaemonProtocolFailed,
-            AtmErrorKind::Serialization,
+            AtmErrorKind::DaemonClient,
             message,
         )
         .with_recovery(
@@ -263,11 +266,22 @@ impl AtmError {
     pub fn daemon_remote_unavailable(message: impl Into<String>) -> Self {
         Self::new_with_code(
             AtmErrorCode::DaemonRemoteUnavailable,
-            AtmErrorKind::Timeout,
+            AtmErrorKind::DaemonClient,
             message,
         )
         .with_recovery(
             "Verify the remote daemon host is reachable and retry the command after connectivity is restored.",
+        )
+    }
+
+    pub fn daemon_runtime(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::DaemonProtocolFailed,
+            AtmErrorKind::DaemonRuntime,
+            message,
+        )
+        .with_recovery(
+            "Inspect daemon logs with `atm log`, then restart the daemon and retry the command.",
         )
     }
 
@@ -422,6 +436,9 @@ impl AtmErrorKind {
             Self::ObservabilityQuery => AtmErrorCode::ObservabilityQueryFailed,
             Self::ObservabilityFollow => AtmErrorCode::ObservabilityFollowFailed,
             Self::ObservabilityHealth => AtmErrorCode::ObservabilityHealthFailed,
+            Self::DaemonRuntime => AtmErrorCode::DaemonProtocolFailed,
+            Self::DaemonClient => AtmErrorCode::DaemonUnavailable,
+            Self::DaemonSingleton => AtmErrorCode::DaemonAlreadyRunning,
         }
     }
 }

@@ -5,6 +5,7 @@ use tracing::debug;
 
 use super::*;
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
+use crate::types::AgentName;
 
 pub(crate) fn apply_store_display_mutations(
     store: &dyn ReadStore,
@@ -163,7 +164,7 @@ pub(crate) fn apply_idle_notification_dedup(
 fn dedupe_idle_notifications(
     index: usize,
     message: &SourcedMessage,
-    latest_idle_for_sender: &HashMap<String, usize>,
+    latest_idle_for_sender: &HashMap<AgentName, usize>,
 ) -> bool {
     if !is_unread_idle_notification(&message.envelope) {
         return true;
@@ -175,7 +176,7 @@ fn dedupe_idle_notifications(
         .unwrap_or(true)
 }
 
-fn messages_from_idle_sender(messages: &[SourcedMessage]) -> HashMap<String, usize> {
+fn messages_from_idle_sender(messages: &[SourcedMessage]) -> HashMap<AgentName, usize> {
     let mut latest_idle_for_sender = HashMap::new();
 
     for (index, message) in messages.iter().enumerate() {
@@ -198,8 +199,8 @@ pub(crate) fn is_unread_idle_notification(message: &MessageEnvelope) -> bool {
     !message.read && idle_notification_sender(message).is_some()
 }
 
-pub(crate) fn idle_sender(message: &MessageEnvelope) -> Option<String> {
-    idle_notification_sender(message)
+pub(crate) fn idle_sender(message: &MessageEnvelope) -> Option<AgentName> {
+    idle_notification_sender(message).and_then(|sender| sender.parse().ok())
 }
 
 pub(crate) fn idle_notification_sender(message: &MessageEnvelope) -> Option<String> {

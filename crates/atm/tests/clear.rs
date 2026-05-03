@@ -2,9 +2,9 @@ use std::fs;
 use std::process::Command;
 
 use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
-use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+use atm_core::types::{AgentName, TeamName};
 use atm_core::{read_messages, write_messages};
-use chrono::{Duration, Utc};
+use chrono::{Duration, TimeZone, Utc};
 use serde_json::Value;
 
 #[test]
@@ -77,6 +77,33 @@ fn test_clear_default_removes_only_read_and_acknowledged() {
     assert_eq!(messages.len(), 2);
     assert!(messages.iter().any(|message| message["text"] == "unread"));
     assert!(messages.iter().any(|message| message["text"] == "pending"));
+}
+
+#[test]
+fn test_clear_uses_default_team_from_workspace_config_for_sqlite_path() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_atm_config("[atm]\ndefault_team = \"atm-dev\"\n");
+    fixture.write_inbox(
+        "arch-ctm",
+        &[fixture.message(
+            "team-lead",
+            "read",
+            true,
+            None,
+            None,
+            Utc::now() - Duration::days(1),
+        )],
+    );
+
+    let output = fixture.run_with_env(&["clear", "--json"], &[("ATM_TEAM", "")]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["removed_total"], 1);
 }
 
 #[test]
@@ -552,6 +579,10 @@ impl Fixture {
         .expect("write team config");
     }
 
+    fn write_atm_config(&self, raw: &str) {
+        fs::write(self.tempdir.path().join(".atm.toml"), raw).expect("write .atm.toml");
+    }
+
     fn write_inbox(&self, agent: &str, messages: &[MessageEnvelope]) {
         let inbox_path = self.inbox_path(agent);
         if let Some(parent) = inbox_path.parent() {
@@ -644,10 +675,14 @@ impl Fixture {
 }
 
 fn idle_notification_text(from: &str) -> String {
+    let timestamp = Utc
+        .with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
+        .single()
+        .expect("idle notification timestamp");
     serde_json::json!({
         "type": "idle_notification",
         "from": from,
-        "timestamp": IsoTimestamp::now().into_inner().to_rfc3339(),
+        "timestamp": timestamp.to_rfc3339(),
         "idleReason": "available"
     })
     .to_string()

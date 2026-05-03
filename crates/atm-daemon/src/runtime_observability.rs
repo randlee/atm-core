@@ -8,7 +8,6 @@ use atm_core::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
     LogTailSession, ObservabilityPort,
 };
-use atm_core::types::{AgentName, TeamName};
 
 #[derive(Debug)]
 pub(crate) struct DaemonObservability {
@@ -104,30 +103,6 @@ impl ObservabilityPort for DaemonObservability {
             detail,
         })
     }
-}
-
-pub(crate) fn emit_runtime_event(
-    observability: &dyn ObservabilityPort,
-    team: &TeamName,
-    agent: &AgentName,
-    action: &'static str,
-    outcome: &'static str,
-    error: Option<&AtmError>,
-) {
-    let _ = observability.emit(CommandEvent {
-        command: "atm-daemon",
-        action,
-        outcome,
-        team: team.clone(),
-        agent: agent.clone(),
-        sender: "atm-daemon".to_string(),
-        message_id: None,
-        requires_ack: false,
-        dry_run: false,
-        task_id: None,
-        error_code: error.map(|error| error.code),
-        error_message: error.map(ToString::to_string),
-    });
 }
 
 pub(crate) fn normalize_doctor_report_observability(

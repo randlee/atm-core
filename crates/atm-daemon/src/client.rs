@@ -310,9 +310,20 @@ fn daemon_start_command() -> StartCommand {
         .and_then(Path::parent)
         .expect("workspace root")
         .to_path_buf();
+    let cargo_bin = std::env::var_os("CARGO");
+    let workspace_lock = workspace_root.join("Cargo.lock");
+    if cargo_bin.is_none() || !workspace_lock.exists() {
+        return StartCommand {
+            // TODO(phase-q): replace the cargo-run fallback with a pinned
+            // install/service launcher for environments without a workspace.
+            program: PathBuf::from("atm-daemon-unavailable"),
+            args: Vec::new(),
+            current_dir: None,
+        };
+    }
     StartCommand {
         // TODO(phase-q): resolve the cargo path via a pinned install/service launcher rather than PATH lookup.
-        program: PathBuf::from("cargo"),
+        program: PathBuf::from(cargo_bin.expect("checked cargo env")),
         args: vec![
             "run".to_string(),
             "--quiet".to_string(),
@@ -329,8 +340,8 @@ pub(crate) fn dispatch_error_to_atm(error: DispatchError) -> AtmError {
     match error {
         DispatchError::Store(error) => AtmError::mailbox_read(error.to_string()),
         DispatchError::PayloadDecode(message) => AtmError::daemon_protocol(message),
-        DispatchError::Handler(message) => AtmError::mailbox_read(message),
-        DispatchError::ResponseEncode(message) => AtmError::mailbox_write(message),
+        DispatchError::Handler(message) => AtmError::daemon_runtime(message),
+        DispatchError::ResponseEncode(message) => AtmError::daemon_protocol(message),
         DispatchError::Unsupported(kind) => AtmError::daemon_protocol(format!(
             "request kind {kind:?} is not implemented by the daemon"
         )),
@@ -416,15 +427,15 @@ pub(crate) fn read_frame<T: for<'de> Deserialize<'de>, R: std::io::Read>(
         if bytes == 0 {
             break;
         }
-        frame.push(byte[0]);
-        if byte[0] == b'\n' {
-            break;
-        }
-        if frame.len() > MAX_FRAME_BYTES {
+        if frame.len() >= MAX_FRAME_BYTES {
             return Err(AtmError::daemon_protocol(format!(
                 "daemon frame exceeded the {} byte safety limit",
                 MAX_FRAME_BYTES
             )));
+        }
+        frame.push(byte[0]);
+        if byte[0] == b'\n' {
+            break;
         }
     }
     if frame.is_empty() {

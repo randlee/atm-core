@@ -5,6 +5,7 @@ use atm_core::address::AgentAddress;
 use atm_core::clear::{self, ClearQuery};
 use atm_core::home;
 use atm_core::inbox_ingress::default_inbox_ingress;
+use atm_core::types::TeamName;
 use atm_rusqlite::RusqliteStore;
 use clap::Args;
 
@@ -42,11 +43,13 @@ impl ClearCommand {
         let home_dir = home::atm_home()?;
         let dry_run = self.dry_run;
         let json = self.json;
+        let config_team = load_default_team_from_workspace_config(&current_dir)?;
         let query = self.build_query(home_dir, current_dir)?;
         let team = query
             .team_override
             .clone()
             .or_else(|| std::env::var("ATM_TEAM").ok().and_then(|value| value.parse().ok()))
+            .or(config_team)
             .ok_or_else(|| anyhow::anyhow!("atm clear requires an active ATM_TEAM or --team for the SQLite-backed Phase Q path"))?;
         let store = RusqliteStore::open_for_team_home(&query.home_dir, &team)?;
         let ingress = default_inbox_ingress();
@@ -111,6 +114,29 @@ fn parse_duration(raw: &str) -> Result<Duration> {
     };
 
     Ok(Duration::from_secs(secs))
+}
+
+fn load_default_team_from_workspace_config(
+    start_dir: &std::path::Path,
+) -> Result<Option<TeamName>> {
+    let mut current = Some(start_dir);
+    while let Some(dir) = current {
+        let config_path = dir.join(".atm.toml");
+        if config_path.exists() {
+            let raw = std::fs::read_to_string(&config_path)?;
+            let parsed = raw.parse::<toml::Value>()?;
+            let team = parsed
+                .get("atm")
+                .and_then(|atm| atm.get("default_team"))
+                .or_else(|| parsed.get("default_team"))
+                .and_then(toml::Value::as_str)
+                .map(str::parse::<TeamName>)
+                .transpose()?;
+            return Ok(team);
+        }
+        current = dir.parent();
+    }
+    Ok(None)
 }
 
 #[cfg(test)]

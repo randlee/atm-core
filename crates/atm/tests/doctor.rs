@@ -1,5 +1,6 @@
 use std::fs;
 use std::process::Command;
+use std::time::{Duration, Instant};
 
 use atm_core::schema::{AgentMember, TeamConfig};
 use serde_json::Value;
@@ -290,7 +291,7 @@ fn test_doctor_reports_typed_error_when_auto_start_fails() {
     let fixture = Fixture::new(&["arch-ctm"]);
 
     let output = fixture.run(
-        &["doctor", "--json"],
+        &["--stderr-logs", "doctor", "--json"],
         &[("ATM_DAEMON_BIN", "/definitely/missing/atm-daemon")],
     );
 
@@ -303,6 +304,15 @@ fn test_doctor_reports_typed_error_when_auto_start_fails() {
     assert!(
         stderr.contains("Check the atm-daemon binary path"),
         "stderr: {stderr}"
+    );
+    let fatal_event = fixture
+        .active_log_records()
+        .into_iter()
+        .find(|record| record["action"] == "service" && record["outcome"] == "error")
+        .expect("fatal structured event");
+    assert_eq!(
+        fatal_event["fields"]["error_code"],
+        "ATM_DAEMON_START_FAILED"
     );
 }
 
@@ -397,6 +407,14 @@ impl Fixture {
             .join("atm.log.jsonl")
     }
 
+    fn active_log_records(&self) -> Vec<Value> {
+        let raw = fs::read_to_string(self.active_log_path()).expect("active log");
+        raw.lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| serde_json::from_str(line).expect("log json"))
+            .collect()
+    }
+
     fn daemon_control_path(&self) -> std::path::PathBuf {
         self.tempdir
             .path()
@@ -425,6 +443,7 @@ fn terminate_process(pid: u32) {
     let _ = Command::new("kill")
         .args(["-TERM", &pid.to_string()])
         .status();
+    wait_for_process_exit(pid, Duration::from_secs(5));
 }
 
 #[cfg(windows)]
@@ -432,4 +451,34 @@ fn terminate_process(pid: u32) {
     let _ = Command::new("taskkill")
         .args(["/PID", &pid.to_string(), "/T", "/F"])
         .status();
+    wait_for_process_exit(pid, Duration::from_secs(5));
+}
+
+#[cfg(unix)]
+fn process_alive(pid: u32) -> bool {
+    Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+#[cfg(windows)]
+fn process_alive(pid: u32) -> bool {
+    Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {pid}")])
+        .output()
+        .ok()
+        .map(|output| String::from_utf8_lossy(&output.stdout).contains(&pid.to_string()))
+        .unwrap_or(false)
+}
+
+fn wait_for_process_exit(pid: u32, timeout: Duration) {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if !process_alive(pid) {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
 }

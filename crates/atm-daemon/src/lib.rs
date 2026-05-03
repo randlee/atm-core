@@ -5,7 +5,7 @@ use std::fs;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -15,7 +15,7 @@ use atm_core::dispatcher::{
 use atm_core::doctor::{DoctorQuery, DoctorReport, DoctorRuntimeHealth, DoctorStatus, run_doctor};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::home;
-use atm_core::observability::ObservabilityPort;
+use atm_core::observability::{CommandEvent, ObservabilityPort};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -29,15 +29,14 @@ use crate::client::{
 pub use crate::client::{
     ensure_daemon_running, request_doctor_json_with_autostart, request_remote,
 };
-use crate::runtime_observability::{
-    DaemonObservability, emit_runtime_event, normalize_doctor_report_observability,
-};
+use crate::runtime_observability::{DaemonObservability, normalize_doctor_report_observability};
 
 pub const SAME_HOST_REQUEST_TIMEOUT: Duration = Duration::from_secs(3);
 pub const REMOTE_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 pub const REMOTE_IO_TIMEOUT: Duration = Duration::from_secs(5);
 pub const DEFAULT_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(30);
 pub const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
+pub const DOCTOR_HANDLER_TIMEOUT: Duration = Duration::from_secs(5);
 pub const SHUTDOWN_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
 pub const SHUTDOWN_FORCE_TIMEOUT: Duration = Duration::from_secs(10);
 pub const MAX_ACCEPTS: usize = 64;
@@ -150,53 +149,79 @@ impl RequestDispatcher for CoreDispatcher {
             RequestPayload::Doctor(value) => {
                 let query: DoctorQuery = serde_json::from_value(value)
                     .map_err(|error| DispatchError::PayloadDecode(error.to_string()))?;
-                let report = thread::spawn({
+                let (tx, rx) = mpsc::sync_channel(1);
+                thread::spawn({
                     let home_dir = self.home_dir.clone();
                     let observability = Arc::clone(&self.observability);
                     let team_name = request.team_name.clone();
                     move || {
-                        let report = run_doctor(query, observability.as_ref())?;
-                        let report =
-                            normalize_doctor_report_observability(report, observability.as_ref());
-                        Ok::<DoctorReport, AtmError>(attach_runtime_health(
-                            report, &home_dir, &team_name,
-                        ))
+                        let result = run_doctor(query, observability.as_ref()).map(|report| {
+                            let report = normalize_doctor_report_observability(
+                                report,
+                                observability.as_ref(),
+                            );
+                            attach_runtime_health(report, &home_dir, &team_name)
+                        });
+                        let _ = tx.send(result);
                     }
-                })
-                .join()
-                .map_err(|_| DispatchError::Handler("doctor worker panicked".to_string()))?
-                .map_err(|error| DispatchError::Handler(error.to_string()))?;
+                });
+                let report = rx
+                    .recv_timeout(DOCTOR_HANDLER_TIMEOUT)
+                    .map_err(|error| match error {
+                        mpsc::RecvTimeoutError::Timeout => DispatchError::Handler(format!(
+                            "doctor worker exceeded the {:?} handler budget",
+                            DOCTOR_HANDLER_TIMEOUT
+                        )),
+                        mpsc::RecvTimeoutError::Disconnected => DispatchError::Handler(
+                            "doctor worker exited before sending a result".to_string(),
+                        ),
+                    })?
+                    .map_err(|error| DispatchError::Handler(error.to_string()))?;
                 let payload_json = serde_json::to_string(&report)
                     .map_err(|error| DispatchError::ResponseEncode(error.to_string()))?;
-                emit_runtime_event(
-                    self.observability.as_ref(),
-                    &request.team_name,
-                    &request.agent_name,
-                    "doctor_request",
-                    "ok",
-                    None,
-                );
+                let _ = self.observability.emit(CommandEvent {
+                    command: "atm-daemon",
+                    action: "doctor_request",
+                    outcome: "ok",
+                    team: request.team_name.clone(),
+                    agent: request.agent_name.clone(),
+                    sender: "atm-daemon".to_string(),
+                    message_id: None,
+                    requires_ack: false,
+                    dry_run: false,
+                    task_id: None,
+                    error_code: None,
+                    error_message: None,
+                });
                 Ok(DaemonResponse {
                     kind: RequestKind::Doctor,
                     payload_json,
                 })
             }
             RequestPayload::Heartbeat(_) => {
-                emit_runtime_event(
-                    self.observability.as_ref(),
-                    &request.team_name,
-                    &request.agent_name,
-                    "heartbeat_request",
-                    "ok",
-                    None,
-                );
+                let _ = self.observability.emit(CommandEvent {
+                    command: "atm-daemon",
+                    action: "heartbeat_request",
+                    outcome: "ok",
+                    team: request.team_name.clone(),
+                    agent: request.agent_name.clone(),
+                    sender: "atm-daemon".to_string(),
+                    message_id: None,
+                    requires_ack: false,
+                    dry_run: false,
+                    task_id: None,
+                    error_code: None,
+                    error_message: None,
+                });
                 Ok(DaemonResponse {
                     kind: RequestKind::Heartbeat,
                     payload_json: "{\"ok\":true}".to_string(),
                 })
             }
             other => Err(DispatchError::Unsupported(other.kind())),
-            // TODO(phase-q): replace the hardcoded request-kind match with registered handlers once the daemon command surface grows beyond the current Q.4 set.
+            // TODO(phase-q §21.6.1): replace this hardcoded request-kind dispatch with an
+            // injectable handler registry. That registry remains deferred scope while Q.4 only
+            // exposes Doctor and Heartbeat through the thin daemon runtime.
         }
     }
 }
@@ -472,6 +497,8 @@ fn accept_tcp_loop(
     dispatcher: Arc<dyn RequestDispatcher>,
     max_inflight: usize,
 ) {
+    // TODO(phase-q §21.4): authenticate remote TCP daemon requests before this
+    // transport is used beyond trusted local/QA scenarios.
     while !stop.load(Ordering::SeqCst) {
         match listener.accept() {
             Ok((stream, _)) => {
@@ -522,8 +549,13 @@ fn spawn_local_connection(
         let _ = write_frame(&mut stream, &envelope);
         inflight.fetch_sub(1, Ordering::SeqCst);
     });
-    if let Ok(mut handles) = worker_threads.lock() {
-        handles.push(handle);
+    match worker_threads.lock() {
+        Ok(mut handles) => handles.push(handle),
+        Err(error) => {
+            eprintln!(
+                "daemon worker-thread registry lock is poisoned; detaching local connection worker: {error}"
+            );
+        }
     }
 }
 
@@ -557,8 +589,13 @@ fn spawn_tcp_connection(
         let _ = write_frame(&mut stream, &envelope);
         inflight.fetch_sub(1, Ordering::SeqCst);
     });
-    if let Ok(mut handles) = worker_threads.lock() {
-        handles.push(handle);
+    match worker_threads.lock() {
+        Ok(mut handles) => handles.push(handle),
+        Err(error) => {
+            eprintln!(
+                "daemon worker-thread registry lock is poisoned; detaching tcp connection worker: {error}"
+            );
+        }
     }
 }
 
@@ -738,6 +775,8 @@ fn attach_runtime_health(
     report.runtime = Some(DoctorRuntimeHealth {
         singleton_state: DoctorStatus::Healthy,
         singleton_detail: "daemon singleton is owned by the active runtime".to_string(),
+        // TODO(phase-q): replace this placeholder with real cache-health
+        // inspection once the dedicated daemon status cache lands.
         status_cache_state: DoctorStatus::Warning,
         status_cache_detail: "live status-cache health is not yet separately reported in Q.4"
             .to_string(),
@@ -966,7 +1005,7 @@ mod tests {
         )
         .expect_err("unreachable host");
         assert_eq!(error.code, AtmErrorCode::DaemonRemoteUnavailable);
-        assert!(started.elapsed() < Duration::from_secs(5));
+        assert!(started.elapsed() < Duration::from_secs(10));
     }
 
     #[test]

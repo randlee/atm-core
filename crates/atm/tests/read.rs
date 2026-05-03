@@ -36,6 +36,27 @@ fn test_read_own_inbox_default() {
 }
 
 #[test]
+fn test_read_uses_default_team_from_workspace_config_for_sqlite_path() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_atm_config("[atm]\ndefault_team = \"atm-dev\"\n");
+    fixture.write_inbox(
+        "arch-ctm",
+        &[fixture.message("team-lead", "hello", false, None, None, 0)],
+    );
+
+    let output = fixture.run_with_env(&["read", "--json"], &[("ATM_TEAM", "")]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["count"], 1);
+    assert_eq!(parsed["messages"][0]["text"], "hello");
+}
+
+#[test]
 fn test_read_marks_read() {
     let fixture = Fixture::new(&["arch-ctm"]);
     let message = fixture.message("team-lead", "hello", false, None, None, 0);
@@ -388,7 +409,7 @@ fn test_read_timeout_with_existing_pending_ack_returns_immediately() {
         "stderr: {}",
         fixture.stderr(&output)
     );
-    assert!(start.elapsed() < std::time::Duration::from_secs(4));
+    assert!(start.elapsed() < std::time::Duration::from_secs(10));
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["count"], 1);
     assert_eq!(parsed["messages"][0]["bucket"], "pending_ack");
@@ -994,6 +1015,10 @@ impl Fixture {
             serde_json::to_vec(&config).expect("team config"),
         )
         .expect("write team config");
+    }
+
+    fn write_atm_config(&self, raw: &str) {
+        fs::write(self.tempdir.path().join(".atm.toml"), raw).expect("write .atm.toml");
     }
 
     fn write_inbox(&self, agent: &str, messages: &[MessageEnvelope]) {

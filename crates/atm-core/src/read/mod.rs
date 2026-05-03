@@ -65,7 +65,7 @@ impl ReadQuery {
         seen_state_update: bool,
         ack_activation_mode: AckActivationMode,
         limit: Option<usize>,
-        sender_filter: Option<&str>,
+        sender_filter: Option<AgentName>,
         timestamp_filter: Option<IsoTimestamp>,
         timeout_secs: Option<u64>,
     ) -> Result<Self, AtmError> {
@@ -80,7 +80,7 @@ impl ReadQuery {
             seen_state_update,
             ack_activation_mode,
             limit,
-            sender_filter: sender_filter.map(str::parse).transpose()?,
+            sender_filter,
             timestamp_filter,
             timeout_secs,
         })
@@ -579,7 +579,9 @@ fn apply_idle_notification_dedup_projected(
         .collect()
 }
 
-fn messages_from_idle_sender_projected(messages: &[ClassifiedMessage]) -> HashMap<String, usize> {
+fn messages_from_idle_sender_projected(
+    messages: &[ClassifiedMessage],
+) -> HashMap<AgentName, usize> {
     let mut latest_idle_for_sender = HashMap::new();
 
     for (index, message) in messages.iter().enumerate() {
@@ -601,7 +603,7 @@ fn messages_from_idle_sender_projected(messages: &[ClassifiedMessage]) -> HashMa
 fn dedupe_idle_notifications_projected(
     index: usize,
     message: &ClassifiedMessage,
-    latest_idle_for_sender: &HashMap<String, usize>,
+    latest_idle_for_sender: &HashMap<AgentName, usize>,
 ) -> bool {
     if !is_unread_idle_notification(&message.envelope) {
         return true;
