@@ -791,7 +791,6 @@ mod tests {
 
     const TEST_TEAM: &str = "test-team";
     const TEST_RECIPIENT: &str = "test-recipient";
-
     #[test]
     fn load_send_alert_state_parse_errors_are_config_errors() {
         let tempdir = tempdir().expect("tempdir");
