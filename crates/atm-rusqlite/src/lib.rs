@@ -1,6 +1,7 @@
 mod ack;
 mod mail;
 mod roster;
+mod send;
 mod task;
 
 #[cfg(test)]
@@ -132,7 +133,7 @@ impl RusqliteStore {
     pub fn open_path(database_path: impl AsRef<Path>) -> Result<Self, StoreError> {
         Self::open_path_with_options(
             database_path.as_ref(),
-            BusyTimeoutMs::DEFAULT,
+            BusyTimeoutMs::new(5000).expect("5000ms busy timeout is valid"),
             SqliteHandleBudget::DEFAULT,
         )
     }
@@ -219,6 +220,12 @@ impl StoreBoundary for RusqliteStore {
 
     fn health(&self) -> Result<StoreHealth, StoreError> {
         let connection = self.lock_connection()?;
+        let journal_mode = query_journal_mode(&connection)?;
+        if !journal_mode.eq_ignore_ascii_case("wal") {
+            return Err(StoreError::query(format!(
+                "SQLite journal_mode drifted from WAL at runtime: observed {journal_mode}"
+            )));
+        }
         Ok(StoreHealth {
             database_path: self.database_path.clone(),
             ready: true,
@@ -241,6 +248,12 @@ pub(crate) fn configure_connection(
         .map_err(|error| {
             StoreError::bootstrap("failed to enable SQLite WAL mode").with_source(error)
         })?;
+    let journal_mode = query_journal_mode(connection)?;
+    if !journal_mode.eq_ignore_ascii_case("wal") {
+        return Err(StoreError::bootstrap(
+            "SQLite refused WAL mode; expected journal_mode=wal after bootstrap",
+        ));
+    }
     connection
         .pragma_update(None, "foreign_keys", 1)
         .map_err(|error| {

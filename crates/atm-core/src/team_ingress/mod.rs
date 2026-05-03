@@ -4,7 +4,7 @@ use std::path::Path;
 use crate::config::load_team_config;
 use crate::error::{AtmError, AtmErrorKind};
 use crate::roster_store::{RosterMemberRecord, RosterStore, TransportKind};
-use crate::schema::{AgentMember, AgentType};
+use crate::schema::{AgentMember, AgentType, TeamConfig};
 use crate::store::{HostName, RecipientPaneId, StoreError};
 use crate::types::TeamName;
 
@@ -27,6 +27,15 @@ pub fn ingest_team_config(
     host_name: &HostName,
 ) -> Result<Vec<RosterMemberRecord>, AtmError> {
     let team_config = load_team_config(team_dir)?;
+    ingest_loaded_team_config(team_name, &team_config, roster_store, host_name)
+}
+
+pub fn ingest_loaded_team_config(
+    team_name: &TeamName,
+    team_config: &TeamConfig,
+    roster_store: &impl RosterStore,
+    host_name: &HostName,
+) -> Result<Vec<RosterMemberRecord>, AtmError> {
     let existing = roster_store
         .load_roster(team_name)
         .map_err(|error| map_store_error("failed to load existing roster rows", error))?;
@@ -59,6 +68,8 @@ fn roster_record_for_member(
 ) -> Result<RosterMemberRecord, AtmError> {
     let role = match &member.agent_type {
         Some(AgentType::Unknown(raw)) if raw.trim().is_empty() => DEFAULT_ROLE.parse(),
+        // After the blank compatibility form is handled above, any remaining
+        // agent_type-derived role comes directly from the member payload.
         Some(agent_type) => agent_type.to_string().parse(),
         None => DEFAULT_ROLE.parse(),
     }
@@ -76,12 +87,7 @@ fn roster_record_for_member(
     })?;
     let transport_kind = DEFAULT_TRANSPORT_KIND
         .parse::<TransportKind>()
-        .map_err(|error| {
-            AtmError::new(
-                AtmErrorKind::Config,
-                format!("invalid built-in transport kind {DEFAULT_TRANSPORT_KIND}: {error}"),
-            )
-        })?;
+        .expect("DEFAULT_TRANSPORT_KIND is a valid non-blank constant");
     let recipient_pane_id = pane_id_for_member(member)?;
     let metadata_json = serde_json::to_string(member).map_err(|source| {
         AtmError::new(

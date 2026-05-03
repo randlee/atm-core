@@ -8,13 +8,15 @@ use std::time::{Duration, Instant};
 use atm_core::ack::{AckMessageId, AckRequest, ack_mail};
 use atm_core::clear::{ClearQuery, clear_mail};
 use atm_core::error::AtmErrorCode;
-use atm_core::inbox_ingress;
+use atm_core::inbox_export::default_inbox_export;
+use atm_core::inbox_ingress::default_inbox_ingress;
 use atm_core::mail_store::MailStore;
-use atm_core::observability::NullObservability;
+use atm_core::observability::{NullObservability, ObservabilityPort};
 use atm_core::read::{ReadQuery, read_mail};
 use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
-use atm_core::send::{SendMessageSource, SendRequest, send_mail};
-use atm_core::task_store::TaskStore;
+use atm_core::send::{
+    SendMessageSource, SendOutcome, SendRequest, resolve_store_team, send_mail_via_store,
+};
 use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
 use atm_core::{read_messages as read_inbox_messages, write_messages as write_inbox_messages};
 use atm_rusqlite::RusqliteStore;
@@ -37,18 +39,23 @@ fn test_recv_timeout() -> Duration {
         .unwrap_or_else(|| Duration::from_secs(10))
 }
 
+fn send_via_store(
+    request: SendRequest,
+    observability: &dyn ObservabilityPort,
+) -> Result<SendOutcome, atm_core::error::AtmError> {
+    let team = resolve_store_team(&request)?;
+    let store = RusqliteStore::open_for_team_home(&request.home_dir, &team)
+        .expect("open store for mailbox locking test");
+    let ingress = default_inbox_ingress();
+    let exporter = default_inbox_export();
+    send_mail_via_store(request, &store, &ingress, &exporter, observability)
+}
+
 #[test]
 #[serial]
 fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
-    let store = Arc::new(
-        RusqliteStore::open_for_team_home(
-            fixture.tempdir.path(),
-            &"atm-dev".parse().expect("team"),
-        )
-        .expect("open store"),
-    );
     let barrier = Arc::new(Barrier::new(3));
     let (tx, rx) = mpsc::channel();
 
@@ -59,14 +66,16 @@ fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
         let barrier = Arc::clone(&barrier);
         let tx = tx.clone();
         let observability = Arc::clone(&observability);
-        let store = Arc::clone(&store);
         thread::spawn(move || {
             barrier.wait();
-            tx.send((
-                label,
-                ack_mail(request, store.as_ref(), observability.as_ref()),
-            ))
-            .expect("send result");
+            let team = request
+                .team_override
+                .clone()
+                .expect("ack test team override");
+            let store = RusqliteStore::open_for_team_home(&request.home_dir, &team)
+                .expect("open store for concurrent ack test");
+            tx.send((label, ack_mail(request, &store, observability.as_ref())))
+                .expect("send result");
         });
     }
     drop(tx);
@@ -109,173 +118,6 @@ fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
 
 #[test]
 #[serial]
-fn ack_mail_imports_legacy_pending_message_through_store_service() {
-    let fixture = Fixture::new();
-    let observability = NullObservability;
-    let store = RusqliteStore::open_for_team_home(
-        fixture.tempdir.path(),
-        &"atm-dev".parse().expect("team"),
-    )
-    .expect("open store");
-
-    let outcome = ack_mail(
-        fixture.ack_request("arch-ctm", fixture.arch_message_id, "ack from arch"),
-        &store,
-        &observability,
-    )
-    .expect("ack legacy message");
-
-    assert_eq!(
-        outcome.message_id,
-        AckMessageId::Legacy(fixture.arch_message_id)
-    );
-    assert_eq!(outcome.reply_target.to_string(), "qa@atm-dev");
-    assert!(
-        fixture
-            .inbox_contents("qa")
-            .iter()
-            .any(|message| message.text == "ack from arch")
-    );
-}
-
-#[test]
-#[serial]
-fn ack_mail_acknowledges_task_linked_imported_message() {
-    let fixture = Fixture::new();
-    let observability = NullObservability;
-    let task_id: atm_core::types::TaskId = "TASK-LINK-1".parse().expect("task id");
-    let mut message = pending_ack_message(
-        "qa",
-        "task-linked pending",
-        LegacyMessageId::new(),
-        "atm-dev",
-    );
-    message.task_id = Some(task_id.clone());
-    let message_id = message.message_id.expect("legacy message id");
-    fixture.write_primary_inbox("arch-ctm", &[message]);
-    let store = RusqliteStore::open_for_team_home(
-        fixture.tempdir.path(),
-        &"atm-dev".parse().expect("team"),
-    )
-    .expect("open store");
-
-    let outcome = ack_mail(
-        fixture.ack_request("arch-ctm", message_id, "ack task"),
-        &store,
-        &observability,
-    )
-    .expect("ack task-linked message");
-
-    assert_eq!(outcome.task_id.as_ref(), Some(&task_id));
-    let task = store
-        .load_task(&task_id)
-        .expect("load task")
-        .expect("task row");
-    assert_eq!(task.status, atm_core::task_store::TaskStatus::Acknowledged);
-    assert!(task.acknowledged_at.is_some());
-}
-
-#[test]
-#[serial]
-fn ack_mail_export_failure_after_commit_surfaces_warning_and_preserves_sqlite_state() {
-    let fixture = Fixture::new();
-    let observability = NullObservability;
-    let store = RusqliteStore::open_for_team_home(
-        fixture.tempdir.path(),
-        &"atm-dev".parse().expect("team"),
-    )
-    .expect("open store");
-    let reply_inbox_path = fixture.primary_inbox_path("qa");
-    fs::remove_file(&reply_inbox_path).expect("remove reply inbox file");
-    fs::create_dir(&reply_inbox_path).expect("replace reply inbox with directory");
-
-    let outcome = ack_mail(
-        fixture.ack_request(
-            "arch-ctm",
-            fixture.arch_message_id,
-            "ack with export failure",
-        ),
-        &store,
-        &observability,
-    )
-    .expect("ack should commit even when export fails");
-
-    assert!(!outcome.warnings.is_empty(), "expected export warning");
-    let stored = store
-        .load_message_by_legacy_id(&fixture.arch_message_id)
-        .expect("load source row")
-        .expect("stored source row");
-    let ack_state = store
-        .load_ack_state(&stored.message_key)
-        .expect("load ack state")
-        .expect("ack state row");
-    assert!(ack_state.acknowledged_at.is_some());
-}
-
-#[test]
-#[serial]
-fn ack_mail_rejects_message_already_acknowledged_in_sqlite_before_ingest() {
-    let fixture = Fixture::new();
-    let observability = NullObservability;
-    let store = RusqliteStore::open_for_team_home(
-        fixture.tempdir.path(),
-        &"atm-dev".parse().expect("team"),
-    )
-    .expect("open store");
-
-    inbox_ingress::ingest_mailbox_state(
-        fixture.tempdir.path(),
-        &"atm-dev".parse().expect("team"),
-        &"arch-ctm".parse().expect("agent"),
-        &store,
-        &observability,
-    )
-    .expect("ingest pending message");
-    let stored = store
-        .load_message_by_legacy_id(&fixture.arch_message_id)
-        .expect("load stored row")
-        .expect("stored row");
-    store
-        .upsert_ack_state(&atm_core::mail_store::AckStateRecord {
-            message_key: stored.message_key.clone(),
-            pending_ack_at: Some(stored.created_at),
-            acknowledged_at: Some(IsoTimestamp::now()),
-            ack_reply_message_key: None,
-            ack_reply_team: None,
-            ack_reply_agent: None,
-        })
-        .expect("seed acknowledged state");
-
-    let error = ack_mail(
-        fixture.ack_request("arch-ctm", fixture.arch_message_id, "should reject"),
-        &store,
-        &observability,
-    )
-    .expect_err("already-acknowledged sqlite state must reject");
-
-    assert_eq!(error.code, AtmErrorCode::AckInvalidState);
-}
-
-#[test]
-#[serial]
-fn duplicate_ack_attempt_returns_ack_invalid_state_at_service_level() {
-    let fixture = Fixture::new();
-    let observability = NullObservability;
-    let store = RusqliteStore::open_for_team_home(
-        fixture.tempdir.path(),
-        &"atm-dev".parse().expect("team"),
-    )
-    .expect("open store");
-    let request = fixture.ack_request("arch-ctm", fixture.arch_message_id, "first ack");
-
-    ack_mail(request.clone(), &store, &observability).expect("first ack");
-    let error = ack_mail(request, &store, &observability).expect_err("duplicate ack must fail");
-
-    assert_eq!(error.code, AtmErrorCode::AckInvalidState);
-}
-
-#[test]
-#[serial]
 fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() {
     let observability = Arc::new(NullObservability);
 
@@ -300,7 +142,7 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
             barrier.wait();
             tx.send((
                 "send-clear/send",
-                send_mail(send_request, observability.as_ref()).map(|_| ()),
+                send_via_store(send_request, observability.as_ref()).map(|_| ()),
             ))
             .expect("send result");
         });
@@ -352,13 +194,6 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
     let (tx, rx) = mpsc::channel();
     let send_request = ack_fixture.send_request("team-lead", "arch-ctm@atm-dev", "new message");
     let ack_request = ack_fixture.ack_request("arch-ctm", pending_message_id, "ack reply");
-    let ack_store = Arc::new(
-        RusqliteStore::open_for_team_home(
-            ack_fixture.tempdir.path(),
-            &"atm-dev".parse().expect("team"),
-        )
-        .expect("open store"),
-    );
     {
         let barrier = Arc::clone(&barrier);
         let tx = tx.clone();
@@ -367,7 +202,7 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
             barrier.wait();
             tx.send((
                 "send-ack/send",
-                send_mail(send_request, observability.as_ref()).map(|_| ()),
+                send_via_store(send_request, observability.as_ref()).map(|_| ()),
             ))
             .expect("send result");
         });
@@ -376,12 +211,17 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
         let barrier = Arc::clone(&barrier);
         let tx = tx.clone();
         let observability = Arc::clone(&observability);
-        let store = Arc::clone(&ack_store);
         thread::spawn(move || {
             barrier.wait();
+            let team = ack_request
+                .team_override
+                .clone()
+                .expect("ack test team override");
+            let store = RusqliteStore::open_for_team_home(&ack_request.home_dir, &team)
+                .expect("open store for concurrent send/ack test");
             tx.send((
                 "send-ack/ack",
-                ack_mail(ack_request, store.as_ref(), observability.as_ref()).map(|_| ()),
+                ack_mail(ack_request, &store, observability.as_ref()).map(|_| ()),
             ))
             .expect("ack result");
         });
@@ -411,20 +251,23 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
         "pending message was not acknowledged: {:?}",
         arch_inbox
     );
-    let pending_store = RusqliteStore::open_for_team_home(
+    let store = RusqliteStore::open_for_team_home(
         ack_fixture.tempdir.path(),
         &"atm-dev".parse().expect("team"),
     )
-    .expect("open store");
-    let pending_row = pending_store
+    .expect("open store for send/ack assertion");
+    let stored = store
         .load_message_by_legacy_id(&pending_message_id)
-        .expect("load pending row")
-        .expect("pending row");
-    let ack_state = pending_store
-        .load_ack_state(&pending_row.message_key)
+        .expect("load stored message")
+        .expect("stored message");
+    let ack_state = store
+        .load_ack_state(&stored.message_key)
         .expect("load ack state")
-        .expect("ack row");
-    assert!(ack_state.acknowledged_at.is_some());
+        .expect("ack state");
+    assert!(
+        ack_state.acknowledged_at.is_some(),
+        "pending message was not acknowledged in SQLite state: {ack_state:?}"
+    );
     let qa_inbox = ack_fixture.inbox_contents("qa");
     assert!(
         qa_inbox.iter().any(|message| message.text == "ack reply"),
@@ -453,7 +296,7 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() 
         let observability = Arc::clone(&observability);
         thread::spawn(move || {
             barrier.wait();
-            tx.send((label, send_mail(request, observability.as_ref())))
+            tx.send((label, send_via_store(request, observability.as_ref())))
                 .expect("send result");
         });
     }
@@ -534,7 +377,7 @@ fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
         let observability = Arc::clone(&observability);
         thread::spawn(move || {
             barrier.wait();
-            tx.send((label, send_mail(request, observability.as_ref())))
+            tx.send((label, send_via_store(request, observability.as_ref())))
                 .expect("send result");
         });
     }
@@ -590,7 +433,7 @@ fn missing_config_notice_seeds_team_lead_workflow_state() {
     fixture.write_primary_inbox_for_team("broken-dev", "recipient", &[]);
     fixture.write_primary_inbox_for_team("broken-dev", "team-lead", &[]);
 
-    send_mail(
+    send_via_store(
         fixture.send_request("team-lead", "recipient@broken-dev", "broken send"),
         &observability,
     )
@@ -630,7 +473,7 @@ fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()
         let observability = Arc::clone(&observability);
         thread::spawn(move || {
             barrier.wait();
-            tx.send((label, send_mail(request, observability.as_ref())))
+            tx.send((label, send_via_store(request, observability.as_ref())))
                 .expect("send result");
         });
     }
@@ -769,7 +612,7 @@ fn send_times_out_under_bounded_lock_contention() {
     lock_file.lock_exclusive().expect("hold mailbox lock");
 
     let started = Instant::now();
-    let error = send_mail(
+    let error = send_via_store(
         fixture.send_request("team-lead", "arch-ctm@atm-dev", "blocked send"),
         &observability,
     )
@@ -893,7 +736,7 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
     // Criterion (a) is verified through the standard send path rather than a
     // direct helper call: send_mail internally assigns metadata.atm.messageId
     // via the private workflow::set_atm_message_id path before read_mail runs.
-    send_mail(
+    send_via_store(
         fixture.send_request("team-lead", "arch-ctm@atm-dev", "hello sidecar"),
         &observability,
     )
@@ -984,7 +827,7 @@ fn send_reports_non_contention_lock_failures_without_timeout() {
     let observability = NullObservability;
     let started = Instant::now();
 
-    let error = send_mail(
+    let error = send_via_store(
         fixture.send_request("team-lead", "arch-ctm@atm-dev", "lock failure"),
         &observability,
     )
@@ -1041,16 +884,16 @@ impl Drop for EnvGuard {
 }
 
 fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
-    // SAFETY: these tests hold the process-wide env_lock mutex and use
-    // #[serial] before mutating the environment, so the mutation is
-    // serialized within this process.
+    // SAFETY: these tests take a process-wide mutex and use #[serial] before
+    // mutating the environment, so the mutation is serialized within this
+    // process.
     unsafe { std::env::set_var(key, value) }
 }
 
 fn remove_env_var<K: AsRef<OsStr>>(key: K) {
-    // SAFETY: these tests hold the process-wide env_lock mutex and use
-    // #[serial] before mutating the environment, so the mutation is
-    // serialized within this process.
+    // SAFETY: these tests take a process-wide mutex and use #[serial] before
+    // mutating the environment, so the mutation is serialized within this
+    // process.
     unsafe { std::env::remove_var(key) }
 }
 

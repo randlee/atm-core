@@ -9,8 +9,8 @@ use crate::config;
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
 use crate::identity;
-use crate::inbox_export;
-use crate::inbox_ingress;
+use crate::inbox_export::{self, InboxExport, default_inbox_export};
+use crate::inbox_ingress::{InboxIngress, default_inbox_ingress};
 use crate::mail_store::{MailStore, MessageSourceKind, StoredMessageRecord};
 use crate::mailbox;
 use crate::mailbox::source::{SourceFile, SourcedMessage};
@@ -24,6 +24,9 @@ use crate::store::{MessageKey, StoreDuplicateIdentity, StoreError};
 use crate::task_store::TaskStore;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
+/// INVARIANT: runtime failure paths in this module must return typed
+/// `AtmError`/`StoreError` results. Production ack/task flows must not rely on
+/// panic/unwrap for expected failure handling.
 /// Parameters for acknowledging one pending-ack mailbox message.
 #[derive(Debug, Clone)]
 pub struct AckRequest {
@@ -219,15 +222,14 @@ where
     {
         return Err(AtmError::agent_not_found(&actor, &team));
     }
-    let _ = inbox_ingress::ingest_mailbox_state(
-        &request.home_dir,
-        &team,
-        &actor,
-        store,
-        observability,
-    )?;
+    let ingress = default_inbox_ingress();
+    let _ = ingress.ingest_mailbox_state(&request.home_dir, &team, &actor, store, observability)?;
+    // TODO(Q.4): replace source-file observation with a store-backed/source-index
+    // lookup once reply export no longer needs shared inbox snapshots.
     let source_files = mailbox::store::observe_source_files(&request.home_dir, &team, &actor)?;
     let source_message = find_source_message(&source_files, request.message_id, &actor, &team)?;
+    // TODO(Q.4): retire the legacy UUID bridge requirement once all ack
+    // surfaces consume canonical `AtmMessageId` end-to-end.
     let source_legacy_message_id = source_message_legacy_message_id(&source_message.envelope)
         .ok_or_else(|| {
             AtmError::validation(format!(
@@ -313,7 +315,7 @@ where
         outcome: "ok",
         team: team.clone(),
         agent: actor.clone(),
-        sender: actor.to_string(),
+        sender: actor.clone(),
         message_id: Some(source_legacy_message_id),
         requires_ack: false,
         dry_run: false,
@@ -328,7 +330,7 @@ where
             outcome: "ok",
             team: team.clone(),
             agent: actor.clone(),
-            sender: actor.to_string(),
+            sender: actor.clone(),
             message_id: Some(source_legacy_message_id),
             requires_ack: false,
             dry_run: false,
@@ -339,7 +341,8 @@ where
     }
 
     let mut warnings = Vec::new();
-    let export_succeeded = match inbox_export::export_message(
+    let exporter = default_inbox_export();
+    let export_succeeded = match exporter.export_message(
         &request.home_dir,
         &reply_team,
         &reply_agent,
@@ -347,7 +350,7 @@ where
         observability,
         inbox_export::ExportEventContext {
             command: "ack",
-            sender: actor.to_string(),
+            sender: actor.clone(),
             message_id: Some(source_legacy_message_id),
             requires_ack: false,
             task_id: source_task_id.clone(),
@@ -360,7 +363,7 @@ where
                 outcome: "ok",
                 team: team.clone(),
                 agent: actor.clone(),
-                sender: actor.to_string(),
+                sender: actor.clone(),
                 message_id: Some(source_legacy_message_id),
                 requires_ack: false,
                 dry_run: false,
@@ -381,7 +384,7 @@ where
                 outcome: "warning",
                 team: team.clone(),
                 agent: actor.clone(),
-                sender: actor.to_string(),
+                sender: actor.clone(),
                 message_id: Some(source_legacy_message_id),
                 requires_ack: false,
                 dry_run: false,
@@ -435,7 +438,7 @@ where
         outcome: "ok",
         team,
         agent: actor.clone(),
-        sender: actor.to_string(),
+        sender: actor.clone(),
         message_id: Some(source_legacy_message_id),
         requires_ack: false,
         dry_run: false,

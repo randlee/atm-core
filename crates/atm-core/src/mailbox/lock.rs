@@ -22,6 +22,7 @@ pub(crate) const DEFAULT_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
 const RETRY_INTERVAL: Duration = Duration::from_millis(50);
 const REMOVE_RETRY_INTERVAL: Duration = Duration::from_millis(10);
 const REMOVE_RETRY_ATTEMPTS: usize = 20;
+const DEBUG_TIMEOUT_ENV: &str = "ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum LockOperation {
@@ -619,7 +620,7 @@ fn is_lock_contention_error(error: &io::Error) -> bool {
 }
 
 fn debug_timeout_override() -> Option<Duration> {
-    std::env::var("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS")
+    std::env::var(DEBUG_TIMEOUT_ENV)
         .ok()
         .and_then(|value| value.parse::<u64>().ok())
         .map(Duration::from_millis)
@@ -1116,6 +1117,7 @@ mod tests {
     #[test]
     #[serial(env)]
     fn default_lock_timeout_uses_default_without_override() {
+        let _guard = EnvGuard::clear("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS");
         assert_eq!(default_lock_timeout(), DEFAULT_LOCK_TIMEOUT);
     }
 
@@ -1142,7 +1144,7 @@ mod tests {
     #[test]
     #[serial(env)]
     fn acquire_reports_read_only_filesystem_for_open_failure_via_env_var_seam() {
-        let _guard = EnvGuard::set_raw("ATM_TEST_FORCE_LOCK_READONLY_FS", "open");
+        let _readonly = ReadOnlyFilesystemGuard::set(LockOperation::Open);
         let tempdir = tempdir().expect("tempdir");
         let inbox = tempdir.path().join("arch-ctm.json");
 
@@ -1203,9 +1205,9 @@ mod tests {
     }
 
     impl EnvGuard {
-        fn set_raw(key: &'static str, value: &str) -> Self {
+        fn clear(key: &'static str) -> Self {
             let original = std::env::var_os(key);
-            set_env_var(key, value);
+            remove_env_var(key);
             Self { key, original }
         }
     }

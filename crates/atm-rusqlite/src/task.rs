@@ -1,12 +1,13 @@
 use atm_core::store::{MessageKey, StoreError};
 use atm_core::task_store::{TaskRecord, TaskStatus, TaskStore};
 use atm_core::types::{IsoTimestamp, TaskId};
-use rusqlite::OptionalExtension;
-use rusqlite::Transaction;
+use rusqlite::{OptionalExtension, Transaction};
 
 use crate::{
     RusqliteStore, classify_store_error, invalid_store_data, parse_optional, parse_required,
 };
+
+impl atm_core::task_store::sealed::Sealed for RusqliteStore {}
 
 #[derive(Debug)]
 struct RawTaskRow {
@@ -52,7 +53,32 @@ impl TaskStore for RusqliteStore {
         &self,
         message_key: &MessageKey,
     ) -> Result<Vec<TaskRecord>, StoreError> {
-        self.with_transaction(|transaction| load_tasks_for_message_tx(transaction, message_key))
+        let connection = self.lock_connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT task_id, message_key, status, created_at, acknowledged_at, metadata_json FROM tasks WHERE message_key = ?1 ORDER BY task_id",
+            )
+            .map_err(|error| classify_store_error(error, "failed to prepare task-by-message query"))?;
+        let rows = statement
+            .query_map([message_key.as_str()], |row| {
+                Ok(RawTaskRow {
+                    task_id: row.get(0)?,
+                    message_key: row.get(1)?,
+                    status: row.get(2)?,
+                    created_at: row.get(3)?,
+                    acknowledged_at: row.get(4)?,
+                    metadata_json: row.get(5)?,
+                })
+            })
+            .map_err(|error| classify_store_error(error, "failed to query task-by-message rows"))?;
+
+        let mut tasks = Vec::new();
+        for row in rows {
+            let raw =
+                row.map_err(|error| classify_store_error(error, "failed to read task row"))?;
+            tasks.push(convert_task_row(raw)?);
+        }
+        Ok(tasks)
     }
 
     fn acknowledge_task(
@@ -60,88 +86,36 @@ impl TaskStore for RusqliteStore {
         task_id: &TaskId,
         acknowledged_at: IsoTimestamp,
     ) -> Result<Option<TaskRecord>, StoreError> {
-        self.with_transaction(|transaction| {
-            transaction
-                .execute(
-                    "UPDATE tasks SET status = ?1, acknowledged_at = ?2 WHERE task_id = ?3",
-                    (
-                        TaskStatus::Acknowledged.as_str(),
-                        acknowledged_at.to_string(),
-                        task_id.as_str(),
-                    ),
-                )
-                .map_err(|error| classify_store_error(error, "failed to acknowledge task"))?;
-            let raw = transaction
-                .query_row(
-                    "SELECT task_id, message_key, status, created_at, acknowledged_at, metadata_json FROM tasks WHERE task_id = ?1",
-                    [task_id.as_str()],
-                    |row| {
-                        Ok(RawTaskRow {
-                            task_id: row.get(0)?,
-                            message_key: row.get(1)?,
-                            status: row.get(2)?,
-                            created_at: row.get(3)?,
-                            acknowledged_at: row.get(4)?,
-                            metadata_json: row.get(5)?,
-                        })
-                    },
-                )
-                .optional()
-                .map_err(|error| {
-                    classify_store_error(error, "failed to reload acknowledged task")
-                })?;
-            raw.map(convert_task_row).transpose()
-        })
+        let connection = self.lock_connection()?;
+        connection
+            .execute(
+                "UPDATE tasks SET status = ?1, acknowledged_at = ?2 WHERE task_id = ?3",
+                (
+                    TaskStatus::Acknowledged.as_str(),
+                    acknowledged_at.to_string(),
+                    task_id.as_str(),
+                ),
+            )
+            .map_err(|error| classify_store_error(error, "failed to acknowledge task"))?;
+        let raw = connection
+            .query_row(
+                "SELECT task_id, message_key, status, created_at, acknowledged_at, metadata_json FROM tasks WHERE task_id = ?1",
+                [task_id.as_str()],
+                |row| {
+                    Ok(RawTaskRow {
+                        task_id: row.get(0)?,
+                        message_key: row.get(1)?,
+                        status: row.get(2)?,
+                        created_at: row.get(3)?,
+                        acknowledged_at: row.get(4)?,
+                        metadata_json: row.get(5)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(|error| classify_store_error(error, "failed to reload acknowledged task"))?;
+        raw.map(convert_task_row).transpose()
     }
-}
-
-pub(crate) fn load_tasks_for_message_tx(
-    transaction: &Transaction<'_>,
-    message_key: &MessageKey,
-) -> Result<Vec<TaskRecord>, StoreError> {
-    let mut statement = transaction
-        .prepare(
-            "SELECT task_id, message_key, status, created_at, acknowledged_at, metadata_json FROM tasks WHERE message_key = ?1 ORDER BY task_id",
-        )
-        .map_err(|error| classify_store_error(error, "failed to prepare task-by-message query"))?;
-    let rows = statement
-        .query_map([message_key.as_str()], |row| {
-            Ok(RawTaskRow {
-                task_id: row.get(0)?,
-                message_key: row.get(1)?,
-                status: row.get(2)?,
-                created_at: row.get(3)?,
-                acknowledged_at: row.get(4)?,
-                metadata_json: row.get(5)?,
-            })
-        })
-        .map_err(|error| classify_store_error(error, "failed to query task-by-message rows"))?;
-
-    let mut tasks = Vec::new();
-    for row in rows {
-        let raw = row.map_err(|error| classify_store_error(error, "failed to read task row"))?;
-        tasks.push(convert_task_row(raw)?);
-    }
-    Ok(tasks)
-}
-
-pub(crate) fn acknowledge_tasks_for_message_tx(
-    transaction: &Transaction<'_>,
-    message_key: &MessageKey,
-    acknowledged_at: IsoTimestamp,
-) -> Result<Vec<TaskId>, StoreError> {
-    let tasks = load_tasks_for_message_tx(transaction, message_key)?;
-    transaction
-        .execute(
-            "UPDATE tasks SET status = ?1, acknowledged_at = ?2 WHERE message_key = ?3",
-            (
-                TaskStatus::Acknowledged.as_str(),
-                acknowledged_at.to_string(),
-                message_key.as_str(),
-            ),
-        )
-        .map_err(|error| classify_store_error(error, "failed to persist task acknowledgement"))?;
-    Ok(tasks.into_iter().map(|task| task.task_id).collect())
 }
 
 pub(crate) fn upsert_task_row(
@@ -177,6 +151,44 @@ pub(crate) fn upsert_task_row(
     Ok(())
 }
 
+pub(crate) fn acknowledge_tasks_for_message_tx(
+    transaction: &Transaction<'_>,
+    message_key: &MessageKey,
+    acknowledged_at: IsoTimestamp,
+) -> Result<Vec<TaskId>, StoreError> {
+    let mut statement = transaction
+        .prepare("SELECT task_id FROM tasks WHERE message_key = ?1 ORDER BY task_id")
+        .map_err(|error| classify_store_error(error, "failed to prepare task lookup for ack"))?;
+    let rows = statement
+        .query_map([message_key.as_str()], |row| row.get::<_, String>(0))
+        .map_err(|error| classify_store_error(error, "failed to query tasks for ack"))?;
+
+    let mut task_ids = Vec::new();
+    for row in rows {
+        let raw_task_id =
+            row.map_err(|error| classify_store_error(error, "failed to read task id for ack"))?;
+        let task_id = parse_required(raw_task_id, "task_id")?;
+        task_ids.push(task_id);
+    }
+
+    if !task_ids.is_empty() {
+        transaction
+            .execute(
+                "UPDATE tasks SET status = ?1, acknowledged_at = ?2 WHERE message_key = ?3",
+                (
+                    TaskStatus::Acknowledged.as_str(),
+                    acknowledged_at.to_string(),
+                    message_key.as_str(),
+                ),
+            )
+            .map_err(|error| {
+                classify_store_error(error, "failed to acknowledge tasks for message")
+            })?;
+    }
+
+    Ok(task_ids)
+}
+
 fn convert_task_row(raw: RawTaskRow) -> Result<TaskRecord, StoreError> {
     Ok(TaskRecord {
         task_id: parse_required(raw.task_id, "task_id")?,
@@ -192,10 +204,6 @@ fn parse_task_status(value: String) -> Result<TaskStatus, StoreError> {
     match value.as_str() {
         "pending_ack" => Ok(TaskStatus::PendingAck),
         "acknowledged" => Ok(TaskStatus::Acknowledged),
-        _ => Err(
-            invalid_store_data("task_status", "unsupported task status").with_recovery(
-                "Repair the SQLite task row so `status` is one of: pending_ack, acknowledged.",
-            ),
-        ),
+        _ => Err(invalid_store_data("task_status", "unsupported task status")),
     }
 }

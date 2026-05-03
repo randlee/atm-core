@@ -19,7 +19,7 @@ pub struct CommandEvent {
     pub outcome: &'static str,
     pub team: TeamName,
     pub agent: AgentName,
-    pub sender: String,
+    pub sender: AgentName,
     pub message_id: Option<LegacyMessageId>,
     pub requires_ack: bool,
     pub dry_run: bool,
@@ -76,6 +76,12 @@ impl LogFieldKey {
 
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+impl std::fmt::Display for LogFieldKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
@@ -368,7 +374,7 @@ pub struct AtmLogQuery {
 pub struct AtmLogRecord {
     pub timestamp: IsoTimestamp,
     pub severity: LogLevelFilter,
-    pub service: String,
+    pub service: LogFieldKey,
     pub target: Option<String>,
     pub action: Option<String>,
     pub message: Option<String>,

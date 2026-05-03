@@ -28,9 +28,13 @@ pub struct TaskRecord {
     pub metadata_json: Option<String>,
 }
 
+pub mod sealed {
+    pub trait Sealed {}
+}
+
 /// Durable task-store boundary kept separate from `MailStore` so mail/task
 /// concerns do not collapse into a single god-interface.
-pub trait TaskStore: StoreBoundary {
+pub trait TaskStore: StoreBoundary + sealed::Sealed {
     fn upsert_task(&self, task: &TaskRecord) -> Result<TaskRecord, StoreError>;
 
     fn load_task(&self, task_id: &TaskId) -> Result<Option<TaskRecord>, StoreError>;
