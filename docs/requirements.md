@@ -90,11 +90,16 @@ Satisfied by:
 - intentionally undecomposed product requirement; this governs overall rewrite
   scope and is enforced across the workspace rather than by one crate-local ID
 
-- `REQ-P-RUNTIME-001` Production ATM commands must not auto-spawn the daemon.
+- `REQ-P-RUNTIME-001` Production ATM commands must connect to the daemon and
+  auto-start it when absent.
 
   Required behavior:
-  - the production CLI/runtime path connects to an already-running daemon
-  - if the daemon is unavailable, ATM must fail clearly with recovery guidance
+  - the production CLI/runtime path first attempts to connect to an
+    already-running daemon
+  - if the daemon is not running, the production CLI/runtime path auto-starts
+    it and retries once
+  - if daemon auto-start still fails, ATM must fail clearly with recovery
+    guidance
   - no production path may silently bypass the daemon by talking directly to
     SQLite or inbox files
 
@@ -136,7 +141,13 @@ Satisfied by:
   interface
 - CI monitoring
 - TUI and MCP features
-- daemon auto-spawn from CLI commands or tests
+- daemon spawning as the core correctness test strategy
+  - bounded daemon smoke tests for the auto-start path are permitted when
+    isolated from default test runs per
+    [Testing Constraints](docs/plan-phase-Q.md#testing-constraints)
+- manual daemon-start discipline as a product requirement
+  - production CLI auto-start when the daemon is absent is in scope under
+    `REQ-P-RUNTIME-001`
 - `atm status` in the initial rewrite
 - separate `atm tail` command in the initial rewrite
 - team lifecycle management outside the retained local recovery surface
@@ -210,7 +221,9 @@ Product requirement ID:
 Satisfied by:
 - `REQ-CORE-CONFIG-001` for home/path/config resolution aspects
 - `REQ-CORE-RUNTIME-001` for durable mail/roster store ownership aspects
-- `REQ-CORE-COMPAT-001` for Claude inbox compatibility-surface aspects
+- `REQ-CORE-INGEST-001` for Claude inbox/config ingest compatibility aspects
+- `REQ-CORE-MAILBOX-001` for persisted Claude inbox write/read compatibility
+  aspects
 - `REQ-ATM-OBS-001` for CLI observability bootstrap/integration aspects
 - `REQ-CORE-OBS-001` for ATM observability boundary/query-model aspects
 
@@ -601,6 +614,9 @@ Post-send-hook rules:
   - optional `task_id` when present
   - optional `recipient_pane_id` when ATM has an authoritative pane mapping for
     the recipient
+- Phase Q addition: `is_ack` is part of the retained hook payload contract for
+  the daemon-owned send/ack runtime path so hook implementations can
+  distinguish `atm send` from `atm ack` without inspecting message text
 - the post-send hook must run after successful non-`dry-run` `atm send`
 - the post-send hook must also run after successful `atm ack`, using the
   reply message as the hook subject
@@ -2448,8 +2464,16 @@ mail correctness.
 
   Required behavior:
   - live status is runtime-owned daemon state
-  - SQLite may store a diagnostic or last-observed snapshot only
+  - SQLite stores the current durable `pid` for each member as roster truth,
+    and daemon memory caches it as the primary liveness field
+  - daemon runtime state must include `last_active_at` for each known active
+    agent/member entry
+  - SQLite must not own live `last_active_at`; it remains daemon-memory-only
+    runtime state
   - roster truth and live-status truth must remain distinct
+  - `pid` is not a diagnostic snapshot or advisory hint; it is the durable
+    roster-owned process identity until replaced by the documented heartbeat or
+    admin-takeover path
 
 ### 21.2 Singleton Daemon Runtime
 
@@ -2477,13 +2501,17 @@ mail correctness.
   - the daemon must not become the only place where ATM mail semantics are
     implemented
 
-- `REQ-CORE-DAEMON-003` Production ATM commands must use an already-running
-  daemon and must fail clearly when it is unavailable.
+- `REQ-CORE-DAEMON-003` Production ATM commands must connect to the daemon and
+  auto-start it when absent.
 
   Required behavior:
-  - production CLI/runtime calls must not auto-spawn the daemon
-  - when the daemon is unavailable, ATM must fail with a clear recovery message
-    rather than silently falling back to direct SQLite or inbox-file access
+  - production CLI/runtime calls first attempt to connect to an already-running
+    daemon
+  - if the daemon is absent, the production CLI/runtime path auto-starts it
+    and retries once
+  - if the daemon remains unavailable after auto-start, ATM must fail with a
+    clear recovery message rather than silently falling back to direct SQLite
+    or inbox-file access
   - in-process test harnesses may bypass the daemon only inside explicit test
     wiring, not in the production path
 
@@ -2742,8 +2770,8 @@ mail correctness.
 
   Required behavior:
   - impossible to run two active ATM daemons on one host
-  - daemon unavailability fails clearly without auto-spawn or hidden direct I/O
-    fallback
+  - daemon unavailability after one auto-start attempt fails clearly with no
+    hidden direct I/O fallback
   - every subsystem performs external I/O only through its owning trait
     boundary
   - production error handling uses typed `Result`/error-enum boundaries instead

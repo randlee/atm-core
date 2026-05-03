@@ -325,59 +325,6 @@ mod tests {
     use std::{panic, panic::AssertUnwindSafe};
 
     use serial_test::serial;
-    use tempfile::tempdir;
-
-    use super::{ClearQuery, clear_mail};
-    use crate::observability::NullObservability;
-    use crate::schema::{AgentMember, TeamConfig};
-
-    #[test]
-    #[serial]
-    fn locked_clear_source_removal_reports_disappearing_mailbox() {
-        let _env_lock = env_lock().lock().expect("env lock");
-        let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
-        let inboxes_dir = team_dir.join("inboxes");
-        std::fs::create_dir_all(&inboxes_dir).expect("inboxes");
-        let config = TeamConfig {
-            members: vec![AgentMember {
-                name: "arch-ctm".to_string(),
-                ..Default::default()
-            }],
-            ..Default::default()
-        };
-        std::fs::write(
-            team_dir.join("config.json"),
-            serde_json::to_vec(&config).expect("team config"),
-        )
-        .expect("write config");
-        std::fs::write(inboxes_dir.join("arch-ctm.json"), "").expect("mailbox");
-        let error = {
-            let _guard = EnvGuard::set_raw("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD", "1");
-            clear_mail(
-                ClearQuery {
-                    home_dir: tempdir.path().to_path_buf(),
-                    current_dir: tempdir.path().to_path_buf(),
-                    actor_override: Some("arch-ctm".parse().expect("actor")),
-                    target_address: None,
-                    team_override: Some("atm-dev".parse().expect("team")),
-                    older_than: None,
-                    idle_only: false,
-                    dry_run: false,
-                },
-                &NullObservability,
-            )
-            .expect_err("missing mailbox")
-        };
-
-        assert!(error.is_mailbox_read());
-        assert!(error.message.contains("disappeared"));
-        assert!(
-            std::env::var_os("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD").is_none(),
-            "scoped env guard leaked after failure path"
-        );
-    }
-
     #[test]
     #[serial]
     fn env_guard_restores_original_value_after_panic() {

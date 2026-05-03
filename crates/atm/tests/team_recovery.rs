@@ -2,6 +2,7 @@ use std::fs;
 use std::process::Command;
 
 use atm_core::schema::MessageEnvelope;
+use atm_core::types::{AgentName, TeamName};
 use chrono::Utc;
 use serde_json::{Value, json};
 
@@ -979,11 +980,11 @@ impl Fixture {
             fs::create_dir_all(parent).expect("inbox dir");
         }
         let envelope = MessageEnvelope {
-            from: from.to_string(),
+            from: from.parse::<AgentName>().expect("agent"),
             text: text.to_string(),
             timestamp: atm_core::types::IsoTimestamp::from_datetime(Utc::now()),
             read: false,
-            source_team: Some("atm-dev".to_string()),
+            source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
             summary: None,
             message_id: None,
             pending_ack_at: None,

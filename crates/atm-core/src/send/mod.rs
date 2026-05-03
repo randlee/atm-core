@@ -214,20 +214,14 @@ pub fn send_mail(
         let mut extra = Map::new();
         workflow::set_atm_message_id(&mut extra, atm_message_id);
         if display_sender != canonical_sender.as_str() {
-            set_canonical_sender_metadata(
-                &mut extra,
-                &qualified_sender_identity(&canonical_sender, sender_team.as_deref()),
-            );
+            set_canonical_sender_metadata(&mut extra, &canonical_sender);
         }
         let envelope = MessageEnvelope {
-            from: display_sender.clone(),
+            from: display_sender.parse().expect("display sender is valid"),
             text: body.clone(),
             timestamp,
             read: false,
-            source_team: sender_team
-                .clone()
-                .map(|team| team.to_string())
-                .or_else(|| Some(recipient.team.to_string())),
+            source_team: sender_team.clone().or_else(|| Some(recipient.team.clone())),
             summary: Some(summary.clone()),
             message_id: Some(message_id),
             pending_ack_at: requires_ack.then_some(timestamp),
@@ -397,14 +391,16 @@ fn notify_team_lead_missing_config(
     );
 
     let notice = MessageEnvelope {
-        from: format!("atm-identity-missing@{team}"),
+        from: "atm-identity-missing"
+            .parse()
+            .expect("system sender is valid"),
         text: format!(
             "ATM warning: send used existing inbox fallback for {recipient}@{team} because team config is missing at {}. Please restore config.json.",
             config_path.display()
         ),
         timestamp,
         read: false,
-        source_team: Some(team.to_string()),
+        source_team: Some(team.parse().expect("team name")),
         summary: Some(format!(
             "ATM warning: missing team config fallback used for {recipient}@{team}"
         )),
@@ -488,7 +484,10 @@ pub(super) fn qualified_sender_identity(sender: &AgentName, sender_team: Option<
         .unwrap_or_else(|| sender.to_string())
 }
 
-fn set_canonical_sender_metadata(extra: &mut Map<String, serde_json::Value>, canonical_from: &str) {
+fn set_canonical_sender_metadata(
+    extra: &mut Map<String, serde_json::Value>,
+    canonical_from: &AgentName,
+) {
     let metadata = extra
         .entry("metadata".to_string())
         .or_insert_with(|| serde_json::Value::Object(Map::new()));
@@ -509,7 +508,7 @@ fn set_canonical_sender_metadata(extra: &mut Map<String, serde_json::Value>, can
     };
     atm.insert(
         "fromIdentity".to_string(),
-        serde_json::Value::String(canonical_from.to_string()),
+        serde_json::to_value(canonical_from).expect("AgentName serializes"),
     );
 }
 

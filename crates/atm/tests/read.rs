@@ -5,9 +5,23 @@ use atm_core::schema::{
     AgentMember, AtmMessageId, AtmMetadataFields, ForwardMetadataEnvelope, LegacyMessageId,
     MessageEnvelope, MessageMetadata, TeamConfig,
 };
-use atm_core::types::IsoTimestamp;
+use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use chrono::{TimeZone, Utc};
 use serde_json::Value;
+
+fn parse_inbox_values(raw: &str) -> Vec<Value> {
+    if raw.trim().is_empty() {
+        return Vec::new();
+    }
+
+    match raw.chars().find(|ch| !ch.is_whitespace()) {
+        Some('[') => serde_json::from_str(raw).expect("json array"),
+        _ => raw
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("json line"))
+            .collect(),
+    }
+}
 
 #[test]
 fn test_read_own_inbox_default() {
@@ -750,12 +764,13 @@ fn test_forward_metadata_message_id_timestamp_matches_persisted_timestamp() {
             atm: Some(AtmMetadataFields {
                 message_id: Some(message_id),
                 source_team: Some("atm-dev".parse().expect("team")),
+                from_identity: None,
                 pending_ack_at: None,
                 acknowledged_at: None,
                 acknowledges_message_id: None,
                 task_id: None,
                 alert_kind: None,
-                missing_config_path: None,
+                missing_config_path: None::<std::path::PathBuf>,
                 extra: serde_json::Map::new(),
             }),
             extra: serde_json::Map::new(),
@@ -860,10 +875,7 @@ impl Fixture {
         let config = TeamConfig {
             members: members
                 .iter()
-                .map(|member| AgentMember {
-                    name: (*member).to_string(),
-                    ..Default::default()
-                })
+                .map(|member| AgentMember::with_name((*member).parse().expect("agent")))
                 .collect(),
             ..Default::default()
         };
@@ -879,12 +891,15 @@ impl Fixture {
         if let Some(parent) = inbox_path.parent() {
             fs::create_dir_all(parent).expect("inbox dir");
         }
-        let raw = messages
+        let values: Vec<Value> = messages
             .iter()
-            .map(|message| serde_json::to_string(message).expect("json line"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        fs::write(inbox_path, format!("{raw}\n")).expect("write inbox");
+            .map(|message| serde_json::to_value(message).expect("json value"))
+            .collect();
+        fs::write(
+            inbox_path,
+            serde_json::to_string_pretty(&values).expect("json array"),
+        )
+        .expect("write inbox");
     }
 
     fn write_raw_inbox(&self, agent: &str, raw: &str) {
@@ -908,12 +923,15 @@ impl Fixture {
         if let Some(parent) = inbox_path.parent() {
             fs::create_dir_all(parent).expect("origin inbox dir");
         }
-        let raw = messages
+        let values: Vec<Value> = messages
             .iter()
-            .map(|message| serde_json::to_string(message).expect("json line"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        fs::write(inbox_path, format!("{raw}\n")).expect("write origin inbox");
+            .map(|message| serde_json::to_value(message).expect("json value"))
+            .collect();
+        fs::write(
+            inbox_path,
+            serde_json::to_string_pretty(&values).expect("json array"),
+        )
+        .expect("write origin inbox");
     }
 
     fn read_seen_state(&self, agent: &str) -> Option<chrono::DateTime<Utc>> {
@@ -938,8 +956,9 @@ impl Fixture {
 
     fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {
         let raw = fs::read_to_string(self.inbox_path(agent)).expect("inbox contents");
-        raw.lines()
-            .map(|line| serde_json::from_str(line).expect("json line"))
+        parse_inbox_values(&raw)
+            .into_iter()
+            .map(|value| serde_json::from_value(value).expect("message envelope"))
             .collect()
     }
 
@@ -986,11 +1005,11 @@ impl Fixture {
         timestamp_offset: i64,
     ) -> MessageEnvelope {
         MessageEnvelope {
-            from: from.to_string(),
+            from: from.parse::<AgentName>().expect("agent"),
             text: text.to_string(),
             timestamp: IsoTimestamp::from_datetime(self.timestamp(timestamp_offset)),
             read,
-            source_team: Some("atm-dev".into()),
+            source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
             summary: None,
             message_id: Some(LegacyMessageId::new()),
             pending_ack_at: pending_ack_offset

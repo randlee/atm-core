@@ -42,8 +42,11 @@ pub(super) fn restore_team(request: RestoreRequest) -> Result<RestoreResult, Atm
         if name == "team-lead.json" {
             return false;
         }
-        name.strip_suffix(".json")
-            .is_some_and(|member| members_to_restore_set.contains(member))
+        name.strip_suffix(".json").is_some_and(|member| {
+            members_to_restore_set
+                .iter()
+                .any(|restored_member| restored_member == &member)
+        })
     });
     let tasks_to_restore = count_numeric_task_files(&backup_dir.join("tasks"))?;
 
@@ -599,11 +602,11 @@ mod tests {
 
     fn write_inbox(path: &Path, text: &str) {
         let envelope = crate::schema::MessageEnvelope {
-            from: "team-lead".to_string(),
+            from: "team-lead".parse().expect("agent"),
             text: text.to_string(),
             timestamp: crate::types::IsoTimestamp::from_datetime(Utc::now()),
             read: false,
-            source_team: Some("atm-dev".to_string()),
+            source_team: Some("atm-dev".parse().expect("team")),
             summary: None,
             message_id: None,
             pending_ack_at: None,
