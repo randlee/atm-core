@@ -126,7 +126,6 @@ impl fmt::Display for AtmMessageId {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
 /// ATM-owned semantic discriminator for alert-class metadata.
 pub enum AlertKind {
     MissingTeamConfig,

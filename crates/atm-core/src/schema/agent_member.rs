@@ -7,7 +7,6 @@ use tracing::warn;
 use crate::types::AgentName;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
 pub enum AgentType {
     GeneralPurpose,
     Plan,
@@ -84,11 +83,14 @@ impl fmt::Display for AgentType {
 pub struct AgentMember {
     pub name: AgentName,
 
-    /// Retained external compatibility field for the full runtime-scoped agent
-    /// identifier (for example `arch-ctm@atm-dev`).
+    /// Compound `agent@team` address as supplied by the external Claude Code
+    /// agent-team API. Opaque passthrough — format is owned externally and not
+    /// validated as an ATM path segment.
     #[serde(default)]
     pub agent_id: String,
 
+    /// Agent type as deserialized from Claude Code agent-team config. ATM
+    /// reads but does not write config.json — no round-trip concern.
     #[serde(default)]
     pub agent_type: AgentType,
 
@@ -103,6 +105,8 @@ pub struct AgentMember {
     #[serde(default)]
     pub tmux_pane_id: String,
 
+    /// Working directory path for the agent process. Opaque passthrough from
+    /// external tmux session state.
     #[serde(default)]
     pub cwd: String,
 
