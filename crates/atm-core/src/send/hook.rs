@@ -500,9 +500,9 @@ mod tests {
         hook_result_log_level, parse_post_send_hook_result,
     };
     use crate::config::types::HookRecipient;
+    use crate::test_support::ROLE_TEAM_LEAD;
 
     const TEST_SENDER: &str = "test-sender";
-    const ROLE_TEAM_LEAD: &str = "team-lead";
 
     #[test]
     fn hook_matches_recipient_exact_and_wildcard_values() {
