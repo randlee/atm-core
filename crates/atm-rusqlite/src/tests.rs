@@ -544,6 +544,7 @@ fn store_errors_stay_discriminated() {
         "busy",
     );
     assert_eq!(busy.kind, StoreErrorKind::Busy);
+    assert_eq!(busy.code, atm_core::error_codes::AtmErrorCode::StoreBusy);
 
     let constraint = crate::classify_store_error(
         rusqlite::Error::SqliteFailure(
@@ -556,9 +557,14 @@ fn store_errors_stay_discriminated() {
         "constraint",
     );
     assert_eq!(constraint.kind, StoreErrorKind::Constraint);
+    assert_eq!(
+        constraint.code,
+        atm_core::error_codes::AtmErrorCode::StoreConstraintViolation
+    );
 
     let query = crate::classify_store_error(rusqlite::Error::InvalidQuery, "query");
     assert_eq!(query.kind, StoreErrorKind::Query);
+    assert_eq!(query.code, atm_core::error_codes::AtmErrorCode::StoreQueryFailed);
 
     let bootstrap_dir = TempDir::new().expect("tempdir");
     let bootstrap_path = bootstrap_dir.path().join("bootstrap-readonly.db");
