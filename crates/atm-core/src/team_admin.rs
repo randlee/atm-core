@@ -28,7 +28,7 @@ pub struct TeamSummary {
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct TeamsList {
     pub action: String,
-    pub team: TeamName,
+    pub team: Option<TeamName>,
     pub teams: Vec<TeamSummary>,
 }
 
@@ -190,7 +190,7 @@ pub enum RestoreResult {
 /// cannot be enumerated.
 pub fn list_teams(home_dir: PathBuf, current_dir: PathBuf) -> Result<TeamsList, AtmError> {
     let config = load_config(&current_dir)?;
-    let current_team = resolve_team(None, config.as_ref()).unwrap_or_default();
+    let current_team = resolve_team(None, config.as_ref());
     let teams_root = teams_root_from_home(&home_dir);
     if !teams_root.exists() {
         return Ok(TeamsList {
@@ -320,12 +320,12 @@ pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmErro
 
     config.members.push(AgentMember {
         name: request.member.clone(),
-        agent_id: format!("{}@{}", request.member, request.team),
-        agent_type: request.agent_type.into(),
-        model: request.model,
+        agent_id: Some(format!("{}@{}", request.member, request.team)),
+        agent_type: Some(request.agent_type.into()),
+        model: Some(request.model),
         joined_at: Some(Utc::now().timestamp_millis() as u64),
-        tmux_pane_id: normalized_tmux_pane_id.unwrap_or_default(),
-        cwd: request.cwd.display().to_string(),
+        tmux_pane_id: normalized_tmux_pane_id,
+        cwd: Some(request.cwd.display().to_string()),
         extra,
     });
 
@@ -418,12 +418,16 @@ pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> 
 fn member_summary(member: &AgentMember) -> MemberSummary {
     MemberSummary {
         name: AgentName::from_validated(member.name.clone()),
-        agent_id: member.agent_id.clone(),
-        agent_type: member.agent_type.to_string(),
-        model: member.model.clone(),
+        agent_id: member.agent_id.clone().unwrap_or_default(),
+        agent_type: member
+            .agent_type
+            .as_ref()
+            .map(ToString::to_string)
+            .unwrap_or_default(),
+        model: member.model.clone().unwrap_or_default(),
         joined_at: member.joined_at,
-        tmux_pane_id: member.tmux_pane_id.clone(),
-        cwd: member.cwd.clone(),
+        tmux_pane_id: member.tmux_pane_id.clone().unwrap_or_default(),
+        cwd: member.cwd.clone().unwrap_or_default(),
         extra: member.extra.clone(),
     }
 }
@@ -706,7 +710,7 @@ mod tests {
             .find(|member| member.name == "arch-ctm")
             .expect("member");
 
-        assert_eq!(member.tmux_pane_id, "%7");
+        assert_eq!(member.tmux_pane_id.as_deref(), Some("%7"));
         assert_eq!(member.extra["backendType"], serde_json::json!("tmux"));
         assert_eq!(member.extra["isActive"], serde_json::json!(true));
     }

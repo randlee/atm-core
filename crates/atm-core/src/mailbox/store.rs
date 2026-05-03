@@ -10,6 +10,7 @@ use crate::mailbox::source::{
     SourceFile, discover_source_paths, load_source_files, rediscover_and_validate_source_paths,
 };
 use crate::schema::MessageEnvelope;
+use crate::types::{AgentName, TeamName};
 
 /// Commit one mailbox file through the mailbox-layer write boundary.
 ///
@@ -34,10 +35,10 @@ pub(crate) fn commit_source_files(source_files: &[SourceFile]) -> Result<(), Atm
 /// Load the current mailbox source set without taking any mailbox locks.
 pub(crate) fn observe_source_files(
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
 ) -> Result<Vec<SourceFile>, AtmError> {
-    let source_paths = discover_source_paths(home_dir, team, agent)?;
+    let source_paths = discover_source_paths(home_dir, team.as_str(), agent.as_str())?;
     load_source_files(&source_paths)
 }
 
@@ -45,8 +46,8 @@ pub(crate) fn observe_source_files(
 /// without forcing the caller into an inbox rewrite.
 pub(crate) fn with_locked_source_files<T, I, F>(
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
     extra_write_paths: I,
     timeout: Duration,
     body: F,
@@ -68,8 +69,8 @@ where
 
 fn with_locked_source_files_hook<T, I, H, F>(
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
     extra_write_paths: I,
     timeout: Duration,
     before_load: H,
@@ -80,11 +81,16 @@ where
     H: FnOnce(&[PathBuf]) -> Result<(), AtmError>,
     F: FnOnce(&[PathBuf], &mut Vec<SourceFile>) -> Result<T, AtmError>,
 {
-    let source_paths = discover_source_paths(home_dir, team, agent)?;
+    let source_paths = discover_source_paths(home_dir, team.as_str(), agent.as_str())?;
     let mut write_paths = source_paths.clone();
     write_paths.extend(extra_write_paths);
     let _locks = lock::acquire_many_sorted(write_paths, timeout)?;
-    let source_paths = rediscover_and_validate_source_paths(&source_paths, home_dir, team, agent)?;
+    let source_paths = rediscover_and_validate_source_paths(
+        &source_paths,
+        home_dir,
+        team.as_str(),
+        agent.as_str(),
+    )?;
     before_load(&source_paths)?;
     let mut source_files = load_source_files(&source_paths)?;
     body(&source_paths, &mut source_files)
@@ -97,11 +103,32 @@ mod tests {
     use super::{commit_mailbox_state, commit_source_files, with_locked_source_files_hook};
     use crate::mailbox::read_messages;
     use crate::mailbox::source::SourceFile;
-    use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
+    use crate::schema::{LegacyMessageId, MessageEnvelope};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
+    fn assert_round_trip_matches(actual: &[MessageEnvelope], expected: &[MessageEnvelope]) {
+        assert_eq!(actual.len(), expected.len());
+        for (actual, expected) in actual.iter().zip(expected) {
+            assert_eq!(actual.from, expected.from);
+            assert_eq!(actual.text, expected.text);
+            assert_eq!(actual.timestamp, expected.timestamp);
+            assert_eq!(actual.read, expected.read);
+            assert_eq!(actual.source_team, expected.source_team);
+            assert_eq!(actual.summary, expected.summary);
+            assert_eq!(actual.message_id, expected.message_id);
+            assert_eq!(actual.pending_ack_at, expected.pending_ack_at);
+            assert_eq!(actual.acknowledged_at, expected.acknowledged_at);
+            assert_eq!(
+                actual.acknowledges_message_id,
+                expected.acknowledges_message_id
+            );
+            assert_eq!(actual.task_id, expected.task_id);
+            assert!(actual.atm_message_id().is_some());
+        }
+    }
+
     #[test]
-    fn commit_mailbox_state_rewrites_mailbox_array_with_only_new_messages() {
+    fn commit_mailbox_state_is_the_canonical_mailbox_write_boundary() {
         let tempdir = tempdir().expect("tempdir");
         let path = tempdir.path().join("arch-ctm.json");
         std::fs::write(&path, "{\"stale\":true}\n").expect("seed mailbox");
@@ -117,7 +144,8 @@ mod tests {
         let encoded: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
         assert_eq!(encoded.len(), 2);
         assert!(raw.ends_with('\n'));
-        assert_eq!(read_messages(&path).expect("read mailbox"), messages);
+        let actual = read_messages(&path).expect("read mailbox");
+        assert_round_trip_matches(&actual, &messages);
     }
 
     #[test]
@@ -143,14 +171,10 @@ mod tests {
         ])
         .expect("commit source files");
 
-        assert_eq!(
-            read_messages(&left_path).expect("left inbox"),
-            left_messages
-        );
-        assert_eq!(
-            read_messages(&right_path).expect("right inbox"),
-            right_messages
-        );
+        let actual_left = read_messages(&left_path).expect("left inbox");
+        assert_round_trip_matches(&actual_left, &left_messages);
+        let actual_right = read_messages(&right_path).expect("right inbox");
+        assert_round_trip_matches(&actual_right, &right_messages);
     }
 
     #[test]
@@ -200,8 +224,8 @@ mod tests {
 
         let error = with_locked_source_files_hook(
             tempdir.path(),
-            "atm-dev",
-            "arch-ctm",
+            &"atm-dev".parse().expect("team"),
+            &"arch-ctm".parse().expect("agent"),
             std::iter::empty::<std::path::PathBuf>(),
             std::time::Duration::from_secs(1),
             |paths| {
@@ -223,22 +247,6 @@ mod tests {
     }
 
     fn sample_message(from: &str, text: &str) -> MessageEnvelope {
-        let atm_message_id = AtmMessageId::new();
-        let message_id = LegacyMessageId::from_atm_message_id(atm_message_id);
-        let mut extra = serde_json::Map::new();
-        let mut metadata = serde_json::Map::new();
-        let mut atm = serde_json::Map::new();
-        atm.insert(
-            "messageId".to_string(),
-            serde_json::Value::String(atm_message_id.to_string()),
-        );
-        atm.insert(
-            "sourceTeam".to_string(),
-            serde_json::Value::String("atm-dev".to_string()),
-        );
-        metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
-        extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
-
         MessageEnvelope {
             from: from.parse::<AgentName>().expect("agent name"),
             text: text.to_string(),
@@ -246,12 +254,12 @@ mod tests {
             read: false,
             source_team: Some("atm-dev".parse::<TeamName>().expect("team name")),
             summary: None,
-            message_id: Some(message_id),
+            message_id: Some(LegacyMessageId::new()),
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
             task_id: None,
-            extra,
+            extra: serde_json::Map::new(),
         }
     }
 }

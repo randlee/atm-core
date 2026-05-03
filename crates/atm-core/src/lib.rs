@@ -20,6 +20,7 @@ pub(crate) mod identity;
 pub mod log;
 /// Internal mailbox persistence and parsing helpers.
 pub(crate) mod mailbox;
+pub use mailbox::{read_messages, write_messages};
 /// Internal model-registry plumbing reserved for follow-on work.
 pub(crate) mod model_registry;
 /// Observability adapter traits and event payload types.

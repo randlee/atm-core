@@ -1,25 +1,11 @@
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+mod helpers;
 
-use atm_core::schema::{
-    AgentMember, MessageEnvelope, TeamConfig, hydrate_legacy_fields_from_metadata,
-};
+use atm_core::schema::{AgentMember, MessageEnvelope, TeamConfig};
+use atm_core::{read_messages, write_messages};
 use serde_json::Value;
-
-fn parse_inbox_values(raw: &str) -> Vec<Value> {
-    if raw.trim().is_empty() {
-        return Vec::new();
-    }
-
-    match raw.chars().find(|ch| !ch.is_whitespace()) {
-        Some('[') => serde_json::from_str(raw).expect("json array"),
-        _ => raw
-            .lines()
-            .map(|line| serde_json::from_str(line).expect("json line"))
-            .collect(),
-    }
-}
 
 #[test]
 fn test_send_creates_inbox_file() {
@@ -353,10 +339,21 @@ fn test_send_missing_config_deduplicates_team_lead_notice_under_concurrency() {
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
     fixture.write_inbox("recipient", &[]);
     fixture.write_inbox("team-lead", &[]);
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(3));
+    let fixture = &fixture;
 
     let (first, second) = std::thread::scope(|scope| {
-        let first = scope.spawn(|| fixture.run(&["send", "recipient@atm-dev", "first"]));
-        let second = scope.spawn(|| fixture.run(&["send", "recipient@atm-dev", "second"]));
+        let first_barrier = barrier.clone();
+        let first = scope.spawn(move || {
+            first_barrier.wait();
+            fixture.run(&["send", "recipient@atm-dev", "first"])
+        });
+        let second_barrier = barrier.clone();
+        let second = scope.spawn(move || {
+            second_barrier.wait();
+            fixture.run(&["send", "recipient@atm-dev", "second"])
+        });
+        barrier.wait();
         (
             first.join().expect("first send"),
             second.join().expect("second send"),
@@ -1030,12 +1027,7 @@ impl Fixture {
         if let Some(parent) = inbox_path.parent() {
             fs::create_dir_all(parent).expect("inbox dir");
         }
-        let values: Vec<Value> = messages
-            .iter()
-            .map(|message| serde_json::to_value(message).expect("json value"))
-            .collect();
-        let raw = serde_json::to_string_pretty(&values).expect("json array");
-        fs::write(inbox_path, raw).expect("write inbox");
+        write_messages(&inbox_path, messages).expect("write inbox");
     }
 
     fn inbox_contents(&self, recipient: &str) -> Vec<MessageEnvelope> {
@@ -1048,20 +1040,13 @@ impl Fixture {
 
     fn inbox_contents_in_team(&self, team: &str, recipient: &str) -> Vec<MessageEnvelope> {
         let inbox_path = self.inbox_path_in_team(team, recipient);
-        let raw = fs::read_to_string(&inbox_path).expect("inbox contents");
-        parse_inbox_values(&raw)
-            .into_iter()
-            .map(|mut value| {
-                hydrate_legacy_fields_from_metadata(&mut value);
-                serde_json::from_value(value).expect("message envelope")
-            })
-            .collect()
+        read_messages(&inbox_path).expect("inbox contents")
     }
 
     fn inbox_json_lines_in_team(&self, team: &str, recipient: &str) -> Vec<Value> {
         let inbox_path = self.inbox_path_in_team(team, recipient);
         let raw = fs::read_to_string(&inbox_path).expect("inbox contents");
-        parse_inbox_values(&raw)
+        helpers::parse_inbox_values(&raw)
     }
 
     fn team_dir(&self) -> std::path::PathBuf {
