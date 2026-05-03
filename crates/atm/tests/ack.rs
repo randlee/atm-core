@@ -2,13 +2,15 @@ use std::fs;
 use std::process::Command;
 mod helpers;
 
+use atm_core::inbox_ingress::ingest_mailbox_state;
 use atm_core::mail_store::MailStore;
+use atm_core::observability::NullObservability;
 use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
 use atm_core::task_store::TaskStore;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_core::{read_messages, write_messages};
 use atm_rusqlite::RusqliteStore;
-use chrono::{Duration, Utc};
+use chrono::{Duration, TimeZone, Utc};
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -227,10 +229,10 @@ fn test_ack_runs_post_send_hook_with_expected_payload() {
     fixture.write_inbox("arch-ctm", &[message]);
 
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
+    let hook_path_toml = toml_single_quoted_path(&hook_path);
+    let payload_path_toml = toml_single_quoted_path(&payload_path);
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'team-lead'\ncommand = ['{}', 'capture', '{}']\n",
-        hook_path.display(),
-        payload_path.display()
+        "[[atm.post_send_hooks]]\nrecipient = 'team-lead'\ncommand = [{hook_path_toml}, 'capture', {payload_path_toml}]\n",
     ));
 
     let output = fixture.run(&[
@@ -272,10 +274,10 @@ fn test_ack_post_send_hook_failure_surfaces_warning() {
     );
 
     let (hook_path, payload_path) = fixture.install_hook_fixture("fail");
+    let hook_path_toml = toml_single_quoted_path(&hook_path);
+    let payload_path_toml = toml_single_quoted_path(&payload_path);
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'team-lead'\ncommand = ['{}', 'fail', '{}']\n",
-        hook_path.display(),
-        payload_path.display()
+        "[[atm.post_send_hooks]]\nrecipient = 'team-lead'\ncommand = [{hook_path_toml}, 'fail', {payload_path_toml}]\n",
     ));
 
     let output = fixture.run(&["ack", &message_id.to_string(), "received and starting"]);
@@ -425,6 +427,51 @@ fn test_ack_accepts_ulid_message_id_for_message_written_by_atm_send() {
     assert_eq!(replies[0].text, "received and starting");
 }
 
+#[test]
+fn test_ack_accepts_legacy_uuid_only_message_after_store_ingest() {
+    let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
+    let message_id = Uuid::new_v4();
+    fixture.write_inbox(
+        "arch-ctm",
+        &[fixture.message(
+            "team-lead",
+            "legacy pending",
+            true,
+            Some(Duration::minutes(5)),
+            None,
+            message_id,
+        )],
+    );
+
+    let store = fixture.store();
+    let observability = NullObservability;
+    let team = "atm-dev".parse().expect("team");
+    let actor = "arch-ctm".parse().expect("agent");
+    let ingest = ingest_mailbox_state(
+        fixture.tempdir.path(),
+        &team,
+        &actor,
+        &store,
+        &observability,
+    )
+    .expect("ingest legacy inbox");
+    assert_eq!(ingest.imported_messages, 1);
+
+    let output = fixture.run(&["ack", &message_id.to_string(), "legacy ack", "--json"]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["message_id"], message_id.to_string());
+
+    let replies = fixture.inbox_contents("team-lead");
+    assert_eq!(replies.len(), 1);
+    assert_eq!(replies[0].text, "legacy ack");
+}
+
 struct Fixture {
     tempdir: tempfile::TempDir,
 }
@@ -571,7 +618,7 @@ impl Fixture {
         acknowledged_offset: Option<Duration>,
         message_id: Uuid,
     ) -> MessageEnvelope {
-        let timestamp = Utc::now() - Duration::minutes(30);
+        let timestamp = fixture_base_timestamp();
         MessageEnvelope {
             from: from.parse::<AgentName>().expect("agent"),
             text: text.to_string(),
@@ -589,4 +636,14 @@ impl Fixture {
             extra: serde_json::Map::new(),
         }
     }
+}
+
+fn fixture_base_timestamp() -> chrono::DateTime<Utc> {
+    Utc.with_ymd_and_hms(2026, 5, 2, 20, 0, 0)
+        .single()
+        .expect("fixture timestamp")
+}
+
+fn toml_single_quoted_path(path: &std::path::Path) -> String {
+    format!("'{}'", path.display().to_string().replace('\'', "''"))
 }

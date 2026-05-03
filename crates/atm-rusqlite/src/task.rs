@@ -192,6 +192,10 @@ fn parse_task_status(value: String) -> Result<TaskStatus, StoreError> {
     match value.as_str() {
         "pending_ack" => Ok(TaskStatus::PendingAck),
         "acknowledged" => Ok(TaskStatus::Acknowledged),
-        _ => Err(invalid_store_data("task_status", "unsupported task status")),
+        _ => Err(
+            invalid_store_data("task_status", "unsupported task status").with_recovery(
+                "Repair the SQLite task row so `status` is one of: pending_ack, acknowledged.",
+            ),
+        ),
     }
 }

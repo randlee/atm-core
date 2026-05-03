@@ -840,6 +840,9 @@ Public entrypoint:
 - optional task id from the acknowledged message
 - reply target
 - reply message id
+  `AckOutcome.reply_message_id` remains `LegacyMessageId` for CLI/output
+  compatibility even though SQLite and `metadata.atm.messageId` carry the
+  canonical `AtmMessageId`
 - reply text
 - warnings: Vec<String>
 - Phase Q addition: `warnings` carries best-effort post-send-hook diagnostics

@@ -61,7 +61,8 @@ impl Serialize for AckMessageId {
 
 #[derive(Debug, Clone)]
 pub struct AckCommitCommand<'a> {
-    pub source_message_key: &'a MessageKey,
+    pub source_legacy_message_id: Option<LegacyMessageId>,
+    pub source_atm_message_id: Option<AtmMessageId>,
     pub reply_message: &'a StoredMessageRecord,
     pub acknowledged_at: IsoTimestamp,
     pub reply_team: &'a TeamName,
@@ -75,6 +76,7 @@ pub struct AckCommitOutcome {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AckCommitRejection {
+    MessageNotFound,
     AlreadyAcknowledged,
     NotPending,
 }
@@ -217,20 +219,7 @@ where
                 "Refresh the mailbox with `atm read` and retry after ATM reconstructs the legacy acknowledgement bridge from metadata.atm.messageId.",
             )
         })?;
-    let stored_message = load_stored_message_for_request(store, request.message_id)?
-        .ok_or_else(|| {
-            AtmError::new_with_code(
-                AtmErrorCode::AckInvalidState,
-                AtmErrorKind::Validation,
-                format!(
-                    "message {} was not imported into SQLite acknowledgement state",
-                    request.message_id
-                ),
-            )
-            .with_recovery(
-                "Refresh the mailbox with `atm read` and retry the acknowledgement after ATM imports the message into SQLite.",
-            )
-        })?;
+    let (source_legacy_candidate, source_atm_candidate) = ack_lookup_candidates(request.message_id);
 
     let (reply_agent, reply_team) = resolve_reply_target(&source_message.envelope, &team)?;
     let reply_team_dir = home::team_dir_from_home(&request.home_dir, &reply_team)?;
@@ -277,7 +266,8 @@ where
     )?;
     let commit_outcome = match store
         .commit_ack_reply(&AckCommitCommand {
-            source_message_key: &stored_message.message_key,
+            source_legacy_message_id: source_legacy_candidate,
+            source_atm_message_id: source_atm_candidate,
             reply_message: &reply_stored_message,
             acknowledged_at: ack_timestamp,
             reply_team: &reply_team,
@@ -411,6 +401,7 @@ where
                 requires_ack: false,
                 is_ack: true,
                 task_id: outcome.task_id.as_ref(),
+                // Q.4 owns roster-backed recipient_pane_id plumbing for ack hooks.
                 recipient_pane_id: None,
             },
         );
@@ -506,8 +497,8 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
 fn find_source_message(
     source_files: &[SourceFile],
     message_id: AckMessageId,
-    actor: &str,
-    team: &str,
+    actor: &AgentName,
+    team: &TeamName,
 ) -> Result<SourcedMessage, AtmError> {
     dedupe_legacy_message_id_surface(
         merged_surface(source_files),
@@ -538,6 +529,18 @@ fn find_source_message(
     })
 }
 
+fn ack_lookup_candidates(
+    message_id: AckMessageId,
+) -> (Option<LegacyMessageId>, Option<AtmMessageId>) {
+    match message_id {
+        AckMessageId::Legacy(legacy_id) => (Some(legacy_id), Some(legacy_id.into_atm_message_id())),
+        AckMessageId::Atm(atm_id) => (
+            Some(LegacyMessageId::from_atm_message_id(atm_id)),
+            Some(atm_id),
+        ),
+    }
+}
+
 fn source_message_legacy_message_id(message: &MessageEnvelope) -> Option<LegacyMessageId> {
     message.message_id.or_else(|| {
         message
@@ -563,45 +566,6 @@ fn message_matches_request_id(message: &MessageEnvelope, request_id: AckMessageI
             message.message_id.is_some_and(|candidate| {
                 candidate == LegacyMessageId::from_atm_message_id(message_id)
             })
-        }
-    }
-}
-
-fn load_stored_message_for_request<S>(
-    store: &S,
-    message_id: AckMessageId,
-) -> Result<Option<StoredMessageRecord>, AtmError>
-where
-    S: MailStore,
-{
-    match message_id {
-        AckMessageId::Legacy(legacy_id) => {
-            let stored = store
-                .load_message_by_legacy_id(&legacy_id)
-                .map_err(|error| {
-                    map_store_error("failed to load acknowledged message from store", error)
-                })?;
-            if stored.is_some() {
-                return Ok(stored);
-            }
-            store
-                .load_message_by_atm_id(&legacy_id.into_atm_message_id())
-                .map_err(|error| {
-                    map_store_error("failed to load acknowledged message from store", error)
-                })
-        }
-        AckMessageId::Atm(atm_id) => {
-            let stored = store.load_message_by_atm_id(&atm_id).map_err(|error| {
-                map_store_error("failed to load acknowledged message from store", error)
-            })?;
-            if stored.is_some() {
-                return Ok(stored);
-            }
-            store
-                .load_message_by_legacy_id(&LegacyMessageId::from_atm_message_id(atm_id))
-                .map_err(|error| {
-                    map_store_error("failed to load acknowledged message from store", error)
-                })
         }
     }
 }
@@ -661,6 +625,16 @@ fn duplicate_ack_reply_error(identity: StoreDuplicateIdentity) -> AtmError {
 
 fn ack_invalid_state_error(message_id: AckMessageId, rejection: AckCommitRejection) -> AtmError {
     match rejection {
+        AckCommitRejection::MessageNotFound => AtmError::new_with_code(
+            AtmErrorCode::AckInvalidState,
+            AtmErrorKind::Validation,
+            format!(
+                "message {message_id} disappeared from SQLite acknowledgement state before the acknowledgement commit"
+            ),
+        )
+        .with_recovery(
+            "Refresh the mailbox with `atm read` and retry the acknowledgement after ATM reimports the message into SQLite.",
+        ),
         AckCommitRejection::AlreadyAcknowledged => AtmError::new_with_code(
             AtmErrorCode::AckInvalidState,
             AtmErrorKind::Validation,

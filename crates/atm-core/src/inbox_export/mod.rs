@@ -30,6 +30,7 @@ pub fn export_message(
     // Transitional compatibility path pending Q.5 lock retirement: export still
     // rewrites the Claude inbox under workflow/mailbox locks so live sessions
     // continue receiving JSON-array projections while SQLite remains the SSOT.
+    // Q.5 owns retirement of these compatibility-only mailbox lock artifacts.
     let result = workflow::commit_workflow_state(
         home_dir,
         team,

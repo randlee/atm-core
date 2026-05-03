@@ -850,7 +850,8 @@ fn commit_ack_reply_rejects_already_acknowledged_message_with_typed_result() {
     let reply = reply_message_at(2);
     let result = store
         .commit_ack_reply(&AckCommitCommand {
-            source_message_key: &source.message_key,
+            source_legacy_message_id: source.legacy_message_id,
+            source_atm_message_id: source.atm_message_id,
             reply_message: &reply,
             acknowledged_at: "2026-05-02T20:00:40Z".parse().expect("timestamp"),
             reply_team: &team(),
@@ -861,5 +862,37 @@ fn commit_ack_reply_rejects_already_acknowledged_message_with_typed_result() {
     assert!(matches!(
         result,
         AckCommitResult::Rejected(AckCommitRejection::AlreadyAcknowledged)
+    ));
+}
+
+#[test]
+fn commit_ack_reply_rejects_non_pending_message_with_typed_result() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let store = RusqliteStore::open_path(tempdir.path().join("mail.db")).expect("open store");
+    let source = message_at(1);
+    store.insert_message(&source).expect("insert source");
+    store
+        .upsert_visibility(&VisibilityStateRecord {
+            message_key: source.message_key.clone(),
+            read_at: Some("2026-05-02T20:00:30Z".parse().expect("timestamp")),
+            cleared_at: None,
+        })
+        .expect("upsert visibility");
+
+    let reply = reply_message_at(2);
+    let result = store
+        .commit_ack_reply(&AckCommitCommand {
+            source_legacy_message_id: source.legacy_message_id,
+            source_atm_message_id: source.atm_message_id,
+            reply_message: &reply,
+            acknowledged_at: "2026-05-02T20:00:40Z".parse().expect("timestamp"),
+            reply_team: &team(),
+            reply_agent: &agent("team-lead"),
+        })
+        .expect("typed rejection");
+
+    assert!(matches!(
+        result,
+        AckCommitResult::Rejected(AckCommitRejection::NotPending)
     ));
 }
