@@ -599,11 +599,11 @@ mod tests {
 
     fn write_inbox(path: &Path, text: &str) {
         let envelope = crate::schema::MessageEnvelope {
-            from: "team-lead".to_string(),
+            from: "team-lead".parse().expect("agent"),
             text: text.to_string(),
             timestamp: crate::types::IsoTimestamp::from_datetime(Utc::now()),
             read: false,
-            source_team: Some("atm-dev".to_string()),
+            source_team: Some("atm-dev".parse().expect("team")),
             summary: None,
             message_id: None,
             pending_ack_at: None,

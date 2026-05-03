@@ -249,7 +249,7 @@ mod tests {
     use uuid::Uuid;
 
     use crate::schema::MessageEnvelope;
-    use crate::types::IsoTimestamp;
+    use crate::types::{AgentName, IsoTimestamp, TeamName};
 
     use super::{MAX_MAILBOX_READ_BYTES, append_message, locked_read_modify_write, read_messages};
     use crate::mailbox::lock;
@@ -495,12 +495,15 @@ mod tests {
     }
 
     fn sample_message(message_id: Uuid, body: &str) -> MessageEnvelope {
+        let legacy_message_id = crate::schema::LegacyMessageId::from(message_id);
+        let atm_message_id = legacy_message_id.into_lossy_atm_message_id_approximation();
+        let message_id = crate::schema::LegacyMessageId::from_atm_message_id(atm_message_id);
         let mut extra = serde_json::Map::new();
         let mut metadata = serde_json::Map::new();
         let mut atm = serde_json::Map::new();
         atm.insert(
             "messageId".to_string(),
-            serde_json::Value::String(crate::schema::AtmMessageId::new().to_string()),
+            serde_json::Value::String(atm_message_id.to_string()),
         );
         atm.insert(
             "sourceTeam".to_string(),
@@ -510,7 +513,7 @@ mod tests {
         extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
 
         MessageEnvelope {
-            from: "arch-ctm".into(),
+            from: "arch-ctm".parse::<AgentName>().expect("agent"),
             text: body.into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -518,9 +521,9 @@ mod tests {
                     .expect("timestamp"),
             ),
             read: false,
-            source_team: Some("atm-dev".into()),
+            source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
             summary: None,
-            message_id: Some(message_id.into()),
+            message_id: Some(message_id),
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,

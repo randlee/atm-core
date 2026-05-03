@@ -160,6 +160,9 @@ impl AtmError {
             AtmErrorKind::Address,
             format!("address parse failed: {}", message.into()),
         )
+        .with_recovery(
+            "Correct the ATM address format and retry with a valid <agent> or <agent>@<team> target.",
+        )
     }
 
     pub fn identity_unavailable() -> Self {

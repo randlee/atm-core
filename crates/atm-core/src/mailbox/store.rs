@@ -55,46 +55,50 @@ where
     I: IntoIterator<Item = PathBuf>,
     F: FnOnce(&[PathBuf], &mut Vec<SourceFile>) -> Result<T, AtmError>,
 {
+    with_locked_source_files_hook(
+        home_dir,
+        team,
+        agent,
+        extra_write_paths,
+        timeout,
+        |_| Ok(()),
+        body,
+    )
+}
+
+fn with_locked_source_files_hook<T, I, H, F>(
+    home_dir: &Path,
+    team: &str,
+    agent: &str,
+    extra_write_paths: I,
+    timeout: Duration,
+    before_load: H,
+    body: F,
+) -> Result<T, AtmError>
+where
+    I: IntoIterator<Item = PathBuf>,
+    H: FnOnce(&[PathBuf]) -> Result<(), AtmError>,
+    F: FnOnce(&[PathBuf], &mut Vec<SourceFile>) -> Result<T, AtmError>,
+{
     let source_paths = discover_source_paths(home_dir, team, agent)?;
     let mut write_paths = source_paths.clone();
     write_paths.extend(extra_write_paths);
     let _locks = lock::acquire_many_sorted(write_paths, timeout)?;
     let source_paths = rediscover_and_validate_source_paths(&source_paths, home_dir, team, agent)?;
-    maybe_remove_locked_source_file_for_test(&source_paths)?;
+    before_load(&source_paths)?;
     let mut source_files = load_source_files(&source_paths)?;
     body(&source_paths, &mut source_files)
-}
-
-fn maybe_remove_locked_source_file_for_test(source_paths: &[PathBuf]) -> Result<(), AtmError> {
-    if std::env::var_os("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD").is_none() {
-        return Ok(());
-    }
-
-    let Some(path) = source_paths.first() else {
-        return Ok(());
-    };
-
-    std::fs::remove_file(path).map_err(|error| {
-        AtmError::mailbox_write(format!(
-            "failed to remove locked inbox {} during test injection: {error}",
-            path.display()
-        ))
-        .with_recovery(
-            "Clear ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD or restore the missing inbox file before retrying the injected test path.",
-        )
-        .with_source(error)
-    })
 }
 
 #[cfg(test)]
 mod tests {
     use tempfile::tempdir;
 
-    use super::{commit_mailbox_state, commit_source_files};
+    use super::{commit_mailbox_state, commit_source_files, with_locked_source_files_hook};
     use crate::mailbox::read_messages;
     use crate::mailbox::source::SourceFile;
-    use crate::schema::{AtmMessageId, MessageEnvelope};
-    use crate::types::IsoTimestamp;
+    use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
+    use crate::types::{AgentName, IsoTimestamp, TeamName};
 
     #[test]
     fn commit_mailbox_state_rewrites_mailbox_array_with_only_new_messages() {
@@ -177,13 +181,56 @@ mod tests {
         assert!(!later_path.exists());
     }
 
+    #[test]
+    fn injected_before_load_hook_can_fail_closed_without_production_env_seam() {
+        let tempdir = tempdir().expect("tempdir");
+        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        let inbox_dir = team_dir.join("inboxes");
+        std::fs::create_dir_all(&inbox_dir).expect("inbox dir");
+        std::fs::write(
+            team_dir.join("config.json"),
+            serde_json::json!({
+                "members": [{"name": "arch-ctm"}, {"name": "team-lead"}]
+            })
+            .to_string(),
+        )
+        .expect("config");
+        let inbox_path = inbox_dir.join("arch-ctm.json");
+        commit_mailbox_state(&inbox_path, &[sample_message("team-lead", "hello")]).expect("seed");
+
+        let error = with_locked_source_files_hook(
+            tempdir.path(),
+            "atm-dev",
+            "arch-ctm",
+            std::iter::empty::<std::path::PathBuf>(),
+            std::time::Duration::from_secs(1),
+            |paths| {
+                let path = paths.first().expect("first path");
+                std::fs::remove_file(path).map_err(|source| {
+                    crate::error::AtmError::mailbox_write(format!(
+                        "failed to remove locked inbox {} during test injection: {source}",
+                        path.display()
+                    ))
+                    .with_source(source)
+                })
+            },
+            |_paths, _source_files| Ok(()),
+        )
+        .expect_err("hook failure");
+
+        assert!(error.is_mailbox_read());
+        assert!(!inbox_path.exists());
+    }
+
     fn sample_message(from: &str, text: &str) -> MessageEnvelope {
+        let atm_message_id = AtmMessageId::new();
+        let message_id = LegacyMessageId::from_atm_message_id(atm_message_id);
         let mut extra = serde_json::Map::new();
         let mut metadata = serde_json::Map::new();
         let mut atm = serde_json::Map::new();
         atm.insert(
             "messageId".to_string(),
-            serde_json::Value::String(AtmMessageId::new().to_string()),
+            serde_json::Value::String(atm_message_id.to_string()),
         );
         atm.insert(
             "sourceTeam".to_string(),
@@ -193,13 +240,13 @@ mod tests {
         extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
 
         MessageEnvelope {
-            from: from.to_string(),
+            from: from.parse::<AgentName>().expect("agent name"),
             text: text.to_string(),
             timestamp: IsoTimestamp::now(),
             read: false,
-            source_team: Some("atm-dev".to_string()),
+            source_team: Some("atm-dev".parse::<TeamName>().expect("team name")),
             summary: None,
-            message_id: Some(crate::schema::LegacyMessageId::new()),
+            message_id: Some(message_id),
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,

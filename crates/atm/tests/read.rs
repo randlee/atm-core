@@ -5,7 +5,7 @@ use atm_core::schema::{
     AgentMember, AtmMessageId, AtmMetadataFields, ForwardMetadataEnvelope, LegacyMessageId,
     MessageEnvelope, MessageMetadata, TeamConfig,
 };
-use atm_core::types::IsoTimestamp;
+use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use chrono::{TimeZone, Utc};
 use serde_json::Value;
 
@@ -764,6 +764,7 @@ fn test_forward_metadata_message_id_timestamp_matches_persisted_timestamp() {
             atm: Some(AtmMetadataFields {
                 message_id: Some(message_id),
                 source_team: Some("atm-dev".parse().expect("team")),
+                from_identity: None,
                 pending_ack_at: None,
                 acknowledged_at: None,
                 acknowledges_message_id: None,
@@ -1007,11 +1008,11 @@ impl Fixture {
         timestamp_offset: i64,
     ) -> MessageEnvelope {
         MessageEnvelope {
-            from: from.to_string(),
+            from: from.parse::<AgentName>().expect("agent"),
             text: text.to_string(),
             timestamp: IsoTimestamp::from_datetime(self.timestamp(timestamp_offset)),
             read,
-            source_team: Some("atm-dev".into()),
+            source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
             summary: None,
             message_id: Some(LegacyMessageId::new()),
             pending_ack_at: pending_ack_offset

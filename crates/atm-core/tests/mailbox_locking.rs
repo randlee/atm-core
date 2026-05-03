@@ -11,10 +11,11 @@ use atm_core::error::AtmErrorCode;
 use atm_core::observability::NullObservability;
 use atm_core::read::{ReadQuery, read_mail};
 use atm_core::schema::{
-    AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig, hydrate_legacy_fields_from_metadata,
+    AgentMember, AtmMessageId, LegacyMessageId, MessageEnvelope, TeamConfig,
+    hydrate_legacy_fields_from_metadata,
 };
 use atm_core::send::{SendMessageSource, SendRequest, send_mail};
-use atm_core::types::{AckActivationMode, IsoTimestamp, ReadSelection};
+use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
 use chrono::Utc;
 use fs2::FileExt;
 use serial_test::serial;
@@ -216,8 +217,10 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
         arch_workflow["messages"][format!("legacy:{pending_message_id}")]["acknowledgedAt"]
             .as_str()
             .is_some()
-            || arch_workflow["messages"]
-                [format!("atm:{}", pending_message_id.into_atm_message_id())]["acknowledgedAt"]
+            || arch_workflow["messages"][format!(
+                "atm:{}",
+                pending_message_id.into_lossy_atm_message_id_approximation()
+            )]["acknowledgedAt"]
                 .as_str()
                 .is_some(),
         "pending message was not acknowledged in workflow state: {arch_workflow:?}"
@@ -395,7 +398,8 @@ fn missing_config_notice_seeds_team_lead_workflow_state() {
 
     let notices = fixture.inbox_contents_for_team("broken-dev", "team-lead");
     let notice = notices.first().expect("missing-config notice");
-    assert_eq!(notice.from, "atm-identity-missing@broken-dev");
+    assert_eq!(notice.from, "atm-identity-missing");
+    assert_eq!(notice.source_team.as_deref(), Some("broken-dev"));
     let workflow = fixture.workflow_state_contents_for_team("broken-dev", "team-lead");
     let notice_atm_id = message_atm_id(notice);
     assert!(
@@ -734,48 +738,6 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
 
 #[test]
 #[serial]
-fn clear_remove_locked_inbox_seam_fails_closed_without_mutating_surviving_state() {
-    let _env_lock = env_lock().lock().expect("env lock");
-    let _fault = EnvGuard::set_raw("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD", "1");
-    let fixture = Fixture::new();
-    let observability = NullObservability;
-    let origin_message_id = LegacyMessageId::from(Uuid::new_v4());
-    fixture.write_origin_inbox(
-        "arch-ctm",
-        "zzz",
-        &[read_message("qa", "origin read a", origin_message_id)],
-    );
-    fixture.write_workflow_state(
-        "arch-ctm",
-        serde_json::json!({
-            "messages": {
-                format!("legacy:{origin_message_id}"): {
-                    "read": true
-                }
-            }
-        }),
-    );
-    let before_origin = fs::read_to_string(fixture.origin_inbox_path("arch-ctm", "zzz"))
-        .expect("origin inbox before");
-    let before_workflow =
-        fs::read_to_string(fixture.workflow_state_path("arch-ctm")).expect("workflow before");
-
-    let error = clear_mail(fixture.clear_query("arch-ctm"), &observability).expect_err("fault");
-
-    assert!(error.is_mailbox_read());
-    assert_eq!(
-        fs::read_to_string(fixture.origin_inbox_path("arch-ctm", "zzz"))
-            .expect("origin inbox after"),
-        before_origin
-    );
-    assert_eq!(
-        fs::read_to_string(fixture.workflow_state_path("arch-ctm")).expect("workflow after"),
-        before_workflow
-    );
-}
-
-#[test]
-#[serial]
 fn clear_fails_closed_on_synthetic_source_discovery_fault() {
     let _env_lock = env_lock().lock().expect("env lock");
     let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT", "1");
@@ -838,6 +800,10 @@ enum CommandOp {
 
 fn env_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    // These tests mutate process-global environment variables while exercising
+    // mailbox lock behavior. Keep a single process-wide mutex in addition to
+    // #[serial] so a poisoned lock fails the suite closed instead of silently
+    // continuing with inconsistent shared state.
     LOCK.get_or_init(|| Mutex::new(()))
 }
 
@@ -888,8 +854,8 @@ impl Fixture {
         let tempdir = tempfile::tempdir().expect("tempdir");
         create_team_with_config(tempdir.path(), "atm-dev", &["team-lead", "arch-ctm", "qa"]);
 
-        let arch_message_id = LegacyMessageId::from(Uuid::new_v4());
-        let qa_message_id = LegacyMessageId::from(Uuid::new_v4());
+        let arch_message_id = LegacyMessageId::from_atm_message_id(AtmMessageId::new());
+        let qa_message_id = LegacyMessageId::from_atm_message_id(AtmMessageId::new());
 
         let fixture = Self {
             tempdir,
@@ -1086,8 +1052,10 @@ fn create_team_with_config(home_dir: &std::path::Path, team: &str, members: &[&s
 }
 
 fn message_atm_id(message: &MessageEnvelope) -> String {
-    message.extra["metadata"]["atm"]["messageId"]
-        .as_str()
+    message
+        .atm_message_id()
+        .map(|message_id| message_id.to_string())
+        .as_deref()
         .expect("atm message id")
         .to_string()
 }
@@ -1154,9 +1122,10 @@ fn pending_ack_message(
     let mut extra = serde_json::Map::new();
     let mut metadata = serde_json::Map::new();
     let mut atm = serde_json::Map::new();
+    let atm_message_id = message_id.into_lossy_atm_message_id_approximation();
     atm.insert(
         "messageId".to_string(),
-        serde_json::Value::String(message_id.into_atm_message_id().to_string()),
+        serde_json::Value::String(atm_message_id.to_string()),
     );
     atm.insert(
         "sourceTeam".to_string(),
@@ -1164,13 +1133,18 @@ fn pending_ack_message(
     );
     metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
     extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
+    assert_eq!(
+        LegacyMessageId::from_atm_message_id(message_atm_id_from_extra(&extra).expect("atm id")),
+        message_id,
+        "mailbox fixture metadata.atm.messageId must match legacy message_id",
+    );
 
     MessageEnvelope {
-        from: from.to_string(),
+        from: from.parse::<AgentName>().expect("agent"),
         text: text.to_string(),
         timestamp: IsoTimestamp::from_datetime(Utc::now()),
         read: true,
-        source_team: Some(source_team.to_string()),
+        source_team: Some(source_team.parse::<TeamName>().expect("team")),
         summary: None,
         message_id: Some(message_id),
         pending_ack_at: Some(IsoTimestamp::from_datetime(Utc::now())),
@@ -1185,9 +1159,10 @@ fn read_message(from: &str, text: &str, message_id: LegacyMessageId) -> MessageE
     let mut extra = serde_json::Map::new();
     let mut metadata = serde_json::Map::new();
     let mut atm = serde_json::Map::new();
+    let atm_message_id = message_id.into_lossy_atm_message_id_approximation();
     atm.insert(
         "messageId".to_string(),
-        serde_json::Value::String(message_id.into_atm_message_id().to_string()),
+        serde_json::Value::String(atm_message_id.to_string()),
     );
     atm.insert(
         "sourceTeam".to_string(),
@@ -1195,13 +1170,18 @@ fn read_message(from: &str, text: &str, message_id: LegacyMessageId) -> MessageE
     );
     metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
     extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
+    assert_eq!(
+        LegacyMessageId::from_atm_message_id(message_atm_id_from_extra(&extra).expect("atm id")),
+        message_id,
+        "mailbox fixture metadata.atm.messageId must match legacy message_id",
+    );
 
     MessageEnvelope {
-        from: from.to_string(),
+        from: from.parse::<AgentName>().expect("agent"),
         text: text.to_string(),
         timestamp: IsoTimestamp::from_datetime(Utc::now()),
         read: true,
-        source_team: Some("atm-dev".to_string()),
+        source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
         summary: None,
         message_id: Some(message_id),
         pending_ack_at: None,
@@ -1216,9 +1196,10 @@ fn unread_message(from: &str, text: &str, message_id: LegacyMessageId) -> Messag
     let mut extra = serde_json::Map::new();
     let mut metadata = serde_json::Map::new();
     let mut atm = serde_json::Map::new();
+    let atm_message_id = message_id.into_lossy_atm_message_id_approximation();
     atm.insert(
         "messageId".to_string(),
-        serde_json::Value::String(message_id.into_atm_message_id().to_string()),
+        serde_json::Value::String(atm_message_id.to_string()),
     );
     atm.insert(
         "sourceTeam".to_string(),
@@ -1226,13 +1207,18 @@ fn unread_message(from: &str, text: &str, message_id: LegacyMessageId) -> Messag
     );
     metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
     extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
+    assert_eq!(
+        LegacyMessageId::from_atm_message_id(message_atm_id_from_extra(&extra).expect("atm id")),
+        message_id,
+        "mailbox fixture metadata.atm.messageId must match legacy message_id",
+    );
 
     MessageEnvelope {
-        from: from.to_string(),
+        from: from.parse::<AgentName>().expect("agent"),
         text: text.to_string(),
         timestamp: IsoTimestamp::from_datetime(Utc::now()),
         read: false,
-        source_team: Some("atm-dev".to_string()),
+        source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
         summary: None,
         message_id: Some(message_id),
         pending_ack_at: None,
@@ -1241,4 +1227,17 @@ fn unread_message(from: &str, text: &str, message_id: LegacyMessageId) -> Messag
         task_id: None,
         extra,
     }
+}
+
+fn message_atm_id_from_extra(
+    extra: &serde_json::Map<String, serde_json::Value>,
+) -> Option<AtmMessageId> {
+    extra
+        .get("metadata")
+        .and_then(serde_json::Value::as_object)
+        .and_then(|metadata| metadata.get("atm"))
+        .and_then(serde_json::Value::as_object)
+        .and_then(|atm| atm.get("messageId"))
+        .and_then(serde_json::Value::as_str)
+        .and_then(|value| value.parse().ok())
 }

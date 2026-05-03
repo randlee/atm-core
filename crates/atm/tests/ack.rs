@@ -4,7 +4,7 @@ use std::process::Command;
 use atm_core::schema::{
     AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig, hydrate_legacy_fields_from_metadata,
 };
-use atm_core::types::IsoTimestamp;
+use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use chrono::{Duration, Utc};
 use serde_json::Value;
 use uuid::Uuid;
@@ -480,11 +480,11 @@ impl Fixture {
     ) -> MessageEnvelope {
         let timestamp = Utc::now() - Duration::minutes(30);
         MessageEnvelope {
-            from: from.to_string(),
+            from: from.parse::<AgentName>().expect("agent"),
             text: text.to_string(),
             timestamp: timestamp.into(),
             read,
-            source_team: Some("atm-dev".into()),
+            source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
             summary: None,
             message_id: Some(LegacyMessageId::from(message_id)),
             pending_ack_at: pending_offset

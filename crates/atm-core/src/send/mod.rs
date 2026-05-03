@@ -220,14 +220,11 @@ pub fn send_mail(
             );
         }
         let envelope = MessageEnvelope {
-            from: display_sender.clone(),
+            from: display_sender.parse().expect("display sender is valid"),
             text: body.clone(),
             timestamp,
             read: false,
-            source_team: sender_team
-                .clone()
-                .map(|team| team.to_string())
-                .or_else(|| Some(recipient.team.to_string())),
+            source_team: sender_team.clone().or_else(|| Some(recipient.team.clone())),
             summary: Some(summary.clone()),
             message_id: Some(message_id),
             pending_ack_at: requires_ack.then_some(timestamp),
@@ -397,14 +394,16 @@ fn notify_team_lead_missing_config(
     );
 
     let notice = MessageEnvelope {
-        from: format!("atm-identity-missing@{team}"),
+        from: "atm-identity-missing"
+            .parse()
+            .expect("system sender is valid"),
         text: format!(
             "ATM warning: send used existing inbox fallback for {recipient}@{team} because team config is missing at {}. Please restore config.json.",
             config_path.display()
         ),
         timestamp,
         read: false,
-        source_team: Some(team.to_string()),
+        source_team: Some(team.parse().expect("team name")),
         summary: Some(format!(
             "ATM warning: missing team config fallback used for {recipient}@{team}"
         )),

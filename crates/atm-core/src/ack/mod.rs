@@ -179,11 +179,11 @@ pub fn ack_mail(
     let mut reply_extra = Map::new();
     workflow::set_atm_message_id(&mut reply_extra, reply_atm_message_id);
     let reply_message = MessageEnvelope {
-        from: actor.to_string(),
+        from: actor.clone(),
         text: reply_text.clone(),
         timestamp: ack_timestamp,
         read: false,
-        source_team: Some(team.to_string()),
+        source_team: Some(team.clone()),
         summary: Some(summary::build_summary(&reply_text, None)),
         message_id: Some(reply_message_id),
         pending_ack_at: None,
@@ -344,13 +344,14 @@ fn resolve_reply_target(
     }
 
     let parsed: AgentAddress = if message.from.contains('@') {
-        message.from.parse()?
+        message.from.as_str().parse()?
     } else {
         AgentAddress {
-            agent: message.from.clone(),
+            agent: message.from.to_string(),
             team: message
                 .source_team
                 .clone()
+                .map(Into::into)
                 .or_else(|| Some(current_team.to_string())),
         }
     };
@@ -503,15 +504,15 @@ mod tests {
 
     use super::{canonical_sender_identity, resolve_reply_target};
     use crate::schema::MessageEnvelope;
-    use crate::types::IsoTimestamp;
+    use crate::types::{AgentName, IsoTimestamp, TeamName};
 
     fn message_with_from(from: &str) -> MessageEnvelope {
         MessageEnvelope {
-            from: from.to_string(),
+            from: from.parse::<AgentName>().expect("agent"),
             text: "hello".to_string(),
             timestamp: IsoTimestamp::now(),
             read: false,
-            source_team: Some("atm-dev".to_string()),
+            source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
             summary: None,
             message_id: None,
             pending_ack_at: None,
@@ -539,7 +540,7 @@ mod tests {
     #[test]
     fn resolve_reply_target_prefers_canonical_sender_identity_metadata() {
         let mut message = message_with_from("lead");
-        message.source_team = Some("atm-dev".to_string());
+        message.source_team = Some("atm-dev".parse::<TeamName>().expect("team"));
         message.extra.insert(
             "metadata".to_string(),
             json!({"atm": {"fromIdentity": "team-lead@src-gen"}}),

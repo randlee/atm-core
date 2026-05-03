@@ -260,15 +260,15 @@ mod tests {
         set_atm_message_id, workflow_key,
     };
     use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
-    use crate::types::IsoTimestamp;
+    use crate::types::{AgentName, IsoTimestamp, TeamName};
 
     fn sample_message() -> MessageEnvelope {
         MessageEnvelope {
-            from: "team-lead".to_string(),
+            from: "team-lead".parse::<AgentName>().expect("agent"),
             text: "hello".to_string(),
             timestamp: IsoTimestamp::now(),
             read: false,
-            source_team: Some("atm-dev".to_string()),
+            source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
             summary: None,
             message_id: Some(LegacyMessageId::new()),
             pending_ack_at: None,

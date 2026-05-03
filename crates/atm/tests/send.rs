@@ -301,7 +301,8 @@ fn test_send_missing_config_uses_existing_inbox_fallback_and_warns_sender() {
 
     let notices = fixture.inbox_contents("team-lead");
     assert_eq!(notices.len(), 1);
-    assert_eq!(notices[0].from, "atm-identity-missing@atm-dev");
+    assert_eq!(notices[0].from, "atm-identity-missing");
+    assert_eq!(notices[0].source_team.as_deref(), Some("atm-dev"));
     assert!(
         notices[0]
             .text

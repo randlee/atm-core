@@ -1,16 +1,15 @@
 //! Shared inbox compatibility schema for Claude-native envelopes plus ATM metadata.
 
-use std::fmt;
-use std::io;
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use std::fmt;
 use tracing::warn;
 use ulid::Ulid;
 use uuid::Uuid;
 
-use crate::types::{IsoTimestamp, TaskId, TeamName};
+use crate::error::AtmError;
+use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -35,7 +34,12 @@ impl LegacyMessageId {
         self.0
     }
 
-    pub fn into_atm_message_id(self) -> AtmMessageId {
+    /// Convert a legacy compatibility UUID into a best-effort ULID approximation.
+    ///
+    /// This mapping is intentionally lossy. `from_atm_message_id` normalizes the
+    /// source ULID into a UUID v4-compatible byte pattern, so reversing the
+    /// process cannot recover the original ULID exactly.
+    pub fn into_lossy_atm_message_id_approximation(self) -> AtmMessageId {
         AtmMessageId::from(Ulid::from_bytes(self.0.into_bytes()))
     }
 }
@@ -139,6 +143,9 @@ pub struct AtmMetadataFields {
     #[serde(rename = "sourceTeam", skip_serializing_if = "Option::is_none")]
     pub source_team: Option<TeamName>,
 
+    #[serde(rename = "fromIdentity", skip_serializing_if = "Option::is_none")]
+    pub from_identity: Option<String>,
+
     #[serde(rename = "pendingAckAt", skip_serializing_if = "Option::is_none")]
     pub pending_ack_at: Option<IsoTimestamp>,
 
@@ -195,7 +202,7 @@ pub struct MessageEnvelope {
     // Claude Code-native fields. Do not change these as if ATM owned the
     // native schema; update the owning schema docs first if the external
     // contract changes.
-    pub from: String,
+    pub from: AgentName,
     pub text: String,
     pub timestamp: IsoTimestamp,
     pub read: bool,
@@ -204,7 +211,7 @@ pub struct MessageEnvelope {
     // message schema. Historical provenance analysis in this design sprint
     // confirmed these persisted fields are ATM-added rather than Claude-native.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_team: Option<String>,
+    pub source_team: Option<TeamName>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
@@ -236,7 +243,7 @@ pub struct MessageEnvelope {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PendingAck {
     pub message_id: LegacyMessageId,
-    pub from: String,
+    pub from: AgentName,
     pub acked: bool,
     pub acked_at: Option<IsoTimestamp>,
 }
@@ -248,19 +255,28 @@ fn ensure_object<'a>(parent: &'a mut Map<String, Value>, key: &str) -> &'a mut M
     if !entry.is_object() {
         *entry = Value::Object(Map::new());
     }
-    entry.as_object_mut().expect("entry forced to object")
+    let Some(entry) = entry.as_object_mut() else {
+        unreachable!("entry was just normalized into an object")
+    };
+    entry
 }
 
-pub(crate) fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, serde_json::Error> {
+pub(crate) fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, AtmError> {
     let mut value = serde_json::to_value(message).map_err(|error| {
-        serde_json::Error::io(io::Error::other(format!(
+        AtmError::mailbox_write(format!(
             "failed to serialize shared inbox envelope for {} at {:?}: {error}",
             message.from, message.timestamp
-        )))
+        ))
+        .with_source(error)
     })?;
     let object = value
         .as_object_mut()
-        .expect("message envelope serializes to object");
+        .ok_or_else(|| {
+            AtmError::mailbox_write(format!(
+                "failed to serialize shared inbox envelope for {} at {:?}: envelope did not encode as a JSON object",
+                message.from, message.timestamp
+            ))
+        })?;
     let _ = object.remove("message_id");
     let source_team = object.remove("source_team");
     let pending_ack_at = object.remove("pendingAckAt");
@@ -271,13 +287,11 @@ pub(crate) fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, 
             .and_then(|value| match value {
                 Value::String(_) => message
                     .acknowledges_message_id
-                    .map(LegacyMessageId::into_atm_message_id)
+                    .map(LegacyMessageId::into_lossy_atm_message_id_approximation)
                     .map(|message_id| Value::String(message_id.to_string())),
                 _ => None,
             });
     let task_id = object.remove("taskId");
-    let _ = object.get("atmAlertKind");
-    let _ = object.get("missingConfigPath");
 
     let metadata = ensure_object(object, "metadata");
     let atm = ensure_object(metadata, "atm");
@@ -299,6 +313,19 @@ pub(crate) fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, 
         atm.entry("taskId".to_string()).or_insert(value);
     }
     Ok(value)
+}
+
+impl MessageEnvelope {
+    pub fn atm_message_id(&self) -> Option<AtmMessageId> {
+        self.extra
+            .get("metadata")
+            .and_then(Value::as_object)
+            .and_then(|metadata| metadata.get("atm"))
+            .and_then(Value::as_object)
+            .and_then(|atm| atm.get("messageId"))
+            .and_then(Value::as_str)
+            .and_then(|value| value.parse().ok())
+    }
 }
 
 pub fn hydrate_legacy_fields_from_metadata(value: &mut Value) {
@@ -401,7 +428,7 @@ mod tests {
         // Claude-native schema. Ownership is documented in
         // docs/legacy-atm-message-schema.md and docs/atm-message-schema.md.
         let envelope = MessageEnvelope {
-            from: "arch-ctm".into(),
+            from: "arch-ctm".parse().expect("agent"),
             text: "hello".into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -409,7 +436,7 @@ mod tests {
                     .expect("timestamp"),
             ),
             read: false,
-            source_team: Some("atm-dev".into()),
+            source_team: Some("atm-dev".parse().expect("team")),
             summary: Some("hello".into()),
             message_id: Some(LegacyMessageId::new()),
             pending_ack_at: Some(IsoTimestamp::from_datetime(
@@ -482,7 +509,7 @@ mod tests {
     fn pending_ack_round_trips() {
         let pending_ack = PendingAck {
             message_id: LegacyMessageId::new(),
-            from: "team-lead".into(),
+            from: "team-lead".parse().expect("agent"),
             acked: true,
             acked_at: Some(IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 1)
@@ -506,6 +533,7 @@ mod tests {
                 atm: Some(AtmMetadataFields {
                     message_id: Some(message_id),
                     source_team: Some("atm-dev".parse().expect("team name")),
+                    from_identity: None,
                     pending_ack_at: None,
                     acknowledged_at: None,
                     acknowledges_message_id: None,
@@ -564,7 +592,7 @@ mod tests {
     #[test]
     fn shared_inbox_write_shape_moves_machine_fields_into_metadata() {
         let envelope = MessageEnvelope {
-            from: "arch-ctm".into(),
+            from: "arch-ctm".parse().expect("agent"),
             text: "hello".into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -572,7 +600,7 @@ mod tests {
                     .expect("timestamp"),
             ),
             read: false,
-            source_team: Some("atm-dev".into()),
+            source_team: Some("atm-dev".parse().expect("team")),
             summary: Some("hello".into()),
             message_id: Some(LegacyMessageId::new()),
             pending_ack_at: Some(IsoTimestamp::from_datetime(
@@ -612,7 +640,7 @@ mod tests {
                 .expect("timestamp"),
         );
         let envelope = MessageEnvelope {
-            from: "arch-ctm".into(),
+            from: "arch-ctm".parse().expect("agent"),
             text: "ack reply".into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -620,7 +648,7 @@ mod tests {
                     .expect("timestamp"),
             ),
             read: false,
-            source_team: Some("atm-dev".into()),
+            source_team: Some("atm-dev".parse().expect("team")),
             summary: Some("ack reply".into()),
             message_id: Some(LegacyMessageId::new()),
             pending_ack_at: None,
