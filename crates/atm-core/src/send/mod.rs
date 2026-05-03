@@ -11,9 +11,18 @@ use crate::config;
 use crate::error::{AtmError, AtmErrorCode};
 use crate::home;
 use crate::identity;
+use crate::inbox_export::{ExportEventContext, InboxExport};
+use crate::inbox_ingress::InboxIngress;
+use crate::mail_store::{AckStateRecord, MailStore, MessageSourceKind, StoredMessageRecord};
 use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
+use crate::roster_store::{RosterMemberRecord, RosterStore};
 use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
+use crate::store::{
+    InsertOutcome, MessageKey, RecipientPaneId, StoreDuplicateIdentity, StoreError,
+};
+use crate::task_store::{TaskRecord, TaskStatus, TaskStore};
+use crate::team_ingress;
 use crate::types::{AgentName, TaskId, TeamName};
 use crate::workflow;
 
@@ -85,6 +94,7 @@ pub struct SendOutcome {
     pub sender: AgentName,
     pub outcome: &'static str,
     pub message_id: LegacyMessageId,
+    pub atm_message_id: AtmMessageId,
     pub requires_ack: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
@@ -92,13 +102,65 @@ pub struct SendOutcome {
     pub summary: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
-    // TODO(v1.1.0): Replace this Vec<String> with a structured WarningEntry type
-    // so degraded-mode warnings can carry recovery guidance separately from the
-    // rendered message text.
+    // TODO(Q.3): Replace this Vec<String> with structured warning codes and
+    // recovery hints so degraded-mode warnings are not carried only as
+    // rendered text.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub dry_run: bool,
+}
+
+pub trait SendStore: MailStore + TaskStore {
+    fn commit_outbound_message(
+        &self,
+        message: &StoredMessageRecord,
+        ack_state: Option<&AckStateRecord>,
+        task: Option<&TaskRecord>,
+    ) -> Result<InsertOutcome<StoredMessageRecord>, StoreError>;
+}
+
+pub fn resolve_store_team(request: &SendRequest) -> Result<TeamName, AtmError> {
+    let config = config::load_config(&request.current_dir)?;
+    request
+        .to
+        .team
+        .as_deref()
+        .and_then(|value| value.parse().ok())
+        .or_else(|| {
+            config::resolve_team(
+                request.team_override.as_ref().map(|team| team.as_str()),
+                config.as_ref(),
+            )
+        })
+        .ok_or_else(AtmError::team_unavailable)
+}
+
+#[derive(Debug)]
+struct PreparedSend {
+    home_dir: PathBuf,
+    config: Option<config::AtmConfig>,
+    loaded_team_config: Option<crate::schema::TeamConfig>,
+    canonical_sender: AgentName,
+    recipient: ResolvedRecipient,
+    sender_team: Option<TeamName>,
+    display_sender: AgentName,
+    inbox_path: PathBuf,
+    warnings: Vec<String>,
+    task_id: Option<TaskId>,
+    requires_ack: bool,
+    body: String,
+    summary: String,
+    message_id: LegacyMessageId,
+    atm_message_id: AtmMessageId,
+    timestamp: crate::types::IsoTimestamp,
+    dry_run: bool,
+}
+
+impl PreparedSend {
+    fn home_dir(&self) -> PathBuf {
+        self.home_dir.clone()
+    }
 }
 
 /// Send one mailbox message to a team member.
@@ -117,10 +179,103 @@ pub struct SendOutcome {
 /// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`] when sender
 /// identity cannot be resolved, recipient or team validation fails,
 /// message/file-policy validation fails, or mailbox persistence fails.
-pub fn send_mail(
+pub fn send_mail_via_store<S>(
     request: SendRequest,
+    store: &S,
+    ingress: &dyn InboxIngress,
+    exporter: &dyn InboxExport,
     observability: &dyn ObservabilityPort,
-) -> Result<SendOutcome, AtmError> {
+) -> Result<SendOutcome, AtmError>
+where
+    S: SendStore + RosterStore,
+{
+    let prepared = prepare_send_request(request)?;
+    let envelope = build_outgoing_envelope(&prepared);
+
+    if prepared.inbox_path.is_file() {
+        let _ = ingress.ingest_mailbox_state(
+            &prepared.home_dir(),
+            &prepared.recipient.team,
+            &prepared.recipient.agent,
+            store,
+            observability,
+        )?;
+    }
+
+    let recipient_pane_id = if let Some(team_config) = prepared.loaded_team_config.as_ref() {
+        let roster = team_ingress::ingest_loaded_team_config(
+            &prepared.recipient.team,
+            team_config,
+            store,
+            &team_ingress::default_host_name(),
+        )?;
+        roster_member_for_recipient(&roster, &prepared.recipient.agent)
+            .and_then(|member| member.recipient_pane_id.clone())
+    } else {
+        let roster = store
+            .load_roster(&prepared.recipient.team)
+            .map_err(|error| {
+                map_store_error("failed to load roster for recipient pane lookup", error)
+            })?;
+        roster_member_for_recipient(&roster, &prepared.recipient.agent)
+            .and_then(|member| member.recipient_pane_id.clone())
+    };
+
+    if !prepared.dry_run {
+        let stored = stored_message_record(&prepared, &envelope)?;
+        let ack_state = prepared.requires_ack.then(|| AckStateRecord {
+            message_key: MessageKey::from_atm_message_id(prepared.atm_message_id),
+            pending_ack_at: Some(prepared.timestamp),
+            acknowledged_at: None,
+            ack_reply_message_key: None,
+            ack_reply_team: None,
+            ack_reply_agent: None,
+        });
+        let task_record = prepared.task_id.clone().map(|task_id| TaskRecord {
+            task_id,
+            message_key: MessageKey::from_atm_message_id(prepared.atm_message_id),
+            status: TaskStatus::PendingAck,
+            created_at: prepared.timestamp,
+            acknowledged_at: None,
+            metadata_json: None,
+        });
+        match store
+            .commit_outbound_message(&stored, ack_state.as_ref(), task_record.as_ref())
+            .map_err(|error| map_store_error("failed to insert outbound message row", error))?
+        {
+            InsertOutcome::Inserted(_) => {}
+            InsertOutcome::Duplicate(identity) => {
+                return Err(duplicate_send_error(identity));
+            }
+        }
+
+        exporter.export_message(
+            &prepared.home_dir(),
+            &prepared.recipient.team,
+            &prepared.recipient.agent,
+            &envelope,
+            observability,
+            ExportEventContext {
+                command: "send",
+                sender: prepared.canonical_sender.clone(),
+                message_id: Some(prepared.message_id),
+                requires_ack: prepared.requires_ack,
+                task_id: prepared.task_id.clone(),
+            },
+        )?;
+    }
+
+    let mut outcome = build_send_outcome(&prepared);
+    finalize_send(
+        &prepared,
+        &mut outcome,
+        observability,
+        recipient_pane_id.as_ref(),
+    );
+    Ok(outcome)
+}
+
+fn prepare_send_request(request: SendRequest) -> Result<PreparedSend, AtmError> {
     let config = config::load_config(&request.current_dir)?;
     let canonical_sender =
         identity::resolve_sender_identity(request.sender_override.as_deref(), config.as_ref())?;
@@ -133,20 +288,21 @@ pub fn send_mail(
     let display_sender = display_sender_identity(
         &canonical_sender,
         request.sender_override.as_deref(),
-        sender_team.as_deref(),
+        sender_team.as_ref(),
         &recipient.team,
         config.as_ref(),
-    );
+    )?;
 
     let team_dir = home::team_dir_from_home(&request.home_dir, &recipient.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&recipient.team));
     }
 
+    let mut warnings = Vec::new();
     let inbox_path =
         home::inbox_path_from_home(&request.home_dir, &recipient.team, &recipient.agent)?;
-    let mut warnings = Vec::new();
 
+    let mut loaded_team_config = None;
     match config::load_team_config(&team_dir) {
         Ok(team_config) => {
             alert_state::clear_missing_team_config_alert(
@@ -160,6 +316,7 @@ pub fn send_mail(
             {
                 return Err(AtmError::agent_not_found(&recipient.agent, &recipient.team));
             }
+            loaded_team_config = Some(team_config);
         }
         Err(error) if error.is_missing_document() => {
             if !inbox_path.exists() {
@@ -210,62 +367,89 @@ pub fn send_mail(
     let message_id = LegacyMessageId::new();
     let (atm_message_id, timestamp) = AtmMessageId::new_with_timestamp();
 
-    if !request.dry_run {
-        let mut extra = Map::new();
-        workflow::set_atm_message_id(&mut extra, atm_message_id);
-        if display_sender != canonical_sender.as_str() {
-            set_canonical_sender_metadata(&mut extra, &canonical_sender);
-        }
-        let envelope = MessageEnvelope {
-            from: display_sender.parse().expect("display sender is valid"),
-            text: body.clone(),
-            timestamp,
-            read: false,
-            source_team: sender_team.clone().or_else(|| Some(recipient.team.clone())),
-            summary: Some(summary.clone()),
-            message_id: Some(message_id),
-            pending_ack_at: requires_ack.then_some(timestamp),
-            acknowledged_at: None,
-            acknowledges_message_id: None,
-            task_id: task_id.clone(),
-            extra,
-        };
-        append_mailbox_message_and_seed_workflow(
-            &request.home_dir,
-            &recipient.team,
-            &recipient.agent,
-            &inbox_path,
-            &envelope,
-        )?;
-    }
-
-    let mut outcome = SendOutcome {
-        action: "send",
-        team: recipient.team.clone(),
-        agent: recipient.agent.clone(),
-        sender: canonical_sender.clone(),
-        outcome: if request.dry_run { "dry_run" } else { "sent" },
-        message_id,
-        requires_ack,
-        task_id: task_id.clone(),
-        summary: Some(summary),
-        message: request.dry_run.then_some(body.clone()),
+    Ok(PreparedSend {
+        home_dir: request.home_dir,
+        config,
+        loaded_team_config,
+        canonical_sender,
+        recipient,
+        sender_team,
+        display_sender,
+        inbox_path,
         warnings,
+        task_id,
+        requires_ack,
+        body,
+        summary,
+        message_id,
+        atm_message_id,
+        timestamp,
         dry_run: request.dry_run,
-    };
+    })
+}
 
-    if !request.dry_run {
+fn build_outgoing_envelope(prepared: &PreparedSend) -> MessageEnvelope {
+    let mut extra = Map::new();
+    workflow::set_atm_message_id(&mut extra, prepared.atm_message_id);
+    if prepared.display_sender != prepared.canonical_sender.as_str() {
+        set_canonical_sender_metadata(&mut extra, &prepared.canonical_sender);
+    }
+    MessageEnvelope {
+        from: prepared.display_sender.clone(),
+        text: prepared.body.clone(),
+        timestamp: prepared.timestamp,
+        read: false,
+        source_team: prepared
+            .sender_team
+            .clone()
+            .or_else(|| Some(prepared.recipient.team.clone())),
+        summary: Some(prepared.summary.clone()),
+        message_id: Some(prepared.message_id),
+        pending_ack_at: prepared.requires_ack.then_some(prepared.timestamp),
+        acknowledged_at: None,
+        acknowledges_message_id: None,
+        task_id: prepared.task_id.clone(),
+        extra,
+    }
+}
+
+fn build_send_outcome(prepared: &PreparedSend) -> SendOutcome {
+    SendOutcome {
+        action: "send",
+        team: prepared.recipient.team.clone(),
+        agent: prepared.recipient.agent.clone(),
+        sender: prepared.canonical_sender.clone(),
+        outcome: if prepared.dry_run { "dry_run" } else { "sent" },
+        message_id: prepared.message_id,
+        atm_message_id: prepared.atm_message_id,
+        requires_ack: prepared.requires_ack,
+        task_id: prepared.task_id.clone(),
+        summary: Some(prepared.summary.clone()),
+        message: prepared.dry_run.then_some(prepared.body.clone()),
+        warnings: prepared.warnings.clone(),
+        dry_run: prepared.dry_run,
+    }
+}
+
+fn finalize_send(
+    prepared: &PreparedSend,
+    outcome: &mut SendOutcome,
+    observability: &dyn ObservabilityPort,
+    recipient_pane_id: Option<&RecipientPaneId>,
+) {
+    if !prepared.dry_run {
         maybe_run_post_send_hook(
             &mut outcome.warnings,
-            config.as_ref(),
+            prepared.config.as_ref(),
             PostSendHookContext {
-                sender: &canonical_sender,
-                sender_team: sender_team.as_ref(),
-                recipient: &recipient,
-                message_id,
-                requires_ack,
+                sender: &prepared.canonical_sender,
+                sender_team: prepared.sender_team.as_ref(),
+                recipient: &prepared.recipient,
+                message_id: prepared.message_id,
+                requires_ack: prepared.requires_ack,
                 is_ack: false,
-                task_id: task_id.as_ref(),
+                task_id: prepared.task_id.as_ref(),
+                recipient_pane_id,
             },
         );
     }
@@ -276,16 +460,84 @@ pub fn send_mail(
         outcome: outcome.outcome,
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
-        sender: canonical_sender.to_string(),
+        sender: prepared.canonical_sender.clone(),
         message_id: Some(outcome.message_id),
         requires_ack: outcome.requires_ack,
         dry_run: outcome.dry_run,
-        task_id,
+        task_id: prepared.task_id.clone(),
         error_code: None,
         error_message: None,
     });
+}
 
-    Ok(outcome)
+fn roster_member_for_recipient<'a>(
+    roster: &'a [RosterMemberRecord],
+    recipient: &AgentName,
+) -> Option<&'a RosterMemberRecord> {
+    roster.iter().find(|member| &member.agent_name == recipient)
+}
+
+fn stored_message_record(
+    prepared: &PreparedSend,
+    envelope: &MessageEnvelope,
+) -> Result<StoredMessageRecord, AtmError> {
+    let raw_metadata_json = envelope
+        .extra
+        .get("metadata")
+        .map(serde_json::to_string)
+        .transpose()
+        .map_err(|source| {
+            AtmError::new(
+                crate::error::AtmErrorKind::Serialization,
+                format!(
+                    "failed to encode ATM metadata for outbound message to {}",
+                    prepared.recipient.agent
+                ),
+            )
+            .with_source(source)
+        })?;
+
+    Ok(StoredMessageRecord {
+        message_key: MessageKey::from_atm_message_id(prepared.atm_message_id),
+        team_name: prepared.recipient.team.clone(),
+        recipient_agent: prepared.recipient.agent.clone(),
+        sender_display: prepared.display_sender.to_string(),
+        sender_canonical: Some(prepared.canonical_sender.clone()),
+        sender_team: prepared
+            .sender_team
+            .clone()
+            .or_else(|| Some(prepared.recipient.team.clone())),
+        body: prepared.body.clone(),
+        summary: Some(prepared.summary.clone()),
+        created_at: prepared.timestamp,
+        source_kind: MessageSourceKind::Atm,
+        legacy_message_id: Some(prepared.message_id),
+        atm_message_id: Some(prepared.atm_message_id),
+        raw_metadata_json,
+    })
+}
+
+fn duplicate_send_error(identity: StoreDuplicateIdentity) -> AtmError {
+    AtmError::new_with_code(
+        AtmErrorCode::StoreConstraintViolation,
+        crate::error::AtmErrorKind::MailboxWrite,
+        format!("generated duplicate outbound message identity during send: {identity:?}"),
+    )
+    .with_recovery(
+        "Retry the send once. If the duplicate persists, inspect the SQLite store for a stale message identity collision before sending again.",
+    )
+}
+
+fn map_store_error(context: &str, error: StoreError) -> AtmError {
+    let mut atm_error = AtmError::new_with_code(
+        error.code,
+        crate::error::AtmErrorKind::MailboxWrite,
+        format!("{context}: {}", error.message),
+    );
+    if let Some(recovery) = error.recovery.as_ref() {
+        atm_error = atm_error.with_recovery(recovery.clone());
+    }
+    atm_error.with_source(error)
 }
 
 #[derive(Debug)]
@@ -303,6 +555,7 @@ pub(crate) struct PostSendHookContext<'a> {
     pub(crate) requires_ack: bool,
     pub(crate) is_ack: bool,
     pub(crate) task_id: Option<&'a TaskId>,
+    pub(crate) recipient_pane_id: Option<&'a RecipientPaneId>,
 }
 
 fn resolve_recipient(
@@ -360,18 +613,19 @@ fn notify_team_lead_missing_config(
         return;
     }
 
-    let team_lead_inbox = match home::inbox_path_from_home(home_dir, team, "team-lead") {
-        Ok(path) => path,
-        Err(error) => {
-            warn!(
-                code = %AtmErrorCode::WarningMissingTeamConfigFallback,
-                %error,
-                team = %team,
-                "failed to resolve team-lead inbox for missing-config notice"
-            );
-            return;
-        }
-    };
+    let team_lead_inbox =
+        match home::inbox_path_from_home(home_dir, team, &AgentName::from_validated("team-lead")) {
+            Ok(path) => path,
+            Err(error) => {
+                warn!(
+                    code = %AtmErrorCode::WarningMissingTeamConfigFallback,
+                    %error,
+                    team = %team,
+                    "failed to resolve team-lead inbox for missing-config notice"
+                );
+                return;
+            }
+        };
 
     if !team_lead_inbox.exists() {
         return;
@@ -391,16 +645,14 @@ fn notify_team_lead_missing_config(
     );
 
     let notice = MessageEnvelope {
-        from: "atm-identity-missing"
-            .parse()
-            .expect("system sender is valid"),
+        from: AgentName::from_validated("atm-identity-missing"),
         text: format!(
             "ATM warning: send used existing inbox fallback for {recipient}@{team} because team config is missing at {}. Please restore config.json.",
             config_path.display()
         ),
         timestamp,
         read: false,
-        source_team: Some(team.parse().expect("team name")),
+        source_team: Some(team.clone()),
         summary: Some(format!(
             "ATM warning: missing team config fallback used for {recipient}@{team}"
         )),
@@ -412,6 +664,9 @@ fn notify_team_lead_missing_config(
         extra,
     };
 
+    // TRANSITIONAL: missing-config notice routes through the legacy
+    // lock+sidecar append path for compatibility; full send-path dual-write
+    // unification is deferred to Q.3+.
     if let Err(error) = append_mailbox_message_and_seed_workflow(
         home_dir,
         team,
@@ -460,13 +715,13 @@ fn append_mailbox_message_and_seed_workflow(
 fn display_sender_identity(
     canonical_sender: &AgentName,
     sender_override: Option<&str>,
-    sender_team: Option<&str>,
-    recipient_team: &str,
+    sender_team: Option<&TeamName>,
+    recipient_team: &TeamName,
     config: Option<&config::AtmConfig>,
-) -> String {
+) -> Result<AgentName, AtmError> {
     let cross_team = sender_team.is_some_and(|team| team != recipient_team);
     if !cross_team {
-        return canonical_sender.to_string();
+        return Ok(canonical_sender.clone());
     }
 
     if let Some(sender_override) = sender_override
@@ -474,14 +729,18 @@ fn display_sender_identity(
         .filter(|value| !value.is_empty())
         && config::aliases::resolve_agent(sender_override, config) == canonical_sender.as_str()
     {
-        return sender_override.to_string();
+        return sender_override.parse();
     }
 
     config::aliases::preferred_alias(canonical_sender.as_str(), config)
         .unwrap_or_else(|| canonical_sender.to_string())
+        .parse()
 }
 
-pub(super) fn qualified_sender_identity(sender: &AgentName, sender_team: Option<&str>) -> String {
+pub(super) fn qualified_sender_identity(
+    sender: &AgentName,
+    sender_team: Option<&TeamName>,
+) -> String {
     sender_team
         .map(|team| format!("{sender}@{team}"))
         .unwrap_or_else(|| sender.to_string())
@@ -511,7 +770,7 @@ fn set_canonical_sender_metadata(
     };
     atm.insert(
         "fromIdentity".to_string(),
-        serde_json::to_value(canonical_from).expect("AgentName serializes"),
+        serde_json::Value::String(canonical_from.to_string()),
     );
 }
 

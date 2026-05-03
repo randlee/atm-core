@@ -12,6 +12,9 @@ use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::persistence;
 use crate::process::process_is_alive;
 
+const ALERT_LOCK_RETRY_ATTEMPTS: usize = 50;
+const ALERT_LOCK_RETRY_INTERVAL: Duration = Duration::from_millis(20);
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub(super) struct SendAlertState {
     #[serde(default)]
@@ -87,7 +90,7 @@ pub(super) fn acquire_lock(path: &Path) -> Option<SendAlertLock> {
         return None;
     }
 
-    for _ in 0..100 {
+    for _ in 0..ALERT_LOCK_RETRY_ATTEMPTS {
         match OpenOptions::new().write(true).create_new(true).open(path) {
             Ok(mut file) => {
                 let pid = std::process::id().to_string();
@@ -107,10 +110,10 @@ pub(super) fn acquire_lock(path: &Path) -> Option<SendAlertLock> {
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
                 if evict_stale_send_alert_lock(path) {
-                    thread::sleep(Duration::from_millis(10));
+                    thread::sleep(ALERT_LOCK_RETRY_INTERVAL);
                     continue;
                 }
-                thread::sleep(Duration::from_millis(10));
+                thread::sleep(ALERT_LOCK_RETRY_INTERVAL);
             }
             Err(error) => {
                 warn!(

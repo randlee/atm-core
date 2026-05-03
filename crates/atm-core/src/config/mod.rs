@@ -623,6 +623,20 @@ post_send_hook_recipients = ["team-lead"]
     }
 
     #[test]
+    fn parse_team_config_applies_name_validation_to_string_and_object_forms() {
+        let (_tempdir, config_path) = temp_config_path();
+        let config = parse_team_config(
+            &config_path,
+            r#"{"members":["bad/name",{"name":"qa"},{"name":"also/bad"}]}"#,
+        )
+        .expect("team config");
+
+        assert_eq!(config.members.len(), 1);
+        assert_eq!(config.members[0].name, "qa");
+        assert!(config.extra.is_empty());
+    }
+
+    #[test]
     fn parse_team_config_defaults_missing_members_to_empty() {
         let (_tempdir, config_path) = temp_config_path();
         let config = parse_team_config(&config_path, r#"{}"#).expect("team config");

@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorKind};
 use crate::home;
@@ -63,7 +64,11 @@ pub(crate) fn load_workflow_state(
         .with_source(error)
     })?;
 
-    serde_json::from_str(&raw).map_err(|error| {
+    parse_workflow_state(&path, &raw)
+}
+
+fn parse_workflow_state(path: &Path, raw: &str) -> Result<WorkflowStateFile, AtmError> {
+    let root: Value = serde_json::from_str(raw).map_err(|error| {
         AtmError::new(
             AtmErrorKind::Serialization,
             format!("invalid workflow state {}: {error}", path.display()),
@@ -72,7 +77,50 @@ pub(crate) fn load_workflow_state(
             "Remove or repair the malformed workflow state file so ATM can rebuild it on the next successful command.",
         )
         .with_source(error)
-    })
+    })?;
+    let root = root.as_object().ok_or_else(|| {
+        AtmError::new(
+            AtmErrorKind::Serialization,
+            format!(
+                "invalid workflow state {}: expected top-level JSON object",
+                path.display()
+            ),
+        )
+        .with_recovery(
+            "Remove or repair the malformed workflow state file so ATM can rebuild it on the next successful command.",
+        )
+    })?;
+
+    let mut state = WorkflowStateFile::default();
+    let Some(messages) = root.get("messages") else {
+        return Ok(state);
+    };
+    let messages = messages.as_object().ok_or_else(|| {
+        AtmError::new(
+            AtmErrorKind::Serialization,
+            format!(
+                "invalid workflow state {}: expected messages to be a JSON object",
+                path.display()
+            ),
+        )
+        .with_recovery(
+            "Remove or repair the malformed workflow state file so ATM can rebuild it on the next successful command.",
+        )
+    })?;
+
+    for (workflow_key, entry_value) in messages {
+        if let Ok(entry) = serde_json::from_value::<WorkflowMessageState>(entry_value.clone()) {
+            state.messages.insert(workflow_key.clone(), entry);
+        } else {
+            warn!(
+                workflow_key,
+                raw_entry = %entry_value,
+                "skipping malformed workflow-state entry"
+            );
+        }
+    }
+
+    Ok(state)
 }
 
 pub(crate) fn save_workflow_state(
@@ -259,8 +307,8 @@ mod tests {
 
     use super::{
         WorkflowMessageState, apply_projected_state, atm_message_id, load_workflow_state,
-        project_envelope, remember_initial_state, remove_message_state, save_workflow_state,
-        set_atm_message_id, workflow_key,
+        parse_workflow_state, project_envelope, remember_initial_state, remove_message_state,
+        save_workflow_state, set_atm_message_id, workflow_key,
     };
     use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
@@ -308,6 +356,42 @@ mod tests {
             load_workflow_state(tempdir.path(), "atm-dev", "arch-ctm").expect("load state");
 
         assert_eq!(loaded, state);
+    }
+
+    #[test]
+    fn load_workflow_state_skips_malformed_message_entries() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let parsed = parse_workflow_state(
+            &tempdir.path().join("workflow.json"),
+            &serde_json::json!({
+                "messages": {
+                    "atm:good": {
+                        "read": true,
+                        "pendingAckAt": null,
+                        "acknowledgedAt": null
+                    },
+                    "atm:bad": "not-an-object"
+                }
+            })
+            .to_string(),
+        )
+        .expect("workflow state should load");
+
+        assert_eq!(parsed.messages.len(), 1);
+        assert!(parsed.messages.get("atm:good").expect("good entry").read);
+        assert!(!parsed.messages.contains_key("atm:bad"));
+    }
+
+    #[test]
+    fn load_workflow_state_rejects_non_object_messages_field() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let error = parse_workflow_state(
+            &tempdir.path().join("workflow.json"),
+            &serde_json::json!({ "messages": [] }).to_string(),
+        )
+        .expect_err("non-object messages field should fail");
+
+        assert!(error.is_serialization());
     }
 
     #[test]

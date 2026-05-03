@@ -26,6 +26,24 @@ impl IsoTimestamp {
     }
 }
 
+impl FromStr for IsoTimestamp {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let parsed = chrono::DateTime::parse_from_rfc3339(value).map_err(|error| {
+            AtmError::validation(format!("timestamp must be RFC3339/ISO-8601: {error}"))
+                .with_recovery("Persist and pass timestamps in RFC3339 UTC form.")
+        })?;
+        Ok(Self(parsed.with_timezone(&Utc)))
+    }
+}
+
+impl fmt::Display for IsoTimestamp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0.to_rfc3339())
+    }
+}
+
 impl From<DateTime<Utc>> for IsoTimestamp {
     fn from(datetime: DateTime<Utc>) -> Self {
         Self(datetime)
@@ -54,6 +72,11 @@ impl AgentName {
     /// Raw untrusted strings must go through `FromStr` or `Deserialize`.
     pub(crate) fn from_validated(value: impl Into<String>) -> Self {
         Self(value.into())
+    }
+
+    /// Stable internal sender identity used by ATM-owned synthetic events.
+    pub fn system() -> Self {
+        Self::from_validated("system")
     }
 }
 
@@ -110,7 +133,7 @@ impl PartialEq<&str> for AgentName {
 }
 
 /// Canonical ATM team name at a public API boundary.
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct TeamName(String);
 

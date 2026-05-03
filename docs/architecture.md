@@ -639,7 +639,14 @@ Supersession note:
 
 Public entrypoint:
 
-`send::send_mail(request: SendRequest, observability: &dyn ObservabilityPort) -> Result<SendOutcome, AtmError>`
+`send::send_mail_via_store(request: SendRequest, store: &dyn SendStore, ingress: &dyn InboxIngress, exporter: &dyn InboxExport, observability: &dyn ObservabilityPort) -> Result<SendOutcome, AtmError>`
+
+Phase Q note:
+- Q.2 replaced the earlier `send_mail(request, observability)` entrypoint with
+  `send_mail_via_store(...)`
+- the store, ingress, and exporter parameters make the SQLite-first write,
+  ingest-before-export, and projection/export boundaries explicit at the public
+  service seam
 
 `SendRequest` contains:
 - home directory
@@ -667,7 +674,8 @@ Public entrypoint:
 | `agent` | `String` | Resolved target recipient. |
 | `sender` | `String` | Resolved sender identity. |
 | `outcome` | `&'static str` | Delivery result such as `sent` or `dry_run`. |
-| `message_id` | `Uuid` | ATM-authored UUID v4 for the send operation. |
+| `message_id` | `LegacyMessageId` | ATM-authored legacy UUID bridge identity for the send operation. |
+| `atm_message_id` | `AtmMessageId` | Canonical ATM ULID carried in SQLite and `metadata.atm.messageId`. |
 | `requires_ack` | `bool` | Whether the message requires acknowledgement. |
 | `task_id` | `Option<String>` | Optional task identifier persisted on the message. |
 | `summary` | `Option<String>` | Generated or caller-supplied summary text. |
@@ -685,14 +693,21 @@ Normal send JSON output includes:
 - `agent`
 - `outcome`
 - `message_id`
+- `atm_message_id`
 - `requires_ack`
 - `task_id`
 - `warnings` when send completed in a degraded but permitted mode
+
+For the ATM-authored inbox wire shape, the top-level legacy `message_id` is
+omitted; that legacy field appears only in compatibility-mode sends. The
+canonical send identity is `atm_message_id`, with the legacy UUID bridge
+retained only where older consumers still require it.
 
 Dry-run send JSON output includes:
 - `action = "send"`
 - `agent`
 - `team`
+- `atm_message_id`
 - `message`
 - `dry_run = true`
 - `requires_ack`
@@ -822,7 +837,7 @@ The CLI JSON output mirrors the current contract:
 
 Public entrypoint:
 
-`ack::ack_mail(request: AckRequest, observability: &dyn ObservabilityPort) -> Result<AckOutcome, AtmError>`
+`ack::ack_mail<S>(request: AckRequest, store: &S, observability: &dyn ObservabilityPort) -> Result<AckOutcome, AtmError> where S: AckStore`
 
 `AckRequest` contains:
 - home directory
@@ -840,6 +855,9 @@ Public entrypoint:
 - optional task id from the acknowledged message
 - reply target
 - reply message id
+  `AckOutcome.reply_message_id` remains `LegacyMessageId` for CLI/output
+  compatibility even though SQLite and `metadata.atm.messageId` carry the
+  canonical `AtmMessageId`
 - reply text
 - warnings: Vec<String>
 - Phase Q addition: `warnings` carries best-effort post-send-hook diagnostics
@@ -847,7 +865,9 @@ Public entrypoint:
 
 The ack service is responsible for the legal transition from `(Read, PendingAck)` to `(Read, Acknowledged)` plus the reply append.
 
-When the source message came from an origin inbox file in the merged surface, the acknowledgement writeback must update that source file atomically rather than projecting the change onto a different inbox file.
+Phase Q supersedes the legacy source-file writeback rule: SQLite is the
+authoritative durable store for ack state, while inbox/file-surface projection
+is deferred to the Q.4 export/runtime path.
 
 ### 6.4 Clear Service
 
@@ -1299,6 +1319,7 @@ Required families:
 - identity
 - team not found
 - agent not found
+- store
 - mailbox read
 - mailbox write
 - file policy

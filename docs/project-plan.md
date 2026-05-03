@@ -2482,6 +2482,9 @@ Integration branch:
 
 ### Q.0 — Boundary Cleanup And Debt Retirement
 
+Status:
+- complete on `feature/pQ-s0-debt-retirement` at `01a252a`
+
 Scope:
 - align the existing codebase with the Phase Q target shape before store and
   daemon work begin

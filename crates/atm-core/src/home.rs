@@ -39,6 +39,16 @@ pub fn inbox_path(team: &str, agent: &str) -> Result<PathBuf, AtmError> {
     inbox_path_from_home(&atm_home()?, team, agent)
 }
 
+/// Resolve the SQLite mail-store path for `team` under the current ATM home.
+///
+/// # Errors
+///
+/// Propagates [`atm_home`] failures when the ATM home directory cannot be
+/// resolved.
+pub fn mail_db_path(team: &str) -> Result<PathBuf, AtmError> {
+    mail_db_path_from_home(&atm_home()?, team)
+}
+
 /// Resolve the team directory for `team` under an explicit ATM home root.
 ///
 /// # Errors
@@ -67,6 +77,20 @@ pub fn inbox_path_from_home(home_dir: &Path, team: &str, agent: &str) -> Result<
         .join(format!("{agent}.json")))
 }
 
+/// Resolve the SQLite mail-store path for `team` under an explicit ATM home root.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::AddressParseFailed`] when `team`
+/// contains path traversal, path separators, or other invalid path-segment
+/// characters.
+pub fn mail_db_path_from_home(home_dir: &Path, team: &str) -> Result<PathBuf, AtmError> {
+    Ok(team_dir_from_home(home_dir, team)?
+        .join(".atm-state")
+        .join("mail.db"))
+}
+
 /// Resolve the ATM-owned workflow-state path for `agent` in `team`.
 ///
 /// # Errors
@@ -85,30 +109,6 @@ pub fn workflow_state_path_from_home(
         .join(".atm-state")
         .join("workflow")
         .join(format!("{agent}.json")))
-}
-
-/// Resolve the ATM-owned state directory for `team`.
-///
-/// # Errors
-///
-/// Returns [`AtmError`] with
-/// [`crate::error_codes::AtmErrorCode::AddressParseFailed`] when `team`
-/// contains path traversal, path separators, or other invalid path-segment
-/// characters.
-pub fn team_state_dir_from_home(home_dir: &Path, team: &str) -> Result<PathBuf, AtmError> {
-    Ok(team_dir_from_home(home_dir, team)?.join(".atm-state"))
-}
-
-/// Resolve the SQLite durable store path for `team`.
-///
-/// # Errors
-///
-/// Returns [`AtmError`] with
-/// [`crate::error_codes::AtmErrorCode::AddressParseFailed`] when `team`
-/// contains path traversal, path separators, or other invalid path-segment
-/// characters.
-pub fn mail_db_path_from_home(home_dir: &Path, team: &str) -> Result<PathBuf, AtmError> {
-    Ok(team_state_dir_from_home(home_dir, team)?.join("mail.db"))
 }
 
 fn resolve_user_home() -> Result<PathBuf, AtmError> {
@@ -131,8 +131,8 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{
-        atm_home, inbox_path, inbox_path_from_home, mail_db_path_from_home, team_dir,
-        team_dir_from_home, team_state_dir_from_home, workflow_state_path_from_home,
+        atm_home, inbox_path, inbox_path_from_home, mail_db_path, mail_db_path_from_home, team_dir,
+        team_dir_from_home, workflow_state_path_from_home,
     };
 
     // Serializes process-environment mutation inside this test module. This is
@@ -236,16 +236,7 @@ mod tests {
                 .join("arch-ctm.json")
         );
         assert_eq!(
-            team_state_dir_from_home(tempdir.path(), "atm-dev").expect("state dir"),
-            tempdir
-                .path()
-                .join(".claude")
-                .join("teams")
-                .join("atm-dev")
-                .join(".atm-state")
-        );
-        assert_eq!(
-            mail_db_path_from_home(tempdir.path(), "atm-dev").expect("mail db"),
+            mail_db_path("atm-dev").expect("mail db path"),
             tempdir
                 .path()
                 .join(".claude")
@@ -290,6 +281,22 @@ mod tests {
                 .join(".atm-state")
                 .join("workflow")
                 .join("arch-ctm.json")
+        );
+    }
+
+    #[test]
+    fn mail_db_path_uses_atm_state_layout() {
+        let tempdir = TempDir::new().expect("tempdir");
+
+        assert_eq!(
+            mail_db_path_from_home(tempdir.path(), "atm-dev").expect("mail db path"),
+            tempdir
+                .path()
+                .join(".claude")
+                .join("teams")
+                .join("atm-dev")
+                .join(".atm-state")
+                .join("mail.db")
         );
     }
 }

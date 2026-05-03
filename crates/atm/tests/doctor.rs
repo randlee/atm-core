@@ -1,5 +1,6 @@
 use std::fs;
 use std::process::Command;
+use std::time::{Duration, Instant};
 
 use atm_core::schema::{AgentMember, TeamConfig};
 use serde_json::Value;
@@ -266,8 +267,61 @@ fn test_doctor_sweeps_stale_mailbox_lock_across_team_inboxes() {
     assert!(!stale_lock.exists(), "doctor should sweep stale sentinel");
 }
 
+#[test]
+fn test_doctor_auto_starts_daemon_when_absent() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+
+    let output = fixture.run(&["doctor", "--json"], &[]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["summary"]["status"], "healthy");
+    assert!(fixture.daemon_control_path().exists());
+    fixture.kill_daemon();
+}
+
+#[test]
+fn test_doctor_reports_typed_error_when_auto_start_fails() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+
+    let output = fixture.run(
+        &["--stderr-logs", "doctor", "--json"],
+        &[("ATM_DAEMON_BIN", "/definitely/missing/atm-daemon")],
+    );
+
+    assert!(!output.status.success());
+    let stderr = fixture.stderr(&output);
+    assert!(
+        stderr.contains("failed to start atm-daemon"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("Check the atm-daemon binary path"),
+        "stderr: {stderr}"
+    );
+    let fatal_event = fixture
+        .active_log_records()
+        .into_iter()
+        .find(|record| record["action"] == "service" && record["outcome"] == "error")
+        .expect("fatal structured event");
+    assert_eq!(
+        fatal_event["fields"]["error_code"],
+        "ATM_DAEMON_START_FAILED"
+    );
+}
+
 struct Fixture {
     tempdir: tempfile::TempDir,
+}
+
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        self.kill_daemon();
+    }
 }
 
 impl Fixture {
@@ -349,5 +403,80 @@ impl Fixture {
             .join("share")
             .join("logs")
             .join("atm.log.jsonl")
+    }
+
+    fn active_log_records(&self) -> Vec<Value> {
+        let raw = fs::read_to_string(self.active_log_path()).expect("active log");
+        raw.lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| serde_json::from_str(line).expect("log json"))
+            .collect()
+    }
+
+    fn daemon_control_path(&self) -> std::path::PathBuf {
+        self.tempdir
+            .path()
+            .join(".atm-state")
+            .join("daemon")
+            .join("control.json")
+    }
+
+    fn kill_daemon(&self) {
+        let Ok(raw) = fs::read(self.daemon_control_path()) else {
+            return;
+        };
+        let Some(pid) = serde_json::from_slice::<Value>(&raw)
+            .ok()
+            .and_then(|value| value.get("pid").and_then(Value::as_u64))
+            .map(|pid| pid as u32)
+        else {
+            return;
+        };
+        terminate_process(pid);
+    }
+}
+
+#[cfg(unix)]
+fn terminate_process(pid: u32) {
+    let _ = Command::new("kill")
+        .args(["-TERM", &pid.to_string()])
+        .status();
+    wait_for_process_exit(pid, Duration::from_secs(5));
+}
+
+#[cfg(windows)]
+fn terminate_process(pid: u32) {
+    let _ = Command::new("taskkill")
+        .args(["/PID", &pid.to_string(), "/T", "/F"])
+        .status();
+    wait_for_process_exit(pid, Duration::from_secs(5));
+}
+
+#[cfg(unix)]
+fn process_alive(pid: u32) -> bool {
+    Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+#[cfg(windows)]
+fn process_alive(pid: u32) -> bool {
+    Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {pid}")])
+        .output()
+        .ok()
+        .map(|output| String::from_utf8_lossy(&output.stdout).contains(&pid.to_string()))
+        .unwrap_or(false)
+}
+
+fn wait_for_process_exit(pid: u32, timeout: Duration) {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if !process_alive(pid) {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(50));
     }
 }

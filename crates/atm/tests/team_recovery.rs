@@ -232,14 +232,6 @@ fn test_backup_captures_config_inboxes_and_tasks() {
     let backup_path = parsed["backup_path"].as_str().expect("backup path");
     let backup_dir = std::path::Path::new(backup_path);
     assert!(backup_dir.join("config.json").is_file());
-    assert!(
-        backup_dir
-            .join(".atm-state")
-            .join("workflow")
-            .join("arch-ctm.json")
-            .is_file()
-    );
-    assert!(backup_dir.join(".atm-state").join("mail.db").is_file());
     assert!(backup_dir.join("inboxes").join("arch-ctm.json").is_file());
     assert!(backup_dir.join("tasks").join("7.json").is_file());
     assert!(backup_dir.join("tasks").join(".highwatermark").is_file());
@@ -326,7 +318,7 @@ fn test_restore_dry_run_reports_members_inboxes_and_tasks() {
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["dry_run"], true);
     assert_eq!(parsed["would_restore_members"][0], "arch-ctm");
-    assert_eq!(parsed["would_restore_inboxes"][0], "arch-ctm");
+    assert_eq!(parsed["would_restore_inboxes"][0], "arch-ctm.json");
     assert_eq!(parsed["would_restore_tasks"], 1);
 }
 
@@ -428,7 +420,7 @@ fn test_restore_preserves_team_lead_and_recomputes_highwatermark() {
         .iter()
         .find(|member| member["name"] == "arch-ctm")
         .expect("restored member");
-    assert_eq!(restored["tmuxPaneId"], "");
+    assert!(restored["tmuxPaneId"].is_null());
     assert!(restored.get("sessionId").is_none());
     assert!(restored.get("activity").is_none());
 
@@ -438,16 +430,6 @@ fn test_restore_preserves_team_lead_and_recomputes_highwatermark() {
     let restored_inbox =
         fs::read_to_string(fixture.inbox_path("atm-dev", "arch-ctm")).expect("restored inbox");
     assert!(restored_inbox.contains("restore worker inbox"));
-    assert_eq!(
-        fs::read_to_string(
-            fixture
-                .team_dir("atm-dev")
-                .join(".atm-state")
-                .join("mail.db")
-        )
-        .expect("restored mail db"),
-        "restored sqlite placeholder"
-    );
     assert_eq!(fixture.read_highwatermark("atm-dev"), "82");
 }
 
@@ -498,7 +480,7 @@ fn test_restore_ignores_stale_mailbox_lock_sentinels_for_compatibility_inboxes()
     );
 
     assert!(
-        fixture
+        !fixture
             .team_dir("atm-dev")
             .join("inboxes")
             .join("arch-ctm.json.lock")

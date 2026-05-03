@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::warn;
 
@@ -11,7 +11,6 @@ use crate::config::{load_config, load_team_config, resolve_team};
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
 use crate::persistence;
-use crate::schema::agent_member::AgentType;
 use crate::schema::{AgentMember, TeamConfig};
 use crate::types::{AgentName, TeamName};
 
@@ -29,12 +28,12 @@ pub struct TeamSummary {
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct TeamsList {
     pub action: String,
-    pub team: TeamName,
+    pub team: Option<TeamName>,
     pub teams: Vec<TeamSummary>,
 }
 
 /// One member entry from a team's live `config.json` roster.
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MemberSummary {
     pub name: AgentName,
     pub agent_id: String,
@@ -47,7 +46,7 @@ pub struct MemberSummary {
 }
 
 /// Result of listing all current members for one team.
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MembersList {
     pub team: TeamName,
     pub members: Vec<MemberSummary>,
@@ -67,7 +66,7 @@ pub struct AddMemberRequest {
     pub home_dir: PathBuf,
     pub team: TeamName,
     pub member: AgentName,
-    pub agent_type: AgentType,
+    pub agent_type: String,
     pub model: String,
     pub cwd: PathBuf,
     pub tmux_pane_id: Option<String>,
@@ -87,7 +86,7 @@ impl AddMemberRequest {
             home_dir,
             team: team.parse()?,
             member: member.parse()?,
-            agent_type: agent_type.into(),
+            agent_type,
             model,
             cwd,
             tmux_pane_id,
@@ -161,7 +160,7 @@ pub struct RestorePlan {
     pub backup_path: PathBuf,
     pub dry_run: bool,
     pub would_restore_members: Vec<AgentName>,
-    pub would_restore_inboxes: Vec<AgentName>,
+    pub would_restore_inboxes: Vec<String>,
     pub would_restore_tasks: usize,
 }
 
@@ -191,7 +190,7 @@ pub enum RestoreResult {
 /// cannot be enumerated.
 pub fn list_teams(home_dir: PathBuf, current_dir: PathBuf) -> Result<TeamsList, AtmError> {
     let config = load_config(&current_dir)?;
-    let current_team = resolve_team(None, config.as_ref()).unwrap_or_default();
+    let current_team = resolve_team(None, config.as_ref());
     let teams_root = teams_root_from_home(&home_dir);
     if !teams_root.exists() {
         return Ok(TeamsList {
@@ -321,12 +320,12 @@ pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmErro
 
     config.members.push(AgentMember {
         name: request.member.clone(),
-        agent_id: format!("{}@{}", request.member, request.team),
-        agent_type: request.agent_type,
-        model: request.model,
+        agent_id: Some(format!("{}@{}", request.member, request.team)),
+        agent_type: Some(request.agent_type.into()),
+        model: Some(request.model),
         joined_at: Some(Utc::now().timestamp_millis() as u64),
-        tmux_pane_id: normalized_tmux_pane_id.unwrap_or_default(),
-        cwd: request.cwd.display().to_string(),
+        tmux_pane_id: normalized_tmux_pane_id,
+        cwd: Some(request.cwd.display().to_string()),
         extra,
     });
 
@@ -347,8 +346,7 @@ pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmErro
     })
 }
 
-/// Create a point-in-time backup of one team's config, ATM-owned state,
-/// inboxes, and task files.
+/// Create a point-in-time backup of one team's config, inboxes, and task files.
 ///
 /// # Errors
 ///
@@ -393,11 +391,6 @@ pub fn backup_team(request: BackupRequest) -> Result<BackupOutcome, AtmError> {
         &backup_dir.join("inboxes"),
         |name| !name.starts_with('.') && !name.ends_with(".lock"),
     )?;
-    copy_directory_recursive_filtered(
-        &home::team_state_dir_from_home(&request.home_dir, &request.team)?,
-        &backup_dir.join(".atm-state"),
-        &|name| !name.ends_with(".lock"),
-    )?;
     copy_regular_files(
         &tasks_dir_from_home(&request.home_dir, &request.team)?,
         &backup_dir.join("tasks"),
@@ -425,12 +418,16 @@ pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> 
 fn member_summary(member: &AgentMember) -> MemberSummary {
     MemberSummary {
         name: AgentName::from_validated(member.name.clone()),
-        agent_id: member.agent_id.clone(),
-        agent_type: member.agent_type.to_string(),
-        model: member.model.clone(),
+        agent_id: member.agent_id.clone().unwrap_or_default(),
+        agent_type: member
+            .agent_type
+            .as_ref()
+            .map(ToString::to_string)
+            .unwrap_or_default(),
+        model: member.model.clone().unwrap_or_default(),
         joined_at: member.joined_at,
-        tmux_pane_id: member.tmux_pane_id.clone(),
-        cwd: member.cwd.clone(),
+        tmux_pane_id: member.tmux_pane_id.clone().unwrap_or_default(),
+        cwd: member.cwd.clone().unwrap_or_default(),
         extra: member.extra.clone(),
     }
 }
@@ -527,66 +524,6 @@ where
     F: Fn(&str) -> bool,
 {
     copy_regular_files_with_policy(src, dst, include, DirEntryErrorPolicy::FailClosed)
-}
-
-fn copy_directory_recursive_filtered(
-    src: &Path,
-    dst: &Path,
-    include: &dyn Fn(&str) -> bool,
-) -> Result<(), AtmError> {
-    if !src.exists() {
-        return Ok(());
-    }
-    fs::create_dir_all(dst).map_err(|error| {
-        AtmError::file_policy(format!(
-            "failed to create destination directory {}: {error}",
-            dst.display()
-        ))
-        .with_source(error)
-        .with_recovery("Check destination directory permissions and retry the copy.")
-    })?;
-
-    let mut entries = Vec::new();
-    for entry in fs::read_dir(src).map_err(|error| {
-        AtmError::file_policy(format!(
-            "failed to read source directory {}: {error}",
-            src.display()
-        ))
-        .with_source(error)
-        .with_recovery("Check source directory permissions and retry the copy.")
-    })? {
-        entries.push(entry.map_err(|error| {
-            AtmError::file_policy(format!(
-                "failed to read source directory entry under {}: {error}",
-                src.display()
-            ))
-            .with_source(error)
-            .with_recovery("Check source directory permissions and retry the copy.")
-        })?);
-    }
-    entries.sort_by_key(|entry| entry.file_name());
-
-    for entry in entries {
-        let from = entry.path();
-        let file_name = entry.file_name();
-        let file_name = file_name.to_string_lossy();
-        let to = dst.join(file_name.as_ref());
-        if from.is_dir() {
-            copy_directory_recursive_filtered(&from, &to, include)?;
-        } else if from.is_file() && include(&file_name) {
-            fs::copy(&from, &to).map_err(|error| {
-                AtmError::file_policy(format!(
-                    "failed to copy {} to {}: {error}",
-                    from.display(),
-                    to.display()
-                ))
-                .with_source(error)
-                .with_recovery("Check source and destination permissions and retry the copy.")
-            })?;
-        }
-    }
-
-    Ok(())
 }
 
 enum DirEntryErrorPolicy {
@@ -700,7 +637,6 @@ mod tests {
     };
     use crate::error_codes::AtmErrorCode;
     use crate::schema::TeamConfig;
-    use crate::schema::agent_member::AgentType;
 
     fn write_team_config(home_dir: &std::path::Path, team: &str) {
         let team_dir = home_dir.join(".claude").join("teams").join(team);
@@ -756,7 +692,7 @@ mod tests {
             home_dir: tempdir.path().to_path_buf(),
             team: "atm-dev".parse().expect("team"),
             member: "arch-ctm".parse().expect("member"),
-            agent_type: AgentType::Worker,
+            agent_type: "worker".to_string(),
             model: "gpt-5".to_string(),
             cwd: tempdir.path().to_path_buf(),
             tmux_pane_id: Some("7".to_string()),
@@ -774,7 +710,7 @@ mod tests {
             .find(|member| member.name == "arch-ctm")
             .expect("member");
 
-        assert_eq!(member.tmux_pane_id, "%7");
+        assert_eq!(member.tmux_pane_id.as_deref(), Some("%7"));
         assert_eq!(member.extra["backendType"], serde_json::json!("tmux"));
         assert_eq!(member.extra["isActive"], serde_json::json!(true));
     }
@@ -788,7 +724,7 @@ mod tests {
             home_dir: tempdir.path().to_path_buf(),
             team: "atm-dev".parse().expect("team"),
             member: "arch-ctm".parse().expect("member"),
-            agent_type: AgentType::Worker,
+            agent_type: "worker".to_string(),
             model: "gpt-5".to_string(),
             cwd: tempdir.path().to_path_buf(),
             tmux_pane_id: Some("session:1.2".to_string()),

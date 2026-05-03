@@ -2,29 +2,10 @@ use std::fs;
 use std::process::Command;
 
 use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
-use atm_core::types::{AgentName, IsoTimestamp, TeamName};
-use chrono::{Duration, Utc};
+use atm_core::types::{AgentName, TeamName};
+use atm_core::{read_messages, write_messages};
+use chrono::{Duration, TimeZone, Utc};
 use serde_json::Value;
-
-fn parse_inbox_values(raw: &str) -> Vec<Value> {
-    if raw.trim().is_empty() {
-        return Vec::new();
-    }
-
-    match raw.chars().find(|ch| !ch.is_whitespace()) {
-        Some('[') => serde_json::from_str(raw).expect("json array"),
-        _ => raw
-            .lines()
-            .map(|line| serde_json::from_str(line).expect("json line"))
-            .collect(),
-    }
-}
-
-fn fixed_now() -> chrono::DateTime<Utc> {
-    "2026-05-02T20:00:00Z"
-        .parse()
-        .expect("fixed clear fixture timestamp")
-}
 
 #[test]
 fn test_clear_default_removes_only_read_and_acknowledged() {
@@ -38,15 +19,15 @@ fn test_clear_default_removes_only_read_and_acknowledged() {
                 false,
                 None,
                 None,
-                fixed_now() - Duration::days(10),
+                Utc::now() - Duration::days(10),
             ),
             fixture.message(
                 "team-lead",
                 "pending",
                 true,
-                Some(fixed_now() - Duration::days(9)),
+                Some(Utc::now() - Duration::days(9)),
                 None,
-                fixed_now() - Duration::days(9),
+                Utc::now() - Duration::days(9),
             ),
             fixture.message(
                 "team-lead",
@@ -54,15 +35,15 @@ fn test_clear_default_removes_only_read_and_acknowledged() {
                 true,
                 None,
                 None,
-                fixed_now() - Duration::days(8),
+                Utc::now() - Duration::days(8),
             ),
             fixture.message(
                 "team-lead",
                 "acknowledged",
                 true,
                 None,
-                Some(fixed_now() - Duration::days(7)),
-                fixed_now() - Duration::days(7),
+                Some(Utc::now() - Duration::days(7)),
+                Utc::now() - Duration::days(7),
             ),
         ],
     );
@@ -84,32 +65,37 @@ fn test_clear_default_removes_only_read_and_acknowledged() {
     assert!(parsed["removed_by_class"]["pending_ack"].is_null());
 
     let inbox = fixture.inbox_contents("arch-ctm");
-    assert_eq!(inbox.len(), 2);
-    assert_eq!(inbox[0].text, "unread");
-    assert_eq!(inbox[1].text, "pending");
+    assert_eq!(inbox.len(), 4);
+    let read_back = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(
+        read_back.status.success(),
+        "stderr: {}",
+        fixture.stderr(&read_back)
+    );
+    let projected = fixture.stdout_json(&read_back);
+    let messages = projected["messages"].as_array().expect("messages array");
+    assert_eq!(messages.len(), 2);
+    assert!(messages.iter().any(|message| message["text"] == "unread"));
+    assert!(messages.iter().any(|message| message["text"] == "pending"));
 }
 
 #[test]
-fn test_clear_succeeds_with_stale_mailbox_lock_artifact() {
+fn test_clear_uses_default_team_from_workspace_config_for_sqlite_path() {
     let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_atm_config("[atm]\ndefault_team = \"atm-dev\"\n");
     fixture.write_inbox(
         "arch-ctm",
         &[fixture.message(
             "team-lead",
-            "read through stale lock",
+            "read",
             true,
             None,
             None,
-            fixed_now() - Duration::days(1),
+            Utc::now() - Duration::days(1),
         )],
     );
-    fs::write(
-        fixture.inbox_path("arch-ctm").with_extension("json.lock"),
-        u32::MAX.to_string(),
-    )
-    .expect("stale lock");
 
-    let output = fixture.run(&["clear", "--json"]);
+    let output = fixture.run_with_env(&["clear", "--json"], &[("ATM_TEAM", "")]);
 
     assert!(
         output.status.success(),
@@ -118,7 +104,6 @@ fn test_clear_succeeds_with_stale_mailbox_lock_artifact() {
     );
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["removed_total"], 1);
-    assert!(fixture.inbox_contents("arch-ctm").is_empty());
 }
 
 #[test]
@@ -132,7 +117,7 @@ fn test_clear_dry_run_does_not_mutate() {
             true,
             None,
             None,
-            fixed_now() - Duration::days(3),
+            Utc::now() - Duration::days(3),
         )],
     );
 
@@ -149,6 +134,14 @@ fn test_clear_dry_run_does_not_mutate() {
     let inbox = fixture.inbox_contents("arch-ctm");
     assert_eq!(inbox.len(), 1);
     assert_eq!(inbox[0].text, "read");
+    let read_back = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(
+        read_back.status.success(),
+        "stderr: {}",
+        fixture.stderr(&read_back)
+    );
+    let projected = fixture.stdout_json(&read_back);
+    assert_eq!(projected["count"], 1);
 }
 
 #[test]
@@ -162,7 +155,7 @@ fn test_clear_emits_retained_log_record() {
             true,
             None,
             None,
-            fixed_now() - Duration::days(3),
+            Utc::now() - Duration::days(3),
         )],
     );
 
@@ -197,9 +190,9 @@ fn test_clear_never_removes_pending_ack() {
             "team-lead",
             "pending",
             true,
-            Some(fixed_now() - Duration::days(2)),
+            Some(Utc::now() - Duration::days(2)),
             None,
-            fixed_now() - Duration::days(2),
+            Utc::now() - Duration::days(2),
         )],
     );
 
@@ -221,6 +214,42 @@ fn test_clear_never_removes_pending_ack() {
 }
 
 #[test]
+fn test_clear_already_cleared_message_is_idempotent() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[fixture.message(
+            "team-lead",
+            "read once",
+            true,
+            None,
+            None,
+            Utc::now() - Duration::days(2),
+        )],
+    );
+
+    let first = fixture.run(&["clear", "--json"]);
+    assert!(first.status.success(), "stderr: {}", fixture.stderr(&first));
+    assert_eq!(fixture.stdout_json(&first)["removed_total"], 1);
+
+    let second = fixture.run(&["clear", "--json"]);
+    assert!(
+        second.status.success(),
+        "stderr: {}",
+        fixture.stderr(&second)
+    );
+    let parsed = fixture.stdout_json(&second);
+    assert_eq!(parsed["removed_total"], 0);
+    let read_back = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(
+        read_back.status.success(),
+        "stderr: {}",
+        fixture.stderr(&read_back)
+    );
+    assert_eq!(fixture.stdout_json(&read_back)["count"], 0);
+}
+
+#[test]
 fn test_clear_uses_workflow_sidecar_and_removes_cleared_entry() {
     let fixture = Fixture::new(&["arch-ctm"]);
     let message = fixture.message(
@@ -229,15 +258,24 @@ fn test_clear_uses_workflow_sidecar_and_removes_cleared_entry() {
         false,
         None,
         None,
-        fixed_now() - Duration::days(2),
+        Utc::now() - Duration::days(2),
     );
     let message_id = message.message_id.expect("message id");
     fixture.write_inbox("arch-ctm", &[message]);
+    let workflow_key = fixture
+        .inbox_contents("arch-ctm")
+        .first()
+        .and_then(|message| {
+            message
+                .atm_message_id()
+                .map(|message_id| format!("atm:{message_id}"))
+        })
+        .unwrap_or_else(|| format!("legacy:{message_id}"));
     fixture.write_workflow_state(
         "arch-ctm",
         serde_json::json!({
             "messages": {
-                format!("legacy:{message_id}"): {
+                workflow_key.clone(): {
                     "read": true
                 }
             }
@@ -251,9 +289,15 @@ fn test_clear_uses_workflow_sidecar_and_removes_cleared_entry() {
         "stderr: {}",
         fixture.stderr(&output)
     );
-    assert!(fixture.inbox_contents("arch-ctm").is_empty());
-    let workflow = fixture.workflow_state_contents("arch-ctm");
-    assert!(workflow["messages"][format!("legacy:{message_id}")].is_null());
+    assert_eq!(fixture.inbox_contents("arch-ctm").len(), 1);
+    let read_back = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(
+        read_back.status.success(),
+        "stderr: {}",
+        fixture.stderr(&read_back)
+    );
+    let projected = fixture.stdout_json(&read_back);
+    assert_eq!(projected["count"], 0);
 }
 
 #[test]
@@ -268,7 +312,7 @@ fn test_clear_idle_only_removes_only_idle_notifications() {
                 true,
                 None,
                 None,
-                fixed_now() - Duration::days(4),
+                Utc::now() - Duration::days(4),
             ),
             fixture.message(
                 "team-lead",
@@ -276,7 +320,7 @@ fn test_clear_idle_only_removes_only_idle_notifications() {
                 true,
                 None,
                 None,
-                fixed_now() - Duration::days(4),
+                Utc::now() - Duration::days(4),
             ),
         ],
     );
@@ -293,8 +337,17 @@ fn test_clear_idle_only_removes_only_idle_notifications() {
     assert_eq!(parsed["removed_by_class"]["read"], 1);
 
     let inbox = fixture.inbox_contents("arch-ctm");
-    assert_eq!(inbox.len(), 1);
-    assert_eq!(inbox[0].text, "normal read");
+    assert_eq!(inbox.len(), 2);
+    let read_back = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(
+        read_back.status.success(),
+        "stderr: {}",
+        fixture.stderr(&read_back)
+    );
+    let projected = fixture.stdout_json(&read_back);
+    let messages = projected["messages"].as_array().expect("messages array");
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0]["text"], "normal read");
 }
 
 #[test]
@@ -304,9 +357,9 @@ fn test_clear_preserves_unknown_fields_on_retained_messages() {
         "team-lead",
         "pending",
         true,
-        Some(fixed_now() - Duration::days(2)),
+        Some(Utc::now() - Duration::days(2)),
         None,
-        fixed_now() - Duration::days(2),
+        Utc::now() - Duration::days(2),
     );
     retained
         .extra
@@ -321,7 +374,7 @@ fn test_clear_preserves_unknown_fields_on_retained_messages() {
                 true,
                 None,
                 None,
-                fixed_now() - Duration::days(3),
+                Utc::now() - Duration::days(3),
             ),
             retained,
         ],
@@ -335,9 +388,9 @@ fn test_clear_preserves_unknown_fields_on_retained_messages() {
         fixture.stderr(&output)
     );
     let inbox = fixture.inbox_contents("arch-ctm");
-    assert_eq!(inbox.len(), 1);
+    assert_eq!(inbox.len(), 2);
     assert_eq!(
-        inbox[0].extra["futureField"],
+        inbox[1].extra["futureField"],
         serde_json::json!({"nested": true})
     );
 }
@@ -354,7 +407,7 @@ fn test_clear_older_than_filters_candidates() {
                 true,
                 None,
                 None,
-                fixed_now() - Duration::days(10),
+                Utc::now() - Duration::days(10),
             ),
             fixture.message(
                 "team-lead",
@@ -362,7 +415,7 @@ fn test_clear_older_than_filters_candidates() {
                 true,
                 None,
                 None,
-                fixed_now() - Duration::hours(6),
+                Utc::now() - Duration::hours(6),
             ),
         ],
     );
@@ -378,8 +431,16 @@ fn test_clear_older_than_filters_candidates() {
     assert_eq!(parsed["removed_total"], 1);
 
     let inbox = fixture.inbox_contents("arch-ctm");
-    assert_eq!(inbox.len(), 1);
-    assert_eq!(inbox[0].text, "newer");
+    assert_eq!(inbox.len(), 2);
+    let read_back = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(
+        read_back.status.success(),
+        "stderr: {}",
+        fixture.stderr(&read_back)
+    );
+    let projected = fixture.stdout_json(&read_back);
+    assert_eq!(projected["count"], 1);
+    assert_eq!(projected["messages"][0]["text"], "newer");
 }
 
 #[test]
@@ -393,7 +454,7 @@ fn test_clear_explicit_target() {
             true,
             None,
             None,
-            fixed_now() - Duration::days(10),
+            Utc::now() - Duration::days(10),
         )],
     );
     fixture.write_inbox(
@@ -404,7 +465,7 @@ fn test_clear_explicit_target() {
             true,
             None,
             None,
-            fixed_now() - Duration::days(10),
+            Utc::now() - Duration::days(10),
         )],
     );
 
@@ -418,8 +479,23 @@ fn test_clear_explicit_target() {
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["agent"], "agent-b");
     assert_eq!(parsed["removed_total"], 1);
-    assert_eq!(fixture.inbox_contents("agent-b").len(), 0);
+    assert_eq!(fixture.inbox_contents("agent-b").len(), 1);
     assert_eq!(fixture.inbox_contents("arch-ctm").len(), 1);
+    let agent_b_read = fixture.run(&[
+        "read",
+        "agent-b",
+        "--as",
+        "arch-ctm",
+        "--all",
+        "--no-mark",
+        "--json",
+    ]);
+    assert!(
+        agent_b_read.status.success(),
+        "stderr: {}",
+        fixture.stderr(&agent_b_read)
+    );
+    assert_eq!(fixture.stdout_json(&agent_b_read)["count"], 0);
 }
 
 #[test]
@@ -434,7 +510,7 @@ fn test_clear_removes_from_origin_inbox_file() {
             true,
             None,
             None,
-            fixed_now() - Duration::days(8),
+            Utc::now() - Duration::days(8),
         )],
     );
 
@@ -445,7 +521,14 @@ fn test_clear_removes_from_origin_inbox_file() {
         fixture.stderr(&output)
     );
 
-    assert_eq!(fixture.origin_inbox_contents("arch-ctm", "host-a").len(), 0);
+    assert_eq!(fixture.origin_inbox_contents("arch-ctm", "host-a").len(), 1);
+    let read_back = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(
+        read_back.status.success(),
+        "stderr: {}",
+        fixture.stderr(&read_back)
+    );
+    assert_eq!(fixture.stdout_json(&read_back)["count"], 0);
 }
 
 struct Fixture {
@@ -496,20 +579,16 @@ impl Fixture {
         .expect("write team config");
     }
 
+    fn write_atm_config(&self, raw: &str) {
+        fs::write(self.tempdir.path().join(".atm.toml"), raw).expect("write .atm.toml");
+    }
+
     fn write_inbox(&self, agent: &str, messages: &[MessageEnvelope]) {
         let inbox_path = self.inbox_path(agent);
         if let Some(parent) = inbox_path.parent() {
             fs::create_dir_all(parent).expect("inbox dir");
         }
-        let values: Vec<Value> = messages
-            .iter()
-            .map(|message| serde_json::to_value(message).expect("json value"))
-            .collect();
-        fs::write(
-            inbox_path,
-            serde_json::to_string_pretty(&values).expect("json array"),
-        )
-        .expect("write inbox");
+        write_messages(&inbox_path, messages).expect("write inbox");
     }
 
     fn inbox_path(&self, agent: &str) -> std::path::PathBuf {
@@ -519,11 +598,7 @@ impl Fixture {
     }
 
     fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {
-        let raw = fs::read_to_string(self.inbox_path(agent)).expect("inbox contents");
-        parse_inbox_values(&raw)
-            .into_iter()
-            .map(|value| serde_json::from_value(value).expect("message envelope"))
-            .collect()
+        read_messages(&self.inbox_path(agent)).expect("inbox contents")
     }
 
     fn write_workflow_state(&self, agent: &str, value: Value) {
@@ -539,31 +614,12 @@ impl Fixture {
             .expect("write workflow");
     }
 
-    fn workflow_state_contents(&self, agent: &str) -> Value {
-        let raw = fs::read_to_string(
-            self.team_dir()
-                .join(".atm-state")
-                .join("workflow")
-                .join(format!("{agent}.json")),
-        )
-        .expect("workflow state contents");
-        serde_json::from_str(&raw).expect("workflow json")
-    }
-
     fn write_origin_inbox(&self, agent: &str, origin: &str, messages: &[MessageEnvelope]) {
         let inbox_path = self.origin_inbox_path(agent, origin);
         if let Some(parent) = inbox_path.parent() {
             fs::create_dir_all(parent).expect("origin inbox dir");
         }
-        let values: Vec<Value> = messages
-            .iter()
-            .map(|message| serde_json::to_value(message).expect("json value"))
-            .collect();
-        fs::write(
-            inbox_path,
-            serde_json::to_string_pretty(&values).expect("json array"),
-        )
-        .expect("write origin inbox");
+        write_messages(&inbox_path, messages).expect("write origin inbox");
     }
 
     fn origin_inbox_path(&self, agent: &str, origin: &str) -> std::path::PathBuf {
@@ -573,12 +629,7 @@ impl Fixture {
     }
 
     fn origin_inbox_contents(&self, agent: &str, origin: &str) -> Vec<MessageEnvelope> {
-        let raw = fs::read_to_string(self.origin_inbox_path(agent, origin))
-            .expect("origin inbox contents");
-        parse_inbox_values(&raw)
-            .into_iter()
-            .map(|value| serde_json::from_value(value).expect("message envelope"))
-            .collect()
+        read_messages(&self.origin_inbox_path(agent, origin)).expect("origin inbox contents")
     }
 
     fn stdout_json(&self, output: &std::process::Output) -> Value {
@@ -624,10 +675,14 @@ impl Fixture {
 }
 
 fn idle_notification_text(from: &str) -> String {
+    let timestamp = Utc
+        .with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
+        .single()
+        .expect("idle notification timestamp");
     serde_json::json!({
         "type": "idle_notification",
         "from": from,
-        "timestamp": IsoTimestamp::now().into_inner().to_rfc3339(),
+        "timestamp": timestamp.to_rfc3339(),
         "idleReason": "available"
     })
     .to_string()

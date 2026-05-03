@@ -168,7 +168,22 @@ Error codes should describe the failure class, not a specific prose message.
   - must not be downgraded to a warning because the old key is ambiguous under
     the redesigned contract
 
-#### 5.8.2 `ATM_WARNING_HOOK_SKIPPED`
+#### 5.8.2 `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`
+
+- code: `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`
+- description: `.atm.toml` still uses the retired flat legacy post-send-hook
+  filter keys
+- HTTP status: `400 Bad Request`
+- context:
+  - emitted during ATM config loading before send execution proceeds
+  - requires migration guidance that explains the recipient-scoped
+    `[[atm.post_send_hooks]]` rule shape
+  - flat legacy keys are ambiguous because they attempted to split sender and
+    recipient filtering outside the new one-rule-per-recipient contract
+  - must not be downgraded to a warning because the config cannot be safely
+    interpreted under the current hook model
+
+#### 5.8.3 `ATM_WARNING_HOOK_SKIPPED`
 
 - code: `ATM_WARNING_HOOK_SKIPPED`
 - description: retired for the hook filter non-match path; retained only as a
@@ -184,7 +199,7 @@ Error codes should describe the failure class, not a specific prose message.
   - actual caller-visible hook warnings now live only under
     `ATM_WARNING_HOOK_EXECUTION_FAILED`
 
-#### 5.8.3 `ATM_WARNING_HOOK_EXECUTION_FAILED`
+#### 5.8.4 `ATM_WARNING_HOOK_EXECUTION_FAILED`
 
 - code: `ATM_WARNING_HOOK_EXECUTION_FAILED`
 - description: a configured post-send hook failed to start, exited non-zero,
@@ -221,19 +236,28 @@ Error codes should describe the failure class, not a specific prose message.
     - message:
       ```text
       error: mailbox lock {operation} failed for {lock_path}: filesystem is read-only.
+      ```
+    - recovery:
+      ```text
+      Remount or move the ATM home to a writable filesystem, then retry the ATM command.
+      ```
 
-### 5.10 Phase Q Reserved Families
+### 5.10 Phase Q Runtime Families
 
-The following families are reserved for the Phase Q runtime line and must be
-materialized in `crates/atm-core/src/error_codes.rs` when the implementation
-lands.
+The following families are part of the Phase Q runtime line. Store codes are
+already materialized in `crates/atm-core/src/error_codes.rs`; the remaining
+families stay documented here as the shared contract for the later runtime
+surface.
 
 #### 5.10.1 Store
 
+- `ATM_STORE_OPEN_FAILED`
 - `ATM_STORE_BOOTSTRAP_FAILED`
-- `ATM_STORE_SCHEMA_FAILED`
+- `ATM_STORE_MIGRATION_FAILED`
+- `ATM_STORE_QUERY_FAILED`
+- `ATM_STORE_BUSY`
+- `ATM_STORE_CONSTRAINT_VIOLATION`
 - `ATM_STORE_TRANSACTION_FAILED`
-- `ATM_STORE_BUSY_TIMEOUT`
 
 #### 5.10.2 Ingest / Export
 
@@ -259,11 +283,6 @@ lands.
 - `ATM_DAEMON_SIGNAL_RELOAD_FAILED`
 - `ATM_DAEMON_UNAVAILABLE`
 - `ATM_DAEMON_CLIENT_TIMEOUT`
-      ```
-    - recovery:
-      ```text
-      Remount or move the ATM home to a writable filesystem, then retry the ATM command.
-      ```
   - drop-time best-effort cleanup may log the code as a warning because the
     mailbox command has already succeeded, but public acquisition/sweep paths
     must return the structured error directly
@@ -279,7 +298,7 @@ Required mapping rules:
 
 | `AtmErrorKind` | Default `AtmErrorCode` | Additional implemented codes in the same kind |
 | --- | --- | --- |
-| `Config` | `ATM_CONFIG_PARSE_FAILED` | `ATM_CONFIG_HOME_UNAVAILABLE`, `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`, `ATM_CONFIG_TEAM_PARSE_FAILED` |
+| `Config` | `ATM_CONFIG_PARSE_FAILED` | `ATM_CONFIG_HOME_UNAVAILABLE`, `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`, `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`, `ATM_CONFIG_TEAM_PARSE_FAILED` |
 | `MissingDocument` | `ATM_CONFIG_TEAM_MISSING` | none |
 | `Address` | `ATM_ADDRESS_PARSE_FAILED` | none |
 | `Identity` | `ATM_IDENTITY_UNAVAILABLE` | none |
@@ -292,11 +311,16 @@ Required mapping rules:
 | `Validation` | `ATM_MESSAGE_VALIDATION_FAILED` | `ATM_ACK_INVALID_STATE`, `ATM_CLEAR_INVALID_STATE` |
 | `Serialization` | `ATM_SERIALIZATION_FAILED` | none |
 | `Timeout` | `ATM_WAIT_TIMEOUT` | none |
+| `Store` | `ATM_STORE_QUERY_FAILED` | `ATM_STORE_OPEN_FAILED`, `ATM_STORE_BOOTSTRAP_FAILED`, `ATM_STORE_MIGRATION_FAILED`, `ATM_STORE_BUSY`, `ATM_STORE_CONSTRAINT_VIOLATION`, `ATM_STORE_TRANSACTION_FAILED` |
 | `ObservabilityEmit` | `ATM_OBSERVABILITY_EMIT_FAILED` | none |
 | `ObservabilityBootstrap` | `ATM_OBSERVABILITY_BOOTSTRAP_FAILED` | none |
 | `ObservabilityQuery` | `ATM_OBSERVABILITY_QUERY_FAILED` | none |
 | `ObservabilityFollow` | `ATM_OBSERVABILITY_FOLLOW_FAILED` | none |
 | `ObservabilityHealth` | `ATM_OBSERVABILITY_HEALTH_FAILED` | `ATM_OBSERVABILITY_HEALTH_OK`, `ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED` |
+
+Store-facing rusqlite layers classify persistence failures first, then command
+adapters preserve those codes under the caller-visible `AtmErrorKind::Store`
+coarse kind.
 
 ## 7. Recoverability Classification
 
@@ -358,13 +382,17 @@ Classification rules:
 | `ATM_WARNING_MISSING_TEAM_CONFIG_FALLBACK` | `warning_only` |
 | `ATM_WARNING_SEND_ALERT_STATE_DEGRADED` | `warning_only` |
 | `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY` | `operator_actionable` |
+| `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS` | `operator_actionable` |
 | `ATM_WARNING_HOOK_SKIPPED` | `warning_only` |
 | `ATM_WARNING_HOOK_EXECUTION_FAILED` | `warning_only` |
 | `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM` | `operator_actionable` |
+| `ATM_STORE_OPEN_FAILED` | `operator_actionable` |
 | `ATM_STORE_BOOTSTRAP_FAILED` | `operator_actionable` |
-| `ATM_STORE_SCHEMA_FAILED` | `fail_closed` |
+| `ATM_STORE_MIGRATION_FAILED` | `operator_actionable` |
+| `ATM_STORE_QUERY_FAILED` | `operator_actionable` |
+| `ATM_STORE_BUSY` | `retryable` |
+| `ATM_STORE_CONSTRAINT_VIOLATION` | `fail_closed` |
 | `ATM_STORE_TRANSACTION_FAILED` | `retryable` |
-| `ATM_STORE_BUSY_TIMEOUT` | `retryable` |
 | `ATM_INGEST_FAILED` | `operator_actionable` |
 | `ATM_WARNING_INGEST_BACKPRESSURE` | `warning_only` |
 | `ATM_WARNING_INGEST_RECORD_SKIPPED` | `warning_only` |

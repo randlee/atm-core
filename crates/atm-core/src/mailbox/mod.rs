@@ -15,14 +15,26 @@ use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::schema::inbox_message::hydrate_legacy_fields_from_metadata;
-use crate::schema::{LegacyMessageId, MessageEnvelope};
+use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
 
 const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct MailboxReadStats {
+    pub skipped_records: usize,
+    pub malformed_metadata_records: usize,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct MailboxReadReport {
+    pub messages: Vec<MessageEnvelope>,
+    pub stats: MailboxReadStats,
+}
 /// Append one message to a shared inbox file under the mailbox lock.
 ///
-/// Production send flows use the same lock discipline through
-/// `mailbox::store::append_mailbox_message_and_seed_workflow()`. This helper is
-/// test-only because production callers must also coordinate workflow seeding.
+/// Production send flows use the same lock discipline through the send-path
+/// workflow commit helper. The single-file lock/load/mutate/rewrite boundary
+/// itself is a production seam and must remain shared with test coverage.
 ///
 /// # Errors
 ///
@@ -32,7 +44,7 @@ const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
 /// [`crate::error_codes::AtmErrorCode::MailboxLockFailed`], or
 /// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`] when the mailbox
 /// cannot be loaded, locked, or atomically replaced.
-#[cfg(test)]
+#[allow(dead_code)]
 pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), AtmError> {
     locked_read_modify_write(path, lock::default_lock_timeout(), |messages| {
         messages.push(envelope.clone());
@@ -44,9 +56,8 @@ pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), Atm
 ///
 /// Production mutation paths use equivalent lock coverage through
 /// `mailbox::store::with_locked_source_files()` plus
-/// `mailbox::store::commit_source_files()`. This helper stays test-only so unit
-/// tests can exercise the shared mailbox lock contract directly without the
-/// workflow/state sidecars required in production commands.
+/// `mailbox::store::commit_source_files()`. Unit and integration tests also use
+/// this seam directly to validate the shared mailbox lock contract.
 ///
 /// # Errors
 ///
@@ -57,8 +68,8 @@ pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), Atm
 /// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`] when ATM cannot
 /// acquire the mailbox lock, read the current mailbox contents, or atomically
 /// persist the rewritten file.
-#[cfg(test)]
-pub(crate) fn locked_read_modify_write<F>(
+#[allow(dead_code)]
+pub fn locked_read_modify_write<F>(
     path: &Path,
     timeout: std::time::Duration,
     mutate: F,
@@ -80,8 +91,12 @@ where
 /// [`crate::error_codes::AtmErrorCode::MailboxReadFailed`] when the mailbox
 /// file cannot be opened or read.
 pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
+    Ok(read_messages_report(path)?.messages)
+}
+
+pub(crate) fn read_messages_report(path: &Path) -> Result<MailboxReadReport, AtmError> {
     if !path.exists() {
-        return Ok(Vec::new());
+        return Ok(MailboxReadReport::default());
     }
 
     let file_size = fs::metadata(path).map_err(|error| {
@@ -122,15 +137,30 @@ pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
     parse_mailbox_contents(&raw, path)
 }
 
-fn parse_mailbox_contents(raw: &str, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
+/// Persist one complete shared inbox file through ATM's canonical write path.
+///
+/// This is the only supported mailbox export boundary for code that needs to
+/// materialize `MessageEnvelope` values onto the Claude-owned inbox surface.
+/// Callers should not serialize inbox JSON directly.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`] when ATM cannot
+/// serialize the envelopes or atomically replace the target inbox file.
+pub fn write_messages(path: &Path, messages: &[MessageEnvelope]) -> Result<(), AtmError> {
+    store::commit_mailbox_state(path, messages)
+}
+
+fn parse_mailbox_contents(raw: &str, path: &Path) -> Result<MailboxReadReport, AtmError> {
     match raw.chars().find(|ch| !ch.is_whitespace()) {
-        None => Ok(Vec::new()),
+        None => Ok(MailboxReadReport::default()),
         Some('[') => parse_mailbox_array(raw, path),
         Some(_) => Ok(parse_mailbox_jsonl(raw, path)),
     }
 }
 
-fn parse_mailbox_array(raw: &str, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
+fn parse_mailbox_array(raw: &str, path: &Path) -> Result<MailboxReadReport, AtmError> {
     let records = serde_json::from_str::<Vec<Value>>(raw).map_err(|error| {
         AtmError::new(
             AtmErrorKind::MailboxRead,
@@ -142,61 +172,64 @@ fn parse_mailbox_array(raw: &str, path: &Path) -> Result<Vec<MessageEnvelope>, A
         .with_source(error)
     })?;
 
-    Ok(records
-        .into_iter()
-        .enumerate()
-        .filter_map(
-            |(index, mut value)| match parse_mailbox_value(&mut value, path, index + 1) {
-                Ok(Some(message)) => Some(message),
-                Ok(None) => None,
-                Err(error) => {
-                    warn!(
-                        code = %AtmErrorCode::WarningMailboxRecordSkipped,
-                        line = index + 1,
-                        mailbox_path = %path.display(),
-                        raw_record = %value,
-                        %error,
-                        "skipping malformed mailbox record"
-                    );
-                    None
-                }
-            },
-        )
-        .collect())
+    let mut report = MailboxReadReport::default();
+    for (index, mut value) in records.into_iter().enumerate() {
+        match parse_mailbox_value(&mut value, path, index + 1) {
+            Ok(Some((message, stats))) => {
+                report.stats.malformed_metadata_records += stats.malformed_metadata_records;
+                report.messages.push(message);
+            }
+            Ok(None) => {}
+            Err(error) => {
+                report.stats.skipped_records += 1;
+                warn!(
+                    code = %AtmErrorCode::WarningMailboxRecordSkipped,
+                    line = index + 1,
+                    mailbox_path = %path.display(),
+                    raw_record = %value,
+                    %error,
+                    "skipping malformed mailbox record"
+                );
+            }
+        }
+    }
+    Ok(report)
 }
 
-fn parse_mailbox_jsonl(raw: &str, path: &Path) -> Vec<MessageEnvelope> {
-    raw.lines()
-        .enumerate()
-        .filter_map(|(index, line)| {
-            if line.trim().is_empty() {
-                return None;
-            }
+fn parse_mailbox_jsonl(raw: &str, path: &Path) -> MailboxReadReport {
+    let mut report = MailboxReadReport::default();
+    for (index, line) in raw.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
 
-            match parse_mailbox_record(line, path, index + 1) {
-                Ok(Some(message)) => Some(message),
-                Ok(None) => None,
-                Err(error) => {
-                    warn!(
-                        code = %AtmErrorCode::WarningMailboxRecordSkipped,
-                        line = index + 1,
-                        mailbox_path = %path.display(),
-                        raw_record = %line,
-                        %error,
-                        "skipping malformed mailbox record"
-                    );
-                    None
-                }
+        match parse_mailbox_record(line, path, index + 1) {
+            Ok(Some((message, stats))) => {
+                report.stats.malformed_metadata_records += stats.malformed_metadata_records;
+                report.messages.push(message);
             }
-        })
-        .collect()
+            Ok(None) => {}
+            Err(error) => {
+                report.stats.skipped_records += 1;
+                warn!(
+                    code = %AtmErrorCode::WarningMailboxRecordSkipped,
+                    line = index + 1,
+                    mailbox_path = %path.display(),
+                    raw_record = %line,
+                    %error,
+                    "skipping malformed mailbox record"
+                );
+            }
+        }
+    }
+    report
 }
 
 fn parse_mailbox_record(
     raw_record: &str,
     path: &Path,
     line_number: usize,
-) -> Result<Option<MessageEnvelope>, serde_json::Error> {
+) -> Result<Option<(MessageEnvelope, MailboxReadStats)>, serde_json::Error> {
     let mut value = serde_json::from_str::<Value>(raw_record)?;
     parse_mailbox_value(&mut value, path, line_number)
 }
@@ -205,10 +238,38 @@ fn parse_mailbox_value(
     value: &mut Value,
     path: &Path,
     line_number: usize,
-) -> Result<Option<MessageEnvelope>, serde_json::Error> {
+) -> Result<Option<(MessageEnvelope, MailboxReadStats)>, serde_json::Error> {
+    let malformed_metadata_records = usize::from(detect_malformed_metadata(value));
     hydrate_legacy_fields_from_metadata(value);
     sanitize_legacy_message_id(value, path, line_number);
-    serde_json::from_value::<MessageEnvelope>(value.take()).map(Some)
+    serde_json::from_value::<MessageEnvelope>(value.take()).map(|message| {
+        Some((
+            message,
+            MailboxReadStats {
+                skipped_records: 0,
+                malformed_metadata_records,
+            },
+        ))
+    })
+}
+
+fn detect_malformed_metadata(value: &Value) -> bool {
+    let Some(atm) = value
+        .get("metadata")
+        .and_then(Value::as_object)
+        .and_then(|metadata| metadata.get("atm"))
+        .and_then(Value::as_object)
+    else {
+        return false;
+    };
+
+    atm.get("messageId")
+        .and_then(Value::as_str)
+        .is_some_and(|raw| raw.parse::<AtmMessageId>().is_err())
+        || atm
+            .get("acknowledgesMessageId")
+            .and_then(Value::as_str)
+            .is_some_and(|raw| raw.parse::<AtmMessageId>().is_err())
 }
 
 fn sanitize_legacy_message_id(value: &mut Value, path: &Path, line_number: usize) {
@@ -254,6 +315,27 @@ mod tests {
     use super::{MAX_MAILBOX_READ_BYTES, append_message, locked_read_modify_write, read_messages};
     use crate::mailbox::lock;
 
+    fn assert_round_trip_matches(actual: &[MessageEnvelope], expected: &[MessageEnvelope]) {
+        assert_eq!(actual.len(), expected.len());
+        for (actual, expected) in actual.iter().zip(expected) {
+            assert_eq!(actual.from, expected.from);
+            assert_eq!(actual.text, expected.text);
+            assert_eq!(actual.timestamp, expected.timestamp);
+            assert_eq!(actual.read, expected.read);
+            assert_eq!(actual.source_team, expected.source_team);
+            assert_eq!(actual.summary, expected.summary);
+            assert_eq!(actual.message_id, expected.message_id);
+            assert_eq!(actual.pending_ack_at, expected.pending_ack_at);
+            assert_eq!(actual.acknowledged_at, expected.acknowledged_at);
+            assert_eq!(
+                actual.acknowledges_message_id,
+                expected.acknowledges_message_id
+            );
+            assert_eq!(actual.task_id, expected.task_id);
+            assert!(actual.atm_message_id().is_some());
+        }
+    }
+
     #[test]
     fn append_message_persists_one_array_record() {
         let tempdir = TempDir::new().expect("tempdir");
@@ -267,7 +349,7 @@ mod tests {
         assert_eq!(values.len(), 1);
         assert_eq!(values[0]["text"], "first");
         let read_back = read_messages(&path).expect("read back");
-        assert_eq!(read_back, vec![envelope]);
+        assert_round_trip_matches(&read_back, &[envelope]);
     }
 
     #[test]
@@ -496,21 +578,6 @@ mod tests {
 
     fn sample_message(message_id: Uuid, body: &str) -> MessageEnvelope {
         let legacy_message_id = crate::schema::LegacyMessageId::from(message_id);
-        let atm_message_id = legacy_message_id.into_atm_message_id();
-        let message_id = crate::schema::LegacyMessageId::from_atm_message_id(atm_message_id);
-        let mut extra = serde_json::Map::new();
-        let mut metadata = serde_json::Map::new();
-        let mut atm = serde_json::Map::new();
-        atm.insert(
-            "messageId".to_string(),
-            serde_json::Value::String(atm_message_id.to_string()),
-        );
-        atm.insert(
-            "sourceTeam".to_string(),
-            serde_json::Value::String("atm-dev".to_string()),
-        );
-        metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
-        extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
 
         MessageEnvelope {
             from: "arch-ctm".parse::<AgentName>().expect("agent"),
@@ -523,12 +590,12 @@ mod tests {
             read: false,
             source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
             summary: None,
-            message_id: Some(message_id),
+            message_id: Some(legacy_message_id),
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
             task_id: None,
-            extra,
+            extra: serde_json::Map::new(),
         }
     }
 }
