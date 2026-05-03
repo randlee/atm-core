@@ -787,11 +787,10 @@ mod tests {
     use super::alert_state;
     use crate::process::process_is_alive;
     use crate::send::{SendMessageSource, SendRequest};
+    use crate::test_support::ROLE_TEAM_LEAD;
 
     const TEST_TEAM: &str = "test-team";
     const TEST_RECIPIENT: &str = "test-recipient";
-    const ROLE_TEAM_LEAD: &str = "team-lead";
-
     #[test]
     fn load_send_alert_state_parse_errors_are_config_errors() {
         let tempdir = tempdir().expect("tempdir");

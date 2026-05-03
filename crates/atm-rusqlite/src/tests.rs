@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Mutex;
 
+use atm_core::ack::{AckCommitCommand, AckCommitRejection, AckCommitResult, AckStore};
 use atm_core::home;
 use atm_core::inbox_ingress::{InboxIngestOutcome, InboxIngress, default_inbox_ingress};
 use atm_core::mail_store::{
@@ -24,6 +25,7 @@ use atm_core::task_store::{TaskRecord, TaskStatus, TaskStore};
 use atm_core::team_ingress::{default_host_name, ingest_loaded_team_config, ingest_team_config};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use rusqlite::{Connection, OpenFlags};
+use serde_json::json;
 use tempfile::TempDir;
 
 #[path = "../../atm/tests/support/mod.rs"]
@@ -215,6 +217,23 @@ fn table_columns(store: &RusqliteStore, table_name: &str) -> Vec<(String, String
         columns.push((name, kind, not_null == 1));
     }
     columns
+}
+
+fn ack_commit_command<'a>(
+    reply_message: &'a atm_core::mail_store::StoredMessageRecord,
+    source_legacy_message_id: Option<LegacyMessageId>,
+    source_atm_message_id: Option<AtmMessageId>,
+    reply_team: &'a TeamName,
+    reply_agent: &'a AgentName,
+) -> AckCommitCommand<'a> {
+    AckCommitCommand {
+        source_legacy_message_id,
+        source_atm_message_id,
+        reply_message,
+        acknowledged_at: "2026-05-02T20:00:20Z".parse().expect("timestamp"),
+        reply_team,
+        reply_agent,
+    }
 }
 
 #[test]
@@ -540,7 +559,7 @@ fn create_read_and_update_store_rows() {
         status: TaskStatus::PendingAck,
         created_at: "2026-05-02T20:00:40Z".parse().expect("timestamp"),
         acknowledged_at: None,
-        metadata_json: Some("{\"priority\":\"high\"}".to_string()),
+        metadata_json: Some(json!({"priority": "high"})),
     };
     store.upsert_task(&task).expect("upsert task");
     assert_eq!(
@@ -570,6 +589,75 @@ fn create_read_and_update_store_rows() {
     assert!(mail_health.ack_state_ready);
     assert!(mail_health.message_visibility_ready);
     assert!(mail_health.pending_exports_ready);
+}
+
+#[test]
+fn commit_ack_reply_rejects_already_acknowledged_message() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let store = RusqliteStore::open_path(tempdir.path().join("mail.db")).expect("open store");
+    let source_message = message_at(1);
+    let reply_message = message_at(2);
+    let reply_team = team();
+    let reply_agent = agent(TEST_RECIPIENT);
+    store
+        .insert_message(&source_message)
+        .expect("insert source");
+
+    store
+        .upsert_visibility(&VisibilityStateRecord {
+            message_key: source_message.message_key.clone(),
+            read_at: Some("2026-05-02T20:00:10Z".parse().expect("timestamp")),
+            cleared_at: None,
+        })
+        .expect("upsert visibility");
+    store
+        .upsert_ack_state(&AckStateRecord {
+            message_key: source_message.message_key.clone(),
+            pending_ack_at: None,
+            acknowledged_at: Some("2026-05-02T20:00:15Z".parse().expect("timestamp")),
+            ack_reply_message_key: Some("ext:prior-reply".parse().expect("message key")),
+            ack_reply_team: Some(team()),
+            ack_reply_agent: Some(agent(TEST_RECIPIENT)),
+        })
+        .expect("upsert ack state");
+
+    let result = store
+        .commit_ack_reply(&ack_commit_command(
+            &reply_message,
+            source_message.legacy_message_id,
+            source_message.atm_message_id,
+            &reply_team,
+            &reply_agent,
+        ))
+        .expect("commit ack reply");
+    assert!(matches!(
+        result,
+        AckCommitResult::Rejected(AckCommitRejection::AlreadyAcknowledged)
+    ));
+}
+
+#[test]
+fn commit_ack_reply_rejects_missing_source_message() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let store = RusqliteStore::open_path(tempdir.path().join("mail.db")).expect("open store");
+    let source_message = message_at(1);
+    let reply_message = message_at(2);
+    let reply_team = team();
+    let reply_agent = agent(TEST_RECIPIENT);
+
+    let result = store
+        .commit_ack_reply(&ack_commit_command(
+            &reply_message,
+            source_message.legacy_message_id,
+            source_message.atm_message_id,
+            &reply_team,
+            &reply_agent,
+        ))
+        .expect("commit ack reply");
+    assert!(matches!(
+        result,
+        AckCommitResult::Rejected(AckCommitRejection::MessageNotFound)
+    ));
 }
 
 #[test]
@@ -1119,7 +1207,7 @@ fn replace_roster_rolls_back_on_constraint_violation() {
 }
 
 #[test]
-fn team_roster_schema_keeps_recipient_pane_nullable() {
+fn team_roster_schema_keeps_nullable_runtime_columns() {
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_path(tempdir.path().join("mail.db")).expect("open store");
     let connection = store.lock_connection().expect("lock");
@@ -1129,15 +1217,36 @@ fn team_roster_schema_keeps_recipient_pane_nullable() {
     let mut rows = statement.query([]).expect("query table_info");
 
     let mut saw_recipient_pane = false;
+    let mut saw_role = false;
+    let mut saw_transport_kind = false;
+    let mut saw_host_name = false;
     while let Some(row) = rows.next().expect("next row") {
         let name: String = row.get(1).expect("column name");
-        if name == "recipient_pane_id" {
-            let not_null: i64 = row.get(3).expect("not null flag");
-            saw_recipient_pane = true;
-            assert_eq!(not_null, 0);
+        let not_null: i64 = row.get(3).expect("not null flag");
+        match name.as_str() {
+            "recipient_pane_id" => {
+                saw_recipient_pane = true;
+                assert_eq!(not_null, 0);
+            }
+            "role" => {
+                saw_role = true;
+                assert_eq!(not_null, 0);
+            }
+            "transport_kind" => {
+                saw_transport_kind = true;
+                assert_eq!(not_null, 0);
+            }
+            "host_name" => {
+                saw_host_name = true;
+                assert_eq!(not_null, 0);
+            }
+            _ => {}
         }
     }
     assert!(saw_recipient_pane);
+    assert!(saw_role);
+    assert!(saw_transport_kind);
+    assert!(saw_host_name);
 }
 
 #[test]
@@ -1162,6 +1271,22 @@ fn store_errors_stay_discriminated() {
     );
     assert_eq!(busy.kind, StoreErrorKind::Busy);
     assert_eq!(busy.code, atm_core::error_codes::AtmErrorCode::StoreBusy);
+
+    let busy_snapshot = crate::classify_store_error(
+        rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error {
+                code: rusqlite::ErrorCode::DatabaseBusy,
+                extended_code: rusqlite::ffi::SQLITE_BUSY_SNAPSHOT,
+            },
+            Some("database busy snapshot".to_string()),
+        ),
+        "busy_snapshot",
+    );
+    assert_eq!(busy_snapshot.kind, StoreErrorKind::Busy);
+    assert_eq!(
+        busy_snapshot.code,
+        atm_core::error_codes::AtmErrorCode::StoreBusy
+    );
 
     let constraint = crate::classify_store_error(
         rusqlite::Error::SqliteFailure(
@@ -1211,10 +1336,10 @@ fn store_errors_stay_discriminated() {
             .expect("open readonly initialized db");
     let migration = crate::bootstrap_schema(&mut readonly_initialized)
         .expect_err("readonly migration should fail");
-    assert_eq!(migration.kind, StoreErrorKind::Migration);
+    assert_eq!(migration.kind, StoreErrorKind::Bootstrap);
     assert_eq!(
         migration.code,
-        atm_core::error_codes::AtmErrorCode::StoreMigrationFailed
+        atm_core::error_codes::AtmErrorCode::StoreBootstrapFailed
     );
 
     let transaction_dir = TempDir::new().expect("tempdir");

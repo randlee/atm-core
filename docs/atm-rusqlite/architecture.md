@@ -43,7 +43,7 @@ Architectural rule:
 - enforcement of:
   - `journal_mode = WAL`
   - `foreign_keys = ON`
-  - `busy_timeout = 1500ms`
+  - `busy_timeout = 5000ms`
   - explicit transactions for mutating operations
 
 `atm-rusqlite` does not own:
@@ -62,7 +62,7 @@ Rules:
 - ATM-owned `AtmErrorCode` remains the public code vocabulary
 - the crate must not invent local ad hoc error-code strings
 - connection open/configuration is not complete until `journal_mode = WAL`,
-  `foreign_keys = ON`, and `busy_timeout = 1500ms` have all been enforced
+  `foreign_keys = ON`, and `busy_timeout = 5000ms` have all been enforced
 - `SQLITE_BUSY` must map to a typed retry-able ATM store error rather than
   leaking as a raw driver failure
 - `SQLITE_BUSY_SNAPSHOT` must map to a typed retry-able or replay-required ATM

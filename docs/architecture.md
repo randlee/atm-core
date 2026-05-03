@@ -837,7 +837,7 @@ The CLI JSON output mirrors the current contract:
 
 Public entrypoint:
 
-`ack::ack_mail(request: AckRequest, observability: &dyn ObservabilityPort) -> Result<AckOutcome, AtmError>`
+`ack::ack_mail<S>(request: AckRequest, store: &S, observability: &dyn ObservabilityPort) -> Result<AckOutcome, AtmError> where S: AckStore`
 
 `AckRequest` contains:
 - home directory
@@ -855,6 +855,9 @@ Public entrypoint:
 - optional task id from the acknowledged message
 - reply target
 - reply message id
+  `AckOutcome.reply_message_id` remains `LegacyMessageId` for CLI/output
+  compatibility even though SQLite and `metadata.atm.messageId` carry the
+  canonical `AtmMessageId`
 - reply text
 - warnings: Vec<String>
 - Phase Q addition: `warnings` carries best-effort post-send-hook diagnostics
@@ -862,7 +865,9 @@ Public entrypoint:
 
 The ack service is responsible for the legal transition from `(Read, PendingAck)` to `(Read, Acknowledged)` plus the reply append.
 
-When the source message came from an origin inbox file in the merged surface, the acknowledgement writeback must update that source file atomically rather than projecting the change onto a different inbox file.
+Phase Q supersedes the legacy source-file writeback rule: SQLite is the
+authoritative durable store for ack state, while inbox/file-surface projection
+is deferred to the Q.4 export/runtime path.
 
 ### 6.4 Clear Service
 
@@ -1310,6 +1315,7 @@ Required families:
 - identity
 - team not found
 - agent not found
+- store
 - mailbox read
 - mailbox write
 - file policy

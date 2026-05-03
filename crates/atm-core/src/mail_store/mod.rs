@@ -107,9 +107,13 @@ pub struct MailStoreHealth {
     pub pending_exports_ready: bool,
 }
 
+pub mod sealed {
+    pub trait Sealed {}
+}
+
 /// Durable message store boundary. Direct SQLite calls must stay in the
 /// `atm-rusqlite` crate; higher layers work only through this trait.
-pub trait MailStore: StoreBoundary {
+pub trait MailStore: StoreBoundary + sealed::Sealed {
     fn insert_message(
         &self,
         message: &StoredMessageRecord,

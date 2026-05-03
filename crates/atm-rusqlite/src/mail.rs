@@ -15,6 +15,8 @@ use crate::{
     sqlite_error_detail, table_exists,
 };
 
+impl atm_core::mail_store::sealed::Sealed for RusqliteStore {}
+
 const MESSAGE_SELECT_COLUMNS: &str = "SELECT message_key, team_name, recipient_agent, sender_display, sender_canonical, sender_team, body, summary, created_at, source_kind, legacy_message_id, atm_message_id, raw_metadata_json FROM messages";
 
 #[derive(Debug)]

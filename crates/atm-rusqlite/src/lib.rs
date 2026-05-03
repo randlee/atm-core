@@ -1,3 +1,4 @@
+mod ack;
 mod mail;
 mod roster;
 mod send;
@@ -11,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 use std::thread;
 use std::time::Duration;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use atm_core::home::mail_db_path_from_home;
 use atm_core::store::{
@@ -78,9 +80,9 @@ CREATE INDEX IF NOT EXISTS idx_tasks_message_key ON tasks(message_key);
 CREATE TABLE IF NOT EXISTS team_roster (
     team_name TEXT NOT NULL,
     agent_name TEXT NOT NULL,
-    role TEXT NOT NULL,
-    transport_kind TEXT NOT NULL,
-    host_name TEXT NOT NULL,
+    role TEXT NULL,
+    transport_kind TEXT NULL,
+    host_name TEXT NULL,
     recipient_pane_id TEXT NULL,
     pid INTEGER NULL,
     metadata_json TEXT NULL,
@@ -112,9 +114,11 @@ CREATE INDEX IF NOT EXISTS idx_pending_exports_next_attempt
 #[derive(Debug)]
 pub struct RusqliteStore {
     database_path: PathBuf,
-    /// A single mutex-guarded `Connection` keeps write ordering explicit and
-    /// matches the Q.1 single-writer store design without pretending reads are
-    /// independent from the shared transaction lifecycle.
+    /// INVARIANT: a single mutex-guarded SQLite `Connection` keeps the Phase Q
+    /// single-writer transaction model explicit. Reads share the same
+    /// connection because ack/task/send transitions intentionally observe a
+    /// single ordered transaction timeline rather than pretending read handles
+    /// are independent from mutation ordering.
     connection: Mutex<Connection>,
     busy_timeout_ms: BusyTimeoutMs,
     handle_budget: SqliteHandleBudget,
@@ -172,8 +176,12 @@ impl RusqliteStore {
                         handle_budget,
                     });
                 }
-                Err(error) if error.kind == StoreErrorKind::Bootstrap && attempt < 2 => {
-                    thread::sleep(Duration::from_millis(25 * (attempt + 1) as u64));
+                Err(error)
+                    if (error.kind == StoreErrorKind::Bootstrap
+                        || is_busy_snapshot_error(&error))
+                        && attempt < 2 =>
+                {
+                    thread::sleep(retry_delay(attempt));
                 }
                 Err(error) => return Err(error),
             }
@@ -271,7 +279,7 @@ pub(crate) fn bootstrap_schema(connection: &mut Connection) -> Result<(), StoreE
     transaction
         .pragma_update(None, "user_version", SCHEMA_VERSION)
         .map_err(|error| {
-            StoreError::migration("failed to persist SQLite schema version").with_source(error)
+            StoreError::bootstrap("failed to persist SQLite schema version").with_source(error)
         })?;
     transaction.commit().map_err(|error| {
         StoreError::bootstrap("failed to commit SQLite schema bootstrap").with_source(error)
@@ -318,6 +326,13 @@ pub(crate) fn table_exists(connection: &Connection, table_name: &str) -> Result<
 
 pub(crate) fn classify_store_error(error: rusqlite::Error, context: &str) -> StoreError {
     if let rusqlite::Error::SqliteFailure(code, message) = &error {
+        if code.extended_code == rusqlite::ffi::SQLITE_BUSY_SNAPSHOT {
+            return StoreError::busy(format!(
+                "{context}: {}",
+                message.as_deref().unwrap_or("database busy snapshot")
+            ))
+            .with_source(error);
+        }
         if code.code == rusqlite::ErrorCode::DatabaseBusy
             || code.code == rusqlite::ErrorCode::DatabaseLocked
         {
@@ -357,7 +372,9 @@ where
 {
     value
         .parse::<T>()
-        .map_err(|error| invalid_store_data(field, error))
+        .map_err(|error| invalid_store_data(field, error).with_recovery(
+            "Repair the malformed SQLite row or rebuild the local ATM store from a clean source of truth before retrying the command.",
+        ))
 }
 
 pub(crate) fn parse_optional<T>(value: Option<String>, field: &str) -> Result<Option<T>, StoreError>
@@ -365,9 +382,41 @@ where
     T: std::str::FromStr,
     T::Err: std::fmt::Display,
 {
-    value.map(|value| parse_required(value, field)).transpose()
+    value
+        .map(|value| {
+            parse_required(value, field).map_err(|error| {
+                error.with_recovery(
+                    "Repair the malformed optional SQLite row value or rebuild the local ATM store before retrying the command.",
+                )
+            })
+        })
+        .transpose()
 }
 
 pub(crate) fn invalid_store_data(field: &str, error: impl std::fmt::Display) -> StoreError {
-    StoreError::query(format!("invalid store data for {field}: {error}"))
+    StoreError::query(format!("invalid store data for {field}: {error}")).with_recovery(
+        "Repair the malformed SQLite row or rebuild the local ATM store from a clean source of truth before retrying the command.",
+    )
+}
+
+fn is_busy_snapshot_error(error: &StoreError) -> bool {
+    error
+        .source
+        .as_deref()
+        .and_then(|source| source.downcast_ref::<rusqlite::Error>())
+        .is_some_and(|source| match source {
+            rusqlite::Error::SqliteFailure(code, _) => {
+                code.extended_code == rusqlite::ffi::SQLITE_BUSY_SNAPSHOT
+            }
+            _ => false,
+        })
+}
+
+fn retry_delay(attempt: usize) -> Duration {
+    let base_ms = 25 * (attempt as u64 + 1);
+    let jitter_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| u64::from(duration.subsec_millis()) % 50)
+        .unwrap_or(0);
+    Duration::from_millis(base_ms + jitter_ms)
 }

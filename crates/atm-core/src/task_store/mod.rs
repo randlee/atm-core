@@ -1,5 +1,6 @@
 use crate::store::{MessageKey, StoreBoundary, StoreError};
 use crate::types::{IsoTimestamp, TaskId};
+use serde_json::Value;
 
 /// Canonical task status persisted by the Phase Q store boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,12 +26,16 @@ pub struct TaskRecord {
     pub status: TaskStatus,
     pub created_at: IsoTimestamp,
     pub acknowledged_at: Option<IsoTimestamp>,
-    pub metadata_json: Option<String>,
+    pub metadata_json: Option<Value>,
+}
+
+pub mod sealed {
+    pub trait Sealed {}
 }
 
 /// Durable task-store boundary kept separate from `MailStore` so mail/task
 /// concerns do not collapse into a single god-interface.
-pub trait TaskStore: StoreBoundary {
+pub trait TaskStore: StoreBoundary + sealed::Sealed {
     fn upsert_task(&self, task: &TaskRecord) -> Result<TaskRecord, StoreError>;
 
     fn load_task(&self, task_id: &TaskId) -> Result<Option<TaskRecord>, StoreError>;

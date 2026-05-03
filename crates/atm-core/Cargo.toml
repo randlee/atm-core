@@ -31,9 +31,9 @@ fs2 = "0.4"
 same-file = "1"
 
 [dev-dependencies]
+atm-rusqlite = { path = "../atm-rusqlite", version = "1.1.2" }
 serial_test = "3"
 tempfile = "3"
-atm-rusqlite = { path = "../atm-rusqlite" }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Threading"] }
