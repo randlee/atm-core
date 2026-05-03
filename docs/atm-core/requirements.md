@@ -15,6 +15,7 @@ defined in [`../requirements.md`](../requirements.md).
 - path and config resolution policy
 - address parsing and validation
 - store contracts and service semantics
+- typed daemon-client protocol contracts shared by first-party ATM clients
 - inbox ingress/export contracts
 - config ingress contracts
 - workflow and typestate rules
@@ -153,8 +154,9 @@ Initial crate requirement IDs:
   orchestration stays outside mail business semantics. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
 - `REQ-CORE-TRANSPORT-001` `atm-core` owns the typed daemon API contract shared
-  by Unix domain socket, TCP/TLS, and in-process test transport. Satisfies:
-  `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
+  by first-party clients plus Unix domain socket, TCP/TLS, and in-process test
+  transport. Satisfies:
+  `REQ-P-CONTRACT-001`, `REQ-P-GRAFT-001`, `REQ-P-TEST-001`.
 - `REQ-CORE-TRANSPORT-002` `atm-core` owns route-selection semantics between
   local and cross-host daemon paths. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
@@ -212,6 +214,8 @@ The `atm-core` crate docs must remain aligned with:
 - [`../legacy-atm-message-schema.md`](../legacy-atm-message-schema.md)
 - [`../atm-error-codes.md`](../atm-error-codes.md)
 - [`../plan-phase-Q.md`](../plan-phase-Q.md)
+- [`../atm-graft/requirements.md`](../atm-graft/requirements.md)
+- [`../atm-graft/architecture.md`](../atm-graft/architecture.md)
 - [`./design/dedup-metadata-schema.md`](./design/dedup-metadata-schema.md)
 - [`./design/sc-observability-integration.md`](./design/sc-observability-integration.md)
 - [`./design/sc-obs-1.0-integration.md`](./design/sc-obs-1.0-integration.md)
@@ -240,6 +244,8 @@ Required `atm-core` crate rules:
   - config ingress
   - watcher / reconcile
   - notifier-facing service integration
+- `atm-core` owns the typed daemon-client request / response / event models
+  consumed by first-party clients such as `atm` and `atm-graft`
 - `atm-core` owns the canonical durable-store contract including:
   - `messages`
   - `ack_state`

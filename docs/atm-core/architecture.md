@@ -55,6 +55,9 @@ Required architectural rules:
 - concrete I/O implementations stay private behind the owning boundary
 - module privacy and hidden constructors are the first enforcement tool even
   before crate extraction
+- daemon-client request / response / event models shared by `atm`,
+  `atm-daemon`, and `atm-graft` belong to `atm-core`; first-party client crates
+  must not mint parallel semantic wire models
 - if a boundary proves fragile, the next step is crate extraction rather than
   boundary bypass
 - typed error translation happens at the boundary layer, but must preserve
@@ -138,11 +141,16 @@ ATM-owned `.atm.toml` semantics for the retained multi-agent model:
 - `[atm].team_members` is the baseline roster used for doctor and future
   orchestration-safety checks
 - `[atm].aliases` is an ATM-owned shorthand map for canonical agent names
+- optional `[atm.graft]` settings are the ATM-owned embedded host-agent
+  integration surface
 - `[[atm.post_send_hooks]]` is the ATM-owned best-effort post-send automation
   surface
 - each rule binds one recipient selector and one command argv
 - retired flat hook keys and `[atm].post_send_hook_members` are configuration
   errors with migration guidance, not compatibility aliases
+- if `.atm.toml` is absent, `atm-graft` remains inactive by design
+- graft mode defaults on when active and may be disabled only by explicit
+  config or runtime opt-out
 - `[atm].identity` is obsolete and ignored by runtime identity resolution
 - launcher-owned sections such as `[rmux]` and future `[scmux]` are outside the
   `atm-core` runtime boundary and are intentionally ignored
