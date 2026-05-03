@@ -116,9 +116,7 @@ fn external_source_fingerprint(
         hash ^= u64::from(b'|');
         hash = hash.wrapping_mul(0x100000001b3);
     }
-    format!("ext{hash:016x}")
-        .parse()
-        .expect("derived external fingerprint")
+    SourceFingerprint::from_external_hex(hash)
 }
 
 fn inbox_message(text: &str) -> MessageEnvelope {
@@ -154,6 +152,8 @@ fn inbox_message(text: &str) -> MessageEnvelope {
 
 #[derive(Default)]
 struct RecordingObservability {
+    // INVARIANT: Mutex protects the shared event sink so tests can assert the
+    // exact emitted sequence after concurrent store callbacks finish.
     events: Mutex<Vec<CommandEvent>>,
 }
 
@@ -1268,6 +1268,7 @@ fn store_errors_stay_discriminated() {
 fn bootstrap_report_matches_live_connection_settings() {
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_path(tempdir.path().join("mail.db")).expect("open store");
+    let bootstrap_report = store.bootstrap_report().expect("bootstrap report");
     let connection = store.lock_connection().expect("lock");
 
     assert_eq!(
@@ -1281,4 +1282,6 @@ fn bootstrap_report_matches_live_connection_settings() {
         "wal"
     );
     assert!(query_foreign_keys(&connection).expect("foreign keys"));
+    drop(connection);
+    assert_eq!(bootstrap_report.handle_budget.get(), 1);
 }

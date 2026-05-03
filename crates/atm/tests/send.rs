@@ -180,6 +180,8 @@ fn test_send_export_failure_emits_retained_error_record() {
 #[derive(Default)]
 struct RecordingIngress {
     calls: AtomicUsize,
+    // INVARIANT: Mutex preserves the last observed target so concurrent test
+    // setup can assert ingress routing without racing the recorder state.
     last_target: Mutex<Option<(TeamName, AgentName)>>,
 }
 
