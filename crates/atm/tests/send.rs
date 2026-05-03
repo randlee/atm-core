@@ -2,8 +2,27 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
-use atm_core::schema::{AgentMember, AtmMessageId, LegacyMessageId, MessageEnvelope, TeamConfig};
+use atm_core::mail_store::MailStore;
+use atm_core::roster_store::RosterStore;
+use atm_core::schema::{AgentMember, MessageEnvelope, TeamConfig};
+use atm_core::task_store::TaskStore;
+use atm_core::{read_messages, write_messages};
+use atm_rusqlite::RusqliteStore;
 use serde_json::Value;
+
+fn parse_inbox_values(raw: &str) -> Vec<Value> {
+    if raw.trim().is_empty() {
+        return Vec::new();
+    }
+
+    match raw.chars().find(|ch| !ch.is_whitespace()) {
+        Some('[') => serde_json::from_str(raw).expect("json array"),
+        _ => raw
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("json line"))
+            .collect(),
+    }
+}
 
 #[test]
 fn test_send_creates_inbox_file() {
@@ -285,7 +304,8 @@ fn test_send_missing_config_uses_existing_inbox_fallback_and_warns_sender() {
 
     let notices = fixture.inbox_contents("team-lead");
     assert_eq!(notices.len(), 1);
-    assert_eq!(notices[0].from, "atm-identity-missing@atm-dev");
+    assert_eq!(notices[0].from, "atm-identity-missing");
+    assert_eq!(notices[0].source_team.as_deref(), Some("atm-dev"));
     assert!(
         notices[0]
             .text
@@ -451,7 +471,7 @@ fn test_send_cross_team_projects_alias_and_persists_canonical_from_identity() {
     assert_eq!(inbox[0].from, "lead");
     assert_eq!(
         inbox[0].extra["metadata"]["atm"]["fromIdentity"],
-        "arch-ctm@atm-dev"
+        "arch-ctm"
     );
 }
 
@@ -497,6 +517,7 @@ fn test_send_runs_post_send_hook_with_expected_payload() {
     assert_eq!(payload["from"], "arch-ctm@atm-dev");
     assert_eq!(payload["to"], "recipient@atm-dev");
     assert_eq!(payload["requires_ack"], false);
+    assert_eq!(payload["is_ack"], false);
     assert!(payload["message_id"].as_str().is_some());
     assert!(payload.get("task_id").is_none());
     assert_eq!(payload["sender"], "arch-ctm");
@@ -786,6 +807,95 @@ fn test_send_runs_post_send_hook_with_python_command() {
 }
 
 #[test]
+fn test_send_persists_store_rows_and_threads_roster_pane_into_hook_payload() {
+    let fixture = Fixture::new("recipient");
+    let mut recipient = AgentMember::with_name("recipient".parse().expect("agent"));
+    recipient.tmux_pane_id = "%7".to_string();
+    fixture.write_team_config_members(vec![recipient]);
+
+    let payload_path = fixture.tempdir.path().join("roster-pane-hook.json");
+    fixture.install_executable_script(
+        "scripts/record_hook.py",
+        &format!(
+            "#!/usr/bin/env python3\nimport os\nfrom pathlib import Path\nPath(r\"{}\").write_text(os.environ['ATM_POST_SEND'])\n",
+            payload_path.display()
+        ),
+    );
+    fixture.write_atm_config(
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['python3', 'scripts/record_hook.py']\n",
+    );
+
+    let output = fixture.run(&[
+        "send",
+        "recipient@atm-dev",
+        "task assignment",
+        "--requires-ack",
+        "--task-id",
+        "TASK-321",
+    ]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+
+    let inbox = fixture.inbox_contents("recipient");
+    assert_eq!(inbox.len(), 1);
+    let atm_message_id = inbox[0].atm_message_id().expect("atm message id");
+
+    let store = RusqliteStore::open_for_team_home(
+        fixture.tempdir.path(),
+        &"atm-dev".parse().expect("team"),
+    )
+    .expect("open store");
+    let stored = store
+        .load_message_by_atm_id(&atm_message_id)
+        .expect("load message by atm id")
+        .expect("stored message");
+    assert_eq!(stored.body, "task assignment");
+    assert_eq!(stored.atm_message_id, Some(atm_message_id));
+    assert!(stored.legacy_message_id.is_some());
+    assert_eq!(stored.recipient_agent.as_str(), "recipient");
+
+    let ack_state = store
+        .load_ack_state(&stored.message_key)
+        .expect("load ack state")
+        .expect("ack row");
+    assert!(ack_state.pending_ack_at.is_some());
+    assert!(ack_state.acknowledged_at.is_none());
+
+    let task = store
+        .load_task(&"TASK-321".parse().expect("task id"))
+        .expect("load task")
+        .expect("task row");
+    assert_eq!(task.message_key, stored.message_key);
+    assert_eq!(task.status, atm_core::task_store::TaskStatus::PendingAck);
+
+    let roster = store
+        .load_roster(&"atm-dev".parse().expect("team"))
+        .expect("load roster");
+    let recipient = roster
+        .iter()
+        .find(|member| member.agent_name.as_str() == "recipient")
+        .expect("recipient roster row");
+    assert_eq!(
+        recipient
+            .recipient_pane_id
+            .as_ref()
+            .map(ToString::to_string)
+            .as_deref(),
+        Some("%7")
+    );
+
+    let payload: serde_json::Value =
+        serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
+    assert_eq!(payload["recipient_pane_id"], "%7");
+    assert_eq!(payload["task_id"], "TASK-321");
+    assert_eq!(payload["is_ack"], false);
+}
+
+#[test]
 fn test_send_rejects_retired_post_send_hook_members_config() {
     let fixture = Fixture::new("recipient");
     fixture.write_atm_config("[atm]\npost_send_hook_members = ['team-lead']\n");
@@ -965,13 +1075,21 @@ impl Fixture {
     }
 
     fn write_team_config_for_team(&self, team: &str, recipient: &str) {
+        self.write_team_config_members_for_team(
+            team,
+            vec![AgentMember::with_name(recipient.parse().expect("agent"))],
+        );
+    }
+
+    fn write_team_config_members(&self, members: Vec<AgentMember>) {
+        self.write_team_config_members_for_team("atm-dev", members);
+    }
+
+    fn write_team_config_members_for_team(&self, team: &str, members: Vec<AgentMember>) {
         let team_dir = self.tempdir.path().join(".claude").join("teams").join(team);
         fs::create_dir_all(&team_dir).expect("team dir");
         let config = TeamConfig {
-            members: vec![AgentMember {
-                name: recipient.to_string(),
-                ..Default::default()
-            }],
+            members,
             ..Default::default()
         };
         fs::write(
@@ -1015,19 +1133,7 @@ impl Fixture {
         if let Some(parent) = inbox_path.parent() {
             fs::create_dir_all(parent).expect("inbox dir");
         }
-        let raw = if messages.is_empty() {
-            String::new()
-        } else {
-            format!(
-                "{}\n",
-                messages
-                    .iter()
-                    .map(|message| serde_json::to_string(message).expect("json line"))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            )
-        };
-        fs::write(inbox_path, raw).expect("write inbox");
+        write_messages(&inbox_path, messages).expect("write inbox");
     }
 
     fn inbox_contents(&self, recipient: &str) -> Vec<MessageEnvelope> {
@@ -1040,28 +1146,13 @@ impl Fixture {
 
     fn inbox_contents_in_team(&self, team: &str, recipient: &str) -> Vec<MessageEnvelope> {
         let inbox_path = self.inbox_path_in_team(team, recipient);
-        let raw = fs::read_to_string(&inbox_path).expect("inbox contents");
-        if raw.trim().is_empty() {
-            return Vec::new();
-        }
-        raw.lines()
-            .map(|line| {
-                let mut value: Value = serde_json::from_str(line).expect("json line");
-                hydrate_legacy_fields_from_metadata(&mut value);
-                serde_json::from_value(value).expect("message envelope")
-            })
-            .collect()
+        read_messages(&inbox_path).expect("inbox contents")
     }
 
     fn inbox_json_lines_in_team(&self, team: &str, recipient: &str) -> Vec<Value> {
         let inbox_path = self.inbox_path_in_team(team, recipient);
         let raw = fs::read_to_string(&inbox_path).expect("inbox contents");
-        if raw.trim().is_empty() {
-            return Vec::new();
-        }
-        raw.lines()
-            .map(|line| serde_json::from_str(line).expect("json line"))
-            .collect()
+        parse_inbox_values(&raw)
     }
 
     fn team_dir(&self) -> std::path::PathBuf {
@@ -1137,64 +1228,5 @@ impl Fixture {
 
     fn stderr(&self, output: &std::process::Output) -> String {
         String::from_utf8(output.stderr.clone()).expect("stderr utf8")
-    }
-}
-
-fn hydrate_legacy_fields_from_metadata(value: &mut Value) {
-    let Some(object) = value.as_object_mut() else {
-        return;
-    };
-    let Some(atm) = object
-        .get("metadata")
-        .and_then(Value::as_object)
-        .and_then(|metadata| metadata.get("atm"))
-        .and_then(Value::as_object)
-        .cloned()
-    else {
-        return;
-    };
-
-    if !object.contains_key("message_id")
-        && let Some(raw) = atm.get("messageId").and_then(Value::as_str)
-        && let Ok(message_id) = raw.parse::<AtmMessageId>()
-    {
-        object.insert(
-            "message_id".to_string(),
-            Value::String(LegacyMessageId::from_atm_message_id(message_id).to_string()),
-        );
-    }
-
-    if !object.contains_key("source_team")
-        && let Some(value) = atm.get("sourceTeam")
-    {
-        object.insert("source_team".to_string(), value.clone());
-    }
-
-    if !object.contains_key("pendingAckAt")
-        && let Some(value) = atm.get("pendingAckAt")
-    {
-        object.insert("pendingAckAt".to_string(), value.clone());
-    }
-
-    if !object.contains_key("acknowledgedAt")
-        && let Some(value) = atm.get("acknowledgedAt")
-    {
-        object.insert("acknowledgedAt".to_string(), value.clone());
-    }
-
-    if !object.contains_key("acknowledgesMessageId")
-        && let Some(raw) = atm.get("acknowledgesMessageId").and_then(Value::as_str)
-        && let Ok(message_id) = raw.parse::<AtmMessageId>()
-    {
-        object.insert(
-            "acknowledgesMessageId".to_string(),
-            Value::String(LegacyMessageId::from_atm_message_id(message_id).to_string()),
-        );
-    }
-
-    if !object.contains_key("taskId")
-        && let Some(value) = atm.get("taskId")
-    {
-        object.insert("taskId".to_string(), value.clone());
     }
 }

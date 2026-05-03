@@ -109,7 +109,11 @@ fn execute_post_send_hook(
         "team": context.recipient.team,
         "message_id": context.message_id.to_string(),
         "requires_ack": context.requires_ack,
+        "is_ack": context.is_ack,
     });
+    if let Some(recipient_pane_id) = context.recipient_pane_id {
+        payload["recipient_pane_id"] = Value::String(recipient_pane_id.to_string());
+    }
     if let Some(task_id) = context.task_id {
         payload["task_id"] = Value::String(task_id.to_string());
     }

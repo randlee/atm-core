@@ -696,18 +696,19 @@ mod tests {
     use crate::mailbox::source::SourcedMessage;
     use crate::schema::{LegacyMessageId, MessageEnvelope};
     use crate::types::{
-        AckActivationMode, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
+        AckActivationMode, AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
+        TeamName,
     };
     use crate::workflow;
 
     fn sourced_message(index: usize, text: &str) -> SourcedMessage {
         SourcedMessage {
             envelope: MessageEnvelope {
-                from: "team-lead".to_string(),
+                from: "team-lead".parse::<AgentName>().expect("agent"),
                 text: text.to_string(),
                 timestamp: IsoTimestamp::now(),
                 read: false,
-                source_team: Some("atm-dev".to_string()),
+                source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
                 summary: None,
                 message_id: Some(LegacyMessageId::new()),
                 pending_ack_at: None,

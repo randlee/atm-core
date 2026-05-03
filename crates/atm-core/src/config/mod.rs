@@ -336,10 +336,20 @@ fn parse_team_config(config_path: &Path, raw: &str) -> Result<TeamConfig, AtmErr
 
 fn parse_team_member(config_path: &Path, index: usize, entry: &Value) -> Option<AgentMember> {
     match entry {
-        Value::String(name) => Some(AgentMember {
-            name: name.clone(),
-            ..Default::default()
-        }),
+        Value::String(name) => match name.parse::<AgentName>() {
+            Ok(name) => Some(AgentMember::with_name(name)),
+            Err(error) => {
+                warn!(
+                    code = %AtmErrorCode::WarningInvalidTeamMemberSkipped,
+                    path = %config_path.display(),
+                    member_index = index,
+                    member = %name,
+                    %error,
+                    "skipping invalid team member record"
+                );
+                None
+            }
+        },
         _ => match serde_json::from_value::<AgentMember>(entry.clone()) {
             Ok(member) => Some(member),
             Err(error) => {
@@ -609,6 +619,20 @@ post_send_hook_recipients = ["team-lead"]
         assert_eq!(config.members.len(), 2);
         assert_eq!(config.members[0].name, "arch-ctm");
         assert_eq!(config.members[1].name, "team-lead");
+        assert!(config.extra.is_empty());
+    }
+
+    #[test]
+    fn parse_team_config_applies_name_validation_to_string_and_object_forms() {
+        let (_tempdir, config_path) = temp_config_path();
+        let config = parse_team_config(
+            &config_path,
+            r#"{"members":["bad/name",{"name":"qa"},{"name":"also/bad"}]}"#,
+        )
+        .expect("team config");
+
+        assert_eq!(config.members.len(), 1);
+        assert_eq!(config.members[0].name, "qa");
         assert!(config.extra.is_empty());
     }
 

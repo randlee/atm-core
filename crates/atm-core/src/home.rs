@@ -39,6 +39,16 @@ pub fn inbox_path(team: &str, agent: &str) -> Result<PathBuf, AtmError> {
     inbox_path_from_home(&atm_home()?, team, agent)
 }
 
+/// Resolve the SQLite mail-store path for `team` under the current ATM home.
+///
+/// # Errors
+///
+/// Propagates [`atm_home`] failures when the ATM home directory cannot be
+/// resolved.
+pub fn mail_db_path(team: &str) -> Result<PathBuf, AtmError> {
+    mail_db_path_from_home(&atm_home()?, team)
+}
+
 /// Resolve the team directory for `team` under an explicit ATM home root.
 ///
 /// # Errors
@@ -65,6 +75,20 @@ pub fn inbox_path_from_home(home_dir: &Path, team: &str, agent: &str) -> Result<
     Ok(team_dir_from_home(home_dir, team)?
         .join("inboxes")
         .join(format!("{agent}.json")))
+}
+
+/// Resolve the SQLite mail-store path for `team` under an explicit ATM home root.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::AddressParseFailed`] when `team`
+/// contains path traversal, path separators, or other invalid path-segment
+/// characters.
+pub fn mail_db_path_from_home(home_dir: &Path, team: &str) -> Result<PathBuf, AtmError> {
+    Ok(team_dir_from_home(home_dir, team)?
+        .join(".atm-state")
+        .join("mail.db"))
 }
 
 /// Resolve the ATM-owned workflow-state path for `agent` in `team`.
@@ -107,10 +131,12 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{
-        atm_home, inbox_path, inbox_path_from_home, team_dir, team_dir_from_home,
-        workflow_state_path_from_home,
+        atm_home, inbox_path, inbox_path_from_home, mail_db_path, mail_db_path_from_home, team_dir,
+        team_dir_from_home, workflow_state_path_from_home,
     };
 
+    // Serializes process-environment mutation inside this test module. This is
+    // process-local only; it does not coordinate with other test processes.
     fn env_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         LOCK.get_or_init(|| Mutex::new(()))
@@ -209,6 +235,16 @@ mod tests {
                 .join("inboxes")
                 .join("arch-ctm.json")
         );
+        assert_eq!(
+            mail_db_path("atm-dev").expect("mail db path"),
+            tempdir
+                .path()
+                .join(".claude")
+                .join("teams")
+                .join("atm-dev")
+                .join(".atm-state")
+                .join("mail.db")
+        );
     }
 
     #[test]
@@ -245,6 +281,22 @@ mod tests {
                 .join(".atm-state")
                 .join("workflow")
                 .join("arch-ctm.json")
+        );
+    }
+
+    #[test]
+    fn mail_db_path_uses_atm_state_layout() {
+        let tempdir = TempDir::new().expect("tempdir");
+
+        assert_eq!(
+            mail_db_path_from_home(tempdir.path(), "atm-dev").expect("mail db path"),
+            tempdir
+                .path()
+                .join(".claude")
+                .join("teams")
+                .join("atm-dev")
+                .join(".atm-state")
+                .join("mail.db")
         );
     }
 }

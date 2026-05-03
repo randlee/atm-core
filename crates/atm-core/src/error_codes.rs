@@ -67,6 +67,20 @@ pub enum AtmErrorCode {
     ObservabilityHealthFailed,
     /// Observability bootstrap/initialization failed.
     ObservabilityBootstrapFailed,
+    /// Opening the SQLite store failed.
+    StoreOpenFailed,
+    /// Bootstrapping the SQLite store failed.
+    StoreBootstrapFailed,
+    /// Migrating the SQLite store failed.
+    StoreMigrationFailed,
+    /// Querying or loading from the SQLite store failed.
+    StoreQueryFailed,
+    /// A SQLite store operation hit a busy or locked database.
+    StoreBusy,
+    /// A SQLite store operation violated a uniqueness or foreign-key constraint.
+    StoreConstraintViolation,
+    /// A SQLite transaction failed and rolled back.
+    StoreTransactionFailed,
     /// Observability health is healthy.
     ObservabilityHealthOk,
     /// A malformed team member record was skipped.
@@ -128,6 +142,13 @@ impl AtmErrorCode {
             Self::ObservabilityFollowFailed => "ATM_OBSERVABILITY_FOLLOW_FAILED",
             Self::ObservabilityHealthFailed => "ATM_OBSERVABILITY_HEALTH_FAILED",
             Self::ObservabilityBootstrapFailed => "ATM_OBSERVABILITY_BOOTSTRAP_FAILED",
+            Self::StoreOpenFailed => "ATM_STORE_OPEN_FAILED",
+            Self::StoreBootstrapFailed => "ATM_STORE_BOOTSTRAP_FAILED",
+            Self::StoreMigrationFailed => "ATM_STORE_MIGRATION_FAILED",
+            Self::StoreQueryFailed => "ATM_STORE_QUERY_FAILED",
+            Self::StoreBusy => "ATM_STORE_BUSY",
+            Self::StoreConstraintViolation => "ATM_STORE_CONSTRAINT_VIOLATION",
+            Self::StoreTransactionFailed => "ATM_STORE_TRANSACTION_FAILED",
             Self::ObservabilityHealthOk => "ATM_OBSERVABILITY_HEALTH_OK",
             Self::WarningInvalidTeamMemberSkipped => "ATM_WARNING_INVALID_TEAM_MEMBER_SKIPPED",
             Self::WarningMailboxRecordSkipped => "ATM_WARNING_MAILBOX_RECORD_SKIPPED",
@@ -179,6 +200,13 @@ impl FromStr for AtmErrorCode {
             "ATM_OBSERVABILITY_FOLLOW_FAILED" => Ok(Self::ObservabilityFollowFailed),
             "ATM_OBSERVABILITY_HEALTH_FAILED" => Ok(Self::ObservabilityHealthFailed),
             "ATM_OBSERVABILITY_BOOTSTRAP_FAILED" => Ok(Self::ObservabilityBootstrapFailed),
+            "ATM_STORE_OPEN_FAILED" => Ok(Self::StoreOpenFailed),
+            "ATM_STORE_BOOTSTRAP_FAILED" => Ok(Self::StoreBootstrapFailed),
+            "ATM_STORE_MIGRATION_FAILED" => Ok(Self::StoreMigrationFailed),
+            "ATM_STORE_QUERY_FAILED" => Ok(Self::StoreQueryFailed),
+            "ATM_STORE_BUSY" => Ok(Self::StoreBusy),
+            "ATM_STORE_CONSTRAINT_VIOLATION" => Ok(Self::StoreConstraintViolation),
+            "ATM_STORE_TRANSACTION_FAILED" => Ok(Self::StoreTransactionFailed),
             "ATM_OBSERVABILITY_HEALTH_OK" => Ok(Self::ObservabilityHealthOk),
             "ATM_WARNING_INVALID_TEAM_MEMBER_SKIPPED" => Ok(Self::WarningInvalidTeamMemberSkipped),
             "ATM_WARNING_MAILBOX_RECORD_SKIPPED" => Ok(Self::WarningMailboxRecordSkipped),
