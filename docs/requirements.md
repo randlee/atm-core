@@ -2462,6 +2462,8 @@ mail correctness.
     caches it as the primary liveness field
   - daemon runtime state must include `last_active_at` for each known active
     agent/member entry
+  - SQLite must not own live `last_active_at`; it remains daemon-memory-only
+    runtime state
   - the runtime-managed member fields (`pid`, `last_active_at`, `state`) must
     update only through one documented heartbeat socket handler, as defined in
     `docs/team-member-state.md`

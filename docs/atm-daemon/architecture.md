@@ -205,11 +205,13 @@ The daemon owns the live runtime view of agent status.
 
 Architectural rules:
 - live status remains in daemon memory
-- current agent `pid` remains in daemon memory as a primary liveness field
+- current agent `pid` is durable SQLite truth and is cached in daemon memory
+  as the primary liveness field
 - `last_active_at` remains in daemon memory alongside live status
 - daemon-managed team-member fields update only through the documented heartbeat
   socket handler in `docs/team-member-state.md`
-- SQLite may retain a diagnostic snapshot only
+- SQLite does not own live status or `last_active_at`; it owns durable roster
+  state and the current per-member `pid`
 - status cache rebuild after restart begins from `unknown` and refreshes through
   runtime events
 - read-time overlays such as `active 3 seconds ago` or `idle for 30 minutes`

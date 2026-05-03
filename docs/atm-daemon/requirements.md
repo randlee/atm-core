@@ -151,6 +151,8 @@ Required runtime rules:
 - daemon memory must also retain `last_active_at` for each known active agent
 - daemon memory must retain the current agent `pid` as a first-class liveness
   field, cached from SQLite; `pid` is not advisory metadata
+- SQLite must not own live `last_active_at`; it owns durable roster state and
+  the current per-member `pid`
 - the daemon-managed member fields (`pid`, `last_active_at`, `state`) must
   update only through one documented heartbeat socket handler shared by ATM CLI
   and hook/runtime producers; see `docs/team-member-state.md`

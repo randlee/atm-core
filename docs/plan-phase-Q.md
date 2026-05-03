@@ -343,6 +343,7 @@ Suggested columns:
 - `role TEXT NULL`
 - `transport_kind TEXT NULL`
 - `host_name TEXT NULL`
+- `pid INTEGER NOT NULL`
 - `recipient_pane_id TEXT NULL`
 - `metadata_json TEXT NULL`
 
@@ -351,6 +352,10 @@ Primary key:
 
 Rules:
 - roster truth lives in SQLite
+- current per-member `pid` lives in SQLite as durable truth and is cached by
+  the daemon as its primary liveness field
+- `last_active_at` does not live in `team_roster`; it is daemon-memory-only
+  runtime state
 - `config.json` becomes an ingress/update source, not the source of truth
 
 ### `message_visibility`
