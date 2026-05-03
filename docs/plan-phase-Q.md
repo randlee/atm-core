@@ -173,7 +173,8 @@ Non-responsibility:
 - daemon must not own unique business logic that is unavailable to in-process
   service callers
 - daemon unavailability must surface as an explicit runtime failure, not as
-  hidden direct SQLite/JSONL fallback or auto-spawn
+  hidden direct SQLite/JSONL fallback; the documented daemon auto-start path is
+  the only allowed startup behavior
 
 ## Plugin Model
 
@@ -638,8 +639,8 @@ Implementation details:
   - status cache `4096`
 - remote delivery success is defined by remote daemon acceptance within the
   bounded retry window
-- daemon-unavailable client calls must fail clearly without hidden fallback or
-  auto-spawn
+- daemon-unavailable client calls must attempt the documented auto-start once,
+  then fail clearly without hidden fallback if the daemon still cannot run
 - `atm doctor` must start consuming daemon/runtime state through the same
   request/response boundaries used by production
 - after Q.1, Unix transport, TCP/TLS transport, `test-socket`,

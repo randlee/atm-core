@@ -90,11 +90,16 @@ Satisfied by:
 - intentionally undecomposed product requirement; this governs overall rewrite
   scope and is enforced across the workspace rather than by one crate-local ID
 
-- `REQ-P-RUNTIME-001` Production ATM commands must not auto-spawn the daemon.
+- `REQ-P-RUNTIME-001` Production ATM commands must connect to the daemon and
+  auto-start it when absent.
 
   Required behavior:
-  - the production CLI/runtime path connects to an already-running daemon
-  - if the daemon is unavailable, ATM must fail clearly with recovery guidance
+  - the production CLI/runtime path first attempts to connect to an
+    already-running daemon
+  - if the daemon is not running, the production CLI/runtime path auto-starts
+    it and retries once
+  - if daemon auto-start still fails, ATM must fail clearly with recovery
+    guidance
   - no production path may silently bypass the daemon by talking directly to
     SQLite or inbox files
 
@@ -136,7 +141,7 @@ Satisfied by:
   interface
 - CI monitoring
 - TUI and MCP features
-- daemon auto-spawn from CLI commands or tests
+- daemon spawning from tests
 - `atm status` in the initial rewrite
 - separate `atm tail` command in the initial rewrite
 - team lifecycle management outside the retained local recovery surface
@@ -2482,13 +2487,17 @@ mail correctness.
   - the daemon must not become the only place where ATM mail semantics are
     implemented
 
-- `REQ-CORE-DAEMON-003` Production ATM commands must use an already-running
-  daemon and must fail clearly when it is unavailable.
+- `REQ-CORE-DAEMON-003` Production ATM commands must connect to the daemon and
+  auto-start it when absent.
 
   Required behavior:
-  - production CLI/runtime calls must not auto-spawn the daemon
-  - when the daemon is unavailable, ATM must fail with a clear recovery message
-    rather than silently falling back to direct SQLite or inbox-file access
+  - production CLI/runtime calls first attempt to connect to an already-running
+    daemon
+  - if the daemon is absent, the production CLI/runtime path auto-starts it
+    and retries once
+  - if the daemon remains unavailable after auto-start, ATM must fail with a
+    clear recovery message rather than silently falling back to direct SQLite
+    or inbox-file access
   - in-process test harnesses may bypass the daemon only inside explicit test
     wiring, not in the production path
 
@@ -2747,8 +2756,8 @@ mail correctness.
 
   Required behavior:
   - impossible to run two active ATM daemons on one host
-  - daemon unavailability fails clearly without auto-spawn or hidden direct I/O
-    fallback
+  - daemon unavailability after one auto-start attempt fails clearly with no
+    hidden direct I/O fallback
   - every subsystem performs external I/O only through its owning trait
     boundary
   - production error handling uses typed `Result`/error-enum boundaries instead

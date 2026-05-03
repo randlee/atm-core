@@ -216,7 +216,7 @@ Supersession note:
 - the Phase Q target architecture in §21 supersedes those constraints with:
   - one explicit daemon runtime
   - no hidden direct SQLite fallback
-  - no hidden daemon auto-spawn path
+  - one explicit daemon auto-start path when the daemon is absent
 
 ## 4. Core Types
 
@@ -1963,6 +1963,9 @@ ATM moves to a split state model:
   - team roster
 - daemon memory is the authoritative live runtime view for:
   - current agent status
+  - `pid`: durable SQLite truth cached in daemon memory as the primary
+    liveness field
+  - `last_active_at`: daemon-memory-only runtime state used for live overlays
 
 SQLite may persist last-observed status for diagnostics, but that snapshot is
 not the live truth.
