@@ -40,7 +40,10 @@ impl AckCommand {
             reply_body: self.reply,
         };
         let team = ack::resolve_store_team(&request)?;
-        let store = RusqliteStore::open_for_team_home(&request.home_dir, &team)?;
+        let store =
+            RusqliteStore::open_for_team_home(&request.home_dir, &team).map_err(|error| {
+                ack::map_store_error_for_command("failed to open SQLite store for ack", error)
+            })?;
         let outcome = ack::ack_mail(request, &store, observability)?;
 
         output::print_ack_result(&outcome, self.json)

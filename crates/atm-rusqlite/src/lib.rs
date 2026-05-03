@@ -345,7 +345,9 @@ where
 {
     value
         .parse::<T>()
-        .map_err(|error| invalid_store_data(field, error))
+        .map_err(|error| invalid_store_data(field, error).with_recovery(
+            "Repair the malformed SQLite row or rebuild the local ATM store from a clean source of truth before retrying the command.",
+        ))
 }
 
 pub(crate) fn parse_optional<T>(value: Option<String>, field: &str) -> Result<Option<T>, StoreError>
@@ -353,9 +355,19 @@ where
     T: std::str::FromStr,
     T::Err: std::fmt::Display,
 {
-    value.map(|value| parse_required(value, field)).transpose()
+    value
+        .map(|value| {
+            parse_required(value, field).map_err(|error| {
+                error.with_recovery(
+                    "Repair the malformed optional SQLite row value or rebuild the local ATM store before retrying the command.",
+                )
+            })
+        })
+        .transpose()
 }
 
 pub(crate) fn invalid_store_data(field: &str, error: impl std::fmt::Display) -> StoreError {
-    StoreError::query(format!("invalid store data for {field}: {error}"))
+    StoreError::query(format!("invalid store data for {field}: {error}")).with_recovery(
+        "Repair the malformed SQLite row or rebuild the local ATM store from a clean source of truth before retrying the command.",
+    )
 }

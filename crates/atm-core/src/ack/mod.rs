@@ -169,11 +169,14 @@ pub fn resolve_store_team(request: &AckRequest) -> Result<TeamName, AtmError> {
 /// [`crate::error_codes::AtmErrorCode::MailboxReadFailed`],
 /// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`],
 /// [`crate::error_codes::AtmErrorCode::MailboxLockFailed`],
-/// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`], or
+/// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`],
+/// [`crate::error_codes::AtmErrorCode::AckInvalidState`],
+/// [`crate::error_codes::AtmErrorCode::StoreConstraintViolation`], or
 /// [`crate::error_codes::AtmErrorCode::MessageValidationFailed`] when actor or
 /// team resolution fails, the message is missing or no longer pending
-/// acknowledgement, reply-target validation fails, or the reply inbox
-/// projection cannot be persisted.
+/// acknowledgement, reply-target validation fails, the store rejects a
+/// duplicate reply identity, or the reply inbox projection cannot be
+/// persisted.
 pub fn ack_mail<S>(
     request: AckRequest,
     store: &S,
@@ -666,6 +669,10 @@ fn map_store_error(context: &str, error: StoreError) -> AtmError {
         atm_error = atm_error.with_recovery(recovery.clone());
     }
     atm_error.with_source(error)
+}
+
+pub fn map_store_error_for_command(context: &str, error: StoreError) -> AtmError {
+    map_store_error(context, error)
 }
 
 fn set_atm_message_id(extra: &mut Map<String, serde_json::Value>, message_id: AtmMessageId) {

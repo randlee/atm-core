@@ -540,10 +540,10 @@ fn test_send_json_reports_canonical_sender_identity() {
 fn test_send_runs_post_send_hook_with_expected_payload() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
+    let hook_path_toml = toml_single_quoted_path(&hook_path);
+    let payload_path_toml = toml_single_quoted_path(&payload_path);
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'capture', '{}']\n",
-        hook_path.display(),
-        payload_path.display()
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = [{hook_path_toml}, 'capture', {payload_path_toml}]\n",
     ));
 
     let output = fixture.run(&["send", "recipient@atm-dev", "hello hook"]);
@@ -569,10 +569,10 @@ fn test_send_runs_post_send_hook_with_expected_payload() {
 fn test_send_post_send_hook_failure_does_not_roll_back_send() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("fail");
+    let hook_path_toml = toml_single_quoted_path(&hook_path);
+    let payload_path_toml = toml_single_quoted_path(&payload_path);
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'fail', '{}']\n",
-        hook_path.display(),
-        payload_path.display()
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = [{hook_path_toml}, 'fail', {payload_path_toml}]\n",
     ));
 
     let output = fixture.run(&["send", "recipient@atm-dev", "hello failed hook", "--json"]);
@@ -600,10 +600,10 @@ fn test_send_post_send_hook_failure_does_not_roll_back_send() {
 fn test_send_post_send_hook_non_match_is_silent() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
+    let hook_path_toml = toml_single_quoted_path(&hook_path);
+    let payload_path_toml = toml_single_quoted_path(&payload_path);
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'quality-mgr'\ncommand = ['{}', 'capture', '{}']\n",
-        hook_path.display(),
-        payload_path.display()
+        "[[atm.post_send_hooks]]\nrecipient = 'quality-mgr'\ncommand = [{hook_path_toml}, 'capture', {payload_path_toml}]\n",
     ));
 
     let output = fixture.run(&["send", "recipient@atm-dev", "hello unmatched hook"]);
@@ -623,10 +623,10 @@ fn test_send_post_send_hook_non_match_is_silent() {
 fn test_send_runs_post_send_hook_for_wildcard_recipient() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
+    let hook_path_toml = toml_single_quoted_path(&hook_path);
+    let payload_path_toml = toml_single_quoted_path(&payload_path);
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = '*'\ncommand = ['{}', 'capture', '{}']\n",
-        hook_path.display(),
-        payload_path.display()
+        "[[atm.post_send_hooks]]\nrecipient = '*'\ncommand = [{hook_path_toml}, 'capture', {payload_path_toml}]\n",
     ));
 
     let output = fixture.run(&["send", "recipient@atm-dev", "hello wildcard hook"]);
@@ -673,10 +673,10 @@ fn test_send_runs_multiple_matching_post_send_hooks_in_config_order() {
 fn test_send_runs_post_send_hook_when_recipient_matches_rule() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
+    let hook_path_toml = toml_single_quoted_path(&hook_path);
+    let payload_path_toml = toml_single_quoted_path(&payload_path);
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'capture', '{}']\n",
-        hook_path.display(),
-        payload_path.display()
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = [{hook_path_toml}, 'capture', {payload_path_toml}]\n",
     ));
 
     let output = fixture.run(&["send", "recipient@atm-dev", "hello recipient hook"]);
@@ -695,10 +695,10 @@ fn test_send_runs_post_send_hook_when_recipient_matches_rule() {
 fn test_send_runs_post_send_hook_for_multiline_message_when_rule_matches() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
+    let hook_path_toml = toml_single_quoted_path(&hook_path);
+    let payload_path_toml = toml_single_quoted_path(&payload_path);
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'capture', '{}']\n",
-        hook_path.display(),
-        payload_path.display()
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = [{hook_path_toml}, 'capture', {payload_path_toml}]\n",
     ));
 
     let output = fixture.run(&[
@@ -723,10 +723,10 @@ fn test_send_runs_post_send_hook_for_multiline_message_when_rule_matches() {
 fn test_send_ignores_post_send_hook_configured_only_in_core_section() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
+    let hook_path_toml = toml_single_quoted_path(&hook_path);
+    let payload_path_toml = toml_single_quoted_path(&payload_path);
     fixture.write_atm_config(&format!(
-        "[core]\ndefault_team = 'atm-dev'\nidentity = 'team-lead'\npost_send_hook = ['{}', 'capture', '{}']\n",
-        hook_path.display(),
-        payload_path.display()
+        "[core]\ndefault_team = 'atm-dev'\nidentity = 'team-lead'\npost_send_hook = [{hook_path_toml}, 'capture', {payload_path_toml}]\n",
     ));
 
     let output = fixture.run(&["send", "recipient@atm-dev", "hello core section"]);
@@ -745,10 +745,10 @@ fn test_send_ignores_post_send_hook_configured_only_in_core_section() {
 fn test_send_post_send_hook_receives_only_configured_positional_args() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture-meta");
+    let hook_path_toml = toml_single_quoted_path(&hook_path);
+    let payload_path_toml = toml_single_quoted_path(&payload_path);
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'capture-meta', '{}']\n",
-        hook_path.display(),
-        payload_path.display()
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = [{hook_path_toml}, 'capture-meta', {payload_path_toml}]\n",
     ));
 
     let output = fixture.run(&["send", "recipient@atm-dev", "hello args"]);
@@ -855,10 +855,10 @@ fn test_send_persists_store_rows_and_threads_roster_pane_into_hook_payload() {
     fixture.write_team_config_members(vec![recipient]);
 
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
+    let hook_path_toml = toml_single_quoted_path(&hook_path);
+    let payload_path_toml = toml_single_quoted_path(&payload_path);
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'capture', '{}']\n",
-        hook_path.display(),
-        payload_path.display()
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = [{hook_path_toml}, 'capture', {payload_path_toml}]\n",
     ));
 
     let output = fixture.run(&[
@@ -988,10 +988,10 @@ fn test_send_rejects_post_send_hook_with_empty_command() {
 fn test_send_ignores_invalid_hook_result_stdout() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("result-invalid");
+    let hook_path_toml = toml_single_quoted_path(&hook_path);
+    let payload_path_toml = toml_single_quoted_path(&payload_path);
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'result-invalid', '{}']\n",
-        hook_path.display(),
-        payload_path.display()
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = [{hook_path_toml}, 'result-invalid', {payload_path_toml}]\n",
     ));
 
     let output = fixture.run(&["send", "recipient@atm-dev", "hello invalid hook result"]);
@@ -1010,10 +1010,10 @@ fn test_send_ignores_invalid_hook_result_stdout() {
 fn test_send_logs_structured_hook_result_stdout() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("result-debug");
+    let hook_path_toml = toml_single_quoted_path(&hook_path);
+    let payload_path_toml = toml_single_quoted_path(&payload_path);
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'result-debug', '{}']\n",
-        hook_path.display(),
-        payload_path.display()
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = [{hook_path_toml}, 'result-debug', {payload_path_toml}]\n",
     ));
 
     let output = fixture.run_with_env(
@@ -1265,4 +1265,8 @@ impl Fixture {
     fn stderr(&self, output: &std::process::Output) -> String {
         String::from_utf8(output.stderr.clone()).expect("stderr utf8")
     }
+}
+
+fn toml_single_quoted_path(path: &std::path::Path) -> String {
+    format!("'{}'", path.display().to_string().replace('\'', "''"))
 }

@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use atm_core::ack::{AckCommitCommand, AckCommitRejection, AckCommitResult, AckStore};
 use atm_core::home;
@@ -94,7 +95,12 @@ fn reply_message_at(index: u8) -> atm_core::mail_store::StoredMessageRecord {
 
 fn inbox_message(text: &str) -> MessageEnvelope {
     let legacy_message_id = LegacyMessageId::new();
-    let (atm_message_id, timestamp) = AtmMessageId::new_with_timestamp();
+    static NEXT_INBOX_ATM_ID: AtomicU64 = AtomicU64::new(1);
+    let suffix = NEXT_INBOX_ATM_ID.fetch_add(1, Ordering::Relaxed);
+    let atm_message_id: AtmMessageId = format!("01ARZ3NDEKTSV4RRFFQ69G{:04X}", suffix)
+        .parse()
+        .expect("deterministic atm message id");
+    let timestamp = atm_message_id.timestamp();
     let mut extra = serde_json::Map::new();
     extra.insert(
         "metadata".to_string(),
