@@ -124,9 +124,13 @@ where
         .and_then(|key| workflow_state.messages.get(&key).cloned())
         .unwrap_or_else(|| workflow::initial_state_for_envelope(envelope));
 
-    if projected.pending_ack_at.is_some() || projected.acknowledged_at.is_some() {
-        store
-            .upsert_ack_state(&AckStateRecord {
+    let existing_ack_state = store
+        .load_ack_state(message_key)
+        .map_err(|error| map_store_error("failed to load imported ack state", error))?;
+    let merged_ack_state = match existing_ack_state {
+        Some(existing) if existing.acknowledged_at.is_some() => Some(existing),
+        _ if projected.pending_ack_at.is_some() || projected.acknowledged_at.is_some() => {
+            Some(AckStateRecord {
                 message_key: message_key.clone(),
                 pending_ack_at: projected.pending_ack_at,
                 acknowledged_at: projected.acknowledged_at,
@@ -134,6 +138,13 @@ where
                 ack_reply_team: None,
                 ack_reply_agent: None,
             })
+        }
+        _ => None,
+    };
+
+    if let Some(ref ack_state) = merged_ack_state {
+        store
+            .upsert_ack_state(ack_state)
             .map_err(|error| map_store_error("failed to upsert imported ack state", error))?;
     }
     if projected.read {
@@ -152,13 +163,19 @@ where
             .upsert_task(&TaskRecord {
                 task_id,
                 message_key: message_key.clone(),
-                status: if projected.acknowledged_at.is_some() {
+                status: if merged_ack_state
+                    .as_ref()
+                    .and_then(|state| state.acknowledged_at)
+                    .is_some()
+                {
                     TaskStatus::Acknowledged
                 } else {
                     TaskStatus::PendingAck
                 },
                 created_at: envelope.timestamp,
-                acknowledged_at: projected.acknowledged_at,
+                acknowledged_at: merged_ack_state
+                    .as_ref()
+                    .and_then(|state| state.acknowledged_at),
                 metadata_json: None,
             })
             .map_err(|error| map_store_error("failed to upsert imported task row", error))?;

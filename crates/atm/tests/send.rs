@@ -854,17 +854,12 @@ fn test_send_persists_store_rows_and_threads_roster_pane_into_hook_payload() {
     recipient.tmux_pane_id = Some("%7".to_string());
     fixture.write_team_config_members(vec![recipient]);
 
-    let payload_path = fixture.tempdir.path().join("roster-pane-hook.json");
-    fixture.install_executable_script(
-        "scripts/record_hook.py",
-        &format!(
-            "#!/usr/bin/env python3\nimport os\nfrom pathlib import Path\nPath(r\"{}\").write_text(os.environ['ATM_POST_SEND'])\n",
-            payload_path.display()
-        ),
-    );
-    fixture.write_atm_config(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['python3', 'scripts/record_hook.py']\n",
-    );
+    let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
+    fixture.write_atm_config(&format!(
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'capture', '{}']\n",
+        hook_path.display(),
+        payload_path.display()
+    ));
 
     let output = fixture.run(&[
         "send",

@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::Path;
 
+use atm_core::ack::{AckCommitCommand, AckCommitRejection, AckCommitResult, AckStore};
 use atm_core::home;
 use atm_core::inbox_ingress::{InboxIngestOutcome, ingest_mailbox_state};
 use atm_core::mail_store::{
@@ -80,6 +81,15 @@ fn roster_member(name: &str, pane_id: Option<&str>, pid: Option<i64>) -> RosterM
         pid: pid.map(|value| ProcessId::new(value).expect("pid")),
         metadata_json: Some("{\"provider\":\"claude\"}".to_string()),
     }
+}
+
+fn reply_message_at(index: u8) -> atm_core::mail_store::StoredMessageRecord {
+    let mut reply = message_at(index);
+    reply.recipient_agent = agent("arch-ctm");
+    reply.sender_display = "team-lead".to_string();
+    reply.sender_canonical = Some(agent("team-lead"));
+    reply.sender_team = Some(team());
+    reply
 }
 
 fn inbox_message(text: &str) -> MessageEnvelope {
@@ -811,4 +821,45 @@ fn bootstrap_report_matches_live_connection_settings() {
         "wal"
     );
     assert!(query_foreign_keys(&connection).expect("foreign keys"));
+}
+
+#[test]
+fn commit_ack_reply_rejects_already_acknowledged_message_with_typed_result() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let store = RusqliteStore::open_path(tempdir.path().join("mail.db")).expect("open store");
+    let source = message_at(1);
+    store.insert_message(&source).expect("insert source");
+    store
+        .upsert_visibility(&VisibilityStateRecord {
+            message_key: source.message_key.clone(),
+            read_at: Some("2026-05-02T20:00:30Z".parse().expect("timestamp")),
+            cleared_at: None,
+        })
+        .expect("upsert visibility");
+    store
+        .upsert_ack_state(&AckStateRecord {
+            message_key: source.message_key.clone(),
+            pending_ack_at: Some("2026-05-02T20:00:10Z".parse().expect("timestamp")),
+            acknowledged_at: Some("2026-05-02T20:00:20Z".parse().expect("timestamp")),
+            ack_reply_message_key: None,
+            ack_reply_team: None,
+            ack_reply_agent: None,
+        })
+        .expect("upsert acknowledged state");
+
+    let reply = reply_message_at(2);
+    let result = store
+        .commit_ack_reply(&AckCommitCommand {
+            source_message_key: &source.message_key,
+            reply_message: &reply,
+            acknowledged_at: "2026-05-02T20:00:40Z".parse().expect("timestamp"),
+            reply_team: &team(),
+            reply_agent: &agent("team-lead"),
+        })
+        .expect("typed rejection");
+
+    assert!(matches!(
+        result,
+        AckCommitResult::Rejected(AckCommitRejection::AlreadyAcknowledged)
+    ));
 }

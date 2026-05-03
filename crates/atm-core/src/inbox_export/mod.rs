@@ -27,6 +27,9 @@ pub fn export_message(
     event: ExportEventContext,
 ) -> Result<(), AtmError> {
     let inbox_path = home::inbox_path_from_home(home_dir, team, agent)?;
+    // Transitional compatibility path pending Q.5 lock retirement: export still
+    // rewrites the Claude inbox under workflow/mailbox locks so live sessions
+    // continue receiving JSON-array projections while SQLite remains the SSOT.
     let result = workflow::commit_workflow_state(
         home_dir,
         team,

@@ -365,7 +365,7 @@ fn test_ack_preserves_sqlite_state_when_reply_export_fails_after_commit() {
     );
     let stderr = fixture.stderr(&output);
     assert!(
-        stderr.contains("warning: acknowledgement reply export failed after SQLite commit"),
+        stderr.contains("acknowledgement reply export failed after SQLite commit"),
         "stderr: {stderr}"
     );
 

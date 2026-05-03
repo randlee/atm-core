@@ -136,6 +136,15 @@ impl Serialize for ReplyTarget {
     }
 }
 
+/// Resolve the SQLite target team for an acknowledgement request.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::ConfigLoadFailed`] when `.atm.toml`
+/// cannot be loaded or
+/// [`crate::error_codes::AtmErrorCode::TeamUnavailable`] when neither the
+/// request nor the config can resolve a team.
 pub fn resolve_store_team(request: &AckRequest) -> Result<TeamName, AtmError> {
     let config = config::load_config(&request.current_dir)?;
     config::resolve_team(
@@ -189,9 +198,6 @@ where
     {
         return Err(AtmError::agent_not_found(&actor, &team));
     }
-    let source_files = mailbox::store::observe_source_files(&request.home_dir, &team, &actor)?;
-    let source_message = find_source_message(&source_files, request.message_id, &actor, &team)?;
-    reject_if_already_acknowledged(store, request.message_id)?;
     let _ = inbox_ingress::ingest_mailbox_state(
         &request.home_dir,
         &team,
@@ -199,6 +205,8 @@ where
         store,
         observability,
     )?;
+    let source_files = mailbox::store::observe_source_files(&request.home_dir, &team, &actor)?;
+    let source_message = find_source_message(&source_files, request.message_id, &actor, &team)?;
     let source_legacy_message_id = source_message_legacy_message_id(&source_message.envelope)
         .ok_or_else(|| {
             AtmError::validation(format!(
@@ -352,9 +360,23 @@ where
         }
         Err(error) => {
             warnings.push(format!(
-                "warning: acknowledgement reply export failed after SQLite commit: {}",
+                "acknowledgement reply export failed after SQLite commit: {}",
                 error.message
             ));
+            let _ = observability.emit(CommandEvent {
+                command: "ack",
+                action: "export_degraded",
+                outcome: "warning",
+                team: team.clone(),
+                agent: actor.clone(),
+                sender: actor.to_string(),
+                message_id: Some(source_legacy_message_id),
+                requires_ack: false,
+                dry_run: false,
+                task_id: source_task_id.clone(),
+                error_code: Some(error.code),
+                error_message: Some(error.message.clone()),
+            });
             false
         }
     };
@@ -429,20 +451,26 @@ fn resolve_reply_target(
         message.from.as_str().parse()?
     } else {
         AgentAddress {
-            agent: message.from.to_string(),
+            agent: AgentName::from_validated(message.from.clone()),
             team: message
                 .source_team
                 .clone()
-                .map(Into::into)
-                .or_else(|| Some(current_team.to_string())),
+                .or_else(|| Some(current_team.clone())),
         }
     };
 
-    let team = parsed.team.ok_or_else(AtmError::team_unavailable)?;
-    Ok((
-        AgentName::from_validated(parsed.agent),
-        TeamName::from_validated(team),
-    ))
+    let team = parsed.team.ok_or_else(|| {
+        let message_reference = message
+            .atm_message_id()
+            .map(|id| id.to_string())
+            .or_else(|| message.message_id.map(|id| id.to_string()))
+            .unwrap_or_else(|| "<unknown>".to_string());
+        AtmError::team_unavailable().with_recovery(format!(
+            "Message {message_reference} from `{}` is missing source team metadata. Refresh the mailbox or repair the message record before retrying acknowledgement.",
+            message.from
+        ))
+    })?;
+    Ok((parsed.agent, team))
 }
 
 fn canonical_sender_identity(message: &MessageEnvelope) -> Option<AgentName> {
@@ -576,28 +604,6 @@ where
                 })
         }
     }
-}
-
-fn reject_if_already_acknowledged<S>(store: &S, message_id: AckMessageId) -> Result<(), AtmError>
-where
-    S: MailStore,
-{
-    let Some(stored_message) = load_stored_message_for_request(store, message_id)? else {
-        return Ok(());
-    };
-    let ack_state = store
-        .load_ack_state(&stored_message.message_key)
-        .map_err(|error| map_store_error("failed to load ack state", error))?;
-    if ack_state
-        .as_ref()
-        .is_some_and(|state| state.acknowledged_at.is_some())
-    {
-        return Err(ack_invalid_state_error(
-            message_id,
-            AckCommitRejection::AlreadyAcknowledged,
-        ));
-    }
-    Ok(())
 }
 
 fn stored_reply_message(
