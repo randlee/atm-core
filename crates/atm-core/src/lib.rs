@@ -64,3 +64,33 @@ pub mod types;
 pub mod watcher_reconcile;
 /// Internal ATM-owned workflow-state helpers shared across mailbox services.
 pub(crate) mod workflow;
+
+#[doc(hidden)]
+pub mod internal_test_hooks {
+    use crate::mailbox::lock::ScopedNonContentionLockErrorOverride;
+    use crate::mailbox::source::ScopedSourceDiscoveryFaultOverride;
+
+    pub struct NonContentionLockErrorGuard {
+        _inner: ScopedNonContentionLockErrorOverride,
+    }
+
+    impl NonContentionLockErrorGuard {
+        pub fn enable() -> Self {
+            Self {
+                _inner: ScopedNonContentionLockErrorOverride::enable(),
+            }
+        }
+    }
+
+    pub struct SourceDiscoveryFaultGuard {
+        _inner: ScopedSourceDiscoveryFaultOverride,
+    }
+
+    impl SourceDiscoveryFaultGuard {
+        pub fn enable() -> Self {
+            Self {
+                _inner: ScopedSourceDiscoveryFaultOverride::enable(),
+            }
+        }
+    }
+}

@@ -302,7 +302,7 @@ pub(crate) fn acquire_many_sorted(
 }
 
 fn try_lock_exclusive(file: &File, lock_path: &Path) -> io::Result<()> {
-    if std::env::var_os("ATM_INTERNAL_TEST_FORCE_LOCK_NON_CONTENTION_ERROR").is_some() {
+    if forced_non_contention_lock_error() {
         return Err(io::Error::other(format!(
             "synthetic non-contention lock failure for {}",
             lock_path.display()
@@ -310,6 +310,10 @@ fn try_lock_exclusive(file: &File, lock_path: &Path) -> io::Result<()> {
     }
 
     file.try_lock_exclusive()
+}
+
+fn forced_non_contention_lock_error() -> bool {
+    non_contention_lock_test_override::get()
 }
 
 fn open_lock_file(lock_path: &Path) -> Result<File, AtmError> {
@@ -749,6 +753,7 @@ fn acquire_in_process_lock(
 fn in_process_lock_state(
     key: CanonicalLockKey,
 ) -> Result<Arc<InProcessMailboxLockState>, AtmError> {
+    const MAX_LOCK_STATE_REGISTRY_ENTRIES: usize = 1024;
     static REGISTRY: OnceLock<
         Mutex<std::collections::HashMap<CanonicalLockKey, Arc<InProcessMailboxLockState>>>,
     > = OnceLock::new();
@@ -764,6 +769,9 @@ fn in_process_lock_state(
                 "Retry the ATM command. If the error persists, restart the current ATM process so the in-process mailbox lock registry is rebuilt.",
             )
         })?;
+    if registry.len() >= MAX_LOCK_STATE_REGISTRY_ENTRIES {
+        registry.retain(|_, state| Arc::strong_count(state) > 1);
+    }
     Ok(registry
         .entry(key)
         .or_insert_with(|| {
@@ -782,6 +790,44 @@ fn canonical_lock_key(path: &Path) -> CanonicalLockKey {
             .to_string_lossy()
             .into_owned(),
     )
+}
+
+mod non_contention_lock_test_override {
+    use std::cell::Cell;
+
+    thread_local! {
+        static OVERRIDE: Cell<bool> = const { Cell::new(false) };
+    }
+
+    pub(super) fn get() -> bool {
+        OVERRIDE.with(Cell::get)
+    }
+
+    pub(super) fn set(enabled: bool) -> bool {
+        OVERRIDE.with(|cell| {
+            let original = cell.get();
+            cell.set(enabled);
+            original
+        })
+    }
+}
+
+pub(crate) struct ScopedNonContentionLockErrorOverride {
+    original: bool,
+}
+
+impl ScopedNonContentionLockErrorOverride {
+    pub(crate) fn enable() -> Self {
+        Self {
+            original: non_contention_lock_test_override::set(true),
+        }
+    }
+}
+
+impl Drop for ScopedNonContentionLockErrorOverride {
+    fn drop(&mut self) {
+        non_contention_lock_test_override::set(self.original);
+    }
 }
 
 #[cfg(test)]

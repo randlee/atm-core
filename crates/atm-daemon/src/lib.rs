@@ -285,6 +285,8 @@ pub struct DaemonHandle {
     inflight: Arc<AtomicUsize>,
     local_thread: Option<JoinHandle<()>>,
     remote_thread: Option<JoinHandle<()>>,
+    // Runtime worker threads are registered here so shutdown can join both
+    // accepted connection workers and any detached request helpers exactly once.
     worker_threads: Arc<Mutex<Vec<JoinHandle<()>>>>,
     singleton: SingletonGuard,
     home_dir: PathBuf,

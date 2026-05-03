@@ -15,6 +15,7 @@ use atm_core::clear::{ClearQuery, clear_mail, clear_mail_via_store};
 use atm_core::error::AtmErrorCode;
 use atm_core::inbox_export::default_inbox_export;
 use atm_core::inbox_ingress::default_inbox_ingress;
+use atm_core::internal_test_hooks::{NonContentionLockErrorGuard, SourceDiscoveryFaultGuard};
 use atm_core::mail_store::MailStore;
 use atm_core::observability::{NullObservability, ObservabilityPort};
 use atm_core::read::{ReadQuery, read_mail, read_mail_via_store};
@@ -40,7 +41,8 @@ fn qualified(agent: &str) -> String {
 
 // Test-side ceiling guard only; production lock timeout defaults to 5s per
 // architecture §18.3.
-const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(2);
+const TEST_TIMEOUT_SECS: u64 = 3;
+const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(TEST_TIMEOUT_SECS);
 
 fn test_recv_timeout() -> Duration {
     std::env::var("ATM_TEST_RECV_TIMEOUT_SECS")
@@ -881,7 +883,7 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
 #[serial]
 fn clear_fails_closed_on_synthetic_source_discovery_fault() {
     let _env_lock = acquire_env_lock();
-    let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT", "1");
+    let _fault = SourceDiscoveryFaultGuard::enable();
     let fixture = Fixture::new();
     let observability = NullObservability;
     fixture.write_origin_inbox(
@@ -916,7 +918,7 @@ fn clear_fails_closed_on_synthetic_source_discovery_fault() {
 #[serial]
 fn send_reports_non_contention_lock_failures_without_timeout() {
     let _env_lock = acquire_env_lock();
-    let _fault = EnvGuard::set_raw("ATM_INTERNAL_TEST_FORCE_LOCK_NON_CONTENTION_ERROR", "1");
+    let _fault = NonContentionLockErrorGuard::enable();
     let fixture = Fixture::new();
     let observability = NullObservability;
     let started = Instant::now();

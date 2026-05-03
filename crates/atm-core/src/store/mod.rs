@@ -7,7 +7,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
-use crate::error::AtmErrorCode;
+use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::schema::{AtmMessageId, LegacyMessageId};
 use crate::types::{AgentName, TeamName};
 
@@ -482,6 +482,20 @@ impl StoreError {
         .with_recovery(
             "Retry after checking the prior store mutation result and ensure the transaction inputs remain internally consistent.",
         )
+    }
+
+    pub fn into_atm_error(self, context: &str) -> AtmError {
+        let kind = match self.kind {
+            StoreErrorKind::Busy => AtmErrorKind::Timeout,
+            StoreErrorKind::Constraint => AtmErrorKind::Validation,
+            _ => AtmErrorKind::Store,
+        };
+        let mut atm_error =
+            AtmError::new_with_code(self.code, kind, format!("{context}: {}", self.message));
+        if let Some(recovery) = self.recovery.as_ref() {
+            atm_error = atm_error.with_recovery(recovery.clone());
+        }
+        atm_error.with_source(self)
     }
 }
 
