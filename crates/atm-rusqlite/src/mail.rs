@@ -467,7 +467,7 @@ impl MailStore for RusqliteStore {
     }
 }
 
-fn insert_message_row(
+pub(crate) fn insert_message_row(
     connection: &Connection,
     message: &StoredMessageRecord,
 ) -> rusqlite::Result<()> {
@@ -508,7 +508,7 @@ fn insert_message_row(
     Ok(())
 }
 
-fn classify_message_duplicate(
+pub(crate) fn classify_message_duplicate(
     error: &rusqlite::Error,
     message: &StoredMessageRecord,
 ) -> Option<StoreDuplicateIdentity> {

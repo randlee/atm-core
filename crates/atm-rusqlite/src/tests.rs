@@ -1,17 +1,22 @@
+use std::fs;
 use std::path::Path;
 
+use atm_core::home;
+use atm_core::inbox_ingress::{InboxIngestOutcome, ingest_mailbox_state};
 use atm_core::mail_store::{
     AckStateRecord, IngestRecord, MailStore, MessageSourceKind, PendingExportRecord,
     VisibilityStateRecord,
 };
+use atm_core::observability::NullObservability;
 use atm_core::roster_store::{
     PidUpdate, RosterMemberRecord, RosterRole, RosterStore, TransportKind,
 };
-use atm_core::schema::{AtmMessageId, LegacyMessageId};
+use atm_core::schema::{AgentMember, AtmMessageId, LegacyMessageId, MessageEnvelope, TeamConfig};
 use atm_core::store::{
     InsertOutcome, MessageKey, ProcessId, StoreBoundary, StoreDuplicateIdentity, StoreErrorKind,
 };
 use atm_core::task_store::{TaskRecord, TaskStatus, TaskStore};
+use atm_core::team_ingress::{default_host_name, ingest_team_config};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use rusqlite::{Connection, OpenFlags};
 use tempfile::TempDir;
@@ -74,6 +79,35 @@ fn roster_member(name: &str, pane_id: Option<&str>, pid: Option<i64>) -> RosterM
         recipient_pane_id: pane_id.map(|value| value.parse().expect("pane")),
         pid: pid.map(|value| ProcessId::new(value).expect("pid")),
         metadata_json: Some("{\"provider\":\"claude\"}".to_string()),
+    }
+}
+
+fn inbox_message(text: &str) -> MessageEnvelope {
+    let legacy_message_id = LegacyMessageId::new();
+    let (atm_message_id, timestamp) = AtmMessageId::new_with_timestamp();
+    let mut extra = serde_json::Map::new();
+    extra.insert(
+        "metadata".to_string(),
+        serde_json::json!({
+            "atm": {
+                "messageId": atm_message_id.to_string(),
+                "sourceTeam": team().to_string()
+            }
+        }),
+    );
+    MessageEnvelope {
+        from: "arch-ctm".parse().expect("sender"),
+        text: text.to_string(),
+        timestamp,
+        read: false,
+        source_team: Some(team()),
+        summary: Some("summary".to_string()),
+        message_id: Some(legacy_message_id),
+        pending_ack_at: Some(timestamp),
+        acknowledged_at: None,
+        acknowledges_message_id: None,
+        task_id: Some("TASK-INGEST-1".parse().expect("task id")),
+        extra,
     }
 }
 
@@ -477,6 +511,149 @@ fn roster_replace_update_and_pid_round_trip() {
 
     let roster_health = store.roster_health().expect("roster health");
     assert!(roster_health.team_roster_ready);
+}
+
+#[test]
+fn team_ingress_replaces_roster_and_preserves_existing_pid() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let store = RusqliteStore::open_for_team_home(tempdir.path(), &team()).expect("open store");
+    let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+    fs::create_dir_all(&team_dir).expect("team dir");
+
+    store
+        .upsert_roster_member(&roster_member("recipient", Some("%1"), Some(4242)))
+        .expect("seed roster member");
+
+    let mut recipient = AgentMember::with_name(agent("recipient"));
+    recipient.tmux_pane_id = Some("%7".to_string());
+    let mut quality = AgentMember::with_name(agent("quality-mgr"));
+    quality.tmux_pane_id = Some("%8".to_string());
+    let config = TeamConfig {
+        members: vec![recipient, quality],
+        ..Default::default()
+    };
+    fs::write(
+        team_dir.join("config.json"),
+        serde_json::to_vec(&config).expect("team config"),
+    )
+    .expect("write team config");
+
+    let roster = ingest_team_config(&team_dir, &team(), &store, &default_host_name())
+        .expect("ingest team config");
+
+    assert_eq!(roster.len(), 2);
+    let recipient = roster
+        .iter()
+        .find(|member| member.agent_name.as_str() == "recipient")
+        .expect("recipient");
+    assert_eq!(
+        recipient
+            .recipient_pane_id
+            .as_ref()
+            .map(ToString::to_string)
+            .as_deref(),
+        Some("%7")
+    );
+    assert_eq!(recipient.pid, Some(ProcessId::new(4242).expect("pid")));
+}
+
+#[test]
+fn inbox_ingress_is_idempotent_and_tracks_degraded_metadata() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let store = RusqliteStore::open_for_team_home(tempdir.path(), &team()).expect("open store");
+    let inbox_path = home::inbox_path_from_home(tempdir.path(), &team(), &agent("team-lead"))
+        .expect("inbox path");
+    if let Some(parent) = inbox_path.parent() {
+        fs::create_dir_all(parent).expect("inbox dir");
+    }
+
+    let valid = inbox_message("ingest me");
+    let valid_value = atm_core::schema::to_shared_inbox_value(&valid).expect("shared inbox value");
+    let malformed_metadata = serde_json::json!({
+        "from": "quality-mgr",
+        "text": "external malformed metadata",
+        "timestamp": "2026-05-02T21:00:00Z",
+        "read": false,
+        "metadata": { "atm": { "messageId": "not-a-ulid" } }
+    });
+    fs::write(
+        &inbox_path,
+        serde_json::to_vec(&vec![valid_value, malformed_metadata]).expect("json array"),
+    )
+    .expect("write inbox");
+
+    let observability = NullObservability;
+    let first = ingest_mailbox_state(
+        tempdir.path(),
+        &team(),
+        &agent("team-lead"),
+        &store,
+        &observability,
+    )
+    .expect("first ingest");
+    assert_eq!(
+        first,
+        InboxIngestOutcome {
+            imported_messages: 2,
+            duplicate_messages: 0,
+            degraded_records: 1,
+        }
+    );
+
+    let second = ingest_mailbox_state(
+        tempdir.path(),
+        &team(),
+        &agent("team-lead"),
+        &store,
+        &observability,
+    )
+    .expect("second ingest");
+    assert_eq!(
+        second,
+        InboxIngestOutcome {
+            imported_messages: 0,
+            duplicate_messages: 2,
+            degraded_records: 1,
+        }
+    );
+}
+
+#[test]
+fn inbox_ingress_tolerates_bare_invalid_jsonl_line_without_panicking() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let store = RusqliteStore::open_for_team_home(tempdir.path(), &team()).expect("open store");
+    let inbox_path = home::inbox_path_from_home(tempdir.path(), &team(), &agent("team-lead"))
+        .expect("inbox path");
+    if let Some(parent) = inbox_path.parent() {
+        fs::create_dir_all(parent).expect("inbox dir");
+    }
+
+    let valid = inbox_message("ingest me");
+    let valid_value = atm_core::schema::to_shared_inbox_value(&valid).expect("shared inbox value");
+    let raw = format!(
+        "{}\n{{not-json\n",
+        serde_json::to_string(&valid_value).expect("json line")
+    );
+    fs::write(&inbox_path, raw).expect("write inbox");
+
+    let observability = NullObservability;
+    let outcome = ingest_mailbox_state(
+        tempdir.path(),
+        &team(),
+        &agent("team-lead"),
+        &store,
+        &observability,
+    )
+    .expect("ingest succeeds");
+
+    assert_eq!(
+        outcome,
+        InboxIngestOutcome {
+            imported_messages: 1,
+            duplicate_messages: 0,
+            degraded_records: 1,
+        }
+    );
 }
 
 #[test]
