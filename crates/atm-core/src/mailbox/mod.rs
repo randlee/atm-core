@@ -500,11 +500,7 @@ mod tests {
         let mut atm = serde_json::Map::new();
         atm.insert(
             "messageId".to_string(),
-            serde_json::Value::String(
-                crate::schema::LegacyMessageId::from(message_id)
-                    .into_atm_message_id()
-                    .to_string(),
-            ),
+            serde_json::Value::String(crate::schema::AtmMessageId::new().to_string()),
         );
         atm.insert(
             "sourceTeam".to_string(),

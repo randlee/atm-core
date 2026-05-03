@@ -1092,9 +1092,21 @@ fn message_atm_id(message: &MessageEnvelope) -> String {
 
 fn read_jsonl(path: std::path::PathBuf) -> Vec<MessageEnvelope> {
     let raw = fs::read_to_string(path).expect("inbox contents");
-    raw.lines()
-        .map(|line| {
-            let mut value: serde_json::Value = serde_json::from_str(line).expect("json line");
+    if raw.trim().is_empty() {
+        return Vec::new();
+    }
+
+    let values: Vec<serde_json::Value> = match raw.chars().find(|ch| !ch.is_whitespace()) {
+        Some('[') => serde_json::from_str(&raw).expect("json array"),
+        _ => raw
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("json line"))
+            .collect(),
+    };
+
+    values
+        .into_iter()
+        .map(|mut value| {
             hydrate_legacy_fields_from_metadata(&mut value);
             serde_json::from_value(value).expect("message envelope")
         })
@@ -1102,18 +1114,26 @@ fn read_jsonl(path: std::path::PathBuf) -> Vec<MessageEnvelope> {
 }
 
 fn find_inbox_json_line(raw: &str, text: &str) -> serde_json::Value {
-    raw.lines()
-        .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("json line"))
+    let values: Vec<serde_json::Value> = if raw.trim().is_empty() {
+        Vec::new()
+    } else {
+        match raw.chars().find(|ch| !ch.is_whitespace()) {
+            Some('[') => serde_json::from_str(raw).expect("json array"),
+            _ => raw
+                .lines()
+                .map(|line| serde_json::from_str(line).expect("json line"))
+                .collect(),
+        }
+    };
+
+    values
+        .into_iter()
         .find(|line| line["text"] == text)
         .expect("matching inbox json line")
 }
 
 fn write_inbox(path: &std::path::Path, messages: &[MessageEnvelope]) {
-    let raw = messages
-        .iter()
-        .map(|message| serde_json::to_string(message).expect("json line"))
-        .collect::<Vec<_>>()
-        .join("\n");
+    let raw = serde_json::to_string_pretty(messages).expect("json array");
     fs::write(path, format!("{raw}\n")).expect("write inbox");
 }
 
@@ -1185,6 +1205,20 @@ fn pending_ack_message(
     message_id: LegacyMessageId,
     source_team: &str,
 ) -> MessageEnvelope {
+    let mut extra = serde_json::Map::new();
+    let mut metadata = serde_json::Map::new();
+    let mut atm = serde_json::Map::new();
+    atm.insert(
+        "messageId".to_string(),
+        serde_json::Value::String(message_id.into_atm_message_id().to_string()),
+    );
+    atm.insert(
+        "sourceTeam".to_string(),
+        serde_json::Value::String(source_team.to_string()),
+    );
+    metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
+    extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
+
     MessageEnvelope {
         from: from.to_string(),
         text: text.to_string(),
@@ -1197,11 +1231,25 @@ fn pending_ack_message(
         acknowledged_at: None,
         acknowledges_message_id: None,
         task_id: None,
-        extra: serde_json::Map::new(),
+        extra,
     }
 }
 
 fn read_message(from: &str, text: &str, message_id: LegacyMessageId) -> MessageEnvelope {
+    let mut extra = serde_json::Map::new();
+    let mut metadata = serde_json::Map::new();
+    let mut atm = serde_json::Map::new();
+    atm.insert(
+        "messageId".to_string(),
+        serde_json::Value::String(message_id.into_atm_message_id().to_string()),
+    );
+    atm.insert(
+        "sourceTeam".to_string(),
+        serde_json::Value::String("atm-dev".to_string()),
+    );
+    metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
+    extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
+
     MessageEnvelope {
         from: from.to_string(),
         text: text.to_string(),
@@ -1214,11 +1262,25 @@ fn read_message(from: &str, text: &str, message_id: LegacyMessageId) -> MessageE
         acknowledged_at: None,
         acknowledges_message_id: None,
         task_id: None,
-        extra: serde_json::Map::new(),
+        extra,
     }
 }
 
 fn unread_message(from: &str, text: &str, message_id: LegacyMessageId) -> MessageEnvelope {
+    let mut extra = serde_json::Map::new();
+    let mut metadata = serde_json::Map::new();
+    let mut atm = serde_json::Map::new();
+    atm.insert(
+        "messageId".to_string(),
+        serde_json::Value::String(message_id.into_atm_message_id().to_string()),
+    );
+    atm.insert(
+        "sourceTeam".to_string(),
+        serde_json::Value::String("atm-dev".to_string()),
+    );
+    metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
+    extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
+
     MessageEnvelope {
         from: from.to_string(),
         text: text.to_string(),
@@ -1231,6 +1293,6 @@ fn unread_message(from: &str, text: &str, message_id: LegacyMessageId) -> Messag
         acknowledged_at: None,
         acknowledges_message_id: None,
         task_id: None,
-        extra: serde_json::Map::new(),
+        extra,
     }
 }

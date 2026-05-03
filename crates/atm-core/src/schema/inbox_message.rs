@@ -256,13 +256,7 @@ pub(crate) fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, 
     let object = value
         .as_object_mut()
         .expect("message envelope serializes to object");
-    let message_id = object.remove("message_id").and_then(|value| match value {
-        Value::String(_) => message
-            .message_id
-            .map(LegacyMessageId::into_atm_message_id)
-            .map(|message_id| Value::String(message_id.to_string())),
-        _ => None,
-    });
+    let _ = object.remove("message_id");
     let source_team = object.remove("source_team");
     let pending_ack_at = object.remove("pendingAckAt");
     let acknowledged_at = object.remove("acknowledgedAt");
@@ -277,15 +271,12 @@ pub(crate) fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, 
                 _ => None,
             });
     let task_id = object.remove("taskId");
-    let alert_kind = object.remove("atmAlertKind");
-    let missing_config_path = object.remove("missingConfigPath");
+    let _ = object.get("atmAlertKind");
+    let _ = object.get("missingConfigPath");
 
     let metadata = ensure_object(object, "metadata");
     let atm = ensure_object(metadata, "atm");
 
-    if let Some(value) = message_id {
-        atm.entry("messageId".to_string()).or_insert(value);
-    }
     if let Some(value) = source_team {
         atm.entry("sourceTeam".to_string()).or_insert(value);
     }
@@ -302,13 +293,6 @@ pub(crate) fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, 
     if let Some(value) = task_id {
         atm.entry("taskId".to_string()).or_insert(value);
     }
-    if let Some(value) = alert_kind {
-        atm.entry("alertKind".to_string()).or_insert(value);
-    }
-    if let Some(value) = missing_config_path {
-        atm.entry("missingConfigPath".to_string()).or_insert(value);
-    }
-
     Ok(value)
 }
 
@@ -610,7 +594,7 @@ mod tests {
             .and_then(|metadata| metadata.get("atm"))
             .and_then(Value::as_object)
             .expect("metadata.atm");
-        assert!(atm.contains_key("messageId"));
+        assert!(!atm.contains_key("messageId"));
         assert_eq!(atm.get("sourceTeam"), Some(&json!("atm-dev")));
         assert_eq!(atm.get("taskId"), Some(&json!("TASK-123")));
     }

@@ -94,7 +94,7 @@ mod tests {
     use super::{commit_mailbox_state, commit_source_files};
     use crate::mailbox::read_messages;
     use crate::mailbox::source::SourceFile;
-    use crate::schema::{LegacyMessageId, MessageEnvelope};
+    use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
     use crate::types::IsoTimestamp;
 
     #[test]
@@ -179,13 +179,12 @@ mod tests {
     }
 
     fn sample_message(from: &str, text: &str) -> MessageEnvelope {
-        let message_id = LegacyMessageId::from(Uuid::new_v4());
         let mut extra = serde_json::Map::new();
         let mut metadata = serde_json::Map::new();
         let mut atm = serde_json::Map::new();
         atm.insert(
             "messageId".to_string(),
-            serde_json::Value::String(message_id.into_atm_message_id().to_string()),
+            serde_json::Value::String(AtmMessageId::new().to_string()),
         );
         atm.insert(
             "sourceTeam".to_string(),
