@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use atm_core::ack::{self, AckRequest};
 use atm_core::home;
 use atm_core::schema::LegacyMessageId;
+use atm_rusqlite::RusqliteStore;
 use clap::Args;
 
 use crate::observability::CliObservability;
@@ -33,17 +34,17 @@ impl AckCommand {
             .parse::<LegacyMessageId>()
             .with_context(|| format!("invalid message id: {}", self.message_id))?;
 
-        let outcome = ack::ack_mail(
-            AckRequest {
-                home_dir,
-                current_dir,
-                actor_override: self.actor.map(|value| value.parse()).transpose()?,
-                team_override: self.team.map(|value| value.parse()).transpose()?,
-                message_id,
-                reply_body: self.reply,
-            },
-            observability,
-        )?;
+        let request = AckRequest {
+            home_dir,
+            current_dir,
+            actor_override: self.actor.map(|value| value.parse()).transpose()?,
+            team_override: self.team.map(|value| value.parse()).transpose()?,
+            message_id,
+            reply_body: self.reply,
+        };
+        let team = ack::resolve_store_team(&request)?;
+        let store = RusqliteStore::open_for_team_home(&request.home_dir, &team)?;
+        let outcome = ack::ack_mail(request, &store, observability)?;
 
         output::print_ack_result(&outcome, self.json)
     }

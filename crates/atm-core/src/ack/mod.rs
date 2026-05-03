@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use serde::{Serialize, Serializer};
 use serde_json::Map;
@@ -6,20 +6,23 @@ use tracing::trace;
 
 use crate::address::AgentAddress;
 use crate::config;
-use crate::error::AtmError;
+use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
 use crate::identity;
+use crate::inbox_export;
+use crate::inbox_ingress;
+use crate::mail_store::{AckStateRecord, MailStore, MessageSourceKind, StoredMessageRecord};
 use crate::mailbox;
 use crate::mailbox::source::{SourceFile, SourcedMessage};
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
-use crate::read::state;
 use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
 use crate::send::{
     PostSendHookContext, ResolvedRecipient, input, maybe_run_post_send_hook, summary,
 };
-use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
-use crate::workflow;
+use crate::store::{InsertOutcome, MessageKey, StoreDuplicateIdentity, StoreError};
+use crate::task_store::TaskStore;
+use crate::types::{AgentName, TaskId, TeamName};
 
 /// Parameters for acknowledging one pending-ack mailbox message.
 #[derive(Debug, Clone)]
@@ -75,6 +78,15 @@ impl Serialize for ReplyTarget {
     }
 }
 
+pub fn resolve_store_team(request: &AckRequest) -> Result<TeamName, AtmError> {
+    let config = config::load_config(&request.current_dir)?;
+    config::resolve_team(
+        request.team_override.as_ref().map(|team| team.as_str()),
+        config.as_ref(),
+    )
+    .ok_or_else(AtmError::team_unavailable)
+}
+
 /// Acknowledge one previously read pending-ack message and append a reply.
 ///
 /// # Errors
@@ -93,10 +105,14 @@ impl Serialize for ReplyTarget {
 /// team resolution fails, the message is missing or no longer pending
 /// acknowledgement, reply-target validation fails, or either the source or
 /// reply inbox cannot be persisted.
-pub fn ack_mail(
+pub fn ack_mail<S>(
     request: AckRequest,
+    store: &S,
     observability: &dyn ObservabilityPort,
-) -> Result<AckOutcome, AtmError> {
+) -> Result<AckOutcome, AtmError>
+where
+    S: MailStore + TaskStore,
+{
     let config = config::load_config(&request.current_dir)?;
     let actor =
         identity::resolve_actor_identity(request.actor_override.as_deref(), config.as_ref())?;
@@ -115,42 +131,59 @@ pub fn ack_mail(
     {
         return Err(AtmError::agent_not_found(&actor, &team));
     }
-
-    let source_workflow_path =
-        home::workflow_state_path_from_home(&request.home_dir, &team, &actor)?;
-    let source_workflow_state = workflow::load_workflow_state(&request.home_dir, &team, &actor)?;
     let source_files = mailbox::store::observe_source_files(&request.home_dir, &team, &actor)?;
-    // Ack intentionally does not apply read-surface idle-notification dedup.
-    // It must preserve the raw merged surface after legacy message_id
-    // canonicalization so acknowledgement lookup does not depend on read-only
-    // inbox clutter policy.
-    let source_message = find_source_message(
-        &source_files,
-        &source_workflow_state,
-        request.message_id,
-        &actor,
+    let source_message = find_source_message(&source_files, request.message_id, &actor, &team)?;
+    let _ = inbox_ingress::ingest_mailbox_state(
+        &request.home_dir,
         &team,
+        &actor,
+        store,
+        observability,
     )?;
-
-    match (
-        state::derive_read_state(&source_message.envelope),
-        state::derive_ack_state(&source_message.envelope),
-    ) {
-        (crate::types::ReadState::Read, crate::types::AckState::PendingAck) => {}
-        (_, crate::types::AckState::Acknowledged) => {
-            return Err(AtmError::validation(format!(
-                "message {} is already acknowledged",
-                request.message_id
-            ))
+    let stored_message = store
+        .load_message_by_legacy_id(&request.message_id)
+        .map_err(|error| map_store_error("failed to load acknowledged message from store", error))?
+        .ok_or_else(|| {
+            AtmError::new_with_code(
+                AtmErrorCode::AckInvalidState,
+                AtmErrorKind::Validation,
+                format!(
+                    "message {} was not imported into SQLite acknowledgement state",
+                    request.message_id
+                ),
+            )
+            .with_recovery(
+                "Refresh the mailbox with `atm read` and retry the acknowledgement after ATM imports the message into SQLite.",
+            )
+        })?;
+    let visibility = store
+        .load_visibility(&stored_message.message_key)
+        .map_err(|error| map_store_error("failed to load visibility state", error))?;
+    let ack_state = store
+        .load_ack_state(&stored_message.message_key)
+        .map_err(|error| map_store_error("failed to load ack state", error))?;
+    match (visibility.as_ref(), ack_state.as_ref()) {
+        (_, Some(state)) if state.acknowledged_at.is_some() => {
+            return Err(AtmError::new_with_code(
+                AtmErrorCode::AckInvalidState,
+                AtmErrorKind::Validation,
+                format!("message {} is already acknowledged", request.message_id),
+            )
             .with_recovery(
                 "Refresh the mailbox with `atm read` and choose a message that is still pending acknowledgement.",
             ));
         }
+        (Some(visibility), Some(state))
+            if visibility.read_at.is_some() && state.pending_ack_at.is_some() => {}
         _ => {
-            return Err(AtmError::validation(format!(
-                "message {} is not in the (read, pending_ack) state",
-                request.message_id
-            ))
+            return Err(AtmError::new_with_code(
+                AtmErrorCode::AckInvalidState,
+                AtmErrorKind::Validation,
+                format!(
+                    "message {} is not in the SQLite-authoritative (read, pending_ack) state",
+                    request.message_id
+                ),
+            )
             .with_recovery(
                 "Refresh the mailbox with `atm read` and choose a message that is still pending acknowledgement.",
             ));
@@ -175,9 +208,12 @@ pub fn ack_mail(
     let (reply_atm_message_id, ack_timestamp) = AtmMessageId::new_with_timestamp();
     let reply_text = input::validate_message_text(request.reply_body)?;
     let reply_message_id = LegacyMessageId::new();
-    let source_task_id = source_message.envelope.task_id.clone();
+    let source_tasks = store
+        .load_tasks_for_message(&stored_message.message_key)
+        .map_err(|error| map_store_error("failed to load linked task rows", error))?;
+    let source_task_id = source_tasks.first().map(|task| task.task_id.clone());
     let mut reply_extra = Map::new();
-    workflow::set_atm_message_id(&mut reply_extra, reply_atm_message_id);
+    set_atm_message_id(&mut reply_extra, reply_atm_message_id);
     let reply_message = MessageEnvelope {
         from: actor.clone(),
         text: reply_text.clone(),
@@ -192,93 +228,100 @@ pub fn ack_mail(
         task_id: None,
         extra: reply_extra,
     };
-
-    let reply_inbox_path =
-        home::inbox_path_from_home(&request.home_dir, &reply_team, &reply_agent)?;
-    let reply_workflow_path =
-        home::workflow_state_path_from_home(&request.home_dir, &reply_team, &reply_agent)?;
-    let reply_targets_source_mailbox =
-        reply_team.as_str() == team.as_str() && reply_agent.as_str() == actor.as_str();
-    // Ack intentionally does not hold a subset lock and then upgrade it.
-    // Resolve the reply target from an unlocked preflight, then let the shared
-    // commit helper acquire the final sorted superset, reload, and re-validate
-    // before mutating either inbox.
-    mailbox::store::with_locked_source_files(
-        &request.home_dir,
-        &team,
+    let reply_stored_message = stored_reply_message(
+        &reply_message,
         &actor,
-        [
-            reply_inbox_path.clone(),
-            source_workflow_path,
-            reply_workflow_path,
-        ],
-        mailbox::lock::default_lock_timeout(),
-        |_source_paths, source_files| {
-            let mut source_workflow_state =
-                workflow::load_workflow_state(&request.home_dir, &team, &actor)?;
-            let mut reply_workflow_state = (!reply_targets_source_mailbox)
-                .then(|| {
-                    workflow::load_workflow_state(&request.home_dir, &reply_team, &reply_agent)
-                })
-                .transpose()?;
-            let source_message = find_source_message(
-                source_files,
-                &source_workflow_state,
-                request.message_id,
-                &actor,
-                &team,
-            )?;
-            match (
-                state::derive_read_state(&source_message.envelope),
-                state::derive_ack_state(&source_message.envelope),
-            ) {
-                (crate::types::ReadState::Read, crate::types::AckState::PendingAck) => {}
-                _ => {
-                    return Err(AtmError::validation(format!(
-                        "message {} is not in the (read, pending_ack) state",
-                        request.message_id
-                    ))
-                    .with_recovery(
-                        "Refresh the mailbox with `atm read` and retry the acknowledgement if the message is still pending acknowledgement.",
-                    ));
-                }
-            }
-            let mailbox_changed = update_source_message(
-                source_files,
-                &mut source_workflow_state,
-                &source_message,
-                ack_timestamp,
-            )?;
-            append_reply_message(source_files, &reply_inbox_path, reply_message.clone())?;
-            mailbox::store::commit_source_files(source_files)?;
-            if reply_targets_source_mailbox {
-                workflow::remember_initial_state(&mut source_workflow_state, &reply_message);
-                workflow::save_workflow_state(
-                    &request.home_dir,
-                    &team,
-                    &actor,
-                    &source_workflow_state,
-                )?;
-            } else {
-                workflow::save_workflow_state(
-                    &request.home_dir,
-                    &team,
-                    &actor,
-                    &source_workflow_state,
-                )?;
-            }
-            if let Some(reply_workflow_state) = reply_workflow_state.as_mut() {
-                workflow::remember_initial_state(reply_workflow_state, &reply_message);
-                workflow::save_workflow_state(
-                    &request.home_dir,
-                    &reply_team,
-                    &reply_agent,
-                    reply_workflow_state,
-                )?;
-            }
-            Ok(mailbox_changed)
-        },
+        &team,
+        &reply_agent,
+        &reply_team,
+        reply_message_id,
+        reply_atm_message_id,
     )?;
+    match store
+        .insert_message(&reply_stored_message)
+        .map_err(|error| map_store_error("failed to persist acknowledgement reply row", error))?
+    {
+        InsertOutcome::Inserted(_) => {}
+        InsertOutcome::Duplicate(identity) => {
+            return Err(duplicate_ack_reply_error(identity));
+        }
+    }
+    store
+        .upsert_ack_state(&AckStateRecord {
+            message_key: stored_message.message_key.clone(),
+            pending_ack_at: None,
+            acknowledged_at: Some(ack_timestamp),
+            ack_reply_message_key: Some(reply_stored_message.message_key.clone()),
+            ack_reply_team: Some(reply_team.clone()),
+            ack_reply_agent: Some(reply_agent.clone()),
+        })
+        .map_err(|error| map_store_error("failed to persist acknowledgement state", error))?;
+    let _ = observability.emit(CommandEvent {
+        command: "ack",
+        action: "commit",
+        outcome: "ok",
+        team: team.clone(),
+        agent: actor.clone(),
+        sender: actor.to_string(),
+        message_id: Some(request.message_id),
+        requires_ack: false,
+        dry_run: false,
+        task_id: source_task_id.clone(),
+        error_code: None,
+        error_message: None,
+    });
+    for task in &source_tasks {
+        store
+            .acknowledge_task(&task.task_id, ack_timestamp)
+            .map_err(|error| map_store_error("failed to persist task acknowledgement", error))?;
+        let _ = observability.emit(CommandEvent {
+            command: "ack",
+            action: "task_transition",
+            outcome: "ok",
+            team: team.clone(),
+            agent: actor.clone(),
+            sender: actor.to_string(),
+            message_id: Some(request.message_id),
+            requires_ack: false,
+            dry_run: false,
+            task_id: Some(task.task_id.clone()),
+            error_code: None,
+            error_message: None,
+        });
+    }
+    if let Err(error) =
+        inbox_export::export_message(&request.home_dir, &reply_team, &reply_agent, &reply_message)
+    {
+        let _ = observability.emit(CommandEvent {
+            command: "ack",
+            action: "export",
+            outcome: "error",
+            team: team.clone(),
+            agent: actor.clone(),
+            sender: actor.to_string(),
+            message_id: Some(request.message_id),
+            requires_ack: false,
+            dry_run: false,
+            task_id: source_task_id.clone(),
+            error_code: Some(error.code),
+            error_message: Some(error.message.clone()),
+        });
+        return Err(error);
+    }
+    let _ = observability.emit(CommandEvent {
+        command: "ack",
+        action: "export",
+        outcome: "ok",
+        team: team.clone(),
+        agent: actor.clone(),
+        sender: actor.to_string(),
+        message_id: Some(request.message_id),
+        requires_ack: false,
+        dry_run: false,
+        task_id: source_task_id.clone(),
+        error_code: None,
+        error_message: None,
+    });
 
     let hook_reply_agent = reply_agent.clone();
     let hook_reply_team = reply_team.clone();
@@ -376,10 +419,7 @@ fn canonical_sender_identity(message: &MessageEnvelope) -> Option<AgentName> {
         .and_then(|value| serde_json::from_value(value).ok())
 }
 
-fn merged_surface(
-    source_files: &[SourceFile],
-    workflow_state: &workflow::WorkflowStateFile,
-) -> Vec<SourcedMessage> {
+fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
     source_files
         .iter()
         .flat_map(|source| {
@@ -389,7 +429,7 @@ fn merged_surface(
                 .cloned()
                 .enumerate()
                 .map(|(source_index, envelope)| SourcedMessage {
-                    envelope: workflow::project_envelope(&envelope, workflow_state),
+                    envelope,
                     source_path: source.path.clone(),
                     source_index: source_index.into(),
                 })
@@ -399,13 +439,12 @@ fn merged_surface(
 
 fn find_source_message(
     source_files: &[SourceFile],
-    workflow_state: &workflow::WorkflowStateFile,
     message_id: LegacyMessageId,
     actor: &str,
     team: &str,
 ) -> Result<SourcedMessage, AtmError> {
     dedupe_legacy_message_id_surface(
-        merged_surface(source_files, workflow_state),
+        merged_surface(source_files),
         |message: &SourcedMessage| message.envelope.message_id,
         |message: &SourcedMessage| message.envelope.timestamp,
     )
@@ -433,70 +472,94 @@ fn find_source_message(
     })
 }
 
-fn update_source_message(
-    source_files: &mut [SourceFile],
-    workflow_state: &mut workflow::WorkflowStateFile,
-    source_message: &SourcedMessage,
-    acknowledged_at: IsoTimestamp,
-) -> Result<bool, AtmError> {
-    let transitioned = state::StoredMessage::<
-        crate::types::ReadReadState,
-        crate::types::PendingAckState,
-    >::read_pending_ack(source_message.envelope.clone())
-    .acknowledge(acknowledged_at)
-    .envelope;
-
-    if workflow::apply_projected_state(workflow_state, &source_message.envelope, &transitioned) {
-        return Ok(false);
-    }
-
-    let source_file = source_files
-        .iter_mut()
-        .find(|source| source.path == source_message.source_path)
-        .ok_or_else(|| {
-            AtmError::mailbox_write(format!(
-                "source inbox disappeared during acknowledgement: {}",
-                source_message.source_path.display()
-            ))
+fn stored_reply_message(
+    reply_message: &MessageEnvelope,
+    actor: &AgentName,
+    source_team: &TeamName,
+    reply_agent: &AgentName,
+    reply_team: &TeamName,
+    reply_message_id: LegacyMessageId,
+    reply_atm_message_id: AtmMessageId,
+) -> Result<StoredMessageRecord, AtmError> {
+    let raw_metadata_json = reply_message
+        .extra
+        .get("metadata")
+        .map(serde_json::to_string)
+        .transpose()
+        .map_err(|source| {
+            AtmError::new(
+                AtmErrorKind::Serialization,
+                format!(
+                    "failed to encode ATM metadata for acknowledgement reply to {}",
+                    reply_agent
+                ),
+            )
+            .with_source(source)
         })?;
 
-    let stored = source_file
-        .messages
-        .get_mut(source_message.source_index.get())
-        .ok_or_else(|| {
-            AtmError::mailbox_write(format!(
-                "source message index {} disappeared during acknowledgement",
-                usize::from(source_message.source_index)
-            ))
-        })?;
-    *stored = transitioned;
-    Ok(true)
+    Ok(StoredMessageRecord {
+        message_key: MessageKey::from_atm_message_id(reply_atm_message_id),
+        team_name: reply_team.clone(),
+        recipient_agent: reply_agent.clone(),
+        sender_display: actor.to_string(),
+        sender_canonical: Some(actor.clone()),
+        sender_team: Some(source_team.clone()),
+        body: reply_message.text.clone(),
+        summary: reply_message.summary.clone(),
+        created_at: reply_message.timestamp,
+        source_kind: MessageSourceKind::Atm,
+        legacy_message_id: Some(reply_message_id),
+        atm_message_id: Some(reply_atm_message_id),
+        raw_metadata_json,
+    })
 }
 
-fn append_reply_message(
-    source_files: &mut Vec<SourceFile>,
-    reply_inbox_path: &Path,
-    reply_message: MessageEnvelope,
-) -> Result<(), AtmError> {
-    if let Some(source_file) = source_files
-        .iter_mut()
-        .find(|source| source.path == reply_inbox_path)
-    {
-        source_file.messages.push(reply_message);
-        return Ok(());
-    }
+fn duplicate_ack_reply_error(identity: StoreDuplicateIdentity) -> AtmError {
+    AtmError::new_with_code(
+        AtmErrorCode::StoreConstraintViolation,
+        AtmErrorKind::MailboxWrite,
+        format!("generated duplicate acknowledgement reply identity: {identity:?}"),
+    )
+    .with_recovery(
+        "Retry the acknowledgement once. If the duplicate persists, inspect the SQLite reply row identities before acknowledging again.",
+    )
+}
 
-    source_files.push(SourceFile {
-        path: reply_inbox_path.to_path_buf(),
-        messages: mailbox::read_messages(reply_inbox_path)?,
-    });
-    source_files
-        .last_mut()
-        .expect("Vec::push is infallible — last_mut always returns Some after push")
-        .messages
-        .push(reply_message);
-    source_files.sort_by(|left, right| left.path.cmp(&right.path));
-    Ok(())
+fn map_store_error(context: &str, error: StoreError) -> AtmError {
+    let mut atm_error = AtmError::new_with_code(
+        error.code,
+        AtmErrorKind::MailboxWrite,
+        format!("{context}: {}", error.message),
+    );
+    if let Some(recovery) = error.recovery.as_ref() {
+        atm_error = atm_error.with_recovery(recovery.clone());
+    }
+    atm_error.with_source(error)
+}
+
+fn set_atm_message_id(extra: &mut Map<String, serde_json::Value>, message_id: AtmMessageId) {
+    let metadata = extra
+        .entry("metadata".to_string())
+        .or_insert_with(|| serde_json::Value::Object(Map::new()));
+    if !metadata.is_object() {
+        *metadata = serde_json::Value::Object(Map::new());
+    }
+    let Some(metadata) = metadata.as_object_mut() else {
+        return;
+    };
+    let atm = metadata
+        .entry("atm".to_string())
+        .or_insert_with(|| serde_json::Value::Object(Map::new()));
+    if !atm.is_object() {
+        *atm = serde_json::Value::Object(Map::new());
+    }
+    let Some(atm) = atm.as_object_mut() else {
+        return;
+    };
+    atm.insert(
+        "messageId".to_string(),
+        serde_json::Value::String(message_id.to_string()),
+    );
 }
 
 #[cfg(test)]

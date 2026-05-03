@@ -8,12 +8,14 @@ use std::time::{Duration, Instant};
 use atm_core::ack::{AckRequest, ack_mail};
 use atm_core::clear::{ClearQuery, clear_mail};
 use atm_core::error::AtmErrorCode;
+use atm_core::mail_store::MailStore;
 use atm_core::observability::NullObservability;
 use atm_core::read::{ReadQuery, read_mail};
 use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest, send_mail};
 use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
 use atm_core::{read_messages as read_inbox_messages, write_messages as write_inbox_messages};
+use atm_rusqlite::RusqliteStore;
 use chrono::Utc;
 use fs2::FileExt;
 use serial_test::serial;
@@ -29,6 +31,13 @@ const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(2);
 fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
+    let store = Arc::new(
+        RusqliteStore::open_for_team_home(
+            fixture.tempdir.path(),
+            &"atm-dev".parse().expect("team"),
+        )
+        .expect("open store"),
+    );
     let barrier = Arc::new(Barrier::new(3));
     let (tx, rx) = mpsc::channel();
 
@@ -39,10 +48,14 @@ fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
         let barrier = Arc::clone(&barrier);
         let tx = tx.clone();
         let observability = Arc::clone(&observability);
+        let store = Arc::clone(&store);
         thread::spawn(move || {
             barrier.wait();
-            tx.send((label, ack_mail(request, observability.as_ref())))
-                .expect("send result");
+            tx.send((
+                label,
+                ack_mail(request, store.as_ref(), observability.as_ref()),
+            ))
+            .expect("send result");
         });
     }
     drop(tx);
@@ -161,6 +174,13 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
     let (tx, rx) = mpsc::channel();
     let send_request = ack_fixture.send_request("team-lead", "arch-ctm@atm-dev", "new message");
     let ack_request = ack_fixture.ack_request("arch-ctm", pending_message_id, "ack reply");
+    let ack_store = Arc::new(
+        RusqliteStore::open_for_team_home(
+            ack_fixture.tempdir.path(),
+            &"atm-dev".parse().expect("team"),
+        )
+        .expect("open store"),
+    );
     {
         let barrier = Arc::clone(&barrier);
         let tx = tx.clone();
@@ -178,11 +198,12 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
         let barrier = Arc::clone(&barrier);
         let tx = tx.clone();
         let observability = Arc::clone(&observability);
+        let store = Arc::clone(&ack_store);
         thread::spawn(move || {
             barrier.wait();
             tx.send((
                 "send-ack/ack",
-                ack_mail(ack_request, observability.as_ref()).map(|_| ()),
+                ack_mail(ack_request, store.as_ref(), observability.as_ref()).map(|_| ()),
             ))
             .expect("ack result");
         });
@@ -212,22 +233,20 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
         "pending message was not acknowledged: {:?}",
         arch_inbox
     );
-    let pending_workflow_key = arch_inbox
-        .iter()
-        .find(|message| message.message_id == Some(pending_message_id))
-        .and_then(|message| {
-            message
-                .atm_message_id()
-                .map(|message_id| format!("atm:{message_id}"))
-        })
-        .unwrap_or_else(|| format!("legacy:{pending_message_id}"));
-    let arch_workflow = ack_fixture.workflow_state_contents("arch-ctm");
-    assert!(
-        arch_workflow["messages"][pending_workflow_key]["acknowledgedAt"]
-            .as_str()
-            .is_some(),
-        "pending message was not acknowledged in workflow state: {arch_workflow:?}"
-    );
+    let pending_store = RusqliteStore::open_for_team_home(
+        ack_fixture.tempdir.path(),
+        &"atm-dev".parse().expect("team"),
+    )
+    .expect("open store");
+    let pending_row = pending_store
+        .load_message_by_legacy_id(&pending_message_id)
+        .expect("load pending row")
+        .expect("pending row");
+    let ack_state = pending_store
+        .load_ack_state(&pending_row.message_key)
+        .expect("load ack state")
+        .expect("ack row");
+    assert!(ack_state.acknowledged_at.is_some());
     let qa_inbox = ack_fixture.inbox_contents("qa");
     assert!(
         qa_inbox.iter().any(|message| message.text == "ack reply"),
