@@ -182,6 +182,7 @@ impl PreparedSend {
 /// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`] when sender
 /// identity cannot be resolved, recipient or team validation fails,
 /// message/file-policy validation fails, or mailbox persistence fails.
+#[deprecated(note = "transitional path; use send_mail_via_store")]
 pub fn send_mail(
     request: SendRequest,
     observability: &dyn ObservabilityPort,
@@ -226,7 +227,13 @@ where
         roster_member_for_recipient(&roster, &prepared.recipient.agent)
             .and_then(|member| member.recipient_pane_id.clone())
     } else {
-        None
+        let roster = store
+            .load_roster(&prepared.recipient.team)
+            .map_err(|error| {
+                map_store_error("failed to load roster for recipient pane lookup", error)
+            })?;
+        roster_member_for_recipient(&roster, &prepared.recipient.agent)
+            .and_then(|member| member.recipient_pane_id.clone())
     };
 
     if !prepared.dry_run {
@@ -766,7 +773,7 @@ fn set_canonical_sender_metadata(
     };
     atm.insert(
         "fromIdentity".to_string(),
-        serde_json::to_value(canonical_from).expect("AgentName serializes"),
+        serde_json::Value::String(canonical_from.to_string()),
     );
 }
 

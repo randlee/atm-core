@@ -83,9 +83,7 @@ fn roster_member(name: &str, pane_id: Option<&str>, pid: Option<i64>) -> RosterM
 }
 
 fn inbox_message(text: &str) -> MessageEnvelope {
-    let legacy_message_id: LegacyMessageId = "00000000-0000-4000-8000-00000000abcd"
-        .parse()
-        .expect("legacy id");
+    let legacy_message_id = LegacyMessageId::new();
     // Test helper only: timestamp-carrying ULIDs can collide if the clock
     // source is artificially frozen, but production identity generation owns
     // the real monotonicity/retry policy.
@@ -561,9 +559,9 @@ fn team_ingress_replaces_roster_and_preserves_existing_pid() {
         .expect("seed roster member");
 
     let mut recipient = AgentMember::with_name(agent("recipient"));
-    recipient.tmux_pane_id = "%7".to_string();
+    recipient.tmux_pane_id = Some("%7".to_string());
     let mut quality = AgentMember::with_name(agent("quality-mgr"));
-    quality.tmux_pane_id = "%8".to_string();
+    quality.tmux_pane_id = Some("%8".to_string());
     let config = TeamConfig {
         members: vec![recipient, quality],
         ..Default::default()
@@ -637,6 +635,23 @@ fn inbox_ingress_is_idempotent_and_tracks_degraded_metadata() {
             degraded_records: 1,
         }
     );
+    let degraded_message_key: MessageKey = store
+        .lock_connection()
+        .expect("lock connection")
+        .query_row(
+            "SELECT message_key FROM messages WHERE sender_display = ?1 AND body = ?2",
+            ("quality-mgr", "external malformed metadata"),
+            |row| row.get::<_, String>(0),
+        )
+        .expect("degraded message key")
+        .parse()
+        .expect("parse degraded message key");
+    let degraded_message = store
+        .load_message(&degraded_message_key)
+        .expect("load degraded message")
+        .expect("stored degraded row");
+    assert_eq!(degraded_message.sender_display, "quality-mgr");
+    assert_eq!(degraded_message.body, "external malformed metadata");
 
     let second = ingester
         .ingest_mailbox_state(
@@ -712,10 +727,18 @@ fn inbox_ingress_uses_envelope_defaults_when_sidecar_entry_is_absent() {
         fs::create_dir_all(parent).expect("workflow dir");
     }
 
-    let with_sidecar = inbox_message("sidecar override");
-    let sidecar_atm_id = with_sidecar.atm_message_id().expect("sidecar atm id");
-    let without_sidecar = inbox_message("default envelope state");
-    let without_sidecar_atm_id = without_sidecar.atm_message_id().expect("default atm id");
+    let mut with_sidecar = inbox_message("sidecar override");
+    let sidecar_atm_id: AtmMessageId = "01JQYVB6W51Q2E7E6T3Y4Q9N2M"
+        .parse()
+        .expect("sidecar atm id");
+    with_sidecar.extra["metadata"]["atm"]["messageId"] =
+        serde_json::Value::String(sidecar_atm_id.to_string());
+    let mut without_sidecar = inbox_message("default envelope state");
+    let without_sidecar_atm_id: AtmMessageId = "01JQYVB6W51Q2E7E6T3Y4Q9N2N"
+        .parse()
+        .expect("default atm id");
+    without_sidecar.extra["metadata"]["atm"]["messageId"] =
+        serde_json::Value::String(without_sidecar_atm_id.to_string());
     fs::write(
         &workflow_path,
         serde_json::to_vec(&serde_json::json!({

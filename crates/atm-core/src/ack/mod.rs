@@ -384,8 +384,8 @@ fn resolve_reply_target(
 
     let team = parsed.team.ok_or_else(AtmError::team_unavailable)?;
     Ok((
-        AgentName::from_validated(parsed.agent),
-        TeamName::from_validated(team),
+        parsed.agent.parse::<AgentName>()?,
+        team.parse::<TeamName>()?,
     ))
 }
 

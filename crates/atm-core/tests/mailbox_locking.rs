@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::fs::{File, OpenOptions};

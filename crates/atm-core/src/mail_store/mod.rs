@@ -4,6 +4,7 @@ use crate::schema::{AtmMessageId, LegacyMessageId};
 use crate::store::{
     InsertOutcome, MessageKey, RecipientPaneId, SourceFingerprint, StoreBoundary, StoreError,
 };
+use crate::task_store::TaskRecord;
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 
 /// Canonical durable source family for a stored message row.
@@ -51,6 +52,14 @@ pub struct IngestRecord {
     pub source_fingerprint: SourceFingerprint,
     pub message_key: MessageKey,
     pub imported_at: IsoTimestamp,
+}
+
+/// Projected workflow state imported alongside one canonical inbox row.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ImportedMessageState {
+    pub ack_state: Option<AckStateRecord>,
+    pub visibility: Option<VisibilityStateRecord>,
+    pub task: Option<TaskRecord>,
 }
 
 /// Durable acknowledgement state keyed by canonical message identity.
@@ -149,6 +158,13 @@ pub trait MailStore: StoreBoundary {
         &self,
         message: &StoredMessageRecord,
         ingest_record: &IngestRecord,
+    ) -> Result<InsertOutcome<StoredMessageRecord>, StoreError>;
+
+    fn insert_message_with_ingest_state(
+        &self,
+        message: &StoredMessageRecord,
+        ingest_record: &IngestRecord,
+        state: &ImportedMessageState,
     ) -> Result<InsertOutcome<StoredMessageRecord>, StoreError>;
 
     fn load_ingest(

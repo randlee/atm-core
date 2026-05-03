@@ -855,7 +855,7 @@ fn test_send_runs_post_send_hook_with_python_command() {
 fn test_send_persists_store_rows_and_threads_roster_pane_into_hook_payload() {
     let fixture = Fixture::new("recipient");
     let mut recipient = AgentMember::with_name("recipient".parse().expect("agent"));
-    recipient.tmux_pane_id = "%7".to_string();
+    recipient.tmux_pane_id = Some("%7".to_string());
     fixture.write_team_config_members(vec![recipient]);
 
     let payload_path = fixture.tempdir.path().join("roster-pane-hook.json");

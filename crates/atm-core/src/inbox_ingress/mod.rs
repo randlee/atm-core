@@ -2,8 +2,8 @@ use std::path::Path;
 
 use crate::error::{AtmError, AtmErrorKind};
 use crate::mail_store::{
-    AckStateRecord, IngestRecord, MailStore, MessageSourceKind, StoredMessageRecord,
-    VisibilityStateRecord,
+    AckStateRecord, ImportedMessageState, IngestRecord, MailStore, MessageSourceKind,
+    StoredMessageRecord, VisibilityStateRecord,
 };
 use crate::mailbox::{self, MailboxReadReport};
 use crate::observability::{CommandEvent, ObservabilityPort};
@@ -115,68 +115,55 @@ fn ingest_source_report(
             message_key: message_key.clone(),
             imported_at: IsoTimestamp::now(),
         };
+        let imported_state = imported_message_state(&message_key, &envelope, workflow_state);
         match store
-            .insert_message_with_ingest(&stored, &ingest_record)
+            .insert_message_with_ingest_state(&stored, &ingest_record, &imported_state)
             .map_err(|error| map_store_error("failed to insert imported mailbox row", error))?
         {
             InsertOutcome::Inserted(_) => outcome.imported_messages += 1,
             InsertOutcome::Duplicate(_) => outcome.duplicate_messages += 1,
         }
-        import_workflow_state(store, &message_key, &envelope, workflow_state)?;
     }
     Ok(())
 }
 
-fn import_workflow_state(
-    store: &dyn InboxIngestStore,
+fn imported_message_state(
     message_key: &MessageKey,
     envelope: &MessageEnvelope,
     workflow_state: &WorkflowStateFile,
-) -> Result<(), AtmError> {
+) -> ImportedMessageState {
     let projected = workflow::workflow_key(envelope)
         .and_then(|key| workflow_state.messages.get(&key).cloned())
         .unwrap_or_else(|| workflow::initial_state_for_envelope(envelope));
 
-    if projected.pending_ack_at.is_some() || projected.acknowledged_at.is_some() {
-        store
-            .upsert_ack_state(&AckStateRecord {
+    ImportedMessageState {
+        ack_state: (projected.pending_ack_at.is_some() || projected.acknowledged_at.is_some())
+            .then(|| AckStateRecord {
                 message_key: message_key.clone(),
                 pending_ack_at: projected.pending_ack_at,
                 acknowledged_at: projected.acknowledged_at,
                 ack_reply_message_key: None,
                 ack_reply_team: None,
                 ack_reply_agent: None,
-            })
-            .map_err(|error| map_store_error("failed to upsert imported ack state", error))?;
+            }),
+        visibility: projected.read.then(|| VisibilityStateRecord {
+            message_key: message_key.clone(),
+            read_at: Some(envelope.timestamp),
+            cleared_at: None,
+        }),
+        task: envelope.task_id.clone().map(|task_id| TaskRecord {
+            task_id,
+            message_key: message_key.clone(),
+            status: if projected.acknowledged_at.is_some() {
+                TaskStatus::Acknowledged
+            } else {
+                TaskStatus::PendingAck
+            },
+            created_at: envelope.timestamp,
+            acknowledged_at: projected.acknowledged_at,
+            metadata_json: None,
+        }),
     }
-    if projected.read {
-        store
-            .upsert_visibility(&VisibilityStateRecord {
-                message_key: message_key.clone(),
-                read_at: Some(envelope.timestamp),
-                cleared_at: None,
-            })
-            .map_err(|error| {
-                map_store_error("failed to upsert imported visibility state", error)
-            })?;
-    }
-    if let Some(task_id) = envelope.task_id.clone() {
-        store
-            .upsert_task(&TaskRecord {
-                task_id,
-                message_key: message_key.clone(),
-                status: if projected.acknowledged_at.is_some() {
-                    TaskStatus::Acknowledged
-                } else {
-                    TaskStatus::PendingAck
-                },
-                created_at: envelope.timestamp,
-                acknowledged_at: projected.acknowledged_at,
-                metadata_json: None,
-            })
-            .map_err(|error| map_store_error("failed to upsert imported task row", error))?;
-    }
-    Ok(())
 }
 
 fn canonical_message_key(
