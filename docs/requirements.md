@@ -143,8 +143,8 @@ Satisfied by:
 - TUI and MCP features
 - daemon spawning as the core correctness test strategy
   - bounded daemon smoke tests for the auto-start path are permitted when
-    isolated from default test runs per `docs/plan-phase-Q.md` Testing
-    Constraints
+    isolated from default test runs per
+    [Testing Constraints](docs/plan-phase-Q.md#testing-constraints)
 - manual daemon-start discipline as a product requirement
   - production CLI auto-start when the daemon is absent is in scope under
     `REQ-P-RUNTIME-001`

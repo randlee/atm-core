@@ -703,6 +703,7 @@ Acceptance:
     than correctness blockers
   - no core test requires daemon process spawning
 
+<a id="testing-constraints"></a>
 ## Testing Constraints
 
 Phase Q must explicitly avoid the daemon failures that sank the earlier design.
