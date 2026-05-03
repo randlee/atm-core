@@ -621,6 +621,44 @@ fn inbox_ingress_is_idempotent_and_tracks_degraded_metadata() {
 }
 
 #[test]
+fn inbox_ingress_tolerates_bare_invalid_jsonl_line_without_panicking() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let store = RusqliteStore::open_for_team_home(tempdir.path(), &team()).expect("open store");
+    let inbox_path = home::inbox_path_from_home(tempdir.path(), &team(), &agent("team-lead"))
+        .expect("inbox path");
+    if let Some(parent) = inbox_path.parent() {
+        fs::create_dir_all(parent).expect("inbox dir");
+    }
+
+    let valid = inbox_message("ingest me");
+    let valid_value = atm_core::schema::to_shared_inbox_value(&valid).expect("shared inbox value");
+    let raw = format!(
+        "{}\n{{not-json\n",
+        serde_json::to_string(&valid_value).expect("json line")
+    );
+    fs::write(&inbox_path, raw).expect("write inbox");
+
+    let observability = NullObservability;
+    let outcome = ingest_mailbox_state(
+        tempdir.path(),
+        &team(),
+        &agent("team-lead"),
+        &store,
+        &observability,
+    )
+    .expect("ingest succeeds");
+
+    assert_eq!(
+        outcome,
+        InboxIngestOutcome {
+            imported_messages: 1,
+            duplicate_messages: 0,
+            degraded_records: 1,
+        }
+    );
+}
+
+#[test]
 fn replace_roster_rolls_back_on_constraint_violation() {
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_path(tempdir.path().join("mail.db")).expect("open store");
