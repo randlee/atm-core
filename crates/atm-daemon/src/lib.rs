@@ -19,7 +19,7 @@ use atm_core::home;
 use atm_core::inbox_ingress::default_inbox_ingress;
 use atm_core::observability::{CommandEvent, ObservabilityPort};
 use atm_core::read::{ReadQuery, read_mail_via_store};
-use atm_rusqlite::RusqliteStore;
+use atm_rusqlite::{RusqliteStore, checkpoint_runtime_wal as checkpoint_runtime_wal_via_store};
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -46,6 +46,7 @@ pub const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
 pub const DOCTOR_HANDLER_TIMEOUT: Duration = Duration::from_secs(3);
 pub const SHUTDOWN_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
 pub const SHUTDOWN_FORCE_TIMEOUT: Duration = Duration::from_secs(10);
+pub const ACCEPT_THREAD_JOIN_TIMEOUT: Duration = Duration::from_secs(2);
 #[cfg(windows)]
 const WINDOWS_STOP_POLL_INTERVAL: Duration = Duration::from_millis(100);
 pub const MAX_ACCEPTS: usize = 64;
@@ -318,10 +319,10 @@ impl DaemonHandle {
     pub fn shutdown(mut self) -> Result<(), AtmError> {
         self.stop.store(true, Ordering::SeqCst);
         if let Some(handle) = self.local_thread.take() {
-            let _ = handle.join();
+            join_accept_thread(handle, "local accept loop")?;
         }
         if let Some(handle) = self.remote_thread.take() {
-            let _ = handle.join();
+            join_accept_thread(handle, "remote accept loop")?;
         }
 
         wait_for_inflight_zero(&self.inflight, SHUTDOWN_DRAIN_TIMEOUT);
@@ -842,7 +843,26 @@ fn register_signal_handlers(
         AtmError::daemon_start_failed("failed to install SIGHUP handler").with_source(error)
     })?;
     #[cfg(windows)]
+    // `signal-hook` does not wire Windows service or detached-process control
+    // events through `SetConsoleCtrlHandler`, so the daemon cannot promise
+    // SIGINT/SIGHUP-style shutdown semantics on headless Windows runtimes.
+    // Tests and callers therefore use explicit shutdown paths instead.
     let _ = (stop, reload);
+    Ok(())
+}
+
+fn join_accept_thread(handle: JoinHandle<()>, thread_name: &str) -> Result<(), AtmError> {
+    let deadline = Instant::now() + ACCEPT_THREAD_JOIN_TIMEOUT;
+    while !handle.is_finished() && Instant::now() < deadline {
+        thread::sleep(Duration::from_millis(25));
+    }
+    if !handle.is_finished() {
+        return Err(AtmError::daemon_start_failed(format!(
+            "{thread_name} did not stop within {:?}",
+            ACCEPT_THREAD_JOIN_TIMEOUT
+        )));
+    }
+    let _ = handle.join();
     Ok(())
 }
 
@@ -894,33 +914,10 @@ fn attach_runtime_health(
 }
 
 fn checkpoint_runtime_wal(home_dir: &Path) -> Result<(), AtmError> {
-    let teams_root = home_dir.join(".claude").join("teams");
-    let Ok(entries) = fs::read_dir(&teams_root) else {
-        return Ok(());
-    };
-    for entry in entries.filter_map(Result::ok) {
-        let db_path = entry.path().join(".atm-state").join("mail.db");
-        if !db_path.exists() {
-            continue;
-        }
-        let connection = rusqlite::Connection::open(&db_path).map_err(|error| {
-            AtmError::daemon_start_failed(format!(
-                "failed to open SQLite store for WAL checkpoint at {}",
-                db_path.display()
-            ))
+    checkpoint_runtime_wal_via_store(home_dir).map_err(|error| {
+        AtmError::daemon_start_failed("failed to checkpoint SQLite WAL during shutdown")
             .with_source(error)
-        })?;
-        connection
-            .pragma_update(None, "wal_checkpoint", "TRUNCATE")
-            .map_err(|error| {
-                AtmError::daemon_start_failed(format!(
-                    "failed to checkpoint SQLite WAL at {}",
-                    db_path.display()
-                ))
-                .with_source(error)
-            })?;
-    }
-    Ok(())
+    })
 }
 
 #[cfg(test)]
