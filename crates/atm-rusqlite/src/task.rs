@@ -1,11 +1,13 @@
 use atm_core::store::{MessageKey, StoreError};
 use atm_core::task_store::{TaskRecord, TaskStatus, TaskStore};
 use atm_core::types::{IsoTimestamp, TaskId};
-use rusqlite::OptionalExtension;
+use rusqlite::{OptionalExtension, Transaction};
 
 use crate::{
     RusqliteStore, classify_store_error, invalid_store_data, parse_optional, parse_required,
 };
+
+impl atm_core::task_store::sealed::Sealed for RusqliteStore {}
 
 #[derive(Debug)]
 struct RawTaskRow {
@@ -20,33 +22,7 @@ struct RawTaskRow {
 impl TaskStore for RusqliteStore {
     fn upsert_task(&self, task: &TaskRecord) -> Result<TaskRecord, StoreError> {
         let connection = self.lock_connection()?;
-        connection
-            .execute(
-                r#"
-                INSERT INTO tasks (
-                    task_id,
-                    message_key,
-                    status,
-                    created_at,
-                    acknowledged_at,
-                    metadata_json
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-                ON CONFLICT(task_id) DO UPDATE SET
-                    message_key = excluded.message_key,
-                    status = excluded.status,
-                    created_at = excluded.created_at,
-                    acknowledged_at = excluded.acknowledged_at,
-                    metadata_json = excluded.metadata_json
-                "#,
-                (
-                    task.task_id.as_str(),
-                    task.message_key.as_str(),
-                    task.status.as_str(),
-                    task.created_at.to_string(),
-                    task.acknowledged_at.as_ref().map(ToString::to_string),
-                    task.metadata_json.as_deref(),
-                ),
-            )
+        upsert_task_row(&connection, task)
             .map_err(|error| classify_store_error(error, "failed to upsert task row"))?;
         Ok(task.clone())
     }
@@ -140,6 +116,77 @@ impl TaskStore for RusqliteStore {
             .map_err(|error| classify_store_error(error, "failed to reload acknowledged task"))?;
         raw.map(convert_task_row).transpose()
     }
+}
+
+pub(crate) fn upsert_task_row(
+    connection: &rusqlite::Connection,
+    task: &TaskRecord,
+) -> rusqlite::Result<()> {
+    connection.execute(
+        r#"
+        INSERT INTO tasks (
+            task_id,
+            message_key,
+            status,
+            created_at,
+            acknowledged_at,
+            metadata_json
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+        ON CONFLICT(task_id) DO UPDATE SET
+            message_key = excluded.message_key,
+            status = excluded.status,
+            created_at = excluded.created_at,
+            acknowledged_at = excluded.acknowledged_at,
+            metadata_json = excluded.metadata_json
+        "#,
+        (
+            task.task_id.as_str(),
+            task.message_key.as_str(),
+            task.status.as_str(),
+            task.created_at.to_string(),
+            task.acknowledged_at.as_ref().map(ToString::to_string),
+            task.metadata_json.as_deref(),
+        ),
+    )?;
+    Ok(())
+}
+
+pub(crate) fn acknowledge_tasks_for_message_tx(
+    transaction: &Transaction<'_>,
+    message_key: &MessageKey,
+    acknowledged_at: IsoTimestamp,
+) -> Result<Vec<TaskId>, StoreError> {
+    let mut statement = transaction
+        .prepare("SELECT task_id FROM tasks WHERE message_key = ?1 ORDER BY task_id")
+        .map_err(|error| classify_store_error(error, "failed to prepare task lookup for ack"))?;
+    let rows = statement
+        .query_map([message_key.as_str()], |row| row.get::<_, String>(0))
+        .map_err(|error| classify_store_error(error, "failed to query tasks for ack"))?;
+
+    let mut task_ids = Vec::new();
+    for row in rows {
+        let raw_task_id =
+            row.map_err(|error| classify_store_error(error, "failed to read task id for ack"))?;
+        let task_id = parse_required(raw_task_id, "task_id")?;
+        task_ids.push(task_id);
+    }
+
+    if !task_ids.is_empty() {
+        transaction
+            .execute(
+                "UPDATE tasks SET status = ?1, acknowledged_at = ?2 WHERE message_key = ?3",
+                (
+                    TaskStatus::Acknowledged.as_str(),
+                    acknowledged_at.to_string(),
+                    message_key.as_str(),
+                ),
+            )
+            .map_err(|error| {
+                classify_store_error(error, "failed to acknowledge tasks for message")
+            })?;
+    }
+
+    Ok(task_ids)
 }
 
 fn convert_task_row(raw: RawTaskRow) -> Result<TaskRecord, StoreError> {

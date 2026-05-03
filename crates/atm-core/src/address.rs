@@ -2,11 +2,12 @@ use std::fmt;
 use std::str::FromStr;
 
 use crate::error::AtmError;
+use crate::types::{AgentName, TeamName};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentAddress {
-    pub agent: String,
-    pub team: Option<String>,
+    pub agent: AgentName,
+    pub team: Option<TeamName>,
 }
 
 impl FromStr for AgentAddress {
@@ -24,14 +25,14 @@ impl FromStr for AgentAddress {
                 validate_path_segment(team, "team")?;
 
                 Ok(Self {
-                    agent: agent.to_string(),
-                    team: Some(team.to_string()),
+                    agent: AgentName::from_validated(agent.to_string()),
+                    team: Some(TeamName::from_validated(team.to_string())),
                 })
             }
             None => {
                 validate_path_segment(trimmed, "agent")?;
                 Ok(Self {
-                    agent: trimmed.to_string(),
+                    agent: AgentName::from_validated(trimmed.to_string()),
                     team: None,
                 })
             }
@@ -90,19 +91,20 @@ mod tests {
     use std::str::FromStr;
 
     use super::AgentAddress;
+    use crate::types::TeamName;
 
     #[test]
     fn parses_bare_agent_address() {
         let parsed = AgentAddress::from_str("arch-ctm").expect("address");
-        assert_eq!(parsed.agent, "arch-ctm");
+        assert_eq!(parsed.agent.as_str(), "arch-ctm");
         assert_eq!(parsed.team, None);
     }
 
     #[test]
     fn parses_agent_with_team() {
         let parsed = AgentAddress::from_str("arch-ctm@atm-dev").expect("address");
-        assert_eq!(parsed.agent, "arch-ctm");
-        assert_eq!(parsed.team.as_deref(), Some("atm-dev"));
+        assert_eq!(parsed.agent.as_str(), "arch-ctm");
+        assert_eq!(parsed.team.as_ref().map(TeamName::as_str), Some("atm-dev"));
     }
 
     #[test]
@@ -131,12 +133,12 @@ mod tests {
     #[test]
     fn accepts_valid_segment_characters() {
         let parsed = AgentAddress::from_str("valid-team_name.1").expect("address");
-        assert_eq!(parsed.agent, "valid-team_name.1");
+        assert_eq!(parsed.agent.as_str(), "valid-team_name.1");
         assert_eq!(parsed.team, None);
 
         let parsed = AgentAddress::from_str("arch-ctm@atm-dev").expect("address");
-        assert_eq!(parsed.agent, "arch-ctm");
-        assert_eq!(parsed.team.as_deref(), Some("atm-dev"));
+        assert_eq!(parsed.agent.as_str(), "arch-ctm");
+        assert_eq!(parsed.team.as_ref().map(TeamName::as_str), Some("atm-dev"));
     }
 
     #[test]

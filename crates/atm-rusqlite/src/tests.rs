@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::Path;
+use std::sync::Mutex;
 
 use atm_core::home;
 use atm_core::inbox_ingress::{InboxIngestOutcome, InboxIngress, default_inbox_ingress};
@@ -7,16 +8,20 @@ use atm_core::mail_store::{
     AckStateRecord, IngestRecord, MailStore, MessageSourceKind, PendingExportRecord,
     VisibilityStateRecord,
 };
-use atm_core::observability::NullObservability;
+use atm_core::observability::{
+    AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
+    LogTailSession, NullObservability, ObservabilityPort,
+};
 use atm_core::roster_store::{
     PidUpdate, RosterMemberRecord, RosterRole, RosterStore, TransportKind,
 };
 use atm_core::schema::{AgentMember, AtmMessageId, LegacyMessageId, MessageEnvelope, TeamConfig};
 use atm_core::store::{
-    InsertOutcome, MessageKey, ProcessId, StoreBoundary, StoreDuplicateIdentity, StoreErrorKind,
+    InsertOutcome, MessageKey, ProcessId, SourceFingerprint, StoreBoundary, StoreDuplicateIdentity,
+    StoreErrorKind,
 };
 use atm_core::task_store::{TaskRecord, TaskStatus, TaskStore};
-use atm_core::team_ingress::{default_host_name, ingest_team_config};
+use atm_core::team_ingress::{default_host_name, ingest_loaded_team_config, ingest_team_config};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use rusqlite::{Connection, OpenFlags};
 use tempfile::TempDir;
@@ -25,8 +30,11 @@ use crate::{
     RusqliteStore, SCHEMA_VERSION, query_foreign_keys, query_journal_mode, query_user_version,
 };
 
+const TEST_TEAM: &str = "test-team";
+const TEST_SENDER: &str = "sender-a";
+
 fn team() -> TeamName {
-    "atm-dev".parse().expect("team")
+    TEST_TEAM.parse().expect("team")
 }
 
 fn agent(name: &str) -> AgentName {
@@ -45,8 +53,8 @@ fn message_at(index: u8) -> atm_core::mail_store::StoredMessageRecord {
         message_key: MessageKey::from_atm_message_id(atm_message_id),
         team_name: team(),
         recipient_agent: agent("team-lead"),
-        sender_display: "arch-ctm".to_string(),
-        sender_canonical: Some(agent("arch-ctm")),
+        sender_display: TEST_SENDER.to_string(),
+        sender_canonical: Some(agent(TEST_SENDER)),
         sender_team: Some(team()),
         body: format!("body-{index}"),
         summary: Some(format!("summary-{index}")),
@@ -82,14 +90,38 @@ fn roster_member(name: &str, pane_id: Option<&str>, pid: Option<i64>) -> RosterM
     }
 }
 
-fn inbox_message(text: &str) -> MessageEnvelope {
-    let legacy_message_id: LegacyMessageId = "00000000-0000-4000-8000-00000000abcd"
+fn external_source_fingerprint(
+    source_path: &Path,
+    sender: &str,
+    timestamp: &str,
+    summary: Option<&str>,
+    body: &str,
+) -> SourceFingerprint {
+    let mut hash = 0xcbf29ce484222325_u64;
+    for segment in [
+        source_path.to_string_lossy().replace('\\', "/"),
+        sender.to_string(),
+        timestamp.to_string(),
+        summary.unwrap_or_default().to_string(),
+        body.to_string(),
+    ] {
+        for byte in segment.as_bytes() {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+        hash ^= u64::from(b'|');
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("ext{hash:016x}")
         .parse()
-        .expect("legacy id");
-    // Test helper only: timestamp-carrying ULIDs can collide if the clock
-    // source is artificially frozen, but production identity generation owns
-    // the real monotonicity/retry policy.
-    let (atm_message_id, timestamp) = AtmMessageId::new_with_timestamp();
+        .expect("derived external fingerprint")
+}
+
+fn inbox_message(text: &str) -> MessageEnvelope {
+    let legacy_message_id = LegacyMessageId::new();
+    let atm_message_id = AtmMessageId::new();
+    let timestamp = atm_message_id.timestamp();
+    let task_id = format!("TASK-{atm_message_id}").parse().expect("task id");
     let mut extra = serde_json::Map::new();
     extra.insert(
         "metadata".to_string(),
@@ -101,7 +133,7 @@ fn inbox_message(text: &str) -> MessageEnvelope {
         }),
     );
     MessageEnvelope {
-        from: "arch-ctm".parse().expect("sender"),
+        from: TEST_SENDER.parse().expect("sender"),
         text: text.to_string(),
         timestamp,
         read: false,
@@ -111,8 +143,39 @@ fn inbox_message(text: &str) -> MessageEnvelope {
         pending_ack_at: Some(timestamp),
         acknowledged_at: None,
         acknowledges_message_id: None,
-        task_id: Some("TASK-INGEST-1".parse().expect("task id")),
+        task_id: Some(task_id),
         extra,
+    }
+}
+
+#[derive(Default)]
+struct RecordingObservability {
+    events: Mutex<Vec<CommandEvent>>,
+}
+
+impl atm_core::observability::sealed::Sealed for RecordingObservability {}
+
+impl ObservabilityPort for RecordingObservability {
+    fn emit(&self, event: CommandEvent) -> Result<(), atm_core::error::AtmError> {
+        self.events.lock().expect("events lock").push(event);
+        Ok(())
+    }
+
+    fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, atm_core::error::AtmError> {
+        Ok(AtmLogSnapshot::default())
+    }
+
+    fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, atm_core::error::AtmError> {
+        Ok(LogTailSession::empty())
+    }
+
+    fn health(&self) -> Result<AtmObservabilityHealth, atm_core::error::AtmError> {
+        Ok(AtmObservabilityHealth {
+            active_log_path: None,
+            logging_state: AtmObservabilityHealthState::Unavailable,
+            query_state: Some(AtmObservabilityHealthState::Unavailable),
+            detail: Some("recording test observability".to_string()),
+        })
     }
 }
 
@@ -159,7 +222,7 @@ fn opens_under_team_state_mail_db() {
             .path()
             .join(".claude")
             .join("teams")
-            .join("atm-dev")
+            .join(TEST_TEAM)
             .join(".atm-state")
             .join("mail.db")
     );
@@ -429,8 +492,8 @@ fn create_read_and_update_store_rows() {
             message_key: export_future.message_key.clone(),
             team_name: team(),
             recipient_agent: agent("team-lead"),
-            sender_display: "arch-ctm".to_string(),
-            sender_canonical: Some(agent("arch-ctm")),
+            sender_display: TEST_SENDER.to_string(),
+            sender_canonical: Some(agent(TEST_SENDER)),
             sender_team: Some(team()),
             body: "future".to_string(),
             summary: None,
@@ -509,7 +572,7 @@ fn roster_replace_update_and_pid_round_trip() {
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_path(tempdir.path().join("mail.db")).expect("open store");
 
-    let arch = roster_member("arch-ctm", Some("%1"), Some(1001));
+    let arch = roster_member(TEST_SENDER, Some("%1"), Some(1001));
     let quality = roster_member("quality-mgr", None, None);
     store
         .replace_roster(&team(), &[arch.clone(), quality.clone()])
@@ -553,7 +616,7 @@ fn roster_replace_update_and_pid_round_trip() {
 fn team_ingress_replaces_roster_and_preserves_existing_pid() {
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_for_team_home(tempdir.path(), &team()).expect("open store");
-    let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+    let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
     fs::create_dir_all(&team_dir).expect("team dir");
 
     store
@@ -594,6 +657,40 @@ fn team_ingress_replaces_roster_and_preserves_existing_pid() {
 }
 
 #[test]
+fn team_ingress_roster_shrink_removes_absent_members() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let store = RusqliteStore::open_for_team_home(tempdir.path(), &team()).expect("open store");
+
+    let mut recipient = AgentMember::with_name(agent("recipient"));
+    recipient.tmux_pane_id = Some("%7".to_string());
+    let config = TeamConfig {
+        members: vec![recipient],
+        ..Default::default()
+    };
+
+    store
+        .replace_roster(
+            &team(),
+            &[
+                roster_member("recipient", Some("%1"), Some(4242)),
+                roster_member("quality-mgr", Some("%8"), Some(5150)),
+            ],
+        )
+        .expect("seed roster");
+
+    let roster = ingest_loaded_team_config(&team(), &config, &store, &default_host_name())
+        .expect("ingest loaded team config");
+
+    assert_eq!(roster.len(), 1);
+    assert_eq!(roster[0].agent_name.as_str(), "recipient");
+    assert_eq!(roster[0].pid, Some(ProcessId::new(4242).expect("pid")));
+
+    let loaded = store.load_roster(&team()).expect("load roster");
+    assert_eq!(loaded.len(), 1);
+    assert_eq!(loaded[0].agent_name.as_str(), "recipient");
+}
+
+#[test]
 fn inbox_ingress_is_idempotent_and_tracks_degraded_metadata() {
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_for_team_home(tempdir.path(), &team()).expect("open store");
@@ -618,7 +715,7 @@ fn inbox_ingress_is_idempotent_and_tracks_degraded_metadata() {
     )
     .expect("write inbox");
 
-    let observability = NullObservability;
+    let observability = RecordingObservability::default();
     let ingester = default_inbox_ingress();
     let first = ingester
         .ingest_mailbox_state(
@@ -637,6 +734,35 @@ fn inbox_ingress_is_idempotent_and_tracks_degraded_metadata() {
             degraded_records: 1,
         }
     );
+    let degraded_envelope = atm_core::read_messages(&inbox_path)
+        .expect("read inbox messages")
+        .into_iter()
+        .find(|message| message.from.as_str() == "quality-mgr")
+        .expect("degraded envelope");
+    let degraded_message_key = MessageKey::from_source_fingerprint(&external_source_fingerprint(
+        &inbox_path,
+        degraded_envelope.from.as_str(),
+        &degraded_envelope.timestamp.to_string(),
+        degraded_envelope.summary.as_deref(),
+        &degraded_envelope.text,
+    ));
+    let degraded_message = store
+        .load_message(&degraded_message_key)
+        .expect("load degraded message")
+        .expect("stored degraded row");
+    assert_eq!(degraded_message.sender_display, "quality-mgr");
+    assert_eq!(degraded_message.body, "external malformed metadata");
+    let events = observability.events.lock().expect("events lock");
+    assert!(
+        events.iter().any(|event| {
+            event.command == "inbox_ingress"
+                && event.outcome == "malformed_metadata"
+                && event.error_code
+                    == Some(atm_core::error::AtmErrorCode::WarningMalformedAtmFieldIgnored)
+        }),
+        "events: {events:?}"
+    );
+    drop(events);
 
     let second = ingester
         .ingest_mailbox_state(
@@ -697,7 +823,7 @@ fn inbox_ingress_tolerates_bare_invalid_jsonl_line_without_panicking() {
 }
 
 #[test]
-fn inbox_ingress_uses_envelope_defaults_when_sidecar_entry_is_absent() {
+fn inbox_ingress_uses_envelope_defaults_when_sidecar_entry_is_absent_or_malformed() {
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_for_team_home(tempdir.path(), &team()).expect("open store");
     let inbox_path = home::inbox_path_from_home(tempdir.path(), &team(), &agent("team-lead"))
@@ -712,10 +838,24 @@ fn inbox_ingress_uses_envelope_defaults_when_sidecar_entry_is_absent() {
         fs::create_dir_all(parent).expect("workflow dir");
     }
 
-    let with_sidecar = inbox_message("sidecar override");
-    let sidecar_atm_id = with_sidecar.atm_message_id().expect("sidecar atm id");
-    let without_sidecar = inbox_message("default envelope state");
-    let without_sidecar_atm_id = without_sidecar.atm_message_id().expect("default atm id");
+    let mut with_sidecar = inbox_message("sidecar override");
+    let sidecar_atm_id: AtmMessageId = "01JQYVB6W51Q2E7E6T3Y4Q9N2M"
+        .parse()
+        .expect("sidecar atm id");
+    with_sidecar.extra["metadata"]["atm"]["messageId"] =
+        serde_json::Value::String(sidecar_atm_id.to_string());
+    let mut without_sidecar = inbox_message("default envelope state");
+    let without_sidecar_atm_id: AtmMessageId = "01JQYVB6W51Q2E7E6T3Y4Q9N2N"
+        .parse()
+        .expect("default atm id");
+    without_sidecar.extra["metadata"]["atm"]["messageId"] =
+        serde_json::Value::String(without_sidecar_atm_id.to_string());
+    let mut malformed_sidecar = inbox_message("malformed sidecar state");
+    let malformed_sidecar_atm_id: AtmMessageId = "01JQYVB6W51Q2E7E6T3Y4Q9N2P"
+        .parse()
+        .expect("malformed atm id");
+    malformed_sidecar.extra["metadata"]["atm"]["messageId"] =
+        serde_json::Value::String(malformed_sidecar_atm_id.to_string());
     fs::write(
         &workflow_path,
         serde_json::to_vec(&serde_json::json!({
@@ -724,7 +864,8 @@ fn inbox_ingress_uses_envelope_defaults_when_sidecar_entry_is_absent() {
                     "read": true,
                     "pendingAckAt": null,
                     "acknowledgedAt": null
-                }
+                },
+                format!("atm:{malformed_sidecar_atm_id}"): "not-an-object"
             }
         }))
         .expect("workflow json"),
@@ -735,6 +876,8 @@ fn inbox_ingress_uses_envelope_defaults_when_sidecar_entry_is_absent() {
         serde_json::to_vec(&vec![
             atm_core::schema::to_shared_inbox_value(&with_sidecar).expect("sidecar message"),
             atm_core::schema::to_shared_inbox_value(&without_sidecar).expect("default message"),
+            atm_core::schema::to_shared_inbox_value(&malformed_sidecar)
+                .expect("malformed sidecar message"),
         ])
         .expect("json array"),
     )
@@ -759,6 +902,10 @@ fn inbox_ingress_uses_envelope_defaults_when_sidecar_entry_is_absent() {
         .load_message_by_atm_id(&without_sidecar_atm_id)
         .expect("load default message")
         .expect("stored default row");
+    let stored_malformed = store
+        .load_message_by_atm_id(&malformed_sidecar_atm_id)
+        .expect("load malformed-sidecar message")
+        .expect("stored malformed-sidecar row");
 
     assert!(
         store
@@ -786,19 +933,31 @@ fn inbox_ingress_uses_envelope_defaults_when_sidecar_entry_is_absent() {
             .expect("load default visibility")
             .is_none()
     );
+
+    let malformed_ack = store
+        .load_ack_state(&stored_malformed.message_key)
+        .expect("load malformed-sidecar ack")
+        .expect("malformed-sidecar ack row");
+    assert!(malformed_ack.pending_ack_at.is_some());
+    assert!(
+        store
+            .load_visibility(&stored_malformed.message_key)
+            .expect("load malformed-sidecar visibility")
+            .is_none()
+    );
 }
 
 #[test]
 fn replace_roster_rolls_back_on_constraint_violation() {
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_path(tempdir.path().join("mail.db")).expect("open store");
-    let arch = roster_member("arch-ctm", Some("%1"), Some(1001));
+    let arch = roster_member(TEST_SENDER, Some("%1"), Some(1001));
     let quality = roster_member("quality-mgr", None, None);
     store
         .replace_roster(&team(), &[arch.clone(), quality.clone()])
         .expect("seed roster");
 
-    let duplicate_arch = roster_member("arch-ctm", Some("%9"), Some(9009));
+    let duplicate_arch = roster_member(TEST_SENDER, Some("%9"), Some(9009));
     let error = store
         .replace_roster(&team(), &[duplicate_arch.clone(), duplicate_arch])
         .expect_err("duplicate replacement should fail");

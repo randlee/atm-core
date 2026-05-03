@@ -102,7 +102,7 @@ fn execute_post_send_hook(
     };
     let command_path = resolve_command_path(config, command_path);
     let mut payload = json!({
-        "from": qualified_sender_identity(context.sender, context.sender_team.map(|team| team.as_str())),
+        "from": qualified_sender_identity(context.sender, context.sender_team),
         "to": format!("{}@{}", context.recipient.agent, context.recipient.team),
         "sender": context.sender.as_str(),
         "recipient": context.recipient.agent,

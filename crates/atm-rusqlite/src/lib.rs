@@ -133,7 +133,7 @@ impl RusqliteStore {
     pub fn open_path(database_path: impl AsRef<Path>) -> Result<Self, StoreError> {
         Self::open_path_with_options(
             database_path.as_ref(),
-            BusyTimeoutMs::DEFAULT,
+            BusyTimeoutMs::new(5000).expect("5000ms busy timeout is valid"),
             SqliteHandleBudget::DEFAULT,
         )
     }
@@ -220,6 +220,12 @@ impl StoreBoundary for RusqliteStore {
 
     fn health(&self) -> Result<StoreHealth, StoreError> {
         let connection = self.lock_connection()?;
+        let journal_mode = query_journal_mode(&connection)?;
+        if !journal_mode.eq_ignore_ascii_case("wal") {
+            return Err(StoreError::query(format!(
+                "SQLite journal_mode drifted from WAL at runtime: observed {journal_mode}"
+            )));
+        }
         Ok(StoreHealth {
             database_path: self.database_path.clone(),
             ready: true,
@@ -242,6 +248,12 @@ pub(crate) fn configure_connection(
         .map_err(|error| {
             StoreError::bootstrap("failed to enable SQLite WAL mode").with_source(error)
         })?;
+    let journal_mode = query_journal_mode(connection)?;
+    if !journal_mode.eq_ignore_ascii_case("wal") {
+        return Err(StoreError::bootstrap(
+            "SQLite refused WAL mode; expected journal_mode=wal after bootstrap",
+        ));
+    }
     connection
         .pragma_update(None, "foreign_keys", 1)
         .map_err(|error| {
@@ -346,7 +358,9 @@ where
 {
     value
         .parse::<T>()
-        .map_err(|error| invalid_store_data(field, error))
+        .map_err(|error| invalid_store_data(field, error).with_recovery(
+            "Repair the malformed SQLite row or rebuild the local ATM store from a clean source of truth before retrying the command.",
+        ))
 }
 
 pub(crate) fn parse_optional<T>(value: Option<String>, field: &str) -> Result<Option<T>, StoreError>
@@ -354,9 +368,19 @@ where
     T: std::str::FromStr,
     T::Err: std::fmt::Display,
 {
-    value.map(|value| parse_required(value, field)).transpose()
+    value
+        .map(|value| {
+            parse_required(value, field).map_err(|error| {
+                error.with_recovery(
+                    "Repair the malformed optional SQLite row value or rebuild the local ATM store before retrying the command.",
+                )
+            })
+        })
+        .transpose()
 }
 
 pub(crate) fn invalid_store_data(field: &str, error: impl std::fmt::Display) -> StoreError {
-    StoreError::query(format!("invalid store data for {field}: {error}"))
+    StoreError::query(format!("invalid store data for {field}: {error}")).with_recovery(
+        "Repair the malformed SQLite row or rebuild the local ATM store from a clean source of truth before retrying the command.",
+    )
 }

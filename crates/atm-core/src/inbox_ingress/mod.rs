@@ -82,7 +82,7 @@ impl InboxIngress for JsonInboxIngress {
             },
             team: team.clone(),
             agent: agent.clone(),
-            sender: "system".to_string(),
+            sender: AgentName::from_validated("system"),
             message_id: None,
             requires_ack: false,
             dry_run: false,

@@ -77,7 +77,11 @@ pub enum AckCommitResult {
     Rejected(AckCommitRejection),
 }
 
-pub trait AckStore: MailStore + TaskStore {
+pub mod sealed {
+    pub trait Sealed {}
+}
+
+pub trait AckStore: MailStore + TaskStore + sealed::Sealed {
     fn commit_ack_reply(
         &self,
         command: &AckCommitCommand<'_>,
@@ -284,7 +288,7 @@ where
         outcome: "ok",
         team: team.clone(),
         agent: actor.clone(),
-        sender: actor.to_string(),
+        sender: actor.clone(),
         message_id: Some(source_legacy_message_id),
         requires_ack: false,
         dry_run: false,
@@ -299,7 +303,7 @@ where
             outcome: "ok",
             team: team.clone(),
             agent: actor.clone(),
-            sender: actor.to_string(),
+            sender: actor.clone(),
             message_id: Some(source_legacy_message_id),
             requires_ack: false,
             dry_run: false,
@@ -331,7 +335,7 @@ where
                 outcome: "ok",
                 team: team.clone(),
                 agent: actor.clone(),
-                sender: actor.to_string(),
+                sender: actor.clone(),
                 message_id: Some(source_legacy_message_id),
                 requires_ack: false,
                 dry_run: false,
@@ -391,7 +395,7 @@ where
         outcome: "ok",
         team,
         agent: actor.clone(),
-        sender: actor.to_string(),
+        sender: actor.clone(),
         message_id: Some(source_legacy_message_id),
         requires_ack: false,
         dry_run: false,
@@ -420,12 +424,11 @@ fn resolve_reply_target(
         message.from.as_str().parse()?
     } else {
         AgentAddress {
-            agent: message.from.to_string(),
+            agent: message.from.clone(),
             team: message
                 .source_team
                 .clone()
-                .map(Into::into)
-                .or_else(|| Some(current_team.to_string())),
+                .or_else(|| Some(current_team.clone())),
         }
     };
 
