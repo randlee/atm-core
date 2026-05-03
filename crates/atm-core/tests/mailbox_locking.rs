@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use atm_core::ack::{AckMessageId, AckRequest, ack_mail};
 use atm_core::clear::{ClearQuery, clear_mail};
 use atm_core::error::AtmErrorCode;
+use atm_core::inbox_ingress;
 use atm_core::mail_store::MailStore;
 use atm_core::observability::NullObservability;
 use atm_core::read::{ReadQuery, read_mail};
@@ -124,7 +125,10 @@ fn ack_mail_imports_legacy_pending_message_through_store_service() {
     )
     .expect("ack legacy message");
 
-    assert_eq!(outcome.message_id, fixture.arch_message_id.to_string());
+    assert_eq!(
+        outcome.message_id,
+        AckMessageId::Legacy(fixture.arch_message_id)
+    );
     assert_eq!(outcome.reply_target.to_string(), "qa@atm-dev");
     assert!(
         fixture
@@ -169,6 +173,87 @@ fn ack_mail_acknowledges_task_linked_imported_message() {
         .expect("task row");
     assert_eq!(task.status, atm_core::task_store::TaskStatus::Acknowledged);
     assert!(task.acknowledged_at.is_some());
+}
+
+#[test]
+#[serial]
+fn ack_mail_export_failure_after_commit_surfaces_warning_and_preserves_sqlite_state() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let store = RusqliteStore::open_for_team_home(
+        fixture.tempdir.path(),
+        &"atm-dev".parse().expect("team"),
+    )
+    .expect("open store");
+    let reply_inbox_path = fixture.primary_inbox_path("qa");
+    fs::remove_file(&reply_inbox_path).expect("remove reply inbox file");
+    fs::create_dir(&reply_inbox_path).expect("replace reply inbox with directory");
+
+    let outcome = ack_mail(
+        fixture.ack_request(
+            "arch-ctm",
+            fixture.arch_message_id,
+            "ack with export failure",
+        ),
+        &store,
+        &observability,
+    )
+    .expect("ack should commit even when export fails");
+
+    assert!(!outcome.warnings.is_empty(), "expected export warning");
+    let stored = store
+        .load_message_by_legacy_id(&fixture.arch_message_id)
+        .expect("load source row")
+        .expect("stored source row");
+    let ack_state = store
+        .load_ack_state(&stored.message_key)
+        .expect("load ack state")
+        .expect("ack state row");
+    assert!(ack_state.acknowledged_at.is_some());
+}
+
+#[test]
+#[serial]
+fn ack_mail_rejects_message_already_acknowledged_in_sqlite_before_ingest() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let store = RusqliteStore::open_for_team_home(
+        fixture.tempdir.path(),
+        &"atm-dev".parse().expect("team"),
+    )
+    .expect("open store");
+
+    inbox_ingress::ingest_mailbox_state(
+        fixture.tempdir.path(),
+        &"atm-dev".parse().expect("team"),
+        &"arch-ctm".parse().expect("agent"),
+        &store,
+        &observability,
+    )
+    .expect("ingest pending message");
+    let stored = store
+        .load_message_by_legacy_id(&fixture.arch_message_id)
+        .expect("load stored row")
+        .expect("stored row");
+    store
+        .upsert_ack_state(&atm_core::mail_store::AckStateRecord {
+            message_key: stored.message_key.clone(),
+            pending_ack_at: Some(stored.created_at),
+            acknowledged_at: Some(IsoTimestamp::now()),
+            ack_reply_message_key: None,
+            ack_reply_team: None,
+            ack_reply_agent: None,
+        })
+        .expect("seed acknowledged state");
+
+    let error = ack_mail(
+        fixture.ack_request("arch-ctm", fixture.arch_message_id, "should reject"),
+        &store,
+        &observability,
+    )
+    .expect_err("already-acknowledged sqlite state must reject");
+
+    assert_eq!(error.code, AtmErrorCode::AckInvalidState);
 }
 
 #[test]
@@ -956,16 +1041,16 @@ impl Drop for EnvGuard {
 }
 
 fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
-    // SAFETY: these tests take a process-wide mutex and use #[serial] before
-    // mutating the environment, so the mutation is serialized within this
-    // process.
+    // SAFETY: these tests hold the process-wide env_lock mutex and use
+    // #[serial] before mutating the environment, so the mutation is
+    // serialized within this process.
     unsafe { std::env::set_var(key, value) }
 }
 
 fn remove_env_var<K: AsRef<OsStr>>(key: K) {
-    // SAFETY: these tests take a process-wide mutex and use #[serial] before
-    // mutating the environment, so the mutation is serialized within this
-    // process.
+    // SAFETY: these tests hold the process-wide env_lock mutex and use
+    // #[serial] before mutating the environment, so the mutation is
+    // serialized within this process.
     unsafe { std::env::remove_var(key) }
 }
 

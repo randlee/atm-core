@@ -50,6 +50,15 @@ impl std::fmt::Display for AckMessageId {
     }
 }
 
+impl Serialize for AckMessageId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct AckCommitCommand<'a> {
     pub source_message_key: &'a MessageKey,
@@ -90,7 +99,7 @@ pub struct AckOutcome {
     pub action: &'static str,
     pub team: TeamName,
     pub agent: AgentName,
-    pub message_id: String,
+    pub message_id: AckMessageId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
     pub reply_target: ReplyTarget,
@@ -152,8 +161,8 @@ pub fn resolve_store_team(request: &AckRequest) -> Result<TeamName, AtmError> {
 /// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`], or
 /// [`crate::error_codes::AtmErrorCode::MessageValidationFailed`] when actor or
 /// team resolution fails, the message is missing or no longer pending
-/// acknowledgement, reply-target validation fails, or either the source or
-/// reply inbox cannot be persisted.
+/// acknowledgement, reply-target validation fails, or the reply inbox
+/// projection cannot be persisted.
 pub fn ack_mail<S>(
     request: AckRequest,
     store: &S,
@@ -356,7 +365,7 @@ where
         action: "ack",
         team: team.clone(),
         agent: actor.clone(),
-        message_id: request.message_id.to_string(),
+        message_id: request.message_id,
         task_id: source_task_id.clone(),
         reply_target: ReplyTarget::new(reply_agent, reply_team),
         reply_message_id,

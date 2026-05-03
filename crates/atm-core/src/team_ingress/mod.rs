@@ -58,8 +58,9 @@ fn roster_record_for_member(
     existing: Option<&RosterMemberRecord>,
 ) -> Result<RosterMemberRecord, AtmError> {
     let role = match &member.agent_type {
-        AgentType::Unknown(raw) if raw.trim().is_empty() => DEFAULT_ROLE.parse(),
-        agent_type => agent_type.to_string().parse(),
+        Some(AgentType::Unknown(raw)) if raw.trim().is_empty() => DEFAULT_ROLE.parse(),
+        Some(agent_type) => agent_type.to_string().parse(),
+        None => DEFAULT_ROLE.parse(),
     }
     .map_err(|error| {
         AtmError::new(
@@ -109,7 +110,7 @@ fn roster_record_for_member(
 }
 
 fn pane_id_for_member(member: &AgentMember) -> Result<Option<RecipientPaneId>, AtmError> {
-    let value = member.tmux_pane_id.trim();
+    let value = member.tmux_pane_id.as_deref().unwrap_or("").trim();
     if value.is_empty() {
         return Ok(None);
     }
