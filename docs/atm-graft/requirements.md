@@ -17,13 +17,14 @@ product requirements without re-owning `atm-core` service semantics or
 - same-host daemon-client integration for linked Rust host-agent executables
 - graft-session registration and lifecycle
 - automatic daemon-originated nudge subscription when graft mode is active
-- host-facing queue / injection bridge for between-tool-call insertion
+- host-facing nudge fetch / injection bridge for between-tool-call insertion
 - graft-mode activation rules based on discovered `.atm.toml`
 - graft-side structured observability through `sc-observability`
 
 `atm-graft` does not own:
 
 - daemon business logic
+- daemon-owned pending-nudge queue state
 - direct SQLite access
 - direct inbox JSONL parsing or writes
 - direct ownership of ATM semantic types that already belong to `atm-core`
@@ -53,8 +54,9 @@ Initial crate requirement IDs:
   surface for first-party Rust host agents. Satisfies:
   `REQ-P-GRAFT-001`, `REQ-CORE-COMPAT-002`,
   `REQ-CORE-TRANSPORT-001`.
-- `REQ-GRAFT-NOTIFY-001` `atm-graft` owns the host-facing nudge queue and
-  structured payload contract used for between-tool-call injection. Satisfies:
+- `REQ-GRAFT-NOTIFY-001` `atm-graft` owns the host-facing nudge fetch/drain
+  contract and structured payload rendering used for between-tool-call
+  injection. Satisfies:
   `REQ-P-GRAFT-001`.
 - `REQ-GRAFT-OBS-001` `atm-graft` owns graft-side structured observability
   emission for activation, connectivity, registration, and nudge-queue
@@ -104,23 +106,28 @@ Required rules:
   - optional runtime heartbeat / activity reporting when the host enables it
 - `atm-graft` must not bypass the daemon by talking directly to SQLite or inbox
   JSONL
+- pending nudge state must remain daemon-owned so embedded and CLI/hook-based
+  consumers observe one queue
 - the host-facing nudge payload is structured and must contain at least:
   - `from`
   - `message`
 - the host executable owns the final insertion point between tool calls;
-  `atm-graft` owns only the queue / bridge surface that makes those nudges
+  `atm-graft` owns only the fetch / bridge surface that makes those nudges
   available
-- `atm-graft` must expose a small public surface rather than mirroring the full
-  CLI:
+- `atm-graft` must expose a small library surface rather than mirroring the
+  full CLI:
   - daemon client operations for `send`, `read`, and `ack`
   - graft-session lifecycle entrypoints
-  - host-facing nudge queue access
+  - host-facing nudge fetch/drain access
+- any hook-facing command that renders insertion-ready nudge text belongs on
+  the `atm` CLI surface and must call the same daemon API used by `atm-graft`
 - `atm-graft` must emit structured observability for:
   - active / inactive graft mode
   - daemon connect / reconnect
   - registration success / failure
-  - nudge received
-  - nudge queued / dropped
+  - nudge received / fetched
+  - daemon-reported nudge drop / backpressure signals when surfaced through the
+    shared API
 
 ## 5.1 Q.5 Alignment Notes
 
@@ -142,6 +149,7 @@ Current implementation notes that shape `atm-graft` planning:
   binary header required for Q.6 completion
 - Q.5 has no daemon API for graft-session registration, unregistration, or
   daemon-originated nudge delivery
+- Q.5 has no daemon-owned pending-nudge drain API for hook-based consumers
 - Q.5 has no `[atm.graft]` config surface in `atm-core`
 
 Planning rule:
@@ -151,6 +159,6 @@ Planning rule:
 
 Scope-simplification rule for the first implementation pass:
 - `atm-graft` v1 should keep its public API to `send`, `read`, `ack`,
-  `GraftSession`, and host-facing nudge draining
+  `GraftSession`, and host-facing nudge fetch/drain access
 - runtime heartbeat / activity reporting is explicitly deferred unless the host
   integration proves it is needed in the same sprint

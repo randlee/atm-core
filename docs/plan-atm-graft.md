@@ -18,6 +18,8 @@ Primary implementation review target:
   `atm-core`
 - the concrete daemon peer remains `atm-daemon`
 - the host executable owns the final between-tool-call injection point
+- pending nudge durability/queue ownership belongs in the daemon rather than
+  inside `atm-graft`
 
 ## 3. Q.5 Snapshot
 
@@ -37,6 +39,7 @@ Important Q.5 gaps relative to `atm-graft`:
   `atm-daemon`
 - `atm_core::dispatcher` still uses `serde_json::Value` payloads
 - no graft registration or daemon-to-client nudge stream exists
+- no daemon-owned pending-nudge queue or poll/drain API exists
 - `send` and `ack` are still direct-store CLI paths rather than daemon-backed
   requests
 - no `[atm.graft]` config surface exists in `atm-core`
@@ -63,6 +66,8 @@ Required change:
   - wire envelope / frame codec helpers over generic `Read` / `Write`
   - small client-facing traits for unary request execution and registered
     session/event streaming
+  - typed nudge-drain request/response models usable by both embedded hosts and
+    CLI polling paths
 
 Why this blocks `atm-graft`:
 - without these surfaces, `atm-graft` would either depend on `atm-daemon` or
@@ -87,10 +92,12 @@ Concrete ownership target:
   - `HeartbeatRequest`
   - `RegisterGraftRequest`
   - `UnregisterGraftRequest`
+  - `DrainNudgesRequest`
 - `atm_core::daemon_api::response`
   - `DaemonResponseEnvelope`
   - per-family typed response payloads
   - `WireFailure`
+  - `DrainNudgesResponse`
 - `atm_core::daemon_api::event`
   - `DaemonEventEnvelope`
   - `NudgeEvent`
@@ -145,6 +152,9 @@ Required change:
 - add graft registration and unregistration handlers
 - add a long-lived registered session/event-delivery path for daemon-originated
   `NudgeEvent`
+- add a daemon-owned bounded per-identity pending-nudge queue
+- add a poll/drain handler that returns pending nudge text for hook-based
+  context insertion
 - keep notifier/plugin implementation private inside `atm-daemon`
 - switch both same-host and remote transport to the shared binary header owned
   by `atm-core`
@@ -152,6 +162,16 @@ Required change:
 Why this blocks `atm-graft`:
 - the crate cannot satisfy its promised `send` / `read` / `ack` / register /
   nudge surface until the daemon actually exposes that API
+
+Queue-ownership decision:
+- `atm-daemon` owns the bounded pending-nudge queue keyed by ATM identity
+- `atm-graft` consumes nudges through:
+  - embedded registered-session delivery when the host binary is modified
+  - poll/drain requests when the host relies on an external post-tool-use hook
+- this prevents host-local queue state from diverging across embedded and
+  CLI-driven integration paths
+- the hook-facing command itself belongs to the `atm` CLI, not to a standalone
+  `atm-graft` executable
 
 ### G.3 CLI convergence gap
 
@@ -240,6 +260,8 @@ Deliverables:
 - daemon handlers for `send` and `ack`
 - shared client path used by `atm` for `send`, `read`, `ack`, `clear`, and
   `doctor`
+- hook-facing `atm` command that renders insertion-ready nudge text from the
+  daemon drain API
 - removal of normal-production direct-store and file-backed fallbacks where the
   product requirements forbid them
 - same-host and remote runtime paths using the `atm-core` binary-header codec
@@ -258,6 +280,8 @@ Deliverables:
 - graft registration / unregistration protocol
 - daemon-owned `post-send-event` to notifier fanout
 - daemon-originated `NudgeEvent` payload with at least `from` and `message`
+- daemon-owned bounded pending-nudge queue keyed by identity/session target
+- `DrainNudgesRequest` / `DrainNudgesResponse` for poll-based consumers
 - bounded daemon/session backpressure behavior with typed failures
 - daemon event envelopes correlated by the same `WireMessageId` header contract
   used for other daemon frames
@@ -275,14 +299,19 @@ Owning crates:
 Deliverables:
 - `.atm.toml` discovery and inert-mode behavior
 - default-on `GraftSession`
-- bounded host-facing nudge queue
+- client-side drain/fetch support over the daemon API
 - public API limited to:
   - `send`
   - `read`
   - `ack`
   - session lifecycle
-  - nudge draining
+  - nudge draining / fetch
 - `tokio` adapter as the first convenience runtime
+
+Non-deliverable note:
+- `atm-graft` does not own a standalone end-user CLI command surface
+- hook-facing commands belong to the `atm` crate and consume the same daemon
+  API contract
 
 Primary risks:
 - host runtime integration assumptions leaking Tokio into the core crate
@@ -301,6 +330,49 @@ To keep the first implementation tractable:
 - keep payload bodies JSON-backed for the first header migration; the scope is
   header hardening and ownership cleanup, not a full binary payload protocol
 
+## 6.1 Integration Modes
+
+The current design now supports two host-integration modes.
+
+Embedded session mode:
+- a modified host binary links `atm-graft`
+- `GraftSession` registers with the daemon
+- nudges are delivered through the daemon session path
+- the host drains fetched nudges between tool calls
+
+Hook/poll mode:
+- the host binary is not modified for direct embedding
+- a post-tool-use hook invokes an ATM command to fetch pending nudge text
+- the daemon returns pending nudges for the current `ATM_IDENTITY`
+- the command emits insertion-ready text and clears or advances the daemon queue
+
+Architectural consequence:
+- the queue must live in the daemon
+- `atm-graft` becomes one consumer path, not the owner of queued nudge state
+
+Recommended command shape:
+- first implementation should use an `atm` CLI command, not a new standalone
+  `atm-graft` binary, because the hook can invoke the already-installed ATM
+  executable
+- candidate surface:
+  - `atm graft nudge --drain`
+  - or another clearly named `atm` subcommand that returns insertion-ready text
+- the command should call the same `DrainNudgesRequest` daemon API used by
+  embedded consumers
+
+Command output rule:
+- default output should be plain text suitable for direct context insertion
+- optional structured output may be added later for debugging or richer hosts
+- when no nudge is pending, the command should exit successfully with empty
+  output so post-tool-use hooks stay simple
+
+Backpressure rule:
+- the daemon queue must be bounded
+- drain semantics must be explicit:
+  - drain one
+  - or drain all pending nudges into one rendered text block
+- silent drop is not acceptable without structured observability
+
 ## 7. Q.6 Dependency
 
 `atm-graft` now depends on the hardened Q.6 Phase Q shape.
@@ -313,6 +385,13 @@ Required upstream Q.6 outcomes before `atm-graft` implementation starts:
 - the protocol tail/debug helper exists for operator inspection
 - daemon-originated event frames use the same header contract rather than a
   parallel framing scheme
+- the daemon exposes a pending-nudge drain API usable by both embedded and
+  CLI-driven hook consumers
+
+Q.7 / Q.8 note:
+- release-gate planning and release execution are not blockers for beginning
+  `atm-graft` implementation once the Q.6 protocol and ownership work is
+  complete
 
 Recommended Q.6 helper location:
 - `atm` crate debug/ops surface, not `atm-graft`
@@ -324,6 +403,17 @@ Recommended Q.6 helper location:
   - decode the fixed binary header
   - print header fields
   - print the decoded JSON payload body
+
+Recommended hook command location:
+- `atm` crate command surface, not `atm-graft`
+- helper ownership candidate:
+  - `crates/atm/src/commands/graft_nudge.rs`
+  - or another clearly named hook-oriented command module in `atm`
+- helper behavior:
+  - resolve current `ATM_IDENTITY` / team context
+  - issue `DrainNudgesRequest`
+  - render insertion-ready text
+  - exit cleanly when no pending nudge exists
 
 ## 8. Re-Reviewed Workflow Finding
 

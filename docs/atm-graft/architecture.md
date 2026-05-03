@@ -26,8 +26,8 @@ the pre-Phase-Q workspace.
   execution/spawn integration; optional adapters such as `tokio` may be
   provided as additive conveniences.
 - `atm-graft` must not own host-specific tool-loop surgery. It exposes a host
-  injection queue/bridge; the embedding executable decides when to drain and
-  surface queued nudges.
+  injection fetch/bridge; the embedding executable decides when to drain and
+  surface daemon-owned nudges.
 
 ## 2.1 Implementation Target Snapshot
 
@@ -134,7 +134,7 @@ Responsibilities:
 - connect to the same-host daemon API
 - register the current host-agent identity and process context
 - receive daemon-originated nudge events
-- expose queued nudges to the embedding host executable
+- expose fetched daemon-owned nudges to the embedding host executable
 - shut down cleanly and unregister when appropriate
 
 Architectural rules:
@@ -143,7 +143,12 @@ Architectural rules:
   executable's business logic
 - session lifecycle failures remain typed and observable; they must not collapse
   into silent disabled behavior after activation succeeded
-- the host-facing queue is advisory and bounded; overflow must emit structured
+
+Queue-ownership rule:
+- bounded pending-nudge state belongs in the daemon
+- `atm-graft` may keep only transient fetched state needed to hand nudges to
+  the embedding host
+- any daemon-queue overflow/backpressure behavior must emit structured
   observability and must not affect durable ATM mail truth
 
 State-model rule:
@@ -170,10 +175,17 @@ Architectural rules:
 - the host-facing payload is structured and contains at least:
   - `from`
   - `message`
-- the host-facing queue is FIFO from the perspective of the embedding agent
-  loop and exists only to support cooperative insertion between tool calls
+- fetched nudge drain order must preserve daemon queue order from the
+  perspective of the embedding agent loop
 - nudges are advisory delivery signals, not durable mail truth; authoritative
   message state remains behind daemon-backed `read` calls
+
+Alternate integration rule:
+- the same pending nudge state must also be accessible through a daemon poll /
+  drain request so hook-driven hosts can fetch insertion text without embedding
+  `atm-graft`
+- this hook-driven path belongs to the `atm` CLI surface, not to a separate
+  `atm-graft` executable
 
 Implementation-target rule:
 - because Q.5 currently has only unary request/response transport, graft
@@ -192,7 +204,12 @@ Required public capability groups:
   - `send`
   - `read`
   - `ack`
-- host-facing nudge queue access
+- host-facing nudge fetch / drain access
+
+Boundary rule:
+- a hook-facing command that prints insertion-ready nudge text is an `atm`
+  command built on the same daemon API, not a CLI owned by the `atm-graft`
+  crate itself
 
 Architectural rules:
 - `read` uses the daemon API rather than direct SQLite access
