@@ -442,6 +442,8 @@ Architectural rules:
   of the atomic send boundary
 - the hook runs only after a successful non-`dry-run` send or ack; it fires
   after both `atm send` and `atm ack`
+- Phase Q addition: the retained hook contract now includes `atm ack` reply
+  writes as hook-producing outbound messages, not only `atm send`
 - each `[[atm.post_send_hooks]]` rule binds one recipient selector and one
   command argv
 - `recipient = "*"` acts as a wildcard match for all recipients
@@ -453,6 +455,8 @@ Architectural rules:
   `ATM_POST_SEND`
 - the payload includes `from`, `to`, `sender`, `recipient`, `team`,
   `message_id`, `requires_ack`, `is_ack` (bool), and optional `task_id`
+- Phase Q addition: `is_ack` is the explicit send-vs-ack discriminator for
+  daemon-owned hook evaluation and downstream nudge logic
 - the hook may optionally emit one structured result object on stdout with a
   declared log level, message, and optional structured fields; ATM parses it
   on a best-effort basis for post-send diagnostics
@@ -838,6 +842,8 @@ Public entrypoint:
 - reply message id
 - reply text
 - warnings: Vec<String>
+- Phase Q addition: `warnings` carries best-effort post-send-hook diagnostics
+  for `atm ack` without changing the successful acknowledgement state
 
 The ack service is responsible for the legal transition from `(Read, PendingAck)` to `(Read, Acknowledged)` plus the reply append.
 

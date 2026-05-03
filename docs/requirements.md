@@ -141,7 +141,10 @@ Satisfied by:
   interface
 - CI monitoring
 - TUI and MCP features
-- daemon spawning from tests
+- daemon spawning as the core correctness test strategy
+  - bounded daemon smoke tests for the auto-start path are permitted when
+    isolated from default test runs per `docs/plan-phase-Q.md` Testing
+    Constraints
 - manual daemon-start discipline as a product requirement
   - production CLI auto-start when the daemon is absent is in scope under
     `REQ-P-RUNTIME-001`
@@ -218,7 +221,9 @@ Product requirement ID:
 Satisfied by:
 - `REQ-CORE-CONFIG-001` for home/path/config resolution aspects
 - `REQ-CORE-RUNTIME-001` for durable mail/roster store ownership aspects
-- `REQ-CORE-COMPAT-001` for Claude inbox compatibility-surface aspects
+- `REQ-CORE-INGEST-001` for Claude inbox/config ingest compatibility aspects
+- `REQ-CORE-MAILBOX-001` for persisted Claude inbox write/read compatibility
+  aspects
 - `REQ-ATM-OBS-001` for CLI observability bootstrap/integration aspects
 - `REQ-CORE-OBS-001` for ATM observability boundary/query-model aspects
 
@@ -609,6 +614,9 @@ Post-send-hook rules:
   - optional `task_id` when present
   - optional `recipient_pane_id` when ATM has an authoritative pane mapping for
     the recipient
+- Phase Q addition: `is_ack` is part of the retained hook payload contract for
+  the daemon-owned send/ack runtime path so hook implementations can
+  distinguish `atm send` from `atm ack` without inspecting message text
 - the post-send hook must run after successful non-`dry-run` `atm send`
 - the post-send hook must also run after successful `atm ack`, using the
   reply message as the hook subject

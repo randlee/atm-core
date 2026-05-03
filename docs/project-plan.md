@@ -906,6 +906,10 @@ The rewrite is ready when:
   visibility in the Phase Q target architecture
 - `atm teams` provides the retained local team recovery surface
 - `atm members` provides retained local roster verification
+- daemon auto-start-when-absent path is exercised in bounded integration
+  testing
+- `ATM_POST_SEND.recipient_pane_id` is sourced from SQLite roster truth when
+  known
 - retained command behavior is preserved, and any Phase Q runtime-shape changes
   are intentionally documented
 - task-linked mail remains pending until acknowledged

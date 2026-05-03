@@ -104,6 +104,7 @@ The `atm-daemon` crate docs must remain aligned with:
 - [`../architecture.md`](../architecture.md)
 - [`../project-plan.md`](../project-plan.md)
 - [`../plan-phase-Q.md`](../plan-phase-Q.md)
+- [`../team-member-state.md`](../team-member-state.md)
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
 - [`../atm-core/requirements.md`](../atm-core/requirements.md)
 - [`../atm-core/architecture.md`](../atm-core/architecture.md)
