@@ -613,18 +613,19 @@ fn notify_team_lead_missing_config(
         return;
     }
 
-    let team_lead_inbox = match home::inbox_path_from_home(home_dir, team, "team-lead") {
-        Ok(path) => path,
-        Err(error) => {
-            warn!(
-                code = %AtmErrorCode::WarningMissingTeamConfigFallback,
-                %error,
-                team = %team,
-                "failed to resolve team-lead inbox for missing-config notice"
-            );
-            return;
-        }
-    };
+    let team_lead_inbox =
+        match home::inbox_path_from_home(home_dir, team, &AgentName::from_validated("team-lead")) {
+            Ok(path) => path,
+            Err(error) => {
+                warn!(
+                    code = %AtmErrorCode::WarningMissingTeamConfigFallback,
+                    %error,
+                    team = %team,
+                    "failed to resolve team-lead inbox for missing-config notice"
+                );
+                return;
+            }
+        };
 
     if !team_lead_inbox.exists() {
         return;
@@ -733,7 +734,10 @@ fn display_sender_identity(
         .parse()
 }
 
-pub(super) fn qualified_sender_identity(sender: &AgentName, sender_team: Option<&str>) -> String {
+pub(super) fn qualified_sender_identity(
+    sender: &AgentName,
+    sender_team: Option<&TeamName>,
+) -> String {
     sender_team
         .map(|team| format!("{sender}@{team}"))
         .unwrap_or_else(|| sender.to_string())

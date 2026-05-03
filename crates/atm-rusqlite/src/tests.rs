@@ -1,5 +1,7 @@
 use std::fs;
 use std::path::Path;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use atm_core::home;
 use atm_core::inbox_ingress::{InboxIngestOutcome, InboxIngress, default_inbox_ingress};
@@ -7,7 +9,10 @@ use atm_core::mail_store::{
     AckStateRecord, IngestRecord, MailStore, MessageSourceKind, PendingExportRecord,
     VisibilityStateRecord,
 };
-use atm_core::observability::NullObservability;
+use atm_core::observability::{
+    AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
+    LogTailSession, NullObservability, ObservabilityPort,
+};
 use atm_core::roster_store::{
     PidUpdate, RosterMemberRecord, RosterRole, RosterStore, TransportKind,
 };
@@ -25,6 +30,8 @@ use tempfile::TempDir;
 use crate::{
     RusqliteStore, SCHEMA_VERSION, query_foreign_keys, query_journal_mode, query_user_version,
 };
+
+static NEXT_INBOX_MESSAGE_ID: AtomicU64 = AtomicU64::new(1);
 
 fn team() -> TeamName {
     "atm-dev".parse().expect("team")
@@ -92,7 +99,7 @@ fn external_source_fingerprint(
 ) -> SourceFingerprint {
     let mut hash = 0xcbf29ce484222325_u64;
     for segment in [
-        source_path.display().to_string(),
+        source_path.to_string_lossy().replace('\\', "/"),
         sender.to_string(),
         timestamp.to_string(),
         summary.unwrap_or_default().to_string(),
@@ -111,11 +118,14 @@ fn external_source_fingerprint(
 }
 
 fn inbox_message(text: &str) -> MessageEnvelope {
-    let legacy_message_id = LegacyMessageId::new();
-    // Test helper only: timestamp-carrying ULIDs can collide if the clock
-    // source is artificially frozen, but production identity generation owns
-    // the real monotonicity/retry policy.
-    let (atm_message_id, timestamp) = AtmMessageId::new_with_timestamp();
+    let index = NEXT_INBOX_MESSAGE_ID.fetch_add(1, Ordering::Relaxed);
+    let legacy_message_id: LegacyMessageId = format!("00000000-0000-4000-8000-{index:012x}")
+        .parse()
+        .expect("legacy id");
+    let atm_message_id: AtmMessageId = format!("01ARZ3NDEKTSV4RRFFQ69G{index:04X}")
+        .parse()
+        .expect("atm id");
+    let timestamp = atm_message_id.timestamp();
     let mut extra = serde_json::Map::new();
     extra.insert(
         "metadata".to_string(),
@@ -139,6 +149,37 @@ fn inbox_message(text: &str) -> MessageEnvelope {
         acknowledges_message_id: None,
         task_id: Some("TASK-INGEST-1".parse().expect("task id")),
         extra,
+    }
+}
+
+#[derive(Default)]
+struct RecordingObservability {
+    events: Mutex<Vec<CommandEvent>>,
+}
+
+impl atm_core::observability::sealed::Sealed for RecordingObservability {}
+
+impl ObservabilityPort for RecordingObservability {
+    fn emit(&self, event: CommandEvent) -> Result<(), atm_core::error::AtmError> {
+        self.events.lock().expect("events lock").push(event);
+        Ok(())
+    }
+
+    fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, atm_core::error::AtmError> {
+        Ok(AtmLogSnapshot::default())
+    }
+
+    fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, atm_core::error::AtmError> {
+        Ok(LogTailSession::empty())
+    }
+
+    fn health(&self) -> Result<AtmObservabilityHealth, atm_core::error::AtmError> {
+        Ok(AtmObservabilityHealth {
+            active_log_path: None,
+            logging_state: AtmObservabilityHealthState::Unavailable,
+            query_state: Some(AtmObservabilityHealthState::Unavailable),
+            detail: Some("recording test observability".to_string()),
+        })
     }
 }
 
@@ -678,7 +719,7 @@ fn inbox_ingress_is_idempotent_and_tracks_degraded_metadata() {
     )
     .expect("write inbox");
 
-    let observability = NullObservability;
+    let observability = RecordingObservability::default();
     let ingester = default_inbox_ingress();
     let first = ingester
         .ingest_mailbox_state(
@@ -715,6 +756,17 @@ fn inbox_ingress_is_idempotent_and_tracks_degraded_metadata() {
         .expect("stored degraded row");
     assert_eq!(degraded_message.sender_display, "quality-mgr");
     assert_eq!(degraded_message.body, "external malformed metadata");
+    let events = observability.events.lock().expect("events lock");
+    assert!(
+        events.iter().any(|event| {
+            event.command == "inbox_ingress"
+                && event.outcome == "malformed_metadata"
+                && event.error_code
+                    == Some(atm_core::error::AtmErrorCode::WarningMalformedAtmFieldIgnored)
+        }),
+        "events: {events:?}"
+    );
+    drop(events);
 
     let second = ingester
         .ingest_mailbox_state(

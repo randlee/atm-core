@@ -79,6 +79,12 @@ impl LogFieldKey {
     }
 }
 
+impl std::fmt::Display for LogFieldKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 impl Serialize for LogFieldKey {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -368,7 +374,7 @@ pub struct AtmLogQuery {
 pub struct AtmLogRecord {
     pub timestamp: IsoTimestamp,
     pub severity: LogLevelFilter,
-    pub service: String,
+    pub service: LogFieldKey,
     pub target: Option<String>,
     pub action: Option<String>,
     pub message: Option<String>,

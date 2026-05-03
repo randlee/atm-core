@@ -482,10 +482,8 @@ fn test_send_missing_config_deduplicates_team_lead_notice_under_concurrency() {
         fixture.stderr(&second)
     );
     let notices = fixture.inbox_contents("team-lead");
-    assert!(notices.len() <= 1, "notices: {notices:?}");
-    if let Some(notice) = notices.first() {
-        assert_eq!(notice.from, "atm-identity-missing");
-    }
+    assert_eq!(notices.len(), 1, "notices: {notices:?}");
+    assert_eq!(notices[0].from, "atm-identity-missing");
 }
 
 #[test]
@@ -1161,7 +1159,8 @@ fn test_send_help_mentions_post_send_hook_config() {
 }
 
 fn read_json_file_with_retry(path: &std::path::Path, label: &str) -> serde_json::Value {
-    for _ in 0..20 {
+    let start = std::time::Instant::now();
+    while start.elapsed() < Duration::from_secs(5) {
         match fs::read(path) {
             Ok(bytes) => return serde_json::from_slice(&bytes).expect("json payload"),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {

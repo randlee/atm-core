@@ -143,7 +143,7 @@ fn emit_degraded_record_events(
             requires_ack: false,
             dry_run: false,
             task_id: None,
-            error_code: None,
+            error_code: Some(crate::error::AtmErrorCode::WarningMalformedAtmFieldIgnored),
             error_message: Some(format!(
                 "ignored malformed metadata while importing {}",
                 source_path.display()
@@ -168,7 +168,7 @@ fn ingest_source_report(
             team_name: team.clone(),
             recipient_agent: agent.clone(),
             source_path: source_path.to_path_buf(),
-            source_fingerprint: source_fingerprint(source_path, &envelope)?,
+            source_fingerprint: source_fingerprint(source_path, &envelope),
             message_key: message_key.clone(),
             imported_at: IsoTimestamp::now(),
         };
@@ -236,27 +236,24 @@ fn canonical_message_key(
     Ok(MessageKey::from_source_fingerprint(&source_fingerprint(
         source_path,
         envelope,
-    )?))
+    )))
 }
 
-fn source_fingerprint(
-    source_path: &Path,
-    envelope: &MessageEnvelope,
-) -> Result<SourceFingerprint, AtmError> {
+fn source_fingerprint(source_path: &Path, envelope: &MessageEnvelope) -> SourceFingerprint {
     if let Some(atm_message_id) = envelope.atm_message_id() {
-        return Ok(format!("atm{atm_message_id}")
+        return format!("atm{atm_message_id}")
             .parse()
-            .expect("ATM message ids always produce a valid source fingerprint"));
+            .expect("ATM message ids always produce a valid source fingerprint");
     }
     if let Some(message_id) = envelope.message_id {
-        return Ok(format!("legacy{message_id}")
+        return format!("legacy{message_id}")
             .parse()
-            .expect("legacy message ids always produce a valid source fingerprint"));
+            .expect("legacy message ids always produce a valid source fingerprint");
     }
 
     let mut hash = 0xcbf29ce484222325_u64;
     for segment in [
-        source_path.display().to_string(),
+        source_path.to_string_lossy().replace('\\', "/"),
         envelope.from.to_string(),
         envelope.timestamp.to_string(),
         envelope.summary.clone().unwrap_or_default(),
@@ -270,9 +267,9 @@ fn source_fingerprint(
         hash = hash.wrapping_mul(0x100000001b3);
     }
 
-    Ok(format!("ext{hash:016x}")
+    format!("ext{hash:016x}")
         .parse()
-        .expect("derived external inbox hash always produces a valid source fingerprint"))
+        .expect("derived external inbox hash always produces a valid source fingerprint")
 }
 
 fn stored_message_record(

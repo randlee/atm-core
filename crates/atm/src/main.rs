@@ -10,8 +10,8 @@ use atm_core::error_codes::AtmErrorCode;
 use atm_core::home;
 use atm_core::observability::{
     AtmLogQuery, AtmLogRecord, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
-    CommandEvent, LogFieldMap, LogFieldMatch, LogLevelFilter, LogOrder, LogTailSession,
-    ObservabilityPort,
+    CommandEvent, LogFieldKey, LogFieldMap, LogFieldMatch, LogLevelFilter, LogOrder,
+    LogTailSession, ObservabilityPort,
 };
 use chrono::{DateTime, Utc};
 use clap::Parser;
@@ -516,7 +516,10 @@ fn map_record(event: LogEvent) -> Result<AtmLogRecord, AtmError> {
     Ok(AtmLogRecord {
         timestamp: map_timestamp_back(event.timestamp)?,
         severity: map_level_back(event.level),
-        service: event.service.to_string(),
+        service: LogFieldKey::new(event.service.to_string()).map_err(|source| {
+            AtmError::observability_query("failed to project shared log service into ATM type")
+                .with_source(source)
+        })?,
         target: Some(event.target.to_string()),
         action: Some(event.action.to_string()),
         message: event.message,
