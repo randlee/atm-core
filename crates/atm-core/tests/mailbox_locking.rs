@@ -10,6 +10,7 @@ use atm_core::clear::{ClearQuery, clear_mail};
 use atm_core::error::AtmErrorCode;
 use atm_core::mail_store::MailStore;
 use atm_core::observability::NullObservability;
+#[allow(deprecated)]
 use atm_core::read::{ReadQuery, read_mail};
 use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest, send_mail};
@@ -587,6 +588,7 @@ fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()
 
 #[test]
 #[serial]
+#[allow(deprecated)]
 fn multi_source_read_and_clear_complete_without_deadlock() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
@@ -736,6 +738,7 @@ fn clear_dry_run_does_not_wait_on_mailbox_lock() {
 
 #[test]
 #[serial]
+#[allow(deprecated)]
 fn read_possible_write_only_locks_when_display_mutation_is_required() {
     let _env_lock = acquire_env_lock();
     let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
@@ -801,6 +804,7 @@ fn read_possible_write_only_locks_when_display_mutation_is_required() {
 
 #[test]
 #[serial]
+#[allow(deprecated)]
 fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() {
     let fixture = Fixture::new();
     let observability = NullObservability;

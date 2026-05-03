@@ -15,8 +15,8 @@ use crate::types::{AgentName, TeamName};
 use serde::{Deserialize, Serialize};
 
 pub use report::{
-    DoctorEnvironmentVisibility, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
-    DoctorSummary,
+    DoctorEnvironmentVisibility, DoctorFinding, DoctorReport, DoctorRuntimeHealth, DoctorSeverity,
+    DoctorStatus, DoctorSummary,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -114,6 +114,7 @@ pub fn run_doctor(
         environment,
         member_roster,
         observability: observability_health,
+        runtime: None,
     })
 }
 

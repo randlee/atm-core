@@ -49,6 +49,16 @@ pub struct DoctorEnvironmentVisibility {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DoctorRuntimeHealth {
+    pub singleton_state: DoctorStatus,
+    pub singleton_detail: String,
+    pub status_cache_state: DoctorStatus,
+    pub status_cache_detail: String,
+    pub sqlite_runtime_state: DoctorStatus,
+    pub sqlite_runtime_detail: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DoctorReport {
     pub summary: DoctorSummary,
     pub findings: Vec<DoctorFinding>,
@@ -57,6 +67,8 @@ pub struct DoctorReport {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub member_roster: Option<MembersList>,
     pub observability: AtmObservabilityHealth,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime: Option<DoctorRuntimeHealth>,
 }
 
 impl DoctorReport {

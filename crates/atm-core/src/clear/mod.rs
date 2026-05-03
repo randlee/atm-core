@@ -18,9 +18,7 @@ use crate::mailbox;
 use crate::mailbox::source::{SourceFile, SourcedMessage, resolve_target};
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
-use crate::read::{
-    ClassifiedMessage, ReadStore, project_messages_for_recipient, projected_message_key, state,
-};
+use crate::read::{self, ClassifiedMessage, ReadStore, project_messages_for_recipient, state};
 use crate::schema::MessageEnvelope;
 use crate::types::{AgentName, IsoTimestamp, MessageClass, SourceIndex, TeamName};
 use crate::workflow;
@@ -249,12 +247,14 @@ pub fn clear_mail_via_store(
         let cleared_at = IsoTimestamp::now();
         let updates = removable
             .iter()
-            .map(|message| VisibilityStateRecord {
-                message_key: projected_message_key(message),
-                read_at: message.envelope.read.then_some(message.envelope.timestamp),
-                cleared_at: Some(cleared_at),
+            .map(|message| {
+                Ok(VisibilityStateRecord {
+                    message_key: read::projection::projected_message_key(message)?,
+                    read_at: message.envelope.read.then_some(message.envelope.timestamp),
+                    cleared_at: Some(cleared_at),
+                })
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, AtmError>>()?;
         store.upsert_visibility_batch(&updates).map_err(|error| {
             AtmError::mailbox_write("failed to persist SQLite clear visibility state")
                 .with_source(error)

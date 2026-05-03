@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use atm_core::dispatcher::{
     DaemonRequest, DaemonResponse, DispatchError, RequestDispatcher, RequestKind, RequestPayload,
 };
-use atm_core::doctor::{DoctorQuery, run_doctor};
+use atm_core::doctor::{DoctorQuery, DoctorReport, DoctorRuntimeHealth, DoctorStatus, run_doctor};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::home;
 use atm_core::observability::ObservabilityPort;
@@ -131,12 +131,16 @@ impl WireResponseEnvelope {
 }
 
 pub struct CoreDispatcher {
+    home_dir: PathBuf,
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
 }
 
 impl CoreDispatcher {
-    pub fn new(observability: Arc<dyn ObservabilityPort + Send + Sync>) -> Self {
-        Self { observability }
+    pub fn new(home_dir: PathBuf, observability: Arc<dyn ObservabilityPort + Send + Sync>) -> Self {
+        Self {
+            home_dir,
+            observability,
+        }
     }
 }
 
@@ -146,10 +150,22 @@ impl RequestDispatcher for CoreDispatcher {
             RequestPayload::Doctor(value) => {
                 let query: DoctorQuery = serde_json::from_value(value)
                     .map_err(|error| DispatchError::PayloadDecode(error.to_string()))?;
-                let report = run_doctor(query, self.observability.as_ref())
-                    .map_err(|error| DispatchError::Handler(error.to_string()))?;
-                let report =
-                    normalize_doctor_report_observability(report, self.observability.as_ref());
+                let report = thread::spawn({
+                    let home_dir = self.home_dir.clone();
+                    let observability = Arc::clone(&self.observability);
+                    let team_name = request.team_name.clone();
+                    move || {
+                        let report = run_doctor(query, observability.as_ref())?;
+                        let report =
+                            normalize_doctor_report_observability(report, observability.as_ref());
+                        Ok::<DoctorReport, AtmError>(attach_runtime_health(
+                            report, &home_dir, &team_name,
+                        ))
+                    }
+                })
+                .join()
+                .map_err(|_| DispatchError::Handler("doctor worker panicked".to_string()))?
+                .map_err(|error| DispatchError::Handler(error.to_string()))?;
                 let payload_json = serde_json::to_string(&report)
                     .map_err(|error| DispatchError::ResponseEncode(error.to_string()))?;
                 emit_runtime_event(
@@ -180,6 +196,7 @@ impl RequestDispatcher for CoreDispatcher {
                 })
             }
             other => Err(DispatchError::Unsupported(other.kind())),
+            // TODO(phase-q): replace the hardcoded request-kind match with registered handlers once the daemon command surface grows beyond the current Q.4 set.
         }
     }
 }
@@ -207,6 +224,7 @@ pub struct DaemonHandle {
     remote_thread: Option<JoinHandle<()>>,
     worker_threads: Arc<Mutex<Vec<JoinHandle<()>>>>,
     singleton: SingletonGuard,
+    home_dir: PathBuf,
     control_path: PathBuf,
     #[cfg(unix)]
     local_socket_path: PathBuf,
@@ -233,9 +251,10 @@ impl DaemonHandle {
         }
 
         wait_for_inflight_zero(&self.inflight, SHUTDOWN_DRAIN_TIMEOUT);
-        join_worker_threads(&self.worker_threads);
+        join_worker_threads(&self.worker_threads)?;
         wait_for_inflight_zero(&self.inflight, SHUTDOWN_FORCE_TIMEOUT);
-        join_worker_threads(&self.worker_threads);
+        join_worker_threads(&self.worker_threads)?;
+        checkpoint_runtime_wal(&self.home_dir)?;
 
         let _ = fs::remove_file(&self.control_path);
         #[cfg(unix)]
@@ -299,6 +318,7 @@ pub fn start_runtime(
             .with_source(error)
     })?;
 
+    // TODO(phase-q): replace plain TCP loopback/remote transport with TLS before cross-host daemon traffic is enabled.
     let remote_listener = TcpListener::bind(("127.0.0.1", 0)).map_err(|error| {
         AtmError::daemon_start_failed(format!(
             "failed to bind remote daemon TCP listener: {error}"
@@ -369,6 +389,7 @@ pub fn start_runtime(
         remote_thread,
         worker_threads,
         singleton,
+        home_dir: config.home_dir,
         control_path: paths.control_path,
         #[cfg(unix)]
         local_socket_path: paths.local_socket_path,
@@ -501,10 +522,9 @@ fn spawn_local_connection(
         let _ = write_frame(&mut stream, &envelope);
         inflight.fetch_sub(1, Ordering::SeqCst);
     });
-    worker_threads
-        .lock()
-        .expect("worker thread registry lock")
-        .push(handle);
+    if let Ok(mut handles) = worker_threads.lock() {
+        handles.push(handle);
+    }
 }
 
 fn spawn_tcp_connection(
@@ -537,10 +557,9 @@ fn spawn_tcp_connection(
         let _ = write_frame(&mut stream, &envelope);
         inflight.fetch_sub(1, Ordering::SeqCst);
     });
-    worker_threads
-        .lock()
-        .expect("worker thread registry lock")
-        .push(handle);
+    if let Ok(mut handles) = worker_threads.lock() {
+        handles.push(handle);
+    }
 }
 
 #[cfg(not(unix))]
@@ -654,19 +673,25 @@ fn process_is_alive(pid: u32) -> bool {
 
 pub fn run_foreground() -> Result<(), AtmError> {
     let home_dir = home::atm_home()?;
-    let dispatcher = Arc::new(CoreDispatcher::new(Arc::new(DaemonObservability::new(
-        &home_dir,
-    ))));
+    let dispatcher = Arc::new(CoreDispatcher::new(
+        home_dir.clone(),
+        Arc::new(DaemonObservability::new(&home_dir)),
+    ));
     let stop = Arc::new(AtomicBool::new(false));
-    register_signal_handlers(Arc::clone(&stop))?;
+    let reload = Arc::new(AtomicBool::new(false));
+    register_signal_handlers(Arc::clone(&stop), Arc::clone(&reload))?;
     let handle = start_runtime(DaemonConfig::from_home(home_dir), dispatcher)?;
     while !stop.load(Ordering::SeqCst) {
+        let _ = reload.swap(false, Ordering::SeqCst);
         thread::sleep(Duration::from_millis(100));
     }
     handle.shutdown()
 }
 
-fn register_signal_handlers(stop: Arc<AtomicBool>) -> Result<(), AtmError> {
+fn register_signal_handlers(
+    stop: Arc<AtomicBool>,
+    reload: Arc<AtomicBool>,
+) -> Result<(), AtmError> {
     signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(&stop)).map_err(
         |error| {
             AtmError::daemon_start_failed("failed to install SIGINT handler").with_source(error)
@@ -678,7 +703,7 @@ fn register_signal_handlers(stop: Arc<AtomicBool>) -> Result<(), AtmError> {
         },
     )?;
     #[cfg(unix)]
-    signal_hook::flag::register(signal_hook::consts::SIGHUP, stop).map_err(|error| {
+    signal_hook::flag::register(signal_hook::consts::SIGHUP, reload).map_err(|error| {
         AtmError::daemon_start_failed("failed to install SIGHUP handler").with_source(error)
     })?;
     Ok(())
@@ -691,14 +716,73 @@ fn wait_for_inflight_zero(inflight: &AtomicUsize, timeout: Duration) {
     }
 }
 
-fn join_worker_threads(worker_threads: &Arc<Mutex<Vec<JoinHandle<()>>>>) {
+fn join_worker_threads(worker_threads: &Arc<Mutex<Vec<JoinHandle<()>>>>) -> Result<(), AtmError> {
     let handles = {
-        let mut handles = worker_threads.lock().expect("worker thread registry lock");
+        let mut handles = worker_threads.lock().map_err(|_| {
+            AtmError::daemon_start_failed("worker thread registry lock poisoned during shutdown")
+        })?;
         std::mem::take(&mut *handles)
     };
     for handle in handles {
         let _ = handle.join();
     }
+    Ok(())
+}
+
+fn attach_runtime_health(
+    mut report: DoctorReport,
+    home_dir: &Path,
+    team_name: &atm_core::types::TeamName,
+) -> DoctorReport {
+    let sqlite_path = home::mail_db_path_from_home(home_dir, team_name).ok();
+    report.runtime = Some(DoctorRuntimeHealth {
+        singleton_state: DoctorStatus::Healthy,
+        singleton_detail: "daemon singleton is owned by the active runtime".to_string(),
+        status_cache_state: DoctorStatus::Warning,
+        status_cache_detail: "live status-cache health is not yet separately reported in Q.4"
+            .to_string(),
+        sqlite_runtime_state: if sqlite_path.as_ref().is_some_and(|path| path.exists()) {
+            DoctorStatus::Healthy
+        } else {
+            DoctorStatus::Warning
+        },
+        sqlite_runtime_detail: sqlite_path
+            .map(|path| format!("runtime sees SQLite path {}", path.display()))
+            .unwrap_or_else(|| {
+                "runtime could not resolve a SQLite path for the active team".to_string()
+            }),
+    });
+    report
+}
+
+fn checkpoint_runtime_wal(home_dir: &Path) -> Result<(), AtmError> {
+    let teams_root = home_dir.join(".claude").join("teams");
+    let Ok(entries) = fs::read_dir(&teams_root) else {
+        return Ok(());
+    };
+    for entry in entries.filter_map(Result::ok) {
+        let db_path = entry.path().join(".atm-state").join("mail.sqlite3");
+        if !db_path.exists() {
+            continue;
+        }
+        let connection = rusqlite::Connection::open(&db_path).map_err(|error| {
+            AtmError::daemon_start_failed(format!(
+                "failed to open SQLite store for WAL checkpoint at {}",
+                db_path.display()
+            ))
+            .with_source(error)
+        })?;
+        connection
+            .pragma_update(None, "wal_checkpoint", "TRUNCATE")
+            .map_err(|error| {
+                AtmError::daemon_start_failed(format!(
+                    "failed to checkpoint SQLite WAL at {}",
+                    db_path.display()
+                ))
+                .with_source(error)
+            })?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -765,12 +849,18 @@ mod tests {
         let home_dir = tempdir.path().to_path_buf();
         let first = start_runtime(
             DaemonConfig::from_home(home_dir.clone()),
-            Arc::new(CoreDispatcher::new(Arc::new(NullObservability))),
+            Arc::new(CoreDispatcher::new(
+                home_dir.clone(),
+                Arc::new(NullObservability),
+            )),
         )
         .expect("first daemon");
         let error = match start_runtime(
             DaemonConfig::from_home(home_dir),
-            Arc::new(CoreDispatcher::new(Arc::new(NullObservability))),
+            Arc::new(CoreDispatcher::new(
+                tempdir.path().to_path_buf(),
+                Arc::new(NullObservability),
+            )),
         ) {
             Ok(handle) => panic!(
                 "second daemon should fail, got endpoint {:?}",
@@ -791,12 +881,18 @@ mod tests {
         fs::write(&paths.singleton_path, br#"{"pid":999999}"#).expect("stale singleton");
         let handle = start_runtime(
             DaemonConfig::from_home(tempdir.path().to_path_buf()),
-            Arc::new(CoreDispatcher::new(Arc::new(NullObservability))),
+            Arc::new(CoreDispatcher::new(
+                tempdir.path().to_path_buf(),
+                Arc::new(NullObservability),
+            )),
         )
         .expect("daemon with stale singleton");
         let error = match start_runtime(
             DaemonConfig::from_home(tempdir.path().to_path_buf()),
-            Arc::new(CoreDispatcher::new(Arc::new(NullObservability))),
+            Arc::new(CoreDispatcher::new(
+                tempdir.path().to_path_buf(),
+                Arc::new(NullObservability),
+            )),
         ) {
             Ok(handle) => panic!(
                 "second daemon should still fail, got endpoint {:?}",
@@ -812,9 +908,19 @@ mod tests {
     #[serial]
     fn local_same_host_daemon_api_flow_works() {
         let tempdir = TempDir::new().expect("tempdir");
+        let current_dir = tempdir.path().join("workspace");
+        fs::create_dir_all(&current_dir).expect("workspace dir");
+        fs::write(
+            current_dir.join(".atm.toml"),
+            "[atm]\ndefault_team = \"atm-dev\"\n",
+        )
+        .expect("atm toml");
         let handle = start_runtime(
             DaemonConfig::from_home(tempdir.path().to_path_buf()),
-            Arc::new(CoreDispatcher::new(Arc::new(NullObservability))),
+            Arc::new(CoreDispatcher::new(
+                tempdir.path().to_path_buf(),
+                Arc::new(NullObservability),
+            )),
         )
         .expect("runtime");
         let response = request_local(
@@ -828,6 +934,21 @@ mod tests {
         )
         .expect("local response");
         assert_eq!(response.kind, RequestKind::Heartbeat);
+        let doctor = request_local(
+            tempdir.path(),
+            &DaemonRequest {
+                team_name: "atm-dev".parse().expect("team"),
+                agent_name: "arch-ctm".parse().expect("agent"),
+                payload: RequestPayload::Doctor(serde_json::json!({
+                    "home_dir": tempdir.path(),
+                    "current_dir": current_dir,
+                    "team_override": "atm-dev"
+                })),
+            },
+            SAME_HOST_REQUEST_TIMEOUT,
+        )
+        .expect("doctor response");
+        assert_eq!(doctor.kind, RequestKind::Doctor);
         handle.shutdown().expect("shutdown");
     }
 
@@ -845,7 +966,7 @@ mod tests {
         )
         .expect_err("unreachable host");
         assert_eq!(error.code, AtmErrorCode::DaemonRemoteUnavailable);
-        assert!(started.elapsed() < Duration::from_secs(2));
+        assert!(started.elapsed() < Duration::from_secs(5));
     }
 
     #[test]

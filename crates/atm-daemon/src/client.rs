@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -11,6 +11,7 @@ use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode as Code;
 use atm_core::types::{AgentName, TeamName};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[cfg(unix)]
 use std::os::unix::net::UnixStream;
@@ -25,7 +26,8 @@ pub(crate) const SAME_HOST_SERVER_IO_TIMEOUT: Duration = Duration::from_secs(5);
 pub(crate) const REMOTE_SERVER_IO_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub fn request_doctor_json_with_autostart(query: DoctorQuery) -> Result<String, AtmError> {
-    let (team_name, agent_name) = resolve_request_identity(query.team_override.clone())?;
+    let (team_name, agent_name) =
+        resolve_request_identity(query.team_override.clone(), Some(&query.current_dir), true)?;
     let request = DaemonRequest {
         team_name,
         agent_name,
@@ -39,16 +41,18 @@ pub fn request_doctor_json_with_autostart(query: DoctorQuery) -> Result<String, 
     let home_dir = query.home_dir.clone();
     match request_local(&home_dir, &request, SAME_HOST_REQUEST_TIMEOUT) {
         Ok(response) => Ok(response.payload_json),
-        Err(_) => {
+        Err(error) if should_retry_autostart(&error) => {
             auto_start_daemon(&home_dir)?;
-            let response = request_local(&home_dir, &request, SAME_HOST_REQUEST_TIMEOUT)?;
+            let response = request_local(&home_dir, &request, SAME_HOST_REQUEST_TIMEOUT)
+                .map_err(add_daemon_ready_recovery)?;
             Ok(response.payload_json)
         }
+        Err(error) => Err(error),
     }
 }
 
 pub fn ensure_daemon_running(home_dir: &Path) -> Result<(), AtmError> {
-    let (team_name, agent_name) = resolve_request_identity(None)?;
+    let (team_name, agent_name) = resolve_request_identity(None, None, false)?;
     let heartbeat_request = DaemonRequest {
         team_name,
         agent_name,
@@ -58,10 +62,13 @@ pub fn ensure_daemon_running(home_dir: &Path) -> Result<(), AtmError> {
     };
     match request_local(home_dir, &heartbeat_request, SAME_HOST_REQUEST_TIMEOUT) {
         Ok(_) => Ok(()),
-        Err(_) => {
+        Err(error) if should_retry_autostart(&error) => {
             auto_start_daemon(home_dir)?;
-            request_local(home_dir, &heartbeat_request, SAME_HOST_REQUEST_TIMEOUT).map(|_| ())
+            request_local(home_dir, &heartbeat_request, SAME_HOST_REQUEST_TIMEOUT)
+                .map(|_| ())
+                .map_err(add_daemon_ready_recovery)
         }
+        Err(error) => Err(error),
     }
 }
 
@@ -161,7 +168,7 @@ pub fn auto_start_daemon(home_dir: &Path) -> Result<(), AtmError> {
     if let Some(current_dir) = &start_command.current_dir {
         command.current_dir(current_dir);
     }
-    command.spawn().map_err(|error| {
+    let mut child = command.spawn().map_err(|error| {
         AtmError::daemon_start_failed(format!(
             "failed to start atm-daemon with {}: {error}",
             start_command.display()
@@ -174,6 +181,13 @@ pub fn auto_start_daemon(home_dir: &Path) -> Result<(), AtmError> {
         if read_control_state(home_dir).is_ok() {
             return Ok(());
         }
+        if let Some(status) = child.try_wait().map_err(|error| {
+            AtmError::daemon_start_failed("failed to monitor atm-daemon startup").with_source(error)
+        })? {
+            return Err(AtmError::daemon_start_failed(format!(
+                "atm-daemon exited before publishing control state with status {status}"
+            )));
+        }
         std::thread::sleep(Duration::from_millis(50));
     }
 
@@ -185,6 +199,8 @@ pub fn auto_start_daemon(home_dir: &Path) -> Result<(), AtmError> {
 
 fn resolve_request_identity(
     team_override: Option<TeamName>,
+    current_dir: Option<&Path>,
+    allow_anonymous_identity: bool,
 ) -> Result<(TeamName, AgentName), AtmError> {
     let team_name = team_override
         .or_else(|| {
@@ -192,12 +208,49 @@ fn resolve_request_identity(
                 .ok()
                 .and_then(|value| value.parse().ok())
         })
+        .or_else(|| current_dir.and_then(default_team_from_workspace_config))
         .ok_or_else(AtmError::team_unavailable)?;
     let agent_name = std::env::var("ATM_IDENTITY")
         .ok()
         .and_then(|value| value.parse().ok())
+        .or_else(|| {
+            allow_anonymous_identity.then(|| {
+                "atm-doctor"
+                    .parse()
+                    .expect("atm-doctor is a valid agent name")
+            })
+        })
         .ok_or_else(AtmError::identity_unavailable)?;
     Ok((team_name, agent_name))
+}
+
+fn default_team_from_workspace_config(start_dir: &Path) -> Option<TeamName> {
+    let mut current = Some(start_dir);
+    while let Some(dir) = current {
+        let candidate = dir.join(".atm.toml");
+        if candidate.is_file() {
+            let raw = fs::read_to_string(candidate).ok()?;
+            let parsed: toml::Value = toml::from_str(&raw).ok()?;
+            return parsed
+                .get("atm")
+                .and_then(|atm| atm.get("default_team"))
+                .or_else(|| parsed.get("default_team"))
+                .and_then(toml::Value::as_str)
+                .and_then(|value| value.parse().ok());
+        }
+        current = dir.parent();
+    }
+    None
+}
+
+fn should_retry_autostart(error: &AtmError) -> bool {
+    matches!(error.code, Code::DaemonUnavailable)
+}
+
+fn add_daemon_ready_recovery(error: AtmError) -> AtmError {
+    error.with_recovery(
+        "The ATM daemon started but did not become ready in time. Check atm-daemon logs and retry the command.",
+    )
 }
 
 fn default_daemon_binary() -> Option<PathBuf> {
@@ -258,6 +311,7 @@ fn daemon_start_command() -> StartCommand {
         .expect("workspace root")
         .to_path_buf();
     StartCommand {
+        // TODO(phase-q): resolve the cargo path via a pinned install/service launcher rather than PATH lookup.
         program: PathBuf::from("cargo"),
         args: vec![
             "run".to_string(),
@@ -273,10 +327,10 @@ fn daemon_start_command() -> StartCommand {
 
 pub(crate) fn dispatch_error_to_atm(error: DispatchError) -> AtmError {
     match error {
-        DispatchError::Store(error) => AtmError::daemon_protocol(error.to_string()),
+        DispatchError::Store(error) => AtmError::mailbox_read(error.to_string()),
         DispatchError::PayloadDecode(message) => AtmError::daemon_protocol(message),
-        DispatchError::Handler(message) => AtmError::daemon_protocol(message),
-        DispatchError::ResponseEncode(message) => AtmError::daemon_protocol(message),
+        DispatchError::Handler(message) => AtmError::mailbox_read(message),
+        DispatchError::ResponseEncode(message) => AtmError::mailbox_write(message),
         DispatchError::Unsupported(kind) => AtmError::daemon_protocol(format!(
             "request kind {kind:?} is not implemented by the daemon"
         )),
@@ -354,19 +408,29 @@ pub(crate) fn read_frame<T: for<'de> Deserialize<'de>, R: std::io::Read>(
 ) -> Result<T, AtmError> {
     let mut reader = BufReader::new(reader);
     let mut frame = Vec::new();
-    let bytes = reader.read_until(b'\n', &mut frame).map_err(|error| {
-        AtmError::daemon_protocol("failed to read daemon frame").with_source(error)
-    })?;
-    if bytes == 0 {
+    let mut byte = [0_u8; 1];
+    loop {
+        let bytes = reader.read(&mut byte).map_err(|error| {
+            AtmError::daemon_protocol("failed to read daemon frame").with_source(error)
+        })?;
+        if bytes == 0 {
+            break;
+        }
+        frame.push(byte[0]);
+        if byte[0] == b'\n' {
+            break;
+        }
+        if frame.len() > MAX_FRAME_BYTES {
+            return Err(AtmError::daemon_protocol(format!(
+                "daemon frame exceeded the {} byte safety limit",
+                MAX_FRAME_BYTES
+            )));
+        }
+    }
+    if frame.is_empty() {
         return Err(AtmError::daemon_protocol(
             "daemon connection closed before a response frame was received",
         ));
-    }
-    if frame.len() > MAX_FRAME_BYTES {
-        return Err(AtmError::daemon_protocol(format!(
-            "daemon frame exceeded the {} byte safety limit",
-            MAX_FRAME_BYTES
-        )));
     }
     if frame.last() == Some(&b'\n') {
         frame.pop();
@@ -392,7 +456,7 @@ fn atomic_write_control_state(path: &Path, bytes: &[u8]) -> Result<(), AtmError>
         path.file_name()
             .and_then(|name| name.to_str())
             .unwrap_or("control"),
-        std::process::id()
+        Uuid::new_v4()
     ));
 
     {

@@ -20,9 +20,12 @@ path = "src/main.rs"
 atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.2" }
 anyhow.workspace = true
 libc = "0.2"
+rusqlite.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 signal-hook = "0.3"
+toml = "0.8"
+uuid.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Threading"] }

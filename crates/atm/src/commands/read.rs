@@ -102,7 +102,7 @@ impl ReadCommand {
                 AckActivationMode::PromoteDisplayedUnread
             },
             self.limit,
-            self.from,
+            self.from.as_deref(),
             timestamp_filter,
             self.timeout,
         )

@@ -117,11 +117,14 @@ dependencies = [
  "agent-team-mail-core",
  "anyhow",
  "libc",
+ "rusqlite",
  "serde",
  "serde_json",
  "serial_test",
  "signal-hook",
  "tempfile",
+ "toml",
+ "uuid",
  "windows-sys 0.59.0",
 ]
 
