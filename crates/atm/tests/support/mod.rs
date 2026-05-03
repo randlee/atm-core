@@ -98,6 +98,10 @@ impl TestEnvBuilder {
     }
 }
 
+/// Default fixtures use `TEST_LEAD` instead of the reserved `ROLE_TEAM_LEAD`
+/// string so generic tests do not silently depend on production role naming.
+/// Tests that must exercise `team-lead` semantics should opt in explicitly by
+/// using `ROLE_TEAM_LEAD`.
 impl Default for TestEnvBuilder {
     fn default() -> Self {
         Self {

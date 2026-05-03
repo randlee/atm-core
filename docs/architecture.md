@@ -2425,7 +2425,8 @@ If a capability cannot be tested without real daemon spawning, that is treated
 as a design smell rather than the default approach.
 
 The authoritative architectural fitness rules that enforce these test-isolation
-constraints live in `.claude/agents/arch-qa.md`.
+constraints live in `.claude/agents/arch-qa.md` as `RULE-008`, `RULE-009`,
+`RULE-010`, and `RULE-011`.
 
 ### 21.8 Lock Elimination
 

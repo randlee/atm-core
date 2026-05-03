@@ -156,6 +156,9 @@ Required behavior:
   resolution
 - use per-command environment assignment rather than `std::env::set_var()`
 
+See also:
+- `docs/cross-platform-guidelines.md` §Test Subprocess Isolation
+
 Allowed narrow exceptions:
 - tests that intentionally validate production reads of `ATM_TEAM` or
   `ATM_IDENTITY` may set those variables explicitly, but only inside the

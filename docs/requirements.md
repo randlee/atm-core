@@ -1802,12 +1802,20 @@ The implementation must include:
   environment state and must not hardcode production-like team or agent
   identities except in explicit production-compatibility tests.
 
+  See also:
+  - [`cross-platform-guidelines.md`](./cross-platform-guidelines.md) §Test Subprocess Isolation
+
   Required behavior:
-  - subprocess-style tests provision temp-owned `ATM_HOME` and
-    `ATM_CONFIG_HOME`
-  - tests that rely on team-directory discovery also provision `ATM_TEAMS_DIR`
-  - tests use test-only fixture constants for team and agent names rather than
-    raw repo-significant production names
+  - (a) tests use test-only fixture constants for all team, agent, and
+    role-significant names rather than raw repo-significant production names
+  - (b) subprocess tests provision isolated `ATM_HOME`, `ATM_CONFIG_HOME`, and
+    `ATM_TEAMS_DIR` as needed and pass `ATM_*` vars per-command rather than
+    through ambient process state
+  - (c) direct-call tests use explicit `team_override` / `actor_override`
+    inputs or TempDir-scoped config; `team_override: None` with an empty or
+    unrelated current directory is a violation
+  - (d) test fixtures write all required config to TempDir-owned state and do
+    not read repo `.atm.toml` or live mailbox directories
   - tests that need the semantic role represented by `team-lead` centralize
     that raw literal behind one named constant
   - tests may set `ATM_TEAM` or `ATM_IDENTITY` when validating production

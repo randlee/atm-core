@@ -41,7 +41,9 @@ fn set_home_env(cmd: &mut assert_cmd::Command, temp_dir: &TempDir) {
 
 Before declaring dev work complete, grep all integration test files:
 ```bash
+grep -rn 'ATM_HOME' crates/atm/tests/ || echo "FAIL: Missing ATM_HOME in test helpers"
 grep -rn 'ATM_CONFIG_HOME' crates/atm/tests/ || echo "FAIL: Missing ATM_CONFIG_HOME in test helpers"
+grep -rn 'ATM_TEAMS_DIR' crates/atm/tests/ || echo "FAIL: Missing ATM_TEAMS_DIR where team discovery is exercised"
 grep -rn 'env(\"HOME\"' crates/atm/tests/
 ```
 
@@ -123,6 +125,10 @@ grep -rn "'/tmp/" crates/ && echo "FAIL: Found /tmp hardcoding" || echo "OK"
 
 ## Test Subprocess Isolation
 
+See also:
+- [`requirements.md`](./requirements.md) `REQ-CORE-TEST-001`
+- [`.claude/agents/arch-qa.md`](../.claude/agents/arch-qa.md) `RULE-011`
+
 Subprocess-style ATM tests must not reuse developer workstation config or
 identity state.
 
@@ -157,6 +163,8 @@ Recommended helper shape:
 ```rust
 let env = TestEnvBuilder::new().build().expect("test env");
 let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("atm");
+// TestEnvBuilder provides filesystem isolation only. Tests still set
+// ATM_IDENTITY and ATM_TEAM explicitly when the command under test needs them.
 cmd.envs(env.env_map.iter())
     .env("ATM_IDENTITY", TEST_SENDER)
     .env("ATM_TEAM", TEST_TEAM)

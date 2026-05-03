@@ -510,13 +510,23 @@ Required service rules:
 Requirement ID:
 - `REQ-CORE-TEST-001`
 
+See also:
+- [`../requirements.md`](../requirements.md) §18.1
+- [`../cross-platform-guidelines.md`](../cross-platform-guidelines.md) §Test Subprocess Isolation
+
 Required service rules:
-- ATM subprocess tests must provision temp-owned `ATM_HOME` and
+- tests use test-only fixture constants for all team, agent, and
+  role-significant names
+- ATM subprocess tests provision temp-owned `ATM_HOME` and
   `ATM_CONFIG_HOME`
-- tests that exercise team-directory discovery must also provision
-  `ATM_TEAMS_DIR`
-- shared fixture names must come from explicit test-only constants such as
-  `TEST_TEAM`, `TEST_SENDER`, `TEST_RECIPIENT`, and `TEST_LEAD`
+- tests that exercise team-directory discovery also provision `ATM_TEAMS_DIR`
+- subprocess tests pass `ATM_*` vars per-command rather than through ambient
+  process state
+- direct-call tests use explicit `team_override` / `actor_override` inputs or
+  TempDir-scoped config; `team_override: None` with an empty or unrelated
+  current directory is a violation
+- test fixtures write all required config to TempDir-owned state and do not
+  read repo `.atm.toml` or live mailbox directories
 - the raw literal `team-lead` may appear only behind a named role constant
   when the production role itself is semantically required
 - tests that validate `ATM_TEAM` or `ATM_IDENTITY` reads may set those
