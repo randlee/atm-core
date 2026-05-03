@@ -35,6 +35,10 @@ pub enum StoreParseError {
     HostName,
     #[error("recipient_pane_id must not be blank")]
     RecipientPaneId,
+    #[error("roster role must not be blank")]
+    RosterRole,
+    #[error("transport kind must not be blank")]
+    TransportKind,
     #[error("pid must be positive")]
     ProcessId,
     #[error("busy_timeout_ms must be greater than zero")]

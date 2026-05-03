@@ -1,4 +1,6 @@
-use crate::store::{HostName, ProcessId, RecipientPaneId, StoreBoundary, StoreError};
+use crate::store::{
+    HostName, ProcessId, RecipientPaneId, StoreBoundary, StoreError, StoreParseError,
+};
 use crate::types::{AgentName, TeamName};
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -19,14 +21,12 @@ impl RosterRole {
 }
 
 impl FromStr for RosterRole {
-    type Err = StoreError;
+    type Err = StoreParseError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let trimmed = value.trim();
         if trimmed.is_empty() {
-            return Err(StoreError::query(
-                "invalid store data for roster role: value must not be blank",
-            ));
+            return Err(StoreParseError::RosterRole);
         }
         Ok(Self(trimmed.to_string()))
     }
@@ -58,14 +58,12 @@ impl TransportKind {
 }
 
 impl FromStr for TransportKind {
-    type Err = StoreError;
+    type Err = StoreParseError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let trimmed = value.trim();
         if trimmed.is_empty() {
-            return Err(StoreError::query(
-                "invalid store data for transport kind: value must not be blank",
-            ));
+            return Err(StoreParseError::TransportKind);
         }
         Ok(Self(trimmed.to_string()))
     }

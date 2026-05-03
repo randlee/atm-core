@@ -13,6 +13,7 @@ use atm_core::store::{
 };
 use atm_core::task_store::{TaskRecord, TaskStatus, TaskStore};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+use rusqlite::{Connection, OpenFlags};
 use tempfile::TempDir;
 
 use crate::{
@@ -204,8 +205,14 @@ fn insert_message_enforces_unique_atm_message_id() {
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_path(tempdir.path().join("mail.db")).expect("open store");
     let first = message_at(1);
+    let second_atm_message_id = AtmMessageId::new();
+    assert_ne!(
+        second_atm_message_id,
+        first.atm_message_id.expect("atm id"),
+        "precondition: distinct atm ids"
+    );
     let second = atm_core::mail_store::StoredMessageRecord {
-        message_key: MessageKey::from_atm_message_id(AtmMessageId::new()),
+        message_key: MessageKey::from_atm_message_id(second_atm_message_id),
         legacy_message_id: Some(
             "00000000-0000-4000-8000-000000000055"
                 .parse()
@@ -437,8 +444,11 @@ fn roster_replace_update_and_pid_round_trip() {
     store
         .replace_roster(&team(), &[arch.clone(), quality.clone()])
         .expect("replace roster");
-    let loaded = store.load_roster(&team()).expect("load roster");
-    assert_eq!(loaded, vec![arch.clone(), quality.clone()]);
+    let mut loaded = store.load_roster(&team()).expect("load roster");
+    let mut expected = vec![arch.clone(), quality.clone()];
+    loaded.sort_by(|left, right| left.agent_name.cmp(&right.agent_name));
+    expected.sort_by(|left, right| left.agent_name.cmp(&right.agent_name));
+    assert_eq!(loaded, expected);
 
     let updated_quality = RosterMemberRecord {
         recipient_pane_id: Some("%2".parse().expect("pane")),
@@ -484,10 +494,11 @@ fn replace_roster_rolls_back_on_constraint_violation() {
         .replace_roster(&team(), &[duplicate_arch.clone(), duplicate_arch])
         .expect_err("duplicate replacement should fail");
     assert_eq!(error.kind, StoreErrorKind::Constraint);
-    assert_eq!(
-        store.load_roster(&team()).expect("load roster"),
-        vec![arch, quality]
-    );
+    let mut loaded = store.load_roster(&team()).expect("load roster");
+    let mut expected = vec![arch, quality];
+    loaded.sort_by(|left, right| left.agent_name.cmp(&right.agent_name));
+    expected.sort_by(|left, right| left.agent_name.cmp(&right.agent_name));
+    assert_eq!(loaded, expected);
 }
 
 #[test]
@@ -548,6 +559,53 @@ fn store_errors_stay_discriminated() {
 
     let query = crate::classify_store_error(rusqlite::Error::InvalidQuery, "query");
     assert_eq!(query.kind, StoreErrorKind::Query);
+
+    let bootstrap_dir = TempDir::new().expect("tempdir");
+    let bootstrap_path = bootstrap_dir.path().join("bootstrap-readonly.db");
+    let bootstrap_connection = Connection::open(&bootstrap_path).expect("open bootstrap db");
+    drop(bootstrap_connection);
+    let mut readonly_uninitialized =
+        Connection::open_with_flags(&bootstrap_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .expect("open readonly bootstrap db");
+    let bootstrap = crate::bootstrap_schema(&mut readonly_uninitialized)
+        .expect_err("readonly bootstrap should fail");
+    assert_eq!(bootstrap.kind, StoreErrorKind::Bootstrap);
+    assert_eq!(
+        bootstrap.code,
+        atm_core::error_codes::AtmErrorCode::StoreBootstrapFailed
+    );
+
+    let migration_dir = TempDir::new().expect("tempdir");
+    let migration_path = migration_dir.path().join("migration-readonly.db");
+    let mut migration_connection = Connection::open(&migration_path).expect("open migration db");
+    crate::bootstrap_schema(&mut migration_connection).expect("bootstrap writable db");
+    drop(migration_connection);
+    let mut readonly_initialized =
+        Connection::open_with_flags(&migration_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .expect("open readonly initialized db");
+    let migration = crate::bootstrap_schema(&mut readonly_initialized)
+        .expect_err("readonly migration should fail");
+    assert_eq!(migration.kind, StoreErrorKind::Migration);
+    assert_eq!(
+        migration.code,
+        atm_core::error_codes::AtmErrorCode::StoreMigrationFailed
+    );
+
+    let transaction_dir = TempDir::new().expect("tempdir");
+    let store =
+        RusqliteStore::open_path(transaction_dir.path().join("mail.db")).expect("open store");
+    let transaction = store
+        .with_transaction(|_| {
+            Err::<(), _>(atm_core::store::StoreError::transaction(
+                "synthetic rollback",
+            ))
+        })
+        .expect_err("transaction helper should preserve transaction errors");
+    assert_eq!(transaction.kind, StoreErrorKind::Transaction);
+    assert_eq!(
+        transaction.code,
+        atm_core::error_codes::AtmErrorCode::StoreTransactionFailed
+    );
 }
 
 #[test]
