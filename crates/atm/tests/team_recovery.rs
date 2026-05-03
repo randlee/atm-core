@@ -394,7 +394,7 @@ fn test_restore_preserves_team_lead_and_recomputes_highwatermark() {
         .iter()
         .find(|member| member["name"] == "arch-ctm")
         .expect("restored member");
-    assert_eq!(restored["tmuxPaneId"], "");
+    assert!(restored["tmuxPaneId"].is_null());
     assert!(restored.get("sessionId").is_none());
     assert!(restored.get("activity").is_none());
 

@@ -254,7 +254,7 @@ pub(super) fn count_numeric_task_files(tasks_dir: &Path) -> Result<usize, AtmErr
 }
 
 pub(super) fn clear_runtime_member_state(member: &mut AgentMember) {
-    member.tmux_pane_id.clear();
+    member.tmux_pane_id = None;
     for key in [
         "backendType",
         "sessionId",
