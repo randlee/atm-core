@@ -272,7 +272,10 @@ fn snapshot_mailbox_lock_paths(home_dir: &Path) -> BTreeSet<PathBuf> {
         };
         for lock_entry in lock_entries.filter_map(Result::ok) {
             let path = lock_entry.path();
-            if path.extension().and_then(|ext| ext.to_str()) != Some("lock") {
+            let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if !(file_name.ends_with(".lock") || file_name.contains(".lock.")) {
                 continue;
             }
             if !lock_entry

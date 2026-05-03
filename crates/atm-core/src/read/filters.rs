@@ -1,14 +1,14 @@
 use crate::read::ClassifiedMessage;
-use crate::types::{DisplayBucket, IsoTimestamp, ReadSelection};
+use crate::types::{AgentName, DisplayBucket, IsoTimestamp, ReadSelection};
 
 pub fn apply_sender_filter(
     messages: Vec<ClassifiedMessage>,
-    sender: Option<&str>,
+    sender: Option<&AgentName>,
 ) -> Vec<ClassifiedMessage> {
     match sender {
         Some(sender) => messages
             .into_iter()
-            .filter(|message| message.envelope.from == sender)
+            .filter(|message| message.envelope.from == sender.as_str())
             .collect(),
         None => messages,
     }

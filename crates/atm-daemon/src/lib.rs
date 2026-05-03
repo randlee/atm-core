@@ -1,28 +1,37 @@
+mod client;
+mod runtime_observability;
+
 use std::fs;
-use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use atm_core::dispatcher::{
     DaemonRequest, DaemonResponse, DispatchError, RequestDispatcher, RequestKind, RequestPayload,
 };
-use atm_core::doctor::{DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, run_doctor};
+use atm_core::doctor::{DoctorQuery, run_doctor};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::home;
-use atm_core::observability::{
-    AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
-    LogTailSession, ObservabilityPort,
-};
+use atm_core::observability::ObservabilityPort;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[cfg(unix)]
 use std::os::unix::net::{UnixListener, UnixStream};
+
+use crate::client::{
+    REMOTE_SERVER_IO_TIMEOUT, SAME_HOST_SERVER_IO_TIMEOUT, dispatch_error_to_atm, read_frame,
+    write_control_state, write_frame,
+};
+pub use crate::client::{
+    ensure_daemon_running, request_doctor_json_with_autostart, request_remote,
+};
+use crate::runtime_observability::{
+    DaemonObservability, emit_runtime_event, normalize_doctor_report_observability,
+};
 
 pub const SAME_HOST_REQUEST_TIMEOUT: Duration = Duration::from_secs(3);
 pub const REMOTE_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -33,6 +42,7 @@ pub const SHUTDOWN_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
 pub const SHUTDOWN_FORCE_TIMEOUT: Duration = Duration::from_secs(10);
 pub const MAX_ACCEPTS: usize = 64;
 pub const MAX_INFLIGHT_PER_CONNECTION: usize = 32;
+pub(crate) const MAX_FRAME_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum LocalEndpoint {
@@ -135,30 +145,41 @@ impl RequestDispatcher for CoreDispatcher {
         match request.payload {
             RequestPayload::Doctor(value) => {
                 let query: DoctorQuery = serde_json::from_value(value)
-                    .map_err(|error| DispatchError::InvalidPayload(error.to_string()))?;
-                let observability = DaemonObservability::new(&query.home_dir);
-                let report = run_doctor(query, &observability)
-                    .map_err(|error| DispatchError::InvalidPayload(error.to_string()))?;
-                let report = normalize_doctor_report_observability(report, &observability);
+                    .map_err(|error| DispatchError::PayloadDecode(error.to_string()))?;
+                let report = run_doctor(query, self.observability.as_ref())
+                    .map_err(|error| DispatchError::Handler(error.to_string()))?;
+                let report =
+                    normalize_doctor_report_observability(report, self.observability.as_ref());
                 let payload_json = serde_json::to_string(&report)
-                    .map_err(|error| DispatchError::InvalidPayload(error.to_string()))?;
-                emit_runtime_event(self.observability.as_ref(), "doctor_request", "ok", None);
+                    .map_err(|error| DispatchError::ResponseEncode(error.to_string()))?;
+                emit_runtime_event(
+                    self.observability.as_ref(),
+                    &request.team_name,
+                    &request.agent_name,
+                    "doctor_request",
+                    "ok",
+                    None,
+                );
                 Ok(DaemonResponse {
                     kind: RequestKind::Doctor,
                     payload_json,
                 })
             }
             RequestPayload::Heartbeat(_) => {
-                emit_runtime_event(self.observability.as_ref(), "heartbeat_request", "ok", None);
+                emit_runtime_event(
+                    self.observability.as_ref(),
+                    &request.team_name,
+                    &request.agent_name,
+                    "heartbeat_request",
+                    "ok",
+                    None,
+                );
                 Ok(DaemonResponse {
                     kind: RequestKind::Heartbeat,
                     payload_json: "{\"ok\":true}".to_string(),
                 })
             }
-            other => Err(DispatchError::InvalidPayload(format!(
-                "request kind {:?} is not implemented in the thin Q.4 daemon runtime",
-                other.kind()
-            ))),
+            other => Err(DispatchError::Unsupported(other.kind())),
         }
     }
 }
@@ -184,8 +205,11 @@ pub struct DaemonHandle {
     inflight: Arc<AtomicUsize>,
     local_thread: Option<JoinHandle<()>>,
     remote_thread: Option<JoinHandle<()>>,
+    worker_threads: Arc<Mutex<Vec<JoinHandle<()>>>>,
     singleton: SingletonGuard,
     control_path: PathBuf,
+    #[cfg(unix)]
+    local_socket_path: PathBuf,
     local_endpoint: LocalEndpoint,
     remote_endpoint: SocketAddr,
 }
@@ -208,17 +232,14 @@ impl DaemonHandle {
             let _ = handle.join();
         }
 
-        let drain_deadline = Instant::now() + SHUTDOWN_DRAIN_TIMEOUT;
-        while self.inflight.load(Ordering::SeqCst) > 0 && Instant::now() < drain_deadline {
-            thread::sleep(Duration::from_millis(25));
-        }
-
-        let force_deadline = Instant::now() + SHUTDOWN_FORCE_TIMEOUT;
-        while self.inflight.load(Ordering::SeqCst) > 0 && Instant::now() < force_deadline {
-            thread::sleep(Duration::from_millis(25));
-        }
+        wait_for_inflight_zero(&self.inflight, SHUTDOWN_DRAIN_TIMEOUT);
+        join_worker_threads(&self.worker_threads);
+        wait_for_inflight_zero(&self.inflight, SHUTDOWN_FORCE_TIMEOUT);
+        join_worker_threads(&self.worker_threads);
 
         let _ = fs::remove_file(&self.control_path);
+        #[cfg(unix)]
+        let _ = fs::remove_file(&self.local_socket_path);
         self.singleton.release()?;
         Ok(())
     }
@@ -240,6 +261,7 @@ pub fn start_runtime(
     let singleton = SingletonGuard::acquire(&paths.singleton_path)?;
     let stop = Arc::new(AtomicBool::new(false));
     let inflight = Arc::new(AtomicUsize::new(0));
+    let worker_threads = Arc::new(Mutex::new(Vec::new()));
 
     #[cfg(unix)]
     if paths.local_socket_path.exists() {
@@ -303,6 +325,7 @@ pub fn start_runtime(
     let local_thread = {
         let stop = Arc::clone(&stop);
         let inflight = Arc::clone(&inflight);
+        let worker_threads = Arc::clone(&worker_threads);
         let dispatcher = Arc::clone(&dispatcher);
         let max_inflight = config.max_inflight_per_connection;
         #[cfg(unix)]
@@ -310,17 +333,32 @@ pub fn start_runtime(
         #[cfg(not(unix))]
         let listener = local_listener;
         Some(thread::spawn(move || {
-            accept_local_loop(listener, stop, inflight, dispatcher, max_inflight)
+            accept_local_loop(
+                listener,
+                stop,
+                inflight,
+                worker_threads,
+                dispatcher,
+                max_inflight,
+            )
         }))
     };
 
     let remote_thread = {
         let stop = Arc::clone(&stop);
         let inflight = Arc::clone(&inflight);
+        let worker_threads = Arc::clone(&worker_threads);
         let dispatcher = Arc::clone(&dispatcher);
         let max_inflight = config.max_inflight_per_connection;
         Some(thread::spawn(move || {
-            accept_tcp_loop(remote_listener, stop, inflight, dispatcher, max_inflight)
+            accept_tcp_loop(
+                remote_listener,
+                stop,
+                inflight,
+                worker_threads,
+                dispatcher,
+                max_inflight,
+            )
         }))
     };
 
@@ -329,342 +367,13 @@ pub fn start_runtime(
         inflight,
         local_thread,
         remote_thread,
+        worker_threads,
         singleton,
         control_path: paths.control_path,
+        #[cfg(unix)]
+        local_socket_path: paths.local_socket_path,
         local_endpoint,
         remote_endpoint,
-    })
-}
-
-pub fn request_doctor_json_with_autostart(query: DoctorQuery) -> Result<String, AtmError> {
-    let request = DaemonRequest {
-        team_name: query
-            .team_override
-            .clone()
-            .or_else(|| {
-                std::env::var("ATM_TEAM")
-                    .ok()
-                    .and_then(|value| value.parse().ok())
-            })
-            .unwrap_or_else(|| "atm-dev".parse().expect("static team name")),
-        agent_name: std::env::var("ATM_IDENTITY")
-            .ok()
-            .and_then(|value| value.parse().ok())
-            .unwrap_or_else(|| "unknown".parse().expect("static agent name")),
-        payload: RequestPayload::Doctor(serde_json::to_value(&query).map_err(|error| {
-            AtmError::daemon_protocol("failed to serialize doctor query").with_source(error)
-        })?),
-    };
-
-    let home_dir = query.home_dir.clone();
-    match request_local(&home_dir, &request, SAME_HOST_REQUEST_TIMEOUT) {
-        Ok(response) => Ok(response.payload_json),
-        Err(_) => {
-            auto_start_daemon(&home_dir)?;
-            let response = request_local(&home_dir, &request, SAME_HOST_REQUEST_TIMEOUT)?;
-            Ok(response.payload_json)
-        }
-    }
-}
-
-pub fn ensure_daemon_running(home_dir: &Path) -> Result<(), AtmError> {
-    let heartbeat_request = DaemonRequest {
-        team_name: std::env::var("ATM_TEAM")
-            .ok()
-            .and_then(|value| value.parse().ok())
-            .unwrap_or_else(|| "atm-dev".parse().expect("static team name")),
-        agent_name: std::env::var("ATM_IDENTITY")
-            .ok()
-            .and_then(|value| value.parse().ok())
-            .unwrap_or_else(|| "unknown".parse().expect("static agent name")),
-        payload: RequestPayload::Heartbeat(serde_json::json!({
-            "pid": std::process::id(),
-        })),
-    };
-    match request_local(home_dir, &heartbeat_request, SAME_HOST_REQUEST_TIMEOUT) {
-        Ok(_) => Ok(()),
-        Err(_) => {
-            auto_start_daemon(home_dir)?;
-            request_local(home_dir, &heartbeat_request, SAME_HOST_REQUEST_TIMEOUT).map(|_| ())
-        }
-    }
-}
-
-pub fn request_local(
-    home_dir: &Path,
-    request: &DaemonRequest,
-    timeout: Duration,
-) -> Result<DaemonResponse, AtmError> {
-    let state = read_control_state(home_dir)?;
-    match state.local_endpoint {
-        #[cfg(unix)]
-        LocalEndpoint::UnixSocket(path) => {
-            let mut stream = UnixStream::connect(&path).map_err(|error| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to connect to local ATM daemon socket {}: {error}",
-                    path.display()
-                ))
-                .with_source(error)
-            })?;
-            stream.set_read_timeout(Some(timeout)).map_err(|error| {
-                AtmError::daemon_request_timeout("failed to set local daemon read timeout")
-                    .with_source(error)
-            })?;
-            stream.set_write_timeout(Some(timeout)).map_err(|error| {
-                AtmError::daemon_request_timeout("failed to set local daemon write timeout")
-                    .with_source(error)
-            })?;
-            exchange_unix(&mut stream, request)
-        }
-        LocalEndpoint::TcpLoopback(addr) => {
-            let mut stream = TcpStream::connect_timeout(&addr, timeout).map_err(|error| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to connect to local ATM daemon loopback endpoint {addr}: {error}"
-                ))
-                .with_source(error)
-            })?;
-            stream.set_read_timeout(Some(timeout)).map_err(|error| {
-                AtmError::daemon_request_timeout("failed to set local daemon read timeout")
-                    .with_source(error)
-            })?;
-            stream.set_write_timeout(Some(timeout)).map_err(|error| {
-                AtmError::daemon_request_timeout("failed to set local daemon write timeout")
-                    .with_source(error)
-            })?;
-            exchange_tcp(&mut stream, request)
-        }
-    }
-}
-
-pub fn request_remote(
-    address: SocketAddr,
-    request: &DaemonRequest,
-    retry_budget: Duration,
-) -> Result<DaemonResponse, AtmError> {
-    let deadline = Instant::now() + retry_budget;
-    let mut last_error = None;
-    while Instant::now() < deadline {
-        match TcpStream::connect_timeout(&address, REMOTE_CONNECT_TIMEOUT) {
-            Ok(mut stream) => {
-                stream
-                    .set_read_timeout(Some(REMOTE_IO_TIMEOUT))
-                    .map_err(|error| {
-                        AtmError::daemon_request_timeout("failed to set remote read timeout")
-                            .with_source(error)
-                    })?;
-                stream
-                    .set_write_timeout(Some(REMOTE_IO_TIMEOUT))
-                    .map_err(|error| {
-                        AtmError::daemon_request_timeout("failed to set remote write timeout")
-                            .with_source(error)
-                    })?;
-                return exchange_tcp(&mut stream, request);
-            }
-            Err(error) => {
-                last_error = Some(error);
-                thread::sleep(Duration::from_millis(50));
-            }
-        }
-    }
-
-    Err(AtmError::daemon_remote_unavailable(format!(
-        "remote daemon at {address} did not accept the request within {:?}",
-        retry_budget
-    ))
-    .with_source(last_error.expect("remote retry captured at least one error")))
-}
-
-pub fn auto_start_daemon(home_dir: &Path) -> Result<(), AtmError> {
-    let start_command = daemon_start_command();
-    let mut command = Command::new(&start_command.program);
-    command
-        .args(&start_command.args)
-        .env("ATM_HOME", home_dir)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    if let Some(current_dir) = &start_command.current_dir {
-        command.current_dir(current_dir);
-    }
-    command.spawn().map_err(|error| {
-        AtmError::daemon_start_failed(format!(
-            "failed to start atm-daemon with {}: {error}",
-            start_command.display()
-        ))
-        .with_source(error)
-    })?;
-
-    let wait_deadline = Instant::now() + AUTO_START_PUBLISH_TIMEOUT;
-    while Instant::now() < wait_deadline {
-        if read_control_state(home_dir).is_ok() {
-            return Ok(());
-        }
-        thread::sleep(Duration::from_millis(50));
-    }
-
-    Err(AtmError::daemon_start_failed(format!(
-        "atm-daemon did not publish its control state within {:?}",
-        AUTO_START_PUBLISH_TIMEOUT
-    )))
-}
-
-fn default_daemon_binary() -> Option<PathBuf> {
-    if let Ok(current) = std::env::current_exe()
-        && let Some(dir) = current.parent()
-    {
-        let sibling = dir.join("atm-daemon");
-        if sibling.exists() {
-            return Some(sibling);
-        }
-        if let Some(parent) = dir.parent() {
-            let sibling = parent.join("atm-daemon");
-            if sibling.exists() {
-                return Some(sibling);
-            }
-        }
-    }
-    None
-}
-
-struct StartCommand {
-    program: PathBuf,
-    args: Vec<String>,
-    current_dir: Option<PathBuf>,
-}
-
-impl StartCommand {
-    fn display(&self) -> String {
-        let mut parts = vec![self.program.display().to_string()];
-        parts.extend(self.args.iter().cloned());
-        parts.join(" ")
-    }
-}
-
-fn daemon_start_command() -> StartCommand {
-    if let Some(program) = std::env::var_os("ATM_DAEMON_BIN").map(PathBuf::from) {
-        return StartCommand {
-            program,
-            args: Vec::new(),
-            current_dir: None,
-        };
-    }
-    if let Some(program) = default_daemon_binary() {
-        return StartCommand {
-            program,
-            args: Vec::new(),
-            current_dir: None,
-        };
-    }
-    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .expect("workspace root")
-        .to_path_buf();
-    StartCommand {
-        program: PathBuf::from("cargo"),
-        args: vec![
-            "run".to_string(),
-            "--quiet".to_string(),
-            "-p".to_string(),
-            "atm-daemon".to_string(),
-            "--bin".to_string(),
-            "atm-daemon".to_string(),
-        ],
-        current_dir: Some(workspace_root),
-    }
-}
-
-fn dispatch_error_to_atm(error: DispatchError) -> AtmError {
-    match error {
-        DispatchError::Store(error) => AtmError::daemon_protocol(error.to_string()),
-        DispatchError::InvalidPayload(message) => AtmError::daemon_protocol(message),
-    }
-}
-
-fn read_control_state(home_dir: &Path) -> Result<ControlState, AtmError> {
-    let paths = DaemonPaths::from_home(home_dir);
-    let raw = fs::read(&paths.control_path).map_err(|error| {
-        AtmError::daemon_unavailable(format!(
-            "daemon control state is unavailable at {}: {error}",
-            paths.control_path.display()
-        ))
-        .with_source(error)
-    })?;
-    serde_json::from_slice(&raw).map_err(|error| {
-        AtmError::daemon_protocol("failed to parse daemon control state").with_source(error)
-    })
-}
-
-fn write_control_state(path: &Path, state: &ControlState) -> Result<(), AtmError> {
-    let bytes = serde_json::to_vec(state).map_err(|error| {
-        AtmError::daemon_protocol("failed to serialize daemon control state").with_source(error)
-    })?;
-    fs::write(path, bytes).map_err(|error| {
-        AtmError::daemon_start_failed(format!(
-            "failed to write daemon control state {}: {error}",
-            path.display()
-        ))
-        .with_source(error)
-    })
-}
-
-#[cfg(unix)]
-fn exchange_unix(
-    stream: &mut UnixStream,
-    request: &DaemonRequest,
-) -> Result<DaemonResponse, AtmError> {
-    write_frame(stream, request)?;
-    let envelope: WireResponseEnvelope = read_frame(stream)?;
-    response_from_envelope(envelope)
-}
-
-fn exchange_tcp(
-    stream: &mut TcpStream,
-    request: &DaemonRequest,
-) -> Result<DaemonResponse, AtmError> {
-    write_frame(stream, request)?;
-    let envelope: WireResponseEnvelope = read_frame(stream)?;
-    response_from_envelope(envelope)
-}
-
-fn response_from_envelope(envelope: WireResponseEnvelope) -> Result<DaemonResponse, AtmError> {
-    if let Some(response) = envelope.response {
-        return Ok(response);
-    }
-    let error = envelope
-        .error
-        .ok_or_else(|| AtmError::daemon_protocol("daemon response envelope was empty"))?;
-    Err(wire_error_to_atm(error))
-}
-
-fn write_frame<T: Serialize, W: Write>(writer: &mut W, value: &T) -> Result<(), AtmError> {
-    let mut writer = BufWriter::new(writer);
-    serde_json::to_writer(&mut writer, value).map_err(|error| {
-        AtmError::daemon_protocol("failed to serialize daemon frame").with_source(error)
-    })?;
-    writer.write_all(b"\n").map_err(|error| {
-        AtmError::daemon_protocol("failed to write daemon frame delimiter").with_source(error)
-    })?;
-    writer.flush().map_err(|error| {
-        AtmError::daemon_protocol("failed to flush daemon frame").with_source(error)
-    })
-}
-
-fn read_frame<T: for<'de> Deserialize<'de>, R: std::io::Read>(
-    reader: &mut R,
-) -> Result<T, AtmError> {
-    let mut reader = BufReader::new(reader);
-    let mut line = String::new();
-    let bytes = reader.read_line(&mut line).map_err(|error| {
-        AtmError::daemon_protocol("failed to read daemon frame").with_source(error)
-    })?;
-    if bytes == 0 {
-        return Err(AtmError::daemon_protocol(
-            "daemon connection closed before a response frame was received",
-        ));
-    }
-    serde_json::from_str(&line).map_err(|error| {
-        AtmError::daemon_protocol("failed to decode daemon frame").with_source(error)
     })
 }
 
@@ -673,10 +382,18 @@ fn accept_local_loop(
     listener: UnixListener,
     stop: Arc<AtomicBool>,
     inflight: Arc<AtomicUsize>,
+    worker_threads: Arc<Mutex<Vec<JoinHandle<()>>>>,
     dispatcher: Arc<dyn RequestDispatcher>,
     max_inflight: usize,
 ) {
-    accept_unix_loop(listener, stop, inflight, dispatcher, max_inflight);
+    accept_unix_loop(
+        listener,
+        stop,
+        inflight,
+        worker_threads,
+        dispatcher,
+        max_inflight,
+    );
 }
 
 #[cfg(unix)]
@@ -684,6 +401,7 @@ fn accept_unix_loop(
     listener: UnixListener,
     stop: Arc<AtomicBool>,
     inflight: Arc<AtomicUsize>,
+    worker_threads: Arc<Mutex<Vec<JoinHandle<()>>>>,
     dispatcher: Arc<dyn RequestDispatcher>,
     max_inflight: usize,
 ) {
@@ -693,6 +411,7 @@ fn accept_unix_loop(
                 spawn_local_connection(
                     stream,
                     Arc::clone(&inflight),
+                    Arc::clone(&worker_threads),
                     Arc::clone(&dispatcher),
                     max_inflight,
                 );
@@ -710,16 +429,25 @@ fn accept_local_loop(
     listener: TcpListener,
     stop: Arc<AtomicBool>,
     inflight: Arc<AtomicUsize>,
+    worker_threads: Arc<Mutex<Vec<JoinHandle<()>>>>,
     dispatcher: Arc<dyn RequestDispatcher>,
     max_inflight: usize,
 ) {
-    accept_tcp_loop(listener, stop, inflight, dispatcher, max_inflight);
+    accept_tcp_loop(
+        listener,
+        stop,
+        inflight,
+        worker_threads,
+        dispatcher,
+        max_inflight,
+    );
 }
 
 fn accept_tcp_loop(
     listener: TcpListener,
     stop: Arc<AtomicBool>,
     inflight: Arc<AtomicUsize>,
+    worker_threads: Arc<Mutex<Vec<JoinHandle<()>>>>,
     dispatcher: Arc<dyn RequestDispatcher>,
     max_inflight: usize,
 ) {
@@ -729,6 +457,7 @@ fn accept_tcp_loop(
                 spawn_tcp_connection(
                     stream,
                     Arc::clone(&inflight),
+                    Arc::clone(&worker_threads),
                     Arc::clone(&dispatcher),
                     max_inflight,
                 );
@@ -745,6 +474,7 @@ fn accept_tcp_loop(
 fn spawn_local_connection(
     mut stream: UnixStream,
     inflight: Arc<AtomicUsize>,
+    worker_threads: Arc<Mutex<Vec<JoinHandle<()>>>>,
     dispatcher: Arc<dyn RequestDispatcher>,
     max_inflight: usize,
 ) {
@@ -758,7 +488,9 @@ fn spawn_local_connection(
         );
         return;
     }
-    thread::spawn(move || {
+    let _ = stream.set_read_timeout(Some(SAME_HOST_SERVER_IO_TIMEOUT));
+    let _ = stream.set_write_timeout(Some(SAME_HOST_SERVER_IO_TIMEOUT));
+    let handle = thread::spawn(move || {
         let envelope = match read_frame::<DaemonRequest, _>(&mut stream) {
             Ok(request) => match dispatcher.dispatch(request) {
                 Ok(response) => WireResponseEnvelope::success(response),
@@ -769,11 +501,16 @@ fn spawn_local_connection(
         let _ = write_frame(&mut stream, &envelope);
         inflight.fetch_sub(1, Ordering::SeqCst);
     });
+    worker_threads
+        .lock()
+        .expect("worker thread registry lock")
+        .push(handle);
 }
 
 fn spawn_tcp_connection(
     mut stream: TcpStream,
     inflight: Arc<AtomicUsize>,
+    worker_threads: Arc<Mutex<Vec<JoinHandle<()>>>>,
     dispatcher: Arc<dyn RequestDispatcher>,
     max_inflight: usize,
 ) {
@@ -787,7 +524,9 @@ fn spawn_tcp_connection(
         );
         return;
     }
-    thread::spawn(move || {
+    let _ = stream.set_read_timeout(Some(REMOTE_SERVER_IO_TIMEOUT));
+    let _ = stream.set_write_timeout(Some(REMOTE_SERVER_IO_TIMEOUT));
+    let handle = thread::spawn(move || {
         let envelope = match read_frame::<DaemonRequest, _>(&mut stream) {
             Ok(request) => match dispatcher.dispatch(request) {
                 Ok(response) => WireResponseEnvelope::success(response),
@@ -798,6 +537,10 @@ fn spawn_tcp_connection(
         let _ = write_frame(&mut stream, &envelope);
         inflight.fetch_sub(1, Ordering::SeqCst);
     });
+    worker_threads
+        .lock()
+        .expect("worker thread registry lock")
+        .push(handle);
 }
 
 #[cfg(not(unix))]
@@ -923,55 +666,6 @@ pub fn run_foreground() -> Result<(), AtmError> {
     handle.shutdown()
 }
 
-#[derive(Debug)]
-struct DaemonObservability {
-    active_log_path: PathBuf,
-    fault_mode: Option<String>,
-}
-
-impl DaemonObservability {
-    fn new(home_dir: &Path) -> Self {
-        Self {
-            active_log_path: home_dir
-                .join(".local")
-                .join("share")
-                .join("logs")
-                .join("atm.log.jsonl"),
-            fault_mode: std::env::var("ATM_OBSERVABILITY_RETAINED_SINK_FAULT").ok(),
-        }
-    }
-}
-
-impl atm_core::observability::sealed::Sealed for DaemonObservability {}
-
-impl ObservabilityPort for DaemonObservability {
-    fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {
-        Ok(())
-    }
-
-    fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
-        Ok(AtmLogSnapshot::default())
-    }
-
-    fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, AtmError> {
-        Ok(LogTailSession::empty())
-    }
-
-    fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
-        let (logging_state, detail) = match self.fault_mode.as_deref() {
-            Some("degraded") => (AtmObservabilityHealthState::Degraded, None),
-            Some("unavailable") => (AtmObservabilityHealthState::Unavailable, None),
-            _ => (AtmObservabilityHealthState::Healthy, None),
-        };
-        Ok(AtmObservabilityHealth {
-            active_log_path: Some(self.active_log_path.clone()),
-            logging_state,
-            query_state: Some(AtmObservabilityHealthState::Healthy),
-            detail,
-        })
-    }
-}
-
 fn register_signal_handlers(stop: Arc<AtomicBool>) -> Result<(), AtmError> {
     signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(&stop)).map_err(
         |error| {
@@ -990,118 +684,27 @@ fn register_signal_handlers(stop: Arc<AtomicBool>) -> Result<(), AtmError> {
     Ok(())
 }
 
-pub fn emit_runtime_event(
-    observability: &dyn ObservabilityPort,
-    action: &'static str,
-    outcome: &'static str,
-    error: Option<&AtmError>,
-) {
-    let _ = observability.emit(CommandEvent {
-        command: "atm-daemon",
-        action,
-        outcome,
-        team: "atm-dev".parse().expect("static team name"),
-        agent: "atm-daemon".parse().expect("static agent name"),
-        sender: "atm-daemon".to_string(),
-        message_id: None,
-        requires_ack: false,
-        dry_run: false,
-        task_id: None,
-        error_code: error.map(|error| error.code),
-        error_message: error.map(ToString::to_string),
-    });
-}
-
-fn wire_error_to_atm(error: WireError) -> AtmError {
-    let recovery = error
-        .recovery
-        .unwrap_or_else(|| "Restart the daemon and retry the command.".to_string());
-    match error.code {
-        AtmErrorCode::DaemonUnavailable => {
-            AtmError::daemon_unavailable(error.message).with_recovery(recovery)
-        }
-        AtmErrorCode::DaemonStartFailed => {
-            AtmError::daemon_start_failed(error.message).with_recovery(recovery)
-        }
-        AtmErrorCode::DaemonAlreadyRunning => {
-            AtmError::daemon_already_running(error.message).with_recovery(recovery)
-        }
-        AtmErrorCode::DaemonRequestTimeout => {
-            AtmError::daemon_request_timeout(error.message).with_recovery(recovery)
-        }
-        AtmErrorCode::DaemonRemoteUnavailable => {
-            AtmError::daemon_remote_unavailable(error.message).with_recovery(recovery)
-        }
-        _ => AtmError::daemon_protocol(error.message).with_recovery(recovery),
+fn wait_for_inflight_zero(inflight: &AtomicUsize, timeout: Duration) {
+    let deadline = Instant::now() + timeout;
+    while inflight.load(Ordering::SeqCst) > 0 && Instant::now() < deadline {
+        thread::sleep(Duration::from_millis(25));
     }
 }
 
-fn normalize_doctor_report_observability(
-    mut report: DoctorReport,
-    observability: &dyn ObservabilityPort,
-) -> DoctorReport {
-    let (health, finding) = match observability.health() {
-        Ok(health) => {
-            let finding = atm_core::doctor::health::observability_finding(&health);
-            (health, finding)
-        }
-        Err(error) => {
-            let health = atm_core::doctor::health::unavailable_snapshot(error.to_string());
-            let finding = atm_core::doctor::health::observability_finding_from_error(&error);
-            (health, finding)
-        }
+fn join_worker_threads(worker_threads: &Arc<Mutex<Vec<JoinHandle<()>>>>) {
+    let handles = {
+        let mut handles = worker_threads.lock().expect("worker thread registry lock");
+        std::mem::take(&mut *handles)
     };
-
-    report.findings.retain(|finding| {
-        !matches!(
-            finding.code,
-            AtmErrorCode::ObservabilityHealthOk
-                | AtmErrorCode::WarningObservabilityHealthDegraded
-                | AtmErrorCode::ObservabilityHealthFailed
-        )
-    });
-    report.findings.push(finding);
-    report.recommendations = report
-        .findings
-        .iter()
-        .filter_map(|finding| finding.remediation.clone())
-        .collect();
-    report.observability = health;
-    refresh_doctor_summary(&mut report);
-    report
-}
-
-fn refresh_doctor_summary(report: &mut DoctorReport) {
-    let (info_count, warning_count, error_count) = report.findings.iter().fold(
-        (0usize, 0usize, 0usize),
-        |(info, warning, error), finding| match finding.severity {
-            DoctorSeverity::Info => (info + 1, warning, error),
-            DoctorSeverity::Warning => (info, warning + 1, error),
-            DoctorSeverity::Error => (info, warning, error + 1),
-        },
-    );
-    let status = if error_count > 0 {
-        DoctorStatus::Error
-    } else if warning_count > 0 {
-        DoctorStatus::Warning
-    } else {
-        DoctorStatus::Healthy
-    };
-    let message = match status {
-        DoctorStatus::Healthy => "ATM doctor completed with healthy findings only",
-        DoctorStatus::Warning => "ATM doctor completed with warnings",
-        DoctorStatus::Error => "ATM doctor found critical issues",
-    };
-    report.summary.status = status;
-    report.summary.message = message.to_string();
-    report.summary.info_count = info_count;
-    report.summary.warning_count = warning_count;
-    report.summary.error_count = error_count;
+    for handle in handles {
+        let _ = handle.join();
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::client::request_local;
     use atm_core::observability::NullObservability;
     use serial_test::serial;
     use tempfile::TempDir;
@@ -1132,7 +735,7 @@ mod tests {
                 .lock()
                 .expect("responses lock")
                 .pop()
-                .ok_or_else(|| DispatchError::InvalidPayload("no queued response".to_string()))
+                .ok_or_else(|| DispatchError::Unsupported(RequestKind::Heartbeat))
         }
     }
 
@@ -1258,12 +861,16 @@ mod tests {
             payload_json: "{\"ok\":true}".to_string(),
         });
         let inflight = Arc::new(AtomicUsize::new(0));
+        let worker_threads = Arc::new(Mutex::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
         let worker = {
             let inflight = Arc::clone(&inflight);
+            let worker_threads = Arc::clone(&worker_threads);
             let dispatcher = dispatcher.clone();
             let stop = Arc::clone(&stop);
-            thread::spawn(move || accept_tcp_loop(listener, stop, inflight, dispatcher, 8))
+            thread::spawn(move || {
+                accept_tcp_loop(listener, stop, inflight, worker_threads, dispatcher, 8)
+            })
         };
         let response = request_remote(
             address,

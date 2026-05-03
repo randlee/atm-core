@@ -43,7 +43,7 @@ pub struct ReadQuery {
     pub seen_state_update: bool,
     pub ack_activation_mode: AckActivationMode,
     pub limit: Option<usize>,
-    pub sender_filter: Option<String>,
+    pub sender_filter: Option<AgentName>,
     pub timestamp_filter: Option<IsoTimestamp>,
     pub timeout_secs: Option<u64>,
 }
@@ -76,7 +76,7 @@ impl ReadQuery {
             seen_state_update,
             ack_activation_mode,
             limit,
-            sender_filter,
+            sender_filter: sender_filter.map(|value| value.parse()).transpose()?,
             timestamp_filter,
             timeout_secs,
         })
@@ -497,7 +497,7 @@ fn selection_state_for_store_messages(
     let bucket_counts = bucket_counts_for(&classified_all);
     let filtered = apply_filters(
         classified_all.clone(),
-        query.sender_filter.as_deref(),
+        query.sender_filter.as_ref(),
         query.timestamp_filter,
     );
     let selected = select_messages(&filtered, query.selection_mode, seen_watermark);
@@ -511,7 +511,7 @@ fn selected_after_filters_projected(
 ) -> Vec<ClassifiedMessage> {
     let filtered = apply_filters(
         messages.to_vec(),
-        query.sender_filter.as_deref(),
+        query.sender_filter.as_ref(),
         query.timestamp_filter,
     );
     select_messages(&filtered, query.selection_mode, seen_watermark)
@@ -763,13 +763,17 @@ pub(crate) fn projected_message_key(message: &ClassifiedMessage) -> MessageKey {
     if let Some(message_key) = &message.message_key {
         return message_key.clone();
     }
-    message
-        .source_path
-        .to_string_lossy()
-        .strip_prefix("sqlite:")
-        .expect("projected SQLite path prefix")
+    projected_message_key_from_source_path(&message.source_path)
+}
+
+pub(crate) fn projected_message_key_from_source_path(source_path: &std::path::Path) -> MessageKey {
+    let path = source_path.to_string_lossy();
+    let Some(raw_message_key) = path.strip_prefix("sqlite:") else {
+        panic!("projected source path must start with sqlite:, got {path}");
+    };
+    raw_message_key
         .parse()
-        .expect("projected SQLite message_key")
+        .unwrap_or_else(|error| panic!("projected sqlite source path contained invalid message_key `{raw_message_key}`: {error}"))
 }
 
 fn selection_state_for_source_files(
@@ -792,7 +796,7 @@ fn selection_state_for_source_files(
     let bucket_counts = bucket_counts_for(&classified_all);
     let filtered = apply_filters(
         classified_all.clone(),
-        query.sender_filter.as_deref(),
+        query.sender_filter.as_ref(),
         query.timestamp_filter,
     );
     let selected = select_messages(&filtered, query.selection_mode, seen_watermark);
@@ -940,7 +944,7 @@ fn classify_all(
 
 fn apply_filters(
     messages: Vec<ClassifiedMessage>,
-    sender_filter: Option<&str>,
+    sender_filter: Option<&AgentName>,
     timestamp_filter: Option<IsoTimestamp>,
 ) -> Vec<ClassifiedMessage> {
     filters::apply_timestamp_filter(
@@ -990,7 +994,7 @@ fn selected_after_filters(
     let classified = classify_all(messages.to_vec(), workflow_state);
     let filtered = apply_filters(
         classified,
-        query.sender_filter.as_deref(),
+        query.sender_filter.as_ref(),
         query.timestamp_filter,
     );
     select_messages(&filtered, query.selection_mode, seen_watermark)

@@ -24,6 +24,9 @@ serde.workspace = true
 serde_json.workspace = true
 signal-hook = "0.3"
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Threading"] }
+
 [dev-dependencies]
 serial_test = "3"
 tempfile = "3"

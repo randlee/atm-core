@@ -79,7 +79,10 @@ pub struct DaemonResponse {
 #[derive(Debug)]
 pub enum DispatchError {
     Store(StoreError),
-    InvalidPayload(String),
+    PayloadDecode(String),
+    Handler(String),
+    ResponseEncode(String),
+    Unsupported(RequestKind),
 }
 
 /// Thin request-dispatch boundary shared by Unix-domain, TCP/TLS, and
@@ -115,6 +118,7 @@ impl TestSocketDispatcher {
 #[cfg(test)]
 impl RequestDispatcher for TestSocketDispatcher {
     fn dispatch(&self, request: DaemonRequest) -> Result<DaemonResponse, DispatchError> {
+        let request_kind = request.kind();
         self.requests
             .lock()
             .expect("test dispatcher requests lock")
@@ -123,11 +127,7 @@ impl RequestDispatcher for TestSocketDispatcher {
             .lock()
             .expect("test dispatcher responses lock")
             .pop_front()
-            .unwrap_or_else(|| {
-                Err(DispatchError::InvalidPayload(
-                    "test dispatcher had no queued response".to_string(),
-                ))
-            })
+            .unwrap_or_else(|| Err(DispatchError::Unsupported(request_kind)))
     }
 }
 
