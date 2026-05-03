@@ -26,6 +26,24 @@ impl IsoTimestamp {
     }
 }
 
+impl FromStr for IsoTimestamp {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let parsed = chrono::DateTime::parse_from_rfc3339(value).map_err(|error| {
+            AtmError::validation(format!("timestamp must be RFC3339/ISO-8601: {error}"))
+                .with_recovery("Persist and pass timestamps in RFC3339 UTC form.")
+        })?;
+        Ok(Self(parsed.with_timezone(&Utc)))
+    }
+}
+
+impl fmt::Display for IsoTimestamp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0.to_rfc3339())
+    }
+}
+
 impl From<DateTime<Utc>> for IsoTimestamp {
     fn from(datetime: DateTime<Utc>) -> Self {
         Self(datetime)
