@@ -659,7 +659,7 @@ fn ack_invalid_state_error(message_id: AckMessageId, rejection: AckCommitRejecti
             ),
         )
         .with_recovery(
-            "Refresh the mailbox with `atm read` and retry the acknowledgement after ATM reimports the message into SQLite.",
+            "Refresh the mailbox with `atm read` and retry the acknowledgement after ATM reimports the message into SQLite. Legacy inbox records without SQLite state remain only partially compliant until reingest succeeds.",
         ),
         AckCommitRejection::AlreadyAcknowledged => AtmError::new_with_code(
             AtmErrorCode::AckInvalidState,

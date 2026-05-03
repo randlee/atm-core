@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Mutex;
 
+use atm_core::ack::{AckCommitCommand, AckCommitRejection, AckCommitResult, AckStore};
 use atm_core::home;
 use atm_core::inbox_ingress::{InboxIngestOutcome, InboxIngress, default_inbox_ingress};
 use atm_core::mail_store::{
@@ -216,6 +217,23 @@ fn table_columns(store: &RusqliteStore, table_name: &str) -> Vec<(String, String
         columns.push((name, kind, not_null == 1));
     }
     columns
+}
+
+fn ack_commit_command<'a>(
+    reply_message: &'a atm_core::mail_store::StoredMessageRecord,
+    source_legacy_message_id: Option<LegacyMessageId>,
+    source_atm_message_id: Option<AtmMessageId>,
+    reply_team: &'a TeamName,
+    reply_agent: &'a AgentName,
+) -> AckCommitCommand<'a> {
+    AckCommitCommand {
+        source_legacy_message_id,
+        source_atm_message_id,
+        reply_message,
+        acknowledged_at: "2026-05-02T20:00:20Z".parse().expect("timestamp"),
+        reply_team,
+        reply_agent,
+    }
 }
 
 #[test]
@@ -571,6 +589,75 @@ fn create_read_and_update_store_rows() {
     assert!(mail_health.ack_state_ready);
     assert!(mail_health.message_visibility_ready);
     assert!(mail_health.pending_exports_ready);
+}
+
+#[test]
+fn commit_ack_reply_rejects_already_acknowledged_message() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let store = RusqliteStore::open_path(tempdir.path().join("mail.db")).expect("open store");
+    let source_message = message_at(1);
+    let reply_message = message_at(2);
+    let reply_team = team();
+    let reply_agent = agent(TEST_RECIPIENT);
+    store
+        .insert_message(&source_message)
+        .expect("insert source");
+
+    store
+        .upsert_visibility(&VisibilityStateRecord {
+            message_key: source_message.message_key.clone(),
+            read_at: Some("2026-05-02T20:00:10Z".parse().expect("timestamp")),
+            cleared_at: None,
+        })
+        .expect("upsert visibility");
+    store
+        .upsert_ack_state(&AckStateRecord {
+            message_key: source_message.message_key.clone(),
+            pending_ack_at: None,
+            acknowledged_at: Some("2026-05-02T20:00:15Z".parse().expect("timestamp")),
+            ack_reply_message_key: Some("ext:prior-reply".parse().expect("message key")),
+            ack_reply_team: Some(team()),
+            ack_reply_agent: Some(agent(TEST_RECIPIENT)),
+        })
+        .expect("upsert ack state");
+
+    let result = store
+        .commit_ack_reply(&ack_commit_command(
+            &reply_message,
+            source_message.legacy_message_id,
+            source_message.atm_message_id,
+            &reply_team,
+            &reply_agent,
+        ))
+        .expect("commit ack reply");
+    assert!(matches!(
+        result,
+        AckCommitResult::Rejected(AckCommitRejection::AlreadyAcknowledged)
+    ));
+}
+
+#[test]
+fn commit_ack_reply_rejects_missing_source_message() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let store = RusqliteStore::open_path(tempdir.path().join("mail.db")).expect("open store");
+    let source_message = message_at(1);
+    let reply_message = message_at(2);
+    let reply_team = team();
+    let reply_agent = agent(TEST_RECIPIENT);
+
+    let result = store
+        .commit_ack_reply(&ack_commit_command(
+            &reply_message,
+            source_message.legacy_message_id,
+            source_message.atm_message_id,
+            &reply_team,
+            &reply_agent,
+        ))
+        .expect("commit ack reply");
+    assert!(matches!(
+        result,
+        AckCommitResult::Rejected(AckCommitRejection::MessageNotFound)
+    ));
 }
 
 #[test]

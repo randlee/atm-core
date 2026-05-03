@@ -58,6 +58,10 @@ fn commit_ack_reply(
         .optional()
         .map_err(|error| classify_store_error(error, "failed to load ack state"))?;
 
+    // State machine: AlreadyAcknowledged short-circuits first, then only the
+    // SQLite-authoritative (read, pending_ack, !acknowledged) state may
+    // advance to Committed. Legacy rows without ack_state may still commit
+    // after read promotion; every other combination rejects as NotPending.
     match (visibility_read_at.flatten(), ack_state.as_ref()) {
         (
             _,
