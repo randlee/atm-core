@@ -1,10 +1,12 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
+use crate::types::AgentName;
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentMember {
-    pub name: String,
+    pub name: AgentName,
 
     #[serde(default)]
     pub agent_id: String,
@@ -31,12 +33,13 @@ pub struct AgentMember {
 #[cfg(test)]
 mod tests {
     use super::AgentMember;
+    use crate::types::AgentName;
 
     #[test]
     fn parse_name_only_record_defaults_optional_fields() {
         let member: AgentMember = serde_json::from_str(r#"{"name":"arch-ctm"}"#).expect("member");
 
-        assert_eq!(member.name, "arch-ctm");
+        assert_eq!(member.name, AgentName::from_validated("arch-ctm"));
         assert!(member.agent_id.is_empty());
         assert!(member.agent_type.is_empty());
         assert!(member.model.is_empty());
@@ -61,7 +64,7 @@ mod tests {
 
         let member: AgentMember = serde_json::from_str(raw).expect("member");
         assert_eq!(member.agent_id, "arch-ctm@atm-dev");
-        assert_eq!(member.name, "arch-ctm");
+        assert_eq!(member.name, AgentName::from_validated("arch-ctm"));
         assert_eq!(member.agent_type, "general-purpose");
         assert_eq!(member.model, "claude-sonnet-4-5");
         assert_eq!(member.joined_at, Some(1770765919076));
@@ -79,7 +82,7 @@ mod tests {
         let member: AgentMember =
             serde_json::from_str(r#"{"name":"arch-ctm","agentType":"plan"}"#).expect("member");
 
-        assert_eq!(member.name, "arch-ctm");
+        assert_eq!(member.name, AgentName::from_validated("arch-ctm"));
         assert_eq!(member.agent_type, "plan");
         assert!(member.agent_id.is_empty());
         assert!(member.model.is_empty());

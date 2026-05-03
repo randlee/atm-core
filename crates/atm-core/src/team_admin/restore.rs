@@ -42,8 +42,11 @@ pub(super) fn restore_team(request: RestoreRequest) -> Result<RestoreResult, Atm
         if name == "team-lead.json" {
             return false;
         }
-        name.strip_suffix(".json")
-            .is_some_and(|member| members_to_restore_set.contains(member))
+        name.strip_suffix(".json").is_some_and(|member| {
+            members_to_restore_set
+                .iter()
+                .any(|restored_member| restored_member == &member)
+        })
     });
     let tasks_to_restore = count_numeric_task_files(&backup_dir.join("tasks"))?;
 

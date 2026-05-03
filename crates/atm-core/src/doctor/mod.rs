@@ -166,7 +166,10 @@ fn load_member_roster(
         .map(|member| member.name.clone())
         .collect::<BTreeSet<_>>();
     for member in baseline {
-        if present.contains(member.as_str()) {
+        if present
+            .iter()
+            .any(|present_member| present_member == &member.as_str())
+        {
             continue;
         }
         findings.push(DoctorFinding {
@@ -381,6 +384,7 @@ mod tests {
         LogTailSession, ObservabilityPort,
     };
     use crate::schema::{AgentMember, TeamConfig};
+    use crate::types::AgentName;
 
     enum StubHealth {
         Ok(AtmObservabilityHealth),
@@ -452,7 +456,7 @@ mod tests {
                 members: members
                     .iter()
                     .map(|member| AgentMember {
-                        name: (*member).to_string(),
+                        name: AgentName::from_validated(*member),
                         ..Default::default()
                     })
                     .collect(),

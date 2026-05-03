@@ -319,7 +319,7 @@ pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmErro
     }
 
     config.members.push(AgentMember {
-        name: request.member.to_string(),
+        name: request.member.clone(),
         agent_id: format!("{}@{}", request.member, request.team),
         agent_type: request.agent_type,
         model: request.model,

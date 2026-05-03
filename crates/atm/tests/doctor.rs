@@ -308,7 +308,7 @@ impl Fixture {
             members: members
                 .iter()
                 .map(|member| AgentMember {
-                    name: (*member).to_string(),
+                    name: (*member).parse().expect("agent"),
                     ..Default::default()
                 })
                 .collect(),

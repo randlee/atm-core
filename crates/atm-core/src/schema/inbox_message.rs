@@ -164,6 +164,9 @@ pub struct AtmMetadataFields {
     #[serde(rename = "alertKind", skip_serializing_if = "Option::is_none")]
     pub alert_kind: Option<String>,
 
+    // This advisory diagnostic field preserves platform-native path encoding
+    // (including backslashes on Windows) rather than normalizing JSON output to
+    // forward-slash-only form.
     #[serde(rename = "missingConfigPath", skip_serializing_if = "Option::is_none")]
     pub missing_config_path: Option<std::path::PathBuf>,
 

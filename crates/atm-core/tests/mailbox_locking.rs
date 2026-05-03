@@ -22,6 +22,8 @@ use serial_test::serial;
 use tempfile::TempDir;
 use uuid::Uuid;
 
+// Test-side ceiling guard only; production lock timeout defaults to 5s per
+// architecture §18.3.
 const NON_BLOCKING_LOCK_BUDGET: Duration = Duration::from_secs(2);
 
 #[test]
@@ -1042,7 +1044,7 @@ fn create_team_with_config(home_dir: &std::path::Path, team: &str, members: &[&s
         members: members
             .iter()
             .map(|name| AgentMember {
-                name: (*name).to_string(),
+                name: (*name).parse().expect("agent"),
                 ..Default::default()
             })
             .collect(),

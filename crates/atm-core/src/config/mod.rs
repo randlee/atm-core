@@ -337,7 +337,7 @@ fn parse_team_config(config_path: &Path, raw: &str) -> Result<TeamConfig, AtmErr
 fn parse_team_member(config_path: &Path, index: usize, entry: &Value) -> Option<AgentMember> {
     match entry {
         Value::String(name) => Some(AgentMember {
-            name: name.clone(),
+            name: AgentName::from_validated(name.clone()),
             ..Default::default()
         }),
         _ => match serde_json::from_value::<AgentMember>(entry.clone()) {

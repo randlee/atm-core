@@ -987,7 +987,7 @@ impl Fixture {
         fs::create_dir_all(&team_dir).expect("team dir");
         let config = TeamConfig {
             members: vec![AgentMember {
-                name: recipient.to_string(),
+                name: recipient.parse().expect("agent"),
                 ..Default::default()
             }],
             ..Default::default()
