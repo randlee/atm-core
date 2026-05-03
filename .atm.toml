@@ -4,7 +4,7 @@ identity = "team-lead"
 
 [[atm.post_send_hooks]]
 recipient = "arch-ctm"
-command = ["scripts/atm-nudge.py", "arch-ctm"]
+command = ["atm-nudge-xml-1.py", "arch-ctm"]
 
 [plugins.atm-agent-mcp]
 codex_bin = "codex"
