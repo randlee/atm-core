@@ -20,9 +20,9 @@ use crate::schema::{LegacyMessageId, MessageEnvelope};
 const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
 /// Append one message to a shared inbox file under the mailbox lock.
 ///
-/// Production send flows use the same lock discipline through
-/// `mailbox::store::append_mailbox_message_and_seed_workflow()`. This helper is
-/// test-only because production callers must also coordinate workflow seeding.
+/// Production send flows use the same lock discipline through the send-path
+/// workflow commit helper. The single-file lock/load/mutate/rewrite boundary
+/// itself is a production seam and must remain shared with test coverage.
 ///
 /// # Errors
 ///
@@ -32,7 +32,7 @@ const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
 /// [`crate::error_codes::AtmErrorCode::MailboxLockFailed`], or
 /// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`] when the mailbox
 /// cannot be loaded, locked, or atomically replaced.
-#[cfg(test)]
+#[allow(dead_code)]
 pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), AtmError> {
     locked_read_modify_write(path, lock::default_lock_timeout(), |messages| {
         messages.push(envelope.clone());
@@ -44,9 +44,8 @@ pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), Atm
 ///
 /// Production mutation paths use equivalent lock coverage through
 /// `mailbox::store::with_locked_source_files()` plus
-/// `mailbox::store::commit_source_files()`. This helper stays test-only so unit
-/// tests can exercise the shared mailbox lock contract directly without the
-/// workflow/state sidecars required in production commands.
+/// `mailbox::store::commit_source_files()`. Unit and integration tests also use
+/// this seam directly to validate the shared mailbox lock contract.
 ///
 /// # Errors
 ///
@@ -57,8 +56,8 @@ pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), Atm
 /// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`] when ATM cannot
 /// acquire the mailbox lock, read the current mailbox contents, or atomically
 /// persist the rewritten file.
-#[cfg(test)]
-pub(crate) fn locked_read_modify_write<F>(
+#[allow(dead_code)]
+pub fn locked_read_modify_write<F>(
     path: &Path,
     timeout: std::time::Duration,
     mutate: F,

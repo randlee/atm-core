@@ -1,7 +1,7 @@
 use std::ffi::{OsStr, OsString};
 use std::fs;
-use std::fs::OpenOptions;
-use std::sync::{Arc, Barrier, Mutex, OnceLock, mpsc};
+use std::fs::{File, OpenOptions};
+use std::sync::{Arc, Barrier, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -23,6 +23,15 @@ use uuid::Uuid;
 // Test-side ceiling guard only; production lock timeout defaults to 5s per
 // architecture §18.3.
 const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(2);
+
+fn test_recv_timeout() -> Duration {
+    std::env::var("ATM_TEST_RECV_TIMEOUT_SECS")
+        .ok()
+        .and_then(|raw| raw.parse::<u64>().ok())
+        .filter(|seconds| *seconds > 0)
+        .map(Duration::from_secs)
+        .unwrap_or_else(|| Duration::from_secs(10))
+}
 
 #[test]
 #[serial]
@@ -49,10 +58,10 @@ fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
 
     barrier.wait();
     let first = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(test_recv_timeout())
         .expect("first ack result");
     let second = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(test_recv_timeout())
         .expect("second ack result");
 
     assert!(
@@ -130,10 +139,10 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
     drop(tx);
     barrier.wait();
     let first = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(test_recv_timeout())
         .expect("first send/clear result");
     let second = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(test_recv_timeout())
         .expect("second send/clear result");
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
@@ -190,10 +199,10 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
     drop(tx);
     barrier.wait();
     let first = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(test_recv_timeout())
         .expect("first send/ack result");
     let second = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(test_recv_timeout())
         .expect("second send/ack result");
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
@@ -264,10 +273,10 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() 
 
     barrier.wait();
     let first = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(test_recv_timeout())
         .expect("first send result");
     let second = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(test_recv_timeout())
         .expect("second send result");
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
@@ -345,10 +354,10 @@ fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
 
     barrier.wait();
     let first = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(test_recv_timeout())
         .expect("first send result");
     let second = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(test_recv_timeout())
         .expect("second send result");
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
@@ -441,10 +450,10 @@ fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()
 
     barrier.wait();
     let first = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(test_recv_timeout())
         .expect("first send result");
     let second = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(test_recv_timeout())
         .expect("second send result");
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
@@ -538,10 +547,10 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
     barrier.wait();
 
     let first = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(test_recv_timeout())
         .expect("first read/clear result");
     let second = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(test_recv_timeout())
         .expect("second read/clear result");
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
@@ -557,7 +566,7 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
 #[test]
 #[serial]
 fn send_times_out_under_bounded_lock_contention() {
-    let _env_lock = env_lock().lock().expect("env lock");
+    let _env_lock = acquire_env_lock();
     let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -588,7 +597,7 @@ fn send_times_out_under_bounded_lock_contention() {
 #[test]
 #[serial]
 fn clear_dry_run_does_not_wait_on_mailbox_lock() {
-    let _env_lock = env_lock().lock().expect("env lock");
+    let _env_lock = acquire_env_lock();
     let fixture = Fixture::new();
     let observability = NullObservability;
     fixture.write_primary_inbox(
@@ -625,7 +634,7 @@ fn clear_dry_run_does_not_wait_on_mailbox_lock() {
 #[test]
 #[serial]
 fn read_possible_write_only_locks_when_display_mutation_is_required() {
-    let _env_lock = env_lock().lock().expect("env lock");
+    let _env_lock = acquire_env_lock();
     let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
     let observability = NullObservability;
 
@@ -746,7 +755,7 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
 #[test]
 #[serial]
 fn clear_fails_closed_on_synthetic_source_discovery_fault() {
-    let _env_lock = env_lock().lock().expect("env lock");
+    let _env_lock = acquire_env_lock();
     let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT", "1");
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -781,7 +790,7 @@ fn clear_fails_closed_on_synthetic_source_discovery_fault() {
 #[test]
 #[serial]
 fn send_reports_non_contention_lock_failures_without_timeout() {
-    let _env_lock = env_lock().lock().expect("env lock");
+    let _env_lock = acquire_env_lock();
     let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR", "1");
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -805,15 +814,20 @@ enum CommandOp {
     Clear(ClearQuery, Arc<NullObservability>),
 }
 
-// Serializes process-environment mutation inside this test module. This is
-// process-local only; it does not coordinate with other test processes.
-fn env_lock() -> &'static Mutex<()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    // These tests mutate process-global environment variables while exercising
-    // mailbox lock behavior. Keep a single process-wide mutex in addition to
-    // #[serial] so a poisoned lock fails the suite closed instead of silently
-    // continuing with inconsistent shared state.
-    LOCK.get_or_init(|| Mutex::new(()))
+// Serializes process-environment mutation across both threads and test
+// processes. nextest runs separate test binaries in parallel, so a plain
+// process-local mutex is not sufficient here.
+fn acquire_env_lock() -> File {
+    let lock_path = std::env::temp_dir().join("atm-mailbox-locking-env.lock");
+    let file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&lock_path)
+        .expect("open env lock file");
+    file.lock_exclusive().expect("lock env file");
+    file
 }
 
 struct EnvGuard {

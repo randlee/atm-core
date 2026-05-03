@@ -10,6 +10,7 @@ use crate::mailbox::source::{
     SourceFile, discover_source_paths, load_source_files, rediscover_and_validate_source_paths,
 };
 use crate::schema::MessageEnvelope;
+use crate::types::{AgentName, TeamName};
 
 /// Commit one mailbox file through the mailbox-layer write boundary.
 ///
@@ -34,10 +35,10 @@ pub(crate) fn commit_source_files(source_files: &[SourceFile]) -> Result<(), Atm
 /// Load the current mailbox source set without taking any mailbox locks.
 pub(crate) fn observe_source_files(
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
 ) -> Result<Vec<SourceFile>, AtmError> {
-    let source_paths = discover_source_paths(home_dir, team, agent)?;
+    let source_paths = discover_source_paths(home_dir, team.as_str(), agent.as_str())?;
     load_source_files(&source_paths)
 }
 
@@ -45,8 +46,8 @@ pub(crate) fn observe_source_files(
 /// without forcing the caller into an inbox rewrite.
 pub(crate) fn with_locked_source_files<T, I, F>(
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
     extra_write_paths: I,
     timeout: Duration,
     body: F,
@@ -68,8 +69,8 @@ where
 
 fn with_locked_source_files_hook<T, I, H, F>(
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
     extra_write_paths: I,
     timeout: Duration,
     before_load: H,
@@ -80,11 +81,16 @@ where
     H: FnOnce(&[PathBuf]) -> Result<(), AtmError>,
     F: FnOnce(&[PathBuf], &mut Vec<SourceFile>) -> Result<T, AtmError>,
 {
-    let source_paths = discover_source_paths(home_dir, team, agent)?;
+    let source_paths = discover_source_paths(home_dir, team.as_str(), agent.as_str())?;
     let mut write_paths = source_paths.clone();
     write_paths.extend(extra_write_paths);
     let _locks = lock::acquire_many_sorted(write_paths, timeout)?;
-    let source_paths = rediscover_and_validate_source_paths(&source_paths, home_dir, team, agent)?;
+    let source_paths = rediscover_and_validate_source_paths(
+        &source_paths,
+        home_dir,
+        team.as_str(),
+        agent.as_str(),
+    )?;
     before_load(&source_paths)?;
     let mut source_files = load_source_files(&source_paths)?;
     body(&source_paths, &mut source_files)
@@ -122,7 +128,7 @@ mod tests {
     }
 
     #[test]
-    fn commit_mailbox_state_rewrites_mailbox_array_with_only_new_messages() {
+    fn commit_mailbox_state_is_the_canonical_mailbox_write_boundary() {
         let tempdir = tempdir().expect("tempdir");
         let path = tempdir.path().join("arch-ctm.json");
         std::fs::write(&path, "{\"stale\":true}\n").expect("seed mailbox");
@@ -218,8 +224,8 @@ mod tests {
 
         let error = with_locked_source_files_hook(
             tempdir.path(),
-            "atm-dev",
-            "arch-ctm",
+            &"atm-dev".parse().expect("team"),
+            &"arch-ctm".parse().expect("agent"),
             std::iter::empty::<std::path::PathBuf>(),
             std::time::Duration::from_secs(1),
             |paths| {
