@@ -105,8 +105,7 @@ pub struct AgentMember {
     #[serde(default)]
     pub tmux_pane_id: String,
 
-    /// Working directory path for the agent process. Opaque passthrough from
-    /// external tmux session state.
+    /// Retained working directory path for the agent process, copied from `config.json` roster state.
     #[serde(default)]
     pub cwd: String,
 
