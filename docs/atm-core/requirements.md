@@ -171,6 +171,11 @@ Initial crate requirement IDs:
 - `REQ-CORE-DOCTOR-002` `atm-core` owns the daemon-health query contract
   consumed by `atm doctor`. Satisfies:
   `REQ-P-DOCTOR-001`, `REQ-P-OBS-001`.
+- `REQ-CORE-TEST-001` `atm-core` owns the workspace subprocess-isolation rule
+  for ATM tests, including test-only fixture identifiers and narrow
+  production-compatibility carve-outs for env-read and role-significant cases.
+  Satisfies:
+  `REQ-P-TEST-001`.
 - `REQ-CORE-TEST-RUNTIME-001` `atm-core` owns the rule that core correctness is
   testable in process without daemon spawning. Satisfies:
   `REQ-P-TEST-001`.
@@ -499,3 +504,22 @@ Required service rules:
   before partial restore is committed
 - `members` must remain useful as a local roster inspection command even when
   daemon or hook state is unavailable
+
+## 10. Test Subprocess Isolation
+
+Requirement ID:
+- `REQ-CORE-TEST-001`
+
+Required service rules:
+- ATM subprocess tests must provision temp-owned `ATM_HOME` and
+  `ATM_CONFIG_HOME`
+- tests that exercise team-directory discovery must also provision
+  `ATM_TEAMS_DIR`
+- shared fixture names must come from explicit test-only constants such as
+  `TEST_TEAM`, `TEST_SENDER`, `TEST_RECIPIENT`, and `TEST_LEAD`
+- the raw literal `team-lead` may appear only behind a named role constant
+  when the production role itself is semantically required
+- tests that validate `ATM_TEAM` or `ATM_IDENTITY` reads may set those
+  variables explicitly, but only inside the isolated subprocess harness
+- ambient reuse of developer workstation ATM home, team, or identity state is
+  forbidden

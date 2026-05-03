@@ -93,6 +93,77 @@ Severity: IMPORTANT
 `sysinfo::System::new_all()` is expensive and must not appear in synchronous hot
 paths such as registration handlers or similar request paths.
 
+### RULE-008: No production team literals in test code
+Severity: CRITICAL
+
+Tests must not hardcode production-like ATM team names in fixtures, subprocess
+arguments, expected output, JSON blobs, or on-disk layout setup.
+
+Required pattern:
+- use test-only constants such as `TEST_TEAM`
+- route shared subprocess setup through a helper such as
+  `crates/atm/tests/support/mod.rs`
+
+Allowed narrow exceptions:
+- tests where a specific production team name is the subject under test
+- references to environment variable names such as `ATM_TEAM`
+
+Flag repo-significant team literals such as `atm-dev` unless the test clearly
+documents why production compatibility requires the real value.
+
+### RULE-009: No production agent identity literals in test code
+Severity: CRITICAL
+
+Tests must not hardcode production-like ATM agent identities in fixtures,
+subprocess arguments, expected output, JSON blobs, or on-disk layout setup.
+
+Required pattern:
+- use test-only constants such as `TEST_SENDER`, `TEST_RECIPIENT`, and
+  `TEST_LEAD`
+
+Allowed narrow exceptions:
+- tests where a specific production identity is the subject under test
+- references to environment variable names such as `ATM_IDENTITY`
+
+Flag repo-significant identities such as `arch-ctm` unless the test clearly
+documents why compatibility requires the real value.
+
+### RULE-010: Role-significant names must be centralized constants
+Severity: CRITICAL
+
+When a test needs the semantic role represented by a reserved name such as
+`team-lead`, the raw literal must be centralized behind one named constant and
+all other test code must consume that constant.
+
+Required pattern:
+- define one constant such as `ROLE_TEAM_LEAD = "team-lead"`
+- use the constant everywhere a role-significant name is required
+
+This preserves coverage for production semantics while preventing unreviewed
+copy/paste spread of reserved names across the test tree.
+
+### RULE-011: Subprocess tests must isolate ATM env and filesystem state
+Severity: CRITICAL
+
+Tests that spawn ATM subprocesses must provision isolated ATM runtime and
+config paths under a temp directory and must pass environment overrides on the
+spawned command rather than mutating ambient process state.
+
+Required behavior:
+- provide isolated `ATM_HOME`
+- provide isolated `ATM_CONFIG_HOME`
+- provide isolated `ATM_TEAMS_DIR` when the test relies on team-directory
+  resolution
+- use per-command environment assignment rather than `std::env::set_var()`
+
+Allowed narrow exceptions:
+- tests that intentionally validate production reads of `ATM_TEAM` or
+  `ATM_IDENTITY` may set those variables explicitly, but only inside the
+  isolated subprocess harness
+
+Ambient reuse of a developer workstation ATM home, team, or identity is a
+blocking failure.
+
 ## Evaluation Process
 
 1. Read the input JSON.

@@ -1764,6 +1764,8 @@ Product requirement ID:
 Satisfied by:
 - intentionally undecomposed product requirement; this governs workspace-level
   test coverage expectations rather than a single crate-local requirement ID
+- `REQ-CORE-TEST-001` for subprocess-isolation, fixture-naming, and explicit
+  production-compatibility carve-out rules
 
 Because `sc-observability` is newly introduced into ATM, the rewrite must add explicit test coverage for:
 - ATM event emission through the observability port boundary
@@ -1793,6 +1795,25 @@ The implementation must include:
 - CLI integration tests for `atm clear`
 - CLI integration tests for `atm teams`
 - CLI integration tests for `atm members`
+
+### 18.1 Subprocess Isolation
+
+- `REQ-CORE-TEST-001` ATM test subprocesses must isolate filesystem and
+  environment state and must not hardcode production-like team or agent
+  identities except in explicit production-compatibility tests.
+
+  Required behavior:
+  - subprocess-style tests provision temp-owned `ATM_HOME` and
+    `ATM_CONFIG_HOME`
+  - tests that rely on team-directory discovery also provision `ATM_TEAMS_DIR`
+  - tests use test-only fixture constants for team and agent names rather than
+    raw repo-significant production names
+  - tests that need the semantic role represented by `team-lead` centralize
+    that raw literal behind one named constant
+  - tests may set `ATM_TEAM` or `ATM_IDENTITY` when validating production
+    env-read behavior, but only inside the isolated subprocess harness
+  - ambient reuse of a developer workstation ATM home, team, or identity is
+    forbidden
 
 ## 19. Acceptance Criteria
 

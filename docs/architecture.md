@@ -2414,9 +2414,18 @@ Phase Q test architecture must keep:
 - core service logic testable in-process
 - transport/watch/runtime logic testable through fakes or harnesses
 - daemon process spawning out of the core test path
+- subprocess integration tests isolated from developer ATM filesystem and
+  identity state by temp-owned config/runtime roots and test-only fixture
+  identifiers
+- explicit production-compatibility exceptions for `ATM_TEAM`,
+  `ATM_IDENTITY`, and reserved role names such as `team-lead` only when those
+  values are the subject under test
 
 If a capability cannot be tested without real daemon spawning, that is treated
 as a design smell rather than the default approach.
+
+The authoritative architectural fitness rules that enforce these test-isolation
+constraints live in `.claude/agents/arch-qa.md`.
 
 ### 21.8 Lock Elimination
 
