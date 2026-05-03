@@ -2,8 +2,10 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use atm_core::home;
+use atm_core::inbox_export::default_inbox_export;
 use atm_core::send::{self, SendMessageSource, SendRequest};
 use atm_core::types::TaskId;
+use atm_rusqlite::RusqliteStore;
 use clap::Args;
 
 use crate::observability::CliObservability;
@@ -56,7 +58,10 @@ impl SendCommand {
         let home_dir = home::atm_home()?;
         let json = self.json;
         let request = self.build_request(home_dir, current_dir)?;
-        let outcome = send::send_mail(request, observability)?;
+        let team = send::resolve_store_team(&request)?;
+        let store = RusqliteStore::open_for_team_home(&request.home_dir, &team)?;
+        let exporter = default_inbox_export();
+        let outcome = send::send_mail_via_store(request, &store, &exporter, observability)?;
 
         output::print_send_result(&outcome, json)
     }

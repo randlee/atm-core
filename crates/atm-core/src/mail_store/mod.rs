@@ -145,6 +145,12 @@ pub trait MailStore: StoreBoundary {
         ingest_record: &IngestRecord,
     ) -> Result<InsertOutcome<IngestRecord>, StoreError>;
 
+    fn insert_message_with_ingest(
+        &self,
+        message: &StoredMessageRecord,
+        ingest_record: &IngestRecord,
+    ) -> Result<InsertOutcome<StoredMessageRecord>, StoreError>;
+
     fn load_ingest(
         &self,
         team_name: &TeamName,

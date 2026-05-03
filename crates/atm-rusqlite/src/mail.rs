@@ -305,32 +305,46 @@ impl MailStore for RusqliteStore {
         ingest_record: &IngestRecord,
     ) -> Result<InsertOutcome<IngestRecord>, StoreError> {
         let connection = self.lock_connection()?;
-        match connection.execute(
-            r#"
-            INSERT INTO inbox_ingest (
-                team_name,
-                recipient_agent,
-                source_path,
-                source_fingerprint,
-                message_key,
-                imported_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-            "#,
-            (
-                ingest_record.team_name.as_str(),
-                ingest_record.recipient_agent.as_str(),
-                ingest_record.source_path.display().to_string(),
-                ingest_record.source_fingerprint.as_str(),
-                ingest_record.message_key.as_str(),
-                ingest_record.imported_at.to_string(),
-            ),
-        ) {
+        match insert_ingest_row(&connection, ingest_record) {
             Ok(_) => Ok(InsertOutcome::Inserted(ingest_record.clone())),
             Err(error) => match classify_ingest_duplicate(&error, ingest_record) {
                 Some(identity) => Ok(InsertOutcome::Duplicate(identity)),
                 None => Err(classify_store_error(error, "failed to record ingest row")),
             },
         }
+    }
+
+    fn insert_message_with_ingest(
+        &self,
+        message: &StoredMessageRecord,
+        ingest_record: &IngestRecord,
+    ) -> Result<InsertOutcome<StoredMessageRecord>, StoreError> {
+        self.with_transaction(|transaction| {
+            match insert_message_row(transaction, message) {
+                Ok(()) => {}
+                Err(error) => {
+                    if let Some(identity) = classify_message_duplicate(&error, message) {
+                        return Ok(InsertOutcome::Duplicate(identity));
+                    }
+                    return Err(classify_store_error(
+                        error,
+                        "failed to insert imported mailbox row",
+                    ));
+                }
+            }
+            match insert_ingest_row(transaction, ingest_record) {
+                Ok(()) => Ok(InsertOutcome::Inserted(message.clone())),
+                Err(error) => match classify_ingest_duplicate(&error, ingest_record) {
+                    Some(identity) => Err(StoreError::constraint(format!(
+                        "ingest fingerprint duplicated during imported mailbox batch write: {identity:?}"
+                    ))),
+                    None => Err(classify_store_error(
+                        error,
+                        "failed to record inbox ingest fingerprint",
+                    )),
+                },
+            }
+        })
     }
 
     fn load_ingest(
@@ -467,7 +481,7 @@ impl MailStore for RusqliteStore {
     }
 }
 
-fn insert_message_row(
+pub(crate) fn insert_message_row(
     connection: &Connection,
     message: &StoredMessageRecord,
 ) -> rusqlite::Result<()> {
@@ -508,7 +522,7 @@ fn insert_message_row(
     Ok(())
 }
 
-fn classify_message_duplicate(
+pub(crate) fn classify_message_duplicate(
     error: &rusqlite::Error,
     message: &StoredMessageRecord,
 ) -> Option<StoreDuplicateIdentity> {
@@ -547,6 +561,33 @@ fn classify_ingest_duplicate(
         });
     }
     None
+}
+
+fn insert_ingest_row(
+    connection: &Connection,
+    ingest_record: &IngestRecord,
+) -> rusqlite::Result<()> {
+    connection.execute(
+        r#"
+        INSERT INTO inbox_ingest (
+            team_name,
+            recipient_agent,
+            source_path,
+            source_fingerprint,
+            message_key,
+            imported_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+        "#,
+        (
+            ingest_record.team_name.as_str(),
+            ingest_record.recipient_agent.as_str(),
+            ingest_record.source_path.display().to_string(),
+            ingest_record.source_fingerprint.as_str(),
+            ingest_record.message_key.as_str(),
+            ingest_record.imported_at.to_string(),
+        ),
+    )?;
+    Ok(())
 }
 
 fn convert_message_row(raw: RawMessageRow) -> Result<StoredMessageRecord, StoreError> {
