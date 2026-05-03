@@ -137,11 +137,15 @@ Required runtime rules:
 - the same transport protocol must be exercisable through an in-process
   `test-socket` without changing handler/business logic
 - transport/store/health operations must obey one documented timeout budget
+  - authoritative timeout budget references:
+    [`../architecture.md §21.6.4`](../architecture.md) and
+    [`architecture.md §3.4`](./architecture.md)
 - runtime queues and handles must obey one documented concrete cap policy
 - daemon memory is the live truth for agent status
 - daemon memory must also retain `last_active_at` for each known active agent
 - daemon memory must retain the current agent `pid` as a first-class liveness
-  field, cached from SQLite; `pid` is not advisory metadata
+  field, cached from SQLite; `pid` is durable roster truth rather than
+  advisory metadata
 - SQLite must not own live `last_active_at`; it owns durable roster state and
   the current per-member `pid`
 - the daemon-managed member fields (`pid`, `last_active_at`, `state`) must
@@ -166,6 +170,9 @@ Required runtime rules:
   extension point requires explicit architecture review
 - watcher/reconcile runtime code must remain isolated from transport, store,
   and notifier implementations behind its own owned boundary
+- daemon unavailability after one documented auto-start attempt must surface as
+  explicit runtime failure rather than hidden fallback to direct SQLite or
+  inbox-file access
 - the socket receive loop must remain a thin dispatcher only:
   - read framed request
   - parse qualified request type

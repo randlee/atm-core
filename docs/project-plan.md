@@ -2473,6 +2473,9 @@ Core design decisions:
 
 Planned sprint sequence:
 
+Integration branch:
+- `integrate/phase-Q`
+
 ### Q.1 — Store And Boundary Foundation
 
 Scope:
@@ -2565,7 +2568,8 @@ Acceptance:
 - second daemon startup fails deterministically
 - remote traffic is daemon-to-daemon only
 - remote send success depends on remote daemon acceptance
-- daemon-unavailable CLI/runtime calls fail clearly without auto-spawn
+- daemon-unavailable CLI/runtime calls first attempt one documented auto-start
+  and then fail clearly with no hidden fallback if the daemon still cannot run
 - daemon code remains a thin runtime wrapper over the service boundaries
 - handler behavior is testable through the in-process `test-socket` transport
 
@@ -2580,6 +2584,17 @@ Acceptance:
 - mailbox locks are no longer part of the normal mail correctness contract
 - stale lock artifacts can no longer wedge ATM mail flows
 - requirements, architecture, and project plan all match the final design
+
+Phase Q completion gate:
+- Q.1 through Q.5 are complete on `integrate/phase-Q`
+- SQLite is authoritative for messages, ack/task state, visibility state, and
+  roster truth
+- `send` and `ack` operate through the daemon production path
+- production CLI/runtime paths obey one-attempt daemon auto-start semantics
+  with typed failure on final daemon unavailability
+- `recipient_pane_id` is sourced from SQLite roster truth when known
+- mailbox-lock correctness dependence is retired from normal mail flows
+- release-gate and QA invariants for Phase Q are satisfied
 
 QA invariants for every Phase Q pass:
 - impossible to run two active daemons on one host

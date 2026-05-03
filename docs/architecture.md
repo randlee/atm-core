@@ -1999,6 +1999,17 @@ Minimum index/constraint rules:
   - visibility projection
   - ingest replay/high-water tracking
 
+Minimum `team_roster` durable fields:
+- `team_name`
+- `agent_name`
+- `recipient_pane_id TEXT NULL`
+  - authoritative post-send-hook pane mapping when known
+  - updated through the roster/registration path rather than rediscovered from
+    local files after Phase Q migration
+- `pid INTEGER NULL`
+  - durable roster truth for the current owning process identity
+  - cached by the daemon as the primary liveness field
+
 ### 21.1.2 SQLite Runtime Invariants
 
 The SQLite runtime contract is part of the architecture, not an implementation
@@ -2100,6 +2111,17 @@ Daemon responsibilities:
 
 Daemon non-responsibility:
 - it must not become the only home of ATM business logic
+
+Auto-start path:
+- production ATM commands first attempt to connect to the already-running
+  daemon
+- if the daemon is absent, the CLI/runtime path may perform exactly one
+  auto-start attempt
+- after one auto-start attempt, the CLI/runtime path retries connect once
+- if the daemon remains unavailable, the command fails with a typed actionable
+  error
+- there is no silent fallback from the production path to direct SQLite or
+  inbox-file access after auto-start failure
 
 ### 21.6 Strict I/O Ownership
 

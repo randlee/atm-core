@@ -37,8 +37,8 @@ The `atm-daemon` crate must remain thin.
   - TCP/TLS
   - in-process `test-socket`
 - cross-host delivery is daemon-to-daemon only.
-- remote delivery may use bounded transient retry, but not a durable long-lived
-  remote outbox.
+- remote delivery may use bounded transient retry for short intermittent
+  failures, but not a durable long-lived remote outbox.
 - remote send success is defined by remote daemon acceptance within the bounded
   retry window.
 - daemon runtime failures must remain typed and must not depend on
@@ -170,17 +170,7 @@ Architectural rules:
   and retained only on crash/fail-stop paths where the process cannot run
   cleanup code
 
-## 3.2 Status Ownership
-
-The daemon owns the live runtime view of agent status.
-
-Architectural rules:
-- live status remains in daemon memory
-- SQLite may retain a diagnostic snapshot only
-- status cache rebuild after restart begins from `unknown` and refreshes through
-  runtime events
-
-## 3.2.1 Resource Caps And Saturation
+## 3.2 Resource Caps And Saturation
 
 The daemon must use explicit, small resource ceilings.
 
@@ -201,7 +191,7 @@ Required saturation behavior:
 - status-cache cap exceeded: evict least-recently-updated noncritical entries
   to `unknown` with structured warning emission
 
-## 3.2.2 Status Ownership
+## 3.3 Status Ownership
 
 The daemon owns the live runtime view of agent status.
 
@@ -224,7 +214,7 @@ Architectural rules:
 - after `schooks 1.0` is released, `schooks` becomes the controlled hook
   environment layer and reports pid/activity updates to `atm-daemon`
 
-## 3.2.3 Timeouts
+## 3.4 Timeouts
 
 Required timeout defaults:
 - same-host daemon request deadline: `3s`
@@ -235,7 +225,7 @@ Required timeout defaults:
 - ingest batch processing slice: `2s` max before yielding
 - daemon health query used by `atm doctor`: `3s`
 
-## 3.3 Test Strategy
+## 3.5 Test Strategy
 
 The daemon is not the core test strategy.
 
@@ -249,7 +239,7 @@ Architectural rules:
 - `atm doctor` and other daemon-querying CLI flows must rely on explicit daemon
   request/response paths, not private inspection shortcuts
 
-## 3.4 Crash Recovery
+## 3.6 Crash Recovery
 
 Crash recovery must preserve durable truth and compatibility export ordering.
 

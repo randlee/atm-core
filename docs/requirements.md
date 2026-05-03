@@ -142,6 +142,9 @@ Satisfied by:
 - CI monitoring
 - TUI and MCP features
 - daemon spawning from tests
+- manual daemon-start discipline as a product requirement
+  - production CLI auto-start when the daemon is absent is in scope under
+    `REQ-P-RUNTIME-001`
 - `atm status` in the initial rewrite
 - separate `atm tail` command in the initial rewrite
 - team lifecycle management outside the retained local recovery surface
@@ -2453,13 +2456,16 @@ mail correctness.
 
   Required behavior:
   - live status is runtime-owned daemon state
-  - SQLite stores the current durable `pid` for each member, and daemon memory
-    caches it as the primary liveness field
+  - SQLite stores the current durable `pid` for each member as roster truth,
+    and daemon memory caches it as the primary liveness field
   - daemon runtime state must include `last_active_at` for each known active
     agent/member entry
   - SQLite must not own live `last_active_at`; it remains daemon-memory-only
     runtime state
   - roster truth and live-status truth must remain distinct
+  - `pid` is not a diagnostic snapshot or advisory hint; it is the durable
+    roster-owned process identity until replaced by the documented heartbeat or
+    admin-takeover path
 
 ### 21.2 Singleton Daemon Runtime
 
