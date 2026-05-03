@@ -5,7 +5,7 @@ use std::sync::{Arc, Barrier, Mutex, OnceLock, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use atm_core::ack::{AckRequest, ack_mail};
+use atm_core::ack::{AckMessageId, AckRequest, ack_mail};
 use atm_core::clear::{ClearQuery, clear_mail};
 use atm_core::error::AtmErrorCode;
 use atm_core::observability::NullObservability;
@@ -904,7 +904,7 @@ impl Fixture {
             current_dir: self.tempdir.path().to_path_buf(),
             actor_override: Some(actor.parse().expect("actor")),
             team_override: Some("atm-dev".parse().expect("team")),
-            message_id,
+            message_id: AckMessageId::Legacy(message_id),
             reply_body: reply_body.to_string(),
         }
     }
