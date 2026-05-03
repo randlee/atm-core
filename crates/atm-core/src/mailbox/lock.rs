@@ -620,6 +620,11 @@ fn is_lock_contention_error(error: &io::Error) -> bool {
 }
 
 fn debug_timeout_override() -> Option<Duration> {
+    #[cfg(test)]
+    if let Some(timeout_ms) = readonly_test_override::debug_timeout_override_ms() {
+        return Some(Duration::from_millis(timeout_ms));
+    }
+
     std::env::var(DEBUG_TIMEOUT_ENV)
         .ok()
         .and_then(|value| value.parse::<u64>().ok())
@@ -781,6 +786,7 @@ mod readonly_test_override {
         // Test-only seam for forcing one filesystem operation to fail without
         // introducing shared mutable state across concurrent test threads.
         static OVERRIDE: Cell<Option<LockOperation>> = const { Cell::new(None) };
+        static DEBUG_TIMEOUT_MS: Cell<Option<u64>> = const { Cell::new(None) };
         #[cfg(windows)]
         static TRANSIENT_LOCK_IDENTITY_ERRORS: RefCell<usize> = const { RefCell::new(0) };
     }
@@ -793,6 +799,18 @@ mod readonly_test_override {
         OVERRIDE.with(|cell| {
             let original = cell.get();
             cell.set(operation);
+            original
+        })
+    }
+
+    pub(super) fn debug_timeout_override_ms() -> Option<u64> {
+        DEBUG_TIMEOUT_MS.with(Cell::get)
+    }
+
+    pub(super) fn set_debug_timeout_override_ms(timeout_ms: Option<u64>) -> Option<u64> {
+        DEBUG_TIMEOUT_MS.with(|cell| {
+            let original = cell.get();
+            cell.set(timeout_ms);
             original
         })
     }
@@ -832,7 +850,6 @@ fn transient_lock_identity_test_override() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::ffi::{OsStr, OsString};
     use std::io;
     use std::time::Duration;
 
@@ -1117,7 +1134,7 @@ mod tests {
     #[test]
     #[serial(env)]
     fn default_lock_timeout_uses_default_without_override() {
-        let _guard = EnvGuard::clear("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS");
+        let _guard = DebugTimeoutGuard::set(None);
         assert_eq!(default_lock_timeout(), DEFAULT_LOCK_TIMEOUT);
     }
 
@@ -1199,40 +1216,21 @@ mod tests {
         assert!(sentinel.exists());
     }
 
-    struct EnvGuard {
-        key: &'static str,
-        original: Option<OsString>,
+    struct DebugTimeoutGuard {
+        original: Option<u64>,
     }
 
-    impl EnvGuard {
-        fn clear(key: &'static str) -> Self {
-            let original = std::env::var_os(key);
-            remove_env_var(key);
-            Self { key, original }
+    impl DebugTimeoutGuard {
+        fn set(timeout_ms: Option<u64>) -> Self {
+            let original = readonly_test_override::set_debug_timeout_override_ms(timeout_ms);
+            Self { original }
         }
     }
 
-    impl Drop for EnvGuard {
+    impl Drop for DebugTimeoutGuard {
         fn drop(&mut self) {
-            match self.original.take() {
-                Some(value) => set_env_var(self.key, value),
-                None => remove_env_var(self.key),
-            }
+            readonly_test_override::set_debug_timeout_override_ms(self.original.take());
         }
-    }
-
-    fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
-        // SAFETY: env-mutating tests in this module use #[serial(env)] before
-        // mutating the process environment, so these mutations are serialized
-        // within this process.
-        unsafe { std::env::set_var(key, value) }
-    }
-
-    fn remove_env_var<K: AsRef<OsStr>>(key: K) {
-        // SAFETY: env-mutating tests in this module use #[serial(env)] before
-        // mutating the process environment, so these mutations are serialized
-        // within this process.
-        unsafe { std::env::remove_var(key) }
     }
 
     use std::path::PathBuf;

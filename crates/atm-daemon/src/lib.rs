@@ -993,9 +993,12 @@ mod tests {
 
     #[test]
     fn bounded_remote_host_unreachable_behavior_is_typed() {
+        let probe = TcpListener::bind(("127.0.0.1", 0)).expect("probe listener");
+        let address = probe.local_addr().expect("probe addr");
+        drop(probe);
         let started = Instant::now();
         let error = request_remote(
-            "127.0.0.1:9".parse().expect("discard addr"),
+            address,
             &DaemonRequest {
                 team_name: "atm-dev".parse().expect("team"),
                 agent_name: "arch-ctm".parse().expect("agent"),

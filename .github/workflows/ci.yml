@@ -95,4 +95,6 @@ jobs:
         run: cargo build --verbose
 
       - name: Run tests
+        env:
+          ATM_TEST_RECV_TIMEOUT_SECS: "60"
         run: cargo test --verbose
