@@ -217,6 +217,44 @@ Why this matters:
 
 ## 5. Proposed Work Packages
 
+### 5.1 Recommended Worktree Map
+
+Unless implementation sequencing changes, the `atm-graft` line should use one
+worktree per package under:
+- `/Users/randlee/Documents/github/atm-core-worktrees/`
+
+Recommended branch/worktree ownership:
+- `GRAFT-1 / Q.6`
+  - worktree: `feature/pQ-s6-wire-protocol`
+  - branch: `feature/pQ-s6-wire-protocol`
+  - scope: binary header, `WireMessageId`, `MaxFramePayloadBytes`,
+    `LocalEndpoint`, `ControlState`, frame codec, and the `atm` tail/debug
+    helper
+- `GRAFT-2 / Phase R`
+  - worktree: `feature/pR-graft-daemon-parity`
+  - branch: `feature/pR-graft-daemon-parity`
+  - scope: retained `send` / `ack` daemon parity, shared client-path cutover,
+    and hook-facing `atm` drain command
+- `GRAFT-3 / Phase R`
+  - worktree: `feature/pR-graft-daemon-session`
+  - branch: `feature/pR-graft-daemon-session`
+  - scope: graft registration, daemon-originated nudge delivery, daemon-owned
+    pending-nudge queueing, and drain API
+- `GRAFT-4 / Phase R`
+  - worktree: `feature/pR-atm-graft`
+  - branch: `feature/pR-atm-graft`
+  - scope: `atm-graft` crate, `GraftSession`, runtime adapters, and host
+    integration
+
+Sequencing rule:
+- `GRAFT-1` lands first because it defines the shared protocol boundary
+- `GRAFT-2` and `GRAFT-3` may proceed as separate worktrees after `GRAFT-1`,
+  but `GRAFT-4` should not start until both have stabilized enough to keep the
+  public graft API from thrashing
+- if a docs-only follow-up is needed between implementation packages, it
+  should stay on `plan/atm-graft` rather than reuse one of the feature
+  worktrees above
+
 ### GRAFT-1 / Q.6: extract wire/control ownership into `atm-core`
 
 Owning crates:
