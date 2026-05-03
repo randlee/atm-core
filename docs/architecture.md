@@ -668,6 +668,7 @@ Public entrypoint:
 | `sender` | `String` | Resolved sender identity. |
 | `outcome` | `&'static str` | Delivery result such as `sent` or `dry_run`. |
 | `message_id` | `Uuid` | ATM-authored UUID v4 for the send operation. |
+| `atm_message_id` | `AtmMessageId` | Canonical ATM ULID carried in SQLite and `metadata.atm.messageId`. |
 | `requires_ack` | `bool` | Whether the message requires acknowledgement. |
 | `task_id` | `Option<String>` | Optional task identifier persisted on the message. |
 | `summary` | `Option<String>` | Generated or caller-supplied summary text. |

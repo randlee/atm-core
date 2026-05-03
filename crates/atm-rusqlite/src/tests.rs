@@ -712,7 +712,7 @@ fn inbox_ingress_tolerates_bare_invalid_jsonl_line_without_panicking() {
 }
 
 #[test]
-fn inbox_ingress_uses_envelope_defaults_when_sidecar_entry_is_absent() {
+fn inbox_ingress_uses_envelope_defaults_when_sidecar_entry_is_absent_or_malformed() {
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_for_team_home(tempdir.path(), &team()).expect("open store");
     let inbox_path = home::inbox_path_from_home(tempdir.path(), &team(), &agent("team-lead"))
@@ -739,6 +739,12 @@ fn inbox_ingress_uses_envelope_defaults_when_sidecar_entry_is_absent() {
         .expect("default atm id");
     without_sidecar.extra["metadata"]["atm"]["messageId"] =
         serde_json::Value::String(without_sidecar_atm_id.to_string());
+    let mut malformed_sidecar = inbox_message("malformed sidecar state");
+    let malformed_sidecar_atm_id: AtmMessageId = "01JQYVB6W51Q2E7E6T3Y4Q9N2P"
+        .parse()
+        .expect("malformed atm id");
+    malformed_sidecar.extra["metadata"]["atm"]["messageId"] =
+        serde_json::Value::String(malformed_sidecar_atm_id.to_string());
     fs::write(
         &workflow_path,
         serde_json::to_vec(&serde_json::json!({
@@ -747,7 +753,8 @@ fn inbox_ingress_uses_envelope_defaults_when_sidecar_entry_is_absent() {
                     "read": true,
                     "pendingAckAt": null,
                     "acknowledgedAt": null
-                }
+                },
+                format!("atm:{malformed_sidecar_atm_id}"): "not-an-object"
             }
         }))
         .expect("workflow json"),
@@ -758,6 +765,8 @@ fn inbox_ingress_uses_envelope_defaults_when_sidecar_entry_is_absent() {
         serde_json::to_vec(&vec![
             atm_core::schema::to_shared_inbox_value(&with_sidecar).expect("sidecar message"),
             atm_core::schema::to_shared_inbox_value(&without_sidecar).expect("default message"),
+            atm_core::schema::to_shared_inbox_value(&malformed_sidecar)
+                .expect("malformed sidecar message"),
         ])
         .expect("json array"),
     )
@@ -782,6 +791,10 @@ fn inbox_ingress_uses_envelope_defaults_when_sidecar_entry_is_absent() {
         .load_message_by_atm_id(&without_sidecar_atm_id)
         .expect("load default message")
         .expect("stored default row");
+    let stored_malformed = store
+        .load_message_by_atm_id(&malformed_sidecar_atm_id)
+        .expect("load malformed-sidecar message")
+        .expect("stored malformed-sidecar row");
 
     assert!(
         store
@@ -807,6 +820,18 @@ fn inbox_ingress_uses_envelope_defaults_when_sidecar_entry_is_absent() {
         store
             .load_visibility(&stored_without.message_key)
             .expect("load default visibility")
+            .is_none()
+    );
+
+    let malformed_ack = store
+        .load_ack_state(&stored_malformed.message_key)
+        .expect("load malformed-sidecar ack")
+        .expect("malformed-sidecar ack row");
+    assert!(malformed_ack.pending_ack_at.is_some());
+    assert!(
+        store
+            .load_visibility(&stored_malformed.message_key)
+            .expect("load malformed-sidecar visibility")
             .is_none()
     );
 }

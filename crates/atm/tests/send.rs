@@ -1,12 +1,19 @@
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
 mod helpers;
 
+use atm_core::inbox_export::default_inbox_export;
+use atm_core::inbox_ingress::{InboxIngestOutcome, InboxIngestStore, InboxIngress};
 use atm_core::mail_store::MailStore;
+use atm_core::observability::NullObservability;
 use atm_core::roster_store::RosterStore;
 use atm_core::schema::{AgentMember, MessageEnvelope, TeamConfig};
+use atm_core::send::{SendMessageSource, SendRequest, resolve_store_team, send_mail_via_store};
 use atm_core::task_store::TaskStore;
+use atm_core::types::{AgentName, TeamName};
 use atm_core::{read_messages, write_messages};
 use atm_rusqlite::RusqliteStore;
 use serde_json::Value;
@@ -150,6 +157,64 @@ fn test_send_export_failure_emits_retained_error_record() {
         }),
         "stdout: {}",
         fixture.stdout(&output)
+    );
+}
+
+#[derive(Default)]
+struct RecordingIngress {
+    calls: AtomicUsize,
+    last_target: Mutex<Option<(TeamName, AgentName)>>,
+}
+
+impl InboxIngress for RecordingIngress {
+    fn ingest_mailbox_state(
+        &self,
+        _home_dir: &std::path::Path,
+        team: &TeamName,
+        agent: &AgentName,
+        _store: &dyn InboxIngestStore,
+        _observability: &dyn atm_core::observability::ObservabilityPort,
+    ) -> Result<InboxIngestOutcome, atm_core::error::AtmError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        *self.last_target.lock().expect("target lock") = Some((team.clone(), agent.clone()));
+        Ok(InboxIngestOutcome::default())
+    }
+}
+
+#[test]
+fn test_send_mail_via_store_calls_injected_inbox_ingress() {
+    let fixture = Fixture::new("recipient");
+    fixture.write_inbox("recipient", &[]);
+    let request = SendRequest::new(
+        fixture.tempdir.path().to_path_buf(),
+        fixture.tempdir.path().to_path_buf(),
+        Some("arch-ctm"),
+        "recipient@atm-dev",
+        Some("atm-dev"),
+        SendMessageSource::Inline("hello ingress".to_string()),
+        None,
+        false,
+        None,
+        false,
+    )
+    .expect("request");
+    let team = resolve_store_team(&request).expect("team");
+    let store = RusqliteStore::open_for_team_home(fixture.tempdir.path(), &team).expect("store");
+    let ingress = RecordingIngress::default();
+    let exporter = default_inbox_export();
+    let observability = NullObservability;
+
+    let outcome = send_mail_via_store(request, &store, &ingress, &exporter, &observability)
+        .expect("send via store");
+
+    assert_eq!(outcome.outcome, "sent");
+    assert_eq!(ingress.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        *ingress.last_target.lock().expect("target lock"),
+        Some((
+            "atm-dev".parse().expect("team"),
+            "recipient".parse().expect("agent"),
+        ))
     );
 }
 

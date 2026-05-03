@@ -27,6 +27,7 @@ name = "agent-team-mail-core"
 version = "1.1.2"
 dependencies = [
  "anyhow",
+ "atm-rusqlite",
  "chrono",
  "fs2",
  "libc",

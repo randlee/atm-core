@@ -12,6 +12,7 @@ use crate::error::{AtmError, AtmErrorCode};
 use crate::home;
 use crate::identity;
 use crate::inbox_export::{ExportEventContext, InboxExport};
+use crate::inbox_ingress::InboxIngress;
 use crate::mail_store::{AckStateRecord, MailStore, MessageSourceKind, StoredMessageRecord};
 use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
@@ -182,32 +183,10 @@ impl PreparedSend {
 /// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`] when sender
 /// identity cannot be resolved, recipient or team validation fails,
 /// message/file-policy validation fails, or mailbox persistence fails.
-#[deprecated(note = "transitional path; use send_mail_via_store")]
-pub fn send_mail(
-    request: SendRequest,
-    observability: &dyn ObservabilityPort,
-) -> Result<SendOutcome, AtmError> {
-    let prepared = prepare_send_request(request)?;
-    let envelope = build_outgoing_envelope(&prepared);
-
-    if !prepared.dry_run {
-        append_mailbox_message_and_seed_workflow(
-            &prepared.home_dir(),
-            &prepared.recipient.team,
-            &prepared.recipient.agent,
-            &prepared.inbox_path,
-            &envelope,
-        )?;
-    }
-
-    let mut outcome = build_send_outcome(&prepared);
-    finalize_send(&prepared, &mut outcome, observability, None);
-    Ok(outcome)
-}
-
 pub fn send_mail_via_store<S>(
     request: SendRequest,
     store: &S,
+    ingress: &dyn InboxIngress,
     exporter: &dyn InboxExport,
     observability: &dyn ObservabilityPort,
 ) -> Result<SendOutcome, AtmError>
@@ -216,6 +195,16 @@ where
 {
     let prepared = prepare_send_request(request)?;
     let envelope = build_outgoing_envelope(&prepared);
+
+    if prepared.inbox_path.is_file() {
+        let _ = ingress.ingest_mailbox_state(
+            &prepared.home_dir(),
+            &prepared.recipient.team,
+            &prepared.recipient.agent,
+            store,
+            observability,
+        )?;
+    }
 
     let recipient_pane_id = if prepared.team_config_present() {
         let roster = team_ingress::ingest_team_config(
@@ -313,9 +302,9 @@ fn prepare_send_request(request: SendRequest) -> Result<PreparedSend, AtmError> 
         return Err(AtmError::team_not_found(&recipient.team));
     }
 
+    let mut warnings = Vec::new();
     let inbox_path =
         home::inbox_path_from_home(&request.home_dir, &recipient.team, &recipient.agent)?;
-    let mut warnings = Vec::new();
 
     match config::load_team_config(&team_dir) {
         Ok(team_config) => {

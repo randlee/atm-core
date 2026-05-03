@@ -365,7 +365,17 @@ fn resolve_reply_target(
             .source_team
             .clone()
             .or_else(|| Some(current_team.clone()))
-            .ok_or_else(AtmError::team_unavailable)?;
+            .ok_or_else(|| {
+                let message_reference = message
+                    .atm_message_id()
+                    .map(|id| id.to_string())
+                    .or_else(|| message.message_id.map(|id| id.to_string()))
+                    .unwrap_or_else(|| "<unknown>".to_string());
+                AtmError::team_unavailable().with_recovery(format!(
+                    "Message {message_reference} from `{}` is missing source team metadata while resolving the acknowledgement reply target. Refresh the mailbox or repair the message record before retrying acknowledgement.",
+                    message.from
+                ))
+            })?;
         return Ok((identity, team));
     }
 
@@ -382,7 +392,17 @@ fn resolve_reply_target(
         }
     };
 
-    let team = parsed.team.ok_or_else(AtmError::team_unavailable)?;
+    let team = parsed.team.ok_or_else(|| {
+        let message_reference = message
+            .atm_message_id()
+            .map(|id| id.to_string())
+            .or_else(|| message.message_id.map(|id| id.to_string()))
+            .unwrap_or_else(|| "<unknown>".to_string());
+        AtmError::team_unavailable().with_recovery(format!(
+            "Message {message_reference} from `{}` is missing source team metadata while resolving the acknowledgement reply target. Refresh the mailbox or repair the message record before retrying acknowledgement.",
+            message.from
+        ))
+    })?;
     Ok((
         parsed.agent.parse::<AgentName>()?,
         team.parse::<TeamName>()?,

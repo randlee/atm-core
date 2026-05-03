@@ -241,6 +241,12 @@ pub(crate) fn configure_connection(
         .map_err(|error| {
             StoreError::bootstrap("failed to enable SQLite WAL mode").with_source(error)
         })?;
+    let journal_mode = query_journal_mode(connection)?;
+    if !journal_mode.eq_ignore_ascii_case("wal") {
+        return Err(StoreError::bootstrap(
+            "SQLite refused WAL mode; expected journal_mode=wal after bootstrap",
+        ));
+    }
     connection
         .pragma_update(None, "foreign_keys", 1)
         .map_err(|error| {

@@ -1,5 +1,3 @@
-#![allow(deprecated)]
-
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::fs::{File, OpenOptions};
@@ -10,12 +8,17 @@ use std::time::{Duration, Instant};
 use atm_core::ack::{AckMessageId, AckRequest, ack_mail};
 use atm_core::clear::{ClearQuery, clear_mail};
 use atm_core::error::AtmErrorCode;
-use atm_core::observability::NullObservability;
+use atm_core::inbox_export::default_inbox_export;
+use atm_core::inbox_ingress::default_inbox_ingress;
+use atm_core::observability::{NullObservability, ObservabilityPort};
 use atm_core::read::{ReadQuery, read_mail};
 use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
-use atm_core::send::{SendMessageSource, SendRequest, send_mail};
+use atm_core::send::{
+    SendMessageSource, SendOutcome, SendRequest, resolve_store_team, send_mail_via_store,
+};
 use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
 use atm_core::{read_messages as read_inbox_messages, write_messages as write_inbox_messages};
+use atm_rusqlite::RusqliteStore;
 use chrono::Utc;
 use fs2::FileExt;
 use serial_test::serial;
@@ -33,6 +36,18 @@ fn test_recv_timeout() -> Duration {
         .filter(|seconds| *seconds > 0)
         .map(Duration::from_secs)
         .unwrap_or_else(|| Duration::from_secs(10))
+}
+
+fn send_via_store(
+    request: SendRequest,
+    observability: &dyn ObservabilityPort,
+) -> Result<SendOutcome, atm_core::error::AtmError> {
+    let team = resolve_store_team(&request)?;
+    let store = RusqliteStore::open_for_team_home(&request.home_dir, &team)
+        .expect("open store for mailbox locking test");
+    let ingress = default_inbox_ingress();
+    let exporter = default_inbox_export();
+    send_mail_via_store(request, &store, &ingress, &exporter, observability)
 }
 
 #[test]
@@ -120,7 +135,7 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
             barrier.wait();
             tx.send((
                 "send-clear/send",
-                send_mail(send_request, observability.as_ref()).map(|_| ()),
+                send_via_store(send_request, observability.as_ref()).map(|_| ()),
             ))
             .expect("send result");
         });
@@ -180,7 +195,7 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
             barrier.wait();
             tx.send((
                 "send-ack/send",
-                send_mail(send_request, observability.as_ref()).map(|_| ()),
+                send_via_store(send_request, observability.as_ref()).map(|_| ()),
             ))
             .expect("send result");
         });
@@ -267,7 +282,7 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() 
         let observability = Arc::clone(&observability);
         thread::spawn(move || {
             barrier.wait();
-            tx.send((label, send_mail(request, observability.as_ref())))
+            tx.send((label, send_via_store(request, observability.as_ref())))
                 .expect("send result");
         });
     }
@@ -348,7 +363,7 @@ fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
         let observability = Arc::clone(&observability);
         thread::spawn(move || {
             barrier.wait();
-            tx.send((label, send_mail(request, observability.as_ref())))
+            tx.send((label, send_via_store(request, observability.as_ref())))
                 .expect("send result");
         });
     }
@@ -404,7 +419,7 @@ fn missing_config_notice_seeds_team_lead_workflow_state() {
     fixture.write_primary_inbox_for_team("broken-dev", "recipient", &[]);
     fixture.write_primary_inbox_for_team("broken-dev", "team-lead", &[]);
 
-    send_mail(
+    send_via_store(
         fixture.send_request("team-lead", "recipient@broken-dev", "broken send"),
         &observability,
     )
@@ -444,7 +459,7 @@ fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()
         let observability = Arc::clone(&observability);
         thread::spawn(move || {
             barrier.wait();
-            tx.send((label, send_mail(request, observability.as_ref())))
+            tx.send((label, send_via_store(request, observability.as_ref())))
                 .expect("send result");
         });
     }
@@ -583,7 +598,7 @@ fn send_times_out_under_bounded_lock_contention() {
     lock_file.lock_exclusive().expect("hold mailbox lock");
 
     let started = Instant::now();
-    let error = send_mail(
+    let error = send_via_store(
         fixture.send_request("team-lead", "arch-ctm@atm-dev", "blocked send"),
         &observability,
     )
@@ -707,7 +722,7 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
     // Criterion (a) is verified through the standard send path rather than a
     // direct helper call: send_mail internally assigns metadata.atm.messageId
     // via the private workflow::set_atm_message_id path before read_mail runs.
-    send_mail(
+    send_via_store(
         fixture.send_request("team-lead", "arch-ctm@atm-dev", "hello sidecar"),
         &observability,
     )
@@ -798,7 +813,7 @@ fn send_reports_non_contention_lock_failures_without_timeout() {
     let observability = NullObservability;
     let started = Instant::now();
 
-    let error = send_mail(
+    let error = send_via_store(
         fixture.send_request("team-lead", "arch-ctm@atm-dev", "lock failure"),
         &observability,
     )
