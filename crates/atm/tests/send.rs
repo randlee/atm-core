@@ -18,7 +18,7 @@ use atm_core::types::{AgentName, TeamName};
 use atm_core::{read_messages, write_messages};
 use atm_rusqlite::RusqliteStore;
 use helpers::{
-    ROLE_TEAM_LEAD, TEST_LEAD, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER,
+    ROLE_TEAM_LEAD, TEST_LEAD, TEST_QA_AGENT, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER,
     TEST_SENDER_ADDRESS, TEST_TEAM, configure_atm_command,
 };
 use serde_json::Value;
@@ -747,7 +747,8 @@ fn test_send_post_send_hook_non_match_is_silent() {
     let fixture = Fixture::new("recipient");
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'quality-mgr'\ncommand = ['{}', 'capture', '{}']\n",
+        "[[atm.post_send_hooks]]\nrecipient = '{}'\ncommand = ['{}', 'capture', '{}']\n",
+        TEST_QA_AGENT,
         hook_path.display(),
         payload_path.display()
     ));
