@@ -23,6 +23,7 @@ use atm_core::types::TeamName;
 use rusqlite::{Connection, OptionalExtension, Transaction};
 
 const SCHEMA_VERSION: i64 = 1;
+const DEFAULT_BUSY_TIMEOUT_MS: BusyTimeoutMs = BusyTimeoutMs::DEFAULT;
 
 const SCHEMA_SQL: &str = r#"
 CREATE TABLE IF NOT EXISTS messages (
@@ -136,7 +137,11 @@ impl RusqliteStore {
     pub fn open_path(database_path: impl AsRef<Path>) -> Result<Self, StoreError> {
         Self::open_path_with_options(
             database_path.as_ref(),
-            BusyTimeoutMs::new(5000).expect("5000ms busy timeout is valid"),
+            // INVARIANT: the default busy timeout intentionally fits inside the
+            // daemon's overall forced-shutdown budget. A blocked SQLite op can
+            // consume most of the graceful drain window, but the daemon waits
+            // for inflight work to quiesce before WAL checkpoint/teardown.
+            DEFAULT_BUSY_TIMEOUT_MS,
             SqliteHandleBudget::DEFAULT,
         )
     }
@@ -229,6 +234,17 @@ pub fn checkpoint_runtime_wal(home_dir: &Path) -> Result<(), StoreError> {
             ))
             .with_source(error)
         })?;
+        connection
+            .busy_timeout(Duration::from_millis(u64::from(
+                DEFAULT_BUSY_TIMEOUT_MS.get(),
+            )))
+            .map_err(|error| {
+                StoreError::bootstrap(format!(
+                    "failed to set SQLite busy timeout for WAL checkpoint at {}",
+                    db_path.display()
+                ))
+                .with_source(error)
+            })?;
         connection
             .pragma_update(None, "wal_checkpoint", "TRUNCATE")
             .map_err(|error| {

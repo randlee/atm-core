@@ -20,6 +20,8 @@ pub use report::{
     DoctorStatus, DoctorSummary,
 };
 
+const ROLE_TEAM_LEAD: &str = "team-lead";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DoctorQuery {
     pub home_dir: PathBuf,
@@ -388,15 +390,17 @@ fn ordered_member_summaries(members: &[AgentMember], baseline: &[TeamName]) -> V
     let mut ordered = Vec::new();
     let mut included = BTreeSet::new();
 
-    if baseline.iter().any(|member| member.as_str() == "team-lead")
-        && let Some(team_lead) = members.iter().find(|member| member.name == "team-lead")
+    if baseline
+        .iter()
+        .any(|member| member.as_str() == ROLE_TEAM_LEAD)
+        && let Some(team_lead) = members.iter().find(|member| member.name == ROLE_TEAM_LEAD)
     {
         ordered.push(member_summary(team_lead));
         included.insert(team_lead.name.clone());
     }
 
     for baseline_member in baseline {
-        if baseline_member.as_str() == "team-lead" {
+        if baseline_member.as_str() == ROLE_TEAM_LEAD {
             continue;
         }
         if let Some(member) = members
@@ -446,6 +450,7 @@ mod tests {
         LogTailSession, ObservabilityPort,
     };
     use crate::schema::{AgentMember, TeamConfig};
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::AgentName;
 
     enum StubHealth {
@@ -508,7 +513,7 @@ mod tests {
         }
 
         fn team_dir(&self) -> PathBuf {
-            self.home_dir.join(".claude").join("teams").join("atm-dev")
+            self.home_dir.join(".claude").join("teams").join(TEST_TEAM)
         }
 
         fn write_team_layout(&self, members: &[&str]) {
@@ -539,14 +544,14 @@ mod tests {
         DoctorQuery {
             home_dir: paths.home_dir.clone(),
             current_dir: paths.current_dir.clone(),
-            team_override: Some("atm-dev".parse().expect("team")),
+            team_override: Some(TEST_TEAM.parse().expect("team")),
         }
     }
 
     #[test]
     fn run_doctor_reports_healthy_observability() {
         let paths = TestPaths::new();
-        paths.write_team_layout(&["arch-ctm"]);
+        paths.write_team_layout(&[TEST_SENDER]);
         let report = run_doctor(
             query(&paths),
             &StubObservability {
@@ -598,10 +603,10 @@ mod tests {
     #[test]
     fn run_doctor_reports_obsolete_identity_drift_as_warning() {
         let paths = TestPaths::new();
-        paths.write_team_layout(&["arch-ctm"]);
+        paths.write_team_layout(&[TEST_SENDER]);
         std::fs::write(
             paths.current_dir.join(".atm.toml"),
-            "[atm]\nidentity = \"arch-ctm\"\n",
+            format!("[atm]\nidentity = \"{TEST_SENDER}\"\n"),
         )
         .expect("config");
         let report = run_doctor(
@@ -631,7 +636,7 @@ mod tests {
     #[test]
     fn run_doctor_reports_degraded_observability_as_warning() {
         let paths = TestPaths::new();
-        paths.write_team_layout(&["arch-ctm"]);
+        paths.write_team_layout(&[TEST_SENDER]);
         let report = run_doctor(
             query(&paths),
             &StubObservability {
@@ -656,7 +661,7 @@ mod tests {
     #[test]
     fn run_doctor_reports_unavailable_observability_as_error() {
         let paths = TestPaths::new();
-        paths.write_team_layout(&["arch-ctm"]);
+        paths.write_team_layout(&[TEST_SENDER]);
         let report = run_doctor(
             query(&paths),
             &StubObservability {
@@ -681,7 +686,7 @@ mod tests {
     #[test]
     fn run_doctor_reports_observability_health_errors() {
         let paths = TestPaths::new();
-        paths.write_team_layout(&["arch-ctm"]);
+        paths.write_team_layout(&[TEST_SENDER]);
         let report = run_doctor(
             query(&paths),
             &StubObservability {
@@ -765,7 +770,7 @@ mod tests {
     #[test]
     fn run_doctor_reports_missing_inboxes_directory_as_error() {
         let paths = TestPaths::new();
-        paths.write_raw_team_config(r#"{"members":[{"name":"arch-ctm"}]}"#);
+        paths.write_raw_team_config(&format!(r#"{{"members":[{{"name":"{TEST_SENDER}"}}]}}"#));
         let report = run_doctor(
             query(&paths),
             &StubObservability {
@@ -792,8 +797,11 @@ mod tests {
     #[test]
     fn run_doctor_sweeps_stale_mailbox_lock_before_reporting() {
         let paths = TestPaths::new();
-        paths.write_team_layout(&["arch-ctm"]);
-        let stale_lock = paths.team_dir().join("inboxes").join("arch-ctm.json.lock");
+        paths.write_team_layout(&[TEST_SENDER]);
+        let stale_lock = paths
+            .team_dir()
+            .join("inboxes")
+            .join(format!("{TEST_SENDER}.json.lock"));
         std::fs::write(&stale_lock, u32::MAX.to_string()).expect("stale lock");
         let report = run_doctor(
             query(&paths),

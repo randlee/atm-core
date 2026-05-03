@@ -47,6 +47,7 @@ pub const DOCTOR_HANDLER_TIMEOUT: Duration = Duration::from_secs(3);
 pub const SHUTDOWN_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
 pub const SHUTDOWN_FORCE_TIMEOUT: Duration = Duration::from_secs(10);
 pub const ACCEPT_THREAD_JOIN_TIMEOUT: Duration = Duration::from_secs(2);
+pub const WORKER_THREAD_JOIN_TIMEOUT: Duration = Duration::from_secs(2);
 #[cfg(windows)]
 const WINDOWS_STOP_POLL_INTERVAL: Duration = Duration::from_millis(100);
 pub const MAX_ACCEPTS: usize = 64;
@@ -142,6 +143,7 @@ impl WireResponseEnvelope {
 pub struct CoreDispatcher {
     home_dir: PathBuf,
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
+    worker_threads: Option<Arc<Mutex<Vec<JoinHandle<()>>>>>,
 }
 
 impl CoreDispatcher {
@@ -149,7 +151,28 @@ impl CoreDispatcher {
         Self {
             home_dir,
             observability,
+            worker_threads: None,
         }
+    }
+
+    pub fn with_worker_threads(mut self, worker_threads: Arc<Mutex<Vec<JoinHandle<()>>>>) -> Self {
+        self.worker_threads = Some(worker_threads);
+        self
+    }
+
+    fn register_worker_thread(&self, handle: JoinHandle<()>) -> Result<(), DispatchError> {
+        if let Some(worker_threads) = &self.worker_threads {
+            match worker_threads.lock() {
+                Ok(mut handles) => handles.push(handle),
+                Err(error) => {
+                    let _ = handle.join();
+                    return Err(DispatchError::Handler(format!(
+                        "worker thread registry lock poisoned while tracking doctor worker: {error}"
+                    )));
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -194,7 +217,7 @@ impl RequestDispatcher for CoreDispatcher {
                 let query: DoctorQuery = serde_json::from_value(value)
                     .map_err(|error| DispatchError::PayloadDecode(error.to_string()))?;
                 let (tx, rx) = mpsc::sync_channel(1);
-                thread::spawn({
+                let handle = thread::spawn({
                     let home_dir = self.home_dir.clone();
                     let observability = Arc::clone(&self.observability);
                     let team_name = request.team_name.clone();
@@ -209,6 +232,7 @@ impl RequestDispatcher for CoreDispatcher {
                         let _ = tx.send(result);
                     }
                 });
+                self.register_worker_thread(handle)?;
                 let report = rx
                     .recv_timeout(DOCTOR_HANDLER_TIMEOUT)
                     .map_err(|error| match error {
@@ -317,6 +341,8 @@ impl DaemonHandle {
     }
 
     pub fn shutdown(mut self) -> Result<(), AtmError> {
+        let shutdown_start = Instant::now();
+        let shutdown_deadline = shutdown_start + SHUTDOWN_FORCE_TIMEOUT;
         self.stop.store(true, Ordering::SeqCst);
         if let Some(handle) = self.local_thread.take() {
             join_accept_thread(handle, "local accept loop")?;
@@ -325,10 +351,16 @@ impl DaemonHandle {
             join_accept_thread(handle, "remote accept loop")?;
         }
 
-        wait_for_inflight_zero(&self.inflight, SHUTDOWN_DRAIN_TIMEOUT);
-        join_worker_threads(&self.worker_threads)?;
-        wait_for_inflight_zero(&self.inflight, SHUTDOWN_FORCE_TIMEOUT);
-        join_worker_threads(&self.worker_threads)?;
+        let drain_deadline = (shutdown_start + SHUTDOWN_DRAIN_TIMEOUT).min(shutdown_deadline);
+        // INVARIANT: SQLite dispatch workers share one serialized store
+        // connection and may spend up to the configured busy_timeout inside a
+        // single request. The shutdown path therefore gives them one bounded
+        // drain window first, then a second bounded total-deadline window
+        // before checkpointing WAL, so busy retries cannot race the final
+        // checkpoint with a still-live writer thread.
+        wait_for_inflight_zero_until(&self.inflight, drain_deadline);
+        wait_for_inflight_zero_until(&self.inflight, shutdown_deadline);
+        join_worker_threads(&self.worker_threads, shutdown_deadline)?;
         checkpoint_runtime_wal(&self.home_dir)?;
 
         let _ = fs::remove_file(&self.control_path);
@@ -341,6 +373,7 @@ impl DaemonHandle {
 
 pub fn start_runtime(
     config: DaemonConfig,
+    worker_threads: Arc<Mutex<Vec<JoinHandle<()>>>>,
     dispatcher: Arc<dyn RequestDispatcher>,
 ) -> Result<DaemonHandle, AtmError> {
     let paths = DaemonPaths::from_home(&config.home_dir);
@@ -355,8 +388,6 @@ pub fn start_runtime(
     let singleton = SingletonGuard::acquire(&paths.singleton_path)?;
     let stop = Arc::new(AtomicBool::new(false));
     let inflight = Arc::new(AtomicUsize::new(0));
-    let worker_threads = Arc::new(Mutex::new(Vec::new()));
-
     #[cfg(unix)]
     if paths.local_socket_path.exists() {
         fs::remove_file(&paths.local_socket_path).map_err(|error| {
@@ -597,6 +628,13 @@ fn spawn_local_connection(
     let _ = stream.set_read_timeout(Some(SAME_HOST_SERVER_IO_TIMEOUT));
     let _ = stream.set_write_timeout(Some(SAME_HOST_SERVER_IO_TIMEOUT));
     let handle = thread::spawn(move || {
+        struct InflightGuard(Arc<AtomicUsize>);
+        impl Drop for InflightGuard {
+            fn drop(&mut self) {
+                self.0.fetch_sub(1, Ordering::SeqCst);
+            }
+        }
+        let _inflight_guard = InflightGuard(Arc::clone(&inflight));
         let envelope = match read_frame::<DaemonRequest, _>(&mut stream) {
             Ok(request) => match dispatcher.dispatch(request) {
                 Ok(response) => WireResponseEnvelope::success(response),
@@ -605,7 +643,6 @@ fn spawn_local_connection(
             Err(error) => WireResponseEnvelope::failure(error),
         };
         let _ = write_frame(&mut stream, &envelope);
-        inflight.fetch_sub(1, Ordering::SeqCst);
     });
     match worker_threads.lock() {
         Ok(mut handles) => handles.push(handle),
@@ -637,6 +674,13 @@ fn spawn_tcp_connection(
     let _ = stream.set_read_timeout(Some(REMOTE_SERVER_IO_TIMEOUT));
     let _ = stream.set_write_timeout(Some(REMOTE_SERVER_IO_TIMEOUT));
     let handle = thread::spawn(move || {
+        struct InflightGuard(Arc<AtomicUsize>);
+        impl Drop for InflightGuard {
+            fn drop(&mut self) {
+                self.0.fetch_sub(1, Ordering::SeqCst);
+            }
+        }
+        let _inflight_guard = InflightGuard(Arc::clone(&inflight));
         let envelope = match read_frame::<DaemonRequest, _>(&mut stream) {
             Ok(request) => match dispatcher.dispatch(request) {
                 Ok(response) => WireResponseEnvelope::success(response),
@@ -645,7 +689,6 @@ fn spawn_tcp_connection(
             Err(error) => WireResponseEnvelope::failure(error),
         };
         let _ = write_frame(&mut stream, &envelope);
-        inflight.fetch_sub(1, Ordering::SeqCst);
     });
     match worker_threads.lock() {
         Ok(mut handles) => handles.push(handle),
@@ -795,14 +838,22 @@ fn process_is_alive(pid: u32) -> bool {
 
 pub fn run_foreground() -> Result<(), AtmError> {
     let home_dir = home::atm_home()?;
-    let dispatcher = Arc::new(CoreDispatcher::new(
-        home_dir.clone(),
-        Arc::new(DaemonObservability::new(&home_dir)),
-    ));
+    let worker_threads = Arc::new(Mutex::new(Vec::new()));
+    let dispatcher = Arc::new(
+        CoreDispatcher::new(
+            home_dir.clone(),
+            Arc::new(DaemonObservability::new(&home_dir)),
+        )
+        .with_worker_threads(Arc::clone(&worker_threads)),
+    );
     let stop = Arc::new(AtomicBool::new(false));
     let reload = Arc::new(AtomicBool::new(false));
     register_signal_handlers(Arc::clone(&stop), Arc::clone(&reload))?;
-    let handle = start_runtime(DaemonConfig::from_home(home_dir), dispatcher)?;
+    let handle = start_runtime(
+        DaemonConfig::from_home(home_dir),
+        Arc::clone(&worker_threads),
+        dispatcher,
+    )?;
     #[cfg(windows)]
     let stop_marker = DaemonPaths::from_home(&handle.home_dir)
         .state_dir
@@ -823,6 +874,9 @@ pub fn run_foreground() -> Result<(), AtmError> {
     handle.shutdown()
 }
 
+/// Register the daemon's three-signal contract before listeners accept
+/// traffic: `SIGINT` and `SIGTERM` trigger shutdown, and `SIGHUP` triggers a
+/// bounded reload without dropping singleton ownership.
 fn register_signal_handlers(
     stop: Arc<AtomicBool>,
     reload: Arc<AtomicBool>,
@@ -862,18 +916,25 @@ fn join_accept_thread(handle: JoinHandle<()>, thread_name: &str) -> Result<(), A
             ACCEPT_THREAD_JOIN_TIMEOUT
         )));
     }
-    let _ = handle.join();
+    if let Err(payload) = handle.join() {
+        return Err(AtmError::daemon_runtime(format!(
+            "{thread_name} panicked during shutdown: {}",
+            thread_panic_message(payload)
+        )));
+    }
     Ok(())
 }
 
-fn wait_for_inflight_zero(inflight: &AtomicUsize, timeout: Duration) {
-    let deadline = Instant::now() + timeout;
+fn wait_for_inflight_zero_until(inflight: &AtomicUsize, deadline: Instant) {
     while inflight.load(Ordering::SeqCst) > 0 && Instant::now() < deadline {
         thread::sleep(Duration::from_millis(25));
     }
 }
 
-fn join_worker_threads(worker_threads: &Arc<Mutex<Vec<JoinHandle<()>>>>) -> Result<(), AtmError> {
+fn join_worker_threads(
+    worker_threads: &Arc<Mutex<Vec<JoinHandle<()>>>>,
+    shutdown_deadline: Instant,
+) -> Result<(), AtmError> {
     let handles = {
         let mut handles = worker_threads.lock().map_err(|_| {
             AtmError::daemon_start_failed("worker thread registry lock poisoned during shutdown")
@@ -881,9 +942,35 @@ fn join_worker_threads(worker_threads: &Arc<Mutex<Vec<JoinHandle<()>>>>) -> Resu
         std::mem::take(&mut *handles)
     };
     for handle in handles {
-        let _ = handle.join();
+        let per_thread_deadline =
+            (Instant::now() + WORKER_THREAD_JOIN_TIMEOUT).min(shutdown_deadline);
+        while !handle.is_finished() && Instant::now() < per_thread_deadline {
+            thread::sleep(Duration::from_millis(25));
+        }
+        if !handle.is_finished() {
+            return Err(AtmError::daemon_runtime(format!(
+                "worker thread did not stop before shutdown deadline (per-thread cap {:?})",
+                WORKER_THREAD_JOIN_TIMEOUT
+            )));
+        }
+        if let Err(payload) = handle.join() {
+            return Err(AtmError::daemon_runtime(format!(
+                "worker thread panicked during shutdown: {}",
+                thread_panic_message(payload)
+            )));
+        }
     }
     Ok(())
+}
+
+fn thread_panic_message(payload: Box<dyn std::any::Any + Send + 'static>) -> String {
+    if let Some(message) = payload.downcast_ref::<&str>() {
+        return (*message).to_string();
+    }
+    if let Some(message) = payload.downcast_ref::<String>() {
+        return message.clone();
+    }
+    "non-string panic payload".to_string()
 }
 
 fn attach_runtime_health(
@@ -985,8 +1072,10 @@ mod tests {
     fn second_daemon_startup_fails_deterministically() {
         let tempdir = TempDir::new().expect("tempdir");
         let home_dir = tempdir.path().to_path_buf();
+        let worker_threads = Arc::new(Mutex::new(Vec::new()));
         let first = start_runtime(
             DaemonConfig::from_home(home_dir.clone()),
+            Arc::clone(&worker_threads),
             Arc::new(CoreDispatcher::new(
                 home_dir.clone(),
                 Arc::new(NullObservability),
@@ -995,6 +1084,7 @@ mod tests {
         .expect("first daemon");
         let error = match start_runtime(
             DaemonConfig::from_home(home_dir),
+            Arc::new(Mutex::new(Vec::new())),
             Arc::new(CoreDispatcher::new(
                 tempdir.path().to_path_buf(),
                 Arc::new(NullObservability),
@@ -1019,6 +1109,7 @@ mod tests {
         fs::write(&paths.singleton_path, br#"{"pid":999999}"#).expect("stale singleton");
         let handle = start_runtime(
             DaemonConfig::from_home(tempdir.path().to_path_buf()),
+            Arc::new(Mutex::new(Vec::new())),
             Arc::new(CoreDispatcher::new(
                 tempdir.path().to_path_buf(),
                 Arc::new(NullObservability),
@@ -1027,6 +1118,7 @@ mod tests {
         .expect("daemon with stale singleton");
         let error = match start_runtime(
             DaemonConfig::from_home(tempdir.path().to_path_buf()),
+            Arc::new(Mutex::new(Vec::new())),
             Arc::new(CoreDispatcher::new(
                 tempdir.path().to_path_buf(),
                 Arc::new(NullObservability),
@@ -1053,12 +1145,14 @@ mod tests {
             format!("[atm]\ndefault_team = \"{TEST_TEAM}\"\n"),
         )
         .expect("atm toml");
+        let worker_threads = Arc::new(Mutex::new(Vec::new()));
         let handle = start_runtime(
             DaemonConfig::from_home(tempdir.path().to_path_buf()),
-            Arc::new(CoreDispatcher::new(
-                tempdir.path().to_path_buf(),
-                Arc::new(NullObservability),
-            )),
+            Arc::clone(&worker_threads),
+            Arc::new(
+                CoreDispatcher::new(tempdir.path().to_path_buf(), Arc::new(NullObservability))
+                    .with_worker_threads(Arc::clone(&worker_threads)),
+            ),
         )
         .expect("runtime");
         let response = request_local(

@@ -311,7 +311,11 @@ fn map_store_error(context: &str, error: StoreError) -> AtmError {
     let kind = match error.kind {
         StoreErrorKind::Busy => AtmErrorKind::Timeout,
         StoreErrorKind::Constraint => AtmErrorKind::Validation,
-        _ => AtmErrorKind::MailboxWrite,
+        StoreErrorKind::Open
+        | StoreErrorKind::Bootstrap
+        | StoreErrorKind::Migration
+        | StoreErrorKind::Query
+        | StoreErrorKind::Transaction => AtmErrorKind::MailboxWrite,
     };
     let mut atm_error =
         AtmError::new_with_code(error.code, kind, format!("{context}: {}", error.message));

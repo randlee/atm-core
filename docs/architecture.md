@@ -2412,6 +2412,8 @@ The daemon runtime must use one documented operational contract.
 Required architectural defaults:
 - graceful shutdown drain deadline: `5s`
 - force-cancel deadline: `10s` total
+- daemon auto-start publish deadline: `10s`
+  (`AUTO_START_PUBLISH_TIMEOUT`)
 - same-host daemon request deadline: `3s`
 - per-leg TCP/TLS connect deadline: `5s`
 - per-leg TCP/TLS read/write deadline: `5s`
