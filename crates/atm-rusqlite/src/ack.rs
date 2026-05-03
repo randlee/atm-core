@@ -1,11 +1,12 @@
 use atm_core::ack::{
     AckCommitCommand, AckCommitOutcome, AckCommitRejection, AckCommitResult, AckStore,
 };
+use atm_core::mail_store::AckStateRecord;
 use atm_core::store::{MessageKey, StoreError};
 use rusqlite::{OptionalExtension, Transaction};
 
-use crate::mail::{classify_message_duplicate, insert_message_row};
-use crate::task::acknowledge_tasks_for_message_tx;
+use crate::mail::{classify_message_duplicate, insert_message_row, upsert_ack_state_row};
+use crate::task::{TaskBatchAcknowledgeOutcome, acknowledge_tasks_for_message_tx};
 use crate::{RusqliteStore, classify_store_error, parse_required};
 
 impl atm_core::ack::sealed::Sealed for RusqliteStore {}
@@ -28,7 +29,7 @@ fn commit_ack_reply(
             AckCommitRejection::MessageNotFound,
         ));
     };
-    let visibility = transaction
+    let visibility_read_at = transaction
         .query_row(
             "SELECT read_at FROM message_visibility WHERE message_key = ?1",
             [source_message_key.as_str()],
@@ -36,27 +37,47 @@ fn commit_ack_reply(
         )
         .optional()
         .map_err(|error| classify_store_error(error, "failed to load visibility state"))?;
+    let source_kind = transaction
+        .query_row(
+            "SELECT source_kind FROM messages WHERE message_key = ?1",
+            [source_message_key.as_str()],
+            |row| row.get::<_, String>(0),
+        )
+        .map_err(|error| classify_store_error(error, "failed to load source message kind"))?;
     let ack_state = transaction
         .query_row(
             "SELECT pending_ack_at, acknowledged_at FROM ack_state WHERE message_key = ?1",
             [source_message_key.as_str()],
             |row| {
-                Ok((
-                    row.get::<_, Option<String>>(0)?,
-                    row.get::<_, Option<String>>(1)?,
-                ))
+                Ok(RawAckState {
+                    pending_ack_at: row.get(0)?,
+                    acknowledged_at: row.get(1)?,
+                })
             },
         )
         .optional()
         .map_err(|error| classify_store_error(error, "failed to load ack state"))?;
 
-    match (visibility, ack_state) {
-        (_, Some((_, Some(_)))) => {
+    match (visibility_read_at.flatten(), ack_state.as_ref()) {
+        (
+            _,
+            Some(RawAckState {
+                acknowledged_at: Some(_),
+                ..
+            }),
+        ) => {
             return Ok(AckCommitResult::Rejected(
                 AckCommitRejection::AlreadyAcknowledged,
             ));
         }
-        (Some(Some(_)), Some((Some(_), None))) => {}
+        (
+            Some(_),
+            Some(RawAckState {
+                pending_ack_at: Some(_),
+                acknowledged_at: None,
+            }),
+        ) => {}
+        (Some(_), None) if source_kind == "legacy" => {}
         _ => return Ok(AckCommitResult::Rejected(AckCommitRejection::NotPending)),
     }
 
@@ -73,46 +94,39 @@ fn commit_ack_reply(
         }
     }
 
-    transaction
-        .execute(
-            r#"
-            INSERT INTO ack_state (
-                message_key,
-                pending_ack_at,
-                acknowledged_at,
-                ack_reply_message_key,
-                ack_reply_team,
-                ack_reply_agent
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-            ON CONFLICT(message_key) DO UPDATE SET
-                pending_ack_at = excluded.pending_ack_at,
-                acknowledged_at = excluded.acknowledged_at,
-                ack_reply_message_key = excluded.ack_reply_message_key,
-                ack_reply_team = excluded.ack_reply_team,
-                ack_reply_agent = excluded.ack_reply_agent
-            "#,
-            (
-                source_message_key.as_str(),
-                Option::<String>::None,
-                Some(command.acknowledged_at.to_string()),
-                Some(command.reply_message.message_key.to_string()),
-                Some(command.reply_team.to_string()),
-                Some(command.reply_agent.to_string()),
-            ),
-        )
-        .map_err(|error| classify_store_error(error, "failed to persist acknowledgement state"))?;
+    upsert_ack_state_row(
+        transaction,
+        &AckStateRecord {
+            message_key: source_message_key.clone(),
+            pending_ack_at: None,
+            acknowledged_at: Some(command.acknowledged_at),
+            ack_reply_message_key: Some(command.reply_message.message_key.clone()),
+            ack_reply_team: Some(command.reply_team.clone()),
+            ack_reply_agent: Some(command.reply_agent.clone()),
+        },
+    )
+    .map_err(|error| classify_store_error(error, "failed to persist acknowledgement state"))?;
 
     // `NotPending` is enforced by the Rust-side visibility/ack-state guard
     // above, so the UPSERT intentionally does not add a second SQL predicate.
-    let task_ids = acknowledge_tasks_for_message_tx(
+    let task_ids = match acknowledge_tasks_for_message_tx(
         transaction,
         &source_message_key,
         command.acknowledged_at,
-    )?;
+    )? {
+        TaskBatchAcknowledgeOutcome::NoTasks => Vec::new(),
+        TaskBatchAcknowledgeOutcome::Acknowledged(task_ids) => task_ids,
+    };
 
     Ok(AckCommitResult::Committed(AckCommitOutcome {
         acknowledged_task_ids: task_ids,
     }))
+}
+
+#[derive(Debug)]
+struct RawAckState {
+    pending_ack_at: Option<String>,
+    acknowledged_at: Option<String>,
 }
 
 fn resolve_source_message_key(

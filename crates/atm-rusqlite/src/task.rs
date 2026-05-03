@@ -2,6 +2,7 @@ use atm_core::store::{MessageKey, StoreError};
 use atm_core::task_store::{TaskRecord, TaskStatus, TaskStore};
 use atm_core::types::{IsoTimestamp, TaskId};
 use rusqlite::{OptionalExtension, Transaction};
+use serde_json::Value;
 
 use crate::{
     RusqliteStore, classify_store_error, invalid_store_data, parse_optional, parse_required,
@@ -17,6 +18,12 @@ struct RawTaskRow {
     created_at: String,
     acknowledged_at: Option<String>,
     metadata_json: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum TaskBatchAcknowledgeOutcome {
+    NoTasks,
+    Acknowledged(Vec<TaskId>),
 }
 
 impl TaskStore for RusqliteStore {
@@ -145,7 +152,7 @@ pub(crate) fn upsert_task_row(
             task.status.as_str(),
             task.created_at.to_string(),
             task.acknowledged_at.as_ref().map(ToString::to_string),
-            task.metadata_json.as_deref(),
+            task.metadata_json.as_ref().map(Value::to_string),
         ),
     )?;
     Ok(())
@@ -155,7 +162,7 @@ pub(crate) fn acknowledge_tasks_for_message_tx(
     transaction: &Transaction<'_>,
     message_key: &MessageKey,
     acknowledged_at: IsoTimestamp,
-) -> Result<Vec<TaskId>, StoreError> {
+) -> Result<TaskBatchAcknowledgeOutcome, StoreError> {
     let mut statement = transaction
         .prepare("SELECT task_id FROM tasks WHERE message_key = ?1 ORDER BY task_id")
         .map_err(|error| classify_store_error(error, "failed to prepare task lookup for ack"))?;
@@ -171,22 +178,22 @@ pub(crate) fn acknowledge_tasks_for_message_tx(
         task_ids.push(task_id);
     }
 
-    if !task_ids.is_empty() {
-        transaction
-            .execute(
-                "UPDATE tasks SET status = ?1, acknowledged_at = ?2 WHERE message_key = ?3",
-                (
-                    TaskStatus::Acknowledged.as_str(),
-                    acknowledged_at.to_string(),
-                    message_key.as_str(),
-                ),
-            )
-            .map_err(|error| {
-                classify_store_error(error, "failed to acknowledge tasks for message")
-            })?;
+    if task_ids.is_empty() {
+        return Ok(TaskBatchAcknowledgeOutcome::NoTasks);
     }
 
-    Ok(task_ids)
+    transaction
+        .execute(
+            "UPDATE tasks SET status = ?1, acknowledged_at = ?2 WHERE message_key = ?3",
+            (
+                TaskStatus::Acknowledged.as_str(),
+                acknowledged_at.to_string(),
+                message_key.as_str(),
+            ),
+        )
+        .map_err(|error| classify_store_error(error, "failed to acknowledge tasks for message"))?;
+
+    Ok(TaskBatchAcknowledgeOutcome::Acknowledged(task_ids))
 }
 
 fn convert_task_row(raw: RawTaskRow) -> Result<TaskRecord, StoreError> {
@@ -196,7 +203,7 @@ fn convert_task_row(raw: RawTaskRow) -> Result<TaskRecord, StoreError> {
         status: parse_task_status(raw.status)?,
         created_at: parse_required(raw.created_at, "created_at")?,
         acknowledged_at: parse_optional(raw.acknowledged_at, "acknowledged_at")?,
-        metadata_json: raw.metadata_json,
+        metadata_json: parse_optional_json(raw.metadata_json, "metadata_json")?,
     })
 }
 
@@ -206,4 +213,16 @@ fn parse_task_status(value: String) -> Result<TaskStatus, StoreError> {
         "acknowledged" => Ok(TaskStatus::Acknowledged),
         _ => Err(invalid_store_data("task_status", "unsupported task status")),
     }
+}
+
+fn parse_optional_json(value: Option<String>, field: &str) -> Result<Option<Value>, StoreError> {
+    value
+        .map(|raw| {
+            serde_json::from_str::<Value>(&raw).map_err(|error| {
+                invalid_store_data(field, error).with_recovery(
+                    "Repair the malformed JSON task metadata or rebuild the local ATM store before retrying the command.",
+                )
+            })
+        })
+        .transpose()
 }

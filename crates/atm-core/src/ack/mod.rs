@@ -799,13 +799,16 @@ mod tests {
     use crate::schema::MessageEnvelope;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
+    const TEST_TEAM_NAME: &str = "test-team";
+    const TEST_ACTOR_B: &str = "test-recipient";
+
     fn message_with_from(from: &str) -> MessageEnvelope {
         MessageEnvelope {
             from: from.parse::<AgentName>().expect("agent"),
             text: "hello".to_string(),
             timestamp: IsoTimestamp::now(),
             read: false,
-            source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
+            source_team: Some(TEST_TEAM_NAME.parse::<TeamName>().expect("team")),
             summary: None,
             message_id: None,
             pending_ack_at: None,
@@ -821,31 +824,32 @@ mod tests {
         let mut message = message_with_from("lead");
         message.extra.insert(
             "metadata".to_string(),
-            json!({"atm": {"fromIdentity": "team-lead"}}),
+            json!({"atm": {"fromIdentity": TEST_ACTOR_B}}),
         );
 
         assert_eq!(
             canonical_sender_identity(&message).as_deref(),
-            Some("team-lead")
+            Some(TEST_ACTOR_B)
         );
     }
 
     #[test]
     fn resolve_reply_target_prefers_canonical_sender_identity_metadata() {
         let mut message = message_with_from("lead");
-        message.source_team = Some("atm-dev".parse::<TeamName>().expect("team"));
+        message.source_team = Some(TEST_TEAM_NAME.parse::<TeamName>().expect("team"));
         message.extra.insert(
             "metadata".to_string(),
-            json!({"atm": {"fromIdentity": "team-lead"}}),
+            json!({"atm": {"fromIdentity": TEST_ACTOR_B}}),
         );
 
-        let target = resolve_reply_target(&message, &"atm-dev".parse::<TeamName>().expect("team"))
-            .expect("reply target");
+        let target =
+            resolve_reply_target(&message, &TEST_TEAM_NAME.parse::<TeamName>().expect("team"))
+                .expect("reply target");
         assert_eq!(
             target,
             (
-                "team-lead".parse().expect("agent"),
-                "atm-dev".parse().expect("team"),
+                TEST_ACTOR_B.parse().expect("agent"),
+                TEST_TEAM_NAME.parse().expect("team"),
             )
         );
     }

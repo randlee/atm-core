@@ -24,6 +24,7 @@ use atm_core::task_store::{TaskRecord, TaskStatus, TaskStore};
 use atm_core::team_ingress::{default_host_name, ingest_loaded_team_config, ingest_team_config};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use rusqlite::{Connection, OpenFlags};
+use serde_json::json;
 use tempfile::TempDir;
 
 use crate::{
@@ -538,7 +539,7 @@ fn create_read_and_update_store_rows() {
         status: TaskStatus::PendingAck,
         created_at: "2026-05-02T20:00:40Z".parse().expect("timestamp"),
         acknowledged_at: None,
-        metadata_json: Some("{\"priority\":\"high\"}".to_string()),
+        metadata_json: Some(json!({"priority": "high"})),
     };
     store.upsert_task(&task).expect("upsert task");
     assert_eq!(
@@ -1111,7 +1112,7 @@ fn replace_roster_rolls_back_on_constraint_violation() {
 }
 
 #[test]
-fn team_roster_schema_keeps_recipient_pane_nullable() {
+fn team_roster_schema_keeps_nullable_runtime_columns() {
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_path(tempdir.path().join("mail.db")).expect("open store");
     let connection = store.lock_connection().expect("lock");
@@ -1121,15 +1122,36 @@ fn team_roster_schema_keeps_recipient_pane_nullable() {
     let mut rows = statement.query([]).expect("query table_info");
 
     let mut saw_recipient_pane = false;
+    let mut saw_role = false;
+    let mut saw_transport_kind = false;
+    let mut saw_host_name = false;
     while let Some(row) = rows.next().expect("next row") {
         let name: String = row.get(1).expect("column name");
-        if name == "recipient_pane_id" {
-            let not_null: i64 = row.get(3).expect("not null flag");
-            saw_recipient_pane = true;
-            assert_eq!(not_null, 0);
+        let not_null: i64 = row.get(3).expect("not null flag");
+        match name.as_str() {
+            "recipient_pane_id" => {
+                saw_recipient_pane = true;
+                assert_eq!(not_null, 0);
+            }
+            "role" => {
+                saw_role = true;
+                assert_eq!(not_null, 0);
+            }
+            "transport_kind" => {
+                saw_transport_kind = true;
+                assert_eq!(not_null, 0);
+            }
+            "host_name" => {
+                saw_host_name = true;
+                assert_eq!(not_null, 0);
+            }
+            _ => {}
         }
     }
     assert!(saw_recipient_pane);
+    assert!(saw_role);
+    assert!(saw_transport_kind);
+    assert!(saw_host_name);
 }
 
 #[test]
@@ -1154,6 +1176,22 @@ fn store_errors_stay_discriminated() {
     );
     assert_eq!(busy.kind, StoreErrorKind::Busy);
     assert_eq!(busy.code, atm_core::error_codes::AtmErrorCode::StoreBusy);
+
+    let busy_snapshot = crate::classify_store_error(
+        rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error {
+                code: rusqlite::ErrorCode::DatabaseBusy,
+                extended_code: rusqlite::ffi::SQLITE_BUSY_SNAPSHOT,
+            },
+            Some("database busy snapshot".to_string()),
+        ),
+        "busy_snapshot",
+    );
+    assert_eq!(busy_snapshot.kind, StoreErrorKind::Busy);
+    assert_eq!(
+        busy_snapshot.code,
+        atm_core::error_codes::AtmErrorCode::StoreBusy
+    );
 
     let constraint = crate::classify_store_error(
         rusqlite::Error::SqliteFailure(
@@ -1203,10 +1241,10 @@ fn store_errors_stay_discriminated() {
             .expect("open readonly initialized db");
     let migration = crate::bootstrap_schema(&mut readonly_initialized)
         .expect_err("readonly migration should fail");
-    assert_eq!(migration.kind, StoreErrorKind::Migration);
+    assert_eq!(migration.kind, StoreErrorKind::Bootstrap);
     assert_eq!(
         migration.code,
-        atm_core::error_codes::AtmErrorCode::StoreMigrationFailed
+        atm_core::error_codes::AtmErrorCode::StoreBootstrapFailed
     );
 
     let transaction_dir = TempDir::new().expect("tempdir");
