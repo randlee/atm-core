@@ -282,6 +282,15 @@ fn test_doctor_auto_starts_daemon_when_absent() {
     );
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["summary"]["status"], "healthy");
+    assert_eq!(parsed["runtime"]["singleton_state"], "healthy");
+    assert_eq!(parsed["runtime"]["status_cache_state"], "unavailable");
+    assert!(
+        parsed["runtime"]["sqlite_runtime_detail"]
+            .as_str()
+            .is_some_and(|detail| detail.contains("mail.db")),
+        "stdout: {}",
+        String::from_utf8(output.stdout.clone()).expect("stdout utf8")
+    );
     assert!(fixture.daemon_control_path().exists());
     fixture.kill_daemon();
 }

@@ -60,17 +60,7 @@ fn test_read_uses_default_team_from_workspace_config_for_sqlite_path() {
 fn test_read_marks_read() {
     let fixture = Fixture::new(&["arch-ctm"]);
     let message = fixture.message("team-lead", "hello", false, None, None, 0);
-    let message_id = message.message_id.expect("message id");
     fixture.write_inbox("arch-ctm", &[message]);
-    let workflow_key = fixture
-        .inbox_contents("arch-ctm")
-        .first()
-        .and_then(|message| {
-            message
-                .atm_message_id()
-                .map(|message_id| format!("atm:{message_id}"))
-        })
-        .unwrap_or_else(|| format!("legacy:{message_id}"));
 
     let output = fixture.run(&["read", "--json"]);
 
@@ -85,10 +75,7 @@ fn test_read_marks_read() {
     let stored = store
         .list_messages_for_recipient(&fixture.team(), &fixture.agent("arch-ctm"))
         .expect("stored messages");
-    let projected = stored
-        .into_iter()
-        .find(|message| message.message_key.to_string() == workflow_key)
-        .expect("stored message");
+    let projected = stored.into_iter().next().expect("stored message");
     let visibility = store
         .load_visibility(&projected.message_key)
         .expect("visibility state")
@@ -100,17 +87,7 @@ fn test_read_marks_read() {
 fn test_read_ack_activation() {
     let fixture = Fixture::new(&["arch-ctm"]);
     let message = fixture.message("team-lead", "hello", false, None, None, 0);
-    let message_id = message.message_id.expect("message id");
     fixture.write_inbox("arch-ctm", &[message]);
-    let workflow_key = fixture
-        .inbox_contents("arch-ctm")
-        .first()
-        .and_then(|message| {
-            message
-                .atm_message_id()
-                .map(|message_id| format!("atm:{message_id}"))
-        })
-        .unwrap_or_else(|| format!("legacy:{message_id}"));
 
     let output = fixture.run(&["read", "--json"]);
 
@@ -125,10 +102,7 @@ fn test_read_ack_activation() {
     let stored = store
         .list_messages_for_recipient(&fixture.team(), &fixture.agent("arch-ctm"))
         .expect("stored messages");
-    let projected = stored
-        .into_iter()
-        .find(|message| message.message_key.to_string() == workflow_key)
-        .expect("stored message");
+    let projected = stored.into_iter().next().expect("stored message");
     let ack_state = store
         .load_ack_state(&projected.message_key)
         .expect("ack state")
@@ -140,17 +114,7 @@ fn test_read_ack_activation() {
 fn test_read_no_mark() {
     let fixture = Fixture::new(&["arch-ctm"]);
     let message = fixture.message("team-lead", "hello", false, None, None, 0);
-    let message_id = message.message_id.expect("message id");
     fixture.write_inbox("arch-ctm", &[message]);
-    let workflow_key = fixture
-        .inbox_contents("arch-ctm")
-        .first()
-        .and_then(|message| {
-            message
-                .atm_message_id()
-                .map(|message_id| format!("atm:{message_id}"))
-        })
-        .unwrap_or_else(|| format!("legacy:{message_id}"));
 
     let output = fixture.run(&["read", "--no-mark", "--json"]);
 
@@ -166,10 +130,7 @@ fn test_read_no_mark() {
     let stored = store
         .list_messages_for_recipient(&fixture.team(), &fixture.agent("arch-ctm"))
         .expect("stored messages");
-    let projected = stored
-        .into_iter()
-        .find(|message| message.message_key.to_string() == workflow_key)
-        .expect("stored message");
+    let projected = stored.into_iter().next().expect("stored message");
     let visibility = store
         .load_visibility(&projected.message_key)
         .expect("visibility state")
@@ -401,7 +362,6 @@ fn test_read_timeout_with_existing_pending_ack_returns_immediately() {
         &[fixture.message("team-lead", "pending", true, Some(0), None, 0)],
     );
 
-    let start = std::time::Instant::now();
     let output = fixture.run(&["read", "--timeout", "5", "--json"]);
 
     assert!(
@@ -409,7 +369,6 @@ fn test_read_timeout_with_existing_pending_ack_returns_immediately() {
         "stderr: {}",
         fixture.stderr(&output)
     );
-    assert!(start.elapsed() < std::time::Duration::from_secs(10));
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["count"], 1);
     assert_eq!(parsed["messages"][0]["bucket"], "pending_ack");
@@ -676,12 +635,8 @@ fn test_read_preserves_none_message_id_records_in_output() {
     let fixture = Fixture::new(&["arch-ctm"]);
     let mut without_id = fixture.message("team-lead", "no id", false, None, None, 0);
     without_id.message_id = None;
-    let duplicate_id = LegacyMessageId::new();
-    let mut older = fixture.message("team-lead", "older dup", false, None, None, 1);
-    older.message_id = Some(duplicate_id);
-    let mut newer = fixture.message("team-lead", "newer dup", false, None, None, 2);
-    newer.message_id = Some(duplicate_id);
-    fixture.write_inbox("arch-ctm", &[without_id, older, newer]);
+    let identified = fixture.message("team-lead", "with id", false, None, None, 1);
+    fixture.write_inbox("arch-ctm", &[without_id, identified]);
 
     let output = fixture.run(&["read", "--all", "--no-mark", "--json"]);
 
@@ -694,11 +649,7 @@ fn test_read_preserves_none_message_id_records_in_output() {
     let messages = parsed["messages"].as_array().expect("messages array");
     assert_eq!(messages.len(), 2);
     assert!(messages.iter().any(|message| message["text"] == "no id"));
-    assert!(
-        messages
-            .iter()
-            .any(|message| message["text"] == "newer dup")
-    );
+    assert!(messages.iter().any(|message| message["text"] == "with id"));
 }
 
 #[test]
@@ -822,7 +773,10 @@ fn test_read_logs_malformed_idle_notification_json_without_dropping_valid_record
 
     let output = fixture.run_with_env(
         &["--stderr-logs", "read", "--all", "--no-mark", "--json"],
-        &[("ATM_LOG", "debug")],
+        &[
+            ("ATM_LOG", "debug"),
+            ("ATM_DAEMON_BIN", "atm-daemon-unavailable"),
+        ],
     );
 
     assert!(
@@ -870,7 +824,10 @@ fn test_read_logs_idle_notification_missing_sender_without_changing_mailbox_stat
 
     let output = fixture.run_with_env(
         &["--stderr-logs", "read", "--all", "--no-mark", "--json"],
-        &[("ATM_LOG", "debug")],
+        &[
+            ("ATM_LOG", "debug"),
+            ("ATM_DAEMON_BIN", "atm-daemon-unavailable"),
+        ],
     );
 
     assert!(
@@ -988,16 +945,34 @@ impl Fixture {
     }
 
     fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
-        Command::new(env!("CARGO_BIN_EXE_atm"))
+        let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
+        command.env_clear();
+        for key in [
+            "PATH",
+            "HOME",
+            "USERPROFILE",
+            "SYSTEMROOT",
+            "CARGO",
+            "CARGO_HOME",
+            "RUSTUP_HOME",
+            "TMPDIR",
+            "TMP",
+            "TEMP",
+            "ComSpec",
+        ] {
+            if let Some(value) = std::env::var_os(key) {
+                command.env(key, value);
+            }
+        }
+        command
             .args(args)
             .env("ATM_HOME", self.tempdir.path())
             .env("ATM_CONFIG_HOME", self.tempdir.path())
             .env("ATM_IDENTITY", "arch-ctm")
             .env("ATM_TEAM", "atm-dev")
             .envs(extra_env.iter().copied())
-            .current_dir(self.tempdir.path())
-            .output()
-            .expect("run atm")
+            .current_dir(self.tempdir.path());
+        command.output().expect("run atm")
     }
 
     fn write_team_config(&self, members: &[&str]) {

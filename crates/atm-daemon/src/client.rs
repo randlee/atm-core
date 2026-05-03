@@ -5,10 +5,12 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+use atm_core::clear::{ClearOutcome, ClearQuery};
 use atm_core::dispatcher::{DaemonRequest, DaemonResponse, DispatchError};
 use atm_core::doctor::DoctorQuery;
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode as Code;
+use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::types::{AgentName, TeamName};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -22,7 +24,7 @@ use crate::{
     WireResponseEnvelope,
 };
 
-pub(crate) const SAME_HOST_SERVER_IO_TIMEOUT: Duration = Duration::from_secs(5);
+pub(crate) const SAME_HOST_SERVER_IO_TIMEOUT: Duration = SAME_HOST_REQUEST_TIMEOUT;
 pub(crate) const REMOTE_SERVER_IO_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub fn request_doctor_json_with_autostart(query: DoctorQuery) -> Result<String, AtmError> {
@@ -49,6 +51,26 @@ pub fn request_doctor_json_with_autostart(query: DoctorQuery) -> Result<String, 
         }
         Err(error) => Err(error),
     }
+}
+
+pub fn request_read_with_autostart(query: ReadQuery) -> Result<ReadOutcome, AtmError> {
+    request_with_autostart(
+        query.home_dir.clone(),
+        query.current_dir.clone(),
+        query.team_override.clone(),
+        atm_core::dispatcher::RequestPayload::Read,
+        &query,
+    )
+}
+
+pub fn request_clear_with_autostart(query: ClearQuery) -> Result<ClearOutcome, AtmError> {
+    request_with_autostart(
+        query.home_dir.clone(),
+        query.current_dir.clone(),
+        query.team_override.clone(),
+        atm_core::dispatcher::RequestPayload::Clear,
+        &query,
+    )
 }
 
 pub fn ensure_daemon_running(home_dir: &Path) -> Result<(), AtmError> {
@@ -116,6 +138,41 @@ pub fn request_local(
             exchange_tcp(&mut stream, request)
         }
     }
+}
+
+fn request_with_autostart<Q, O>(
+    home_dir: PathBuf,
+    current_dir: PathBuf,
+    team_override: Option<TeamName>,
+    payload_builder: fn(serde_json::Value) -> atm_core::dispatcher::RequestPayload,
+    query: &Q,
+) -> Result<O, AtmError>
+where
+    Q: Serialize,
+    O: for<'de> Deserialize<'de>,
+{
+    let (team_name, agent_name) =
+        resolve_request_identity(team_override, Some(&current_dir), false)?;
+    let request = DaemonRequest {
+        team_name,
+        agent_name,
+        payload: payload_builder(serde_json::to_value(query).map_err(|error| {
+            AtmError::daemon_protocol("failed to serialize daemon request payload")
+                .with_source(error)
+        })?),
+    };
+    let response = match request_local(&home_dir, &request, SAME_HOST_REQUEST_TIMEOUT) {
+        Ok(response) => response,
+        Err(error) if should_retry_autostart(&error) => {
+            auto_start_daemon(&home_dir)?;
+            request_local(&home_dir, &request, SAME_HOST_REQUEST_TIMEOUT)
+                .map_err(add_daemon_ready_recovery)?
+        }
+        Err(error) => return Err(error),
+    };
+    serde_json::from_str(&response.payload_json).map_err(|error| {
+        AtmError::daemon_protocol("failed to decode daemon response payload").with_source(error)
+    })
 }
 
 pub fn request_remote(

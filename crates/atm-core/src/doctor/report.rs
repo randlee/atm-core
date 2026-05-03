@@ -19,6 +19,7 @@ pub enum DoctorSeverity {
 #[serde(rename_all = "snake_case")]
 pub enum DoctorStatus {
     Healthy,
+    Unavailable,
     Warning,
     Error,
 }

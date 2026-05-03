@@ -34,6 +34,7 @@ enum LockOperation {
 }
 
 impl LockOperation {
+    #[cfg(test)]
     const fn test_override_token(self) -> &'static str {
         match self {
             Self::CreateDirectory => "create_directory",
@@ -564,27 +565,37 @@ fn is_readonly_filesystem_error(error: &io::Error) -> bool {
 
 fn forced_readonly_filesystem_error(operation: LockOperation) -> Option<io::Error> {
     #[cfg(test)]
-    if forced_readonly_filesystem_test_override() == Some(operation) {
-        return Some(io::Error::from_raw_os_error(
+    {
+        if forced_readonly_filesystem_test_override() == Some(operation) {
+            return Some(io::Error::from_raw_os_error(
+                readonly_filesystem_raw_os_error(),
+            ));
+        }
+
+        let forced = std::env::var("ATM_TEST_FORCE_LOCK_READONLY_FS").ok()?;
+        if forced != operation.test_override_token() {
+            return None;
+        }
+
+        Some(io::Error::from_raw_os_error(
             readonly_filesystem_raw_os_error(),
-        ));
+        ))
     }
 
-    let forced = std::env::var("ATM_TEST_FORCE_LOCK_READONLY_FS").ok()?;
-    if forced != operation.test_override_token() {
-        return None;
+    #[cfg(not(test))]
+    {
+        let _ = operation;
+        None
     }
-
-    Some(io::Error::from_raw_os_error(
-        readonly_filesystem_raw_os_error(),
-    ))
 }
 
+#[cfg(test)]
 #[cfg(windows)]
 const fn readonly_filesystem_raw_os_error() -> i32 {
     windows_sys::Win32::Foundation::ERROR_WRITE_PROTECT as i32
 }
 
+#[cfg(test)]
 #[cfg(not(windows))]
 const fn readonly_filesystem_raw_os_error() -> i32 {
     libc::EROFS

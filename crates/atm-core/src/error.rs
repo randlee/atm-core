@@ -191,18 +191,22 @@ impl AtmError {
         .with_recovery("Pass an explicit team in the address or configure a default team.")
     }
 
-    pub fn team_not_found(team: &str) -> Self {
+    pub fn team_not_found(team: &crate::types::TeamName) -> Self {
         Self::new(
             AtmErrorKind::TeamNotFound,
-            format!("team '{team}' was not found"),
+            format!("team '{}' was not found", team.as_str()),
         )
         .with_recovery("Create the team config or target a different team.")
     }
 
-    pub fn agent_not_found(agent: &str, team: &str) -> Self {
+    pub fn agent_not_found(agent: &crate::types::AgentName, team: &crate::types::TeamName) -> Self {
         Self::new(
             AtmErrorKind::AgentNotFound,
-            format!("agent '{agent}' was not found in team '{team}'"),
+            format!(
+                "agent '{}' was not found in team '{}'",
+                agent.as_str(),
+                team.as_str()
+            ),
         )
         .with_recovery("Update the team membership or target a different recipient.")
     }

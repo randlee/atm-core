@@ -1,5 +1,6 @@
 use crate::store::{MessageKey, StoreBoundary, StoreError};
 use crate::types::{IsoTimestamp, TaskId};
+use serde_json::Value;
 
 /// Canonical task status persisted by the Phase Q store boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,7 +26,7 @@ pub struct TaskRecord {
     pub status: TaskStatus,
     pub created_at: IsoTimestamp,
     pub acknowledged_at: Option<IsoTimestamp>,
-    pub metadata_json: Option<String>,
+    pub metadata_json: Option<Value>,
 }
 
 pub mod sealed {

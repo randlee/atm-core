@@ -709,7 +709,7 @@ Implementation details:
   - TCP/TLS connect `5s`
   - TCP/TLS read/write `5s`
   - remote retry budget `30s`
-  - SQLite `busy_timeout` `1500ms`
+  - SQLite `busy_timeout` `5000ms`
   - ingest batch slice `2s`
   - doctor query `3s`
 - resource caps:

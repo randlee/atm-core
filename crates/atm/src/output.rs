@@ -151,6 +151,7 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
         "Doctor status: {}",
         match report.summary.status {
             DoctorStatus::Healthy => "healthy",
+            DoctorStatus::Unavailable => "unavailable",
             DoctorStatus::Warning => "warning",
             DoctorStatus::Error => "error",
         }

@@ -24,6 +24,7 @@ use atm_core::task_store::{TaskRecord, TaskStatus, TaskStore};
 use atm_core::team_ingress::{default_host_name, ingest_loaded_team_config, ingest_team_config};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use rusqlite::{Connection, OpenFlags};
+use serde_json::json;
 use tempfile::TempDir;
 
 use crate::{
@@ -31,7 +32,8 @@ use crate::{
 };
 
 const TEST_TEAM: &str = "test-team";
-const TEST_SENDER: &str = "sender-a";
+const TEST_SENDER: &str = "test-sender";
+const TEST_RECIPIENT: &str = "test-recipient";
 
 fn team() -> TeamName {
     TEST_TEAM.parse().expect("team")
@@ -52,7 +54,7 @@ fn message_at(index: u8) -> atm_core::mail_store::StoredMessageRecord {
     atm_core::mail_store::StoredMessageRecord {
         message_key: MessageKey::from_atm_message_id(atm_message_id),
         team_name: team(),
-        recipient_agent: agent("team-lead"),
+        recipient_agent: agent(TEST_RECIPIENT),
         sender_display: TEST_SENDER.to_string(),
         sender_canonical: Some(agent(TEST_SENDER)),
         sender_team: Some(team()),
@@ -69,9 +71,11 @@ fn message_at(index: u8) -> atm_core::mail_store::StoredMessageRecord {
 fn ingest_record(root: &Path, message_key: &MessageKey) -> IngestRecord {
     IngestRecord {
         team_name: team(),
-        recipient_agent: agent("team-lead"),
-        source_path: root.join("team-lead.json"),
-        source_fingerprint: "sha256-team-lead-001".parse().expect("fingerprint"),
+        recipient_agent: agent(TEST_RECIPIENT),
+        source_path: root.join(format!("{TEST_RECIPIENT}.json")),
+        source_fingerprint: format!("sha256-{TEST_RECIPIENT}-001")
+            .parse()
+            .expect("fingerprint"),
         message_key: message_key.clone(),
         imported_at: "2026-05-02T20:00:05Z".parse().expect("timestamp"),
     }
@@ -188,7 +192,7 @@ fn pending_export(
     PendingExportRecord {
         message_key: message_key.clone(),
         export_target_team: team(),
-        export_target_agent: agent("team-lead"),
+        export_target_agent: agent(TEST_RECIPIENT),
         recipient_pane_id: Some("%1".parse().expect("pane")),
         attempt_count,
         next_attempt_at: next.parse().expect("next attempt"),
@@ -429,7 +433,7 @@ fn create_read_and_update_store_rows() {
         acknowledged_at: Some("2026-05-02T20:00:20Z".parse().expect("timestamp")),
         ack_reply_message_key: Some("ext:ack-reply-1".parse().expect("message key")),
         ack_reply_team: Some(team()),
-        ack_reply_agent: Some(agent("team-lead")),
+        ack_reply_agent: Some(agent(TEST_RECIPIENT)),
     };
     store.upsert_ack_state(&ack_state).expect("upsert ack");
     assert_eq!(
@@ -491,7 +495,7 @@ fn create_read_and_update_store_rows() {
         .insert_message(&atm_core::mail_store::StoredMessageRecord {
             message_key: export_future.message_key.clone(),
             team_name: team(),
-            recipient_agent: agent("team-lead"),
+            recipient_agent: agent(TEST_RECIPIENT),
             sender_display: TEST_SENDER.to_string(),
             sender_canonical: Some(agent(TEST_SENDER)),
             sender_team: Some(team()),
@@ -535,7 +539,7 @@ fn create_read_and_update_store_rows() {
         status: TaskStatus::PendingAck,
         created_at: "2026-05-02T20:00:40Z".parse().expect("timestamp"),
         acknowledged_at: None,
-        metadata_json: Some("{\"priority\":\"high\"}".to_string()),
+        metadata_json: Some(json!({"priority": "high"})),
     };
     store.upsert_task(&task).expect("upsert task");
     assert_eq!(
@@ -620,10 +624,10 @@ fn team_ingress_replaces_roster_and_preserves_existing_pid() {
     fs::create_dir_all(&team_dir).expect("team dir");
 
     store
-        .upsert_roster_member(&roster_member("recipient", Some("%1"), Some(4242)))
+        .upsert_roster_member(&roster_member(TEST_RECIPIENT, Some("%1"), Some(4242)))
         .expect("seed roster member");
 
-    let mut recipient = AgentMember::with_name(agent("recipient"));
+    let mut recipient = AgentMember::with_name(agent(TEST_RECIPIENT));
     recipient.tmux_pane_id = Some("%7".to_string());
     let mut quality = AgentMember::with_name(agent("quality-mgr"));
     quality.tmux_pane_id = Some("%8".to_string());
@@ -643,7 +647,7 @@ fn team_ingress_replaces_roster_and_preserves_existing_pid() {
     assert_eq!(roster.len(), 2);
     let recipient = roster
         .iter()
-        .find(|member| member.agent_name.as_str() == "recipient")
+        .find(|member| member.agent_name.as_str() == TEST_RECIPIENT)
         .expect("recipient");
     assert_eq!(
         recipient
@@ -657,11 +661,58 @@ fn team_ingress_replaces_roster_and_preserves_existing_pid() {
 }
 
 #[test]
+fn team_ingress_renamed_member_replaces_old_agent_name() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let store = RusqliteStore::open_for_team_home(tempdir.path(), &team()).expect("open store");
+    let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+    fs::create_dir_all(&team_dir).expect("team dir");
+
+    store
+        .replace_roster(
+            &team(),
+            &[
+                roster_member(TEST_RECIPIENT, Some("%1"), Some(4242)),
+                roster_member("quality-mgr", Some("%8"), Some(5150)),
+            ],
+        )
+        .expect("seed roster");
+
+    let mut renamed = AgentMember::with_name(agent("renamed-recipient"));
+    renamed.tmux_pane_id = Some("%9".to_string());
+    let config = TeamConfig {
+        members: vec![renamed],
+        ..Default::default()
+    };
+    fs::write(
+        team_dir.join("config.json"),
+        serde_json::to_vec(&config).expect("team config"),
+    )
+    .expect("write team config");
+
+    let roster = ingest_team_config(&team_dir, &team(), &store, &default_host_name())
+        .expect("ingest team config");
+    assert_eq!(roster.len(), 1);
+    assert_eq!(roster[0].agent_name.as_str(), "renamed-recipient");
+
+    let loaded = store.load_roster(&team()).expect("load roster");
+    assert!(
+        loaded
+            .iter()
+            .all(|member| member.agent_name.as_str() != TEST_RECIPIENT)
+    );
+    assert!(
+        loaded
+            .iter()
+            .any(|member| member.agent_name.as_str() == "renamed-recipient")
+    );
+}
+
+#[test]
 fn team_ingress_roster_shrink_removes_absent_members() {
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_for_team_home(tempdir.path(), &team()).expect("open store");
 
-    let mut recipient = AgentMember::with_name(agent("recipient"));
+    let mut recipient = AgentMember::with_name(agent(TEST_RECIPIENT));
     recipient.tmux_pane_id = Some("%7".to_string());
     let config = TeamConfig {
         members: vec![recipient],
@@ -672,7 +723,7 @@ fn team_ingress_roster_shrink_removes_absent_members() {
         .replace_roster(
             &team(),
             &[
-                roster_member("recipient", Some("%1"), Some(4242)),
+                roster_member(TEST_RECIPIENT, Some("%1"), Some(4242)),
                 roster_member("quality-mgr", Some("%8"), Some(5150)),
             ],
         )
@@ -682,19 +733,110 @@ fn team_ingress_roster_shrink_removes_absent_members() {
         .expect("ingest loaded team config");
 
     assert_eq!(roster.len(), 1);
-    assert_eq!(roster[0].agent_name.as_str(), "recipient");
+    assert_eq!(roster[0].agent_name.as_str(), TEST_RECIPIENT);
     assert_eq!(roster[0].pid, Some(ProcessId::new(4242).expect("pid")));
 
     let loaded = store.load_roster(&team()).expect("load roster");
     assert_eq!(loaded.len(), 1);
-    assert_eq!(loaded[0].agent_name.as_str(), "recipient");
+    assert_eq!(loaded[0].agent_name.as_str(), TEST_RECIPIENT);
+}
+
+#[test]
+fn inbox_ingress_counts_duplicate_atm_messages_across_source_files() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let store = RusqliteStore::open_for_team_home(tempdir.path(), &team()).expect("open store");
+    let primary_inbox = home::inbox_path_from_home(tempdir.path(), &team(), &agent(TEST_RECIPIENT))
+        .expect("primary inbox path");
+    let origin_inbox = primary_inbox
+        .parent()
+        .expect("inbox dir")
+        .join(format!("{TEST_RECIPIENT}.origin-a.json"));
+    fs::create_dir_all(primary_inbox.parent().expect("inbox dir")).expect("create inbox dir");
+
+    let value =
+        atm_core::schema::to_shared_inbox_value(&inbox_message("duplicate atm")).expect("value");
+    fs::write(
+        &primary_inbox,
+        serde_json::to_vec(&vec![value.clone()]).expect("primary inbox json"),
+    )
+    .expect("write primary inbox");
+    fs::write(
+        &origin_inbox,
+        serde_json::to_vec(&vec![value]).expect("origin inbox json"),
+    )
+    .expect("write origin inbox");
+
+    let outcome = default_inbox_ingress()
+        .ingest_mailbox_state(
+            tempdir.path(),
+            &team(),
+            &agent(TEST_RECIPIENT),
+            &store,
+            &NullObservability,
+        )
+        .expect("ingest succeeds");
+
+    assert_eq!(
+        outcome,
+        InboxIngestOutcome {
+            imported_messages: 1,
+            duplicate_messages: 1,
+            degraded_records: 0,
+        }
+    );
+}
+
+#[test]
+fn inbox_ingress_counts_duplicate_external_messages_on_reingest() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let store = RusqliteStore::open_for_team_home(tempdir.path(), &team()).expect("open store");
+    let inbox_path = home::inbox_path_from_home(tempdir.path(), &team(), &agent(TEST_RECIPIENT))
+        .expect("inbox path");
+    fs::create_dir_all(inbox_path.parent().expect("inbox dir")).expect("create inbox dir");
+
+    let external = serde_json::json!({
+        "from": "external-sender",
+        "text": "duplicate external",
+        "timestamp": "2026-05-02T21:00:00Z",
+        "read": false
+    });
+    fs::write(
+        &inbox_path,
+        serde_json::to_vec(&vec![external]).expect("inbox json"),
+    )
+    .expect("write inbox");
+
+    let ingester = default_inbox_ingress();
+    let first = ingester
+        .ingest_mailbox_state(
+            tempdir.path(),
+            &team(),
+            &agent(TEST_RECIPIENT),
+            &store,
+            &NullObservability,
+        )
+        .expect("first ingest");
+    assert_eq!(first.imported_messages, 1);
+    assert_eq!(first.duplicate_messages, 0);
+
+    let second = ingester
+        .ingest_mailbox_state(
+            tempdir.path(),
+            &team(),
+            &agent(TEST_RECIPIENT),
+            &store,
+            &NullObservability,
+        )
+        .expect("second ingest");
+    assert_eq!(second.imported_messages, 0);
+    assert_eq!(second.duplicate_messages, 1);
 }
 
 #[test]
 fn inbox_ingress_is_idempotent_and_tracks_degraded_metadata() {
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_for_team_home(tempdir.path(), &team()).expect("open store");
-    let inbox_path = home::inbox_path_from_home(tempdir.path(), &team(), &agent("team-lead"))
+    let inbox_path = home::inbox_path_from_home(tempdir.path(), &team(), &agent(TEST_RECIPIENT))
         .expect("inbox path");
     if let Some(parent) = inbox_path.parent() {
         fs::create_dir_all(parent).expect("inbox dir");
@@ -721,7 +863,7 @@ fn inbox_ingress_is_idempotent_and_tracks_degraded_metadata() {
         .ingest_mailbox_state(
             tempdir.path(),
             &team(),
-            &agent("team-lead"),
+            &agent(TEST_RECIPIENT),
             &store,
             &observability,
         )
@@ -768,7 +910,7 @@ fn inbox_ingress_is_idempotent_and_tracks_degraded_metadata() {
         .ingest_mailbox_state(
             tempdir.path(),
             &team(),
-            &agent("team-lead"),
+            &agent(TEST_RECIPIENT),
             &store,
             &observability,
         )
@@ -787,7 +929,7 @@ fn inbox_ingress_is_idempotent_and_tracks_degraded_metadata() {
 fn inbox_ingress_tolerates_bare_invalid_jsonl_line_without_panicking() {
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_for_team_home(tempdir.path(), &team()).expect("open store");
-    let inbox_path = home::inbox_path_from_home(tempdir.path(), &team(), &agent("team-lead"))
+    let inbox_path = home::inbox_path_from_home(tempdir.path(), &team(), &agent(TEST_RECIPIENT))
         .expect("inbox path");
     if let Some(parent) = inbox_path.parent() {
         fs::create_dir_all(parent).expect("inbox dir");
@@ -806,7 +948,7 @@ fn inbox_ingress_tolerates_bare_invalid_jsonl_line_without_panicking() {
         .ingest_mailbox_state(
             tempdir.path(),
             &team(),
-            &agent("team-lead"),
+            &agent(TEST_RECIPIENT),
             &store,
             &observability,
         )
@@ -826,13 +968,13 @@ fn inbox_ingress_tolerates_bare_invalid_jsonl_line_without_panicking() {
 fn inbox_ingress_uses_envelope_defaults_when_sidecar_entry_is_absent_or_malformed() {
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_for_team_home(tempdir.path(), &team()).expect("open store");
-    let inbox_path = home::inbox_path_from_home(tempdir.path(), &team(), &agent("team-lead"))
+    let inbox_path = home::inbox_path_from_home(tempdir.path(), &team(), &agent(TEST_RECIPIENT))
         .expect("inbox path");
     if let Some(parent) = inbox_path.parent() {
         fs::create_dir_all(parent).expect("inbox dir");
     }
     let workflow_path =
-        home::workflow_state_path_from_home(tempdir.path(), team().as_str(), "team-lead")
+        home::workflow_state_path_from_home(tempdir.path(), team().as_str(), TEST_RECIPIENT)
             .expect("workflow path");
     if let Some(parent) = workflow_path.parent() {
         fs::create_dir_all(parent).expect("workflow dir");
@@ -888,7 +1030,7 @@ fn inbox_ingress_uses_envelope_defaults_when_sidecar_entry_is_absent_or_malforme
         .ingest_mailbox_state(
             tempdir.path(),
             &team(),
-            &agent("team-lead"),
+            &agent(TEST_RECIPIENT),
             &store,
             &observability,
         )
@@ -970,7 +1112,7 @@ fn replace_roster_rolls_back_on_constraint_violation() {
 }
 
 #[test]
-fn team_roster_schema_keeps_recipient_pane_nullable() {
+fn team_roster_schema_keeps_nullable_runtime_columns() {
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_path(tempdir.path().join("mail.db")).expect("open store");
     let connection = store.lock_connection().expect("lock");
@@ -980,15 +1122,36 @@ fn team_roster_schema_keeps_recipient_pane_nullable() {
     let mut rows = statement.query([]).expect("query table_info");
 
     let mut saw_recipient_pane = false;
+    let mut saw_role = false;
+    let mut saw_transport_kind = false;
+    let mut saw_host_name = false;
     while let Some(row) = rows.next().expect("next row") {
         let name: String = row.get(1).expect("column name");
-        if name == "recipient_pane_id" {
-            let not_null: i64 = row.get(3).expect("not null flag");
-            saw_recipient_pane = true;
-            assert_eq!(not_null, 0);
+        let not_null: i64 = row.get(3).expect("not null flag");
+        match name.as_str() {
+            "recipient_pane_id" => {
+                saw_recipient_pane = true;
+                assert_eq!(not_null, 0);
+            }
+            "role" => {
+                saw_role = true;
+                assert_eq!(not_null, 0);
+            }
+            "transport_kind" => {
+                saw_transport_kind = true;
+                assert_eq!(not_null, 0);
+            }
+            "host_name" => {
+                saw_host_name = true;
+                assert_eq!(not_null, 0);
+            }
+            _ => {}
         }
     }
     assert!(saw_recipient_pane);
+    assert!(saw_role);
+    assert!(saw_transport_kind);
+    assert!(saw_host_name);
 }
 
 #[test]
@@ -1013,6 +1176,22 @@ fn store_errors_stay_discriminated() {
     );
     assert_eq!(busy.kind, StoreErrorKind::Busy);
     assert_eq!(busy.code, atm_core::error_codes::AtmErrorCode::StoreBusy);
+
+    let busy_snapshot = crate::classify_store_error(
+        rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error {
+                code: rusqlite::ErrorCode::DatabaseBusy,
+                extended_code: rusqlite::ffi::SQLITE_BUSY_SNAPSHOT,
+            },
+            Some("database busy snapshot".to_string()),
+        ),
+        "busy_snapshot",
+    );
+    assert_eq!(busy_snapshot.kind, StoreErrorKind::Busy);
+    assert_eq!(
+        busy_snapshot.code,
+        atm_core::error_codes::AtmErrorCode::StoreBusy
+    );
 
     let constraint = crate::classify_store_error(
         rusqlite::Error::SqliteFailure(
@@ -1062,10 +1241,10 @@ fn store_errors_stay_discriminated() {
             .expect("open readonly initialized db");
     let migration = crate::bootstrap_schema(&mut readonly_initialized)
         .expect_err("readonly migration should fail");
-    assert_eq!(migration.kind, StoreErrorKind::Migration);
+    assert_eq!(migration.kind, StoreErrorKind::Bootstrap);
     assert_eq!(
         migration.code,
-        atm_core::error_codes::AtmErrorCode::StoreMigrationFailed
+        atm_core::error_codes::AtmErrorCode::StoreBootstrapFailed
     );
 
     let transaction_dir = TempDir::new().expect("tempdir");

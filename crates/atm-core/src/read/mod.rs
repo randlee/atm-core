@@ -7,7 +7,7 @@ pub(crate) mod wait;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::address::AgentAddress;
@@ -35,7 +35,7 @@ use projection::{
     selection_state_for_source_files,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
@@ -87,20 +87,20 @@ impl ReadQuery {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BucketCounts {
     pub unread: usize,
     pub pending_ack: usize,
     pub history: usize,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClassifiedMessage {
-    #[serde(skip)]
+    #[serde(skip_serializing, skip_deserializing, default)]
     message_key: Option<MessageKey>,
-    #[serde(skip)]
+    #[serde(skip_serializing, skip_deserializing, default)]
     source_index: SourceIndex,
-    #[serde(skip)]
+    #[serde(skip_serializing, skip_deserializing, default)]
     source_path: PathBuf,
     pub bucket: DisplayBucket,
     pub class: MessageClass,
@@ -108,9 +108,9 @@ pub struct ClassifiedMessage {
     pub envelope: MessageEnvelope,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadOutcome {
-    pub action: &'static str,
+    pub action: String,
     pub team: TeamName,
     pub agent: AgentName,
     pub selection_mode: ReadSelection,
@@ -125,7 +125,7 @@ pub trait ReadStore: InboxIngestStore + MailStore + TaskStore {}
 
 impl<T> ReadStore for T where T: InboxIngestStore + MailStore + TaskStore + ?Sized {}
 
-#[deprecated(note = "transitional path; use read_mail_via_store")]
+#[deprecated(note = "transitional path; use read_mail_via_store; planned retirement: Q.5")]
 pub fn read_mail(
     query: ReadQuery,
     observability: &dyn ObservabilityPort,
@@ -293,7 +293,7 @@ pub fn read_mail(
         && bucket_counts.history > 0;
 
     let outcome = ReadOutcome {
-        action: "read",
+        action: "read".to_string(),
         team: target.team.clone(),
         agent: target.agent.clone(),
         selection_mode: query.selection_mode,
@@ -441,7 +441,7 @@ pub fn read_mail_via_store(
         && bucket_counts.history > 0;
 
     let outcome = ReadOutcome {
-        action: "read",
+        action: "read".to_string(),
         team: target.team.clone(),
         agent: target.agent.clone(),
         selection_mode: query.selection_mode,
