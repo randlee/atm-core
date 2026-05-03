@@ -14,6 +14,8 @@ pub const TEST_QA: &str = "qa-a";
 #[allow(dead_code)]
 pub const TEST_LEAD: &str = "team-lead";
 #[allow(dead_code)]
+pub const ROLE_TEAM_LEAD: &str = "team-lead";
+#[allow(dead_code)]
 pub const TEST_DAEMON: &str = "daemon";
 #[allow(dead_code)]
 pub const TEST_ORIGIN: &str = "host-a";

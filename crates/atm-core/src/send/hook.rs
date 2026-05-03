@@ -501,19 +501,22 @@ mod tests {
     };
     use crate::config::types::HookRecipient;
 
+    const TEST_SENDER: &str = "test-sender";
+    const ROLE_TEAM_LEAD: &str = "team-lead";
+
     #[test]
     fn hook_matches_recipient_exact_and_wildcard_values() {
         assert!(hook_matches_recipient(
-            &HookRecipient::Named("arch-ctm".parse().expect("recipient")),
-            &"arch-ctm".parse().expect("candidate")
+            &HookRecipient::Named(TEST_SENDER.parse().expect("recipient")),
+            &TEST_SENDER.parse().expect("candidate")
         ));
         assert!(hook_matches_recipient(
             &HookRecipient::Wildcard,
-            &"arch-ctm".parse().expect("candidate")
+            &TEST_SENDER.parse().expect("candidate")
         ));
         assert!(!hook_matches_recipient(
-            &HookRecipient::Named("team-lead".parse().expect("recipient")),
-            &"arch-ctm".parse().expect("candidate")
+            &HookRecipient::Named(ROLE_TEAM_LEAD.parse().expect("recipient")),
+            &TEST_SENDER.parse().expect("candidate")
         ));
     }
 
