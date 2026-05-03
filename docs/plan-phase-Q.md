@@ -783,11 +783,9 @@ Acceptance:
     than correctness blockers
   - no core test requires daemon process spawning
 
-### Q.6 — Production-Readiness Gate + Release Sprint
+### Q.6 — Wire Protocol Hardening
 
 Scope:
-- prove the Phase Q implementation is production ready rather than merely
-  architecturally aligned
 - complete the protocol-hardening work needed for daemon extension and
   `atm-graft`
 - replace newline-delimited framing with one shared binary header for daemon
@@ -796,8 +794,6 @@ Scope:
   `atm-core`
 - add a tail/debug helper that strips the binary header and renders the JSON
   payload for inspection
-- run the release gate, packaging gate, and final documentation/QA alignment
-- publish only after all prior sprint gates are green
 
 Acceptance:
 - every daemon frame starts with one binary header that includes:
@@ -812,12 +808,35 @@ Acceptance:
   live in `atm-core` rather than `atm-daemon`
 - the protocol tail/debug helper can strip the binary header and print the JSON
   payload
+
+### Q.7 — Production-Readiness Gate + Release Planning
+
+Scope:
+- prove the Phase Q implementation is production ready rather than merely
+  architecturally aligned once Q.6 wire changes land
+- run the release gate, packaging gate, and final documentation/QA alignment
+- finish versioning, changelog, and release-plan preparation without executing
+  the final publish step yet
+
+Acceptance:
 - version bump planning is complete
+- `CHANGELOG.md` is updated
 - `cargo publish --dry-run` succeeds for the intended publish set
+- all Phase Q release-gate conditions pass on the release candidate
+- release packaging/documentation checklists are ready for final execution
+
+### Q.8 — Release Execution
+
+Scope:
+- execute the prepared Phase Q release after Q.7 release-gate approval
+- publish the approved release line and finish the remaining release-control
+  actions
+
+Acceptance:
 - crates.io publish succeeds for the intended release line
 - GitHub release/tag/binary artifact steps are complete
-- `CHANGELOG.md` is updated
-- all Phase Q release-gate conditions pass on the release candidate
+- final release-control follow-through is complete for the approved Phase Q
+  publish line
 
 <a id="testing-constraints"></a>
 ## Testing Constraints
@@ -951,6 +970,9 @@ The following must be checked on every QA pass for Phase Q:
 
 Phase Q should be considered complete only when:
 - Q.0 cleanup work is complete and no longer blocks Q.1+ implementation
+- Q.6 wire-protocol hardening is complete
+- Q.7 release gate and planning is complete
+- Q.8 release execution is complete
 - ATM mail correctness no longer depends on mailbox `.lock` files
 - SQLite is the authoritative store for read/ack/clear/task semantics
 - SQLite is the authoritative store for team roster

@@ -2630,11 +2630,9 @@ Acceptance:
 - stale lock artifacts can no longer wedge ATM mail flows
 - requirements, architecture, and project plan all match the final design
 
-### Q.6 — Production-Readiness Gate And Release
+### Q.6 — Wire Protocol Hardening
 
 Scope:
-- prove the Phase Q implementation is production ready rather than merely
-  architecturally aligned
 - complete the wire-format hardening required for daemon extensibility and
   `atm-graft`
 - replace newline-delimited framing with a shared binary header carrying
@@ -2642,8 +2640,6 @@ Scope:
 - move shared protocol/control models required by first-party clients from
   `atm-daemon` into `atm-core`
 - add a tail/debug helper that strips the binary header and shows payload JSON
-- run the release gate, packaging gate, and final QA/documentation alignment
-- publish only after all prior sprint gates are green
 
 Acceptance:
 - same-host and remote daemon transport use one versioned binary frame header
@@ -2655,15 +2651,38 @@ Acceptance:
   live in `atm-core`
 - the protocol tail/debug helper can render JSON payloads without the binary
   header
+
+### Q.7 — Production-Readiness Gate And Release Planning
+
+Scope:
+- prove the Phase Q implementation is production ready rather than merely
+  architecturally aligned once Q.6 wire changes land
+- run the release gate, packaging gate, and final QA/documentation alignment
+- finish versioning, changelog, and release-plan preparation without executing
+  the final publish step yet
+
+Acceptance:
 - version bump planning is complete
+- `CHANGELOG.md` is updated
 - `cargo publish --dry-run` succeeds for the intended publish set
+- all Phase Q release-gate conditions pass on the release candidate
+- release packaging/documentation checklists are ready for final execution
+
+### Q.8 — Release Execution
+
+Scope:
+- execute the approved Phase Q release plan after Q.7 gate signoff
+- publish the retained release line and complete the final release-control
+  actions
+
+Acceptance:
 - crates.io publish succeeds for the intended release line
 - GitHub release/tag/binary artifact steps are complete
-- `CHANGELOG.md` is updated
-- all Phase Q release-gate conditions pass on the release candidate
+- final release-control follow-through is complete for the approved Phase Q
+  publish line
 
 Phase Q completion gate:
-- Q.0 through Q.6 are complete on `integrate/phase-Q`
+- Q.0 through Q.8 are complete on `integrate/phase-Q`
 - SQLite is authoritative for messages, ack/task state, visibility state, and
   roster truth
 - `send` and `ack` operate through the daemon production path
