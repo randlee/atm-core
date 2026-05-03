@@ -57,12 +57,6 @@ impl AgentName {
     }
 }
 
-impl Default for AgentName {
-    fn default() -> Self {
-        Self("<default-agent-name>".to_string())
-    }
-}
-
 impl FromStr for AgentName {
     type Err = AtmError;
 

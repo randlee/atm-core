@@ -2,6 +2,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use tracing::warn;
 
 use crate::types::AgentName;
 
@@ -30,7 +31,13 @@ impl From<String> for AgentType {
             "lead" => Self::Lead,
             "qa" => Self::Qa,
             "worker" => Self::Worker,
-            _ => Self::Unknown(value),
+            _ => {
+                warn!(
+                    raw_agent_type = %value,
+                    "unknown agent_type preserved as opaque compatibility value"
+                );
+                Self::Unknown(value)
+            }
         }
     }
 }
@@ -72,23 +79,27 @@ impl fmt::Display for AgentType {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentMember {
     pub name: AgentName,
 
+    /// Retained external compatibility field for the full runtime-scoped agent
+    /// identifier (for example `arch-ctm@atm-dev`).
     #[serde(default)]
     pub agent_id: String,
 
     #[serde(default)]
     pub agent_type: AgentType,
 
+    /// Retained provider/model label copied from `config.json` roster state.
     #[serde(default)]
     pub model: String,
 
     #[serde(default)]
     pub joined_at: Option<u64>,
 
+    /// Retained tmux pane identifier copied from `config.json` roster state.
     #[serde(default)]
     pub tmux_pane_id: String,
 
@@ -97,6 +108,21 @@ pub struct AgentMember {
 
     #[serde(flatten)]
     pub extra: Map<String, Value>,
+}
+
+impl AgentMember {
+    pub fn with_name(name: AgentName) -> Self {
+        Self {
+            name,
+            agent_id: String::new(),
+            agent_type: AgentType::default(),
+            model: String::new(),
+            joined_at: None,
+            tmux_pane_id: String::new(),
+            cwd: String::new(),
+            extra: Map::new(),
+        }
+    }
 }
 
 #[cfg(test)]

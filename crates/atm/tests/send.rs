@@ -986,10 +986,7 @@ impl Fixture {
         let team_dir = self.tempdir.path().join(".claude").join("teams").join(team);
         fs::create_dir_all(&team_dir).expect("team dir");
         let config = TeamConfig {
-            members: vec![AgentMember {
-                name: recipient.parse().expect("agent"),
-                ..Default::default()
-            }],
+            members: vec![AgentMember::with_name(recipient.parse().expect("agent"))],
             ..Default::default()
         };
         fs::write(

@@ -337,10 +337,7 @@ fn parse_team_config(config_path: &Path, raw: &str) -> Result<TeamConfig, AtmErr
 fn parse_team_member(config_path: &Path, index: usize, entry: &Value) -> Option<AgentMember> {
     match entry {
         Value::String(name) => match name.parse::<AgentName>() {
-            Ok(name) => Some(AgentMember {
-                name,
-                ..Default::default()
-            }),
+            Ok(name) => Some(AgentMember::with_name(name)),
             Err(error) => {
                 warn!(
                     code = %AtmErrorCode::WarningInvalidTeamMemberSkipped,

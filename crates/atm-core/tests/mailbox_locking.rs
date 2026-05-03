@@ -802,6 +802,8 @@ enum CommandOp {
     Clear(ClearQuery, Arc<NullObservability>),
 }
 
+// Serializes process-environment mutation inside this test module. This is
+// process-local only; it does not coordinate with other test processes.
 fn env_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     // These tests mutate process-global environment variables while exercising
@@ -1041,10 +1043,7 @@ fn create_team_with_config(home_dir: &std::path::Path, team: &str, members: &[&s
     let config = TeamConfig {
         members: members
             .iter()
-            .map(|name| AgentMember {
-                name: (*name).parse().expect("agent"),
-                ..Default::default()
-            })
+            .map(|name| AgentMember::with_name((*name).parse().expect("agent")))
             .collect(),
         ..Default::default()
     };

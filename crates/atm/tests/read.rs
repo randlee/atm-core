@@ -875,10 +875,7 @@ impl Fixture {
         let config = TeamConfig {
             members: members
                 .iter()
-                .map(|member| AgentMember {
-                    name: (*member).parse().expect("agent"),
-                    ..Default::default()
-                })
+                .map(|member| AgentMember::with_name((*member).parse().expect("agent")))
                 .collect(),
             ..Default::default()
         };

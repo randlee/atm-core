@@ -125,14 +125,56 @@ impl fmt::Display for AtmMessageId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(transparent)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 /// ATM-owned semantic discriminator for alert-class metadata.
-pub struct AlertKind(String);
+pub enum AlertKind {
+    MissingTeamConfig,
+    Unknown(String),
+}
 
 impl AlertKind {
     pub fn as_str(&self) -> &str {
-        &self.0
+        match self {
+            Self::MissingTeamConfig => "missing_team_config",
+            Self::Unknown(value) => value,
+        }
+    }
+}
+
+impl From<String> for AlertKind {
+    fn from(value: String) -> Self {
+        match value.as_str() {
+            "missing_team_config" => Self::MissingTeamConfig,
+            _ => Self::Unknown(value),
+        }
+    }
+}
+
+impl From<AlertKind> for String {
+    fn from(value: AlertKind) -> Self {
+        match value {
+            AlertKind::MissingTeamConfig => "missing_team_config".to_string(),
+            AlertKind::Unknown(value) => value,
+        }
+    }
+}
+
+impl Serialize for AlertKind {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for AlertKind {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(Self::from(String::deserialize(deserializer)?))
     }
 }
 
@@ -428,10 +470,29 @@ mod tests {
     use chrono::Utc;
 
     use super::{
-        AtmMessageId, AtmMetadataFields, ForwardMetadataEnvelope, IsoTimestamp, LegacyMessageId,
-        MessageEnvelope, MessageMetadata, PendingAck, hydrate_legacy_fields_from_metadata,
-        to_shared_inbox_value,
+        AlertKind, AtmMessageId, AtmMetadataFields, ForwardMetadataEnvelope, IsoTimestamp,
+        LegacyMessageId, MessageEnvelope, MessageMetadata, PendingAck,
+        hydrate_legacy_fields_from_metadata, to_shared_inbox_value,
     };
+
+    #[test]
+    fn alert_kind_round_trips_known_and_unknown_wire_values() {
+        let known: AlertKind =
+            serde_json::from_str(r#""missing_team_config""#).expect("known alert kind");
+        assert_eq!(known, AlertKind::MissingTeamConfig);
+        assert_eq!(
+            serde_json::to_string(&known).expect("encode known"),
+            r#""missing_team_config""#
+        );
+
+        let unknown: AlertKind =
+            serde_json::from_str(r#""future_alert_kind""#).expect("unknown alert kind");
+        assert_eq!(unknown, AlertKind::Unknown("future_alert_kind".to_string()));
+        assert_eq!(
+            serde_json::to_string(&unknown).expect("encode unknown"),
+            r#""future_alert_kind""#
+        );
+    }
 
     #[test]
     fn message_envelope_round_trips_with_current_inbox_shape() {

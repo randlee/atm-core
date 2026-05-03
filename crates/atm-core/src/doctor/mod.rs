@@ -455,10 +455,7 @@ mod tests {
             let config = TeamConfig {
                 members: members
                     .iter()
-                    .map(|member| AgentMember {
-                        name: AgentName::from_validated(*member),
-                        ..Default::default()
-                    })
+                    .map(|member| AgentMember::with_name(AgentName::from_validated(*member)))
                     .collect(),
                 ..Default::default()
             };
