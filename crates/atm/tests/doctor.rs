@@ -488,4 +488,16 @@ fn wait_for_process_exit(pid: u32, timeout: Duration) {
         }
         std::thread::sleep(Duration::from_millis(50));
     }
+
+    #[cfg(unix)]
+    {
+        let _ = Command::new("kill").args(["-9", &pid.to_string()]).output();
+    }
+
+    #[cfg(windows)]
+    {
+        let _ = Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .output();
+    }
 }

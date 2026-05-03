@@ -2,11 +2,9 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use atm_core::address::AgentAddress;
-use atm_core::clear::{self, ClearQuery};
-use atm_core::error_codes::AtmErrorCode;
+use atm_core::clear::ClearQuery;
 use atm_core::home;
 use clap::Args;
-use tracing::warn;
 
 use crate::observability::CliObservability;
 use crate::output;
@@ -43,19 +41,10 @@ impl ClearCommand {
         let dry_run = self.dry_run;
         let json = self.json;
         let query = self.build_query(home_dir, current_dir)?;
-        match atm_daemon::request_clear_with_autostart(query.clone()) {
-            Ok(outcome) => output::print_clear_result(&outcome, dry_run, json),
-            Err(error) if should_fallback_to_file_clear(&error.code) => {
-                warn!(
-                    code = %error.code,
-                    %error.message,
-                    "daemon clear path unavailable; falling back to direct file-backed clear"
-                );
-                let outcome = clear::clear_mail(query, observability)?;
-                output::print_clear_result(&outcome, dry_run, json)
-            }
-            Err(error) => Err(error.into()),
-        }
+        let outcome = atm_daemon::request_clear_with_autostart(query)?;
+        output::print_clear_result(&outcome, dry_run, json)?;
+        let _ = observability;
+        Ok(())
     }
 
     fn build_query(
@@ -81,15 +70,6 @@ impl ClearCommand {
             dry_run: self.dry_run,
         })
     }
-}
-
-fn should_fallback_to_file_clear(code: &AtmErrorCode) -> bool {
-    matches!(
-        code,
-        AtmErrorCode::DaemonUnavailable
-            | AtmErrorCode::DaemonStartFailed
-            | AtmErrorCode::DaemonRequestTimeout
-    )
 }
 
 fn parse_duration(raw: &str) -> Result<Duration> {

@@ -306,7 +306,7 @@ pub(crate) fn acquire_many_sorted(
 }
 
 fn try_lock_exclusive(file: &File, lock_path: &Path) -> io::Result<()> {
-    if std::env::var_os("ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR").is_some() {
+    if std::env::var_os("ATM_INTERNAL_TEST_FORCE_LOCK_NON_CONTENTION_ERROR").is_some() {
         return Err(io::Error::other(format!(
             "synthetic non-contention lock failure for {}",
             lock_path.display()

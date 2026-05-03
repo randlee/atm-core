@@ -1,6 +1,9 @@
 mod commands;
 mod observability;
 mod output;
+#[cfg(test)]
+#[path = "../tests/support/mod.rs"]
+pub(crate) mod test_support;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
