@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorKind};
 use crate::home;
@@ -110,6 +111,12 @@ fn parse_workflow_state(path: &Path, raw: &str) -> Result<WorkflowStateFile, Atm
     for (workflow_key, entry_value) in messages {
         if let Ok(entry) = serde_json::from_value::<WorkflowMessageState>(entry_value.clone()) {
             state.messages.insert(workflow_key.clone(), entry);
+        } else {
+            warn!(
+                workflow_key,
+                raw_entry = %entry_value,
+                "skipping malformed workflow-state entry"
+            );
         }
     }
 

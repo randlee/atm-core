@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
 mod helpers;
 
 use atm_core::inbox_export::default_inbox_export;
@@ -17,6 +18,7 @@ use atm_core::types::{AgentName, TeamName};
 use atm_core::{read_messages, write_messages};
 use atm_rusqlite::RusqliteStore;
 use serde_json::Value;
+use serial_test::serial;
 
 #[test]
 fn test_send_creates_inbox_file() {
@@ -446,6 +448,7 @@ fn test_send_missing_config_deduplicates_team_lead_notice() {
 }
 
 #[test]
+#[serial]
 fn test_send_missing_config_deduplicates_team_lead_notice_under_concurrency() {
     let fixture = Fixture::new("recipient");
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
@@ -622,8 +625,7 @@ fn test_send_runs_post_send_hook_with_expected_payload() {
         "stderr: {}",
         fixture.stderr(&output)
     );
-    let payload: serde_json::Value =
-        serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
+    let payload: serde_json::Value = read_json_file_with_retry(&payload_path, "hook payload");
     assert_eq!(payload["from"], "arch-ctm@atm-dev");
     assert_eq!(payload["to"], "recipient@atm-dev");
     assert_eq!(payload["requires_ack"], false);
@@ -705,8 +707,7 @@ fn test_send_runs_post_send_hook_for_wildcard_recipient() {
         "stderr: {}",
         fixture.stderr(&output)
     );
-    let payload: serde_json::Value =
-        serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
+    let payload: serde_json::Value = read_json_file_with_retry(&payload_path, "hook payload");
     assert_eq!(payload["recipient"], "recipient");
 }
 
@@ -755,8 +756,7 @@ fn test_send_runs_post_send_hook_when_recipient_matches_rule() {
         "stderr: {}",
         fixture.stderr(&output)
     );
-    let payload: serde_json::Value =
-        serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
+    let payload: serde_json::Value = read_json_file_with_retry(&payload_path, "hook payload");
     assert_eq!(payload["recipient"], "recipient");
 }
 
@@ -781,8 +781,7 @@ fn test_send_runs_post_send_hook_for_multiline_message_when_rule_matches() {
         "stderr: {}",
         fixture.stderr(&output)
     );
-    let payload: serde_json::Value =
-        serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
+    let payload: serde_json::Value = read_json_file_with_retry(&payload_path, "hook payload");
     assert_eq!(payload["from"], "arch-ctm@atm-dev");
     assert_eq!(payload["to"], "recipient@atm-dev");
     assert!(payload["message_id"].as_str().is_some());
@@ -827,8 +826,7 @@ fn test_send_post_send_hook_receives_only_configured_positional_args() {
         "stderr: {}",
         fixture.stderr(&output)
     );
-    let captured: serde_json::Value =
-        serde_json::from_slice(&fs::read(payload_path).expect("hook meta")).expect("json");
+    let captured: serde_json::Value = read_json_file_with_retry(&payload_path, "hook meta");
     assert_eq!(captured["args"], serde_json::json!([]));
     assert_eq!(captured["payload"]["to"], "recipient@atm-dev");
 }
@@ -856,8 +854,7 @@ fn test_send_runs_post_send_hook_with_relative_script_command() {
         "stderr: {}",
         fixture.stderr(&output)
     );
-    let payload: serde_json::Value =
-        serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
+    let payload: serde_json::Value = read_json_file_with_retry(&payload_path, "hook payload");
     assert_eq!(payload["recipient"], "recipient");
 }
 
@@ -884,8 +881,7 @@ fn test_send_runs_post_send_hook_with_bare_bash_command() {
         "stderr: {}",
         fixture.stderr(&output)
     );
-    let payload: serde_json::Value =
-        serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
+    let payload: serde_json::Value = read_json_file_with_retry(&payload_path, "hook payload");
     assert_eq!(payload["recipient"], "recipient");
 }
 
@@ -911,8 +907,7 @@ fn test_send_runs_post_send_hook_with_python_command() {
         "stderr: {}",
         fixture.stderr(&output)
     );
-    let payload: serde_json::Value =
-        serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
+    let payload: serde_json::Value = read_json_file_with_retry(&payload_path, "hook payload");
     assert_eq!(payload["recipient"], "recipient");
 }
 
@@ -998,11 +993,39 @@ fn test_send_persists_store_rows_and_threads_roster_pane_into_hook_payload() {
         Some("%7")
     );
 
-    let payload: serde_json::Value =
-        serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
+    let payload: serde_json::Value = read_json_file_with_retry(&payload_path, "hook payload");
     assert_eq!(payload["recipient_pane_id"], "%7");
     assert_eq!(payload["task_id"], "TASK-321");
     assert_eq!(payload["is_ack"], false);
+}
+
+#[test]
+fn test_send_hook_payload_omits_recipient_pane_id_when_roster_entry_is_absent() {
+    let fixture = Fixture::new("recipient");
+    fixture.write_inbox("recipient", &[]);
+    fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
+
+    let payload_path = fixture.tempdir.path().join("missing-config-hook.json");
+    fixture.install_executable_script(
+        "scripts/record_hook.py",
+        &format!(
+            "#!/usr/bin/env python3\nimport os\nfrom pathlib import Path\nPath(r\"{}\").write_text(os.environ['ATM_POST_SEND'])\n",
+            payload_path.display()
+        ),
+    );
+    fixture.write_atm_config(
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['python3', 'scripts/record_hook.py']\n",
+    );
+
+    let output = fixture.run(&["send", "recipient@atm-dev", "missing config fallback"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let payload: serde_json::Value = read_json_file_with_retry(&payload_path, "hook payload");
+    assert!(payload.get("recipient_pane_id").is_none(), "{payload}");
 }
 
 #[test]
@@ -1135,6 +1158,22 @@ fn test_send_help_mentions_post_send_hook_config() {
     assert!(stdout.contains("command = [\"argv\", ...]"));
     assert!(stdout.contains("ATM_LOG=debug"));
     assert!(stdout.contains(".atm.toml"));
+}
+
+fn read_json_file_with_retry(path: &std::path::Path, label: &str) -> serde_json::Value {
+    for _ in 0..20 {
+        match fs::read(path) {
+            Ok(bytes) => return serde_json::from_slice(&bytes).expect("json payload"),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            Err(error) => panic!("{label}: {error}"),
+        }
+    }
+    panic!(
+        "{label}: file not found after retry window: {}",
+        path.display()
+    );
 }
 
 struct Fixture {

@@ -4,7 +4,7 @@ use std::path::Path;
 use crate::config::load_team_config;
 use crate::error::{AtmError, AtmErrorKind};
 use crate::roster_store::{RosterMemberRecord, RosterStore, TransportKind};
-use crate::schema::{AgentMember, AgentType};
+use crate::schema::{AgentMember, AgentType, TeamConfig};
 use crate::store::{HostName, RecipientPaneId, StoreError};
 use crate::types::TeamName;
 
@@ -27,6 +27,15 @@ pub fn ingest_team_config(
     host_name: &HostName,
 ) -> Result<Vec<RosterMemberRecord>, AtmError> {
     let team_config = load_team_config(team_dir)?;
+    ingest_loaded_team_config(team_name, &team_config, roster_store, host_name)
+}
+
+pub fn ingest_loaded_team_config(
+    team_name: &TeamName,
+    team_config: &TeamConfig,
+    roster_store: &impl RosterStore,
+    host_name: &HostName,
+) -> Result<Vec<RosterMemberRecord>, AtmError> {
     let existing = roster_store
         .load_roster(team_name)
         .map_err(|error| map_store_error("failed to load existing roster rows", error))?;

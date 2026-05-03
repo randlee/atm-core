@@ -219,6 +219,12 @@ impl StoreBoundary for RusqliteStore {
 
     fn health(&self) -> Result<StoreHealth, StoreError> {
         let connection = self.lock_connection()?;
+        let journal_mode = query_journal_mode(&connection)?;
+        if !journal_mode.eq_ignore_ascii_case("wal") {
+            return Err(StoreError::query(format!(
+                "SQLite journal_mode drifted from WAL at runtime: observed {journal_mode}"
+            )));
+        }
         Ok(StoreHealth {
             database_path: self.database_path.clone(),
             ready: true,

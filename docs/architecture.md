@@ -686,6 +686,7 @@ Normal send JSON output includes:
 - `agent`
 - `outcome`
 - `message_id`
+- `atm_message_id`
 - `requires_ack`
 - `task_id`
 - `warnings` when send completed in a degraded but permitted mode

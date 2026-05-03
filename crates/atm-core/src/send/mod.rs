@@ -102,9 +102,9 @@ pub struct SendOutcome {
     pub summary: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
-    // TODO(v1.1.0): Replace this Vec<String> with a structured WarningEntry type
-    // so degraded-mode warnings can carry recovery guidance separately from the
-    // rendered message text.
+    // TODO(Q.3): Replace this Vec<String> with structured warning codes and
+    // recovery hints so degraded-mode warnings are not carried only as
+    // rendered text.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
     #[serde(default, skip_serializing_if = "is_false")]
@@ -140,11 +140,11 @@ pub fn resolve_store_team(request: &SendRequest) -> Result<TeamName, AtmError> {
 struct PreparedSend {
     home_dir: PathBuf,
     config: Option<config::AtmConfig>,
+    loaded_team_config: Option<crate::schema::TeamConfig>,
     canonical_sender: AgentName,
     recipient: ResolvedRecipient,
     sender_team: Option<TeamName>,
     display_sender: AgentName,
-    team_dir: PathBuf,
     inbox_path: PathBuf,
     warnings: Vec<String>,
     task_id: Option<TaskId>,
@@ -158,10 +158,6 @@ struct PreparedSend {
 }
 
 impl PreparedSend {
-    fn team_config_present(&self) -> bool {
-        self.team_dir.join("config.json").exists()
-    }
-
     fn home_dir(&self) -> PathBuf {
         self.home_dir.clone()
     }
@@ -206,10 +202,10 @@ where
         )?;
     }
 
-    let recipient_pane_id = if prepared.team_config_present() {
-        let roster = team_ingress::ingest_team_config(
-            &prepared.team_dir,
+    let recipient_pane_id = if let Some(team_config) = prepared.loaded_team_config.as_ref() {
+        let roster = team_ingress::ingest_loaded_team_config(
             &prepared.recipient.team,
+            team_config,
             store,
             &team_ingress::default_host_name(),
         )?;
@@ -292,7 +288,7 @@ fn prepare_send_request(request: SendRequest) -> Result<PreparedSend, AtmError> 
     let display_sender = display_sender_identity(
         &canonical_sender,
         request.sender_override.as_deref(),
-        sender_team.as_deref(),
+        sender_team.as_ref(),
         &recipient.team,
         config.as_ref(),
     )?;
@@ -306,6 +302,7 @@ fn prepare_send_request(request: SendRequest) -> Result<PreparedSend, AtmError> 
     let inbox_path =
         home::inbox_path_from_home(&request.home_dir, &recipient.team, &recipient.agent)?;
 
+    let mut loaded_team_config = None;
     match config::load_team_config(&team_dir) {
         Ok(team_config) => {
             alert_state::clear_missing_team_config_alert(
@@ -319,6 +316,7 @@ fn prepare_send_request(request: SendRequest) -> Result<PreparedSend, AtmError> 
             {
                 return Err(AtmError::agent_not_found(&recipient.agent, &recipient.team));
             }
+            loaded_team_config = Some(team_config);
         }
         Err(error) if error.is_missing_document() => {
             if !inbox_path.exists() {
@@ -372,11 +370,11 @@ fn prepare_send_request(request: SendRequest) -> Result<PreparedSend, AtmError> 
     Ok(PreparedSend {
         home_dir: request.home_dir,
         config,
+        loaded_team_config,
         canonical_sender,
         recipient,
         sender_team,
         display_sender,
-        team_dir,
         inbox_path,
         warnings,
         task_id,
@@ -462,7 +460,7 @@ fn finalize_send(
         outcome: outcome.outcome,
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
-        sender: prepared.canonical_sender.to_string(),
+        sender: prepared.canonical_sender.clone(),
         message_id: Some(outcome.message_id),
         requires_ack: outcome.requires_ack,
         dry_run: outcome.dry_run,
@@ -665,6 +663,9 @@ fn notify_team_lead_missing_config(
         extra,
     };
 
+    // TRANSITIONAL: missing-config notice routes through the legacy
+    // lock+sidecar append path for compatibility; full send-path dual-write
+    // unification is deferred to Q.3+.
     if let Err(error) = append_mailbox_message_and_seed_workflow(
         home_dir,
         team,
@@ -710,8 +711,8 @@ fn append_mailbox_message_and_seed_workflow(
 fn display_sender_identity(
     canonical_sender: &AgentName,
     sender_override: Option<&str>,
-    sender_team: Option<&str>,
-    recipient_team: &str,
+    sender_team: Option<&TeamName>,
+    recipient_team: &TeamName,
     config: Option<&config::AtmConfig>,
 ) -> Result<AgentName, AtmError> {
     let cross_team = sender_team.is_some_and(|team| team != recipient_team);

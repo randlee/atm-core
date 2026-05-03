@@ -71,7 +71,7 @@ impl InboxExport for WorkflowInboxExport {
                 outcome: "error",
                 team: team.clone(),
                 agent: agent.clone(),
-                sender: event.sender.to_string(),
+                sender: event.sender.clone(),
                 message_id: event.message_id,
                 requires_ack: event.requires_ack,
                 dry_run: false,

@@ -8,7 +8,7 @@ use crate::mail_store::{
 use crate::mailbox::{self, MailboxReadReport};
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::MessageEnvelope;
-use crate::store::{InsertOutcome, MessageKey, SourceFingerprint, StoreError, StoreParseError};
+use crate::store::{InsertOutcome, MessageKey, SourceFingerprint, StoreError};
 use crate::task_store::{TaskRecord, TaskStatus, TaskStore};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use crate::workflow::{self, WorkflowStateFile};
@@ -61,6 +61,14 @@ impl InboxIngress for JsonInboxIngress {
             let report = mailbox::read_messages_report(&source_path)?;
             outcome.degraded_records +=
                 report.stats.skipped_records + report.stats.malformed_metadata_records;
+            emit_degraded_record_events(
+                observability,
+                team,
+                agent,
+                &source_path,
+                report.stats.skipped_records,
+                report.stats.malformed_metadata_records,
+            );
             ingest_source_report(
                 &source_path,
                 report,
@@ -82,7 +90,7 @@ impl InboxIngress for JsonInboxIngress {
             },
             team: team.clone(),
             agent: agent.clone(),
-            sender: "system".to_string(),
+            sender: AgentName::system(),
             message_id: None,
             requires_ack: false,
             dry_run: false,
@@ -92,6 +100,55 @@ impl InboxIngress for JsonInboxIngress {
         });
 
         Ok(outcome)
+    }
+}
+
+fn emit_degraded_record_events(
+    observability: &dyn ObservabilityPort,
+    team: &TeamName,
+    agent: &AgentName,
+    source_path: &Path,
+    skipped_records: usize,
+    malformed_metadata_records: usize,
+) {
+    for _ in 0..skipped_records {
+        let _ = observability.emit(CommandEvent {
+            command: "inbox_ingress",
+            action: "import_record",
+            outcome: "skipped_record",
+            team: team.clone(),
+            agent: agent.clone(),
+            sender: AgentName::system(),
+            message_id: None,
+            requires_ack: false,
+            dry_run: false,
+            task_id: None,
+            error_code: Some(crate::error::AtmErrorCode::WarningMailboxRecordSkipped),
+            error_message: Some(format!(
+                "skipped malformed inbox record while importing {}",
+                source_path.display()
+            )),
+        });
+    }
+
+    for _ in 0..malformed_metadata_records {
+        let _ = observability.emit(CommandEvent {
+            command: "inbox_ingress",
+            action: "import_record",
+            outcome: "malformed_metadata",
+            team: team.clone(),
+            agent: agent.clone(),
+            sender: AgentName::system(),
+            message_id: None,
+            requires_ack: false,
+            dry_run: false,
+            task_id: None,
+            error_code: None,
+            error_message: Some(format!(
+                "ignored malformed metadata while importing {}",
+                source_path.display()
+            )),
+        });
     }
 }
 
@@ -187,14 +244,14 @@ fn source_fingerprint(
     envelope: &MessageEnvelope,
 ) -> Result<SourceFingerprint, AtmError> {
     if let Some(atm_message_id) = envelope.atm_message_id() {
-        return format!("atm{atm_message_id}")
+        return Ok(format!("atm{atm_message_id}")
             .parse()
-            .map_err(map_fingerprint_error);
+            .expect("ATM message ids always produce a valid source fingerprint"));
     }
     if let Some(message_id) = envelope.message_id {
-        return format!("legacy{message_id}")
+        return Ok(format!("legacy{message_id}")
             .parse()
-            .map_err(map_fingerprint_error);
+            .expect("legacy message ids always produce a valid source fingerprint"));
     }
 
     let mut hash = 0xcbf29ce484222325_u64;
@@ -213,9 +270,9 @@ fn source_fingerprint(
         hash = hash.wrapping_mul(0x100000001b3);
     }
 
-    format!("ext{hash:016x}")
+    Ok(format!("ext{hash:016x}")
         .parse()
-        .map_err(map_fingerprint_error)
+        .expect("derived external inbox hash always produces a valid source fingerprint"))
 }
 
 fn stored_message_record(
@@ -271,16 +328,6 @@ fn sender_canonical(envelope: &MessageEnvelope) -> Option<AgentName> {
         .and_then(|atm| atm.get("fromIdentity"))
         .and_then(serde_json::Value::as_str)
         .and_then(|value| value.parse().ok())
-}
-
-fn map_fingerprint_error(error: StoreParseError) -> AtmError {
-    AtmError::new(
-        AtmErrorKind::Validation,
-        format!("failed to derive stable external inbox fingerprint: {error}"),
-    )
-    .with_recovery(
-        "Repair the malformed external message identity inputs before retrying inbox import.",
-    )
 }
 
 fn map_store_error(context: &str, error: StoreError) -> AtmError {

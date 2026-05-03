@@ -344,7 +344,7 @@ pub fn ack_mail(
         outcome: "ok",
         team,
         agent: actor.clone(),
-        sender: actor.to_string(),
+        sender: actor.clone(),
         message_id: Some(source_legacy_message_id),
         requires_ack: false,
         dry_run: false,

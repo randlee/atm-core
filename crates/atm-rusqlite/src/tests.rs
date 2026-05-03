@@ -13,10 +13,11 @@ use atm_core::roster_store::{
 };
 use atm_core::schema::{AgentMember, AtmMessageId, LegacyMessageId, MessageEnvelope, TeamConfig};
 use atm_core::store::{
-    InsertOutcome, MessageKey, ProcessId, StoreBoundary, StoreDuplicateIdentity, StoreErrorKind,
+    InsertOutcome, MessageKey, ProcessId, SourceFingerprint, StoreBoundary, StoreDuplicateIdentity,
+    StoreErrorKind,
 };
 use atm_core::task_store::{TaskRecord, TaskStatus, TaskStore};
-use atm_core::team_ingress::{default_host_name, ingest_team_config};
+use atm_core::team_ingress::{default_host_name, ingest_loaded_team_config, ingest_team_config};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use rusqlite::{Connection, OpenFlags};
 use tempfile::TempDir;
@@ -80,6 +81,33 @@ fn roster_member(name: &str, pane_id: Option<&str>, pid: Option<i64>) -> RosterM
         pid: pid.map(|value| ProcessId::new(value).expect("pid")),
         metadata_json: Some("{\"provider\":\"claude\"}".to_string()),
     }
+}
+
+fn external_source_fingerprint(
+    source_path: &Path,
+    sender: &str,
+    timestamp: &str,
+    summary: Option<&str>,
+    body: &str,
+) -> SourceFingerprint {
+    let mut hash = 0xcbf29ce484222325_u64;
+    for segment in [
+        source_path.display().to_string(),
+        sender.to_string(),
+        timestamp.to_string(),
+        summary.unwrap_or_default().to_string(),
+        body.to_string(),
+    ] {
+        for byte in segment.as_bytes() {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+        hash ^= u64::from(b'|');
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("ext{hash:016x}")
+        .parse()
+        .expect("derived external fingerprint")
 }
 
 fn inbox_message(text: &str) -> MessageEnvelope {
@@ -592,6 +620,40 @@ fn team_ingress_replaces_roster_and_preserves_existing_pid() {
 }
 
 #[test]
+fn team_ingress_roster_shrink_removes_absent_members() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let store = RusqliteStore::open_for_team_home(tempdir.path(), &team()).expect("open store");
+
+    let mut recipient = AgentMember::with_name(agent("recipient"));
+    recipient.tmux_pane_id = Some("%7".to_string());
+    let config = TeamConfig {
+        members: vec![recipient],
+        ..Default::default()
+    };
+
+    store
+        .replace_roster(
+            &team(),
+            &[
+                roster_member("recipient", Some("%1"), Some(4242)),
+                roster_member("quality-mgr", Some("%8"), Some(5150)),
+            ],
+        )
+        .expect("seed roster");
+
+    let roster = ingest_loaded_team_config(&team(), &config, &store, &default_host_name())
+        .expect("ingest loaded team config");
+
+    assert_eq!(roster.len(), 1);
+    assert_eq!(roster[0].agent_name.as_str(), "recipient");
+    assert_eq!(roster[0].pid, Some(ProcessId::new(4242).expect("pid")));
+
+    let loaded = store.load_roster(&team()).expect("load roster");
+    assert_eq!(loaded.len(), 1);
+    assert_eq!(loaded[0].agent_name.as_str(), "recipient");
+}
+
+#[test]
 fn inbox_ingress_is_idempotent_and_tracks_degraded_metadata() {
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_for_team_home(tempdir.path(), &team()).expect("open store");
@@ -635,17 +697,18 @@ fn inbox_ingress_is_idempotent_and_tracks_degraded_metadata() {
             degraded_records: 1,
         }
     );
-    let degraded_message_key: MessageKey = store
-        .lock_connection()
-        .expect("lock connection")
-        .query_row(
-            "SELECT message_key FROM messages WHERE sender_display = ?1 AND body = ?2",
-            ("quality-mgr", "external malformed metadata"),
-            |row| row.get::<_, String>(0),
-        )
-        .expect("degraded message key")
-        .parse()
-        .expect("parse degraded message key");
+    let degraded_envelope = atm_core::read_messages(&inbox_path)
+        .expect("read inbox messages")
+        .into_iter()
+        .find(|message| message.from.as_str() == "quality-mgr")
+        .expect("degraded envelope");
+    let degraded_message_key = MessageKey::from_source_fingerprint(&external_source_fingerprint(
+        &inbox_path,
+        degraded_envelope.from.as_str(),
+        &degraded_envelope.timestamp.to_string(),
+        degraded_envelope.summary.as_deref(),
+        &degraded_envelope.text,
+    ));
     let degraded_message = store
         .load_message(&degraded_message_key)
         .expect("load degraded message")

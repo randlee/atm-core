@@ -68,7 +68,9 @@ impl CliObservability {
             agent: identity
                 .parse()
                 .unwrap_or_else(|_| "unknown".parse().expect("agent")),
-            sender: identity,
+            sender: identity
+                .parse()
+                .unwrap_or_else(|_| "unknown".parse().expect("agent")),
             message_id: None,
             requires_ack: false,
             dry_run: false,
@@ -196,7 +198,7 @@ mod tests {
             outcome: "sent",
             team: "atm-dev".parse().expect("team"),
             agent: "arch-ctm".parse().expect("agent"),
-            sender: "arch-ctm".to_string(),
+            sender: "arch-ctm".parse().expect("sender"),
             message_id: message_id.map(|value| value.parse().expect("legacy message id")),
             requires_ack: false,
             dry_run: false,
