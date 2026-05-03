@@ -2,8 +2,8 @@ use std::marker::PhantomData;
 
 use crate::schema::MessageEnvelope;
 use crate::types::{
-    AckState, AcknowledgedAckState, DisplayBucket, IsoTimestamp, MessageClass, NoAckState,
-    PendingAckState, ReadReadState, ReadState, UnreadReadState,
+    AckState, DisplayBucket, IsoTimestamp, MessageClass, NoAckState, PendingAckState,
+    ReadReadState, ReadState, UnreadReadState,
 };
 
 #[derive(Debug, Clone)]
@@ -68,25 +68,6 @@ impl StoredMessage<ReadReadState, NoAckState> {
 
 impl StoredMessage<ReadReadState, PendingAckState> {
     pub(crate) fn read_pending_ack(envelope: MessageEnvelope) -> Self {
-        Self {
-            envelope,
-            _read: PhantomData,
-            _ack: PhantomData,
-        }
-    }
-
-    pub fn acknowledge(
-        mut self,
-        at: IsoTimestamp,
-    ) -> StoredMessage<ReadReadState, AcknowledgedAckState> {
-        self.envelope.acknowledged_at = Some(at);
-        self.envelope.pending_ack_at = None;
-        StoredMessage::read_acknowledged(self.envelope)
-    }
-}
-
-impl StoredMessage<ReadReadState, AcknowledgedAckState> {
-    pub(crate) fn read_acknowledged(envelope: MessageEnvelope) -> Self {
         Self {
             envelope,
             _read: PhantomData,

@@ -1,12 +1,14 @@
 use std::fs;
 use std::process::Command;
 
+use atm_core::mail_store::MailStore;
 use atm_core::schema::{
     AgentMember, AtmMessageId, AtmMetadataFields, ForwardMetadataEnvelope, LegacyMessageId,
-    MessageEnvelope, MessageMetadata, TeamConfig,
+    MessageEnvelope, MessageMetadata, TeamConfig, to_shared_inbox_value,
 };
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_core::{read_messages, write_messages};
+use atm_rusqlite::RusqliteStore;
 use chrono::{TimeZone, Utc};
 use serde_json::Value;
 
@@ -58,10 +60,19 @@ fn test_read_marks_read() {
     );
     let inbox = fixture.inbox_contents("arch-ctm");
     assert!(!inbox[0].read);
-    let workflow = fixture
-        .workflow_state_contents("arch-ctm")
-        .expect("workflow state");
-    assert_eq!(workflow["messages"][&workflow_key]["read"], true);
+    let store = fixture.store();
+    let stored = store
+        .list_messages_for_recipient(&fixture.team(), &fixture.agent("arch-ctm"))
+        .expect("stored messages");
+    let projected = stored
+        .into_iter()
+        .find(|message| message.message_key.to_string() == workflow_key)
+        .expect("stored message");
+    let visibility = store
+        .load_visibility(&projected.message_key)
+        .expect("visibility state")
+        .expect("stored visibility");
+    assert!(visibility.read_at.is_some());
 }
 
 #[test]
@@ -89,14 +100,19 @@ fn test_read_ack_activation() {
     );
     let inbox = fixture.inbox_contents("arch-ctm");
     assert!(inbox[0].pending_ack_at.is_none());
-    let workflow = fixture
-        .workflow_state_contents("arch-ctm")
-        .expect("workflow state");
-    assert!(
-        workflow["messages"][&workflow_key]["pendingAckAt"]
-            .as_str()
-            .is_some()
-    );
+    let store = fixture.store();
+    let stored = store
+        .list_messages_for_recipient(&fixture.team(), &fixture.agent("arch-ctm"))
+        .expect("stored messages");
+    let projected = stored
+        .into_iter()
+        .find(|message| message.message_key.to_string() == workflow_key)
+        .expect("stored message");
+    let ack_state = store
+        .load_ack_state(&projected.message_key)
+        .expect("ack state")
+        .expect("stored ack state");
+    assert!(ack_state.pending_ack_at.is_some());
 }
 
 #[test]
@@ -125,11 +141,91 @@ fn test_read_no_mark() {
     let inbox = fixture.inbox_contents("arch-ctm");
     assert!(!inbox[0].read);
     assert!(inbox[0].pending_ack_at.is_none());
-    let workflow = fixture
-        .workflow_state_contents("arch-ctm")
-        .expect("workflow state");
-    assert_eq!(workflow["messages"][&workflow_key]["read"], true);
-    assert!(workflow["messages"][&workflow_key]["pendingAckAt"].is_null());
+    let store = fixture.store();
+    let stored = store
+        .list_messages_for_recipient(&fixture.team(), &fixture.agent("arch-ctm"))
+        .expect("stored messages");
+    let projected = stored
+        .into_iter()
+        .find(|message| message.message_key.to_string() == workflow_key)
+        .expect("stored message");
+    let visibility = store
+        .load_visibility(&projected.message_key)
+        .expect("visibility state")
+        .expect("stored visibility");
+    let ack_state = store
+        .load_ack_state(&projected.message_key)
+        .expect("ack state");
+    assert!(visibility.read_at.is_some());
+    assert!(ack_state.is_none());
+}
+
+#[test]
+fn test_read_projects_mixed_legacy_and_forward_rows_consistently() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    let legacy = fixture.message("legacy-sender", "legacy row", false, None, None, 0);
+    let forward = fixture.message("forward-sender", "forward row", false, None, None, 1);
+    fixture.write_raw_inbox_values(
+        "arch-ctm",
+        &[
+            serde_json::to_value(&legacy).expect("legacy json"),
+            to_shared_inbox_value(&forward).expect("forward json"),
+        ],
+    );
+
+    let output = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    let messages = parsed["messages"].as_array().expect("messages array");
+    assert_eq!(messages.len(), 2);
+    assert!(
+        messages
+            .iter()
+            .any(|message| message["text"] == "legacy row")
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|message| message["text"] == "forward row")
+    );
+}
+
+#[test]
+fn test_read_repeated_after_external_append_reconciles_new_rows() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[fixture.message("team-lead", "initial", false, None, None, 0)],
+    );
+
+    let first = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(first.status.success(), "stderr: {}", fixture.stderr(&first));
+    assert_eq!(fixture.stdout_json(&first)["count"], 1);
+
+    let mut inbox = fixture.inbox_contents("arch-ctm");
+    inbox.push(fixture.message("team-lead", "appended later", false, None, None, 1));
+    fixture.write_inbox("arch-ctm", &inbox);
+
+    let second = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(
+        second.status.success(),
+        "stderr: {}",
+        fixture.stderr(&second)
+    );
+    let parsed = fixture.stdout_json(&second);
+    let messages = parsed["messages"].as_array().expect("messages array");
+    assert_eq!(messages.len(), 2);
+    assert!(messages.iter().any(|message| message["text"] == "initial"));
+    assert!(
+        messages
+            .iter()
+            .any(|message| message["text"] == "appended later")
+    );
 }
 
 #[test]
@@ -916,6 +1012,13 @@ impl Fixture {
         fs::write(inbox_path, raw).expect("write raw inbox");
     }
 
+    fn write_raw_inbox_values(&self, agent: &str, values: &[Value]) {
+        self.write_raw_inbox(
+            agent,
+            &serde_json::to_string(values).expect("raw inbox array"),
+        );
+    }
+
     fn write_seen_state(&self, agent: &str, timestamp: chrono::DateTime<Utc>) {
         let path = self.team_dir().join(".seen").join(agent);
         if let Some(parent) = path.parent() {
@@ -956,14 +1059,16 @@ impl Fixture {
         read_messages(&self.inbox_path(agent)).expect("inbox contents")
     }
 
-    fn workflow_state_contents(&self, agent: &str) -> Option<Value> {
-        let path = self
-            .team_dir()
-            .join(".atm-state")
-            .join("workflow")
-            .join(format!("{agent}.json"));
-        let raw = fs::read_to_string(path).ok()?;
-        Some(serde_json::from_str(&raw).expect("workflow json"))
+    fn store(&self) -> RusqliteStore {
+        RusqliteStore::open_for_team_home(self.tempdir.path(), &self.team()).expect("open store")
+    }
+
+    fn team(&self) -> TeamName {
+        "atm-dev".parse().expect("team")
+    }
+
+    fn agent(&self, value: &str) -> AgentName {
+        value.parse().expect("agent")
     }
 
     fn stdout_json(&self, output: &std::process::Output) -> Value {

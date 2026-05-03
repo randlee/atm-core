@@ -1,4 +1,5 @@
 pub(crate) mod filters;
+pub(crate) mod projection;
 pub(crate) mod seen_state;
 pub(crate) mod state;
 pub(crate) mod wait;
@@ -7,26 +8,33 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use serde::Serialize;
-use serde_json::Value;
-use tracing::debug;
+use serde_json::{Map, Value};
 
 use crate::address::AgentAddress;
 use crate::config;
 use crate::error::AtmError;
 use crate::home;
 use crate::identity;
+use crate::inbox_ingress::{InboxIngestStore, InboxIngress};
+use crate::mail_store::{AckStateRecord, MailStore, StoredMessageRecord, VisibilityStateRecord};
 use crate::mailbox;
 use crate::mailbox::source::{SourceFile, SourcedMessage, resolve_target};
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
-use crate::schema::MessageEnvelope;
+use crate::schema::{AtmMetadataFields, MessageEnvelope};
+use crate::store::MessageKey;
+use crate::task_store::TaskStore;
 use crate::types::{
     AckActivationMode, AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
     SourceIndex, TeamName,
 };
 use crate::workflow;
+use projection::{
+    apply_filters, apply_idle_notification_dedup, apply_store_display_mutations, bucket_counts_for,
+    classify_all, idle_sender, is_unread_idle_notification, merged_surface,
+    selection_state_for_source_files,
+};
 
-/// Parameters for querying and optionally mutating one mailbox display surface.
 #[derive(Debug, Clone)]
 pub struct ReadQuery {
     pub home_dir: PathBuf,
@@ -39,7 +47,7 @@ pub struct ReadQuery {
     pub seen_state_update: bool,
     pub ack_activation_mode: AckActivationMode,
     pub limit: Option<usize>,
-    pub sender_filter: Option<String>,
+    pub sender_filter: Option<AgentName>,
     pub timestamp_filter: Option<IsoTimestamp>,
     pub timeout_secs: Option<u64>,
 }
@@ -57,7 +65,7 @@ impl ReadQuery {
         seen_state_update: bool,
         ack_activation_mode: AckActivationMode,
         limit: Option<usize>,
-        sender_filter: Option<String>,
+        sender_filter: Option<&str>,
         timestamp_filter: Option<IsoTimestamp>,
         timeout_secs: Option<u64>,
     ) -> Result<Self, AtmError> {
@@ -72,14 +80,13 @@ impl ReadQuery {
             seen_state_update,
             ack_activation_mode,
             limit,
-            sender_filter,
+            sender_filter: sender_filter.map(str::parse).transpose()?,
             timestamp_filter,
             timeout_secs,
         })
     }
 }
 
-/// Bucket counts for one classified mailbox surface.
 #[derive(Debug, Clone, Serialize)]
 pub struct BucketCounts {
     pub unread: usize,
@@ -87,9 +94,10 @@ pub struct BucketCounts {
     pub history: usize,
 }
 
-/// One mailbox message classified for ATM display output.
 #[derive(Debug, Clone, Serialize)]
 pub struct ClassifiedMessage {
+    #[serde(skip)]
+    message_key: Option<MessageKey>,
     #[serde(skip)]
     source_index: SourceIndex,
     #[serde(skip)]
@@ -100,7 +108,6 @@ pub struct ClassifiedMessage {
     pub envelope: MessageEnvelope,
 }
 
-/// Result of one mailbox read/query command.
 #[derive(Debug, Clone, Serialize)]
 pub struct ReadOutcome {
     pub action: &'static str,
@@ -114,23 +121,11 @@ pub struct ReadOutcome {
     pub bucket_counts: BucketCounts,
 }
 
-/// Read one mailbox surface, optionally marking displayed messages as read.
-///
-/// # Errors
-///
-/// Returns [`AtmError`] with
-/// [`crate::error_codes::AtmErrorCode::IdentityUnavailable`],
-/// [`crate::error_codes::AtmErrorCode::TeamUnavailable`],
-/// [`crate::error_codes::AtmErrorCode::TeamNotFound`],
-/// [`crate::error_codes::AtmErrorCode::AgentNotFound`],
-/// [`crate::error_codes::AtmErrorCode::AddressParseFailed`],
-/// [`crate::error_codes::AtmErrorCode::MailboxReadFailed`],
-/// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`],
-/// [`crate::error_codes::AtmErrorCode::MailboxLockFailed`], or
-/// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`] when actor or
-/// target resolution fails, the team or agent cannot be validated, shared
-/// mailbox locks cannot be acquired, or the selected mailbox state cannot be
-/// reloaded or persisted safely.
+pub trait ReadStore: InboxIngestStore + MailStore + TaskStore {}
+
+impl<T> ReadStore for T where T: InboxIngestStore + MailStore + TaskStore + ?Sized {}
+
+#[deprecated(note = "transitional path; use read_mail_via_store")]
 pub fn read_mail(
     query: ReadQuery,
     observability: &dyn ObservabilityPort,
@@ -327,90 +322,264 @@ pub fn read_mail(
     Ok(outcome)
 }
 
-fn selection_state_for_source_files(
-    source_files: &[SourceFile],
-    workflow_state: &workflow::WorkflowStateFile,
+pub fn read_mail_via_store(
+    query: ReadQuery,
+    store: &dyn ReadStore,
+    ingress: &dyn InboxIngress,
+    observability: &dyn ObservabilityPort,
+) -> Result<ReadOutcome, AtmError> {
+    let config = config::load_config(&query.current_dir)?;
+    let actor = identity::resolve_actor_identity(query.actor_override.as_deref(), config.as_ref())?;
+    let actor_team = config::resolve_team(query.team_override.as_deref(), config.as_ref());
+    let target = resolve_target(
+        query.target_address.as_ref(),
+        &actor,
+        query.team_override.as_ref(),
+        config.as_ref(),
+    )?;
+
+    let team_dir = home::team_dir_from_home(&query.home_dir, &target.team)?;
+    if !team_dir.exists() {
+        return Err(AtmError::team_not_found(&target.team).with_recovery(
+            "Create the team config for the requested team or target a different team before retrying `atm read`.",
+        ));
+    }
+
+    let team_config = config::load_team_config(&team_dir)?;
+    if target.explicit
+        && !team_config
+            .members
+            .iter()
+            .any(|member| member.name == target.agent.as_str())
+    {
+        return Err(
+            AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
+                "Update the team membership in config.json or read a different mailbox target.",
+            ),
+        );
+    }
+
+    let own_inbox = actor == target.agent && actor_team.as_deref() == Some(target.team.as_str());
+    let seen_watermark = if query.seen_state_filter && query.selection_mode != ReadSelection::All {
+        seen_state::load_seen_watermark(&query.home_dir, &target.team, &target.agent)?
+    } else {
+        None
+    };
+
+    ingress.ingest_mailbox_state(
+        &query.home_dir,
+        &target.team,
+        &target.agent,
+        store,
+        observability,
+    )?;
+
+    let (mut bucket_counts, mut selected) = selection_state_for_store_messages(
+        store,
+        &target.team,
+        &target.agent,
+        &query,
+        seen_watermark,
+    )?;
+    let mut timed_out = false;
+
+    if selected.is_empty()
+        && let Some(timeout_secs) = query.timeout_secs
+    {
+        let wait_satisfied = wait::wait_for_eligible_message(
+            timeout_secs,
+            || {
+                ingress.ingest_mailbox_state(
+                    &query.home_dir,
+                    &target.team,
+                    &target.agent,
+                    store,
+                    observability,
+                )?;
+                project_messages_for_recipient(store, &target.team, &target.agent)
+            },
+            |messages| {
+                !selected_after_filters_projected(messages, &query, seen_watermark).is_empty()
+            },
+        )?;
+
+        if wait_satisfied {
+            (bucket_counts, selected) = selection_state_for_store_messages(
+                store,
+                &target.team,
+                &target.agent,
+                &query,
+                seen_watermark,
+            )?;
+        } else {
+            timed_out = true;
+        }
+    }
+
+    sort_and_limit_selected(&mut selected, query.limit);
+    let mutation_applied =
+        apply_store_display_mutations(store, &selected, query.ack_activation_mode, own_inbox)?;
+    let output_messages = selected.clone();
+
+    if query.seen_state_update
+        && !selected.is_empty()
+        && let Some(latest_timestamp) = selected
+            .iter()
+            .map(|message| message.envelope.timestamp)
+            .max()
+    {
+        seen_state::save_seen_watermark(
+            &query.home_dir,
+            &target.team,
+            &target.agent,
+            latest_timestamp,
+        )?;
+    }
+
+    let history_collapsed = query.selection_mode != ReadSelection::All
+        && query.selection_mode != ReadSelection::ActionableWithHistory
+        && bucket_counts.history > 0;
+
+    let outcome = ReadOutcome {
+        action: "read",
+        team: target.team.clone(),
+        agent: target.agent.clone(),
+        selection_mode: query.selection_mode,
+        history_collapsed,
+        mutation_applied,
+        count: output_messages.len(),
+        messages: output_messages,
+        bucket_counts,
+    };
+
+    let _ = observability.emit(CommandEvent {
+        command: "read",
+        action: "read",
+        outcome: if timed_out { "timeout" } else { "ok" },
+        team: outcome.team.clone(),
+        agent: outcome.agent.clone(),
+        sender: actor.to_string(),
+        message_id: None,
+        requires_ack: false,
+        dry_run: false,
+        task_id: None,
+        error_code: None,
+        error_message: None,
+    });
+
+    Ok(outcome)
+}
+
+fn selection_state_for_store_messages(
+    store: &dyn ReadStore,
+    team: &TeamName,
+    agent: &AgentName,
     query: &ReadQuery,
     seen_watermark: Option<IsoTimestamp>,
-) -> (BucketCounts, Vec<ClassifiedMessage>) {
-    let classified_all = classify_all(
-        apply_idle_notification_dedup(
-            dedupe_legacy_message_id_surface(
-                merged_surface(source_files),
-                |message: &SourcedMessage| message.envelope.message_id,
-                |message: &SourcedMessage| message.envelope.timestamp,
-            ),
-            workflow_state,
-        ),
-        workflow_state,
-    );
+) -> Result<(BucketCounts, Vec<ClassifiedMessage>), AtmError> {
+    let classified_all =
+        classify_projected_messages(project_messages_for_recipient(store, team, agent)?);
     let bucket_counts = bucket_counts_for(&classified_all);
     let filtered = apply_filters(
         classified_all.clone(),
-        query.sender_filter.as_deref(),
+        query.sender_filter.as_ref(),
         query.timestamp_filter,
     );
     let selected = select_messages(&filtered, query.selection_mode, seen_watermark);
-    (bucket_counts, selected)
+    Ok((bucket_counts, selected))
 }
 
-fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
-    source_files
-        .iter()
-        .flat_map(|source| {
-            source
-                .messages
-                .iter()
-                .cloned()
-                .enumerate()
-                .map(|(source_index, envelope)| SourcedMessage {
-                    envelope,
-                    source_path: source.path.clone(),
-                    source_index: source_index.into(),
-                })
+fn selected_after_filters_projected(
+    messages: &[ClassifiedMessage],
+    query: &ReadQuery,
+    seen_watermark: Option<IsoTimestamp>,
+) -> Vec<ClassifiedMessage> {
+    let filtered = apply_filters(
+        messages.to_vec(),
+        query.sender_filter.as_ref(),
+        query.timestamp_filter,
+    );
+    select_messages(&filtered, query.selection_mode, seen_watermark)
+}
+
+pub(crate) fn project_messages_for_recipient(
+    store: &dyn ReadStore,
+    team: &TeamName,
+    agent: &AgentName,
+) -> Result<Vec<ClassifiedMessage>, AtmError> {
+    let messages = store
+        .list_messages_for_recipient(team, agent)
+        .map_err(|error| {
+            AtmError::mailbox_read("failed to project SQLite mailbox state").with_source(error)
+        })?;
+    let mut projected = Vec::new();
+    for (index, message) in messages.into_iter().enumerate() {
+        let ack_state = store
+            .load_ack_state(&message.message_key)
+            .map_err(|error| {
+                AtmError::mailbox_read("failed to load projected ack state").with_source(error)
+            })?;
+        let visibility = store
+            .load_visibility(&message.message_key)
+            .map_err(|error| {
+                AtmError::mailbox_read("failed to load projected visibility state")
+                    .with_source(error)
+            })?;
+        if visibility
+            .as_ref()
+            .and_then(|state| state.cleared_at)
+            .is_some()
+        {
+            continue;
+        }
+        let task_id = store
+            .load_tasks_for_message(&message.message_key)
+            .map_err(|error| {
+                AtmError::mailbox_read("failed to load projected task linkage").with_source(error)
+            })?
+            .into_iter()
+            .next()
+            .map(|task| task.task_id);
+        let envelope =
+            envelope_from_store_record(&message, ack_state.as_ref(), visibility.as_ref(), task_id)?;
+        projected.push(ClassifiedMessage {
+            message_key: Some(message.message_key.clone()),
+            source_index: index.into(),
+            source_path: PathBuf::from(format!("sqlite:{}", message.message_key)),
+            bucket: DisplayBucket::Unread,
+            class: MessageClass::Unread,
+            envelope,
+        });
+    }
+    Ok(apply_idle_notification_dedup_projected(projected))
+}
+
+fn classify_projected_messages(messages: Vec<ClassifiedMessage>) -> Vec<ClassifiedMessage> {
+    messages
+        .into_iter()
+        .map(|mut message| {
+            message.class = state::classify_message(&message.envelope);
+            message.bucket = state::display_bucket_for_class(message.class);
+            message
         })
         .collect()
 }
 
-fn apply_idle_notification_dedup(
-    deduped: Vec<SourcedMessage>,
-    workflow_state: &workflow::WorkflowStateFile,
-) -> Vec<SourcedMessage> {
-    let projected = deduped
-        .into_iter()
-        .map(|message| SourcedMessage {
-            envelope: workflow::project_envelope(&message.envelope, workflow_state),
-            source_path: message.source_path,
-            source_index: message.source_index,
-        })
-        .collect::<Vec<_>>();
-    let latest_idle_for_sender = messages_from_idle_sender(&projected);
-
-    projected
+fn apply_idle_notification_dedup_projected(
+    messages: Vec<ClassifiedMessage>,
+) -> Vec<ClassifiedMessage> {
+    let latest_idle_for_sender = messages_from_idle_sender_projected(&messages);
+    messages
         .into_iter()
         .enumerate()
         .filter_map(|(index, message)| {
-            dedupe_idle_notifications(index, &message, &latest_idle_for_sender).then_some(message)
+            dedupe_idle_notifications_projected(index, &message, &latest_idle_for_sender)
+                .then_some(message)
         })
         .collect()
 }
 
-fn dedupe_idle_notifications(
-    index: usize,
-    message: &SourcedMessage,
-    latest_idle_for_sender: &HashMap<String, usize>,
-) -> bool {
-    if !is_unread_idle_notification(&message.envelope) {
-        return true;
-    }
-
-    idle_sender(&message.envelope)
-        .and_then(|sender| latest_idle_for_sender.get(&sender))
-        .map(|keep_index| *keep_index == index)
-        .unwrap_or(true)
-}
-
-fn messages_from_idle_sender(messages: &[SourcedMessage]) -> HashMap<String, usize> {
+fn messages_from_idle_sender_projected(messages: &[ClassifiedMessage]) -> HashMap<String, usize> {
     let mut latest_idle_for_sender = HashMap::new();
 
     for (index, message) in messages.iter().enumerate() {
@@ -429,96 +598,88 @@ fn messages_from_idle_sender(messages: &[SourcedMessage]) -> HashMap<String, usi
     latest_idle_for_sender
 }
 
-fn is_unread_idle_notification(message: &MessageEnvelope) -> bool {
-    !message.read && idle_notification_sender(message).is_some()
+fn dedupe_idle_notifications_projected(
+    index: usize,
+    message: &ClassifiedMessage,
+    latest_idle_for_sender: &HashMap<String, usize>,
+) -> bool {
+    if !is_unread_idle_notification(&message.envelope) {
+        return true;
+    }
+
+    idle_sender(&message.envelope)
+        .and_then(|sender| latest_idle_for_sender.get(&sender))
+        .map(|keep_index| *keep_index == index)
+        .unwrap_or(true)
 }
 
-fn idle_sender(message: &MessageEnvelope) -> Option<String> {
-    idle_notification_sender(message)
-}
+fn envelope_from_store_record(
+    message: &StoredMessageRecord,
+    ack_state: Option<&AckStateRecord>,
+    visibility: Option<&VisibilityStateRecord>,
+    task_id: Option<crate::types::TaskId>,
+) -> Result<MessageEnvelope, AtmError> {
+    let mut extra = Map::new();
+    let mut metadata = message
+        .raw_metadata_json
+        .as_deref()
+        .map(serde_json::from_str::<Value>)
+        .transpose()
+        .map_err(|error| {
+            AtmError::mailbox_read("failed to decode stored metadata projection").with_source(error)
+        })?
+        .unwrap_or_else(|| Value::Object(Map::new()));
 
-fn idle_notification_sender(message: &MessageEnvelope) -> Option<String> {
-    let value = match serde_json::from_str::<Value>(&message.text) {
-        Ok(value) => value,
-        Err(error) => {
-            if message.text.contains("idle_notification") {
-                debug!(
-                    %error,
-                    recovery = "Repair or remove the malformed Claude idle-notification JSON. ATM will continue treating the record as a normal mailbox message.",
-                    message_text = %message.text,
-                    "ignoring malformed idle-notification JSON while classifying read surface"
-                );
-            }
-            return None;
-        }
+    if !metadata.is_object() {
+        metadata = Value::Object(Map::new());
+    }
+    let Some(metadata_object) = metadata.as_object_mut() else {
+        unreachable!("metadata normalized to object")
     };
-
-    if value.get("type").and_then(Value::as_str) != Some("idle_notification") {
-        return None;
+    let atm = metadata_object
+        .entry("atm".to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+    if !atm.is_object() {
+        *atm = Value::Object(Map::new());
     }
+    let Some(atm_object) = atm.as_object_mut() else {
+        unreachable!("atm metadata normalized to object")
+    };
+    let atm_fields = AtmMetadataFields {
+        message_id: message.atm_message_id,
+        source_team: message.sender_team.clone(),
+        from_identity: message.sender_canonical.clone(),
+        pending_ack_at: ack_state.and_then(|state| state.pending_ack_at),
+        acknowledged_at: ack_state.and_then(|state| state.acknowledged_at),
+        acknowledges_message_id: None,
+        task_id: task_id.clone(),
+        alert_kind: None,
+        missing_config_path: None,
+        extra: atm_object.clone(),
+    };
+    let atm_value = serde_json::to_value(atm_fields).map_err(|error| {
+        AtmError::mailbox_read("failed to encode stored ATM metadata projection").with_source(error)
+    })?;
+    *atm_object = atm_value.as_object().cloned().unwrap_or_default();
+    extra.insert("metadata".to_string(), metadata);
 
-    match value.get("from").and_then(Value::as_str) {
-        Some(sender) => Some(sender.to_string()),
-        None => {
-            debug!(
-                recovery = "Ensure Claude idle-notification payloads include a string `from` field. ATM will continue treating the record as a normal mailbox message.",
-                message_text = %message.text,
-                "ignoring malformed idle-notification payload missing string `from`"
-            );
-            None
-        }
-    }
-}
-
-fn classify_all(
-    messages: Vec<SourcedMessage>,
-    workflow_state: &workflow::WorkflowStateFile,
-) -> Vec<ClassifiedMessage> {
-    messages
-        .into_iter()
-        .map(|message| {
-            let projected = workflow::project_envelope(&message.envelope, workflow_state);
-            let class = state::classify_message(&projected);
-            let bucket = state::display_bucket_for_class(class);
-
-            ClassifiedMessage {
-                source_index: message.source_index,
-                source_path: message.source_path,
-                bucket,
-                class,
-                envelope: projected,
-            }
-        })
-        .collect()
-}
-
-fn apply_filters(
-    messages: Vec<ClassifiedMessage>,
-    sender_filter: Option<&str>,
-    timestamp_filter: Option<IsoTimestamp>,
-) -> Vec<ClassifiedMessage> {
-    filters::apply_timestamp_filter(
-        filters::apply_sender_filter(messages, sender_filter),
-        timestamp_filter,
-    )
-}
-
-fn bucket_counts_for(messages: &[ClassifiedMessage]) -> BucketCounts {
-    messages.iter().fold(
-        BucketCounts {
-            unread: 0,
-            pending_ack: 0,
-            history: 0,
-        },
-        |mut counts, message| {
-            match message.bucket {
-                DisplayBucket::Unread => counts.unread += 1,
-                DisplayBucket::PendingAck => counts.pending_ack += 1,
-                DisplayBucket::History => counts.history += 1,
-            }
-            counts
-        },
-    )
+    Ok(MessageEnvelope {
+        from: message
+            .sender_canonical
+            .clone()
+            .unwrap_or_else(|| AgentName::from_validated(message.sender_display.clone())),
+        text: message.body.clone(),
+        timestamp: message.created_at,
+        read: visibility.and_then(|state| state.read_at).is_some(),
+        source_team: message.sender_team.clone(),
+        summary: message.summary.clone(),
+        message_id: message.legacy_message_id,
+        pending_ack_at: ack_state.and_then(|state| state.pending_ack_at),
+        acknowledged_at: ack_state.and_then(|state| state.acknowledged_at),
+        acknowledges_message_id: None,
+        task_id,
+        extra,
+    })
 }
 
 fn select_messages(
@@ -544,7 +705,7 @@ fn selected_after_filters(
     let classified = classify_all(messages.to_vec(), workflow_state);
     let filtered = apply_filters(
         classified,
-        query.sender_filter.as_deref(),
+        query.sender_filter.as_ref(),
         query.timestamp_filter,
     );
     select_messages(&filtered, query.selection_mode, seen_watermark)
@@ -574,6 +735,7 @@ fn output_messages_from_selection(
         .iter()
         .cloned()
         .map(|selected_message| ClassifiedMessage {
+            message_key: None,
             source_index: selected_message.source_index,
             source_path: selected_message.source_path.clone(),
             bucket: selected_message.bucket,
@@ -692,8 +854,9 @@ mod tests {
     use serde_json::Map;
     use tempfile::tempdir;
 
-    use super::{ReadQuery, idle_notification_sender, selected_after_filters};
+    use super::{ReadQuery, selected_after_filters};
     use crate::mailbox::source::SourcedMessage;
+    use crate::read::projection::idle_notification_sender;
     use crate::schema::{LegacyMessageId, MessageEnvelope};
     use crate::types::{
         AckActivationMode, AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,

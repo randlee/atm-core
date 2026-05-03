@@ -2,9 +2,12 @@ use std::fs;
 use std::process::Command;
 mod helpers;
 
+use atm_core::mail_store::MailStore;
 use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
+use atm_core::task_store::TaskStore;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_core::{read_messages, write_messages};
+use atm_rusqlite::RusqliteStore;
 use chrono::{Duration, Utc};
 use serde_json::Value;
 use uuid::Uuid;
@@ -52,18 +55,23 @@ fn test_ack_transitions_pending_ack_and_appends_reply() {
     assert!(inbox[0].read);
     assert!(inbox[0].pending_ack_at.is_some());
     assert!(inbox[0].acknowledged_at.is_none());
-    let workflow_key = inbox[0]
-        .atm_message_id()
-        .map(|message_id| format!("atm:{message_id}"))
-        .unwrap_or_else(|| format!("legacy:{message_id}"));
-    let workflow = fixture.workflow_state_contents("arch-ctm");
-    assert_eq!(workflow["messages"][&workflow_key]["read"], true);
-    assert!(workflow["messages"][&workflow_key]["pendingAckAt"].is_null());
-    assert!(
-        workflow["messages"][&workflow_key]["acknowledgedAt"]
-            .as_str()
-            .is_some()
-    );
+    let store = fixture.store();
+    let stored = store
+        .load_message_by_legacy_id(&LegacyMessageId::from(message_id))
+        .expect("load stored message")
+        .expect("stored row");
+    let ack_state = store
+        .load_ack_state(&stored.message_key)
+        .expect("load ack state")
+        .expect("ack row");
+    assert!(ack_state.pending_ack_at.is_none());
+    assert!(ack_state.acknowledged_at.is_some());
+    let task = store
+        .load_task(&"TASK-123".parse().expect("task id"))
+        .expect("load task")
+        .expect("task row");
+    assert!(task.acknowledged_at.is_some());
+    assert_eq!(task.status, atm_core::task_store::TaskStatus::Acknowledged);
 
     let replies = fixture.inbox_contents("team-lead");
     assert_eq!(replies.len(), 1);
@@ -110,16 +118,59 @@ fn test_ack_updates_origin_inbox_file() {
     assert_eq!(origin.len(), 1);
     assert!(origin[0].pending_ack_at.is_some());
     assert!(origin[0].acknowledged_at.is_none());
-    let workflow_key = origin[0]
-        .atm_message_id()
-        .map(|message_id| format!("atm:{message_id}"))
-        .unwrap_or_else(|| format!("legacy:{message_id}"));
-    let workflow = fixture.workflow_state_contents("arch-ctm");
-    assert!(
-        workflow["messages"][&workflow_key]["acknowledgedAt"]
-            .as_str()
-            .is_some()
+    let store = fixture.store();
+    let stored = store
+        .load_message_by_legacy_id(&LegacyMessageId::from(message_id))
+        .expect("load stored message")
+        .expect("stored row");
+    let ack_state = store
+        .load_ack_state(&stored.message_key)
+        .expect("load ack state")
+        .expect("ack row");
+    assert!(ack_state.pending_ack_at.is_none());
+    assert!(ack_state.acknowledged_at.is_some());
+}
+
+#[test]
+fn test_ack_imports_legacy_origin_message_and_persists_task_state_across_restart() {
+    let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
+    let message_id = Uuid::new_v4();
+    let mut message = fixture.message(
+        "team-lead",
+        "origin pending",
+        true,
+        Some(Duration::minutes(5)),
+        None,
+        message_id,
     );
+    message.task_id = Some("TASK-ORIGIN-123".parse().expect("task id"));
+    fixture.write_origin_inbox("arch-ctm", "host-a", &[message]);
+
+    let output = fixture.run(&["ack", &message_id.to_string(), "got it", "--json"]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+
+    let restarted_store = fixture.store();
+    let stored = restarted_store
+        .load_message_by_legacy_id(&LegacyMessageId::from(message_id))
+        .expect("load stored message")
+        .expect("stored row");
+    let ack_state = restarted_store
+        .load_ack_state(&stored.message_key)
+        .expect("load ack state")
+        .expect("ack row");
+    assert!(ack_state.pending_ack_at.is_none());
+    assert!(ack_state.acknowledged_at.is_some());
+    let task = restarted_store
+        .load_task(&"TASK-ORIGIN-123".parse().expect("task id"))
+        .expect("load task")
+        .expect("task row");
+    assert_eq!(task.message_key, stored.message_key);
+    assert_eq!(task.status, atm_core::task_store::TaskStatus::Acknowledged);
+    assert!(task.acknowledged_at.is_some());
 }
 
 #[test]
@@ -282,10 +333,96 @@ fn test_ack_rejects_message_that_is_not_pending() {
     assert!(
         fixture
             .stderr(&output)
-            .contains("is not in the (read, pending_ack) state"),
+            .contains("SQLite-authoritative (read, pending_ack) state"),
         "stderr: {}",
         fixture.stderr(&output)
     );
+}
+
+#[test]
+fn test_ack_preserves_sqlite_state_when_reply_export_fails_after_commit() {
+    let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
+    let message_id = Uuid::new_v4();
+    let mut message = fixture.message(
+        "team-lead",
+        "please ack",
+        true,
+        Some(Duration::minutes(5)),
+        None,
+        message_id,
+    );
+    message.task_id = Some("TASK-EXPORT-123".parse().expect("task id"));
+    fixture.write_inbox("arch-ctm", &[message]);
+    fs::create_dir_all(fixture.inbox_path("team-lead")).expect("block reply export path");
+
+    let output = fixture.run(&["ack", &message_id.to_string(), "received and starting"]);
+
+    assert!(
+        output.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        fixture.stderr(&output)
+    );
+    let stderr = fixture.stderr(&output);
+    assert!(
+        stderr.contains("warning: acknowledgement reply export failed after SQLite commit"),
+        "stderr: {stderr}"
+    );
+
+    let restarted_store = fixture.store();
+    let stored = restarted_store
+        .load_message_by_legacy_id(&LegacyMessageId::from(message_id))
+        .expect("load stored message")
+        .expect("stored row");
+    let ack_state = restarted_store
+        .load_ack_state(&stored.message_key)
+        .expect("load ack state")
+        .expect("ack row");
+    assert!(ack_state.pending_ack_at.is_none());
+    assert!(ack_state.acknowledged_at.is_some());
+    assert!(ack_state.ack_reply_message_key.is_some());
+    let task = restarted_store
+        .load_task(&"TASK-EXPORT-123".parse().expect("task id"))
+        .expect("load task")
+        .expect("task row");
+    assert_eq!(task.status, atm_core::task_store::TaskStatus::Acknowledged);
+    assert!(task.acknowledged_at.is_some());
+}
+
+#[test]
+fn test_ack_accepts_ulid_message_id_for_message_written_by_atm_send() {
+    let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
+    let send = fixture.run_with_env(
+        &["send", "arch-ctm@atm-dev", "please ack", "--requires-ack"],
+        &[("ATM_IDENTITY", "team-lead")],
+    );
+    assert!(send.status.success(), "stderr: {}", fixture.stderr(&send));
+
+    let inbox = fixture.inbox_contents("arch-ctm");
+    assert_eq!(inbox.len(), 1);
+    let atm_message_id = inbox[0].atm_message_id().expect("atm message id");
+    let read = fixture.run(&["read", "--all"]);
+    assert!(read.status.success(), "stderr: {}", fixture.stderr(&read));
+
+    let output = fixture.run(&[
+        "ack",
+        &atm_message_id.to_string(),
+        "received and starting",
+        "--json",
+    ]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["message_id"], atm_message_id.to_string());
+    assert_eq!(parsed["reply_target"], "team-lead@atm-dev");
+
+    let replies = fixture.inbox_contents("team-lead");
+    assert_eq!(replies.len(), 1);
+    assert_eq!(replies[0].text, "received and starting");
 }
 
 struct Fixture {
@@ -301,6 +438,10 @@ impl Fixture {
     }
 
     fn run(&self, args: &[&str]) -> std::process::Output {
+        self.run_with_env(args, &[])
+    }
+
+    fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
         Command::new(env!("CARGO_BIN_EXE_atm"))
             .args(args)
             .env("ATM_HOME", self.tempdir.path())
@@ -308,6 +449,7 @@ impl Fixture {
             .env("ATM_IDENTITY", "arch-ctm")
             .env("ATM_TEAM", "atm-dev")
             .current_dir(self.tempdir.path())
+            .envs(extra_env.iter().copied())
             .output()
             .expect("run atm")
     }
@@ -374,15 +516,9 @@ impl Fixture {
         read_messages(&self.origin_inbox_path(agent, origin)).expect("origin inbox contents")
     }
 
-    fn workflow_state_contents(&self, agent: &str) -> Value {
-        let raw = fs::read_to_string(
-            self.team_dir()
-                .join(".atm-state")
-                .join("workflow")
-                .join(format!("{agent}.json")),
-        )
-        .expect("workflow state contents");
-        serde_json::from_str(&raw).expect("workflow json")
+    fn store(&self) -> RusqliteStore {
+        RusqliteStore::open_for_team_home(self.tempdir.path(), &"atm-dev".parse().expect("team"))
+            .expect("open store")
     }
 
     fn stdout_json(&self, output: &std::process::Output) -> Value {

@@ -381,7 +381,7 @@ pub struct AtmLogSnapshot {
     pub truncated: bool,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AtmObservabilityHealthState {
     Healthy,
@@ -389,7 +389,7 @@ pub enum AtmObservabilityHealthState {
     Unavailable,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AtmObservabilityHealth {
     pub active_log_path: Option<PathBuf>,
     pub logging_state: AtmObservabilityHealthState,

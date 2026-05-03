@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/atm-core", "crates/atm", "crates/atm-rusqlite"]
+members = ["crates/atm-core", "crates/atm", "crates/atm-daemon", "crates/atm-rusqlite"]
 resolver = "2"
 
 [workspace.package]

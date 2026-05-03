@@ -205,6 +205,72 @@ impl AtmError {
         )
     }
 
+    pub fn daemon_unavailable(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::DaemonUnavailable,
+            AtmErrorKind::Validation,
+            message,
+        )
+        .with_recovery(
+            "Ensure the ATM daemon can start and accept local requests, then retry the command.",
+        )
+    }
+
+    pub fn daemon_start_failed(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::DaemonStartFailed,
+            AtmErrorKind::Validation,
+            message,
+        )
+        .with_recovery(
+            "Check the atm-daemon binary path, daemon state directory permissions, and retry the command.",
+        )
+    }
+
+    pub fn daemon_already_running(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::DaemonAlreadyRunning,
+            AtmErrorKind::Validation,
+            message,
+        )
+        .with_recovery(
+            "Stop the existing daemon or connect to it instead of starting a second daemon.",
+        )
+    }
+
+    pub fn daemon_request_timeout(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::DaemonRequestTimeout,
+            AtmErrorKind::Timeout,
+            message,
+        )
+        .with_recovery(
+            "Retry the command after daemon load subsides, or inspect daemon health with `atm doctor`.",
+        )
+    }
+
+    pub fn daemon_protocol(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::DaemonProtocolFailed,
+            AtmErrorKind::Serialization,
+            message,
+        )
+        .with_recovery(
+            "Restart the ATM daemon and retry the command. If the problem persists, update both ATM binaries together.",
+        )
+    }
+
+    pub fn daemon_remote_unavailable(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::DaemonRemoteUnavailable,
+            AtmErrorKind::Timeout,
+            message,
+        )
+        .with_recovery(
+            "Verify the remote daemon host is reachable and retry the command after connectivity is restored.",
+        )
+    }
+
     pub fn missing_document(message: impl Into<String>) -> Self {
         Self::new(AtmErrorKind::MissingDocument, message).with_recovery(
             "Restore the missing ATM document or recreate it through the documented team-management workflow before retrying.",

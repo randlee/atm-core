@@ -12,13 +12,14 @@ use crate::observability::ObservabilityPort;
 use crate::schema::AgentMember;
 use crate::team_admin::{MemberSummary, MembersList};
 use crate::types::{AgentName, TeamName};
+use serde::{Deserialize, Serialize};
 
 pub use report::{
-    DoctorEnvironmentVisibility, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
-    DoctorSummary,
+    DoctorEnvironmentVisibility, DoctorFinding, DoctorReport, DoctorRuntimeHealth, DoctorSeverity,
+    DoctorStatus, DoctorSummary,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DoctorQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
@@ -113,6 +114,7 @@ pub fn run_doctor(
         environment,
         member_roster,
         observability: observability_health,
+        runtime: None,
     })
 }
 
@@ -271,7 +273,10 @@ fn snapshot_mailbox_lock_paths(home_dir: &Path) -> BTreeSet<PathBuf> {
         };
         for lock_entry in lock_entries.filter_map(Result::ok) {
             let path = lock_entry.path();
-            if path.extension().and_then(|ext| ext.to_str()) != Some("lock") {
+            let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if !(file_name.ends_with(".lock") || file_name.contains(".lock.")) {
                 continue;
             }
             if !lock_entry

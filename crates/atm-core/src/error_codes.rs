@@ -81,6 +81,18 @@ pub enum AtmErrorCode {
     StoreConstraintViolation,
     /// A SQLite transaction failed and rolled back.
     StoreTransactionFailed,
+    /// The ATM daemon could not be reached.
+    DaemonUnavailable,
+    /// Starting the ATM daemon failed.
+    DaemonStartFailed,
+    /// A second ATM daemon attempted to start while one was already active.
+    DaemonAlreadyRunning,
+    /// A daemon request exceeded its deadline.
+    DaemonRequestTimeout,
+    /// The daemon request/response protocol failed.
+    DaemonProtocolFailed,
+    /// A remote daemon could not be reached within the retry budget.
+    DaemonRemoteUnavailable,
     /// Observability health is healthy.
     ObservabilityHealthOk,
     /// A malformed team member record was skipped.
@@ -149,6 +161,12 @@ impl AtmErrorCode {
             Self::StoreBusy => "ATM_STORE_BUSY",
             Self::StoreConstraintViolation => "ATM_STORE_CONSTRAINT_VIOLATION",
             Self::StoreTransactionFailed => "ATM_STORE_TRANSACTION_FAILED",
+            Self::DaemonUnavailable => "ATM_DAEMON_UNAVAILABLE",
+            Self::DaemonStartFailed => "ATM_DAEMON_START_FAILED",
+            Self::DaemonAlreadyRunning => "ATM_DAEMON_ALREADY_RUNNING",
+            Self::DaemonRequestTimeout => "ATM_DAEMON_REQUEST_TIMEOUT",
+            Self::DaemonProtocolFailed => "ATM_DAEMON_PROTOCOL_FAILED",
+            Self::DaemonRemoteUnavailable => "ATM_DAEMON_REMOTE_UNAVAILABLE",
             Self::ObservabilityHealthOk => "ATM_OBSERVABILITY_HEALTH_OK",
             Self::WarningInvalidTeamMemberSkipped => "ATM_WARNING_INVALID_TEAM_MEMBER_SKIPPED",
             Self::WarningMailboxRecordSkipped => "ATM_WARNING_MAILBOX_RECORD_SKIPPED",
@@ -207,6 +225,12 @@ impl FromStr for AtmErrorCode {
             "ATM_STORE_BUSY" => Ok(Self::StoreBusy),
             "ATM_STORE_CONSTRAINT_VIOLATION" => Ok(Self::StoreConstraintViolation),
             "ATM_STORE_TRANSACTION_FAILED" => Ok(Self::StoreTransactionFailed),
+            "ATM_DAEMON_UNAVAILABLE" => Ok(Self::DaemonUnavailable),
+            "ATM_DAEMON_START_FAILED" => Ok(Self::DaemonStartFailed),
+            "ATM_DAEMON_ALREADY_RUNNING" => Ok(Self::DaemonAlreadyRunning),
+            "ATM_DAEMON_REQUEST_TIMEOUT" => Ok(Self::DaemonRequestTimeout),
+            "ATM_DAEMON_PROTOCOL_FAILED" => Ok(Self::DaemonProtocolFailed),
+            "ATM_DAEMON_REMOTE_UNAVAILABLE" => Ok(Self::DaemonRemoteUnavailable),
             "ATM_OBSERVABILITY_HEALTH_OK" => Ok(Self::ObservabilityHealthOk),
             "ATM_WARNING_INVALID_TEAM_MEMBER_SKIPPED" => Ok(Self::WarningInvalidTeamMemberSkipped),
             "ATM_WARNING_MAILBOX_RECORD_SKIPPED" => Ok(Self::WarningMailboxRecordSkipped),

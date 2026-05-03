@@ -1,7 +1,9 @@
 use anyhow::{Context, Result};
 use atm_core::home;
+use atm_core::inbox_ingress::default_inbox_ingress;
 use atm_core::read::{self, ReadQuery};
 use atm_core::types::{AckActivationMode, IsoTimestamp, ReadSelection};
+use atm_rusqlite::RusqliteStore;
 use clap::Args;
 
 use crate::observability::CliObservability;
@@ -65,7 +67,14 @@ impl ReadCommand {
         let home_dir = home::atm_home()?;
         let json = self.json;
         let query = self.build_query(home_dir, current_dir)?;
-        let outcome = read::read_mail(query, observability)?;
+        let team = query
+            .team_override
+            .clone()
+            .or_else(|| std::env::var("ATM_TEAM").ok().and_then(|value| value.parse().ok()))
+            .ok_or_else(|| anyhow::anyhow!("atm read requires an active ATM_TEAM or --team for the SQLite-backed Phase Q path"))?;
+        let store = RusqliteStore::open_for_team_home(&query.home_dir, &team)?;
+        let ingress = default_inbox_ingress();
+        let outcome = read::read_mail_via_store(query, &store, &ingress, observability)?;
         output::print_read_result(&outcome, json)
     }
 
@@ -93,7 +102,7 @@ impl ReadCommand {
                 AckActivationMode::PromoteDisplayedUnread
             },
             self.limit,
-            self.from,
+            self.from.as_deref(),
             timestamp_filter,
             self.timeout,
         )

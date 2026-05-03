@@ -1,0 +1,35 @@
+[package]
+name = "atm-daemon"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Thin ATM daemon runtime and transport adapters."
+repository.workspace = true
+homepage.workspace = true
+
+[lib]
+name = "atm_daemon"
+
+[[bin]]
+name = "atm-daemon"
+path = "src/main.rs"
+
+[dependencies]
+atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.2" }
+anyhow.workspace = true
+libc = "0.2"
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+signal-hook = "0.3"
+toml = "0.8"
+uuid.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Threading"] }
+
+[dev-dependencies]
+serial_test = "3"
+tempfile = "3"

@@ -18,6 +18,10 @@ pub mod error_codes;
 pub mod home;
 /// Internal identity resolution and hook lookup helpers.
 pub(crate) mod identity;
+/// Inbox-export helpers projecting ATM-authored rows back to Claude inbox files.
+pub mod inbox_export;
+/// Inbox-ingest helpers importing shared inbox rows into SQLite truth.
+pub mod inbox_ingress;
 /// Log query and filtering types for the CLI log surface.
 pub mod log;
 /// Durable message-store contracts and records.
@@ -47,6 +51,8 @@ pub mod store;
 pub mod task_store;
 /// Retained local team discovery, roster repair, and backup/restore workflows.
 pub mod team_admin;
+/// Team-config ingress helpers projecting roster state into SQLite truth.
+pub mod team_ingress;
 /// Internal text-formatting helpers used by ATM core surfaces.
 pub(crate) mod text;
 /// Shared enums and semantic newtypes used across ATM core workflows.

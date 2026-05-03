@@ -73,7 +73,7 @@ impl Command {
             Self::Ack(command) => command.run(observability),
             Self::Clear(command) => command.run(observability),
             Self::Log(command) => command.run(observability),
-            Self::Doctor(command) => command.run(observability),
+            Self::Doctor(command) => command.run(observability).map_err(Into::into),
             Self::Teams(command) => command.run(observability),
             Self::Members(command) => command.run(observability),
         }
