@@ -906,6 +906,10 @@ The rewrite is ready when:
   visibility in the Phase Q target architecture
 - `atm teams` provides the retained local team recovery surface
 - `atm members` provides retained local roster verification
+- daemon auto-start-when-absent path is exercised in bounded integration
+  testing
+- `ATM_POST_SEND.recipient_pane_id` is sourced from SQLite roster truth when
+  known
 - retained command behavior is preserved, and any Phase Q runtime-shape changes
   are intentionally documented
 - task-linked mail remains pending until acknowledged
@@ -2473,6 +2477,49 @@ Core design decisions:
 
 Planned sprint sequence:
 
+Integration branch:
+- `integrate/phase-Q`
+
+### Q.0 — Boundary Cleanup And Debt Retirement
+
+Scope:
+- align the existing codebase with the Phase Q target shape before store and
+  daemon work begin
+- remove technical debt and duplicated compatibility helpers that would
+  otherwise slow or distort Q.1+
+- keep this sprint strictly about current retained-path cleanup, not
+  speculative pre-implementation of later architecture
+
+Implementation focus:
+- one shared inbox write boundary
+- one shared inbox hydration boundary
+- one owned message-id compatibility bridge
+- explicit roster/member construction instead of hidden defaults
+- centralized hook payload and hook trigger seams
+- config-ingest validation parity between shorthand and object forms
+
+Code-review evidence:
+- `mailbox::atomic::write_messages()` already serves as the real inbox write
+  seam and should remain the only ATM-owned writer
+- `schema::to_shared_inbox_value()` and
+  `hydrate_legacy_fields_from_metadata()` already serve as the real schema
+  compatibility seams and should absorb duplicated helper logic
+- recent context-injection fixes showed that drift around these boundaries
+  creates immediate product failures
+- recent `AgentName` / `AgentMember` cleanup showed that hidden defaults and
+  duplicated hydrators create migration friction rather than helping
+
+Acceptance:
+- one ATM-owned inbox write boundary and one ATM-owned metadata hydration
+  boundary are explicit and covered by tests
+- duplicated compatibility helpers are removed from retained command/test code
+- hidden default construction for externally meaningful identity fields is
+  removed from retained runtime/test paths
+- hook/event shaping is auditable from one service boundary
+- shorthand and object-form `config.json` member parsing follow the same
+  validation expectations where both remain supported
+- the codebase is simpler to migrate after Q.0 than before Q.0
+
 ### Q.1 — Store And Boundary Foundation
 
 Scope:
@@ -2486,6 +2533,7 @@ Scope:
 - keep service logic fully testable in-process
 
 Parallelization rule:
+- Q.0 must be complete before Q.1 is treated as the contract lock-in point
 - Q.1 is the convergence point
 - Unix/TCP/test-socket transport work, watcher/reconcile work, and
   command-handler migration must not branch into parallel implementation until
@@ -2565,11 +2613,12 @@ Acceptance:
 - second daemon startup fails deterministically
 - remote traffic is daemon-to-daemon only
 - remote send success depends on remote daemon acceptance
-- daemon-unavailable CLI/runtime calls fail clearly without auto-spawn
+- daemon-unavailable CLI/runtime calls first attempt one documented auto-start
+  and then fail clearly with no hidden fallback if the daemon still cannot run
 - daemon code remains a thin runtime wrapper over the service boundaries
 - handler behavior is testable through the in-process `test-socket` transport
 
-### Q.5 — Lock Retirement And Production Gate
+### Q.5 — Lock Retirement And Ops Cleanup
 
 Scope:
 - retire mailbox-lock dependence from ATM mail correctness
@@ -2580,6 +2629,33 @@ Acceptance:
 - mailbox locks are no longer part of the normal mail correctness contract
 - stale lock artifacts can no longer wedge ATM mail flows
 - requirements, architecture, and project plan all match the final design
+
+### Q.6 — Production-Readiness Gate And Release
+
+Scope:
+- prove the Phase Q implementation is production ready rather than merely
+  architecturally aligned
+- run the release gate, packaging gate, and final QA/documentation alignment
+- publish only after all prior sprint gates are green
+
+Acceptance:
+- version bump planning is complete
+- `cargo publish --dry-run` succeeds for the intended publish set
+- crates.io publish succeeds for the intended release line
+- GitHub release/tag/binary artifact steps are complete
+- `CHANGELOG.md` is updated
+- all Phase Q release-gate conditions pass on the release candidate
+
+Phase Q completion gate:
+- Q.0 through Q.6 are complete on `integrate/phase-Q`
+- SQLite is authoritative for messages, ack/task state, visibility state, and
+  roster truth
+- `send` and `ack` operate through the daemon production path
+- production CLI/runtime paths obey one-attempt daemon auto-start semantics
+  with typed failure on final daemon unavailability
+- `recipient_pane_id` is sourced from SQLite roster truth when known
+- mailbox-lock correctness dependence is retired from normal mail flows
+- release-gate and QA invariants for Phase Q are satisfied
 
 QA invariants for every Phase Q pass:
 - impossible to run two active daemons on one host
