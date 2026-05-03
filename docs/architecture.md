@@ -951,7 +951,9 @@ Public entrypoint:
 - findings
 - recommendations
 - environment override visibility
-- current team member roster from `config.json`
+- current authoritative team member roster from SQLite
+- any detected drift between the current `config.json` ingress roster and the
+  authoritative SQLite roster
 - observability health
 
 `DoctorFinding` contains:
@@ -965,10 +967,12 @@ structure where useful, but in the Phase Q target architecture it must include
 daemon/runtime checks rather than assuming a daemon-free local-only model.
 
 Roster output rules:
-- show all current `config.json` members in doctor output
+- show all current authoritative SQLite members in doctor output
 - show baseline `[atm].team_members` first
 - show `team-lead` first among the baseline members when present
 - show extra runtime members after the baseline set
+- surface explicit findings when the current `config.json` ingress roster
+  differs from the authoritative SQLite roster
 - snapshot `~/.claude/teams/*/inboxes/*.lock` at doctor start and end; any lock
   path present in both snapshots is stale and should surface as
   `ATM_WARNING_STALE_MAILBOX_LOCK` with `rm -f <path>` recovery guidance
@@ -1100,7 +1104,9 @@ The doctor pipeline stages are:
 3. inspect ATM config for obsolete fields such as `[atm].identity`
 4. verify local team/mailbox/config paths
 5. verify hook identity availability
-6. compare baseline `[atm].team_members` against `config.json.members`
+6. compare baseline `[atm].team_members` against the authoritative SQLite
+   roster and compare the current `config.json` ingress roster against that
+   same SQLite roster
 7. verify observability initialization and health
 8. verify observability query readiness for `atm log`
 9. assemble findings, recommendations, and ordered roster output

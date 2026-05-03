@@ -65,7 +65,7 @@ Initial crate requirement IDs:
   the CLI/runtime-entry aspects of:
   `REQ-CORE-DAEMON-002`, `REQ-CORE-TEST-RUNTIME-001`.
 - `REQ-ATM-RUNTIME-002` `atm` owns production daemon-unavailable behavior and
-  must not auto-spawn the daemon. Satisfies:
+  the one-attempt daemon auto-start path. Satisfies:
   `REQ-P-RUNTIME-001`, `REQ-CORE-DAEMON-003`.
 - `REQ-ATM-ERROR-001` `atm` owns CLI-side rendering/preservation of typed
   runtime errors from `atm-core` and `atm-daemon`. Satisfies:
@@ -135,8 +135,9 @@ Required Phase Q rules:
   depending on daemon process spawning
 - if a direct in-process service harness exists for tests, it must not become a
   second production path with divergent semantics
-- if the daemon is unavailable in production, `atm` must fail clearly with
-  recovery guidance rather than auto-spawning or silently bypassing the daemon
+- if the daemon is unavailable in production, `atm` must perform one
+  documented auto-start attempt, retry connect once, and then fail clearly
+  with recovery guidance rather than silently bypassing the daemon
 - `atm doctor` remains a CLI command, but its production runtime checks may
   query daemon state through the runtime boundary
 - CLI runtime failures must preserve typed error identity until the rendering

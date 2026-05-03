@@ -145,9 +145,9 @@ Satisfied by:
 - CI monitoring
 - TUI and MCP features
 - daemon spawning as the core correctness test strategy
-  - bounded daemon smoke tests for the auto-start path are permitted when
-    isolated from default test runs per
-    [Testing Constraints](docs/plan-phase-Q.md#testing-constraints)
+- bounded daemon smoke tests for the auto-start path are permitted when
+  isolated from default test runs per
+    [Testing Constraints](./plan-phase-Q.md#testing-constraints)
 - manual daemon-start discipline as a product requirement
   - production CLI auto-start when the daemon is absent is in scope under
     `REQ-P-RUNTIME-001`
@@ -1274,7 +1274,10 @@ The initial doctor implementation must cover:
 - singleton daemon ownership health
 - SQLite mail-store path visibility and openability when Phase Q runtime is
   active
-- baseline `[atm].team_members` coverage against `config.json.members`
+- baseline `[atm].team_members` coverage against the authoritative SQLite
+  roster
+- drift between the current `config.json` ingress roster and the
+  authoritative SQLite roster
 - team directory existence
 - team config existence and parse health
 - inbox directory existence and writability
@@ -1294,8 +1297,10 @@ The initial doctor implementation must cover:
 Human output must provide:
 - overall status summary
 - findings grouped by severity
-- full current member roster from `config.json`, with baseline
+- full current authoritative member roster from SQLite, with baseline
   `[atm].team_members` shown first and `team-lead` first among that baseline
+- explicit drift findings when `config.json` ingress roster and SQLite roster
+  disagree
 - concrete remediation guidance when the user can act
 
 JSON output must provide:

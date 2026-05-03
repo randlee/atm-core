@@ -43,7 +43,9 @@ The `atm` crate must remain thin.
 - `atm` must not access SQLite or inbox JSONL directly
 - `atm` must not own socket protocol semantics beyond client-side request
   mapping and error presentation
-- `atm` must not auto-spawn the daemon in production
+- `atm` must perform the documented one-attempt daemon auto-start path in
+  production when the daemon is absent, and must not invent any additional
+  fallback path beyond that retry contract
 - `atm` must preserve typed runtime error identity until the rendering
   boundary instead of collapsing failures into panic/unwrap control flow
 

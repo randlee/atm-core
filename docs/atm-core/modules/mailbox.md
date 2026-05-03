@@ -4,6 +4,12 @@ Owns mailbox file discovery, atomic read/write helpers, locking, duplicate
 suppression, and origin-inbox merge primitives.
 
 Primary ownership note:
+- Phase Q clarification:
+  - mailbox file ownership remains active for Claude-compatible context
+    injection and import/export compatibility
+  - mailbox-lock-orchestrated read/ack/clear correctness is transitional and
+    is retired from the final Phase Q durable-truth model once SQLite owns
+    ack/task/visibility state
 - mailbox code must distinguish:
   - read-only snapshot helpers
   - read-possible-write flows

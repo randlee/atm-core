@@ -463,11 +463,13 @@ Required identity rules:
 Required doctor rules:
 - `atm doctor` must flag obsolete `[atm].identity` when present with
   `ATM_WARNING_IDENTITY_DRIFT`
-- `atm doctor` must compare `[atm].team_members` against `config.json.members`
+- `atm doctor` must compare `[atm].team_members` against the authoritative
+  SQLite roster
+- `atm doctor` must compare the current `config.json` ingress roster against
+  the authoritative SQLite roster and report drift in either direction
 - missing baseline members are findings
-- extra runtime members in `config.json` are allowed
-- doctor roster output must show all `config.json` members, with baseline
-  members first and `team-lead` first among the baseline set
+- doctor roster output must show the authoritative SQLite roster, with
+  baseline members first and `team-lead` first among the baseline set
 - `atm doctor` must snapshot `~/.claude/teams/*/inboxes/*.lock` at start and
   end of the run; any lock path present in both snapshots is stale and must be
   reported with `ATM_WARNING_STALE_MAILBOX_LOCK` plus `rm -f <path>` recovery guidance

@@ -214,9 +214,11 @@ Identity-specific policy:
   so hook scripts do not need to rediscover pane mappings from file state
 - the reserved diagnostic sender `atm-identity-missing@<team>` is for
   ATM-generated repair/diagnostic notices only
-- doctor should project the live `config.json` roster in a deterministic order:
-  baseline `[atm].team_members` first, `team-lead` first among that baseline,
-  then extra runtime members
+- doctor should project the authoritative SQLite roster in a deterministic
+  order: baseline `[atm].team_members` first, `team-lead` first among that
+  baseline, then extra runtime members
+- doctor should also report drift between the current `config.json` ingress
+  roster and the authoritative SQLite roster
 - doctor should snapshot `~/.claude/teams/*/inboxes/*.lock` at start and end;
   any lock path present in both snapshots is stale and should surface as
   `ATM_WARNING_STALE_MAILBOX_LOCK` with `rm -f <path>` recovery guidance
