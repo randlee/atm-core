@@ -10,7 +10,9 @@ use atm_core::clear::{ClearQuery, clear_mail};
 use atm_core::error::AtmErrorCode;
 use atm_core::observability::NullObservability;
 use atm_core::read::{ReadQuery, read_mail};
-use atm_core::schema::{AgentMember, AtmMessageId, LegacyMessageId, MessageEnvelope, TeamConfig};
+use atm_core::schema::{
+    AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig, hydrate_legacy_fields_from_metadata,
+};
 use atm_core::send::{SendMessageSource, SendRequest, send_mail};
 use atm_core::types::{AckActivationMode, IsoTimestamp, ReadSelection};
 use chrono::Utc;
@@ -1141,62 +1143,6 @@ fn sentinel_path(path: &std::path::Path) -> std::path::PathBuf {
     let mut os = path.as_os_str().to_os_string();
     os.push(".lock");
     std::path::PathBuf::from(os)
-}
-
-fn hydrate_legacy_fields_from_metadata(value: &mut serde_json::Value) {
-    let Some(object) = value.as_object_mut() else {
-        return;
-    };
-    let Some(atm) = object
-        .get("metadata")
-        .and_then(serde_json::Value::as_object)
-        .and_then(|metadata| metadata.get("atm"))
-        .and_then(serde_json::Value::as_object)
-        .cloned()
-    else {
-        return;
-    };
-
-    if !object.contains_key("message_id")
-        && let Some(raw) = atm.get("messageId").and_then(serde_json::Value::as_str)
-        && let Ok(message_id) = raw.parse::<AtmMessageId>()
-    {
-        object.insert(
-            "message_id".to_string(),
-            serde_json::Value::String(LegacyMessageId::from_atm_message_id(message_id).to_string()),
-        );
-    }
-    if !object.contains_key("source_team")
-        && let Some(value) = atm.get("sourceTeam")
-    {
-        object.insert("source_team".to_string(), value.clone());
-    }
-    if !object.contains_key("pendingAckAt")
-        && let Some(value) = atm.get("pendingAckAt")
-    {
-        object.insert("pendingAckAt".to_string(), value.clone());
-    }
-    if !object.contains_key("acknowledgedAt")
-        && let Some(value) = atm.get("acknowledgedAt")
-    {
-        object.insert("acknowledgedAt".to_string(), value.clone());
-    }
-    if !object.contains_key("acknowledgesMessageId")
-        && let Some(raw) = atm
-            .get("acknowledgesMessageId")
-            .and_then(serde_json::Value::as_str)
-        && let Ok(message_id) = raw.parse::<AtmMessageId>()
-    {
-        object.insert(
-            "acknowledgesMessageId".to_string(),
-            serde_json::Value::String(LegacyMessageId::from_atm_message_id(message_id).to_string()),
-        );
-    }
-    if !object.contains_key("taskId")
-        && let Some(value) = atm.get("taskId")
-    {
-        object.insert("taskId".to_string(), value.clone());
-    }
 }
 
 fn pending_ack_message(

@@ -89,12 +89,11 @@ fn maybe_remove_locked_source_file_for_test(source_paths: &[PathBuf]) -> Result<
 #[cfg(test)]
 mod tests {
     use tempfile::tempdir;
-    use uuid::Uuid;
 
     use super::{commit_mailbox_state, commit_source_files};
     use crate::mailbox::read_messages;
     use crate::mailbox::source::SourceFile;
-    use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
+    use crate::schema::{AtmMessageId, MessageEnvelope};
     use crate::types::IsoTimestamp;
 
     #[test]
@@ -200,7 +199,7 @@ mod tests {
             read: false,
             source_team: Some("atm-dev".to_string()),
             summary: None,
-            message_id: Some(message_id),
+            message_id: Some(crate::schema::LegacyMessageId::new()),
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,

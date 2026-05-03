@@ -23,7 +23,12 @@ impl LegacyMessageId {
     }
 
     pub fn from_atm_message_id(value: AtmMessageId) -> Self {
-        Self(Uuid::from_bytes(value.into_ulid().to_bytes()))
+        let mut bytes = value.into_ulid().to_bytes();
+        // Preserve a deterministic bridge for legacy read/ack flows while
+        // normalizing the bytes into a structurally valid UUID v4 shape.
+        bytes[6] = (bytes[6] & 0x0f) | 0x40;
+        bytes[8] = (bytes[8] & 0x3f) | 0x80;
+        Self(Uuid::from_bytes(bytes))
     }
 
     pub fn into_uuid(self) -> Uuid {
@@ -296,7 +301,7 @@ pub(crate) fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, 
     Ok(value)
 }
 
-pub(crate) fn hydrate_legacy_fields_from_metadata(value: &mut Value) {
+pub fn hydrate_legacy_fields_from_metadata(value: &mut Value) {
     let Some(object) = value.as_object_mut() else {
         return;
     };
