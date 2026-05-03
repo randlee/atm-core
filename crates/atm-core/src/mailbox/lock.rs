@@ -32,19 +32,6 @@ enum LockOperation {
     RemoveStaleSentinel,
 }
 
-impl LockOperation {
-    #[cfg(test)]
-    const fn test_override_token(self) -> &'static str {
-        match self {
-            Self::CreateDirectory => "create_directory",
-            Self::Open => "open",
-            Self::WriteOwnerRecord => "write_owner",
-            Self::Remove => "remove",
-            Self::RemoveStaleSentinel => "remove_stale_sentinel",
-        }
-    }
-}
-
 impl std::fmt::Display for LockOperation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
@@ -584,15 +571,7 @@ fn forced_readonly_filesystem_error(operation: LockOperation) -> Option<io::Erro
                 readonly_filesystem_raw_os_error(),
             ));
         }
-
-        let forced = std::env::var("ATM_TEST_FORCE_LOCK_READONLY_FS").ok()?;
-        if forced != operation.test_override_token() {
-            return None;
-        }
-
-        Some(io::Error::from_raw_os_error(
-            readonly_filesystem_raw_os_error(),
-        ))
+        None
     }
 
     #[cfg(not(test))]

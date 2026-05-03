@@ -726,52 +726,14 @@ fn override_reply_message_id_for_tests() -> Result<Option<LegacyMessageId>, AtmE
     if let Some(message_id) = reply_id_test_override::legacy_message_id() {
         return Ok(Some(message_id));
     }
-
-    match std::env::var("ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID") {
-        Ok(value) => value.parse().map(Some).map_err(|error| {
-            AtmError::validation(format!(
-                "ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID must be a UUID legacy message id: {error}"
-            ))
-            .with_recovery(
-                "Remove the invalid test-only ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID override or provide a UUID-form legacy message id.",
-            )
-        }),
-        Err(std::env::VarError::NotPresent) => Ok(None),
-        Err(std::env::VarError::NotUnicode(_)) => Err(
-            AtmError::validation(
-                "ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID must be valid UTF-8 when set",
-            )
-            .with_recovery(
-                "Remove the invalid test-only ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID override or provide a UTF-8 UUID string.",
-            ),
-        ),
-    }
+    Ok(None)
 }
 
 fn override_reply_atm_message_id_for_tests() -> Result<Option<AtmMessageId>, AtmError> {
     if let Some(message_id) = reply_id_test_override::atm_message_id() {
         return Ok(Some(message_id));
     }
-
-    match std::env::var("ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID") {
-        Ok(value) => value.parse().map(Some).map_err(|error| {
-            AtmError::validation(format!(
-                "ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID must be a ULID ATM message id: {error}"
-            ))
-            .with_recovery(
-                "Remove the invalid test-only ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID override or provide a ULID-form ATM message id.",
-            )
-        }),
-        Err(std::env::VarError::NotPresent) => Ok(None),
-        Err(std::env::VarError::NotUnicode(_)) => Err(
-            AtmError::validation(
-                "ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID must be valid UTF-8 when set",
-            )
-            .with_recovery(
-                "Remove the invalid test-only ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID override or provide a UTF-8 ULID string.",
-            ),
-        ),
-    }
+    Ok(None)
 }
 
 fn set_atm_message_id(extra: &mut Map<String, serde_json::Value>, message_id: AtmMessageId) {
@@ -813,7 +775,6 @@ mod reply_id_test_override {
         LEGACY_MESSAGE_ID.with(|cell| *cell.borrow())
     }
 
-    #[cfg(test)]
     pub(super) fn set_legacy_message_id(
         message_id: Option<LegacyMessageId>,
     ) -> Option<LegacyMessageId> {
@@ -828,7 +789,6 @@ mod reply_id_test_override {
         ATM_MESSAGE_ID.with(|cell| *cell.borrow())
     }
 
-    #[cfg(test)]
     pub(super) fn set_atm_message_id(message_id: Option<AtmMessageId>) -> Option<AtmMessageId> {
         ATM_MESSAGE_ID.with(|cell| {
             let original = *cell.borrow();
@@ -838,42 +798,38 @@ mod reply_id_test_override {
     }
 }
 
-#[cfg(test)]
-pub(crate) struct ScopedReplyMessageIdOverride {
+#[doc(hidden)]
+pub struct ScopedReplyMessageIdOverride {
     original: Option<LegacyMessageId>,
 }
 
-#[cfg(test)]
 impl ScopedReplyMessageIdOverride {
-    pub(crate) fn set(message_id: LegacyMessageId) -> Self {
+    pub fn set(message_id: LegacyMessageId) -> Self {
         Self {
             original: reply_id_test_override::set_legacy_message_id(Some(message_id)),
         }
     }
 }
 
-#[cfg(test)]
 impl Drop for ScopedReplyMessageIdOverride {
     fn drop(&mut self) {
         reply_id_test_override::set_legacy_message_id(self.original.take());
     }
 }
 
-#[cfg(test)]
-pub(crate) struct ScopedReplyAtmMessageIdOverride {
+#[doc(hidden)]
+pub struct ScopedReplyAtmMessageIdOverride {
     original: Option<AtmMessageId>,
 }
 
-#[cfg(test)]
 impl ScopedReplyAtmMessageIdOverride {
-    pub(crate) fn set(message_id: AtmMessageId) -> Self {
+    pub fn set(message_id: AtmMessageId) -> Self {
         Self {
             original: reply_id_test_override::set_atm_message_id(Some(message_id)),
         }
     }
 }
 
-#[cfg(test)]
 impl Drop for ScopedReplyAtmMessageIdOverride {
     fn drop(&mut self) {
         reply_id_test_override::set_atm_message_id(self.original.take());

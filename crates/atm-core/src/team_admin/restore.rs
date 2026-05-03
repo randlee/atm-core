@@ -278,7 +278,7 @@ fn restore_task_bucket(src: &Path, dst: &Path) -> Result<(), AtmError> {
                 dst.display()
             ))
             .with_source(error)
-            .with_recovery("Check task directory permissions and rerun the restore.")
+            .with_recovery("Check task directory permissions and rerun `atm teams restore`.")
         })?;
         return Ok(());
     }
@@ -297,7 +297,9 @@ fn restore_task_bucket(src: &Path, dst: &Path) -> Result<(), AtmError> {
                 staging.display()
             ))
             .with_source(error)
-            .with_recovery("Check task staging directory permissions and rerun the restore.")
+            .with_recovery(
+                "Check task staging directory permissions and rerun `atm teams restore`.",
+            )
         })?;
     }
     super::copy_regular_files_strict(src, &staging, |name| {
@@ -311,7 +313,7 @@ fn restore_task_bucket(src: &Path, dst: &Path) -> Result<(), AtmError> {
                 dst.display()
             ))
             .with_source(error)
-            .with_recovery("Check task directory permissions and rerun the restore.")
+            .with_recovery("Check task directory permissions and rerun `atm teams restore`.")
         })?;
     }
     if let Some(parent) = dst.parent() {
@@ -321,7 +323,7 @@ fn restore_task_bucket(src: &Path, dst: &Path) -> Result<(), AtmError> {
                 parent.display()
             ))
             .with_source(error)
-            .with_recovery("Check task parent directory permissions and rerun the restore.")
+            .with_recovery("Check task parent directory permissions and rerun `atm teams restore`.")
         })?;
     }
     fs::rename(&staging, dst).map_err(|error| {
@@ -330,7 +332,7 @@ fn restore_task_bucket(src: &Path, dst: &Path) -> Result<(), AtmError> {
             dst.display()
         ))
         .with_source(error)
-        .with_recovery("Check task directory permissions and rerun the restore.")
+        .with_recovery("Check task directory permissions and rerun `atm teams restore`.")
     })?;
     Ok(())
 }
@@ -342,7 +344,7 @@ fn recompute_highwatermark(tasks_dir: &Path) -> Result<usize, AtmError> {
             tasks_dir.display()
         ))
         .with_source(error)
-        .with_recovery("Check task directory permissions and rerun the restore.")
+        .with_recovery("Check task directory permissions and rerun `atm teams restore`.")
     })?;
 
     let max_id = fs::read_dir(tasks_dir)
@@ -352,7 +354,7 @@ fn recompute_highwatermark(tasks_dir: &Path) -> Result<usize, AtmError> {
                 tasks_dir.display()
             ))
             .with_source(error)
-            .with_recovery("Check task directory permissions and rerun the restore.")
+            .with_recovery("Check task directory permissions and rerun `atm teams restore`.")
         })?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| {
@@ -361,7 +363,7 @@ fn recompute_highwatermark(tasks_dir: &Path) -> Result<usize, AtmError> {
                 tasks_dir.display()
             ))
             .with_source(error)
-            .with_recovery("Check task directory permissions and rerun the restore.")
+            .with_recovery("Check task directory permissions and rerun `atm teams restore`.")
         })?
         .into_iter()
         .map(|entry| entry.path())
@@ -381,7 +383,7 @@ fn recompute_highwatermark(tasks_dir: &Path) -> Result<usize, AtmError> {
         &format!("{max_id}\n"),
         AtmErrorKind::FilePolicy,
         "task highwatermark",
-        "Check task directory permissions and rerun the restore.",
+        "Check task directory permissions and rerun `atm teams restore`.",
     )?;
     Ok(max_id)
 }
@@ -483,7 +485,9 @@ pub(super) fn apply_restored_inboxes(
                 from.display()
             ))
             .with_source(error)
-            .with_recovery("Check inbox permissions and backup integrity, then rerun the restore.")
+            .with_recovery(
+                "Check inbox permissions and backup integrity, then rerun `atm teams restore`.",
+            )
         })?;
     }
     for inbox_name in inboxes_to_restore {

@@ -38,7 +38,7 @@ pub(crate) fn observe_source_files(
     team: &TeamName,
     agent: &AgentName,
 ) -> Result<Vec<SourceFile>, AtmError> {
-    let source_paths = discover_source_paths(home_dir, team.as_str(), agent.as_str())?;
+    let source_paths = discover_source_paths(home_dir, team, agent)?;
     load_source_files(&source_paths)
 }
 
@@ -81,7 +81,7 @@ where
     H: FnOnce(&[PathBuf]) -> Result<(), AtmError>,
     F: FnOnce(&[PathBuf], &mut Vec<SourceFile>) -> Result<T, AtmError>,
 {
-    let source_paths = discover_source_paths(home_dir, team.as_str(), agent.as_str())?;
+    let source_paths = discover_source_paths(home_dir, team, agent)?;
     let mut write_paths = source_paths.clone();
     write_paths.extend(extra_write_paths);
     // TRANSITIONAL: compatibility only, pending Q.5+ lock retirement.
@@ -89,12 +89,7 @@ where
     // this lock boundary remains only while the Claude inbox compatibility
     // surface is still rewritten in-process.
     let _locks = lock::acquire_many_sorted(write_paths, timeout)?;
-    let source_paths = rediscover_and_validate_source_paths(
-        &source_paths,
-        home_dir,
-        team.as_str(),
-        agent.as_str(),
-    )?;
+    let source_paths = rediscover_and_validate_source_paths(&source_paths, home_dir, team, agent)?;
     before_load(&source_paths)?;
     let mut source_files = load_source_files(&source_paths)?;
     body(&source_paths, &mut source_files)

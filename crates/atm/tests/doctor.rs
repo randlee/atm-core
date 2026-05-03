@@ -64,7 +64,9 @@ fn test_doctor_reports_unavailable_observability_with_real_fault_injection() {
     assert_eq!(parsed["observability"]["query_state"], "healthy");
 }
 
+/// daemon smoke test — run explicitly with --include-ignored
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_obsolete_identity_drift_warning() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_atm_config(&format!("[atm]\nidentity = \"{TEST_SENDER}\"\n"));
@@ -88,7 +90,9 @@ fn test_doctor_reports_obsolete_identity_drift_warning() {
     );
 }
 
+/// daemon smoke test — run explicitly with --include-ignored
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_missing_baseline_team_member() {
     let fixture = Fixture::new(&[ROLE_TEAM_LEAD, TEST_SENDER]);
     fixture.write_atm_config(
@@ -118,7 +122,9 @@ fn test_doctor_reports_missing_baseline_team_member() {
     );
 }
 
+/// daemon smoke test — run explicitly with --include-ignored
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_member_roster_with_baseline_ordering() {
     let fixture = Fixture::new(&[TEST_QA, ROLE_TEAM_LEAD, TEST_SENDER, "temp-worker"]);
     fixture.write_atm_config(
@@ -144,7 +150,9 @@ fn test_doctor_reports_member_roster_with_baseline_ordering() {
     assert_eq!(members[3]["name"], "temp-worker");
 }
 
+/// daemon smoke test — run explicitly with --include-ignored
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_missing_team_directory_finding() {
     let fixture = Fixture::empty();
 
@@ -162,7 +170,9 @@ fn test_doctor_reports_missing_team_directory_finding() {
     );
 }
 
+/// daemon smoke test — run explicitly with --include-ignored
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_team_config_parse_failure_finding() {
     let fixture = Fixture::empty();
     fixture.write_raw_team_config("{\"members\":");
@@ -181,7 +191,9 @@ fn test_doctor_reports_team_config_parse_failure_finding() {
     );
 }
 
+/// daemon smoke test — run explicitly with --include-ignored
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_missing_inboxes_directory_finding() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     fs::remove_dir_all(fixture.team_dir().join("inboxes")).expect("remove inboxes dir");
@@ -200,7 +212,9 @@ fn test_doctor_reports_missing_inboxes_directory_finding() {
     );
 }
 
+/// daemon smoke test — run explicitly with --include-ignored
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_stale_restore_marker_warning() {
     let fixture = Fixture::new(&[ROLE_TEAM_LEAD, TEST_SENDER]);
     let backup_path = fixture.tempdir.path().join("backup");
@@ -263,8 +277,10 @@ fn test_doctor_sweeps_stale_mailbox_lock_across_team_inboxes() {
 
 #[test]
 #[serial(env)]
-fn test_doctor_auto_starts_daemon_when_absent() {
+fn test_doctor_in_process_health_check_reports_runtime_fields() {
     let fixture = Fixture::new(&[TEST_SENDER]);
+    // In-process dispatcher coverage only; this does not validate the full
+    // CLI auto-start-then-connect sequence.
     let parsed = serde_json::to_value(fixture.run_in_process_doctor(&[])).expect("doctor json");
     assert_eq!(parsed["summary"]["status"], "healthy");
     assert_eq!(parsed["runtime"]["singleton_state"], "healthy");

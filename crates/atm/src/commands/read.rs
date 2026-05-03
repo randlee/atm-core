@@ -1,4 +1,9 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
+#[allow(clippy::duplicate_mod)]
+#[cfg(test)]
+#[path = "../../tests/support/mod.rs"]
+mod support;
+use atm_core::error::AtmError;
 use atm_core::home;
 use atm_core::inbox_ingress::default_inbox_ingress;
 use atm_core::read::{self, ReadQuery};
@@ -127,9 +132,13 @@ impl ReadCommand {
     }
 }
 
-fn parse_timestamp(value: &str) -> Result<IsoTimestamp> {
+fn parse_timestamp(value: &str) -> std::result::Result<IsoTimestamp, AtmError> {
     chrono::DateTime::parse_from_rfc3339(value)
-        .with_context(|| format!("invalid ISO 8601 timestamp: {value}"))
+        .map_err(|source| {
+            AtmError::validation(format!("invalid ISO 8601 timestamp: {value}"))
+                .with_source(source)
+                .with_recovery("Provide --since as an RFC 3339 / ISO 8601 timestamp.")
+        })
         .map(|timestamp| timestamp.with_timezone(&chrono::Utc).into())
 }
 
@@ -146,9 +155,10 @@ mod tests {
     use atm_rusqlite::RusqliteStore;
     use tempfile::TempDir;
 
+    use super::support::ROLE_TEAM_LEAD;
+
     const TEST_TEAM: &str = "test-team";
     const TEST_SENDER: &str = "sender-a";
-    const ROLE_TEAM_LEAD: &str = "team-lead";
 
     #[test]
     fn build_query_rejects_invalid_target_before_core() {

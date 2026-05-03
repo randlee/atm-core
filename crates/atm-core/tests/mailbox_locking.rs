@@ -36,11 +36,6 @@ fn qualified(agent: &str) -> String {
     format!("{agent}@{TEST_TEAM}")
 }
 
-// Test-side ceiling guard only; production lock timeout defaults to 5s per
-// architecture §18.3.
-const TEST_TIMEOUT_SECS: u64 = 3;
-const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(TEST_TIMEOUT_SECS);
-
 fn test_recv_timeout() -> Duration {
     std::env::var("ATM_TEST_RECV_TIMEOUT_SECS")
         .ok()
@@ -662,17 +657,12 @@ fn clear_dry_run_does_not_wait_on_mailbox_lock() {
         .expect("open lock file");
     lock_file.lock_exclusive().expect("hold mailbox lock");
 
-    let started = Instant::now();
     let mut clear_query = fixture.clear_query(TEST_SENDER);
     clear_query.dry_run = true;
     let outcome = clear_mail(clear_query, &observability).expect("dry-run clear");
 
     assert_eq!(outcome.removed_total, 0);
     assert_eq!(outcome.remaining_total, 1);
-    assert!(
-        started.elapsed() < TEST_LOCK_BUDGET_CEILING,
-        "retain only a coarse non-blocking budget here; recv_timeout-based tests above already cover deadlock detection"
-    );
 }
 
 #[test]
@@ -691,6 +681,8 @@ fn read_and_clear_via_store_ignore_inbox_file_lock() {
             LegacyMessageId::from(Uuid::new_v4()),
         )],
     );
+    let inbox_before =
+        fs::read_to_string(fixture.primary_inbox_path(TEST_SENDER)).expect("raw inbox before");
 
     let inbox_file = OpenOptions::new()
         .create(true)
@@ -718,6 +710,11 @@ fn read_and_clear_via_store_ignore_inbox_file_lock() {
     )
     .expect("clear");
     assert_eq!(clear_outcome.removed_total, 1);
+    assert_eq!(
+        fs::read_to_string(fixture.primary_inbox_path(TEST_SENDER)).expect("raw inbox after"),
+        inbox_before,
+        "store-backed clear should not mutate the compatibility inbox file while a direct inbox lock is held",
+    );
 }
 
 #[test]

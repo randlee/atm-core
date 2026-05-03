@@ -64,14 +64,14 @@ pub(crate) fn resolve_target(
 
 pub(crate) fn discover_origin_inboxes(
     inboxes_dir: &Path,
-    agent: &str,
+    agent: &AgentName,
 ) -> Result<Vec<PathBuf>, AtmError> {
     if !inboxes_dir.exists() {
         return Ok(Vec::new());
     }
 
-    let prefix = format!("{agent}.");
-    let primary = format!("{agent}.json");
+    let prefix = format!("{}.", agent.as_str());
+    let primary = format!("{}.json", agent.as_str());
     if let Some(error) = forced_source_discovery_fault() {
         return Err(origin_inbox_enumeration_error(inboxes_dir, agent, error));
     }
@@ -99,7 +99,7 @@ pub(crate) fn discover_origin_inboxes(
                 warn!(
                     code = %AtmErrorCode::WarningOriginInboxEntrySkipped,
                     inbox_dir = %inboxes_dir.display(),
-                    agent,
+                    agent = agent.as_str(),
                     %enumerated,
                     "failed while enumerating origin inbox entries; aborting source discovery"
                 );
@@ -122,10 +122,10 @@ pub(crate) fn discover_origin_inboxes(
 
 pub(crate) fn discover_source_paths(
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
 ) -> Result<Vec<PathBuf>, AtmError> {
-    let inbox_path = home::inbox_path_from_home(home_dir, team, agent)?;
+    let inbox_path = home::inbox_path_from_home(home_dir, team.as_str(), agent.as_str())?;
     let inboxes_dir = inbox_path
         .parent()
         .ok_or_else(|| AtmError::mailbox_read("inbox path has no parent directory"))?;
@@ -144,8 +144,8 @@ pub(crate) fn discover_source_paths(
 pub(crate) fn rediscover_and_validate_source_paths(
     locked_paths: &[PathBuf],
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
 ) -> Result<Vec<PathBuf>, AtmError> {
     let rediscovered = discover_source_paths(home_dir, team, agent)?;
     if rediscovered != locked_paths {
@@ -159,11 +159,16 @@ pub(crate) fn rediscover_and_validate_source_paths(
     Ok(rediscovered)
 }
 
-fn origin_inbox_enumeration_error(inboxes_dir: &Path, agent: &str, error: io::Error) -> AtmError {
+fn origin_inbox_enumeration_error(
+    inboxes_dir: &Path,
+    agent: &AgentName,
+    error: io::Error,
+) -> AtmError {
     AtmError::new(
         AtmErrorKind::MailboxRead,
         format!(
-            "failed to enumerate origin inbox entries for agent '{agent}' in {}: {error}",
+            "failed to enumerate origin inbox entries for agent '{}' in {}: {error}",
+            agent.as_str(),
             inboxes_dir.display()
         ),
     )
@@ -262,22 +267,28 @@ mod tests {
         origin_inbox_enumeration_error, rediscover_and_validate_source_paths, resolve_target,
     };
     use crate::config::AtmConfig;
+    use crate::types::{AgentName, TeamName};
+
+    const TEST_TEAM: &str = "test-team";
+    const TEST_ACTOR: &str = "test-sender";
+    const TEST_LEAD: &str = "test-lead";
 
     #[test]
     fn discover_origin_inboxes_ignores_primary_and_sorts_matches() {
         let tempdir = tempdir().expect("tempdir");
         let inboxes = tempdir.path();
-        std::fs::write(inboxes.join("arch-ctm.json"), "").expect("primary");
-        std::fs::write(inboxes.join("arch-ctm.host-b.json"), "").expect("host b");
-        std::fs::write(inboxes.join("arch-ctm.host-a.json"), "").expect("host a");
+        std::fs::write(inboxes.join(format!("{TEST_ACTOR}.json")), "").expect("primary");
+        std::fs::write(inboxes.join(format!("{TEST_ACTOR}.host-b.json")), "").expect("host b");
+        std::fs::write(inboxes.join(format!("{TEST_ACTOR}.host-a.json")), "").expect("host a");
         std::fs::write(inboxes.join("other.json"), "").expect("other");
 
-        let discovered = discover_origin_inboxes(inboxes, "arch-ctm").expect("discover");
+        let discovered = discover_origin_inboxes(inboxes, &TEST_ACTOR.parse().expect("agent"))
+            .expect("discover");
         assert_eq!(
             discovered,
             vec![
-                inboxes.join("arch-ctm.host-a.json"),
-                inboxes.join("arch-ctm.host-b.json")
+                inboxes.join(format!("{TEST_ACTOR}.host-a.json")),
+                inboxes.join(format!("{TEST_ACTOR}.host-b.json"))
             ]
         );
     }
@@ -286,7 +297,7 @@ mod tests {
     fn origin_inbox_enumeration_error_is_mailbox_read_failure() {
         let error = origin_inbox_enumeration_error(
             Path::new("test-inbox-dir"),
-            "arch-ctm",
+            &TEST_ACTOR.parse().expect("agent"),
             io::Error::other("synthetic"),
         );
 
@@ -301,29 +312,29 @@ mod tests {
     #[test]
     fn resolve_target_canonicalizes_alias_before_mailbox_lookup() {
         let mut aliases = BTreeMap::new();
-        aliases.insert("tl".to_string(), "team-lead".to_string());
+        aliases.insert("tl".to_string(), TEST_LEAD.to_string());
         let config = AtmConfig {
-            default_team: Some("atm-dev".parse().expect("team")),
+            default_team: Some(TEST_TEAM.parse().expect("team")),
             aliases,
             ..Default::default()
         };
 
         let target = resolve_target(
             Some(&"tl".parse().expect("address")),
-            &"arch-ctm".parse().expect("agent"),
-            None,
+            &TEST_ACTOR.parse().expect("agent"),
+            Some(&TEST_TEAM.parse().expect("team")),
             Some(&config),
         )
         .expect("target");
-        assert_eq!(target.agent, "team-lead");
-        assert_eq!(target.team, "atm-dev");
+        assert_eq!(target.agent, TEST_LEAD);
+        assert_eq!(target.team, TEST_TEAM);
         assert!(target.explicit);
     }
 
     #[test]
     fn load_source_files_reports_disappearing_mailbox() {
         let tempdir = tempdir().expect("tempdir");
-        let path = tempdir.path().join("arch-ctm.json");
+        let path = tempdir.path().join(format!("{TEST_ACTOR}.json"));
         std::fs::write(&path, "").expect("mailbox");
         std::fs::remove_file(&path).expect("remove");
 
@@ -336,10 +347,11 @@ mod tests {
     fn discover_origin_inboxes_reports_synthetic_fault() {
         let tempdir = tempdir().expect("tempdir");
         let inboxes = tempdir.path();
-        std::fs::write(inboxes.join("arch-ctm.host-a.json"), "").expect("host a");
+        std::fs::write(inboxes.join(format!("{TEST_ACTOR}.host-a.json")), "").expect("host a");
         let _fault = ScopedSourceDiscoveryFaultOverride::enable();
 
-        let error = discover_origin_inboxes(inboxes, "arch-ctm").expect_err("synthetic fault");
+        let error = discover_origin_inboxes(inboxes, &TEST_ACTOR.parse().expect("agent"))
+            .expect_err("synthetic fault");
         assert!(error.is_mailbox_read());
         assert!(
             error
@@ -355,38 +367,39 @@ mod tests {
         let inboxes = home
             .join(".claude")
             .join("teams")
-            .join("atm-dev")
+            .join(TEST_TEAM)
             .join("inboxes");
         std::fs::create_dir_all(&inboxes).expect("inboxes");
-        let locked = inboxes.join("arch-ctm.json");
-        let added = inboxes.join("arch-ctm.host-a.json");
+        let locked = inboxes.join(format!("{TEST_ACTOR}.json"));
+        let added = inboxes.join(format!("{TEST_ACTOR}.host-a.json"));
         std::fs::write(&locked, "").expect("primary");
 
-        let discovered =
-            super::discover_source_paths(home, "atm-dev", "arch-ctm").expect("discover");
+        let discovered = super::discover_source_paths(
+            home,
+            &TEST_TEAM.parse().expect("team"),
+            &TEST_ACTOR.parse().expect("agent"),
+        )
+        .expect("discover");
         std::fs::write(&added, "").expect("origin");
 
-        let error = rediscover_and_validate_source_paths(&discovered, home, "atm-dev", "arch-ctm")
-            .expect_err("drift error");
+        let error = rediscover_and_validate_source_paths(
+            &discovered,
+            home,
+            &TEST_TEAM.parse().expect("team"),
+            &TEST_ACTOR.parse().expect("agent"),
+        )
+        .expect_err("drift error");
         assert!(error.is_mailbox_lock());
         assert!(error.message.contains("source path set changed"));
     }
 
     #[test]
     fn discover_source_paths_rejects_invalid_team_segment() {
-        let tempdir = tempdir().expect("tempdir");
-        let error =
-            super::discover_source_paths(tempdir.path(), "../evil", "arch-ctm").expect_err("team");
-
-        assert!(error.is_address());
+        assert!("../evil".parse::<TeamName>().is_err());
     }
 
     #[test]
     fn discover_source_paths_rejects_invalid_agent_segment() {
-        let tempdir = tempdir().expect("tempdir");
-        let error =
-            super::discover_source_paths(tempdir.path(), "atm-dev", "../evil").expect_err("agent");
-
-        assert!(error.is_address());
+        assert!("../evil".parse::<AgentName>().is_err());
     }
 }

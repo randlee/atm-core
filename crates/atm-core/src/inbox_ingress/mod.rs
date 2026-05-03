@@ -55,8 +55,7 @@ impl InboxIngress for JsonInboxIngress {
             workflow::load_workflow_state(home_dir, team.as_str(), agent.as_str())?;
         // INVARIANT: discover_source_paths() is bounded to the validated
         // home/team/agent scope provided to this ingress call.
-        let source_paths =
-            mailbox::source::discover_source_paths(home_dir, team.as_str(), agent.as_str())?;
+        let source_paths = mailbox::source::discover_source_paths(home_dir, team, agent)?;
         let mut outcome = InboxIngestOutcome::default();
 
         for source_path in source_paths {
