@@ -1,17 +1,21 @@
+use std::ffi::OsString;
 use std::fs;
 use std::process::Command;
 mod helpers;
 
+use atm_core::ack::{self, AckMessageId, AckRequest};
+use atm_core::error::AtmErrorCode;
 use atm_core::inbox_ingress::ingest_mailbox_state;
 use atm_core::mail_store::MailStore;
 use atm_core::observability::NullObservability;
-use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
+use atm_core::schema::{AgentMember, AtmMessageId, LegacyMessageId, MessageEnvelope, TeamConfig};
 use atm_core::task_store::TaskStore;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_core::{read_messages, write_messages};
 use atm_rusqlite::RusqliteStore;
 use chrono::{Duration, TimeZone, Utc};
 use serde_json::Value;
+use serial_test::serial;
 use uuid::Uuid;
 
 #[test]
@@ -93,7 +97,7 @@ fn test_ack_transitions_pending_ack_and_appends_reply() {
 }
 
 #[test]
-fn test_ack_updates_origin_inbox_file() {
+fn test_ack_ingests_origin_inbox_and_persists_ack_state_in_sqlite() {
     let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
     let message_id = Uuid::new_v4();
     fixture.write_origin_inbox(
@@ -116,6 +120,8 @@ fn test_ack_updates_origin_inbox_file() {
         fixture.stderr(&output)
     );
 
+    // The origin inbox file keeps the pre-commit compatibility snapshot.
+    // SQLite is authoritative for ack state after ingestion/commit.
     let origin = fixture.origin_inbox_contents("arch-ctm", "host-a");
     assert_eq!(origin.len(), 1);
     assert!(origin[0].pending_ack_at.is_some());
@@ -131,6 +137,89 @@ fn test_ack_updates_origin_inbox_file() {
         .expect("ack row");
     assert!(ack_state.pending_ack_at.is_none());
     assert!(ack_state.acknowledged_at.is_some());
+}
+
+#[test]
+#[serial]
+fn test_ack_duplicate_reply_identity_reports_store_constraint_violation() {
+    let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
+    let message_id = Uuid::new_v4();
+    fixture.write_inbox(
+        "arch-ctm",
+        &[fixture.message(
+            "team-lead",
+            "please ack",
+            true,
+            Some(Duration::minutes(5)),
+            None,
+            message_id,
+        )],
+    );
+
+    let conflicting_reply_id = LegacyMessageId::new();
+    let conflicting_reply_atm_message_id = AtmMessageId::new();
+    let mut conflicting_reply_extra = serde_json::Map::new();
+    conflicting_reply_extra.insert(
+        "metadata".to_string(),
+        serde_json::json!({
+            "atm": {
+                "messageId": conflicting_reply_atm_message_id.to_string(),
+            }
+        }),
+    );
+    let conflicting_reply = MessageEnvelope {
+        from: "arch-ctm".parse().expect("sender"),
+        text: "preexisting conflicting reply".to_string(),
+        timestamp: "2026-05-02T19:45:00Z".parse().expect("timestamp"),
+        read: false,
+        source_team: Some("atm-dev".parse().expect("team")),
+        summary: Some("preexisting conflicting reply".to_string()),
+        message_id: Some(conflicting_reply_id),
+        pending_ack_at: None,
+        acknowledged_at: None,
+        acknowledges_message_id: None,
+        task_id: None,
+        extra: conflicting_reply_extra,
+    };
+    fixture.write_inbox("team-lead", &[conflicting_reply]);
+
+    let store = fixture.store();
+    let observability = NullObservability;
+    let team = "atm-dev".parse().expect("team");
+    let reply_agent = "team-lead".parse().expect("reply agent");
+    ingest_mailbox_state(
+        fixture.tempdir.path(),
+        &team,
+        &reply_agent,
+        &store,
+        &observability,
+    )
+    .expect("ingest conflicting reply into SQLite");
+
+    let _reply_id_override = ScopedEnvVar::set(
+        "ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID",
+        &conflicting_reply_id.to_string(),
+    );
+    let _reply_atm_id_override = ScopedEnvVar::set(
+        "ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID",
+        &conflicting_reply_atm_message_id.to_string(),
+    );
+
+    let error = ack::ack_mail(
+        AckRequest {
+            home_dir: fixture.tempdir.path().to_path_buf(),
+            current_dir: fixture.tempdir.path().to_path_buf(),
+            actor_override: None,
+            team_override: None,
+            message_id: AckMessageId::Legacy(LegacyMessageId::from(message_id)),
+            reply_body: "duplicate reply".to_string(),
+        },
+        &store,
+        &observability,
+    )
+    .expect_err("duplicate reply identity should fail");
+
+    assert_eq!(error.code, AtmErrorCode::StoreConstraintViolation);
 }
 
 #[test]
@@ -634,6 +723,38 @@ impl Fixture {
             acknowledges_message_id: None,
             task_id: None,
             extra: serde_json::Map::new(),
+        }
+    }
+}
+
+struct ScopedEnvVar {
+    key: &'static str,
+    previous: Option<OsString>,
+}
+
+impl ScopedEnvVar {
+    fn set(key: &'static str, value: &str) -> Self {
+        let previous = std::env::var_os(key);
+        // SAFETY: this test is marked #[serial], so no concurrent test in this
+        // process mutates the same environment while the override is active.
+        unsafe { std::env::set_var(key, value) };
+        Self { key, previous }
+    }
+}
+
+impl Drop for ScopedEnvVar {
+    fn drop(&mut self) {
+        match &self.previous {
+            Some(value) => {
+                // SAFETY: this test is marked #[serial], so restoring the
+                // captured environment value is process-exclusive here.
+                unsafe { std::env::set_var(self.key, value) };
+            }
+            None => {
+                // SAFETY: this test is marked #[serial], so removing the
+                // override is process-exclusive here.
+                unsafe { std::env::remove_var(self.key) };
+            }
         }
     }
 }

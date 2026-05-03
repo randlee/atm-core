@@ -236,6 +236,11 @@ Error codes should describe the failure class, not a specific prose message.
     - message:
       ```text
       error: mailbox lock {operation} failed for {lock_path}: filesystem is read-only.
+      ```
+    - recovery:
+      ```text
+      Remount or move the ATM home to a writable filesystem, then retry the ATM command.
+      ```
 
 ### 5.10 Phase Q Runtime Families
 
@@ -278,11 +283,6 @@ surface.
 - `ATM_DAEMON_SIGNAL_RELOAD_FAILED`
 - `ATM_DAEMON_UNAVAILABLE`
 - `ATM_DAEMON_CLIENT_TIMEOUT`
-      ```
-    - recovery:
-      ```text
-      Remount or move the ATM home to a writable filesystem, then retry the ATM command.
-      ```
   - drop-time best-effort cleanup may log the code as a warning because the
     mailbox command has already succeeded, but public acquisition/sweep paths
     must return the structured error directly
@@ -298,7 +298,7 @@ Required mapping rules:
 
 | `AtmErrorKind` | Default `AtmErrorCode` | Additional implemented codes in the same kind |
 | --- | --- | --- |
-| `Config` | `ATM_CONFIG_PARSE_FAILED` | `ATM_CONFIG_HOME_UNAVAILABLE`, `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`, `ATM_CONFIG_TEAM_PARSE_FAILED` |
+| `Config` | `ATM_CONFIG_PARSE_FAILED` | `ATM_CONFIG_HOME_UNAVAILABLE`, `ATM_CONFIG_RETIRED_HOOK_MEMBERS_KEY`, `ATM_CONFIG_RETIRED_LEGACY_HOOK_KEYS`, `ATM_CONFIG_TEAM_PARSE_FAILED` |
 | `MissingDocument` | `ATM_CONFIG_TEAM_MISSING` | none |
 | `Address` | `ATM_ADDRESS_PARSE_FAILED` | none |
 | `Identity` | `ATM_IDENTITY_UNAVAILABLE` | none |
@@ -311,16 +311,16 @@ Required mapping rules:
 | `Validation` | `ATM_MESSAGE_VALIDATION_FAILED` | `ATM_ACK_INVALID_STATE`, `ATM_CLEAR_INVALID_STATE` |
 | `Serialization` | `ATM_SERIALIZATION_FAILED` | none |
 | `Timeout` | `ATM_WAIT_TIMEOUT` | none |
-| `StoreError (pre-AtmError mapping)` | n/a | `ATM_STORE_OPEN_FAILED`, `ATM_STORE_BOOTSTRAP_FAILED`, `ATM_STORE_MIGRATION_FAILED`, `ATM_STORE_QUERY_FAILED`, `ATM_STORE_BUSY`, `ATM_STORE_CONSTRAINT_VIOLATION`, `ATM_STORE_TRANSACTION_FAILED` |
+| `Store` | `ATM_STORE_QUERY_FAILED` | `ATM_STORE_OPEN_FAILED`, `ATM_STORE_BOOTSTRAP_FAILED`, `ATM_STORE_MIGRATION_FAILED`, `ATM_STORE_BUSY`, `ATM_STORE_CONSTRAINT_VIOLATION`, `ATM_STORE_TRANSACTION_FAILED` |
 | `ObservabilityEmit` | `ATM_OBSERVABILITY_EMIT_FAILED` | none |
 | `ObservabilityBootstrap` | `ATM_OBSERVABILITY_BOOTSTRAP_FAILED` | none |
 | `ObservabilityQuery` | `ATM_OBSERVABILITY_QUERY_FAILED` | none |
 | `ObservabilityFollow` | `ATM_OBSERVABILITY_FOLLOW_FAILED` | none |
 | `ObservabilityHealth` | `ATM_OBSERVABILITY_HEALTH_FAILED` | `ATM_OBSERVABILITY_HEALTH_OK`, `ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED` |
 
-The `StoreError` row is intentionally parallel to `AtmErrorKind`: store-facing
-rusqlite layers classify persistence failures before command adapters map them
-into caller-visible `AtmError` values.
+Store-facing rusqlite layers classify persistence failures first, then command
+adapters preserve those codes under the caller-visible `AtmErrorKind::Store`
+coarse kind.
 
 ## 7. Recoverability Classification
 

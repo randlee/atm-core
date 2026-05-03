@@ -88,7 +88,18 @@ pub enum AckCommitResult {
     Rejected(AckCommitRejection),
 }
 
+/// SQLite-backed acknowledgement persistence boundary for Phase Q.
+///
+/// Implementations own the authoritative ack/task transition and may reject
+/// duplicate reply identities or invalid source-message state before any
+/// compatibility inbox export occurs.
 pub trait AckStore: MailStore + TaskStore {
+    /// Persist one acknowledgement transition and its reply record.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError`] when the SQLite-backed ack/task state cannot be
+    /// loaded, validated, or committed.
     fn commit_ack_reply(
         &self,
         command: &AckCommitCommand<'_>,
@@ -239,9 +250,12 @@ where
         return Err(AtmError::agent_not_found(&reply_agent, &reply_team));
     }
 
-    let (reply_atm_message_id, ack_timestamp) = AtmMessageId::new_with_timestamp();
+    let reply_atm_message_id =
+        override_reply_atm_message_id_for_tests()?.unwrap_or_else(AtmMessageId::new);
+    let ack_timestamp = reply_atm_message_id.timestamp();
     let reply_text = input::validate_message_text(request.reply_body)?;
-    let reply_message_id = LegacyMessageId::new();
+    let reply_message_id =
+        override_reply_message_id_for_tests()?.unwrap_or_else(LegacyMessageId::new);
     let mut reply_extra = Map::new();
     set_atm_message_id(&mut reply_extra, reply_atm_message_id);
     let reply_message = MessageEnvelope {
@@ -662,7 +676,7 @@ fn ack_invalid_state_error(message_id: AckMessageId, rejection: AckCommitRejecti
 fn map_store_error(context: &str, error: StoreError) -> AtmError {
     let mut atm_error = AtmError::new_with_code(
         error.code,
-        AtmErrorKind::MailboxWrite,
+        AtmErrorKind::Store,
         format!("{context}: {}", error.message),
     );
     if let Some(recovery) = error.recovery.as_ref() {
@@ -671,8 +685,58 @@ fn map_store_error(context: &str, error: StoreError) -> AtmError {
     atm_error.with_source(error)
 }
 
+/// Map one store-family failure into the caller-visible ATM error boundary.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] with the store-family code and the dedicated
+/// [`AtmErrorKind::Store`] coarse kind.
 pub fn map_store_error_for_command(context: &str, error: StoreError) -> AtmError {
     map_store_error(context, error)
+}
+
+fn override_reply_message_id_for_tests() -> Result<Option<LegacyMessageId>, AtmError> {
+    match std::env::var("ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID") {
+        Ok(value) => value.parse().map(Some).map_err(|error| {
+            AtmError::validation(format!(
+                "ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID must be a UUID legacy message id: {error}"
+            ))
+            .with_recovery(
+                "Remove the invalid test-only ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID override or provide a UUID-form legacy message id.",
+            )
+        }),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(std::env::VarError::NotUnicode(_)) => Err(
+            AtmError::validation(
+                "ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID must be valid UTF-8 when set",
+            )
+            .with_recovery(
+                "Remove the invalid test-only ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID override or provide a UTF-8 UUID string.",
+            ),
+        ),
+    }
+}
+
+fn override_reply_atm_message_id_for_tests() -> Result<Option<AtmMessageId>, AtmError> {
+    match std::env::var("ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID") {
+        Ok(value) => value.parse().map(Some).map_err(|error| {
+            AtmError::validation(format!(
+                "ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID must be a ULID ATM message id: {error}"
+            ))
+            .with_recovery(
+                "Remove the invalid test-only ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID override or provide a ULID-form ATM message id.",
+            )
+        }),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(std::env::VarError::NotUnicode(_)) => Err(
+            AtmError::validation(
+                "ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID must be valid UTF-8 when set",
+            )
+            .with_recovery(
+                "Remove the invalid test-only ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID override or provide a UTF-8 ULID string.",
+            ),
+        ),
+    }
 }
 
 fn set_atm_message_id(extra: &mut Map<String, serde_json::Value>, message_id: AtmMessageId) {
