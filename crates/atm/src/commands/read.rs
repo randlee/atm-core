@@ -1,10 +1,8 @@
 use anyhow::{Context, Result};
-use atm_core::error_codes::AtmErrorCode;
 use atm_core::home;
-use atm_core::read::{self, ReadQuery};
+use atm_core::read::ReadQuery;
 use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection};
 use clap::Args;
-use tracing::warn;
 
 use crate::observability::CliObservability;
 use crate::output;
@@ -67,20 +65,10 @@ impl ReadCommand {
         let home_dir = home::atm_home()?;
         let json = self.json;
         let query = self.build_query(home_dir, current_dir)?;
-        match atm_daemon::request_read_with_autostart(query.clone()) {
-            Ok(outcome) => output::print_read_result(&outcome, json),
-            Err(error) if should_fallback_to_file_read(&error.code) => {
-                warn!(
-                    code = %error.code,
-                    %error.message,
-                    "daemon read path unavailable; falling back to direct file-backed read"
-                );
-                #[allow(deprecated)]
-                let outcome = read::read_mail(query, observability)?;
-                output::print_read_result(&outcome, json)
-            }
-            Err(error) => Err(error.into()),
-        }
+        let outcome = atm_daemon::request_read_with_autostart(query)?;
+        output::print_read_result(&outcome, json)?;
+        let _ = observability;
+        Ok(())
     }
 
     fn build_query(
@@ -132,15 +120,6 @@ impl ReadCommand {
             ReadSelection::Actionable
         }
     }
-}
-
-fn should_fallback_to_file_read(code: &AtmErrorCode) -> bool {
-    matches!(
-        code,
-        AtmErrorCode::DaemonUnavailable
-            | AtmErrorCode::DaemonStartFailed
-            | AtmErrorCode::DaemonRequestTimeout
-    )
 }
 
 fn parse_timestamp(value: &str) -> Result<IsoTimestamp> {

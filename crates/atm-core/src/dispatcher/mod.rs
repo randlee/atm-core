@@ -135,11 +135,14 @@ impl RequestDispatcher for TestSocketDispatcher {
 mod tests {
     use super::*;
 
+    const TEST_TEAM_NAME: &str = "test-team";
+    const TEST_AGENT_NAME: &str = "test-sender";
+
     #[test]
     fn test_socket_dispatcher_records_requests_and_returns_queued_response() {
         let dispatcher = TestSocketDispatcher::default();
-        let team_name: TeamName = "atm-dev".parse().expect("team");
-        let agent_name: AgentName = "arch-ctm".parse().expect("agent");
+        let team_name: TeamName = TEST_TEAM_NAME.parse().expect("team");
+        let agent_name: AgentName = TEST_AGENT_NAME.parse().expect("agent");
         dispatcher.queue_response(Ok(DaemonResponse {
             kind: RequestKind::Heartbeat,
             payload_json: "{\"ok\":true}".to_string(),

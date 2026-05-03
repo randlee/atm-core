@@ -7,6 +7,9 @@ use std::sync::{Arc, Barrier, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
+#[path = "../../atm/tests/support/mod.rs"]
+mod support;
+
 use atm_core::ack::{AckMessageId, AckRequest, ack_mail};
 use atm_core::clear::{ClearQuery, clear_mail, clear_mail_via_store};
 use atm_core::error::AtmErrorCode;
@@ -23,13 +26,13 @@ use atm_rusqlite::RusqliteStore;
 use chrono::Utc;
 use fs2::FileExt;
 use serial_test::serial;
+use support::ROLE_TEAM_LEAD;
 use tempfile::TempDir;
 use uuid::Uuid;
 
 const TEST_TEAM: &str = "test-team";
 const TEST_SENDER: &str = "sender-a";
 const TEST_RECIPIENT: &str = "recipient";
-const ROLE_TEAM_LEAD: &str = "team-lead";
 
 fn qualified(agent: &str) -> String {
     format!("{agent}@{TEST_TEAM}")
@@ -913,7 +916,7 @@ fn clear_fails_closed_on_synthetic_source_discovery_fault() {
 #[serial]
 fn send_reports_non_contention_lock_failures_without_timeout() {
     let _env_lock = acquire_env_lock();
-    let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR", "1");
+    let _fault = EnvGuard::set_raw("ATM_INTERNAL_TEST_FORCE_LOCK_NON_CONTENTION_ERROR", "1");
     let fixture = Fixture::new();
     let observability = NullObservability;
     let started = Instant::now();
@@ -941,19 +944,31 @@ enum CommandOp {
 // processes. nextest runs separate test binaries in parallel, so a plain
 // process-local mutex is not sufficient here.
 fn acquire_env_lock() -> File {
-    let lock_path = std::env::temp_dir().join(format!(
-        "atm-mailbox-locking-env.{}.lock",
-        std::process::id()
-    ));
-    let file = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(&lock_path)
-        .expect("open env lock file");
-    file.lock_exclusive().expect("lock env file");
-    file
+    const RETRY_INTERVAL: Duration = Duration::from_millis(100);
+    const LOCK_TIMEOUT: Duration = Duration::from_secs(10);
+
+    let lock_path = std::env::temp_dir().join("atm-mailbox-locking-env.lock");
+    let deadline = Instant::now() + LOCK_TIMEOUT;
+    loop {
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(&lock_path)
+            .expect("open env lock file");
+        match file.try_lock_exclusive() {
+            Ok(()) => return file,
+            Err(error) => {
+                assert!(
+                    Instant::now() < deadline,
+                    "timed out waiting for shared env lock {}: {error}",
+                    lock_path.display()
+                );
+                thread::sleep(RETRY_INTERVAL);
+            }
+        }
+    }
 }
 
 struct EnvGuard {
