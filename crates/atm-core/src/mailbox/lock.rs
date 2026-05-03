@@ -829,12 +829,9 @@ impl Drop for ScopedDebugTimeoutOverride {
     }
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
+#[cfg(test)]
 mod readonly_test_override {
     use std::cell::Cell;
-
-    #[cfg(windows)]
-    use std::cell::RefCell;
 
     use super::LockOperation;
 
@@ -844,7 +841,7 @@ mod readonly_test_override {
         static OVERRIDE: Cell<Option<LockOperation>> = const { Cell::new(None) };
         static DEBUG_TIMEOUT_MS: Cell<Option<u64>> = const { Cell::new(None) };
         #[cfg(windows)]
-        static TRANSIENT_LOCK_IDENTITY_ERRORS: RefCell<usize> = const { RefCell::new(0) };
+        static TRANSIENT_LOCK_IDENTITY_ERRORS: Cell<usize> = const { Cell::new(0) };
     }
 
     pub(super) fn get() -> Option<LockOperation> {
@@ -874,11 +871,11 @@ mod readonly_test_override {
     #[cfg(windows)]
     pub(super) fn take_transient_lock_identity_error() -> bool {
         TRANSIENT_LOCK_IDENTITY_ERRORS.with(|cell| {
-            let mut remaining = cell.borrow_mut();
-            if *remaining == 0 {
+            let remaining = cell.get();
+            if remaining == 0 {
                 return false;
             }
-            *remaining -= 1;
+            cell.set(remaining - 1);
             true
         })
     }
@@ -886,11 +883,17 @@ mod readonly_test_override {
     #[cfg(windows)]
     pub(super) fn set_transient_lock_identity_errors(count: usize) -> usize {
         TRANSIENT_LOCK_IDENTITY_ERRORS.with(|cell| {
-            let mut remaining = cell.borrow_mut();
-            let original = *remaining;
-            *remaining = count;
+            let original = cell.get();
+            cell.set(count);
             original
         })
+    }
+}
+
+#[cfg(not(test))]
+mod readonly_test_override {
+    pub(super) fn debug_timeout_override_ms() -> Option<u64> {
+        None
     }
 }
 

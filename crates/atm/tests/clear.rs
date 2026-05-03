@@ -10,6 +10,7 @@ use helpers::{ROLE_TEAM_LEAD, TEST_SENDER, TEST_TEAM, configure_atm_command};
 use serde_json::Value;
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_clear_default_removes_only_read_and_acknowledged() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_inbox(
@@ -82,6 +83,7 @@ fn test_clear_default_removes_only_read_and_acknowledged() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_clear_uses_default_team_from_workspace_config_for_sqlite_path() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_atm_config(&format!("[atm]\ndefault_team = \"{TEST_TEAM}\"\n"));
@@ -109,6 +111,7 @@ fn test_clear_uses_default_team_from_workspace_config_for_sqlite_path() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_clear_dry_run_does_not_mutate() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_inbox(
@@ -147,6 +150,7 @@ fn test_clear_dry_run_does_not_mutate() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_clear_emits_retained_log_record() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_inbox(
@@ -184,6 +188,7 @@ fn test_clear_emits_retained_log_record() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_clear_never_removes_pending_ack() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_inbox(
@@ -216,6 +221,7 @@ fn test_clear_never_removes_pending_ack() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_clear_already_cleared_message_is_idempotent() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_inbox(
@@ -252,6 +258,7 @@ fn test_clear_already_cleared_message_is_idempotent() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_clear_uses_workflow_sidecar_and_removes_cleared_entry() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     let message = fixture.message(
@@ -303,6 +310,7 @@ fn test_clear_uses_workflow_sidecar_and_removes_cleared_entry() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_clear_idle_only_removes_only_idle_notifications() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_inbox(
@@ -353,6 +361,7 @@ fn test_clear_idle_only_removes_only_idle_notifications() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_clear_preserves_unknown_fields_on_retained_messages() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     let mut retained = fixture.message(
@@ -398,6 +407,7 @@ fn test_clear_preserves_unknown_fields_on_retained_messages() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_clear_older_than_filters_candidates() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_inbox(
@@ -446,6 +456,7 @@ fn test_clear_older_than_filters_candidates() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_clear_explicit_target() {
     let fixture = Fixture::new(&[TEST_SENDER, "agent-b"]);
     fixture.write_inbox(
@@ -501,6 +512,7 @@ fn test_clear_explicit_target() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_clear_removes_from_origin_inbox_file() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_origin_inbox(

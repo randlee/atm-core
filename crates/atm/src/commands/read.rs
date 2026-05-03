@@ -147,6 +147,7 @@ mod tests {
     use std::fs;
 
     use super::ReadCommand;
+    use crate::test_support::ROLE_TEAM_LEAD;
     use atm_core::inbox_ingress::default_inbox_ingress;
     use atm_core::observability::NullObservability;
     use atm_core::schema::{AgentMember, MessageEnvelope, TeamConfig};
