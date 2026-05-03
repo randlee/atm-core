@@ -33,6 +33,8 @@ pub use mailbox::{read_messages, write_messages};
 pub(crate) mod model_registry;
 /// Observability adapter traits and event payload types.
 pub mod observability;
+/// Shared observability envelope types used by CLI and daemon adapters.
+pub use sc_observability_types;
 /// Internal atomic persistence helpers for shared mutable state files.
 pub(crate) mod persistence;
 /// Internal process-liveness helpers shared across lock implementations.

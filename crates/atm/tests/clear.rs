@@ -1,5 +1,6 @@
 use std::fs;
 use std::process::Command;
+use std::time::Instant;
 mod helpers;
 
 use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
@@ -552,6 +553,12 @@ struct Fixture {
     tempdir: tempfile::TempDir,
 }
 
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        self.kill_daemon();
+    }
+}
+
 impl Fixture {
     fn new(members: &[&str]) -> Self {
         let tempdir = tempfile::tempdir().expect("tempdir");
@@ -661,6 +668,14 @@ impl Fixture {
             .join(TEST_TEAM)
     }
 
+    fn daemon_control_path(&self) -> std::path::PathBuf {
+        self.tempdir
+            .path()
+            .join(".atm-state")
+            .join("daemon")
+            .join("control.json")
+    }
+
     fn message(
         &self,
         from: &str,
@@ -684,6 +699,97 @@ impl Fixture {
             task_id: None,
             extra: serde_json::Map::new(),
         }
+    }
+
+    fn kill_daemon(&self) {
+        let Ok(raw) = fs::read(self.daemon_control_path()) else {
+            return;
+        };
+        let Some(pid) = serde_json::from_slice::<Value>(&raw)
+            .ok()
+            .and_then(|value| value.get("pid").and_then(Value::as_u64))
+            .map(|pid| pid as u32)
+        else {
+            return;
+        };
+        terminate_process(pid);
+    }
+}
+
+#[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
+fn test_clear_auto_starts_daemon_when_absent() {
+    let fixture = Fixture::new(&[TEST_SENDER]);
+    fixture.write_inbox(
+        TEST_SENDER,
+        &[fixture.message(
+            ROLE_TEAM_LEAD,
+            "read",
+            true,
+            None,
+            None,
+            Utc::now() - Duration::days(1),
+        )],
+    );
+    assert!(
+        !fixture.daemon_control_path().exists(),
+        "fixture should begin without daemon control state"
+    );
+
+    let output = fixture.run(&["clear", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    assert!(fixture.daemon_control_path().exists());
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["removed_total"], 1);
+}
+
+#[cfg(unix)]
+fn terminate_process(pid: u32) {
+    let _ = Command::new("kill")
+        .args(["-TERM", &pid.to_string()])
+        .status();
+    wait_for_process_exit(pid, std::time::Duration::from_secs(5));
+}
+
+#[cfg(windows)]
+fn terminate_process(pid: u32) {
+    let _ = Command::new("taskkill")
+        .args(["/PID", &pid.to_string(), "/T", "/F"])
+        .status();
+    wait_for_process_exit(pid, std::time::Duration::from_secs(5));
+}
+
+#[cfg(unix)]
+fn process_alive(pid: u32) -> bool {
+    Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+#[cfg(windows)]
+fn process_alive(pid: u32) -> bool {
+    Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {pid}")])
+        .output()
+        .ok()
+        .and_then(|output| String::from_utf8(output.stdout).ok())
+        .is_some_and(|stdout| stdout.lines().any(|line| line.contains(&pid.to_string())))
+}
+
+fn wait_for_process_exit(pid: u32, timeout: std::time::Duration) {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if !process_alive(pid) {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
     }
 }
 

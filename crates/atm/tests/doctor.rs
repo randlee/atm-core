@@ -263,7 +263,7 @@ fn test_doctor_sweeps_stale_mailbox_lock_across_team_inboxes() {
 
 #[test]
 #[serial(env)]
-fn test_doctor_auto_starts_daemon_when_absent() {
+fn test_doctor_in_process_runtime_projection_reports_healthy_runtime() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     let parsed = serde_json::to_value(fixture.run_in_process_doctor(&[])).expect("doctor json");
     assert_eq!(parsed["summary"]["status"], "healthy");
@@ -276,6 +276,27 @@ fn test_doctor_auto_starts_daemon_when_absent() {
         "stdout: {}",
         serde_json::to_string_pretty(&parsed).expect("doctor json pretty")
     );
+}
+
+#[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
+fn test_doctor_cli_auto_starts_daemon_when_absent() {
+    let fixture = Fixture::new(&[TEST_SENDER]);
+    assert!(
+        !fixture.daemon_control_path().exists(),
+        "fixture should begin without a published daemon control state"
+    );
+
+    let output = fixture.run(&["doctor", "--json"], &[]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert!(fixture.daemon_control_path().exists());
+    assert_eq!(parsed["runtime"]["singleton_state"], "healthy");
 }
 
 #[test]
