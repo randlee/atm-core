@@ -564,7 +564,10 @@ fn store_errors_stay_discriminated() {
 
     let query = crate::classify_store_error(rusqlite::Error::InvalidQuery, "query");
     assert_eq!(query.kind, StoreErrorKind::Query);
-    assert_eq!(query.code, atm_core::error_codes::AtmErrorCode::StoreQueryFailed);
+    assert_eq!(
+        query.code,
+        atm_core::error_codes::AtmErrorCode::StoreQueryFailed
+    );
 
     let bootstrap_dir = TempDir::new().expect("tempdir");
     let bootstrap_path = bootstrap_dir.path().join("bootstrap-readonly.db");
