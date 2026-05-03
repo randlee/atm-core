@@ -337,7 +337,7 @@ fn test_ack_runs_post_send_hook_with_expected_payload() {
     let hook_path_toml = toml_single_quoted_path(&hook_path);
     let payload_path_toml = toml_single_quoted_path(&payload_path);
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'team-lead'\ncommand = [{hook_path_toml}, 'capture', {payload_path_toml}]\n",
+        "[[atm.post_send_hooks]]\nrecipient = '{TEST_LEAD}'\ncommand = [{hook_path_toml}, 'capture', {payload_path_toml}]\n",
     ));
 
     let output = fixture.run(&[
@@ -383,7 +383,7 @@ fn test_ack_post_send_hook_failure_surfaces_warning() {
     let hook_path_toml = toml_single_quoted_path(&hook_path);
     let payload_path_toml = toml_single_quoted_path(&payload_path);
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'team-lead'\ncommand = [{hook_path_toml}, 'fail', {payload_path_toml}]\n",
+        "[[atm.post_send_hooks]]\nrecipient = '{TEST_LEAD}'\ncommand = [{hook_path_toml}, 'fail', {payload_path_toml}]\n",
     ));
 
     let output = fixture.run(&["ack", &message_id.to_string(), "received and starting"]);
