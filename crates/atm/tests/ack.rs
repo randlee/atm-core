@@ -892,8 +892,21 @@ impl MailStore for FailingCommitStore {
         self.inner.load_message_by_atm_id(atm_message_id)
     }
 
+    fn list_messages_for_recipient(
+        &self,
+        team_name: &TeamName,
+        recipient_agent: &AgentName,
+    ) -> Result<Vec<StoredMessageRecord>, StoreError> {
+        self.inner
+            .list_messages_for_recipient(team_name, recipient_agent)
+    }
+
     fn upsert_ack_state(&self, ack_state: &AckStateRecord) -> Result<AckStateRecord, StoreError> {
         self.inner.upsert_ack_state(ack_state)
+    }
+
+    fn upsert_ack_state_batch(&self, ack_states: &[AckStateRecord]) -> Result<(), StoreError> {
+        self.inner.upsert_ack_state_batch(ack_states)
     }
 
     fn load_ack_state(
@@ -908,6 +921,13 @@ impl MailStore for FailingCommitStore {
         visibility: &VisibilityStateRecord,
     ) -> Result<VisibilityStateRecord, StoreError> {
         self.inner.upsert_visibility(visibility)
+    }
+
+    fn upsert_visibility_batch(
+        &self,
+        visibilities: &[VisibilityStateRecord],
+    ) -> Result<(), StoreError> {
+        self.inner.upsert_visibility_batch(visibilities)
     }
 
     fn load_visibility(

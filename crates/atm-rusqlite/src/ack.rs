@@ -2,12 +2,11 @@ use atm_core::ack::{
     AckCommitCommand, AckCommitOutcome, AckCommitRejection, AckCommitResult, AckStore,
 };
 use atm_core::store::StoreError;
-use atm_core::task_store::TaskStatus;
-use atm_core::types::TaskId;
 use rusqlite::{OptionalExtension, Transaction};
 
 use crate::mail::{classify_message_duplicate, insert_message_row};
-use crate::{RusqliteStore, classify_store_error, parse_required};
+use crate::task::acknowledge_tasks_for_message_tx;
+use crate::{RusqliteStore, classify_store_error};
 
 impl atm_core::ack::sealed::Sealed for RusqliteStore {}
 
@@ -98,31 +97,11 @@ fn commit_ack_reply(
         )
         .map_err(|error| classify_store_error(error, "failed to persist acknowledgement state"))?;
 
-    let mut statement = transaction
-        .prepare("SELECT task_id FROM tasks WHERE message_key = ?1 ORDER BY task_id")
-        .map_err(|error| classify_store_error(error, "failed to prepare task lookup"))?;
-    let rows = statement
-        .query_map([command.source_message_key.as_str()], |row| {
-            row.get::<_, String>(0)
-        })
-        .map_err(|error| classify_store_error(error, "failed to query linked task rows"))?;
-    let mut task_ids = Vec::new();
-    for row in rows {
-        let raw_task_id =
-            row.map_err(|error| classify_store_error(error, "failed to read linked task row"))?;
-        task_ids.push(parse_required::<TaskId>(raw_task_id, "task_id")?);
-    }
-
-    transaction
-        .execute(
-            "UPDATE tasks SET status = ?1, acknowledged_at = ?2 WHERE message_key = ?3",
-            (
-                TaskStatus::Acknowledged.as_str(),
-                command.acknowledged_at.to_string(),
-                command.source_message_key.as_str(),
-            ),
-        )
-        .map_err(|error| classify_store_error(error, "failed to persist task acknowledgement"))?;
+    let task_ids = acknowledge_tasks_for_message_tx(
+        transaction,
+        command.source_message_key,
+        command.acknowledged_at,
+    )?;
 
     Ok(AckCommitResult::Committed(AckCommitOutcome {
         acknowledged_task_ids: task_ids,
