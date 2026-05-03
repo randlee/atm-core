@@ -938,18 +938,6 @@ impl Fixture {
         read_messages(&self.inbox_path(agent)).expect("inbox contents")
     }
 
-    fn store(&self) -> RusqliteStore {
-        RusqliteStore::open_for_team_home(self.tempdir.path(), &self.team()).expect("open store")
-    }
-
-    fn team(&self) -> TeamName {
-        TEST_TEAM.parse().expect("team")
-    }
-
-    fn agent(&self, value: &str) -> AgentName {
-        value.parse().expect("agent")
-    }
-
     fn stdout_json(&self, output: &std::process::Output) -> Value {
         serde_json::from_slice(&output.stdout).expect("valid read json")
     }
@@ -998,6 +986,18 @@ impl Fixture {
             task_id: None,
             extra: serde_json::Map::new(),
         }
+    }
+
+    fn store(&self) -> RusqliteStore {
+        RusqliteStore::open_for_team_home(self.tempdir.path(), &self.team()).expect("open store")
+    }
+
+    fn team(&self) -> TeamName {
+        TEST_TEAM.parse().expect("team")
+    }
+
+    fn agent(&self, value: &str) -> AgentName {
+        value.parse().expect("agent")
     }
 }
 

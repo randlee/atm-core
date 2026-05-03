@@ -156,8 +156,6 @@ mod tests {
     use atm_rusqlite::RusqliteStore;
     use tempfile::TempDir;
 
-    use super::support::ROLE_TEAM_LEAD;
-
     const TEST_TEAM: &str = "test-team";
     const TEST_SENDER: &str = "sender-a";
 

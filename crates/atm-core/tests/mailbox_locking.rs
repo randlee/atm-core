@@ -1,5 +1,6 @@
 #![allow(deprecated)]
 
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::fs::{File, OpenOptions};
 use std::sync::{Arc, Barrier, mpsc};
@@ -10,12 +11,13 @@ use std::time::{Duration, Instant};
 mod support;
 
 use atm_core::ack::{AckMessageId, AckRequest, ack_mail};
-use atm_core::clear::{ClearQuery, clear_mail, clear_mail_via_store};
+use atm_core::clear::{ClearQuery, clear_mail};
+use atm_core::error::AtmErrorCode;
 use atm_core::inbox_export::default_inbox_export;
 use atm_core::inbox_ingress::default_inbox_ingress;
 use atm_core::mail_store::MailStore;
 use atm_core::observability::{NullObservability, ObservabilityPort};
-use atm_core::read::{ReadQuery, read_mail, read_mail_via_store};
+use atm_core::read::{ReadQuery, read_mail};
 use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
 use atm_core::send::{SendMessageSource, SendOutcome, SendRequest, send_mail_via_store};
 use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
@@ -35,6 +37,10 @@ const TEST_RECIPIENT: &str = "recipient";
 fn qualified(agent: &str) -> String {
     format!("{agent}@{TEST_TEAM}")
 }
+
+// Test-side ceiling guard only; production lock timeout defaults to 5s per
+// architecture §18.3.
+const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(2);
 
 fn test_recv_timeout() -> Duration {
     std::env::var("ATM_TEST_RECV_TIMEOUT_SECS")
@@ -56,7 +62,7 @@ fn send_via_store(
 }
 
 #[test]
-#[serial]
+#[serial(env)]
 fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
@@ -120,7 +126,7 @@ fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
 }
 
 #[test]
-#[serial]
+#[serial(env)]
 fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() {
     let observability = Arc::new(NullObservability);
 
@@ -252,7 +258,7 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
         arch_inbox.iter().any(|message| {
             message.message_id == Some(pending_message_id) && message.acknowledged_at.is_none()
         }),
-        "pending message was not acknowledged: {:?}",
+        "pending message should remain unacknowledged in the compatibility inbox after the concurrent ack: {:?}",
         arch_inbox
     );
     let store = ack_fixture.store();
@@ -277,7 +283,7 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
 }
 
 #[test]
-#[serial]
+#[serial(env)]
 fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
@@ -364,7 +370,7 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() 
 }
 
 #[test]
-#[serial]
+#[serial(env)]
 fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
@@ -455,7 +461,7 @@ fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
 }
 
 #[test]
-#[serial]
+#[serial(env)]
 fn missing_config_notice_seeds_team_lead_workflow_state() {
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -485,7 +491,7 @@ fn missing_config_notice_seeds_team_lead_workflow_state() {
 }
 
 #[test]
-#[serial]
+#[serial(env)]
 fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
@@ -552,8 +558,7 @@ fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()
 }
 
 #[test]
-#[serial]
-#[allow(deprecated)]
+#[serial(env)]
 fn multi_source_read_and_clear_complete_without_deadlock() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
@@ -634,7 +639,39 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
 }
 
 #[test]
-#[serial]
+#[serial(env)]
+fn send_times_out_under_bounded_lock_contention() {
+    let _env_lock = acquire_env_lock();
+    let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let lock_path = sentinel_path(&fixture.primary_inbox_path(TEST_SENDER));
+    let lock_file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&lock_path)
+        .expect("open lock file");
+    lock_file.lock_exclusive().expect("hold mailbox lock");
+
+    let started = Instant::now();
+    let error = send_via_store(
+        fixture.send_request(ROLE_TEAM_LEAD, &qualified(TEST_SENDER), "blocked send"),
+        fixture.store().as_ref(),
+        &observability,
+    )
+    .expect_err("timeout");
+
+    assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
+    assert!(
+        started.elapsed() < TEST_LOCK_BUDGET_CEILING,
+        "retain only a coarse non-blocking budget here; recv_timeout-based tests above already cover deadlock detection"
+    );
+}
+
+#[test]
+#[serial(env)]
 fn clear_dry_run_does_not_wait_on_mailbox_lock() {
     let _env_lock = acquire_env_lock();
     let fixture = Fixture::new();
@@ -657,69 +694,86 @@ fn clear_dry_run_does_not_wait_on_mailbox_lock() {
         .expect("open lock file");
     lock_file.lock_exclusive().expect("hold mailbox lock");
 
+    let started = Instant::now();
     let mut clear_query = fixture.clear_query(TEST_SENDER);
     clear_query.dry_run = true;
     let outcome = clear_mail(clear_query, &observability).expect("dry-run clear");
 
     assert_eq!(outcome.removed_total, 0);
     assert_eq!(outcome.remaining_total, 1);
+    assert!(
+        started.elapsed() < TEST_LOCK_BUDGET_CEILING,
+        "retain only a coarse non-blocking budget here; recv_timeout-based tests above already cover deadlock detection"
+    );
 }
 
 #[test]
-#[serial]
-fn read_and_clear_via_store_ignore_inbox_file_lock() {
+#[serial(env)]
+fn read_possible_write_only_locks_when_display_mutation_is_required() {
     let _env_lock = acquire_env_lock();
-    let fixture = Fixture::new();
+    let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
     let observability = NullObservability;
-    let store = fixture.store();
-    let ingress = default_inbox_ingress();
-    fixture.write_primary_inbox(
+
+    let mutation_fixture = Fixture::new();
+    mutation_fixture.write_primary_inbox(
         TEST_SENDER,
-        &[read_message(
+        &[unread_message(
             ROLE_TEAM_LEAD,
-            "locked inbox history",
+            "needs mark-read",
             LegacyMessageId::from(Uuid::new_v4()),
         )],
     );
-    let inbox_before =
-        fs::read_to_string(fixture.primary_inbox_path(TEST_SENDER)).expect("raw inbox before");
-
-    let inbox_file = OpenOptions::new()
+    let mutation_lock_path = sentinel_path(&mutation_fixture.primary_inbox_path(TEST_SENDER));
+    let mutation_lock_file = OpenOptions::new()
         .create(true)
         .truncate(false)
         .read(true)
         .write(true)
-        .open(fixture.primary_inbox_path(TEST_SENDER))
-        .expect("open inbox file");
-    inbox_file
+        .open(&mutation_lock_path)
+        .expect("open mutation lock file");
+    mutation_lock_file
         .lock_exclusive()
-        .expect("hold inbox file lock directly");
+        .expect("hold mutation lock");
+    let mut mutation_query = mutation_fixture.read_query(TEST_SENDER);
+    mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
+    let error = read_mail(mutation_query, &observability).expect_err("lock timeout");
+    assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
 
-    let mut read_query = fixture.read_query(TEST_SENDER);
-    read_query.selection_mode = ReadSelection::All;
-    read_query.ack_activation_mode = AckActivationMode::ReadOnly;
-    let read_outcome =
-        read_mail_via_store(read_query, store.as_ref(), &ingress, &observability).expect("read");
-    assert_eq!(read_outcome.count, 1);
-
-    let clear_outcome = clear_mail_via_store(
-        fixture.clear_query(TEST_SENDER),
-        store.as_ref(),
-        &ingress,
-        &observability,
-    )
-    .expect("clear");
-    assert_eq!(clear_outcome.removed_total, 1);
-    assert_eq!(
-        fs::read_to_string(fixture.primary_inbox_path(TEST_SENDER)).expect("raw inbox after"),
-        inbox_before,
-        "store-backed clear should not mutate the compatibility inbox file while a direct inbox lock is held",
+    let no_mutation_fixture = Fixture::new();
+    no_mutation_fixture.write_primary_inbox(
+        TEST_SENDER,
+        &[read_message(
+            ROLE_TEAM_LEAD,
+            "already read",
+            LegacyMessageId::from(Uuid::new_v4()),
+        )],
+    );
+    let no_mutation_lock_path = sentinel_path(&no_mutation_fixture.primary_inbox_path(TEST_SENDER));
+    let no_mutation_lock_file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&no_mutation_lock_path)
+        .expect("open no-mutation lock file");
+    no_mutation_lock_file
+        .lock_exclusive()
+        .expect("hold no-mutation lock");
+    let mut no_mutation_query = no_mutation_fixture.read_query(TEST_SENDER);
+    no_mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
+    no_mutation_query.selection_mode = ReadSelection::All;
+    let started = Instant::now();
+    let outcome = read_mail(no_mutation_query, &observability).expect("read without mutation");
+    assert_eq!(outcome.count, 1);
+    assert_eq!(outcome.messages[0].envelope.text, "already read");
+    assert!(
+        started.elapsed() < TEST_LOCK_BUDGET_CEILING,
+        "retain only a coarse non-blocking budget here; recv_timeout-based tests above already cover deadlock detection"
     );
 }
 
 #[test]
-#[serial]
-#[allow(deprecated)]
+#[serial(env)]
 fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() {
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -775,6 +829,64 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
     );
 }
 
+#[test]
+#[serial(env)]
+fn clear_fails_closed_on_synthetic_source_discovery_fault() {
+    let _env_lock = acquire_env_lock();
+    let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT", "1");
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    fixture.write_origin_inbox(
+        TEST_SENDER,
+        "host-a",
+        &[read_message(
+            TEST_RECIPIENT,
+            "origin read a",
+            LegacyMessageId::from(Uuid::new_v4()),
+        )],
+    );
+    let before_primary =
+        fs::read_to_string(fixture.primary_inbox_path(TEST_SENDER)).expect("primary inbox before");
+    let before_origin = fs::read_to_string(fixture.origin_inbox_path(TEST_SENDER, "host-a"))
+        .expect("origin inbox before");
+
+    let error = clear_mail(fixture.clear_query(TEST_SENDER), &observability).expect_err("fault");
+
+    assert_eq!(error.code, AtmErrorCode::MailboxReadFailed);
+    assert_eq!(
+        fs::read_to_string(fixture.primary_inbox_path(TEST_SENDER)).expect("primary inbox after"),
+        before_primary
+    );
+    assert_eq!(
+        fs::read_to_string(fixture.origin_inbox_path(TEST_SENDER, "host-a"))
+            .expect("origin inbox after"),
+        before_origin
+    );
+}
+
+#[test]
+#[serial(env)]
+fn send_reports_non_contention_lock_failures_without_timeout() {
+    let _env_lock = acquire_env_lock();
+    let _fault = EnvGuard::set_raw("ATM_INTERNAL_TEST_FORCE_LOCK_NON_CONTENTION_ERROR", "1");
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let started = Instant::now();
+
+    let error = send_via_store(
+        fixture.send_request(ROLE_TEAM_LEAD, &qualified(TEST_SENDER), "lock failure"),
+        fixture.store().as_ref(),
+        &observability,
+    )
+    .expect_err("non-contention lock failure");
+
+    assert_eq!(error.code, AtmErrorCode::MailboxLockFailed);
+    assert!(
+        started.elapsed() < TEST_LOCK_BUDGET_CEILING,
+        "retain only a coarse non-blocking budget here; recv_timeout-based tests above already cover deadlock detection"
+    );
+}
+
 enum CommandOp {
     Read(ReadQuery, Arc<NullObservability>),
     Clear(ClearQuery, Arc<NullObservability>),
@@ -786,12 +898,8 @@ enum CommandOp {
 fn acquire_env_lock() -> File {
     const RETRY_INTERVAL: Duration = Duration::from_millis(100);
     const LOCK_TIMEOUT: Duration = Duration::from_secs(10);
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    std::hash::Hash::hash(&env!("CARGO_MANIFEST_DIR"), &mut hasher);
-    let lock_path = std::env::temp_dir().join(format!(
-        "atm-mailbox-locking-env-{:x}.lock",
-        std::hash::Hasher::finish(&hasher)
-    ));
+
+    let lock_path = std::env::temp_dir().join("atm-mailbox-locking-env.lock");
     let deadline = Instant::now() + LOCK_TIMEOUT;
     loop {
         let file = OpenOptions::new()
@@ -813,6 +921,42 @@ fn acquire_env_lock() -> File {
             }
         }
     }
+}
+
+struct EnvGuard {
+    key: &'static str,
+    original: Option<OsString>,
+}
+
+impl EnvGuard {
+    fn set_raw(key: &'static str, value: &str) -> Self {
+        let original = std::env::var_os(key);
+        set_env_var(key, value);
+        Self { key, original }
+    }
+}
+
+impl Drop for EnvGuard {
+    fn drop(&mut self) {
+        match self.original.take() {
+            Some(value) => set_env_var(self.key, value),
+            None => remove_env_var(self.key),
+        }
+    }
+}
+
+fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
+    // SAFETY: these tests take a process-wide mutex and use #[serial(env)] before
+    // mutating the environment, so the mutation is serialized within this
+    // process.
+    unsafe { std::env::set_var(key, value) }
+}
+
+fn remove_env_var<K: AsRef<OsStr>>(key: K) {
+    // SAFETY: these tests take a process-wide mutex and use #[serial(env)] before
+    // mutating the environment, so the mutation is serialized within this
+    // process.
+    unsafe { std::env::remove_var(key) }
 }
 
 struct Fixture {

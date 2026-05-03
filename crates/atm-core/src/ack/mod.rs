@@ -126,6 +126,9 @@ pub struct AckOutcome {
     pub reply_target: ReplyTarget,
     pub reply_message_id: LegacyMessageId,
     pub reply_text: String,
+    /// Best-effort warnings emitted after the authoritative SQLite commit
+    /// succeeds, currently limited to degraded compatibility inbox export and
+    /// post-send hook execution failures.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
 }
@@ -659,7 +662,7 @@ fn ack_invalid_state_error(message_id: AckMessageId, rejection: AckCommitRejecti
             ),
         )
         .with_recovery(
-            "Refresh the mailbox with `atm read` and retry the acknowledgement after ATM reimports the message into SQLite.",
+            "Refresh the mailbox with `atm read` and retry the acknowledgement after ATM reimports the message into SQLite. Legacy inbox records without SQLite state remain only partially compliant until reingest succeeds.",
         ),
         AckCommitRejection::AlreadyAcknowledged => AtmError::new_with_code(
             AtmErrorCode::AckInvalidState,
@@ -723,17 +726,47 @@ const fn is_store_error_code(code: AtmErrorCode) -> bool {
 }
 
 fn override_reply_message_id_for_tests() -> Result<Option<LegacyMessageId>, AtmError> {
-    if let Some(message_id) = reply_id_test_override::legacy_message_id() {
-        return Ok(Some(message_id));
+    match std::env::var("ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID") {
+        Ok(value) => value.parse().map(Some).map_err(|error| {
+            AtmError::validation(format!(
+                "ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID must be a UUID legacy message id: {error}"
+            ))
+            .with_recovery(
+                "Remove the invalid test-only ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID override or provide a UUID-form legacy message id.",
+            )
+        }),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(std::env::VarError::NotUnicode(_)) => Err(
+            AtmError::validation(
+                "ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID must be valid UTF-8 when set",
+            )
+            .with_recovery(
+                "Remove the invalid test-only ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID override or provide a UTF-8 UUID string.",
+            ),
+        ),
     }
-    Ok(None)
 }
 
 fn override_reply_atm_message_id_for_tests() -> Result<Option<AtmMessageId>, AtmError> {
-    if let Some(message_id) = reply_id_test_override::atm_message_id() {
-        return Ok(Some(message_id));
+    match std::env::var("ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID") {
+        Ok(value) => value.parse().map(Some).map_err(|error| {
+            AtmError::validation(format!(
+                "ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID must be a ULID ATM message id: {error}"
+            ))
+            .with_recovery(
+                "Remove the invalid test-only ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID override or provide a ULID-form ATM message id.",
+            )
+        }),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(std::env::VarError::NotUnicode(_)) => Err(
+            AtmError::validation(
+                "ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID must be valid UTF-8 when set",
+            )
+            .with_recovery(
+                "Remove the invalid test-only ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID override or provide a UTF-8 ULID string.",
+            ),
+        ),
     }
-    Ok(None)
 }
 
 fn set_atm_message_id(extra: &mut Map<String, serde_json::Value>, message_id: AtmMessageId) {
@@ -761,78 +794,69 @@ fn set_atm_message_id(extra: &mut Map<String, serde_json::Value>, message_id: At
     );
 }
 
-mod reply_id_test_override {
-    use std::cell::RefCell;
-
-    use crate::schema::{AtmMessageId, LegacyMessageId};
-
-    thread_local! {
-        static LEGACY_MESSAGE_ID: RefCell<Option<LegacyMessageId>> = const { RefCell::new(None) };
-        static ATM_MESSAGE_ID: RefCell<Option<AtmMessageId>> = const { RefCell::new(None) };
-    }
-
-    pub(super) fn legacy_message_id() -> Option<LegacyMessageId> {
-        LEGACY_MESSAGE_ID.with(|cell| *cell.borrow())
-    }
-
-    pub(super) fn set_legacy_message_id(
-        message_id: Option<LegacyMessageId>,
-    ) -> Option<LegacyMessageId> {
-        LEGACY_MESSAGE_ID.with(|cell| {
-            let original = *cell.borrow();
-            *cell.borrow_mut() = message_id;
-            original
-        })
-    }
-
-    pub(super) fn atm_message_id() -> Option<AtmMessageId> {
-        ATM_MESSAGE_ID.with(|cell| *cell.borrow())
-    }
-
-    pub(super) fn set_atm_message_id(message_id: Option<AtmMessageId>) -> Option<AtmMessageId> {
-        ATM_MESSAGE_ID.with(|cell| {
-            let original = *cell.borrow();
-            *cell.borrow_mut() = message_id;
-            original
-        })
-    }
+#[cfg(test)]
+pub(crate) struct ScopedReplyMessageIdOverride {
+    original: Option<String>,
 }
 
-#[doc(hidden)]
-pub struct ScopedReplyMessageIdOverride {
-    original: Option<LegacyMessageId>,
-}
-
+#[cfg(test)]
 impl ScopedReplyMessageIdOverride {
-    pub fn set(message_id: LegacyMessageId) -> Self {
-        Self {
-            original: reply_id_test_override::set_legacy_message_id(Some(message_id)),
-        }
+    pub(crate) fn set(message_id: LegacyMessageId) -> Self {
+        let key = "ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID";
+        let original = std::env::var(key).ok();
+        // SAFETY: test-only hook; call sites are serialized by the owning tests.
+        unsafe { std::env::set_var(key, message_id.to_string()) };
+        Self { original }
     }
 }
 
+#[cfg(test)]
 impl Drop for ScopedReplyMessageIdOverride {
     fn drop(&mut self) {
-        reply_id_test_override::set_legacy_message_id(self.original.take());
-    }
-}
-
-#[doc(hidden)]
-pub struct ScopedReplyAtmMessageIdOverride {
-    original: Option<AtmMessageId>,
-}
-
-impl ScopedReplyAtmMessageIdOverride {
-    pub fn set(message_id: AtmMessageId) -> Self {
-        Self {
-            original: reply_id_test_override::set_atm_message_id(Some(message_id)),
+        let key = "ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID";
+        match self.original.take() {
+            Some(value) => {
+                // SAFETY: test-only hook; call sites are serialized by the owning tests.
+                unsafe { std::env::set_var(key, value) };
+            }
+            None => {
+                // SAFETY: test-only hook; call sites are serialized by the owning tests.
+                unsafe { std::env::remove_var(key) };
+            }
         }
     }
 }
 
+#[cfg(test)]
+pub(crate) struct ScopedReplyAtmMessageIdOverride {
+    original: Option<String>,
+}
+
+#[cfg(test)]
+impl ScopedReplyAtmMessageIdOverride {
+    pub(crate) fn set(message_id: AtmMessageId) -> Self {
+        let key = "ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID";
+        let original = std::env::var(key).ok();
+        // SAFETY: test-only hook; call sites are serialized by the owning tests.
+        unsafe { std::env::set_var(key, message_id.to_string()) };
+        Self { original }
+    }
+}
+
+#[cfg(test)]
 impl Drop for ScopedReplyAtmMessageIdOverride {
     fn drop(&mut self) {
-        reply_id_test_override::set_atm_message_id(self.original.take());
+        let key = "ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID";
+        match self.original.take() {
+            Some(value) => {
+                // SAFETY: test-only hook; call sites are serialized by the owning tests.
+                unsafe { std::env::set_var(key, value) };
+            }
+            None => {
+                // SAFETY: test-only hook; call sites are serialized by the owning tests.
+                unsafe { std::env::remove_var(key) };
+            }
+        }
     }
 }
 

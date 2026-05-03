@@ -1,10 +1,9 @@
+use std::ffi::OsString;
 use std::fs;
 use std::process::Command;
 mod helpers;
 
-use atm_core::ack::{
-    self, AckMessageId, AckRequest, ScopedReplyAtmMessageIdOverride, ScopedReplyMessageIdOverride,
-};
+use atm_core::ack::{self, AckMessageId, AckRequest};
 use atm_core::error::AtmErrorCode;
 use atm_core::inbox_ingress::{InboxIngress, default_inbox_ingress};
 use atm_core::mail_store::{
@@ -210,9 +209,14 @@ fn test_ack_duplicate_reply_identity_reports_store_constraint_violation() {
         )
         .expect("ingest conflicting reply into SQLite");
 
-    let _reply_id_override = ScopedReplyMessageIdOverride::set(conflicting_reply_id);
-    let _reply_atm_id_override =
-        ScopedReplyAtmMessageIdOverride::set(conflicting_reply_atm_message_id);
+    let _reply_id_override = ScopedEnvVar::set(
+        "ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID",
+        &conflicting_reply_id.to_string(),
+    );
+    let _reply_atm_id_override = ScopedEnvVar::set(
+        "ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID",
+        &conflicting_reply_atm_message_id.to_string(),
+    );
 
     let error = ack::ack_mail(
         AckRequest {
@@ -333,7 +337,7 @@ fn test_ack_runs_post_send_hook_with_expected_payload() {
     let hook_path_toml = toml_single_quoted_path(&hook_path);
     let payload_path_toml = toml_single_quoted_path(&payload_path);
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'team-lead'\ncommand = [{hook_path_toml}, 'capture', {payload_path_toml}]\n",
+        "[[atm.post_send_hooks]]\nrecipient = '{TEST_LEAD}'\ncommand = [{hook_path_toml}, 'capture', {payload_path_toml}]\n",
     ));
 
     let output = fixture.run(&[
@@ -379,7 +383,7 @@ fn test_ack_post_send_hook_failure_surfaces_warning() {
     let hook_path_toml = toml_single_quoted_path(&hook_path);
     let payload_path_toml = toml_single_quoted_path(&payload_path);
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'team-lead'\ncommand = [{hook_path_toml}, 'fail', {payload_path_toml}]\n",
+        "[[atm.post_send_hooks]]\nrecipient = '{TEST_LEAD}'\ncommand = [{hook_path_toml}, 'fail', {payload_path_toml}]\n",
     ));
 
     let output = fixture.run(&["ack", &message_id.to_string(), "received and starting"]);
@@ -411,6 +415,16 @@ fn test_ack_rejects_already_acknowledged_message() {
             Some(Duration::minutes(1)),
             message_id,
         )],
+    );
+    // This integration case intentionally proves the CLI path rejects based on
+    // SQLite state populated from inbox ingest, not from a pre-seeded store
+    // fixture.
+    assert!(
+        fixture
+            .store()
+            .load_message_by_legacy_id(&LegacyMessageId::from(message_id))
+            .expect("load stored message before ack")
+            .is_none()
     );
 
     let output = fixture.run(&["ack", &message_id.to_string(), "duplicate"]);
@@ -574,6 +588,18 @@ fn test_ack_accepts_legacy_uuid_only_message_after_store_ingest() {
         )
         .expect("ingest legacy inbox");
     assert_eq!(ingest.imported_messages, 1);
+    let stored = store
+        .load_message_by_legacy_id(&LegacyMessageId::from(message_id))
+        .expect("load ingested legacy row")
+        .expect("ingested legacy row");
+    let ack_state = store
+        .load_ack_state(&stored.message_key)
+        .expect("load legacy ack state")
+        .expect("legacy ack state");
+    assert!(
+        ack_state.pending_ack_at.is_some(),
+        "legacy fallback coverage requires the pending-ack row to exist before ack commit: stored={stored:?} ack_state={ack_state:?}"
+    );
 
     let output = fixture.run(&["ack", &message_id.to_string(), "legacy ack", "--json"]);
     assert!(
@@ -795,6 +821,38 @@ impl Fixture {
     }
 }
 
+struct ScopedEnvVar {
+    key: &'static str,
+    previous: Option<OsString>,
+}
+
+impl ScopedEnvVar {
+    fn set(key: &'static str, value: &str) -> Self {
+        let previous = std::env::var_os(key);
+        // SAFETY: this test is marked #[serial], so no concurrent test in this
+        // process mutates the same environment while the override is active.
+        unsafe { std::env::set_var(key, value) };
+        Self { key, previous }
+    }
+}
+
+impl Drop for ScopedEnvVar {
+    fn drop(&mut self) {
+        match &self.previous {
+            Some(value) => {
+                // SAFETY: this test is marked #[serial], so restoring the
+                // captured environment value is process-exclusive here.
+                unsafe { std::env::set_var(self.key, value) };
+            }
+            None => {
+                // SAFETY: this test is marked #[serial], so removing the
+                // override is process-exclusive here.
+                unsafe { std::env::remove_var(self.key) };
+            }
+        }
+    }
+}
+
 struct FailingCommitStore {
     inner: RusqliteStore,
     error_message: String,
@@ -889,9 +947,9 @@ impl MailStore for FailingCommitStore {
 
     fn upsert_visibility_batch(
         &self,
-        visibilities: &[VisibilityStateRecord],
+        visibility: &[VisibilityStateRecord],
     ) -> Result<(), StoreError> {
-        self.inner.upsert_visibility_batch(visibilities)
+        self.inner.upsert_visibility_batch(visibility)
     }
 
     fn load_visibility(
