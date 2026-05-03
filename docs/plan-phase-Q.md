@@ -173,7 +173,8 @@ Non-responsibility:
 - daemon must not own unique business logic that is unavailable to in-process
   service callers
 - daemon unavailability must surface as an explicit runtime failure, not as
-  hidden direct SQLite/JSONL fallback or auto-spawn
+  hidden direct SQLite/JSONL fallback; the documented daemon auto-start path is
+  the only allowed startup behavior
 
 ## Plugin Model
 
@@ -343,6 +344,8 @@ Suggested columns:
 - `role TEXT NULL`
 - `transport_kind TEXT NULL`
 - `host_name TEXT NULL`
+- `recipient_pane_id TEXT NULL`
+- `pid INTEGER NULL`
 - `metadata_json TEXT NULL`
 
 Primary key:
@@ -350,6 +353,10 @@ Primary key:
 
 Rules:
 - roster truth lives in SQLite
+- current per-member `pid` lives in SQLite as durable truth and is cached by
+  the daemon as its primary liveness field
+- `last_active_at` does not live in `team_roster`; it is daemon-memory-only
+  runtime state
 - `config.json` becomes an ingress/update source, not the source of truth
 
 ### `message_visibility`
@@ -432,6 +439,85 @@ Compatibility rules:
 
 ## Sprint Breakdown
 
+### Q.0 — Boundary Cleanup And Debt Retirement
+
+Scope:
+- align the current codebase with the Phase Q target shape before store and
+  daemon work begin
+- remove technical debt that would otherwise force workaround code in Q.1+
+- simplify the retained filesystem/runtime line without prebuilding later
+  architecture
+
+Non-goals:
+- no partial daemon implementation
+- no speculative transport or plugin framework work
+- no speculative crate split that does not directly reduce implementation risk
+- no cleanup work whose only value is style rather than migration safety
+
+Expected files / crates:
+- `crates/atm-core/src/mailbox/*`
+- `crates/atm-core/src/schema/*`
+- `crates/atm-core/src/send/*`
+- `crates/atm-core/src/config/*`
+- `crates/atm-core/src/workflow/*`
+- `crates/atm-core/src/team_admin/*`
+- `crates/atm/tests/*`
+- `crates/atm-core/tests/*`
+
+Implementation details:
+- keep one ATM-owned inbox write boundary and make that the only retained
+  message export path
+- keep one ATM-owned inbox hydration boundary and remove duplicated
+  test-local/service-local compatibility helpers
+- confine message-id compatibility reinterpretation to the schema boundary
+  rather than spreading ULID/UUID bridge logic through service/test code
+- remove hidden defaults and sentinel construction paths for externally
+  meaningful identifiers and roster members; require explicit validated
+  constructors instead
+- keep `ATM_POST_SEND` payload shaping and post-send hook trigger points
+  centralized rather than letting command/test code assemble them ad hoc
+- tighten `config.json` ingest so shorthand and object-form team-member parsing
+  obey the same validation expectations where both remain supported
+- keep retained passthrough field ownership documented at the schema boundary
+  so Q.1 migration work does not have to rediscover who owns which wire fields
+- add or update conformance tests around:
+  - one shared inbox write path
+  - one metadata hydration path
+  - explicit roster/member construction
+  - hook payload stability
+  - config ingest validation parity
+
+Code-review basis for Q.0:
+- `mailbox::atomic::write_messages()` is already the right shared write seam
+  and should remain the only ATM-owned inbox writer
+- `schema::to_shared_inbox_value()` and
+  `hydrate_legacy_fields_from_metadata()` are already the right schema
+  compatibility seams and should absorb compatibility logic rather than being
+  mirrored elsewhere
+- `crates/atm/tests/send.rs` and `crates/atm-core/tests/mailbox_locking.rs`
+  have both recently carried duplicated metadata hydration helpers, which is
+  exactly the kind of drift Q.0 should remove
+- recent `AgentName` / `AgentMember` fixes showed that hidden defaults create
+  migration drag and ambiguous ownership
+- recent context-injection fixes showed that inbox write policy must stay
+  centralized or Claude compatibility regresses quickly
+
+Acceptance:
+- one ATM-owned inbox write path exists and is the only retained path used by
+  send/ack mail persistence
+- one ATM-owned metadata hydration path exists and duplicated test-local/schema
+  shim logic is removed
+- no retained command/test path depends on hidden default construction for
+  externally meaningful identity fields
+- hook payload assembly and hook trigger points are auditable from one service
+  boundary rather than scattered through command/test code
+- `config.json` shorthand and object-form member parsing obey the same
+  validation expectations where both are supported
+- conformance tests document the intended seams so Q.1 work can build against
+  them without reinterpretation
+- cleanup leaves the codebase simpler than before; Q.0 must remove workaround
+  code, not add another compatibility layer
+
 ### Q.1 — SQLite Store Foundation
 
 Scope:
@@ -446,6 +532,7 @@ Scope:
 - add explicit dispatcher boundary alongside transport/handlers
 
 Parallelization rule:
+- Q.0 must be complete before Q.1 boundary work is considered locked
 - Q.1 defines the lock-in point for the core boundary traits, request/response
   contracts, typed errors, dispatcher/handler seams, and store-family split
 - transport, watcher/reconcile, and command-migration work must not proceed as
@@ -495,6 +582,7 @@ Acceptance:
   - transactional rollback on mid-operation failure
   - uniqueness of `message_key`, `legacy_message_id`, and `atm_message_id`
   - roster row replacement/update behavior
+  - `recipient_pane_id TEXT NULL` added to `team_roster` schema
   - structured store/bootstrap errors remain discriminated and do not panic on
     routine failure
 
@@ -633,8 +721,8 @@ Implementation details:
   - status cache `4096`
 - remote delivery success is defined by remote daemon acceptance within the
   bounded retry window
-- daemon-unavailable client calls must fail clearly without hidden fallback or
-  auto-spawn
+- daemon-unavailable client calls must attempt the documented auto-start once,
+  then fail clearly without hidden fallback if the daemon still cannot run
 - `atm doctor` must start consuming daemon/runtime state through the same
   request/response boundaries used by production
 - after Q.1, Unix transport, TCP/TLS transport, `test-socket`,
@@ -650,6 +738,8 @@ Acceptance:
   - repeated `read` after external Claude append
   - clear of ack-pending message remains forbidden
   - clear of already-cleared message is idempotent
+  - daemon auto-start-when-absent success path covered by integration test
+  - auto-start failure after retry returns a clear typed error
   - second daemon startup fails deterministically
   - stale singleton artifact cleanup does not allow double-start
   - local same-host daemon API flow
@@ -693,6 +783,23 @@ Acceptance:
     than correctness blockers
   - no core test requires daemon process spawning
 
+### Q.6 — Production-Readiness Gate + Release Sprint
+
+Scope:
+- prove the Phase Q implementation is production ready rather than merely
+  architecturally aligned
+- run the release gate, packaging gate, and final documentation/QA alignment
+- publish only after all prior sprint gates are green
+
+Acceptance:
+- version bump planning is complete
+- `cargo publish --dry-run` succeeds for the intended publish set
+- crates.io publish succeeds for the intended release line
+- GitHub release/tag/binary artifact steps are complete
+- `CHANGELOG.md` is updated
+- all Phase Q release-gate conditions pass on the release candidate
+
+<a id="testing-constraints"></a>
 ## Testing Constraints
 
 Phase Q must explicitly avoid the daemon failures that sank the earlier design.
@@ -811,16 +918,24 @@ The following must be checked on every QA pass for Phase Q:
 - typed runtime errors remain discriminated across service, daemon, and CLI
   boundaries
 - roster truth lives in SQLite; live status truth lives in daemon memory
+- invariant: `pid` is durable SQLite truth and `last_active_at` is
+  daemon-memory-only runtime state
+- invariant: recipient pane-id must come from SQLite roster truth after Phase Q
+  migration
 - Claude compatibility continues to use Claude-native top-level fields plus
   `metadata.atm`
 
 ## Release Gate For Phase Q
 
 Phase Q should be considered complete only when:
+- Q.0 cleanup work is complete and no longer blocks Q.1+ implementation
 - ATM mail correctness no longer depends on mailbox `.lock` files
 - SQLite is the authoritative store for read/ack/clear/task semantics
 - SQLite is the authoritative store for team roster
 - live status is owned by the runtime layer rather than being treated as
   durable database truth
+- daemon auto-start-when-absent path is exercised in integration testing
+- `ATM_POST_SEND.recipient_pane_id` is sourced from SQLite roster truth when
+  recipient pane truth is known
 - Claude inbox files remain a compatible export/ingest surface only
 - stale lock cleanup can no longer wedge normal ATM mail flows

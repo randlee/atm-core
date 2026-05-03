@@ -216,7 +216,7 @@ Supersession note:
 - the Phase Q target architecture in §21 supersedes those constraints with:
   - one explicit daemon runtime
   - no hidden direct SQLite fallback
-  - no hidden daemon auto-spawn path
+  - one explicit daemon auto-start path when the daemon is absent
 
 ## 4. Core Types
 
@@ -440,7 +440,10 @@ Architectural rules:
   canonical sender identity rather than the display-oriented `from` projection
 - ATM-owned post-send hooks are best-effort recipient-scoped helpers, not part
   of the atomic send boundary
-- the hook runs only after a successful non-`dry-run` send
+- the hook runs only after a successful non-`dry-run` send or ack; it fires
+  after both `atm send` and `atm ack`
+- Phase Q addition: the retained hook contract now includes `atm ack` reply
+  writes as hook-producing outbound messages, not only `atm send`
 - each `[[atm.post_send_hooks]]` rule binds one recipient selector and one
   command argv
 - `recipient = "*"` acts as a wildcard match for all recipients
@@ -451,7 +454,9 @@ Architectural rules:
 - the hook receives inherited environment plus one ATM-owned JSON payload in
   `ATM_POST_SEND`
 - the payload includes `from`, `to`, `sender`, `recipient`, `team`,
-  `message_id`, `requires_ack`, and optional `task_id`
+  `message_id`, `requires_ack`, `is_ack` (bool), and optional `task_id`
+- Phase Q addition: `is_ack` is the explicit send-vs-ack discriminator for
+  daemon-owned hook evaluation and downstream nudge logic
 - the hook may optionally emit one structured result object on stdout with a
   declared log level, message, and optional structured fields; ATM parses it
   on a best-effort basis for post-send diagnostics
@@ -836,6 +841,9 @@ Public entrypoint:
 - reply target
 - reply message id
 - reply text
+- warnings: Vec<String>
+- Phase Q addition: `warnings` carries best-effort post-send-hook diagnostics
+  for `atm ack` without changing the successful acknowledgement state
 
 The ack service is responsible for the legal transition from `(Read, PendingAck)` to `(Read, Acknowledged)` plus the reply append.
 
@@ -1125,14 +1133,16 @@ contain:
 - `to`
 - `message_id`
 - `requires_ack`
+- `is_ack`
 - optional `task_id` when present
 - optional `recipient_pane_id` when ATM already knows the authoritative pane
   mapping for the recipient
 
-The post-send hook runs only after a successful non-`dry-run` send, executes
-once when sender or recipient matching succeeds, may optionally emit one
-structured stdout result for observability, and never rolls back a successful
-send on failure or timeout.
+The post-send hook runs only after a successful outbound mailbox write from
+`atm send` or `atm ack`. It executes once when recipient matching succeeds,
+uses `is_ack = false` for `atm send` and `is_ack = true` for `atm ack`, may
+optionally emit one structured stdout result for observability, and never rolls
+back a successful message write on failure or timeout.
 
 Phase Q hook-note:
 - once roster and pane mapping truth move to SQLite, the send path should place
@@ -1959,6 +1969,9 @@ ATM moves to a split state model:
   - team roster
 - daemon memory is the authoritative live runtime view for:
   - current agent status
+  - `pid`: durable SQLite truth cached in daemon memory as the primary
+    liveness field
+  - `last_active_at`: daemon-memory-only runtime state used for live overlays
 
 SQLite may persist last-observed status for diagnostics, but that snapshot is
 not the live truth.
@@ -1991,6 +2004,17 @@ Minimum index/constraint rules:
   - task lookup
   - visibility projection
   - ingest replay/high-water tracking
+
+Minimum `team_roster` durable fields:
+- `team_name`
+- `agent_name`
+- `recipient_pane_id TEXT NULL`
+  - authoritative post-send-hook pane mapping when known
+  - updated through the roster/registration path rather than rediscovered from
+    local files after Phase Q migration
+- `pid INTEGER NULL`
+  - durable roster truth for the current owning process identity
+  - cached by the daemon as the primary liveness field
 
 ### 21.1.2 SQLite Runtime Invariants
 
@@ -2093,6 +2117,17 @@ Daemon responsibilities:
 
 Daemon non-responsibility:
 - it must not become the only home of ATM business logic
+
+Auto-start path:
+- production ATM commands first attempt to connect to the already-running
+  daemon
+- if the daemon is absent, the CLI/runtime path may perform exactly one
+  auto-start attempt
+- after one auto-start attempt, the CLI/runtime path retries connect once
+- if the daemon remains unavailable, the command fails with a typed actionable
+  error
+- there is no silent fallback from the production path to direct SQLite or
+  inbox-file access after auto-start failure
 
 ### 21.6 Strict I/O Ownership
 

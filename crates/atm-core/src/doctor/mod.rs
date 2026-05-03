@@ -166,7 +166,10 @@ fn load_member_roster(
         .map(|member| member.name.clone())
         .collect::<BTreeSet<_>>();
     for member in baseline {
-        if present.contains(member.as_str()) {
+        if present
+            .iter()
+            .any(|present_member| present_member == &member.as_str())
+        {
             continue;
         }
         findings.push(DoctorFinding {
@@ -360,7 +363,7 @@ fn member_summary(member: &AgentMember) -> MemberSummary {
     MemberSummary {
         name: AgentName::from_validated(member.name.clone()),
         agent_id: member.agent_id.clone(),
-        agent_type: member.agent_type.clone(),
+        agent_type: member.agent_type.to_string(),
         model: member.model.clone(),
         joined_at: member.joined_at,
         tmux_pane_id: member.tmux_pane_id.clone(),
@@ -381,6 +384,7 @@ mod tests {
         LogTailSession, ObservabilityPort,
     };
     use crate::schema::{AgentMember, TeamConfig};
+    use crate::types::AgentName;
 
     enum StubHealth {
         Ok(AtmObservabilityHealth),
@@ -451,10 +455,7 @@ mod tests {
             let config = TeamConfig {
                 members: members
                     .iter()
-                    .map(|member| AgentMember {
-                        name: (*member).to_string(),
-                        ..Default::default()
-                    })
+                    .map(|member| AgentMember::with_name(AgentName::from_validated(*member)))
                     .collect(),
                 ..Default::default()
             };

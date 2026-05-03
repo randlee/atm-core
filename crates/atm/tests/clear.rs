@@ -2,7 +2,8 @@ use std::fs;
 use std::process::Command;
 
 use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
-use atm_core::types::IsoTimestamp;
+use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+use atm_core::{read_messages, write_messages};
 use chrono::{Duration, Utc};
 use serde_json::Value;
 
@@ -181,11 +182,20 @@ fn test_clear_uses_workflow_sidecar_and_removes_cleared_entry() {
     );
     let message_id = message.message_id.expect("message id");
     fixture.write_inbox("arch-ctm", &[message]);
+    let workflow_key = fixture
+        .inbox_contents("arch-ctm")
+        .first()
+        .and_then(|message| {
+            message
+                .atm_message_id()
+                .map(|message_id| format!("atm:{message_id}"))
+        })
+        .unwrap_or_else(|| format!("legacy:{message_id}"));
     fixture.write_workflow_state(
         "arch-ctm",
         serde_json::json!({
             "messages": {
-                format!("legacy:{message_id}"): {
+                workflow_key.clone(): {
                     "read": true
                 }
             }
@@ -201,7 +211,7 @@ fn test_clear_uses_workflow_sidecar_and_removes_cleared_entry() {
     );
     assert!(fixture.inbox_contents("arch-ctm").is_empty());
     let workflow = fixture.workflow_state_contents("arch-ctm");
-    assert!(workflow["messages"][format!("legacy:{message_id}")].is_null());
+    assert!(workflow["messages"][workflow_key].is_null());
 }
 
 #[test]
@@ -433,10 +443,7 @@ impl Fixture {
         let config = TeamConfig {
             members: members
                 .iter()
-                .map(|member| AgentMember {
-                    name: (*member).to_string(),
-                    ..Default::default()
-                })
+                .map(|member| AgentMember::with_name((*member).parse().expect("agent")))
                 .collect(),
             ..Default::default()
         };
@@ -452,12 +459,7 @@ impl Fixture {
         if let Some(parent) = inbox_path.parent() {
             fs::create_dir_all(parent).expect("inbox dir");
         }
-        let raw = messages
-            .iter()
-            .map(|message| serde_json::to_string(message).expect("json line"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        fs::write(inbox_path, format!("{raw}\n")).expect("write inbox");
+        write_messages(&inbox_path, messages).expect("write inbox");
     }
 
     fn inbox_path(&self, agent: &str) -> std::path::PathBuf {
@@ -467,10 +469,7 @@ impl Fixture {
     }
 
     fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {
-        let raw = fs::read_to_string(self.inbox_path(agent)).expect("inbox contents");
-        raw.lines()
-            .map(|line| serde_json::from_str(line).expect("json line"))
-            .collect()
+        read_messages(&self.inbox_path(agent)).expect("inbox contents")
     }
 
     fn write_workflow_state(&self, agent: &str, value: Value) {
@@ -502,12 +501,7 @@ impl Fixture {
         if let Some(parent) = inbox_path.parent() {
             fs::create_dir_all(parent).expect("origin inbox dir");
         }
-        let raw = messages
-            .iter()
-            .map(|message| serde_json::to_string(message).expect("json line"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        fs::write(inbox_path, format!("{raw}\n")).expect("write origin inbox");
+        write_messages(&inbox_path, messages).expect("write origin inbox");
     }
 
     fn origin_inbox_path(&self, agent: &str, origin: &str) -> std::path::PathBuf {
@@ -517,11 +511,7 @@ impl Fixture {
     }
 
     fn origin_inbox_contents(&self, agent: &str, origin: &str) -> Vec<MessageEnvelope> {
-        let raw = fs::read_to_string(self.origin_inbox_path(agent, origin))
-            .expect("origin inbox contents");
-        raw.lines()
-            .map(|line| serde_json::from_str(line).expect("json line"))
-            .collect()
+        read_messages(&self.origin_inbox_path(agent, origin)).expect("origin inbox contents")
     }
 
     fn stdout_json(&self, output: &std::process::Output) -> Value {
@@ -550,11 +540,11 @@ impl Fixture {
         timestamp: chrono::DateTime<Utc>,
     ) -> MessageEnvelope {
         MessageEnvelope {
-            from: from.to_string(),
+            from: from.parse::<AgentName>().expect("agent"),
             text: text.to_string(),
             timestamp: timestamp.into(),
             read,
-            source_team: Some("atm-dev".into()),
+            source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
             summary: None,
             message_id: Some(LegacyMessageId::new()),
             pending_ack_at: pending_ack_at.map(Into::into),

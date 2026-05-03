@@ -28,7 +28,7 @@ pub struct TeamSummary {
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct TeamsList {
     pub action: String,
-    pub team: TeamName,
+    pub team: Option<TeamName>,
     pub teams: Vec<TeamSummary>,
 }
 
@@ -190,7 +190,7 @@ pub enum RestoreResult {
 /// cannot be enumerated.
 pub fn list_teams(home_dir: PathBuf, current_dir: PathBuf) -> Result<TeamsList, AtmError> {
     let config = load_config(&current_dir)?;
-    let current_team = resolve_team(None, config.as_ref()).unwrap_or_default();
+    let current_team = resolve_team(None, config.as_ref());
     let teams_root = teams_root_from_home(&home_dir);
     if !teams_root.exists() {
         return Ok(TeamsList {
@@ -319,9 +319,9 @@ pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmErro
     }
 
     config.members.push(AgentMember {
-        name: request.member.to_string(),
+        name: request.member.clone(),
         agent_id: format!("{}@{}", request.member, request.team),
-        agent_type: request.agent_type,
+        agent_type: request.agent_type.into(),
         model: request.model,
         joined_at: Some(Utc::now().timestamp_millis() as u64),
         tmux_pane_id: normalized_tmux_pane_id.unwrap_or_default(),
@@ -419,7 +419,7 @@ fn member_summary(member: &AgentMember) -> MemberSummary {
     MemberSummary {
         name: AgentName::from_validated(member.name.clone()),
         agent_id: member.agent_id.clone(),
-        agent_type: member.agent_type.clone(),
+        agent_type: member.agent_type.to_string(),
         model: member.model.clone(),
         joined_at: member.joined_at,
         tmux_pane_id: member.tmux_pane_id.clone(),

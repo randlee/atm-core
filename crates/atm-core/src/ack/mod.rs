@@ -15,7 +15,9 @@ use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
 use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
-use crate::send::{input, summary};
+use crate::send::{
+    PostSendHookContext, ResolvedRecipient, input, maybe_run_post_send_hook, summary,
+};
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use crate::workflow;
 
@@ -42,6 +44,8 @@ pub struct AckOutcome {
     pub reply_target: ReplyTarget,
     pub reply_message_id: LegacyMessageId,
     pub reply_text: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -175,11 +179,11 @@ pub fn ack_mail(
     let mut reply_extra = Map::new();
     workflow::set_atm_message_id(&mut reply_extra, reply_atm_message_id);
     let reply_message = MessageEnvelope {
-        from: actor.to_string(),
+        from: actor.clone(),
         text: reply_text.clone(),
         timestamp: ack_timestamp,
         read: false,
-        source_team: Some(team.to_string()),
+        source_team: Some(team.clone()),
         summary: Some(summary::build_summary(&reply_text, None)),
         message_id: Some(reply_message_id),
         pending_ack_at: None,
@@ -276,16 +280,37 @@ pub fn ack_mail(
         },
     )?;
 
-    let outcome = AckOutcome {
+    let hook_reply_agent = reply_agent.clone();
+    let hook_reply_team = reply_team.clone();
+    let mut outcome = AckOutcome {
         action: "ack",
         team: team.clone(),
         agent: actor.clone(),
         message_id: request.message_id,
         task_id: source_task_id.clone(),
-        reply_target: ReplyTarget::new(AgentName::from_validated(reply_agent), reply_team),
+        reply_target: ReplyTarget::new(reply_agent, reply_team),
         reply_message_id,
         reply_text: reply_text.clone(),
+        warnings: Vec::new(),
     };
+
+    let hook_reply_recipient = ResolvedRecipient {
+        agent: hook_reply_agent,
+        team: hook_reply_team,
+    };
+    maybe_run_post_send_hook(
+        &mut outcome.warnings,
+        config.as_ref(),
+        PostSendHookContext {
+            sender: &actor,
+            sender_team: Some(&team),
+            recipient: &hook_reply_recipient,
+            message_id: reply_message_id,
+            requires_ack: false,
+            is_ack: true,
+            task_id: outcome.task_id.as_ref(),
+        },
+    );
 
     let _ = observability.emit(CommandEvent {
         command: "ack",
@@ -310,22 +335,23 @@ fn resolve_reply_target(
     current_team: &str,
 ) -> Result<(AgentName, TeamName), AtmError> {
     if let Some(identity) = canonical_sender_identity(message) {
-        let parsed: AgentAddress = identity.parse()?;
-        let team = parsed.team.ok_or_else(AtmError::team_unavailable)?;
-        return Ok((
-            AgentName::from_validated(parsed.agent),
-            TeamName::from_validated(team),
-        ));
+        let team = message
+            .source_team
+            .clone()
+            .or_else(|| Some(current_team.parse().expect("validated team")))
+            .ok_or_else(AtmError::team_unavailable)?;
+        return Ok((identity, team));
     }
 
     let parsed: AgentAddress = if message.from.contains('@') {
-        message.from.parse()?
+        message.from.as_str().parse()?
     } else {
         AgentAddress {
-            agent: message.from.clone(),
+            agent: message.from.to_string(),
             team: message
                 .source_team
                 .clone()
+                .map(Into::into)
                 .or_else(|| Some(current_team.to_string())),
         }
     };
@@ -337,7 +363,7 @@ fn resolve_reply_target(
     ))
 }
 
-fn canonical_sender_identity(message: &MessageEnvelope) -> Option<String> {
+fn canonical_sender_identity(message: &MessageEnvelope) -> Option<AgentName> {
     message
         .extra
         .get("metadata")
@@ -345,8 +371,8 @@ fn canonical_sender_identity(message: &MessageEnvelope) -> Option<String> {
         .and_then(|metadata| metadata.get("atm"))
         .and_then(serde_json::Value::as_object)
         .and_then(|atm| atm.get("fromIdentity"))
-        .and_then(serde_json::Value::as_str)
-        .map(ToOwned::to_owned)
+        .cloned()
+        .and_then(|value| serde_json::from_value(value).ok())
 }
 
 fn merged_surface(
@@ -478,15 +504,15 @@ mod tests {
 
     use super::{canonical_sender_identity, resolve_reply_target};
     use crate::schema::MessageEnvelope;
-    use crate::types::IsoTimestamp;
+    use crate::types::{AgentName, IsoTimestamp, TeamName};
 
     fn message_with_from(from: &str) -> MessageEnvelope {
         MessageEnvelope {
-            from: from.to_string(),
+            from: from.parse::<AgentName>().expect("agent"),
             text: "hello".to_string(),
             timestamp: IsoTimestamp::now(),
             read: false,
-            source_team: Some("atm-dev".to_string()),
+            source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
             summary: None,
             message_id: None,
             pending_ack_at: None,
@@ -502,22 +528,22 @@ mod tests {
         let mut message = message_with_from("lead");
         message.extra.insert(
             "metadata".to_string(),
-            json!({"atm": {"fromIdentity": "team-lead@src-gen"}}),
+            json!({"atm": {"fromIdentity": "team-lead"}}),
         );
 
         assert_eq!(
             canonical_sender_identity(&message).as_deref(),
-            Some("team-lead@src-gen")
+            Some("team-lead")
         );
     }
 
     #[test]
     fn resolve_reply_target_prefers_canonical_sender_identity_metadata() {
         let mut message = message_with_from("lead");
-        message.source_team = Some("atm-dev".to_string());
+        message.source_team = Some("atm-dev".parse::<TeamName>().expect("team"));
         message.extra.insert(
             "metadata".to_string(),
-            json!({"atm": {"fromIdentity": "team-lead@src-gen"}}),
+            json!({"atm": {"fromIdentity": "team-lead"}}),
         );
 
         let target = resolve_reply_target(&message, "atm-dev").expect("reply target");
@@ -525,7 +551,7 @@ mod tests {
             target,
             (
                 "team-lead".parse().expect("agent"),
-                "src-gen".parse().expect("team"),
+                "atm-dev".parse().expect("team"),
             )
         );
     }

@@ -2,8 +2,23 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
-use atm_core::schema::{AgentMember, AtmMessageId, LegacyMessageId, MessageEnvelope, TeamConfig};
+use atm_core::schema::{AgentMember, MessageEnvelope, TeamConfig};
+use atm_core::{read_messages, write_messages};
 use serde_json::Value;
+
+fn parse_inbox_values(raw: &str) -> Vec<Value> {
+    if raw.trim().is_empty() {
+        return Vec::new();
+    }
+
+    match raw.chars().find(|ch| !ch.is_whitespace()) {
+        Some('[') => serde_json::from_str(raw).expect("json array"),
+        _ => raw
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("json line"))
+            .collect(),
+    }
+}
 
 #[test]
 fn test_send_creates_inbox_file() {
@@ -285,7 +300,8 @@ fn test_send_missing_config_uses_existing_inbox_fallback_and_warns_sender() {
 
     let notices = fixture.inbox_contents("team-lead");
     assert_eq!(notices.len(), 1);
-    assert_eq!(notices[0].from, "atm-identity-missing@atm-dev");
+    assert_eq!(notices[0].from, "atm-identity-missing");
+    assert_eq!(notices[0].source_team.as_deref(), Some("atm-dev"));
     assert!(
         notices[0]
             .text
@@ -451,7 +467,7 @@ fn test_send_cross_team_projects_alias_and_persists_canonical_from_identity() {
     assert_eq!(inbox[0].from, "lead");
     assert_eq!(
         inbox[0].extra["metadata"]["atm"]["fromIdentity"],
-        "arch-ctm@atm-dev"
+        "arch-ctm"
     );
 }
 
@@ -497,6 +513,7 @@ fn test_send_runs_post_send_hook_with_expected_payload() {
     assert_eq!(payload["from"], "arch-ctm@atm-dev");
     assert_eq!(payload["to"], "recipient@atm-dev");
     assert_eq!(payload["requires_ack"], false);
+    assert_eq!(payload["is_ack"], false);
     assert!(payload["message_id"].as_str().is_some());
     assert!(payload.get("task_id").is_none());
     assert_eq!(payload["sender"], "arch-ctm");
@@ -968,10 +985,7 @@ impl Fixture {
         let team_dir = self.tempdir.path().join(".claude").join("teams").join(team);
         fs::create_dir_all(&team_dir).expect("team dir");
         let config = TeamConfig {
-            members: vec![AgentMember {
-                name: recipient.to_string(),
-                ..Default::default()
-            }],
+            members: vec![AgentMember::with_name(recipient.parse().expect("agent"))],
             ..Default::default()
         };
         fs::write(
@@ -1015,19 +1029,7 @@ impl Fixture {
         if let Some(parent) = inbox_path.parent() {
             fs::create_dir_all(parent).expect("inbox dir");
         }
-        let raw = if messages.is_empty() {
-            String::new()
-        } else {
-            format!(
-                "{}\n",
-                messages
-                    .iter()
-                    .map(|message| serde_json::to_string(message).expect("json line"))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            )
-        };
-        fs::write(inbox_path, raw).expect("write inbox");
+        write_messages(&inbox_path, messages).expect("write inbox");
     }
 
     fn inbox_contents(&self, recipient: &str) -> Vec<MessageEnvelope> {
@@ -1040,28 +1042,13 @@ impl Fixture {
 
     fn inbox_contents_in_team(&self, team: &str, recipient: &str) -> Vec<MessageEnvelope> {
         let inbox_path = self.inbox_path_in_team(team, recipient);
-        let raw = fs::read_to_string(&inbox_path).expect("inbox contents");
-        if raw.trim().is_empty() {
-            return Vec::new();
-        }
-        raw.lines()
-            .map(|line| {
-                let mut value: Value = serde_json::from_str(line).expect("json line");
-                hydrate_legacy_fields_from_metadata(&mut value);
-                serde_json::from_value(value).expect("message envelope")
-            })
-            .collect()
+        read_messages(&inbox_path).expect("inbox contents")
     }
 
     fn inbox_json_lines_in_team(&self, team: &str, recipient: &str) -> Vec<Value> {
         let inbox_path = self.inbox_path_in_team(team, recipient);
         let raw = fs::read_to_string(&inbox_path).expect("inbox contents");
-        if raw.trim().is_empty() {
-            return Vec::new();
-        }
-        raw.lines()
-            .map(|line| serde_json::from_str(line).expect("json line"))
-            .collect()
+        parse_inbox_values(&raw)
     }
 
     fn team_dir(&self) -> std::path::PathBuf {
@@ -1137,64 +1124,5 @@ impl Fixture {
 
     fn stderr(&self, output: &std::process::Output) -> String {
         String::from_utf8(output.stderr.clone()).expect("stderr utf8")
-    }
-}
-
-fn hydrate_legacy_fields_from_metadata(value: &mut Value) {
-    let Some(object) = value.as_object_mut() else {
-        return;
-    };
-    let Some(atm) = object
-        .get("metadata")
-        .and_then(Value::as_object)
-        .and_then(|metadata| metadata.get("atm"))
-        .and_then(Value::as_object)
-        .cloned()
-    else {
-        return;
-    };
-
-    if !object.contains_key("message_id")
-        && let Some(raw) = atm.get("messageId").and_then(Value::as_str)
-        && let Ok(message_id) = raw.parse::<AtmMessageId>()
-    {
-        object.insert(
-            "message_id".to_string(),
-            Value::String(LegacyMessageId::from_atm_message_id(message_id).to_string()),
-        );
-    }
-
-    if !object.contains_key("source_team")
-        && let Some(value) = atm.get("sourceTeam")
-    {
-        object.insert("source_team".to_string(), value.clone());
-    }
-
-    if !object.contains_key("pendingAckAt")
-        && let Some(value) = atm.get("pendingAckAt")
-    {
-        object.insert("pendingAckAt".to_string(), value.clone());
-    }
-
-    if !object.contains_key("acknowledgedAt")
-        && let Some(value) = atm.get("acknowledgedAt")
-    {
-        object.insert("acknowledgedAt".to_string(), value.clone());
-    }
-
-    if !object.contains_key("acknowledgesMessageId")
-        && let Some(raw) = atm.get("acknowledgesMessageId").and_then(Value::as_str)
-        && let Ok(message_id) = raw.parse::<AtmMessageId>()
-    {
-        object.insert(
-            "acknowledgesMessageId".to_string(),
-            Value::String(LegacyMessageId::from_atm_message_id(message_id).to_string()),
-        );
-    }
-
-    if !object.contains_key("taskId")
-        && let Some(value) = atm.get("taskId")
-    {
-        object.insert("taskId".to_string(), value.clone());
     }
 }
