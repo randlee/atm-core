@@ -180,6 +180,8 @@ mod tests {
     use super::{atomic_write_bytes, temp_path_for_atomic_write};
     use crate::error::AtmErrorKind;
 
+    // Serializes process-environment mutation inside this test module. This is
+    // process-local only; it does not coordinate with other test processes.
     fn env_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         LOCK.get_or_init(|| Mutex::new(()))

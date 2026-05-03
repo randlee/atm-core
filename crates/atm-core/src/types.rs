@@ -33,7 +33,7 @@ impl From<DateTime<Utc>> for IsoTimestamp {
 }
 
 /// Canonical ATM agent/member name at a public API boundary.
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct AgentName(String);
 
@@ -48,6 +48,10 @@ impl AgentName {
         self.0
     }
 
+    /// Construct from a value that has already passed `validate_path_segment`
+    /// or came from a trusted internal deserialization context.
+    ///
+    /// Raw untrusted strings must go through `FromStr` or `Deserialize`.
     pub(crate) fn from_validated(value: impl Into<String>) -> Self {
         Self(value.into())
     }

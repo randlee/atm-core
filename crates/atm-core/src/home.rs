@@ -111,6 +111,8 @@ mod tests {
         workflow_state_path_from_home,
     };
 
+    // Serializes process-environment mutation inside this test module. This is
+    // process-local only; it does not coordinate with other test processes.
     fn env_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         LOCK.get_or_init(|| Mutex::new(()))

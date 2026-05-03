@@ -1,11 +1,27 @@
 use std::fs;
 use std::process::Command;
 
-use atm_core::schema::{AgentMember, AtmMessageId, LegacyMessageId, MessageEnvelope, TeamConfig};
-use atm_core::types::IsoTimestamp;
+use atm_core::schema::{
+    AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig, hydrate_legacy_fields_from_metadata,
+};
+use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use chrono::{Duration, Utc};
 use serde_json::Value;
 use uuid::Uuid;
+
+fn parse_inbox_values(raw: &str) -> Vec<Value> {
+    if raw.trim().is_empty() {
+        return Vec::new();
+    }
+
+    match raw.chars().find(|ch| !ch.is_whitespace()) {
+        Some('[') => serde_json::from_str(raw).expect("json array"),
+        _ => raw
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("json line"))
+            .collect(),
+    }
+}
 
 #[test]
 fn test_ack_transitions_pending_ack_and_appends_reply() {
@@ -315,10 +331,7 @@ impl Fixture {
         let config = TeamConfig {
             members: members
                 .iter()
-                .map(|member| AgentMember {
-                    name: (*member).to_string(),
-                    ..Default::default()
-                })
+                .map(|member| AgentMember::with_name((*member).parse().expect("agent")))
                 .collect(),
             ..Default::default()
         };
@@ -334,12 +347,15 @@ impl Fixture {
         if let Some(parent) = inbox_path.parent() {
             fs::create_dir_all(parent).expect("inbox dir");
         }
-        let raw = messages
+        let values: Vec<Value> = messages
             .iter()
-            .map(|message| serde_json::to_string(message).expect("json line"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        fs::write(inbox_path, format!("{raw}\n")).expect("write inbox");
+            .map(|message| serde_json::to_value(message).expect("json value"))
+            .collect();
+        fs::write(
+            inbox_path,
+            serde_json::to_string_pretty(&values).expect("json array"),
+        )
+        .expect("write inbox");
     }
 
     fn inbox_path(&self, agent: &str) -> std::path::PathBuf {
@@ -350,9 +366,9 @@ impl Fixture {
 
     fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {
         let raw = fs::read_to_string(self.inbox_path(agent)).expect("inbox contents");
-        raw.lines()
-            .map(|line| {
-                let mut value: Value = serde_json::from_str(line).expect("json line");
+        parse_inbox_values(&raw)
+            .into_iter()
+            .map(|mut value| {
                 hydrate_legacy_fields_from_metadata(&mut value);
                 serde_json::from_value(value).expect("message envelope")
             })
@@ -361,9 +377,7 @@ impl Fixture {
 
     fn inbox_json_lines(&self, agent: &str) -> Vec<Value> {
         let raw = fs::read_to_string(self.inbox_path(agent)).expect("inbox contents");
-        raw.lines()
-            .map(|line| serde_json::from_str(line).expect("json line"))
-            .collect()
+        parse_inbox_values(&raw)
     }
 
     fn write_origin_inbox(&self, agent: &str, origin: &str, messages: &[MessageEnvelope]) {
@@ -371,12 +385,15 @@ impl Fixture {
         if let Some(parent) = inbox_path.parent() {
             fs::create_dir_all(parent).expect("origin inbox dir");
         }
-        let raw = messages
+        let values: Vec<Value> = messages
             .iter()
-            .map(|message| serde_json::to_string(message).expect("json line"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        fs::write(inbox_path, format!("{raw}\n")).expect("write origin inbox");
+            .map(|message| serde_json::to_value(message).expect("json value"))
+            .collect();
+        fs::write(
+            inbox_path,
+            serde_json::to_string_pretty(&values).expect("json array"),
+        )
+        .expect("write origin inbox");
     }
 
     fn origin_inbox_path(&self, agent: &str, origin: &str) -> std::path::PathBuf {
@@ -388,9 +405,9 @@ impl Fixture {
     fn origin_inbox_contents(&self, agent: &str, origin: &str) -> Vec<MessageEnvelope> {
         let raw = fs::read_to_string(self.origin_inbox_path(agent, origin))
             .expect("origin inbox contents");
-        raw.lines()
-            .map(|line| {
-                let mut value: Value = serde_json::from_str(line).expect("json line");
+        parse_inbox_values(&raw)
+            .into_iter()
+            .map(|mut value| {
                 hydrate_legacy_fields_from_metadata(&mut value);
                 serde_json::from_value(value).expect("message envelope")
             })
@@ -460,11 +477,11 @@ impl Fixture {
     ) -> MessageEnvelope {
         let timestamp = Utc::now() - Duration::minutes(30);
         MessageEnvelope {
-            from: from.to_string(),
+            from: from.parse::<AgentName>().expect("agent"),
             text: text.to_string(),
             timestamp: timestamp.into(),
             read,
-            source_team: Some("atm-dev".into()),
+            source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
             summary: None,
             message_id: Some(LegacyMessageId::from(message_id)),
             pending_ack_at: pending_offset
@@ -475,59 +492,5 @@ impl Fixture {
             task_id: None,
             extra: serde_json::Map::new(),
         }
-    }
-}
-
-fn hydrate_legacy_fields_from_metadata(value: &mut Value) {
-    let Some(object) = value.as_object_mut() else {
-        return;
-    };
-    let Some(atm) = object
-        .get("metadata")
-        .and_then(Value::as_object)
-        .and_then(|metadata| metadata.get("atm"))
-        .and_then(Value::as_object)
-        .cloned()
-    else {
-        return;
-    };
-
-    if !object.contains_key("message_id")
-        && let Some(raw) = atm.get("messageId").and_then(Value::as_str)
-        && let Ok(message_id) = raw.parse::<AtmMessageId>()
-    {
-        object.insert(
-            "message_id".to_string(),
-            Value::String(LegacyMessageId::from_atm_message_id(message_id).to_string()),
-        );
-    }
-    if !object.contains_key("source_team")
-        && let Some(value) = atm.get("sourceTeam")
-    {
-        object.insert("source_team".to_string(), value.clone());
-    }
-    if !object.contains_key("pendingAckAt")
-        && let Some(value) = atm.get("pendingAckAt")
-    {
-        object.insert("pendingAckAt".to_string(), value.clone());
-    }
-    if !object.contains_key("acknowledgedAt")
-        && let Some(value) = atm.get("acknowledgedAt")
-    {
-        object.insert("acknowledgedAt".to_string(), value.clone());
-    }
-    if !object.contains_key("acknowledgesMessageId")
-        && let Some(raw) = atm.get("acknowledgesMessageId").and_then(Value::as_str)
-        && let Ok(message_id) = raw.parse::<AtmMessageId>()
-    {
-        object.insert(
-            "acknowledgesMessageId".to_string(),
-            Value::String(LegacyMessageId::from_atm_message_id(message_id).to_string()),
-        );
-    }
-    if !object.contains_key("taskId")
-        && let Some(value) = atm.get("taskId")
-    {
-        object.insert("taskId".to_string(), value.clone());
     }
 }
