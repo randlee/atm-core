@@ -30,8 +30,11 @@ use crate::{
     RusqliteStore, SCHEMA_VERSION, query_foreign_keys, query_journal_mode, query_user_version,
 };
 
+const TEST_TEAM: &str = "test-team";
+const TEST_SENDER: &str = "sender-a";
+
 fn team() -> TeamName {
-    "atm-dev".parse().expect("team")
+    TEST_TEAM.parse().expect("team")
 }
 
 fn agent(name: &str) -> AgentName {
@@ -50,8 +53,8 @@ fn message_at(index: u8) -> atm_core::mail_store::StoredMessageRecord {
         message_key: MessageKey::from_atm_message_id(atm_message_id),
         team_name: team(),
         recipient_agent: agent("team-lead"),
-        sender_display: "arch-ctm".to_string(),
-        sender_canonical: Some(agent("arch-ctm")),
+        sender_display: TEST_SENDER.to_string(),
+        sender_canonical: Some(agent(TEST_SENDER)),
         sender_team: Some(team()),
         body: format!("body-{index}"),
         summary: Some(format!("summary-{index}")),
@@ -130,7 +133,7 @@ fn inbox_message(text: &str) -> MessageEnvelope {
         }),
     );
     MessageEnvelope {
-        from: "arch-ctm".parse().expect("sender"),
+        from: TEST_SENDER.parse().expect("sender"),
         text: text.to_string(),
         timestamp,
         read: false,
@@ -219,7 +222,7 @@ fn opens_under_team_state_mail_db() {
             .path()
             .join(".claude")
             .join("teams")
-            .join("atm-dev")
+            .join(TEST_TEAM)
             .join(".atm-state")
             .join("mail.db")
     );
@@ -489,8 +492,8 @@ fn create_read_and_update_store_rows() {
             message_key: export_future.message_key.clone(),
             team_name: team(),
             recipient_agent: agent("team-lead"),
-            sender_display: "arch-ctm".to_string(),
-            sender_canonical: Some(agent("arch-ctm")),
+            sender_display: TEST_SENDER.to_string(),
+            sender_canonical: Some(agent(TEST_SENDER)),
             sender_team: Some(team()),
             body: "future".to_string(),
             summary: None,
@@ -569,7 +572,7 @@ fn roster_replace_update_and_pid_round_trip() {
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_path(tempdir.path().join("mail.db")).expect("open store");
 
-    let arch = roster_member("arch-ctm", Some("%1"), Some(1001));
+    let arch = roster_member(TEST_SENDER, Some("%1"), Some(1001));
     let quality = roster_member("quality-mgr", None, None);
     store
         .replace_roster(&team(), &[arch.clone(), quality.clone()])
@@ -613,7 +616,7 @@ fn roster_replace_update_and_pid_round_trip() {
 fn team_ingress_replaces_roster_and_preserves_existing_pid() {
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_for_team_home(tempdir.path(), &team()).expect("open store");
-    let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+    let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
     fs::create_dir_all(&team_dir).expect("team dir");
 
     store
@@ -948,13 +951,13 @@ fn inbox_ingress_uses_envelope_defaults_when_sidecar_entry_is_absent_or_malforme
 fn replace_roster_rolls_back_on_constraint_violation() {
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_path(tempdir.path().join("mail.db")).expect("open store");
-    let arch = roster_member("arch-ctm", Some("%1"), Some(1001));
+    let arch = roster_member(TEST_SENDER, Some("%1"), Some(1001));
     let quality = roster_member("quality-mgr", None, None);
     store
         .replace_roster(&team(), &[arch.clone(), quality.clone()])
         .expect("seed roster");
 
-    let duplicate_arch = roster_member("arch-ctm", Some("%9"), Some(9009));
+    let duplicate_arch = roster_member(TEST_SENDER, Some("%9"), Some(9009));
     let error = store
         .replace_roster(&team(), &[duplicate_arch.clone(), duplicate_arch])
         .expect_err("duplicate replacement should fail");

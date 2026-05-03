@@ -221,14 +221,10 @@ fn canonical_message_key(
 
 fn source_fingerprint(source_path: &Path, envelope: &MessageEnvelope) -> SourceFingerprint {
     if let Some(atm_message_id) = envelope.atm_message_id() {
-        return format!("atm{atm_message_id}")
-            .parse()
-            .expect("ATM message ids always produce a valid source fingerprint");
+        return atm_message_id.into();
     }
     if let Some(message_id) = envelope.message_id {
-        return format!("legacy{message_id}")
-            .parse()
-            .expect("legacy message ids always produce a valid source fingerprint");
+        return message_id.into();
     }
 
     let mut hash = 0xcbf29ce484222325_u64;
@@ -270,6 +266,9 @@ fn stored_message_record(
                     "failed to encode metadata for imported inbox message from {}",
                     envelope.from
                 ),
+            )
+            .with_recovery(
+                "Repair the imported metadata payload or re-read the source inbox after the sender/export path emits valid JSON metadata.",
             )
             .with_source(source)
         })?;

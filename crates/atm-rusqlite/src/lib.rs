@@ -132,7 +132,7 @@ impl RusqliteStore {
     pub fn open_path(database_path: impl AsRef<Path>) -> Result<Self, StoreError> {
         Self::open_path_with_options(
             database_path.as_ref(),
-            BusyTimeoutMs::DEFAULT,
+            BusyTimeoutMs::new(5000).expect("5000ms busy timeout is valid"),
             SqliteHandleBudget::DEFAULT,
         )
     }

@@ -178,6 +178,24 @@ impl Deref for SourceFingerprint {
     }
 }
 
+impl From<AtmMessageId> for SourceFingerprint {
+    fn from(value: AtmMessageId) -> Self {
+        // INVARIANT: AtmMessageId is already validated ULID text, and the
+        // `atm...` prefix stays within the stable ASCII token shape accepted
+        // by SourceFingerprint for ATM-authored ingress identities.
+        Self(format!("atm{value}"))
+    }
+}
+
+impl From<LegacyMessageId> for SourceFingerprint {
+    fn from(value: LegacyMessageId) -> Self {
+        // INVARIANT: LegacyMessageId is already validated UUID text, and the
+        // `legacy...` prefix stays within the stable ASCII token shape accepted
+        // by SourceFingerprint for compatibility ingress identities.
+        Self(format!("legacy{value}"))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct HostName(String);
