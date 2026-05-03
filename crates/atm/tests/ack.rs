@@ -6,10 +6,16 @@ mod helpers;
 use atm_core::ack::{self, AckMessageId, AckRequest};
 use atm_core::error::AtmErrorCode;
 use atm_core::inbox_ingress::ingest_mailbox_state;
-use atm_core::mail_store::MailStore;
+use atm_core::mail_store::{
+    AckStateRecord, IngestRecord, MailStore, MailStoreHealth, PendingExportRecord,
+    StoredMessageRecord, VisibilityStateRecord,
+};
 use atm_core::observability::NullObservability;
 use atm_core::schema::{AgentMember, AtmMessageId, LegacyMessageId, MessageEnvelope, TeamConfig};
-use atm_core::task_store::TaskStore;
+use atm_core::store::{
+    InsertOutcome, MessageKey, SourceFingerprint, StoreBootstrapReport, StoreError, StoreHealth,
+};
+use atm_core::task_store::{TaskRecord, TaskStore};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_core::{read_messages, write_messages};
 use atm_rusqlite::RusqliteStore;
@@ -19,6 +25,7 @@ use serial_test::serial;
 use uuid::Uuid;
 
 #[test]
+#[serial]
 fn test_ack_transitions_pending_ack_and_appends_reply() {
     let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
     let message_id = Uuid::new_v4();
@@ -97,6 +104,7 @@ fn test_ack_transitions_pending_ack_and_appends_reply() {
 }
 
 #[test]
+#[serial]
 fn test_ack_ingests_origin_inbox_and_persists_ack_state_in_sqlite() {
     let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
     let message_id = Uuid::new_v4();
@@ -209,7 +217,7 @@ fn test_ack_duplicate_reply_identity_reports_store_constraint_violation() {
         AckRequest {
             home_dir: fixture.tempdir.path().to_path_buf(),
             current_dir: fixture.tempdir.path().to_path_buf(),
-            actor_override: None,
+            actor_override: Some("arch-ctm".parse().expect("actor")),
             team_override: None,
             message_id: AckMessageId::Legacy(LegacyMessageId::from(message_id)),
             reply_body: "duplicate reply".to_string(),
@@ -223,6 +231,7 @@ fn test_ack_duplicate_reply_identity_reports_store_constraint_violation() {
 }
 
 #[test]
+#[serial]
 fn test_ack_imports_legacy_origin_message_and_persists_task_state_across_restart() {
     let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
     let message_id = Uuid::new_v4();
@@ -265,6 +274,7 @@ fn test_ack_imports_legacy_origin_message_and_persists_task_state_across_restart
 }
 
 #[test]
+#[serial]
 fn test_ack_emits_retained_log_record() {
     let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
     let message_id = Uuid::new_v4();
@@ -303,6 +313,7 @@ fn test_ack_emits_retained_log_record() {
 }
 
 #[test]
+#[serial]
 fn test_ack_runs_post_send_hook_with_expected_payload() {
     let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
     let message_id = Uuid::new_v4();
@@ -347,6 +358,7 @@ fn test_ack_runs_post_send_hook_with_expected_payload() {
 }
 
 #[test]
+#[serial]
 fn test_ack_post_send_hook_failure_surfaces_warning() {
     let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
     let message_id = Uuid::new_v4();
@@ -384,6 +396,7 @@ fn test_ack_post_send_hook_failure_surfaces_warning() {
 }
 
 #[test]
+#[serial]
 fn test_ack_rejects_already_acknowledged_message() {
     let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
     let message_id = Uuid::new_v4();
@@ -410,6 +423,7 @@ fn test_ack_rejects_already_acknowledged_message() {
 }
 
 #[test]
+#[serial]
 fn test_ack_rejects_message_that_is_not_pending() {
     let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
     let message_id = Uuid::new_v4();
@@ -431,6 +445,7 @@ fn test_ack_rejects_message_that_is_not_pending() {
 }
 
 #[test]
+#[serial]
 fn test_ack_preserves_sqlite_state_when_reply_export_fails_after_commit() {
     let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
     let message_id = Uuid::new_v4();
@@ -481,6 +496,7 @@ fn test_ack_preserves_sqlite_state_when_reply_export_fails_after_commit() {
 }
 
 #[test]
+#[serial]
 fn test_ack_accepts_ulid_message_id_for_message_written_by_atm_send() {
     let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
     let send = fixture.run_with_env(
@@ -517,6 +533,7 @@ fn test_ack_accepts_ulid_message_id_for_message_written_by_atm_send() {
 }
 
 #[test]
+#[serial]
 fn test_ack_accepts_legacy_uuid_only_message_after_store_ingest() {
     let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
     let message_id = Uuid::new_v4();
@@ -559,6 +576,47 @@ fn test_ack_accepts_legacy_uuid_only_message_after_store_ingest() {
     let replies = fixture.inbox_contents("team-lead");
     assert_eq!(replies.len(), 1);
     assert_eq!(replies[0].text, "legacy ack");
+}
+
+#[test]
+#[serial]
+fn test_ack_surfaces_typed_store_error_when_commit_fails() {
+    let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
+    let message_id = Uuid::new_v4();
+    fixture.write_inbox(
+        "arch-ctm",
+        &[fixture.message(
+            "team-lead",
+            "please ack",
+            true,
+            Some(Duration::minutes(5)),
+            None,
+            message_id,
+        )],
+    );
+
+    let store = fixture.store();
+    let failing_store = FailingCommitStore::new(
+        store,
+        StoreError::transaction("synthetic commit failure for ack test"),
+    );
+    let observability = NullObservability;
+    let error = ack::ack_mail(
+        AckRequest {
+            home_dir: fixture.tempdir.path().to_path_buf(),
+            current_dir: fixture.tempdir.path().to_path_buf(),
+            actor_override: Some("arch-ctm".parse().expect("actor")),
+            team_override: None,
+            message_id: AckMessageId::Legacy(LegacyMessageId::from(message_id)),
+            reply_body: "store failure".to_string(),
+        },
+        &failing_store,
+        &observability,
+    )
+    .expect_err("store commit failure should surface as typed ATM error");
+
+    assert_eq!(error.code, AtmErrorCode::StoreTransactionFailed);
+    assert!(error.is_store(), "error should stay in the store kind");
 }
 
 struct Fixture {
@@ -756,6 +814,169 @@ impl Drop for ScopedEnvVar {
                 unsafe { std::env::remove_var(self.key) };
             }
         }
+    }
+}
+
+struct FailingCommitStore {
+    inner: RusqliteStore,
+    error_message: String,
+}
+
+impl FailingCommitStore {
+    fn new(inner: RusqliteStore, error: StoreError) -> Self {
+        Self {
+            inner,
+            error_message: error.message,
+        }
+    }
+}
+
+impl atm_core::ack::sealed::Sealed for FailingCommitStore {}
+
+impl atm_core::store::StoreBoundary for FailingCommitStore {
+    fn bootstrap_report(&self) -> Result<StoreBootstrapReport, StoreError> {
+        self.inner.bootstrap_report()
+    }
+
+    fn health(&self) -> Result<StoreHealth, StoreError> {
+        self.inner.health()
+    }
+}
+
+impl MailStore for FailingCommitStore {
+    fn insert_message(
+        &self,
+        message: &StoredMessageRecord,
+    ) -> Result<InsertOutcome<StoredMessageRecord>, StoreError> {
+        self.inner.insert_message(message)
+    }
+
+    fn insert_message_batch(&self, messages: &[StoredMessageRecord]) -> Result<(), StoreError> {
+        self.inner.insert_message_batch(messages)
+    }
+
+    fn load_message(
+        &self,
+        message_key: &MessageKey,
+    ) -> Result<Option<StoredMessageRecord>, StoreError> {
+        self.inner.load_message(message_key)
+    }
+
+    fn load_message_by_legacy_id(
+        &self,
+        legacy_message_id: &LegacyMessageId,
+    ) -> Result<Option<StoredMessageRecord>, StoreError> {
+        self.inner.load_message_by_legacy_id(legacy_message_id)
+    }
+
+    fn load_message_by_atm_id(
+        &self,
+        atm_message_id: &AtmMessageId,
+    ) -> Result<Option<StoredMessageRecord>, StoreError> {
+        self.inner.load_message_by_atm_id(atm_message_id)
+    }
+
+    fn upsert_ack_state(&self, ack_state: &AckStateRecord) -> Result<AckStateRecord, StoreError> {
+        self.inner.upsert_ack_state(ack_state)
+    }
+
+    fn load_ack_state(
+        &self,
+        message_key: &MessageKey,
+    ) -> Result<Option<AckStateRecord>, StoreError> {
+        self.inner.load_ack_state(message_key)
+    }
+
+    fn upsert_visibility(
+        &self,
+        visibility: &VisibilityStateRecord,
+    ) -> Result<VisibilityStateRecord, StoreError> {
+        self.inner.upsert_visibility(visibility)
+    }
+
+    fn load_visibility(
+        &self,
+        message_key: &MessageKey,
+    ) -> Result<Option<VisibilityStateRecord>, StoreError> {
+        self.inner.load_visibility(message_key)
+    }
+
+    fn record_ingest(
+        &self,
+        ingest_record: &IngestRecord,
+    ) -> Result<InsertOutcome<IngestRecord>, StoreError> {
+        self.inner.record_ingest(ingest_record)
+    }
+
+    fn load_ingest(
+        &self,
+        team_name: &TeamName,
+        recipient_agent: &AgentName,
+        source_fingerprint: &SourceFingerprint,
+    ) -> Result<Option<IngestRecord>, StoreError> {
+        self.inner
+            .load_ingest(team_name, recipient_agent, source_fingerprint)
+    }
+
+    fn record_pending_export(&self, export: &PendingExportRecord) -> Result<(), StoreError> {
+        self.inner.record_pending_export(export)
+    }
+
+    fn remove_pending_export(&self, message_key: &MessageKey) -> Result<(), StoreError> {
+        self.inner.remove_pending_export(message_key)
+    }
+
+    fn load_due_pending_exports(
+        &self,
+        now: &IsoTimestamp,
+        limit: usize,
+    ) -> Result<Vec<PendingExportRecord>, StoreError> {
+        self.inner.load_due_pending_exports(now, limit)
+    }
+
+    fn remove_expired_pending_exports(&self, now: &IsoTimestamp) -> Result<u64, StoreError> {
+        self.inner.remove_expired_pending_exports(now)
+    }
+
+    fn mail_health(&self) -> Result<MailStoreHealth, StoreError> {
+        self.inner.mail_health()
+    }
+}
+
+impl TaskStore for FailingCommitStore {
+    fn upsert_task(&self, task: &TaskRecord) -> Result<TaskRecord, StoreError> {
+        self.inner.upsert_task(task)
+    }
+
+    fn load_task(
+        &self,
+        task_id: &atm_core::types::TaskId,
+    ) -> Result<Option<TaskRecord>, StoreError> {
+        self.inner.load_task(task_id)
+    }
+
+    fn load_tasks_for_message(
+        &self,
+        message_key: &MessageKey,
+    ) -> Result<Vec<TaskRecord>, StoreError> {
+        self.inner.load_tasks_for_message(message_key)
+    }
+
+    fn acknowledge_task(
+        &self,
+        task_id: &atm_core::types::TaskId,
+        acknowledged_at: IsoTimestamp,
+    ) -> Result<Option<TaskRecord>, StoreError> {
+        self.inner.acknowledge_task(task_id, acknowledged_at)
+    }
+}
+
+impl atm_core::ack::AckStore for FailingCommitStore {
+    fn commit_ack_reply(
+        &self,
+        _command: &atm_core::ack::AckCommitCommand<'_>,
+    ) -> Result<atm_core::ack::AckCommitResult, StoreError> {
+        Err(StoreError::transaction(self.error_message.clone()))
     }
 }
 

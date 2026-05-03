@@ -822,7 +822,7 @@ The CLI JSON output mirrors the current contract:
 
 Public entrypoint:
 
-`ack::ack_mail(request: AckRequest, observability: &dyn ObservabilityPort) -> Result<AckOutcome, AtmError>`
+`ack::ack_mail<S>(request: AckRequest, store: &S, observability: &dyn ObservabilityPort) -> Result<AckOutcome, AtmError> where S: AckStore`
 
 `AckRequest` contains:
 - home directory
@@ -1298,6 +1298,7 @@ Required families:
 - identity
 - team not found
 - agent not found
+- store
 - mailbox read
 - mailbox write
 - file policy

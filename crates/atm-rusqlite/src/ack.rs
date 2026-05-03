@@ -8,6 +8,8 @@ use crate::mail::{classify_message_duplicate, insert_message_row};
 use crate::task::acknowledge_tasks_for_message_tx;
 use crate::{RusqliteStore, classify_store_error, parse_required};
 
+impl atm_core::ack::sealed::Sealed for RusqliteStore {}
+
 impl AckStore for RusqliteStore {
     fn commit_ack_reply(
         &self,

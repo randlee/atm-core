@@ -32,6 +32,7 @@ pub struct AckRequest {
     pub actor_override: Option<AgentName>,
     pub team_override: Option<TeamName>,
     pub message_id: AckMessageId,
+    // TODO(Q.4): replace reply_body String with AckBody newtype.
     pub reply_body: String,
 }
 
@@ -93,7 +94,11 @@ pub enum AckCommitResult {
 /// Implementations own the authoritative ack/task transition and may reject
 /// duplicate reply identities or invalid source-message state before any
 /// compatibility inbox export occurs.
-pub trait AckStore: MailStore + TaskStore {
+pub mod sealed {
+    pub trait Sealed {}
+}
+
+pub trait AckStore: MailStore + TaskStore + sealed::Sealed {
     /// Persist one acknowledgement transition and its reply record.
     ///
     /// # Errors
@@ -602,7 +607,8 @@ fn stored_reply_message(
         .map(serde_json::to_string)
         .transpose()
         .map_err(|source| {
-            AtmError::new(
+            AtmError::new_with_code(
+                AtmErrorCode::SerializationFailed,
                 AtmErrorKind::Serialization,
                 format!(
                     "failed to encode ATM metadata for acknowledgement reply to {}",
@@ -632,7 +638,7 @@ fn stored_reply_message(
 fn duplicate_ack_reply_error(identity: StoreDuplicateIdentity) -> AtmError {
     AtmError::new_with_code(
         AtmErrorCode::StoreConstraintViolation,
-        AtmErrorKind::MailboxWrite,
+        AtmErrorKind::Store,
         format!("generated duplicate acknowledgement reply identity: {identity:?}"),
     )
     .with_recovery(
@@ -674,6 +680,11 @@ fn ack_invalid_state_error(message_id: AckMessageId, rejection: AckCommitRejecti
 }
 
 fn map_store_error(context: &str, error: StoreError) -> AtmError {
+    debug_assert!(
+        is_store_error_code(error.code),
+        "map_store_error expects store-family AtmErrorCode, got {}",
+        error.code
+    );
     let mut atm_error = AtmError::new_with_code(
         error.code,
         AtmErrorKind::Store,
@@ -693,6 +704,19 @@ fn map_store_error(context: &str, error: StoreError) -> AtmError {
 /// [`AtmErrorKind::Store`] coarse kind.
 pub fn map_store_error_for_command(context: &str, error: StoreError) -> AtmError {
     map_store_error(context, error)
+}
+
+const fn is_store_error_code(code: AtmErrorCode) -> bool {
+    matches!(
+        code,
+        AtmErrorCode::StoreOpenFailed
+            | AtmErrorCode::StoreBootstrapFailed
+            | AtmErrorCode::StoreMigrationFailed
+            | AtmErrorCode::StoreQueryFailed
+            | AtmErrorCode::StoreBusy
+            | AtmErrorCode::StoreConstraintViolation
+            | AtmErrorCode::StoreTransactionFailed
+    )
 }
 
 fn override_reply_message_id_for_tests() -> Result<Option<LegacyMessageId>, AtmError> {
