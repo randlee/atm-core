@@ -41,7 +41,9 @@ fn set_home_env(cmd: &mut assert_cmd::Command, temp_dir: &TempDir) {
 
 Before declaring dev work complete, grep all integration test files:
 ```bash
+grep -rn 'ATM_HOME' crates/atm/tests/ || echo "FAIL: Missing ATM_HOME in test helpers"
 grep -rn 'ATM_CONFIG_HOME' crates/atm/tests/ || echo "FAIL: Missing ATM_CONFIG_HOME in test helpers"
+grep -rn 'ATM_TEAMS_DIR' crates/atm/tests/ || echo "FAIL: Missing ATM_TEAMS_DIR where team discovery is exercised"
 grep -rn 'env(\"HOME\"' crates/atm/tests/
 ```
 
@@ -120,6 +122,54 @@ grep -rn "'/tmp/" crates/ && echo "FAIL: Found /tmp hardcoding" || echo "OK"
 
 - Check env vars with `std::env::var()`, not by reading `/proc` or shell config files.
 - For test isolation, set env vars per-command with `cmd.env("KEY", "value")` rather than `std::env::set_var()` which is global and causes race conditions in parallel tests.
+
+## Test Subprocess Isolation
+
+See also:
+- [`requirements.md`](./requirements.md) `REQ-CORE-TEST-001`
+- [`.claude/agents/arch-qa.md`](../.claude/agents/arch-qa.md) `RULE-011`
+
+Subprocess-style ATM tests must not reuse developer workstation config or
+identity state.
+
+Required pattern:
+- create one `TempDir` per test fixture
+- point `ATM_HOME` at that temp-owned runtime root
+- point `ATM_CONFIG_HOME` at that temp-owned config root
+- point `ATM_TEAMS_DIR` at a temp-owned teams directory when the test depends
+  on team discovery
+- pass environment overrides with `cmd.env(...)` on each spawned command
+
+Use explicit test-only names for team and agent fixtures:
+- `TEST_TEAM = "test-team"`
+- `TEST_SENDER = "test-sender"`
+- `TEST_RECIPIENT = "test-recipient"`
+- `TEST_LEAD = "test-lead"`
+
+Reserved production names may still matter in a few tests:
+- `ATM_TEAM` and `ATM_IDENTITY` may be set explicitly when the test is proving
+  production env-read behavior
+- `team-lead` may be used when the role itself is semantically significant,
+  but the raw literal should be centralized behind one constant such as
+  `ROLE_TEAM_LEAD`
+
+Avoid:
+- raw `atm-dev` / `arch-*` literals in generic test fixtures
+- `std::env::set_var()` in integration tests
+- reading or writing the developer's real ATM home during tests
+
+Recommended helper shape:
+
+```rust
+let env = TestEnvBuilder::new().build().expect("test env");
+let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("atm");
+// TestEnvBuilder provides filesystem isolation only. Tests still set
+// ATM_IDENTITY and ATM_TEAM explicitly when the command under test needs them.
+cmd.envs(env.env_map.iter())
+    .env("ATM_IDENTITY", TEST_SENDER)
+    .env("ATM_TEAM", TEST_TEAM)
+    .current_dir(&env.cwd);
+```
 
 ## Line Endings
 
