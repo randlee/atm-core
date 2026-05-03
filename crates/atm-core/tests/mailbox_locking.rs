@@ -11,12 +11,8 @@ mod support;
 
 use atm_core::ack::{AckMessageId, AckRequest, ack_mail};
 use atm_core::clear::{ClearQuery, clear_mail, clear_mail_via_store};
-use atm_core::error::AtmErrorCode;
 use atm_core::inbox_export::default_inbox_export;
 use atm_core::inbox_ingress::default_inbox_ingress;
-use atm_core::internal_test_hooks::{
-    DebugMailboxLockTimeoutOverrideGuard, NonContentionLockErrorGuard, SourceDiscoveryFaultGuard,
-};
 use atm_core::mail_store::MailStore;
 use atm_core::observability::{NullObservability, ObservabilityPort};
 use atm_core::read::{ReadQuery, read_mail, read_mail_via_store};
@@ -644,38 +640,6 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
 
 #[test]
 #[serial]
-fn send_times_out_under_bounded_lock_contention() {
-    let _env_lock = acquire_env_lock();
-    let _timeout = DebugMailboxLockTimeoutOverrideGuard::set(100);
-    let fixture = Fixture::new();
-    let observability = NullObservability;
-    let lock_path = sentinel_path(&fixture.primary_inbox_path(TEST_SENDER));
-    let lock_file = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(&lock_path)
-        .expect("open lock file");
-    lock_file.lock_exclusive().expect("hold mailbox lock");
-
-    let started = Instant::now();
-    let error = send_via_store(
-        fixture.send_request(ROLE_TEAM_LEAD, &qualified(TEST_SENDER), "blocked send"),
-        fixture.store().as_ref(),
-        &observability,
-    )
-    .expect_err("timeout");
-
-    assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
-    assert!(
-        started.elapsed() < TEST_LOCK_BUDGET_CEILING,
-        "retain only a coarse non-blocking budget here; recv_timeout-based tests above already cover deadlock detection"
-    );
-}
-
-#[test]
-#[serial]
 fn clear_dry_run_does_not_wait_on_mailbox_lock() {
     let _env_lock = acquire_env_lock();
     let fixture = Fixture::new();
@@ -759,72 +723,6 @@ fn read_and_clear_via_store_ignore_inbox_file_lock() {
 #[test]
 #[serial]
 #[allow(deprecated)]
-fn read_possible_write_only_locks_when_display_mutation_is_required() {
-    let _env_lock = acquire_env_lock();
-    let _timeout = DebugMailboxLockTimeoutOverrideGuard::set(100);
-    let observability = NullObservability;
-
-    let mutation_fixture = Fixture::new();
-    mutation_fixture.write_primary_inbox(
-        TEST_SENDER,
-        &[unread_message(
-            ROLE_TEAM_LEAD,
-            "needs mark-read",
-            LegacyMessageId::from(Uuid::new_v4()),
-        )],
-    );
-    let mutation_lock_path = sentinel_path(&mutation_fixture.primary_inbox_path(TEST_SENDER));
-    let mutation_lock_file = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(&mutation_lock_path)
-        .expect("open mutation lock file");
-    mutation_lock_file
-        .lock_exclusive()
-        .expect("hold mutation lock");
-    let mut mutation_query = mutation_fixture.read_query(TEST_SENDER);
-    mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
-    let error = read_mail(mutation_query, &observability).expect_err("lock timeout");
-    assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
-
-    let no_mutation_fixture = Fixture::new();
-    no_mutation_fixture.write_primary_inbox(
-        TEST_SENDER,
-        &[read_message(
-            ROLE_TEAM_LEAD,
-            "already read",
-            LegacyMessageId::from(Uuid::new_v4()),
-        )],
-    );
-    let no_mutation_lock_path = sentinel_path(&no_mutation_fixture.primary_inbox_path(TEST_SENDER));
-    let no_mutation_lock_file = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(&no_mutation_lock_path)
-        .expect("open no-mutation lock file");
-    no_mutation_lock_file
-        .lock_exclusive()
-        .expect("hold no-mutation lock");
-    let mut no_mutation_query = no_mutation_fixture.read_query(TEST_SENDER);
-    no_mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
-    no_mutation_query.selection_mode = ReadSelection::All;
-    let started = Instant::now();
-    let outcome = read_mail(no_mutation_query, &observability).expect("read without mutation");
-    assert_eq!(outcome.count, 1);
-    assert_eq!(outcome.messages[0].envelope.text, "already read");
-    assert!(
-        started.elapsed() < TEST_LOCK_BUDGET_CEILING,
-        "retain only a coarse non-blocking budget here; recv_timeout-based tests above already cover deadlock detection"
-    );
-}
-
-#[test]
-#[serial]
-#[allow(deprecated)]
 fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() {
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -880,64 +778,6 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
     );
 }
 
-#[test]
-#[serial]
-fn clear_fails_closed_on_synthetic_source_discovery_fault() {
-    let _env_lock = acquire_env_lock();
-    let _fault = SourceDiscoveryFaultGuard::enable();
-    let fixture = Fixture::new();
-    let observability = NullObservability;
-    fixture.write_origin_inbox(
-        TEST_SENDER,
-        "host-a",
-        &[read_message(
-            TEST_RECIPIENT,
-            "origin read a",
-            LegacyMessageId::from(Uuid::new_v4()),
-        )],
-    );
-    let before_primary =
-        fs::read_to_string(fixture.primary_inbox_path(TEST_SENDER)).expect("primary inbox before");
-    let before_origin = fs::read_to_string(fixture.origin_inbox_path(TEST_SENDER, "host-a"))
-        .expect("origin inbox before");
-
-    let error = clear_mail(fixture.clear_query(TEST_SENDER), &observability).expect_err("fault");
-
-    assert_eq!(error.code, AtmErrorCode::MailboxReadFailed);
-    assert_eq!(
-        fs::read_to_string(fixture.primary_inbox_path(TEST_SENDER)).expect("primary inbox after"),
-        before_primary
-    );
-    assert_eq!(
-        fs::read_to_string(fixture.origin_inbox_path(TEST_SENDER, "host-a"))
-            .expect("origin inbox after"),
-        before_origin
-    );
-}
-
-#[test]
-#[serial]
-fn send_reports_non_contention_lock_failures_without_timeout() {
-    let _env_lock = acquire_env_lock();
-    let _fault = NonContentionLockErrorGuard::enable();
-    let fixture = Fixture::new();
-    let observability = NullObservability;
-    let started = Instant::now();
-
-    let error = send_via_store(
-        fixture.send_request(ROLE_TEAM_LEAD, &qualified(TEST_SENDER), "lock failure"),
-        fixture.store().as_ref(),
-        &observability,
-    )
-    .expect_err("non-contention lock failure");
-
-    assert_eq!(error.code, AtmErrorCode::MailboxLockFailed);
-    assert!(
-        started.elapsed() < TEST_LOCK_BUDGET_CEILING,
-        "retain only a coarse non-blocking budget here; recv_timeout-based tests above already cover deadlock detection"
-    );
-}
-
 enum CommandOp {
     Read(ReadQuery, Arc<NullObservability>),
     Clear(ClearQuery, Arc<NullObservability>),
@@ -949,8 +789,12 @@ enum CommandOp {
 fn acquire_env_lock() -> File {
     const RETRY_INTERVAL: Duration = Duration::from_millis(100);
     const LOCK_TIMEOUT: Duration = Duration::from_secs(10);
-
-    let lock_path = std::env::temp_dir().join("atm-mailbox-locking-env.lock");
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    std::hash::Hash::hash(&env!("CARGO_MANIFEST_DIR"), &mut hasher);
+    let lock_path = std::env::temp_dir().join(format!(
+        "atm-mailbox-locking-env-{:x}.lock",
+        std::hash::Hasher::finish(&hasher)
+    ));
     let deadline = Instant::now() + LOCK_TIMEOUT;
     loop {
         let file = OpenOptions::new()

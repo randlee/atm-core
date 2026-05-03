@@ -315,8 +315,14 @@ fn try_lock_exclusive(file: &File, lock_path: &Path) -> io::Result<()> {
     file.try_lock_exclusive()
 }
 
+#[cfg(test)]
 fn forced_non_contention_lock_error() -> bool {
     non_contention_lock_test_override::get()
+}
+
+#[cfg(not(test))]
+fn forced_non_contention_lock_error() -> bool {
+    false
 }
 
 fn open_lock_file(lock_path: &Path) -> Result<File, AtmError> {
@@ -781,6 +787,7 @@ fn canonical_lock_key(path: &Path) -> CanonicalLockKey {
     )
 }
 
+#[cfg(test)]
 mod non_contention_lock_test_override {
     use std::cell::Cell;
 
@@ -801,10 +808,12 @@ mod non_contention_lock_test_override {
     }
 }
 
+#[cfg(test)]
 pub(crate) struct ScopedNonContentionLockErrorOverride {
     original: bool,
 }
 
+#[cfg(test)]
 impl ScopedNonContentionLockErrorOverride {
     pub(crate) fn enable() -> Self {
         Self {
@@ -813,16 +822,19 @@ impl ScopedNonContentionLockErrorOverride {
     }
 }
 
+#[cfg(test)]
 impl Drop for ScopedNonContentionLockErrorOverride {
     fn drop(&mut self) {
         non_contention_lock_test_override::set(self.original);
     }
 }
 
+#[cfg(test)]
 pub(crate) struct ScopedDebugTimeoutOverride {
     original: Option<u64>,
 }
 
+#[cfg(test)]
 impl ScopedDebugTimeoutOverride {
     pub(crate) fn set(timeout_ms: u64) -> Self {
         Self {
@@ -831,6 +843,7 @@ impl ScopedDebugTimeoutOverride {
     }
 }
 
+#[cfg(test)]
 impl Drop for ScopedDebugTimeoutOverride {
     fn drop(&mut self) {
         readonly_test_override::set_debug_timeout_override_ms(self.original.take());
@@ -921,7 +934,8 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        DEFAULT_LOCK_TIMEOUT, LockOperation, StaleLockSentinelEviction, acquire,
+        DEFAULT_LOCK_TIMEOUT, LockOperation, ScopedDebugTimeoutOverride,
+        ScopedNonContentionLockErrorOverride, StaleLockSentinelEviction, acquire,
         acquire_many_sorted, default_lock_timeout, evict_stale_lock_sentinel,
         is_lock_contention_error, is_lock_sentinel_candidate, readonly_test_override,
         sentinel_path, sweep_stale_lock_sentinels,
@@ -1136,6 +1150,39 @@ mod tests {
 
         let error = acquire(&inbox, Duration::from_millis(10)).expect_err("timeout");
         assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn debug_timeout_override_shortens_default_lock_timeout() {
+        let tempdir = tempdir().expect("tempdir");
+        let inbox = tempdir.path().join(format!("{TEST_SENDER}.json"));
+        let _guard = acquire(&inbox, DEFAULT_LOCK_TIMEOUT).expect("first lock");
+        let _timeout = ScopedDebugTimeoutOverride::set(100);
+
+        let started = std::time::Instant::now();
+        let error = acquire(&inbox, default_lock_timeout()).expect_err("timeout");
+        assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "debug timeout override should keep the test budget bounded"
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn synthetic_non_contention_failure_surfaces_mailbox_lock_failed() {
+        let tempdir = tempdir().expect("tempdir");
+        let inbox = tempdir.path().join(format!("{TEST_SENDER}.json"));
+        let _fault = ScopedNonContentionLockErrorOverride::enable();
+
+        let error = acquire(&inbox, DEFAULT_LOCK_TIMEOUT).expect_err("synthetic lock failure");
+        assert_eq!(error.code, AtmErrorCode::MailboxLockFailed);
+        assert!(
+            error
+                .message
+                .contains("synthetic non-contention lock failure")
+        );
     }
 
     #[test]

@@ -581,6 +581,7 @@ mod restore_test_override {
         INBOX_STAGE_FAILURE.with(Cell::get)
     }
 
+    #[cfg(test)]
     pub(super) fn set_inbox_stage_failure(enabled: bool) -> bool {
         INBOX_STAGE_FAILURE.with(|cell| {
             let original = cell.get();
@@ -593,6 +594,7 @@ mod restore_test_override {
         MARKER_REMOVE_FAILURE.with(Cell::get)
     }
 
+    #[cfg(test)]
     pub(super) fn set_marker_remove_failure(enabled: bool) -> bool {
         MARKER_REMOVE_FAILURE.with(|cell| {
             let original = cell.get();
@@ -602,10 +604,12 @@ mod restore_test_override {
     }
 }
 
+#[cfg(test)]
 pub(crate) struct ScopedRestoreInboxStageFailureOverride {
     original: bool,
 }
 
+#[cfg(test)]
 impl ScopedRestoreInboxStageFailureOverride {
     pub(crate) fn enable() -> Self {
         Self {
@@ -614,16 +618,19 @@ impl ScopedRestoreInboxStageFailureOverride {
     }
 }
 
+#[cfg(test)]
 impl Drop for ScopedRestoreInboxStageFailureOverride {
     fn drop(&mut self) {
         restore_test_override::set_inbox_stage_failure(self.original);
     }
 }
 
+#[cfg(test)]
 pub(crate) struct ScopedRestoreMarkerRemoveFailureOverride {
     original: bool,
 }
 
+#[cfg(test)]
 impl ScopedRestoreMarkerRemoveFailureOverride {
     pub(crate) fn enable() -> Self {
         Self {
@@ -632,6 +639,7 @@ impl ScopedRestoreMarkerRemoveFailureOverride {
     }
 }
 
+#[cfg(test)]
 impl Drop for ScopedRestoreMarkerRemoveFailureOverride {
     fn drop(&mut self) {
         restore_test_override::set_marker_remove_failure(self.original);

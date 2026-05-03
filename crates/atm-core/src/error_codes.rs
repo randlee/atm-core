@@ -91,6 +91,8 @@ pub enum AtmErrorCode {
     DaemonRequestTimeout,
     /// The daemon request/response protocol failed.
     DaemonProtocolFailed,
+    /// The daemon runtime handler failed after the protocol layer succeeded.
+    DaemonRuntimeFailed,
     /// A remote daemon could not be reached within the retry budget.
     DaemonRemoteUnavailable,
     /// Observability health is healthy.
@@ -166,6 +168,7 @@ impl AtmErrorCode {
             Self::DaemonAlreadyRunning => "ATM_DAEMON_ALREADY_RUNNING",
             Self::DaemonRequestTimeout => "ATM_DAEMON_REQUEST_TIMEOUT",
             Self::DaemonProtocolFailed => "ATM_DAEMON_PROTOCOL_FAILED",
+            Self::DaemonRuntimeFailed => "ATM_DAEMON_RUNTIME_FAILED",
             Self::DaemonRemoteUnavailable => "ATM_DAEMON_REMOTE_UNAVAILABLE",
             Self::ObservabilityHealthOk => "ATM_OBSERVABILITY_HEALTH_OK",
             Self::WarningInvalidTeamMemberSkipped => "ATM_WARNING_INVALID_TEAM_MEMBER_SKIPPED",
@@ -230,6 +233,7 @@ impl FromStr for AtmErrorCode {
             "ATM_DAEMON_ALREADY_RUNNING" => Ok(Self::DaemonAlreadyRunning),
             "ATM_DAEMON_REQUEST_TIMEOUT" => Ok(Self::DaemonRequestTimeout),
             "ATM_DAEMON_PROTOCOL_FAILED" => Ok(Self::DaemonProtocolFailed),
+            "ATM_DAEMON_RUNTIME_FAILED" => Ok(Self::DaemonRuntimeFailed),
             "ATM_DAEMON_REMOTE_UNAVAILABLE" => Ok(Self::DaemonRemoteUnavailable),
             "ATM_OBSERVABILITY_HEALTH_OK" => Ok(Self::ObservabilityHealthOk),
             "ATM_WARNING_INVALID_TEAM_MEMBER_SKIPPED" => Ok(Self::WarningInvalidTeamMemberSkipped),

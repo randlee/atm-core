@@ -5,7 +5,6 @@ mod helpers;
 use atm_core::ack::{self, AckMessageId, AckRequest};
 use atm_core::error::AtmErrorCode;
 use atm_core::inbox_ingress::{InboxIngress, default_inbox_ingress};
-use atm_core::internal_test_hooks::{ReplyAtmMessageIdOverrideGuard, ReplyMessageIdOverrideGuard};
 use atm_core::mail_store::{
     AckStateRecord, IngestRecord, MailStore, MailStoreHealth, PendingExportRecord,
     StoredMessageRecord, VisibilityStateRecord,
@@ -209,9 +208,14 @@ fn test_ack_duplicate_reply_identity_reports_store_constraint_violation() {
         )
         .expect("ingest conflicting reply into SQLite");
 
-    let _reply_id_override = ReplyMessageIdOverrideGuard::set(conflicting_reply_id);
-    let _reply_atm_id_override =
-        ReplyAtmMessageIdOverrideGuard::set(conflicting_reply_atm_message_id);
+    let _reply_id_override = EnvGuard::set(
+        "ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID",
+        conflicting_reply_id.to_string(),
+    );
+    let _reply_atm_id_override = EnvGuard::set(
+        "ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID",
+        conflicting_reply_atm_message_id.to_string(),
+    );
 
     let error = ack::ack_mail(
         AckRequest {
@@ -632,6 +636,35 @@ fn test_ack_surfaces_typed_store_error_when_commit_fails() {
 
 struct Fixture {
     tempdir: tempfile::TempDir,
+}
+
+struct EnvGuard {
+    key: &'static str,
+    original: Option<std::ffi::OsString>,
+}
+
+impl EnvGuard {
+    fn set(key: &'static str, value: impl AsRef<std::ffi::OsStr>) -> Self {
+        let original = std::env::var_os(key);
+        // SAFETY: ack tests are serialized and this guard restores the original
+        // value before the next test observes the process environment.
+        unsafe { std::env::set_var(key, value) };
+        Self { key, original }
+    }
+}
+
+impl Drop for EnvGuard {
+    fn drop(&mut self) {
+        if let Some(original) = self.original.take() {
+            // SAFETY: ack tests are serialized and this guard restores the
+            // original value before any other test reads the environment.
+            unsafe { std::env::set_var(self.key, original) };
+        } else {
+            // SAFETY: ack tests are serialized and this guard only removes the
+            // test-only variable it previously introduced.
+            unsafe { std::env::remove_var(self.key) };
+        }
+    }
 }
 
 impl Fixture {

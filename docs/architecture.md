@@ -2149,6 +2149,8 @@ Auto-start path:
 - if the daemon is absent, the CLI/runtime path may perform exactly one
   auto-start attempt
 - after one auto-start attempt, the CLI/runtime path retries connect once
+- daemon startup waits at most `10s` for control-state publication
+  (`AUTO_START_PUBLISH_TIMEOUT`)
 - if the daemon remains unavailable, the command fails with a typed actionable
   error
 - there is no silent fallback from the production path to direct SQLite or

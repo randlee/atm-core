@@ -16,6 +16,7 @@ use crate::types::{AgentName, TeamName};
 
 #[path = "team_admin/restore.rs"]
 mod restore;
+#[cfg(test)]
 pub(crate) use restore::{
     ScopedRestoreInboxStageFailureOverride, ScopedRestoreMarkerRemoveFailureOverride,
 };
@@ -534,6 +535,7 @@ mod team_config_write_test_override {
         OVERRIDE.with(Cell::get)
     }
 
+    #[cfg(test)]
     pub(super) fn set(enabled: bool) -> bool {
         OVERRIDE.with(|cell| {
             let original = cell.get();
@@ -543,10 +545,12 @@ mod team_config_write_test_override {
     }
 }
 
+#[cfg(test)]
 pub(crate) struct ScopedTeamConfigWriteFailureOverride {
     original: bool,
 }
 
+#[cfg(test)]
 impl ScopedTeamConfigWriteFailureOverride {
     pub(crate) fn enable() -> Self {
         Self {
@@ -555,6 +559,7 @@ impl ScopedTeamConfigWriteFailureOverride {
     }
 }
 
+#[cfg(test)]
 impl Drop for ScopedTeamConfigWriteFailureOverride {
     fn drop(&mut self) {
         team_config_write_test_override::set(self.original);

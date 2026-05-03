@@ -173,11 +173,18 @@ fn origin_inbox_enumeration_error(inboxes_dir: &Path, agent: &str, error: io::Er
     .with_source(error)
 }
 
+#[cfg(test)]
 fn forced_source_discovery_fault() -> Option<io::Error> {
     source_discovery_fault_test_override::get()
         .then(|| io::Error::other("synthetic read_dir entry enumeration fault"))
 }
 
+#[cfg(not(test))]
+fn forced_source_discovery_fault() -> Option<io::Error> {
+    None
+}
+
+#[cfg(test)]
 mod source_discovery_fault_test_override {
     use std::cell::Cell;
 
@@ -198,10 +205,12 @@ mod source_discovery_fault_test_override {
     }
 }
 
+#[cfg(test)]
 pub(crate) struct ScopedSourceDiscoveryFaultOverride {
     original: bool,
 }
 
+#[cfg(test)]
 impl ScopedSourceDiscoveryFaultOverride {
     pub(crate) fn enable() -> Self {
         Self {
@@ -210,6 +219,7 @@ impl ScopedSourceDiscoveryFaultOverride {
     }
 }
 
+#[cfg(test)]
 impl Drop for ScopedSourceDiscoveryFaultOverride {
     fn drop(&mut self) {
         source_discovery_fault_test_override::set(self.original);
@@ -248,8 +258,8 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        discover_origin_inboxes, load_source_files, origin_inbox_enumeration_error,
-        rediscover_and_validate_source_paths, resolve_target,
+        ScopedSourceDiscoveryFaultOverride, discover_origin_inboxes, load_source_files,
+        origin_inbox_enumeration_error, rediscover_and_validate_source_paths, resolve_target,
     };
     use crate::config::AtmConfig;
 
@@ -320,6 +330,22 @@ mod tests {
         let error = load_source_files(&[path]).expect_err("missing mailbox");
         assert!(error.is_mailbox_read());
         assert!(error.message.contains("disappeared"));
+    }
+
+    #[test]
+    fn discover_origin_inboxes_reports_synthetic_fault() {
+        let tempdir = tempdir().expect("tempdir");
+        let inboxes = tempdir.path();
+        std::fs::write(inboxes.join("arch-ctm.host-a.json"), "").expect("host a");
+        let _fault = ScopedSourceDiscoveryFaultOverride::enable();
+
+        let error = discover_origin_inboxes(inboxes, "arch-ctm").expect_err("synthetic fault");
+        assert!(error.is_mailbox_read());
+        assert!(
+            error
+                .message
+                .contains("failed to enumerate origin inbox entries")
+        );
     }
 
     #[test]

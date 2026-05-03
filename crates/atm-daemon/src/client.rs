@@ -669,6 +669,9 @@ fn wire_error_to_atm(error: WireError) -> AtmError {
         Code::DaemonProtocolFailed => {
             AtmError::daemon_protocol(error.message).with_recovery(recovery)
         }
+        Code::DaemonRuntimeFailed => {
+            AtmError::daemon_runtime(error.message).with_recovery(recovery)
+        }
         Code::DaemonRemoteUnavailable => {
             AtmError::daemon_remote_unavailable(error.message).with_recovery(recovery)
         }
@@ -705,7 +708,7 @@ mod tests {
         assert_eq!(payload.code, Code::DaemonProtocolFailed);
         assert!(payload.message.contains("decode daemon request payload"));
 
-        assert_eq!(handler.code, Code::DaemonProtocolFailed);
+        assert_eq!(handler.code, Code::DaemonRuntimeFailed);
         assert!(handler.message.contains("handler failed"));
 
         assert_eq!(encode.code, Code::DaemonProtocolFailed);

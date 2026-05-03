@@ -1,7 +1,9 @@
 use anyhow::{Context, Result};
 use atm_core::home;
-use atm_core::read::{ReadOutcome, ReadQuery};
+use atm_core::inbox_ingress::default_inbox_ingress;
+use atm_core::read::{self, ReadQuery};
 use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection};
+use atm_rusqlite::RusqliteStore;
 use clap::Args;
 
 use crate::observability::CliObservability;
@@ -64,25 +66,14 @@ impl ReadCommand {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
         let json = self.json;
-        let outcome = self.execute_with_requester(home_dir, current_dir, |query| {
-            atm_daemon::request_read_with_autostart(query)
-        })?;
-        output::print_read_result(&outcome, json)?;
-        let _ = observability;
-        Ok(())
-    }
-
-    fn execute_with_requester<F>(
-        self,
-        home_dir: std::path::PathBuf,
-        current_dir: std::path::PathBuf,
-        requester: F,
-    ) -> Result<ReadOutcome>
-    where
-        F: FnOnce(ReadQuery) -> Result<ReadOutcome, atm_core::error::AtmError>,
-    {
         let query = self.build_query(home_dir, current_dir)?;
-        requester(query).map_err(Into::into)
+        let team = read::resolve_store_team(&query)?;
+        let store = RusqliteStore::open_for_team_home(&query.home_dir, &team)
+            .map_err(|error| error.into_atm_error("failed to open SQLite store for read"))?;
+        let ingress = default_inbox_ingress();
+        let outcome = read::read_mail_via_store(query, &store, &ingress, observability)?;
+        output::print_read_result(&outcome, json)?;
+        Ok(())
     }
 
     fn build_query(
@@ -145,14 +136,14 @@ fn parse_timestamp(value: &str) -> Result<IsoTimestamp> {
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::sync::Arc;
 
     use super::ReadCommand;
-    use atm_core::dispatcher::{DaemonRequest, RequestKind, RequestPayload};
+    use atm_core::inbox_ingress::default_inbox_ingress;
+    use atm_core::observability::NullObservability;
     use atm_core::schema::{AgentMember, MessageEnvelope, TeamConfig};
     use atm_core::types::{AgentName, TeamName};
     use atm_core::write_messages;
-    use atm_daemon::{CoreDispatcher, TestSocketClient};
+    use atm_rusqlite::RusqliteStore;
     use tempfile::TempDir;
 
     const TEST_TEAM: &str = "test-team";
@@ -188,7 +179,7 @@ mod tests {
     }
 
     #[test]
-    fn execute_with_requester_supports_in_process_dispatch() {
+    fn execute_with_store_reads_direct_sqlite_path() {
         let fixture = Fixture::new();
         let command = ReadCommand {
             target: None,
@@ -208,29 +199,16 @@ mod tests {
             timeout: None,
             actor: Some(TEST_SENDER.to_string()),
         };
+        let query = command
+            .build_query(fixture.home_dir(), fixture.current_dir())
+            .expect("read query");
+        let team = atm_core::read::resolve_store_team(&query).expect("store team");
+        let store =
+            RusqliteStore::open_for_team_home(&query.home_dir, &team).expect("open sqlite store");
+        let ingress = default_inbox_ingress();
+        let observability = NullObservability;
 
-        let outcome = command
-            .execute_with_requester(fixture.home_dir(), fixture.current_dir(), |query| {
-                let dispatcher = CoreDispatcher::new(
-                    fixture.home_dir(),
-                    Arc::new(atm_core::observability::NullObservability),
-                );
-                let client = TestSocketClient::new(&dispatcher);
-                let response = client.request(DaemonRequest {
-                    team_name: TEST_TEAM.parse().expect("team"),
-                    agent_name: TEST_SENDER.parse().expect("agent"),
-                    payload: RequestPayload::Read(
-                        serde_json::to_value(query).expect("read query json"),
-                    ),
-                })?;
-                assert_eq!(response.kind, RequestKind::Read);
-                serde_json::from_str(&response.payload_json).map_err(|error| {
-                    atm_core::error::AtmError::daemon_protocol(
-                        "failed to decode test read response",
-                    )
-                    .with_source(error)
-                })
-            })
+        let outcome = atm_core::read::read_mail_via_store(query, &store, &ingress, &observability)
             .expect("read outcome");
 
         assert_eq!(outcome.team.as_str(), TEST_TEAM);

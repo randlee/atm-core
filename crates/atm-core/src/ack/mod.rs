@@ -813,6 +813,7 @@ mod reply_id_test_override {
         LEGACY_MESSAGE_ID.with(|cell| *cell.borrow())
     }
 
+    #[cfg(test)]
     pub(super) fn set_legacy_message_id(
         message_id: Option<LegacyMessageId>,
     ) -> Option<LegacyMessageId> {
@@ -827,6 +828,7 @@ mod reply_id_test_override {
         ATM_MESSAGE_ID.with(|cell| *cell.borrow())
     }
 
+    #[cfg(test)]
     pub(super) fn set_atm_message_id(message_id: Option<AtmMessageId>) -> Option<AtmMessageId> {
         ATM_MESSAGE_ID.with(|cell| {
             let original = *cell.borrow();
@@ -836,10 +838,12 @@ mod reply_id_test_override {
     }
 }
 
+#[cfg(test)]
 pub(crate) struct ScopedReplyMessageIdOverride {
     original: Option<LegacyMessageId>,
 }
 
+#[cfg(test)]
 impl ScopedReplyMessageIdOverride {
     pub(crate) fn set(message_id: LegacyMessageId) -> Self {
         Self {
@@ -848,16 +852,19 @@ impl ScopedReplyMessageIdOverride {
     }
 }
 
+#[cfg(test)]
 impl Drop for ScopedReplyMessageIdOverride {
     fn drop(&mut self) {
         reply_id_test_override::set_legacy_message_id(self.original.take());
     }
 }
 
+#[cfg(test)]
 pub(crate) struct ScopedReplyAtmMessageIdOverride {
     original: Option<AtmMessageId>,
 }
 
+#[cfg(test)]
 impl ScopedReplyAtmMessageIdOverride {
     pub(crate) fn set(message_id: AtmMessageId) -> Self {
         Self {
@@ -866,6 +873,7 @@ impl ScopedReplyAtmMessageIdOverride {
     }
 }
 
+#[cfg(test)]
 impl Drop for ScopedReplyAtmMessageIdOverride {
     fn drop(&mut self) {
         reply_id_test_override::set_atm_message_id(self.original.take());

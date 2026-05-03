@@ -46,6 +46,8 @@ pub const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
 pub const DOCTOR_HANDLER_TIMEOUT: Duration = Duration::from_secs(3);
 pub const SHUTDOWN_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
 pub const SHUTDOWN_FORCE_TIMEOUT: Duration = Duration::from_secs(10);
+#[cfg(windows)]
+const WINDOWS_STOP_POLL_INTERVAL: Duration = Duration::from_millis(100);
 pub const MAX_ACCEPTS: usize = 64;
 pub const MAX_INFLIGHT_PER_CONNECTION: usize = 32;
 pub(crate) const MAX_FRAME_BYTES: usize = 64 * 1024;
@@ -226,6 +228,9 @@ impl RequestDispatcher for CoreDispatcher {
                     outcome: "ok",
                     team: request.team_name.clone(),
                     agent: request.agent_name.clone(),
+                    // INVARIANT: the daemon emits runtime-owned observability
+                    // records with a fixed sender identity so queries can
+                    // distinguish daemon events from user commands.
                     sender: "atm-daemon".parse().expect("daemon sender is valid"),
                     message_id: None,
                     requires_ack: false,
@@ -246,6 +251,9 @@ impl RequestDispatcher for CoreDispatcher {
                     outcome: "ok",
                     team: request.team_name.clone(),
                     agent: request.agent_name.clone(),
+                    // INVARIANT: the daemon emits runtime-owned observability
+                    // records with a fixed sender identity so queries can
+                    // distinguish daemon events from user commands.
                     sender: "atm-daemon".parse().expect("daemon sender is valid"),
                     message_id: None,
                     requires_ack: false,
@@ -508,7 +516,10 @@ fn accept_unix_loop(
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 thread::sleep(Duration::from_millis(25));
             }
-            Err(_) => thread::sleep(Duration::from_millis(25)),
+            Err(error) => {
+                eprintln!("daemon local accept loop error: {error}");
+                thread::sleep(Duration::from_millis(25));
+            }
         }
     }
 }
@@ -556,7 +567,10 @@ fn accept_tcp_loop(
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 thread::sleep(Duration::from_millis(25));
             }
-            Err(_) => thread::sleep(Duration::from_millis(25)),
+            Err(error) => {
+                eprintln!("daemon TCP accept loop error: {error}");
+                thread::sleep(Duration::from_millis(25));
+            }
         }
     }
 }
@@ -788,8 +802,21 @@ pub fn run_foreground() -> Result<(), AtmError> {
     let reload = Arc::new(AtomicBool::new(false));
     register_signal_handlers(Arc::clone(&stop), Arc::clone(&reload))?;
     let handle = start_runtime(DaemonConfig::from_home(home_dir), dispatcher)?;
+    #[cfg(windows)]
+    let stop_marker = DaemonPaths::from_home(&handle.home_dir)
+        .state_dir
+        .join("stop.request");
     while !stop.load(Ordering::SeqCst) {
+        #[cfg(windows)]
+        if stop_marker.exists() {
+            let _ = fs::remove_file(&stop_marker);
+            stop.store(true, Ordering::SeqCst);
+            continue;
+        }
         let _ = reload.swap(false, Ordering::SeqCst);
+        #[cfg(windows)]
+        thread::sleep(WINDOWS_STOP_POLL_INTERVAL);
+        #[cfg(not(windows))]
         thread::sleep(Duration::from_millis(100));
     }
     handle.shutdown()
@@ -799,11 +826,13 @@ fn register_signal_handlers(
     stop: Arc<AtomicBool>,
     reload: Arc<AtomicBool>,
 ) -> Result<(), AtmError> {
+    #[cfg(not(windows))]
     signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(&stop)).map_err(
         |error| {
             AtmError::daemon_start_failed("failed to install SIGINT handler").with_source(error)
         },
     )?;
+    #[cfg(not(windows))]
     signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&stop)).map_err(
         |error| {
             AtmError::daemon_start_failed("failed to install SIGTERM handler").with_source(error)
@@ -813,6 +842,8 @@ fn register_signal_handlers(
     signal_hook::flag::register(signal_hook::consts::SIGHUP, reload).map_err(|error| {
         AtmError::daemon_start_failed("failed to install SIGHUP handler").with_source(error)
     })?;
+    #[cfg(windows)]
+    let _ = (stop, reload);
     Ok(())
 }
 

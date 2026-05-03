@@ -65,6 +65,7 @@ pub mod watcher_reconcile;
 /// Internal ATM-owned workflow-state helpers shared across mailbox services.
 pub(crate) mod workflow;
 
+#[cfg(test)]
 #[doc(hidden)]
 pub mod internal_test_hooks {
     use crate::ack::{ScopedReplyAtmMessageIdOverride, ScopedReplyMessageIdOverride};

@@ -125,6 +125,28 @@ pub trait ReadStore: InboxIngestStore + MailStore + TaskStore {}
 
 impl<T> ReadStore for T where T: InboxIngestStore + MailStore + TaskStore + ?Sized {}
 
+/// Resolve the SQLite target team for one read request.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when ATM cannot load the workspace config or when the
+/// request/config cannot resolve a team for the target mailbox.
+pub fn resolve_store_team(query: &ReadQuery) -> Result<TeamName, AtmError> {
+    let config = config::load_config(&query.current_dir)?;
+    query
+        .target_address
+        .as_ref()
+        .and_then(|address| address.team.as_deref())
+        .and_then(|team| team.parse().ok())
+        .or_else(|| {
+            config::resolve_team(
+                query.team_override.as_ref().map(|team| team.as_str()),
+                config.as_ref(),
+            )
+        })
+        .ok_or_else(AtmError::team_unavailable)
+}
+
 #[deprecated(note = "transitional path; use read_mail_via_store; planned retirement: Q.5")]
 pub fn read_mail(
     query: ReadQuery,

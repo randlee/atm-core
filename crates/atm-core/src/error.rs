@@ -285,7 +285,7 @@ impl AtmError {
 
     pub fn daemon_runtime(message: impl Into<String>) -> Self {
         Self::new_with_code(
-            AtmErrorCode::DaemonProtocolFailed,
+            AtmErrorCode::DaemonRuntimeFailed,
             AtmErrorKind::DaemonRuntime,
             message,
         )
@@ -446,7 +446,7 @@ impl AtmErrorKind {
             Self::ObservabilityQuery => AtmErrorCode::ObservabilityQueryFailed,
             Self::ObservabilityFollow => AtmErrorCode::ObservabilityFollowFailed,
             Self::ObservabilityHealth => AtmErrorCode::ObservabilityHealthFailed,
-            Self::DaemonRuntime => AtmErrorCode::DaemonProtocolFailed,
+            Self::DaemonRuntime => AtmErrorCode::DaemonRuntimeFailed,
             Self::DaemonClient => AtmErrorCode::DaemonUnavailable,
             Self::DaemonSingleton => AtmErrorCode::DaemonAlreadyRunning,
         }
