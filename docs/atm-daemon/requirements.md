@@ -21,7 +21,7 @@ in the pre-Phase-Q workspace yet.
 - cross-host daemon-to-daemon transport
 - runtime composition of `atm-core` service boundaries
 - live agent status cache
-- runtime watch/reconcile loop
+- runtime watch/reconcile loop if enabled
 - daemon-side `sc-observability` emission
 
 `atm-daemon` does not own:
@@ -128,25 +128,15 @@ Required runtime rules:
 - exactly one daemon may be active on a host at a time
 - daemon startup must fail deterministically if a live daemon already owns the
   runtime
-- required config must validate before listeners bind; invalid config fails
-  deterministically with typed startup diagnostics
 - stale ownership cleanup must never allow two live daemons
 - graceful shutdown must stop accepts, drain or cancel inflight work within one
   bounded deadline, checkpoint WAL, and release singleton ownership
 - signal handlers must be installed before listeners are opened
 - remote delivery must be daemon-to-daemon only
-- `atm send`, `atm ack`, and `atm clear` must use the daemon production path
-  rather than direct CLI/store mutation in the Phase Q runtime
-- `atm read` must not be documented as daemon-owned by default; daemon
-  participation is limited to explicitly requested live overlays or other
-  documented runtime-only data
 - the same transport protocol must be exercisable through an in-process
   `test-socket` without changing handler/business logic
 - transport/store/health operations must obey one documented timeout budget
 - runtime queues and handles must obey one documented concrete cap policy
-- no async dispatcher, accept loop, watcher, notifier, or health-query path
-  may perform blocking SQLite calls inline; direct SQLite work stays behind
-  `spawn_blocking` or a dedicated blocking pool owned by the store adapter
 - daemon memory is the live truth for agent status
 - daemon memory must also retain `last_active_at` for each known active agent
 - daemon memory must retain the current agent `pid` as a first-class liveness
@@ -175,11 +165,6 @@ Required runtime rules:
   extension point requires explicit architecture review
 - watcher/reconcile runtime code must remain isolated from transport, store,
   and notifier implementations behind its own owned boundary
-- canonical system events and external post-send-hook execution happen only on
-  the daemon side of the store boundary after a successful eligible durable
-  insert
-- duplicate durable insert attempts rejected as `DuplicateEntry` must not fire
-  post-send hooks or other canonical downstream message events
 - the socket receive loop must remain a thin dispatcher only:
   - read framed request
   - parse qualified request type
@@ -200,8 +185,3 @@ Required runtime rules:
   rather than collapsing into panic/unwrap control flow
 - daemon runtime and transport paths must emit structured observability events
 - daemon must expose one explicit health/status query interface for `atm doctor`
-- daemon health/status must distinguish liveness from readiness and expose the
-  queue-depth/backlog metrics needed to diagnose readiness pressure
-- when `atm read` requests live runtime overlays, daemon responses must be able
-  to supply relative activity strings derived from `last_active_at`, such as
-  `active 3 seconds ago` or `idle for 30 minutes`

@@ -166,14 +166,14 @@ Hard requirements:
 Runtime responsibility:
 - socket listeners
 - local/remote transport adapters
-- filesystem watch/reconcile runtime
+- filesystem watch/reconcile runtime if enabled
 - live agent status cache
 
 Non-responsibility:
 - daemon must not own unique business logic that is unavailable to in-process
   service callers
 - daemon unavailability must surface as an explicit runtime failure, not as
-  hidden direct SQLite/JSONL fallback or any undocumented daemon-start path
+  hidden direct SQLite/JSONL fallback or auto-spawn
 
 ## Plugin Model
 
@@ -344,7 +344,6 @@ Suggested columns:
 - `transport_kind TEXT NULL`
 - `host_name TEXT NULL`
 - `pid INTEGER NOT NULL`
-- `recipient_pane_id TEXT NULL`
 - `metadata_json TEXT NULL`
 
 Primary key:
@@ -414,22 +413,6 @@ Important runtime note:
   - Unix domain socket
   - TCP/TLS
 - keep live status in daemon memory
-- keep current agent `pid` durable in SQLite and cached in daemon memory as the
-  primary liveness field
-- track daemon-memory `last_active_at` per agent
-- route all runtime-only team-member updates through one heartbeat socket
-  handler shared by ATM CLI and hook/runtime producers; see
-  `docs/team-member-state.md`
-- keep the team-member runtime state machines minimal and auditable as defined
-  in `docs/team-member-state.md`
-- until `schooks 1.0` is released, use the already-installed Python hooks from
-  `../agent-team-mail` as the interim pid/activity injection path
-- after `schooks 1.0` is released, move the controlled environment injection
-  and pid/activity reporting path into `schooks`, which then reports to
-  `atm-daemon`
-- allow `atm read` to consume daemon-supplied live activity overlays such as
-  `active 3 seconds ago` or `idle for 30 minutes` without making daemon-owned
-  inbox-read logic a Phase Q requirement
 - keep cross-host routing daemon-to-daemon only
 
 ### Stage 5: Compatibility Cleanup
@@ -437,13 +420,6 @@ Important runtime note:
 - remove mailbox-lock dependence from runtime correctness
 - retire stale-lock cron sweep for mail flows
 - keep only any compatibility code still required for non-mail paths
-
-### Stage 6: Production-Readiness Gate And Release
-
-- prove the daemon-owned Phase Q runtime is production-ready, not merely
-  architecture-complete
-- validate release-gate, publish, and operational-readiness checks
-- ship the released Phase Q runtime as the new production baseline
 
 ## Backward Compatibility
 
@@ -496,31 +472,9 @@ Implementation details:
 - keep business logic depending on abstract `MailStore`, `TaskStore`, and
   `RosterStore` traits defined in `atm-core`
 - keep schema bootstrap/migrations centralized
-- define semantic newtypes here rather than propagating raw `String` at
-  service/store/request boundaries for durable identities and routing
-  identifiers:
-  - `MessageKey`
-  - `MessageId`
-  - `TaskId`
-  - `TeamName`
-  - `AgentName`
-  - `HostName`
-  - `SourceFingerprint`
-  - `PaneId`
 - define the canonical `message_key` model here before command cutover begins
-- decision: `MessageKey` is an opaque validated wrapper newtype over the
-  canonical `atm:` / `legacy:` / `ext:` durable identity string forms, not a
-  public discriminated enum
-- `message_key` must remain a semantic newtype throughout service/store/request
-  boundaries; conversion to/from raw `String` is an adapter concern only
 - define typed error enums for store/bootstrap failures before command cutover
   spreads ad hoc error translation
-- if the runtime uses Tokio or another async executor, direct SQLite calls must
-  run under `spawn_blocking` or a dedicated blocking pool owned by the store
-  adapter; async dispatcher, accept-loop, watcher, and notifier tasks must not
-  perform blocking SQLite calls inline
-- schema bootstrap, migration, and store-open paths must emit structured
-  `sc-observability` events for success, upgrade, and degraded-open outcomes
 - define crash-recovery durable state now:
   - ordering rule `SQLite commit -> export`
   - re-export keyed by `message_key`
@@ -546,9 +500,6 @@ Acceptance:
   - transactional rollback on mid-operation failure
   - uniqueness of `message_key`, `legacy_message_id`, and `atm_message_id`
   - roster row replacement/update behavior
-  - `recipient_pane_id` round-trips through roster storage and is present in
-    `ATM_POST_SEND` when hook payload projection has authoritative pane truth
-  - blocking-store isolation from async runtime tasks
   - structured store/bootstrap errors remain discriminated and do not panic on
     routine failure
 
@@ -558,7 +509,7 @@ Scope:
 - ingest external inbox rows into SQLite
 - ingest existing workflow sidecar state into SQLite
 - ingest `config.json` roster updates into SQLite
-- move ATM `send` to daemon-owned SQLite-first plus inbox export
+- move ATM `send` to SQLite-first plus inbox export
 - keep exported envelope Claude-native + `metadata.atm`
 
 Expected files / crates:
@@ -579,28 +530,17 @@ Implementation details:
 - once roster truth is authoritative in SQLite, the send path must include the
   authoritative `recipient_pane_id` in `ATM_POST_SEND` for post-send hooks when
   that pane mapping is known
-- post-send-hook execution for `send` must happen only on the daemon side of
-  the store boundary after a successful new durable insert
 - post-send hook implementations should consume `ATM_POST_SEND.recipient_pane_id`
   instead of rediscovering pane mappings from local files once this field is
   available
 - ingest/export paths must emit structured `sc-observability` events for import
   success, degradation, and export failure
-- ingest/export/store failure handling in this sprint must stay within typed
-  error families rather than panic/unwrap paths:
-  - ingest
-  - export
-  - store
-- durable row shape, Claude export shape, and hook payload shape must be
-  compared explicitly for compatibility before the sprint is considered done
 - after Q.1, this slice can proceed in parallel with transport and
   watcher/reconcile implementation because it depends only on the locked
   ingress/store/export contracts
 
 Acceptance:
 - `send` inserts authoritative rows in SQLite
-- the production `send` path routes through the daemon rather than direct CLI
-  store mutation
 - ATM-authored inbox export still works for Claude recipients
 - repeated ingest does not duplicate imported records
 - tests cover:
@@ -611,8 +551,6 @@ Acceptance:
   - `config.json` roster changes updating SQLite roster truth deterministically
   - `ATM_POST_SEND.recipient_pane_id` populated from roster truth when the
     recipient pane mapping is known
-  - compatibility mapping between SQLite row shape, Claude export shape, and
-    hook payload shape
   - structured ingest/export error variants and observability events for the
     degraded paths above
 
@@ -622,7 +560,6 @@ Scope:
 - move ack state and task state to SQLite
 - append reply exports after SQLite commit
 - stop treating inbox mutation as authoritative ack state
-- move `ack` to the daemon-owned production path
 
 Expected files / crates:
 - `crates/atm-core/src/ack/*`
@@ -632,23 +569,14 @@ Expected files / crates:
 Implementation details:
 - reply export happens only after SQLite commit succeeds
 - ack/task transitions must not require rewriting the source inbox record
-- post-send-hook execution for `ack` must happen only on the daemon side of
-  the store boundary after a successful eligible durable insert
 - existing workflow sidecar state is read only for migration/backfill once
   SQLite is authoritative
 - ack/task failure modes must remain typed across service and export boundaries
-- ack/task transition and hook paths must emit structured `sc-observability`
-  events for success, duplicate rejection, export degradation, and hook
-  degradation
-- ack/task/store/export failure handling must stay within typed error families
-  rather than panic/unwrap paths
 - after Q.1, this slice can proceed in parallel with transport/runtime work so
   long as it stays within the locked store/export/handler contracts
 
 Acceptance:
 - ack-required messages are authoritative in SQLite
-- the production `ack` path routes through the daemon rather than direct CLI
-  store mutation
 - task linkage and acknowledged state survive restart without inbox rewrites
 - reply export still lands in Claude inbox correctly
 - tests cover:
@@ -656,7 +584,6 @@ Acceptance:
   - task-linked imported message
   - reply export failure after commit surfaces clearly and does not corrupt SQLite
   - duplicate ack attempt rejection against SQLite truth
-  - duplicate durable insert / `DuplicateEntry` does not fire post-send hooks
   - no ack/task runtime failure path relies on panic/unwrap
 
 ### Q.4 — Read/Clear Cutover + Thin Daemon Runtime
@@ -674,8 +601,7 @@ Expected files / crates:
 - `crates/atm/src/*` daemon client wiring
 
 Implementation details:
-- `read` must return correct SQLite-backed mailbox projection whether or not a
-  daemon-supplied live overlay is requested
+- `read` must reconcile new external inbox writes before projection
 - `clear` becomes SQLite visibility mutation, not inbox truth mutation
 - imported legacy messages and forward ATM messages must project consistently
 - `atm-daemon` owns singleton enforcement and transport only
@@ -683,20 +609,8 @@ Implementation details:
 - remote transport uses TCP/TLS daemon-to-daemon only
 - transport-boundary tests use the in-process `test-socket`
 - live status cache is daemon-memory truth
-- current agent `pid` is durable SQLite truth and the primary liveness field,
-  cached in daemon memory
-- `last_active_at` is daemon-memory truth
-- runtime-only team-member state updates are constrained by
-  `docs/team-member-state.md`
-- team-member runtime transitions must remain minimal and follow the documented
-  state machines in `docs/team-member-state.md`
 - daemon emits structured runtime and transport events through
   `sc-observability`
-- runtime/store/transport/daemon-client failures in this sprint must stay
-  within typed error families rather than panic/unwrap paths
-- daemon startup must validate required config before binding listeners or
-  accepting requests; invalid config must fail deterministically with typed
-  startup diagnostics
 - daemon graceful shutdown sequence:
   - stop accepts
   - drain inflight work for `5s`
@@ -722,24 +636,10 @@ Implementation details:
   - retry queue `256`
   - SQLite handles `1..=4`
   - status cache `4096`
-- saturation policy:
-  - accept cap `64`: shed new accepts with typed over-capacity error; do not
-    await unboundedly in the accept loop
-  - per-connection inflight `32`: shed excess requests on that connection with
-    typed over-capacity error
-  - ingest queue `1024`: degrade with structured backlog/health reporting and
-    fail the enqueue; never silently drop
-  - retry queue `256`: shed the retry attempt with typed remote-delivery
-    saturation failure rather than growing unbounded
 - remote delivery success is defined by remote daemon acceptance within the
   bounded retry window
-- remote retry policy:
-- applies only to idempotent remote delivery attempts
-  - uses bounded exponential backoff with jitter
-  - enforces one per-message max-attempt bound inside the `30s` total retry
-    budget
-- daemon-unavailable client calls must fail clearly without hidden fallback and
-  must use only the documented connect/start behavior
+- daemon-unavailable client calls must fail clearly without hidden fallback or
+  auto-spawn
 - `atm doctor` must start consuming daemon/runtime state through the same
   request/response boundaries used by production
 - after Q.1, Unix transport, TCP/TLS transport, `test-socket`,
@@ -750,7 +650,6 @@ Acceptance:
 - `read` and `clear` no longer require mailbox rewrite correctness
 - lock contention on inbox files does not block SQLite-owned state transitions
 - existing CLI output remains compatible
-- canonical system events fire only from the daemon-owned post-store boundary
 - tests cover:
   - mixed imported legacy + forward ATM rows
   - repeated `read` after external Claude append
@@ -765,9 +664,6 @@ Acceptance:
   - daemon-unavailable path returns typed error with recovery guidance
   - `atm doctor` can surface daemon/runtime availability without direct socket
     or SQLite bypasses in CLI code
-  - invalid daemon config fails before listener bind
-  - saturation behavior matches the documented shed/degrade semantics for each
-    bounded queue/cap
 
 ### Q.5 — Lock Retirement + Ops Cleanup
 
@@ -789,10 +685,6 @@ Implementation details:
   rather than the old file-truth lock model
 - remaining compatibility-only lock logic must be diagnosable but non-blocking
   for normal mail correctness
-- doctor/restore/ops degraded compatibility findings must emit structured
-  `sc-observability` diagnostics
-- remaining compatibility-only failure handling must stay within typed error
-  families and explicit doctor findings rather than panic/unwrap paths
 
 Acceptance:
 - mail flows do not require the 5-minute stale-lock sweep
@@ -805,144 +697,6 @@ Acceptance:
   - compatibility-only remaining lock artifacts surface as diagnostics rather
     than correctness blockers
   - no core test requires daemon process spawning
-
-### Q.6 — Production-Readiness Gate + Release Sprint
-
-Scope:
-- prove the Phase Q daemon/runtime is production-ready end-to-end
-- prove `atm send`, `atm ack`, and `atm clear` route through the daemon
-  production path
-- prove `atm read` remains correct from SQLite truth and that any daemon live
-  overlay path is accurate and optional
-- validate every boundary rule listed in the Phase Q QA invariants
-- validate every item in the Production-Readiness Checklist
-- validate every Phase Q release-gate criterion
-- prepare the Phase Q line for production release rather than architecture-only
-  completion
-
-Expected files / crates:
-- `crates/atm/src/*`
-- `crates/atm-core/src/*`
-- `crates/atm-daemon/src/*`
-- `crates/atm-rusqlite/src/*`
-- `crates/atm-core/tests/*`
-- `crates/atm/tests/*`
-- `Cargo.toml`
-- `CHANGELOG.md`
-- `.github/workflows/*`
-- release / packaging docs and scripts as needed
-
-Implementation details:
-- validate daemon singleton enforcement under repeated start, clean shutdown,
-  and stale-artifact recovery conditions
-- validate graceful shutdown ordering:
-  - stop accepts
-  - drain inflight work
-  - force-cancel remaining inflight at the deadline
-  - checkpoint WAL
-  - release singleton artifacts
-- validate `atm send` and `atm ack` through the daemon production path rather
-  than direct CLI/store mutation
-- validate `atm clear` through the daemon production path rather than direct
-  CLI/store mutation
-- validate `atm read` correctness against SQLite projection, plus any optional
-  daemon-supplied live overlay path
-- validate canonical event emission only from the daemon-owned post-store
-  boundary
-- validate no canonical event or external hook execution on `DuplicateEntry`,
-  replay, reconcile, imported inbound JSONL, or remote inbound delivery
-- validate every strict boundary rule with explicit conformance/integration
-  coverage:
-  - store / SQL
-  - inbox ingress/export
-  - config ingress
-  - watcher/reconcile
-  - transport
-  - dispatcher/handlers
-  - notifier/plugin
-  - doctor health query
-- validate structured `sc-observability` coverage at both CLI and daemon
-  layers, including degraded/failed paths
-- validate typed error families and `AtmErrorCode` coverage for:
-  - store
-  - ingest
-  - export
-  - transport
-  - daemon runtime
-  - daemon singleton
-  - daemon client
-- validate every public `AtmErrorCode` variant contract includes:
-  - stable code
-  - cause summary
-  - operator/developer recovery steps
-  - docs link
-- validate explicit compatibility mapping across:
-  - SQLite durable row shapes
-  - daemon request/response interfaces
-  - Claude export envelope
-  - post-send-hook payload
-- validate daemon startup rejects invalid required config before binding
-  listeners
-- validate queue saturation behavior against the documented shed/degrade rules
-  for:
-  - accept cap
-  - per-connection inflight cap
-  - ingest queue
-  - retry queue
-- validate no async dispatcher, accept loop, watcher, or notifier task performs
-  blocking SQLite calls inline
-- validate timeout conformance so no transport, store, ingest, doctor, or
-  remote-delivery path can wait indefinitely
-- validate the production result is observably and operationally better than
-  the current ATM runtime rather than merely equivalent
-- bump workspace/package versions for the Phase Q release target
-- run release-blocking validation:
-  - `cargo fmt --check`
-  - `cargo clippy --workspace --all-targets -- -D warnings`
-  - `cargo audit`
-  - `cargo deny`
-- run `cargo publish --dry-run` validation for the publishable crates
-- plan for crates.io publish and GitHub release creation with binary artifacts
-- update `CHANGELOG.md` for the Phase Q release
-- update docs to reflect the production-ready released state rather than
-  planned-only state
-
-Acceptance:
-- every item in the Production-Readiness Checklist is explicitly proven by
-  implementation, tests, or release validation
-- every Phase Q QA invariant has listed conformance/integration coverage
-- `atm send`, `atm ack`, and `atm clear` are proven on the daemon production
-  path
-- `atm read` is proven correct from SQLite truth, and any daemon live overlay
-  path is proven accurate and optional
-- daemon singleton, graceful shutdown, stale-artifact cleanup, and daemon
-  unavailability behavior are all validated
-- invalid required config is proven to fail before listener bind
-- queue saturation behavior is validated with explicit shed/degrade semantics
-- structured `sc-observability` coverage is validated at CLI and daemon layers
-- typed error families are validated across store/ingest/export/transport/
-  daemon-runtime/daemon-singleton/daemon-client surfaces
-- no transport, store, ingest, doctor, or remote-delivery path waits
-  indefinitely under timeout-conformance tests
-- `atm doctor` distinguishes liveness from readiness and exposes queue-depth /
-  backlog metrics needed for daemon-health diagnosis
-- no async dispatcher, accept-loop, watcher, or notifier task performs
-  blocking SQLite work inline
-- the release gate is satisfied as written, including the “better than current
-  ATM runtime” criterion
-- workspace/package version bump plan is explicit for the Phase Q release
-- publish/release steps are documented, including:
-  - `cargo fmt --check`
-  - `cargo clippy --workspace --all-targets -- -D warnings`
-  - `cargo audit`
-  - `cargo deny`
-  - `cargo publish --dry-run`
-  - crates.io publish for the publishable crates
-  - GitHub release/tag creation
-  - binary artifact validation
-  - `CHANGELOG.md` update
-- docs match the final production-ready runtime and release shape
-  rather than an implementation-in-progress shape
 
 ## Testing Constraints
 
@@ -959,67 +713,6 @@ Hard requirements:
 Non-negotiable constraint:
 - no test architecture may depend on daemon process spawning to validate core
   mail correctness
-
-## Production-Readiness Checklist
-
-Phase Q is not complete unless every item below is true in the documented end
-state:
-
-- the phase exit condition is a production-ready daemon, not a preparatory
-  architecture slice
-- `atm send` goes through the daemon production path
-- `atm ack` goes through the daemon production path
-- `atm clear` goes through the daemon production path
-- `atm read` remains correct from SQLite truth and may add daemon-supplied live
-  overlays when requested
-- post-send-hook execution is daemon-owned
-- canonical system events are emitted only after a successful SSOT transition
-  on the daemon side of the store boundary
-- CLI, transport, watcher/reconcile, ingress adapters, and SQLite/store do not
-  emit canonical system events directly
-- hook-eligible origins are explicit
-- non-hook-eligible origins are explicit
-- immutable ATM-authored `message_id` / `message_key` reuse is rejected as
-  `DuplicateEntry`
-- duplicate durable insert attempts do not produce duplicate events or hook
-  execution
-- SQLite is the SSOT for mail, ack/task, visibility, and roster
-- live agent status remains daemon-memory truth
-- strict trait/I-O boundaries are explicit and QA-enforced
-- concrete adapters remain private behind those boundaries
-- Unix domain socket and TCP/TLS share one tiny dispatcher/handler contract
-- `test-socket` exists for isolated transport-boundary tests
-- daemon singleton, startup, shutdown, crash recovery, and stale-artifact
-  rules are explicit
-- watcher/reconcile behavior is explicit and isolated
-- daemon-to-daemon routing and remote acceptance semantics are explicit
-- `atm doctor` daemon health surface is explicit
-- liveness vs readiness semantics and queue-depth metrics are explicit for
-  daemon health/doctor reporting
-- structured `sc-observability` is explicit at CLI and daemon layers
-- typed error handling is explicit, wildcard/catch-all codes are forbidden,
-  and panic/unwrap are not the normal production strategy
-- important request/response, hook-payload, durable-insert, and health-report
-  shapes are expressed explicitly enough to compare interface compatibility
-- conformance/integration tests are listed for edge cases and boundary rules
-- every boundary violation is an immediate QA failure
-- the publish/release path is explicit:
-  - workspace/package version bump
-  - `cargo fmt --check`
-  - `cargo clippy --workspace --all-targets -- -D warnings`
-  - `cargo audit`
-  - `cargo deny`
-  - `cargo publish --dry-run`
-  - crates.io publish for the publishable crates
-  - GitHub release with tag and binary artifacts
-  - `CHANGELOG.md` update
-- the release gate proves the result is production-ready and better than the
-  current ATM runtime
-- every public `AtmErrorCode` variant carries the four-part contract:
-  - stable code
-  - cause summary
-  - operator/developer recovery steps
-  - docs link
 
 ## Risk Register
 
@@ -1106,17 +799,10 @@ Mitigation:
 The following must be checked on every QA pass for Phase Q:
 
 - it is impossible for two active ATM daemons to run on one host
-- `atm send`, `atm ack`, and `atm clear` use the daemon production path
-- `atm read` stays correct from SQLite truth and any daemon use is limited to
-  documented live overlays/runtime-only data
 - every subsystem performs all of its external I/O only through its owning
   trait boundary
 - any SQL, watcher, notifier, or socket-boundary bypass is an immediate QA
   failure
-- canonical system events are emitted only from the daemon-owned post-store
-  boundary
-- duplicate durable insert attempts do not create duplicate events or external
-  hook execution
 - no business logic has leaked into transport/runtime adapter code
 - daemon spawning is not part of the core test strategy
 - transport/runtime code remains thin and does not collapse into a giant socket
@@ -1129,28 +815,13 @@ The following must be checked on every QA pass for Phase Q:
 - CLI and daemon both retain structured `sc-observability` coverage
 - typed runtime errors remain discriminated across service, daemon, and CLI
   boundaries
-- no async dispatcher, accept loop, watcher, or notifier path performs
-  blocking SQLite calls inline
-- roster truth and current `pid` truth live in SQLite; live status truth and
-  `last_active_at` truth live in daemon memory
-- daemon health reporting distinguishes liveness from readiness and exposes the
-  queue-depth/backlog metrics needed for diagnosis
+- roster truth lives in SQLite; live status truth lives in daemon memory
 - Claude compatibility continues to use Claude-native top-level fields plus
   `metadata.atm`
 
 ## Release Gate For Phase Q
 
 Phase Q should be considered complete only when:
-- the result is production-ready, not merely architecture-prepared
-- the daemon is production-ready and required for the normal runtime path
-- `atm send` works through the daemon production path
-- `atm ack` works through the daemon production path
-- `atm clear` works through the daemon production path
-- if `atm read` requests daemon-supplied live overlays, those overlays are
-  correct and derived from daemon-memory state without making daemon-owned
-  inbox-read logic a required Phase Q ownership boundary
-- post-send-hook execution is daemon-owned and fires only from the canonical
-  daemon-side post-store event boundary
 - ATM mail correctness no longer depends on mailbox `.lock` files
 - SQLite is the authoritative store for read/ack/clear/task semantics
 - SQLite is the authoritative store for team roster
@@ -1158,25 +829,3 @@ Phase Q should be considered complete only when:
   durable database truth
 - Claude inbox files remain a compatible export/ingest surface only
 - stale lock cleanup can no longer wedge normal ATM mail flows
-- invalid required config fails before listener bind
-- queue saturation behavior matches the documented shed/degrade semantics
-- `atm doctor` exposes liveness vs readiness and queue-depth/backlog metrics
-- no transport, store, ingest, doctor, or remote-delivery path waits
-  indefinitely under timeout-conformance coverage
-- no async dispatcher, accept-loop, watcher, or notifier path performs
-  blocking SQLite calls inline
-- release-blocking validation passes:
-  - `cargo fmt --check`
-  - `cargo clippy --workspace --all-targets -- -D warnings`
-  - `cargo audit`
-  - `cargo deny`
-- every public `AtmErrorCode` variant carries the four-part contract:
-  - stable code
-  - cause summary
-  - operator/developer recovery steps
-  - docs link
-- crates.io publish succeeds for the publishable crates
-- a GitHub release exists with tag and binary artifacts
-- `CHANGELOG.md` is updated for the Phase Q release
-- the result is observably and operationally better than the current ATM
-  runtime rather than simply equivalent with new internals

@@ -255,9 +255,6 @@ Required `atm-core` crate rules:
   rather than passing raw integer literals through the service boundary
 - `atm-core` owns the ingest replay/degradation contract and must not silently
   drop parseable external rows
-- `atm-core` owns the canonical event-classification contract above the store
-  boundary and must not let CLI, ingress, transport, watcher, or store code
-  fire canonical system events directly
 - `atm-core` must not let command/service code access SQLite, inbox JSONL,
   `config.json`, or sockets except through the owning boundary
 - `atm-core` must not let watcher/reconcile logic bypass the owned ingress or
@@ -272,20 +269,10 @@ Required `atm-core` crate rules:
   `Result` propagation rather than panic/unwrap on routine failure paths
 - `atm-core` must define ATM-owned structured event/error models that both the
   CLI and daemon layers emit through `sc-observability`
-- `atm-core` must define which durable insert results are hook/event eligible,
-  including:
-  - locally-originated `send`
-  - locally-originated `ack`
-  - later locally-originated plugin outbound send
-  and which are not, including import, replay/reconcile, remote inbound
-  delivery, and `DuplicateEntry`
 - `atm-core` store implementations must enforce WAL-mode, foreign-key, and
   explicit-transaction policy through the owning store boundary
 - `atm-core` defines the store contracts; the first concrete SQLite
   implementation lives in `atm-rusqlite`
-- `atm-core` store contracts must surface a typed duplicate durable insert
-  result/error such as `DuplicateEntry` for immutable `message_id` /
-  `message_key` reuse rather than silently rewriting or reinserting rows
 
 Phase-Q crate-local supersession note:
 - earlier daemon-free phrasing in this file is historical from the prior line
@@ -448,14 +435,16 @@ Required identity rules:
   - optional `task_id` when present
   - optional `recipient_pane_id` when authoritative roster truth includes a
     pane mapping for the recipient
+- the hook must run after successful non-`dry-run` `atm send`
+- the hook must also run after successful `atm ack`, using the reply message as
+  the hook subject
+- `is_ack` must be `false` for `atm send` and `true` for `atm ack`
 - the hook may optionally emit one structured stdout result with `level`,
   `message`, and optional `fields`; ATM logs it on a best-effort basis and
   ignores absent or invalid output
 - hook-rule evaluation and execution outcomes must remain observable through
   structured diagnostics without creating caller-visible warnings for expected
   recipient non-match
-- the Phase Q target runtime supersedes the old CLI-owned send-only hook path
-  with one daemon-owned post-store hook trigger for eligible outbound messages
 - once Phase Q roster truth is stored in SQLite, `atm-core` must source
   `recipient_pane_id` from the authoritative roster/store boundary rather than
   forcing hooks to rediscover it from local files

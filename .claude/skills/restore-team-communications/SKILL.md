@@ -1,5 +1,6 @@
 ---
 name: restore-team-communications
+version: 0.2.0
 description: >
   Repair Claude teammate routing after same-session compaction or resume when
   atm-dev still exists on disk and the saved leadSessionId still matches the

@@ -90,15 +90,11 @@ Satisfied by:
 - intentionally undecomposed product requirement; this governs overall rewrite
   scope and is enforced across the workspace rather than by one crate-local ID
 
-- `REQ-P-RUNTIME-001` Production ATM commands must connect to the active daemon
-  and auto-start it when absent.
+- `REQ-P-RUNTIME-001` Production ATM commands must not auto-spawn the daemon.
 
   Required behavior:
-  - the production CLI/runtime path first attempts to connect to an
-    already-running daemon
-  - if the daemon is unavailable, CLI must attempt one bounded background
-    auto-start for the active team daemon and then retry the connection once
-  - if auto-start still fails, ATM must fail clearly with recovery guidance
+  - the production CLI/runtime path connects to an already-running daemon
+  - if the daemon is unavailable, ATM must fail clearly with recovery guidance
   - no production path may silently bypass the daemon by talking directly to
     SQLite or inbox files
 
@@ -140,7 +136,7 @@ Satisfied by:
   interface
 - CI monitoring
 - TUI and MCP features
-- daemon auto-spawn from tests
+- daemon auto-spawn from CLI commands or tests
 - `atm status` in the initial rewrite
 - separate `atm tail` command in the initial rewrite
 - team lifecycle management outside the retained local recovery surface
@@ -605,6 +601,10 @@ Post-send-hook rules:
   - optional `task_id` when present
   - optional `recipient_pane_id` when ATM has an authoritative pane mapping for
     the recipient
+- the post-send hook must run after successful non-`dry-run` `atm send`
+- the post-send hook must also run after successful `atm ack`, using the
+  reply message as the hook subject
+- `is_ack` must be `false` for `atm send` and `true` for `atm ack`
 - example payload:
   ```json
   {
@@ -638,12 +638,6 @@ Post-send-hook rules:
 - when a hook is configured, ATM must emit enough diagnostics to explain
   whether the hook ran or failed, including the sender, recipient, and matched
   hook recipient selector
-- Phase Q supersession note:
-  - the retained release-line hook rules above describe the current
-    command-triggered contract
-  - the Phase Q target runtime supersedes this with one daemon-owned
-    post-store hook trigger for eligible outbound messages, as defined in
-    Section 21
 
 ## 6. `atm send`
 
@@ -1073,6 +1067,7 @@ Acknowledge a pending-ack message in the caller's own inbox and send a visible r
   - append a reply message to the original sender's inbox
 - preserve `acknowledgesMessageId` on the emitted reply
 - reject duplicate acknowledgement of an already acknowledged message
+- run matching `[[atm.post_send_hooks]]` rules after a successful ack, using the reply message as the hook subject
 
 ### 8.4 Output Contract
 
@@ -1085,6 +1080,7 @@ JSON output must include:
 - `reply_text` (String body of the reply message sent)
 - `task_id` (optional String, present when the source message has `taskId`)
 - `reply_target`
+- `warnings` (array of strings, omitted when empty)
 
 ## 9. `atm clear`
 
@@ -2392,7 +2388,6 @@ mail correctness.
     - clear/visibility state
     - task linkage and task metadata
     - team roster
-    - current per-member pid
   - Claude-owned inbox JSONL files are compatibility ingress/export surfaces,
     not ATM's authoritative durable mail store
   - `config.json` becomes a roster-ingress source, not the durable roster truth
@@ -2415,11 +2410,6 @@ mail correctness.
   - schema constraints must forbid duplicate authoritative identities
   - the schema must document the required lookup indexes for message lookup,
     task lookup, visibility projection, and ingest dedupe
-  - ATM-authored message identity is immutable; the same ATM-authored
-    `message_id` / `message_key` must never be reused for a different durable
-    message
-  - an attempted durable insert of an already-known immutable ATM message must
-    return a typed duplicate result/error such as `DuplicateEntry`
 
 - `REQ-CORE-STORE-002` The Phase Q SQLite store must enforce WAL and explicit
   transaction policy.
@@ -2464,53 +2454,7 @@ mail correctness.
     agent/member entry
   - SQLite must not own live `last_active_at`; it remains daemon-memory-only
     runtime state
-  - the runtime-managed member fields (`pid`, `last_active_at`, `state`) must
-    update only through one documented heartbeat socket handler, as defined in
-    `docs/team-member-state.md`
-  - for Claude hook-driven sessions, the current pid capture mechanism must use
-    the stable parent agent PID (`current-thread.parent.pid` / hook
-    `os.getppid()` equivalent), not the short-lived hook subprocess PID
-  - for Codex-style sessions without Claude hooks, the current pid capture
-    mechanism must use the agent process PID itself
-  - until `schooks 1.0` is released, the installed Python hooks from
-    `../agent-team-mail` are the supported interim mechanism for sourcing the
-    Claude-side pid/activity heartbeat inputs
-  - once `schooks 1.0` is released, `schooks` becomes the controlled hook
-    environment layer and must report pid/activity updates to `atm-daemon`
-  - `atm-daemon` remains the owner of live `last_active_at` and state truth
-    even after `schooks` takes over environment control
-  - if a heartbeat reports a new pid while the stored old pid is still alive,
-    the daemon must reject the new pid unless the explicit admin takeover path
-    documented in `docs/team-member-state.md` is active
-  - a successful pid replacement must update SQLite and emit
-    `AgentPidChanged`
-  - runtime member-state transitions must follow the minimal transition model
-    in `docs/team-member-state.md`
-  - illegal runtime member-state transitions must be prevented by one closed
-    transition API and encoded with typestate or equivalent compile-time
-    structure where practical (`RBP-002`)
-  - `atm read` may consume daemon-owned live-status overlays such as
-    `active 3 seconds ago` or `idle for 30 minutes`, but this does not make
-    daemon-owned inbox-read logic mandatory
-  - SQLite may store a diagnostic or last-observed snapshot only
   - roster truth and live-status truth must remain distinct
-  - all allowed update paths for durable roster fields and runtime-only
-    team-member fields must be listed in `docs/team-member-state.md`; no other
-    update paths are permitted
-
-- `REQ-CORE-RUNTIME-004` Canonical system events must be emitted only on the
-  daemon side of the durable store boundary.
-
-  Required behavior:
-  - CLI, transport, watcher/reconcile, ingress adapters, and SQLite/store code
-    must not fire system events or external post-send hooks directly
-  - those layers may only submit work, return typed results, or emit
-    diagnostics
-  - one daemon-owned core service boundary interprets durable write results and
-    determines whether an event-producing transition occurred
-  - internal daemon-local hook sites may exist for logging, testing, and
-    notifier fanout, but the external post-send hook remains a single canonical
-    downstream effect of the daemon-owned event boundary
 
 ### 21.2 Singleton Daemon Runtime
 
@@ -2534,28 +2478,19 @@ mail correctness.
     - transport listeners
     - route selection
     - live-status cache
-    - watch/reconcile loop
+    - watch/reconcile loop if enabled
   - the daemon must not become the only place where ATM mail semantics are
     implemented
 
-- `REQ-CORE-DAEMON-003` Production ATM commands must connect to the active
-  daemon, auto-start it when absent, and fail clearly only when connect/start
-  cannot succeed.
+- `REQ-CORE-DAEMON-003` Production ATM commands must use an already-running
+  daemon and must fail clearly when it is unavailable.
 
   Required behavior:
-  - production CLI/runtime calls must first attempt to connect to the active
-    daemon
-  - if the daemon is unavailable, ATM must attempt one bounded background
-    daemon start for the active team and then retry the connection once
-  - if connect/start still fails, ATM must fail with a clear recovery message
+  - production CLI/runtime calls must not auto-spawn the daemon
+  - when the daemon is unavailable, ATM must fail with a clear recovery message
     rather than silently falling back to direct SQLite or inbox-file access
   - in-process test harnesses may bypass the daemon only inside explicit test
     wiring, not in the production path
-  - `atm send` must route through the daemon in the Phase Q production path
-  - `atm ack` must route through the daemon in the Phase Q production path
-  - `atm clear` must route through the daemon in the Phase Q production path
-  - `atm read` may request daemon-supplied live overlays, but correct mailbox
-    projection must not depend on daemon-owned inbox-read logic
 
   Satisfies:
   - `REQ-P-RUNTIME-001`
@@ -2564,8 +2499,6 @@ mail correctness.
   shutdown and signal-handling contract.
 
   Required behavior:
-  - required config must validate before listeners bind; invalid config fails
-    deterministically with typed startup diagnostics
   - `SIGINT` and `SIGTERM` begin graceful shutdown
   - `SIGHUP` triggers bounded runtime rescan/reload without releasing singleton
     ownership
@@ -2613,8 +2546,6 @@ mail correctness.
   - the `AtmErrorCode` registry must not use wildcard or catch-all variants in
     place of specific codes
   - every public `AtmErrorCode` must document one recoverability class
-  - every public `AtmErrorCode` must document one docs link and stable
-    cause/recovery contract in the central registry
   - the `AtmErrorCode` registry is centralized and read-only from the
     perspective of feature/service code; subsystems consume codes from the
     registry and do not mint local alternatives
@@ -2719,17 +2650,8 @@ mail correctness.
   - retry queue depth: `256`
   - SQLite handle budget: `1..=4`
   - live status-cache cap: `4096`
-  - accept-cap saturation sheds new accepts with typed over-capacity error
-  - per-connection inflight saturation sheds excess requests for that
-    connection with typed over-capacity error
-  - ingest-queue saturation degrades with structured backlog/health reporting
-    and fails the enqueue; it never silently drops
-  - retry-queue saturation sheds the retry attempt with typed
-    remote-delivery saturation error rather than growing unboundedly
-  - no async dispatcher, accept loop, watcher, notifier, or health-query path
-    may perform blocking SQLite calls inline; direct SQLite work must stay
-    behind `spawn_blocking` or a dedicated blocking pool owned by the store
-    adapter
+  - saturation behavior must fail with typed errors or structured degradation,
+    never silent drop
 
 ### 21.5 Claude Compatibility And Native Agent Path
 
@@ -2755,34 +2677,6 @@ mail correctness.
     of JSONL
   - the later agent plugin crate must align to this daemon API rather than
     introducing a parallel message transport
-
-- `REQ-CORE-COMPAT-003` The post-send hook must execute on the daemon side of
-  the durable store boundary in the Phase Q production runtime.
-
-  Required behavior:
-  - the external post-send hook fires only after a successful new SSOT insert
-    for a hook-eligible locally-originated outbound message
-  - post-send-hook execution is daemon-owned downstream behavior, not store
-    behavior and not CLI behavior
-  - hook execution must never roll back a durable message commit
-  - hook failure remains a typed best-effort warning/diagnostic outcome
-  - the daemon-owned hook payload must include whether the outbound message is
-    an ack reply (`is_ack`)
-
-- `REQ-CORE-COMPAT-004` Hook eligibility must be explicit and origin-based.
-
-  Required behavior:
-  - hook-eligible origins are:
-    - locally-originated `atm send`
-    - locally-originated `atm ack`
-    - later locally-originated daemon/plugin outbound send operations
-  - non-hook-eligible origins are:
-    - imported inbound Claude/legacy JSONL rows
-    - remote inbound daemon deliveries
-    - replay/re-export/reconcile paths
-    - duplicate durable insert attempts rejected as `DuplicateEntry`
-  - one successful eligible durable insert may fire the external post-send hook
-    at most once
 
 ### 21.6 Lock Elimination Target
 
@@ -2839,15 +2733,11 @@ mail correctness.
   - daemon/runtime health information must be obtained through an explicit
     daemon-facing interface rather than direct CLI inspection of private daemon
     state
-  - daemon reachability (liveness) and daemon readiness must remain distinct
-    health answers
   - the health interface must be able to report at least:
     - daemon reachability
-    - daemon readiness
     - singleton ownership status
     - live status-cache summary
     - ingest backlog / degraded-ingest state when present
-    - queue-depth / backlog metrics needed to diagnose readiness pressure
     - SQLite open/readiness state
 
 ### 21.9 QA Invariants
@@ -2857,27 +2747,16 @@ mail correctness.
 
   Required behavior:
   - impossible to run two active ATM daemons on one host
-  - daemon unavailability uses only the documented connect/start path and fails
-    clearly if that path cannot succeed, with no hidden direct I/O fallback
+  - daemon unavailability fails clearly without auto-spawn or hidden direct I/O
+    fallback
   - every subsystem performs external I/O only through its owning trait
     boundary
   - production error handling uses typed `Result`/error-enum boundaries instead
     of panic/unwrap for fallible runtime paths
   - daemon/runtime code remains thin and does not accumulate business logic
   - daemon spawning is not the test strategy
-  - `atm send`, `atm ack`, and `atm clear` use the daemon production path
-  - `atm read` uses daemon participation only for explicitly requested live
-    overlays or other documented runtime-only data
-  - canonical system events fire only from the daemon-owned post-store
-    transition boundary
-  - duplicate durable insert attempts do not create duplicate events or
-    post-send-hook execution
-  - no async dispatcher, accept loop, watcher, notifier, or health-query path
-    performs blocking SQLite calls inline
   - SQLite remains the source of truth for mail and roster
   - live agent status remains runtime-owned state
-  - daemon health reporting distinguishes liveness from readiness and exposes
-    queue-depth/backlog metrics
   - structured `sc-observability` coverage remains present at both CLI and
     daemon layers
   - Claude compatibility export remains Claude-native top-level plus

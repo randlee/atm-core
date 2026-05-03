@@ -216,7 +216,7 @@ Supersession note:
 - the Phase Q target architecture in §21 supersedes those constraints with:
   - one explicit daemon runtime
   - no hidden direct SQLite fallback
-  - one documented daemon connect/start path only
+  - no hidden daemon auto-spawn path
 
 ## 4. Core Types
 
@@ -440,7 +440,8 @@ Architectural rules:
   canonical sender identity rather than the display-oriented `from` projection
 - ATM-owned post-send hooks are best-effort recipient-scoped helpers, not part
   of the atomic send boundary
-- the hook runs only after a successful non-`dry-run` send
+- the hook runs only after a successful non-`dry-run` send or ack; it fires
+  after both `atm send` and `atm ack`
 - each `[[atm.post_send_hooks]]` rule binds one recipient selector and one
   command argv
 - `recipient = "*"` acts as a wildcard match for all recipients
@@ -451,9 +452,7 @@ Architectural rules:
 - the hook receives inherited environment plus one ATM-owned JSON payload in
   `ATM_POST_SEND`
 - the payload includes `from`, `to`, `sender`, `recipient`, `team`,
-  `message_id`, `requires_ack`, `is_ack`, and optional `recipient_pane_id`
-  when ATM already knows the authoritative pane mapping for the recipient, and
-  optional `task_id`
+  `message_id`, `requires_ack`, `is_ack` (bool), and optional `task_id`
 - the hook may optionally emit one structured result object on stdout with a
   declared log level, message, and optional structured fields; ATM parses it
   on a best-effort basis for post-send diagnostics
@@ -838,6 +837,7 @@ Public entrypoint:
 - reply target
 - reply message id
 - reply text
+- warnings: Vec<String>
 
 The ack service is responsible for the legal transition from `(Read, PendingAck)` to `(Read, Acknowledged)` plus the reply append.
 
@@ -1132,14 +1132,13 @@ contain:
 - optional `recipient_pane_id` when ATM already knows the authoritative pane
   mapping for the recipient
 
-In the retained pre-Phase-Q line, the post-send hook runs only after a
-successful non-`dry-run` send, executes once when sender or recipient matching
-succeeds, may optionally emit one structured stdout result for observability,
-and never rolls back a successful send on failure or timeout.
+The post-send hook runs only after a successful outbound mailbox write from
+`atm send` or `atm ack`. It executes once when recipient matching succeeds,
+uses `is_ack = false` for `atm send` and `is_ack = true` for `atm ack`, may
+optionally emit one structured stdout result for observability, and never rolls
+back a successful message write on failure or timeout.
 
 Phase Q hook-note:
-- the Phase Q target runtime supersedes the old CLI-owned send-only hook path
-  with one daemon-owned post-store hook trigger for eligible outbound messages
 - once roster and pane mapping truth move to SQLite, the send path should place
   the authoritative recipient pane id into `ATM_POST_SEND.recipient_pane_id`
 - post-send hook implementations should prefer that payload field over local
@@ -1962,42 +1961,11 @@ ATM moves to a split state model:
   - ack/task state
   - read/clear visibility state
   - team roster
-  - current per-member pid
 - daemon memory is the authoritative live runtime view for:
   - current agent status
-  - per-agent `last_active_at` timestamps used for live read-time overlays
 
 SQLite may persist last-observed status for diagnostics, but that snapshot is
-not the live truth. When `atm read` includes live runtime overlays, those
-overlays come from daemon memory after durable mailbox projection and do not
-require daemon ownership of inbox-read logic itself. The daemon caches current
-pid from SQLite as the primary liveness field and updates the durable pid only
-through the documented heartbeat handler.
-
-The complete field ownership and update-path contract for team-member state is
-defined in `docs/team-member-state.md`.
-
-The runtime member-state transition model must stay minimal and closed:
-- one documented activity-state machine
-- one documented pid-ownership/change state machine
-- one documented identity-conflict state machine
-- no additional hidden fallback transitions
-- implementation should use typestate or equivalent compile-time structure
-  where practical per `RBP-002`
-
-Interim pid-capture path:
-- until `schooks 1.0` is released, ATM relies on the already-installed Python
-  hooks from `../agent-team-mail`
-- for Claude sessions, those hooks capture the stable parent agent pid via
-  `current-thread.parent.pid` / hook `os.getppid()`
-- for Codex-style sessions, ATM CLI/runtime sends the agent process pid through
-  the same daemon heartbeat socket path used by hooks
-- once `schooks 1.0` is released, `schooks` becomes the controlled hook
-  environment layer and reports pid/activity updates to `atm-daemon`
-- if a heartbeat reports a different pid while the stored pid is still alive,
-  the daemon must treat that as an identity conflict and reject the update
-  unless the explicit admin takeover path documented in
-  `docs/team-member-state.md` is active
+not the live truth.
 
 ### 21.1.1 SQLite Schema Contract
 
@@ -2054,19 +2022,6 @@ Required architectural rules:
 - persisted retry state must not become a long-lived remote outbox; expired
   retry rows fail closed during replay
 
-### 21.1.4 Migration Stages
-
-The migration model is six-stage and the production release gate is part of the
-target architecture, not a follow-on note.
-
-Stages:
-1. store and boundary foundation
-2. ingest plus send dual write
-3. read/ack/clear cutover
-4. thin daemon runtime
-5. compatibility cleanup and lock retirement
-6. production-readiness gate and release
-
 ### 21.2 Compatibility Surfaces
 
 Claude-owned inbox JSONL files remain required for:
@@ -2079,41 +2034,6 @@ Architectural rule:
 
 `config.json` remains a team-ingress surface, but roster truth moves to
 SQLite.
-
-Compatibility-shape rule:
-- durable row shapes, daemon request/response shapes, Claude export shapes, and
-  post-send-hook payload shapes must stay explicitly mappable
-- no compatibility path may depend on ad hoc field reconstruction hidden in one
-  adapter
-
-Illustrative compatibility mapping:
-
-```rust
-pub struct HookPayload {
-    pub from: String,
-    pub to: String,
-    pub sender: AgentName,
-    pub recipient: AgentName,
-    pub team: TeamName,
-    pub message_id: MessageId,
-    pub requires_ack: bool,
-    pub is_ack: bool,
-    pub task_id: Option<TaskId>,
-    pub recipient_pane_id: Option<PaneId>,
-}
-```
-
-Required mapping relationships:
-- `messages.message_key` is the durable identity key used by daemon services
-- `messages.atm_message_id` / forward `metadata.atm.messageId` remains the
-  Claude/export-facing ATM message id when present
-- `ack_state.ack_reply_message_key` links reply export and hook payload for ack
-  transitions
-- `team_roster.recipient_pane_id` is the authoritative source for
-  `HookPayload.recipient_pane_id`
-- exported Claude JSONL remains Claude-native at top level plus `metadata.atm`
-- hook payloads are derived from durable committed state, not transport-local
-  request data
 
 ### 21.3 Information Flow
 
@@ -2135,44 +2055,6 @@ There are three distinct paths:
    - routing expands from `agent@team` to `agent@team.host`
    - sender-side daemons do not write remote host JSONL directly
    - successful remote delivery requires remote daemon acceptance
-
-### 21.3.1 Canonical Event Boundary
-
-Phase Q emits canonical system events from one place only: the daemon-owned
-core service boundary after a successful SSOT transition.
-
-Rules:
-- CLI, transport, watcher/reconcile, ingress adapters, and SQLite/store code
-  do not fire canonical system events or external post-send hooks directly
-- those layers only submit work, return typed results, or emit diagnostics
-- the daemon-owned core service interprets durable write results and decides
-  whether an event-producing transition occurred
-- internal daemon-local hook sites may exist for logging, testing, notifier
-  fanout, and observability, but they are not additional external hook
-  boundaries
-- duplicate durable insert attempts do not produce canonical events
-
-### 21.3.2 Hook Eligibility
-
-External post-send-hook execution is one downstream effect of the canonical
-daemon event boundary.
-
-Eligible origins:
-- locally-originated `atm send`
-- locally-originated `atm ack`
-- later locally-originated daemon/plugin outbound send operations
-
-Ineligible origins:
-- imported inbound Claude/legacy JSONL rows
-- remote inbound daemon deliveries
-- replay/re-export/reconcile paths
-- duplicate durable insert attempts rejected as `DuplicateEntry`
-
-Hook trigger rule:
-- one successful eligible durable insert may trigger the external post-send
-  hook at most once
-- hook execution happens only after the durable insert succeeds
-- hook execution never rolls back the durable insert
 
 ### 21.4 One Interface, Two Transport Implementations
 
@@ -2211,7 +2093,7 @@ Daemon responsibilities:
 - route selection
 - live status cache
 - daemon-facing diagnostics and health queries used by `atm doctor`
-- watch/reconcile runtime
+- watch/reconcile runtime if enabled
 
 Daemon non-responsibility:
 - it must not become the only home of ATM business logic
@@ -2240,28 +2122,6 @@ Privacy rule:
 
 Each I/O-owning subsystem needs one explicit architectural boundary.
 
-Illustrative Phase Q boundary sample:
-
-```rust
-pub enum DurableInsertOutcome {
-    Created {
-        message_key: MessageKey,
-        hook_eligible: bool,
-        is_ack: bool,
-        origin: EventOrigin,
-    },
-    DuplicateEntry {
-        message_key: MessageKey,
-    },
-}
-```
-
-Rules illustrated by this shape:
-- the store reports durable outcomes, not hooks
-- `DuplicateEntry` is explicit
-- hook eligibility is decided above the store boundary
-- canonical event emission happens only on `Created`
-
 #### MailStore
 
 Dispatch model:
@@ -2285,26 +2145,6 @@ Scope rule:
   message lifecycle
 - `MailStore` is not the long-term owner of generic task-orchestration or
   daemon-status domains
-- `MailStore` enforces immutable durable identity uniqueness
-- duplicate attempts for an already-known immutable ATM-authored
-  `message_id`/`message_key` return a typed duplicate result/error such as
-  `DuplicateEntry`
-
-Illustrative trait shape:
-
-```rust
-pub trait MailStore: sealed::Sealed {
-    fn insert_message(
-        &self,
-        input: NewMessage,
-    ) -> Result<DurableInsertOutcome, StoreError>;
-
-    fn load_message(
-        &self,
-        key: &MessageKey,
-    ) -> Result<Option<MessageRecord>, StoreError>;
-}
-```
 
 #### TaskStore
 
@@ -2391,55 +2231,6 @@ Dispatcher rule:
 - request-family behavior lives in injectable handlers behind that dispatcher
 - adding a new request type must not require embedding business logic into
   Unix-socket or TCP/TLS adapter code
-
-Illustrative transport/dispatcher split:
-
-```rust
-pub trait Transport: sealed::Sealed {
-    fn serve(&self, dispatcher: &dyn Dispatcher) -> Result<(), TransportError>;
-}
-
-pub trait Dispatcher: sealed::Sealed {
-    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError>;
-}
-```
-
-Illustrative request/response shape:
-
-```rust
-pub enum RequestEnvelope {
-    Send(SendRequest),
-    Ack(AckRequest),
-    Read(ReadRequest),
-    Clear(ClearRequest),
-    Doctor(DoctorHealthQuery),
-}
-
-pub enum ResponseEnvelope {
-    Send(SendResponse),
-    Ack(AckResponse),
-    Read(ReadResponse),
-    Clear(ClearResponse),
-    Doctor(DoctorHealthReport),
-}
-
-pub struct SendRequest {
-    pub from: AgentName,
-    pub to: AgentName,
-    pub team: TeamName,
-    pub message_id: MessageId,
-    pub task_id: Option<TaskId>,
-    pub requires_ack: bool,
-    pub body: String,
-}
-
-pub struct AckRequest {
-    pub team: TeamName,
-    pub message_key: MessageKey,
-    pub task_id: Option<TaskId>,
-    pub body: Option<String>,
-}
-```
 
 Socket receive loop rule:
 - the receive loop must stay intentionally small
@@ -2539,8 +2330,6 @@ Architectural rules:
   store, ingest, and transport events remain daemon-owned observability sinks
 - production runtime diagnostics must not collapse into ad hoc stdout/stderr
   debugging
-- external post-send-hook execution is a daemon-owned downstream effect of the
-  canonical event boundary, not a store, ingress, or transport concern
 
 ### 21.6.3 Doctor Health Interface
 
@@ -2557,44 +2346,6 @@ Architectural rules:
   - SQLite readiness/openability as observed by the runtime
 - CLI code must not inspect private daemon state directly to synthesize health
   answers
-
-Illustrative health-query shape:
-
-```rust
-pub struct DoctorHealthQuery {
-    pub include_runtime: bool,
-    pub include_ingest: bool,
-    pub include_store: bool,
-}
-
-pub struct DoctorHealthReport {
-    pub daemon_reachable: bool,
-    pub daemon_ready: bool,
-    pub singleton_owner: Option<String>,
-    pub store_ready: bool,
-    pub ingest_degraded: bool,
-    pub queue_depths: QueueDepthSnapshot,
-    pub live_status_summary: StatusSummary,
-}
-
-pub struct QueueDepthSnapshot {
-    pub accepts: u32,
-    pub per_connection_inflight: u32,
-    pub ingest_queue: u32,
-    pub retry_queue: u32,
-}
-```
-
-Health-report rules:
-- liveness and readiness are distinct:
-  - liveness answers whether the daemon is reachable and responsive
-  - readiness answers whether it can safely serve normal runtime traffic
-- queue/backlog metrics are part of readiness diagnosis and must cover at
-  least:
-  - accept pressure
-  - ingest backlog
-  - retry backlog
-  - per-connection inflight saturation when relevant
 
 ### 21.6.4 Shutdown, Signals, Timeouts, And Resource Caps
 
@@ -2619,30 +2370,10 @@ Required caps:
 - SQLite handle budget: `1..=4`
 - status-cache cap: `4096`
 
-Required saturation policy:
-- accept cap exceeded: shed new accepts with typed over-capacity error
-- per-connection inflight exceeded: shed excess requests for that connection
-  with typed over-capacity error
-- ingest queue full: degrade with structured backlog/health reporting and fail
-  the enqueue; never silently drop
-- retry queue full: shed the retry attempt with typed remote-delivery
-  saturation error rather than growing unboundedly
-
 Required signal behavior:
 - install `SIGINT`/`SIGTERM`/`SIGHUP` handling before listeners accept
 - `SIGINT` and `SIGTERM` enter graceful shutdown
 - `SIGHUP` triggers bounded rescan/reload without dropping singleton ownership
-
-Blocking-I/O isolation rule:
-- if the runtime uses Tokio or another async executor, direct SQLite work must
-  remain behind `spawn_blocking` or a dedicated blocking pool owned by the
-  store adapter
-- async dispatcher, accept-loop, watcher, notifier, and health-query tasks
-  must not perform blocking SQLite calls inline
-
-Timeout-conformance rule:
-- transport, store, ingest, doctor, and remote-delivery paths must each have
-  timeout-conformance coverage proving they do not wait indefinitely
 
 ### 21.7 Test Strategy
 
@@ -2663,23 +2394,19 @@ relief. The target Phase Q architecture removes mailbox-lock dependence from
 ATM mail correctness by moving durable state ownership to SQLite and treating
 JSONL as compatibility ingress/egress only.
 
-### 21.9 Six-Stage Migration Model
+### 21.9 Five-Stage Migration Model
 
-Phase Q follows six architectural migration stages:
+Phase Q follows five architectural migration stages:
 
 1. store and boundary foundation
-2. ingest plus send dual write
-3. read/ack/clear cutover
-4. thin daemon runtime
-5. compatibility cleanup and lock retirement
-6. production-readiness gate and release
+2. compatibility ingest/export
+3. ack/task migration
+4. read/clear cutover plus thin daemon runtime
+5. lock retirement and production gate
 
 This ordering is intentional:
 - durable truth moves first
-- compatibility paths stay owned and explicit while command cutover proceeds
-- daemon runtime arrives only after service boundaries and durable truth are
-  proven
-- compatibility cleanup and lock retirement happen after runtime ownership is
-  established
-- the production-readiness gate remains a distinct final stage rather than
-  being collapsed into lock retirement
+- compatibility paths stay owned and explicit
+- daemon runtime arrives only after service boundaries are proven
+- lock retirement closes the phase after the daemon/runtime and store model are
+  already in place

@@ -497,6 +497,7 @@ fn test_send_runs_post_send_hook_with_expected_payload() {
     assert_eq!(payload["from"], "arch-ctm@atm-dev");
     assert_eq!(payload["to"], "recipient@atm-dev");
     assert_eq!(payload["requires_ack"], false);
+    assert_eq!(payload["is_ack"], false);
     assert!(payload["message_id"].as_str().is_some());
     assert!(payload.get("task_id").is_none());
     assert_eq!(payload["sender"], "arch-ctm");

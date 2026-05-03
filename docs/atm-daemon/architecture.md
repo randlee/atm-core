@@ -19,7 +19,7 @@ The `atm-daemon` crate is responsible for:
 - remote daemon-to-daemon transport listener/client
 - runtime wiring of `atm-core` service boundaries
 - live agent-status cache
-- watch/reconcile runtime loop
+- optional watch/reconcile runtime loop
 - daemon/runtime observability emission
 - daemon health/status query surface for `atm doctor`
 
@@ -37,10 +37,6 @@ The `atm-daemon` crate must remain thin.
   - TCP/TLS
   - in-process `test-socket`
 - cross-host delivery is daemon-to-daemon only.
-- `atm send`, `atm ack`, and `atm clear` route through the daemon in the Phase
-  Q production runtime.
-- `atm read` remains SQLite-backed and may request daemon-supplied live
-  overlays without making inbox-read logic daemon-owned by default.
 - remote delivery may use bounded transient retry, but not a durable long-lived
   remote outbox.
 - remote send success is defined by remote daemon acceptance within the bounded
@@ -51,9 +47,6 @@ The `atm-daemon` crate must remain thin.
   debug-only runtime path replaces it in production.
 - plugin-local observability does not replace daemon-owned runtime/transport
   sinks; daemon-owned events stay daemon-owned.
-- canonical system events and external post-send-hook execution happen only
-  after the daemon-owned core service receives a successful eligible durable
-  insert result from the store boundary.
 - runtime subsystems stay fully isolated:
   - SQL/store calls belong only to the store boundary
   - file-watch/reconcile logic belongs only to the watcher/reconcile boundary
@@ -62,9 +55,6 @@ The `atm-daemon` crate must remain thin.
 - watcher/reconcile adapters remain crate-private and dispatch through owned
   ingress/service handlers rather than touching store/transport/notifier
   internals directly
-- duplicate durable insert attempts rejected by the store as `DuplicateEntry`
-  do not produce canonical downstream message events or post-send-hook
-  execution
 
 ## 3.1 Singleton Runtime
 
@@ -75,8 +65,6 @@ Hard invariant:
 Architectural rule:
 - singleton enforcement belongs in the runtime wrapper only
 - the runtime must fail closed rather than allowing split ownership
-- required config must validate before listeners bind; invalid config fails
-  deterministically with typed startup diagnostics
 
 Lifecycle state model:
 - the daemon runtime must explicitly model:
@@ -143,25 +131,6 @@ Dispatcher/handler rule:
 - the dispatcher itself stays thin and must not absorb request-family business
   logic
 
-Illustrative daemon-side shape:
-
-```rust
-pub trait Dispatcher: sealed::Sealed {
-    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError>;
-}
-
-pub trait MessageHandler: sealed::Sealed {
-    fn handle_send(&self, request: SendRequest) -> Result<SendResponse, AtmError>;
-    fn handle_ack(&self, request: AckRequest) -> Result<AckResponse, AtmError>;
-}
-```
-
-The point of this sample is boundary placement:
-- transport calls `dispatch(...)`
-- dispatcher routes only
-- request-family handlers own behavior
-- neither Unix-domain nor TCP/TLS adapters own send/ack semantics
-
 ## 3.1.1 Graceful Shutdown
 
 Shutdown is part of the daemon contract, not an implementation detail.
@@ -205,22 +174,9 @@ The daemon owns the live runtime view of agent status.
 
 Architectural rules:
 - live status remains in daemon memory
-- current agent `pid` is durable SQLite truth and is cached in daemon memory
-  as the primary liveness field
-- `last_active_at` remains in daemon memory alongside live status
-- daemon-managed team-member fields update only through the documented heartbeat
-  socket handler in `docs/team-member-state.md`
-- SQLite does not own live status or `last_active_at`; it owns durable roster
-  state and the current per-member `pid`
+- SQLite may retain a diagnostic snapshot only
 - status cache rebuild after restart begins from `unknown` and refreshes through
   runtime events
-- read-time overlays such as `active 3 seconds ago` or `idle for 30 minutes`
-  are derived from daemon-memory `last_active_at`, not from durable roster
-  rows
-- until `schooks 1.0` is released, pid/activity updates may arrive through the
-  installed Python hooks from `../agent-team-mail`
-- after `schooks 1.0` is released, `schooks` becomes the controlled hook
-  environment layer and reports pid/activity updates to `atm-daemon`
 
 ## 3.2.1 Resource Caps And Saturation
 
@@ -242,8 +198,29 @@ Required saturation behavior:
 - retry queue full: fail remote send attempt rather than enqueueing unbounded
 - status-cache cap exceeded: evict least-recently-updated noncritical entries
   to `unknown` with structured warning emission
-- health/report surfaces must distinguish liveness from readiness and expose
-  queue-depth/backlog metrics needed to diagnose the saturation states above
+
+## 3.2.1 Status Ownership
+
+The daemon owns the live runtime view of agent status.
+
+Architectural rules:
+- live status remains in daemon memory
+- current agent `pid` is durable SQLite truth and is cached in daemon memory
+  as the primary liveness field
+- `last_active_at` remains in daemon memory alongside live status
+- daemon-managed team-member fields update only through the documented heartbeat
+  socket handler in `docs/team-member-state.md`
+- SQLite does not own live status or `last_active_at`; it owns durable roster
+  state and the current per-member `pid`
+- status cache rebuild after restart begins from `unknown` and refreshes through
+  runtime events
+- read-time overlays such as `active 3 seconds ago` or `idle for 30 minutes`
+  are derived from daemon-memory `last_active_at`, not from durable roster
+  rows
+- until `schooks 1.0` is released, pid/activity updates may arrive through the
+  installed Python hooks from `../agent-team-mail`
+- after `schooks 1.0` is released, `schooks` becomes the controlled hook
+  environment layer and reports pid/activity updates to `atm-daemon`
 
 ## 3.2.2 Timeouts
 
@@ -255,12 +232,6 @@ Required timeout defaults:
 - SQLite `busy_timeout`: `1500ms`
 - ingest batch processing slice: `2s` max before yielding
 - daemon health query used by `atm doctor`: `3s`
-- timeout-conformance coverage must prove that transport, store, ingest,
-  doctor, and remote-delivery paths do not wait indefinitely
-- if the runtime uses Tokio or another async executor, direct SQLite work must
-  stay behind `spawn_blocking` or a dedicated blocking pool; async dispatcher,
-  accept-loop, watcher, notifier, and health-query tasks must not block on
-  SQLite inline
 
 ## 3.3 Test Strategy
 
