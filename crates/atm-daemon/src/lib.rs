@@ -826,7 +826,6 @@ fn register_signal_handlers(
     stop: Arc<AtomicBool>,
     reload: Arc<AtomicBool>,
 ) -> Result<(), AtmError> {
-    #[cfg(not(windows))]
     signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(&stop)).map_err(
         |error| {
             AtmError::daemon_start_failed("failed to install SIGINT handler").with_source(error)

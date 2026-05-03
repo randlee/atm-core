@@ -850,7 +850,7 @@ impl Drop for ScopedDebugTimeoutOverride {
     }
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
+#[cfg(test)]
 mod readonly_test_override {
     use std::cell::Cell;
 
@@ -912,6 +912,13 @@ mod readonly_test_override {
             *remaining = count;
             original
         })
+    }
+}
+
+#[cfg(not(test))]
+mod readonly_test_override {
+    pub(super) fn debug_timeout_override_ms() -> Option<u64> {
+        None
     }
 }
 
