@@ -8,7 +8,7 @@ use crate::mail_store::{
 use crate::mailbox::{self, MailboxReadReport};
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::MessageEnvelope;
-use crate::store::{InsertOutcome, MessageKey, SourceFingerprint, StoreError};
+use crate::store::{InsertOutcome, MessageKey, SourceFingerprint, StoreError, StoreErrorKind};
 use crate::task_store::{TaskRecord, TaskStatus, TaskStore};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use crate::workflow::{self, WorkflowStateFile};
@@ -53,6 +53,8 @@ impl InboxIngress for JsonInboxIngress {
     ) -> Result<InboxIngestOutcome, AtmError> {
         let workflow_state =
             workflow::load_workflow_state(home_dir, team.as_str(), agent.as_str())?;
+        // INVARIANT: discover_source_paths() is bounded to the validated
+        // home/team/agent scope provided to this ingress call.
         let source_paths =
             mailbox::source::discover_source_paths(home_dir, team.as_str(), agent.as_str())?;
         let mut outcome = InboxIngestOutcome::default();
@@ -142,7 +144,7 @@ fn ingest_source_report(
     outcome: &mut InboxIngestOutcome,
 ) -> Result<(), AtmError> {
     for envelope in report.messages {
-        let message_key = canonical_message_key(source_path, &envelope)?;
+        let message_key = canonical_message_key(source_path, &envelope);
         let stored = stored_message_record(message_key.clone(), team, agent, &envelope)?;
         let ingest_record = IngestRecord {
             team_name: team.clone(),
@@ -203,27 +205,23 @@ fn imported_message_state(
     }
 }
 
-fn canonical_message_key(
-    source_path: &Path,
-    envelope: &MessageEnvelope,
-) -> Result<MessageKey, AtmError> {
+fn canonical_message_key(source_path: &Path, envelope: &MessageEnvelope) -> MessageKey {
     if let Some(atm_message_id) = envelope.atm_message_id() {
-        return Ok(MessageKey::from_atm_message_id(atm_message_id));
+        return MessageKey::from_atm_message_id(atm_message_id);
     }
     if let Some(message_id) = envelope.message_id {
-        return Ok(MessageKey::from_legacy_message_id(message_id));
+        return MessageKey::from_legacy_message_id(message_id);
     }
-    Ok(MessageKey::from_source_fingerprint(&source_fingerprint(
-        source_path,
-        envelope,
-    )))
+    MessageKey::from_source_fingerprint(&source_fingerprint(source_path, envelope))
 }
 
 fn source_fingerprint(source_path: &Path, envelope: &MessageEnvelope) -> SourceFingerprint {
     if let Some(atm_message_id) = envelope.atm_message_id() {
+        // INVARIANT: AtmMessageId is always a valid ULID-format fingerprint source.
         return atm_message_id.into();
     }
     if let Some(message_id) = envelope.message_id {
+        // INVARIANT: LegacyMessageId always produces a valid fingerprint.
         return message_id.into();
     }
 
@@ -243,9 +241,9 @@ fn source_fingerprint(source_path: &Path, envelope: &MessageEnvelope) -> SourceF
         hash = hash.wrapping_mul(0x100000001b3);
     }
 
-    format!("ext{hash:016x}")
-        .parse()
-        .expect("derived external inbox hash always produces a valid source fingerprint")
+    // INVARIANT: FNV hash of canonical path+message fields always produces a
+    // valid hex fingerprint.
+    SourceFingerprint::from_external_hex(hash)
 }
 
 fn stored_message_record(
@@ -307,11 +305,13 @@ fn sender_canonical(envelope: &MessageEnvelope) -> Option<AgentName> {
 }
 
 fn map_store_error(context: &str, error: StoreError) -> AtmError {
-    let mut atm_error = AtmError::new_with_code(
-        error.code,
-        AtmErrorKind::MailboxWrite,
-        format!("{context}: {}", error.message),
-    );
+    let kind = match error.kind {
+        StoreErrorKind::Busy => AtmErrorKind::Timeout,
+        StoreErrorKind::Constraint => AtmErrorKind::Validation,
+        _ => AtmErrorKind::MailboxWrite,
+    };
+    let mut atm_error =
+        AtmError::new_with_code(error.code, kind, format!("{context}: {}", error.message));
     if let Some(recovery) = error.recovery.as_ref() {
         atm_error = atm_error.with_recovery(recovery.clone());
     }
