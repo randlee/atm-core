@@ -18,7 +18,7 @@ use crate::schema::inbox_message::hydrate_legacy_fields_from_metadata;
 use crate::schema::{LegacyMessageId, MessageEnvelope};
 
 const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
-/// Append one message to a mailbox JSONL file under the mailbox lock.
+/// Append one message to a shared inbox file under the mailbox lock.
 ///
 /// Production send flows use the same lock discipline through
 /// `mailbox::store::append_mailbox_message_and_seed_workflow()`. This helper is
@@ -72,7 +72,7 @@ where
     store::commit_mailbox_state(path, &messages)
 }
 
-/// Read all valid mailbox records from a mailbox JSONL file.
+/// Read all valid mailbox records from one shared inbox file.
 ///
 /// # Errors
 ///
@@ -255,15 +255,17 @@ mod tests {
     use crate::mailbox::lock;
 
     #[test]
-    fn append_message_persists_one_jsonl_record() {
+    fn append_message_persists_one_array_record() {
         let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("append-message.jsonl");
+        let path = tempdir.path().join("append-message.json");
         let envelope = sample_message(Uuid::new_v4(), "first");
 
         append_message(&path, &envelope).expect("append");
 
         let raw = fs::read_to_string(&path).expect("raw contents");
-        assert!(raw.contains("\"text\":\"first\""));
+        let values: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0]["text"], "first");
         let read_back = read_messages(&path).expect("read back");
         assert_eq!(read_back, vec![envelope]);
     }
@@ -271,21 +273,23 @@ mod tests {
     #[test]
     fn append_message_serializes_metadata_atm_without_top_level_machine_fields() {
         let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("append-message-metadata.jsonl");
+        let path = tempdir.path().join("append-message-metadata.json");
         let envelope = sample_message(Uuid::new_v4(), "first");
 
         append_message(&path, &envelope).expect("append");
 
         let raw = fs::read_to_string(&path).expect("raw contents");
-        assert!(raw.contains("\"metadata\":{\"atm\":{"));
-        assert!(!raw.contains("\"message_id\""));
-        assert!(!raw.contains("\"source_team\""));
+        let values: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
+        let object = values[0].as_object().expect("message object");
+        assert!(object.contains_key("metadata"));
+        assert!(!object.contains_key("message_id"));
+        assert!(!object.contains_key("source_team"));
     }
 
     #[test]
     fn locked_read_modify_write_reads_mutates_and_rewrites_under_lock() {
         let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("locked-rmw.jsonl");
+        let path = tempdir.path().join("locked-rmw.json");
         let first = sample_message(Uuid::new_v4(), "first");
         append_message(&path, &first).expect("seed");
 
@@ -306,7 +310,7 @@ mod tests {
     #[test]
     fn append_message_removes_lock_sentinel_after_write() {
         let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("append-removes-lock.jsonl");
+        let path = tempdir.path().join("append-removes-lock.json");
 
         append_message(&path, &sample_message(Uuid::new_v4(), "first")).expect("append");
 
@@ -316,7 +320,7 @@ mod tests {
     #[test]
     fn append_message_cleans_preexisting_stale_lock_sentinel() {
         let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("append-cleans-stale-lock.jsonl");
+        let path = tempdir.path().join("append-cleans-stale-lock.json");
         fs::write(lock::sentinel_path(&path), u32::MAX.to_string()).expect("stale lock");
 
         append_message(&path, &sample_message(Uuid::new_v4(), "first")).expect("append");
@@ -465,7 +469,7 @@ mod tests {
     #[test]
     fn append_message_preserves_both_records_under_concurrent_writers() {
         let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("append-message-concurrent.jsonl");
+        let path = tempdir.path().join("append-message-concurrent.json");
         let barrier = Arc::new(Barrier::new(3));
 
         let mut handles = Vec::new();

@@ -98,7 +98,7 @@ mod tests {
     use crate::types::IsoTimestamp;
 
     #[test]
-    fn commit_mailbox_state_rewrites_mailbox_jsonl_with_only_new_messages() {
+    fn commit_mailbox_state_rewrites_mailbox_array_with_only_new_messages() {
         let tempdir = tempdir().expect("tempdir");
         let path = tempdir.path().join("arch-ctm.json");
         std::fs::write(&path, "{\"stale\":true}\n").expect("seed mailbox");
@@ -111,7 +111,8 @@ mod tests {
 
         let raw = std::fs::read_to_string(&path).expect("mailbox contents");
         assert!(!raw.contains("stale"));
-        assert_eq!(raw.lines().count(), 2);
+        let encoded: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
+        assert_eq!(encoded.len(), 2);
         assert!(raw.ends_with('\n'));
         assert_eq!(read_messages(&path).expect("read mailbox"), messages);
     }

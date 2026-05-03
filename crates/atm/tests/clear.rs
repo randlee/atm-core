@@ -6,6 +6,20 @@ use atm_core::types::IsoTimestamp;
 use chrono::{Duration, Utc};
 use serde_json::Value;
 
+fn parse_inbox_values(raw: &str) -> Vec<Value> {
+    if raw.trim().is_empty() {
+        return Vec::new();
+    }
+
+    match raw.chars().find(|ch| !ch.is_whitespace()) {
+        Some('[') => serde_json::from_str(raw).expect("json array"),
+        _ => raw
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("json line"))
+            .collect(),
+    }
+}
+
 #[test]
 fn test_clear_default_removes_only_read_and_acknowledged() {
     let fixture = Fixture::new(&["arch-ctm"]);
@@ -452,12 +466,15 @@ impl Fixture {
         if let Some(parent) = inbox_path.parent() {
             fs::create_dir_all(parent).expect("inbox dir");
         }
-        let raw = messages
+        let values: Vec<Value> = messages
             .iter()
-            .map(|message| serde_json::to_string(message).expect("json line"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        fs::write(inbox_path, format!("{raw}\n")).expect("write inbox");
+            .map(|message| serde_json::to_value(message).expect("json value"))
+            .collect();
+        fs::write(
+            inbox_path,
+            serde_json::to_string_pretty(&values).expect("json array"),
+        )
+        .expect("write inbox");
     }
 
     fn inbox_path(&self, agent: &str) -> std::path::PathBuf {
@@ -468,8 +485,9 @@ impl Fixture {
 
     fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {
         let raw = fs::read_to_string(self.inbox_path(agent)).expect("inbox contents");
-        raw.lines()
-            .map(|line| serde_json::from_str(line).expect("json line"))
+        parse_inbox_values(&raw)
+            .into_iter()
+            .map(|value| serde_json::from_value(value).expect("message envelope"))
             .collect()
     }
 
@@ -502,12 +520,15 @@ impl Fixture {
         if let Some(parent) = inbox_path.parent() {
             fs::create_dir_all(parent).expect("origin inbox dir");
         }
-        let raw = messages
+        let values: Vec<Value> = messages
             .iter()
-            .map(|message| serde_json::to_string(message).expect("json line"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        fs::write(inbox_path, format!("{raw}\n")).expect("write origin inbox");
+            .map(|message| serde_json::to_value(message).expect("json value"))
+            .collect();
+        fs::write(
+            inbox_path,
+            serde_json::to_string_pretty(&values).expect("json array"),
+        )
+        .expect("write origin inbox");
     }
 
     fn origin_inbox_path(&self, agent: &str, origin: &str) -> std::path::PathBuf {
@@ -519,8 +540,9 @@ impl Fixture {
     fn origin_inbox_contents(&self, agent: &str, origin: &str) -> Vec<MessageEnvelope> {
         let raw = fs::read_to_string(self.origin_inbox_path(agent, origin))
             .expect("origin inbox contents");
-        raw.lines()
-            .map(|line| serde_json::from_str(line).expect("json line"))
+        parse_inbox_values(&raw)
+            .into_iter()
+            .map(|value| serde_json::from_value(value).expect("message envelope"))
             .collect()
     }
 

@@ -19,7 +19,7 @@ name = "atm"
 path = "src/main.rs"
 
 [dependencies]
-atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.0" }
+atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.1" }
 anyhow.workspace = true
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
