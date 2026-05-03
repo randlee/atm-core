@@ -88,6 +88,16 @@ pub struct PendingExportRecord {
     pub expires_at: IsoTimestamp,
 }
 
+/// Readiness snapshot for the durable mail-store tables owned by `MailStore`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MailStoreHealth {
+    pub messages_ready: bool,
+    pub inbox_ingest_ready: bool,
+    pub ack_state_ready: bool,
+    pub message_visibility_ready: bool,
+    pub pending_exports_ready: bool,
+}
+
 /// Durable message store boundary. Direct SQLite calls must stay in the
 /// `atm-rusqlite` crate; higher layers work only through this trait.
 pub trait MailStore: StoreBoundary {
@@ -145,4 +155,14 @@ pub trait MailStore: StoreBoundary {
     fn record_pending_export(&self, export: &PendingExportRecord) -> Result<(), StoreError>;
 
     fn remove_pending_export(&self, message_key: &MessageKey) -> Result<(), StoreError>;
+
+    fn load_due_pending_exports(
+        &self,
+        now: &IsoTimestamp,
+        limit: usize,
+    ) -> Result<Vec<PendingExportRecord>, StoreError>;
+
+    fn remove_expired_pending_exports(&self, now: &IsoTimestamp) -> Result<u64, StoreError>;
+
+    fn mail_health(&self) -> Result<MailStoreHealth, StoreError>;
 }

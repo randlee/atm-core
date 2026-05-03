@@ -1,4 +1,4 @@
-use crate::store::{InsertOutcome, MessageKey, StoreBoundary, StoreError};
+use crate::store::{MessageKey, StoreBoundary, StoreError};
 use crate::types::{IsoTimestamp, TaskId};
 
 /// Canonical task status persisted by the Phase Q store boundary.
@@ -31,7 +31,18 @@ pub struct TaskRecord {
 /// Durable task-store boundary kept separate from `MailStore` so mail/task
 /// concerns do not collapse into a single god-interface.
 pub trait TaskStore: StoreBoundary {
-    fn upsert_task(&self, task: &TaskRecord) -> Result<InsertOutcome<TaskRecord>, StoreError>;
+    fn upsert_task(&self, task: &TaskRecord) -> Result<TaskRecord, StoreError>;
 
     fn load_task(&self, task_id: &TaskId) -> Result<Option<TaskRecord>, StoreError>;
+
+    fn load_tasks_for_message(
+        &self,
+        message_key: &MessageKey,
+    ) -> Result<Vec<TaskRecord>, StoreError>;
+
+    fn acknowledge_task(
+        &self,
+        task_id: &TaskId,
+        acknowledged_at: IsoTimestamp,
+    ) -> Result<Option<TaskRecord>, StoreError>;
 }

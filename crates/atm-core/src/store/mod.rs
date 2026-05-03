@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use serde::{Deserialize, Deserializer, Serialize};
+use thiserror::Error;
 
 use crate::error::AtmErrorCode;
 use crate::schema::{AtmMessageId, LegacyMessageId};
@@ -13,6 +14,34 @@ use crate::types::{AgentName, TeamName};
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct MessageKey(String);
+
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum StoreParseError {
+    #[error("message_key must use '<kind>:<value>' format")]
+    MessageKeyFormat,
+    #[error("message_key suffix must not be blank")]
+    MessageKeyBlankSuffix,
+    #[error("message_key prefix must be one of: atm, legacy, ext")]
+    MessageKeyPrefix,
+    #[error("atm message_key suffix must be a valid ULID")]
+    MessageKeyAtmSuffix,
+    #[error("legacy message_key suffix must be a valid UUID")]
+    MessageKeyLegacySuffix,
+    #[error("ext message_key suffix must be a stable external fingerprint")]
+    MessageKeyExternalSuffix,
+    #[error("source_fingerprint must use a stable ASCII token without separators")]
+    SourceFingerprint,
+    #[error("host_name must be a non-empty logical host token")]
+    HostName,
+    #[error("recipient_pane_id must not be blank")]
+    RecipientPaneId,
+    #[error("pid must be positive")]
+    ProcessId,
+    #[error("busy_timeout_ms must be greater than zero")]
+    BusyTimeoutMs,
+    #[error("sqlite_handle_budget must be in the range 1..=4")]
+    SqliteHandleBudget,
+}
 
 impl MessageKey {
     pub fn as_str(&self) -> &str {
@@ -47,32 +76,32 @@ impl MessageKey {
 }
 
 impl FromStr for MessageKey {
-    type Err = &'static str;
+    type Err = StoreParseError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let trimmed = value.trim();
         let Some((prefix, suffix)) = trimmed.split_once(':') else {
-            return Err("message_key must use '<kind>:<value>' format");
+            return Err(StoreParseError::MessageKeyFormat);
         };
         if suffix.trim().is_empty() {
-            return Err("message_key suffix must not be blank");
+            return Err(StoreParseError::MessageKeyBlankSuffix);
         }
         match prefix {
             "atm" => {
                 suffix
                     .parse::<AtmMessageId>()
-                    .map_err(|_| "atm message_key suffix must be a valid ULID")?;
+                    .map_err(|_| StoreParseError::MessageKeyAtmSuffix)?;
             }
             "legacy" => {
                 suffix
                     .parse::<LegacyMessageId>()
-                    .map_err(|_| "legacy message_key suffix must be a valid UUID")?;
+                    .map_err(|_| StoreParseError::MessageKeyLegacySuffix)?;
             }
             "ext" => {
                 validate_external_token(suffix)
-                    .map_err(|_| "ext message_key suffix must be a stable external fingerprint")?;
+                    .map_err(|_| StoreParseError::MessageKeyExternalSuffix)?;
             }
-            _ => return Err("message_key prefix must be one of: atm, legacy, ext"),
+            _ => return Err(StoreParseError::MessageKeyPrefix),
         }
         Ok(Self(trimmed.to_string()))
     }
@@ -112,12 +141,11 @@ impl SourceFingerprint {
 }
 
 impl FromStr for SourceFingerprint {
-    type Err = &'static str;
+    type Err = StoreParseError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let trimmed = value.trim();
-        validate_external_token(trimmed)
-            .map_err(|_| "source_fingerprint must use a stable ASCII token without separators")?;
+        validate_external_token(trimmed).map_err(|_| StoreParseError::SourceFingerprint)?;
         Ok(Self(trimmed.to_string()))
     }
 }
@@ -157,12 +185,12 @@ impl HostName {
 }
 
 impl FromStr for HostName {
-    type Err = &'static str;
+    type Err = StoreParseError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let trimmed = value.trim();
         if trimmed.is_empty() || trimmed.contains('/') || trimmed.contains('\\') {
-            return Err("host_name must be a non-empty logical host token");
+            return Err(StoreParseError::HostName);
         }
         Ok(Self(trimmed.to_string()))
     }
@@ -195,12 +223,12 @@ impl RecipientPaneId {
 }
 
 impl FromStr for RecipientPaneId {
-    type Err = &'static str;
+    type Err = StoreParseError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let trimmed = value.trim();
         if trimmed.is_empty() {
-            return Err("recipient_pane_id must not be blank");
+            return Err(StoreParseError::RecipientPaneId);
         }
         Ok(Self(trimmed.to_string()))
     }
@@ -227,9 +255,9 @@ impl fmt::Display for RecipientPaneId {
 pub struct ProcessId(i64);
 
 impl ProcessId {
-    pub fn new(value: i64) -> Result<Self, &'static str> {
+    pub fn new(value: i64) -> Result<Self, StoreParseError> {
         if value <= 0 {
-            return Err("pid must be positive");
+            return Err(StoreParseError::ProcessId);
         }
         Ok(Self(value))
     }
@@ -246,9 +274,9 @@ pub struct BusyTimeoutMs(u16);
 impl BusyTimeoutMs {
     pub const DEFAULT: Self = Self(1500);
 
-    pub fn new(value: u16) -> Result<Self, &'static str> {
+    pub fn new(value: u16) -> Result<Self, StoreParseError> {
         if value == 0 {
-            return Err("busy_timeout_ms must be greater than zero");
+            return Err(StoreParseError::BusyTimeoutMs);
         }
         Ok(Self(value))
     }
@@ -265,9 +293,9 @@ pub struct SqliteHandleBudget(u8);
 impl SqliteHandleBudget {
     pub const DEFAULT: Self = Self(1);
 
-    pub fn new(value: u8) -> Result<Self, &'static str> {
+    pub fn new(value: u8) -> Result<Self, StoreParseError> {
         if !(1..=4).contains(&value) {
-            return Err("sqlite_handle_budget must be in the range 1..=4");
+            return Err(StoreParseError::SqliteHandleBudget);
         }
         Ok(Self(value))
     }
@@ -448,9 +476,9 @@ impl StdError for StoreError {
     }
 }
 
-fn validate_external_token(value: &str) -> Result<(), &'static str> {
+fn validate_external_token(value: &str) -> Result<(), StoreParseError> {
     if value.is_empty() || value.contains('/') || value.contains('\\') || value.contains(':') {
-        return Err("invalid external token");
+        return Err(StoreParseError::SourceFingerprint);
     }
     Ok(())
 }

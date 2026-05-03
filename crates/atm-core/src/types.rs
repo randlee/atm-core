@@ -128,7 +128,7 @@ impl PartialEq<&str> for AgentName {
 }
 
 /// Canonical ATM team name at a public API boundary.
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct TeamName(String);
 

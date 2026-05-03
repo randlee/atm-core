@@ -28,7 +28,7 @@ pub struct TeamSummary {
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct TeamsList {
     pub action: String,
-    pub team: TeamName,
+    pub team: Option<TeamName>,
     pub teams: Vec<TeamSummary>,
 }
 
@@ -190,7 +190,7 @@ pub enum RestoreResult {
 /// cannot be enumerated.
 pub fn list_teams(home_dir: PathBuf, current_dir: PathBuf) -> Result<TeamsList, AtmError> {
     let config = load_config(&current_dir)?;
-    let current_team = resolve_team(None, config.as_ref()).unwrap_or_default();
+    let current_team = resolve_team(None, config.as_ref());
     let teams_root = teams_root_from_home(&home_dir);
     if !teams_root.exists() {
         return Ok(TeamsList {
