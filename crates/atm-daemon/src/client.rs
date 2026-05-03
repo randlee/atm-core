@@ -501,6 +501,9 @@ pub(crate) fn read_frame<T: for<'de> Deserialize<'de>, R: std::io::Read>(
         if bytes == 0 {
             break;
         }
+        // INVARIANT: reject the frame before pushing another byte once the
+        // bounded buffer is full so oversized peers cannot force unbounded
+        // allocation growth before we surface a typed protocol error.
         if frame.len() >= MAX_FRAME_BYTES {
             return Err(AtmError::daemon_protocol(format!(
                 "daemon frame exceeded the {} byte safety limit",
@@ -683,6 +686,7 @@ mod tests {
     use super::*;
     use atm_core::dispatcher::RequestKind;
     use atm_core::store::StoreError;
+    use std::io::Cursor;
 
     #[test]
     fn dispatch_error_to_atm_preserves_store_code_and_recovery() {
@@ -716,5 +720,15 @@ mod tests {
 
         assert_eq!(unsupported.code, Code::MessageValidationFailed);
         assert!(unsupported.message.contains("not implemented"));
+    }
+
+    #[test]
+    fn read_frame_rejects_oversized_payload_before_decode() {
+        let oversized = vec![b'a'; MAX_FRAME_BYTES + 1];
+        let mut cursor = Cursor::new(oversized);
+        let error = read_frame::<serde_json::Value, _>(&mut cursor).expect_err("oversized frame");
+
+        assert_eq!(error.code, Code::DaemonProtocolFailed);
+        assert!(error.message.contains("safety limit"));
     }
 }

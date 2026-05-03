@@ -352,6 +352,12 @@ impl DaemonHandle {
         }
 
         let drain_deadline = (shutdown_start + SHUTDOWN_DRAIN_TIMEOUT).min(shutdown_deadline);
+        // INVARIANT: SQLite dispatch workers share one serialized store
+        // connection and may spend up to the configured busy_timeout inside a
+        // single request. The shutdown path therefore gives them one bounded
+        // drain window first, then a second bounded total-deadline window
+        // before checkpointing WAL, so busy retries cannot race the final
+        // checkpoint with a still-live writer thread.
         wait_for_inflight_zero_until(&self.inflight, drain_deadline);
         wait_for_inflight_zero_until(&self.inflight, shutdown_deadline);
         join_worker_threads(&self.worker_threads, shutdown_deadline)?;

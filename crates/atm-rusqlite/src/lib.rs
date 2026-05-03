@@ -136,6 +136,10 @@ impl RusqliteStore {
     pub fn open_path(database_path: impl AsRef<Path>) -> Result<Self, StoreError> {
         Self::open_path_with_options(
             database_path.as_ref(),
+            // INVARIANT: the default busy timeout intentionally fits inside the
+            // daemon's overall forced-shutdown budget. A blocked SQLite op can
+            // consume most of the graceful drain window, but the daemon waits
+            // for inflight work to quiesce before WAL checkpoint/teardown.
             BusyTimeoutMs::new(5000).expect("5000ms busy timeout is valid"),
             SqliteHandleBudget::DEFAULT,
         )

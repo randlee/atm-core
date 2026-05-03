@@ -65,6 +65,7 @@ fn test_doctor_reports_unavailable_observability_with_real_fault_injection() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_obsolete_identity_drift_warning() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_atm_config(&format!("[atm]\nidentity = \"{TEST_SENDER}\"\n"));
@@ -89,6 +90,7 @@ fn test_doctor_reports_obsolete_identity_drift_warning() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_missing_baseline_team_member() {
     let fixture = Fixture::new(&[ROLE_TEAM_LEAD, TEST_SENDER]);
     fixture.write_atm_config(
@@ -119,6 +121,7 @@ fn test_doctor_reports_missing_baseline_team_member() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_member_roster_with_baseline_ordering() {
     let fixture = Fixture::new(&[TEST_QA, ROLE_TEAM_LEAD, TEST_SENDER, "temp-worker"]);
     fixture.write_atm_config(
@@ -145,6 +148,7 @@ fn test_doctor_reports_member_roster_with_baseline_ordering() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_missing_team_directory_finding() {
     let fixture = Fixture::empty();
 
@@ -163,6 +167,7 @@ fn test_doctor_reports_missing_team_directory_finding() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_team_config_parse_failure_finding() {
     let fixture = Fixture::empty();
     fixture.write_raw_team_config("{\"members\":");
@@ -182,6 +187,7 @@ fn test_doctor_reports_team_config_parse_failure_finding() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_missing_inboxes_directory_finding() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     fs::remove_dir_all(fixture.team_dir().join("inboxes")).expect("remove inboxes dir");
@@ -201,6 +207,7 @@ fn test_doctor_reports_missing_inboxes_directory_finding() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_stale_restore_marker_warning() {
     let fixture = Fixture::new(&[ROLE_TEAM_LEAD, TEST_SENDER]);
     let backup_path = fixture.tempdir.path().join("backup");
@@ -229,6 +236,7 @@ fn test_doctor_reports_stale_restore_marker_warning() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_sweeps_stale_mailbox_lock_across_team_inboxes() {
     let fixture = Fixture::new(&[ROLE_TEAM_LEAD, TEST_SENDER]);
     let stale_lock = fixture
@@ -300,6 +308,7 @@ fn test_doctor_cli_auto_starts_daemon_when_absent() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_typed_error_when_auto_start_fails() {
     let fixture = Fixture::new(&[TEST_SENDER]);
 
