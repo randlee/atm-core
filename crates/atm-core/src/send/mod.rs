@@ -270,6 +270,7 @@ pub fn send_mail(
                 recipient: &recipient,
                 message_id,
                 requires_ack,
+                is_ack: false,
                 task_id: task_id.as_ref(),
             },
         );
@@ -294,19 +295,20 @@ pub fn send_mail(
 }
 
 #[derive(Debug)]
-pub(super) struct ResolvedRecipient {
-    agent: AgentName,
-    team: TeamName,
+pub(crate) struct ResolvedRecipient {
+    pub(crate) agent: AgentName,
+    pub(crate) team: TeamName,
 }
 
 #[derive(Clone, Copy)]
-pub(super) struct PostSendHookContext<'a> {
-    sender: &'a AgentName,
-    sender_team: Option<&'a TeamName>,
-    recipient: &'a ResolvedRecipient,
-    message_id: LegacyMessageId,
-    requires_ack: bool,
-    task_id: Option<&'a TaskId>,
+pub(crate) struct PostSendHookContext<'a> {
+    pub(crate) sender: &'a AgentName,
+    pub(crate) sender_team: Option<&'a TeamName>,
+    pub(crate) recipient: &'a ResolvedRecipient,
+    pub(crate) message_id: LegacyMessageId,
+    pub(crate) requires_ack: bool,
+    pub(crate) is_ack: bool,
+    pub(crate) task_id: Option<&'a TaskId>,
 }
 
 fn resolve_recipient(
@@ -511,7 +513,7 @@ fn set_canonical_sender_metadata(extra: &mut Map<String, serde_json::Value>, can
     );
 }
 
-fn maybe_run_post_send_hook(
+pub(crate) fn maybe_run_post_send_hook(
     warnings: &mut Vec<String>,
     config: Option<&config::AtmConfig>,
     context: PostSendHookContext<'_>,

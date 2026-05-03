@@ -597,9 +597,14 @@ Post-send-hook rules:
   - `team`
   - `message_id`
   - `requires_ack`
+  - `is_ack`
   - optional `task_id` when present
   - optional `recipient_pane_id` when ATM has an authoritative pane mapping for
     the recipient
+- the post-send hook must run after successful non-`dry-run` `atm send`
+- the post-send hook must also run after successful `atm ack`, using the
+  reply message as the hook subject
+- `is_ack` must be `false` for `atm send` and `true` for `atm ack`
 - example payload:
   ```json
   {
@@ -610,6 +615,7 @@ Post-send-hook rules:
     "team": "atm-dev",
     "message_id": "...",
     "requires_ack": false,
+    "is_ack": false,
     "recipient_pane_id": "%1"
   }
   ```
@@ -1061,6 +1067,7 @@ Acknowledge a pending-ack message in the caller's own inbox and send a visible r
   - append a reply message to the original sender's inbox
 - preserve `acknowledgesMessageId` on the emitted reply
 - reject duplicate acknowledgement of an already acknowledged message
+- run matching `[[atm.post_send_hooks]]` rules after a successful ack, using the reply message as the hook subject
 
 ### 8.4 Output Contract
 
@@ -1073,6 +1080,7 @@ JSON output must include:
 - `reply_text` (String body of the reply message sent)
 - `task_id` (optional String, present when the source message has `taskId`)
 - `reply_target`
+- `warnings` (array of strings, omitted when empty)
 
 ## 9. `atm clear`
 

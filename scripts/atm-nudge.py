@@ -313,7 +313,25 @@ def nudge_pane(pane_id: str, recipient: str, message: str) -> None:
     log(f"nudged recipient={recipient} pane={pane_id}")
 
 
-def build_message(team: str) -> str:
+def build_message(team: str, payload: dict[str, object] | None = None) -> str:
+    payload = payload or {}
+    is_ack = payload.get("is_ack") is True
+    message_id = str(payload.get("message_id", "")).strip()
+    if is_ack:
+        acknowledgement = (
+            f"message {message_id} acknowledged"
+            if message_id
+            else "message acknowledged"
+        )
+        return (
+            f"<atm><action>read atm --team {team}</action>"
+            f"<action>ack the message</action>"
+            f"<action>{acknowledgement}</action>"
+            f"<action>complete associated work immediately</action>"
+            f'<when idle="immediate" busy="complete tasks based on established priority"/>'
+            f'<console announce="concise" pause="false"/></atm>'
+        )
+
     return (
         f"<atm><action>read atm --team {team}</action>"
         f"<action>ack the message</action>"
@@ -512,7 +530,8 @@ def main(argv: list[str]) -> int:
     recipient = args[0].strip()
     message_arg = args[1].strip() if len(args) >= 2 else None
     team = resolve_team()
-    message = message_arg if message_arg else build_message(team)
+    payload = read_post_send_payload()
+    message = message_arg if message_arg else build_message(team, payload)
 
     if pane_override:
         nudge_pane(pane_override, recipient, message)

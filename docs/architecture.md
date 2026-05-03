@@ -440,7 +440,8 @@ Architectural rules:
   canonical sender identity rather than the display-oriented `from` projection
 - ATM-owned post-send hooks are best-effort recipient-scoped helpers, not part
   of the atomic send boundary
-- the hook runs only after a successful non-`dry-run` send
+- the hook runs only after a successful non-`dry-run` send or ack; it fires
+  after both `atm send` and `atm ack`
 - each `[[atm.post_send_hooks]]` rule binds one recipient selector and one
   command argv
 - `recipient = "*"` acts as a wildcard match for all recipients
@@ -451,7 +452,7 @@ Architectural rules:
 - the hook receives inherited environment plus one ATM-owned JSON payload in
   `ATM_POST_SEND`
 - the payload includes `from`, `to`, `sender`, `recipient`, `team`,
-  `message_id`, `requires_ack`, and optional `task_id`
+  `message_id`, `requires_ack`, `is_ack` (bool), and optional `task_id`
 - the hook may optionally emit one structured result object on stdout with a
   declared log level, message, and optional structured fields; ATM parses it
   on a best-effort basis for post-send diagnostics
@@ -836,6 +837,7 @@ Public entrypoint:
 - reply target
 - reply message id
 - reply text
+- warnings: Vec<String>
 
 The ack service is responsible for the legal transition from `(Read, PendingAck)` to `(Read, Acknowledged)` plus the reply append.
 
@@ -1125,14 +1127,16 @@ contain:
 - `to`
 - `message_id`
 - `requires_ack`
+- `is_ack`
 - optional `task_id` when present
 - optional `recipient_pane_id` when ATM already knows the authoritative pane
   mapping for the recipient
 
-The post-send hook runs only after a successful non-`dry-run` send, executes
-once when sender or recipient matching succeeds, may optionally emit one
-structured stdout result for observability, and never rolls back a successful
-send on failure or timeout.
+The post-send hook runs only after a successful outbound mailbox write from
+`atm send` or `atm ack`. It executes once when recipient matching succeeds,
+uses `is_ack = false` for `atm send` and `is_ack = true` for `atm ack`, may
+optionally emit one structured stdout result for observability, and never rolls
+back a successful message write on failure or timeout.
 
 Phase Q hook-note:
 - once roster and pane mapping truth move to SQLite, the send path should place

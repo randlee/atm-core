@@ -168,6 +168,87 @@ fn test_ack_emits_retained_log_record() {
 }
 
 #[test]
+fn test_ack_runs_post_send_hook_with_expected_payload() {
+    let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
+    let message_id = Uuid::new_v4();
+    let mut message = fixture.message(
+        "team-lead",
+        "please ack",
+        true,
+        Some(Duration::minutes(5)),
+        None,
+        message_id,
+    );
+    message.task_id = Some("TASK-123".parse().expect("task id"));
+    fixture.write_inbox("arch-ctm", &[message]);
+
+    let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
+    fixture.write_atm_config(&format!(
+        "[[atm.post_send_hooks]]\nrecipient = 'team-lead'\ncommand = ['{}', 'capture', '{}']\n",
+        hook_path.display(),
+        payload_path.display()
+    ));
+
+    let output = fixture.run(&[
+        "ack",
+        &message_id.to_string(),
+        "received and starting",
+        "--json",
+    ]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let payload: Value =
+        serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
+    assert_eq!(payload["from"], "arch-ctm@atm-dev");
+    assert_eq!(payload["to"], "team-lead@atm-dev");
+    assert_eq!(payload["requires_ack"], false);
+    assert_eq!(payload["is_ack"], true);
+    assert_eq!(payload["task_id"], "TASK-123");
+    assert!(payload["message_id"].as_str().is_some());
+}
+
+#[test]
+fn test_ack_post_send_hook_failure_surfaces_warning() {
+    let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
+    let message_id = Uuid::new_v4();
+    fixture.write_inbox(
+        "arch-ctm",
+        &[fixture.message(
+            "team-lead",
+            "please ack",
+            true,
+            Some(Duration::minutes(5)),
+            None,
+            message_id,
+        )],
+    );
+
+    let (hook_path, payload_path) = fixture.install_hook_fixture("fail");
+    fixture.write_atm_config(&format!(
+        "[[atm.post_send_hooks]]\nrecipient = 'team-lead'\ncommand = ['{}', 'fail', '{}']\n",
+        hook_path.display(),
+        payload_path.display()
+    ));
+
+    let output = fixture.run(&["ack", &message_id.to_string(), "received and starting"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let stderr = fixture.stderr(&output);
+    assert!(
+        stderr.contains("post-send hook exited unsuccessfully"),
+        "stderr: {stderr}"
+    );
+}
+
+#[test]
 fn test_ack_rejects_already_acknowledged_message() {
     let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
     let message_id = Uuid::new_v4();
@@ -236,6 +317,10 @@ impl Fixture {
             .current_dir(self.tempdir.path())
             .output()
             .expect("run atm")
+    }
+
+    fn write_atm_config(&self, body: &str) {
+        fs::write(self.tempdir.path().join(".atm.toml"), body).expect("write .atm.toml");
     }
 
     fn write_team_config(&self, members: &[&str]) {
@@ -355,6 +440,31 @@ impl Fixture {
             .join(".claude")
             .join("teams")
             .join("atm-dev")
+    }
+
+    fn install_hook_fixture(&self, mode: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+        let fixture_binary =
+            std::path::PathBuf::from(env!("CARGO_BIN_EXE_atm_post_send_hook_fixture"));
+        let hook_dir = self.tempdir.path().join("bin");
+        fs::create_dir_all(&hook_dir).expect("hook dir");
+        let hook_path = hook_dir.join(fixture_binary.file_name().expect("hook binary filename"));
+        fs::copy(&fixture_binary, &hook_path).expect("copy hook fixture");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            let mut permissions = fs::metadata(&hook_path)
+                .expect("hook metadata")
+                .permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(&hook_path, permissions).expect("hook permissions");
+        }
+        let payload_path = self.tempdir.path().join(format!("{mode}-payload.json"));
+        (
+            std::path::PathBuf::from("bin")
+                .join(hook_path.file_name().expect("copied hook binary filename")),
+            payload_path,
+        )
     }
 
     fn message(
