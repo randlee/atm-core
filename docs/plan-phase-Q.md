@@ -439,6 +439,85 @@ Compatibility rules:
 
 ## Sprint Breakdown
 
+### Q.0 — Boundary Cleanup And Debt Retirement
+
+Scope:
+- align the current codebase with the Phase Q target shape before store and
+  daemon work begin
+- remove technical debt that would otherwise force workaround code in Q.1+
+- simplify the retained filesystem/runtime line without prebuilding later
+  architecture
+
+Non-goals:
+- no partial daemon implementation
+- no speculative transport or plugin framework work
+- no speculative crate split that does not directly reduce implementation risk
+- no cleanup work whose only value is style rather than migration safety
+
+Expected files / crates:
+- `crates/atm-core/src/mailbox/*`
+- `crates/atm-core/src/schema/*`
+- `crates/atm-core/src/send/*`
+- `crates/atm-core/src/config/*`
+- `crates/atm-core/src/workflow/*`
+- `crates/atm-core/src/team_admin/*`
+- `crates/atm/tests/*`
+- `crates/atm-core/tests/*`
+
+Implementation details:
+- keep one ATM-owned inbox write boundary and make that the only retained
+  message export path
+- keep one ATM-owned inbox hydration boundary and remove duplicated
+  test-local/service-local compatibility helpers
+- confine message-id compatibility reinterpretation to the schema boundary
+  rather than spreading ULID/UUID bridge logic through service/test code
+- remove hidden defaults and sentinel construction paths for externally
+  meaningful identifiers and roster members; require explicit validated
+  constructors instead
+- keep `ATM_POST_SEND` payload shaping and post-send hook trigger points
+  centralized rather than letting command/test code assemble them ad hoc
+- tighten `config.json` ingest so shorthand and object-form team-member parsing
+  obey the same validation expectations where both remain supported
+- keep retained passthrough field ownership documented at the schema boundary
+  so Q.1 migration work does not have to rediscover who owns which wire fields
+- add or update conformance tests around:
+  - one shared inbox write path
+  - one metadata hydration path
+  - explicit roster/member construction
+  - hook payload stability
+  - config ingest validation parity
+
+Code-review basis for Q.0:
+- `mailbox::atomic::write_messages()` is already the right shared write seam
+  and should remain the only ATM-owned inbox writer
+- `schema::to_shared_inbox_value()` and
+  `hydrate_legacy_fields_from_metadata()` are already the right schema
+  compatibility seams and should absorb compatibility logic rather than being
+  mirrored elsewhere
+- `crates/atm/tests/send.rs` and `crates/atm-core/tests/mailbox_locking.rs`
+  have both recently carried duplicated metadata hydration helpers, which is
+  exactly the kind of drift Q.0 should remove
+- recent `AgentName` / `AgentMember` fixes showed that hidden defaults create
+  migration drag and ambiguous ownership
+- recent context-injection fixes showed that inbox write policy must stay
+  centralized or Claude compatibility regresses quickly
+
+Acceptance:
+- one ATM-owned inbox write path exists and is the only retained path used by
+  send/ack mail persistence
+- one ATM-owned metadata hydration path exists and duplicated test-local/schema
+  shim logic is removed
+- no retained command/test path depends on hidden default construction for
+  externally meaningful identity fields
+- hook payload assembly and hook trigger points are auditable from one service
+  boundary rather than scattered through command/test code
+- `config.json` shorthand and object-form member parsing obey the same
+  validation expectations where both are supported
+- conformance tests document the intended seams so Q.1 work can build against
+  them without reinterpretation
+- cleanup leaves the codebase simpler than before; Q.0 must remove workaround
+  code, not add another compatibility layer
+
 ### Q.1 — SQLite Store Foundation
 
 Scope:
@@ -453,6 +532,7 @@ Scope:
 - add explicit dispatcher boundary alongside transport/handlers
 
 Parallelization rule:
+- Q.0 must be complete before Q.1 boundary work is considered locked
 - Q.1 defines the lock-in point for the core boundary traits, request/response
   contracts, typed errors, dispatcher/handler seams, and store-family split
 - transport, watcher/reconcile, and command-migration work must not proceed as
@@ -703,6 +783,22 @@ Acceptance:
     than correctness blockers
   - no core test requires daemon process spawning
 
+### Q.6 — Production-Readiness Gate + Release Sprint
+
+Scope:
+- prove the Phase Q implementation is production ready rather than merely
+  architecturally aligned
+- run the release gate, packaging gate, and final documentation/QA alignment
+- publish only after all prior sprint gates are green
+
+Acceptance:
+- version bump planning is complete
+- `cargo publish --dry-run` succeeds for the intended publish set
+- crates.io publish succeeds for the intended release line
+- GitHub release/tag/binary artifact steps are complete
+- `CHANGELOG.md` is updated
+- all Phase Q release-gate conditions pass on the release candidate
+
 <a id="testing-constraints"></a>
 ## Testing Constraints
 
@@ -832,6 +928,7 @@ The following must be checked on every QA pass for Phase Q:
 ## Release Gate For Phase Q
 
 Phase Q should be considered complete only when:
+- Q.0 cleanup work is complete and no longer blocks Q.1+ implementation
 - ATM mail correctness no longer depends on mailbox `.lock` files
 - SQLite is the authoritative store for read/ack/clear/task semantics
 - SQLite is the authoritative store for team roster
