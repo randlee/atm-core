@@ -336,10 +336,23 @@ fn parse_team_config(config_path: &Path, raw: &str) -> Result<TeamConfig, AtmErr
 
 fn parse_team_member(config_path: &Path, index: usize, entry: &Value) -> Option<AgentMember> {
     match entry {
-        Value::String(name) => Some(AgentMember {
-            name: AgentName::from_validated(name.clone()),
-            ..Default::default()
-        }),
+        Value::String(name) => match name.parse::<AgentName>() {
+            Ok(name) => Some(AgentMember {
+                name,
+                ..Default::default()
+            }),
+            Err(error) => {
+                warn!(
+                    code = %AtmErrorCode::WarningInvalidTeamMemberSkipped,
+                    path = %config_path.display(),
+                    member_index = index,
+                    member = %name,
+                    %error,
+                    "skipping invalid team member record"
+                );
+                None
+            }
+        },
         _ => match serde_json::from_value::<AgentMember>(entry.clone()) {
             Ok(member) => Some(member),
             Err(error) => {

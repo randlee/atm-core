@@ -22,24 +22,15 @@ impl LegacyMessageId {
     }
 
     pub fn from_atm_message_id(value: AtmMessageId) -> Self {
-        let mut bytes = value.into_ulid().to_bytes();
-        // Preserve a deterministic bridge for legacy read/ack flows while
-        // normalizing the bytes into a structurally valid UUID v4 shape.
-        bytes[6] = (bytes[6] & 0x0f) | 0x40;
-        bytes[8] = (bytes[8] & 0x3f) | 0x80;
-        Self(Uuid::from_bytes(bytes))
+        Self(Uuid::from_bytes(value.into_ulid().to_bytes()))
     }
 
     pub fn into_uuid(self) -> Uuid {
         self.0
     }
 
-    /// Convert a legacy compatibility UUID into a best-effort ULID approximation.
-    ///
-    /// This mapping is intentionally lossy. `from_atm_message_id` normalizes the
-    /// source ULID into a UUID v4-compatible byte pattern, so reversing the
-    /// process cannot recover the original ULID exactly.
-    pub fn into_lossy_atm_message_id_approximation(self) -> AtmMessageId {
+    /// Reinterpret the raw UUID bytes as an ATM message ULID without mutation.
+    pub fn into_atm_message_id(self) -> AtmMessageId {
         AtmMessageId::from(Ulid::from_bytes(self.0.into_bytes()))
     }
 }
@@ -134,6 +125,17 @@ impl fmt::Display for AtmMessageId {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+/// ATM-owned semantic discriminator for alert-class metadata.
+pub struct AlertKind(String);
+
+impl AlertKind {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 /// ATM-owned machine metadata planned for the forward `metadata.atm` namespace.
 pub struct AtmMetadataFields {
@@ -162,7 +164,7 @@ pub struct AtmMetadataFields {
     pub task_id: Option<TaskId>,
 
     #[serde(rename = "alertKind", skip_serializing_if = "Option::is_none")]
-    pub alert_kind: Option<String>,
+    pub alert_kind: Option<AlertKind>,
 
     // This advisory diagnostic field preserves platform-native path encoding
     // (including backslashes on Windows) rather than normalizing JSON output to
@@ -293,10 +295,10 @@ pub(crate) fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, 
             .and_then(|value| match value {
                 Value::String(_) => message
                     .acknowledges_message_id
-                    // This forwarding path is lossy: the top-level field is a
-                    // legacy UUID, so the shared inbox export can only emit a
-                    // ULID approximation rather than the original ATM ULID.
-                    .map(LegacyMessageId::into_lossy_atm_message_id_approximation)
+                    // This forwarding path preserves the legacy UUID bytes
+                    // exactly, but the resulting shared-inbox value is still a
+                    // compatibility reinterpretation of those bytes as a ULID.
+                    .map(LegacyMessageId::into_atm_message_id)
                     .map(|message_id| Value::String(message_id.to_string())),
                 _ => None,
             });

@@ -24,7 +24,7 @@ use uuid::Uuid;
 
 // Test-side ceiling guard only; production lock timeout defaults to 5s per
 // architecture §18.3.
-const NON_BLOCKING_LOCK_BUDGET: Duration = Duration::from_secs(2);
+const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(2);
 
 #[test]
 #[serial]
@@ -219,10 +219,8 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
         arch_workflow["messages"][format!("legacy:{pending_message_id}")]["acknowledgedAt"]
             .as_str()
             .is_some()
-            || arch_workflow["messages"][format!(
-                "atm:{}",
-                pending_message_id.into_lossy_atm_message_id_approximation()
-            )]["acknowledgedAt"]
+            || arch_workflow["messages"]
+                [format!("atm:{}", pending_message_id.into_atm_message_id())]["acknowledgedAt"]
                 .as_str()
                 .is_some(),
         "pending message was not acknowledged in workflow state: {arch_workflow:?}"
@@ -579,7 +577,7 @@ fn send_times_out_under_bounded_lock_contention() {
 
     assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
     assert!(
-        started.elapsed() < NON_BLOCKING_LOCK_BUDGET,
+        started.elapsed() < TEST_LOCK_BUDGET_CEILING,
         "retain only a coarse non-blocking budget here; recv_timeout-based tests above already cover deadlock detection"
     );
 }
@@ -616,7 +614,7 @@ fn clear_dry_run_does_not_wait_on_mailbox_lock() {
     assert_eq!(outcome.removed_total, 0);
     assert_eq!(outcome.remaining_total, 1);
     assert!(
-        started.elapsed() < NON_BLOCKING_LOCK_BUDGET,
+        started.elapsed() < TEST_LOCK_BUDGET_CEILING,
         "retain only a coarse non-blocking budget here; recv_timeout-based tests above already cover deadlock detection"
     );
 }
@@ -681,7 +679,7 @@ fn read_possible_write_only_locks_when_display_mutation_is_required() {
     assert_eq!(outcome.count, 1);
     assert_eq!(outcome.messages[0].envelope.text, "already read");
     assert!(
-        started.elapsed() < NON_BLOCKING_LOCK_BUDGET,
+        started.elapsed() < TEST_LOCK_BUDGET_CEILING,
         "retain only a coarse non-blocking budget here; recv_timeout-based tests above already cover deadlock detection"
     );
 }
@@ -794,7 +792,7 @@ fn send_reports_non_contention_lock_failures_without_timeout() {
 
     assert_eq!(error.code, AtmErrorCode::MailboxLockFailed);
     assert!(
-        started.elapsed() < NON_BLOCKING_LOCK_BUDGET,
+        started.elapsed() < TEST_LOCK_BUDGET_CEILING,
         "retain only a coarse non-blocking budget here; recv_timeout-based tests above already cover deadlock detection"
     );
 }
@@ -1128,7 +1126,7 @@ fn pending_ack_message(
     let mut extra = serde_json::Map::new();
     let mut metadata = serde_json::Map::new();
     let mut atm = serde_json::Map::new();
-    let atm_message_id = message_id.into_lossy_atm_message_id_approximation();
+    let atm_message_id = message_id.into_atm_message_id();
     atm.insert(
         "messageId".to_string(),
         serde_json::Value::String(atm_message_id.to_string()),
@@ -1165,7 +1163,7 @@ fn read_message(from: &str, text: &str, message_id: LegacyMessageId) -> MessageE
     let mut extra = serde_json::Map::new();
     let mut metadata = serde_json::Map::new();
     let mut atm = serde_json::Map::new();
-    let atm_message_id = message_id.into_lossy_atm_message_id_approximation();
+    let atm_message_id = message_id.into_atm_message_id();
     atm.insert(
         "messageId".to_string(),
         serde_json::Value::String(atm_message_id.to_string()),
@@ -1202,7 +1200,7 @@ fn unread_message(from: &str, text: &str, message_id: LegacyMessageId) -> Messag
     let mut extra = serde_json::Map::new();
     let mut metadata = serde_json::Map::new();
     let mut atm = serde_json::Map::new();
-    let atm_message_id = message_id.into_lossy_atm_message_id_approximation();
+    let atm_message_id = message_id.into_atm_message_id();
     atm.insert(
         "messageId".to_string(),
         serde_json::Value::String(atm_message_id.to_string()),

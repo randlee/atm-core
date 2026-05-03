@@ -363,7 +363,7 @@ fn member_summary(member: &AgentMember) -> MemberSummary {
     MemberSummary {
         name: AgentName::from_validated(member.name.clone()),
         agent_id: member.agent_id.clone(),
-        agent_type: member.agent_type.clone(),
+        agent_type: member.agent_type.to_string(),
         model: member.model.clone(),
         joined_at: member.joined_at,
         tmux_pane_id: member.tmux_pane_id.clone(),

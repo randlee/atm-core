@@ -496,7 +496,7 @@ mod tests {
 
     fn sample_message(message_id: Uuid, body: &str) -> MessageEnvelope {
         let legacy_message_id = crate::schema::LegacyMessageId::from(message_id);
-        let atm_message_id = legacy_message_id.into_lossy_atm_message_id_approximation();
+        let atm_message_id = legacy_message_id.into_atm_message_id();
         let message_id = crate::schema::LegacyMessageId::from_atm_message_id(atm_message_id);
         let mut extra = serde_json::Map::new();
         let mut metadata = serde_json::Map::new();
