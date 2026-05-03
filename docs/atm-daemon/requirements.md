@@ -20,6 +20,7 @@ in the pre-Phase-Q workspace yet.
 - same-host daemon API transport
 - cross-host daemon-to-daemon transport
 - runtime composition of `atm-core` service boundaries
+- graft-session registration and daemon-originated nudge delivery
 - live agent status cache
 - runtime watch/reconcile loop if enabled
 - daemon-side `sc-observability` emission
@@ -43,6 +44,7 @@ Initial allocation:
 - `REQ-DAEMON-STATUS-*`
 - `REQ-DAEMON-TEST-*`
 - `REQ-DAEMON-OBS-*`
+- `REQ-DAEMON-NOTIFY-*`
 - `REQ-DAEMON-HEALTH-*`
 - `REQ-DAEMON-SIGNAL-*`
 
@@ -89,6 +91,12 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-OBS-001` `atm-daemon` owns daemon/runtime/transport structured
   event emission through `sc-observability`. Satisfies:
   `REQ-CORE-OBS-002`.
+- `REQ-DAEMON-NOTIFY-001` `atm-daemon` owns daemon-side `post-send-event`
+  shaping and delivery to registered `atm-graft` sessions. Satisfies:
+  `REQ-P-GRAFT-001`, `REQ-CORE-COMPAT-002`.
+- `REQ-DAEMON-NOTIFY-002` `atm-daemon` owns graft-session registration and
+  lifecycle over the same-host daemon API. Satisfies:
+  `REQ-P-GRAFT-001`, `REQ-CORE-TRANSPORT-001`.
 - `REQ-DAEMON-HEALTH-001` `atm-daemon` owns the daemon health interface
   consumed by `atm doctor`. Satisfies:
   `REQ-CORE-DOCTOR-002`.
@@ -108,6 +116,8 @@ The `atm-daemon` crate docs must remain aligned with:
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
 - [`../atm-core/requirements.md`](../atm-core/requirements.md)
 - [`../atm-core/architecture.md`](../atm-core/architecture.md)
+- [`../atm-graft/requirements.md`](../atm-graft/requirements.md)
+- [`../atm-graft/architecture.md`](../atm-graft/architecture.md)
 
 ## 5. Phase Q Runtime Requirements
 
@@ -123,6 +133,8 @@ Requirement IDs:
 - `REQ-DAEMON-STATUS-001`
 - `REQ-DAEMON-TEST-001`
 - `REQ-DAEMON-OBS-001`
+- `REQ-DAEMON-NOTIFY-001`
+- `REQ-DAEMON-NOTIFY-002`
 - `REQ-DAEMON-HEALTH-001`
 - `REQ-DAEMON-SIGNAL-001`
 
@@ -135,6 +147,9 @@ Required runtime rules:
   bounded deadline, checkpoint WAL, and release singleton ownership
 - signal handlers must be installed before listeners are opened
 - remote delivery must be daemon-to-daemon only
+- same-host daemon client traffic may come from retained CLI callers or
+  registered `atm-graft` sessions, but all such clients use the same logical
+  daemon API
 - the same transport protocol must be exercisable through an in-process
   `test-socket` without changing handler/business logic
 - transport/store/health operations must obey one documented timeout budget
@@ -193,4 +208,11 @@ Required runtime rules:
 - daemon runtime failures must remain typed across transport/runtime boundaries
   rather than collapsing into panic/unwrap control flow
 - daemon runtime and transport paths must emit structured observability events
+- daemon-side notifier logic must emit daemon-originated nudge payloads to
+  registered `atm-graft` sessions only after authoritative message commit
+- daemon-side `post-send-event` delivery must remain distinct from
+  `.atm.toml` `post-send hook` subprocess execution
+- graft-session registration must be automatic by default from an active
+  `atm-graft` client and must return typed unavailable / backpressure failures
+  when the daemon cannot accept the session
 - daemon must expose one explicit health/status query interface for `atm doctor`

@@ -13,6 +13,7 @@ The current workspace contains:
 
 The Phase Q target workspace remains intentionally small and adds:
 - `atm-daemon`: daemon runtime binary / transport host
+- `atm-graft`: embedded Rust host-agent daemon client crate
 - `atm-rusqlite`: first concrete SQLite store implementation
 
 The CLI stays thin. Product logic moves into `atm-core`.
@@ -38,6 +39,7 @@ moved into:
 - [`docs/atm/architecture.md`](./atm/architecture.md)
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
+- [`docs/atm-graft/architecture.md`](./atm-graft/architecture.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 
 Phase-Q supersession note:
@@ -48,11 +50,12 @@ Phase-Q supersession note:
 
 ## 2. Crate Boundaries
 
-The post-Q product runtime is implemented by four crates:
+The post-Q product runtime is implemented by five crates:
 
 - `atm-core`
 - `atm`
 - `atm-daemon`
+- `atm-graft`
 - `atm-rusqlite`
 
 Product-level boundary rules:
@@ -62,11 +65,14 @@ Product-level boundary rules:
 - `atm` owns CLI parsing, dispatch, rendering, and bootstrap.
 - `atm-daemon` owns runtime composition, transport adapters, singleton
   enforcement, and live-status runtime state.
+- `atm-graft` owns embedded Rust host-agent daemon-client runtime behavior,
+  including registration, nudge delivery, and host injection bridging.
 - `atm-rusqlite` owns the first concrete SQLite implementation of the durable
   store boundaries.
 - `atm-core` must not own clap or terminal-formatting concerns.
 - `atm` must not own mailbox, workflow, log-query, or doctor business logic.
 - `atm-daemon` must not become a second business-logic crate.
+- `atm-graft` must not own daemon business logic or direct store / inbox I/O.
 - `atm-rusqlite` must not absorb workflow or command logic; it implements store
   contracts only.
 
@@ -75,6 +81,7 @@ Crate-local boundary detail is owned by:
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm/architecture.md`](./atm/architecture.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
+- [`docs/atm-graft/architecture.md`](./atm-graft/architecture.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 
 ### 2.3 Release Publication Boundary
@@ -2068,7 +2075,10 @@ There are three distinct paths:
 2. Native agent path
    - native agent/plugin traffic does not use JSONL
    - native agents talk to the local daemon API
+   - first-party Rust host-agent executables do so through `atm-graft`
    - the daemon commits through the SQLite store boundary
+   - after authoritative commit, the daemon may emit a daemon-owned
+     `post-send-event` for registered graft sessions
 
 3. Remote host path
    - cross-host delivery is daemon-to-daemon only
@@ -2324,6 +2334,7 @@ Boundary rule:
 
 Dispatch model:
 - one-way notification plus status-reporting callbacks
+- daemon-owned `post-send-event` fanout to registered graft sessions
 
 Object-safety rule:
 - callers depend on an object-safe notifier/plugin boundary, not agent-specific
@@ -2331,6 +2342,8 @@ Object-safety rule:
 
 Minimum method set:
 - notify message/task delivery
+- register/unregister graft session
+- deliver structured nudge payload
 - report live status update
 - return typed backpressure / unavailable results
 

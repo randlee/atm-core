@@ -18,6 +18,7 @@ The `atm-daemon` crate is responsible for:
 - local daemon API listener
 - remote daemon-to-daemon transport listener/client
 - runtime wiring of `atm-core` service boundaries
+- graft-session registration and daemon-originated nudge delivery
 - live agent-status cache
 - optional watch/reconcile runtime loop
 - daemon/runtime observability emission
@@ -36,6 +37,8 @@ The `atm-daemon` crate must remain thin.
   - Unix domain socket
   - TCP/TLS
   - in-process `test-socket`
+- same-host daemon clients include the retained CLI and embedded `atm-graft`
+  sessions; both consume the same logical daemon API
 - cross-host delivery is daemon-to-daemon only.
 - remote delivery may use bounded transient retry for short intermittent
   failures, but not a durable long-lived remote outbox.
@@ -47,6 +50,8 @@ The `atm-daemon` crate must remain thin.
   debug-only runtime path replaces it in production.
 - plugin-local observability does not replace daemon-owned runtime/transport
   sinks; daemon-owned events stay daemon-owned.
+- daemon-owned `post-send-event` delivery is an internal notifier path and is
+  distinct from `.atm.toml` `post-send hook` subprocess execution.
 - runtime subsystems stay fully isolated:
   - SQL/store calls belong only to the store boundary
   - file-watch/reconcile logic belongs only to the watcher/reconcile boundary
@@ -169,6 +174,24 @@ Architectural rules:
 - singleton ownership artifacts must be released on normal signal-driven exit
   and retained only on crash/fail-stop paths where the process cannot run
   cleanup code
+
+## 3.1.3 Graft Sessions And Nudge Delivery
+
+Daemon-owned nudge delivery to embedded host agents is part of the notifier
+boundary.
+
+Architectural rules:
+- registered `atm-graft` sessions are same-host daemon clients, not alternate
+  daemon implementations
+- the daemon emits one internal `post-send-event` after authoritative message
+  commit and may fan that event out to registered graft sessions
+- the minimum nudge payload delivered to `atm-graft` contains:
+  - `from`
+  - `message`
+- the daemon must keep nudge delivery advisory; durable mail truth remains in
+  SQLite and daemon-backed `read` paths
+- notifier/plugin delivery internals remain crate-private even when the public
+  daemon API exposes graft-session registration and typed nudge events
 
 ## 3.2 Resource Caps And Saturation
 

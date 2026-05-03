@@ -39,7 +39,7 @@ detail is necessary to explain a product-level decision.
 
 ### 2.3 Crate Docs Define Ownership
 
-Files in `docs/atm/` and `docs/atm-core/` define:
+Files in `docs/atm/`, `docs/atm-core/`, and `docs/atm-graft/` define:
 
 - what each crate owns
 - how each crate satisfies referenced product requirements
@@ -120,12 +120,15 @@ docs/
       mailbox.md
       config.md
       observability.md
+  atm-graft/
+    requirements.md
+    architecture.md
 ```
 
 Notes:
 
-- Additional supporting docs may be added under `docs/atm/` or
-  `docs/atm-core/` when justified.
+- Additional supporting docs may be added under `docs/atm/`,
+  `docs/atm-core/`, or `docs/atm-graft/` when justified.
 - Top-level docs remain the only product-level source of truth.
 - Cross-subsystem schema ownership docs that define who owns a wire/storage
   schema belong at top level and must use explicit subsystem names in the file
@@ -262,7 +265,17 @@ Owns core library documentation:
 
 `docs/atm-core/modules/` owns one file per significant module or service area.
 
-Each module file must document:
+### 5.3 `docs/atm-graft/`
+
+Owns embedded host-agent integration documentation:
+
+- same-host daemon client runtime for linked Rust agent executables
+- activation and config-loading behavior for graft mode
+- host-agent queue / injection bridge boundaries
+- graft-side observability ownership
+- crate-local architectural decisions for the embedded graft runtime
+
+Each `atm-core` module file must document:
 
 - the module’s responsibility
 - inputs and outputs

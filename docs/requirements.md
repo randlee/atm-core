@@ -66,6 +66,8 @@ Crate-local ownership docs live under:
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm-daemon/requirements.md`](./atm-daemon/requirements.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
+- [`docs/atm-graft/requirements.md`](./atm-graft/requirements.md)
+- [`docs/atm-graft/architecture.md`](./atm-graft/architecture.md)
 - [`docs/atm-rusqlite/requirements.md`](./atm-rusqlite/requirements.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 
@@ -124,6 +126,7 @@ Satisfied by:
 - local team discovery and recovery through `atm teams`
 - local roster verification through `atm members`
 - native agent/plugin notification interface
+- embedded Rust host-agent integration via `atm-graft`
 - the retained local team recovery surface:
   - `atm teams`
   - `atm members`
@@ -2585,6 +2588,8 @@ mail correctness.
   - cross-host transport: TCP/TLS
   - test transport: in-process `test-socket` implementation of the same
     protocol/interface for subsystem and daemon-boundary tests
+  - same-host daemon clients may include retained CLI callers and active
+    `atm-graft` sessions, but all use the same logical daemon API
   - these are implementations of one protocol/interface, not separate systems
   - socket receive logic must remain a small framed-message loop that:
     - reads one request frame
@@ -2700,6 +2705,28 @@ mail correctness.
     of JSONL
   - the later agent plugin crate must align to this daemon API rather than
     introducing a parallel message transport
+
+- `REQ-P-GRAFT-001` First-party embedded Rust host-agent integration must use
+  one daemon-backed graft crate aligned to the Phase Q runtime boundaries.
+
+  Required behavior:
+  - the first-party embedded Rust host-agent integration crate is
+    `atm-graft`
+  - `atm-graft` uses the same-host daemon API for `send`, `read`, `ack`,
+    session registration, and nudge delivery
+  - `atm-graft` must not access SQLite or inbox JSONL directly
+  - if no `.atm.toml` is discovered, `atm-graft` remains inactive
+  - when active, automatic daemon registration and nudge subscription are
+    enabled by default and may be disabled only by explicit config or runtime
+    opt-out
+  - daemon-originated nudge payloads delivered to `atm-graft` are structured
+    and must contain at least:
+    - `from`
+    - `message`
+  - the host-agent executable owns the final between-tool-call insertion of
+    queued nudge payloads; `atm-graft` owns only the queue/bridge surface
+  - daemon-internal `post-send-event` delivery is distinct from
+    `.atm.toml`-configured post-send shell hooks
 
 ### 21.6 Lock Elimination Target
 
