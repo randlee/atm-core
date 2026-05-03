@@ -288,6 +288,42 @@ fn test_ack_rejects_message_that_is_not_pending() {
     );
 }
 
+#[test]
+fn test_ack_accepts_ulid_message_id_for_message_written_by_atm_send() {
+    let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
+    let send = fixture.run_with_env(
+        &["send", "arch-ctm@atm-dev", "please ack", "--requires-ack"],
+        &[("ATM_IDENTITY", "team-lead")],
+    );
+    assert!(send.status.success(), "stderr: {}", fixture.stderr(&send));
+
+    let inbox = fixture.inbox_contents("arch-ctm");
+    assert_eq!(inbox.len(), 1);
+    let atm_message_id = inbox[0].atm_message_id().expect("atm message id");
+    let read = fixture.run(&["read", "--all"]);
+    assert!(read.status.success(), "stderr: {}", fixture.stderr(&read));
+
+    let output = fixture.run(&[
+        "ack",
+        &atm_message_id.to_string(),
+        "received and starting",
+        "--json",
+    ]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["message_id"], atm_message_id.to_string());
+    assert_eq!(parsed["reply_target"], "team-lead@atm-dev");
+
+    let replies = fixture.inbox_contents("team-lead");
+    assert_eq!(replies.len(), 1);
+    assert_eq!(replies[0].text, "received and starting");
+}
+
 struct Fixture {
     tempdir: tempfile::TempDir,
 }
@@ -301,6 +337,10 @@ impl Fixture {
     }
 
     fn run(&self, args: &[&str]) -> std::process::Output {
+        self.run_with_env(args, &[])
+    }
+
+    fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
         Command::new(env!("CARGO_BIN_EXE_atm"))
             .args(args)
             .env("ATM_HOME", self.tempdir.path())
@@ -308,6 +348,7 @@ impl Fixture {
             .env("ATM_IDENTITY", "arch-ctm")
             .env("ATM_TEAM", "atm-dev")
             .current_dir(self.tempdir.path())
+            .envs(extra_env.iter().copied())
             .output()
             .expect("run atm")
     }

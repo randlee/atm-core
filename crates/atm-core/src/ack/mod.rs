@@ -28,8 +28,23 @@ pub struct AckRequest {
     pub current_dir: PathBuf,
     pub actor_override: Option<AgentName>,
     pub team_override: Option<TeamName>,
-    pub message_id: LegacyMessageId,
+    pub message_id: AckMessageId,
     pub reply_body: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AckMessageId {
+    Legacy(LegacyMessageId),
+    Atm(AtmMessageId),
+}
+
+impl std::fmt::Display for AckMessageId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Legacy(value) => write!(f, "{value}"),
+            Self::Atm(value) => write!(f, "{value}"),
+        }
+    }
 }
 
 /// Summary of one successful acknowledgement and reply emission.
@@ -38,7 +53,7 @@ pub struct AckOutcome {
     pub action: &'static str,
     pub team: TeamName,
     pub agent: AgentName,
-    pub message_id: LegacyMessageId,
+    pub message_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
     pub reply_target: ReplyTarget,
@@ -131,6 +146,16 @@ pub fn ack_mail(
         &actor,
         &team,
     )?;
+    let source_legacy_message_id = source_message_legacy_message_id(&source_message.envelope)
+        .ok_or_else(|| {
+            AtmError::validation(format!(
+                "message {} has no legacy acknowledgement bridge identity",
+                request.message_id
+            ))
+            .with_recovery(
+                "Refresh the mailbox with `atm read` and retry after ATM reconstructs the legacy acknowledgement bridge from metadata.atm.messageId.",
+            )
+        })?;
 
     match (
         state::derive_read_state(&source_message.envelope),
@@ -188,7 +213,7 @@ pub fn ack_mail(
         message_id: Some(reply_message_id),
         pending_ack_at: None,
         acknowledged_at: None,
-        acknowledges_message_id: Some(request.message_id),
+        acknowledges_message_id: Some(source_legacy_message_id),
         task_id: None,
         extra: reply_extra,
     };
@@ -286,7 +311,7 @@ pub fn ack_mail(
         action: "ack",
         team: team.clone(),
         agent: actor.clone(),
-        message_id: request.message_id,
+        message_id: request.message_id.to_string(),
         task_id: source_task_id.clone(),
         reply_target: ReplyTarget::new(reply_agent, reply_team),
         reply_message_id,
@@ -309,6 +334,7 @@ pub fn ack_mail(
             requires_ack: false,
             is_ack: true,
             task_id: outcome.task_id.as_ref(),
+            recipient_pane_id: None,
         },
     );
 
@@ -319,7 +345,7 @@ pub fn ack_mail(
         team,
         agent: actor.clone(),
         sender: actor.to_string(),
-        message_id: Some(request.message_id),
+        message_id: Some(source_legacy_message_id),
         requires_ack: false,
         dry_run: false,
         task_id: source_task_id,
@@ -332,13 +358,13 @@ pub fn ack_mail(
 
 fn resolve_reply_target(
     message: &MessageEnvelope,
-    current_team: &str,
+    current_team: &TeamName,
 ) -> Result<(AgentName, TeamName), AtmError> {
     if let Some(identity) = canonical_sender_identity(message) {
         let team = message
             .source_team
             .clone()
-            .or_else(|| Some(current_team.parse().expect("validated team")))
+            .or_else(|| Some(current_team.clone()))
             .ok_or_else(AtmError::team_unavailable)?;
         return Ok((identity, team));
     }
@@ -358,8 +384,8 @@ fn resolve_reply_target(
 
     let team = parsed.team.ok_or_else(AtmError::team_unavailable)?;
     Ok((
-        AgentName::from_validated(parsed.agent),
-        TeamName::from_validated(team),
+        parsed.agent.parse::<AgentName>()?,
+        team.parse::<TeamName>()?,
     ))
 }
 
@@ -399,7 +425,7 @@ fn merged_surface(
 fn find_source_message(
     source_files: &[SourceFile],
     workflow_state: &workflow::WorkflowStateFile,
-    message_id: LegacyMessageId,
+    message_id: AckMessageId,
     actor: &str,
     team: &str,
 ) -> Result<SourcedMessage, AtmError> {
@@ -409,18 +435,7 @@ fn find_source_message(
         |message: &SourcedMessage| message.envelope.timestamp,
     )
     .into_iter()
-    .filter_map(|message| match message.envelope.message_id {
-        Some(_) => Some(message),
-        None => {
-            trace!(
-                source_path = %message.source_path.display(),
-                source_index = usize::from(message.source_index),
-                "skipping source message without message_id during ack lookup"
-            );
-            None
-        }
-    })
-    .find(|message| message.envelope.message_id == Some(message_id))
+    .find(|message| message_matches_request_id(&message.envelope, message_id))
     .ok_or_else(|| {
         AtmError::validation(format!(
             "message {} was not found in {}@{}",
@@ -430,6 +445,47 @@ fn find_source_message(
             "Refresh the mailbox with `atm read` and choose a message that is still present in the pending-ack surface.",
         )
     })
+}
+
+fn source_message_legacy_message_id(message: &MessageEnvelope) -> Option<LegacyMessageId> {
+    message.message_id.or_else(|| {
+        message
+            .atm_message_id()
+            .map(LegacyMessageId::from_atm_message_id)
+    })
+}
+
+fn message_matches_request_id(message: &MessageEnvelope, request_id: AckMessageId) -> bool {
+    match request_id {
+        AckMessageId::Legacy(message_id) => {
+            if message.message_id == Some(message_id) {
+                return true;
+            }
+            match message.atm_message_id() {
+                Some(candidate) => candidate == message_id.into_atm_message_id(),
+                None => {
+                    trace!(
+                        "skipping source message without matching legacy/ULID identity during legacy ack lookup"
+                    );
+                    false
+                }
+            }
+        }
+        AckMessageId::Atm(message_id) => {
+            if message.atm_message_id() == Some(message_id) {
+                return true;
+            }
+            match message.message_id {
+                Some(candidate) => candidate == LegacyMessageId::from_atm_message_id(message_id),
+                None => {
+                    trace!(
+                        "skipping source message without matching ULID/legacy identity during ULID ack lookup"
+                    );
+                    false
+                }
+            }
+        }
+    }
 }
 
 fn update_source_message(
@@ -546,7 +602,8 @@ mod tests {
             json!({"atm": {"fromIdentity": "team-lead"}}),
         );
 
-        let target = resolve_reply_target(&message, "atm-dev").expect("reply target");
+        let target = resolve_reply_target(&message, &"atm-dev".parse::<TeamName>().expect("team"))
+            .expect("reply target");
         assert_eq!(
             target,
             (
