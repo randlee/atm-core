@@ -12,13 +12,14 @@ use crate::observability::ObservabilityPort;
 use crate::schema::AgentMember;
 use crate::team_admin::{MemberSummary, MembersList};
 use crate::types::{AgentName, TeamName};
+use serde::{Deserialize, Serialize};
 
 pub use report::{
     DoctorEnvironmentVisibility, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
     DoctorSummary,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DoctorQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,

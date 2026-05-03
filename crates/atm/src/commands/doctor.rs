@@ -22,18 +22,18 @@ impl DoctorCommand {
     // without introducing a wider command abstraction before a concrete need
     // appears.
     /// Execute the `atm doctor` command.
-    pub fn run(self, observability: &CliObservability) -> Result<()> {
+    pub fn run(self, _observability: &CliObservability) -> Result<()> {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
+        atm_daemon::ensure_daemon_running(&home_dir)?;
         let report = doctor::run_doctor(
             DoctorQuery {
                 home_dir,
                 current_dir,
                 team_override: self.team.map(|value| value.parse()).transpose()?,
             },
-            observability,
+            _observability,
         )?;
-
         let has_errors = report.has_errors();
         output::print_doctor_result(&report, self.json)?;
         if has_errors {

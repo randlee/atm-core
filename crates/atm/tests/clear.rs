@@ -65,9 +65,18 @@ fn test_clear_default_removes_only_read_and_acknowledged() {
     assert!(parsed["removed_by_class"]["pending_ack"].is_null());
 
     let inbox = fixture.inbox_contents("arch-ctm");
-    assert_eq!(inbox.len(), 2);
-    assert_eq!(inbox[0].text, "unread");
-    assert_eq!(inbox[1].text, "pending");
+    assert_eq!(inbox.len(), 4);
+    let read_back = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(
+        read_back.status.success(),
+        "stderr: {}",
+        fixture.stderr(&read_back)
+    );
+    let projected = fixture.stdout_json(&read_back);
+    let messages = projected["messages"].as_array().expect("messages array");
+    assert_eq!(messages.len(), 2);
+    assert!(messages.iter().any(|message| message["text"] == "unread"));
+    assert!(messages.iter().any(|message| message["text"] == "pending"));
 }
 
 #[test]
@@ -98,6 +107,14 @@ fn test_clear_dry_run_does_not_mutate() {
     let inbox = fixture.inbox_contents("arch-ctm");
     assert_eq!(inbox.len(), 1);
     assert_eq!(inbox[0].text, "read");
+    let read_back = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(
+        read_back.status.success(),
+        "stderr: {}",
+        fixture.stderr(&read_back)
+    );
+    let projected = fixture.stdout_json(&read_back);
+    assert_eq!(projected["count"], 1);
 }
 
 #[test]
@@ -170,6 +187,42 @@ fn test_clear_never_removes_pending_ack() {
 }
 
 #[test]
+fn test_clear_already_cleared_message_is_idempotent() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[fixture.message(
+            "team-lead",
+            "read once",
+            true,
+            None,
+            None,
+            Utc::now() - Duration::days(2),
+        )],
+    );
+
+    let first = fixture.run(&["clear", "--json"]);
+    assert!(first.status.success(), "stderr: {}", fixture.stderr(&first));
+    assert_eq!(fixture.stdout_json(&first)["removed_total"], 1);
+
+    let second = fixture.run(&["clear", "--json"]);
+    assert!(
+        second.status.success(),
+        "stderr: {}",
+        fixture.stderr(&second)
+    );
+    let parsed = fixture.stdout_json(&second);
+    assert_eq!(parsed["removed_total"], 0);
+    let read_back = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(
+        read_back.status.success(),
+        "stderr: {}",
+        fixture.stderr(&read_back)
+    );
+    assert_eq!(fixture.stdout_json(&read_back)["count"], 0);
+}
+
+#[test]
 fn test_clear_uses_workflow_sidecar_and_removes_cleared_entry() {
     let fixture = Fixture::new(&["arch-ctm"]);
     let message = fixture.message(
@@ -209,9 +262,15 @@ fn test_clear_uses_workflow_sidecar_and_removes_cleared_entry() {
         "stderr: {}",
         fixture.stderr(&output)
     );
-    assert!(fixture.inbox_contents("arch-ctm").is_empty());
-    let workflow = fixture.workflow_state_contents("arch-ctm");
-    assert!(workflow["messages"][workflow_key].is_null());
+    assert_eq!(fixture.inbox_contents("arch-ctm").len(), 1);
+    let read_back = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(
+        read_back.status.success(),
+        "stderr: {}",
+        fixture.stderr(&read_back)
+    );
+    let projected = fixture.stdout_json(&read_back);
+    assert_eq!(projected["count"], 0);
 }
 
 #[test]
@@ -251,8 +310,17 @@ fn test_clear_idle_only_removes_only_idle_notifications() {
     assert_eq!(parsed["removed_by_class"]["read"], 1);
 
     let inbox = fixture.inbox_contents("arch-ctm");
-    assert_eq!(inbox.len(), 1);
-    assert_eq!(inbox[0].text, "normal read");
+    assert_eq!(inbox.len(), 2);
+    let read_back = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(
+        read_back.status.success(),
+        "stderr: {}",
+        fixture.stderr(&read_back)
+    );
+    let projected = fixture.stdout_json(&read_back);
+    let messages = projected["messages"].as_array().expect("messages array");
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0]["text"], "normal read");
 }
 
 #[test]
@@ -293,9 +361,9 @@ fn test_clear_preserves_unknown_fields_on_retained_messages() {
         fixture.stderr(&output)
     );
     let inbox = fixture.inbox_contents("arch-ctm");
-    assert_eq!(inbox.len(), 1);
+    assert_eq!(inbox.len(), 2);
     assert_eq!(
-        inbox[0].extra["futureField"],
+        inbox[1].extra["futureField"],
         serde_json::json!({"nested": true})
     );
 }
@@ -336,8 +404,16 @@ fn test_clear_older_than_filters_candidates() {
     assert_eq!(parsed["removed_total"], 1);
 
     let inbox = fixture.inbox_contents("arch-ctm");
-    assert_eq!(inbox.len(), 1);
-    assert_eq!(inbox[0].text, "newer");
+    assert_eq!(inbox.len(), 2);
+    let read_back = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(
+        read_back.status.success(),
+        "stderr: {}",
+        fixture.stderr(&read_back)
+    );
+    let projected = fixture.stdout_json(&read_back);
+    assert_eq!(projected["count"], 1);
+    assert_eq!(projected["messages"][0]["text"], "newer");
 }
 
 #[test]
@@ -376,8 +452,23 @@ fn test_clear_explicit_target() {
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["agent"], "agent-b");
     assert_eq!(parsed["removed_total"], 1);
-    assert_eq!(fixture.inbox_contents("agent-b").len(), 0);
+    assert_eq!(fixture.inbox_contents("agent-b").len(), 1);
     assert_eq!(fixture.inbox_contents("arch-ctm").len(), 1);
+    let agent_b_read = fixture.run(&[
+        "read",
+        "agent-b",
+        "--as",
+        "arch-ctm",
+        "--all",
+        "--no-mark",
+        "--json",
+    ]);
+    assert!(
+        agent_b_read.status.success(),
+        "stderr: {}",
+        fixture.stderr(&agent_b_read)
+    );
+    assert_eq!(fixture.stdout_json(&agent_b_read)["count"], 0);
 }
 
 #[test]
@@ -403,7 +494,14 @@ fn test_clear_removes_from_origin_inbox_file() {
         fixture.stderr(&output)
     );
 
-    assert_eq!(fixture.origin_inbox_contents("arch-ctm", "host-a").len(), 0);
+    assert_eq!(fixture.origin_inbox_contents("arch-ctm", "host-a").len(), 1);
+    let read_back = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(
+        read_back.status.success(),
+        "stderr: {}",
+        fixture.stderr(&read_back)
+    );
+    assert_eq!(fixture.stdout_json(&read_back)["count"], 0);
 }
 
 struct Fixture {
@@ -483,17 +581,6 @@ impl Fixture {
         }
         fs::write(path, serde_json::to_vec(&value).expect("workflow json"))
             .expect("write workflow");
-    }
-
-    fn workflow_state_contents(&self, agent: &str) -> Value {
-        let raw = fs::read_to_string(
-            self.team_dir()
-                .join(".atm-state")
-                .join("workflow")
-                .join(format!("{agent}.json")),
-        )
-        .expect("workflow state contents");
-        serde_json::from_str(&raw).expect("workflow json")
     }
 
     fn write_origin_inbox(&self, agent: &str, origin: &str, messages: &[MessageEnvelope]) {

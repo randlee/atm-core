@@ -136,25 +136,49 @@ fn import_workflow_state(
     let projected = workflow::workflow_key(envelope)
         .and_then(|key| workflow_state.messages.get(&key).cloned())
         .unwrap_or_else(|| workflow::initial_state_for_envelope(envelope));
+    let existing_ack_state = store
+        .load_ack_state(message_key)
+        .map_err(|error| map_store_error("failed to load existing imported ack state", error))?;
+    let existing_visibility = store.load_visibility(message_key).map_err(|error| {
+        map_store_error("failed to load existing imported visibility state", error)
+    })?;
 
-    if projected.pending_ack_at.is_some() || projected.acknowledged_at.is_some() {
+    if projected.pending_ack_at.is_some()
+        || projected.acknowledged_at.is_some()
+        || existing_ack_state.is_some()
+    {
         store
             .upsert_ack_state(&AckStateRecord {
                 message_key: message_key.clone(),
-                pending_ack_at: projected.pending_ack_at,
-                acknowledged_at: projected.acknowledged_at,
-                ack_reply_message_key: None,
-                ack_reply_team: None,
-                ack_reply_agent: None,
+                pending_ack_at: projected.pending_ack_at.or(existing_ack_state
+                    .as_ref()
+                    .and_then(|state| state.pending_ack_at)),
+                acknowledged_at: projected.acknowledged_at.or(existing_ack_state
+                    .as_ref()
+                    .and_then(|state| state.acknowledged_at)),
+                ack_reply_message_key: existing_ack_state
+                    .as_ref()
+                    .and_then(|state| state.ack_reply_message_key.clone()),
+                ack_reply_team: existing_ack_state
+                    .as_ref()
+                    .and_then(|state| state.ack_reply_team.clone()),
+                ack_reply_agent: existing_ack_state
+                    .as_ref()
+                    .and_then(|state| state.ack_reply_agent.clone()),
             })
             .map_err(|error| map_store_error("failed to upsert imported ack state", error))?;
     }
-    if projected.read {
+    if projected.read || existing_visibility.is_some() {
         store
             .upsert_visibility(&VisibilityStateRecord {
                 message_key: message_key.clone(),
-                read_at: Some(envelope.timestamp),
-                cleared_at: None,
+                read_at: projected
+                    .read
+                    .then_some(envelope.timestamp)
+                    .or(existing_visibility.as_ref().and_then(|state| state.read_at)),
+                cleared_at: existing_visibility
+                    .as_ref()
+                    .and_then(|state| state.cleared_at),
             })
             .map_err(|error| {
                 map_store_error("failed to upsert imported visibility state", error)
@@ -200,14 +224,20 @@ fn source_fingerprint(
     envelope: &MessageEnvelope,
 ) -> Result<SourceFingerprint, AtmError> {
     if let Some(atm_message_id) = envelope.atm_message_id() {
-        return format!("atm{atm_message_id}")
-            .parse()
-            .map_err(map_fingerprint_error);
+        return format!(
+            "atm{atm_message_id}-{}",
+            envelope.timestamp.into_inner().timestamp_millis()
+        )
+        .parse()
+        .map_err(map_fingerprint_error);
     }
     if let Some(message_id) = envelope.message_id {
-        return format!("legacy{message_id}")
-            .parse()
-            .map_err(map_fingerprint_error);
+        return format!(
+            "legacy{message_id}-{}",
+            envelope.timestamp.into_inner().timestamp_millis()
+        )
+        .parse()
+        .map_err(map_fingerprint_error);
     }
 
     let mut hash = 0xcbf29ce484222325_u64;

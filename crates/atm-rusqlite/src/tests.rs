@@ -561,9 +561,9 @@ fn team_ingress_replaces_roster_and_preserves_existing_pid() {
         .expect("seed roster member");
 
     let mut recipient = AgentMember::with_name(agent("recipient"));
-    recipient.tmux_pane_id = "%7".to_string();
+    recipient.tmux_pane_id = Some("%7".to_string());
     let mut quality = AgentMember::with_name(agent("quality-mgr"));
-    quality.tmux_pane_id = "%8".to_string();
+    quality.tmux_pane_id = Some("%8".to_string());
     let config = TeamConfig {
         members: vec![recipient, quality],
         ..Default::default()

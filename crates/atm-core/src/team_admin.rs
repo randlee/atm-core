@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::warn;
 
@@ -33,7 +33,7 @@ pub struct TeamsList {
 }
 
 /// One member entry from a team's live `config.json` roster.
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MemberSummary {
     pub name: AgentName,
     pub agent_id: String,
@@ -46,7 +46,7 @@ pub struct MemberSummary {
 }
 
 /// Result of listing all current members for one team.
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MembersList {
     pub team: TeamName,
     pub members: Vec<MemberSummary>,

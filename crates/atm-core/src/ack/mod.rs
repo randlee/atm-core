@@ -9,8 +9,8 @@ use crate::config;
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
 use crate::identity;
-use crate::inbox_export;
-use crate::inbox_ingress;
+use crate::inbox_export::{self, InboxExport};
+use crate::inbox_ingress::{self, InboxIngress};
 use crate::mail_store::{MailStore, MessageSourceKind, StoredMessageRecord};
 use crate::mailbox;
 use crate::mailbox::source::{SourceFile, SourcedMessage};
@@ -183,7 +183,7 @@ where
     let source_files = mailbox::store::observe_source_files(&request.home_dir, &team, &actor)?;
     let source_message = find_source_message(&source_files, request.message_id, &actor, &team)?;
     reject_if_already_acknowledged(store, request.message_id)?;
-    let _ = inbox_ingress::ingest_mailbox_state(
+    let _ = inbox_ingress::default_inbox_ingress().ingest_mailbox_state(
         &request.home_dir,
         &team,
         &actor,
@@ -310,7 +310,7 @@ where
     }
 
     let mut warnings = Vec::new();
-    let export_succeeded = match inbox_export::export_message(
+    let export_succeeded = match inbox_export::default_inbox_export().export_message(
         &request.home_dir,
         &reply_team,
         &reply_agent,
@@ -318,7 +318,7 @@ where
         observability,
         inbox_export::ExportEventContext {
             command: "ack",
-            sender: actor.to_string(),
+            sender: actor.clone(),
             message_id: Some(source_legacy_message_id),
             requires_ack: false,
             task_id: source_task_id.clone(),

@@ -1,5 +1,6 @@
 use crate::store::StoreError;
 use crate::types::{AgentName, TeamName};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 #[cfg(test)]
 use std::collections::VecDeque;
@@ -8,7 +9,7 @@ use std::sync::Mutex;
 
 /// Qualified daemon request kinds. Transport layers must decode and dispatch
 /// immediately to an injected handler rather than accumulating business logic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RequestKind {
     Send,
     Ack,
@@ -18,7 +19,7 @@ pub enum RequestKind {
     Doctor,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RequestPayload {
     Send(Value),
     Ack(Value),
@@ -53,7 +54,7 @@ impl RequestPayload {
 }
 
 /// Minimal shared request envelope for local and remote transport adapters.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DaemonRequest {
     pub team_name: TeamName,
     pub agent_name: AgentName,
@@ -67,7 +68,7 @@ impl DaemonRequest {
 }
 
 /// Minimal shared daemon response envelope.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DaemonResponse {
     pub kind: RequestKind,
     pub payload_json: String,

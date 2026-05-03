@@ -123,6 +123,12 @@ pub trait MailStore: StoreBoundary {
         atm_message_id: &AtmMessageId,
     ) -> Result<Option<StoredMessageRecord>, StoreError>;
 
+    fn list_messages_for_recipient(
+        &self,
+        team_name: &TeamName,
+        recipient_agent: &AgentName,
+    ) -> Result<Vec<StoredMessageRecord>, StoreError>;
+
     fn upsert_ack_state(&self, ack_state: &AckStateRecord) -> Result<AckStateRecord, StoreError>;
 
     fn load_ack_state(
@@ -135,10 +141,17 @@ pub trait MailStore: StoreBoundary {
         visibility: &VisibilityStateRecord,
     ) -> Result<VisibilityStateRecord, StoreError>;
 
+    fn upsert_visibility_batch(
+        &self,
+        visibility: &[VisibilityStateRecord],
+    ) -> Result<(), StoreError>;
+
     fn load_visibility(
         &self,
         message_key: &MessageKey,
     ) -> Result<Option<VisibilityStateRecord>, StoreError>;
+
+    fn upsert_ack_state_batch(&self, ack_states: &[AckStateRecord]) -> Result<(), StoreError>;
 
     fn record_ingest(
         &self,

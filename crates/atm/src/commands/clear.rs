@@ -4,6 +4,8 @@ use anyhow::{Context, Result};
 use atm_core::address::AgentAddress;
 use atm_core::clear::{self, ClearQuery};
 use atm_core::home;
+use atm_core::inbox_ingress::default_inbox_ingress;
+use atm_rusqlite::RusqliteStore;
 use clap::Args;
 
 use crate::observability::CliObservability;
@@ -41,7 +43,14 @@ impl ClearCommand {
         let dry_run = self.dry_run;
         let json = self.json;
         let query = self.build_query(home_dir, current_dir)?;
-        let outcome = clear::clear_mail(query, observability)?;
+        let team = query
+            .team_override
+            .clone()
+            .or_else(|| std::env::var("ATM_TEAM").ok().and_then(|value| value.parse().ok()))
+            .ok_or_else(|| anyhow::anyhow!("atm clear requires an active ATM_TEAM or --team for the SQLite-backed Phase Q path"))?;
+        let store = RusqliteStore::open_for_team_home(&query.home_dir, &team)?;
+        let ingress = default_inbox_ingress();
+        let outcome = clear::clear_mail_via_store(query, &store, &ingress, observability)?;
         output::print_clear_result(&outcome, dry_run, json)
     }
 

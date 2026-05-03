@@ -268,8 +268,52 @@ fn test_doctor_reports_stale_mailbox_lock_across_team_inboxes() {
     );
 }
 
+#[test]
+fn test_doctor_auto_starts_daemon_when_absent() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+
+    let output = fixture.run(&["doctor", "--json"], &[]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["summary"]["status"], "healthy");
+    assert!(fixture.daemon_control_path().exists());
+    fixture.kill_daemon();
+}
+
+#[test]
+fn test_doctor_reports_typed_error_when_auto_start_fails() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+
+    let output = fixture.run(
+        &["doctor", "--json"],
+        &[("ATM_DAEMON_BIN", "/definitely/missing/atm-daemon")],
+    );
+
+    assert!(!output.status.success());
+    let stderr = fixture.stderr(&output);
+    assert!(
+        stderr.contains("failed to start atm-daemon"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("Check the atm-daemon binary path"),
+        "stderr: {stderr}"
+    );
+}
+
 struct Fixture {
     tempdir: tempfile::TempDir,
+}
+
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        self.kill_daemon();
+    }
 }
 
 impl Fixture {
@@ -352,4 +396,40 @@ impl Fixture {
             .join("logs")
             .join("atm.log.jsonl")
     }
+
+    fn daemon_control_path(&self) -> std::path::PathBuf {
+        self.tempdir
+            .path()
+            .join(".atm-state")
+            .join("daemon")
+            .join("control.json")
+    }
+
+    fn kill_daemon(&self) {
+        let Ok(raw) = fs::read(self.daemon_control_path()) else {
+            return;
+        };
+        let Some(pid) = serde_json::from_slice::<Value>(&raw)
+            .ok()
+            .and_then(|value| value.get("pid").and_then(Value::as_u64))
+            .map(|pid| pid as u32)
+        else {
+            return;
+        };
+        terminate_process(pid);
+    }
+}
+
+#[cfg(unix)]
+fn terminate_process(pid: u32) {
+    let _ = Command::new("kill")
+        .args(["-TERM", &pid.to_string()])
+        .status();
+}
+
+#[cfg(windows)]
+fn terminate_process(pid: u32) {
+    let _ = Command::new("taskkill")
+        .args(["/PID", &pid.to_string(), "/T", "/F"])
+        .status();
 }
