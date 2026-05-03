@@ -157,10 +157,7 @@ fn test_read_projects_mixed_legacy_and_forward_rows_consistently() {
         ],
     );
 
-    let output = fixture.run_with_env(
-        &["read", "--all", "--no-mark", "--json"],
-        &[("ATM_DAEMON_BIN", "atm-daemon-unavailable")],
-    );
+    let output = fixture.run(&["read", "--all", "--no-mark", "--json"]);
 
     assert!(
         output.status.success(),
