@@ -126,6 +126,9 @@ pub struct AckOutcome {
     pub reply_target: ReplyTarget,
     pub reply_message_id: LegacyMessageId,
     pub reply_text: String,
+    /// Best-effort warnings emitted after the authoritative SQLite commit
+    /// succeeds, currently limited to degraded compatibility inbox export and
+    /// post-send hook execution failures.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
 }

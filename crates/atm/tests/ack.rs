@@ -416,6 +416,16 @@ fn test_ack_rejects_already_acknowledged_message() {
             message_id,
         )],
     );
+    // This integration case intentionally proves the CLI path rejects based on
+    // SQLite state populated from inbox ingest, not from a pre-seeded store
+    // fixture.
+    assert!(
+        fixture
+            .store()
+            .load_message_by_legacy_id(&LegacyMessageId::from(message_id))
+            .expect("load stored message before ack")
+            .is_none()
+    );
 
     let output = fixture.run(&["ack", &message_id.to_string(), "duplicate"]);
 
@@ -578,6 +588,18 @@ fn test_ack_accepts_legacy_uuid_only_message_after_store_ingest() {
         )
         .expect("ingest legacy inbox");
     assert_eq!(ingest.imported_messages, 1);
+    let stored = store
+        .load_message_by_legacy_id(&LegacyMessageId::from(message_id))
+        .expect("load ingested legacy row")
+        .expect("ingested legacy row");
+    let ack_state = store
+        .load_ack_state(&stored.message_key)
+        .expect("load legacy ack state")
+        .expect("legacy ack state");
+    assert!(
+        ack_state.pending_ack_at.is_some(),
+        "legacy fallback coverage requires the pending-ack row to exist before ack commit: stored={stored:?} ack_state={ack_state:?}"
+    );
 
     let output = fixture.run(&["ack", &message_id.to_string(), "legacy ack", "--json"]);
     assert!(
