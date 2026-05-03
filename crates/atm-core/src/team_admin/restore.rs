@@ -10,6 +10,7 @@ use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
 use crate::persistence;
 use crate::schema::AgentMember;
+use crate::types::AgentName;
 
 use super::{RestoreOutcome, RestorePlan, RestoreRequest, RestoreResult};
 
@@ -38,14 +39,12 @@ pub(super) fn restore_team(request: RestoreRequest) -> Result<RestoreResult, Atm
 
     let mut inboxes_to_restore = list_backup_inboxes(&backup_dir)?;
     inboxes_to_restore.retain(|name| {
-        if name == "team-lead.json" {
+        if name.as_str() == "team-lead" {
             return false;
         }
-        name.strip_suffix(".json").is_some_and(|member| {
-            members_to_restore_set
-                .iter()
-                .any(|restored_member| restored_member == &member)
-        })
+        members_to_restore_set
+            .iter()
+            .any(|restored_member| restored_member == name)
     });
     let tasks_to_restore = count_numeric_task_files(&backup_dir.join("tasks"))?;
 
@@ -184,7 +183,7 @@ fn locate_backup_dir(
         .ok_or_else(|| AtmError::missing_document(format!("no backup found for team '{}'", team)))
 }
 
-pub(super) fn list_backup_inboxes(backup_dir: &Path) -> Result<Vec<String>, AtmError> {
+pub(super) fn list_backup_inboxes(backup_dir: &Path) -> Result<Vec<AgentName>, AtmError> {
     let inbox_dir = backup_dir.join("inboxes");
     if !inbox_dir.exists() {
         return Ok(Vec::new());
@@ -210,7 +209,12 @@ pub(super) fn list_backup_inboxes(backup_dir: &Path) -> Result<Vec<String>, AtmE
         })?
         .into_iter()
         .filter(|entry| entry.path().is_file())
-        .map(|entry| entry.file_name().to_string_lossy().to_string())
+        .filter_map(|entry| {
+            let file_name = entry.file_name().to_string_lossy().to_string();
+            file_name
+                .strip_suffix(".json")
+                .and_then(|agent| agent.parse::<AgentName>().ok())
+        })
         .collect::<Vec<_>>();
     names.sort();
     Ok(names)
@@ -453,7 +457,7 @@ pub(super) fn cleanup_restore_workspace(team_dir: &Path) -> Result<(), AtmError>
 pub(super) fn apply_restored_inboxes(
     team_dir: &Path,
     backup_dir: &Path,
-    inboxes_to_restore: &[String],
+    inboxes_to_restore: &[AgentName],
 ) -> Result<(), AtmError> {
     let inboxes_dir = team_dir.join("inboxes");
     fs::create_dir_all(&inboxes_dir).map_err(|error| {
@@ -475,8 +479,9 @@ pub(super) fn apply_restored_inboxes(
         .with_recovery("Check inbox staging permissions and rerun `atm teams restore`.")
     })?;
     for inbox_name in inboxes_to_restore {
-        let from = backup_dir.join("inboxes").join(inbox_name);
-        let staged = inbox_staging_dir.join(inbox_name);
+        let inbox_file = format!("{inbox_name}.json");
+        let from = backup_dir.join("inboxes").join(&inbox_file);
+        let staged = inbox_staging_dir.join(&inbox_file);
         copy_restored_inbox_to_staging(&from, &staged).map_err(|error| {
             AtmError::mailbox_write(format!(
                 "failed to stage restored inbox {} from {}: {error}",
@@ -488,8 +493,9 @@ pub(super) fn apply_restored_inboxes(
         })?;
     }
     for inbox_name in inboxes_to_restore {
-        let staged = inbox_staging_dir.join(inbox_name);
-        let to = inboxes_dir.join(inbox_name);
+        let inbox_file = format!("{inbox_name}.json");
+        let staged = inbox_staging_dir.join(&inbox_file);
+        let to = inboxes_dir.join(&inbox_file);
         fs::rename(&staged, &to).map_err(|error| {
             AtmError::mailbox_write(format!(
                 "failed to install restored inbox {} from {}: {error}",
@@ -533,6 +539,10 @@ fn apply_restored_state(team_dir: &Path, backup_dir: &Path) -> Result<(), AtmErr
             .with_recovery("Check ATM state directory permissions and rerun `atm teams restore`.")
         })?;
     }
+    // Directory rename is the atomic installation boundary for restored ATM
+    // state. copy_state_tree builds the full replacement under
+    // `.restore-staging/.atm-state` first so the live `.atm-state` tree is
+    // swapped in one rename rather than through piecemeal file writes.
     fs::rename(&state_staging_dir, &state_dir).map_err(|error| {
         AtmError::file_policy(format!(
             "failed to install restored ATM state from {} to {}: {error}",

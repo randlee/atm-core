@@ -20,6 +20,12 @@ fn parse_inbox_values(raw: &str) -> Vec<Value> {
     }
 }
 
+fn fixed_now() -> chrono::DateTime<Utc> {
+    "2026-05-02T20:00:00Z"
+        .parse()
+        .expect("fixed clear fixture timestamp")
+}
+
 #[test]
 fn test_clear_default_removes_only_read_and_acknowledged() {
     let fixture = Fixture::new(&["arch-ctm"]);
@@ -32,15 +38,15 @@ fn test_clear_default_removes_only_read_and_acknowledged() {
                 false,
                 None,
                 None,
-                Utc::now() - Duration::days(10),
+                fixed_now() - Duration::days(10),
             ),
             fixture.message(
                 "team-lead",
                 "pending",
                 true,
-                Some(Utc::now() - Duration::days(9)),
+                Some(fixed_now() - Duration::days(9)),
                 None,
-                Utc::now() - Duration::days(9),
+                fixed_now() - Duration::days(9),
             ),
             fixture.message(
                 "team-lead",
@@ -48,15 +54,15 @@ fn test_clear_default_removes_only_read_and_acknowledged() {
                 true,
                 None,
                 None,
-                Utc::now() - Duration::days(8),
+                fixed_now() - Duration::days(8),
             ),
             fixture.message(
                 "team-lead",
                 "acknowledged",
                 true,
                 None,
-                Some(Utc::now() - Duration::days(7)),
-                Utc::now() - Duration::days(7),
+                Some(fixed_now() - Duration::days(7)),
+                fixed_now() - Duration::days(7),
             ),
         ],
     );
@@ -94,7 +100,7 @@ fn test_clear_succeeds_with_stale_mailbox_lock_artifact() {
             true,
             None,
             None,
-            Utc::now() - Duration::days(1),
+            fixed_now() - Duration::days(1),
         )],
     );
     fs::write(
@@ -126,7 +132,7 @@ fn test_clear_dry_run_does_not_mutate() {
             true,
             None,
             None,
-            Utc::now() - Duration::days(3),
+            fixed_now() - Duration::days(3),
         )],
     );
 
@@ -156,7 +162,7 @@ fn test_clear_emits_retained_log_record() {
             true,
             None,
             None,
-            Utc::now() - Duration::days(3),
+            fixed_now() - Duration::days(3),
         )],
     );
 
@@ -191,9 +197,9 @@ fn test_clear_never_removes_pending_ack() {
             "team-lead",
             "pending",
             true,
-            Some(Utc::now() - Duration::days(2)),
+            Some(fixed_now() - Duration::days(2)),
             None,
-            Utc::now() - Duration::days(2),
+            fixed_now() - Duration::days(2),
         )],
     );
 
@@ -223,7 +229,7 @@ fn test_clear_uses_workflow_sidecar_and_removes_cleared_entry() {
         false,
         None,
         None,
-        Utc::now() - Duration::days(2),
+        fixed_now() - Duration::days(2),
     );
     let message_id = message.message_id.expect("message id");
     fixture.write_inbox("arch-ctm", &[message]);
@@ -262,7 +268,7 @@ fn test_clear_idle_only_removes_only_idle_notifications() {
                 true,
                 None,
                 None,
-                Utc::now() - Duration::days(4),
+                fixed_now() - Duration::days(4),
             ),
             fixture.message(
                 "team-lead",
@@ -270,7 +276,7 @@ fn test_clear_idle_only_removes_only_idle_notifications() {
                 true,
                 None,
                 None,
-                Utc::now() - Duration::days(4),
+                fixed_now() - Duration::days(4),
             ),
         ],
     );
@@ -298,9 +304,9 @@ fn test_clear_preserves_unknown_fields_on_retained_messages() {
         "team-lead",
         "pending",
         true,
-        Some(Utc::now() - Duration::days(2)),
+        Some(fixed_now() - Duration::days(2)),
         None,
-        Utc::now() - Duration::days(2),
+        fixed_now() - Duration::days(2),
     );
     retained
         .extra
@@ -315,7 +321,7 @@ fn test_clear_preserves_unknown_fields_on_retained_messages() {
                 true,
                 None,
                 None,
-                Utc::now() - Duration::days(3),
+                fixed_now() - Duration::days(3),
             ),
             retained,
         ],
@@ -348,7 +354,7 @@ fn test_clear_older_than_filters_candidates() {
                 true,
                 None,
                 None,
-                Utc::now() - Duration::days(10),
+                fixed_now() - Duration::days(10),
             ),
             fixture.message(
                 "team-lead",
@@ -356,7 +362,7 @@ fn test_clear_older_than_filters_candidates() {
                 true,
                 None,
                 None,
-                Utc::now() - Duration::hours(6),
+                fixed_now() - Duration::hours(6),
             ),
         ],
     );
@@ -387,7 +393,7 @@ fn test_clear_explicit_target() {
             true,
             None,
             None,
-            Utc::now() - Duration::days(10),
+            fixed_now() - Duration::days(10),
         )],
     );
     fixture.write_inbox(
@@ -398,7 +404,7 @@ fn test_clear_explicit_target() {
             true,
             None,
             None,
-            Utc::now() - Duration::days(10),
+            fixed_now() - Duration::days(10),
         )],
     );
 
@@ -428,7 +434,7 @@ fn test_clear_removes_from_origin_inbox_file() {
             true,
             None,
             None,
-            Utc::now() - Duration::days(8),
+            fixed_now() - Duration::days(8),
         )],
     );
 

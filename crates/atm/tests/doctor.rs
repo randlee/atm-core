@@ -234,7 +234,7 @@ fn test_doctor_reports_stale_restore_marker_warning() {
 }
 
 #[test]
-fn test_doctor_reports_stale_mailbox_lock_across_team_inboxes() {
+fn test_doctor_sweeps_stale_mailbox_lock_across_team_inboxes() {
     let fixture = Fixture::new(&["team-lead", "arch-ctm"]);
     let stale_lock = fixture
         .tempdir
@@ -257,15 +257,13 @@ fn test_doctor_reports_stale_mailbox_lock_across_team_inboxes() {
     let parsed = fixture.stdout_json(&output);
     let findings = parsed["findings"].as_array().expect("findings array");
     assert!(
-        findings.iter().any(|finding| {
-            finding["code"] == "ATM_WARNING_STALE_MAILBOX_LOCK"
-                && finding["message"]
-                    .as_str()
-                    .is_some_and(|message| message.contains(&stale_lock.display().to_string()))
-        }),
+        findings
+            .iter()
+            .all(|finding| finding["code"] != "ATM_WARNING_STALE_MAILBOX_LOCK"),
         "stdout: {}",
         String::from_utf8(output.stdout.clone()).expect("stdout utf8")
     );
+    assert!(!stale_lock.exists(), "doctor should sweep stale sentinel");
 }
 
 struct Fixture {

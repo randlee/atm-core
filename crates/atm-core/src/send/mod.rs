@@ -436,6 +436,9 @@ fn append_mailbox_message_and_seed_workflow(
     inbox_path: &Path,
     envelope: &MessageEnvelope,
 ) -> Result<(), AtmError> {
+    // TRANSITIONAL: this path still shares the compatibility mailbox/workflow
+    // lock boundary while Q.5 retires file-lock ownership from normal mail
+    // correctness.
     workflow::commit_workflow_state(
         home_dir,
         team,

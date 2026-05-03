@@ -33,6 +33,7 @@ enum LockOperation {
 }
 
 impl LockOperation {
+    #[cfg(test)]
     const fn test_override_token(self) -> &'static str {
         match self {
             Self::CreateDirectory => "create_directory",
@@ -149,6 +150,8 @@ pub(crate) fn sort_unique_paths(paths: impl IntoIterator<Item = PathBuf>) -> Vec
 /// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`] before the
 /// configured deadline.
 pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard, AtmError> {
+    // TRANSITIONAL: lock acquisition retained for compatibility; pending Q.5+
+    // lock retirement.
     let lock_path = sentinel_path(path);
     let owner_pid = std::process::id();
     let owner_record = LockOwnerRecord::new(owner_pid);
@@ -231,7 +234,6 @@ pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard
 /// sentinel cleanup hits a read-only filesystem. Other per-sentinel eviction
 /// failures are logged and skipped so recovery commands can continue scanning
 /// the rest of the mailbox directory.
-#[cfg(test)]
 pub(crate) fn sweep_stale_lock_sentinels(dir: &Path) -> Result<usize, AtmError> {
     if !dir.exists() {
         return Ok(0);
@@ -285,6 +287,8 @@ pub(crate) fn acquire_many_sorted(
     paths: impl IntoIterator<Item = PathBuf>,
     timeout: Duration,
 ) -> Result<Vec<MailboxLockGuard>, AtmError> {
+    // TRANSITIONAL: lock acquisition retained for compatibility; pending Q.5+
+    // lock retirement.
     let paths = sort_unique_paths(paths);
     let deadline = Instant::now() + timeout;
     let mut guards = Vec::with_capacity(paths.len());
@@ -509,8 +513,7 @@ fn should_retry_remove_lock_sentinel(error: &io::Error) -> bool {
     }
 }
 
-#[cfg(test)]
-fn is_lock_sentinel_candidate(path: &Path) -> bool {
+pub(crate) fn is_lock_sentinel_candidate(path: &Path) -> bool {
     // Sweep both the live `.lock` sentinel and rotated leftovers such as
     // `.lock.old` so crash/recovery cleanup does not miss renamed stale files.
     path.file_name()
@@ -565,28 +568,36 @@ fn is_readonly_filesystem_error(error: &io::Error) -> bool {
 
 fn forced_readonly_filesystem_error(operation: LockOperation) -> Option<io::Error> {
     #[cfg(test)]
-    if forced_readonly_filesystem_test_override() == Some(operation) {
-        return Some(io::Error::from_raw_os_error(
+    {
+        if forced_readonly_filesystem_test_override() == Some(operation) {
+            return Some(io::Error::from_raw_os_error(
+                readonly_filesystem_raw_os_error(),
+            ));
+        }
+
+        let forced = std::env::var("ATM_TEST_FORCE_LOCK_READONLY_FS").ok()?;
+        if forced != operation.test_override_token() {
+            return None;
+        }
+
+        Some(io::Error::from_raw_os_error(
             readonly_filesystem_raw_os_error(),
-        ));
+        ))
     }
 
-    let forced = std::env::var("ATM_TEST_FORCE_LOCK_READONLY_FS").ok()?;
-    if forced != operation.test_override_token() {
-        return None;
+    #[cfg(not(test))]
+    {
+        let _ = operation;
+        None
     }
-
-    Some(io::Error::from_raw_os_error(
-        readonly_filesystem_raw_os_error(),
-    ))
 }
 
-#[cfg(windows)]
+#[cfg(all(test, windows))]
 const fn readonly_filesystem_raw_os_error() -> i32 {
     windows_sys::Win32::Foundation::ERROR_WRITE_PROTECT as i32
 }
 
-#[cfg(not(windows))]
+#[cfg(all(test, not(windows)))]
 const fn readonly_filesystem_raw_os_error() -> i32 {
     libc::EROFS
 }
@@ -700,11 +711,7 @@ fn acquire_in_process_lock(
     let mut held = state
         .held
         .lock()
-        .map_err(|_| {
-            AtmError::mailbox_lock("in-process mailbox lock state poisoned").with_recovery(
-                "Retry the ATM command. If the error persists, restart the current ATM process so the in-process mailbox lock gate is rebuilt.",
-            )
-        })?;
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     loop {
         if !*held {
             *held = true;
@@ -719,11 +726,7 @@ fn acquire_in_process_lock(
         let (next_held, wait_result) = state
             .wake
             .wait_timeout(held, remaining)
-            .map_err(|_| {
-                AtmError::mailbox_lock("in-process mailbox lock wait poisoned").with_recovery(
-                    "Retry the ATM command. If the error persists, restart the current ATM process so the in-process mailbox lock gate is rebuilt.",
-                )
-            })?;
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         held = next_held;
         if wait_result.timed_out() && *held {
             return Err(AtmError::mailbox_lock_timeout(path));
@@ -744,11 +747,7 @@ fn in_process_lock_state(
     let registry = REGISTRY.get_or_init(|| Mutex::new(std::collections::HashMap::new()));
     let mut registry = registry
         .lock()
-        .map_err(|_| {
-            AtmError::mailbox_lock("in-process mailbox lock registry poisoned").with_recovery(
-                "Retry the ATM command. If the error persists, restart the current ATM process so the in-process mailbox lock registry is rebuilt.",
-            )
-        })?;
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     Ok(registry
         .entry(key)
         .or_insert_with(|| {

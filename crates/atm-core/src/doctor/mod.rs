@@ -4,7 +4,8 @@ pub mod report;
 use std::collections::BTreeSet;
 use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+
+use uuid::Uuid;
 
 use crate::config;
 use crate::error_codes::AtmErrorCode;
@@ -74,6 +75,7 @@ pub fn run_doctor(
     let member_roster = resolved_team
         .as_deref()
         .and_then(|team| load_member_roster(&home_dir, team, config.as_ref(), &mut findings));
+    sweep_stale_mailbox_lock_dirs(&home_dir, &mut findings);
     push_stale_mailbox_lock_findings(
         &initial_lock_snapshot,
         &snapshot_mailbox_lock_paths(&home_dir),
@@ -258,6 +260,9 @@ fn check_restore_marker(team: &str, team_dir: &Path, findings: &mut Vec<DoctorFi
 }
 
 fn snapshot_mailbox_lock_paths(home_dir: &Path) -> BTreeSet<PathBuf> {
+    // TRANSITIONAL: stale mailbox-lock snapshots remain only as compatibility
+    // diagnostics while Phase Q retires file-lock ownership from mail
+    // correctness.
     let teams_root = home_dir.join(".claude").join("teams");
     let Ok(team_entries) = fs::read_dir(&teams_root) else {
         return BTreeSet::new();
@@ -271,7 +276,7 @@ fn snapshot_mailbox_lock_paths(home_dir: &Path) -> BTreeSet<PathBuf> {
         };
         for lock_entry in lock_entries.filter_map(Result::ok) {
             let path = lock_entry.path();
-            if path.extension().and_then(|ext| ext.to_str()) != Some("lock") {
+            if !crate::mailbox::lock::is_lock_sentinel_candidate(&path) {
                 continue;
             }
             if !lock_entry
@@ -287,11 +292,34 @@ fn snapshot_mailbox_lock_paths(home_dir: &Path) -> BTreeSet<PathBuf> {
     locks
 }
 
+fn sweep_stale_mailbox_lock_dirs(home_dir: &Path, findings: &mut Vec<DoctorFinding>) {
+    let teams_root = home_dir.join(".claude").join("teams");
+    let Ok(team_entries) = fs::read_dir(&teams_root) else {
+        return;
+    };
+
+    for team_entry in team_entries.filter_map(Result::ok) {
+        let inboxes_dir = team_entry.path().join("inboxes");
+        match crate::mailbox::lock::sweep_stale_lock_sentinels(&inboxes_dir) {
+            Ok(_) => {}
+            Err(error) => findings.push(DoctorFinding {
+                severity: DoctorSeverity::Warning,
+                code: error.code,
+                message: error.message,
+                remediation: error.recovery,
+            }),
+        }
+    }
+}
+
 fn push_stale_mailbox_lock_findings(
     initial: &BTreeSet<PathBuf>,
     final_snapshot: &BTreeSet<PathBuf>,
     findings: &mut Vec<DoctorFinding>,
 ) {
+    // TRANSITIONAL: stale mailbox-lock findings remain only as compatibility
+    // diagnostics while Phase Q retires file-lock ownership from mail
+    // correctness.
     for path in initial.intersection(final_snapshot) {
         findings.push(DoctorFinding {
             severity: DoctorSeverity::Warning,
@@ -309,13 +337,10 @@ fn push_stale_mailbox_lock_findings(
 }
 
 fn probe_directory_writable(directory: &Path) -> Result<(), std::io::Error> {
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
     let probe_path = directory.join(format!(
-        ".atm-doctor-write-probe-{}-{nonce}",
-        std::process::id()
+        ".atm-doctor-write-probe-{}-{}",
+        std::process::id(),
+        Uuid::new_v4()
     ));
     let file = OpenOptions::new()
         .create_new(true)
@@ -728,10 +753,10 @@ mod tests {
     }
 
     #[test]
-    fn run_doctor_reports_stale_mailbox_lock_as_warning() {
+    fn run_doctor_sweeps_stale_mailbox_lock_without_warning() {
         let paths = TestPaths::new();
         paths.write_team_layout(&["arch-ctm"]);
-        let stale_lock = paths.team_dir().join("inboxes").join("arch-ctm.json.lock");
+        let stale_lock = paths.team_dir().join("inboxes").join("arch-ctm.json.lock.old");
         std::fs::write(&stale_lock, u32::MAX.to_string()).expect("stale lock");
         let report = run_doctor(
             query(&paths),
@@ -746,13 +771,14 @@ mod tests {
         )
         .expect("doctor report");
 
-        assert_eq!(report.summary.status, DoctorStatus::Warning);
         assert!(
-            report.findings.iter().any(|finding| {
-                finding.code == AtmErrorCode::WarningStaleMailboxLock
-                    && finding.message.contains(&stale_lock.display().to_string())
-            }),
+            report
+                .findings
+                .iter()
+                .all(|finding| finding.code != AtmErrorCode::WarningStaleMailboxLock),
             "{report:#?}"
         );
+        assert_eq!(report.summary.status, DoctorStatus::Healthy);
+        assert!(!stale_lock.exists(), "doctor should sweep stale sentinel");
     }
 }

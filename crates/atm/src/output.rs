@@ -318,7 +318,14 @@ pub fn print_restore_plan(plan: &RestorePlan, json: bool) -> Result<()> {
             .collect::<Vec<_>>()
             .join(", ")
     );
-    println!("  Inboxes: {}", plan.would_restore_inboxes.join(", "));
+    println!(
+        "  Inboxes: {}",
+        plan.would_restore_inboxes
+            .iter()
+            .map(|agent| agent.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
     println!("  Tasks: {}", plan.would_restore_tasks);
     Ok(())
 }

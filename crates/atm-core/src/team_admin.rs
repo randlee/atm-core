@@ -11,6 +11,7 @@ use crate::config::{load_config, load_team_config, resolve_team};
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
 use crate::persistence;
+use crate::schema::agent_member::AgentType;
 use crate::schema::{AgentMember, TeamConfig};
 use crate::types::{AgentName, TeamName};
 
@@ -66,7 +67,7 @@ pub struct AddMemberRequest {
     pub home_dir: PathBuf,
     pub team: TeamName,
     pub member: AgentName,
-    pub agent_type: String,
+    pub agent_type: AgentType,
     pub model: String,
     pub cwd: PathBuf,
     pub tmux_pane_id: Option<String>,
@@ -86,7 +87,7 @@ impl AddMemberRequest {
             home_dir,
             team: team.parse()?,
             member: member.parse()?,
-            agent_type,
+            agent_type: agent_type.into(),
             model,
             cwd,
             tmux_pane_id,
@@ -160,7 +161,7 @@ pub struct RestorePlan {
     pub backup_path: PathBuf,
     pub dry_run: bool,
     pub would_restore_members: Vec<AgentName>,
-    pub would_restore_inboxes: Vec<String>,
+    pub would_restore_inboxes: Vec<AgentName>,
     pub would_restore_tasks: usize,
 }
 
@@ -321,7 +322,7 @@ pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmErro
     config.members.push(AgentMember {
         name: request.member.clone(),
         agent_id: format!("{}@{}", request.member, request.team),
-        agent_type: request.agent_type.into(),
+        agent_type: request.agent_type,
         model: request.model,
         joined_at: Some(Utc::now().timestamp_millis() as u64),
         tmux_pane_id: normalized_tmux_pane_id.unwrap_or_default(),
@@ -699,6 +700,7 @@ mod tests {
     };
     use crate::error_codes::AtmErrorCode;
     use crate::schema::TeamConfig;
+    use crate::schema::agent_member::AgentType;
 
     fn write_team_config(home_dir: &std::path::Path, team: &str) {
         let team_dir = home_dir.join(".claude").join("teams").join(team);
@@ -754,7 +756,7 @@ mod tests {
             home_dir: tempdir.path().to_path_buf(),
             team: "atm-dev".parse().expect("team"),
             member: "arch-ctm".parse().expect("member"),
-            agent_type: "worker".to_string(),
+            agent_type: AgentType::Worker,
             model: "gpt-5".to_string(),
             cwd: tempdir.path().to_path_buf(),
             tmux_pane_id: Some("7".to_string()),
@@ -786,7 +788,7 @@ mod tests {
             home_dir: tempdir.path().to_path_buf(),
             team: "atm-dev".parse().expect("team"),
             member: "arch-ctm".parse().expect("member"),
-            agent_type: "worker".to_string(),
+            agent_type: AgentType::Worker,
             model: "gpt-5".to_string(),
             cwd: tempdir.path().to_path_buf(),
             tmux_pane_id: Some("session:1.2".to_string()),

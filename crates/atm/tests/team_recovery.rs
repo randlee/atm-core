@@ -326,7 +326,7 @@ fn test_restore_dry_run_reports_members_inboxes_and_tasks() {
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["dry_run"], true);
     assert_eq!(parsed["would_restore_members"][0], "arch-ctm");
-    assert_eq!(parsed["would_restore_inboxes"][0], "arch-ctm.json");
+    assert_eq!(parsed["would_restore_inboxes"][0], "arch-ctm");
     assert_eq!(parsed["would_restore_tasks"], 1);
 }
 

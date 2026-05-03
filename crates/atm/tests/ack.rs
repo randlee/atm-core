@@ -5,7 +5,7 @@ use atm_core::schema::{
     AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig, hydrate_legacy_fields_from_metadata,
 };
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -475,7 +475,9 @@ impl Fixture {
         acknowledged_offset: Option<Duration>,
         message_id: Uuid,
     ) -> MessageEnvelope {
-        let timestamp = Utc::now() - Duration::minutes(30);
+        let timestamp: DateTime<Utc> = "2026-05-02T19:30:00Z"
+            .parse()
+            .expect("fixed ack fixture timestamp");
         MessageEnvelope {
             from: from.parse::<AgentName>().expect("agent"),
             text: text.to_string(),

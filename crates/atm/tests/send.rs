@@ -375,6 +375,9 @@ fn test_send_missing_config_deduplicates_team_lead_notice_under_concurrency() {
     fixture.write_inbox("recipient", &[]);
     fixture.write_inbox("team-lead", &[]);
 
+    // This validates the compatibility-path lock invariant that concurrent
+    // missing-config sends must serialize the notice/workflow seed so
+    // team-lead receives only one warning record.
     let (first, second) = std::thread::scope(|scope| {
         let first = scope.spawn(|| fixture.run(&["send", "recipient@atm-dev", "first"]));
         let second = scope.spawn(|| fixture.run(&["send", "recipient@atm-dev", "second"]));
