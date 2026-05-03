@@ -1,6 +1,9 @@
 mod commands;
 mod observability;
 mod output;
+#[cfg(test)]
+#[path = "../tests/support/mod.rs"]
+pub(crate) mod test_support;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -10,8 +13,8 @@ use atm_core::error_codes::AtmErrorCode;
 use atm_core::home;
 use atm_core::observability::{
     AtmLogQuery, AtmLogRecord, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
-    CommandEvent, LogFieldMap, LogFieldMatch, LogLevelFilter, LogOrder, LogTailSession,
-    ObservabilityPort,
+    CommandEvent, LogFieldKey, LogFieldMap, LogFieldMatch, LogLevelFilter, LogOrder,
+    LogTailSession, ObservabilityPort,
 };
 use chrono::{DateTime, Utc};
 use clap::Parser;
@@ -400,7 +403,7 @@ fn map_command_event(
     );
     fields.insert(
         "sender".to_string(),
-        serde_json::Value::String(event.sender.clone()),
+        serde_json::Value::String(event.sender.to_string()),
     );
     fields.insert(
         "requires_ack".to_string(),
@@ -516,7 +519,10 @@ fn map_record(event: LogEvent) -> Result<AtmLogRecord, AtmError> {
     Ok(AtmLogRecord {
         timestamp: map_timestamp_back(event.timestamp)?,
         severity: map_level_back(event.level),
-        service: event.service.to_string(),
+        service: LogFieldKey::new(event.service.to_string()).map_err(|source| {
+            AtmError::observability_query("failed to project shared log service into ATM type")
+                .with_source(source)
+        })?,
         target: Some(event.target.to_string()),
         action: Some(event.action.to_string()),
         message: event.message,

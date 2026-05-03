@@ -1,6 +1,6 @@
 use atm_core::mail_store::{
-    AckStateRecord, IngestRecord, MailStore, MailStoreHealth, MessageSourceKind,
-    PendingExportRecord, StoredMessageRecord, VisibilityStateRecord,
+    AckStateRecord, ImportedMessageState, IngestRecord, MailStore, MailStoreHealth,
+    MessageSourceKind, PendingExportRecord, StoredMessageRecord, VisibilityStateRecord,
 };
 use atm_core::schema::{AtmMessageId, LegacyMessageId};
 use atm_core::store::{
@@ -9,6 +9,7 @@ use atm_core::store::{
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use rusqlite::{Connection, OptionalExtension};
 
+use crate::task::upsert_task_row;
 use crate::{
     RusqliteStore, classify_store_error, invalid_store_data, parse_optional, parse_required,
     sqlite_error_detail, table_exists,
@@ -195,36 +196,7 @@ impl MailStore for RusqliteStore {
 
     fn upsert_ack_state(&self, ack_state: &AckStateRecord) -> Result<AckStateRecord, StoreError> {
         let connection = self.lock_connection()?;
-        connection
-            .execute(
-                r#"
-                INSERT INTO ack_state (
-                    message_key,
-                    pending_ack_at,
-                    acknowledged_at,
-                    ack_reply_message_key,
-                    ack_reply_team,
-                    ack_reply_agent
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-                ON CONFLICT(message_key) DO UPDATE SET
-                    pending_ack_at = excluded.pending_ack_at,
-                    acknowledged_at = excluded.acknowledged_at,
-                    ack_reply_message_key = excluded.ack_reply_message_key,
-                    ack_reply_team = excluded.ack_reply_team,
-                    ack_reply_agent = excluded.ack_reply_agent
-                "#,
-                (
-                    ack_state.message_key.as_str(),
-                    ack_state.pending_ack_at.as_ref().map(ToString::to_string),
-                    ack_state.acknowledged_at.as_ref().map(ToString::to_string),
-                    ack_state
-                        .ack_reply_message_key
-                        .as_ref()
-                        .map(|value| value.to_string()),
-                    ack_state.ack_reply_team.as_ref().map(ToString::to_string),
-                    ack_state.ack_reply_agent.as_ref().map(ToString::to_string),
-                ),
-            )
+        upsert_ack_state_row(&connection, ack_state)
             .map_err(|error| classify_store_error(error, "failed to upsert ack state"))?;
         Ok(ack_state.clone())
     }
@@ -259,21 +231,7 @@ impl MailStore for RusqliteStore {
         visibility: &VisibilityStateRecord,
     ) -> Result<VisibilityStateRecord, StoreError> {
         let connection = self.lock_connection()?;
-        connection
-            .execute(
-                r#"
-                INSERT INTO message_visibility (message_key, read_at, cleared_at)
-                VALUES (?1, ?2, ?3)
-                ON CONFLICT(message_key) DO UPDATE SET
-                    read_at = excluded.read_at,
-                    cleared_at = excluded.cleared_at
-                "#,
-                (
-                    visibility.message_key.as_str(),
-                    visibility.read_at.as_ref().map(ToString::to_string),
-                    visibility.cleared_at.as_ref().map(ToString::to_string),
-                ),
-            )
+        upsert_visibility_row(&connection, visibility)
             .map_err(|error| classify_store_error(error, "failed to upsert visibility state"))?;
         Ok(visibility.clone())
     }
@@ -305,32 +263,77 @@ impl MailStore for RusqliteStore {
         ingest_record: &IngestRecord,
     ) -> Result<InsertOutcome<IngestRecord>, StoreError> {
         let connection = self.lock_connection()?;
-        match connection.execute(
-            r#"
-            INSERT INTO inbox_ingest (
-                team_name,
-                recipient_agent,
-                source_path,
-                source_fingerprint,
-                message_key,
-                imported_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-            "#,
-            (
-                ingest_record.team_name.as_str(),
-                ingest_record.recipient_agent.as_str(),
-                ingest_record.source_path.display().to_string(),
-                ingest_record.source_fingerprint.as_str(),
-                ingest_record.message_key.as_str(),
-                ingest_record.imported_at.to_string(),
-            ),
-        ) {
+        match insert_ingest_row(&connection, ingest_record) {
             Ok(_) => Ok(InsertOutcome::Inserted(ingest_record.clone())),
             Err(error) => match classify_ingest_duplicate(&error, ingest_record) {
                 Some(identity) => Ok(InsertOutcome::Duplicate(identity)),
                 None => Err(classify_store_error(error, "failed to record ingest row")),
             },
         }
+    }
+
+    fn insert_message_with_ingest(
+        &self,
+        message: &StoredMessageRecord,
+        ingest_record: &IngestRecord,
+    ) -> Result<InsertOutcome<StoredMessageRecord>, StoreError> {
+        self.insert_message_with_ingest_state(
+            message,
+            ingest_record,
+            &ImportedMessageState::default(),
+        )
+    }
+
+    fn insert_message_with_ingest_state(
+        &self,
+        message: &StoredMessageRecord,
+        ingest_record: &IngestRecord,
+        state: &ImportedMessageState,
+    ) -> Result<InsertOutcome<StoredMessageRecord>, StoreError> {
+        self.with_transaction(|transaction| {
+            match insert_message_row(transaction, message) {
+                Ok(()) => {}
+                Err(error) => {
+                    if let Some(identity) = classify_message_duplicate(&error, message) {
+                        return Ok(InsertOutcome::Duplicate(identity));
+                    }
+                    return Err(classify_store_error(
+                        error,
+                        "failed to insert imported mailbox row",
+                    ));
+                }
+            }
+            match insert_ingest_row(transaction, ingest_record) {
+                Ok(()) => {}
+                Err(error) => {
+                    return match classify_ingest_duplicate(&error, ingest_record) {
+                        Some(identity) => Err(StoreError::constraint(format!(
+                            "ingest fingerprint duplicated during imported mailbox batch write: {identity:?}"
+                        ))),
+                        None => Err(classify_store_error(
+                            error,
+                            "failed to record inbox ingest fingerprint",
+                        )),
+                    };
+                }
+            }
+            if let Some(ack_state) = state.ack_state.as_ref() {
+                upsert_ack_state_row(transaction, ack_state).map_err(|error| {
+                    classify_store_error(error, "failed to upsert imported ack state")
+                })?;
+            }
+            if let Some(visibility) = state.visibility.as_ref() {
+                upsert_visibility_row(transaction, visibility).map_err(|error| {
+                    classify_store_error(error, "failed to upsert imported visibility state")
+                })?;
+            }
+            if let Some(task) = state.task.as_ref() {
+                upsert_task_row(transaction, task).map_err(|error| {
+                    classify_store_error(error, "failed to upsert imported task row")
+                })?;
+            }
+            Ok(InsertOutcome::Inserted(message.clone()))
+        })
     }
 
     fn load_ingest(
@@ -467,7 +470,7 @@ impl MailStore for RusqliteStore {
     }
 }
 
-fn insert_message_row(
+pub(crate) fn insert_message_row(
     connection: &Connection,
     message: &StoredMessageRecord,
 ) -> rusqlite::Result<()> {
@@ -508,7 +511,64 @@ fn insert_message_row(
     Ok(())
 }
 
-fn classify_message_duplicate(
+pub(crate) fn upsert_ack_state_row(
+    connection: &Connection,
+    ack_state: &AckStateRecord,
+) -> rusqlite::Result<()> {
+    connection.execute(
+        r#"
+        INSERT INTO ack_state (
+            message_key,
+            pending_ack_at,
+            acknowledged_at,
+            ack_reply_message_key,
+            ack_reply_team,
+            ack_reply_agent
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+        ON CONFLICT(message_key) DO UPDATE SET
+            pending_ack_at = excluded.pending_ack_at,
+            acknowledged_at = excluded.acknowledged_at,
+            ack_reply_message_key = excluded.ack_reply_message_key,
+            ack_reply_team = excluded.ack_reply_team,
+            ack_reply_agent = excluded.ack_reply_agent
+        "#,
+        (
+            ack_state.message_key.as_str(),
+            ack_state.pending_ack_at.as_ref().map(ToString::to_string),
+            ack_state.acknowledged_at.as_ref().map(ToString::to_string),
+            ack_state
+                .ack_reply_message_key
+                .as_ref()
+                .map(|value| value.to_string()),
+            ack_state.ack_reply_team.as_ref().map(ToString::to_string),
+            ack_state.ack_reply_agent.as_ref().map(ToString::to_string),
+        ),
+    )?;
+    Ok(())
+}
+
+pub(crate) fn upsert_visibility_row(
+    connection: &Connection,
+    visibility: &VisibilityStateRecord,
+) -> rusqlite::Result<()> {
+    connection.execute(
+        r#"
+        INSERT INTO message_visibility (message_key, read_at, cleared_at)
+        VALUES (?1, ?2, ?3)
+        ON CONFLICT(message_key) DO UPDATE SET
+            read_at = excluded.read_at,
+            cleared_at = excluded.cleared_at
+        "#,
+        (
+            visibility.message_key.as_str(),
+            visibility.read_at.as_ref().map(ToString::to_string),
+            visibility.cleared_at.as_ref().map(ToString::to_string),
+        ),
+    )?;
+    Ok(())
+}
+
+pub(crate) fn classify_message_duplicate(
     error: &rusqlite::Error,
     message: &StoredMessageRecord,
 ) -> Option<StoreDuplicateIdentity> {
@@ -547,6 +607,33 @@ fn classify_ingest_duplicate(
         });
     }
     None
+}
+
+fn insert_ingest_row(
+    connection: &Connection,
+    ingest_record: &IngestRecord,
+) -> rusqlite::Result<()> {
+    connection.execute(
+        r#"
+        INSERT INTO inbox_ingest (
+            team_name,
+            recipient_agent,
+            source_path,
+            source_fingerprint,
+            message_key,
+            imported_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+        "#,
+        (
+            ingest_record.team_name.as_str(),
+            ingest_record.recipient_agent.as_str(),
+            ingest_record.source_path.display().to_string(),
+            ingest_record.source_fingerprint.as_str(),
+            ingest_record.message_key.as_str(),
+            ingest_record.imported_at.to_string(),
+        ),
+    )?;
+    Ok(())
 }
 
 fn convert_message_row(raw: RawMessageRow) -> Result<StoredMessageRecord, StoreError> {

@@ -2,8 +2,11 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use atm_core::home;
+use atm_core::inbox_export::default_inbox_export;
+use atm_core::inbox_ingress::default_inbox_ingress;
 use atm_core::send::{self, SendMessageSource, SendRequest};
 use atm_core::types::TaskId;
+use atm_rusqlite::RusqliteStore;
 use clap::Args;
 
 use crate::observability::CliObservability;
@@ -56,7 +59,12 @@ impl SendCommand {
         let home_dir = home::atm_home()?;
         let json = self.json;
         let request = self.build_request(home_dir, current_dir)?;
-        let outcome = send::send_mail(request, observability)?;
+        let team = send::resolve_store_team(&request)?;
+        let store = RusqliteStore::open_for_team_home(&request.home_dir, &team)?;
+        let ingress = default_inbox_ingress();
+        let exporter = default_inbox_export();
+        let outcome =
+            send::send_mail_via_store(request, &store, &ingress, &exporter, observability)?;
 
         output::print_send_result(&outcome, json)
     }
@@ -106,14 +114,15 @@ impl SendCommand {
 #[cfg(test)]
 mod tests {
     use super::SendCommand;
+    use crate::test_support::{ROLE_TEAM_LEAD, TEST_TEAM};
 
     #[test]
     fn build_request_rejects_invalid_target_before_core() {
         let command = SendCommand {
             to: "../evil".to_string(),
             message: Some("hello".to_string()),
-            from: Some("team-lead".to_string()),
-            team: Some("atm-dev".to_string()),
+            from: Some(ROLE_TEAM_LEAD.to_string()),
+            team: Some(TEST_TEAM.to_string()),
             file: None,
             stdin: false,
             summary: None,

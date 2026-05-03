@@ -639,7 +639,14 @@ Supersession note:
 
 Public entrypoint:
 
-`send::send_mail(request: SendRequest, observability: &dyn ObservabilityPort) -> Result<SendOutcome, AtmError>`
+`send::send_mail_via_store(request: SendRequest, store: &dyn SendStore, ingress: &dyn InboxIngress, exporter: &dyn InboxExport, observability: &dyn ObservabilityPort) -> Result<SendOutcome, AtmError>`
+
+Phase Q note:
+- Q.2 replaced the earlier `send_mail(request, observability)` entrypoint with
+  `send_mail_via_store(...)`
+- the store, ingress, and exporter parameters make the SQLite-first write,
+  ingest-before-export, and projection/export boundaries explicit at the public
+  service seam
 
 `SendRequest` contains:
 - home directory
@@ -667,7 +674,8 @@ Public entrypoint:
 | `agent` | `String` | Resolved target recipient. |
 | `sender` | `String` | Resolved sender identity. |
 | `outcome` | `&'static str` | Delivery result such as `sent` or `dry_run`. |
-| `message_id` | `Uuid` | ATM-authored UUID v4 for the send operation. |
+| `message_id` | `LegacyMessageId` | ATM-authored legacy UUID bridge identity for the send operation. |
+| `atm_message_id` | `AtmMessageId` | Canonical ATM ULID carried in SQLite and `metadata.atm.messageId`. |
 | `requires_ack` | `bool` | Whether the message requires acknowledgement. |
 | `task_id` | `Option<String>` | Optional task identifier persisted on the message. |
 | `summary` | `Option<String>` | Generated or caller-supplied summary text. |
@@ -685,14 +693,21 @@ Normal send JSON output includes:
 - `agent`
 - `outcome`
 - `message_id`
+- `atm_message_id`
 - `requires_ack`
 - `task_id`
 - `warnings` when send completed in a degraded but permitted mode
+
+For the ATM-authored inbox wire shape, the top-level legacy `message_id` is
+omitted; that legacy field appears only in compatibility-mode sends. The
+canonical send identity is `atm_message_id`, with the legacy UUID bridge
+retained only where older consumers still require it.
 
 Dry-run send JSON output includes:
 - `action = "send"`
 - `agent`
 - `team`
+- `atm_message_id`
 - `message`
 - `dry_run = true`
 - `requires_ack`
@@ -2389,7 +2404,7 @@ Required architectural defaults:
 - per-leg TCP/TLS connect deadline: `5s`
 - per-leg TCP/TLS read/write deadline: `5s`
 - total remote retry budget: `30s`
-- SQLite `busy_timeout`: `1500ms`
+- SQLite `busy_timeout`: `5000ms`
 - ingest batch processing slice: `2s`
 - doctor health query deadline: `3s`
 

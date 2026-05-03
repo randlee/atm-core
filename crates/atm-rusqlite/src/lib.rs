@@ -1,5 +1,6 @@
 mod mail;
 mod roster;
+mod send;
 mod task;
 
 #[cfg(test)]
@@ -8,11 +9,13 @@ mod tests;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
+use std::thread;
 use std::time::Duration;
 
 use atm_core::home::mail_db_path_from_home;
 use atm_core::store::{
-    BusyTimeoutMs, SqliteHandleBudget, StoreBootstrapReport, StoreBoundary, StoreError, StoreHealth,
+    BusyTimeoutMs, SqliteHandleBudget, StoreBootstrapReport, StoreBoundary, StoreError,
+    StoreErrorKind, StoreHealth,
 };
 use atm_core::types::TeamName;
 use rusqlite::{Connection, OptionalExtension, Transaction};
@@ -129,7 +132,7 @@ impl RusqliteStore {
     pub fn open_path(database_path: impl AsRef<Path>) -> Result<Self, StoreError> {
         Self::open_path_with_options(
             database_path.as_ref(),
-            BusyTimeoutMs::DEFAULT,
+            BusyTimeoutMs::new(5000).expect("5000ms busy timeout is valid"),
             SqliteHandleBudget::DEFAULT,
         )
     }
@@ -149,23 +152,34 @@ impl RusqliteStore {
             })?;
         }
 
-        let mut connection = Connection::open(database_path).map_err(|error| {
-            StoreError::open(format!(
-                "failed to open SQLite store {}",
-                database_path.display()
-            ))
-            .with_source(error)
-        })?;
+        for attempt in 0..3 {
+            let mut connection = Connection::open(database_path).map_err(|error| {
+                StoreError::open(format!(
+                    "failed to open SQLite store {}",
+                    database_path.display()
+                ))
+                .with_source(error)
+            })?;
 
-        configure_connection(&connection, busy_timeout_ms)?;
-        bootstrap_schema(&mut connection)?;
+            match configure_connection(&connection, busy_timeout_ms)
+                .and_then(|()| bootstrap_schema(&mut connection))
+            {
+                Ok(()) => {
+                    return Ok(Self {
+                        database_path: database_path.to_path_buf(),
+                        connection: Mutex::new(connection),
+                        busy_timeout_ms,
+                        handle_budget,
+                    });
+                }
+                Err(error) if error.kind == StoreErrorKind::Bootstrap && attempt < 2 => {
+                    thread::sleep(Duration::from_millis(25 * (attempt + 1) as u64));
+                }
+                Err(error) => return Err(error),
+            }
+        }
 
-        Ok(Self {
-            database_path: database_path.to_path_buf(),
-            connection: Mutex::new(connection),
-            busy_timeout_ms,
-            handle_budget,
-        })
+        unreachable!("bootstrap retry loop either returns success or the terminal error")
     }
 
     pub(crate) fn lock_connection(&self) -> Result<MutexGuard<'_, Connection>, StoreError> {
@@ -205,6 +219,12 @@ impl StoreBoundary for RusqliteStore {
 
     fn health(&self) -> Result<StoreHealth, StoreError> {
         let connection = self.lock_connection()?;
+        let journal_mode = query_journal_mode(&connection)?;
+        if !journal_mode.eq_ignore_ascii_case("wal") {
+            return Err(StoreError::query(format!(
+                "SQLite journal_mode drifted from WAL at runtime: observed {journal_mode}"
+            )));
+        }
         Ok(StoreHealth {
             database_path: self.database_path.clone(),
             ready: true,
@@ -227,6 +247,12 @@ pub(crate) fn configure_connection(
         .map_err(|error| {
             StoreError::bootstrap("failed to enable SQLite WAL mode").with_source(error)
         })?;
+    let journal_mode = query_journal_mode(connection)?;
+    if !journal_mode.eq_ignore_ascii_case("wal") {
+        return Err(StoreError::bootstrap(
+            "SQLite refused WAL mode; expected journal_mode=wal after bootstrap",
+        ));
+    }
     connection
         .pragma_update(None, "foreign_keys", 1)
         .map_err(|error| {

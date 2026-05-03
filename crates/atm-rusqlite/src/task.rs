@@ -20,33 +20,7 @@ struct RawTaskRow {
 impl TaskStore for RusqliteStore {
     fn upsert_task(&self, task: &TaskRecord) -> Result<TaskRecord, StoreError> {
         let connection = self.lock_connection()?;
-        connection
-            .execute(
-                r#"
-                INSERT INTO tasks (
-                    task_id,
-                    message_key,
-                    status,
-                    created_at,
-                    acknowledged_at,
-                    metadata_json
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-                ON CONFLICT(task_id) DO UPDATE SET
-                    message_key = excluded.message_key,
-                    status = excluded.status,
-                    created_at = excluded.created_at,
-                    acknowledged_at = excluded.acknowledged_at,
-                    metadata_json = excluded.metadata_json
-                "#,
-                (
-                    task.task_id.as_str(),
-                    task.message_key.as_str(),
-                    task.status.as_str(),
-                    task.created_at.to_string(),
-                    task.acknowledged_at.as_ref().map(ToString::to_string),
-                    task.metadata_json.as_deref(),
-                ),
-            )
+        upsert_task_row(&connection, task)
             .map_err(|error| classify_store_error(error, "failed to upsert task row"))?;
         Ok(task.clone())
     }
@@ -140,6 +114,39 @@ impl TaskStore for RusqliteStore {
             .map_err(|error| classify_store_error(error, "failed to reload acknowledged task"))?;
         raw.map(convert_task_row).transpose()
     }
+}
+
+pub(crate) fn upsert_task_row(
+    connection: &rusqlite::Connection,
+    task: &TaskRecord,
+) -> rusqlite::Result<()> {
+    connection.execute(
+        r#"
+        INSERT INTO tasks (
+            task_id,
+            message_key,
+            status,
+            created_at,
+            acknowledged_at,
+            metadata_json
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+        ON CONFLICT(task_id) DO UPDATE SET
+            message_key = excluded.message_key,
+            status = excluded.status,
+            created_at = excluded.created_at,
+            acknowledged_at = excluded.acknowledged_at,
+            metadata_json = excluded.metadata_json
+        "#,
+        (
+            task.task_id.as_str(),
+            task.message_key.as_str(),
+            task.status.as_str(),
+            task.created_at.to_string(),
+            task.acknowledged_at.as_ref().map(ToString::to_string),
+            task.metadata_json.as_deref(),
+        ),
+    )?;
+    Ok(())
 }
 
 fn convert_task_row(raw: RawTaskRow) -> Result<TaskRecord, StoreError> {

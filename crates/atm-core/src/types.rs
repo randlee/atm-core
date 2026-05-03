@@ -73,6 +73,11 @@ impl AgentName {
     pub(crate) fn from_validated(value: impl Into<String>) -> Self {
         Self(value.into())
     }
+
+    /// Stable internal sender identity used by ATM-owned synthetic events.
+    pub fn system() -> Self {
+        Self::from_validated("system")
+    }
 }
 
 impl FromStr for AgentName {

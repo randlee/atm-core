@@ -142,6 +142,10 @@ impl SourceFingerprint {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    pub fn from_external_hex(hash: u64) -> Self {
+        Self(format!("ext{hash:016x}"))
+    }
 }
 
 impl FromStr for SourceFingerprint {
@@ -175,6 +179,24 @@ impl Deref for SourceFingerprint {
 
     fn deref(&self) -> &Self::Target {
         self.as_str()
+    }
+}
+
+impl From<AtmMessageId> for SourceFingerprint {
+    fn from(value: AtmMessageId) -> Self {
+        // INVARIANT: AtmMessageId is already validated ULID text, and the
+        // `atm...` prefix stays within the stable ASCII token shape accepted
+        // by SourceFingerprint for ATM-authored ingress identities.
+        Self(format!("atm{value}"))
+    }
+}
+
+impl From<LegacyMessageId> for SourceFingerprint {
+    fn from(value: LegacyMessageId) -> Self {
+        // INVARIANT: LegacyMessageId is already validated UUID text, and the
+        // `legacy...` prefix stays within the stable ASCII token shape accepted
+        // by SourceFingerprint for compatibility ingress identities.
+        Self(format!("legacy{value}"))
     }
 }
 
@@ -276,7 +298,7 @@ impl ProcessId {
 pub struct BusyTimeoutMs(u16);
 
 impl BusyTimeoutMs {
-    pub const DEFAULT: Self = Self(1500);
+    pub const DEFAULT: Self = Self(5000);
 
     pub fn new(value: u16) -> Result<Self, StoreParseError> {
         if value == 0 {
