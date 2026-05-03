@@ -1,5 +1,6 @@
 use std::fs;
 use std::process::Command;
+mod helpers;
 
 use atm_core::mail_store::MailStore;
 use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
@@ -10,20 +11,6 @@ use atm_rusqlite::RusqliteStore;
 use chrono::{Duration, Utc};
 use serde_json::Value;
 use uuid::Uuid;
-
-fn parse_inbox_values(raw: &str) -> Vec<Value> {
-    if raw.trim().is_empty() {
-        return Vec::new();
-    }
-
-    match raw.chars().find(|ch| !ch.is_whitespace()) {
-        Some('[') => serde_json::from_str(raw).expect("json array"),
-        _ => raw
-            .lines()
-            .map(|line| serde_json::from_str(line).expect("json line"))
-            .collect(),
-    }
-}
 
 #[test]
 fn test_ack_transitions_pending_ack_and_appends_reply() {
@@ -508,7 +495,7 @@ impl Fixture {
 
     fn inbox_json_lines(&self, agent: &str) -> Vec<Value> {
         let raw = fs::read_to_string(self.inbox_path(agent)).expect("inbox contents");
-        parse_inbox_values(&raw)
+        helpers::parse_inbox_values(&raw)
     }
 
     fn write_origin_inbox(&self, agent: &str, origin: &str, messages: &[MessageEnvelope]) {

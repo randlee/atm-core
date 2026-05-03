@@ -320,12 +320,12 @@ pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmErro
 
     config.members.push(AgentMember {
         name: request.member.clone(),
-        agent_id: format!("{}@{}", request.member, request.team),
-        agent_type: request.agent_type.into(),
-        model: request.model,
+        agent_id: Some(format!("{}@{}", request.member, request.team)),
+        agent_type: Some(request.agent_type.into()),
+        model: Some(request.model),
         joined_at: Some(Utc::now().timestamp_millis() as u64),
-        tmux_pane_id: normalized_tmux_pane_id.unwrap_or_default(),
-        cwd: request.cwd.display().to_string(),
+        tmux_pane_id: normalized_tmux_pane_id,
+        cwd: Some(request.cwd.display().to_string()),
         extra,
     });
 
@@ -418,12 +418,16 @@ pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> 
 fn member_summary(member: &AgentMember) -> MemberSummary {
     MemberSummary {
         name: AgentName::from_validated(member.name.clone()),
-        agent_id: member.agent_id.clone(),
-        agent_type: member.agent_type.to_string(),
-        model: member.model.clone(),
+        agent_id: member.agent_id.clone().unwrap_or_default(),
+        agent_type: member
+            .agent_type
+            .as_ref()
+            .map(ToString::to_string)
+            .unwrap_or_default(),
+        model: member.model.clone().unwrap_or_default(),
         joined_at: member.joined_at,
-        tmux_pane_id: member.tmux_pane_id.clone(),
-        cwd: member.cwd.clone(),
+        tmux_pane_id: member.tmux_pane_id.clone().unwrap_or_default(),
+        cwd: member.cwd.clone().unwrap_or_default(),
         extra: member.extra.clone(),
     }
 }
@@ -706,7 +710,7 @@ mod tests {
             .find(|member| member.name == "arch-ctm")
             .expect("member");
 
-        assert_eq!(member.tmux_pane_id, "%7");
+        assert_eq!(member.tmux_pane_id.as_deref(), Some("%7"));
         assert_eq!(member.extra["backendType"], serde_json::json!("tmux"));
         assert_eq!(member.extra["isActive"], serde_json::json!(true));
     }

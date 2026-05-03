@@ -671,6 +671,24 @@ mod tests {
     }
 
     #[test]
+    fn legacy_message_id_slot_rejects_ulid_values() {
+        let (atm_message_id, _) = AtmMessageId::new_with_timestamp();
+        let raw = format!(
+            r#"{{
+                "from":"team-lead",
+                "text":"hello",
+                "timestamp":"2026-03-30T00:00:00Z",
+                "read":false,
+                "message_id":"{}"
+            }}"#,
+            atm_message_id
+        );
+
+        let error = serde_json::from_str::<MessageEnvelope>(&raw).expect_err("ulid in legacy slot");
+        assert!(error.to_string().contains("UUID"));
+    }
+
+    #[test]
     fn shared_inbox_write_shape_moves_machine_fields_into_metadata() {
         let legacy_message_id = LegacyMessageId::new();
         let envelope = MessageEnvelope {
