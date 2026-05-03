@@ -74,7 +74,7 @@ pub fn run_doctor(
         });
     }
     let member_roster = resolved_team
-        .as_deref()
+        .as_ref()
         .and_then(|team| load_member_roster(&home_dir, team, config.as_ref(), &mut findings));
     sweep_stale_mailbox_locks(&home_dir, &mut findings);
     push_stale_mailbox_lock_findings(
@@ -155,11 +155,11 @@ fn default_runtime_health(
 
 fn load_member_roster(
     home_dir: &Path,
-    team: &str,
+    team: &TeamName,
     config: Option<&config::AtmConfig>,
     findings: &mut Vec<DoctorFinding>,
 ) -> Option<MembersList> {
-    let team_dir = match crate::home::team_dir_from_home(home_dir, team) {
+    let team_dir = match crate::home::team_dir_from_home(home_dir, team.as_str()) {
         Ok(team_dir) => team_dir,
         Err(error) => {
             push_doctor_error(findings, DoctorSeverity::Error, error);
@@ -176,13 +176,14 @@ fn load_member_roster(
                 team
             ),
             remediation: Some(format!(
-                "Create .claude/teams/{team} or correct ATM_HOME / --team before rerunning `atm doctor`."
+                "Create .claude/teams/{} or correct ATM_HOME / --team before rerunning `atm doctor`.",
+                team
             )),
         });
         return None;
     }
 
-    check_restore_marker(team, &team_dir, findings);
+    check_restore_marker(team.as_str(), &team_dir, findings);
 
     let team_config = match config::load_team_config(&team_dir) {
         Ok(team_config) => team_config,
@@ -195,7 +196,7 @@ fn load_member_roster(
         .map(|config| config.team_members.as_slice())
         .unwrap_or(&[]);
 
-    check_inbox_directory(team, &team_dir.join("inboxes"), findings);
+    check_inbox_directory(team.as_str(), &team_dir.join("inboxes"), findings);
 
     let present = team_config
         .members

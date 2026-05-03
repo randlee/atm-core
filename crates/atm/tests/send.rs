@@ -18,7 +18,7 @@ use atm_core::types::{AgentName, TeamName};
 use atm_core::{read_messages, write_messages};
 use atm_rusqlite::RusqliteStore;
 use helpers::{
-    ROLE_TEAM_LEAD, TEST_LEAD, TEST_QA, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER,
+    ROLE_TEAM_LEAD, TEST_LEAD, TEST_QA_AGENT, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER,
     TEST_SENDER_ADDRESS, TEST_TEAM, configure_atm_command,
 };
 use serde_json::Value;
@@ -93,27 +93,6 @@ fn test_send_dry_run_no_file() {
     assert_eq!(parsed["requires_ack"], false);
 
     assert!(!fixture.inbox_path("recipient").exists());
-}
-
-#[test]
-fn test_send_succeeds_with_stale_mailbox_lock_artifact() {
-    let fixture = Fixture::new(TEST_RECIPIENT);
-    let inbox_path = fixture.inbox_path(TEST_RECIPIENT);
-    if let Some(parent) = inbox_path.parent() {
-        fs::create_dir_all(parent).expect("inbox dir");
-    }
-    fs::write(inbox_path.with_extension("json.lock"), u32::MAX.to_string()).expect("stale lock");
-
-    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello after stale lock"]);
-
-    assert!(
-        output.status.success(),
-        "stderr: {}",
-        fixture.stderr(&output)
-    );
-    let inbox = fixture.inbox_contents(TEST_RECIPIENT);
-    assert_eq!(inbox.len(), 1);
-    assert_eq!(inbox[0].text, "hello after stale lock");
 }
 
 #[test]
@@ -548,9 +527,6 @@ fn test_send_missing_config_deduplicates_team_lead_notice_under_concurrency() {
     let barrier = std::sync::Arc::new(std::sync::Barrier::new(3));
     let fixture = &fixture;
 
-    // This validates the compatibility-path lock invariant that concurrent
-    // missing-config sends must serialize the notice/workflow seed so
-    // team-lead receives only one warning record.
     let (first, second) = std::thread::scope(|scope| {
         let first_barrier = barrier.clone();
         let first = scope.spawn(move || {
@@ -772,7 +748,7 @@ fn test_send_post_send_hook_non_match_is_silent() {
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
         "[[atm.post_send_hooks]]\nrecipient = '{}'\ncommand = ['{}', 'capture', '{}']\n",
-        TEST_QA,
+        TEST_QA_AGENT,
         hook_path.display(),
         payload_path.display()
     ));

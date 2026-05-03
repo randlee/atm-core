@@ -68,6 +68,8 @@ fn roster_record_for_member(
 ) -> Result<RosterMemberRecord, AtmError> {
     let role = match &member.agent_type {
         Some(AgentType::Unknown(raw)) if raw.trim().is_empty() => DEFAULT_ROLE.parse(),
+        // After the blank compatibility form is handled above, any remaining
+        // agent_type-derived role comes directly from the member payload.
         Some(agent_type) => agent_type.to_string().parse(),
         None => DEFAULT_ROLE.parse(),
     }
@@ -85,12 +87,7 @@ fn roster_record_for_member(
     })?;
     let transport_kind = DEFAULT_TRANSPORT_KIND
         .parse::<TransportKind>()
-        .map_err(|error| {
-            AtmError::new(
-                AtmErrorKind::Config,
-                format!("invalid built-in transport kind {DEFAULT_TRANSPORT_KIND}: {error}"),
-            )
-        })?;
+        .expect("DEFAULT_TRANSPORT_KIND is a valid non-blank constant");
     let recipient_pane_id = pane_id_for_member(member)?;
     let metadata_json = serde_json::to_string(member).map_err(|source| {
         AtmError::new(

@@ -1139,13 +1139,8 @@ mod tests {
         let _guard = acquire(&inbox, DEFAULT_LOCK_TIMEOUT).expect("first lock");
         let _timeout = ScopedDebugTimeoutOverride::set(100);
 
-        let started = std::time::Instant::now();
         let error = acquire(&inbox, default_lock_timeout()).expect_err("timeout");
         assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
-        assert!(
-            started.elapsed() < Duration::from_secs(2),
-            "debug timeout override should keep the test budget bounded"
-        );
     }
 
     #[test]

@@ -243,6 +243,7 @@ fn test_doctor_reports_stale_restore_marker_warning() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_sweeps_stale_mailbox_lock_across_team_inboxes() {
     let fixture = Fixture::new(&[ROLE_TEAM_LEAD, TEST_SENDER]);
     let stale_lock = fixture
@@ -295,6 +296,7 @@ fn test_doctor_in_process_health_check_reports_runtime_fields() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_typed_error_when_auto_start_fails() {
     let fixture = Fixture::new(&[TEST_SENDER]);
 

@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Mutex;
 
+use atm_core::ack::{AckCommitCommand, AckCommitRejection, AckCommitResult, AckStore};
 use atm_core::home;
 use atm_core::inbox_ingress::{InboxIngestOutcome, InboxIngress, default_inbox_ingress};
 use atm_core::mail_store::{
@@ -27,9 +28,13 @@ use rusqlite::{Connection, OpenFlags};
 use serde_json::json;
 use tempfile::TempDir;
 
+#[path = "../../atm/tests/support/mod.rs"]
+mod test_support;
+
 use crate::{
     RusqliteStore, SCHEMA_VERSION, query_foreign_keys, query_journal_mode, query_user_version,
 };
+use test_support::TEST_QA_AGENT;
 
 const TEST_TEAM: &str = "test-team";
 const TEST_SENDER: &str = "test-sender";
@@ -73,9 +78,7 @@ fn ingest_record(root: &Path, message_key: &MessageKey) -> IngestRecord {
         team_name: team(),
         recipient_agent: agent(TEST_RECIPIENT),
         source_path: root.join(format!("{TEST_RECIPIENT}.json")),
-        source_fingerprint: format!("sha256-{TEST_RECIPIENT}-001")
-            .parse()
-            .expect("fingerprint"),
+        source_fingerprint: SourceFingerprint::from_external_hex(0x5e2d_0000_0000_0001),
         message_key: message_key.clone(),
         imported_at: "2026-05-02T20:00:05Z".parse().expect("timestamp"),
     }
@@ -214,6 +217,23 @@ fn table_columns(store: &RusqliteStore, table_name: &str) -> Vec<(String, String
         columns.push((name, kind, not_null == 1));
     }
     columns
+}
+
+fn ack_commit_command<'a>(
+    reply_message: &'a atm_core::mail_store::StoredMessageRecord,
+    source_legacy_message_id: Option<LegacyMessageId>,
+    source_atm_message_id: Option<AtmMessageId>,
+    reply_team: &'a TeamName,
+    reply_agent: &'a AgentName,
+) -> AckCommitCommand<'a> {
+    AckCommitCommand {
+        source_legacy_message_id,
+        source_atm_message_id,
+        reply_message,
+        acknowledged_at: "2026-05-02T20:00:20Z".parse().expect("timestamp"),
+        reply_team,
+        reply_agent,
+    }
 }
 
 #[test]
@@ -572,12 +592,81 @@ fn create_read_and_update_store_rows() {
 }
 
 #[test]
+fn commit_ack_reply_rejects_already_acknowledged_message() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let store = RusqliteStore::open_path(tempdir.path().join("mail.db")).expect("open store");
+    let source_message = message_at(1);
+    let reply_message = message_at(2);
+    let reply_team = team();
+    let reply_agent = agent(TEST_RECIPIENT);
+    store
+        .insert_message(&source_message)
+        .expect("insert source");
+
+    store
+        .upsert_visibility(&VisibilityStateRecord {
+            message_key: source_message.message_key.clone(),
+            read_at: Some("2026-05-02T20:00:10Z".parse().expect("timestamp")),
+            cleared_at: None,
+        })
+        .expect("upsert visibility");
+    store
+        .upsert_ack_state(&AckStateRecord {
+            message_key: source_message.message_key.clone(),
+            pending_ack_at: None,
+            acknowledged_at: Some("2026-05-02T20:00:15Z".parse().expect("timestamp")),
+            ack_reply_message_key: Some("ext:prior-reply".parse().expect("message key")),
+            ack_reply_team: Some(team()),
+            ack_reply_agent: Some(agent(TEST_RECIPIENT)),
+        })
+        .expect("upsert ack state");
+
+    let result = store
+        .commit_ack_reply(&ack_commit_command(
+            &reply_message,
+            source_message.legacy_message_id,
+            source_message.atm_message_id,
+            &reply_team,
+            &reply_agent,
+        ))
+        .expect("commit ack reply");
+    assert!(matches!(
+        result,
+        AckCommitResult::Rejected(AckCommitRejection::AlreadyAcknowledged)
+    ));
+}
+
+#[test]
+fn commit_ack_reply_rejects_missing_source_message() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let store = RusqliteStore::open_path(tempdir.path().join("mail.db")).expect("open store");
+    let source_message = message_at(1);
+    let reply_message = message_at(2);
+    let reply_team = team();
+    let reply_agent = agent(TEST_RECIPIENT);
+
+    let result = store
+        .commit_ack_reply(&ack_commit_command(
+            &reply_message,
+            source_message.legacy_message_id,
+            source_message.atm_message_id,
+            &reply_team,
+            &reply_agent,
+        ))
+        .expect("commit ack reply");
+    assert!(matches!(
+        result,
+        AckCommitResult::Rejected(AckCommitRejection::MessageNotFound)
+    ));
+}
+
+#[test]
 fn roster_replace_update_and_pid_round_trip() {
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_path(tempdir.path().join("mail.db")).expect("open store");
 
     let arch = roster_member(TEST_SENDER, Some("%1"), Some(1001));
-    let quality = roster_member("quality-mgr", None, None);
+    let quality = roster_member(TEST_QA_AGENT, None, None);
     store
         .replace_roster(&team(), &[arch.clone(), quality.clone()])
         .expect("replace roster");
@@ -629,7 +718,7 @@ fn team_ingress_replaces_roster_and_preserves_existing_pid() {
 
     let mut recipient = AgentMember::with_name(agent(TEST_RECIPIENT));
     recipient.tmux_pane_id = Some("%7".to_string());
-    let mut quality = AgentMember::with_name(agent("quality-mgr"));
+    let mut quality = AgentMember::with_name(agent(TEST_QA_AGENT));
     quality.tmux_pane_id = Some("%8".to_string());
     let config = TeamConfig {
         members: vec![recipient, quality],
@@ -672,7 +761,7 @@ fn team_ingress_renamed_member_replaces_old_agent_name() {
             &team(),
             &[
                 roster_member(TEST_RECIPIENT, Some("%1"), Some(4242)),
-                roster_member("quality-mgr", Some("%8"), Some(5150)),
+                roster_member(TEST_QA_AGENT, Some("%8"), Some(5150)),
             ],
         )
         .expect("seed roster");
@@ -724,7 +813,7 @@ fn team_ingress_roster_shrink_removes_absent_members() {
             &team(),
             &[
                 roster_member(TEST_RECIPIENT, Some("%1"), Some(4242)),
-                roster_member("quality-mgr", Some("%8"), Some(5150)),
+                roster_member(TEST_QA_AGENT, Some("%8"), Some(5150)),
             ],
         )
         .expect("seed roster");
@@ -743,6 +832,9 @@ fn team_ingress_roster_shrink_removes_absent_members() {
 
 #[test]
 fn inbox_ingress_counts_duplicate_atm_messages_across_source_files() {
+    // Dedup advisory (Q.2-QA-12 / ATM-QA-012-003): duplicate suppression is
+    // defined at the SQLite ingress boundary, so repeated source imports must
+    // increment duplicate_messages without mutating durable message truth.
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_for_team_home(tempdir.path(), &team()).expect("open store");
     let primary_inbox = home::inbox_path_from_home(tempdir.path(), &team(), &agent(TEST_RECIPIENT))
@@ -788,6 +880,9 @@ fn inbox_ingress_counts_duplicate_atm_messages_across_source_files() {
 
 #[test]
 fn inbox_ingress_counts_duplicate_external_messages_on_reingest() {
+    // Dedup advisory (Q.2-QA-12 / ATM-QA-012-003): re-ingesting the same
+    // external record must report a duplicate rather than creating a second
+    // durable row.
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_for_team_home(tempdir.path(), &team()).expect("open store");
     let inbox_path = home::inbox_path_from_home(tempdir.path(), &team(), &agent(TEST_RECIPIENT))
@@ -845,7 +940,7 @@ fn inbox_ingress_is_idempotent_and_tracks_degraded_metadata() {
     let valid = inbox_message("ingest me");
     let valid_value = atm_core::schema::to_shared_inbox_value(&valid).expect("shared inbox value");
     let malformed_metadata = serde_json::json!({
-        "from": "quality-mgr",
+        "from": TEST_QA_AGENT,
         "text": "external malformed metadata",
         "timestamp": "2026-05-02T21:00:00Z",
         "read": false,
@@ -879,7 +974,7 @@ fn inbox_ingress_is_idempotent_and_tracks_degraded_metadata() {
     let degraded_envelope = atm_core::read_messages(&inbox_path)
         .expect("read inbox messages")
         .into_iter()
-        .find(|message| message.from.as_str() == "quality-mgr")
+        .find(|message| message.from.as_str() == TEST_QA_AGENT)
         .expect("degraded envelope");
     let degraded_message_key = MessageKey::from_source_fingerprint(&external_source_fingerprint(
         &inbox_path,
@@ -892,7 +987,7 @@ fn inbox_ingress_is_idempotent_and_tracks_degraded_metadata() {
         .load_message(&degraded_message_key)
         .expect("load degraded message")
         .expect("stored degraded row");
-    assert_eq!(degraded_message.sender_display, "quality-mgr");
+    assert_eq!(degraded_message.sender_display, TEST_QA_AGENT);
     assert_eq!(degraded_message.body, "external malformed metadata");
     let events = observability.events.lock().expect("events lock");
     assert!(
@@ -1094,7 +1189,7 @@ fn replace_roster_rolls_back_on_constraint_violation() {
     let tempdir = TempDir::new().expect("tempdir");
     let store = RusqliteStore::open_path(tempdir.path().join("mail.db")).expect("open store");
     let arch = roster_member(TEST_SENDER, Some("%1"), Some(1001));
-    let quality = roster_member("quality-mgr", None, None);
+    let quality = roster_member(TEST_QA_AGENT, None, None);
     store
         .replace_roster(&team(), &[arch.clone(), quality.clone()])
         .expect("seed roster");

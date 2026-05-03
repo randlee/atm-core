@@ -24,9 +24,9 @@ use crate::store::{MessageKey, StoreDuplicateIdentity, StoreError};
 use crate::task_store::TaskStore;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
-/// INVARIANT: runtime failure paths in this module must return typed
-/// `AtmError`/`StoreError` results. Production ack/task flows must not rely on
-/// panic/unwrap for expected failure handling.
+// INVARIANT: runtime failure paths in this module must return typed
+// `AtmError`/`StoreError` results. Production ack/task flows must not rely on
+// panic/unwrap for expected failure handling.
 /// Parameters for acknowledging one pending-ack mailbox message.
 #[derive(Debug, Clone)]
 pub struct AckRequest {

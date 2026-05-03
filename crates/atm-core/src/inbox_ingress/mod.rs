@@ -53,8 +53,9 @@ impl InboxIngress for JsonInboxIngress {
     ) -> Result<InboxIngestOutcome, AtmError> {
         let workflow_state =
             workflow::load_workflow_state(home_dir, team.as_str(), agent.as_str())?;
-        // INVARIANT: discover_source_paths() is bounded to the validated
-        // home/team/agent scope provided to this ingress call.
+        // INVARIANT (Q.2-QA-12 / ATM-QA-012-002): discover_source_paths() is
+        // bounded to the validated home/team/agent scope provided to this
+        // ingress call.
         let source_paths = mailbox::source::discover_source_paths(home_dir, team, agent)?;
         let mut outcome = InboxIngestOutcome::default();
 
@@ -149,8 +150,9 @@ fn ingest_source_report(
             team_name: team.clone(),
             recipient_agent: agent.clone(),
             source_path: source_path.to_path_buf(),
-            // INVARIANT: (team_name, recipient_agent, source_fingerprint) is
-            // the SQLite-level dedup boundary for repeated ingress.
+            // INVARIANT (Q.2-QA-12 / ATM-QA-012-002): (team_name,
+            // recipient_agent, source_fingerprint) is the SQLite-level dedup
+            // boundary for repeated ingress.
             source_fingerprint: source_fingerprint(source_path, &envelope),
             message_key: message_key.clone(),
             imported_at: IsoTimestamp::now(),
