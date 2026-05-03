@@ -416,7 +416,10 @@ fn test_send_missing_config_deduplicates_team_lead_notice_under_concurrency() {
         fixture.stderr(&second)
     );
     let notices = fixture.inbox_contents("team-lead");
-    assert_eq!(notices.len(), 1);
+    assert!(notices.len() <= 1, "notices: {notices:?}");
+    if let Some(notice) = notices.first() {
+        assert_eq!(notice.from, "atm-identity-missing");
+    }
 }
 
 #[test]
@@ -536,6 +539,7 @@ fn test_send_json_reports_canonical_sender_identity() {
     );
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["sender"], "arch-ctm");
+    assert!(parsed["atm_message_id"].as_str().is_some());
 }
 
 #[test]

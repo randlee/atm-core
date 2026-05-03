@@ -11,8 +11,7 @@ use crate::config;
 use crate::error::{AtmError, AtmErrorCode};
 use crate::home;
 use crate::identity;
-use crate::inbox_export;
-use crate::inbox_export::ExportEventContext;
+use crate::inbox_export::{ExportEventContext, InboxExport};
 use crate::mail_store::{AckStateRecord, MailStore, MessageSourceKind, StoredMessageRecord};
 use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
@@ -94,6 +93,7 @@ pub struct SendOutcome {
     pub sender: AgentName,
     pub outcome: &'static str,
     pub message_id: LegacyMessageId,
+    pub atm_message_id: AtmMessageId,
     pub requires_ack: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
@@ -108,6 +108,15 @@ pub struct SendOutcome {
     pub warnings: Vec<String>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub dry_run: bool,
+}
+
+pub trait SendStore: MailStore + TaskStore {
+    fn commit_outbound_message(
+        &self,
+        message: &StoredMessageRecord,
+        ack_state: Option<&AckStateRecord>,
+        task: Option<&TaskRecord>,
+    ) -> Result<InsertOutcome<StoredMessageRecord>, StoreError>;
 }
 
 pub fn resolve_store_team(request: &SendRequest) -> Result<TeamName, AtmError> {
@@ -133,7 +142,7 @@ struct PreparedSend {
     canonical_sender: AgentName,
     recipient: ResolvedRecipient,
     sender_team: Option<TeamName>,
-    display_sender: String,
+    display_sender: AgentName,
     team_dir: PathBuf,
     inbox_path: PathBuf,
     warnings: Vec<String>,
@@ -198,10 +207,11 @@ pub fn send_mail(
 pub fn send_mail_via_store<S>(
     request: SendRequest,
     store: &S,
+    exporter: &dyn InboxExport,
     observability: &dyn ObservabilityPort,
 ) -> Result<SendOutcome, AtmError>
 where
-    S: MailStore + TaskStore + RosterStore,
+    S: SendStore + RosterStore,
 {
     let prepared = prepare_send_request(request)?;
     let envelope = build_outgoing_envelope(&prepared);
@@ -221,8 +231,24 @@ where
 
     if !prepared.dry_run {
         let stored = stored_message_record(&prepared, &envelope)?;
+        let ack_state = prepared.requires_ack.then(|| AckStateRecord {
+            message_key: MessageKey::from_atm_message_id(prepared.atm_message_id),
+            pending_ack_at: Some(prepared.timestamp),
+            acknowledged_at: None,
+            ack_reply_message_key: None,
+            ack_reply_team: None,
+            ack_reply_agent: None,
+        });
+        let task_record = prepared.task_id.clone().map(|task_id| TaskRecord {
+            task_id,
+            message_key: MessageKey::from_atm_message_id(prepared.atm_message_id),
+            status: TaskStatus::PendingAck,
+            created_at: prepared.timestamp,
+            acknowledged_at: None,
+            metadata_json: None,
+        });
         match store
-            .insert_message(&stored)
+            .commit_outbound_message(&stored, ack_state.as_ref(), task_record.as_ref())
             .map_err(|error| map_store_error("failed to insert outbound message row", error))?
         {
             InsertOutcome::Inserted(_) => {}
@@ -231,33 +257,7 @@ where
             }
         }
 
-        if prepared.requires_ack {
-            store
-                .upsert_ack_state(&AckStateRecord {
-                    message_key: MessageKey::from_atm_message_id(prepared.atm_message_id),
-                    pending_ack_at: Some(prepared.timestamp),
-                    acknowledged_at: None,
-                    ack_reply_message_key: None,
-                    ack_reply_team: None,
-                    ack_reply_agent: None,
-                })
-                .map_err(|error| map_store_error("failed to persist outbound ack state", error))?;
-        }
-
-        if let Some(task_id) = prepared.task_id.clone() {
-            store
-                .upsert_task(&TaskRecord {
-                    task_id,
-                    message_key: MessageKey::from_atm_message_id(prepared.atm_message_id),
-                    status: TaskStatus::PendingAck,
-                    created_at: prepared.timestamp,
-                    acknowledged_at: None,
-                    metadata_json: None,
-                })
-                .map_err(|error| map_store_error("failed to persist outbound task row", error))?;
-        }
-
-        inbox_export::export_message(
+        exporter.export_message(
             &prepared.home_dir(),
             &prepared.recipient.team,
             &prepared.recipient.agent,
@@ -265,7 +265,7 @@ where
             observability,
             ExportEventContext {
                 command: "send",
-                sender: prepared.canonical_sender.to_string(),
+                sender: prepared.canonical_sender.clone(),
                 message_id: Some(prepared.message_id),
                 requires_ack: prepared.requires_ack,
                 task_id: prepared.task_id.clone(),
@@ -299,7 +299,7 @@ fn prepare_send_request(request: SendRequest) -> Result<PreparedSend, AtmError> 
         sender_team.as_deref(),
         &recipient.team,
         config.as_ref(),
-    );
+    )?;
 
     let team_dir = home::team_dir_from_home(&request.home_dir, &recipient.team)?;
     if !team_dir.exists() {
@@ -401,10 +401,7 @@ fn build_outgoing_envelope(prepared: &PreparedSend) -> MessageEnvelope {
         set_canonical_sender_metadata(&mut extra, &prepared.canonical_sender);
     }
     MessageEnvelope {
-        from: prepared
-            .display_sender
-            .parse()
-            .expect("display sender is valid"),
+        from: prepared.display_sender.clone(),
         text: prepared.body.clone(),
         timestamp: prepared.timestamp,
         read: false,
@@ -430,6 +427,7 @@ fn build_send_outcome(prepared: &PreparedSend) -> SendOutcome {
         sender: prepared.canonical_sender.clone(),
         outcome: if prepared.dry_run { "dry_run" } else { "sent" },
         message_id: prepared.message_id,
+        atm_message_id: prepared.atm_message_id,
         requires_ack: prepared.requires_ack,
         task_id: prepared.task_id.clone(),
         summary: Some(prepared.summary.clone()),
@@ -509,7 +507,7 @@ fn stored_message_record(
         message_key: MessageKey::from_atm_message_id(prepared.atm_message_id),
         team_name: prepared.recipient.team.clone(),
         recipient_agent: prepared.recipient.agent.clone(),
-        sender_display: prepared.display_sender.clone(),
+        sender_display: prepared.display_sender.to_string(),
         sender_canonical: Some(prepared.canonical_sender.clone()),
         sender_team: prepared
             .sender_team
@@ -652,16 +650,14 @@ fn notify_team_lead_missing_config(
     );
 
     let notice = MessageEnvelope {
-        from: "atm-identity-missing"
-            .parse()
-            .expect("system sender is valid"),
+        from: AgentName::from_validated("atm-identity-missing"),
         text: format!(
             "ATM warning: send used existing inbox fallback for {recipient}@{team} because team config is missing at {}. Please restore config.json.",
             config_path.display()
         ),
         timestamp,
         read: false,
-        source_team: Some(team.parse().expect("team name")),
+        source_team: Some(team.clone()),
         summary: Some(format!(
             "ATM warning: missing team config fallback used for {recipient}@{team}"
         )),
@@ -721,10 +717,10 @@ fn display_sender_identity(
     sender_team: Option<&str>,
     recipient_team: &str,
     config: Option<&config::AtmConfig>,
-) -> String {
+) -> Result<AgentName, AtmError> {
     let cross_team = sender_team.is_some_and(|team| team != recipient_team);
     if !cross_team {
-        return canonical_sender.to_string();
+        return Ok(canonical_sender.clone());
     }
 
     if let Some(sender_override) = sender_override
@@ -732,11 +728,12 @@ fn display_sender_identity(
         .filter(|value| !value.is_empty())
         && config::aliases::resolve_agent(sender_override, config) == canonical_sender.as_str()
     {
-        return sender_override.to_string();
+        return sender_override.parse();
     }
 
     config::aliases::preferred_alias(canonical_sender.as_str(), config)
         .unwrap_or_else(|| canonical_sender.to_string())
+        .parse()
 }
 
 pub(super) fn qualified_sender_identity(sender: &AgentName, sender_team: Option<&str>) -> String {

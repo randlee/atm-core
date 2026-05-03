@@ -1,5 +1,6 @@
 mod mail;
 mod roster;
+mod send;
 mod task;
 
 #[cfg(test)]

@@ -20,81 +20,93 @@ pub struct InboxIngestOutcome {
     pub degraded_records: usize,
 }
 
-pub fn ingest_mailbox_state<S>(
-    home_dir: &Path,
-    team: &TeamName,
-    agent: &AgentName,
-    store: &S,
-    observability: &dyn ObservabilityPort,
-) -> Result<InboxIngestOutcome, AtmError>
-where
-    S: MailStore + TaskStore,
-{
-    let workflow_state = workflow::load_workflow_state(home_dir, team.as_str(), agent.as_str())?;
-    let source_paths =
-        mailbox::source::discover_source_paths(home_dir, team.as_str(), agent.as_str())?;
-    let mut outcome = InboxIngestOutcome::default();
+pub trait InboxIngestStore: MailStore + TaskStore {}
 
-    for source_path in source_paths {
-        let report = mailbox::read_messages_report(&source_path)?;
-        outcome.degraded_records +=
-            report.stats.skipped_records + report.stats.malformed_metadata_records;
-        ingest_source_report(
-            &source_path,
-            report,
-            team,
-            agent,
-            &workflow_state,
-            store,
-            &mut outcome,
-        )?;
-    }
+impl<T> InboxIngestStore for T where T: MailStore + TaskStore + ?Sized {}
 
-    let _ = observability.emit(CommandEvent {
-        command: "inbox_ingress",
-        action: "import",
-        outcome: if outcome.degraded_records > 0 {
-            "degraded"
-        } else {
-            "ok"
-        },
-        team: team.clone(),
-        agent: agent.clone(),
-        sender: "system".to_string(),
-        message_id: None,
-        requires_ack: false,
-        dry_run: false,
-        task_id: None,
-        error_code: None,
-        error_message: None,
-    });
-
-    Ok(outcome)
+pub trait InboxIngress {
+    fn ingest_mailbox_state(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        store: &dyn InboxIngestStore,
+        observability: &dyn ObservabilityPort,
+    ) -> Result<InboxIngestOutcome, AtmError>;
 }
 
-fn ingest_source_report<S>(
+#[derive(Debug, Default, Clone, Copy)]
+pub struct JsonInboxIngress;
+
+pub fn default_inbox_ingress() -> JsonInboxIngress {
+    JsonInboxIngress
+}
+
+impl InboxIngress for JsonInboxIngress {
+    fn ingest_mailbox_state(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        store: &dyn InboxIngestStore,
+        observability: &dyn ObservabilityPort,
+    ) -> Result<InboxIngestOutcome, AtmError> {
+        let workflow_state =
+            workflow::load_workflow_state(home_dir, team.as_str(), agent.as_str())?;
+        let source_paths =
+            mailbox::source::discover_source_paths(home_dir, team.as_str(), agent.as_str())?;
+        let mut outcome = InboxIngestOutcome::default();
+
+        for source_path in source_paths {
+            let report = mailbox::read_messages_report(&source_path)?;
+            outcome.degraded_records +=
+                report.stats.skipped_records + report.stats.malformed_metadata_records;
+            ingest_source_report(
+                &source_path,
+                report,
+                team,
+                agent,
+                &workflow_state,
+                store,
+                &mut outcome,
+            )?;
+        }
+
+        let _ = observability.emit(CommandEvent {
+            command: "inbox_ingress",
+            action: "import",
+            outcome: if outcome.degraded_records > 0 {
+                "degraded"
+            } else {
+                "ok"
+            },
+            team: team.clone(),
+            agent: agent.clone(),
+            sender: "system".to_string(),
+            message_id: None,
+            requires_ack: false,
+            dry_run: false,
+            task_id: None,
+            error_code: None,
+            error_message: None,
+        });
+
+        Ok(outcome)
+    }
+}
+
+fn ingest_source_report(
     source_path: &Path,
     report: MailboxReadReport,
     team: &TeamName,
     agent: &AgentName,
     workflow_state: &WorkflowStateFile,
-    store: &S,
+    store: &dyn InboxIngestStore,
     outcome: &mut InboxIngestOutcome,
-) -> Result<(), AtmError>
-where
-    S: MailStore + TaskStore,
-{
+) -> Result<(), AtmError> {
     for envelope in report.messages {
         let message_key = canonical_message_key(source_path, &envelope)?;
         let stored = stored_message_record(message_key.clone(), team, agent, &envelope)?;
-        match store
-            .insert_message(&stored)
-            .map_err(|error| map_store_error("failed to insert imported mailbox row", error))?
-        {
-            InsertOutcome::Inserted(_) => outcome.imported_messages += 1,
-            InsertOutcome::Duplicate(_) => outcome.duplicate_messages += 1,
-        }
-
         let ingest_record = IngestRecord {
             team_name: team.clone(),
             recipient_agent: agent.clone(),
@@ -103,23 +115,24 @@ where
             message_key: message_key.clone(),
             imported_at: IsoTimestamp::now(),
         };
-        let _ = store
-            .record_ingest(&ingest_record)
-            .map_err(|error| map_store_error("failed to record inbox ingest fingerprint", error))?;
+        match store
+            .insert_message_with_ingest(&stored, &ingest_record)
+            .map_err(|error| map_store_error("failed to insert imported mailbox row", error))?
+        {
+            InsertOutcome::Inserted(_) => outcome.imported_messages += 1,
+            InsertOutcome::Duplicate(_) => outcome.duplicate_messages += 1,
+        }
         import_workflow_state(store, &message_key, &envelope, workflow_state)?;
     }
     Ok(())
 }
 
-fn import_workflow_state<S>(
-    store: &S,
+fn import_workflow_state(
+    store: &dyn InboxIngestStore,
     message_key: &MessageKey,
     envelope: &MessageEnvelope,
     workflow_state: &WorkflowStateFile,
-) -> Result<(), AtmError>
-where
-    S: MailStore + TaskStore,
-{
+) -> Result<(), AtmError> {
     let projected = workflow::workflow_key(envelope)
         .and_then(|key| workflow_state.messages.get(&key).cloned())
         .unwrap_or_else(|| workflow::initial_state_for_envelope(envelope));

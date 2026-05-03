@@ -358,13 +358,13 @@ pub fn ack_mail(
 
 fn resolve_reply_target(
     message: &MessageEnvelope,
-    current_team: &str,
+    current_team: &TeamName,
 ) -> Result<(AgentName, TeamName), AtmError> {
     if let Some(identity) = canonical_sender_identity(message) {
         let team = message
             .source_team
             .clone()
-            .or_else(|| Some(current_team.parse().expect("validated team")))
+            .or_else(|| Some(current_team.clone()))
             .ok_or_else(AtmError::team_unavailable)?;
         return Ok((identity, team));
     }
@@ -602,7 +602,8 @@ mod tests {
             json!({"atm": {"fromIdentity": "team-lead"}}),
         );
 
-        let target = resolve_reply_target(&message, "atm-dev").expect("reply target");
+        let target = resolve_reply_target(&message, &"atm-dev".parse::<TeamName>().expect("team"))
+            .expect("reply target");
         assert_eq!(
             target,
             (

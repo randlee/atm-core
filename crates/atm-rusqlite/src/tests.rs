@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 
 use atm_core::home;
-use atm_core::inbox_ingress::{InboxIngestOutcome, ingest_mailbox_state};
+use atm_core::inbox_ingress::{InboxIngestOutcome, InboxIngress, default_inbox_ingress};
 use atm_core::mail_store::{
     AckStateRecord, IngestRecord, MailStore, MessageSourceKind, PendingExportRecord,
     VisibilityStateRecord,
@@ -86,6 +86,9 @@ fn inbox_message(text: &str) -> MessageEnvelope {
     let legacy_message_id: LegacyMessageId = "00000000-0000-4000-8000-00000000abcd"
         .parse()
         .expect("legacy id");
+    // Test helper only: timestamp-carrying ULIDs can collide if the clock
+    // source is artificially frozen, but production identity generation owns
+    // the real monotonicity/retry policy.
     let (atm_message_id, timestamp) = AtmMessageId::new_with_timestamp();
     let mut extra = serde_json::Map::new();
     extra.insert(
@@ -292,6 +295,37 @@ fn insert_message_batch_rolls_back_on_mid_operation_failure() {
         store
             .load_message(&first.message_key)
             .expect("reload after failed batch")
+            .is_none()
+    );
+}
+
+#[test]
+fn insert_message_with_ingest_rolls_back_when_ingest_write_fails() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let store = RusqliteStore::open_path(tempdir.path().join("mail.db")).expect("open store");
+    let first = message_at(1);
+    let first_ingest = ingest_record(tempdir.path(), &first.message_key);
+    match store
+        .insert_message_with_ingest(&first, &first_ingest)
+        .expect("first insert with ingest")
+    {
+        InsertOutcome::Inserted(_) => {}
+        InsertOutcome::Duplicate(_) => panic!("first insert unexpectedly duplicate"),
+    }
+
+    let second = message_at(2);
+    let duplicate_ingest = IngestRecord {
+        message_key: second.message_key.clone(),
+        ..first_ingest.clone()
+    };
+    let error = store
+        .insert_message_with_ingest(&second, &duplicate_ingest)
+        .expect_err("duplicate ingest should fail atomically");
+    assert_eq!(error.kind, StoreErrorKind::Constraint);
+    assert!(
+        store
+            .load_message(&second.message_key)
+            .expect("reload after failed atomic ingest")
             .is_none()
     );
 }
@@ -585,14 +619,16 @@ fn inbox_ingress_is_idempotent_and_tracks_degraded_metadata() {
     .expect("write inbox");
 
     let observability = NullObservability;
-    let first = ingest_mailbox_state(
-        tempdir.path(),
-        &team(),
-        &agent("team-lead"),
-        &store,
-        &observability,
-    )
-    .expect("first ingest");
+    let ingester = default_inbox_ingress();
+    let first = ingester
+        .ingest_mailbox_state(
+            tempdir.path(),
+            &team(),
+            &agent("team-lead"),
+            &store,
+            &observability,
+        )
+        .expect("first ingest");
     assert_eq!(
         first,
         InboxIngestOutcome {
@@ -602,14 +638,15 @@ fn inbox_ingress_is_idempotent_and_tracks_degraded_metadata() {
         }
     );
 
-    let second = ingest_mailbox_state(
-        tempdir.path(),
-        &team(),
-        &agent("team-lead"),
-        &store,
-        &observability,
-    )
-    .expect("second ingest");
+    let second = ingester
+        .ingest_mailbox_state(
+            tempdir.path(),
+            &team(),
+            &agent("team-lead"),
+            &store,
+            &observability,
+        )
+        .expect("second ingest");
     assert_eq!(
         second,
         InboxIngestOutcome {
@@ -639,14 +676,15 @@ fn inbox_ingress_tolerates_bare_invalid_jsonl_line_without_panicking() {
     fs::write(&inbox_path, raw).expect("write inbox");
 
     let observability = NullObservability;
-    let outcome = ingest_mailbox_state(
-        tempdir.path(),
-        &team(),
-        &agent("team-lead"),
-        &store,
-        &observability,
-    )
-    .expect("ingest succeeds");
+    let outcome = default_inbox_ingress()
+        .ingest_mailbox_state(
+            tempdir.path(),
+            &team(),
+            &agent("team-lead"),
+            &store,
+            &observability,
+        )
+        .expect("ingest succeeds");
 
     assert_eq!(
         outcome,
@@ -655,6 +693,98 @@ fn inbox_ingress_tolerates_bare_invalid_jsonl_line_without_panicking() {
             duplicate_messages: 0,
             degraded_records: 1,
         }
+    );
+}
+
+#[test]
+fn inbox_ingress_uses_envelope_defaults_when_sidecar_entry_is_absent() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let store = RusqliteStore::open_for_team_home(tempdir.path(), &team()).expect("open store");
+    let inbox_path = home::inbox_path_from_home(tempdir.path(), &team(), &agent("team-lead"))
+        .expect("inbox path");
+    if let Some(parent) = inbox_path.parent() {
+        fs::create_dir_all(parent).expect("inbox dir");
+    }
+    let workflow_path =
+        home::workflow_state_path_from_home(tempdir.path(), team().as_str(), "team-lead")
+            .expect("workflow path");
+    if let Some(parent) = workflow_path.parent() {
+        fs::create_dir_all(parent).expect("workflow dir");
+    }
+
+    let with_sidecar = inbox_message("sidecar override");
+    let sidecar_atm_id = with_sidecar.atm_message_id().expect("sidecar atm id");
+    let without_sidecar = inbox_message("default envelope state");
+    let without_sidecar_atm_id = without_sidecar.atm_message_id().expect("default atm id");
+    fs::write(
+        &workflow_path,
+        serde_json::to_vec(&serde_json::json!({
+            "messages": {
+                format!("atm:{sidecar_atm_id}"): {
+                    "read": true,
+                    "pendingAckAt": null,
+                    "acknowledgedAt": null
+                }
+            }
+        }))
+        .expect("workflow json"),
+    )
+    .expect("write workflow state");
+    fs::write(
+        &inbox_path,
+        serde_json::to_vec(&vec![
+            atm_core::schema::to_shared_inbox_value(&with_sidecar).expect("sidecar message"),
+            atm_core::schema::to_shared_inbox_value(&without_sidecar).expect("default message"),
+        ])
+        .expect("json array"),
+    )
+    .expect("write inbox");
+
+    let observability = NullObservability;
+    default_inbox_ingress()
+        .ingest_mailbox_state(
+            tempdir.path(),
+            &team(),
+            &agent("team-lead"),
+            &store,
+            &observability,
+        )
+        .expect("ingest succeeds");
+
+    let stored_with = store
+        .load_message_by_atm_id(&sidecar_atm_id)
+        .expect("load sidecar message")
+        .expect("stored sidecar row");
+    let stored_without = store
+        .load_message_by_atm_id(&without_sidecar_atm_id)
+        .expect("load default message")
+        .expect("stored default row");
+
+    assert!(
+        store
+            .load_visibility(&stored_with.message_key)
+            .expect("load sidecar visibility")
+            .expect("sidecar visibility row")
+            .read_at
+            .is_some()
+    );
+    assert!(
+        store
+            .load_ack_state(&stored_with.message_key)
+            .expect("load sidecar ack")
+            .is_none()
+    );
+
+    let default_ack = store
+        .load_ack_state(&stored_without.message_key)
+        .expect("load default ack")
+        .expect("default ack row");
+    assert!(default_ack.pending_ack_at.is_some());
+    assert!(
+        store
+            .load_visibility(&stored_without.message_key)
+            .expect("load default visibility")
+            .is_none()
     );
 }
 
