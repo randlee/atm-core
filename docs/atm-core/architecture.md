@@ -73,10 +73,13 @@ Current Q.5 alignment note:
 - `crates/atm-core/src/dispatcher/mod.rs` currently provides only a thin shared
   envelope with `serde_json::Value` payloads
 - the follow-on `atm-graft` plan requires `atm-core` to absorb the typed
-  daemon-client protocol, control-state, and event models that currently live
-  in `atm-daemon`
+  daemon-client protocol and control-state models that currently live in
+  `atm-daemon`
 - Q.5 also still uses newline-delimited framing rather than the versioned
   binary header now required for Q.6 completion
+- Q.6 deliverables stop at the shared request / response / control / frame
+  boundary; `DaemonEventEnvelope`, `NudgeEvent`, and other daemon-originated
+  event models are deferred to Phase R / `GRAFT-3`
 
 Sealing posture per boundary:
 - `MailStore`: sealed by default

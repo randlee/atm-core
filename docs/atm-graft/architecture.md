@@ -20,8 +20,9 @@ the pre-Phase-Q workspace.
   daemon over the documented same-host socket protocol only.
 - `atm-graft` must not depend on `atm-rusqlite`; direct store access is outside
   its boundary.
-- `atm-graft` owns graft-side structured observability and may depend directly
-  on `sc-observability` for its own runtime events.
+- `atm-graft` owns graft-side observability behavior, but it must emit through
+  an injected `ObservabilityPort`-style boundary supplied by the embedding
+  host rather than requiring a direct public crate dependency.
 - `atm-graft` must remain runtime-neutral at its core. Host executables supply
   execution/spawn integration; optional adapters such as `tokio` may be
   provided as additive conveniences.
@@ -77,24 +78,22 @@ Architectural rules:
 The current Q.5 `dispatcher` module is only a partial precursor.
 
 Required follow-on ownership in `atm-core`:
-- typed request structs for:
-  - `send`
-  - `read`
-  - `ack`
-  - `clear`
-  - `doctor`
-  - `heartbeat`
-  - graft registration / unregistration
-- typed response structs for the same request families
-- typed daemon-originated event structs for at least:
-  - `NudgeEvent`
-  - registration rejection / shutdown notifications if the protocol uses them
-- typed control-state and same-host endpoint models needed by socket clients
-- versioned binary frame-header models with transport-scoped correlation ids
-- typed wire envelope / framing helpers that do not require a dependency on
-  `atm-daemon`
-- small client-facing traits for request execution and graft-session event
-  streams
+- Q.6 deliverables:
+  - typed request / response structs for the retained daemon-backed request
+    families
+  - typed control-state and same-host endpoint models needed by socket clients
+  - versioned binary frame-header models with transport-scoped correlation ids
+  - typed wire envelope / framing helpers that do not require a dependency on
+    `atm-daemon`
+  - small client-facing traits for unary request execution
+- Phase R / `GRAFT-3` follow-on:
+  - typed request / response structs for retained `send` / `ack` convergence
+  - typed request / response structs for graft registration / unregistration
+  - typed daemon-originated event structs for at least:
+    - `NudgeEvent`
+    - registration rejection / shutdown notifications if the protocol uses
+      them
+  - any long-lived client/session event-stream traits
 
 Rust boundary rules:
 - semantic request / response / event types must not remain raw
@@ -191,7 +190,8 @@ Implementation-target rule:
 - because Q.5 currently has only unary request/response transport, graft
   delivery requires a new long-lived registration/session protocol rather than
   reuse of the current one-shot request path
-- every daemon-originated event frame still uses the shared binary header and
+- daemon-originated event frames are a Phase R / `GRAFT-3` follow-on, not a
+  Q.6 deliverable, but they must eventually reuse the shared binary header and
   its transport-scoped `WireMessageId`
 
 ## 2.7 Client API Boundary
@@ -228,11 +228,13 @@ Implementation-target note:
 `atm-graft` owns its own runtime/client observability.
 
 Architectural rules:
-- graft-side events emit through `sc-observability`
+- graft-side events emit through the embedding host's injected observability
+  boundary
 - graft-side events remain separate from daemon-owned runtime and transport
   events
-- host-agent embedding must not require `atm-core` to depend directly on
-  `sc-observability`
+- the embedding host provides the concrete observability adapter; `atm-graft`
+  consumes an injected ATM-owned trait surface rather than a direct public
+  dependency on `sc-observability`
 - registration, reconnect, queue-overflow, and daemon-unavailable paths must
   keep typed error identity with recovery guidance (`RBP-001`)
 

@@ -19,7 +19,8 @@ product requirements without re-owning `atm-core` service semantics or
 - automatic daemon-originated nudge subscription when graft mode is active
 - host-facing nudge fetch / injection bridge for between-tool-call insertion
 - graft-mode activation rules based on discovered `.atm.toml`
-- graft-side structured observability through `sc-observability`
+- graft-side observability through an ATM-owned injected boundary supplied by
+  the embedding host
 
 `atm-graft` does not own:
 
@@ -128,6 +129,8 @@ Required rules:
   - nudge received / fetched
   - daemon-reported nudge drop / backpressure signals when surfaced through the
     shared API
+  - the observability boundary must be injected by the host binary; `atm-graft`
+    must not require a direct public dependency on `sc-observability`
 
 ## 5.1 Q.5 Alignment Notes
 

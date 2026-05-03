@@ -786,8 +786,8 @@ Acceptance:
 ### Q.6 — Wire Protocol Hardening
 
 Scope:
-- complete the protocol-hardening work needed for daemon extension and
-  `atm-graft`
+- complete the narrow protocol-hardening work needed for future daemon
+  extensibility and first-party client reuse
 - replace newline-delimited framing with one shared binary header for daemon
   traffic
 - move shared wire/control protocol models required by first-party clients into
@@ -798,16 +798,21 @@ Scope:
 Acceptance:
 - every daemon frame starts with one binary header that includes:
   - `protocol_version`
-  - wire `message_id`
+  - `WireMessageId`
   - `payload_length`
-- the wire `message_id` is transport-only and is distinct from ATM mail
+- `WireMessageId` is transport-only and is distinct from ATM mail
   `message_id` / `metadata.atm.messageId`
 - protocol decode switches by binary header before payload JSON decode
-- request/response correlation is preserved through the wire `message_id`
+- request/response correlation is preserved through `WireMessageId`
 - shared wire/control types and frame helpers needed by first-party clients
   live in `atm-core` rather than `atm-daemon`
+- `atm_core::daemon_api` owns `LocalEndpoint` and `ControlState`
+- maximum daemon frame payload is `16 MiB`, and decoders reject oversized
+  payloads before allocation
 - the protocol tail/debug helper can strip the binary header and print the JSON
-  payload
+  payload, and the `atm` crate owns that helper surface
+- Q.6 work must also satisfy the Phase Q QA invariants listed under
+  [QA invariants for every Phase Q pass](#qa-invariants-for-every-phase-q-pass)
 
 ### Q.7 — Production-Readiness Gate + Release Planning
 
@@ -979,7 +984,7 @@ Phase Q should be considered complete only when:
 - live status is owned by the runtime layer rather than being treated as
   durable database truth
 - daemon auto-start-when-absent path is exercised in integration testing
-- daemon transport uses the versioned binary header with wire `message_id` and
+- daemon transport uses the versioned binary header with `WireMessageId` and
   payload length
 - shared wire/control protocol ownership needed by first-party clients lives in
   `atm-core`

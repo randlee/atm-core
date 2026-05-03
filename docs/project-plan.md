@@ -2633,24 +2633,28 @@ Acceptance:
 ### Q.6 — Wire Protocol Hardening
 
 Scope:
-- complete the wire-format hardening required for daemon extensibility and
-  `atm-graft`
+- complete the narrow wire-format hardening required for daemon extensibility
+  and first-party client reuse
 - replace newline-delimited framing with a shared binary header carrying
-  `protocol_version`, wire `message_id`, and `payload_length`
+  `protocol_version`, `WireMessageId`, and `payload_length`
 - move shared protocol/control models required by first-party clients from
   `atm-daemon` into `atm-core`
 - add a tail/debug helper that strips the binary header and shows payload JSON
 
 Acceptance:
 - same-host and remote daemon transport use one versioned binary frame header
-- the wire `message_id` in that header is transport-only and is distinct from
+- `WireMessageId` in that header is transport-only and is distinct from
   ATM mail `message_id` / `metadata.atm.messageId`
 - protocol decoding switches by header version before JSON payload decode
-- request/response correlation uses the wire `message_id`
+- request/response correlation uses `WireMessageId`
 - shared wire/control/frame types consumed by `atm` and future `atm-graft`
   live in `atm-core`
-- the protocol tail/debug helper can render JSON payloads without the binary
-  header
+- `atm_core::daemon_api` owns `LocalEndpoint` and `ControlState`
+- maximum daemon frame payload is `16 MiB`, and decoders reject oversized
+  payloads before allocation
+- the `atm` crate owns the protocol tail/debug helper, which can render JSON
+  payloads without the binary header
+- Q.6 work also satisfies the Phase Q QA invariants listed below
 
 ### Q.7 — Production-Readiness Gate And Release Planning
 
@@ -2690,7 +2694,7 @@ Phase Q completion gate:
   with typed failure on final daemon unavailability
 - `recipient_pane_id` is sourced from SQLite roster truth when known
 - mailbox-lock correctness dependence is retired from normal mail flows
-- daemon transport uses the versioned binary header with wire `message_id` and
+- daemon transport uses the versioned binary header with `WireMessageId` and
   payload length
 - protocol/control ownership needed by first-party clients lives in `atm-core`
 - release-gate and QA invariants for Phase Q are satisfied

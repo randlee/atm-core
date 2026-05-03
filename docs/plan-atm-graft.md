@@ -61,13 +61,9 @@ Required change:
 - introduce an `atm-core` daemon-API module that owns:
   - typed request structs
   - typed response structs
-  - typed daemon-originated event structs
   - same-host endpoint/control-state types
   - wire envelope / frame codec helpers over generic `Read` / `Write`
-  - small client-facing traits for unary request execution and registered
-    session/event streaming
-  - typed nudge-drain request/response models usable by both embedded hosts and
-    CLI polling paths
+  - small client-facing traits for unary request execution
 
 Why this blocks `atm-graft`:
 - without these surfaces, `atm-graft` would either depend on `atm-daemon` or
@@ -76,32 +72,22 @@ Why this blocks `atm-graft`:
 Concrete ownership target:
 - `atm_core::daemon_api::types`
   - `WireProtocolVersion`
-  - `FrameFlags`
   - `WireMessageId`
   - `PayloadLength`
+  - `MaxFramePayloadBytes`
   - `LocalEndpoint`
   - `ControlState`
   - `FrameHeader`
 - `atm_core::daemon_api::request`
   - `DaemonRequestEnvelope`
-  - `SendRequest`
   - `ReadRequest`
-  - `AckRequest`
   - `ClearRequest`
   - `DoctorRequest`
   - `HeartbeatRequest`
-  - `RegisterGraftRequest`
-  - `UnregisterGraftRequest`
-  - `DrainNudgesRequest`
 - `atm_core::daemon_api::response`
   - `DaemonResponseEnvelope`
   - per-family typed response payloads
   - `WireFailure`
-  - `DrainNudgesResponse`
-- `atm_core::daemon_api::event`
-  - `DaemonEventEnvelope`
-  - `NudgeEvent`
-  - optional session-lifecycle events if Q.6 keeps them explicit
 - `atm_core::daemon_api::codec`
   - `encode_frame`
   - `decode_frame`
@@ -110,7 +96,6 @@ Concrete ownership target:
   - binary-header parsing helpers
 - `atm_core::daemon_api::client`
   - sealed request/client traits
-  - sealed graft-session stream traits
 
 Naming rule:
 - `WireMessageId` is a transport-scoped correlation identifier
@@ -119,61 +104,46 @@ Naming rule:
 
 Recommended binary header layout:
 - fixed-size `FrameHeader` encoded before every payload frame
-- first implementation target: 24 bytes total
+- first implementation target: 22 bytes total
   - `protocol_version: u16` big-endian
-  - `flags: u16` big-endian
   - `message_id: [u8; 16]`
   - `payload_length: u32` big-endian
 - `WireProtocolVersion` wraps the `u16`
-- `FrameFlags` wraps the `u16`; first implementation may require `0`
 - `WireMessageId` wraps the `[u8; 16]` and should render to text in logs/debug
   output without sharing semantics with ATM mail ids
 - `PayloadLength` wraps the `u32` and must be validated against one documented
   maximum frame size before payload allocation
+- `MaxFramePayloadBytes` owns that documented payload cap; the Q.6 target cap
+  is `16 MiB`
 
 Header parsing rule:
 - read exactly the fixed header first
 - switch by `protocol_version`
-- validate `payload_length`
+- validate `payload_length` against `MaxFramePayloadBytes` before allocation
 - read the payload body
 - then decode the JSON payload
 
-### G.2 daemon runtime completion gap
+### G.2 Q.6 daemon/runtime implementation gap
 
 Current state:
 - the daemon only handles `read`, `clear`, `doctor`, and `heartbeat`
-- `send` and `ack` request kinds exist in the partial dispatcher model but are
-  not implemented
 - the transport is newline-delimited, one request followed by one response,
-  with no server-push event path
+  with no binary header
+- shared same-host client control-state and frame helpers still live partly in
+  `atm-daemon`
 
 Required change:
-- complete handler support for `send` and `ack`
-- add graft registration and unregistration handlers
-- add a long-lived registered session/event-delivery path for daemon-originated
-  `NudgeEvent`
-- add a daemon-owned bounded per-identity pending-nudge queue
-- add a poll/drain handler that returns pending nudge text for hook-based
-  context insertion
-- keep notifier/plugin implementation private inside `atm-daemon`
-- switch both same-host and remote transport to the shared binary header owned
-  by `atm-core`
+- move shared same-host wire/control models into `atm-core`
+- replace newline framing with the shared binary header owned by `atm-core`
+- add header payload-length validation against `MaxFramePayloadBytes`
+- keep request-family business logic and any future notifier/plugin runtime
+  private inside `atm-daemon`
 
 Why this blocks `atm-graft`:
-- the crate cannot satisfy its promised `send` / `read` / `ack` / register /
-  nudge surface until the daemon actually exposes that API
+- the crate cannot begin against a stable client boundary until the shared
+  header and `atm-core` ownership move are complete
 
-Queue-ownership decision:
-- `atm-daemon` owns the bounded pending-nudge queue keyed by ATM identity
-- `atm-graft` consumes nudges through:
-  - embedded registered-session delivery when the host binary is modified
-  - poll/drain requests when the host relies on an external post-tool-use hook
-- this prevents host-local queue state from diverging across embedded and
-  CLI-driven integration paths
-- the hook-facing command itself belongs to the `atm` CLI, not to a standalone
-  `atm-graft` executable
-
-### G.3 CLI convergence gap
+### G.3 post-Q daemon API convergence gap
 
 Current state:
 - `atm read`, `atm clear`, and `atm doctor` already use daemon requests
@@ -183,14 +153,34 @@ Current state:
 
 Required change:
 - migrate `atm send` and `atm ack` to the shared daemon client contract
-- remove direct file-backed fallback from normal production paths once daemon
-  parity is complete
+- restructure fallback removal as a post-cutover gate once daemon parity is
+  proven, not as a Q.6 precondition
 
 Why this matters to `atm-graft`:
-- `atm-graft` should not become the first consumer of a new daemon contract
-  while the primary CLI still uses a different production path
+- these are important convergence items, but they are not part of Q.6
+- they belong in a named post-Q sprint such as `Phase R`
 
-### G.4 config activation gap
+### G.4 post-Q graft/runtime gap
+
+Current state:
+- there is no graft registration / unregistration protocol
+- there is no daemon-originated nudge event stream
+- there is no daemon-owned pending-nudge drain API for hook-based consumers
+
+Required change:
+- add graft registration / unregistration handlers
+- add typed daemon-originated `NudgeEvent` delivery
+- add daemon-owned bounded pending-nudge queueing
+- add `DrainNudgesRequest` / `DrainNudgesResponse`
+- expose a hook-facing `atm` command on top of that same daemon API
+
+Why this matters:
+- these are the core prerequisites for the actual embedded/hook integration
+  modes, but they are outside the narrow Q.6 scope confirmed by the user and
+  `team-lead`
+- they belong in a named post-Q sprint such as `Phase R`
+
+### G.5 config activation gap
 
 Current state:
 - `.atm.toml` loading supports `[atm]`, aliases, team members, and post-send
@@ -206,7 +196,7 @@ Required change:
 Why this blocks `atm-graft`:
 - inert-vs-active behavior is a product rule, not a host-private convention
 
-### G.5 transitional workflow gap
+### G.6 transitional workflow gap
 
 Current state:
 - SQLite is the durable Phase Q direction
@@ -227,29 +217,29 @@ Why this matters:
 
 ## 5. Proposed Work Packages
 
-### GRAFT-1: extract daemon protocol ownership into `atm-core`
+### GRAFT-1 / Q.6: extract wire/control ownership into `atm-core`
 
 Owning crates:
 - `atm-core`
 - `atm-daemon`
 
 Deliverables:
-- typed `atm-core` request / response / event models
 - typed endpoint/control-state models in `atm-core`
 - shared frame codec helpers in `atm-core`
 - `FrameHeader` with:
   - `protocol_version: WireProtocolVersion`
   - `message_id: WireMessageId`
   - `payload_length: PayloadLength`
-- sealed client/session traits with explicit object-safety posture
+- `MaxFramePayloadBytes` validation gate
+- `atm_core::daemon_api` ownership for `LocalEndpoint` and `ControlState`
+- tail/debug helper owned by the `atm` crate command surface
 
 Primary risks:
 - accidental leakage of daemon-private runtime details into `atm-core`
-- under-typed public models that leave `Value`-shaped payloads in place
 - transport correlation ids being confused with ATM mail ids unless the wrapper
   types and docs stay explicit
 
-### GRAFT-2: finish daemon API parity for retained operations
+### GRAFT-2 / Phase R: finish daemon API parity for retained operations
 
 Owning crates:
 - `atm-daemon`
@@ -262,15 +252,14 @@ Deliverables:
   `doctor`
 - hook-facing `atm` command that renders insertion-ready nudge text from the
   daemon drain API
-- removal of normal-production direct-store and file-backed fallbacks where the
-  product requirements forbid them
+- fallback-removal gate after daemon parity proves stable
 - same-host and remote runtime paths using the `atm-core` binary-header codec
 
 Primary risks:
 - changing CLI production paths before parity tests are ready
 - introducing new daemon failure codes without matching recovery guidance
 
-### GRAFT-3: add daemon-side graft registration and nudge delivery
+### GRAFT-3 / Phase R: add daemon-side graft registration and nudge delivery
 
 Owning crates:
 - `atm-daemon`
@@ -290,7 +279,7 @@ Primary risks:
 - unclear session ownership when `ATM_IDENTITY` conflicts with an existing pid
 - unbounded queue growth between daemon and host
 
-### GRAFT-4: implement `atm-graft`
+### GRAFT-4 / Phase R: implement `atm-graft`
 
 Owning crates:
 - `atm-graft`
@@ -380,18 +369,21 @@ Backpressure rule:
 Required upstream Q.6 outcomes before `atm-graft` implementation starts:
 - daemon framing uses the shared binary header
 - `WireMessageId` is present and documented as transport-only
+- `LocalEndpoint` and `ControlState` have moved into `atm_core::daemon_api`
 - shared wire/control/frame types have moved into `atm-core`
-- the retained CLI uses the daemon-backed client contract for `send` and `ack`
 - the protocol tail/debug helper exists for operator inspection
-- daemon-originated event frames use the same header contract rather than a
-  parallel framing scheme
-- the daemon exposes a pending-nudge drain API usable by both embedded and
-  CLI-driven hook consumers
+- maximum payload validation is documented and enforced through one ATM-owned
+  limit type
 
 Q.7 / Q.8 note:
 - release-gate planning and release execution are not blockers for beginning
   `atm-graft` implementation once the Q.6 protocol and ownership work is
   complete
+
+Post-Q note:
+- daemon-backed `send`/`ack`, graft registration, daemon-originated nudge
+  delivery, and hook-facing nudge drain commands are not Q.6 prerequisites
+- they belong to the post-Q implementation sprint currently named `Phase R`
 
 Recommended Q.6 helper location:
 - `atm` crate debug/ops surface, not `atm-graft`

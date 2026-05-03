@@ -2116,9 +2116,9 @@ Wire-format rule:
 - every daemon frame begins with one binary header
 - the binary header includes:
   - `protocol_version`
-  - wire `message_id`
+  - `WireMessageId`
   - `payload_length`
-- the wire `message_id` is transport-only and must not be confused with ATM
+- `WireMessageId` is transport-only and must not be confused with ATM
   mail `message_id` / `metadata.atm.messageId`
 - transport adapters switch decode behavior from the header before decoding the
   payload body
@@ -2438,6 +2438,7 @@ Required architectural defaults:
 Required caps:
 - max concurrent accepted connections: `64`
 - max per-connection inflight requests: `32`
+- max daemon frame payload: `16 MiB`
 - ingest queue depth: `1024`
 - retry queue depth: `256`
 - SQLite handle budget: `1..=4`
