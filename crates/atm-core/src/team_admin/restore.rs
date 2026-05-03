@@ -413,7 +413,7 @@ fn prepare_restore_staging_dir(team_dir: &Path) -> Result<(), AtmError> {
 }
 
 fn copy_restored_inbox_to_staging(from: &Path, staged: &Path) -> Result<u64, std::io::Error> {
-    if std::env::var_os("ATM_TEST_FAIL_RESTORE_INBOX_STAGE").is_some() {
+    if forced_restore_inbox_stage_failure() {
         return Err(std::io::Error::other(format!(
             "forced inbox staging failure for {}",
             staged.display()
@@ -533,7 +533,7 @@ pub(super) fn clear_restore_marker(team_dir: &Path) -> Result<(), AtmError> {
         return Ok(());
     }
 
-    if std::env::var_os("ATM_TEST_FAIL_RESTORE_MARKER_REMOVE").is_some() {
+    if forced_restore_marker_remove_failure() {
         return Err(AtmError::file_policy(format!(
             "failed to remove restore marker {}: forced test failure",
             marker.display()
@@ -553,23 +553,108 @@ pub(super) fn clear_restore_marker(team_dir: &Path) -> Result<(), AtmError> {
     })
 }
 
+fn forced_restore_inbox_stage_failure() -> bool {
+    if restore_test_override::inbox_stage_failure() {
+        return true;
+    }
+
+    std::env::var_os("ATM_TEST_FAIL_RESTORE_INBOX_STAGE").is_some()
+}
+
+fn forced_restore_marker_remove_failure() -> bool {
+    if restore_test_override::marker_remove_failure() {
+        return true;
+    }
+
+    std::env::var_os("ATM_TEST_FAIL_RESTORE_MARKER_REMOVE").is_some()
+}
+
+mod restore_test_override {
+    use std::cell::Cell;
+
+    thread_local! {
+        static INBOX_STAGE_FAILURE: Cell<bool> = const { Cell::new(false) };
+        static MARKER_REMOVE_FAILURE: Cell<bool> = const { Cell::new(false) };
+    }
+
+    pub(super) fn inbox_stage_failure() -> bool {
+        INBOX_STAGE_FAILURE.with(Cell::get)
+    }
+
+    pub(super) fn set_inbox_stage_failure(enabled: bool) -> bool {
+        INBOX_STAGE_FAILURE.with(|cell| {
+            let original = cell.get();
+            cell.set(enabled);
+            original
+        })
+    }
+
+    pub(super) fn marker_remove_failure() -> bool {
+        MARKER_REMOVE_FAILURE.with(Cell::get)
+    }
+
+    pub(super) fn set_marker_remove_failure(enabled: bool) -> bool {
+        MARKER_REMOVE_FAILURE.with(|cell| {
+            let original = cell.get();
+            cell.set(enabled);
+            original
+        })
+    }
+}
+
+pub(crate) struct ScopedRestoreInboxStageFailureOverride {
+    original: bool,
+}
+
+impl ScopedRestoreInboxStageFailureOverride {
+    pub(crate) fn enable() -> Self {
+        Self {
+            original: restore_test_override::set_inbox_stage_failure(true),
+        }
+    }
+}
+
+impl Drop for ScopedRestoreInboxStageFailureOverride {
+    fn drop(&mut self) {
+        restore_test_override::set_inbox_stage_failure(self.original);
+    }
+}
+
+pub(crate) struct ScopedRestoreMarkerRemoveFailureOverride {
+    original: bool,
+}
+
+impl ScopedRestoreMarkerRemoveFailureOverride {
+    pub(crate) fn enable() -> Self {
+        Self {
+            original: restore_test_override::set_marker_remove_failure(true),
+        }
+    }
+}
+
+impl Drop for ScopedRestoreMarkerRemoveFailureOverride {
+    fn drop(&mut self) {
+        restore_test_override::set_marker_remove_failure(self.original);
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::path::Path;
-    use std::sync::{Mutex, OnceLock};
-
     use chrono::Utc;
     use serde_json::json;
     use serial_test::serial;
+    use std::fs;
+    use std::path::Path;
     use tempfile::tempdir;
 
     use super::{
+        ScopedRestoreInboxStageFailureOverride, ScopedRestoreMarkerRemoveFailureOverride,
         clear_restore_marker, prepare_restore_workspace, restore_marker_path, restore_staging_dir,
         restore_task_state_from_backup, restore_team,
     };
     use crate::schema::TeamConfig;
     use crate::team_admin::RestoreRequest;
+    use crate::team_admin::ScopedTeamConfigWriteFailureOverride;
 
     fn write_team_config(home_dir: &Path, team: &str, value: serde_json::Value) {
         write_json(
@@ -619,51 +704,6 @@ mod tests {
             path,
             &format!("{}\n", serde_json::to_string(&envelope).expect("envelope")),
         );
-    }
-
-    fn env_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-    }
-
-    fn with_env_var_serial<T>(key: &'static str, value: &str, body: impl FnOnce() -> T) -> T {
-        let _guard = env_lock().lock().expect("env lock");
-        let _env_guard = EnvGuard::set_raw(key, value);
-        body()
-    }
-
-    struct EnvGuard {
-        key: &'static str,
-        original: Option<std::ffi::OsString>,
-    }
-
-    impl EnvGuard {
-        fn set_raw(key: &'static str, value: &str) -> Self {
-            let original = std::env::var_os(key);
-            set_env_var(key, value);
-            Self { key, original }
-        }
-    }
-
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            match self.original.take() {
-                Some(value) => set_env_var(self.key, value),
-                None => remove_env_var(self.key),
-            }
-        }
-    }
-
-    fn set_env_var<K: AsRef<std::ffi::OsStr>, V: AsRef<std::ffi::OsStr>>(key: K, value: V) {
-        // SAFETY: restore tests that mutate process environment run under
-        // `serial_test` and hold the shared env lock for the full mutation
-        // window.
-        unsafe { std::env::set_var(key, value) };
-    }
-
-    fn remove_env_var<K: AsRef<std::ffi::OsStr>>(key: K) {
-        // SAFETY: same serialization guarantee as above.
-        unsafe { std::env::remove_var(key) };
     }
 
     #[test]
@@ -753,14 +793,15 @@ mod tests {
             &json!({"id":"80"}),
         );
 
-        let result = with_env_var_serial("ATM_TEST_FAIL_TEAM_CONFIG_WRITE", "1", || {
+        let _guard = ScopedTeamConfigWriteFailureOverride::enable();
+        let result = {
             restore_team(RestoreRequest {
                 home_dir: tempdir.path().to_path_buf(),
                 team: "atm-dev".parse().expect("team"),
                 from: Some(backup_dir.clone()),
                 dry_run: false,
             })
-        });
+        };
 
         let error = result.expect_err("restore failure");
         assert!(error.is_file_policy());
@@ -814,14 +855,15 @@ mod tests {
             "restored worker inbox",
         );
 
-        let result = with_env_var_serial("ATM_TEST_FAIL_RESTORE_MARKER_REMOVE", "1", || {
+        let _guard = ScopedRestoreMarkerRemoveFailureOverride::enable();
+        let result = {
             restore_team(RestoreRequest {
                 home_dir: tempdir.path().to_path_buf(),
                 team: "atm-dev".parse().expect("team"),
                 from: Some(backup_dir.clone()),
                 dry_run: false,
             })
-        });
+        };
 
         assert!(
             result.is_ok(),
@@ -872,14 +914,15 @@ mod tests {
             "restored worker inbox",
         );
 
-        let result = with_env_var_serial("ATM_TEST_FAIL_RESTORE_INBOX_STAGE", "1", || {
+        let _guard = ScopedRestoreInboxStageFailureOverride::enable();
+        let result = {
             restore_team(RestoreRequest {
                 home_dir: tempdir.path().to_path_buf(),
                 team: "atm-dev".parse().expect("team"),
                 from: Some(backup_dir.clone()),
                 dry_run: false,
             })
-        });
+        };
 
         let error = result.expect_err("restore should fail on injected inbox stage error");
         assert!(error.is_mailbox_write());

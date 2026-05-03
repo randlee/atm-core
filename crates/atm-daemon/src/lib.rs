@@ -35,7 +35,8 @@ pub use crate::client::{
     ensure_daemon_running, request_clear_with_autostart, request_doctor_json_with_autostart,
     request_read_with_autostart, request_remote,
 };
-use crate::runtime_observability::{DaemonObservability, normalize_doctor_report_observability};
+pub use crate::runtime_observability::DaemonObservability;
+use crate::runtime_observability::normalize_doctor_report_observability;
 
 pub const SAME_HOST_REQUEST_TIMEOUT: Duration = Duration::from_secs(3);
 pub const REMOTE_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -285,6 +286,8 @@ pub struct DaemonHandle {
     inflight: Arc<AtomicUsize>,
     local_thread: Option<JoinHandle<()>>,
     remote_thread: Option<JoinHandle<()>>,
+    // Runtime worker threads are registered here so shutdown can join both
+    // accepted connection workers and any detached request helpers exactly once.
     worker_threads: Arc<Mutex<Vec<JoinHandle<()>>>>,
     singleton: SingletonGuard,
     home_dir: PathBuf,

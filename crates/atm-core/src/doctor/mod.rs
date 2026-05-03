@@ -117,8 +117,40 @@ pub fn run_doctor(
         environment,
         member_roster,
         observability: observability_health,
-        runtime: None,
+        runtime: Some(default_runtime_health(&home_dir, resolved_team.as_ref())),
     })
+}
+
+fn default_runtime_health(
+    home_dir: &Path,
+    resolved_team: Option<&TeamName>,
+) -> DoctorRuntimeHealth {
+    let sqlite_runtime_detail = resolved_team
+        .and_then(|team| crate::home::mail_db_path_from_home(home_dir, team).ok())
+        .map(|path| {
+            if path.exists() {
+                format!("SQLite path {} exists but no daemon runtime supplied live health", path.display())
+            } else {
+                format!(
+                    "SQLite path {} is expected for the active team, but no daemon runtime supplied live health",
+                    path.display()
+                )
+            }
+        })
+        .unwrap_or_else(|| {
+            "doctor could not resolve a team-specific SQLite path because no active team was available"
+                .to_string()
+        });
+    DoctorRuntimeHealth {
+        singleton_state: DoctorStatus::Unavailable,
+        singleton_detail: "daemon runtime state unavailable in core-only doctor execution"
+            .to_string(),
+        status_cache_state: DoctorStatus::Unavailable,
+        status_cache_detail: "daemon status cache is unavailable in core-only doctor execution"
+            .to_string(),
+        sqlite_runtime_state: DoctorStatus::Unavailable,
+        sqlite_runtime_detail,
+    }
 }
 
 fn load_member_roster(

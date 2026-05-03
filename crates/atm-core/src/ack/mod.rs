@@ -723,6 +723,10 @@ const fn is_store_error_code(code: AtmErrorCode) -> bool {
 }
 
 fn override_reply_message_id_for_tests() -> Result<Option<LegacyMessageId>, AtmError> {
+    if let Some(message_id) = reply_id_test_override::legacy_message_id() {
+        return Ok(Some(message_id));
+    }
+
     match std::env::var("ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID") {
         Ok(value) => value.parse().map(Some).map_err(|error| {
             AtmError::validation(format!(
@@ -745,6 +749,10 @@ fn override_reply_message_id_for_tests() -> Result<Option<LegacyMessageId>, AtmE
 }
 
 fn override_reply_atm_message_id_for_tests() -> Result<Option<AtmMessageId>, AtmError> {
+    if let Some(message_id) = reply_id_test_override::atm_message_id() {
+        return Ok(Some(message_id));
+    }
+
     match std::env::var("ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID") {
         Ok(value) => value.parse().map(Some).map_err(|error| {
             AtmError::validation(format!(
@@ -789,6 +797,79 @@ fn set_atm_message_id(extra: &mut Map<String, serde_json::Value>, message_id: At
         "messageId".to_string(),
         serde_json::Value::String(message_id.to_string()),
     );
+}
+
+mod reply_id_test_override {
+    use std::cell::RefCell;
+
+    use crate::schema::{AtmMessageId, LegacyMessageId};
+
+    thread_local! {
+        static LEGACY_MESSAGE_ID: RefCell<Option<LegacyMessageId>> = const { RefCell::new(None) };
+        static ATM_MESSAGE_ID: RefCell<Option<AtmMessageId>> = const { RefCell::new(None) };
+    }
+
+    pub(super) fn legacy_message_id() -> Option<LegacyMessageId> {
+        LEGACY_MESSAGE_ID.with(|cell| *cell.borrow())
+    }
+
+    pub(super) fn set_legacy_message_id(
+        message_id: Option<LegacyMessageId>,
+    ) -> Option<LegacyMessageId> {
+        LEGACY_MESSAGE_ID.with(|cell| {
+            let original = *cell.borrow();
+            *cell.borrow_mut() = message_id;
+            original
+        })
+    }
+
+    pub(super) fn atm_message_id() -> Option<AtmMessageId> {
+        ATM_MESSAGE_ID.with(|cell| *cell.borrow())
+    }
+
+    pub(super) fn set_atm_message_id(message_id: Option<AtmMessageId>) -> Option<AtmMessageId> {
+        ATM_MESSAGE_ID.with(|cell| {
+            let original = *cell.borrow();
+            *cell.borrow_mut() = message_id;
+            original
+        })
+    }
+}
+
+pub(crate) struct ScopedReplyMessageIdOverride {
+    original: Option<LegacyMessageId>,
+}
+
+impl ScopedReplyMessageIdOverride {
+    pub(crate) fn set(message_id: LegacyMessageId) -> Self {
+        Self {
+            original: reply_id_test_override::set_legacy_message_id(Some(message_id)),
+        }
+    }
+}
+
+impl Drop for ScopedReplyMessageIdOverride {
+    fn drop(&mut self) {
+        reply_id_test_override::set_legacy_message_id(self.original.take());
+    }
+}
+
+pub(crate) struct ScopedReplyAtmMessageIdOverride {
+    original: Option<AtmMessageId>,
+}
+
+impl ScopedReplyAtmMessageIdOverride {
+    pub(crate) fn set(message_id: AtmMessageId) -> Self {
+        Self {
+            original: reply_id_test_override::set_atm_message_id(Some(message_id)),
+        }
+    }
+}
+
+impl Drop for ScopedReplyAtmMessageIdOverride {
+    fn drop(&mut self) {
+        reply_id_test_override::set_atm_message_id(self.original.take());
+    }
 }
 
 #[cfg(test)]

@@ -14,13 +14,13 @@ use sc_observability_types::{
 };
 
 #[derive(Debug)]
-pub(crate) struct DaemonObservability {
+pub struct DaemonObservability {
     active_log_path: PathBuf,
     fault_mode: Option<String>,
 }
 
 impl DaemonObservability {
-    pub(crate) fn new(home_dir: &Path) -> Self {
+    pub fn new(home_dir: &Path) -> Self {
         Self {
             // TODO(phase-q): replace this direct JSONL sink with the shared sc-observability retained sink once the daemon runtime adapter lands.
             active_log_path: home_dir

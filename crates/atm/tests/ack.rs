@@ -1,4 +1,3 @@
-use std::ffi::OsString;
 use std::fs;
 use std::process::Command;
 mod helpers;
@@ -6,6 +5,7 @@ mod helpers;
 use atm_core::ack::{self, AckMessageId, AckRequest};
 use atm_core::error::AtmErrorCode;
 use atm_core::inbox_ingress::{InboxIngress, default_inbox_ingress};
+use atm_core::internal_test_hooks::{ReplyAtmMessageIdOverrideGuard, ReplyMessageIdOverrideGuard};
 use atm_core::mail_store::{
     AckStateRecord, IngestRecord, MailStore, MailStoreHealth, PendingExportRecord,
     StoredMessageRecord, VisibilityStateRecord,
@@ -209,14 +209,9 @@ fn test_ack_duplicate_reply_identity_reports_store_constraint_violation() {
         )
         .expect("ingest conflicting reply into SQLite");
 
-    let _reply_id_override = ScopedEnvVar::set(
-        "ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID",
-        &conflicting_reply_id.to_string(),
-    );
-    let _reply_atm_id_override = ScopedEnvVar::set(
-        "ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID",
-        &conflicting_reply_atm_message_id.to_string(),
-    );
+    let _reply_id_override = ReplyMessageIdOverrideGuard::set(conflicting_reply_id);
+    let _reply_atm_id_override =
+        ReplyAtmMessageIdOverrideGuard::set(conflicting_reply_atm_message_id);
 
     let error = ack::ack_mail(
         AckRequest {
@@ -795,38 +790,6 @@ impl Fixture {
             acknowledges_message_id: None,
             task_id: None,
             extra: serde_json::Map::new(),
-        }
-    }
-}
-
-struct ScopedEnvVar {
-    key: &'static str,
-    previous: Option<OsString>,
-}
-
-impl ScopedEnvVar {
-    fn set(key: &'static str, value: &str) -> Self {
-        let previous = std::env::var_os(key);
-        // SAFETY: this test is marked #[serial], so no concurrent test in this
-        // process mutates the same environment while the override is active.
-        unsafe { std::env::set_var(key, value) };
-        Self { key, previous }
-    }
-}
-
-impl Drop for ScopedEnvVar {
-    fn drop(&mut self) {
-        match &self.previous {
-            Some(value) => {
-                // SAFETY: this test is marked #[serial], so restoring the
-                // captured environment value is process-exclusive here.
-                unsafe { std::env::set_var(self.key, value) };
-            }
-            None => {
-                // SAFETY: this test is marked #[serial], so removing the
-                // override is process-exclusive here.
-                unsafe { std::env::remove_var(self.key) };
-            }
         }
     }
 }

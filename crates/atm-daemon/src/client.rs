@@ -144,6 +144,9 @@ fn request_with_autostart<Q, O>(
     home_dir: PathBuf,
     current_dir: PathBuf,
     team_override: Option<TeamName>,
+    // Deliberately keep this as a function pointer rather than an arbitrary
+    // closure so request-building cannot capture ambient test state or runtime
+    // references that would diverge from the production CLI-to-daemon contract.
     payload_builder: fn(serde_json::Value) -> atm_core::dispatcher::RequestPayload,
     query: &Q,
 ) -> Result<O, AtmError>
@@ -210,6 +213,8 @@ pub fn request_remote(
         "remote daemon at {address} did not accept the request within {:?}",
         retry_budget
     ))
+    // INVARIANT: the retry loop stores an error on every failed connect attempt,
+    // and reaching this branch means at least one attempt elapsed before deadline.
     .with_source(last_error.expect("remote retry captured at least one error")))
 }
 
@@ -273,6 +278,8 @@ fn resolve_request_identity(
         .or_else(|| {
             allow_anonymous_identity.then(|| {
                 "atm-doctor"
+                    // INVARIANT: the anonymous doctor identity is a hard-coded,
+                    // already-validated internal agent name.
                     .parse()
                     .expect("atm-doctor is a valid agent name")
             })
@@ -365,6 +372,8 @@ fn daemon_start_command() -> StartCommand {
     let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(Path::parent)
+        // INVARIANT: atm-daemon lives under crates/atm-daemon, so walking two
+        // parents from CARGO_MANIFEST_DIR always reaches the workspace root.
         .expect("workspace root")
         .to_path_buf();
     let cargo_bin = std::env::var_os("CARGO");
@@ -380,6 +389,8 @@ fn daemon_start_command() -> StartCommand {
     }
     StartCommand {
         // TODO(phase-q): resolve the cargo path via a pinned install/service launcher rather than PATH lookup.
+        // INVARIANT: the fallback branch above returns early when cargo_bin is
+        // absent, so this path only executes when the cargo env var is present.
         program: PathBuf::from(cargo_bin.expect("checked cargo env")),
         args: vec![
             "run".to_string(),
@@ -395,12 +406,18 @@ fn daemon_start_command() -> StartCommand {
 
 pub(crate) fn dispatch_error_to_atm(error: DispatchError) -> AtmError {
     match error {
-        DispatchError::Store(error) => AtmError::mailbox_read(error.to_string()),
-        DispatchError::PayloadDecode(message) => AtmError::daemon_protocol(message),
-        DispatchError::Handler(message) => AtmError::daemon_runtime(message),
-        DispatchError::ResponseEncode(message) => AtmError::daemon_protocol(message),
-        DispatchError::Unsupported(kind) => AtmError::daemon_protocol(format!(
-            "request kind {kind:?} is not implemented by the daemon"
+        DispatchError::Store(error) => error.into_atm_error("daemon store request failed"),
+        DispatchError::PayloadDecode(message) => AtmError::daemon_protocol(format!(
+            "failed to decode daemon request payload: {message}"
+        )),
+        DispatchError::Handler(message) => {
+            AtmError::daemon_runtime(format!("daemon request handler failed: {message}"))
+        }
+        DispatchError::ResponseEncode(message) => AtmError::daemon_protocol(format!(
+            "failed to encode daemon response payload: {message}"
+        )),
+        DispatchError::Unsupported(kind) => AtmError::validation(format!(
+            "daemon request kind {kind:?} is not implemented by the active runtime"
         )),
     }
 }
@@ -655,5 +672,46 @@ fn wire_error_to_atm(error: WireError) -> AtmError {
         Code::DaemonRemoteUnavailable => {
             AtmError::daemon_remote_unavailable(error.message).with_recovery(recovery)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use atm_core::dispatcher::RequestKind;
+    use atm_core::store::StoreError;
+
+    #[test]
+    fn dispatch_error_to_atm_preserves_store_code_and_recovery() {
+        let error = dispatch_error_to_atm(DispatchError::Store(
+            StoreError::constraint("duplicate message key")
+                .with_recovery("Use a different message key."),
+        ));
+        assert_eq!(error.code, Code::StoreConstraintViolation);
+        assert!(error.message.contains("daemon store request failed"));
+        assert_eq!(
+            error.recovery.as_deref(),
+            Some("Use a different message key.")
+        );
+    }
+
+    #[test]
+    fn dispatch_error_to_atm_maps_variants_to_distinct_messages() {
+        let payload = dispatch_error_to_atm(DispatchError::PayloadDecode("bad read query".into()));
+        let handler = dispatch_error_to_atm(DispatchError::Handler("read worker panicked".into()));
+        let encode = dispatch_error_to_atm(DispatchError::ResponseEncode("bad json".into()));
+        let unsupported = dispatch_error_to_atm(DispatchError::Unsupported(RequestKind::Send));
+
+        assert_eq!(payload.code, Code::DaemonProtocolFailed);
+        assert!(payload.message.contains("decode daemon request payload"));
+
+        assert_eq!(handler.code, Code::DaemonProtocolFailed);
+        assert!(handler.message.contains("handler failed"));
+
+        assert_eq!(encode.code, Code::DaemonProtocolFailed);
+        assert!(encode.message.contains("encode daemon response payload"));
+
+        assert_eq!(unsupported.code, Code::MessageValidationFailed);
+        assert!(unsupported.message.contains("not implemented"));
     }
 }

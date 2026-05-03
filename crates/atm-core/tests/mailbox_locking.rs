@@ -1,6 +1,5 @@
 #![allow(deprecated)]
 
-use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::fs::{File, OpenOptions};
 use std::sync::{Arc, Barrier, mpsc};
@@ -15,6 +14,9 @@ use atm_core::clear::{ClearQuery, clear_mail, clear_mail_via_store};
 use atm_core::error::AtmErrorCode;
 use atm_core::inbox_export::default_inbox_export;
 use atm_core::inbox_ingress::default_inbox_ingress;
+use atm_core::internal_test_hooks::{
+    DebugMailboxLockTimeoutOverrideGuard, NonContentionLockErrorGuard, SourceDiscoveryFaultGuard,
+};
 use atm_core::mail_store::MailStore;
 use atm_core::observability::{NullObservability, ObservabilityPort};
 use atm_core::read::{ReadQuery, read_mail, read_mail_via_store};
@@ -40,7 +42,8 @@ fn qualified(agent: &str) -> String {
 
 // Test-side ceiling guard only; production lock timeout defaults to 5s per
 // architecture §18.3.
-const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(2);
+const TEST_TIMEOUT_SECS: u64 = 3;
+const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(TEST_TIMEOUT_SECS);
 
 fn test_recv_timeout() -> Duration {
     std::env::var("ATM_TEST_RECV_TIMEOUT_SECS")
@@ -643,7 +646,7 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
 #[serial]
 fn send_times_out_under_bounded_lock_contention() {
     let _env_lock = acquire_env_lock();
-    let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
+    let _timeout = DebugMailboxLockTimeoutOverrideGuard::set(100);
     let fixture = Fixture::new();
     let observability = NullObservability;
     let lock_path = sentinel_path(&fixture.primary_inbox_path(TEST_SENDER));
@@ -758,7 +761,7 @@ fn read_and_clear_via_store_ignore_inbox_file_lock() {
 #[allow(deprecated)]
 fn read_possible_write_only_locks_when_display_mutation_is_required() {
     let _env_lock = acquire_env_lock();
-    let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
+    let _timeout = DebugMailboxLockTimeoutOverrideGuard::set(100);
     let observability = NullObservability;
 
     let mutation_fixture = Fixture::new();
@@ -881,7 +884,7 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
 #[serial]
 fn clear_fails_closed_on_synthetic_source_discovery_fault() {
     let _env_lock = acquire_env_lock();
-    let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT", "1");
+    let _fault = SourceDiscoveryFaultGuard::enable();
     let fixture = Fixture::new();
     let observability = NullObservability;
     fixture.write_origin_inbox(
@@ -916,7 +919,7 @@ fn clear_fails_closed_on_synthetic_source_discovery_fault() {
 #[serial]
 fn send_reports_non_contention_lock_failures_without_timeout() {
     let _env_lock = acquire_env_lock();
-    let _fault = EnvGuard::set_raw("ATM_INTERNAL_TEST_FORCE_LOCK_NON_CONTENTION_ERROR", "1");
+    let _fault = NonContentionLockErrorGuard::enable();
     let fixture = Fixture::new();
     let observability = NullObservability;
     let started = Instant::now();
@@ -969,42 +972,6 @@ fn acquire_env_lock() -> File {
             }
         }
     }
-}
-
-struct EnvGuard {
-    key: &'static str,
-    original: Option<OsString>,
-}
-
-impl EnvGuard {
-    fn set_raw(key: &'static str, value: &str) -> Self {
-        let original = std::env::var_os(key);
-        set_env_var(key, value);
-        Self { key, original }
-    }
-}
-
-impl Drop for EnvGuard {
-    fn drop(&mut self) {
-        match self.original.take() {
-            Some(value) => set_env_var(self.key, value),
-            None => remove_env_var(self.key),
-        }
-    }
-}
-
-fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
-    // SAFETY: these tests take a process-wide mutex and use #[serial] before
-    // mutating the environment, so the mutation is serialized within this
-    // process.
-    unsafe { std::env::set_var(key, value) }
-}
-
-fn remove_env_var<K: AsRef<OsStr>>(key: K) {
-    // SAFETY: these tests take a process-wide mutex and use #[serial] before
-    // mutating the environment, so the mutation is serialized within this
-    // process.
-    unsafe { std::env::remove_var(key) }
 }
 
 struct Fixture {

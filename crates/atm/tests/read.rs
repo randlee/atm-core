@@ -867,6 +867,12 @@ fn test_read_mutual_exclusion() {
 #[test]
 fn test_read_timeout_expiry() {
     let fixture = Fixture::new(&[TEST_SENDER]);
+    let warmup = fixture.run(&["read", "--json"]);
+    assert!(
+        warmup.status.success(),
+        "stderr: {}",
+        fixture.stderr(&warmup)
+    );
 
     let output = fixture.run(&["read", "--timeout", "0", "--json"]);
 

@@ -16,6 +16,9 @@ use crate::types::{AgentName, TeamName};
 
 #[path = "team_admin/restore.rs"]
 mod restore;
+pub(crate) use restore::{
+    ScopedRestoreInboxStageFailureOverride, ScopedRestoreMarkerRemoveFailureOverride,
+};
 
 /// One discovered team and its current member count.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -494,7 +497,7 @@ fn write_team_config(team_dir: &Path, config: &TeamConfig) -> Result<(), AtmErro
 
 fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), AtmError> {
     // Test seam for deterministic rollback coverage in integration tests.
-    if std::env::var_os("ATM_TEST_FAIL_TEAM_CONFIG_WRITE").is_some() {
+    if forced_team_config_write_failure() {
         return Err(AtmError::file_policy(format!(
             "forced team config write failure for {}",
             path.display()
@@ -510,6 +513,52 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), AtmError> {
         "config",
         "Check config directory permissions and rerun the operation.",
     )
+}
+
+fn forced_team_config_write_failure() -> bool {
+    if team_config_write_test_override::get() {
+        return true;
+    }
+
+    std::env::var_os("ATM_TEST_FAIL_TEAM_CONFIG_WRITE").is_some()
+}
+
+mod team_config_write_test_override {
+    use std::cell::Cell;
+
+    thread_local! {
+        static OVERRIDE: Cell<bool> = const { Cell::new(false) };
+    }
+
+    pub(super) fn get() -> bool {
+        OVERRIDE.with(Cell::get)
+    }
+
+    pub(super) fn set(enabled: bool) -> bool {
+        OVERRIDE.with(|cell| {
+            let original = cell.get();
+            cell.set(enabled);
+            original
+        })
+    }
+}
+
+pub(crate) struct ScopedTeamConfigWriteFailureOverride {
+    original: bool,
+}
+
+impl ScopedTeamConfigWriteFailureOverride {
+    pub(crate) fn enable() -> Self {
+        Self {
+            original: team_config_write_test_override::set(true),
+        }
+    }
+}
+
+impl Drop for ScopedTeamConfigWriteFailureOverride {
+    fn drop(&mut self) {
+        team_config_write_test_override::set(self.original);
+    }
 }
 
 fn copy_regular_files<F>(src: &Path, dst: &Path, include: F) -> Result<(), AtmError>

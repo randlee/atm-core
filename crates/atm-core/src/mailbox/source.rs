@@ -174,8 +174,46 @@ fn origin_inbox_enumeration_error(inboxes_dir: &Path, agent: &str, error: io::Er
 }
 
 fn forced_source_discovery_fault() -> Option<io::Error> {
-    std::env::var_os("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT")
-        .map(|_| io::Error::other("synthetic read_dir entry enumeration fault"))
+    source_discovery_fault_test_override::get()
+        .then(|| io::Error::other("synthetic read_dir entry enumeration fault"))
+}
+
+mod source_discovery_fault_test_override {
+    use std::cell::Cell;
+
+    thread_local! {
+        static OVERRIDE: Cell<bool> = const { Cell::new(false) };
+    }
+
+    pub(super) fn get() -> bool {
+        OVERRIDE.with(Cell::get)
+    }
+
+    pub(super) fn set(enabled: bool) -> bool {
+        OVERRIDE.with(|cell| {
+            let original = cell.get();
+            cell.set(enabled);
+            original
+        })
+    }
+}
+
+pub(crate) struct ScopedSourceDiscoveryFaultOverride {
+    original: bool,
+}
+
+impl ScopedSourceDiscoveryFaultOverride {
+    pub(crate) fn enable() -> Self {
+        Self {
+            original: source_discovery_fault_test_override::set(true),
+        }
+    }
+}
+
+impl Drop for ScopedSourceDiscoveryFaultOverride {
+    fn drop(&mut self) {
+        source_discovery_fault_test_override::set(self.original);
+    }
 }
 
 pub(crate) fn load_source_files(paths: &[PathBuf]) -> Result<Vec<SourceFile>, AtmError> {

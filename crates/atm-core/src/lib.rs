@@ -64,3 +64,112 @@ pub mod types;
 pub mod watcher_reconcile;
 /// Internal ATM-owned workflow-state helpers shared across mailbox services.
 pub(crate) mod workflow;
+
+#[doc(hidden)]
+pub mod internal_test_hooks {
+    use crate::ack::{ScopedReplyAtmMessageIdOverride, ScopedReplyMessageIdOverride};
+    use crate::mailbox::lock::ScopedDebugTimeoutOverride;
+    use crate::mailbox::lock::ScopedNonContentionLockErrorOverride;
+    use crate::mailbox::source::ScopedSourceDiscoveryFaultOverride;
+    use crate::schema::{AtmMessageId, LegacyMessageId};
+    use crate::team_admin::{
+        ScopedRestoreInboxStageFailureOverride, ScopedRestoreMarkerRemoveFailureOverride,
+        ScopedTeamConfigWriteFailureOverride,
+    };
+
+    pub struct NonContentionLockErrorGuard {
+        _inner: ScopedNonContentionLockErrorOverride,
+    }
+
+    impl NonContentionLockErrorGuard {
+        pub fn enable() -> Self {
+            Self {
+                _inner: ScopedNonContentionLockErrorOverride::enable(),
+            }
+        }
+    }
+
+    pub struct SourceDiscoveryFaultGuard {
+        _inner: ScopedSourceDiscoveryFaultOverride,
+    }
+
+    impl SourceDiscoveryFaultGuard {
+        pub fn enable() -> Self {
+            Self {
+                _inner: ScopedSourceDiscoveryFaultOverride::enable(),
+            }
+        }
+    }
+
+    pub struct DebugMailboxLockTimeoutOverrideGuard {
+        _inner: ScopedDebugTimeoutOverride,
+    }
+
+    impl DebugMailboxLockTimeoutOverrideGuard {
+        pub fn set(timeout_ms: u64) -> Self {
+            Self {
+                _inner: ScopedDebugTimeoutOverride::set(timeout_ms),
+            }
+        }
+    }
+
+    pub struct ReplyMessageIdOverrideGuard {
+        _inner: ScopedReplyMessageIdOverride,
+    }
+
+    impl ReplyMessageIdOverrideGuard {
+        pub fn set(message_id: LegacyMessageId) -> Self {
+            Self {
+                _inner: ScopedReplyMessageIdOverride::set(message_id),
+            }
+        }
+    }
+
+    pub struct ReplyAtmMessageIdOverrideGuard {
+        _inner: ScopedReplyAtmMessageIdOverride,
+    }
+
+    impl ReplyAtmMessageIdOverrideGuard {
+        pub fn set(message_id: AtmMessageId) -> Self {
+            Self {
+                _inner: ScopedReplyAtmMessageIdOverride::set(message_id),
+            }
+        }
+    }
+
+    pub struct TeamConfigWriteFailureGuard {
+        _inner: ScopedTeamConfigWriteFailureOverride,
+    }
+
+    impl TeamConfigWriteFailureGuard {
+        pub fn enable() -> Self {
+            Self {
+                _inner: ScopedTeamConfigWriteFailureOverride::enable(),
+            }
+        }
+    }
+
+    pub struct RestoreInboxStageFailureGuard {
+        _inner: ScopedRestoreInboxStageFailureOverride,
+    }
+
+    impl RestoreInboxStageFailureGuard {
+        pub fn enable() -> Self {
+            Self {
+                _inner: ScopedRestoreInboxStageFailureOverride::enable(),
+            }
+        }
+    }
+
+    pub struct RestoreMarkerRemoveFailureGuard {
+        _inner: ScopedRestoreMarkerRemoveFailureOverride,
+    }
+
+    impl RestoreMarkerRemoveFailureGuard {
+        pub fn enable() -> Self {
+            Self {
+                _inner: ScopedRestoreMarkerRemoveFailureOverride::enable(),
+            }
+        }
+    }
+}
