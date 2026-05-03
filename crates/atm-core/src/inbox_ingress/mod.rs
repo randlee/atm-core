@@ -61,14 +61,44 @@ impl InboxIngress for JsonInboxIngress {
             let report = mailbox::read_messages_report(&source_path)?;
             outcome.degraded_records +=
                 report.stats.skipped_records + report.stats.malformed_metadata_records;
-            emit_degraded_record_events(
-                observability,
-                team,
-                agent,
-                &source_path,
-                report.stats.skipped_records,
-                report.stats.malformed_metadata_records,
-            );
+            for _ in 0..report.stats.skipped_records {
+                let _ = observability.emit(CommandEvent {
+                    command: "inbox_ingress",
+                    action: "import_record",
+                    outcome: "skipped_record",
+                    team: team.clone(),
+                    agent: agent.clone(),
+                    sender: AgentName::system(),
+                    message_id: None,
+                    requires_ack: false,
+                    dry_run: false,
+                    task_id: None,
+                    error_code: Some(crate::error::AtmErrorCode::WarningMailboxRecordSkipped),
+                    error_message: Some(format!(
+                        "skipped malformed inbox record while importing {}",
+                        source_path.display()
+                    )),
+                });
+            }
+            for _ in 0..report.stats.malformed_metadata_records {
+                let _ = observability.emit(CommandEvent {
+                    command: "inbox_ingress",
+                    action: "import_record",
+                    outcome: "malformed_metadata",
+                    team: team.clone(),
+                    agent: agent.clone(),
+                    sender: AgentName::system(),
+                    message_id: None,
+                    requires_ack: false,
+                    dry_run: false,
+                    task_id: None,
+                    error_code: Some(crate::error::AtmErrorCode::WarningMalformedAtmFieldIgnored),
+                    error_message: Some(format!(
+                        "ignored malformed metadata while importing {}",
+                        source_path.display()
+                    )),
+                });
+            }
             ingest_source_report(
                 &source_path,
                 report,
@@ -102,56 +132,6 @@ impl InboxIngress for JsonInboxIngress {
         Ok(outcome)
     }
 }
-
-fn emit_degraded_record_events(
-    observability: &dyn ObservabilityPort,
-    team: &TeamName,
-    agent: &AgentName,
-    source_path: &Path,
-    skipped_records: usize,
-    malformed_metadata_records: usize,
-) {
-    for _ in 0..skipped_records {
-        let _ = observability.emit(CommandEvent {
-            command: "inbox_ingress",
-            action: "import_record",
-            outcome: "skipped_record",
-            team: team.clone(),
-            agent: agent.clone(),
-            sender: AgentName::system(),
-            message_id: None,
-            requires_ack: false,
-            dry_run: false,
-            task_id: None,
-            error_code: Some(crate::error::AtmErrorCode::WarningMailboxRecordSkipped),
-            error_message: Some(format!(
-                "skipped malformed inbox record while importing {}",
-                source_path.display()
-            )),
-        });
-    }
-
-    for _ in 0..malformed_metadata_records {
-        let _ = observability.emit(CommandEvent {
-            command: "inbox_ingress",
-            action: "import_record",
-            outcome: "malformed_metadata",
-            team: team.clone(),
-            agent: agent.clone(),
-            sender: AgentName::system(),
-            message_id: None,
-            requires_ack: false,
-            dry_run: false,
-            task_id: None,
-            error_code: Some(crate::error::AtmErrorCode::WarningMalformedAtmFieldIgnored),
-            error_message: Some(format!(
-                "ignored malformed metadata while importing {}",
-                source_path.display()
-            )),
-        });
-    }
-}
-
 fn ingest_source_report(
     source_path: &Path,
     report: MailboxReadReport,

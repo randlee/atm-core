@@ -639,7 +639,7 @@ Supersession note:
 
 Public entrypoint:
 
-`send::send_mail_via_store(request: SendRequest, store: &dyn SendStore, ingress: &dyn InboxIngress, exporter: &dyn InboxExporter, observability: &dyn ObservabilityPort) -> Result<SendOutcome, AtmError>`
+`send::send_mail_via_store(request: SendRequest, store: &dyn SendStore, ingress: &dyn InboxIngress, exporter: &dyn InboxExport, observability: &dyn ObservabilityPort) -> Result<SendOutcome, AtmError>`
 
 Phase Q note:
 - Q.2 replaced the earlier `send_mail(request, observability)` entrypoint with
@@ -698,10 +698,16 @@ Normal send JSON output includes:
 - `task_id`
 - `warnings` when send completed in a degraded but permitted mode
 
+For the ATM-authored inbox wire shape, the top-level legacy `message_id` is
+omitted; that legacy field appears only in compatibility-mode sends. The
+canonical send identity is `atm_message_id`, with the legacy UUID bridge
+retained only where older consumers still require it.
+
 Dry-run send JSON output includes:
 - `action = "send"`
 - `agent`
 - `team`
+- `atm_message_id`
 - `message`
 - `dry_run = true`
 - `requires_ack`

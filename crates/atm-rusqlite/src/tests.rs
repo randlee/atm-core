@@ -1,7 +1,6 @@
 use std::fs;
 use std::path::Path;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use atm_core::home;
 use atm_core::inbox_ingress::{InboxIngestOutcome, InboxIngress, default_inbox_ingress};
@@ -30,8 +29,6 @@ use tempfile::TempDir;
 use crate::{
     RusqliteStore, SCHEMA_VERSION, query_foreign_keys, query_journal_mode, query_user_version,
 };
-
-static NEXT_INBOX_MESSAGE_ID: AtomicU64 = AtomicU64::new(1);
 
 fn team() -> TeamName {
     "atm-dev".parse().expect("team")
@@ -118,14 +115,10 @@ fn external_source_fingerprint(
 }
 
 fn inbox_message(text: &str) -> MessageEnvelope {
-    let index = NEXT_INBOX_MESSAGE_ID.fetch_add(1, Ordering::Relaxed);
-    let legacy_message_id: LegacyMessageId = format!("00000000-0000-4000-8000-{index:012x}")
-        .parse()
-        .expect("legacy id");
-    let atm_message_id: AtmMessageId = format!("01ARZ3NDEKTSV4RRFFQ69G{index:04X}")
-        .parse()
-        .expect("atm id");
+    let legacy_message_id = LegacyMessageId::new();
+    let atm_message_id = AtmMessageId::new();
     let timestamp = atm_message_id.timestamp();
+    let task_id = format!("TASK-{atm_message_id}").parse().expect("task id");
     let mut extra = serde_json::Map::new();
     extra.insert(
         "metadata".to_string(),
@@ -147,7 +140,7 @@ fn inbox_message(text: &str) -> MessageEnvelope {
         pending_ack_at: Some(timestamp),
         acknowledged_at: None,
         acknowledges_message_id: None,
-        task_id: Some("TASK-INGEST-1".parse().expect("task id")),
+        task_id: Some(task_id),
         extra,
     }
 }

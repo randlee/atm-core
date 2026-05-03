@@ -102,6 +102,7 @@ fn test_send_json_output() {
     assert_eq!(parsed["outcome"], "sent");
     assert_eq!(parsed["requires_ack"], false);
     assert!(parsed["message_id"].as_str().is_some());
+    assert!(parsed["atm_message_id"].as_str().is_some());
 }
 
 #[test]
@@ -156,6 +157,7 @@ fn test_send_export_failure_emits_retained_error_record() {
                 && record["severity"] == "error"
                 && record["fields"]["agent"] == "recipient"
                 && record["fields"]["team"] == "atm-dev"
+                && record["fields"]["error_code"] == "ATM_MAILBOX_READ_FAILED"
         }),
         "stdout: {}",
         fixture.stdout(&output)
@@ -450,6 +452,8 @@ fn test_send_missing_config_deduplicates_team_lead_notice() {
 #[test]
 #[serial]
 fn test_send_missing_config_deduplicates_team_lead_notice_under_concurrency() {
+    // This intentionally races two real send subprocesses. A failure here
+    // points to production dedup/locking behavior, not just test harness drift.
     let fixture = Fixture::new("recipient");
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
     fixture.write_inbox("recipient", &[]);
@@ -1162,7 +1166,10 @@ fn read_json_file_with_retry(path: &std::path::Path, label: &str) -> serde_json:
     let start = std::time::Instant::now();
     while start.elapsed() < Duration::from_secs(5) {
         match fs::read(path) {
-            Ok(bytes) => return serde_json::from_slice(&bytes).expect("json payload"),
+            Ok(bytes) => match serde_json::from_slice(&bytes) {
+                Ok(value) => return value,
+                Err(_) => std::thread::sleep(Duration::from_millis(25)),
+            },
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 std::thread::sleep(Duration::from_millis(25));
             }
@@ -1170,7 +1177,7 @@ fn read_json_file_with_retry(path: &std::path::Path, label: &str) -> serde_json:
         }
     }
     panic!(
-        "{label}: file not found after retry window: {}",
+        "{label}: file missing or never reached a valid JSON payload within retry window: {}",
         path.display()
     );
 }
