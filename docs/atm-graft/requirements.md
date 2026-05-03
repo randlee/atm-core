@@ -67,6 +67,8 @@ The `atm-graft` crate docs must remain aligned with:
 
 - [`../requirements.md`](../requirements.md)
 - [`../architecture.md`](../architecture.md)
+- [`../plan-atm-graft.md`](../plan-atm-graft.md)
+- [`../arch-review-phase-Q.md`](../arch-review-phase-Q.md)
 - [`../project-plan.md`](../project-plan.md)
 - [`../plan-phase-Q.md`](../plan-phase-Q.md)
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
@@ -119,3 +121,36 @@ Required rules:
   - registration success / failure
   - nudge received
   - nudge queued / dropped
+
+## 5.1 Q.5 Alignment Notes
+
+The architectural target above remains correct, but the current Phase Q
+implementation does not satisfy it yet.
+
+Primary review target:
+- `/Users/randlee/Documents/github/atm-core-worktrees/feature/pQ-s5-lock-retirement`
+
+Current implementation notes that shape `atm-graft` planning:
+- Q.5 currently exposes daemon-backed `read`, `clear`, `doctor`, and
+  `heartbeat`, but `send` and `ack` still run through direct `RusqliteStore`
+  call paths in the `atm` crate
+- `atm_core::dispatcher` currently uses `serde_json::Value` payloads rather
+  than typed semantic request / response / event structs
+- same-host client control-state and wire-envelope types currently live in
+  `atm-daemon`, not `atm-core`
+- daemon framing is still newline-delimited and does not yet use the versioned
+  binary header required for Q.6 completion
+- Q.5 has no daemon API for graft-session registration, unregistration, or
+  daemon-originated nudge delivery
+- Q.5 has no `[atm.graft]` config surface in `atm-core`
+
+Planning rule:
+- `REQ-GRAFT-CONFIG-001`, `REQ-GRAFT-CLIENT-001`, and `REQ-GRAFT-NOTIFY-001`
+  are prerequisite-driven requirements; `atm-graft` implementation starts only
+  after the needed `atm-core` and `atm-daemon` surfaces exist
+
+Scope-simplification rule for the first implementation pass:
+- `atm-graft` v1 should keep its public API to `send`, `read`, `ack`,
+  `GraftSession`, and host-facing nudge draining
+- runtime heartbeat / activity reporting is explicitly deferred unless the host
+  integration proves it is needed in the same sprint

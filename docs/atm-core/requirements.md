@@ -208,6 +208,8 @@ The `atm-core` crate docs must remain aligned with:
 
 - [`../requirements.md`](../requirements.md)
 - [`../architecture.md`](../architecture.md)
+- [`../plan-atm-graft.md`](../plan-atm-graft.md)
+- [`../arch-review-phase-Q.md`](../arch-review-phase-Q.md)
 - [`../project-plan.md`](../project-plan.md)
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
 - [`../atm-message-schema.md`](../atm-message-schema.md)
@@ -246,6 +248,11 @@ Required `atm-core` crate rules:
   - notifier-facing service integration
 - `atm-core` owns the typed daemon-client request / response / event models
   consumed by first-party clients such as `atm` and `atm-graft`
+- `atm-core` owns the shared wire/control protocol models required by
+  first-party daemon clients, including:
+  - versioned binary frame-header types
+  - same-host endpoint/control-state models
+  - frame encode/decode helpers that are independent of concrete socket types
 - `atm-core` owns the canonical durable-store contract including:
   - `messages`
   - `ack_state`
@@ -279,6 +286,17 @@ Required `atm-core` crate rules:
   explicit-transaction policy through the owning store boundary
 - `atm-core` defines the store contracts; the first concrete SQLite
   implementation lives in `atm-rusqlite`
+
+Current Q.5 implementation note:
+- the current `dispatcher` module is only a partial precursor to this target
+  boundary
+- request families currently still wrap `serde_json::Value`
+- same-host client control-state and wire-envelope ownership still live in
+  `atm-daemon`
+- newline-delimited framing remains in use today and must be replaced by the
+  versioned binary header defined in the Phase Q Q.6 closeout scope
+- `atm-graft` implementation therefore depends on a follow-on extraction step
+  before these requirements are satisfied in code
 
 Phase-Q crate-local supersession note:
 - earlier daemon-free phrasing in this file is historical from the prior line

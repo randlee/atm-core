@@ -2635,10 +2635,26 @@ Acceptance:
 Scope:
 - prove the Phase Q implementation is production ready rather than merely
   architecturally aligned
+- complete the wire-format hardening required for daemon extensibility and
+  `atm-graft`
+- replace newline-delimited framing with a shared binary header carrying
+  `protocol_version`, wire `message_id`, and `payload_length`
+- move shared protocol/control models required by first-party clients from
+  `atm-daemon` into `atm-core`
+- add a tail/debug helper that strips the binary header and shows payload JSON
 - run the release gate, packaging gate, and final QA/documentation alignment
 - publish only after all prior sprint gates are green
 
 Acceptance:
+- same-host and remote daemon transport use one versioned binary frame header
+- the wire `message_id` in that header is transport-only and is distinct from
+  ATM mail `message_id` / `metadata.atm.messageId`
+- protocol decoding switches by header version before JSON payload decode
+- request/response correlation uses the wire `message_id`
+- shared wire/control/frame types consumed by `atm` and future `atm-graft`
+  live in `atm-core`
+- the protocol tail/debug helper can render JSON payloads without the binary
+  header
 - version bump planning is complete
 - `cargo publish --dry-run` succeeds for the intended publish set
 - crates.io publish succeeds for the intended release line
@@ -2655,6 +2671,9 @@ Phase Q completion gate:
   with typed failure on final daemon unavailability
 - `recipient_pane_id` is sourced from SQLite roster truth when known
 - mailbox-lock correctness dependence is retired from normal mail flows
+- daemon transport uses the versioned binary header with wire `message_id` and
+  payload length
+- protocol/control ownership needed by first-party clients lives in `atm-core`
 - release-gate and QA invariants for Phase Q are satisfied
 
 QA invariants for every Phase Q pass:
@@ -2666,6 +2685,8 @@ QA invariants for every Phase Q pass:
   immediate QA failure
 - daemon/runtime code remains thin
 - socket receive loops remain tiny dispatcher loops only
+- frame encode/decode helpers and shared control-state models required by
+  first-party clients are owned by `atm-core`
 - any socket loop that performs SQL, watcher, notifier, or workflow logic is
   an immediate QA failure
 - any watcher/reconcile implementation that performs SQL, socket, or notifier

@@ -70,6 +70,9 @@ Crate-local ownership docs live under:
 - [`docs/atm-graft/architecture.md`](./atm-graft/architecture.md)
 - [`docs/atm-rusqlite/requirements.md`](./atm-rusqlite/requirements.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
+- planning/review notes for the `atm-graft` line live in:
+  - [`docs/plan-atm-graft.md`](./plan-atm-graft.md)
+  - [`docs/arch-review-phase-Q.md`](./arch-review-phase-Q.md)
 
 During the cleanup/restructure phase, product requirements stay here while
 crate-local ownership is moved out of this file into the crate directories.
@@ -2596,6 +2599,16 @@ mail correctness.
   - same-host daemon clients may include retained CLI callers and active
     `atm-graft` sessions, but all use the same logical daemon API
   - these are implementations of one protocol/interface, not separate systems
+  - every daemon frame must begin with one binary header that includes:
+    - `protocol_version`
+    - wire `message_id`
+    - `payload_length`
+  - the wire `message_id` is a transport-scoped correlation field and is
+    distinct from ATM mail `message_id` / `metadata.atm.messageId`
+  - frame decode must switch on the binary header before payload JSON decode
+  - request/response correlation must be preserved by the wire `message_id`
+  - newline-delimited framing is not an acceptable completion shape for
+    Phase Q
   - socket receive logic must remain a small framed-message loop that:
     - reads one request frame
     - parses it into a qualified request enum/value
@@ -2607,6 +2620,8 @@ mail correctness.
     Unix-domain or TCP/TLS transport adapters
   - socket receive logic must not perform SQL, watcher, or notification
     business logic inline
+  - shared wire/control protocol types needed by first-party clients must live
+    in `atm-core` rather than `atm-daemon`
   - any violation of this transport isolation rule is a direct QA failure for
     the Phase Q implementation line
   - subsystem and runtime tests must be able to replace Unix/TCP transport
@@ -2732,6 +2747,13 @@ mail correctness.
     queued nudge payloads; `atm-graft` owns only the queue/bridge surface
   - daemon-internal `post-send-event` delivery is distinct from
     `.atm.toml`-configured post-send shell hooks
+
+  Current Q.5 implementation note:
+  - this remains the product requirement, but the current Q.5 implementation
+    does not satisfy it yet
+  - the implementation-targeted gaps and work packages are tracked in
+    [`plan-atm-graft.md`](./plan-atm-graft.md) and
+    [`arch-review-phase-Q.md`](./arch-review-phase-Q.md)
 
 ### 21.6 Lock Elimination Target
 

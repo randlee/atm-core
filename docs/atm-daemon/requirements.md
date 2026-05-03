@@ -110,6 +110,8 @@ The `atm-daemon` crate docs must remain aligned with:
 
 - [`../requirements.md`](../requirements.md)
 - [`../architecture.md`](../architecture.md)
+- [`../plan-atm-graft.md`](../plan-atm-graft.md)
+- [`../arch-review-phase-Q.md`](../arch-review-phase-Q.md)
 - [`../project-plan.md`](../project-plan.md)
 - [`../plan-phase-Q.md`](../plan-phase-Q.md)
 - [`../team-member-state.md`](../team-member-state.md)
@@ -152,6 +154,11 @@ Required runtime rules:
   daemon API
 - the same transport protocol must be exercisable through an in-process
   `test-socket` without changing handler/business logic
+- daemon transport must use the versioned binary frame header required by
+  product Phase Q docs:
+  - `protocol_version`
+  - wire `message_id`
+  - `payload_length`
 - transport/store/health operations must obey one documented timeout budget
   - authoritative timeout budget references:
     [`../architecture.md §21.6.4`](../architecture.md) and
@@ -194,6 +201,9 @@ Required runtime rules:
   - parse qualified request type
   - dispatch through the owning dispatcher/handler boundary
   - return typed response
+- the binary frame header and shared control-state models consumed by
+  first-party clients must come from `atm-core`; `atm-daemon` owns runtime use
+  of those models, not their shared semantic definition
 - request-kind routing must stay in the dispatcher boundary, not in concrete
   Unix-domain or TCP/TLS adapter code
 - handler implementations for request families must be injectable behind that
@@ -216,3 +226,12 @@ Required runtime rules:
   `atm-graft` client and must return typed unavailable / backpressure failures
   when the daemon cannot accept the session
 - daemon must expose one explicit health/status query interface for `atm doctor`
+
+Current Q.5 implementation note:
+- daemon-backed `read`, `clear`, `doctor`, and `heartbeat` exist today
+- daemon-backed `send`, `ack`, graft-session registration, and daemon-originated
+  nudge delivery do not yet exist in code
+- current framing is still newline-delimited and the shared wire/control models
+  still live partly in `atm-daemon`
+- `REQ-DAEMON-NOTIFY-001` and `REQ-DAEMON-NOTIFY-002` therefore remain target
+  requirements, not current implementation facts

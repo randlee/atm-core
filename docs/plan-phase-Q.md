@@ -788,10 +788,30 @@ Acceptance:
 Scope:
 - prove the Phase Q implementation is production ready rather than merely
   architecturally aligned
+- complete the protocol-hardening work needed for daemon extension and
+  `atm-graft`
+- replace newline-delimited framing with one shared binary header for daemon
+  traffic
+- move shared wire/control protocol models required by first-party clients into
+  `atm-core`
+- add a tail/debug helper that strips the binary header and renders the JSON
+  payload for inspection
 - run the release gate, packaging gate, and final documentation/QA alignment
 - publish only after all prior sprint gates are green
 
 Acceptance:
+- every daemon frame starts with one binary header that includes:
+  - `protocol_version`
+  - wire `message_id`
+  - `payload_length`
+- the wire `message_id` is transport-only and is distinct from ATM mail
+  `message_id` / `metadata.atm.messageId`
+- protocol decode switches by binary header before payload JSON decode
+- request/response correlation is preserved through the wire `message_id`
+- shared wire/control types and frame helpers needed by first-party clients
+  live in `atm-core` rather than `atm-daemon`
+- the protocol tail/debug helper can strip the binary header and print the JSON
+  payload
 - version bump planning is complete
 - `cargo publish --dry-run` succeeds for the intended publish set
 - crates.io publish succeeds for the intended release line
@@ -910,6 +930,8 @@ The following must be checked on every QA pass for Phase Q:
 - transport/runtime code remains thin and does not collapse into a giant socket
   class
 - socket receive loops are tiny dispatcher loops only
+- shared wire framing, binary-header parsing, and control-state models needed
+  by first-party clients are owned by `atm-core`
 - any socket loop that performs SQL, watcher, notifier, or workflow logic is
   an immediate QA failure
 - any watcher/reconcile implementation that performs SQL, socket, or notifier
@@ -935,6 +957,10 @@ Phase Q should be considered complete only when:
 - live status is owned by the runtime layer rather than being treated as
   durable database truth
 - daemon auto-start-when-absent path is exercised in integration testing
+- daemon transport uses the versioned binary header with wire `message_id` and
+  payload length
+- shared wire/control protocol ownership needed by first-party clients lives in
+  `atm-core`
 - `ATM_POST_SEND.recipient_pane_id` is sourced from SQLite roster truth when
   recipient pane truth is known
 - Claude inbox files remain a compatible export/ingest surface only

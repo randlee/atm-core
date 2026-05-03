@@ -42,6 +42,10 @@ moved into:
 - [`docs/atm-graft/architecture.md`](./atm-graft/architecture.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 
+Implementation-target planning and review notes for `atm-graft` live in:
+- [`docs/plan-atm-graft.md`](./plan-atm-graft.md)
+- [`docs/arch-review-phase-Q.md`](./arch-review-phase-Q.md)
+
 Phase-Q supersession note:
 - earlier daemon-free architecture statements in this file are historical from
   the prior rewrite line
@@ -75,6 +79,11 @@ Product-level boundary rules:
 - `atm-graft` must not own daemon business logic or direct store / inbox I/O.
 - `atm-rusqlite` must not absorb workflow or command logic; it implements store
   contracts only.
+
+Current implementation-target note:
+- the boundary above is the intended Phase Q shape
+- the current Q.5 codebase still requires follow-on protocol extraction and
+  daemon API completion before `atm-graft` can be implemented against it
 
 Crate-local boundary detail is owned by:
 
@@ -2102,6 +2111,20 @@ test transport:
 - tests: in-process `test-socket`
 
 This is one protocol with multiple implementations, not multiple systems.
+
+Wire-format rule:
+- every daemon frame begins with one binary header
+- the binary header includes:
+  - `protocol_version`
+  - wire `message_id`
+  - `payload_length`
+- the wire `message_id` is transport-only and must not be confused with ATM
+  mail `message_id` / `metadata.atm.messageId`
+- transport adapters switch decode behavior from the header before decoding the
+  payload body
+- payload bodies may remain JSON initially, but framing is not newline-delimited
+- shared wire/control protocol models required by first-party clients belong to
+  `atm-core`, not `atm-daemon`
 
 Test-transport rule:
 - `test-socket` implements the same dispatcher/handler contract without real

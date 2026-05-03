@@ -29,7 +29,31 @@ the pre-Phase-Q workspace.
   injection queue/bridge; the embedding executable decides when to drain and
   surface queued nudges.
 
-## 2.1 Boundary Model
+## 2.1 Implementation Target Snapshot
+
+The current implementation target for this design is:
+- `develop` after `Q.RULES-DOC-1` merge
+- Phase Q implementation review target:
+  `/Users/randlee/Documents/github/atm-core-worktrees/feature/pQ-s5-lock-retirement`
+
+Current Q.5 realities that this architecture must target:
+- `atm-core` already has strong durable store models for mail, task, and roster
+  state
+- `atm-daemon` already supports same-host `read`, `clear`, `doctor`, and
+  `heartbeat` requests
+- the daemon protocol is still unary request/response and does not yet support
+  graft registration or server-push nudge delivery
+- the current CLI still uses mixed transport modes:
+  - `read`, `clear`, and `doctor` go through `atm-daemon`
+  - `send` and `ack` still call SQLite-backed services directly
+- workflow sidecar state is still transitional compatibility machinery during
+  Q.5 and must not be treated as the future graft-facing truth surface
+
+Architectural consequence:
+- `atm-graft` planning must target the follow-on extraction and completion work
+  required by Q.5, not the older published crate surface
+
+## 2.2 Boundary Model
 
 Phase Q uses this split for embedded host-agent integration:
 
@@ -39,12 +63,51 @@ Phase Q uses this split for embedded host-agent integration:
 - `atm-graft` owns the concrete same-host daemon client, graft-session
   lifecycle, and host bridge
 
-Architectural rule:
+Architectural rules:
 - first-party Rust host agents must not invent a parallel transport or
   alternate daemon contract outside the `atm-core` client models consumed by
   `atm-graft`
+- all structs, enums, and traits needed by `atm-graft` must live in
+  `atm-core`, even when the daemon is the concrete runtime peer
+- concrete socket/runtime code may remain outside `atm-core`, but it must bind
+  only to `atm-core` protocol and control-state models
 
-## 2.2 Activation And Config Boundary
+## 2.3 Required `atm-core` Surfaces
+
+The current Q.5 `dispatcher` module is only a partial precursor.
+
+Required follow-on ownership in `atm-core`:
+- typed request structs for:
+  - `send`
+  - `read`
+  - `ack`
+  - `clear`
+  - `doctor`
+  - `heartbeat`
+  - graft registration / unregistration
+- typed response structs for the same request families
+- typed daemon-originated event structs for at least:
+  - `NudgeEvent`
+  - registration rejection / shutdown notifications if the protocol uses them
+- typed control-state and same-host endpoint models needed by socket clients
+- versioned binary frame-header models with transport-scoped correlation ids
+- typed wire envelope / framing helpers that do not require a dependency on
+  `atm-daemon`
+- small client-facing traits for request execution and graft-session event
+  streams
+
+Rust boundary rules:
+- semantic request / response / event types must not remain raw
+  `serde_json::Value` payloads; this is a direct `RBP-004` newtype/typed-model
+  requirement for a published crate boundary
+- transport correlation ids must use a distinct semantic wrapper type rather
+  than reusing ATM mail `message_id` semantics
+- any new public client or stream traits must make an explicit sealed/open
+  decision up front; default posture is sealed (`RBP-003`)
+- stream-oriented traits intended for dynamic dispatch must remain object-safe
+  (`RBP-008`)
+
+## 2.4 Activation And Config Boundary
 
 `atm-graft` is active only inside an ATM-configured project.
 
@@ -55,13 +118,15 @@ Architectural rules:
   identity-resolution scheme
 - optional graft-specific config remains ATM-owned config semantics rather than
   host-private settings
-- the initial graft config surface is intentionally small:
-  - graft mode defaults on when active
-  - an explicit disable switch is allowed
-  - daemon endpoint overrides may be added later without widening the semantic
-    contract
+- the initial graft config surface must stay small:
+  - `[atm.graft].enabled = true|false`
+  - endpoint override only if Q.5 follow-on work proves it necessary
 
-## 2.3 Graft Session
+Architectural consequence:
+- because Q.5 has no `[atm.graft]` model yet, `atm-core` config loading must be
+  extended before `atm-graft` activation logic can be implemented
+
+## 2.5 Graft Session
 
 The active runtime object is `GraftSession`.
 
@@ -78,8 +143,20 @@ Architectural rules:
   executable's business logic
 - session lifecycle failures remain typed and observable; they must not collapse
   into silent disabled behavior after activation succeeded
+- the host-facing queue is advisory and bounded; overflow must emit structured
+  observability and must not affect durable ATM mail truth
 
-## 2.4 Nudge Delivery Model
+State-model rule:
+- the runtime must keep the lifecycle explicit at least across:
+  - inactive
+  - connecting
+  - registered
+  - disconnected / retrying
+  - closed
+- whether this becomes a full typestate API is deferred, but the documented
+  state machine must remain clear (`RBP-002`)
+
+## 2.6 Nudge Delivery Model
 
 Nudges originate from the daemon, not from local shell hooks.
 
@@ -94,11 +171,18 @@ Architectural rules:
   - `from`
   - `message`
 - the host-facing queue is FIFO from the perspective of the embedding agent
-  loop; the queue exists to support cooperative insertion between tool calls
+  loop and exists only to support cooperative insertion between tool calls
 - nudges are advisory delivery signals, not durable mail truth; authoritative
   message state remains behind daemon-backed `read` calls
 
-## 2.5 Client API Boundary
+Implementation-target rule:
+- because Q.5 currently has only unary request/response transport, graft
+  delivery requires a new long-lived registration/session protocol rather than
+  reuse of the current one-shot request path
+- every daemon-originated event frame still uses the shared binary header and
+  its transport-scoped `WireMessageId`
+
+## 2.7 Client API Boundary
 
 `atm-graft` should expose a deliberately small public surface.
 
@@ -112,11 +196,17 @@ Required public capability groups:
 
 Architectural rules:
 - `read` uses the daemon API rather than direct SQLite access
-- `send` and `ack` use the same daemon-backed semantic contract as `atm`
+- `send` and `ack` must eventually use the same daemon-backed semantic
+  contract as `atm`
 - any optional runtime heartbeat or activity reporting must also use the daemon
   API instead of side channels
 
-## 2.6 Observability Boundary
+Implementation-target note:
+- Q.5 does not yet satisfy the `send` / `ack` daemon-path rule, so the `atm`
+  crate must converge on the same client protocol before `atm-graft` can share
+  that boundary cleanly
+
+## 2.8 Observability Boundary
 
 `atm-graft` owns its own runtime/client observability.
 
@@ -126,6 +216,8 @@ Architectural rules:
   events
 - host-agent embedding must not require `atm-core` to depend directly on
   `sc-observability`
+- registration, reconnect, queue-overflow, and daemon-unavailable paths must
+  keep typed error identity with recovery guidance (`RBP-001`)
 
 ## 3. ADR Namespace
 

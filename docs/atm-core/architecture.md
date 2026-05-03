@@ -58,12 +58,25 @@ Required architectural rules:
 - daemon-client request / response / event models shared by `atm`,
   `atm-daemon`, and `atm-graft` belong to `atm-core`; first-party client crates
   must not mint parallel semantic wire models
+- shared wire/control protocol models also belong to `atm-core`, including the
+  versioned binary frame header, frame codec helpers, and same-host endpoint /
+  control-state types needed by first-party clients
 - if a boundary proves fragile, the next step is crate extraction rather than
   boundary bypass
 - typed error translation happens at the boundary layer, but must preserve
   discriminated error identity across store/ingress/export/service calls
 - `atm-core` owns ATM event and error models used by both CLI and daemon
   `sc-observability` emitters
+
+Current Q.5 alignment note:
+- the architectural target above is not fully implemented yet
+- `crates/atm-core/src/dispatcher/mod.rs` currently provides only a thin shared
+  envelope with `serde_json::Value` payloads
+- the follow-on `atm-graft` plan requires `atm-core` to absorb the typed
+  daemon-client protocol, control-state, and event models that currently live
+  in `atm-daemon`
+- Q.5 also still uses newline-delimited framing rather than the versioned
+  binary header now required for Q.6 completion
 
 Sealing posture per boundary:
 - `MailStore`: sealed by default

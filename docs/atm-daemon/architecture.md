@@ -193,6 +193,17 @@ Architectural rules:
 - notifier/plugin delivery internals remain crate-private even when the public
   daemon API exposes graft-session registration and typed nudge events
 
+Current Q.5 alignment note:
+- the architecture above is still pending follow-on implementation work
+- current daemon transport is unary request/response only and does not yet
+  expose graft-session registration or daemon-originated event delivery
+
+Transport-shape rule:
+- `atm-daemon` implements the shared versioned binary frame header owned by
+  `atm-core`
+- `atm-daemon` must not become the semantic owner of that header, same-host
+  endpoint types, or control-state models needed by first-party clients
+
 ## 3.2 Resource Caps And Saturation
 
 The daemon must use explicit, small resource ceilings.
