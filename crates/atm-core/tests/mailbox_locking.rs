@@ -281,6 +281,11 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
 fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
+    let bootstrap_store_team: TeamName = "atm-dev".parse().expect("team");
+    let store = Arc::new(
+        RusqliteStore::open_for_team_home(fixture.tempdir.path(), &bootstrap_store_team)
+            .expect("bootstrap shared store before concurrent sends"),
+    );
     let barrier = Arc::new(Barrier::new(3));
     let (tx, rx) = mpsc::channel();
 
@@ -292,12 +297,24 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() 
 
     for (label, request) in [("plain", plain_request), ("task", task_request)] {
         let barrier = Arc::clone(&barrier);
+        let store = Arc::clone(&store);
         let tx = tx.clone();
         let observability = Arc::clone(&observability);
         thread::spawn(move || {
             barrier.wait();
-            tx.send((label, send_via_store(request, observability.as_ref())))
-                .expect("send result");
+            let ingress = default_inbox_ingress();
+            let exporter = default_inbox_export();
+            tx.send((
+                label,
+                send_mail_via_store(
+                    request,
+                    store.as_ref(),
+                    &ingress,
+                    &exporter,
+                    observability.as_ref(),
+                ),
+            ))
+            .expect("send result");
         });
     }
     drop(tx);
@@ -353,6 +370,13 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() 
 fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
+    let store = Arc::new(
+        RusqliteStore::open_for_team_home(
+            fixture.tempdir.path(),
+            &"atm-dev".parse().expect("team"),
+        )
+        .expect("open store"),
+    );
     fixture.write_workflow_state(
         "arch-ctm",
         serde_json::json!({
@@ -373,12 +397,24 @@ fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
 
     for (label, request) in [("first", first_request), ("second", second_request)] {
         let barrier = Arc::clone(&barrier);
+        let store = Arc::clone(&store);
         let tx = tx.clone();
         let observability = Arc::clone(&observability);
         thread::spawn(move || {
             barrier.wait();
-            tx.send((label, send_via_store(request, observability.as_ref())))
-                .expect("send result");
+            let ingress = default_inbox_ingress();
+            let exporter = default_inbox_export();
+            tx.send((
+                label,
+                send_mail_via_store(
+                    request,
+                    store.as_ref(),
+                    &ingress,
+                    &exporter,
+                    observability.as_ref(),
+                ),
+            ))
+            .expect("send result");
         });
     }
     drop(tx);
