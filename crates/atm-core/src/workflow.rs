@@ -116,6 +116,9 @@ where
     let workflow_path = home::workflow_state_path_from_home(home_dir, team, agent)?;
     let mut write_paths = vec![workflow_path];
     write_paths.extend(extra_write_paths);
+    // TRANSITIONAL: compatibility only, pending Q.5+ lock retirement.
+    // Workflow-sidecar updates still share the Claude inbox rewrite lock set,
+    // but Phase Q mail correctness must remain SQLite-owned rather than lock-owned.
     let _locks = lock::acquire_many_sorted(write_paths, timeout)?;
     let mut workflow_state = load_workflow_state(home_dir, team, agent)?;
     let (result, changed) = body(&mut workflow_state)?;

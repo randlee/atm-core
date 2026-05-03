@@ -84,6 +84,27 @@ fn test_send_dry_run_no_file() {
 }
 
 #[test]
+fn test_send_succeeds_with_stale_mailbox_lock_artifact() {
+    let fixture = Fixture::new("recipient");
+    let inbox_path = fixture.inbox_path("recipient");
+    if let Some(parent) = inbox_path.parent() {
+        fs::create_dir_all(parent).expect("inbox dir");
+    }
+    fs::write(inbox_path.with_extension("json.lock"), u32::MAX.to_string()).expect("stale lock");
+
+    let output = fixture.run(&["send", "recipient@atm-dev", "hello after stale lock"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let inbox = fixture.inbox_contents("recipient");
+    assert_eq!(inbox.len(), 1);
+    assert_eq!(inbox[0].text, "hello after stale lock");
+}
+
+#[test]
 fn test_send_json_output() {
     let fixture = Fixture::new("recipient");
 

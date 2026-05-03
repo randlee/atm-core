@@ -203,6 +203,21 @@ fn test_backup_captures_config_inboxes_and_tasks() {
         json!({"leadSessionId":"lead-1","members":[{"name":"team-lead"},{"name":"arch-ctm"}]}),
     );
     fixture.write_inbox("atm-dev", "arch-ctm", "backup me");
+    fixture.write_text(
+        fixture
+            .team_dir("atm-dev")
+            .join(".atm-state")
+            .join("workflow")
+            .join("arch-ctm.json"),
+        r#"{"messages":{"legacy:1":{"read":true}}}"#,
+    );
+    fixture.write_text(
+        fixture
+            .team_dir("atm-dev")
+            .join(".atm-state")
+            .join("mail.db"),
+        "sqlite-placeholder",
+    );
     fixture.write_task("atm-dev", 7, json!({"id":"7","status":"open"}));
     fixture.write_highwatermark("atm-dev", "7\n");
 
@@ -217,6 +232,14 @@ fn test_backup_captures_config_inboxes_and_tasks() {
     let backup_path = parsed["backup_path"].as_str().expect("backup path");
     let backup_dir = std::path::Path::new(backup_path);
     assert!(backup_dir.join("config.json").is_file());
+    assert!(
+        backup_dir
+            .join(".atm-state")
+            .join("workflow")
+            .join("arch-ctm.json")
+            .is_file()
+    );
+    assert!(backup_dir.join(".atm-state").join("mail.db").is_file());
     assert!(backup_dir.join("inboxes").join("arch-ctm.json").is_file());
     assert!(backup_dir.join("tasks").join("7.json").is_file());
     assert!(backup_dir.join("tasks").join(".highwatermark").is_file());
@@ -354,6 +377,17 @@ fn test_restore_preserves_team_lead_and_recomputes_highwatermark() {
         "team-lead",
         "restore worker inbox",
     );
+    fixture.write_text(
+        backup_dir
+            .join(".atm-state")
+            .join("workflow")
+            .join("arch-ctm.json"),
+        r#"{"messages":{"legacy:1":{"read":true}}}"#,
+    );
+    fixture.write_text(
+        backup_dir.join(".atm-state").join("mail.db"),
+        "restored sqlite placeholder",
+    );
     fixture.write_json(
         backup_dir.join("tasks").join("80.json"),
         &json!({"id":"80","status":"open"}),
@@ -404,11 +438,21 @@ fn test_restore_preserves_team_lead_and_recomputes_highwatermark() {
     let restored_inbox =
         fs::read_to_string(fixture.inbox_path("atm-dev", "arch-ctm")).expect("restored inbox");
     assert!(restored_inbox.contains("restore worker inbox"));
+    assert_eq!(
+        fs::read_to_string(
+            fixture
+                .team_dir("atm-dev")
+                .join(".atm-state")
+                .join("mail.db")
+        )
+        .expect("restored mail db"),
+        "restored sqlite placeholder"
+    );
     assert_eq!(fixture.read_highwatermark("atm-dev"), "82");
 }
 
 #[test]
-fn test_restore_sweeps_stale_mailbox_lock_sentinels() {
+fn test_restore_ignores_stale_mailbox_lock_sentinels_for_compatibility_inboxes() {
     let fixture = Fixture::new();
     fixture.write_team_config_value(
         "atm-dev",
@@ -454,7 +498,7 @@ fn test_restore_sweeps_stale_mailbox_lock_sentinels() {
     );
 
     assert!(
-        !fixture
+        fixture
             .team_dir("atm-dev")
             .join("inboxes")
             .join("arch-ctm.json.lock")
@@ -463,7 +507,7 @@ fn test_restore_sweeps_stale_mailbox_lock_sentinels() {
 }
 
 #[test]
-fn test_backup_restore_roundtrip_leaves_zero_mailbox_locks() {
+fn test_backup_restore_roundtrip_keeps_mail_flows_working_with_stale_mailbox_locks() {
     let fixture = Fixture::new();
     fixture.write_team_config_value(
         "atm-dev",
@@ -503,13 +547,12 @@ fn test_backup_restore_roundtrip_leaves_zero_mailbox_locks() {
         fixture.stderr(&restore_output)
     );
 
-    let lock_files = fs::read_dir(fixture.team_dir("atm-dev").join("inboxes"))
-        .expect("inboxes dir")
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("lock"))
-        .count();
-    assert_eq!(lock_files, 0);
+    let read_output = fixture.run(&["read", "--json"]);
+    assert!(
+        read_output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&read_output)
+    );
 }
 
 #[test]

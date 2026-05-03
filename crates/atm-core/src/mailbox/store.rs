@@ -83,6 +83,10 @@ where
     let source_paths = discover_source_paths(home_dir, team, agent)?;
     let mut write_paths = source_paths.clone();
     write_paths.extend(extra_write_paths);
+    // TRANSITIONAL: compatibility only, pending Q.5+ lock retirement.
+    // SQLite/mail-state correctness must not depend on mailbox lock artifacts;
+    // this lock boundary remains only while the Claude inbox compatibility
+    // surface is still rewritten in-process.
     let _locks = lock::acquire_many_sorted(write_paths, timeout)?;
     let source_paths = rediscover_and_validate_source_paths(&source_paths, home_dir, team, agent)?;
     before_load(&source_paths)?;

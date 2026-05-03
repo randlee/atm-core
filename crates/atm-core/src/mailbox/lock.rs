@@ -231,6 +231,7 @@ pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard
 /// sentinel cleanup hits a read-only filesystem. Other per-sentinel eviction
 /// failures are logged and skipped so recovery commands can continue scanning
 /// the rest of the mailbox directory.
+#[cfg(test)]
 pub(crate) fn sweep_stale_lock_sentinels(dir: &Path) -> Result<usize, AtmError> {
     if !dir.exists() {
         return Ok(0);
@@ -508,6 +509,7 @@ fn should_retry_remove_lock_sentinel(error: &io::Error) -> bool {
     }
 }
 
+#[cfg(test)]
 fn is_lock_sentinel_candidate(path: &Path) -> bool {
     // Sweep both the live `.lock` sentinel and rotated leftovers such as
     // `.lock.old` so crash/recovery cleanup does not miss renamed stale files.

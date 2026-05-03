@@ -84,6 +84,38 @@ fn test_clear_default_removes_only_read_and_acknowledged() {
 }
 
 #[test]
+fn test_clear_succeeds_with_stale_mailbox_lock_artifact() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[fixture.message(
+            "team-lead",
+            "read through stale lock",
+            true,
+            None,
+            None,
+            Utc::now() - Duration::days(1),
+        )],
+    );
+    fs::write(
+        fixture.inbox_path("arch-ctm").with_extension("json.lock"),
+        u32::MAX.to_string(),
+    )
+    .expect("stale lock");
+
+    let output = fixture.run(&["clear", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["removed_total"], 1);
+    assert!(fixture.inbox_contents("arch-ctm").is_empty());
+}
+
+#[test]
 fn test_clear_dry_run_does_not_mutate() {
     let fixture = Fixture::new(&["arch-ctm"]);
     fixture.write_inbox(

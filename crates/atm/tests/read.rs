@@ -47,6 +47,38 @@ fn test_read_own_inbox_default() {
 }
 
 #[test]
+fn test_read_succeeds_with_stale_mailbox_lock_artifact() {
+    let fixture = Fixture::new(&["arch-ctm"]);
+    fixture.write_inbox(
+        "arch-ctm",
+        &[fixture.message(
+            "team-lead",
+            "hello through stale lock",
+            false,
+            None,
+            None,
+            0,
+        )],
+    );
+    fs::write(
+        fixture.inbox_path("arch-ctm").with_extension("json.lock"),
+        u32::MAX.to_string(),
+    )
+    .expect("stale lock");
+
+    let output = fixture.run(&["read", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["count"], 1);
+    assert_eq!(parsed["messages"][0]["text"], "hello through stale lock");
+}
+
+#[test]
 fn test_read_marks_read() {
     let fixture = Fixture::new(&["arch-ctm"]);
     let message = fixture.message("team-lead", "hello", false, None, None, 0);

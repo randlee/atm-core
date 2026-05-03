@@ -87,6 +87,30 @@ pub fn workflow_state_path_from_home(
         .join(format!("{agent}.json")))
 }
 
+/// Resolve the ATM-owned state directory for `team`.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::AddressParseFailed`] when `team`
+/// contains path traversal, path separators, or other invalid path-segment
+/// characters.
+pub fn team_state_dir_from_home(home_dir: &Path, team: &str) -> Result<PathBuf, AtmError> {
+    Ok(team_dir_from_home(home_dir, team)?.join(".atm-state"))
+}
+
+/// Resolve the SQLite durable store path for `team`.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::AddressParseFailed`] when `team`
+/// contains path traversal, path separators, or other invalid path-segment
+/// characters.
+pub fn mail_db_path_from_home(home_dir: &Path, team: &str) -> Result<PathBuf, AtmError> {
+    Ok(team_state_dir_from_home(home_dir, team)?.join("mail.db"))
+}
+
 fn resolve_user_home() -> Result<PathBuf, AtmError> {
     env::var_os("HOME")
         .filter(|value| !value.is_empty())
@@ -107,8 +131,8 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{
-        atm_home, inbox_path, inbox_path_from_home, team_dir, team_dir_from_home,
-        workflow_state_path_from_home,
+        atm_home, inbox_path, inbox_path_from_home, mail_db_path_from_home, team_dir,
+        team_dir_from_home, team_state_dir_from_home, workflow_state_path_from_home,
     };
 
     // Serializes process-environment mutation inside this test module. This is
@@ -210,6 +234,25 @@ mod tests {
                 .join("atm-dev")
                 .join("inboxes")
                 .join("arch-ctm.json")
+        );
+        assert_eq!(
+            team_state_dir_from_home(tempdir.path(), "atm-dev").expect("state dir"),
+            tempdir
+                .path()
+                .join(".claude")
+                .join("teams")
+                .join("atm-dev")
+                .join(".atm-state")
+        );
+        assert_eq!(
+            mail_db_path_from_home(tempdir.path(), "atm-dev").expect("mail db"),
+            tempdir
+                .path()
+                .join(".claude")
+                .join("teams")
+                .join("atm-dev")
+                .join(".atm-state")
+                .join("mail.db")
         );
     }
 

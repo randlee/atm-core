@@ -297,11 +297,11 @@ fn push_stale_mailbox_lock_findings(
             severity: DoctorSeverity::Warning,
             code: AtmErrorCode::WarningStaleMailboxLock,
             message: format!(
-                "mailbox lock sentinel persisted for the full doctor run at {}; the lock is likely stale",
+                "mailbox lock sentinel persisted for the full doctor run at {}; the lock is likely stale and should be treated as a transitional compatibility diagnostic",
                 path.display()
             ),
             remediation: Some(format!(
-                "Confirm no live ATM process still owns the mailbox, then remove the stale sentinel with `rm -f {}`.",
+                "Confirm no live compatibility-path process still owns the mailbox, then remove the stale sentinel with `rm -f {}`. Phase Q mail correctness is SQLite-owned and must not depend on this artifact.",
                 path.display()
             )),
         });

@@ -8,7 +8,6 @@ use tracing::warn;
 use crate::config::load_team_config;
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
-use crate::mailbox::lock;
 use crate::persistence;
 use crate::schema::AgentMember;
 
@@ -90,6 +89,7 @@ pub(super) fn restore_team(request: RestoreRequest) -> Result<RestoreResult, Atm
 
     let restore_result = (|| {
         apply_restored_inboxes(&team_dir, &backup_dir, &inboxes_to_restore)?;
+        apply_restored_state(&team_dir, &backup_dir)?;
 
         let tasks_dir = super::tasks_dir_from_home(&request.home_dir, &request.team)?;
         restore_task_state_from_backup(&backup_dir.join("tasks"), &tasks_dir)?;
@@ -398,6 +398,10 @@ fn restore_staging_inboxes_dir(team_dir: &Path) -> PathBuf {
     restore_staging_dir(team_dir).join("inboxes")
 }
 
+fn restore_staging_state_dir(team_dir: &Path) -> PathBuf {
+    restore_staging_dir(team_dir).join(".atm-state")
+}
+
 fn prepare_restore_staging_dir(team_dir: &Path) -> Result<(), AtmError> {
     let staging_root = restore_staging_dir(team_dir);
     if staging_root.exists() {
@@ -460,9 +464,6 @@ pub(super) fn apply_restored_inboxes(
         .with_source(error)
         .with_recovery("Check inbox directory permissions and rerun `atm teams restore`.")
     })?;
-    lock::sweep_stale_lock_sentinels(&inboxes_dir).map_err(|error| {
-        error.with_recovery("Check inbox directory permissions and rerun `atm teams restore`.")
-    })?;
 
     let inbox_staging_dir = restore_staging_inboxes_dir(team_dir);
     fs::create_dir_all(&inbox_staging_dir).map_err(|error| {
@@ -502,12 +503,105 @@ pub(super) fn apply_restored_inboxes(
     Ok(())
 }
 
+fn apply_restored_state(team_dir: &Path, backup_dir: &Path) -> Result<(), AtmError> {
+    let backup_state_dir = backup_dir.join(".atm-state");
+    if !backup_state_dir.exists() {
+        return Ok(());
+    }
+
+    let state_staging_dir = restore_staging_state_dir(team_dir);
+    if state_staging_dir.exists() {
+        fs::remove_dir_all(&state_staging_dir).map_err(|error| {
+            AtmError::file_policy(format!(
+                "failed to clear restore state staging directory {}: {error}",
+                state_staging_dir.display()
+            ))
+            .with_source(error)
+            .with_recovery("Check staging directory permissions and rerun `atm teams restore`.")
+        })?;
+    }
+    copy_state_tree(&backup_state_dir, &state_staging_dir)?;
+
+    let state_dir = team_dir.join(".atm-state");
+    if state_dir.exists() {
+        fs::remove_dir_all(&state_dir).map_err(|error| {
+            AtmError::file_policy(format!(
+                "failed to remove existing ATM state directory {}: {error}",
+                state_dir.display()
+            ))
+            .with_source(error)
+            .with_recovery("Check ATM state directory permissions and rerun `atm teams restore`.")
+        })?;
+    }
+    fs::rename(&state_staging_dir, &state_dir).map_err(|error| {
+        AtmError::file_policy(format!(
+            "failed to install restored ATM state from {} to {}: {error}",
+            state_staging_dir.display(),
+            state_dir.display()
+        ))
+        .with_source(error)
+        .with_recovery("Check ATM state directory permissions and rerun `atm teams restore`.")
+    })?;
+    Ok(())
+}
+
 pub(super) fn restore_task_state_from_backup(
     backup_tasks_dir: &Path,
     tasks_dir: &Path,
 ) -> Result<usize, AtmError> {
     restore_task_bucket(backup_tasks_dir, tasks_dir)?;
     recompute_highwatermark(tasks_dir)
+}
+
+fn copy_state_tree(src: &Path, dst: &Path) -> Result<(), AtmError> {
+    if !src.exists() {
+        return Ok(());
+    }
+    fs::create_dir_all(dst).map_err(|error| {
+        AtmError::file_policy(format!(
+            "failed to create restore state directory {}: {error}",
+            dst.display()
+        ))
+        .with_source(error)
+        .with_recovery("Check ATM state directory permissions and rerun `atm teams restore`.")
+    })?;
+    let mut entries = fs::read_dir(src)
+        .map_err(|error| {
+            AtmError::file_policy(format!(
+                "failed to read ATM state backup directory {}: {error}",
+                src.display()
+            ))
+            .with_source(error)
+            .with_recovery("Check backup ATM state permissions and rerun `atm teams restore`.")
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
+            AtmError::file_policy(format!(
+                "failed to read ATM state backup entry under {}: {error}",
+                src.display()
+            ))
+            .with_source(error)
+            .with_recovery("Check backup ATM state permissions and rerun `atm teams restore`.")
+        })?;
+    entries.sort_by_key(|entry| entry.file_name());
+    for entry in entries {
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+        if from.is_dir() {
+            copy_state_tree(&from, &to)?;
+        } else if from.is_file() {
+            fs::copy(&from, &to).map_err(|error| {
+                AtmError::file_policy(format!(
+                    "failed to copy restored ATM state {} to {}: {error}",
+                    from.display(),
+                    to.display()
+                ))
+                .with_source(error)
+                .with_recovery("Check ATM state permissions and rerun `atm teams restore`.")
+            })?;
+        }
+    }
+    Ok(())
 }
 
 fn write_restore_marker(team_dir: &Path, backup_dir: &Path) -> Result<(), AtmError> {

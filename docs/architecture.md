@@ -964,7 +964,9 @@ Roster output rules:
 - show extra runtime members after the baseline set
 - snapshot `~/.claude/teams/*/inboxes/*.lock` at doctor start and end; any lock
   path present in both snapshots is stale and should surface as
-  `ATM_WARNING_STALE_MAILBOX_LOCK` with `rm -f <path>` recovery guidance
+  `ATM_WARNING_STALE_MAILBOX_LOCK` with recovery guidance that explicitly marks
+  the lock as a transitional compatibility diagnostic rather than a Phase Q
+  mail-correctness dependency
 
 ### 6.8 Team Recovery Services
 
@@ -984,19 +986,21 @@ Architectural rules:
   ATM home directory
 - `add-member` is the retained local roster-repair path and must reject
   duplicates before mutating config
-- `backup` snapshots current team config, inboxes, and the ATM team task
-  bucket into a timestamped snapshot directory
+- `backup` snapshots current team config, the ATM-owned `.atm-state` tree
+  (including SQLite durable state and workflow compatibility state), inboxes,
+  and the ATM team task bucket into a timestamped snapshot directory
 - inbox backup excludes transient mailbox `*.lock` sentinels, dotfiles, and
   restore markers
 - `restore` is a local recovery path and must:
   - preserve the current team-lead entry and `leadSessionId`
   - restore only missing non-lead members
   - clear runtime-only restored-member state before persistence
+  - restore the ATM-owned `.atm-state` tree from the chosen snapshot when
+    present
   - restore non-lead inboxes from the chosen snapshot
-  - sweep stale mailbox `*.lock` sentinels before restored inbox files are copied in
-  - treat stale-sentinel sweep as result-bearing: if that cleanup hits a
-    read-only-filesystem failure, restore must stop and surface
-    `MailboxLockReadOnlyFilesystem` instead of warning and continuing
+  - treat stale mailbox `*.lock` sentinels as compatibility-only diagnostics;
+    restore must not require sweeping them in order to restore durable ATM
+    state or inbox compatibility files
   - recompute `.highwatermark` from the maximum restored task id
   - support a dry-run path without making changes
 - Claude Code project task-list restoration remains separate from the retained

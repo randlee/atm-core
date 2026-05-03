@@ -346,7 +346,8 @@ pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmErro
     })
 }
 
-/// Create a point-in-time backup of one team's config, inboxes, and task files.
+/// Create a point-in-time backup of one team's config, ATM-owned state,
+/// inboxes, and task files.
 ///
 /// # Errors
 ///
@@ -390,6 +391,11 @@ pub fn backup_team(request: BackupRequest) -> Result<BackupOutcome, AtmError> {
         &team_dir.join("inboxes"),
         &backup_dir.join("inboxes"),
         |name| !name.starts_with('.') && !name.ends_with(".lock"),
+    )?;
+    copy_directory_recursive_filtered(
+        &home::team_state_dir_from_home(&request.home_dir, &request.team)?,
+        &backup_dir.join(".atm-state"),
+        &|name| !name.ends_with(".lock"),
     )?;
     copy_regular_files(
         &tasks_dir_from_home(&request.home_dir, &request.team)?,
@@ -520,6 +526,66 @@ where
     F: Fn(&str) -> bool,
 {
     copy_regular_files_with_policy(src, dst, include, DirEntryErrorPolicy::FailClosed)
+}
+
+fn copy_directory_recursive_filtered(
+    src: &Path,
+    dst: &Path,
+    include: &dyn Fn(&str) -> bool,
+) -> Result<(), AtmError> {
+    if !src.exists() {
+        return Ok(());
+    }
+    fs::create_dir_all(dst).map_err(|error| {
+        AtmError::file_policy(format!(
+            "failed to create destination directory {}: {error}",
+            dst.display()
+        ))
+        .with_source(error)
+        .with_recovery("Check destination directory permissions and retry the copy.")
+    })?;
+
+    let mut entries = Vec::new();
+    for entry in fs::read_dir(src).map_err(|error| {
+        AtmError::file_policy(format!(
+            "failed to read source directory {}: {error}",
+            src.display()
+        ))
+        .with_source(error)
+        .with_recovery("Check source directory permissions and retry the copy.")
+    })? {
+        entries.push(entry.map_err(|error| {
+            AtmError::file_policy(format!(
+                "failed to read source directory entry under {}: {error}",
+                src.display()
+            ))
+            .with_source(error)
+            .with_recovery("Check source directory permissions and retry the copy.")
+        })?);
+    }
+    entries.sort_by_key(|entry| entry.file_name());
+
+    for entry in entries {
+        let from = entry.path();
+        let file_name = entry.file_name();
+        let file_name = file_name.to_string_lossy();
+        let to = dst.join(file_name.as_ref());
+        if from.is_dir() {
+            copy_directory_recursive_filtered(&from, &to, include)?;
+        } else if from.is_file() && include(&file_name) {
+            fs::copy(&from, &to).map_err(|error| {
+                AtmError::file_policy(format!(
+                    "failed to copy {} to {}: {error}",
+                    from.display(),
+                    to.display()
+                ))
+                .with_source(error)
+                .with_recovery("Check source and destination permissions and retry the copy.")
+            })?;
+        }
+    }
+
+    Ok(())
 }
 
 enum DirEntryErrorPolicy {
