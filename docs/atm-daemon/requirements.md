@@ -43,6 +43,7 @@ Initial allocation:
 - `REQ-DAEMON-STATUS-*`
 - `REQ-DAEMON-TEST-*`
 - `REQ-DAEMON-OBS-*`
+- `REQ-DAEMON-HEALTH-*`
 - `REQ-DAEMON-SIGNAL-*`
 
 Initial crate requirement IDs:

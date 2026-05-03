@@ -344,7 +344,8 @@ Suggested columns:
 - `role TEXT NULL`
 - `transport_kind TEXT NULL`
 - `host_name TEXT NULL`
-- `pid INTEGER NOT NULL`
+- `recipient_pane_id TEXT NULL`
+- `pid INTEGER NULL`
 - `metadata_json TEXT NULL`
 
 Primary key:
@@ -501,6 +502,7 @@ Acceptance:
   - transactional rollback on mid-operation failure
   - uniqueness of `message_key`, `legacy_message_id`, and `atm_message_id`
   - roster row replacement/update behavior
+  - `recipient_pane_id TEXT NULL` added to `team_roster` schema
   - structured store/bootstrap errors remain discriminated and do not panic on
     routine failure
 
@@ -656,6 +658,8 @@ Acceptance:
   - repeated `read` after external Claude append
   - clear of ack-pending message remains forbidden
   - clear of already-cleared message is idempotent
+  - daemon auto-start-when-absent success path covered by integration test
+  - auto-start failure after retry returns a clear typed error
   - second daemon startup fails deterministically
   - stale singleton artifact cleanup does not allow double-start
   - local same-host daemon API flow
@@ -817,6 +821,10 @@ The following must be checked on every QA pass for Phase Q:
 - typed runtime errors remain discriminated across service, daemon, and CLI
   boundaries
 - roster truth lives in SQLite; live status truth lives in daemon memory
+- invariant: `pid` is durable SQLite truth and `last_active_at` is
+  daemon-memory-only runtime state
+- invariant: recipient pane-id must come from SQLite roster truth after Phase Q
+  migration
 - Claude compatibility continues to use Claude-native top-level fields plus
   `metadata.atm`
 
@@ -828,5 +836,8 @@ Phase Q should be considered complete only when:
 - SQLite is the authoritative store for team roster
 - live status is owned by the runtime layer rather than being treated as
   durable database truth
+- daemon auto-start-when-absent path is exercised in integration testing
+- `ATM_POST_SEND.recipient_pane_id` is sourced from SQLite roster truth when
+  recipient pane truth is known
 - Claude inbox files remain a compatible export/ingest surface only
 - stale lock cleanup can no longer wedge normal ATM mail flows

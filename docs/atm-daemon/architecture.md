@@ -55,6 +55,8 @@ The `atm-daemon` crate must remain thin.
 - watcher/reconcile adapters remain crate-private and dispatch through owned
   ingress/service handlers rather than touching store/transport/notifier
   internals directly
+- the watcher/reconcile boundary minimum method set is defined in product
+  [architecture.md §21.6.1](../architecture.md)
 
 ## 3.1 Singleton Runtime
 
@@ -199,7 +201,7 @@ Required saturation behavior:
 - status-cache cap exceeded: evict least-recently-updated noncritical entries
   to `unknown` with structured warning emission
 
-## 3.2.1 Status Ownership
+## 3.2.2 Status Ownership
 
 The daemon owns the live runtime view of agent status.
 
@@ -222,7 +224,7 @@ Architectural rules:
 - after `schooks 1.0` is released, `schooks` becomes the controlled hook
   environment layer and reports pid/activity updates to `atm-daemon`
 
-## 3.2.2 Timeouts
+## 3.2.3 Timeouts
 
 Required timeout defaults:
 - same-host daemon request deadline: `3s`
