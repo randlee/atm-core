@@ -150,6 +150,8 @@ fn ingest_source_report(
             team_name: team.clone(),
             recipient_agent: agent.clone(),
             source_path: source_path.to_path_buf(),
+            // INVARIANT: (team_name, recipient_agent, source_fingerprint) is
+            // the SQLite-level dedup boundary for repeated ingress.
             source_fingerprint: source_fingerprint(source_path, &envelope),
             message_key: message_key.clone(),
             imported_at: IsoTimestamp::now(),

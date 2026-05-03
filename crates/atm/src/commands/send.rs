@@ -114,14 +114,15 @@ impl SendCommand {
 #[cfg(test)]
 mod tests {
     use super::SendCommand;
+    use crate::test_support::{ROLE_TEAM_LEAD, TEST_TEAM};
 
     #[test]
     fn build_request_rejects_invalid_target_before_core() {
         let command = SendCommand {
             to: "../evil".to_string(),
             message: Some("hello".to_string()),
-            from: Some("team-lead".to_string()),
-            team: Some("atm-dev".to_string()),
+            from: Some(ROLE_TEAM_LEAD.to_string()),
+            team: Some(TEST_TEAM.to_string()),
             file: None,
             stdin: false,
             summary: None,

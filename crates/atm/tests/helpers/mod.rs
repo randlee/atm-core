@@ -3,28 +3,14 @@ use std::process::Command;
 
 use serde_json::Value;
 
-#[allow(dead_code)]
-pub const TEST_TEAM: &str = "test-team";
-#[allow(dead_code)]
-pub const TEST_SENDER: &str = "sender-a";
-#[allow(dead_code)]
-pub const TEST_RECIPIENT: &str = "recipient";
-#[allow(dead_code)]
-pub const TEST_QA: &str = "qa-a";
-#[allow(dead_code)]
-pub const TEST_LEAD: &str = "team-lead";
-#[allow(dead_code)]
-pub const ROLE_TEAM_LEAD: &str = "team-lead";
-#[allow(dead_code)]
-pub const TEST_DAEMON: &str = "daemon";
-#[allow(dead_code)]
-pub const TEST_ORIGIN: &str = "host-a";
-#[allow(dead_code)]
-pub const TEST_SENDER_ADDRESS: &str = "sender-a@test-team";
-#[allow(dead_code)]
-pub const TEST_RECIPIENT_ADDRESS: &str = "recipient@test-team";
-#[allow(dead_code)]
-pub const TEST_LEAD_ADDRESS: &str = "team-lead@test-team";
+#[path = "../support/mod.rs"]
+mod support;
+
+#[allow(dead_code, unused_imports)]
+pub use support::{
+    ROLE_TEAM_LEAD, TEST_DAEMON, TEST_LEAD, TEST_LEAD_ADDRESS, TEST_ORIGIN, TEST_QA,
+    TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_SENDER_ADDRESS, TEST_TEAM,
+};
 
 #[allow(dead_code)]
 pub fn qualified(agent: &str) -> String {
