@@ -136,6 +136,37 @@ fn test_send_emits_retained_log_record() {
 }
 
 #[test]
+fn test_send_export_failure_emits_retained_error_record() {
+    let fixture = Fixture::new("recipient");
+    fs::remove_file(fixture.inbox_path("recipient")).ok();
+    fs::create_dir_all(fixture.inbox_path("recipient")).expect("block recipient inbox path");
+
+    let send = fixture.run(&["send", "recipient@atm-dev", "hello export failure"]);
+    assert!(!send.status.success(), "stdout: {}", fixture.stdout(&send));
+
+    let output = fixture.run(&["log", "filter", "--match", "command=send", "--json"]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+
+    let parsed: serde_json::Value = serde_json::from_slice(&output.stdout).expect("valid log json");
+    let records = parsed["records"].as_array().expect("records array");
+    assert!(
+        records.iter().any(|record| {
+            record["fields"]["command"] == "send"
+                && record["action"] == "export"
+                && record["severity"] == "error"
+                && record["fields"]["agent"] == "recipient"
+                && record["fields"]["team"] == "atm-dev"
+        }),
+        "stdout: {}",
+        fixture.stdout(&output)
+    );
+}
+
+#[test]
 fn test_send_requires_ack() {
     let fixture = Fixture::new("recipient");
 
@@ -301,6 +332,18 @@ fn test_send_missing_config_uses_existing_inbox_fallback_and_warns_sender() {
     let inbox = fixture.inbox_contents("recipient");
     assert_eq!(inbox.len(), 1);
     assert_eq!(inbox[0].text, "hello fallback");
+    let atm_message_id = inbox[0].atm_message_id().expect("atm message id");
+    let store = RusqliteStore::open_for_team_home(
+        fixture.tempdir.path(),
+        &"atm-dev".parse().expect("team"),
+    )
+    .expect("open store");
+    let stored = store
+        .load_message_by_atm_id(&atm_message_id)
+        .expect("load stored message by atm id")
+        .expect("stored row");
+    assert_eq!(stored.body, "hello fallback");
+    assert_eq!(stored.recipient_agent.as_str(), "recipient");
 
     let notices = fixture.inbox_contents("team-lead");
     assert_eq!(notices.len(), 1);

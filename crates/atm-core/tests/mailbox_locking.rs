@@ -5,7 +5,7 @@ use std::sync::{Arc, Barrier, Mutex, OnceLock, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use atm_core::ack::{AckRequest, ack_mail};
+use atm_core::ack::{AckMessageId, AckRequest, ack_mail};
 use atm_core::clear::{ClearQuery, clear_mail};
 use atm_core::error::AtmErrorCode;
 use atm_core::mail_store::MailStore;
@@ -13,6 +13,7 @@ use atm_core::observability::NullObservability;
 use atm_core::read::{ReadQuery, read_mail};
 use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest, send_mail};
+use atm_core::task_store::TaskStore;
 use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
 use atm_core::{read_messages as read_inbox_messages, write_messages as write_inbox_messages};
 use atm_rusqlite::RusqliteStore;
@@ -94,6 +95,89 @@ fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
             .iter()
             .any(|message| message.text == "ack from arch")
     );
+}
+
+#[test]
+#[serial]
+fn ack_mail_imports_legacy_pending_message_through_store_service() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let store = RusqliteStore::open_for_team_home(
+        fixture.tempdir.path(),
+        &"atm-dev".parse().expect("team"),
+    )
+    .expect("open store");
+
+    let outcome = ack_mail(
+        fixture.ack_request("arch-ctm", fixture.arch_message_id, "ack from arch"),
+        &store,
+        &observability,
+    )
+    .expect("ack legacy message");
+
+    assert_eq!(outcome.message_id, fixture.arch_message_id.to_string());
+    assert_eq!(outcome.reply_target.to_string(), "qa@atm-dev");
+    assert!(
+        fixture
+            .inbox_contents("qa")
+            .iter()
+            .any(|message| message.text == "ack from arch")
+    );
+}
+
+#[test]
+#[serial]
+fn ack_mail_acknowledges_task_linked_imported_message() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let task_id: atm_core::types::TaskId = "TASK-LINK-1".parse().expect("task id");
+    let mut message = pending_ack_message(
+        "qa",
+        "task-linked pending",
+        LegacyMessageId::new(),
+        "atm-dev",
+    );
+    message.task_id = Some(task_id.clone());
+    let message_id = message.message_id.expect("legacy message id");
+    fixture.write_primary_inbox("arch-ctm", &[message]);
+    let store = RusqliteStore::open_for_team_home(
+        fixture.tempdir.path(),
+        &"atm-dev".parse().expect("team"),
+    )
+    .expect("open store");
+
+    let outcome = ack_mail(
+        fixture.ack_request("arch-ctm", message_id, "ack task"),
+        &store,
+        &observability,
+    )
+    .expect("ack task-linked message");
+
+    assert_eq!(outcome.task_id.as_ref(), Some(&task_id));
+    let task = store
+        .load_task(&task_id)
+        .expect("load task")
+        .expect("task row");
+    assert_eq!(task.status, atm_core::task_store::TaskStatus::Acknowledged);
+    assert!(task.acknowledged_at.is_some());
+}
+
+#[test]
+#[serial]
+fn duplicate_ack_attempt_returns_ack_invalid_state_at_service_level() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let store = RusqliteStore::open_for_team_home(
+        fixture.tempdir.path(),
+        &"atm-dev".parse().expect("team"),
+    )
+    .expect("open store");
+    let request = fixture.ack_request("arch-ctm", fixture.arch_message_id, "first ack");
+
+    ack_mail(request.clone(), &store, &observability).expect("first ack");
+    let error = ack_mail(request, &store, &observability).expect_err("duplicate ack must fail");
+
+    assert_eq!(error.code, AtmErrorCode::AckInvalidState);
 }
 
 #[test]
@@ -923,7 +1007,7 @@ impl Fixture {
             current_dir: self.tempdir.path().to_path_buf(),
             actor_override: Some(actor.parse().expect("actor")),
             team_override: Some("atm-dev".parse().expect("team")),
-            message_id,
+            message_id: AckMessageId::Legacy(message_id),
             reply_body: reply_body.to_string(),
         }
     }

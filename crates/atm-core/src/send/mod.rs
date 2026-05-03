@@ -12,6 +12,7 @@ use crate::error::{AtmError, AtmErrorCode};
 use crate::home;
 use crate::identity;
 use crate::inbox_export;
+use crate::inbox_export::ExportEventContext;
 use crate::mail_store::{AckStateRecord, MailStore, MessageSourceKind, StoredMessageRecord};
 use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
@@ -256,28 +257,20 @@ where
                 .map_err(|error| map_store_error("failed to persist outbound task row", error))?;
         }
 
-        if let Err(error) = inbox_export::export_message(
+        inbox_export::export_message(
             &prepared.home_dir(),
             &prepared.recipient.team,
             &prepared.recipient.agent,
             &envelope,
-        ) {
-            let _ = observability.emit(CommandEvent {
+            observability,
+            ExportEventContext {
                 command: "send",
-                action: "export",
-                outcome: "error",
-                team: prepared.recipient.team.clone(),
-                agent: prepared.recipient.agent.clone(),
                 sender: prepared.canonical_sender.to_string(),
                 message_id: Some(prepared.message_id),
                 requires_ack: prepared.requires_ack,
-                dry_run: false,
                 task_id: prepared.task_id.clone(),
-                error_code: Some(error.code),
-                error_message: Some(error.message.clone()),
-            });
-            return Err(error);
-        }
+            },
+        )?;
     }
 
     let mut outcome = build_send_outcome(&prepared);
