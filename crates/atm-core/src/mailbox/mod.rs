@@ -15,9 +15,21 @@ use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::schema::inbox_message::hydrate_legacy_fields_from_metadata;
-use crate::schema::{LegacyMessageId, MessageEnvelope};
+use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
 
 const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct MailboxReadStats {
+    pub skipped_records: usize,
+    pub malformed_metadata_records: usize,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct MailboxReadReport {
+    pub messages: Vec<MessageEnvelope>,
+    pub stats: MailboxReadStats,
+}
 /// Append one message to a shared inbox file under the mailbox lock.
 ///
 /// Production send flows use the same lock discipline through
@@ -80,8 +92,12 @@ where
 /// [`crate::error_codes::AtmErrorCode::MailboxReadFailed`] when the mailbox
 /// file cannot be opened or read.
 pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
+    Ok(read_messages_report(path)?.messages)
+}
+
+pub(crate) fn read_messages_report(path: &Path) -> Result<MailboxReadReport, AtmError> {
     if !path.exists() {
-        return Ok(Vec::new());
+        return Ok(MailboxReadReport::default());
     }
 
     let file_size = fs::metadata(path).map_err(|error| {
@@ -137,15 +153,15 @@ pub fn write_messages(path: &Path, messages: &[MessageEnvelope]) -> Result<(), A
     store::commit_mailbox_state(path, messages)
 }
 
-fn parse_mailbox_contents(raw: &str, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
+fn parse_mailbox_contents(raw: &str, path: &Path) -> Result<MailboxReadReport, AtmError> {
     match raw.chars().find(|ch| !ch.is_whitespace()) {
-        None => Ok(Vec::new()),
+        None => Ok(MailboxReadReport::default()),
         Some('[') => parse_mailbox_array(raw, path),
         Some(_) => Ok(parse_mailbox_jsonl(raw, path)),
     }
 }
 
-fn parse_mailbox_array(raw: &str, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
+fn parse_mailbox_array(raw: &str, path: &Path) -> Result<MailboxReadReport, AtmError> {
     let records = serde_json::from_str::<Vec<Value>>(raw).map_err(|error| {
         AtmError::new(
             AtmErrorKind::MailboxRead,
@@ -157,61 +173,64 @@ fn parse_mailbox_array(raw: &str, path: &Path) -> Result<Vec<MessageEnvelope>, A
         .with_source(error)
     })?;
 
-    Ok(records
-        .into_iter()
-        .enumerate()
-        .filter_map(
-            |(index, mut value)| match parse_mailbox_value(&mut value, path, index + 1) {
-                Ok(Some(message)) => Some(message),
-                Ok(None) => None,
-                Err(error) => {
-                    warn!(
-                        code = %AtmErrorCode::WarningMailboxRecordSkipped,
-                        line = index + 1,
-                        mailbox_path = %path.display(),
-                        raw_record = %value,
-                        %error,
-                        "skipping malformed mailbox record"
-                    );
-                    None
-                }
-            },
-        )
-        .collect())
+    let mut report = MailboxReadReport::default();
+    for (index, mut value) in records.into_iter().enumerate() {
+        match parse_mailbox_value(&mut value, path, index + 1) {
+            Ok(Some((message, stats))) => {
+                report.stats.malformed_metadata_records += stats.malformed_metadata_records;
+                report.messages.push(message);
+            }
+            Ok(None) => {}
+            Err(error) => {
+                report.stats.skipped_records += 1;
+                warn!(
+                    code = %AtmErrorCode::WarningMailboxRecordSkipped,
+                    line = index + 1,
+                    mailbox_path = %path.display(),
+                    raw_record = %value,
+                    %error,
+                    "skipping malformed mailbox record"
+                );
+            }
+        }
+    }
+    Ok(report)
 }
 
-fn parse_mailbox_jsonl(raw: &str, path: &Path) -> Vec<MessageEnvelope> {
-    raw.lines()
-        .enumerate()
-        .filter_map(|(index, line)| {
-            if line.trim().is_empty() {
-                return None;
-            }
+fn parse_mailbox_jsonl(raw: &str, path: &Path) -> MailboxReadReport {
+    let mut report = MailboxReadReport::default();
+    for (index, line) in raw.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
 
-            match parse_mailbox_record(line, path, index + 1) {
-                Ok(Some(message)) => Some(message),
-                Ok(None) => None,
-                Err(error) => {
-                    warn!(
-                        code = %AtmErrorCode::WarningMailboxRecordSkipped,
-                        line = index + 1,
-                        mailbox_path = %path.display(),
-                        raw_record = %line,
-                        %error,
-                        "skipping malformed mailbox record"
-                    );
-                    None
-                }
+        match parse_mailbox_record(line, path, index + 1) {
+            Ok(Some((message, stats))) => {
+                report.stats.malformed_metadata_records += stats.malformed_metadata_records;
+                report.messages.push(message);
             }
-        })
-        .collect()
+            Ok(None) => {}
+            Err(error) => {
+                report.stats.skipped_records += 1;
+                warn!(
+                    code = %AtmErrorCode::WarningMailboxRecordSkipped,
+                    line = index + 1,
+                    mailbox_path = %path.display(),
+                    raw_record = %line,
+                    %error,
+                    "skipping malformed mailbox record"
+                );
+            }
+        }
+    }
+    report
 }
 
 fn parse_mailbox_record(
     raw_record: &str,
     path: &Path,
     line_number: usize,
-) -> Result<Option<MessageEnvelope>, serde_json::Error> {
+) -> Result<Option<(MessageEnvelope, MailboxReadStats)>, serde_json::Error> {
     let mut value = serde_json::from_str::<Value>(raw_record)?;
     parse_mailbox_value(&mut value, path, line_number)
 }
@@ -220,10 +239,38 @@ fn parse_mailbox_value(
     value: &mut Value,
     path: &Path,
     line_number: usize,
-) -> Result<Option<MessageEnvelope>, serde_json::Error> {
+) -> Result<Option<(MessageEnvelope, MailboxReadStats)>, serde_json::Error> {
+    let malformed_metadata_records = usize::from(detect_malformed_metadata(value));
     hydrate_legacy_fields_from_metadata(value);
     sanitize_legacy_message_id(value, path, line_number);
-    serde_json::from_value::<MessageEnvelope>(value.take()).map(Some)
+    serde_json::from_value::<MessageEnvelope>(value.take()).map(|message| {
+        Some((
+            message,
+            MailboxReadStats {
+                skipped_records: 0,
+                malformed_metadata_records,
+            },
+        ))
+    })
+}
+
+fn detect_malformed_metadata(value: &Value) -> bool {
+    let Some(atm) = value
+        .get("metadata")
+        .and_then(Value::as_object)
+        .and_then(|metadata| metadata.get("atm"))
+        .and_then(Value::as_object)
+    else {
+        return false;
+    };
+
+    atm.get("messageId")
+        .and_then(Value::as_str)
+        .is_some_and(|raw| raw.parse::<AtmMessageId>().is_err())
+        || atm
+            .get("acknowledgesMessageId")
+            .and_then(Value::as_str)
+            .is_some_and(|raw| raw.parse::<AtmMessageId>().is_err())
 }
 
 fn sanitize_legacy_message_id(value: &mut Value, path: &Path, line_number: usize) {

@@ -2,8 +2,12 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
+use atm_core::mail_store::MailStore;
+use atm_core::roster_store::RosterStore;
 use atm_core::schema::{AgentMember, MessageEnvelope, TeamConfig};
+use atm_core::task_store::TaskStore;
 use atm_core::{read_messages, write_messages};
+use atm_rusqlite::RusqliteStore;
 use serde_json::Value;
 
 fn parse_inbox_values(raw: &str) -> Vec<Value> {
@@ -803,6 +807,95 @@ fn test_send_runs_post_send_hook_with_python_command() {
 }
 
 #[test]
+fn test_send_persists_store_rows_and_threads_roster_pane_into_hook_payload() {
+    let fixture = Fixture::new("recipient");
+    let mut recipient = AgentMember::with_name("recipient".parse().expect("agent"));
+    recipient.tmux_pane_id = "%7".to_string();
+    fixture.write_team_config_members(vec![recipient]);
+
+    let payload_path = fixture.tempdir.path().join("roster-pane-hook.json");
+    fixture.install_executable_script(
+        "scripts/record_hook.py",
+        &format!(
+            "#!/usr/bin/env python3\nimport os\nfrom pathlib import Path\nPath(r\"{}\").write_text(os.environ['ATM_POST_SEND'])\n",
+            payload_path.display()
+        ),
+    );
+    fixture.write_atm_config(
+        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['python3', 'scripts/record_hook.py']\n",
+    );
+
+    let output = fixture.run(&[
+        "send",
+        "recipient@atm-dev",
+        "task assignment",
+        "--requires-ack",
+        "--task-id",
+        "TASK-321",
+    ]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+
+    let inbox = fixture.inbox_contents("recipient");
+    assert_eq!(inbox.len(), 1);
+    let atm_message_id = inbox[0].atm_message_id().expect("atm message id");
+
+    let store = RusqliteStore::open_for_team_home(
+        fixture.tempdir.path(),
+        &"atm-dev".parse().expect("team"),
+    )
+    .expect("open store");
+    let stored = store
+        .load_message_by_atm_id(&atm_message_id)
+        .expect("load message by atm id")
+        .expect("stored message");
+    assert_eq!(stored.body, "task assignment");
+    assert_eq!(stored.atm_message_id, Some(atm_message_id));
+    assert!(stored.legacy_message_id.is_some());
+    assert_eq!(stored.recipient_agent.as_str(), "recipient");
+
+    let ack_state = store
+        .load_ack_state(&stored.message_key)
+        .expect("load ack state")
+        .expect("ack row");
+    assert!(ack_state.pending_ack_at.is_some());
+    assert!(ack_state.acknowledged_at.is_none());
+
+    let task = store
+        .load_task(&"TASK-321".parse().expect("task id"))
+        .expect("load task")
+        .expect("task row");
+    assert_eq!(task.message_key, stored.message_key);
+    assert_eq!(task.status, atm_core::task_store::TaskStatus::PendingAck);
+
+    let roster = store
+        .load_roster(&"atm-dev".parse().expect("team"))
+        .expect("load roster");
+    let recipient = roster
+        .iter()
+        .find(|member| member.agent_name.as_str() == "recipient")
+        .expect("recipient roster row");
+    assert_eq!(
+        recipient
+            .recipient_pane_id
+            .as_ref()
+            .map(ToString::to_string)
+            .as_deref(),
+        Some("%7")
+    );
+
+    let payload: serde_json::Value =
+        serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
+    assert_eq!(payload["recipient_pane_id"], "%7");
+    assert_eq!(payload["task_id"], "TASK-321");
+    assert_eq!(payload["is_ack"], false);
+}
+
+#[test]
 fn test_send_rejects_retired_post_send_hook_members_config() {
     let fixture = Fixture::new("recipient");
     fixture.write_atm_config("[atm]\npost_send_hook_members = ['team-lead']\n");
@@ -982,10 +1075,21 @@ impl Fixture {
     }
 
     fn write_team_config_for_team(&self, team: &str, recipient: &str) {
+        self.write_team_config_members_for_team(
+            team,
+            vec![AgentMember::with_name(recipient.parse().expect("agent"))],
+        );
+    }
+
+    fn write_team_config_members(&self, members: Vec<AgentMember>) {
+        self.write_team_config_members_for_team("atm-dev", members);
+    }
+
+    fn write_team_config_members_for_team(&self, team: &str, members: Vec<AgentMember>) {
         let team_dir = self.tempdir.path().join(".claude").join("teams").join(team);
         fs::create_dir_all(&team_dir).expect("team dir");
         let config = TeamConfig {
-            members: vec![AgentMember::with_name(recipient.parse().expect("agent"))],
+            members,
             ..Default::default()
         };
         fs::write(

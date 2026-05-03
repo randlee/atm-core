@@ -309,6 +309,7 @@ pub fn ack_mail(
             requires_ack: false,
             is_ack: true,
             task_id: outcome.task_id.as_ref(),
+            recipient_pane_id: None,
         },
     );
 
