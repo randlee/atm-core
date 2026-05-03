@@ -142,6 +142,10 @@ impl SourceFingerprint {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    pub fn from_external_hex(hash: u64) -> Self {
+        Self(format!("ext{hash:016x}"))
+    }
 }
 
 impl FromStr for SourceFingerprint {
@@ -294,7 +298,7 @@ impl ProcessId {
 pub struct BusyTimeoutMs(u16);
 
 impl BusyTimeoutMs {
-    pub const DEFAULT: Self = Self(1500);
+    pub const DEFAULT: Self = Self(5000);
 
     pub fn new(value: u16) -> Result<Self, StoreParseError> {
         if value == 0 {

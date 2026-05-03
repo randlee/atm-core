@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use chrono::{DateTime, TimeDelta, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::debug;
 
@@ -24,7 +24,7 @@ use crate::types::{AgentName, IsoTimestamp, MessageClass, SourceIndex, TeamName}
 use crate::workflow;
 
 /// Parameters for clearing read or acknowledged mailbox messages.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClearQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
@@ -37,16 +37,16 @@ pub struct ClearQuery {
 }
 
 /// Counts of removed mailbox messages by ATM display class.
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RemovedByClass {
     pub acknowledged: usize,
     pub read: usize,
 }
 
 /// Result of one mailbox cleanup command.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClearOutcome {
-    pub action: &'static str,
+    pub action: String,
     pub team: TeamName,
     pub agent: AgentName,
     pub removed_total: usize,
@@ -167,7 +167,7 @@ pub fn clear_mail(
     };
 
     let outcome = ClearOutcome {
-        action: "clear",
+        action: "clear".to_string(),
         team: target.team.clone(),
         agent: target.agent.clone(),
         removed_total,
@@ -262,7 +262,7 @@ pub fn clear_mail_via_store(
     }
 
     let outcome = ClearOutcome {
-        action: "clear",
+        action: "clear".to_string(),
         team: target.team.clone(),
         agent: target.agent.clone(),
         removed_total,

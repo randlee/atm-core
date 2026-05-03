@@ -8,6 +8,10 @@ use atm_core::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
     LogTailSession, ObservabilityPort,
 };
+use sc_observability_types::{
+    ActionName, CorrelationId, Level, LogEvent, OutcomeLabel, ProcessIdentity, SchemaVersion,
+    ServiceName, TargetCategory, Timestamp,
+};
 
 #[derive(Debug)]
 pub(crate) struct DaemonObservability {
@@ -54,20 +58,7 @@ impl ObservabilityPort for DaemonObservability {
                 ))
                 .with_source(error)
             })?;
-        let payload = serde_json::json!({
-            "command": event.command,
-            "action": event.action,
-            "outcome": event.outcome,
-            "team": event.team.as_str(),
-            "agent": event.agent.as_str(),
-            "sender": event.sender,
-            "message_id": event.message_id.map(|value| value.to_string()),
-            "requires_ack": event.requires_ack,
-            "dry_run": event.dry_run,
-            "task_id": event.task_id.map(|value| value.to_string()),
-            "error_code": event.error_code.map(|value| value.to_string()),
-            "error_message": event.error_message,
-        });
+        let payload = map_command_event(event)?;
         serde_json::to_writer(&mut file, &payload).map_err(|error| {
             AtmError::observability_emit("failed to serialize daemon observability event")
                 .with_source(error)
@@ -102,6 +93,95 @@ impl ObservabilityPort for DaemonObservability {
             query_state: Some(AtmObservabilityHealthState::Healthy),
             detail,
         })
+    }
+}
+
+fn map_command_event(event: CommandEvent) -> Result<LogEvent, AtmError> {
+    let version =
+        SchemaVersion::new(sc_observability_types::constants::OBSERVATION_ENVELOPE_VERSION)
+            .map_err(|source| {
+                AtmError::observability_emit(
+                    "failed to validate daemon observability schema version",
+                )
+                .with_source(source)
+            })?;
+    let service = ServiceName::new("atm").map_err(|source| {
+        AtmError::observability_emit("failed to validate daemon observability service name")
+            .with_source(source)
+    })?;
+    let target = TargetCategory::new("atm.command").map_err(|source| {
+        AtmError::observability_emit("failed to validate daemon observability target")
+            .with_source(source)
+    })?;
+    let action = ActionName::new(event.action).map_err(|source| {
+        AtmError::observability_emit("failed to validate daemon observability action")
+            .with_source(source)
+    })?;
+    let request_id = event
+        .message_id
+        .map(|value| CorrelationId::new(value.to_string()))
+        .transpose()
+        .map_err(|source| {
+            AtmError::observability_emit("failed to validate daemon observability request id")
+                .with_source(source)
+        })?;
+    let correlation_id = event
+        .task_id
+        .as_deref()
+        .map(CorrelationId::new)
+        .transpose()
+        .map_err(|source| {
+            AtmError::observability_emit("failed to validate daemon observability correlation id")
+                .with_source(source)
+        })?;
+    let outcome = OutcomeLabel::new(event.outcome).map_err(|source| {
+        AtmError::observability_emit("failed to validate daemon observability outcome label")
+            .with_source(source)
+    })?;
+    let fields = serde_json::json!({
+        "command": event.command,
+        "team": event.team.as_str(),
+        "agent": event.agent.as_str(),
+        "sender": event.sender.as_str(),
+        "requires_ack": event.requires_ack,
+        "dry_run": event.dry_run,
+        "message_id": event.message_id.map(|value| value.to_string()),
+        "task_id": event.task_id.map(|value| value.to_string()),
+        "error_code": event.error_code.map(|value| value.to_string()),
+        "error_message": event.error_message,
+    })
+    .as_object()
+    .cloned()
+    .expect("observability fields object");
+
+    Ok(LogEvent {
+        version,
+        timestamp: Timestamp::now_utc(),
+        level: level_for_outcome(event.outcome),
+        service,
+        target,
+        action,
+        message: Some(format!(
+            "ATM command {} completed with outcome {}",
+            event.command, event.outcome
+        )),
+        identity: ProcessIdentity::default(),
+        trace: None,
+        request_id,
+        correlation_id,
+        outcome: Some(outcome),
+        diagnostic: None,
+        state_transition: None,
+        fields,
+    })
+}
+
+fn level_for_outcome(outcome: &str) -> Level {
+    match outcome {
+        "ok" | "sent" | "dry_run" => Level::Info,
+        "timeout" => Level::Warn,
+        "error" | "failed" => Level::Error,
+        _ => Level::Warn,
     }
 }
 
@@ -158,6 +238,7 @@ fn refresh_doctor_summary(report: &mut DoctorReport) {
     };
     let message = match status {
         DoctorStatus::Healthy => "ATM doctor completed with healthy findings only",
+        DoctorStatus::Unavailable => "ATM doctor completed with unavailable runtime details",
         DoctorStatus::Warning => "ATM doctor completed with warnings",
         DoctorStatus::Error => "ATM doctor found critical issues",
     };

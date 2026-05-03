@@ -99,6 +99,7 @@ pub fn run_doctor(
 
     let message = match status {
         DoctorStatus::Healthy => "ATM doctor completed with healthy findings only",
+        DoctorStatus::Unavailable => "ATM doctor completed with unavailable runtime details",
         DoctorStatus::Warning => "ATM doctor completed with warnings",
         DoctorStatus::Error => "ATM doctor found critical issues",
     };

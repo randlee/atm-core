@@ -1,10 +1,12 @@
 use std::fmt;
 use std::str::FromStr;
 
+use serde::{Deserialize, Serialize};
+
 use crate::error::AtmError;
 use crate::types::{AgentName, TeamName};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentAddress {
     pub agent: AgentName,
     pub team: Option<TeamName>,

@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
+use atm_core::error_codes::AtmErrorCode;
 use atm_core::home;
-use atm_core::inbox_ingress::default_inbox_ingress;
 use atm_core::read::{self, ReadQuery};
-use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
-use atm_rusqlite::RusqliteStore;
+use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection};
 use clap::Args;
+use tracing::warn;
 
 use crate::observability::CliObservability;
 use crate::output;
@@ -66,18 +66,21 @@ impl ReadCommand {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
         let json = self.json;
-        let config_team = load_default_team_from_workspace_config(&current_dir)?;
         let query = self.build_query(home_dir, current_dir)?;
-        let team = query
-            .team_override
-            .clone()
-            .or_else(|| std::env::var("ATM_TEAM").ok().and_then(|value| value.parse().ok()))
-            .or(config_team)
-            .ok_or_else(|| anyhow::anyhow!("atm read requires an active ATM_TEAM or --team for the SQLite-backed Phase Q path"))?;
-        let store = RusqliteStore::open_for_team_home(&query.home_dir, &team)?;
-        let ingress = default_inbox_ingress();
-        let outcome = read::read_mail_via_store(query, &store, &ingress, observability)?;
-        output::print_read_result(&outcome, json)
+        match atm_daemon::request_read_with_autostart(query.clone()) {
+            Ok(outcome) => output::print_read_result(&outcome, json),
+            Err(error) if should_fallback_to_file_read(&error.code) => {
+                warn!(
+                    code = %error.code,
+                    %error.message,
+                    "daemon read path unavailable; falling back to direct file-backed read"
+                );
+                #[allow(deprecated)]
+                let outcome = read::read_mail(query, observability)?;
+                output::print_read_result(&outcome, json)
+            }
+            Err(error) => Err(error.into()),
+        }
     }
 
     fn build_query(
@@ -131,33 +134,19 @@ impl ReadCommand {
     }
 }
 
+fn should_fallback_to_file_read(code: &AtmErrorCode) -> bool {
+    matches!(
+        code,
+        AtmErrorCode::DaemonUnavailable
+            | AtmErrorCode::DaemonStartFailed
+            | AtmErrorCode::DaemonRequestTimeout
+    )
+}
+
 fn parse_timestamp(value: &str) -> Result<IsoTimestamp> {
     chrono::DateTime::parse_from_rfc3339(value)
         .with_context(|| format!("invalid ISO 8601 timestamp: {value}"))
         .map(|timestamp| timestamp.with_timezone(&chrono::Utc).into())
-}
-
-fn load_default_team_from_workspace_config(
-    start_dir: &std::path::Path,
-) -> Result<Option<TeamName>> {
-    let mut current = Some(start_dir);
-    while let Some(dir) = current {
-        let config_path = dir.join(".atm.toml");
-        if config_path.exists() {
-            let raw = std::fs::read_to_string(&config_path)?;
-            let parsed = raw.parse::<toml::Value>()?;
-            let team = parsed
-                .get("atm")
-                .and_then(|atm| atm.get("default_team"))
-                .or_else(|| parsed.get("default_team"))
-                .and_then(toml::Value::as_str)
-                .map(str::parse::<TeamName>)
-                .transpose()?;
-            return Ok(team);
-        }
-        current = dir.parent();
-    }
-    Ok(None)
 }
 
 #[cfg(test)]

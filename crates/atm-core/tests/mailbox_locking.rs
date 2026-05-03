@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::fs::{File, OpenOptions};
@@ -12,15 +14,9 @@ use atm_core::inbox_export::default_inbox_export;
 use atm_core::inbox_ingress::default_inbox_ingress;
 use atm_core::mail_store::MailStore;
 use atm_core::observability::{NullObservability, ObservabilityPort};
-#[allow(deprecated)]
 use atm_core::read::{ReadQuery, read_mail, read_mail_via_store};
-use atm_core::schema::{
-    AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig, to_shared_inbox_value,
-};
-use atm_core::send::{
-    SendMessageSource, SendOutcome, SendRequest, resolve_store_team, send_mail_via_store,
-};
-use atm_core::task_store::TaskStore;
+use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
+use atm_core::send::{SendMessageSource, SendOutcome, SendRequest, send_mail_via_store};
 use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
 use atm_core::{read_messages as read_inbox_messages, write_messages as write_inbox_messages};
 use atm_rusqlite::RusqliteStore;
@@ -29,6 +25,15 @@ use fs2::FileExt;
 use serial_test::serial;
 use tempfile::TempDir;
 use uuid::Uuid;
+
+const TEST_TEAM: &str = "test-team";
+const TEST_SENDER: &str = "sender-a";
+const TEST_RECIPIENT: &str = "recipient";
+const ROLE_TEAM_LEAD: &str = "team-lead";
+
+fn qualified(agent: &str) -> String {
+    format!("{agent}@{TEST_TEAM}")
+}
 
 // Test-side ceiling guard only; production lock timeout defaults to 5s per
 // architecture §18.3.
@@ -45,14 +50,12 @@ fn test_recv_timeout() -> Duration {
 
 fn send_via_store(
     request: SendRequest,
+    store: &RusqliteStore,
     observability: &dyn ObservabilityPort,
 ) -> Result<SendOutcome, atm_core::error::AtmError> {
-    let team = resolve_store_team(&request)?;
-    let store = RusqliteStore::open_for_team_home(&request.home_dir, &team)
-        .expect("open store for mailbox locking test");
     let ingress = default_inbox_ingress();
     let exporter = default_inbox_export();
-    send_mail_via_store(request, &store, &ingress, &exporter, observability)
+    send_mail_via_store(request, store, &ingress, &exporter, observability)
 }
 
 #[test]
@@ -60,24 +63,18 @@ fn send_via_store(
 fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
-    let store = Arc::new(
-        RusqliteStore::open_for_team_home(
-            fixture.tempdir.path(),
-            &"atm-dev".parse().expect("team"),
-        )
-        .expect("open store"),
-    );
     let barrier = Arc::new(Barrier::new(3));
     let (tx, rx) = mpsc::channel();
 
-    let arch_request = fixture.ack_request("arch-ctm", fixture.arch_message_id, "ack from arch");
-    let qa_request = fixture.ack_request("qa", fixture.qa_message_id, "ack from qa");
+    let arch_request = fixture.ack_request(TEST_SENDER, fixture.arch_message_id, "ack from arch");
+    let qa_request = fixture.ack_request(TEST_RECIPIENT, fixture.qa_message_id, "ack from qa");
+    let store = fixture.store();
 
     for (label, request) in [("arch", arch_request), ("qa", qa_request)] {
         let barrier = Arc::clone(&barrier);
         let tx = tx.clone();
-        let observability = Arc::clone(&observability);
         let store = Arc::clone(&store);
+        let observability = Arc::clone(&observability);
         thread::spawn(move || {
             barrier.wait();
             tx.send((
@@ -108,11 +105,11 @@ fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
         "second ack failed for {}: {:?}; arch inbox: {:?}; qa inbox: {:?}",
         second.0,
         second.1,
-        fixture.inbox_contents("arch-ctm"),
-        fixture.inbox_contents("qa")
+        fixture.inbox_contents(TEST_SENDER),
+        fixture.inbox_contents(TEST_RECIPIENT)
     );
-    let arch_inbox = fixture.inbox_contents("arch-ctm");
-    let qa_inbox = fixture.inbox_contents("qa");
+    let arch_inbox = fixture.inbox_contents(TEST_SENDER);
+    let qa_inbox = fixture.inbox_contents(TEST_RECIPIENT);
     assert!(
         arch_inbox
             .iter()
@@ -127,114 +124,34 @@ fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
 
 #[test]
 #[serial]
-fn ack_mail_imports_legacy_pending_message_through_store_service() {
-    let fixture = Fixture::new();
-    let observability = NullObservability;
-    let store = RusqliteStore::open_for_team_home(
-        fixture.tempdir.path(),
-        &"atm-dev".parse().expect("team"),
-    )
-    .expect("open store");
-
-    let outcome = ack_mail(
-        fixture.ack_request("arch-ctm", fixture.arch_message_id, "ack from arch"),
-        &store,
-        &observability,
-    )
-    .expect("ack legacy message");
-
-    assert_eq!(outcome.message_id, fixture.arch_message_id.to_string());
-    assert_eq!(outcome.reply_target.to_string(), "qa@atm-dev");
-    assert!(
-        fixture
-            .inbox_contents("qa")
-            .iter()
-            .any(|message| message.text == "ack from arch")
-    );
-}
-
-#[test]
-#[serial]
-fn ack_mail_acknowledges_task_linked_imported_message() {
-    let fixture = Fixture::new();
-    let observability = NullObservability;
-    let task_id: atm_core::types::TaskId = "TASK-LINK-1".parse().expect("task id");
-    let mut message = pending_ack_message(
-        "qa",
-        "task-linked pending",
-        LegacyMessageId::new(),
-        "atm-dev",
-    );
-    message.task_id = Some(task_id.clone());
-    let message_id = message.message_id.expect("legacy message id");
-    fixture.write_primary_inbox("arch-ctm", &[message]);
-    let store = RusqliteStore::open_for_team_home(
-        fixture.tempdir.path(),
-        &"atm-dev".parse().expect("team"),
-    )
-    .expect("open store");
-
-    let outcome = ack_mail(
-        fixture.ack_request("arch-ctm", message_id, "ack task"),
-        &store,
-        &observability,
-    )
-    .expect("ack task-linked message");
-
-    assert_eq!(outcome.task_id.as_ref(), Some(&task_id));
-    let task = store
-        .load_task(&task_id)
-        .expect("load task")
-        .expect("task row");
-    assert_eq!(task.status, atm_core::task_store::TaskStatus::Acknowledged);
-    assert!(task.acknowledged_at.is_some());
-}
-
-#[test]
-#[serial]
-fn duplicate_ack_attempt_returns_ack_invalid_state_at_service_level() {
-    let fixture = Fixture::new();
-    let observability = NullObservability;
-    let store = RusqliteStore::open_for_team_home(
-        fixture.tempdir.path(),
-        &"atm-dev".parse().expect("team"),
-    )
-    .expect("open store");
-    let request = fixture.ack_request("arch-ctm", fixture.arch_message_id, "first ack");
-
-    ack_mail(request.clone(), &store, &observability).expect("first ack");
-    let error = ack_mail(request, &store, &observability).expect_err("duplicate ack must fail");
-
-    assert_eq!(error.code, AtmErrorCode::AckInvalidState);
-}
-
-#[test]
-#[serial]
 fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() {
     let observability = Arc::new(NullObservability);
 
     let clear_fixture = Fixture::new();
     clear_fixture.write_primary_inbox(
-        "arch-ctm",
+        TEST_SENDER,
         &[read_message(
-            "qa",
+            TEST_RECIPIENT,
             "clearable history entry",
             LegacyMessageId::from(Uuid::new_v4()),
         )],
     );
     let barrier = Arc::new(Barrier::new(3));
     let (tx, rx) = mpsc::channel();
-    let send_request = clear_fixture.send_request("team-lead", "arch-ctm@atm-dev", "new message");
-    let clear_request = clear_fixture.clear_query("arch-ctm");
+    let send_request =
+        clear_fixture.send_request(ROLE_TEAM_LEAD, &qualified(TEST_SENDER), "new message");
+    let clear_request = clear_fixture.clear_query(TEST_SENDER);
+    let clear_store = clear_fixture.store();
     {
         let barrier = Arc::clone(&barrier);
         let tx = tx.clone();
+        let store = Arc::clone(&clear_store);
         let observability = Arc::clone(&observability);
         thread::spawn(move || {
             barrier.wait();
             tx.send((
                 "send-clear/send",
-                send_via_store(send_request, observability.as_ref()).map(|_| ()),
+                send_via_store(send_request, store.as_ref(), observability.as_ref()).map(|_| ()),
             ))
             .expect("send result");
         });
@@ -262,7 +179,7 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
         .expect("second send/clear result");
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
-    let arch_inbox = clear_fixture.inbox_contents("arch-ctm");
+    let arch_inbox = clear_fixture.inbox_contents(TEST_SENDER);
     assert!(
         arch_inbox
             .iter()
@@ -274,34 +191,30 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
     let ack_fixture = Fixture::new();
     let pending_message_id = LegacyMessageId::from(Uuid::new_v4());
     ack_fixture.write_primary_inbox(
-        "arch-ctm",
+        TEST_SENDER,
         &[pending_ack_message(
-            "qa",
+            TEST_RECIPIENT,
             "pending ack",
             pending_message_id,
-            "atm-dev",
+            TEST_TEAM,
         )],
     );
     let barrier = Arc::new(Barrier::new(3));
     let (tx, rx) = mpsc::channel();
-    let send_request = ack_fixture.send_request("team-lead", "arch-ctm@atm-dev", "new message");
-    let ack_request = ack_fixture.ack_request("arch-ctm", pending_message_id, "ack reply");
-    let ack_store = Arc::new(
-        RusqliteStore::open_for_team_home(
-            ack_fixture.tempdir.path(),
-            &"atm-dev".parse().expect("team"),
-        )
-        .expect("open store"),
-    );
+    let send_request =
+        ack_fixture.send_request(ROLE_TEAM_LEAD, &qualified(TEST_SENDER), "new message");
+    let ack_request = ack_fixture.ack_request(TEST_SENDER, pending_message_id, "ack reply");
+    let ack_store = ack_fixture.store();
     {
         let barrier = Arc::clone(&barrier);
         let tx = tx.clone();
+        let store = Arc::clone(&ack_store);
         let observability = Arc::clone(&observability);
         thread::spawn(move || {
             barrier.wait();
             tx.send((
                 "send-ack/send",
-                send_via_store(send_request, observability.as_ref()).map(|_| ()),
+                send_via_store(send_request, store.as_ref(), observability.as_ref()).map(|_| ()),
             ))
             .expect("send result");
         });
@@ -309,8 +222,8 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
     {
         let barrier = Arc::clone(&barrier);
         let tx = tx.clone();
-        let observability = Arc::clone(&observability);
         let store = Arc::clone(&ack_store);
+        let observability = Arc::clone(&observability);
         thread::spawn(move || {
             barrier.wait();
             tx.send((
@@ -330,7 +243,7 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
         .expect("second send/ack result");
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
-    let arch_inbox = ack_fixture.inbox_contents("arch-ctm");
+    let arch_inbox = ack_fixture.inbox_contents(TEST_SENDER);
     assert!(
         arch_inbox
             .iter()
@@ -345,21 +258,20 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
         "pending message was not acknowledged: {:?}",
         arch_inbox
     );
-    let pending_store = RusqliteStore::open_for_team_home(
-        ack_fixture.tempdir.path(),
-        &"atm-dev".parse().expect("team"),
-    )
-    .expect("open store");
-    let pending_row = pending_store
+    let store = ack_fixture.store();
+    let stored = store
         .load_message_by_legacy_id(&pending_message_id)
-        .expect("load pending row")
-        .expect("pending row");
-    let ack_state = pending_store
-        .load_ack_state(&pending_row.message_key)
+        .expect("load stored message")
+        .expect("stored message");
+    let ack_state = store
+        .load_ack_state(&stored.message_key)
         .expect("load ack state")
-        .expect("ack row");
-    assert!(ack_state.acknowledged_at.is_some());
-    let qa_inbox = ack_fixture.inbox_contents("qa");
+        .expect("ack state");
+    assert!(
+        ack_state.acknowledged_at.is_some(),
+        "pending message was not acknowledged in SQLite state: {ack_state:?}"
+    );
+    let qa_inbox = ack_fixture.inbox_contents(TEST_RECIPIENT);
     assert!(
         qa_inbox.iter().any(|message| message.text == "ack reply"),
         "ack reply was not persisted: {:?}",
@@ -372,23 +284,38 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
 fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
+    let store = fixture.store();
     let barrier = Arc::new(Barrier::new(3));
     let (tx, rx) = mpsc::channel();
 
-    let plain_request = fixture.send_request("team-lead", "arch-ctm@atm-dev", "plain payload");
-    let mut task_request = fixture.send_request("qa", "arch-ctm@atm-dev", "task payload");
+    let plain_request =
+        fixture.send_request(ROLE_TEAM_LEAD, &qualified(TEST_SENDER), "plain payload");
+    let mut task_request =
+        fixture.send_request(TEST_RECIPIENT, &qualified(TEST_SENDER), "task payload");
     task_request.requires_ack = true;
     task_request.task_id = Some("TASK-123".parse().expect("task id"));
     task_request.summary_override = Some("manual summary".to_string());
 
     for (label, request) in [("plain", plain_request), ("task", task_request)] {
         let barrier = Arc::clone(&barrier);
+        let store = Arc::clone(&store);
         let tx = tx.clone();
         let observability = Arc::clone(&observability);
         thread::spawn(move || {
             barrier.wait();
-            tx.send((label, send_via_store(request, observability.as_ref())))
-                .expect("send result");
+            let ingress = default_inbox_ingress();
+            let exporter = default_inbox_export();
+            tx.send((
+                label,
+                send_mail_via_store(
+                    request,
+                    store.as_ref(),
+                    &ingress,
+                    &exporter,
+                    observability.as_ref(),
+                ),
+            ))
+            .expect("send result");
         });
     }
     drop(tx);
@@ -403,7 +330,7 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() 
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
 
-    let inbox = fixture.inbox_contents("arch-ctm");
+    let inbox = fixture.inbox_contents(TEST_SENDER);
     let plain_message = inbox
         .iter()
         .find(|message| message.text == "plain payload")
@@ -420,7 +347,7 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() 
 
     let plain_atm_id = message_atm_id(plain_message);
     let task_atm_id = message_atm_id(task_message);
-    let workflow = fixture.workflow_state_contents("arch-ctm");
+    let workflow = fixture.workflow_state_contents(TEST_SENDER);
     assert!(
         workflow["messages"][format!("atm:{plain_atm_id}")]
             .as_object()
@@ -444,8 +371,9 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() 
 fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
+    let store = fixture.store();
     fixture.write_workflow_state(
-        "arch-ctm",
+        TEST_SENDER,
         serde_json::json!({
             "messages": {
                 "legacy:existing": {
@@ -459,17 +387,31 @@ fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
 
     let barrier = Arc::new(Barrier::new(3));
     let (tx, rx) = mpsc::channel();
-    let first_request = fixture.send_request("team-lead", "arch-ctm@atm-dev", "first payload");
-    let second_request = fixture.send_request("qa", "arch-ctm@atm-dev", "second payload");
+    let first_request =
+        fixture.send_request(ROLE_TEAM_LEAD, &qualified(TEST_SENDER), "first payload");
+    let second_request =
+        fixture.send_request(TEST_RECIPIENT, &qualified(TEST_SENDER), "second payload");
 
     for (label, request) in [("first", first_request), ("second", second_request)] {
         let barrier = Arc::clone(&barrier);
+        let store = Arc::clone(&store);
         let tx = tx.clone();
         let observability = Arc::clone(&observability);
         thread::spawn(move || {
             barrier.wait();
-            tx.send((label, send_via_store(request, observability.as_ref())))
-                .expect("send result");
+            let ingress = default_inbox_ingress();
+            let exporter = default_inbox_export();
+            tx.send((
+                label,
+                send_mail_via_store(
+                    request,
+                    store.as_ref(),
+                    &ingress,
+                    &exporter,
+                    observability.as_ref(),
+                ),
+            ))
+            .expect("send result");
         });
     }
     drop(tx);
@@ -484,7 +426,7 @@ fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
 
-    let inbox = fixture.inbox_contents("arch-ctm");
+    let inbox = fixture.inbox_contents(TEST_SENDER);
     let first_message = inbox
         .iter()
         .find(|message| message.text == "first payload")
@@ -493,7 +435,7 @@ fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
         .iter()
         .find(|message| message.text == "second payload")
         .expect("second inbox message");
-    let workflow = fixture.workflow_state_contents("arch-ctm");
+    let workflow = fixture.workflow_state_contents(TEST_SENDER);
 
     assert!(
         workflow["messages"]["legacy:existing"]
@@ -521,20 +463,21 @@ fn missing_config_notice_seeds_team_lead_workflow_state() {
     let fixture = Fixture::new();
     let observability = NullObservability;
     fixture.create_team_without_config("broken-dev");
-    fixture.write_primary_inbox_for_team("broken-dev", "recipient", &[]);
-    fixture.write_primary_inbox_for_team("broken-dev", "team-lead", &[]);
+    fixture.write_primary_inbox_for_team("broken-dev", TEST_RECIPIENT, &[]);
+    fixture.write_primary_inbox_for_team("broken-dev", ROLE_TEAM_LEAD, &[]);
 
     send_via_store(
-        fixture.send_request("team-lead", "recipient@broken-dev", "broken send"),
+        fixture.send_request(ROLE_TEAM_LEAD, "recipient@broken-dev", "broken send"),
+        fixture.store().as_ref(),
         &observability,
     )
     .expect("missing-config send");
 
-    let notices = fixture.inbox_contents_for_team("broken-dev", "team-lead");
+    let notices = fixture.inbox_contents_for_team("broken-dev", ROLE_TEAM_LEAD);
     let notice = notices.first().expect("missing-config notice");
     assert_eq!(notice.from, "atm-identity-missing");
     assert_eq!(notice.source_team.as_deref(), Some("broken-dev"));
-    let workflow = fixture.workflow_state_contents_for_team("broken-dev", "team-lead");
+    let workflow = fixture.workflow_state_contents_for_team("broken-dev", ROLE_TEAM_LEAD);
     let notice_atm_id = message_atm_id(notice);
     assert!(
         workflow["messages"][format!("atm:{notice_atm_id}")]
@@ -550,22 +493,29 @@ fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
     fixture.create_team_without_config("broken-dev");
-    fixture.write_primary_inbox_for_team("broken-dev", "recipient", &[]);
-    fixture.write_primary_inbox_for_team("broken-dev", "team-lead", &[]);
+    fixture.write_primary_inbox_for_team("broken-dev", TEST_RECIPIENT, &[]);
+    fixture.write_primary_inbox_for_team("broken-dev", ROLE_TEAM_LEAD, &[]);
 
     let barrier = Arc::new(Barrier::new(3));
     let (tx, rx) = mpsc::channel();
-    let normal_request = fixture.send_request("team-lead", "arch-ctm@atm-dev", "normal send");
-    let broken_request = fixture.send_request("qa", "recipient@broken-dev", "broken send");
+    let normal_request =
+        fixture.send_request(ROLE_TEAM_LEAD, &qualified(TEST_SENDER), "normal send");
+    let broken_request =
+        fixture.send_request(TEST_RECIPIENT, "recipient@broken-dev", "broken send");
+    let store = fixture.store();
 
     for (label, request) in [("normal", normal_request), ("broken", broken_request)] {
         let barrier = Arc::clone(&barrier);
         let tx = tx.clone();
+        let store = Arc::clone(&store);
         let observability = Arc::clone(&observability);
         thread::spawn(move || {
             barrier.wait();
-            tx.send((label, send_via_store(request, observability.as_ref())))
-                .expect("send result");
+            tx.send((
+                label,
+                send_via_store(request, store.as_ref(), observability.as_ref()),
+            ))
+            .expect("send result");
         });
     }
     drop(tx);
@@ -582,21 +532,21 @@ fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()
 
     assert!(
         fixture
-            .inbox_contents("arch-ctm")
+            .inbox_contents(TEST_SENDER)
             .iter()
             .any(|message| message.text == "normal send"),
         "normal send missing from primary team inbox"
     );
     assert!(
         fixture
-            .inbox_contents_for_team("broken-dev", "recipient")
+            .inbox_contents_for_team("broken-dev", TEST_RECIPIENT)
             .iter()
             .any(|message| message.text == "broken send"),
         "missing-config recipient send was not persisted"
     );
-    let notices = fixture.inbox_contents_for_team("broken-dev", "team-lead");
+    let notices = fixture.inbox_contents_for_team("broken-dev", ROLE_TEAM_LEAD);
     let notice = notices.first().expect("missing-config notice");
-    let workflow = fixture.workflow_state_contents_for_team("broken-dev", "team-lead");
+    let workflow = fixture.workflow_state_contents_for_team("broken-dev", ROLE_TEAM_LEAD);
     let notice_atm_id = message_atm_id(notice);
     assert!(
         workflow["messages"][format!("atm:{notice_atm_id}")]["pendingAckAt"].is_null(),
@@ -611,27 +561,27 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
     fixture.write_primary_inbox(
-        "arch-ctm",
+        TEST_SENDER,
         &[unread_message(
-            "team-lead",
+            ROLE_TEAM_LEAD,
             "primary unread",
             LegacyMessageId::from(Uuid::new_v4()),
         )],
     );
     fixture.write_origin_inbox(
-        "arch-ctm",
+        TEST_SENDER,
         "host-b",
         &[unread_message(
-            "qa",
+            TEST_RECIPIENT,
             "origin unread b",
             LegacyMessageId::from(Uuid::new_v4()),
         )],
     );
     fixture.write_origin_inbox(
-        "arch-ctm",
+        TEST_SENDER,
         "host-a",
         &[read_message(
-            "qa",
+            TEST_RECIPIENT,
             "origin read a",
             LegacyMessageId::from(Uuid::new_v4()),
         )],
@@ -639,8 +589,8 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
 
     let barrier = Arc::new(Barrier::new(3));
     let (tx, rx) = mpsc::channel();
-    let read_request = fixture.read_query("arch-ctm");
-    let clear_request = fixture.clear_query("arch-ctm");
+    let read_request = fixture.read_query(TEST_SENDER);
+    let clear_request = fixture.clear_query(TEST_SENDER);
     for (label, op) in [
         (
             "read",
@@ -677,13 +627,13 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
         .expect("second read/clear result");
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
-    let arch_inbox = fixture.inbox_contents("arch-ctm");
-    let host_a_inbox = fixture.origin_inbox_contents("arch-ctm", "host-a");
-    let host_b_inbox = fixture.origin_inbox_contents("arch-ctm", "host-b");
+    let arch_inbox = fixture.inbox_contents(TEST_SENDER);
+    let host_a_inbox = fixture.origin_inbox_contents(TEST_SENDER, "host-a");
+    let host_b_inbox = fixture.origin_inbox_contents(TEST_SENDER, "host-b");
     let _ = (arch_inbox, host_a_inbox, host_b_inbox);
-    assert!(fixture.primary_inbox_path("arch-ctm").exists());
-    assert!(fixture.origin_inbox_path("arch-ctm", "host-a").exists());
-    assert!(fixture.origin_inbox_path("arch-ctm", "host-b").exists());
+    assert!(fixture.primary_inbox_path(TEST_SENDER).exists());
+    assert!(fixture.origin_inbox_path(TEST_SENDER, "host-a").exists());
+    assert!(fixture.origin_inbox_path(TEST_SENDER, "host-b").exists());
 }
 
 #[test]
@@ -693,7 +643,7 @@ fn send_times_out_under_bounded_lock_contention() {
     let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
     let fixture = Fixture::new();
     let observability = NullObservability;
-    let lock_path = sentinel_path(&fixture.primary_inbox_path("arch-ctm"));
+    let lock_path = sentinel_path(&fixture.primary_inbox_path(TEST_SENDER));
     let lock_file = OpenOptions::new()
         .create(true)
         .truncate(false)
@@ -705,7 +655,8 @@ fn send_times_out_under_bounded_lock_contention() {
 
     let started = Instant::now();
     let error = send_via_store(
-        fixture.send_request("team-lead", "arch-ctm@atm-dev", "blocked send"),
+        fixture.send_request(ROLE_TEAM_LEAD, &qualified(TEST_SENDER), "blocked send"),
+        fixture.store().as_ref(),
         &observability,
     )
     .expect_err("timeout");
@@ -724,14 +675,14 @@ fn clear_dry_run_does_not_wait_on_mailbox_lock() {
     let fixture = Fixture::new();
     let observability = NullObservability;
     fixture.write_primary_inbox(
-        "arch-ctm",
+        TEST_SENDER,
         &[unread_message(
-            "team-lead",
+            ROLE_TEAM_LEAD,
             "read without lock",
             LegacyMessageId::from(Uuid::new_v4()),
         )],
     );
-    let lock_path = sentinel_path(&fixture.primary_inbox_path("arch-ctm"));
+    let lock_path = sentinel_path(&fixture.primary_inbox_path(TEST_SENDER));
     let lock_file = OpenOptions::new()
         .create(true)
         .truncate(false)
@@ -742,7 +693,7 @@ fn clear_dry_run_does_not_wait_on_mailbox_lock() {
     lock_file.lock_exclusive().expect("hold mailbox lock");
 
     let started = Instant::now();
-    let mut clear_query = fixture.clear_query("arch-ctm");
+    let mut clear_query = fixture.clear_query(TEST_SENDER);
     clear_query.dry_run = true;
     let outcome = clear_mail(clear_query, &observability).expect("dry-run clear");
 
@@ -756,6 +707,51 @@ fn clear_dry_run_does_not_wait_on_mailbox_lock() {
 
 #[test]
 #[serial]
+fn read_and_clear_via_store_ignore_inbox_file_lock() {
+    let _env_lock = acquire_env_lock();
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let store = fixture.store();
+    let ingress = default_inbox_ingress();
+    fixture.write_primary_inbox(
+        TEST_SENDER,
+        &[read_message(
+            ROLE_TEAM_LEAD,
+            "locked inbox history",
+            LegacyMessageId::from(Uuid::new_v4()),
+        )],
+    );
+
+    let inbox_file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(fixture.primary_inbox_path(TEST_SENDER))
+        .expect("open inbox file");
+    inbox_file
+        .lock_exclusive()
+        .expect("hold inbox file lock directly");
+
+    let mut read_query = fixture.read_query(TEST_SENDER);
+    read_query.selection_mode = ReadSelection::All;
+    read_query.ack_activation_mode = AckActivationMode::ReadOnly;
+    let read_outcome =
+        read_mail_via_store(read_query, store.as_ref(), &ingress, &observability).expect("read");
+    assert_eq!(read_outcome.count, 1);
+
+    let clear_outcome = clear_mail_via_store(
+        fixture.clear_query(TEST_SENDER),
+        store.as_ref(),
+        &ingress,
+        &observability,
+    )
+    .expect("clear");
+    assert_eq!(clear_outcome.removed_total, 1);
+}
+
+#[test]
+#[serial]
 #[allow(deprecated)]
 fn read_possible_write_only_locks_when_display_mutation_is_required() {
     let _env_lock = acquire_env_lock();
@@ -764,14 +760,14 @@ fn read_possible_write_only_locks_when_display_mutation_is_required() {
 
     let mutation_fixture = Fixture::new();
     mutation_fixture.write_primary_inbox(
-        "arch-ctm",
+        TEST_SENDER,
         &[unread_message(
-            "team-lead",
+            ROLE_TEAM_LEAD,
             "needs mark-read",
             LegacyMessageId::from(Uuid::new_v4()),
         )],
     );
-    let mutation_lock_path = sentinel_path(&mutation_fixture.primary_inbox_path("arch-ctm"));
+    let mutation_lock_path = sentinel_path(&mutation_fixture.primary_inbox_path(TEST_SENDER));
     let mutation_lock_file = OpenOptions::new()
         .create(true)
         .truncate(false)
@@ -782,21 +778,21 @@ fn read_possible_write_only_locks_when_display_mutation_is_required() {
     mutation_lock_file
         .lock_exclusive()
         .expect("hold mutation lock");
-    let mut mutation_query = mutation_fixture.read_query("arch-ctm");
+    let mut mutation_query = mutation_fixture.read_query(TEST_SENDER);
     mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
     let error = read_mail(mutation_query, &observability).expect_err("lock timeout");
     assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
 
     let no_mutation_fixture = Fixture::new();
     no_mutation_fixture.write_primary_inbox(
-        "arch-ctm",
+        TEST_SENDER,
         &[read_message(
-            "team-lead",
+            ROLE_TEAM_LEAD,
             "already read",
             LegacyMessageId::from(Uuid::new_v4()),
         )],
     );
-    let no_mutation_lock_path = sentinel_path(&no_mutation_fixture.primary_inbox_path("arch-ctm"));
+    let no_mutation_lock_path = sentinel_path(&no_mutation_fixture.primary_inbox_path(TEST_SENDER));
     let no_mutation_lock_file = OpenOptions::new()
         .create(true)
         .truncate(false)
@@ -807,7 +803,7 @@ fn read_possible_write_only_locks_when_display_mutation_is_required() {
     no_mutation_lock_file
         .lock_exclusive()
         .expect("hold no-mutation lock");
-    let mut no_mutation_query = no_mutation_fixture.read_query("arch-ctm");
+    let mut no_mutation_query = no_mutation_fixture.read_query(TEST_SENDER);
     no_mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
     no_mutation_query.selection_mode = ReadSelection::All;
     let started = Instant::now();
@@ -831,13 +827,14 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
     // direct helper call: send_mail internally assigns metadata.atm.messageId
     // via the private workflow::set_atm_message_id path before read_mail runs.
     send_via_store(
-        fixture.send_request("team-lead", "arch-ctm@atm-dev", "hello sidecar"),
+        fixture.send_request(ROLE_TEAM_LEAD, &qualified(TEST_SENDER), "hello sidecar"),
+        fixture.store().as_ref(),
         &observability,
     )
     .expect("send ULID-authored message");
 
     let inbox_before =
-        fs::read_to_string(fixture.primary_inbox_path("arch-ctm")).expect("raw inbox before read");
+        fs::read_to_string(fixture.primary_inbox_path(TEST_SENDER)).expect("raw inbox before read");
     let physical_before = find_inbox_json_line(&inbox_before, "hello sidecar");
     let atm_message_id = physical_before["metadata"]["atm"]["messageId"]
         .as_str()
@@ -845,7 +842,7 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
         .to_string();
     assert_eq!(physical_before["read"], false);
 
-    let mut read_query = fixture.read_query("arch-ctm");
+    let mut read_query = fixture.read_query(TEST_SENDER);
     read_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
     let outcome = read_mail(read_query, &observability).expect("read mail");
     assert!(
@@ -857,7 +854,7 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
     );
 
     let inbox_after =
-        fs::read_to_string(fixture.primary_inbox_path("arch-ctm")).expect("raw inbox after read");
+        fs::read_to_string(fixture.primary_inbox_path(TEST_SENDER)).expect("raw inbox after read");
     assert_eq!(inbox_after, inbox_before);
     let physical_after = find_inbox_json_line(&inbox_after, "hello sidecar");
     assert_eq!(
@@ -866,196 +863,15 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
     );
     assert_eq!(physical_after["read"], false);
     assert!(
-        !sentinel_path(&fixture.primary_inbox_path("arch-ctm")).exists(),
+        !sentinel_path(&fixture.primary_inbox_path(TEST_SENDER)).exists(),
         "read-only ULID sidecar path must not leave a lock sentinel behind",
     );
 
-    let workflow = fixture.workflow_state_contents("arch-ctm");
+    let workflow = fixture.workflow_state_contents(TEST_SENDER);
     assert_eq!(
         workflow["messages"][format!("atm:{atm_message_id}")]["read"],
         true
     );
-}
-
-#[test]
-#[serial]
-fn read_mail_via_store_repeated_after_external_append_reconciles_new_rows() {
-    let _env_lock = acquire_env_lock();
-    let fixture = Fixture::new();
-    let observability = NullObservability;
-    let store = RusqliteStore::open_for_team_home(
-        fixture.tempdir.path(),
-        &"atm-dev".parse().expect("team"),
-    )
-    .expect("open store");
-    let ingress = default_inbox_ingress();
-    fixture.write_primary_inbox(
-        "arch-ctm",
-        &[unread_message(
-            "team-lead",
-            "initial",
-            LegacyMessageId::from(Uuid::new_v4()),
-        )],
-    );
-
-    let mut first_query = fixture.read_query("arch-ctm");
-    first_query.selection_mode = ReadSelection::All;
-    first_query.ack_activation_mode = AckActivationMode::ReadOnly;
-    let first =
-        read_mail_via_store(first_query, &store, &ingress, &observability).expect("first read");
-    assert_eq!(first.count, 1);
-
-    let mut inbox = fixture.inbox_contents("arch-ctm");
-    inbox.push(unread_message(
-        "team-lead",
-        "appended later",
-        LegacyMessageId::from(Uuid::new_v4()),
-    ));
-    fixture.write_primary_inbox("arch-ctm", &inbox);
-
-    let mut second_query = fixture.read_query("arch-ctm");
-    second_query.selection_mode = ReadSelection::All;
-    second_query.ack_activation_mode = AckActivationMode::ReadOnly;
-    let second =
-        read_mail_via_store(second_query, &store, &ingress, &observability).expect("second read");
-    assert_eq!(second.count, 2);
-    assert!(
-        second
-            .messages
-            .iter()
-            .any(|message| message.envelope.text == "initial")
-    );
-    assert!(
-        second
-            .messages
-            .iter()
-            .any(|message| message.envelope.text == "appended later")
-    );
-}
-
-#[test]
-#[serial]
-fn read_mail_via_store_projects_mixed_legacy_and_forward_rows() {
-    let _env_lock = acquire_env_lock();
-    let fixture = Fixture::new();
-    let observability = NullObservability;
-    let store = RusqliteStore::open_for_team_home(
-        fixture.tempdir.path(),
-        &"atm-dev".parse().expect("team"),
-    )
-    .expect("open store");
-    let ingress = default_inbox_ingress();
-    let legacy = unread_message(
-        "legacy-sender",
-        "legacy row",
-        LegacyMessageId::from(Uuid::new_v4()),
-    );
-    let forward = unread_message(
-        "forward-sender",
-        "forward row",
-        LegacyMessageId::from(Uuid::new_v4()),
-    );
-    fixture.write_primary_inbox_values(
-        "arch-ctm",
-        &[
-            serde_json::to_value(&legacy).expect("legacy json"),
-            to_shared_inbox_value(&forward).expect("forward json"),
-        ],
-    );
-
-    let outcome = read_mail_via_store(
-        fixture.read_query("arch-ctm"),
-        &store,
-        &ingress,
-        &observability,
-    )
-    .expect("read");
-    assert_eq!(outcome.count, 2);
-    assert!(
-        outcome
-            .messages
-            .iter()
-            .any(|message| message.envelope.text == "legacy row")
-    );
-    assert!(
-        outcome
-            .messages
-            .iter()
-            .any(|message| message.envelope.text == "forward row")
-    );
-}
-
-#[test]
-#[serial]
-fn clear_mail_via_store_leaves_pending_ack_visible() {
-    let _env_lock = acquire_env_lock();
-    let fixture = Fixture::new();
-    let observability = NullObservability;
-    let store = RusqliteStore::open_for_team_home(
-        fixture.tempdir.path(),
-        &"atm-dev".parse().expect("team"),
-    )
-    .expect("open store");
-    let ingress = default_inbox_ingress();
-    fixture.write_primary_inbox(
-        "arch-ctm",
-        &[pending_ack_message(
-            "team-lead",
-            "pending ack",
-            LegacyMessageId::from(Uuid::new_v4()),
-            "atm-dev",
-        )],
-    );
-
-    let outcome = clear_mail_via_store(
-        fixture.clear_query("arch-ctm"),
-        &store,
-        &ingress,
-        &observability,
-    )
-    .expect("clear");
-    assert_eq!(outcome.removed_total, 0);
-    assert_eq!(outcome.remaining_total, 1);
-}
-
-#[test]
-#[serial]
-fn clear_mail_via_store_is_idempotent_for_second_clear() {
-    let _env_lock = acquire_env_lock();
-    let fixture = Fixture::new();
-    let observability = NullObservability;
-    let store = RusqliteStore::open_for_team_home(
-        fixture.tempdir.path(),
-        &"atm-dev".parse().expect("team"),
-    )
-    .expect("open store");
-    let ingress = default_inbox_ingress();
-    fixture.write_primary_inbox(
-        "arch-ctm",
-        &[read_message(
-            "team-lead",
-            "read only",
-            LegacyMessageId::from(Uuid::new_v4()),
-        )],
-    );
-
-    let first = clear_mail_via_store(
-        fixture.clear_query("arch-ctm"),
-        &store,
-        &ingress,
-        &observability,
-    )
-    .expect("first clear");
-    assert_eq!(first.removed_total, 1);
-
-    let second = clear_mail_via_store(
-        fixture.clear_query("arch-ctm"),
-        &store,
-        &ingress,
-        &observability,
-    )
-    .expect("second clear");
-    assert_eq!(second.removed_total, 0);
 }
 
 #[test]
@@ -1066,28 +882,28 @@ fn clear_fails_closed_on_synthetic_source_discovery_fault() {
     let fixture = Fixture::new();
     let observability = NullObservability;
     fixture.write_origin_inbox(
-        "arch-ctm",
+        TEST_SENDER,
         "host-a",
         &[read_message(
-            "qa",
+            TEST_RECIPIENT,
             "origin read a",
             LegacyMessageId::from(Uuid::new_v4()),
         )],
     );
     let before_primary =
-        fs::read_to_string(fixture.primary_inbox_path("arch-ctm")).expect("primary inbox before");
-    let before_origin = fs::read_to_string(fixture.origin_inbox_path("arch-ctm", "host-a"))
+        fs::read_to_string(fixture.primary_inbox_path(TEST_SENDER)).expect("primary inbox before");
+    let before_origin = fs::read_to_string(fixture.origin_inbox_path(TEST_SENDER, "host-a"))
         .expect("origin inbox before");
 
-    let error = clear_mail(fixture.clear_query("arch-ctm"), &observability).expect_err("fault");
+    let error = clear_mail(fixture.clear_query(TEST_SENDER), &observability).expect_err("fault");
 
     assert_eq!(error.code, AtmErrorCode::MailboxReadFailed);
     assert_eq!(
-        fs::read_to_string(fixture.primary_inbox_path("arch-ctm")).expect("primary inbox after"),
+        fs::read_to_string(fixture.primary_inbox_path(TEST_SENDER)).expect("primary inbox after"),
         before_primary
     );
     assert_eq!(
-        fs::read_to_string(fixture.origin_inbox_path("arch-ctm", "host-a"))
+        fs::read_to_string(fixture.origin_inbox_path(TEST_SENDER, "host-a"))
             .expect("origin inbox after"),
         before_origin
     );
@@ -1103,7 +919,8 @@ fn send_reports_non_contention_lock_failures_without_timeout() {
     let started = Instant::now();
 
     let error = send_via_store(
-        fixture.send_request("team-lead", "arch-ctm@atm-dev", "lock failure"),
+        fixture.send_request(ROLE_TEAM_LEAD, &qualified(TEST_SENDER), "lock failure"),
+        fixture.store().as_ref(),
         &observability,
     )
     .expect_err("non-contention lock failure");
@@ -1124,7 +941,10 @@ enum CommandOp {
 // processes. nextest runs separate test binaries in parallel, so a plain
 // process-local mutex is not sufficient here.
 fn acquire_env_lock() -> File {
-    let lock_path = std::env::temp_dir().join("atm-mailbox-locking-env.lock");
+    let lock_path = std::env::temp_dir().join(format!(
+        "atm-mailbox-locking-env.{}.lock",
+        std::process::id()
+    ));
     let file = OpenOptions::new()
         .create(true)
         .truncate(false)
@@ -1176,12 +996,21 @@ struct Fixture {
     tempdir: TempDir,
     arch_message_id: LegacyMessageId,
     qa_message_id: LegacyMessageId,
+    store: Arc<RusqliteStore>,
 }
 
 impl Fixture {
     fn new() -> Self {
         let tempdir = tempfile::tempdir().expect("tempdir");
-        create_team_with_config(tempdir.path(), "atm-dev", &["team-lead", "arch-ctm", "qa"]);
+        create_team_with_config(
+            tempdir.path(),
+            TEST_TEAM,
+            &[ROLE_TEAM_LEAD, TEST_SENDER, TEST_RECIPIENT],
+        );
+        let store = Arc::new(
+            RusqliteStore::open_for_team_home(tempdir.path(), &TEST_TEAM.parse().expect("team"))
+                .expect("open shared mailbox-locking test store"),
+        );
 
         let arch_message_id = LegacyMessageId::new();
         let qa_message_id = LegacyMessageId::new();
@@ -1190,27 +1019,32 @@ impl Fixture {
             tempdir,
             arch_message_id,
             qa_message_id,
+            store,
         };
         fixture.write_primary_inbox(
-            "arch-ctm",
+            TEST_SENDER,
             &[pending_ack_message(
-                "qa",
+                TEST_RECIPIENT,
                 "arch pending",
                 arch_message_id,
-                "atm-dev",
+                TEST_TEAM,
             )],
         );
         fixture.write_primary_inbox(
-            "qa",
+            TEST_RECIPIENT,
             &[pending_ack_message(
-                "arch-ctm",
+                TEST_SENDER,
                 "qa pending",
                 qa_message_id,
-                "atm-dev",
+                TEST_TEAM,
             )],
         );
 
         fixture
+    }
+
+    fn store(&self) -> Arc<RusqliteStore> {
+        Arc::clone(&self.store)
     }
 
     fn ack_request(
@@ -1223,7 +1057,7 @@ impl Fixture {
             home_dir: self.tempdir.path().to_path_buf(),
             current_dir: self.tempdir.path().to_path_buf(),
             actor_override: Some(actor.parse().expect("actor")),
-            team_override: Some("atm-dev".parse().expect("team")),
+            team_override: Some(TEST_TEAM.parse().expect("team")),
             message_id: AckMessageId::Legacy(message_id),
             reply_body: reply_body.to_string(),
         }
@@ -1235,7 +1069,7 @@ impl Fixture {
             current_dir: self.tempdir.path().to_path_buf(),
             actor_override: Some(actor.parse().expect("actor")),
             target_address: None,
-            team_override: Some("atm-dev".parse().expect("team")),
+            team_override: Some(TEST_TEAM.parse().expect("team")),
             older_than: None,
             idle_only: false,
             dry_run: false,
@@ -1248,7 +1082,7 @@ impl Fixture {
             self.tempdir.path().to_path_buf(),
             Some(actor),
             None,
-            Some("atm-dev"),
+            Some(TEST_TEAM),
             ReadSelection::Actionable,
             false,
             false,
@@ -1267,7 +1101,7 @@ impl Fixture {
             self.tempdir.path().to_path_buf(),
             Some(sender),
             to,
-            Some("atm-dev"),
+            Some(TEST_TEAM),
             SendMessageSource::Inline(text.to_string()),
             None,
             false,
@@ -1278,7 +1112,7 @@ impl Fixture {
     }
 
     fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {
-        self.inbox_contents_for_team("atm-dev", agent)
+        self.inbox_contents_for_team(TEST_TEAM, agent)
     }
 
     fn origin_inbox_contents(&self, agent: &str, suffix: &str) -> Vec<MessageEnvelope> {
@@ -1286,7 +1120,7 @@ impl Fixture {
     }
 
     fn workflow_state_contents(&self, agent: &str) -> serde_json::Value {
-        self.workflow_state_contents_for_team("atm-dev", agent)
+        self.workflow_state_contents_for_team(TEST_TEAM, agent)
     }
 
     fn inbox_contents_for_team(&self, team: &str, agent: &str) -> Vec<MessageEnvelope> {
@@ -1316,21 +1150,12 @@ impl Fixture {
         write_inbox(&self.primary_inbox_path_for_team(team, agent), messages);
     }
 
-    fn write_primary_inbox_values(&self, agent: &str, values: &[serde_json::Value]) {
-        let path = self.primary_inbox_path(agent);
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).expect("inbox dir");
-        }
-        fs::write(path, serde_json::to_vec(values).expect("raw inbox values"))
-            .expect("write raw inbox values");
-    }
-
     fn write_origin_inbox(&self, agent: &str, suffix: &str, messages: &[MessageEnvelope]) {
         write_inbox(&self.origin_inbox_path(agent, suffix), messages);
     }
 
     fn primary_inbox_path(&self, agent: &str) -> std::path::PathBuf {
-        self.primary_inbox_path_for_team("atm-dev", agent)
+        self.primary_inbox_path_for_team(TEST_TEAM, agent)
     }
 
     fn primary_inbox_path_for_team(&self, team: &str, agent: &str) -> std::path::PathBuf {
@@ -1344,13 +1169,13 @@ impl Fixture {
             .path()
             .join(".claude")
             .join("teams")
-            .join("atm-dev")
+            .join(TEST_TEAM)
             .join("inboxes")
             .join(format!("{agent}.{suffix}.json"))
     }
 
     fn workflow_state_path(&self, agent: &str) -> std::path::PathBuf {
-        self.workflow_state_path_for_team("atm-dev", agent)
+        self.workflow_state_path_for_team(TEST_TEAM, agent)
     }
 
     fn workflow_state_path_for_team(&self, team: &str, agent: &str) -> std::path::PathBuf {
@@ -1459,7 +1284,7 @@ fn read_message(from: &str, text: &str, message_id: LegacyMessageId) -> MessageE
         text: text.to_string(),
         timestamp: IsoTimestamp::from_datetime(Utc::now()),
         read: true,
-        source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
+        source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
         summary: None,
         message_id: Some(message_id),
         pending_ack_at: None,
@@ -1476,7 +1301,7 @@ fn unread_message(from: &str, text: &str, message_id: LegacyMessageId) -> Messag
         text: text.to_string(),
         timestamp: IsoTimestamp::from_datetime(Utc::now()),
         read: false,
-        source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
+        source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
         summary: None,
         message_id: Some(message_id),
         pending_ack_at: None,

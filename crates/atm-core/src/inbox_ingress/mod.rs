@@ -2,13 +2,13 @@ use std::path::Path;
 
 use crate::error::{AtmError, AtmErrorKind};
 use crate::mail_store::{
-    AckStateRecord, IngestRecord, MailStore, MessageSourceKind, StoredMessageRecord,
-    VisibilityStateRecord,
+    AckStateRecord, ImportedMessageState, IngestRecord, MailStore, MessageSourceKind,
+    StoredMessageRecord, VisibilityStateRecord,
 };
 use crate::mailbox::{self, MailboxReadReport};
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::MessageEnvelope;
-use crate::store::{InsertOutcome, MessageKey, SourceFingerprint, StoreError, StoreParseError};
+use crate::store::{InsertOutcome, MessageKey, SourceFingerprint, StoreError, StoreErrorKind};
 use crate::task_store::{TaskRecord, TaskStatus, TaskStore};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use crate::workflow::{self, WorkflowStateFile};
@@ -53,6 +53,8 @@ impl InboxIngress for JsonInboxIngress {
     ) -> Result<InboxIngestOutcome, AtmError> {
         let workflow_state =
             workflow::load_workflow_state(home_dir, team.as_str(), agent.as_str())?;
+        // INVARIANT: discover_source_paths() is bounded to the validated
+        // home/team/agent scope provided to this ingress call.
         let source_paths =
             mailbox::source::discover_source_paths(home_dir, team.as_str(), agent.as_str())?;
         let mut outcome = InboxIngestOutcome::default();
@@ -132,7 +134,6 @@ impl InboxIngress for JsonInboxIngress {
         Ok(outcome)
     }
 }
-
 fn ingest_source_report(
     source_path: &Path,
     report: MailboxReadReport,
@@ -143,144 +144,90 @@ fn ingest_source_report(
     outcome: &mut InboxIngestOutcome,
 ) -> Result<(), AtmError> {
     for envelope in report.messages {
-        let message_key = canonical_message_key(source_path, &envelope)?;
+        let message_key = canonical_message_key(source_path, &envelope);
         let stored = stored_message_record(message_key.clone(), team, agent, &envelope)?;
         let ingest_record = IngestRecord {
             team_name: team.clone(),
             recipient_agent: agent.clone(),
             source_path: source_path.to_path_buf(),
-            source_fingerprint: source_fingerprint(source_path, &envelope)?,
+            source_fingerprint: source_fingerprint(source_path, &envelope),
             message_key: message_key.clone(),
             imported_at: IsoTimestamp::now(),
         };
+        let imported_state = imported_message_state(&message_key, &envelope, workflow_state);
         match store
-            .insert_message_with_ingest(&stored, &ingest_record)
+            .insert_message_with_ingest_state(&stored, &ingest_record, &imported_state)
             .map_err(|error| map_store_error("failed to insert imported mailbox row", error))?
         {
             InsertOutcome::Inserted(_) => outcome.imported_messages += 1,
             InsertOutcome::Duplicate(_) => outcome.duplicate_messages += 1,
         }
-        import_workflow_state(store, &message_key, &envelope, workflow_state)?;
     }
     Ok(())
 }
 
-fn import_workflow_state(
-    store: &dyn InboxIngestStore,
+fn imported_message_state(
     message_key: &MessageKey,
     envelope: &MessageEnvelope,
     workflow_state: &WorkflowStateFile,
-) -> Result<(), AtmError> {
+) -> ImportedMessageState {
     let projected = workflow::workflow_key(envelope)
         .and_then(|key| workflow_state.messages.get(&key).cloned())
         .unwrap_or_else(|| workflow::initial_state_for_envelope(envelope));
-    let existing_ack_state = store
-        .load_ack_state(message_key)
-        .map_err(|error| map_store_error("failed to load existing imported ack state", error))?;
-    let existing_visibility = store.load_visibility(message_key).map_err(|error| {
-        map_store_error("failed to load existing imported visibility state", error)
-    })?;
 
-    if projected.pending_ack_at.is_some()
-        || projected.acknowledged_at.is_some()
-        || existing_ack_state.is_some()
-    {
-        store
-            .upsert_ack_state(&AckStateRecord {
+    ImportedMessageState {
+        ack_state: (projected.pending_ack_at.is_some() || projected.acknowledged_at.is_some())
+            .then(|| AckStateRecord {
                 message_key: message_key.clone(),
-                pending_ack_at: projected.pending_ack_at.or(existing_ack_state
-                    .as_ref()
-                    .and_then(|state| state.pending_ack_at)),
-                acknowledged_at: projected.acknowledged_at.or(existing_ack_state
-                    .as_ref()
-                    .and_then(|state| state.acknowledged_at)),
-                ack_reply_message_key: existing_ack_state
-                    .as_ref()
-                    .and_then(|state| state.ack_reply_message_key.clone()),
-                ack_reply_team: existing_ack_state
-                    .as_ref()
-                    .and_then(|state| state.ack_reply_team.clone()),
-                ack_reply_agent: existing_ack_state
-                    .as_ref()
-                    .and_then(|state| state.ack_reply_agent.clone()),
-            })
-            .map_err(|error| map_store_error("failed to upsert imported ack state", error))?;
-    }
-    if projected.read || existing_visibility.is_some() {
-        store
-            .upsert_visibility(&VisibilityStateRecord {
-                message_key: message_key.clone(),
-                read_at: projected
-                    .read
-                    .then_some(envelope.timestamp)
-                    .or(existing_visibility.as_ref().and_then(|state| state.read_at)),
-                cleared_at: existing_visibility
-                    .as_ref()
-                    .and_then(|state| state.cleared_at),
-            })
-            .map_err(|error| {
-                map_store_error("failed to upsert imported visibility state", error)
-            })?;
-    }
-    if let Some(task_id) = envelope.task_id.clone() {
-        store
-            .upsert_task(&TaskRecord {
-                task_id,
-                message_key: message_key.clone(),
-                status: if projected.acknowledged_at.is_some() {
-                    TaskStatus::Acknowledged
-                } else {
-                    TaskStatus::PendingAck
-                },
-                created_at: envelope.timestamp,
+                pending_ack_at: projected.pending_ack_at,
                 acknowledged_at: projected.acknowledged_at,
-                metadata_json: None,
-            })
-            .map_err(|error| map_store_error("failed to upsert imported task row", error))?;
+                ack_reply_message_key: None,
+                ack_reply_team: None,
+                ack_reply_agent: None,
+            }),
+        visibility: projected.read.then(|| VisibilityStateRecord {
+            message_key: message_key.clone(),
+            read_at: Some(envelope.timestamp),
+            cleared_at: None,
+        }),
+        task: envelope.task_id.clone().map(|task_id| TaskRecord {
+            task_id,
+            message_key: message_key.clone(),
+            status: if projected.acknowledged_at.is_some() {
+                TaskStatus::Acknowledged
+            } else {
+                TaskStatus::PendingAck
+            },
+            created_at: envelope.timestamp,
+            acknowledged_at: projected.acknowledged_at,
+            metadata_json: None,
+        }),
     }
-    Ok(())
 }
 
-fn canonical_message_key(
-    source_path: &Path,
-    envelope: &MessageEnvelope,
-) -> Result<MessageKey, AtmError> {
+fn canonical_message_key(source_path: &Path, envelope: &MessageEnvelope) -> MessageKey {
     if let Some(atm_message_id) = envelope.atm_message_id() {
-        return Ok(MessageKey::from_atm_message_id(atm_message_id));
+        return MessageKey::from_atm_message_id(atm_message_id);
     }
     if let Some(message_id) = envelope.message_id {
-        return Ok(MessageKey::from_legacy_message_id(message_id));
+        return MessageKey::from_legacy_message_id(message_id);
     }
-    Ok(MessageKey::from_source_fingerprint(&source_fingerprint(
-        source_path,
-        envelope,
-    )?))
+    MessageKey::from_source_fingerprint(&source_fingerprint(source_path, envelope))
 }
 
-fn source_fingerprint(
-    source_path: &Path,
-    envelope: &MessageEnvelope,
-) -> Result<SourceFingerprint, AtmError> {
+fn source_fingerprint(source_path: &Path, envelope: &MessageEnvelope) -> SourceFingerprint {
     if let Some(atm_message_id) = envelope.atm_message_id() {
-        return format!(
-            "atm{atm_message_id}-{}",
-            envelope.timestamp.into_inner().timestamp_millis()
-        )
-        .parse()
-        .map_err(map_fingerprint_error);
+        // INVARIANT: AtmMessageId is always a valid ULID-format fingerprint source.
+        return atm_message_id.into();
     }
     if let Some(message_id) = envelope.message_id {
-        return format!(
-            "legacy{message_id}-{}",
-            envelope.timestamp.into_inner().timestamp_millis()
-        )
-        .parse()
-        .map_err(map_fingerprint_error);
+        // INVARIANT: LegacyMessageId always produces a valid fingerprint.
+        return message_id.into();
     }
 
     let mut hash = 0xcbf29ce484222325_u64;
     for segment in [
-        source_path.display().to_string(),
+        source_path.to_string_lossy().replace('\\', "/"),
         envelope.from.to_string(),
         envelope.timestamp.to_string(),
         envelope.summary.clone().unwrap_or_default(),
@@ -294,9 +241,9 @@ fn source_fingerprint(
         hash = hash.wrapping_mul(0x100000001b3);
     }
 
-    format!("ext{hash:016x}")
-        .parse()
-        .map_err(map_fingerprint_error)
+    // INVARIANT: FNV hash of canonical path+message fields always produces a
+    // valid hex fingerprint.
+    SourceFingerprint::from_external_hex(hash)
 }
 
 fn stored_message_record(
@@ -317,6 +264,9 @@ fn stored_message_record(
                     "failed to encode metadata for imported inbox message from {}",
                     envelope.from
                 ),
+            )
+            .with_recovery(
+                "Repair the imported metadata payload or re-read the source inbox after the sender/export path emits valid JSON metadata.",
             )
             .with_source(source)
         })?;
@@ -354,22 +304,14 @@ fn sender_canonical(envelope: &MessageEnvelope) -> Option<AgentName> {
         .and_then(|value| value.parse().ok())
 }
 
-fn map_fingerprint_error(error: StoreParseError) -> AtmError {
-    AtmError::new(
-        AtmErrorKind::Validation,
-        format!("failed to derive stable external inbox fingerprint: {error}"),
-    )
-    .with_recovery(
-        "Repair the malformed external message identity inputs before retrying inbox import.",
-    )
-}
-
 fn map_store_error(context: &str, error: StoreError) -> AtmError {
-    let mut atm_error = AtmError::new_with_code(
-        error.code,
-        AtmErrorKind::MailboxWrite,
-        format!("{context}: {}", error.message),
-    );
+    let kind = match error.kind {
+        StoreErrorKind::Busy => AtmErrorKind::Timeout,
+        StoreErrorKind::Constraint => AtmErrorKind::Validation,
+        _ => AtmErrorKind::MailboxWrite,
+    };
+    let mut atm_error =
+        AtmError::new_with_code(error.code, kind, format!("{context}: {}", error.message));
     if let Some(recovery) = error.recovery.as_ref() {
         atm_error = atm_error.with_recovery(recovery.clone());
     }

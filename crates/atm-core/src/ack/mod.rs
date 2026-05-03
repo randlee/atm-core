@@ -9,8 +9,8 @@ use crate::config;
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
 use crate::identity;
-use crate::inbox_export::{self, InboxExport};
-use crate::inbox_ingress::{self, InboxIngress};
+use crate::inbox_export::{self, InboxExport, default_inbox_export};
+use crate::inbox_ingress::{InboxIngress, default_inbox_ingress};
 use crate::mail_store::{MailStore, MessageSourceKind, StoredMessageRecord};
 use crate::mailbox;
 use crate::mailbox::source::{SourceFile, SourcedMessage};
@@ -24,6 +24,9 @@ use crate::store::{MessageKey, StoreDuplicateIdentity, StoreError};
 use crate::task_store::TaskStore;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
+/// INVARIANT: runtime failure paths in this module must return typed
+/// `AtmError`/`StoreError` results. Production ack/task flows must not rely on
+/// panic/unwrap for expected failure handling.
 /// Parameters for acknowledging one pending-ack mailbox message.
 #[derive(Debug, Clone)]
 pub struct AckRequest {
@@ -32,6 +35,7 @@ pub struct AckRequest {
     pub actor_override: Option<AgentName>,
     pub team_override: Option<TeamName>,
     pub message_id: AckMessageId,
+    // TODO(Q.4): replace reply_body String with AckBody newtype.
     pub reply_body: String,
 }
 
@@ -50,9 +54,19 @@ impl std::fmt::Display for AckMessageId {
     }
 }
 
+impl Serialize for AckMessageId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct AckCommitCommand<'a> {
-    pub source_message_key: &'a MessageKey,
+    pub source_legacy_message_id: Option<LegacyMessageId>,
+    pub source_atm_message_id: Option<AtmMessageId>,
     pub reply_message: &'a StoredMessageRecord,
     pub acknowledged_at: IsoTimestamp,
     pub reply_team: &'a TeamName,
@@ -66,6 +80,7 @@ pub struct AckCommitOutcome {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AckCommitRejection {
+    MessageNotFound,
     AlreadyAcknowledged,
     NotPending,
 }
@@ -77,11 +92,22 @@ pub enum AckCommitResult {
     Rejected(AckCommitRejection),
 }
 
+/// SQLite-backed acknowledgement persistence boundary for Phase Q.
+///
+/// Implementations own the authoritative ack/task transition and may reject
+/// duplicate reply identities or invalid source-message state before any
+/// compatibility inbox export occurs.
 pub mod sealed {
     pub trait Sealed {}
 }
 
 pub trait AckStore: MailStore + TaskStore + sealed::Sealed {
+    /// Persist one acknowledgement transition and its reply record.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError`] when the SQLite-backed ack/task state cannot be
+    /// loaded, validated, or committed.
     fn commit_ack_reply(
         &self,
         command: &AckCommitCommand<'_>,
@@ -94,7 +120,7 @@ pub struct AckOutcome {
     pub action: &'static str,
     pub team: TeamName,
     pub agent: AgentName,
-    pub message_id: String,
+    pub message_id: AckMessageId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
     pub reply_target: ReplyTarget,
@@ -131,6 +157,15 @@ impl Serialize for ReplyTarget {
     }
 }
 
+/// Resolve the SQLite target team for an acknowledgement request.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::ConfigLoadFailed`] when `.atm.toml`
+/// cannot be loaded or
+/// [`crate::error_codes::AtmErrorCode::TeamUnavailable`] when neither the
+/// request nor the config can resolve a team.
 pub fn resolve_store_team(request: &AckRequest) -> Result<TeamName, AtmError> {
     let config = config::load_config(&request.current_dir)?;
     config::resolve_team(
@@ -153,11 +188,14 @@ pub fn resolve_store_team(request: &AckRequest) -> Result<TeamName, AtmError> {
 /// [`crate::error_codes::AtmErrorCode::MailboxReadFailed`],
 /// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`],
 /// [`crate::error_codes::AtmErrorCode::MailboxLockFailed`],
-/// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`], or
+/// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`],
+/// [`crate::error_codes::AtmErrorCode::AckInvalidState`],
+/// [`crate::error_codes::AtmErrorCode::StoreConstraintViolation`], or
 /// [`crate::error_codes::AtmErrorCode::MessageValidationFailed`] when actor or
 /// team resolution fails, the message is missing or no longer pending
-/// acknowledgement, reply-target validation fails, or either the source or
-/// reply inbox cannot be persisted.
+/// acknowledgement, reply-target validation fails, the store rejects a
+/// duplicate reply identity, or the reply inbox projection cannot be
+/// persisted.
 pub fn ack_mail<S>(
     request: AckRequest,
     store: &S,
@@ -184,16 +222,14 @@ where
     {
         return Err(AtmError::agent_not_found(&actor, &team));
     }
+    let ingress = default_inbox_ingress();
+    let _ = ingress.ingest_mailbox_state(&request.home_dir, &team, &actor, store, observability)?;
+    // TODO(Q.4): replace source-file observation with a store-backed/source-index
+    // lookup once reply export no longer needs shared inbox snapshots.
     let source_files = mailbox::store::observe_source_files(&request.home_dir, &team, &actor)?;
     let source_message = find_source_message(&source_files, request.message_id, &actor, &team)?;
-    reject_if_already_acknowledged(store, request.message_id)?;
-    let _ = inbox_ingress::default_inbox_ingress().ingest_mailbox_state(
-        &request.home_dir,
-        &team,
-        &actor,
-        store,
-        observability,
-    )?;
+    // TODO(Q.4): retire the legacy UUID bridge requirement once all ack
+    // surfaces consume canonical `AtmMessageId` end-to-end.
     let source_legacy_message_id = source_message_legacy_message_id(&source_message.envelope)
         .ok_or_else(|| {
             AtmError::validation(format!(
@@ -204,20 +240,7 @@ where
                 "Refresh the mailbox with `atm read` and retry after ATM reconstructs the legacy acknowledgement bridge from metadata.atm.messageId.",
             )
         })?;
-    let stored_message = load_stored_message_for_request(store, request.message_id)?
-        .ok_or_else(|| {
-            AtmError::new_with_code(
-                AtmErrorCode::AckInvalidState,
-                AtmErrorKind::Validation,
-                format!(
-                    "message {} was not imported into SQLite acknowledgement state",
-                    request.message_id
-                ),
-            )
-            .with_recovery(
-                "Refresh the mailbox with `atm read` and retry the acknowledgement after ATM imports the message into SQLite.",
-            )
-        })?;
+    let (source_legacy_candidate, source_atm_candidate) = ack_lookup_candidates(request.message_id);
 
     let (reply_agent, reply_team) = resolve_reply_target(&source_message.envelope, &team)?;
     let reply_team_dir = home::team_dir_from_home(&request.home_dir, &reply_team)?;
@@ -267,7 +290,8 @@ where
     )?;
     let commit_outcome = match store
         .commit_ack_reply(&AckCommitCommand {
-            source_message_key: &stored_message.message_key,
+            source_legacy_message_id: source_legacy_candidate,
+            source_atm_message_id: source_atm_candidate,
             reply_message: &reply_stored_message,
             acknowledged_at: ack_timestamp,
             reply_team: &reply_team,
@@ -317,7 +341,8 @@ where
     }
 
     let mut warnings = Vec::new();
-    let export_succeeded = match inbox_export::default_inbox_export().export_message(
+    let exporter = default_inbox_export();
+    let export_succeeded = match exporter.export_message(
         &request.home_dir,
         &reply_team,
         &reply_agent,
@@ -350,9 +375,23 @@ where
         }
         Err(error) => {
             warnings.push(format!(
-                "warning: acknowledgement reply export failed after SQLite commit: {}",
+                "acknowledgement reply export failed after SQLite commit: {}",
                 error.message
             ));
+            let _ = observability.emit(CommandEvent {
+                command: "ack",
+                action: "export_degraded",
+                outcome: "warning",
+                team: team.clone(),
+                agent: actor.clone(),
+                sender: actor.clone(),
+                message_id: Some(source_legacy_message_id),
+                requires_ack: false,
+                dry_run: false,
+                task_id: source_task_id.clone(),
+                error_code: Some(error.code),
+                error_message: Some(error.message.clone()),
+            });
             false
         }
     };
@@ -363,7 +402,7 @@ where
         action: "ack",
         team: team.clone(),
         agent: actor.clone(),
-        message_id: request.message_id.to_string(),
+        message_id: request.message_id,
         task_id: source_task_id.clone(),
         reply_target: ReplyTarget::new(reply_agent, reply_team),
         reply_message_id,
@@ -387,6 +426,7 @@ where
                 requires_ack: false,
                 is_ack: true,
                 task_id: outcome.task_id.as_ref(),
+                // Q.4 owns roster-backed recipient_pane_id plumbing for ack hooks.
                 recipient_pane_id: None,
             },
         );
@@ -427,7 +467,7 @@ fn resolve_reply_target(
         message.from.as_str().parse()?
     } else {
         AgentAddress {
-            agent: message.from.clone(),
+            agent: AgentName::from_validated(message.from.clone()),
             team: message
                 .source_team
                 .clone()
@@ -435,11 +475,18 @@ fn resolve_reply_target(
         }
     };
 
-    let team = parsed.team.ok_or_else(AtmError::team_unavailable)?;
-    Ok((
-        AgentName::from_validated(parsed.agent),
-        TeamName::from_validated(team),
-    ))
+    let team = parsed.team.ok_or_else(|| {
+        let message_reference = message
+            .atm_message_id()
+            .map(|id| id.to_string())
+            .or_else(|| message.message_id.map(|id| id.to_string()))
+            .unwrap_or_else(|| "<unknown>".to_string());
+        AtmError::team_unavailable().with_recovery(format!(
+            "Message {message_reference} from `{}` is missing source team metadata. Refresh the mailbox or repair the message record before retrying acknowledgement.",
+            message.from
+        ))
+    })?;
+    Ok((parsed.agent, team))
 }
 
 fn canonical_sender_identity(message: &MessageEnvelope) -> Option<AgentName> {
@@ -475,8 +522,8 @@ fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
 fn find_source_message(
     source_files: &[SourceFile],
     message_id: AckMessageId,
-    actor: &str,
-    team: &str,
+    actor: &AgentName,
+    team: &TeamName,
 ) -> Result<SourcedMessage, AtmError> {
     dedupe_legacy_message_id_surface(
         merged_surface(source_files),
@@ -505,6 +552,18 @@ fn find_source_message(
             "Refresh the mailbox with `atm read` and choose a message that is still present in the pending-ack surface.",
         )
     })
+}
+
+fn ack_lookup_candidates(
+    message_id: AckMessageId,
+) -> (Option<LegacyMessageId>, Option<AtmMessageId>) {
+    match message_id {
+        AckMessageId::Legacy(legacy_id) => (Some(legacy_id), Some(legacy_id.into_atm_message_id())),
+        AckMessageId::Atm(atm_id) => (
+            Some(LegacyMessageId::from_atm_message_id(atm_id)),
+            Some(atm_id),
+        ),
+    }
 }
 
 fn source_message_legacy_message_id(message: &MessageEnvelope) -> Option<LegacyMessageId> {
@@ -536,67 +595,6 @@ fn message_matches_request_id(message: &MessageEnvelope, request_id: AckMessageI
     }
 }
 
-fn load_stored_message_for_request<S>(
-    store: &S,
-    message_id: AckMessageId,
-) -> Result<Option<StoredMessageRecord>, AtmError>
-where
-    S: MailStore,
-{
-    match message_id {
-        AckMessageId::Legacy(legacy_id) => {
-            let stored = store
-                .load_message_by_legacy_id(&legacy_id)
-                .map_err(|error| {
-                    map_store_error("failed to load acknowledged message from store", error)
-                })?;
-            if stored.is_some() {
-                return Ok(stored);
-            }
-            store
-                .load_message_by_atm_id(&legacy_id.into_atm_message_id())
-                .map_err(|error| {
-                    map_store_error("failed to load acknowledged message from store", error)
-                })
-        }
-        AckMessageId::Atm(atm_id) => {
-            let stored = store.load_message_by_atm_id(&atm_id).map_err(|error| {
-                map_store_error("failed to load acknowledged message from store", error)
-            })?;
-            if stored.is_some() {
-                return Ok(stored);
-            }
-            store
-                .load_message_by_legacy_id(&LegacyMessageId::from_atm_message_id(atm_id))
-                .map_err(|error| {
-                    map_store_error("failed to load acknowledged message from store", error)
-                })
-        }
-    }
-}
-
-fn reject_if_already_acknowledged<S>(store: &S, message_id: AckMessageId) -> Result<(), AtmError>
-where
-    S: MailStore,
-{
-    let Some(stored_message) = load_stored_message_for_request(store, message_id)? else {
-        return Ok(());
-    };
-    let ack_state = store
-        .load_ack_state(&stored_message.message_key)
-        .map_err(|error| map_store_error("failed to load ack state", error))?;
-    if ack_state
-        .as_ref()
-        .is_some_and(|state| state.acknowledged_at.is_some())
-    {
-        return Err(ack_invalid_state_error(
-            message_id,
-            AckCommitRejection::AlreadyAcknowledged,
-        ));
-    }
-    Ok(())
-}
-
 fn stored_reply_message(
     reply_message: &MessageEnvelope,
     actor: &AgentName,
@@ -612,7 +610,8 @@ fn stored_reply_message(
         .map(serde_json::to_string)
         .transpose()
         .map_err(|source| {
-            AtmError::new(
+            AtmError::new_with_code(
+                AtmErrorCode::SerializationFailed,
                 AtmErrorKind::Serialization,
                 format!(
                     "failed to encode ATM metadata for acknowledgement reply to {}",
@@ -642,7 +641,7 @@ fn stored_reply_message(
 fn duplicate_ack_reply_error(identity: StoreDuplicateIdentity) -> AtmError {
     AtmError::new_with_code(
         AtmErrorCode::StoreConstraintViolation,
-        AtmErrorKind::MailboxWrite,
+        AtmErrorKind::Store,
         format!("generated duplicate acknowledgement reply identity: {identity:?}"),
     )
     .with_recovery(
@@ -652,6 +651,16 @@ fn duplicate_ack_reply_error(identity: StoreDuplicateIdentity) -> AtmError {
 
 fn ack_invalid_state_error(message_id: AckMessageId, rejection: AckCommitRejection) -> AtmError {
     match rejection {
+        AckCommitRejection::MessageNotFound => AtmError::new_with_code(
+            AtmErrorCode::AckInvalidState,
+            AtmErrorKind::Validation,
+            format!(
+                "message {message_id} disappeared from SQLite acknowledgement state before the acknowledgement commit"
+            ),
+        )
+        .with_recovery(
+            "Refresh the mailbox with `atm read` and retry the acknowledgement after ATM reimports the message into SQLite.",
+        ),
         AckCommitRejection::AlreadyAcknowledged => AtmError::new_with_code(
             AtmErrorCode::AckInvalidState,
             AtmErrorKind::Validation,
@@ -674,6 +683,11 @@ fn ack_invalid_state_error(message_id: AckMessageId, rejection: AckCommitRejecti
 }
 
 fn map_store_error(context: &str, error: StoreError) -> AtmError {
+    debug_assert!(
+        is_store_error_code(error.code),
+        "map_store_error expects store-family AtmErrorCode, got {}",
+        error.code
+    );
     let mut atm_error = AtmError::new_with_code(
         error.code,
         AtmErrorKind::Store,
@@ -695,6 +709,19 @@ pub fn map_store_error_for_command(context: &str, error: StoreError) -> AtmError
     map_store_error(context, error)
 }
 
+const fn is_store_error_code(code: AtmErrorCode) -> bool {
+    matches!(
+        code,
+        AtmErrorCode::StoreOpenFailed
+            | AtmErrorCode::StoreBootstrapFailed
+            | AtmErrorCode::StoreMigrationFailed
+            | AtmErrorCode::StoreQueryFailed
+            | AtmErrorCode::StoreBusy
+            | AtmErrorCode::StoreConstraintViolation
+            | AtmErrorCode::StoreTransactionFailed
+    )
+}
+
 fn override_reply_message_id_for_tests() -> Result<Option<LegacyMessageId>, AtmError> {
     match std::env::var("ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID") {
         Ok(value) => value.parse().map(Some).map_err(|error| {
@@ -706,13 +733,12 @@ fn override_reply_message_id_for_tests() -> Result<Option<LegacyMessageId>, AtmE
             )
         }),
         Err(std::env::VarError::NotPresent) => Ok(None),
-        Err(error) => Err(
-            AtmError::new(
-                AtmErrorKind::Config,
-                format!("failed to read ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID: {error}"),
+        Err(std::env::VarError::NotUnicode(_)) => Err(
+            AtmError::validation(
+                "ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID must be valid UTF-8 when set",
             )
             .with_recovery(
-                "Clear or repair the ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID environment override before rerunning the ack flow.",
+                "Remove the invalid test-only ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID override or provide a UTF-8 UUID string.",
             ),
         ),
     }
@@ -729,13 +755,12 @@ fn override_reply_atm_message_id_for_tests() -> Result<Option<AtmMessageId>, Atm
             )
         }),
         Err(std::env::VarError::NotPresent) => Ok(None),
-        Err(error) => Err(
-            AtmError::new(
-                AtmErrorKind::Config,
-                format!("failed to read ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID: {error}"),
+        Err(std::env::VarError::NotUnicode(_)) => Err(
+            AtmError::validation(
+                "ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID must be valid UTF-8 when set",
             )
             .with_recovery(
-                "Clear or repair the ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID environment override before rerunning the ack flow.",
+                "Remove the invalid test-only ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID override or provide a UTF-8 ULID string.",
             ),
         ),
     }
@@ -774,13 +799,16 @@ mod tests {
     use crate::schema::MessageEnvelope;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
+    const TEST_TEAM_NAME: &str = "test-team";
+    const TEST_ACTOR_B: &str = "test-recipient";
+
     fn message_with_from(from: &str) -> MessageEnvelope {
         MessageEnvelope {
             from: from.parse::<AgentName>().expect("agent"),
             text: "hello".to_string(),
             timestamp: IsoTimestamp::now(),
             read: false,
-            source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
+            source_team: Some(TEST_TEAM_NAME.parse::<TeamName>().expect("team")),
             summary: None,
             message_id: None,
             pending_ack_at: None,
@@ -796,31 +824,32 @@ mod tests {
         let mut message = message_with_from("lead");
         message.extra.insert(
             "metadata".to_string(),
-            json!({"atm": {"fromIdentity": "team-lead"}}),
+            json!({"atm": {"fromIdentity": TEST_ACTOR_B}}),
         );
 
         assert_eq!(
             canonical_sender_identity(&message).as_deref(),
-            Some("team-lead")
+            Some(TEST_ACTOR_B)
         );
     }
 
     #[test]
     fn resolve_reply_target_prefers_canonical_sender_identity_metadata() {
         let mut message = message_with_from("lead");
-        message.source_team = Some("atm-dev".parse::<TeamName>().expect("team"));
+        message.source_team = Some(TEST_TEAM_NAME.parse::<TeamName>().expect("team"));
         message.extra.insert(
             "metadata".to_string(),
-            json!({"atm": {"fromIdentity": "team-lead"}}),
+            json!({"atm": {"fromIdentity": TEST_ACTOR_B}}),
         );
 
-        let target = resolve_reply_target(&message, &"atm-dev".parse::<TeamName>().expect("team"))
-            .expect("reply target");
+        let target =
+            resolve_reply_target(&message, &TEST_TEAM_NAME.parse::<TeamName>().expect("team"))
+                .expect("reply target");
         assert_eq!(
             target,
             (
-                "team-lead".parse().expect("agent"),
-                "atm-dev".parse().expect("team"),
+                TEST_ACTOR_B.parse().expect("agent"),
+                TEST_TEAM_NAME.parse().expect("team"),
             )
         );
     }

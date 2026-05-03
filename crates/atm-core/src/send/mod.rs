@@ -791,6 +791,10 @@ mod tests {
     use crate::process::process_is_alive;
     use crate::send::{SendMessageSource, SendRequest};
 
+    const TEST_TEAM: &str = "test-team";
+    const TEST_RECIPIENT: &str = "test-recipient";
+    const ROLE_TEAM_LEAD: &str = "team-lead";
+
     #[test]
     fn load_send_alert_state_parse_errors_are_config_errors() {
         let tempdir = tempdir().expect("tempdir");
@@ -811,7 +815,7 @@ mod tests {
         let mut state = alert_state::SendAlertState::default();
         state
             .missing_team_config_keys
-            .insert("teams/atm-dev/config.json".to_string());
+            .insert(format!("teams/{TEST_TEAM}/config.json"));
 
         alert_state::save(&path, &state).expect("save");
         let loaded = alert_state::load(&path).expect("load");
@@ -848,9 +852,9 @@ mod tests {
         let error = SendRequest::new(
             tempdir.path().to_path_buf(),
             tempdir.path().to_path_buf(),
-            Some("team-lead"),
+            Some(ROLE_TEAM_LEAD),
             "../evil",
-            Some("atm-dev"),
+            Some(TEST_TEAM),
             SendMessageSource::Inline("hello".to_string()),
             None,
             false,
@@ -868,8 +872,8 @@ mod tests {
         let error = SendRequest::new(
             tempdir.path().to_path_buf(),
             tempdir.path().to_path_buf(),
-            Some("team-lead"),
-            "arch-ctm",
+            Some(ROLE_TEAM_LEAD),
+            TEST_RECIPIENT,
             Some("../evil"),
             SendMessageSource::Inline("hello".to_string()),
             None,

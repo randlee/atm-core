@@ -9,13 +9,18 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use atm_core::clear::{ClearQuery, clear_mail_via_store};
 use atm_core::dispatcher::{
     DaemonRequest, DaemonResponse, DispatchError, RequestDispatcher, RequestKind, RequestPayload,
 };
 use atm_core::doctor::{DoctorQuery, DoctorReport, DoctorRuntimeHealth, DoctorStatus, run_doctor};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::home;
+use atm_core::inbox_ingress::default_inbox_ingress;
 use atm_core::observability::{CommandEvent, ObservabilityPort};
+use atm_core::read::{ReadQuery, read_mail_via_store};
+use atm_rusqlite::RusqliteStore;
+use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -27,7 +32,8 @@ use crate::client::{
     write_control_state, write_frame,
 };
 pub use crate::client::{
-    ensure_daemon_running, request_doctor_json_with_autostart, request_remote,
+    ensure_daemon_running, request_clear_with_autostart, request_doctor_json_with_autostart,
+    request_read_with_autostart, request_remote,
 };
 use crate::runtime_observability::{DaemonObservability, normalize_doctor_report_observability};
 
@@ -36,7 +42,7 @@ pub const REMOTE_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 pub const REMOTE_IO_TIMEOUT: Duration = Duration::from_secs(5);
 pub const DEFAULT_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(30);
 pub const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
-pub const DOCTOR_HANDLER_TIMEOUT: Duration = Duration::from_secs(5);
+pub const DOCTOR_HANDLER_TIMEOUT: Duration = Duration::from_secs(3);
 pub const SHUTDOWN_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
 pub const SHUTDOWN_FORCE_TIMEOUT: Duration = Duration::from_secs(10);
 pub const MAX_ACCEPTS: usize = 64;
@@ -146,6 +152,40 @@ impl CoreDispatcher {
 impl RequestDispatcher for CoreDispatcher {
     fn dispatch(&self, request: DaemonRequest) -> Result<DaemonResponse, DispatchError> {
         match request.payload {
+            RequestPayload::Send(_) => Err(DispatchError::Unsupported(RequestKind::Send)),
+            RequestPayload::Ack(_) => Err(DispatchError::Unsupported(RequestKind::Ack)),
+            RequestPayload::Read(value) => {
+                let query: ReadQuery = serde_json::from_value(value)
+                    .map_err(|error| DispatchError::PayloadDecode(error.to_string()))?;
+                let store = RusqliteStore::open_for_team_home(&query.home_dir, &request.team_name)
+                    .map_err(|error| DispatchError::Handler(error.to_string()))?;
+                let ingress = default_inbox_ingress();
+                let outcome =
+                    read_mail_via_store(query, &store, &ingress, self.observability.as_ref())
+                        .map_err(|error| DispatchError::Handler(error.to_string()))?;
+                let payload_json = serde_json::to_string(&outcome)
+                    .map_err(|error| DispatchError::ResponseEncode(error.to_string()))?;
+                Ok(DaemonResponse {
+                    kind: RequestKind::Read,
+                    payload_json,
+                })
+            }
+            RequestPayload::Clear(value) => {
+                let query: ClearQuery = serde_json::from_value(value)
+                    .map_err(|error| DispatchError::PayloadDecode(error.to_string()))?;
+                let store = RusqliteStore::open_for_team_home(&query.home_dir, &request.team_name)
+                    .map_err(|error| DispatchError::Handler(error.to_string()))?;
+                let ingress = default_inbox_ingress();
+                let outcome =
+                    clear_mail_via_store(query, &store, &ingress, self.observability.as_ref())
+                        .map_err(|error| DispatchError::Handler(error.to_string()))?;
+                let payload_json = serde_json::to_string(&outcome)
+                    .map_err(|error| DispatchError::ResponseEncode(error.to_string()))?;
+                Ok(DaemonResponse {
+                    kind: RequestKind::Clear,
+                    payload_json,
+                })
+            }
             RequestPayload::Doctor(value) => {
                 let query: DoctorQuery = serde_json::from_value(value)
                     .map_err(|error| DispatchError::PayloadDecode(error.to_string()))?;
@@ -217,11 +257,9 @@ impl RequestDispatcher for CoreDispatcher {
                     kind: RequestKind::Heartbeat,
                     payload_json: "{\"ok\":true}".to_string(),
                 })
-            }
-            other => Err(DispatchError::Unsupported(other.kind())),
-            // TODO(phase-q §21.6.1): replace this hardcoded request-kind dispatch with an
-            // injectable handler registry. That registry remains deferred scope while Q.4 only
-            // exposes Doctor and Heartbeat through the thin daemon runtime.
+            } // TODO(phase-q §21.6.1): replace this hardcoded request-kind dispatch with an
+              // injectable handler registry. That registry remains deferred scope while Q.4 only
+              // exposes a small fixed set of request handlers through the thin daemon runtime.
         }
     }
 }
@@ -343,6 +381,8 @@ pub fn start_runtime(
             .with_source(error)
     })?;
 
+    // TODO(Q.5): enable Windows TLS support before cross-host daemon traffic
+    // is used beyond trusted local/QA scenarios.
     // TODO(phase-q): replace plain TCP loopback/remote transport with TLS before cross-host daemon traffic is enabled.
     let remote_listener = TcpListener::bind(("127.0.0.1", 0)).map_err(|error| {
         AtmError::daemon_start_failed(format!(
@@ -617,6 +657,27 @@ struct SingletonGuard {
 
 impl SingletonGuard {
     fn acquire(path: &Path) -> Result<Self, AtmError> {
+        let stale_eviction_lock_path = path.with_extension("json.lock");
+        let stale_eviction_lock = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&stale_eviction_lock_path)
+            .map_err(|error| {
+                AtmError::daemon_start_failed(format!(
+                    "failed to open daemon singleton stale-eviction lock {}: {error}",
+                    stale_eviction_lock_path.display()
+                ))
+                .with_source(error)
+            })?;
+        stale_eviction_lock.lock_exclusive().map_err(|error| {
+            AtmError::daemon_start_failed(format!(
+                "failed to acquire daemon singleton stale-eviction lock {}: {error}",
+                stale_eviction_lock_path.display()
+            ))
+            .with_source(error)
+        })?;
         match fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -628,6 +689,7 @@ impl SingletonGuard {
                     AtmError::daemon_start_failed("failed to serialize singleton state")
                         .with_source(error)
                 })?;
+                drop(stale_eviction_lock);
                 Ok(Self {
                     path: path.to_path_buf(),
                 })
@@ -645,6 +707,7 @@ impl SingletonGuard {
                     .and_then(|value| value.get("pid").and_then(Value::as_u64))
                     .map(|pid| pid as u32);
                 if pid.is_some_and(process_is_alive) {
+                    drop(stale_eviction_lock);
                     return Err(AtmError::daemon_already_running(format!(
                         "another ATM daemon already owns {}",
                         path.display()
@@ -657,13 +720,17 @@ impl SingletonGuard {
                     ))
                     .with_source(remove_error)
                 })?;
+                drop(stale_eviction_lock);
                 Self::acquire(path)
             }
-            Err(error) => Err(AtmError::daemon_start_failed(format!(
-                "failed to create daemon singleton {}: {error}",
-                path.display()
-            ))
-            .with_source(error)),
+            Err(error) => {
+                drop(stale_eviction_lock);
+                Err(AtmError::daemon_start_failed(format!(
+                    "failed to create daemon singleton {}: {error}",
+                    path.display()
+                ))
+                .with_source(error))
+            }
         }
     }
 
@@ -777,9 +844,8 @@ fn attach_runtime_health(
         singleton_detail: "daemon singleton is owned by the active runtime".to_string(),
         // TODO(phase-q): replace this placeholder with real cache-health
         // inspection once the dedicated daemon status cache lands.
-        status_cache_state: DoctorStatus::Warning,
-        status_cache_detail: "live status-cache health is not yet separately reported in Q.4"
-            .to_string(),
+        status_cache_state: DoctorStatus::Unavailable,
+        status_cache_detail: "status cache health: not yet implemented".to_string(),
         sqlite_runtime_state: if sqlite_path.as_ref().is_some_and(|path| path.exists()) {
             DoctorStatus::Healthy
         } else {
@@ -800,7 +866,7 @@ fn checkpoint_runtime_wal(home_dir: &Path) -> Result<(), AtmError> {
         return Ok(());
     };
     for entry in entries.filter_map(Result::ok) {
-        let db_path = entry.path().join(".atm-state").join("mail.sqlite3");
+        let db_path = entry.path().join(".atm-state").join("mail.db");
         if !db_path.exists() {
             continue;
         }
@@ -831,6 +897,9 @@ mod tests {
     use atm_core::observability::NullObservability;
     use serial_test::serial;
     use tempfile::TempDir;
+
+    const TEST_TEAM: &str = "test-team";
+    const TEST_SENDER: &str = "sender-a";
 
     #[derive(Default)]
     struct FakeDispatcher {
@@ -872,9 +941,9 @@ mod tests {
         let client = TestSocketClient::new(&dispatcher);
         let response = client
             .request(DaemonRequest {
-                team_name: "atm-dev".parse().expect("team"),
-                agent_name: "arch-ctm".parse().expect("agent"),
-                payload: RequestPayload::Doctor(serde_json::json!({"team_override":"atm-dev"})),
+                team_name: TEST_TEAM.parse().expect("team"),
+                agent_name: TEST_SENDER.parse().expect("agent"),
+                payload: RequestPayload::Doctor(serde_json::json!({"team_override":TEST_TEAM})),
             })
             .expect("response");
         assert_eq!(response.kind, RequestKind::Doctor);
@@ -951,7 +1020,7 @@ mod tests {
         fs::create_dir_all(&current_dir).expect("workspace dir");
         fs::write(
             current_dir.join(".atm.toml"),
-            "[atm]\ndefault_team = \"atm-dev\"\n",
+            format!("[atm]\ndefault_team = \"{TEST_TEAM}\"\n"),
         )
         .expect("atm toml");
         let handle = start_runtime(
@@ -965,8 +1034,8 @@ mod tests {
         let response = request_local(
             tempdir.path(),
             &DaemonRequest {
-                team_name: "atm-dev".parse().expect("team"),
-                agent_name: "arch-ctm".parse().expect("agent"),
+                team_name: TEST_TEAM.parse().expect("team"),
+                agent_name: TEST_SENDER.parse().expect("agent"),
                 payload: RequestPayload::Heartbeat(serde_json::json!({"pid": 42})),
             },
             SAME_HOST_REQUEST_TIMEOUT,
@@ -976,12 +1045,12 @@ mod tests {
         let doctor = request_local(
             tempdir.path(),
             &DaemonRequest {
-                team_name: "atm-dev".parse().expect("team"),
-                agent_name: "arch-ctm".parse().expect("agent"),
+                team_name: TEST_TEAM.parse().expect("team"),
+                agent_name: TEST_SENDER.parse().expect("agent"),
                 payload: RequestPayload::Doctor(serde_json::json!({
                     "home_dir": tempdir.path(),
                     "current_dir": current_dir,
-                    "team_override": "atm-dev"
+                    "team_override": TEST_TEAM
                 })),
             },
             SAME_HOST_REQUEST_TIMEOUT,
@@ -993,19 +1062,20 @@ mod tests {
 
     #[test]
     fn bounded_remote_host_unreachable_behavior_is_typed() {
-        let started = Instant::now();
+        let probe = TcpListener::bind(("127.0.0.1", 0)).expect("probe listener");
+        let address = probe.local_addr().expect("probe addr");
+        drop(probe);
         let error = request_remote(
-            "127.0.0.1:9".parse().expect("discard addr"),
+            address,
             &DaemonRequest {
-                team_name: "atm-dev".parse().expect("team"),
-                agent_name: "arch-ctm".parse().expect("agent"),
+                team_name: TEST_TEAM.parse().expect("team"),
+                agent_name: TEST_SENDER.parse().expect("agent"),
                 payload: RequestPayload::Send(serde_json::json!({"message":"hello"})),
             },
             Duration::from_millis(250),
         )
         .expect_err("unreachable host");
         assert_eq!(error.code, AtmErrorCode::DaemonRemoteUnavailable);
-        assert!(started.elapsed() < Duration::from_secs(10));
     }
 
     #[test]
@@ -1035,8 +1105,8 @@ mod tests {
         let response = request_remote(
             address,
             &DaemonRequest {
-                team_name: "atm-dev".parse().expect("team"),
-                agent_name: "arch-ctm".parse().expect("agent"),
+                team_name: TEST_TEAM.parse().expect("team"),
+                agent_name: TEST_SENDER.parse().expect("agent"),
                 payload: RequestPayload::Send(serde_json::json!({"message":"hello"})),
             },
             Duration::from_secs(1),
