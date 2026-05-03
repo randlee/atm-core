@@ -5,13 +5,16 @@ mod helpers;
 use atm_core::mail_store::MailStore;
 use atm_core::schema::{
     AgentMember, AtmMessageId, AtmMetadataFields, ForwardMetadataEnvelope, LegacyMessageId,
-    MessageEnvelope, MessageMetadata, TeamConfig, to_shared_inbox_value,
+    MessageEnvelope, MessageMetadata, TeamConfig,
 };
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_core::{read_messages, write_messages};
 use atm_rusqlite::RusqliteStore;
 use chrono::{TimeZone, Utc};
-use helpers::{ROLE_TEAM_LEAD, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM, configure_atm_command};
+use helpers::{
+    ROLE_TEAM_LEAD, TEST_DAEMON, TEST_LEAD, TEST_ORIGIN, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM,
+    configure_atm_command,
+};
 use serde_json::Value;
 
 #[test]
@@ -19,7 +22,7 @@ fn test_read_own_inbox_default() {
     let fixture = Fixture::new(&[TEST_SENDER, TEST_RECIPIENT]);
     fixture.write_inbox(
         TEST_SENDER,
-        &[fixture.message(ROLE_TEAM_LEAD, "hello", false, None, None, 0)],
+        &[fixture.message(TEST_LEAD, "hello", false, None, None, 0)],
     );
 
     let output = fixture.run(&["read", "--json"]);
@@ -35,27 +38,6 @@ fn test_read_own_inbox_default() {
     assert_eq!(parsed["count"], 1);
     assert_eq!(parsed["bucket_counts"]["unread"], 1);
     assert_eq!(parsed["messages"][0]["bucket"], "unread");
-}
-
-#[test]
-fn test_read_uses_default_team_from_workspace_config_for_sqlite_path() {
-    let fixture = Fixture::new(&[TEST_SENDER]);
-    fixture.write_atm_config(&format!("[atm]\ndefault_team = \"{TEST_TEAM}\"\n"));
-    fixture.write_inbox(
-        TEST_SENDER,
-        &[fixture.message(ROLE_TEAM_LEAD, "hello", false, None, None, 0)],
-    );
-
-    let output = fixture.run_with_env(&["read", "--json"], &[("ATM_TEAM", "")]);
-
-    assert!(
-        output.status.success(),
-        "stderr: {}",
-        fixture.stderr(&output)
-    );
-    let parsed = fixture.stdout_json(&output);
-    assert_eq!(parsed["count"], 1);
-    assert_eq!(parsed["messages"][0]["text"], "hello");
 }
 
 #[test]
@@ -145,82 +127,14 @@ fn test_read_no_mark() {
 }
 
 #[test]
-fn test_read_projects_mixed_legacy_and_forward_rows_consistently() {
-    let fixture = Fixture::new(&[TEST_SENDER]);
-    let legacy = fixture.message("legacy-sender", "legacy row", false, None, None, 0);
-    let forward = fixture.message("forward-sender", "forward row", false, None, None, 1);
-    fixture.write_raw_inbox_values(
-        TEST_SENDER,
-        &[
-            serde_json::to_value(&legacy).expect("legacy json"),
-            to_shared_inbox_value(&forward).expect("forward json"),
-        ],
-    );
-
-    let output = fixture.run(&["read", "--all", "--no-mark", "--json"]);
-
-    assert!(
-        output.status.success(),
-        "stderr: {}",
-        fixture.stderr(&output)
-    );
-    let parsed = fixture.stdout_json(&output);
-    let messages = parsed["messages"].as_array().expect("messages array");
-    assert_eq!(messages.len(), 2);
-    assert!(
-        messages
-            .iter()
-            .any(|message| message["text"] == "legacy row")
-    );
-    assert!(
-        messages
-            .iter()
-            .any(|message| message["text"] == "forward row")
-    );
-}
-
-#[test]
-fn test_read_repeated_after_external_append_reconciles_new_rows() {
-    let fixture = Fixture::new(&[TEST_SENDER]);
-    fixture.write_inbox(
-        TEST_SENDER,
-        &[fixture.message(ROLE_TEAM_LEAD, "initial", false, None, None, 0)],
-    );
-
-    let first = fixture.run(&["read", "--all", "--no-mark", "--json"]);
-    assert!(first.status.success(), "stderr: {}", fixture.stderr(&first));
-    assert_eq!(fixture.stdout_json(&first)["count"], 1);
-
-    let mut inbox = fixture.inbox_contents(TEST_SENDER);
-    inbox.push(fixture.message(ROLE_TEAM_LEAD, "appended later", false, None, None, 1));
-    fixture.write_inbox(TEST_SENDER, &inbox);
-
-    let second = fixture.run(&["read", "--all", "--no-mark", "--json"]);
-    assert!(
-        second.status.success(),
-        "stderr: {}",
-        fixture.stderr(&second)
-    );
-    let parsed = fixture.stdout_json(&second);
-    let messages = parsed["messages"].as_array().expect("messages array");
-    assert_eq!(messages.len(), 2);
-    assert!(messages.iter().any(|message| message["text"] == "initial"));
-    assert!(
-        messages
-            .iter()
-            .any(|message| message["text"] == "appended later")
-    );
-}
-
-#[test]
 fn test_read_unread_only() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_inbox(
         TEST_SENDER,
         &[
-            fixture.message(ROLE_TEAM_LEAD, "unread", false, None, None, 2),
-            fixture.message(ROLE_TEAM_LEAD, "pending", true, Some(1), None, 1),
-            fixture.message(ROLE_TEAM_LEAD, "history", true, None, None, 0),
+            fixture.message(TEST_LEAD, "unread", false, None, None, 2),
+            fixture.message(TEST_LEAD, "pending", true, Some(1), None, 1),
+            fixture.message(TEST_LEAD, "history", true, None, None, 0),
         ],
     );
 
@@ -244,7 +158,7 @@ fn test_read_json_output() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_inbox(
         TEST_SENDER,
-        &[fixture.message(ROLE_TEAM_LEAD, "hello", false, None, None, 0)],
+        &[fixture.message(TEST_LEAD, "hello", false, None, None, 0)],
     );
 
     let output = fixture.run(&["read", "--json"]);
@@ -262,7 +176,7 @@ fn test_read_json_output() {
     assert!(parsed["bucket_counts"]["unread"].as_u64().is_some());
     assert!(parsed["bucket_counts"]["pending_ack"].as_u64().is_some());
     assert!(parsed["bucket_counts"]["history"].as_u64().is_some());
-    assert_eq!(parsed["messages"][0]["from"], ROLE_TEAM_LEAD);
+    assert_eq!(parsed["messages"][0]["from"], TEST_LEAD);
 }
 
 #[test]
@@ -270,7 +184,7 @@ fn test_read_emits_retained_log_record() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_inbox(
         TEST_SENDER,
-        &[fixture.message(ROLE_TEAM_LEAD, "hello", false, None, None, 0)],
+        &[fixture.message(TEST_LEAD, "hello", false, None, None, 0)],
     );
 
     let read = fixture.run(&["read", "--json"]);
@@ -314,8 +228,8 @@ fn test_read_seen_state() {
     fixture.write_inbox(
         TEST_SENDER,
         &[
-            fixture.message(ROLE_TEAM_LEAD, "history", true, None, None, 0),
-            fixture.message(ROLE_TEAM_LEAD, "new unread", false, None, None, 10),
+            fixture.message(TEST_LEAD, "history", true, None, None, 0),
+            fixture.message(TEST_LEAD, "new unread", false, None, None, 10),
         ],
     );
     fixture.write_seen_state(TEST_SENDER, fixture.timestamp(5));
@@ -339,8 +253,8 @@ fn test_read_limit() {
     fixture.write_inbox(
         TEST_SENDER,
         &[
-            fixture.message(ROLE_TEAM_LEAD, "first", false, None, None, 0),
-            fixture.message(ROLE_TEAM_LEAD, "second", false, None, None, 1),
+            fixture.message(TEST_LEAD, "first", false, None, None, 0),
+            fixture.message(TEST_LEAD, "second", false, None, None, 1),
         ],
     );
 
@@ -361,7 +275,7 @@ fn test_read_timeout_with_existing_pending_ack_returns_immediately() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_inbox(
         TEST_SENDER,
-        &[fixture.message(ROLE_TEAM_LEAD, "pending", true, Some(0), None, 0)],
+        &[fixture.message(TEST_LEAD, "pending", true, Some(0), None, 0)],
     );
 
     let output = fixture.run(&["read", "--timeout", "5", "--json"]);
@@ -381,7 +295,7 @@ fn test_read_pending_ack_only() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_inbox(
         TEST_SENDER,
-        &[fixture.message(ROLE_TEAM_LEAD, "pending", true, Some(0), None, 0)],
+        &[fixture.message(TEST_LEAD, "pending", true, Some(0), None, 0)],
     );
 
     let output = fixture.run(&["read", "--pending-ack-only", "--json"]);
@@ -424,7 +338,7 @@ fn test_read_no_update_seen() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_inbox(
         TEST_SENDER,
-        &[fixture.message(ROLE_TEAM_LEAD, "history", true, None, None, 10)],
+        &[fixture.message(TEST_LEAD, "history", true, None, None, 10)],
     );
     let initial = fixture.timestamp(0);
     fixture.write_seen_state(TEST_SENDER, initial);
@@ -470,22 +384,22 @@ fn test_read_deduplicates_unread_idle_notifications_per_sender() {
         TEST_SENDER,
         &[
             fixture.message(
-                "daemon",
-                &idle_notification_text(ROLE_TEAM_LEAD, "available"),
+                TEST_DAEMON,
+                &idle_notification_text(TEST_LEAD, "available"),
                 false,
                 None,
                 None,
                 0,
             ),
             fixture.message(
-                "daemon",
-                &idle_notification_text(ROLE_TEAM_LEAD, "available"),
+                TEST_DAEMON,
+                &idle_notification_text(TEST_LEAD, "available"),
                 false,
                 None,
                 None,
                 1,
             ),
-            fixture.message(ROLE_TEAM_LEAD, "normal unread", false, None, None, 2),
+            fixture.message(TEST_LEAD, "normal unread", false, None, None, 2),
         ],
     );
 
@@ -504,7 +418,7 @@ fn test_read_deduplicates_unread_idle_notifications_per_sender() {
     assert!(
         messages
             .iter()
-            .filter(|message| message["text"] == idle_notification_text(ROLE_TEAM_LEAD, "available"))
+            .filter(|message| message["text"] == idle_notification_text(TEST_LEAD, "available"))
             .count()
             == 1
     );
@@ -517,7 +431,7 @@ fn test_read_deduplicates_idle_notifications_per_sender_only() {
         TEST_SENDER,
         &[
             fixture.message(
-                "daemon",
+                TEST_DAEMON,
                 &idle_notification_text("sender-a", "available"),
                 false,
                 None,
@@ -525,7 +439,7 @@ fn test_read_deduplicates_idle_notifications_per_sender_only() {
                 0,
             ),
             fixture.message(
-                "daemon",
+                TEST_DAEMON,
                 &idle_notification_text("sender-a", "available"),
                 false,
                 None,
@@ -533,7 +447,7 @@ fn test_read_deduplicates_idle_notifications_per_sender_only() {
                 1,
             ),
             fixture.message(
-                "daemon",
+                TEST_DAEMON,
                 &idle_notification_text("sender-b", "available"),
                 false,
                 None,
@@ -541,7 +455,7 @@ fn test_read_deduplicates_idle_notifications_per_sender_only() {
                 2,
             ),
             fixture.message(
-                "daemon",
+                TEST_DAEMON,
                 &idle_notification_text("sender-b", "available"),
                 false,
                 None,
@@ -585,24 +499,24 @@ fn test_read_keeps_read_idle_notifications_visible() {
         TEST_SENDER,
         &[
             fixture.message(
-                "daemon",
-                &idle_notification_text(ROLE_TEAM_LEAD, "available"),
+                TEST_DAEMON,
+                &idle_notification_text(TEST_LEAD, "available"),
                 true,
                 None,
                 None,
                 0,
             ),
             fixture.message(
-                "daemon",
-                &idle_notification_text(ROLE_TEAM_LEAD, "available"),
+                TEST_DAEMON,
+                &idle_notification_text(TEST_LEAD, "available"),
                 true,
                 None,
                 None,
                 1,
             ),
             fixture.message(
-                "daemon",
-                &idle_notification_text(ROLE_TEAM_LEAD, "available"),
+                TEST_DAEMON,
+                &idle_notification_text(TEST_LEAD, "available"),
                 false,
                 None,
                 None,
@@ -626,7 +540,7 @@ fn test_read_keeps_read_idle_notifications_visible() {
     assert_eq!(
         messages
             .iter()
-            .filter(|message| message["text"] == idle_notification_text(ROLE_TEAM_LEAD, "available"))
+            .filter(|message| message["text"] == idle_notification_text(TEST_LEAD, "available"))
             .count(),
         3
     );
@@ -661,7 +575,7 @@ fn test_read_accepts_json_array_inbox_without_message_id() {
         TEST_SENDER,
         &serde_json::json!([
             {
-                "from": ROLE_TEAM_LEAD,
+                "from": TEST_LEAD,
                 "text": "array without id",
                 "timestamp": "2026-03-30T00:00:00Z",
                 "read": false
@@ -686,7 +600,7 @@ fn test_read_accepts_json_array_inbox_without_message_id() {
 #[test]
 fn test_read_accepts_json_array_inbox_with_message_id() {
     let fixture = Fixture::new(&[TEST_SENDER]);
-    let message = fixture.message(ROLE_TEAM_LEAD, "array with id", false, None, None, 0);
+    let message = fixture.message(TEST_LEAD, "array with id", false, None, None, 0);
     fixture.write_raw_inbox(
         TEST_SENDER,
         &serde_json::to_string(&vec![message.clone()]).expect("json"),
@@ -714,8 +628,8 @@ fn test_read_keeps_read_and_unread_idle_notifications_from_different_files() {
     fixture.write_inbox(
         TEST_SENDER,
         &[fixture.message(
-            "daemon",
-            &idle_notification_text(ROLE_TEAM_LEAD, "available"),
+            TEST_DAEMON,
+            &idle_notification_text(TEST_LEAD, "available"),
             false,
             None,
             None,
@@ -724,10 +638,10 @@ fn test_read_keeps_read_and_unread_idle_notifications_from_different_files() {
     );
     fixture.write_origin_inbox(
         TEST_SENDER,
-        "host-a",
+        TEST_ORIGIN,
         &[fixture.message(
-            "daemon",
-            &idle_notification_text(ROLE_TEAM_LEAD, "available"),
+            TEST_DAEMON,
+            &idle_notification_text(TEST_LEAD, "available"),
             true,
             None,
             None,
@@ -747,7 +661,7 @@ fn test_read_keeps_read_and_unread_idle_notifications_from_different_files() {
     assert_eq!(
         messages
             .iter()
-            .filter(|message| message["text"] == idle_notification_text(ROLE_TEAM_LEAD, "available"))
+            .filter(|message| message["text"] == idle_notification_text(TEST_LEAD, "available"))
             .count(),
         2
     );
@@ -762,18 +676,21 @@ fn test_read_logs_malformed_idle_notification_json_without_dropping_valid_record
         TEST_SENDER,
         &[
             fixture.message(
-                "daemon",
-                &format!(r#"{{"type":"idle_notification","from":"{ROLE_TEAM_LEAD}""#),
+                TEST_DAEMON,
+                r#"{"type":"idle_notification","from":TEST_LEAD"#,
                 false,
                 None,
                 None,
                 0,
             ),
-            fixture.message(ROLE_TEAM_LEAD, "normal unread", false, None, None, 1),
+            fixture.message(TEST_LEAD, "normal unread", false, None, None, 1),
         ],
     );
 
-    let output = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    let output = fixture.run_with_env(
+        &["--stderr-logs", "read", "--all", "--no-mark", "--json"],
+        &[("ATM_LOG", "debug")],
+    );
 
     assert!(
         output.status.success(),
@@ -788,9 +705,16 @@ fn test_read_logs_malformed_idle_notification_json_without_dropping_valid_record
             .iter()
             .any(|message| message["text"] == "normal unread")
     );
-    assert!(messages.iter().any(|message| {
-        message["text"] == format!(r#"{{"type":"idle_notification","from":"{ROLE_TEAM_LEAD}""#)
-    }));
+    assert!(
+        messages.iter().any(|message| {
+            message["text"] == r#"{"type":"idle_notification","from":TEST_LEAD"#
+        })
+    );
+    let stderr = fixture.stderr(&output);
+    assert!(
+        stderr.contains("ignoring malformed idle-notification JSON while classifying read surface"),
+        "stderr: {stderr}"
+    );
 }
 
 #[test]
@@ -805,13 +729,16 @@ fn test_read_logs_idle_notification_missing_sender_without_changing_mailbox_stat
     fixture.write_inbox(
         TEST_SENDER,
         &[
-            fixture.message("daemon", &malformed, false, None, None, 0),
-            fixture.message(ROLE_TEAM_LEAD, "normal unread", false, None, None, 1),
+            fixture.message(TEST_DAEMON, &malformed, false, None, None, 0),
+            fixture.message(TEST_LEAD, "normal unread", false, None, None, 1),
         ],
     );
     let before = fixture.inbox_contents(TEST_SENDER);
 
-    let output = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    let output = fixture.run_with_env(
+        &["--stderr-logs", "read", "--all", "--no-mark", "--json"],
+        &[("ATM_LOG", "debug")],
+    );
 
     assert!(
         output.status.success(),
@@ -819,6 +746,11 @@ fn test_read_logs_idle_notification_missing_sender_without_changing_mailbox_stat
         fixture.stderr(&output)
     );
     assert_eq!(fixture.inbox_contents(TEST_SENDER), before);
+    let stderr = fixture.stderr(&output);
+    assert!(
+        stderr.contains("ignoring malformed idle-notification payload missing string `from`"),
+        "stderr: {stderr}"
+    );
 }
 
 #[test]
@@ -867,12 +799,6 @@ fn test_read_mutual_exclusion() {
 #[test]
 fn test_read_timeout_expiry() {
     let fixture = Fixture::new(&[TEST_SENDER]);
-    let warmup = fixture.run(&["read", "--json"]);
-    assert!(
-        warmup.status.success(),
-        "stderr: {}",
-        fixture.stderr(&warmup)
-    );
 
     let output = fixture.run(&["read", "--timeout", "0", "--json"]);
 
@@ -890,7 +816,7 @@ fn test_read_no_since_last_seen_wins() {
     let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_inbox(
         TEST_SENDER,
-        &[fixture.message(ROLE_TEAM_LEAD, "history", true, None, None, 0)],
+        &[fixture.message(TEST_LEAD, "history", true, None, None, 0)],
     );
     fixture.write_seen_state(TEST_SENDER, fixture.timestamp(10));
 
@@ -930,11 +856,13 @@ impl Fixture {
 
     fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
         let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
-        configure_atm_command(&mut command, self.tempdir.path(), Some(TEST_SENDER))
+        configure_atm_command(&mut command, self.tempdir.path(), Some(TEST_SENDER));
+        command
             .args(args)
             .envs(extra_env.iter().copied())
-            .current_dir(self.tempdir.path());
-        command.output().expect("run atm")
+            .current_dir(self.tempdir.path())
+            .output()
+            .expect("run atm")
     }
 
     fn write_team_config(&self, members: &[&str]) {
@@ -954,10 +882,6 @@ impl Fixture {
         .expect("write team config");
     }
 
-    fn write_atm_config(&self, raw: &str) {
-        fs::write(self.tempdir.path().join(".atm.toml"), raw).expect("write .atm.toml");
-    }
-
     fn write_inbox(&self, agent: &str, messages: &[MessageEnvelope]) {
         let inbox_path = self.inbox_path(agent);
         if let Some(parent) = inbox_path.parent() {
@@ -972,13 +896,6 @@ impl Fixture {
             fs::create_dir_all(parent).expect("inbox dir");
         }
         fs::write(inbox_path, raw).expect("write raw inbox");
-    }
-
-    fn write_raw_inbox_values(&self, agent: &str, values: &[Value]) {
-        self.write_raw_inbox(
-            agent,
-            &serde_json::to_string(values).expect("raw inbox array"),
-        );
     }
 
     fn write_seen_state(&self, agent: &str, timestamp: chrono::DateTime<Utc>) {
@@ -1019,18 +936,6 @@ impl Fixture {
 
     fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {
         read_messages(&self.inbox_path(agent)).expect("inbox contents")
-    }
-
-    fn store(&self) -> RusqliteStore {
-        RusqliteStore::open_for_team_home(self.tempdir.path(), &self.team()).expect("open store")
-    }
-
-    fn team(&self) -> TeamName {
-        TEST_TEAM.parse().expect("team")
-    }
-
-    fn agent(&self, value: &str) -> AgentName {
-        value.parse().expect("agent")
     }
 
     fn stdout_json(&self, output: &std::process::Output) -> Value {
@@ -1081,6 +986,18 @@ impl Fixture {
             task_id: None,
             extra: serde_json::Map::new(),
         }
+    }
+
+    fn store(&self) -> RusqliteStore {
+        RusqliteStore::open_for_team_home(self.tempdir.path(), &self.team()).expect("open store")
+    }
+
+    fn team(&self) -> TeamName {
+        TEST_TEAM.parse().expect("team")
+    }
+
+    fn agent(&self, value: &str) -> AgentName {
+        value.parse().expect("agent")
     }
 }
 

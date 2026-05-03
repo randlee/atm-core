@@ -22,6 +22,7 @@ pub(crate) const DEFAULT_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
 const RETRY_INTERVAL: Duration = Duration::from_millis(50);
 const REMOVE_RETRY_INTERVAL: Duration = Duration::from_millis(10);
 const REMOVE_RETRY_ATTEMPTS: usize = 20;
+const DEBUG_TIMEOUT_ENV: &str = "ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum LockOperation {
@@ -33,7 +34,6 @@ enum LockOperation {
 }
 
 impl LockOperation {
-    #[cfg(test)]
     const fn test_override_token(self) -> &'static str {
         match self {
             Self::CreateDirectory => "create_directory",
@@ -150,8 +150,6 @@ pub(crate) fn sort_unique_paths(paths: impl IntoIterator<Item = PathBuf>) -> Vec
 /// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`] before the
 /// configured deadline.
 pub(crate) fn acquire(path: &Path, timeout: Duration) -> Result<MailboxLockGuard, AtmError> {
-    // TRANSITIONAL: lock acquisition retained for compatibility; pending Q.5+
-    // lock retirement.
     let lock_path = sentinel_path(path);
     let owner_pid = std::process::id();
     let owner_record = LockOwnerRecord::new(owner_pid);
@@ -287,8 +285,6 @@ pub(crate) fn acquire_many_sorted(
     paths: impl IntoIterator<Item = PathBuf>,
     timeout: Duration,
 ) -> Result<Vec<MailboxLockGuard>, AtmError> {
-    // TRANSITIONAL: lock acquisition retained for compatibility; pending Q.5+
-    // lock retirement.
     let paths = sort_unique_paths(paths);
     let deadline = Instant::now() + timeout;
     let mut guards = Vec::with_capacity(paths.len());
@@ -305,7 +301,7 @@ pub(crate) fn acquire_many_sorted(
 }
 
 fn try_lock_exclusive(file: &File, lock_path: &Path) -> io::Result<()> {
-    if forced_non_contention_lock_error() {
+    if std::env::var_os("ATM_INTERNAL_TEST_FORCE_LOCK_NON_CONTENTION_ERROR").is_some() {
         return Err(io::Error::other(format!(
             "synthetic non-contention lock failure for {}",
             lock_path.display()
@@ -313,16 +309,6 @@ fn try_lock_exclusive(file: &File, lock_path: &Path) -> io::Result<()> {
     }
 
     file.try_lock_exclusive()
-}
-
-#[cfg(test)]
-fn forced_non_contention_lock_error() -> bool {
-    non_contention_lock_test_override::get()
-}
-
-#[cfg(not(test))]
-fn forced_non_contention_lock_error() -> bool {
-    false
 }
 
 fn open_lock_file(lock_path: &Path) -> Result<File, AtmError> {
@@ -523,7 +509,7 @@ fn should_retry_remove_lock_sentinel(error: &io::Error) -> bool {
     }
 }
 
-pub(crate) fn is_lock_sentinel_candidate(path: &Path) -> bool {
+fn is_lock_sentinel_candidate(path: &Path) -> bool {
     // Sweep both the live `.lock` sentinel and rotated leftovers such as
     // `.lock.old` so crash/recovery cleanup does not miss renamed stale files.
     path.file_name()
@@ -578,36 +564,28 @@ fn is_readonly_filesystem_error(error: &io::Error) -> bool {
 
 fn forced_readonly_filesystem_error(operation: LockOperation) -> Option<io::Error> {
     #[cfg(test)]
-    {
-        if forced_readonly_filesystem_test_override() == Some(operation) {
-            return Some(io::Error::from_raw_os_error(
-                readonly_filesystem_raw_os_error(),
-            ));
-        }
-
-        let forced = std::env::var("ATM_TEST_FORCE_LOCK_READONLY_FS").ok()?;
-        if forced != operation.test_override_token() {
-            return None;
-        }
-
-        Some(io::Error::from_raw_os_error(
+    if forced_readonly_filesystem_test_override() == Some(operation) {
+        return Some(io::Error::from_raw_os_error(
             readonly_filesystem_raw_os_error(),
-        ))
+        ));
     }
 
-    #[cfg(not(test))]
-    {
-        let _ = operation;
-        None
+    let forced = std::env::var("ATM_TEST_FORCE_LOCK_READONLY_FS").ok()?;
+    if forced != operation.test_override_token() {
+        return None;
     }
+
+    Some(io::Error::from_raw_os_error(
+        readonly_filesystem_raw_os_error(),
+    ))
 }
 
-#[cfg(all(test, windows))]
+#[cfg(windows)]
 const fn readonly_filesystem_raw_os_error() -> i32 {
     windows_sys::Win32::Foundation::ERROR_WRITE_PROTECT as i32
 }
 
-#[cfg(all(test, not(windows)))]
+#[cfg(not(windows))]
 const fn readonly_filesystem_raw_os_error() -> i32 {
     libc::EROFS
 }
@@ -642,11 +620,10 @@ fn is_lock_contention_error(error: &io::Error) -> bool {
 }
 
 fn debug_timeout_override() -> Option<Duration> {
-    if let Some(timeout_ms) = readonly_test_override::debug_timeout_override_ms() {
-        return Some(Duration::from_millis(timeout_ms));
-    }
-
-    None
+    std::env::var(DEBUG_TIMEOUT_ENV)
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .map(Duration::from_millis)
 }
 
 /// Per-acquisition sentinel ownership record written into the `.lock` file.
@@ -722,7 +699,11 @@ fn acquire_in_process_lock(
     let mut held = state
         .held
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+        .map_err(|_| {
+            AtmError::mailbox_lock("in-process mailbox lock state poisoned").with_recovery(
+                "Retry the ATM command. If the error persists, restart the current ATM process so the in-process mailbox lock gate is rebuilt.",
+            )
+        })?;
     loop {
         if !*held {
             *held = true;
@@ -737,7 +718,11 @@ fn acquire_in_process_lock(
         let (next_held, wait_result) = state
             .wake
             .wait_timeout(held, remaining)
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+            .map_err(|_| {
+                AtmError::mailbox_lock("in-process mailbox lock wait poisoned").with_recovery(
+                    "Retry the ATM command. If the error persists, restart the current ATM process so the in-process mailbox lock gate is rebuilt.",
+                )
+            })?;
         held = next_held;
         if wait_result.timed_out() && *held {
             return Err(AtmError::mailbox_lock_timeout(path));
@@ -748,7 +733,6 @@ fn acquire_in_process_lock(
 fn in_process_lock_state(
     key: CanonicalLockKey,
 ) -> Result<Arc<InProcessMailboxLockState>, AtmError> {
-    const MAX_LOCK_STATE_REGISTRY_ENTRIES: usize = 1024;
     static REGISTRY: OnceLock<
         Mutex<std::collections::HashMap<CanonicalLockKey, Arc<InProcessMailboxLockState>>>,
     > = OnceLock::new();
@@ -764,9 +748,6 @@ fn in_process_lock_state(
                 "Retry the ATM command. If the error persists, restart the current ATM process so the in-process mailbox lock registry is rebuilt.",
             )
         })?;
-    if registry.len() >= MAX_LOCK_STATE_REGISTRY_ENTRIES {
-        registry.retain(|_, state| Arc::strong_count(state) > 1);
-    }
     Ok(registry
         .entry(key)
         .or_insert_with(|| {
@@ -788,69 +769,6 @@ fn canonical_lock_key(path: &Path) -> CanonicalLockKey {
 }
 
 #[cfg(test)]
-mod non_contention_lock_test_override {
-    use std::cell::Cell;
-
-    thread_local! {
-        static OVERRIDE: Cell<bool> = const { Cell::new(false) };
-    }
-
-    pub(super) fn get() -> bool {
-        OVERRIDE.with(Cell::get)
-    }
-
-    pub(super) fn set(enabled: bool) -> bool {
-        OVERRIDE.with(|cell| {
-            let original = cell.get();
-            cell.set(enabled);
-            original
-        })
-    }
-}
-
-#[cfg(test)]
-pub(crate) struct ScopedNonContentionLockErrorOverride {
-    original: bool,
-}
-
-#[cfg(test)]
-impl ScopedNonContentionLockErrorOverride {
-    pub(crate) fn enable() -> Self {
-        Self {
-            original: non_contention_lock_test_override::set(true),
-        }
-    }
-}
-
-#[cfg(test)]
-impl Drop for ScopedNonContentionLockErrorOverride {
-    fn drop(&mut self) {
-        non_contention_lock_test_override::set(self.original);
-    }
-}
-
-#[cfg(test)]
-pub(crate) struct ScopedDebugTimeoutOverride {
-    original: Option<u64>,
-}
-
-#[cfg(test)]
-impl ScopedDebugTimeoutOverride {
-    pub(crate) fn set(timeout_ms: u64) -> Self {
-        Self {
-            original: readonly_test_override::set_debug_timeout_override_ms(Some(timeout_ms)),
-        }
-    }
-}
-
-#[cfg(test)]
-impl Drop for ScopedDebugTimeoutOverride {
-    fn drop(&mut self) {
-        readonly_test_override::set_debug_timeout_override_ms(self.original.take());
-    }
-}
-
-#[cfg(test)]
 mod readonly_test_override {
     use std::cell::Cell;
 
@@ -860,7 +778,6 @@ mod readonly_test_override {
         // Test-only seam for forcing one filesystem operation to fail without
         // introducing shared mutable state across concurrent test threads.
         static OVERRIDE: Cell<Option<LockOperation>> = const { Cell::new(None) };
-        static DEBUG_TIMEOUT_MS: Cell<Option<u64>> = const { Cell::new(None) };
         #[cfg(windows)]
         static TRANSIENT_LOCK_IDENTITY_ERRORS: Cell<usize> = const { Cell::new(0) };
     }
@@ -873,18 +790,6 @@ mod readonly_test_override {
         OVERRIDE.with(|cell| {
             let original = cell.get();
             cell.set(operation);
-            original
-        })
-    }
-
-    pub(super) fn debug_timeout_override_ms() -> Option<u64> {
-        DEBUG_TIMEOUT_MS.with(Cell::get)
-    }
-
-    pub(super) fn set_debug_timeout_override_ms(timeout_ms: Option<u64>) -> Option<u64> {
-        DEBUG_TIMEOUT_MS.with(|cell| {
-            let original = cell.get();
-            cell.set(timeout_ms);
             original
         })
     }
@@ -911,10 +816,69 @@ mod readonly_test_override {
     }
 }
 
-#[cfg(not(test))]
-mod readonly_test_override {
-    pub(super) fn debug_timeout_override_ms() -> Option<u64> {
-        None
+#[cfg(test)]
+pub(crate) struct ScopedNonContentionLockErrorOverride {
+    original: Option<std::ffi::OsString>,
+}
+
+#[cfg(test)]
+impl ScopedNonContentionLockErrorOverride {
+    pub(crate) fn enable() -> Self {
+        let key = "ATM_INTERNAL_TEST_FORCE_LOCK_NON_CONTENTION_ERROR";
+        let original = std::env::var_os(key);
+        // SAFETY: test-only hook; call sites are serialized by the owning tests.
+        unsafe { std::env::set_var(key, "1") };
+        Self { original }
+    }
+}
+
+#[cfg(test)]
+impl Drop for ScopedNonContentionLockErrorOverride {
+    fn drop(&mut self) {
+        let key = "ATM_INTERNAL_TEST_FORCE_LOCK_NON_CONTENTION_ERROR";
+        match self.original.take() {
+            Some(value) => {
+                // SAFETY: test-only hook; call sites are serialized by the owning tests.
+                unsafe { std::env::set_var(key, value) };
+            }
+            None => {
+                // SAFETY: test-only hook; call sites are serialized by the owning tests.
+                unsafe { std::env::remove_var(key) };
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+pub(crate) struct ScopedDebugTimeoutOverride {
+    original: Option<std::ffi::OsString>,
+}
+
+#[cfg(test)]
+impl ScopedDebugTimeoutOverride {
+    pub(crate) fn set(timeout_ms: u64) -> Self {
+        let key = DEBUG_TIMEOUT_ENV;
+        let original = std::env::var_os(key);
+        // SAFETY: test-only hook; call sites are serialized by the owning tests.
+        unsafe { std::env::set_var(key, timeout_ms.to_string()) };
+        Self { original }
+    }
+}
+
+#[cfg(test)]
+impl Drop for ScopedDebugTimeoutOverride {
+    fn drop(&mut self) {
+        let key = DEBUG_TIMEOUT_ENV;
+        match self.original.take() {
+            Some(value) => {
+                // SAFETY: test-only hook; call sites are serialized by the owning tests.
+                unsafe { std::env::set_var(key, value) };
+            }
+            None => {
+                // SAFETY: test-only hook; call sites are serialized by the owning tests.
+                unsafe { std::env::remove_var(key) };
+            }
+        }
     }
 }
 
@@ -930,6 +894,7 @@ fn transient_lock_identity_test_override() -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::{OsStr, OsString};
     use std::io;
     use std::time::Duration;
 
@@ -937,14 +902,12 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        DEFAULT_LOCK_TIMEOUT, LockOperation, ScopedDebugTimeoutOverride,
-        ScopedNonContentionLockErrorOverride, StaleLockSentinelEviction, acquire,
+        DEFAULT_LOCK_TIMEOUT, LockOperation, StaleLockSentinelEviction, acquire,
         acquire_many_sorted, default_lock_timeout, evict_stale_lock_sentinel,
         is_lock_contention_error, is_lock_sentinel_candidate, readonly_test_override,
         sentinel_path, sweep_stale_lock_sentinels,
     };
     use crate::error::AtmErrorCode;
-    use crate::test_support::{ROLE_TEAM_LEAD, TEST_SENDER};
 
     struct ReadOnlyFilesystemGuard {
         original: Option<LockOperation>,
@@ -986,18 +949,15 @@ mod tests {
     #[test]
     #[serial(env)]
     fn sentinel_path_appends_lock_suffix() {
-        let path = PathBuf::from(format!("{ROLE_TEAM_LEAD}.json"));
-        assert_eq!(
-            sentinel_path(&path),
-            PathBuf::from(format!("{ROLE_TEAM_LEAD}.json.lock"))
-        );
+        let path = PathBuf::from("team-lead.json");
+        assert_eq!(sentinel_path(&path), PathBuf::from("team-lead.json.lock"));
     }
 
     #[test]
     #[serial(env)]
     fn acquire_creates_sentinel_file() {
         let tempdir = tempdir().expect("tempdir");
-        let inbox = tempdir.path().join(format!("{TEST_SENDER}.json"));
+        let inbox = tempdir.path().join("arch-ctm.json");
 
         let _guard = acquire(&inbox, DEFAULT_LOCK_TIMEOUT).expect("lock");
 
@@ -1008,7 +968,7 @@ mod tests {
     #[serial(env)]
     fn dropping_guard_removes_sentinel_file() {
         let tempdir = tempdir().expect("tempdir");
-        let inbox = tempdir.path().join(format!("{TEST_SENDER}.json"));
+        let inbox = tempdir.path().join("arch-ctm.json");
         let sentinel = sentinel_path(&inbox);
 
         {
@@ -1023,11 +983,9 @@ mod tests {
     #[serial(env)]
     fn dropping_guard_skips_removal_when_sentinel_path_rotates() {
         let tempdir = tempdir().expect("tempdir");
-        let inbox = tempdir.path().join(format!("{TEST_SENDER}.json"));
+        let inbox = tempdir.path().join("arch-ctm.json");
         let sentinel = sentinel_path(&inbox);
-        let rotated = tempdir
-            .path()
-            .join(format!("{TEST_SENDER}.json.lock.replaced"));
+        let rotated = tempdir.path().join("arch-ctm.json.lock.replaced");
 
         {
             let _guard = acquire(&inbox, DEFAULT_LOCK_TIMEOUT).expect("lock");
@@ -1044,7 +1002,7 @@ mod tests {
     #[serial(env)]
     fn acquire_retries_when_lock_identity_compare_hits_transient_access_denied() {
         let tempdir = tempdir().expect("tempdir");
-        let inbox = tempdir.path().join(format!("{TEST_SENDER}.json"));
+        let inbox = tempdir.path().join("arch-ctm.json");
         let _guard = TransientLockIdentityGuard::set(1);
 
         let _lock = acquire(&inbox, DEFAULT_LOCK_TIMEOUT).expect("lock after transient compare");
@@ -1056,7 +1014,7 @@ mod tests {
     #[serial(env)]
     fn evict_stale_lock_sentinel_removes_dead_pid_file() {
         let tempdir = tempdir().expect("tempdir");
-        let sentinel = tempdir.path().join(format!("{TEST_SENDER}.json.lock"));
+        let sentinel = tempdir.path().join("arch-ctm.json.lock");
         std::fs::write(&sentinel, u32::MAX.to_string()).expect("stale sentinel");
 
         assert_eq!(
@@ -1070,8 +1028,8 @@ mod tests {
     #[serial(env)]
     fn sweep_stale_lock_sentinels_removes_only_lock_files_with_dead_pids() {
         let tempdir = tempdir().expect("tempdir");
-        let lock_path = tempdir.path().join(format!("{TEST_SENDER}.json.lock"));
-        let inbox_path = tempdir.path().join(format!("{TEST_SENDER}.json"));
+        let lock_path = tempdir.path().join("arch-ctm.json.lock");
+        let inbox_path = tempdir.path().join("arch-ctm.json");
         std::fs::write(&lock_path, u32::MAX.to_string()).expect("stale sentinel");
         std::fs::write(&inbox_path, "inbox").expect("inbox");
 
@@ -1086,10 +1044,8 @@ mod tests {
     #[serial(env)]
     fn sweep_stale_lock_sentinels_removes_rotated_dead_pid_sentinels_only() {
         let tempdir = tempdir().expect("tempdir");
-        let rotated = tempdir.path().join(format!("{TEST_SENDER}.json.lock.old"));
-        let live_rotated = tempdir
-            .path()
-            .join(format!("{ROLE_TEAM_LEAD}.json.lock.replaced"));
+        let rotated = tempdir.path().join("arch-ctm.json.lock.old");
+        let live_rotated = tempdir.path().join("team-lead.json.lock.replaced");
         let unrelated = tempdir.path().join("locksmith.txt");
         std::fs::write(&rotated, u32::MAX.to_string()).expect("stale rotated");
         std::fs::write(&live_rotated, std::process::id().to_string()).expect("live rotated");
@@ -1107,7 +1063,7 @@ mod tests {
     #[serial(env)]
     fn sweep_stale_lock_sentinels_skips_malformed_rotated_sentinels() {
         let tempdir = tempdir().expect("tempdir");
-        let rotated = tempdir.path().join(format!("{TEST_SENDER}.json.lock.old"));
+        let rotated = tempdir.path().join("arch-ctm.json.lock.old");
         std::fs::write(&rotated, "not-a-pid").expect("malformed");
 
         let removed = sweep_stale_lock_sentinels(tempdir.path()).expect("sweep");
@@ -1148,44 +1104,11 @@ mod tests {
     #[serial(env)]
     fn acquire_reports_mailbox_lock_timeout_code() {
         let tempdir = tempdir().expect("tempdir");
-        let inbox = tempdir.path().join(format!("{TEST_SENDER}.json"));
+        let inbox = tempdir.path().join("arch-ctm.json");
         let _first = acquire(&inbox, DEFAULT_LOCK_TIMEOUT).expect("first lock");
 
         let error = acquire(&inbox, Duration::from_millis(10)).expect_err("timeout");
         assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
-    }
-
-    #[test]
-    #[serial(env)]
-    fn debug_timeout_override_shortens_default_lock_timeout() {
-        let tempdir = tempdir().expect("tempdir");
-        let inbox = tempdir.path().join(format!("{TEST_SENDER}.json"));
-        let _guard = acquire(&inbox, DEFAULT_LOCK_TIMEOUT).expect("first lock");
-        let _timeout = ScopedDebugTimeoutOverride::set(100);
-
-        let started = std::time::Instant::now();
-        let error = acquire(&inbox, default_lock_timeout()).expect_err("timeout");
-        assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
-        assert!(
-            started.elapsed() < Duration::from_secs(2),
-            "debug timeout override should keep the test budget bounded"
-        );
-    }
-
-    #[test]
-    #[serial(env)]
-    fn synthetic_non_contention_failure_surfaces_mailbox_lock_failed() {
-        let tempdir = tempdir().expect("tempdir");
-        let inbox = tempdir.path().join(format!("{TEST_SENDER}.json"));
-        let _fault = ScopedNonContentionLockErrorOverride::enable();
-
-        let error = acquire(&inbox, DEFAULT_LOCK_TIMEOUT).expect_err("synthetic lock failure");
-        assert_eq!(error.code, AtmErrorCode::MailboxLockFailed);
-        assert!(
-            error
-                .message
-                .contains("synthetic non-contention lock failure")
-        );
     }
 
     #[test]
@@ -1223,13 +1146,13 @@ mod tests {
     #[serial(env)]
     fn sort_unique_paths_dedupes_same_canonical_path() {
         let tempdir = tempdir().expect("tempdir");
-        let real = tempdir.path().join(format!("{TEST_SENDER}.json"));
+        let real = tempdir.path().join("arch-ctm.json");
         std::fs::write(&real, "").expect("write");
         let alternate = tempdir
             .path()
             .join("nested")
             .join("..")
-            .join(format!("{TEST_SENDER}.json"));
+            .join("arch-ctm.json");
         std::fs::create_dir_all(tempdir.path().join("nested")).expect("nested");
 
         let sorted = super::sort_unique_paths(vec![real.clone(), alternate]);
@@ -1256,6 +1179,7 @@ mod tests {
     #[test]
     #[serial(env)]
     fn default_lock_timeout_uses_default_without_override() {
+        let _guard = EnvGuard::clear("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS");
         assert_eq!(default_lock_timeout(), DEFAULT_LOCK_TIMEOUT);
     }
 
@@ -1271,7 +1195,7 @@ mod tests {
     fn acquire_reports_read_only_filesystem_for_open_failure() {
         let _readonly = ReadOnlyFilesystemGuard::set(LockOperation::Open);
         let tempdir = tempdir().expect("tempdir");
-        let inbox = tempdir.path().join(format!("{TEST_SENDER}.json"));
+        let inbox = tempdir.path().join("arch-ctm.json");
 
         let error = acquire(&inbox, DEFAULT_LOCK_TIMEOUT).expect_err("read-only open");
 
@@ -1284,7 +1208,7 @@ mod tests {
     fn acquire_reports_read_only_filesystem_for_open_failure_via_env_var_seam() {
         let _readonly = ReadOnlyFilesystemGuard::set(LockOperation::Open);
         let tempdir = tempdir().expect("tempdir");
-        let inbox = tempdir.path().join(format!("{TEST_SENDER}.json"));
+        let inbox = tempdir.path().join("arch-ctm.json");
 
         let error = acquire(&inbox, DEFAULT_LOCK_TIMEOUT).expect_err("read-only open");
 
@@ -1297,7 +1221,7 @@ mod tests {
     fn acquire_reports_read_only_filesystem_for_owner_record_write_failure() {
         let _readonly = ReadOnlyFilesystemGuard::set(LockOperation::WriteOwnerRecord);
         let tempdir = tempdir().expect("tempdir");
-        let inbox = tempdir.path().join(format!("{TEST_SENDER}.json"));
+        let inbox = tempdir.path().join("arch-ctm.json");
 
         let error = acquire(&inbox, DEFAULT_LOCK_TIMEOUT).expect_err("read-only write");
 
@@ -1314,7 +1238,7 @@ mod tests {
     fn sweep_reports_read_only_filesystem_for_stale_sentinel_removal() {
         let _readonly = ReadOnlyFilesystemGuard::set(LockOperation::Remove);
         let tempdir = tempdir().expect("tempdir");
-        let rotated = tempdir.path().join(format!("{TEST_SENDER}.json.lock.old"));
+        let rotated = tempdir.path().join("arch-ctm.json.lock.old");
         std::fs::write(&rotated, u32::MAX.to_string()).expect("stale rotated");
 
         let error = sweep_stale_lock_sentinels(tempdir.path()).expect_err("read-only remove");
@@ -1327,7 +1251,7 @@ mod tests {
     #[serial(env)]
     fn dropping_guard_tolerates_read_only_cleanup_failure() {
         let tempdir = tempdir().expect("tempdir");
-        let inbox = tempdir.path().join(format!("{TEST_SENDER}.json"));
+        let inbox = tempdir.path().join("arch-ctm.json");
         let sentinel = sentinel_path(&inbox);
         let guard = acquire(&inbox, DEFAULT_LOCK_TIMEOUT).expect("lock");
         let _readonly = ReadOnlyFilesystemGuard::set(LockOperation::Remove);
@@ -1336,5 +1260,42 @@ mod tests {
 
         assert!(sentinel.exists());
     }
+
+    struct EnvGuard {
+        key: &'static str,
+        original: Option<OsString>,
+    }
+
+    impl EnvGuard {
+        fn clear(key: &'static str) -> Self {
+            let original = std::env::var_os(key);
+            remove_env_var(key);
+            Self { key, original }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match self.original.take() {
+                Some(value) => set_env_var(self.key, value),
+                None => remove_env_var(self.key),
+            }
+        }
+    }
+
+    fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
+        // SAFETY: env-mutating tests in this module use #[serial(env)] before
+        // mutating the process environment, so these mutations are serialized
+        // within this process.
+        unsafe { std::env::set_var(key, value) }
+    }
+
+    fn remove_env_var<K: AsRef<OsStr>>(key: K) {
+        // SAFETY: env-mutating tests in this module use #[serial(env)] before
+        // mutating the process environment, so these mutations are serialized
+        // within this process.
+        unsafe { std::env::remove_var(key) }
+    }
+
     use std::path::PathBuf;
 }

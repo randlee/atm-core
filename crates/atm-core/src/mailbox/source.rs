@@ -175,13 +175,20 @@ fn origin_inbox_enumeration_error(inboxes_dir: &Path, agent: &str, error: io::Er
 
 #[cfg(test)]
 fn forced_source_discovery_fault() -> Option<io::Error> {
-    source_discovery_fault_test_override::get()
-        .then(|| io::Error::other("synthetic read_dir entry enumeration fault"))
+    if source_discovery_fault_test_override::get()
+        || std::env::var_os("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT").is_some()
+    {
+        return Some(io::Error::other(
+            "synthetic read_dir entry enumeration fault",
+        ));
+    }
+    None
 }
 
 #[cfg(not(test))]
 fn forced_source_discovery_fault() -> Option<io::Error> {
-    None
+    std::env::var_os("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT")
+        .map(|_| io::Error::other("synthetic read_dir entry enumeration fault"))
 }
 
 #[cfg(test)]
