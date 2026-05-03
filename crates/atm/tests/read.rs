@@ -6,22 +6,9 @@ use atm_core::schema::{
     MessageEnvelope, MessageMetadata, TeamConfig,
 };
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+use atm_core::{read_messages, write_messages};
 use chrono::{TimeZone, Utc};
 use serde_json::Value;
-
-fn parse_inbox_values(raw: &str) -> Vec<Value> {
-    if raw.trim().is_empty() {
-        return Vec::new();
-    }
-
-    match raw.chars().find(|ch| !ch.is_whitespace()) {
-        Some('[') => serde_json::from_str(raw).expect("json array"),
-        _ => raw
-            .lines()
-            .map(|line| serde_json::from_str(line).expect("json line"))
-            .collect(),
-    }
-}
 
 #[test]
 fn test_read_own_inbox_default() {
@@ -50,8 +37,17 @@ fn test_read_own_inbox_default() {
 fn test_read_marks_read() {
     let fixture = Fixture::new(&["arch-ctm"]);
     let message = fixture.message("team-lead", "hello", false, None, None, 0);
-    let workflow_key = format!("legacy:{}", message.message_id.expect("message id"));
+    let message_id = message.message_id.expect("message id");
     fixture.write_inbox("arch-ctm", &[message]);
+    let workflow_key = fixture
+        .inbox_contents("arch-ctm")
+        .first()
+        .and_then(|message| {
+            message
+                .atm_message_id()
+                .map(|message_id| format!("atm:{message_id}"))
+        })
+        .unwrap_or_else(|| format!("legacy:{message_id}"));
 
     let output = fixture.run(&["read", "--json"]);
 
@@ -72,8 +68,17 @@ fn test_read_marks_read() {
 fn test_read_ack_activation() {
     let fixture = Fixture::new(&["arch-ctm"]);
     let message = fixture.message("team-lead", "hello", false, None, None, 0);
-    let workflow_key = format!("legacy:{}", message.message_id.expect("message id"));
+    let message_id = message.message_id.expect("message id");
     fixture.write_inbox("arch-ctm", &[message]);
+    let workflow_key = fixture
+        .inbox_contents("arch-ctm")
+        .first()
+        .and_then(|message| {
+            message
+                .atm_message_id()
+                .map(|message_id| format!("atm:{message_id}"))
+        })
+        .unwrap_or_else(|| format!("legacy:{message_id}"));
 
     let output = fixture.run(&["read", "--json"]);
 
@@ -98,8 +103,17 @@ fn test_read_ack_activation() {
 fn test_read_no_mark() {
     let fixture = Fixture::new(&["arch-ctm"]);
     let message = fixture.message("team-lead", "hello", false, None, None, 0);
-    let workflow_key = format!("legacy:{}", message.message_id.expect("message id"));
+    let message_id = message.message_id.expect("message id");
     fixture.write_inbox("arch-ctm", &[message]);
+    let workflow_key = fixture
+        .inbox_contents("arch-ctm")
+        .first()
+        .and_then(|message| {
+            message
+                .atm_message_id()
+                .map(|message_id| format!("atm:{message_id}"))
+        })
+        .unwrap_or_else(|| format!("legacy:{message_id}"));
 
     let output = fixture.run(&["read", "--no-mark", "--json"]);
 
@@ -891,15 +905,7 @@ impl Fixture {
         if let Some(parent) = inbox_path.parent() {
             fs::create_dir_all(parent).expect("inbox dir");
         }
-        let values: Vec<Value> = messages
-            .iter()
-            .map(|message| serde_json::to_value(message).expect("json value"))
-            .collect();
-        fs::write(
-            inbox_path,
-            serde_json::to_string_pretty(&values).expect("json array"),
-        )
-        .expect("write inbox");
+        write_messages(&inbox_path, messages).expect("write inbox");
     }
 
     fn write_raw_inbox(&self, agent: &str, raw: &str) {
@@ -923,15 +929,7 @@ impl Fixture {
         if let Some(parent) = inbox_path.parent() {
             fs::create_dir_all(parent).expect("origin inbox dir");
         }
-        let values: Vec<Value> = messages
-            .iter()
-            .map(|message| serde_json::to_value(message).expect("json value"))
-            .collect();
-        fs::write(
-            inbox_path,
-            serde_json::to_string_pretty(&values).expect("json array"),
-        )
-        .expect("write origin inbox");
+        write_messages(&inbox_path, messages).expect("write origin inbox");
     }
 
     fn read_seen_state(&self, agent: &str) -> Option<chrono::DateTime<Utc>> {
@@ -955,11 +953,7 @@ impl Fixture {
     }
 
     fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {
-        let raw = fs::read_to_string(self.inbox_path(agent)).expect("inbox contents");
-        parse_inbox_values(&raw)
-            .into_iter()
-            .map(|value| serde_json::from_value(value).expect("message envelope"))
-            .collect()
+        read_messages(&self.inbox_path(agent)).expect("inbox contents")
     }
 
     fn workflow_state_contents(&self, agent: &str) -> Option<Value> {

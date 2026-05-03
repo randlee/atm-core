@@ -1,10 +1,9 @@
 use std::fs;
 use std::process::Command;
 
-use atm_core::schema::{
-    AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig, hydrate_legacy_fields_from_metadata,
-};
+use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+use atm_core::{read_messages, write_messages};
 use chrono::{Duration, Utc};
 use serde_json::Value;
 use uuid::Uuid;
@@ -66,14 +65,15 @@ fn test_ack_transitions_pending_ack_and_appends_reply() {
     assert!(inbox[0].read);
     assert!(inbox[0].pending_ack_at.is_some());
     assert!(inbox[0].acknowledged_at.is_none());
+    let workflow_key = inbox[0]
+        .atm_message_id()
+        .map(|message_id| format!("atm:{message_id}"))
+        .unwrap_or_else(|| format!("legacy:{message_id}"));
     let workflow = fixture.workflow_state_contents("arch-ctm");
-    assert_eq!(
-        workflow["messages"][format!("legacy:{message_id}")]["read"],
-        true
-    );
-    assert!(workflow["messages"][format!("legacy:{message_id}")]["pendingAckAt"].is_null());
+    assert_eq!(workflow["messages"][&workflow_key]["read"], true);
+    assert!(workflow["messages"][&workflow_key]["pendingAckAt"].is_null());
     assert!(
-        workflow["messages"][format!("legacy:{message_id}")]["acknowledgedAt"]
+        workflow["messages"][&workflow_key]["acknowledgedAt"]
             .as_str()
             .is_some()
     );
@@ -123,9 +123,13 @@ fn test_ack_updates_origin_inbox_file() {
     assert_eq!(origin.len(), 1);
     assert!(origin[0].pending_ack_at.is_some());
     assert!(origin[0].acknowledged_at.is_none());
+    let workflow_key = origin[0]
+        .atm_message_id()
+        .map(|message_id| format!("atm:{message_id}"))
+        .unwrap_or_else(|| format!("legacy:{message_id}"));
     let workflow = fixture.workflow_state_contents("arch-ctm");
     assert!(
-        workflow["messages"][format!("legacy:{message_id}")]["acknowledgedAt"]
+        workflow["messages"][&workflow_key]["acknowledgedAt"]
             .as_str()
             .is_some()
     );
@@ -347,15 +351,7 @@ impl Fixture {
         if let Some(parent) = inbox_path.parent() {
             fs::create_dir_all(parent).expect("inbox dir");
         }
-        let values: Vec<Value> = messages
-            .iter()
-            .map(|message| serde_json::to_value(message).expect("json value"))
-            .collect();
-        fs::write(
-            inbox_path,
-            serde_json::to_string_pretty(&values).expect("json array"),
-        )
-        .expect("write inbox");
+        write_messages(&inbox_path, messages).expect("write inbox");
     }
 
     fn inbox_path(&self, agent: &str) -> std::path::PathBuf {
@@ -365,14 +361,7 @@ impl Fixture {
     }
 
     fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {
-        let raw = fs::read_to_string(self.inbox_path(agent)).expect("inbox contents");
-        parse_inbox_values(&raw)
-            .into_iter()
-            .map(|mut value| {
-                hydrate_legacy_fields_from_metadata(&mut value);
-                serde_json::from_value(value).expect("message envelope")
-            })
-            .collect()
+        read_messages(&self.inbox_path(agent)).expect("inbox contents")
     }
 
     fn inbox_json_lines(&self, agent: &str) -> Vec<Value> {
@@ -385,15 +374,7 @@ impl Fixture {
         if let Some(parent) = inbox_path.parent() {
             fs::create_dir_all(parent).expect("origin inbox dir");
         }
-        let values: Vec<Value> = messages
-            .iter()
-            .map(|message| serde_json::to_value(message).expect("json value"))
-            .collect();
-        fs::write(
-            inbox_path,
-            serde_json::to_string_pretty(&values).expect("json array"),
-        )
-        .expect("write origin inbox");
+        write_messages(&inbox_path, messages).expect("write origin inbox");
     }
 
     fn origin_inbox_path(&self, agent: &str, origin: &str) -> std::path::PathBuf {
@@ -403,15 +384,7 @@ impl Fixture {
     }
 
     fn origin_inbox_contents(&self, agent: &str, origin: &str) -> Vec<MessageEnvelope> {
-        let raw = fs::read_to_string(self.origin_inbox_path(agent, origin))
-            .expect("origin inbox contents");
-        parse_inbox_values(&raw)
-            .into_iter()
-            .map(|mut value| {
-                hydrate_legacy_fields_from_metadata(&mut value);
-                serde_json::from_value(value).expect("message envelope")
-            })
-            .collect()
+        read_messages(&self.origin_inbox_path(agent, origin)).expect("origin inbox contents")
     }
 
     fn workflow_state_contents(&self, agent: &str) -> Value {

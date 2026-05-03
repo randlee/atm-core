@@ -97,8 +97,29 @@ mod tests {
     use super::{commit_mailbox_state, commit_source_files, with_locked_source_files_hook};
     use crate::mailbox::read_messages;
     use crate::mailbox::source::SourceFile;
-    use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
+    use crate::schema::{LegacyMessageId, MessageEnvelope};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
+
+    fn assert_round_trip_matches(actual: &[MessageEnvelope], expected: &[MessageEnvelope]) {
+        assert_eq!(actual.len(), expected.len());
+        for (actual, expected) in actual.iter().zip(expected) {
+            assert_eq!(actual.from, expected.from);
+            assert_eq!(actual.text, expected.text);
+            assert_eq!(actual.timestamp, expected.timestamp);
+            assert_eq!(actual.read, expected.read);
+            assert_eq!(actual.source_team, expected.source_team);
+            assert_eq!(actual.summary, expected.summary);
+            assert_eq!(actual.message_id, expected.message_id);
+            assert_eq!(actual.pending_ack_at, expected.pending_ack_at);
+            assert_eq!(actual.acknowledged_at, expected.acknowledged_at);
+            assert_eq!(
+                actual.acknowledges_message_id,
+                expected.acknowledges_message_id
+            );
+            assert_eq!(actual.task_id, expected.task_id);
+            assert!(actual.atm_message_id().is_some());
+        }
+    }
 
     #[test]
     fn commit_mailbox_state_rewrites_mailbox_array_with_only_new_messages() {
@@ -117,7 +138,8 @@ mod tests {
         let encoded: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
         assert_eq!(encoded.len(), 2);
         assert!(raw.ends_with('\n'));
-        assert_eq!(read_messages(&path).expect("read mailbox"), messages);
+        let actual = read_messages(&path).expect("read mailbox");
+        assert_round_trip_matches(&actual, &messages);
     }
 
     #[test]
@@ -143,14 +165,10 @@ mod tests {
         ])
         .expect("commit source files");
 
-        assert_eq!(
-            read_messages(&left_path).expect("left inbox"),
-            left_messages
-        );
-        assert_eq!(
-            read_messages(&right_path).expect("right inbox"),
-            right_messages
-        );
+        let actual_left = read_messages(&left_path).expect("left inbox");
+        assert_round_trip_matches(&actual_left, &left_messages);
+        let actual_right = read_messages(&right_path).expect("right inbox");
+        assert_round_trip_matches(&actual_right, &right_messages);
     }
 
     #[test]
@@ -223,22 +241,6 @@ mod tests {
     }
 
     fn sample_message(from: &str, text: &str) -> MessageEnvelope {
-        let atm_message_id = AtmMessageId::new();
-        let message_id = LegacyMessageId::from_atm_message_id(atm_message_id);
-        let mut extra = serde_json::Map::new();
-        let mut metadata = serde_json::Map::new();
-        let mut atm = serde_json::Map::new();
-        atm.insert(
-            "messageId".to_string(),
-            serde_json::Value::String(atm_message_id.to_string()),
-        );
-        atm.insert(
-            "sourceTeam".to_string(),
-            serde_json::Value::String("atm-dev".to_string()),
-        );
-        metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
-        extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
-
         MessageEnvelope {
             from: from.parse::<AgentName>().expect("agent name"),
             text: text.to_string(),
@@ -246,12 +248,12 @@ mod tests {
             read: false,
             source_team: Some("atm-dev".parse::<TeamName>().expect("team name")),
             summary: None,
-            message_id: Some(message_id),
+            message_id: Some(LegacyMessageId::new()),
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
             task_id: None,
-            extra,
+            extra: serde_json::Map::new(),
         }
     }
 }

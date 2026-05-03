@@ -134,6 +134,20 @@ mod tests {
     use crate::types::AgentName;
 
     #[test]
+    fn with_name_constructs_explicit_member_without_hidden_identity_defaults() {
+        let member = AgentMember::with_name(AgentName::from_validated("arch-ctm"));
+
+        assert_eq!(member.name, AgentName::from_validated("arch-ctm"));
+        assert!(member.agent_id.is_empty());
+        assert_eq!(member.agent_type, AgentType::Unknown(String::new()));
+        assert!(member.model.is_empty());
+        assert_eq!(member.joined_at, None);
+        assert!(member.tmux_pane_id.is_empty());
+        assert!(member.cwd.is_empty());
+        assert!(member.extra.is_empty());
+    }
+
+    #[test]
     fn parse_name_only_record_defaults_optional_fields() {
         let member: AgentMember = serde_json::from_str(r#"{"name":"arch-ctm"}"#).expect("member");
 

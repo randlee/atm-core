@@ -122,6 +122,21 @@ pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
     parse_mailbox_contents(&raw, path)
 }
 
+/// Persist one complete shared inbox file through ATM's canonical write path.
+///
+/// This is the only supported mailbox export boundary for code that needs to
+/// materialize `MessageEnvelope` values onto the Claude-owned inbox surface.
+/// Callers should not serialize inbox JSON directly.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] with
+/// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`] when ATM cannot
+/// serialize the envelopes or atomically replace the target inbox file.
+pub fn write_messages(path: &Path, messages: &[MessageEnvelope]) -> Result<(), AtmError> {
+    store::commit_mailbox_state(path, messages)
+}
+
 fn parse_mailbox_contents(raw: &str, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
     match raw.chars().find(|ch| !ch.is_whitespace()) {
         None => Ok(Vec::new()),
@@ -254,6 +269,27 @@ mod tests {
     use super::{MAX_MAILBOX_READ_BYTES, append_message, locked_read_modify_write, read_messages};
     use crate::mailbox::lock;
 
+    fn assert_round_trip_matches(actual: &[MessageEnvelope], expected: &[MessageEnvelope]) {
+        assert_eq!(actual.len(), expected.len());
+        for (actual, expected) in actual.iter().zip(expected) {
+            assert_eq!(actual.from, expected.from);
+            assert_eq!(actual.text, expected.text);
+            assert_eq!(actual.timestamp, expected.timestamp);
+            assert_eq!(actual.read, expected.read);
+            assert_eq!(actual.source_team, expected.source_team);
+            assert_eq!(actual.summary, expected.summary);
+            assert_eq!(actual.message_id, expected.message_id);
+            assert_eq!(actual.pending_ack_at, expected.pending_ack_at);
+            assert_eq!(actual.acknowledged_at, expected.acknowledged_at);
+            assert_eq!(
+                actual.acknowledges_message_id,
+                expected.acknowledges_message_id
+            );
+            assert_eq!(actual.task_id, expected.task_id);
+            assert!(actual.atm_message_id().is_some());
+        }
+    }
+
     #[test]
     fn append_message_persists_one_array_record() {
         let tempdir = TempDir::new().expect("tempdir");
@@ -267,7 +303,7 @@ mod tests {
         assert_eq!(values.len(), 1);
         assert_eq!(values[0]["text"], "first");
         let read_back = read_messages(&path).expect("read back");
-        assert_eq!(read_back, vec![envelope]);
+        assert_round_trip_matches(&read_back, &[envelope]);
     }
 
     #[test]
@@ -496,21 +532,6 @@ mod tests {
 
     fn sample_message(message_id: Uuid, body: &str) -> MessageEnvelope {
         let legacy_message_id = crate::schema::LegacyMessageId::from(message_id);
-        let atm_message_id = legacy_message_id.into_atm_message_id();
-        let message_id = crate::schema::LegacyMessageId::from_atm_message_id(atm_message_id);
-        let mut extra = serde_json::Map::new();
-        let mut metadata = serde_json::Map::new();
-        let mut atm = serde_json::Map::new();
-        atm.insert(
-            "messageId".to_string(),
-            serde_json::Value::String(atm_message_id.to_string()),
-        );
-        atm.insert(
-            "sourceTeam".to_string(),
-            serde_json::Value::String("atm-dev".to_string()),
-        );
-        metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
-        extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
 
         MessageEnvelope {
             from: "arch-ctm".parse::<AgentName>().expect("agent"),
@@ -523,12 +544,12 @@ mod tests {
             read: false,
             source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
             summary: None,
-            message_id: Some(message_id),
+            message_id: Some(legacy_message_id),
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
             task_id: None,
-            extra,
+            extra: serde_json::Map::new(),
         }
     }
 }

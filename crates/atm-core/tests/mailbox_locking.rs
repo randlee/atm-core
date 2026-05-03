@@ -10,12 +10,10 @@ use atm_core::clear::{ClearQuery, clear_mail};
 use atm_core::error::AtmErrorCode;
 use atm_core::observability::NullObservability;
 use atm_core::read::{ReadQuery, read_mail};
-use atm_core::schema::{
-    AgentMember, AtmMessageId, LegacyMessageId, MessageEnvelope, TeamConfig,
-    hydrate_legacy_fields_from_metadata,
-};
+use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest, send_mail};
 use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
+use atm_core::{read_messages as read_inbox_messages, write_messages as write_inbox_messages};
 use chrono::Utc;
 use fs2::FileExt;
 use serial_test::serial;
@@ -214,15 +212,20 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
         "pending message was not acknowledged: {:?}",
         arch_inbox
     );
+    let pending_workflow_key = arch_inbox
+        .iter()
+        .find(|message| message.message_id == Some(pending_message_id))
+        .and_then(|message| {
+            message
+                .atm_message_id()
+                .map(|message_id| format!("atm:{message_id}"))
+        })
+        .unwrap_or_else(|| format!("legacy:{pending_message_id}"));
     let arch_workflow = ack_fixture.workflow_state_contents("arch-ctm");
     assert!(
-        arch_workflow["messages"][format!("legacy:{pending_message_id}")]["acknowledgedAt"]
+        arch_workflow["messages"][pending_workflow_key]["acknowledgedAt"]
             .as_str()
-            .is_some()
-            || arch_workflow["messages"]
-                [format!("atm:{}", pending_message_id.into_atm_message_id())]["acknowledgedAt"]
-                .as_str()
-                .is_some(),
+            .is_some(),
         "pending message was not acknowledged in workflow state: {arch_workflow:?}"
     );
     let qa_inbox = ack_fixture.inbox_contents("qa");
@@ -860,8 +863,8 @@ impl Fixture {
         let tempdir = tempfile::tempdir().expect("tempdir");
         create_team_with_config(tempdir.path(), "atm-dev", &["team-lead", "arch-ctm", "qa"]);
 
-        let arch_message_id = LegacyMessageId::from_atm_message_id(AtmMessageId::new());
-        let qa_message_id = LegacyMessageId::from_atm_message_id(AtmMessageId::new());
+        let arch_message_id = LegacyMessageId::new();
+        let qa_message_id = LegacyMessageId::new();
 
         let fixture = Self {
             tempdir,
@@ -1064,26 +1067,7 @@ fn message_atm_id(message: &MessageEnvelope) -> String {
 }
 
 fn read_jsonl(path: std::path::PathBuf) -> Vec<MessageEnvelope> {
-    let raw = fs::read_to_string(path).expect("inbox contents");
-    if raw.trim().is_empty() {
-        return Vec::new();
-    }
-
-    let values: Vec<serde_json::Value> = match raw.chars().find(|ch| !ch.is_whitespace()) {
-        Some('[') => serde_json::from_str(&raw).expect("json array"),
-        _ => raw
-            .lines()
-            .map(|line| serde_json::from_str(line).expect("json line"))
-            .collect(),
-    };
-
-    values
-        .into_iter()
-        .map(|mut value| {
-            hydrate_legacy_fields_from_metadata(&mut value);
-            serde_json::from_value(value).expect("message envelope")
-        })
-        .collect()
+    read_inbox_messages(&path).expect("inbox contents")
 }
 
 fn find_inbox_json_line(raw: &str, text: &str) -> serde_json::Value {
@@ -1106,8 +1090,10 @@ fn find_inbox_json_line(raw: &str, text: &str) -> serde_json::Value {
 }
 
 fn write_inbox(path: &std::path::Path, messages: &[MessageEnvelope]) {
-    let raw = serde_json::to_string_pretty(messages).expect("json array");
-    fs::write(path, format!("{raw}\n")).expect("write inbox");
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).expect("inbox dir");
+    }
+    write_inbox_messages(path, messages).expect("write inbox");
 }
 
 fn sentinel_path(path: &std::path::Path) -> std::path::PathBuf {
@@ -1122,26 +1108,6 @@ fn pending_ack_message(
     message_id: LegacyMessageId,
     source_team: &str,
 ) -> MessageEnvelope {
-    let mut extra = serde_json::Map::new();
-    let mut metadata = serde_json::Map::new();
-    let mut atm = serde_json::Map::new();
-    let atm_message_id = message_id.into_atm_message_id();
-    atm.insert(
-        "messageId".to_string(),
-        serde_json::Value::String(atm_message_id.to_string()),
-    );
-    atm.insert(
-        "sourceTeam".to_string(),
-        serde_json::Value::String(source_team.to_string()),
-    );
-    metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
-    extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
-    assert_eq!(
-        LegacyMessageId::from_atm_message_id(message_atm_id_from_extra(&extra).expect("atm id")),
-        message_id,
-        "mailbox fixture metadata.atm.messageId must match legacy message_id",
-    );
-
     MessageEnvelope {
         from: from.parse::<AgentName>().expect("agent"),
         text: text.to_string(),
@@ -1154,31 +1120,11 @@ fn pending_ack_message(
         acknowledged_at: None,
         acknowledges_message_id: None,
         task_id: None,
-        extra,
+        extra: serde_json::Map::new(),
     }
 }
 
 fn read_message(from: &str, text: &str, message_id: LegacyMessageId) -> MessageEnvelope {
-    let mut extra = serde_json::Map::new();
-    let mut metadata = serde_json::Map::new();
-    let mut atm = serde_json::Map::new();
-    let atm_message_id = message_id.into_atm_message_id();
-    atm.insert(
-        "messageId".to_string(),
-        serde_json::Value::String(atm_message_id.to_string()),
-    );
-    atm.insert(
-        "sourceTeam".to_string(),
-        serde_json::Value::String("atm-dev".to_string()),
-    );
-    metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
-    extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
-    assert_eq!(
-        LegacyMessageId::from_atm_message_id(message_atm_id_from_extra(&extra).expect("atm id")),
-        message_id,
-        "mailbox fixture metadata.atm.messageId must match legacy message_id",
-    );
-
     MessageEnvelope {
         from: from.parse::<AgentName>().expect("agent"),
         text: text.to_string(),
@@ -1191,31 +1137,11 @@ fn read_message(from: &str, text: &str, message_id: LegacyMessageId) -> MessageE
         acknowledged_at: None,
         acknowledges_message_id: None,
         task_id: None,
-        extra,
+        extra: serde_json::Map::new(),
     }
 }
 
 fn unread_message(from: &str, text: &str, message_id: LegacyMessageId) -> MessageEnvelope {
-    let mut extra = serde_json::Map::new();
-    let mut metadata = serde_json::Map::new();
-    let mut atm = serde_json::Map::new();
-    let atm_message_id = message_id.into_atm_message_id();
-    atm.insert(
-        "messageId".to_string(),
-        serde_json::Value::String(atm_message_id.to_string()),
-    );
-    atm.insert(
-        "sourceTeam".to_string(),
-        serde_json::Value::String("atm-dev".to_string()),
-    );
-    metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
-    extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
-    assert_eq!(
-        LegacyMessageId::from_atm_message_id(message_atm_id_from_extra(&extra).expect("atm id")),
-        message_id,
-        "mailbox fixture metadata.atm.messageId must match legacy message_id",
-    );
-
     MessageEnvelope {
         from: from.parse::<AgentName>().expect("agent"),
         text: text.to_string(),
@@ -1228,19 +1154,6 @@ fn unread_message(from: &str, text: &str, message_id: LegacyMessageId) -> Messag
         acknowledged_at: None,
         acknowledges_message_id: None,
         task_id: None,
-        extra,
+        extra: serde_json::Map::new(),
     }
-}
-
-fn message_atm_id_from_extra(
-    extra: &serde_json::Map<String, serde_json::Value>,
-) -> Option<AtmMessageId> {
-    extra
-        .get("metadata")
-        .and_then(serde_json::Value::as_object)
-        .and_then(|metadata| metadata.get("atm"))
-        .and_then(serde_json::Value::as_object)
-        .and_then(|atm| atm.get("messageId"))
-        .and_then(serde_json::Value::as_str)
-        .and_then(|value| value.parse().ok())
 }

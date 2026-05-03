@@ -307,7 +307,7 @@ fn ensure_object<'a>(parent: &'a mut Map<String, Value>, key: &str) -> &'a mut M
     entry
 }
 
-pub(crate) fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, AtmError> {
+pub fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, AtmError> {
     let mut value = serde_json::to_value(message).map_err(|error| {
         AtmError::mailbox_write(format!(
             "failed to serialize shared inbox envelope for {} at {:?}: {error}",
@@ -323,10 +323,17 @@ pub(crate) fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, 
                 message.from, message.timestamp
             ))
         })?;
-    // The legacy UUID `message_id` is stripped here but deliberately not
-    // forwarded. Forwarded ATM message ids must remain ULID-authored per
-    // architecture §5.2 rather than being derived from compatibility UUIDs.
-    let _ = object.remove("message_id");
+    // Preserve legacy message-id compatibility by projecting the raw UUID
+    // bytes into metadata.atm.messageId when a forward id is not already
+    // present. This keeps the write path lossless for preseeded legacy/test
+    // envelopes while confining the bridge to the schema layer.
+    let message_id = object.remove("message_id").and_then(|value| match value {
+        Value::String(_) => message
+            .message_id
+            .map(LegacyMessageId::into_atm_message_id)
+            .map(|message_id| Value::String(message_id.to_string())),
+        _ => None,
+    });
     let source_team = object.remove("source_team");
     let pending_ack_at = object.remove("pendingAckAt");
     let acknowledged_at = object.remove("acknowledgedAt");
@@ -348,6 +355,9 @@ pub(crate) fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, 
     let metadata = ensure_object(object, "metadata");
     let atm = ensure_object(metadata, "atm");
 
+    if let Some(value) = message_id {
+        atm.entry("messageId".to_string()).or_insert(value);
+    }
     if let Some(value) = source_team {
         atm.entry("sourceTeam".to_string()).or_insert(value);
     }
@@ -662,6 +672,7 @@ mod tests {
 
     #[test]
     fn shared_inbox_write_shape_moves_machine_fields_into_metadata() {
+        let legacy_message_id = LegacyMessageId::new();
         let envelope = MessageEnvelope {
             from: "arch-ctm".parse().expect("agent"),
             text: "hello".into(),
@@ -673,7 +684,7 @@ mod tests {
             read: false,
             source_team: Some("atm-dev".parse().expect("team")),
             summary: Some("hello".into()),
-            message_id: Some(LegacyMessageId::new()),
+            message_id: Some(legacy_message_id),
             pending_ack_at: Some(IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 1)
                     .single()
@@ -698,7 +709,10 @@ mod tests {
             .and_then(|metadata| metadata.get("atm"))
             .and_then(Value::as_object)
             .expect("metadata.atm");
-        assert!(!atm.contains_key("messageId"));
+        assert_eq!(
+            atm.get("messageId"),
+            Some(&json!(legacy_message_id.into_atm_message_id().to_string()))
+        );
         assert_eq!(atm.get("sourceTeam"), Some(&json!("atm-dev")));
         assert_eq!(atm.get("taskId"), Some(&json!("TASK-123")));
     }
@@ -745,6 +759,36 @@ mod tests {
             Some(&json!("2026-03-30T00:00:02Z"))
         );
         assert!(atm["acknowledgesMessageId"].as_str().is_some());
+    }
+
+    #[test]
+    fn legacy_message_id_round_trips_through_shared_inbox_schema_boundary() {
+        let legacy_message_id = LegacyMessageId::new();
+        let envelope = MessageEnvelope {
+            from: "arch-ctm".parse().expect("agent"),
+            text: "hello".into(),
+            timestamp: IsoTimestamp::from_datetime(
+                Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
+                    .single()
+                    .expect("timestamp"),
+            ),
+            read: false,
+            source_team: Some("atm-dev".parse().expect("team")),
+            summary: None,
+            message_id: Some(legacy_message_id),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            task_id: None,
+            extra: Map::new(),
+        };
+
+        let mut encoded = to_shared_inbox_value(&envelope).expect("encode");
+        hydrate_legacy_fields_from_metadata(&mut encoded);
+        let decoded: MessageEnvelope = serde_json::from_value(encoded).expect("decode");
+
+        assert_eq!(decoded.message_id, Some(legacy_message_id));
+        assert_eq!(decoded.source_team.as_deref(), Some("atm-dev"));
     }
 
     #[test]

@@ -2,9 +2,8 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
-use atm_core::schema::{
-    AgentMember, MessageEnvelope, TeamConfig, hydrate_legacy_fields_from_metadata,
-};
+use atm_core::schema::{AgentMember, MessageEnvelope, TeamConfig};
+use atm_core::{read_messages, write_messages};
 use serde_json::Value;
 
 fn parse_inbox_values(raw: &str) -> Vec<Value> {
@@ -1030,12 +1029,7 @@ impl Fixture {
         if let Some(parent) = inbox_path.parent() {
             fs::create_dir_all(parent).expect("inbox dir");
         }
-        let values: Vec<Value> = messages
-            .iter()
-            .map(|message| serde_json::to_value(message).expect("json value"))
-            .collect();
-        let raw = serde_json::to_string_pretty(&values).expect("json array");
-        fs::write(inbox_path, raw).expect("write inbox");
+        write_messages(&inbox_path, messages).expect("write inbox");
     }
 
     fn inbox_contents(&self, recipient: &str) -> Vec<MessageEnvelope> {
@@ -1048,14 +1042,7 @@ impl Fixture {
 
     fn inbox_contents_in_team(&self, team: &str, recipient: &str) -> Vec<MessageEnvelope> {
         let inbox_path = self.inbox_path_in_team(team, recipient);
-        let raw = fs::read_to_string(&inbox_path).expect("inbox contents");
-        parse_inbox_values(&raw)
-            .into_iter()
-            .map(|mut value| {
-                hydrate_legacy_fields_from_metadata(&mut value);
-                serde_json::from_value(value).expect("message envelope")
-            })
-            .collect()
+        read_messages(&inbox_path).expect("inbox contents")
     }
 
     fn inbox_json_lines_in_team(&self, team: &str, recipient: &str) -> Vec<Value> {
