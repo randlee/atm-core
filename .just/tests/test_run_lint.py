@@ -12,6 +12,7 @@ if str(JUST_DIR) not in sys.path:
 
 from run_lint import build_tasks
 from run_lint import extract_count
+from run_lint import prioritize_error_lines
 from run_lint import resolve_task_names
 
 
@@ -31,6 +32,22 @@ class RunLintTests(unittest.TestCase):
 
     def test_extract_count_understands_total_violations(self) -> None:
         self.assertEqual(extract_count(["total violations: 58"]), 58)
+
+    def test_prioritize_error_lines_prefers_actual_failures(self) -> None:
+        lines = [
+            "Updating crates.io index",
+            "Downloaded crate",
+            "error[E0432]: unresolved import `uuid`",
+            "could not compile `agent-team-mail`",
+        ]
+
+        self.assertEqual(
+            prioritize_error_lines(lines),
+            [
+                "error[E0432]: unresolved import `uuid`",
+                "could not compile `agent-team-mail`",
+            ],
+        )
 
     def test_build_tasks_contains_expected_commands(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

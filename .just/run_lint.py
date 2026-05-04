@@ -88,6 +88,18 @@ def interesting_lines(output: str) -> list[str]:
     return filtered or lines
 
 
+def prioritize_error_lines(lines: list[str]) -> list[str]:
+    error_lines = [
+        line
+        for line in lines
+        if any(
+            token in line.lower()
+            for token in ("error", "failed", "traceback", "exception", "could not")
+        )
+    ]
+    return error_lines or lines
+
+
 def extract_count(lines: list[str]) -> int | None:
     for line in reversed(lines):
         lowered = line.lower()
@@ -164,6 +176,7 @@ def print_result(result: LintResult, repo_root: Path) -> None:
         return
 
     preview = lines[:4]
+    preview = prioritize_error_lines(lines)[:4]
     for line in preview:
         print(f"  {line}")
     print(f"  full log: {log_display}")

@@ -80,9 +80,9 @@ def format_duration(duration_seconds: float) -> str:
 
 def relative_log_path(repo_root: Path, log_path: Path) -> str:
     try:
-        return str(log_path.relative_to(repo_root))
+        return log_path.relative_to(repo_root).as_posix()
     except ValueError:
-        return str(log_path)
+        return log_path.as_posix()
 
 
 def build_transcript_header(
