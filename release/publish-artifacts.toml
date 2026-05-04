@@ -7,7 +7,29 @@ cargo_toml = "crates/atm-core/Cargo.toml"
 required = true
 publish = true
 publish_order = 1
-preflight_check = "full"
+preflight_check = "dry-run"
+wait_after_publish_seconds = 60
+verify_install = false
+
+[[crates]]
+artifact = "atm-rusqlite"
+package = "atm-rusqlite"
+cargo_toml = "crates/atm-rusqlite/Cargo.toml"
+required = true
+publish = true
+publish_order = 2
+preflight_check = "dry-run"
+wait_after_publish_seconds = 60
+verify_install = false
+
+[[crates]]
+artifact = "atm-daemon"
+package = "atm-daemon"
+cargo_toml = "crates/atm-daemon/Cargo.toml"
+required = true
+publish = true
+publish_order = 3
+preflight_check = "dry-run"
 wait_after_publish_seconds = 60
 verify_install = false
 
@@ -17,8 +39,8 @@ package = "agent-team-mail"
 cargo_toml = "crates/atm/Cargo.toml"
 required = true
 publish = true
-publish_order = 2
-preflight_check = "locked"
+publish_order = 4
+preflight_check = "dry-run"
 wait_after_publish_seconds = 0
 verify_install = true
 

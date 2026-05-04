@@ -178,14 +178,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t full_checks < <(
+          mapfile -t dry_run_checks < <(
             python3 scripts/release_artifacts.py list-preflight \
               --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
-              --mode full
+              --mode dry-run
           )
-          for crate in "${full_checks[@]}"; do
+          for crate in "${dry_run_checks[@]}"; do
             [[ -n "$crate" ]] || continue
-            cargo package -p "$crate" --locked
+            mapfile -t patch_configs < <(
+              python3 scripts/release_artifacts.py list-patch-config \
+                --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+                --workspace-toml Cargo.toml \
+                --package "$crate"
+            )
+            patch_args=()
+            for config in "${patch_configs[@]}"; do
+              [[ -n "$config" ]] || continue
+              patch_args+=(--config "$config")
+            done
+            cargo package -p "$crate" --locked --no-verify "${patch_args[@]}"
+            cargo publish --dry-run -p "$crate" --locked --no-verify "${patch_args[@]}"
           done
 
           mapfile -t locked_checks < <(

@@ -11,7 +11,8 @@ import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
 
-PREFLIGHT_FULL = "full"
+PREFLIGHT_DRY_RUN = "dry-run"
+PREFLIGHT_PACKAGE = "package"
 PREFLIGHT_LOCKED = "locked"
 
 
@@ -50,7 +51,7 @@ def load_manifest(path: Path) -> dict:
         package = require_str(crate, "package", f"crates[{idx}]")
         require_str(crate, "cargo_toml", f"crates[{idx}]")
         mode = require_str(crate, "preflight_check", f"crates[{idx}]")
-        if mode not in {PREFLIGHT_FULL, PREFLIGHT_LOCKED}:
+        if mode not in {PREFLIGHT_DRY_RUN, PREFLIGHT_PACKAGE, PREFLIGHT_LOCKED}:
             raise SystemExit(f"{artifact}: invalid preflight_check {mode!r}")
         if artifact in seen_artifacts:
             raise SystemExit(f"duplicate artifact {artifact}")
@@ -242,31 +243,38 @@ def has_workspace_path_deps(crate_toml: Path, workspace_root: Path) -> list[str]
 
     check_table(data.get("dependencies", {}))
     check_table(data.get("build-dependencies", {}))
+    check_table(data.get("dev-dependencies", {}))
     for target_data in data.get("target", {}).values():
         if isinstance(target_data, dict):
             check_table(target_data.get("dependencies", {}))
             check_table(target_data.get("build-dependencies", {}))
+            check_table(target_data.get("dev-dependencies", {}))
     return sorted(set(deps))
 
 
 def validate_preflight_checks(args: argparse.Namespace) -> int:
     manifest = load_manifest(Path(args.manifest))
     workspace_root = Path(args.workspace_toml).parent
+    manifest_packages = {crate["package"] for crate in manifest["crates"] if crate["publish"]}
     errors = []
     for crate in manifest["crates"]:
-        if crate["preflight_check"] != PREFLIGHT_FULL:
+        if crate["preflight_check"] != PREFLIGHT_DRY_RUN:
             continue
         crate_toml = workspace_root / crate["cargo_toml"]
-        path_deps = has_workspace_path_deps(crate_toml, workspace_root)
-        if path_deps:
+        path_deps = workspace_dependency_names(
+            crate_toml, workspace_root, include_dev_dependencies=True
+        )
+        unmanaged = sorted(dep for dep in path_deps if dep not in manifest_packages)
+        if unmanaged:
             errors.append(
-                f"{crate['artifact']} has workspace path deps ({', '.join(path_deps)}) but preflight_check='full'"
+                f"{crate['artifact']} has workspace deps not present in the release manifest "
+                f"({', '.join(unmanaged)})"
             )
     if errors:
         for error in errors:
             print(error)
         return 1
-    print("ok: all preflight_check='full' crates are genuine leaf crates")
+    print("ok: dry-run crates are compatible with generated patch.crates-io config")
     return 0
 
 
@@ -282,7 +290,9 @@ def workspace_package_map(workspace_toml: Path) -> dict[str, Path]:
     return mapping
 
 
-def workspace_dependency_names(crate_toml: Path, workspace_root: Path) -> set[str]:
+def workspace_dependency_names(
+    crate_toml: Path, workspace_root: Path, include_dev_dependencies: bool = False
+) -> set[str]:
     data = tomllib.loads(crate_toml.read_text(encoding="utf-8"))
     ws_toml = workspace_root / "Cargo.toml"
     ws_data = tomllib.loads(ws_toml.read_text(encoding="utf-8")) if ws_toml.exists() else {}
@@ -320,10 +330,14 @@ def workspace_dependency_names(crate_toml: Path, workspace_root: Path) -> set[st
 
     collect(data.get("dependencies", {}))
     collect(data.get("build-dependencies", {}))
+    if include_dev_dependencies:
+        collect(data.get("dev-dependencies", {}))
     for target_data in data.get("target", {}).values():
         if isinstance(target_data, dict):
             collect(target_data.get("dependencies", {}))
             collect(target_data.get("build-dependencies", {}))
+            if include_dev_dependencies:
+                collect(target_data.get("dev-dependencies", {}))
     return deps
 
 
@@ -347,6 +361,30 @@ def validate_publish_order(args: argparse.Namespace) -> int:
             print(f"  - {violation}")
         return 1
     print("ok: publish_order matches the workspace dependency graph")
+    return 0
+
+
+def list_patch_config(args: argparse.Namespace) -> int:
+    manifest = load_manifest(Path(args.manifest))
+    workspace_root = Path(args.workspace_toml).parent
+    manifest_by_package = {crate["package"]: crate for crate in manifest["crates"]}
+    crate = manifest_by_package.get(args.package)
+    if crate is None:
+        raise SystemExit(f"package {args.package!r} is not present in the manifest")
+
+    deps = sorted(
+        workspace_dependency_names(
+            workspace_root / crate["cargo_toml"],
+            workspace_root,
+            include_dev_dependencies=True,
+        )
+    )
+    for dep in deps:
+        dep_entry = manifest_by_package.get(dep)
+        if dep_entry is None:
+            continue
+        dep_dir = Path(dep_entry["cargo_toml"]).parent.as_posix()
+        print(f'patch.crates-io.{dep}.path="{dep_dir}"')
     return 0
 
 
@@ -375,8 +413,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     list_pre = subparsers.add_parser("list-preflight")
     list_pre.add_argument("--manifest", required=True)
-    list_pre.add_argument("--mode", required=True, choices=[PREFLIGHT_FULL, PREFLIGHT_LOCKED])
+    list_pre.add_argument(
+        "--mode",
+        required=True,
+        choices=[PREFLIGHT_DRY_RUN, PREFLIGHT_PACKAGE, PREFLIGHT_LOCKED],
+    )
     list_pre.set_defaults(func=list_preflight)
+
+    list_patch = subparsers.add_parser("list-patch-config")
+    list_patch.add_argument("--manifest", required=True)
+    list_patch.add_argument("--workspace-toml", required=True)
+    list_patch.add_argument("--package", required=True)
+    list_patch.set_defaults(func=list_patch_config)
 
     list_plan = subparsers.add_parser("list-publish-plan")
     list_plan.add_argument("--manifest", required=True)
