@@ -12,6 +12,7 @@ use crate::mailbox::lock;
 use crate::observability::ObservabilityPort;
 use crate::schema::AgentMember;
 use crate::team_admin::{MemberSummary, MembersList};
+use crate::test_support::ROLE_TEAM_LEAD;
 use crate::types::{AgentName, TeamName};
 use serde::{Deserialize, Serialize};
 
@@ -387,15 +388,17 @@ fn ordered_member_summaries(members: &[AgentMember], baseline: &[TeamName]) -> V
     let mut ordered = Vec::new();
     let mut included = BTreeSet::new();
 
-    if baseline.iter().any(|member| member.as_str() == "team-lead")
-        && let Some(team_lead) = members.iter().find(|member| member.name == "team-lead")
+    if baseline
+        .iter()
+        .any(|member| member.as_str() == ROLE_TEAM_LEAD)
+        && let Some(team_lead) = members.iter().find(|member| member.name == ROLE_TEAM_LEAD)
     {
         ordered.push(member_summary(team_lead));
         included.insert(team_lead.name.clone());
     }
 
     for baseline_member in baseline {
-        if baseline_member.as_str() == "team-lead" {
+        if baseline_member.as_str() == ROLE_TEAM_LEAD {
             continue;
         }
         if let Some(member) = members
@@ -434,6 +437,8 @@ fn member_summary(member: &AgentMember) -> MemberSummary {
 }
 
 #[cfg(test)]
+// rule-008: allow-start -- doctor tests use explicit fixture identities in
+// serialized config/report payloads; exceptions stay visible at module scope.
 mod tests {
     use std::path::PathBuf;
 
@@ -818,3 +823,4 @@ mod tests {
         assert!(!stale_lock.exists(), "doctor should sweep stale sentinel");
     }
 }
+// rule-008: allow-end

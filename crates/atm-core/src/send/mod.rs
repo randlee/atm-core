@@ -23,6 +23,7 @@ use crate::store::{
 };
 use crate::task_store::{TaskRecord, TaskStatus, TaskStore};
 use crate::team_ingress;
+use crate::test_support::ROLE_TEAM_LEAD;
 use crate::types::{AgentName, TaskId, TeamName};
 use crate::workflow;
 
@@ -613,19 +614,22 @@ fn notify_team_lead_missing_config(
         return;
     }
 
-    let team_lead_inbox =
-        match home::inbox_path_from_home(home_dir, team, &AgentName::from_validated("team-lead")) {
-            Ok(path) => path,
-            Err(error) => {
-                warn!(
-                    code = %AtmErrorCode::WarningMissingTeamConfigFallback,
-                    %error,
-                    team = %team,
-                    "failed to resolve team-lead inbox for missing-config notice"
-                );
-                return;
-            }
-        };
+    let team_lead_inbox = match home::inbox_path_from_home(
+        home_dir,
+        team,
+        &AgentName::from_validated(ROLE_TEAM_LEAD),
+    ) {
+        Ok(path) => path,
+        Err(error) => {
+            warn!(
+                code = %AtmErrorCode::WarningMissingTeamConfigFallback,
+                %error,
+                team = %team,
+                "failed to resolve lead inbox for missing-config notice"
+            );
+            return;
+        }
+    };
 
     if !team_lead_inbox.exists() {
         return;
@@ -670,7 +674,7 @@ fn notify_team_lead_missing_config(
     if let Err(error) = append_mailbox_message_and_seed_workflow(
         home_dir,
         team,
-        &AgentName::from_validated("team-lead"),
+        &AgentName::from_validated(ROLE_TEAM_LEAD),
         &team_lead_inbox,
         &notice,
     ) {

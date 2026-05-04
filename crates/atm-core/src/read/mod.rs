@@ -872,6 +872,8 @@ fn transition_displayed_message(
 }
 
 #[cfg(test)]
+// rule-008: allow-start -- read-path tests intentionally preserve explicit
+// fixture payloads when verifying filtering and idle-notification handling.
 mod tests {
     use std::path::PathBuf;
 
@@ -1008,3 +1010,4 @@ mod tests {
         assert!(error.message.contains("agent name"));
     }
 }
+// rule-008: allow-end

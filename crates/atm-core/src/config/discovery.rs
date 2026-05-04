@@ -91,6 +91,8 @@ pub fn command_looks_like_path(program: &str) -> bool {
 }
 
 #[cfg(test)]
+// rule-008: allow-start -- config-discovery tests intentionally preserve raw
+// hook recipient literals as the subject under test.
 mod tests {
     use std::path::PathBuf;
 
@@ -230,3 +232,4 @@ mod tests {
         assert!(error.message.contains("command program must not be empty"));
     }
 }
+// rule-008: allow-end

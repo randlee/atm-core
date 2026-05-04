@@ -138,6 +138,8 @@ fn fatal_emit_failure_message(stage: &str, emit_error: &AtmError) -> String {
 }
 
 #[cfg(test)]
+// rule-008: allow-start -- observability tests intentionally preserve concrete
+// fixture identities in emitted event payloads.
 mod tests {
     use atm_core::error::AtmError;
     use atm_core::observability::{
@@ -300,3 +302,4 @@ mod tests {
         observability.emit_fatal_error("service", &AtmError::validation("boom"));
     }
 }
+// rule-008: allow-end

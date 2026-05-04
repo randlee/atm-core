@@ -82,6 +82,8 @@ fn seen_state_path(home_dir: &Path, team: &str, agent: &str) -> Result<PathBuf, 
 }
 
 #[cfg(test)]
+// rule-008: allow-start -- seen-state tests use concrete team/agent strings in
+// path-key assertions; the literals are confined to this test module.
 mod tests {
     use chrono::TimeZone;
     use tempfile::TempDir;
@@ -137,3 +139,4 @@ mod tests {
         assert!(error.is_address());
     }
 }
+// rule-008: allow-end
