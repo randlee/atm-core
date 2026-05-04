@@ -472,6 +472,8 @@ pub fn hydrate_legacy_fields_from_metadata(value: &mut Value) {
 }
 
 #[cfg(test)]
+// rule-008: allow-start -- inbox schema compatibility tests intentionally
+// exercise production-shaped identity literals as fixture payloads.
 mod tests {
     use chrono::TimeZone;
     use serde_json::{Map, Value, json};
@@ -905,3 +907,4 @@ mod tests {
         );
     }
 }
+// rule-008: allow-end

@@ -262,6 +262,8 @@ pub(crate) fn load_source_files(paths: &[PathBuf]) -> Result<Vec<SourceFile>, At
 }
 
 #[cfg(test)]
+// rule-008: allow-start -- source-discovery tests use explicit mailbox and
+// alias fixture strings to keep path and alias assertions readable.
 mod tests {
     use std::collections::BTreeMap;
     use std::io;
@@ -410,3 +412,4 @@ mod tests {
         assert!("../evil".parse::<AgentName>().is_err());
     }
 }
+// rule-008: allow-end

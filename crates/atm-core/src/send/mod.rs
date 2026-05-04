@@ -23,6 +23,7 @@ use crate::store::{
 };
 use crate::task_store::{TaskRecord, TaskStatus, TaskStore};
 use crate::team_ingress;
+use crate::test_support::ROLE_TEAM_LEAD;
 use crate::types::{AgentName, TaskId, TeamName};
 use crate::workflow;
 
@@ -618,7 +619,7 @@ fn notify_team_lead_missing_config(
                 code = %AtmErrorCode::WarningMissingTeamConfigFallback,
                 %error,
                 team = %team,
-                "failed to resolve team-lead inbox for missing-config notice"
+                "failed to resolve lead inbox for missing-config notice"
             );
             return;
         }

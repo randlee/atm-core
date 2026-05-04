@@ -14,13 +14,18 @@ ALLOWED_PATTERNS = (
     re.compile(r"\bATM_(?:TEAM|IDENTITY)\b"),
 )
 
+ALLOW_NEXT_LINE_PATTERN = re.compile(r"rule-008:\s*allow-next-line\b", re.IGNORECASE)
+ALLOW_BLOCK_START_PATTERN = re.compile(r"rule-008:\s*allow-start\b", re.IGNORECASE)
+ALLOW_BLOCK_END_PATTERN = re.compile(r"rule-008:\s*allow-end\b", re.IGNORECASE)
+
 EXCLUDED_PATHS = {
     "crates/atm/tests/support/mod.rs",
+    "crates/atm-core/tests/support.rs",
 }
 
 
 def is_test_scope(path: Path, text: str) -> bool:
-    return "/tests/" in path.as_posix()
+    return True
 
 
 def collect_test_lines(repo_root: Path) -> list[tuple[Path, int, str]]:
@@ -39,14 +44,38 @@ def collect_test_lines(repo_root: Path) -> list[tuple[Path, int, str]]:
     return results
 
 
+def line_has_allow_next_line(line_number: int, lines: list[str]) -> bool:
+    if line_number <= 1:
+        return False
+    return bool(ALLOW_NEXT_LINE_PATTERN.search(lines[line_number - 2]))
+
+
+def line_is_inside_allow_block(line_number: int, lines: list[str]) -> bool:
+    allow_depth = 0
+    for line in lines[: line_number - 1]:
+        if ALLOW_BLOCK_START_PATTERN.search(line):
+            allow_depth += 1
+        if ALLOW_BLOCK_END_PATTERN.search(line):
+            allow_depth = max(0, allow_depth - 1)
+    return allow_depth > 0
+
+
 def main() -> int:
     repo_root = Path(__file__).resolve().parent.parent
     failures: list[tuple[str, int, str]] = []
     scanned_lines = collect_test_lines(repo_root)
+    cached_lines: dict[str, list[str]] = {}
     for path, line_number, line in scanned_lines:
         if not any(literal in line for literal in FORBIDDEN_LITERALS):
             continue
         if any(pattern.search(line) for pattern in ALLOWED_PATTERNS):
+            continue
+        path_key = path.as_posix()
+        if path_key not in cached_lines:
+            cached_lines[path_key] = (repo_root / path).read_text(encoding="utf-8").splitlines()
+        if line_has_allow_next_line(line_number, cached_lines[path_key]):
+            continue
+        if line_is_inside_allow_block(line_number, cached_lines[path_key]):
             continue
         failures.append((path.as_posix(), line_number, line.strip()))
 

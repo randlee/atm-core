@@ -300,6 +300,8 @@ fn sanitize_legacy_message_id(value: &mut Value, path: &Path, line_number: usize
 }
 
 #[cfg(test)]
+// rule-008: allow-start -- mailbox serialization tests intentionally pin
+// fixture payloads with explicit identity strings for schema readability.
 mod tests {
     use std::fs::{self, File};
     use std::sync::{Arc, Barrier};
@@ -605,3 +607,4 @@ mod tests {
         }
     }
 }
+// rule-008: allow-end

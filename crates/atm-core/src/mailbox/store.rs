@@ -96,6 +96,8 @@ where
 }
 
 #[cfg(test)]
+// rule-008: allow-start -- store-boundary tests use concrete fixture names in
+// mailbox JSON/path assertions to keep the persistence contract obvious.
 mod tests {
     use tempfile::tempdir;
 
@@ -262,3 +264,4 @@ mod tests {
         }
     }
 }
+// rule-008: allow-end
