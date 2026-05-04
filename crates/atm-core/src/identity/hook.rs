@@ -120,6 +120,9 @@ mod test_hook_file_override {
     use std::path::PathBuf;
 
     thread_local! {
+        // Test-only hook-file seam. `RefCell<Option<PathBuf>>` keeps the
+        // override thread-local while allowing guard-style replacement and
+        // restoration without touching the production parent-pid path logic.
         static OVERRIDE: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
     }
 

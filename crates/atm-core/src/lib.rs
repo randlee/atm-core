@@ -59,7 +59,6 @@ pub mod team_admin;
 pub mod team_ingress;
 /// Shared synthetic test identities and role constants used across crate tests.
 #[doc(hidden)]
-#[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 /// Internal text-formatting helpers used by ATM core surfaces.
 pub(crate) mod text;

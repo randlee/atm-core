@@ -16,7 +16,7 @@ use crate::inbox_ingress::InboxIngress;
 use crate::mail_store::{AckStateRecord, MailStore, MessageSourceKind, StoredMessageRecord};
 use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
-use crate::roles::ROLE_TEAM_LEAD;
+use crate::roles::TEAM_LEAD_AGENT;
 use crate::roster_store::{RosterMemberRecord, RosterStore};
 use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
 use crate::store::{
@@ -252,6 +252,8 @@ where
             }
         }
 
+        // INVARIANT: persist the store row before exporting the shared inbox
+        // projection so retries can deduplicate against durable ATM truth.
         exporter.export_message(
             &prepared.home_dir(),
             &prepared.recipient.team,
@@ -603,11 +605,7 @@ fn notify_team_lead_missing_config(
     team: &TeamName,
     recipient: &AgentName,
 ) {
-    let team_lead_inbox = match home::inbox_path_from_home(
-        home_dir,
-        team,
-        &AgentName::from_validated(ROLE_TEAM_LEAD),
-    ) {
+    let team_lead_inbox = match home::inbox_path_from_home(home_dir, team, &TEAM_LEAD_AGENT) {
         Ok(path) => path,
         Err(error) => {
             warn!(
@@ -662,13 +660,15 @@ fn notify_team_lead_missing_config(
         extra,
     };
 
-    // TRANSITIONAL: missing-config notice routes through the legacy
-    // lock+sidecar append path for compatibility; full send-path dual-write
-    // unification is deferred to Q.3+.
+    // TRANSITIONAL: missing-config notices still route through the legacy
+    // lock+sidecar append path for compatibility; full send-path/store-backed
+    // export unification is deferred to the later Q.7/Q.8 cleanup work.
+    // TODO(Q.7): move atmAlertKind/missingConfigPath into metadata.atm once
+    // warning envelopes stop depending on legacy top-level compatibility fields.
     if let Err(error) = append_mailbox_message_and_seed_workflow(
         home_dir,
         team,
-        &AgentName::from_validated(ROLE_TEAM_LEAD),
+        &TEAM_LEAD_AGENT,
         &team_lead_inbox,
         &notice,
     ) {
