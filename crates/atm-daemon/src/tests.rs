@@ -227,5 +227,19 @@ fn remote_acceptance_is_required_for_send_success() {
     .expect("remote response");
     assert_eq!(response.kind, RequestKind::Send);
     stop.store(true, Ordering::SeqCst);
-    let _ = worker.join();
+    let deadline = std::time::Instant::now() + SHUTDOWN_FORCE_TIMEOUT;
+    while !worker.is_finished() && std::time::Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    assert!(
+        worker.is_finished(),
+        "tcp accept worker did not stop within {:?}",
+        SHUTDOWN_FORCE_TIMEOUT
+    );
+    if let Err(payload) = worker.join() {
+        panic!(
+            "tcp accept worker panicked during shutdown: {}",
+            crate::shutdown::thread_panic_message(payload)
+        );
+    }
 }

@@ -31,6 +31,12 @@ pub fn configure_atm_command<'a>(
 ) -> &'a mut Command {
     let daemon_bin = Path::new(env!("CARGO_BIN_EXE_atm"))
         .with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX));
+    assert!(
+        daemon_bin.exists(),
+        "expected hermetic test daemon binary beside {} but it was missing: {}. Build the workspace test binaries before running CLI integration tests.",
+        env!("CARGO_BIN_EXE_atm"),
+        daemon_bin.display()
+    );
     command.env_clear();
     for key in [
         "PATH",
@@ -50,10 +56,8 @@ pub fn configure_atm_command<'a>(
     command
         .env("ATM_HOME", home_dir)
         .env("ATM_CONFIG_HOME", home_dir)
-        .env("ATM_TEAM", TEST_TEAM);
-    if daemon_bin.exists() {
-        command.env("ATM_DAEMON_BIN", daemon_bin);
-    }
+        .env("ATM_TEAM", TEST_TEAM)
+        .env("ATM_DAEMON_BIN", &daemon_bin);
     if let Some(identity) = identity {
         command.env("ATM_IDENTITY", identity);
     }

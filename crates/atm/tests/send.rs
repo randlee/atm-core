@@ -792,17 +792,12 @@ fn test_send_runs_post_send_hook_for_wildcard_recipient() {
 #[test]
 fn test_send_runs_multiple_matching_post_send_hooks_in_config_order() {
     let fixture = Fixture::new("recipient");
-    let order_path = fixture.tempdir.path().join("hook-order.log");
-    fixture.install_executable_script(
-        "scripts/append-order.py",
-        &format!(
-            "#!/usr/bin/env python3\nimport sys\nfrom pathlib import Path\nPath(r\"{}\").open(\"a\", encoding=\"utf-8\").write(sys.argv[1] + \"\\n\")\n",
-            order_path.display()
-        ),
-    );
-    fixture.write_atm_config(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['python3', 'scripts/append-order.py', 'recipient']\n\n[[atm.post_send_hooks]]\nrecipient = '*'\ncommand = ['python3', 'scripts/append-order.py', 'wildcard']\n",
-    );
+    let (hook_path, order_path) = fixture.install_hook_fixture("hook-order");
+    let hook_path_toml = toml_single_quoted_path(&hook_path);
+    let order_path_toml = toml_single_quoted_path(&order_path);
+    fixture.write_atm_config(&format!(
+        "[[atm.post_send_hooks]]\nrecipient = '{TEST_RECIPIENT}'\ncommand = [{hook_path_toml}, 'append-line', {order_path_toml}, 'recipient']\n\n[[atm.post_send_hooks]]\nrecipient = '*'\ncommand = [{hook_path_toml}, 'append-line', {order_path_toml}, 'wildcard']\n",
+    ));
 
     let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello multiple hooks"]);
 
@@ -1265,6 +1260,10 @@ fn read_json_file_with_retry(path: &std::path::Path, label: &str) -> serde_json:
         start.elapsed(),
         path.display(),
     );
+}
+
+fn toml_single_quoted_path(path: &std::path::Path) -> String {
+    format!("'{}'", path.display().to_string().replace('\'', "''"))
 }
 
 struct Fixture {
