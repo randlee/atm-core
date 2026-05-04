@@ -12,7 +12,7 @@ use crate::mailbox::lock;
 use crate::persistence;
 use crate::schema::AgentMember;
 
-use super::{RestoreOutcome, RestorePlan, RestoreRequest, RestoreResult};
+use super::{ROLE_TEAM_LEAD, RestoreOutcome, RestorePlan, RestoreRequest, RestoreResult};
 
 pub(super) fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> {
     let team_dir = home::team_dir_from_home(&request.home_dir, &request.team)?;
@@ -26,7 +26,7 @@ pub(super) fn restore_team(request: RestoreRequest) -> Result<RestoreResult, Atm
     let members_to_restore = backup_config
         .members
         .iter()
-        .filter(|member| member.name != "team-lead")
+        .filter(|member| member.name != ROLE_TEAM_LEAD)
         .filter(|member| {
             !current_config
                 .members
@@ -38,8 +38,9 @@ pub(super) fn restore_team(request: RestoreRequest) -> Result<RestoreResult, Atm
     let members_to_restore_set = members_to_restore.iter().cloned().collect::<BTreeSet<_>>();
 
     let mut inboxes_to_restore = list_backup_inboxes(&backup_dir)?;
+    let team_lead_inbox = format!("{ROLE_TEAM_LEAD}.json");
     inboxes_to_restore.retain(|name| {
-        if name == "team-lead.json" {
+        if name == &team_lead_inbox {
             return false;
         }
         name.strip_suffix(".json").is_some_and(|member| {
@@ -68,7 +69,7 @@ pub(super) fn restore_team(request: RestoreRequest) -> Result<RestoreResult, Atm
     prepare_restore_workspace(&team_dir, &backup_dir)?;
     let mut updated_config = current_config.clone();
     for member in &backup_config.members {
-        if member.name == "team-lead" {
+        if member.name == ROLE_TEAM_LEAD {
             continue;
         }
         if updated_config

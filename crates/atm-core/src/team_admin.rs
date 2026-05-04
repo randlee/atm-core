@@ -21,6 +21,8 @@ pub(crate) use restore::{
     ScopedRestoreInboxStageFailureOverride, ScopedRestoreMarkerRemoveFailureOverride,
 };
 
+pub(crate) const ROLE_TEAM_LEAD: &str = "team-lead";
+
 /// One discovered team and its current member count.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct TeamSummary {
@@ -274,12 +276,12 @@ pub fn list_members(query: MembersQuery) -> Result<MembersList, AtmError> {
     if let Some(team_lead) = config
         .members
         .iter()
-        .find(|member| member.name == "team-lead")
+        .find(|member| member.name == ROLE_TEAM_LEAD)
     {
         members.push(member_summary(team_lead));
     }
     for member in &config.members {
-        if member.name == "team-lead" {
+        if member.name == ROLE_TEAM_LEAD {
             continue;
         }
         members.push(member_summary(member));

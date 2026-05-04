@@ -902,7 +902,7 @@ fn acquire_env_lock() -> File {
     const RETRY_INTERVAL: Duration = Duration::from_millis(100);
     const LOCK_TIMEOUT: Duration = Duration::from_secs(10);
 
-    let lock_path = std::env::temp_dir().join("atm-core-test-env.lock");
+    let lock_path = std::env::temp_dir().join(concat!(env!("CARGO_PKG_NAME"), "-test-env.lock"));
     let deadline = Instant::now() + LOCK_TIMEOUT;
     loop {
         let file = OpenOptions::new()

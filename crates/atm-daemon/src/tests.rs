@@ -6,6 +6,11 @@ use tempfile::TempDir;
 
 const TEST_TEAM: &str = "test-team";
 const TEST_SENDER: &str = "sender-a";
+// CI should override this via ATM_TEST_TIMEOUT_MS when runners need a larger
+// retry budget, but tests must still work hermetically when that env var is
+// absent.
+const DEFAULT_TEST_TIMEOUT_MS: u64 = 5_000;
+const LOOPBACK_PROBE_ATTEMPTS: usize = 8;
 
 #[derive(Default)]
 struct FakeDispatcher {
@@ -177,18 +182,28 @@ fn local_same_host_daemon_api_flow_works() {
 
 #[test]
 fn bounded_remote_host_unreachable_behavior_is_typed() {
-    let address = closed_loopback_address();
-    let error = request_remote(
-        address,
-        &DaemonRequest {
-            team_name: TEST_TEAM.parse().expect("team"),
-            agent_name: TEST_SENDER.parse().expect("agent"),
-            payload: RequestPayload::Send(serde_json::json!({"message":"hello"})),
-        },
-        Duration::from_millis(250),
-    )
-    .expect_err("unreachable host");
-    assert_eq!(error.code, AtmErrorCode::DaemonRemoteUnavailable);
+    let request = DaemonRequest {
+        team_name: TEST_TEAM.parse().expect("team"),
+        agent_name: TEST_SENDER.parse().expect("agent"),
+        payload: RequestPayload::Send(serde_json::json!({"message":"hello"})),
+    };
+    for attempt in 0..LOOPBACK_PROBE_ATTEMPTS {
+        let address = closed_loopback_address();
+        match request_remote(address, &request, Duration::from_millis(250)) {
+            Err(error) => {
+                assert_eq!(error.code, AtmErrorCode::DaemonRemoteUnavailable);
+                return;
+            }
+            Ok(response) => {
+                assert!(
+                    attempt + 1 < LOOPBACK_PROBE_ATTEMPTS,
+                    "loopback probe address {address} was reclaimed on every attempt; last response: {:?}",
+                    response.kind
+                );
+            }
+        }
+    }
+    unreachable!("loopback retry guard must return or panic inside the loop");
 }
 
 fn closed_loopback_address() -> std::net::SocketAddr {
@@ -200,6 +215,9 @@ fn closed_loopback_address() -> std::net::SocketAddr {
 
 #[test]
 fn remote_acceptance_is_required_for_send_success() {
+    // Bind the listener before spinning up the accept loop so the OS never
+    // has a chance to reclaim the chosen ephemeral port between discovery and
+    // service startup.
     let listener = TcpListener::bind(("127.0.0.1", 0)).expect("listener");
     listener
         .set_nonblocking(true)
@@ -227,7 +245,7 @@ fn remote_acceptance_is_required_for_send_success() {
         agent_name: TEST_SENDER.parse().expect("agent"),
         payload: RequestPayload::Send(serde_json::json!({"message":"hello"})),
     };
-    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    let deadline = std::time::Instant::now() + test_timeout_budget(Duration::from_secs(5));
     let response = loop {
         match request_remote(address, &request, Duration::from_millis(250)) {
             Ok(response) => break response,
@@ -265,5 +283,6 @@ fn test_timeout_budget(default_timeout: Duration) -> Duration {
         .and_then(|raw| raw.parse::<u64>().ok())
         .filter(|timeout_ms| *timeout_ms > 0)
         .map(Duration::from_millis)
-        .unwrap_or(default_timeout)
+        .unwrap_or_else(|| Duration::from_millis(DEFAULT_TEST_TIMEOUT_MS))
+        .max(default_timeout)
 }
