@@ -6,13 +6,7 @@ from pathlib import Path
 
 
 MAX_NON_TEST_LINES = 1000
-# Temporary Phase Q exclusions. Remove these entries in Q.6 after the
-# corresponding file-splitting work lands.
-TEMPORARY_EXCLUSIONS = {
-    "crates/atm-core/src/mailbox/lock.rs": "Q.6 split pending",
-    "crates/atm-core/src/read/mod.rs": "Q.6 split pending",
-    "crates/atm-rusqlite/src/tests.rs": "Q.6 split pending",
-}
+TEMPORARY_EXCLUSIONS: dict[str, str] = {}
 
 
 def main() -> int:
