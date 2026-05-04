@@ -686,10 +686,10 @@ fn test_send_json_reports_canonical_sender_identity() {
 
 #[test]
 fn test_send_runs_post_send_hook_with_expected_payload() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'capture', '{}']\n",
+        "[[atm.post_send_hooks]]\nrecipient = '{TEST_RECIPIENT}'\ncommand = ['{}', 'capture', '{}']\n",
         hook_path.display(),
         payload_path.display()
     ));
