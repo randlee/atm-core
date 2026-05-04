@@ -654,9 +654,32 @@ fn accept_tcp_loop(
     dispatcher: Arc<dyn RequestDispatcher>,
     max_inflight: usize,
 ) {
+    accept_tcp_loop_with_ready(
+        listener,
+        stop,
+        inflight,
+        worker_threads,
+        dispatcher,
+        max_inflight,
+        None,
+    );
+}
+
+fn accept_tcp_loop_with_ready(
+    listener: TcpListener,
+    stop: Arc<AtomicBool>,
+    inflight: Arc<AtomicUsize>,
+    worker_threads: Arc<Mutex<Vec<JoinHandle<()>>>>,
+    dispatcher: Arc<dyn RequestDispatcher>,
+    max_inflight: usize,
+    mut ready_tx: Option<mpsc::Sender<()>>,
+) {
     // TODO(phase-q §21.4): authenticate remote TCP daemon requests before this
     // transport is used beyond trusted local/QA scenarios.
     while !stop.load(Ordering::SeqCst) {
+        if let Some(ready_tx) = ready_tx.take() {
+            let _ = ready_tx.send(());
+        }
         match listener.accept() {
             Ok((stream, _)) => {
                 spawn_tcp_connection(

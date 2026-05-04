@@ -22,8 +22,6 @@ pub(crate) use restore::{
     ScopedRestoreInboxStageFailureOverride, ScopedRestoreMarkerRemoveFailureOverride,
 };
 
-pub(crate) const ROLE_TEAM_LEAD: &str = "team-lead";
-
 /// One discovered team and its current member count.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct TeamSummary {

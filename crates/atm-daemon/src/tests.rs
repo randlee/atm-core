@@ -1,11 +1,9 @@
 use super::*;
 use crate::client::request_local;
 use atm_core::observability::NullObservability;
+use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
 use serial_test::serial;
 use tempfile::TempDir;
-
-const TEST_TEAM: &str = "test-team";
-const TEST_SENDER: &str = "sender-a";
 
 #[derive(Default)]
 struct FakeDispatcher {
@@ -178,17 +176,27 @@ fn local_same_host_daemon_api_flow_works() {
 #[test]
 fn bounded_remote_host_unreachable_behavior_is_typed() {
     let address = closed_loopback_address();
-    let error = request_remote(
-        address,
-        &DaemonRequest {
-            team_name: TEST_TEAM.parse().expect("team"),
-            agent_name: TEST_SENDER.parse().expect("agent"),
-            payload: RequestPayload::Send(serde_json::json!({"message":"hello"})),
-        },
-        Duration::from_millis(250),
-    )
-    .expect_err("unreachable host");
-    assert_eq!(error.code, AtmErrorCode::DaemonRemoteUnavailable);
+    let request = DaemonRequest {
+        team_name: TEST_TEAM.parse().expect("team"),
+        agent_name: TEST_SENDER.parse().expect("agent"),
+        payload: RequestPayload::Send(serde_json::json!({"message":"hello"})),
+    };
+    for attempt in 0..8 {
+        match request_remote(address, &request, Duration::from_millis(250)) {
+            Err(error) => {
+                assert_eq!(error.code, AtmErrorCode::DaemonRemoteUnavailable);
+                return;
+            }
+            Ok(response) => {
+                assert!(
+                    attempt < 7,
+                    "loopback probe address {address} was reclaimed on every attempt; last response kind: {:?}",
+                    response.kind
+                );
+            }
+        }
+    }
+    unreachable!("loopback retry guard must return or panic inside the loop");
 }
 
 fn closed_loopback_address() -> std::net::SocketAddr {
@@ -200,7 +208,7 @@ fn closed_loopback_address() -> std::net::SocketAddr {
 
 #[test]
 fn remote_acceptance_is_required_for_send_success() {
-    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("listener");
+    let listener = bound_loopback_listener();
     listener
         .set_nonblocking(true)
         .expect("listener nonblocking");
@@ -221,8 +229,15 @@ fn remote_acceptance_is_required_for_send_success() {
         let stop = Arc::clone(&stop);
         let ready_tx = ready_tx;
         thread::spawn(move || {
-            ready_tx.send(()).expect("accept loop ready");
-            accept_tcp_loop(listener, stop, inflight, worker_threads, dispatcher, 8)
+            accept_tcp_loop_with_ready(
+                listener,
+                stop,
+                inflight,
+                worker_threads,
+                dispatcher,
+                8,
+                Some(ready_tx),
+            )
         })
     };
     let request = DaemonRequest {
@@ -261,4 +276,8 @@ fn test_timeout_budget(default_timeout: Duration) -> Duration {
         .filter(|timeout_ms| *timeout_ms > 0)
         .map(Duration::from_millis)
         .unwrap_or(default_timeout)
+}
+
+fn bound_loopback_listener() -> TcpListener {
+    TcpListener::bind(("127.0.0.1", 0)).expect("probe listener")
 }

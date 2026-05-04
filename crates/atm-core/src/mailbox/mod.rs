@@ -312,14 +312,11 @@ mod tests {
     use uuid::Uuid;
 
     use crate::schema::MessageEnvelope;
+    use crate::test_support::{ROLE_TEAM_LEAD, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
     use super::{MAX_MAILBOX_READ_BYTES, append_message, locked_read_modify_write, read_messages};
     use crate::mailbox::lock;
-
-    const ROLE_TEAM_LEAD: &str = "team-lead";
-    const TEST_SENDER: &str = "sender-a";
-    const TEST_TEAM: &str = "test-team";
 
     fn assert_round_trip_matches(actual: &[MessageEnvelope], expected: &[MessageEnvelope]) {
         assert_eq!(actual.len(), expected.len());

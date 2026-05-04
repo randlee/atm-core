@@ -3,21 +3,17 @@ use std::path::PathBuf;
 use serde_json::Map;
 use tempfile::tempdir;
 
-#[path = "../../tests/support.rs"]
-mod support;
-
 use super::{ReadQuery, selected_after_filters};
 use crate::error_codes::AtmErrorCode;
 use crate::mailbox::source::SourcedMessage;
 use crate::read::projection::idle_notification_sender;
 use crate::schema::{LegacyMessageId, MessageEnvelope};
+use crate::test_support::ROLE_TEAM_LEAD;
 use crate::types::{
     AckActivationMode, AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
     TeamName,
 };
 use crate::workflow;
-
-use support::ROLE_TEAM_LEAD;
 
 const TEST_TEAM: &str = "test-team";
 const TEST_SOURCE_FILE: &str = "test-sender.json";

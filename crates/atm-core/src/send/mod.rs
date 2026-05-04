@@ -33,8 +33,6 @@ pub(super) mod hook;
 pub(crate) mod input;
 pub(crate) mod summary;
 
-const ROLE_TEAM_LEAD: &str = "team-lead";
-
 #[derive(Debug, Clone)]
 pub enum SendMessageSource {
     Inline(String),
