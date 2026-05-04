@@ -171,11 +171,6 @@ Initial crate requirement IDs:
 - `REQ-CORE-DOCTOR-002` `atm-core` owns the daemon-health query contract
   consumed by `atm doctor`. Satisfies:
   `REQ-P-DOCTOR-001`, `REQ-P-OBS-001`.
-- `REQ-CORE-TEST-001` `atm-core` owns the workspace subprocess-isolation rule
-  for ATM tests, including test-only fixture identifiers and narrow
-  production-compatibility carve-outs for env-read and role-significant cases.
-  Satisfies:
-  `REQ-P-TEST-001`.
 - `REQ-CORE-TEST-RUNTIME-001` `atm-core` owns the rule that core correctness is
   testable in process without daemon spawning. Satisfies:
   `REQ-P-TEST-001`.
@@ -504,32 +499,3 @@ Required service rules:
   before partial restore is committed
 - `members` must remain useful as a local roster inspection command even when
   daemon or hook state is unavailable
-
-## 10. Test Subprocess Isolation
-
-Requirement ID:
-- `REQ-CORE-TEST-001`
-
-See also:
-- [`../requirements.md`](../requirements.md) §18.1
-- [`../cross-platform-guidelines.md`](../cross-platform-guidelines.md) §Test Subprocess Isolation
-
-Required service rules:
-- tests use test-only fixture constants for all team, agent, and
-  role-significant names
-- ATM subprocess tests provision temp-owned `ATM_HOME` and
-  `ATM_CONFIG_HOME`
-- tests that exercise team-directory discovery also provision `ATM_TEAMS_DIR`
-- subprocess tests pass `ATM_*` vars per-command rather than through ambient
-  process state
-- direct-call tests use explicit `team_override` / `actor_override` inputs or
-  TempDir-scoped config; `team_override: None` with an empty or unrelated
-  current directory is a violation
-- test fixtures write all required config to TempDir-owned state and do not
-  read repo `.atm.toml` or live mailbox directories
-- the raw literal `team-lead` may appear only behind a named role constant
-  when the production role itself is semantically required
-- tests that validate `ATM_TEAM` or `ATM_IDENTITY` reads may set those
-  variables explicitly, but only inside the isolated subprocess harness
-- ambient reuse of developer workstation ATM home, team, or identity state is
-  forbidden
