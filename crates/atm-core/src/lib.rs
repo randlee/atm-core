@@ -52,9 +52,12 @@ pub(crate) mod workflow;
 
 pub use boundary::{
     AtmFramePayload, AtmProtocol, AtmRequestEnvelope, AtmResponseEnvelope, ClientTransport,
-    ClientTransportRequest, ClientTransportResponse, DispatchRequestEnvelope,
-    DispatchResponseEnvelope, NotificationEvent, NotificationSink, ReconcileCoordinator,
-    ReconcileRequest, ReconcileResult, RequestDispatcher, RuntimeStatusSnapshot, ServerTransport,
-    ServerTransportRequest, ServerTransportResponse, StatusSource, WatchEventBatch,
-    WatchEventSource, WatchSubscriptionRequest,
+    ClientTransportRequest, ClientTransportResponse, ConfigIngress, ConfigLoadRequest,
+    ConfigLoadResponse, DispatchRequestEnvelope, DispatchResponseEnvelope, InboxExport,
+    InboxExportRequest, InboxExportResponse, InboxIngress, InboxIngressRequest,
+    InboxIngressResponse, MailStore, MailStoreRequest, MailStoreResponse, NotificationEvent,
+    NotificationSink, ReconcileCoordinator, ReconcileRequest, ReconcileResult, RequestDispatcher,
+    RosterStore, RosterStoreRequest, RosterStoreResponse, RuntimeStatusSnapshot, ServerTransport,
+    ServerTransportRequest, ServerTransportResponse, StatusSource, TaskStore, TaskStoreRequest,
+    TaskStoreResponse, WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
 };

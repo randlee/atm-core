@@ -246,14 +246,11 @@ What is already landed:
   - owner-crate test-bypass checks
 
 What is not landed yet:
-- `crates/atm-daemon/` crate scaffold
-- `crates/atm-rusqlite/` crate scaffold
-- `MailStore`, `TaskStore`, `RosterStore`, `ConfigIngress`, `InboxIngress`, and
-  `InboxExport` Rust traits
-- adapter implementation shells for daemon/runtime, SQLite, config ingestion,
-  inbox ingestion/export, and notification/status plumbing
-- explicit composition modules that wire the CLI client root and daemon runtime
-  root through only the boundary contracts
+- config ingestion and inbox ingress/export adapter shells
+- final module splits that move daemon/runtime and sqlite adapters out of the
+  current crate-root skeleton files
+- any future composition path that connects runtime wiring to sqlite-backed
+  adapters without introducing a direct `atm-daemon -> atm-rusqlite` edge
 - service orchestration shells that route retained command behavior through the
   new boundary-owned call graph
 
@@ -269,7 +266,44 @@ Gate status before Wave 2:
 ### R.3.1 Skeleton First
 
 Status:
-- pending
+- in progress
+
+Current landed subset:
+- `crates/atm-daemon` and `crates/atm-rusqlite` exist as crate-root skeletons
+- `crates/atm-core/src/boundary/mod.rs` now carries stub traits plus request/result shells for:
+  - `MailStore`
+  - `TaskStore`
+  - `RosterStore`
+  - `ConfigIngress`
+  - `InboxIngress`
+  - `InboxExport`
+- daemon runtime stub adapters are landed for:
+  - `ServerTransport`
+  - `NotificationSink`
+  - `StatusSource`
+  - `WatchEventSource`
+  - `ReconcileCoordinator`
+- sqlite stub adapters are landed for:
+  - `MailStore`
+  - `TaskStore`
+  - `RosterStore`
+- explicit composition modules exist in:
+  - `crates/atm-daemon/src/composition.rs`
+  - `crates/atm/src/composition.rs`
+- `just lint` passes on the current skeleton branch with:
+  - no direct CLI-to-daemon edge
+  - no direct CLI-to-sqlite edge
+  - no direct daemon-to-sqlite edge permitted by the boundary contract
+
+Still required before `R.3.1` can close:
+- config ingress and inbox ingress/export adapter shells
+- final daemon/rusqlite adapter module splits beyond the current crate-root skeletons
+- completion of the retained planned runtime shells that still exist only in docs
+  if Wave 2 continues to keep them in scope:
+  - peer client transport
+  - request dispatcher
+- a trait-only composition path for sqlite-backed runtime assembly that does not
+  require a direct `atm-daemon -> atm-rusqlite` dependency
 
 Required outcome:
 - traits/facades exist

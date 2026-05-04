@@ -468,7 +468,7 @@ name: MailStore
 public:
   trait: MailStore
   facade: null
-  notes: planned trait name — not yet landed (Wave 2, R.4)
+  notes: stub trait landed in atm_core::boundary; contract shape remains skeletal
 
 implementation:
   type: null
@@ -496,10 +496,7 @@ dependencies:
 
 references:
   scope: outside_owner_crate
-  forbidden:
-    - SqliteMailStore
-    - RusqliteStore
-    - rusqlite::Connection
+  forbidden: []
 
 contracts:
   request_types:
@@ -522,9 +519,9 @@ enforcement:
     - no_concrete_store_leakage
 
 status:
-  state: deferred
+  state: stub_landed
   notes:
-    - Wave 2 (R.4) — implementation sprint not yet scheduled
+    - trait plus request/response stubs landed in atm_core::boundary
     - mail state remains distinct from task and roster state
 ```
 
@@ -545,7 +542,7 @@ name: TaskStore
 public:
   trait: TaskStore
   facade: null
-  notes: planned trait name — not yet landed (Wave 2, R.4)
+  notes: stub trait landed in atm_core::boundary; contract shape remains skeletal
 
 implementation:
   type: null
@@ -573,9 +570,7 @@ dependencies:
 
 references:
   scope: outside_owner_crate
-  forbidden:
-    - SqliteTaskStore
-    - rusqlite::Connection
+  forbidden: []
 
 contracts:
   request_types:
@@ -598,9 +593,9 @@ enforcement:
     - no_concrete_store_leakage
 
 status:
-  state: deferred
+  state: stub_landed
   notes:
-    - Wave 2 (R.4) — implementation sprint not yet scheduled
+    - trait plus request/response stubs landed in atm_core::boundary
     - ack-specific state changes belong here even when ack is modeled through send
 ```
 
@@ -621,7 +616,7 @@ name: RosterStore
 public:
   trait: RosterStore
   facade: null
-  notes: planned trait name — not yet landed (Wave 2, R.4)
+  notes: stub trait landed in atm_core::boundary; contract shape remains skeletal
 
 implementation:
   type: null
@@ -649,9 +644,7 @@ dependencies:
 
 references:
   scope: outside_owner_crate
-  forbidden:
-    - SqliteRosterStore
-    - rusqlite::Connection
+  forbidden: []
 
 contracts:
   request_types:
@@ -674,9 +667,9 @@ enforcement:
     - no_concrete_store_leakage
 
 status:
-  state: deferred
+  state: stub_landed
   notes:
-    - Wave 2 (R.4) — implementation sprint not yet scheduled
+    - trait plus request/response stubs landed in atm_core::boundary
     - live status belongs elsewhere; this boundary owns durable roster truth only
 ```
 
@@ -697,7 +690,7 @@ name: ConfigIngress
 public:
   trait: ConfigIngress
   facade: null
-  notes: planned trait name — not yet landed (Wave 2, R.4)
+  notes: stub trait landed in atm_core::boundary; contract shape remains skeletal
 
 implementation:
   type: null
@@ -726,9 +719,7 @@ dependencies:
 
 references:
   scope: outside_owner_crate
-  forbidden:
-    - load_team_config
-    - std::fs::read_to_string
+  forbidden: []
 
 contracts:
   request_types:
@@ -751,9 +742,9 @@ enforcement:
     - no_direct_config_parser_calls
 
 status:
-  state: deferred
+  state: stub_landed
   notes:
-    - Wave 2 (R.4) — implementation sprint not yet scheduled
+    - trait plus request/response stubs landed in atm_core::boundary
     - this boundary replaces direct command/service calls into a concrete parser module
 ```
 
@@ -774,7 +765,7 @@ name: InboxIngress
 public:
   trait: InboxIngress
   facade: null
-  notes: planned trait name — not yet landed (Wave 2, R.4)
+  notes: stub trait landed in atm_core::boundary; contract shape remains skeletal
 
 implementation:
   type: null
@@ -802,8 +793,7 @@ dependencies:
 
 references:
   scope: outside_owner_crate
-  forbidden:
-    - mailbox::store::observe_source_files
+  forbidden: []
 
 contracts:
   request_types:
@@ -826,9 +816,9 @@ enforcement:
     - no_direct_mailbox_helper_calls
 
 status:
-  state: deferred
+  state: stub_landed
   notes:
-    - Wave 2 (R.4) — implementation sprint not yet scheduled
+    - trait plus request/response stubs landed in atm_core::boundary
     - watcher-driven reconcile should call this boundary rather than store helpers directly
 ```
 
@@ -849,7 +839,7 @@ name: InboxExport
 public:
   trait: InboxExport
   facade: null
-  notes: planned trait name — not yet landed (Wave 2, R.4)
+  notes: stub trait landed in atm_core::boundary; contract shape remains skeletal
 
 implementation:
   type: null
@@ -877,9 +867,7 @@ dependencies:
 
 references:
   scope: outside_owner_crate
-  forbidden:
-    - mailbox::store::with_locked_source_files
-    - mailbox::store::commit_source_files
+  forbidden: []
 
 contracts:
   request_types:
@@ -902,9 +890,9 @@ enforcement:
     - no_direct_mailbox_helper_calls
 
 status:
-  state: deferred
+  state: stub_landed
   notes:
-    - Wave 2 (R.4) — implementation sprint not yet scheduled
+    - trait plus request/response stubs landed in atm_core::boundary
     - send and receive state transitions should reach compatibility files through this boundary only
 ```
 

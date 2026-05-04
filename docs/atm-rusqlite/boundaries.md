@@ -3,8 +3,9 @@
 This document captures the planned concrete SQLite adapters for Phase R.
 
 Current design assumption:
-- `atm-daemon::bootstrap` is the production runtime composition root
-- thin callers and extension crates must not depend on `atm-rusqlite`
+- concrete sqlite adapters stay private to this crate
+- no external crate should depend on `atm-rusqlite` directly
+- any future runtime composition must go through boundary traits/facades rather than a direct daemon-to-sqlite crate edge
 
 ## SqliteMailStoreAdapter
 
@@ -20,13 +21,13 @@ public:
 
 implementation:
   type: SqliteMailStore
-  module: atm_rusqlite::mail_store
+  module: atm_rusqlite
   visibility: private
   constructor: private
 
 composition:
   roots:
-    - atm_daemon::bootstrap
+    - atm_rusqlite::assemble_boundary
 
 ownership:
   io_owns:
@@ -37,13 +38,13 @@ ownership:
     - process_spawn
 
 dependencies:
-  allowed_dependents:
-    - atm-daemon
+  allowed_dependents: []
   allowed_dependencies:
     - atm-core
     - rusqlite
   forbidden_edges:
     - atm -> atm-rusqlite
+    - atm-daemon -> atm-rusqlite
     - atm-graft -> atm-rusqlite
 
 references:
@@ -77,9 +78,10 @@ enforcement:
     - no_public_reexport
 
 status:
-  state: planned
+  state: stub_landed
   notes:
     - assembled only by the daemon runtime composition root
+    - stub implementation currently lives at crate root and is assembled through atm_rusqlite::SqliteBoundaryAssembly
 ```
 
 Purpose:
@@ -102,13 +104,13 @@ public:
 
 implementation:
   type: SqliteTaskStore
-  module: atm_rusqlite::task_store
+  module: atm_rusqlite
   visibility: private
   constructor: private
 
 composition:
   roots:
-    - atm_daemon::bootstrap
+    - atm_rusqlite::assemble_boundary
 
 ownership:
   io_owns:
@@ -119,13 +121,13 @@ ownership:
     - process_spawn
 
 dependencies:
-  allowed_dependents:
-    - atm-daemon
+  allowed_dependents: []
   allowed_dependencies:
     - atm-core
     - rusqlite
   forbidden_edges:
     - atm -> atm-rusqlite
+    - atm-daemon -> atm-rusqlite
     - atm-graft -> atm-rusqlite
 
 references:
@@ -159,9 +161,10 @@ enforcement:
     - no_public_reexport
 
 status:
-  state: planned
+  state: stub_landed
   notes:
     - ack-related task transitions still resolve through send-shape workflows, not a separate public ack API
+    - stub implementation currently lives at crate root and is assembled through atm_rusqlite::SqliteBoundaryAssembly
 ```
 
 Purpose:
@@ -184,13 +187,13 @@ public:
 
 implementation:
   type: SqliteRosterStore
-  module: atm_rusqlite::roster_store
+  module: atm_rusqlite
   visibility: private
   constructor: private
 
 composition:
   roots:
-    - atm_daemon::bootstrap
+    - atm_rusqlite::assemble_boundary
 
 ownership:
   io_owns:
@@ -201,13 +204,13 @@ ownership:
     - process_spawn
 
 dependencies:
-  allowed_dependents:
-    - atm-daemon
+  allowed_dependents: []
   allowed_dependencies:
     - atm-core
     - rusqlite
   forbidden_edges:
     - atm -> atm-rusqlite
+    - atm-daemon -> atm-rusqlite
     - atm-graft -> atm-rusqlite
 
 references:
@@ -241,9 +244,10 @@ enforcement:
     - no_public_reexport
 
 status:
-  state: planned
+  state: stub_landed
   notes:
     - durable roster truth remains distinct from live status caches
+    - stub implementation currently lives at crate root and is assembled through atm_rusqlite::SqliteBoundaryAssembly
 ```
 
 Purpose:

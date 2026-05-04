@@ -4,8 +4,6 @@ This document captures runtime-owned concrete adapters for Phase R.
 
 Current design assumption:
 - `atm-daemon` is the production runtime composition root
-- direct dependency on `atm-rusqlite` is allowed for runtime assembly in the
-  current design line
 - `allowed_dependents: []` means no external crate should depend on these
   daemon-private concrete adapters
 
@@ -23,13 +21,13 @@ public:
 
 implementation:
   type: LocalSocketServerTransport
-  module: atm_daemon::transport::local_socket
-  visibility: private
-  constructor: private
+  module: atm_daemon
+  visibility: pub(crate)
+  constructor: pub(crate)
 
 composition:
   roots:
-    - atm_daemon::bootstrap
+    - atm_daemon::composition::compose_runtime
 
 ownership:
   io_owns:
@@ -44,11 +42,11 @@ dependencies:
   allowed_dependents: []
   allowed_dependencies:
     - atm-core
-    - atm-rusqlite
     - tokio
   forbidden_edges:
     - atm -> atm-daemon
     - atm-graft -> atm-daemon
+    - atm-daemon -> atm-rusqlite
 
 references:
   scope: outside_owner_crate
@@ -80,9 +78,10 @@ enforcement:
     - no_cli_to_daemon_edge
 
 status:
-  state: planned
+  state: stub_landed
   notes:
     - thin clients must stop at ClientTransport and AtmProtocol
+    - stub implementation currently lives at crate root and is assembled through atm_daemon::composition
 ```
 
 Purpose:
@@ -105,13 +104,13 @@ public:
 
 implementation:
   type: PeerClientTransport
-  module: atm_daemon::transport::peer_client
+  module: atm_daemon
   visibility: private
   constructor: private
 
 composition:
   roots:
-    - atm_daemon::bootstrap
+    - atm_daemon::composition::compose_runtime
 
 ownership:
   io_owns:
@@ -126,11 +125,11 @@ dependencies:
   allowed_dependents: []
   allowed_dependencies:
     - atm-core
-    - atm-rusqlite
     - tokio
   forbidden_edges:
     - atm -> atm-daemon
     - atm-graft -> atm-daemon
+    - atm-daemon -> atm-rusqlite
 
 references:
   scope: outside_owner_crate
@@ -163,6 +162,7 @@ status:
   state: planned
   notes:
     - remote daemon-to-daemon delivery uses the same shared client transport family
+    - runtime composition will land through atm_daemon::composition when this adapter is introduced
 ```
 
 Purpose:
@@ -185,13 +185,13 @@ public:
 
 implementation:
   type: FileWatchEventSource
-  module: atm_daemon::watch::source
-  visibility: private
-  constructor: private
+  module: atm_daemon
+  visibility: pub(crate)
+  constructor: pub(crate)
 
 composition:
   roots:
-    - atm_daemon::bootstrap
+    - atm_daemon::composition::compose_runtime
 
 ownership:
   io_owns:
@@ -204,10 +204,10 @@ dependencies:
   allowed_dependents: []
   allowed_dependencies:
     - atm-core
-    - atm-rusqlite
   forbidden_edges:
     - atm -> atm-daemon
     - atm-graft -> atm-daemon
+    - atm-daemon -> atm-rusqlite
 
 references:
   scope: outside_owner_crate
@@ -239,9 +239,10 @@ enforcement:
     - no_watch_io_outside_boundary
 
 status:
-  state: planned
+  state: stub_landed
   notes:
     - raw watch event capture stays runtime-private
+    - stub implementation currently lives at crate root and is assembled through atm_daemon::composition
 ```
 
 Purpose:
@@ -264,13 +265,13 @@ public:
 
 implementation:
   type: DaemonReconcileCoordinator
-  module: atm_daemon::watch::reconcile
-  visibility: private
-  constructor: private
+  module: atm_daemon
+  visibility: pub(crate)
+  constructor: pub(crate)
 
 composition:
   roots:
-    - atm_daemon::bootstrap
+    - atm_daemon::composition::compose_runtime
 
 ownership:
   io_owns:
@@ -284,10 +285,10 @@ dependencies:
   allowed_dependents: []
   allowed_dependencies:
     - atm-core
-    - atm-rusqlite
   forbidden_edges:
     - atm -> atm-daemon
     - atm-graft -> atm-daemon
+    - atm-daemon -> atm-rusqlite
 
 references:
   scope: outside_owner_crate
@@ -317,9 +318,10 @@ enforcement:
     - no_store_or_transport_bypass_in_reconcile
 
 status:
-  state: planned
+  state: stub_landed
   notes:
     - runtime reconcile remains separate from raw watch source implementation
+    - stub implementation currently lives at crate root and is assembled through atm_daemon::composition
 ```
 
 Purpose:
@@ -342,13 +344,13 @@ public:
 
 implementation:
   type: DaemonRequestDispatcher
-  module: atm_daemon::dispatcher
+  module: atm_daemon
   visibility: private
   constructor: private
 
 composition:
   roots:
-    - atm_daemon::bootstrap
+    - atm_daemon::composition::compose_runtime
 
 ownership:
   io_owns:
@@ -361,10 +363,10 @@ dependencies:
   allowed_dependents: []
   allowed_dependencies:
     - atm-core
-    - atm-rusqlite
   forbidden_edges:
     - atm -> atm-daemon
     - atm-graft -> atm-daemon
+    - atm-daemon -> atm-rusqlite
 
 references:
   scope: outside_owner_crate
@@ -397,6 +399,7 @@ status:
   state: planned
   notes:
     - dispatcher remains thin and runtime-owned
+    - runtime composition will land through atm_daemon::composition when this adapter is introduced
 ```
 
 Purpose:
@@ -404,3 +407,158 @@ Purpose:
 
 Notes:
 - This adapter exists to keep transport loops and service logic separate.
+
+## DaemonNotificationSinkAdapter
+
+```yaml
+boundary_id: BOUNDARY-NotificationSink-Daemon
+owner_package: atm-daemon
+owner_crate_path: atm_daemon
+name: DaemonNotificationSinkAdapter
+
+public:
+  trait: NotificationSink
+  facade: null
+
+implementation:
+  type: DaemonNotificationSink
+  module: atm_daemon
+  visibility: pub(crate)
+  constructor: pub(crate)
+
+composition:
+  roots:
+    - atm_daemon::composition::compose_runtime
+
+ownership:
+  io_owns:
+    - outbound_notification_delivery
+  io_forbidden:
+    - sqlite
+    - socket_io
+
+dependencies:
+  allowed_dependents: []
+  allowed_dependencies:
+    - atm-core
+  forbidden_edges:
+    - atm -> atm-daemon
+    - atm-graft -> atm-daemon
+    - atm-daemon -> atm-rusqlite
+
+references:
+  scope: outside_owner_crate
+  forbidden:
+    - DaemonNotificationSink
+    - std::process::Command
+
+contracts:
+  request_types:
+    - notification payload requests
+  response_types:
+    - notification delivery results
+  error_types:
+    - AtmError
+
+testing:
+  allowed_test_double_paths:
+    - atm_core::test_support::StubNotificationSink
+  forbidden_test_bypasses:
+    - std::process::Command
+
+enforcement:
+  lint_rules:
+    - LINT-BOUNDARY-NOTIFICATION-SINK-DAEMON-EDGES
+    - LINT-BOUNDARY-NOTIFICATION-SINK-DAEMON-REFERENCES
+  review_gates:
+    - no_public_impl
+    - no_process_spawn_outside_notification_boundary
+
+status:
+  state: stub_landed
+  notes:
+    - stub implementation currently lives at crate root and is assembled through atm_daemon::composition
+```
+
+Purpose:
+- Owns the daemon runtime adapter behind the NotificationSink contract.
+
+Notes:
+- This keeps process-spawn or plugin-style delivery out of service logic.
+
+## DaemonStatusSourceAdapter
+
+```yaml
+boundary_id: BOUNDARY-StatusSource-Daemon
+owner_package: atm-daemon
+owner_crate_path: atm_daemon
+name: DaemonStatusSourceAdapter
+
+public:
+  trait: StatusSource
+  facade: null
+
+implementation:
+  type: DaemonStatusSource
+  module: atm_daemon
+  visibility: pub(crate)
+  constructor: pub(crate)
+
+composition:
+  roots:
+    - atm_daemon::composition::compose_runtime
+
+ownership:
+  io_owns:
+    - runtime_status_snapshots
+    - status_event_delivery
+  io_forbidden:
+    - sqlite
+    - socket_io
+
+dependencies:
+  allowed_dependents: []
+  allowed_dependencies:
+    - atm-core
+  forbidden_edges:
+    - atm -> atm-daemon
+    - atm-graft -> atm-daemon
+    - atm-daemon -> atm-rusqlite
+
+references:
+  scope: outside_owner_crate
+  forbidden:
+    - DaemonStatusSource
+
+contracts:
+  request_types:
+    - status source requests
+  response_types:
+    - status snapshot batches
+  error_types:
+    - AtmError
+
+testing:
+  allowed_test_double_paths:
+    - atm_core::test_support::StubStatusSource
+  forbidden_test_bypasses: []
+
+enforcement:
+  lint_rules:
+    - LINT-BOUNDARY-STATUS-SOURCE-DAEMON-EDGES
+    - LINT-BOUNDARY-STATUS-SOURCE-DAEMON-REFERENCES
+  review_gates:
+    - no_public_impl
+    - no_status_leakage_into_roster_store
+
+status:
+  state: stub_landed
+  notes:
+    - stub implementation currently lives at crate root and is assembled through atm_daemon::composition
+```
+
+Purpose:
+- Owns the daemon runtime adapter behind the StatusSource contract.
+
+Notes:
+- Durable roster truth remains separate from runtime status sourcing.
