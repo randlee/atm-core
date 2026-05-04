@@ -1,3 +1,5 @@
+mod support;
+
 use std::fs;
 use std::process::Command;
 
@@ -7,6 +9,9 @@ use atm_core::schema::{
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use chrono::{Duration, Utc};
 use serde_json::Value;
+use support::{
+    TEST_LEAD, TEST_LEAD_ADDRESS, TEST_ORIGIN, TEST_SENDER, TEST_SENDER_ADDRESS, TEST_TEAM,
+};
 use uuid::Uuid;
 
 fn parse_inbox_values(raw: &str) -> Vec<Value> {
@@ -25,10 +30,10 @@ fn parse_inbox_values(raw: &str) -> Vec<Value> {
 
 #[test]
 fn test_ack_transitions_pending_ack_and_appends_reply() {
-    let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
+    let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let message_id = Uuid::new_v4();
     let mut message = fixture.message(
-        "team-lead",
+        TEST_LEAD,
         "please ack",
         true,
         Some(Duration::minutes(5)),
@@ -36,7 +41,7 @@ fn test_ack_transitions_pending_ack_and_appends_reply() {
         message_id,
     );
     message.task_id = Some("TASK-123".parse().expect("task id"));
-    fixture.write_inbox("arch-ctm", &[message]);
+    fixture.write_inbox(TEST_SENDER, &[message]);
 
     let output = fixture.run(&[
         "ack",
@@ -53,20 +58,20 @@ fn test_ack_transitions_pending_ack_and_appends_reply() {
 
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["action"], "ack");
-    assert_eq!(parsed["team"], "atm-dev");
-    assert_eq!(parsed["agent"], "arch-ctm");
+    assert_eq!(parsed["team"], TEST_TEAM);
+    assert_eq!(parsed["agent"], TEST_SENDER);
     assert_eq!(parsed["message_id"], message_id.to_string());
     assert_eq!(parsed["task_id"], "TASK-123");
-    assert_eq!(parsed["reply_target"], "team-lead@atm-dev");
+    assert_eq!(parsed["reply_target"], TEST_LEAD_ADDRESS);
     assert_eq!(parsed["reply_text"], "received and starting");
     assert!(parsed["reply_message_id"].as_str().is_some());
 
-    let inbox = fixture.inbox_contents("arch-ctm");
+    let inbox = fixture.inbox_contents(TEST_SENDER);
     assert_eq!(inbox.len(), 1);
     assert!(inbox[0].read);
     assert!(inbox[0].pending_ack_at.is_some());
     assert!(inbox[0].acknowledged_at.is_none());
-    let workflow = fixture.workflow_state_contents("arch-ctm");
+    let workflow = fixture.workflow_state_contents(TEST_SENDER);
     assert_eq!(
         workflow["messages"][format!("legacy:{message_id}")]["read"],
         true
@@ -78,15 +83,15 @@ fn test_ack_transitions_pending_ack_and_appends_reply() {
             .is_some()
     );
 
-    let replies = fixture.inbox_contents("team-lead");
+    let replies = fixture.inbox_contents(TEST_LEAD);
     assert_eq!(replies.len(), 1);
     assert_eq!(replies[0].text, "received and starting");
-    assert_eq!(replies[0].from, "arch-ctm");
+    assert_eq!(replies[0].from, TEST_SENDER);
     assert_eq!(
         replies[0].acknowledges_message_id,
         Some(LegacyMessageId::from(message_id))
     );
-    let raw_replies = fixture.inbox_json_lines("team-lead");
+    let raw_replies = fixture.inbox_json_lines(TEST_LEAD);
     assert!(
         raw_replies[0]["metadata"]["atm"]["acknowledgesMessageId"]
             .as_str()
@@ -97,13 +102,13 @@ fn test_ack_transitions_pending_ack_and_appends_reply() {
 
 #[test]
 fn test_ack_updates_origin_inbox_file() {
-    let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
+    let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let message_id = Uuid::new_v4();
     fixture.write_origin_inbox(
-        "arch-ctm",
-        "host-a",
+        TEST_SENDER,
+        TEST_ORIGIN,
         &[fixture.message(
-            "team-lead",
+            TEST_LEAD,
             "origin pending",
             true,
             Some(Duration::minutes(5)),
@@ -119,11 +124,11 @@ fn test_ack_updates_origin_inbox_file() {
         fixture.stderr(&output)
     );
 
-    let origin = fixture.origin_inbox_contents("arch-ctm", "host-a");
+    let origin = fixture.origin_inbox_contents(TEST_SENDER, TEST_ORIGIN);
     assert_eq!(origin.len(), 1);
     assert!(origin[0].pending_ack_at.is_some());
     assert!(origin[0].acknowledged_at.is_none());
-    let workflow = fixture.workflow_state_contents("arch-ctm");
+    let workflow = fixture.workflow_state_contents(TEST_SENDER);
     assert!(
         workflow["messages"][format!("legacy:{message_id}")]["acknowledgedAt"]
             .as_str()
@@ -133,12 +138,12 @@ fn test_ack_updates_origin_inbox_file() {
 
 #[test]
 fn test_ack_emits_retained_log_record() {
-    let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
+    let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let message_id = Uuid::new_v4();
     fixture.write_inbox(
-        "arch-ctm",
+        TEST_SENDER,
         &[fixture.message(
-            "team-lead",
+            TEST_LEAD,
             "please ack",
             true,
             Some(Duration::minutes(5)),
@@ -161,7 +166,7 @@ fn test_ack_emits_retained_log_record() {
     assert!(
         records.iter().any(|record| {
             record["fields"]["command"] == "ack"
-                && record["fields"]["agent"] == "arch-ctm"
+                && record["fields"]["agent"] == TEST_SENDER
                 && record["fields"]["message_id"] == message_id.to_string()
         }),
         "stdout: {}",
@@ -171,10 +176,10 @@ fn test_ack_emits_retained_log_record() {
 
 #[test]
 fn test_ack_runs_post_send_hook_with_expected_payload() {
-    let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
+    let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let message_id = Uuid::new_v4();
     let mut message = fixture.message(
-        "team-lead",
+        TEST_LEAD,
         "please ack",
         true,
         Some(Duration::minutes(5)),
@@ -182,11 +187,12 @@ fn test_ack_runs_post_send_hook_with_expected_payload() {
         message_id,
     );
     message.task_id = Some("TASK-123".parse().expect("task id"));
-    fixture.write_inbox("arch-ctm", &[message]);
+    fixture.write_inbox(TEST_SENDER, &[message]);
 
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'team-lead'\ncommand = ['{}', 'capture', '{}']\n",
+        "[[atm.post_send_hooks]]\nrecipient = '{}'\ncommand = ['{}', 'capture', '{}']\n",
+        TEST_LEAD,
         hook_path.display(),
         payload_path.display()
     ));
@@ -205,8 +211,8 @@ fn test_ack_runs_post_send_hook_with_expected_payload() {
     );
     let payload: Value =
         serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
-    assert_eq!(payload["from"], "arch-ctm@atm-dev");
-    assert_eq!(payload["to"], "team-lead@atm-dev");
+    assert_eq!(payload["from"], TEST_SENDER_ADDRESS);
+    assert_eq!(payload["to"], TEST_LEAD_ADDRESS);
     assert_eq!(payload["requires_ack"], false);
     assert_eq!(payload["is_ack"], true);
     assert_eq!(payload["task_id"], "TASK-123");
@@ -215,12 +221,12 @@ fn test_ack_runs_post_send_hook_with_expected_payload() {
 
 #[test]
 fn test_ack_post_send_hook_failure_surfaces_warning() {
-    let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
+    let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let message_id = Uuid::new_v4();
     fixture.write_inbox(
-        "arch-ctm",
+        TEST_SENDER,
         &[fixture.message(
-            "team-lead",
+            TEST_LEAD,
             "please ack",
             true,
             Some(Duration::minutes(5)),
@@ -231,7 +237,8 @@ fn test_ack_post_send_hook_failure_surfaces_warning() {
 
     let (hook_path, payload_path) = fixture.install_hook_fixture("fail");
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'team-lead'\ncommand = ['{}', 'fail', '{}']\n",
+        "[[atm.post_send_hooks]]\nrecipient = '{}'\ncommand = ['{}', 'fail', '{}']\n",
+        TEST_LEAD,
         hook_path.display(),
         payload_path.display()
     ));
@@ -252,12 +259,12 @@ fn test_ack_post_send_hook_failure_surfaces_warning() {
 
 #[test]
 fn test_ack_rejects_already_acknowledged_message() {
-    let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
+    let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let message_id = Uuid::new_v4();
     fixture.write_inbox(
-        "arch-ctm",
+        TEST_SENDER,
         &[fixture.message(
-            "team-lead",
+            TEST_LEAD,
             "already acked",
             true,
             None,
@@ -278,11 +285,11 @@ fn test_ack_rejects_already_acknowledged_message() {
 
 #[test]
 fn test_ack_rejects_message_that_is_not_pending() {
-    let fixture = Fixture::new(&["arch-ctm", "team-lead"]);
+    let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let message_id = Uuid::new_v4();
     fixture.write_inbox(
-        "arch-ctm",
-        &[fixture.message("team-lead", "plain read", true, None, None, message_id)],
+        TEST_SENDER,
+        &[fixture.message(TEST_LEAD, "plain read", true, None, None, message_id)],
     );
 
     let output = fixture.run(&["ack", &message_id.to_string(), "nope"]);
@@ -314,8 +321,8 @@ impl Fixture {
             .args(args)
             .env("ATM_HOME", self.tempdir.path())
             .env("ATM_CONFIG_HOME", self.tempdir.path())
-            .env("ATM_IDENTITY", "arch-ctm")
-            .env("ATM_TEAM", "atm-dev")
+            .env("ATM_IDENTITY", TEST_SENDER)
+            .env("ATM_TEAM", TEST_TEAM)
             .current_dir(self.tempdir.path())
             .output()
             .expect("run atm")
@@ -438,7 +445,7 @@ impl Fixture {
             .path()
             .join(".claude")
             .join("teams")
-            .join("atm-dev")
+            .join(TEST_TEAM)
     }
 
     fn install_hook_fixture(&self, mode: &str) -> (std::path::PathBuf, std::path::PathBuf) {
@@ -481,7 +488,7 @@ impl Fixture {
             text: text.to_string(),
             timestamp: timestamp.into(),
             read,
-            source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
+            source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
             summary: None,
             message_id: Some(LegacyMessageId::from(message_id)),
             pending_ack_at: pending_offset

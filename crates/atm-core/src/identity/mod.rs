@@ -56,7 +56,9 @@ pub(crate) fn resolve_sender_identity(
 /// Returns [`AtmError`] with
 /// [`crate::error_codes::AtmErrorCode::IdentityUnavailable`] when
 /// `ATM_IDENTITY` is not set in the current environment.
-pub fn resolve_runtime_sender_identity(config: Option<&AtmConfig>) -> Result<AgentName, AtmError> {
+pub(crate) fn resolve_runtime_sender_identity(
+    config: Option<&AtmConfig>,
+) -> Result<AgentName, AtmError> {
     crate::config::resolve_identity(config).ok_or_else(AtmError::identity_unavailable)
 }
 
@@ -65,14 +67,14 @@ fn resolve_aliased_agent(value: &str, config: Option<&AtmConfig>) -> Result<Agen
 }
 
 #[cfg(test)]
-pub fn resolve_hook_identity(
+pub(crate) fn resolve_hook_identity(
     team_override: Option<&str>,
     config: Option<&AtmConfig>,
-) -> Result<(String, String), AtmError> {
+) -> Result<(AgentName, crate::types::TeamName), AtmError> {
     let agent = resolve_runtime_sender_identity(config)?;
     let team = crate::config::resolve_team(team_override, config)
         .ok_or_else(AtmError::team_unavailable)?;
-    Ok((agent.into_inner(), team.into_inner()))
+    Ok((agent, team))
 }
 
 #[cfg(test)]
@@ -84,15 +86,20 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use crate::config::AtmConfig;
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::AgentName;
 
-    use super::{resolve_hook_identity, resolve_runtime_sender_identity, resolve_sender_identity};
+    #[cfg(unix)]
+    use super::resolve_sender_identity;
+    use super::{resolve_hook_identity, resolve_runtime_sender_identity};
+    #[cfg(unix)]
+    use crate::roles::ROLE_TEAM_LEAD;
 
     #[test]
     #[serial_test::serial(env)]
     fn resolves_sender_identity_from_environment() {
         let original_identity = env::var_os("ATM_IDENTITY");
-        set_env_var("ATM_IDENTITY", "arch-ctm");
+        set_env_var("ATM_IDENTITY", TEST_SENDER);
 
         let config = AtmConfig {
             identity: Some("config-agent".into()),
@@ -101,7 +108,7 @@ mod tests {
         };
         assert_eq!(
             resolve_runtime_sender_identity(Some(&config)).expect("identity"),
-            AgentName::from_validated("arch-ctm")
+            AgentName::from_validated(TEST_SENDER)
         );
 
         restore("ATM_IDENTITY", original_identity);
@@ -130,12 +137,12 @@ mod tests {
     fn resolves_hook_identity_from_environment() {
         let original_identity = env::var_os("ATM_IDENTITY");
         let original_team = env::var_os("ATM_TEAM");
-        set_env_var("ATM_IDENTITY", "arch-ctm");
-        set_env_var("ATM_TEAM", "atm-dev");
+        set_env_var("ATM_IDENTITY", TEST_SENDER);
+        set_env_var("ATM_TEAM", TEST_TEAM);
 
         let (agent, team) = resolve_hook_identity(None, None).expect("hook identity");
-        assert_eq!(agent, "arch-ctm");
-        assert_eq!(team, "atm-dev");
+        assert_eq!(agent.as_str(), TEST_SENDER);
+        assert_eq!(team.as_str(), TEST_TEAM);
 
         restore("ATM_IDENTITY", original_identity);
         restore("ATM_TEAM", original_team);
@@ -183,7 +190,7 @@ mod tests {
         .expect("hook file");
 
         let mut aliases = std::collections::BTreeMap::new();
-        aliases.insert("lead".to_string(), "team-lead".to_string());
+        aliases.insert("lead".to_string(), ROLE_TEAM_LEAD.to_string());
         let config = AtmConfig {
             aliases,
             ..Default::default()
@@ -191,7 +198,7 @@ mod tests {
 
         assert_eq!(
             resolve_sender_identity(None, Some(&config)).expect("send identity"),
-            AgentName::from_validated("team-lead")
+            AgentName::from_validated(ROLE_TEAM_LEAD)
         );
 
         let _ = fs::remove_file(hook_path);

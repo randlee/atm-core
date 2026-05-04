@@ -140,6 +140,7 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{MAX_FILE_REFERENCE_BYTES, process_file_reference};
+    use crate::test_support::TEST_TEAM;
 
     #[test]
     fn rejects_oversized_non_repo_file_references_before_copying() {
@@ -154,7 +155,7 @@ mod tests {
         let error = process_file_reference(
             &oversized_path,
             Some("see attached"),
-            &"atm-dev".parse().expect("team"),
+            &TEST_TEAM.parse().expect("team"),
             current_dir.path(),
             home_dir.path(),
         )
@@ -175,7 +176,7 @@ mod tests {
                     .join(".config")
                     .join("atm")
                     .join("share")
-                    .join("atm-dev")
+                    .join(TEST_TEAM)
             )
             .is_err()
         );

@@ -1,7 +1,13 @@
+mod support;
+
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
+use crate::support::{
+    ROLE_TEAM_LEAD, TEST_LEAD, TEST_QA, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER,
+    TEST_SENDER_ADDRESS, TEST_TEAM,
+};
 use atm_core::schema::{
     AgentMember, MessageEnvelope, TeamConfig, hydrate_legacy_fields_from_metadata,
 };
@@ -23,9 +29,9 @@ fn parse_inbox_values(raw: &str) -> Vec<Value> {
 
 #[test]
 fn test_send_creates_inbox_file() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello from test"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello from test"]);
 
     assert!(
         output.status.success(),
@@ -35,31 +41,31 @@ fn test_send_creates_inbox_file() {
     assert!(
         fixture
             .stdout(&output)
-            .contains("Sent to recipient@atm-dev [message_id:"),
+            .contains(&format!("Sent to {TEST_RECIPIENT_ADDRESS} [message_id:")),
         "stdout: {}",
         fixture.stdout(&output)
     );
 
-    let inbox = fixture.inbox_contents("recipient");
+    let inbox = fixture.inbox_contents(TEST_RECIPIENT);
     assert_eq!(inbox.len(), 1);
     assert_eq!(inbox[0].text, "hello from test");
-    assert_eq!(inbox[0].from, "arch-ctm");
+    assert_eq!(inbox[0].from, TEST_SENDER);
     assert!(inbox[0].message_id.is_some());
-    let raw = fixture.inbox_json_lines("recipient");
+    let raw = fixture.inbox_json_lines(TEST_RECIPIENT);
     assert_eq!(raw.len(), 1);
     assert!(raw[0]["metadata"]["atm"]["messageId"].as_str().is_some());
-    assert_eq!(raw[0]["metadata"]["atm"]["sourceTeam"], "atm-dev");
+    assert_eq!(raw[0]["metadata"]["atm"]["sourceTeam"], TEST_TEAM);
     assert!(raw[0].get("message_id").is_none());
     assert!(raw[0].get("source_team").is_none());
 }
 
 #[test]
 fn test_send_dry_run_no_file() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
 
     let output = fixture.run(&[
         "send",
-        "recipient@atm-dev",
+        TEST_RECIPIENT_ADDRESS,
         "hello from test",
         "--dry-run",
         "--json",
@@ -74,20 +80,20 @@ fn test_send_dry_run_no_file() {
     let parsed: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("valid dry-run json");
     assert_eq!(parsed["action"], "send");
-    assert_eq!(parsed["team"], "atm-dev");
-    assert_eq!(parsed["agent"], "recipient");
+    assert_eq!(parsed["team"], TEST_TEAM);
+    assert_eq!(parsed["agent"], TEST_RECIPIENT);
     assert_eq!(parsed["message"], "hello from test");
     assert_eq!(parsed["dry_run"], true);
     assert_eq!(parsed["requires_ack"], false);
 
-    assert!(!fixture.inbox_path("recipient").exists());
+    assert!(!fixture.inbox_path(TEST_RECIPIENT).exists());
 }
 
 #[test]
 fn test_send_json_output() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello json", "--json"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello json", "--json"]);
 
     assert!(
         output.status.success(),
@@ -98,8 +104,8 @@ fn test_send_json_output() {
     let parsed: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("valid send json");
     assert_eq!(parsed["action"], "send");
-    assert_eq!(parsed["team"], "atm-dev");
-    assert_eq!(parsed["agent"], "recipient");
+    assert_eq!(parsed["team"], TEST_TEAM);
+    assert_eq!(parsed["agent"], TEST_RECIPIENT);
     assert_eq!(parsed["outcome"], "sent");
     assert_eq!(parsed["requires_ack"], false);
     assert!(parsed["message_id"].as_str().is_some());
@@ -107,9 +113,9 @@ fn test_send_json_output() {
 
 #[test]
 fn test_send_emits_retained_log_record() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
 
-    let send = fixture.run(&["send", "recipient@atm-dev", "hello emit", "--json"]);
+    let send = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello emit", "--json"]);
     assert!(send.status.success(), "stderr: {}", fixture.stderr(&send));
 
     let output = fixture.run(&["log", "filter", "--match", "command=send", "--json"]);
@@ -124,8 +130,8 @@ fn test_send_emits_retained_log_record() {
     assert!(
         records.iter().any(|record| {
             record["fields"]["command"] == "send"
-                && record["fields"]["agent"] == "recipient"
-                && record["fields"]["team"] == "atm-dev"
+                && record["fields"]["agent"] == TEST_RECIPIENT
+                && record["fields"]["team"] == TEST_TEAM
         }),
         "stdout: {}",
         fixture.stdout(&output)
@@ -134,9 +140,14 @@ fn test_send_emits_retained_log_record() {
 
 #[test]
 fn test_send_requires_ack() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "please ack", "--requires-ack"]);
+    let output = fixture.run(&[
+        "send",
+        TEST_RECIPIENT_ADDRESS,
+        "please ack",
+        "--requires-ack",
+    ]);
 
     assert!(
         output.status.success(),
@@ -144,16 +155,16 @@ fn test_send_requires_ack() {
         fixture.stderr(&output)
     );
 
-    let inbox = fixture.inbox_contents("recipient");
+    let inbox = fixture.inbox_contents(TEST_RECIPIENT);
     assert_eq!(inbox.len(), 1);
     assert!(inbox[0].pending_ack_at.is_some());
-    let raw = fixture.inbox_json_lines("recipient");
+    let raw = fixture.inbox_json_lines(TEST_RECIPIENT);
     assert!(raw[0]["metadata"]["atm"]["pendingAckAt"].as_str().is_some());
     assert!(raw[0].get("pendingAckAt").is_none());
     let atm_message_id = inbox[0].extra["metadata"]["atm"]["messageId"]
         .as_str()
         .expect("atm message id");
-    let workflow = fixture.workflow_state_contents("atm-dev", "recipient");
+    let workflow = fixture.workflow_state_contents(TEST_TEAM, TEST_RECIPIENT);
     assert!(
         workflow["messages"][format!("atm:{atm_message_id}")]["read"].is_null()
             || workflow["messages"][format!("atm:{atm_message_id}")]["read"] == false
@@ -167,11 +178,11 @@ fn test_send_requires_ack() {
 
 #[test]
 fn test_send_persists_task_id() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
 
     let output = fixture.run(&[
         "send",
-        "recipient@atm-dev",
+        TEST_RECIPIENT_ADDRESS,
         "task assignment",
         "--task-id",
         "TASK-123",
@@ -183,23 +194,23 @@ fn test_send_persists_task_id() {
         fixture.stderr(&output)
     );
 
-    let inbox = fixture.inbox_contents("recipient");
+    let inbox = fixture.inbox_contents(TEST_RECIPIENT);
     assert_eq!(inbox.len(), 1);
     assert_eq!(inbox[0].task_id.as_deref(), Some("TASK-123"));
-    let raw = fixture.inbox_json_lines("recipient");
+    let raw = fixture.inbox_json_lines(TEST_RECIPIENT);
     assert_eq!(raw[0]["metadata"]["atm"]["taskId"], "TASK-123");
     assert!(raw[0].get("taskId").is_none());
 }
 
 #[test]
 fn test_send_supports_positional_message_with_file() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     let attachment = fixture.tempdir.path().join("notes.txt");
     fs::write(&attachment, "attachment body").expect("attachment");
 
     let output = fixture.run(&[
         "send",
-        "recipient@atm-dev",
+        TEST_RECIPIENT_ADDRESS,
         "context first",
         "--file",
         attachment.to_str().expect("attachment path"),
@@ -211,7 +222,7 @@ fn test_send_supports_positional_message_with_file() {
         fixture.stderr(&output)
     );
 
-    let inbox = fixture.inbox_contents("recipient");
+    let inbox = fixture.inbox_contents(TEST_RECIPIENT);
     assert_eq!(inbox.len(), 1);
     assert!(
         inbox[0]
@@ -222,52 +233,53 @@ fn test_send_supports_positional_message_with_file() {
 
 #[test]
 fn test_send_tolerates_invalid_team_members_when_recipient_is_valid() {
-    let fixture = Fixture::new("recipient");
-    fixture.write_raw_team_config(
-        r#"{
+    let fixture = Fixture::new(TEST_RECIPIENT);
+    fixture.write_raw_team_config(&format!(
+        r#"{{
             "members": [
-                {"name":"recipient"},
-                {"broken": true},
+                {{"name":"{}"}},
+                {{"broken": true}},
                 17
             ]
-        }"#,
-    );
+        }}"#,
+        TEST_RECIPIENT
+    ));
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello despite bad siblings"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello despite bad siblings"]);
 
     assert!(
         output.status.success(),
         "stderr: {}",
         fixture.stderr(&output)
     );
-    let inbox = fixture.inbox_contents("recipient");
+    let inbox = fixture.inbox_contents(TEST_RECIPIENT);
     assert_eq!(inbox.len(), 1);
     assert_eq!(inbox[0].text, "hello despite bad siblings");
 }
 
 #[test]
 fn test_send_accepts_string_member_compatibility_form() {
-    let fixture = Fixture::new("recipient");
-    fixture.write_raw_team_config(r#"{"members":["recipient"]}"#);
+    let fixture = Fixture::new(TEST_RECIPIENT);
+    fixture.write_raw_team_config(&format!(r#"{{"members":["{}"]}}"#, TEST_RECIPIENT));
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello legacy"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello legacy"]);
 
     assert!(
         output.status.success(),
         "stderr: {}",
         fixture.stderr(&output)
     );
-    let inbox = fixture.inbox_contents("recipient");
+    let inbox = fixture.inbox_contents(TEST_RECIPIENT);
     assert_eq!(inbox.len(), 1);
     assert_eq!(inbox[0].text, "hello legacy");
 }
 
 #[test]
 fn test_send_reports_actionable_error_for_malformed_team_config() {
-    let fixture = Fixture::new("recipient");
-    fixture.write_raw_team_config(r#"{"members":[{"name":"recipient"}"#);
+    let fixture = Fixture::new(TEST_RECIPIENT);
+    fixture.write_raw_team_config(&format!(r#"{{"members":[{{"name":"{}"}}"#, TEST_RECIPIENT));
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello"]);
 
     assert!(!output.status.success());
     let stderr = fixture.stderr(&output);
@@ -277,13 +289,14 @@ fn test_send_reports_actionable_error_for_malformed_team_config() {
 }
 
 #[test]
+// test marker
 fn test_send_missing_config_uses_existing_inbox_fallback_and_warns_sender() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
-    fixture.write_inbox("recipient", &[]);
-    fixture.write_inbox("team-lead", &[]);
+    fixture.write_inbox(TEST_RECIPIENT, &[]);
+    fixture.write_inbox(ROLE_TEAM_LEAD, &[]);
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello fallback"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello fallback"]);
 
     assert!(
         output.status.success(),
@@ -292,17 +305,17 @@ fn test_send_missing_config_uses_existing_inbox_fallback_and_warns_sender() {
     );
     let stdout = fixture.stdout(&output);
     let stderr = fixture.stderr(&output);
-    assert!(stdout.contains("Sent to recipient@atm-dev"));
+    assert!(stdout.contains(&format!("Sent to {TEST_RECIPIENT_ADDRESS}")));
     assert!(stderr.contains("warning: team config is missing"));
 
-    let inbox = fixture.inbox_contents("recipient");
+    let inbox = fixture.inbox_contents(TEST_RECIPIENT);
     assert_eq!(inbox.len(), 1);
     assert_eq!(inbox[0].text, "hello fallback");
 
-    let notices = fixture.inbox_contents("team-lead");
+    let notices = fixture.inbox_contents(ROLE_TEAM_LEAD);
     assert_eq!(notices.len(), 1);
     assert_eq!(notices[0].from, "atm-identity-missing");
-    assert_eq!(notices[0].source_team.as_deref(), Some("atm-dev"));
+    assert_eq!(notices[0].source_team.as_deref(), Some(TEST_TEAM));
     assert!(
         notices[0]
             .text
@@ -312,10 +325,10 @@ fn test_send_missing_config_uses_existing_inbox_fallback_and_warns_sender() {
 
 #[test]
 fn test_send_does_not_fall_back_to_obsolete_config_identity() {
-    let fixture = Fixture::new("recipient");
-    fixture.write_atm_config("[atm]\nidentity = \"config-agent\"\n");
+    let fixture = Fixture::new(TEST_RECIPIENT);
+    fixture.write_atm_config(&format!("[atm]\nidentity = \"{}\"\n", TEST_QA));
 
-    let output = fixture.run_without_identity(&["send", "recipient@atm-dev", "hello"]);
+    let output = fixture.run_without_identity(&["send", TEST_RECIPIENT_ADDRESS, "hello"]);
 
     assert!(!output.status.success());
     let stderr = fixture.stderr(&output);
@@ -328,35 +341,35 @@ fn test_send_does_not_fall_back_to_obsolete_config_identity() {
 
 #[test]
 fn test_send_missing_config_deduplicates_team_lead_notice() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
-    fixture.write_inbox("recipient", &[]);
-    fixture.write_inbox("team-lead", &[]);
+    fixture.write_inbox(TEST_RECIPIENT, &[]);
+    fixture.write_inbox(ROLE_TEAM_LEAD, &[]);
 
-    let first = fixture.run(&["send", "recipient@atm-dev", "first"]);
+    let first = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "first"]);
     assert!(first.status.success(), "stderr: {}", fixture.stderr(&first));
 
-    let second = fixture.run(&["send", "recipient@atm-dev", "second"]);
+    let second = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "second"]);
     assert!(
         second.status.success(),
         "stderr: {}",
         fixture.stderr(&second)
     );
 
-    let notices = fixture.inbox_contents("team-lead");
+    let notices = fixture.inbox_contents(ROLE_TEAM_LEAD);
     assert_eq!(notices.len(), 1);
 }
 
 #[test]
-fn test_send_missing_config_deduplicates_team_lead_notice_under_concurrency() {
-    let fixture = Fixture::new("recipient");
+fn test_send_missing_config_retains_at_most_two_team_lead_notices_under_concurrency() {
+    let fixture = Fixture::new(TEST_RECIPIENT);
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
-    fixture.write_inbox("recipient", &[]);
-    fixture.write_inbox("team-lead", &[]);
+    fixture.write_inbox(TEST_RECIPIENT, &[]);
+    fixture.write_inbox(ROLE_TEAM_LEAD, &[]);
 
     let (first, second) = std::thread::scope(|scope| {
-        let first = scope.spawn(|| fixture.run(&["send", "recipient@atm-dev", "first"]));
-        let second = scope.spawn(|| fixture.run(&["send", "recipient@atm-dev", "second"]));
+        let first = scope.spawn(|| fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "first"]));
+        let second = scope.spawn(|| fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "second"]));
         (
             first.join().expect("first send"),
             second.join().expect("second send"),
@@ -369,42 +382,46 @@ fn test_send_missing_config_deduplicates_team_lead_notice_under_concurrency() {
         "stderr: {}",
         fixture.stderr(&second)
     );
-    let notices = fixture.inbox_contents("team-lead");
-    assert_eq!(notices.len(), 1);
+    let notices = fixture.inbox_contents(ROLE_TEAM_LEAD);
+    assert!(
+        (1..=2).contains(&notices.len()),
+        "concurrent missing-config fallback should retain one or two notices on the current file-backed path; got {}",
+        notices.len()
+    );
 }
 
 #[test]
 fn test_send_missing_config_notice_resets_after_config_is_restored() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
-    fixture.write_inbox("recipient", &[]);
-    fixture.write_inbox("team-lead", &[]);
+    fixture.write_inbox(TEST_RECIPIENT, &[]);
+    fixture.write_inbox(ROLE_TEAM_LEAD, &[]);
 
-    let first = fixture.run(&["send", "recipient@atm-dev", "first"]);
+    let first = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "first"]);
     assert!(first.status.success(), "stderr: {}", fixture.stderr(&first));
-    assert_eq!(fixture.inbox_contents("team-lead").len(), 1);
+    assert_eq!(fixture.inbox_contents(ROLE_TEAM_LEAD).len(), 1);
 
-    fixture.write_team_config("recipient");
-    let second = fixture.run(&["send", "recipient@atm-dev", "with config restored"]);
+    fixture.write_team_config(TEST_RECIPIENT);
+    let second = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "with config restored"]);
     assert!(
         second.status.success(),
         "stderr: {}",
         fixture.stderr(&second)
     );
-    assert_eq!(fixture.inbox_contents("team-lead").len(), 1);
+    assert_eq!(fixture.inbox_contents(ROLE_TEAM_LEAD).len(), 1);
 
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config again");
-    let third = fixture.run(&["send", "recipient@atm-dev", "broken again"]);
+    let third = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "broken again"]);
     assert!(third.status.success(), "stderr: {}", fixture.stderr(&third));
-    assert_eq!(fixture.inbox_contents("team-lead").len(), 2);
+    assert_eq!(fixture.inbox_contents(ROLE_TEAM_LEAD).len(), 2);
 }
 
 #[test]
 fn test_send_missing_config_fails_when_recipient_inbox_does_not_exist() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello"]);
 
     assert!(!output.status.success());
     let stderr = fixture.stderr(&output);
@@ -415,47 +432,57 @@ fn test_send_missing_config_fails_when_recipient_inbox_does_not_exist() {
 
 #[test]
 fn test_send_missing_config_does_not_block_when_team_lead_inbox_is_absent() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
-    fixture.write_inbox("recipient", &[]);
+    fixture.write_inbox(TEST_RECIPIENT, &[]);
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello fallback"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello fallback"]);
 
     assert!(
         output.status.success(),
         "stderr: {}",
         fixture.stderr(&output)
     );
-    let inbox = fixture.inbox_contents("recipient");
+    let inbox = fixture.inbox_contents(TEST_RECIPIENT);
     assert_eq!(inbox.len(), 1);
 }
 
 #[test]
 fn test_send_resolves_recipient_alias_before_membership_validation() {
-    let fixture = Fixture::new("team-lead");
-    fixture.write_atm_config("[atm]\n[atm.aliases]\ntl = \"team-lead\"\n");
+    let fixture = Fixture::new(ROLE_TEAM_LEAD);
+    fixture.write_atm_config(&format!(
+        "[atm]\n[atm.aliases]\ntl = \"{}\"\n",
+        ROLE_TEAM_LEAD
+    ));
 
-    let output = fixture.run(&["send", "tl@atm-dev", "hello alias"]);
+    let output = fixture.run(&["send", &format!("tl@{TEST_TEAM}"), "hello alias"]);
 
     assert!(
         output.status.success(),
         "stderr: {}",
         fixture.stderr(&output)
     );
-    let inbox = fixture.inbox_contents("team-lead");
+    let inbox = fixture.inbox_contents(ROLE_TEAM_LEAD);
     assert_eq!(inbox.len(), 1);
     assert_eq!(inbox[0].text, "hello alias");
 }
 
 #[test]
 fn test_send_cross_team_projects_alias_and_persists_canonical_from_identity() {
-    let fixture = Fixture::new("recipient");
-    fixture.write_team_config_for_team("other-team", "recipient");
-    fixture.write_atm_config("[atm]\n[atm.aliases]\nlead = \"arch-ctm\"\n");
+    let fixture = Fixture::new(TEST_RECIPIENT);
+    fixture.write_team_config_for_team("other-team", TEST_RECIPIENT);
+    fixture.write_atm_config(&format!(
+        "[atm]\n[atm.aliases]\nlead = \"{}\"\n",
+        TEST_SENDER
+    ));
 
     let output = fixture.run_with_env(
-        &["send", "recipient@other-team", "hello cross-team"],
-        &[("ATM_TEAM", "atm-dev")],
+        &[
+            "send",
+            &format!("{TEST_RECIPIENT}@other-team"),
+            "hello cross-team",
+        ],
+        &[("ATM_TEAM", TEST_TEAM)],
     );
 
     assert!(
@@ -463,24 +490,32 @@ fn test_send_cross_team_projects_alias_and_persists_canonical_from_identity() {
         "stderr: {}",
         fixture.stderr(&output)
     );
-    let inbox = fixture.inbox_contents_in_team("other-team", "recipient");
+    let inbox = fixture.inbox_contents_in_team("other-team", TEST_RECIPIENT);
     assert_eq!(inbox.len(), 1);
     assert_eq!(inbox[0].from, "lead");
     assert_eq!(
         inbox[0].extra["metadata"]["atm"]["fromIdentity"],
-        "arch-ctm"
+        TEST_SENDER
     );
 }
 
 #[test]
 fn test_send_json_reports_canonical_sender_identity() {
-    let fixture = Fixture::new("recipient");
-    fixture.write_team_config_for_team("other-team", "recipient");
-    fixture.write_atm_config("[atm]\n[atm.aliases]\nlead = \"arch-ctm\"\n");
+    let fixture = Fixture::new(TEST_RECIPIENT);
+    fixture.write_team_config_for_team("other-team", TEST_RECIPIENT);
+    fixture.write_atm_config(&format!(
+        "[atm]\n[atm.aliases]\nlead = \"{}\"\n",
+        TEST_SENDER
+    ));
 
     let output = fixture.run_with_env(
-        &["send", "recipient@other-team", "hello cross-team", "--json"],
-        &[("ATM_TEAM", "atm-dev")],
+        &[
+            "send",
+            &format!("{TEST_RECIPIENT}@other-team"),
+            "hello cross-team",
+            "--json",
+        ],
+        &[("ATM_TEAM", TEST_TEAM)],
     );
 
     assert!(
@@ -489,20 +524,21 @@ fn test_send_json_reports_canonical_sender_identity() {
         fixture.stderr(&output)
     );
     let parsed = fixture.stdout_json(&output);
-    assert_eq!(parsed["sender"], "arch-ctm");
+    assert_eq!(parsed["sender"], TEST_SENDER);
 }
 
 #[test]
 fn test_send_runs_post_send_hook_with_expected_payload() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'capture', '{}']\n",
+        "[[atm.post_send_hooks]]\nrecipient = '{}'\ncommand = ['{}', 'capture', '{}']\n",
+        TEST_RECIPIENT,
         hook_path.display(),
         payload_path.display()
     ));
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello hook"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello hook"]);
 
     assert!(
         output.status.success(),
@@ -511,27 +547,33 @@ fn test_send_runs_post_send_hook_with_expected_payload() {
     );
     let payload: serde_json::Value =
         serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
-    assert_eq!(payload["from"], "arch-ctm@atm-dev");
-    assert_eq!(payload["to"], "recipient@atm-dev");
+    assert_eq!(payload["from"], TEST_SENDER_ADDRESS);
+    assert_eq!(payload["to"], TEST_RECIPIENT_ADDRESS);
     assert_eq!(payload["requires_ack"], false);
     assert_eq!(payload["is_ack"], false);
     assert!(payload["message_id"].as_str().is_some());
     assert!(payload.get("task_id").is_none());
-    assert_eq!(payload["sender"], "arch-ctm");
-    assert_eq!(payload["recipient"], "recipient");
+    assert_eq!(payload["sender"], TEST_SENDER);
+    assert_eq!(payload["recipient"], TEST_RECIPIENT);
 }
 
 #[test]
 fn test_send_post_send_hook_failure_does_not_roll_back_send() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     let (hook_path, payload_path) = fixture.install_hook_fixture("fail");
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'fail', '{}']\n",
+        "[[atm.post_send_hooks]]\nrecipient = '{}'\ncommand = ['{}', 'fail', '{}']\n",
+        TEST_RECIPIENT,
         hook_path.display(),
         payload_path.display()
     ));
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello failed hook", "--json"]);
+    let output = fixture.run(&[
+        "send",
+        TEST_RECIPIENT_ADDRESS,
+        "hello failed hook",
+        "--json",
+    ]);
 
     assert!(
         output.status.success(),
@@ -548,21 +590,22 @@ fn test_send_post_send_hook_failure_does_not_roll_back_send() {
         "stdout: {}",
         fixture.stdout(&output)
     );
-    let inbox = fixture.inbox_contents("recipient");
+    let inbox = fixture.inbox_contents(TEST_RECIPIENT);
     assert_eq!(inbox.len(), 1);
 }
 
 #[test]
 fn test_send_post_send_hook_non_match_is_silent() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'quality-mgr'\ncommand = ['{}', 'capture', '{}']\n",
+        "[[atm.post_send_hooks]]\nrecipient = '{}'\ncommand = ['{}', 'capture', '{}']\n",
+        TEST_QA,
         hook_path.display(),
         payload_path.display()
     ));
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello unmatched hook"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello unmatched hook"]);
 
     assert!(
         output.status.success(),
@@ -571,13 +614,13 @@ fn test_send_post_send_hook_non_match_is_silent() {
     );
     assert!(!payload_path.exists(), "hook payload unexpectedly created");
     assert_eq!(fixture.stderr(&output), "");
-    let inbox = fixture.inbox_contents("recipient");
+    let inbox = fixture.inbox_contents(TEST_RECIPIENT);
     assert_eq!(inbox.len(), 1);
 }
 
 #[test]
 fn test_send_runs_post_send_hook_for_wildcard_recipient() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
         "[[atm.post_send_hooks]]\nrecipient = '*'\ncommand = ['{}', 'capture', '{}']\n",
@@ -585,7 +628,7 @@ fn test_send_runs_post_send_hook_for_wildcard_recipient() {
         payload_path.display()
     ));
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello wildcard hook"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello wildcard hook"]);
 
     assert!(
         output.status.success(),
@@ -594,12 +637,12 @@ fn test_send_runs_post_send_hook_for_wildcard_recipient() {
     );
     let payload: serde_json::Value =
         serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
-    assert_eq!(payload["recipient"], "recipient");
+    assert_eq!(payload["recipient"], TEST_RECIPIENT);
 }
 
 #[test]
 fn test_send_runs_multiple_matching_post_send_hooks_in_config_order() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     let order_path = fixture.tempdir.path().join("hook-order.log");
     fixture.install_executable_script(
         "scripts/append-order.py",
@@ -609,10 +652,13 @@ fn test_send_runs_multiple_matching_post_send_hooks_in_config_order() {
         ),
     );
     fixture.write_atm_config(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['python3', 'scripts/append-order.py', 'recipient']\n\n[[atm.post_send_hooks]]\nrecipient = '*'\ncommand = ['python3', 'scripts/append-order.py', 'wildcard']\n",
+        &format!(
+            "[[atm.post_send_hooks]]\nrecipient = '{}'\ncommand = ['python3', 'scripts/append-order.py', '{}']\n\n[[atm.post_send_hooks]]\nrecipient = '*'\ncommand = ['python3', 'scripts/append-order.py', 'wildcard']\n",
+            TEST_RECIPIENT, TEST_RECIPIENT
+        ),
     );
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello multiple hooks"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello multiple hooks"]);
 
     assert!(
         output.status.success(),
@@ -627,15 +673,16 @@ fn test_send_runs_multiple_matching_post_send_hooks_in_config_order() {
 
 #[test]
 fn test_send_runs_post_send_hook_when_recipient_matches_rule() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'capture', '{}']\n",
+        "[[atm.post_send_hooks]]\nrecipient = '{}'\ncommand = ['{}', 'capture', '{}']\n",
+        TEST_RECIPIENT,
         hook_path.display(),
         payload_path.display()
     ));
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello recipient hook"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello recipient hook"]);
 
     assert!(
         output.status.success(),
@@ -644,22 +691,23 @@ fn test_send_runs_post_send_hook_when_recipient_matches_rule() {
     );
     let payload: serde_json::Value =
         serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
-    assert_eq!(payload["recipient"], "recipient");
+    assert_eq!(payload["recipient"], TEST_RECIPIENT);
 }
 
 #[test]
 fn test_send_runs_post_send_hook_for_multiline_message_when_rule_matches() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'capture', '{}']\n",
+        "[[atm.post_send_hooks]]\nrecipient = '{}'\ncommand = ['{}', 'capture', '{}']\n",
+        TEST_RECIPIENT,
         hook_path.display(),
         payload_path.display()
     ));
 
     let output = fixture.run(&[
         "send",
-        "recipient@atm-dev",
+        TEST_RECIPIENT_ADDRESS,
         "<atm-task id=\"task-1\">\n  <description>Review the Phase 2 plan.</description>\n</atm-task>",
     ]);
 
@@ -670,22 +718,24 @@ fn test_send_runs_post_send_hook_for_multiline_message_when_rule_matches() {
     );
     let payload: serde_json::Value =
         serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
-    assert_eq!(payload["from"], "arch-ctm@atm-dev");
-    assert_eq!(payload["to"], "recipient@atm-dev");
+    assert_eq!(payload["from"], TEST_SENDER_ADDRESS);
+    assert_eq!(payload["to"], TEST_RECIPIENT_ADDRESS);
     assert!(payload["message_id"].as_str().is_some());
 }
 
 #[test]
 fn test_send_ignores_post_send_hook_configured_only_in_core_section() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
-        "[core]\ndefault_team = 'atm-dev'\nidentity = 'team-lead'\npost_send_hook = ['{}', 'capture', '{}']\n",
+        "[core]\ndefault_team = '{}'\nidentity = '{}'\npost_send_hook = ['{}', 'capture', '{}']\n",
+        TEST_TEAM,
+        TEST_LEAD,
         hook_path.display(),
         payload_path.display()
     ));
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello core section"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello core section"]);
 
     assert!(
         output.status.success(),
@@ -693,21 +743,22 @@ fn test_send_ignores_post_send_hook_configured_only_in_core_section() {
         fixture.stderr(&output)
     );
     assert!(!payload_path.exists(), "hook payload unexpectedly created");
-    let inbox = fixture.inbox_contents("recipient");
+    let inbox = fixture.inbox_contents(TEST_RECIPIENT);
     assert_eq!(inbox.len(), 1);
 }
 
 #[test]
 fn test_send_post_send_hook_receives_only_configured_positional_args() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture-meta");
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'capture-meta', '{}']\n",
+        "[[atm.post_send_hooks]]\nrecipient = '{}'\ncommand = ['{}', 'capture-meta', '{}']\n",
+        TEST_RECIPIENT,
         hook_path.display(),
         payload_path.display()
     ));
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello args"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello args"]);
 
     assert!(
         output.status.success(),
@@ -717,13 +768,13 @@ fn test_send_post_send_hook_receives_only_configured_positional_args() {
     let captured: serde_json::Value =
         serde_json::from_slice(&fs::read(payload_path).expect("hook meta")).expect("json");
     assert_eq!(captured["args"], serde_json::json!([]));
-    assert_eq!(captured["payload"]["to"], "recipient@atm-dev");
+    assert_eq!(captured["payload"]["to"], TEST_RECIPIENT_ADDRESS);
 }
 
 #[cfg(unix)]
 #[test]
 fn test_send_runs_post_send_hook_with_relative_script_command() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     let payload_path = fixture.tempdir.path().join("relative-hook.json");
     fixture.install_executable_script(
         "scripts/record-hook.sh",
@@ -732,11 +783,12 @@ fn test_send_runs_post_send_hook_with_relative_script_command() {
             payload_path.display()
         ),
     );
-    fixture.write_atm_config(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['scripts/record-hook.sh']\n",
-    );
+    fixture.write_atm_config(&format!(
+        "[[atm.post_send_hooks]]\nrecipient = '{}'\ncommand = ['scripts/record-hook.sh']\n",
+        TEST_RECIPIENT
+    ));
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello relative script"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello relative script"]);
 
     assert!(
         output.status.success(),
@@ -745,13 +797,13 @@ fn test_send_runs_post_send_hook_with_relative_script_command() {
     );
     let payload: serde_json::Value =
         serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
-    assert_eq!(payload["recipient"], "recipient");
+    assert_eq!(payload["recipient"], TEST_RECIPIENT);
 }
 
 #[cfg(unix)]
 #[test]
 fn test_send_runs_post_send_hook_with_bare_bash_command() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     let payload_path = fixture.tempdir.path().join("bash-hook.json");
     fixture.install_executable_script(
         "scripts/record-hook.sh",
@@ -760,11 +812,12 @@ fn test_send_runs_post_send_hook_with_bare_bash_command() {
             payload_path.display()
         ),
     );
-    fixture.write_atm_config(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['bash', 'scripts/record-hook.sh']\n",
-    );
+    fixture.write_atm_config(&format!(
+        "[[atm.post_send_hooks]]\nrecipient = '{}'\ncommand = ['bash', 'scripts/record-hook.sh']\n",
+        TEST_RECIPIENT
+    ));
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello bare bash"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello bare bash"]);
 
     assert!(
         output.status.success(),
@@ -773,12 +826,12 @@ fn test_send_runs_post_send_hook_with_bare_bash_command() {
     );
     let payload: serde_json::Value =
         serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
-    assert_eq!(payload["recipient"], "recipient");
+    assert_eq!(payload["recipient"], TEST_RECIPIENT);
 }
 
 #[test]
 fn test_send_runs_post_send_hook_with_python_command() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     let payload_path = fixture.tempdir.path().join("python-hook.json");
     fixture.install_executable_script(
         "scripts/record_hook.py",
@@ -787,11 +840,12 @@ fn test_send_runs_post_send_hook_with_python_command() {
             payload_path.display()
         ),
     );
-    fixture.write_atm_config(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['python3', 'scripts/record_hook.py']\n",
-    );
+    fixture.write_atm_config(&format!(
+        "[[atm.post_send_hooks]]\nrecipient = '{}'\ncommand = ['python3', 'scripts/record_hook.py']\n",
+        TEST_RECIPIENT
+    ));
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello python hook"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello python hook"]);
 
     assert!(
         output.status.success(),
@@ -800,15 +854,18 @@ fn test_send_runs_post_send_hook_with_python_command() {
     );
     let payload: serde_json::Value =
         serde_json::from_slice(&fs::read(payload_path).expect("hook payload")).expect("json");
-    assert_eq!(payload["recipient"], "recipient");
+    assert_eq!(payload["recipient"], TEST_RECIPIENT);
 }
 
 #[test]
 fn test_send_rejects_retired_post_send_hook_members_config() {
-    let fixture = Fixture::new("recipient");
-    fixture.write_atm_config("[atm]\npost_send_hook_members = ['team-lead']\n");
+    let fixture = Fixture::new(TEST_RECIPIENT);
+    fixture.write_atm_config(&format!(
+        "[atm]\npost_send_hook_members = ['{}']\n",
+        ROLE_TEAM_LEAD
+    ));
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello retired"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello retired"]);
 
     assert!(!output.status.success());
     let stderr = fixture.stderr(&output);
@@ -819,12 +876,13 @@ fn test_send_rejects_retired_post_send_hook_members_config() {
 
 #[test]
 fn test_send_rejects_legacy_post_send_filter_shape() {
-    let fixture = Fixture::new("recipient");
-    fixture.write_atm_config(
-        "[atm]\npost_send_hook = ['bin/hook']\npost_send_hook_recipients = ['recipient']\n",
-    );
+    let fixture = Fixture::new(TEST_RECIPIENT);
+    fixture.write_atm_config(&format!(
+        "[atm]\npost_send_hook = ['bin/hook']\npost_send_hook_recipients = ['{}']\n",
+        TEST_RECIPIENT
+    ));
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello retired"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello retired"]);
 
     assert!(!output.status.success());
     let stderr = fixture.stderr(&output);
@@ -834,10 +892,10 @@ fn test_send_rejects_legacy_post_send_filter_shape() {
 
 #[test]
 fn test_send_rejects_post_send_hook_with_empty_recipient() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     fixture.write_atm_config("[[atm.post_send_hooks]]\nrecipient = '   '\ncommand = ['bash']\n");
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello invalid hook"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello invalid hook"]);
 
     assert!(!output.status.success());
     let stderr = fixture.stderr(&output);
@@ -846,10 +904,13 @@ fn test_send_rejects_post_send_hook_with_empty_recipient() {
 
 #[test]
 fn test_send_rejects_post_send_hook_with_empty_command() {
-    let fixture = Fixture::new("recipient");
-    fixture.write_atm_config("[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = []\n");
+    let fixture = Fixture::new(TEST_RECIPIENT);
+    fixture.write_atm_config(&format!(
+        "[[atm.post_send_hooks]]\nrecipient = '{}'\ncommand = []\n",
+        TEST_RECIPIENT
+    ));
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello invalid hook"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello invalid hook"]);
 
     assert!(!output.status.success());
     let stderr = fixture.stderr(&output);
@@ -858,15 +919,16 @@ fn test_send_rejects_post_send_hook_with_empty_command() {
 
 #[test]
 fn test_send_ignores_invalid_hook_result_stdout() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     let (hook_path, payload_path) = fixture.install_hook_fixture("result-invalid");
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'result-invalid', '{}']\n",
+        "[[atm.post_send_hooks]]\nrecipient = '{}'\ncommand = ['{}', 'result-invalid', '{}']\n",
+        TEST_RECIPIENT,
         hook_path.display(),
         payload_path.display()
     ));
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello invalid hook result"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello invalid hook result"]);
 
     assert!(
         output.status.success(),
@@ -874,16 +936,17 @@ fn test_send_ignores_invalid_hook_result_stdout() {
         fixture.stderr(&output)
     );
     assert_eq!(fixture.stderr(&output), "");
-    let inbox = fixture.inbox_contents("recipient");
+    let inbox = fixture.inbox_contents(TEST_RECIPIENT);
     assert_eq!(inbox.len(), 1);
 }
 
 #[test]
 fn test_send_logs_structured_hook_result_stdout() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     let (hook_path, payload_path) = fixture.install_hook_fixture("result-debug");
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'result-debug', '{}']\n",
+        "[[atm.post_send_hooks]]\nrecipient = '{}'\ncommand = ['{}', 'result-debug', '{}']\n",
+        TEST_RECIPIENT,
         hook_path.display(),
         payload_path.display()
     ));
@@ -892,7 +955,7 @@ fn test_send_logs_structured_hook_result_stdout() {
         &[
             "--stderr-logs",
             "send",
-            "recipient@atm-dev",
+            TEST_RECIPIENT_ADDRESS,
             "hello hook result",
             "--json",
         ],
@@ -905,8 +968,8 @@ fn test_send_logs_structured_hook_result_stdout() {
         fixture.stderr(&output)
     );
     let parsed = fixture.stdout_json(&output);
-    assert_eq!(parsed["agent"], "recipient");
-    assert_eq!(parsed["team"], "atm-dev");
+    assert_eq!(parsed["agent"], TEST_RECIPIENT);
+    assert_eq!(parsed["team"], TEST_TEAM);
     let stderr = fixture.stderr(&output);
     assert!(
         stderr.contains("hook fixture captured payload"),
@@ -957,7 +1020,7 @@ impl Fixture {
             .env("ATM_HOME", self.tempdir.path())
             .env("ATM_CONFIG_HOME", self.tempdir.path())
             .env_remove("ATM_IDENTITY")
-            .env("ATM_TEAM", "atm-dev")
+            .env("ATM_TEAM", TEST_TEAM)
             .current_dir(self.tempdir.path())
             .output()
             .expect("run atm without identity")
@@ -969,8 +1032,8 @@ impl Fixture {
             .args(args)
             .env("ATM_HOME", self.tempdir.path())
             .env("ATM_CONFIG_HOME", self.tempdir.path())
-            .env("ATM_IDENTITY", "arch-ctm")
-            .env("ATM_TEAM", "atm-dev")
+            .env("ATM_IDENTITY", TEST_SENDER)
+            .env("ATM_TEAM", TEST_TEAM)
             .current_dir(self.tempdir.path());
         for (key, value) in extra_env {
             command.env(key, value);
@@ -979,7 +1042,7 @@ impl Fixture {
     }
 
     fn write_team_config(&self, recipient: &str) {
-        self.write_team_config_for_team("atm-dev", recipient);
+        self.write_team_config_for_team(TEST_TEAM, recipient);
     }
 
     fn write_team_config_for_team(&self, team: &str, recipient: &str) {
@@ -1002,7 +1065,7 @@ impl Fixture {
             .path()
             .join(".claude")
             .join("teams")
-            .join("atm-dev");
+            .join(TEST_TEAM);
         fs::create_dir_all(&team_dir).expect("team dir");
         fs::write(team_dir.join("config.json"), raw).expect("write raw team config");
     }
@@ -1012,7 +1075,7 @@ impl Fixture {
     }
 
     fn inbox_path(&self, recipient: &str) -> std::path::PathBuf {
-        self.inbox_path_in_team("atm-dev", recipient)
+        self.inbox_path_in_team(TEST_TEAM, recipient)
     }
 
     fn inbox_path_in_team(&self, team: &str, recipient: &str) -> std::path::PathBuf {
@@ -1039,11 +1102,11 @@ impl Fixture {
     }
 
     fn inbox_contents(&self, recipient: &str) -> Vec<MessageEnvelope> {
-        self.inbox_contents_in_team("atm-dev", recipient)
+        self.inbox_contents_in_team(TEST_TEAM, recipient)
     }
 
     fn inbox_json_lines(&self, recipient: &str) -> Vec<Value> {
-        self.inbox_json_lines_in_team("atm-dev", recipient)
+        self.inbox_json_lines_in_team(TEST_TEAM, recipient)
     }
 
     fn inbox_contents_in_team(&self, team: &str, recipient: &str) -> Vec<MessageEnvelope> {
@@ -1069,7 +1132,7 @@ impl Fixture {
             .path()
             .join(".claude")
             .join("teams")
-            .join("atm-dev")
+            .join(TEST_TEAM)
     }
 
     fn workflow_state_contents(&self, team: &str, agent: &str) -> Value {

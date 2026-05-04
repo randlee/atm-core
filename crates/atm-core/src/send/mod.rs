@@ -13,6 +13,7 @@ use crate::home;
 use crate::identity;
 use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
+use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
 use crate::types::{AgentName, TaskId, TeamName};
 use crate::workflow;
@@ -360,14 +361,14 @@ fn notify_team_lead_missing_config(
         return;
     }
 
-    let team_lead_inbox = match home::inbox_path_from_home(home_dir, team, "team-lead") {
+    let team_lead_inbox = match home::inbox_path_from_home(home_dir, team, ROLE_TEAM_LEAD) {
         Ok(path) => path,
         Err(error) => {
             warn!(
                 code = %AtmErrorCode::WarningMissingTeamConfigFallback,
                 %error,
                 team = %team,
-                "failed to resolve team-lead inbox for missing-config notice"
+                "failed to resolve reserved missing-config inbox for notice"
             );
             return;
         }
@@ -415,7 +416,7 @@ fn notify_team_lead_missing_config(
     if let Err(error) = append_mailbox_message_and_seed_workflow(
         home_dir,
         team,
-        &AgentName::from_validated("team-lead"),
+        &AgentName::from_validated(ROLE_TEAM_LEAD),
         &team_lead_inbox,
         &notice,
     ) {
@@ -527,7 +528,9 @@ mod tests {
 
     use super::alert_state;
     use crate::process::process_is_alive;
+    use crate::roles::ROLE_TEAM_LEAD;
     use crate::send::{SendMessageSource, SendRequest};
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
 
     #[test]
     fn load_send_alert_state_parse_errors_are_config_errors() {
@@ -549,7 +552,7 @@ mod tests {
         let mut state = alert_state::SendAlertState::default();
         state
             .missing_team_config_keys
-            .insert("teams/atm-dev/config.json".to_string());
+            .insert(format!("teams/{TEST_TEAM}/config.json"));
 
         alert_state::save(&path, &state).expect("save");
         let loaded = alert_state::load(&path).expect("load");
@@ -586,9 +589,9 @@ mod tests {
         let error = SendRequest::new(
             tempdir.path().to_path_buf(),
             tempdir.path().to_path_buf(),
-            Some("team-lead"),
+            Some(ROLE_TEAM_LEAD),
             "../evil",
-            Some("atm-dev"),
+            Some(TEST_TEAM),
             SendMessageSource::Inline("hello".to_string()),
             None,
             false,
@@ -606,8 +609,8 @@ mod tests {
         let error = SendRequest::new(
             tempdir.path().to_path_buf(),
             tempdir.path().to_path_buf(),
-            Some("team-lead"),
-            "arch-ctm",
+            Some(ROLE_TEAM_LEAD),
+            TEST_SENDER,
             Some("../evil"),
             SendMessageSource::Inline("hello".to_string()),
             None,

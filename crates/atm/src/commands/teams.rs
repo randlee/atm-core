@@ -137,12 +137,13 @@ impl RestoreCommand {
 #[cfg(test)]
 mod tests {
     use super::AddMemberCommand;
+    use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
 
     #[test]
     fn build_request_rejects_invalid_team_before_core() {
         let command = AddMemberCommand {
             team: "../evil".to_string(),
-            member: "arch-ctm".to_string(),
+            member: TEST_SENDER.to_string(),
             agent_type: "worker".to_string(),
             model: "gpt-5".to_string(),
             cwd: None,
@@ -160,7 +161,7 @@ mod tests {
     #[test]
     fn build_request_rejects_invalid_member_before_core() {
         let command = AddMemberCommand {
-            team: "atm-dev".to_string(),
+            team: TEST_TEAM.to_string(),
             member: "../evil".to_string(),
             agent_type: "worker".to_string(),
             model: "gpt-5".to_string(),
