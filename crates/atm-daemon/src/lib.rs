@@ -1,5 +1,7 @@
 mod client;
 mod runtime_observability;
+mod shutdown;
+mod singleton;
 
 use std::fs;
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -13,16 +15,14 @@ use atm_core::clear::{ClearQuery, clear_mail_via_store};
 use atm_core::dispatcher::{
     DaemonRequest, DaemonResponse, DispatchError, RequestDispatcher, RequestKind, RequestPayload,
 };
-use atm_core::doctor::{DoctorQuery, DoctorReport, DoctorRuntimeHealth, DoctorStatus, run_doctor};
+use atm_core::doctor::{DoctorQuery, run_doctor};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::home;
 use atm_core::inbox_ingress::default_inbox_ingress;
 use atm_core::observability::{CommandEvent, ObservabilityPort};
 use atm_core::read::{ReadQuery, read_mail_via_store};
 use atm_rusqlite::{RusqliteStore, checkpoint_runtime_wal as checkpoint_runtime_wal_via_store};
-use fs2::FileExt;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 #[cfg(unix)]
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -37,6 +37,12 @@ pub use crate::client::{
 };
 pub use crate::runtime_observability::DaemonObservability;
 use crate::runtime_observability::normalize_doctor_report_observability;
+use crate::shutdown::{
+    attach_runtime_health, join_accept_thread, join_worker_threads, wait_for_inflight_zero_until,
+};
+use crate::singleton::SingletonGuard;
+#[cfg(not(unix))]
+use crate::singleton::bind_loopback_listener;
 
 pub const SAME_HOST_REQUEST_TIMEOUT: Duration = Duration::from_secs(3);
 pub const REMOTE_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -176,6 +182,27 @@ impl CoreDispatcher {
     }
 }
 
+fn join_doctor_worker_until(
+    handle: JoinHandle<()>,
+    deadline: Instant,
+) -> Result<Option<JoinHandle<()>>, DispatchError> {
+    while !handle.is_finished() && Instant::now() < deadline {
+        thread::sleep(Duration::from_millis(25));
+    }
+    if !handle.is_finished() {
+        return Ok(Some(handle));
+    }
+    handle
+        .join()
+        .map_err(|payload| {
+            DispatchError::Handler(format!(
+                "doctor worker panicked: {}",
+                shutdown::thread_panic_message(payload)
+            ))
+        })
+        .map(|_| None)
+}
+
 impl RequestDispatcher for CoreDispatcher {
     fn dispatch(&self, request: DaemonRequest) -> Result<DaemonResponse, DispatchError> {
         match request.payload {
@@ -185,7 +212,7 @@ impl RequestDispatcher for CoreDispatcher {
                 let query: ReadQuery = serde_json::from_value(value)
                     .map_err(|error| DispatchError::PayloadDecode(error.to_string()))?;
                 let store = RusqliteStore::open_for_team_home(&query.home_dir, &request.team_name)
-                    .map_err(|error| DispatchError::Handler(error.to_string()))?;
+                    .map_err(DispatchError::Store)?;
                 let ingress = default_inbox_ingress();
                 let outcome =
                     read_mail_via_store(query, &store, &ingress, self.observability.as_ref())
@@ -201,7 +228,7 @@ impl RequestDispatcher for CoreDispatcher {
                 let query: ClearQuery = serde_json::from_value(value)
                     .map_err(|error| DispatchError::PayloadDecode(error.to_string()))?;
                 let store = RusqliteStore::open_for_team_home(&query.home_dir, &request.team_name)
-                    .map_err(|error| DispatchError::Handler(error.to_string()))?;
+                    .map_err(DispatchError::Store)?;
                 let ingress = default_inbox_ingress();
                 let outcome =
                     clear_mail_via_store(query, &store, &ingress, self.observability.as_ref())
@@ -217,7 +244,9 @@ impl RequestDispatcher for CoreDispatcher {
                 let query: DoctorQuery = serde_json::from_value(value)
                     .map_err(|error| DispatchError::PayloadDecode(error.to_string()))?;
                 let (tx, rx) = mpsc::sync_channel(1);
+                let cancelled = Arc::new(AtomicBool::new(false));
                 let handle = thread::spawn({
+                    let cancelled = Arc::clone(&cancelled);
                     let home_dir = self.home_dir.clone();
                     let observability = Arc::clone(&self.observability);
                     let team_name = request.team_name.clone();
@@ -229,22 +258,47 @@ impl RequestDispatcher for CoreDispatcher {
                             );
                             attach_runtime_health(report, &home_dir, &team_name)
                         });
-                        let _ = tx.send(result);
+                        if !cancelled.load(Ordering::SeqCst) {
+                            let _ = tx.send(result);
+                        }
                     }
                 });
-                self.register_worker_thread(handle)?;
-                let report = rx
-                    .recv_timeout(DOCTOR_HANDLER_TIMEOUT)
-                    .map_err(|error| match error {
-                        mpsc::RecvTimeoutError::Timeout => DispatchError::Handler(format!(
+                let report = match rx.recv_timeout(DOCTOR_HANDLER_TIMEOUT) {
+                    Ok(result) => {
+                        if let Some(handle) = join_doctor_worker_until(
+                            handle,
+                            Instant::now() + WORKER_THREAD_JOIN_TIMEOUT,
+                        )? {
+                            self.register_worker_thread(handle)?;
+                        }
+                        result.map_err(|error| DispatchError::Handler(error.to_string()))?
+                    }
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        cancelled.store(true, Ordering::SeqCst);
+                        if let Some(handle) = join_doctor_worker_until(
+                            handle,
+                            Instant::now() + WORKER_THREAD_JOIN_TIMEOUT,
+                        )? {
+                            self.register_worker_thread(handle)?;
+                        }
+                        return Err(DispatchError::Handler(format!(
                             "doctor worker exceeded the {:?} handler budget",
                             DOCTOR_HANDLER_TIMEOUT
-                        )),
-                        mpsc::RecvTimeoutError::Disconnected => DispatchError::Handler(
+                        )));
+                    }
+                    Err(mpsc::RecvTimeoutError::Disconnected) => {
+                        cancelled.store(true, Ordering::SeqCst);
+                        if let Some(handle) = join_doctor_worker_until(
+                            handle,
+                            Instant::now() + WORKER_THREAD_JOIN_TIMEOUT,
+                        )? {
+                            self.register_worker_thread(handle)?;
+                        }
+                        return Err(DispatchError::Handler(
                             "doctor worker exited before sending a result".to_string(),
-                        ),
-                    })?
-                    .map_err(|error| DispatchError::Handler(error.to_string()))?;
+                        ));
+                    }
+                };
                 let payload_json = serde_json::to_string(&report)
                     .map_err(|error| DispatchError::ResponseEncode(error.to_string()))?;
                 let _ = self.observability.emit(CommandEvent {
@@ -700,142 +754,6 @@ fn spawn_tcp_connection(
     }
 }
 
-#[cfg(not(unix))]
-fn bind_loopback_listener() -> Result<(TcpListener, LocalEndpoint), AtmError> {
-    let listener = TcpListener::bind(("127.0.0.1", 0)).map_err(|error| {
-        AtmError::daemon_start_failed(format!("failed to bind local loopback listener: {error}"))
-            .with_source(error)
-    })?;
-    let addr = listener.local_addr().map_err(|error| {
-        AtmError::daemon_start_failed("failed to inspect loopback address").with_source(error)
-    })?;
-    Ok((listener, LocalEndpoint::TcpLoopback(addr)))
-}
-
-struct SingletonGuard {
-    path: PathBuf,
-}
-
-impl SingletonGuard {
-    fn acquire(path: &Path) -> Result<Self, AtmError> {
-        let stale_eviction_lock_path = path.with_extension("json.lock");
-        let stale_eviction_lock = fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(&stale_eviction_lock_path)
-            .map_err(|error| {
-                AtmError::daemon_start_failed(format!(
-                    "failed to open daemon singleton stale-eviction lock {}: {error}",
-                    stale_eviction_lock_path.display()
-                ))
-                .with_source(error)
-            })?;
-        stale_eviction_lock.lock_exclusive().map_err(|error| {
-            AtmError::daemon_start_failed(format!(
-                "failed to acquire daemon singleton stale-eviction lock {}: {error}",
-                stale_eviction_lock_path.display()
-            ))
-            .with_source(error)
-        })?;
-        match fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(path)
-        {
-            Ok(mut file) => {
-                let payload = serde_json::json!({ "pid": std::process::id() });
-                serde_json::to_writer(&mut file, &payload).map_err(|error| {
-                    AtmError::daemon_start_failed("failed to serialize singleton state")
-                        .with_source(error)
-                })?;
-                drop(stale_eviction_lock);
-                Ok(Self {
-                    path: path.to_path_buf(),
-                })
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                let raw = fs::read(path).map_err(|read_error| {
-                    AtmError::daemon_already_running(format!(
-                        "daemon singleton exists at {} and could not be inspected: {read_error}",
-                        path.display()
-                    ))
-                    .with_source(read_error)
-                })?;
-                let pid = serde_json::from_slice::<Value>(&raw)
-                    .ok()
-                    .and_then(|value| value.get("pid").and_then(Value::as_u64))
-                    .map(|pid| pid as u32);
-                if pid.is_some_and(process_is_alive) {
-                    drop(stale_eviction_lock);
-                    return Err(AtmError::daemon_already_running(format!(
-                        "another ATM daemon already owns {}",
-                        path.display()
-                    )));
-                }
-                fs::remove_file(path).map_err(|remove_error| {
-                    AtmError::daemon_start_failed(format!(
-                        "failed to remove stale daemon singleton {}: {remove_error}",
-                        path.display()
-                    ))
-                    .with_source(remove_error)
-                })?;
-                drop(stale_eviction_lock);
-                Self::acquire(path)
-            }
-            Err(error) => {
-                drop(stale_eviction_lock);
-                Err(AtmError::daemon_start_failed(format!(
-                    "failed to create daemon singleton {}: {error}",
-                    path.display()
-                ))
-                .with_source(error))
-            }
-        }
-    }
-
-    fn release(&self) -> Result<(), AtmError> {
-        fs::remove_file(&self.path).map_err(|error| {
-            AtmError::daemon_start_failed(format!(
-                "failed to release daemon singleton {}: {error}",
-                self.path.display()
-            ))
-            .with_source(error)
-        })
-    }
-}
-
-#[cfg(unix)]
-fn process_is_alive(pid: u32) -> bool {
-    let pid: libc::pid_t = match pid.try_into() {
-        Ok(pid) => pid,
-        Err(_) => return false,
-    };
-    let result = unsafe { libc::kill(pid, 0) };
-    if result == 0 {
-        return true;
-    }
-    std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
-}
-
-#[cfg(windows)]
-fn process_is_alive(pid: u32) -> bool {
-    use windows_sys::Win32::Foundation::{CloseHandle, STILL_ACTIVE};
-    use windows_sys::Win32::System::Threading::{
-        GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
-    };
-
-    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
-    if handle.is_null() {
-        return false;
-    }
-    let mut exit_code = 0u32;
-    let ok = unsafe { GetExitCodeProcess(handle, &mut exit_code) };
-    unsafe { CloseHandle(handle) };
-    ok != 0 && exit_code == STILL_ACTIVE as u32
-}
-
 pub fn run_foreground() -> Result<(), AtmError> {
     let home_dir = home::atm_home()?;
     let worker_threads = Arc::new(Mutex::new(Vec::new()));
@@ -905,101 +823,6 @@ fn register_signal_handlers(
     Ok(())
 }
 
-fn join_accept_thread(handle: JoinHandle<()>, thread_name: &str) -> Result<(), AtmError> {
-    let deadline = Instant::now() + ACCEPT_THREAD_JOIN_TIMEOUT;
-    while !handle.is_finished() && Instant::now() < deadline {
-        thread::sleep(Duration::from_millis(25));
-    }
-    if !handle.is_finished() {
-        return Err(AtmError::daemon_start_failed(format!(
-            "{thread_name} did not stop within {:?}",
-            ACCEPT_THREAD_JOIN_TIMEOUT
-        )));
-    }
-    if let Err(payload) = handle.join() {
-        return Err(AtmError::daemon_runtime(format!(
-            "{thread_name} panicked during shutdown: {}",
-            thread_panic_message(payload)
-        )));
-    }
-    Ok(())
-}
-
-fn wait_for_inflight_zero_until(inflight: &AtomicUsize, deadline: Instant) {
-    while inflight.load(Ordering::SeqCst) > 0 && Instant::now() < deadline {
-        thread::sleep(Duration::from_millis(25));
-    }
-}
-
-fn join_worker_threads(
-    worker_threads: &Arc<Mutex<Vec<JoinHandle<()>>>>,
-    shutdown_deadline: Instant,
-) -> Result<(), AtmError> {
-    let handles = {
-        let mut handles = worker_threads.lock().map_err(|_| {
-            AtmError::daemon_start_failed("worker thread registry lock poisoned during shutdown")
-        })?;
-        std::mem::take(&mut *handles)
-    };
-    for handle in handles {
-        let per_thread_deadline =
-            (Instant::now() + WORKER_THREAD_JOIN_TIMEOUT).min(shutdown_deadline);
-        while !handle.is_finished() && Instant::now() < per_thread_deadline {
-            thread::sleep(Duration::from_millis(25));
-        }
-        if !handle.is_finished() {
-            return Err(AtmError::daemon_runtime(format!(
-                "worker thread did not stop before shutdown deadline (per-thread cap {:?})",
-                WORKER_THREAD_JOIN_TIMEOUT
-            )));
-        }
-        if let Err(payload) = handle.join() {
-            return Err(AtmError::daemon_runtime(format!(
-                "worker thread panicked during shutdown: {}",
-                thread_panic_message(payload)
-            )));
-        }
-    }
-    Ok(())
-}
-
-fn thread_panic_message(payload: Box<dyn std::any::Any + Send + 'static>) -> String {
-    if let Some(message) = payload.downcast_ref::<&str>() {
-        return (*message).to_string();
-    }
-    if let Some(message) = payload.downcast_ref::<String>() {
-        return message.clone();
-    }
-    "non-string panic payload".to_string()
-}
-
-fn attach_runtime_health(
-    mut report: DoctorReport,
-    home_dir: &Path,
-    team_name: &atm_core::types::TeamName,
-) -> DoctorReport {
-    let sqlite_path = home::mail_db_path_from_home(home_dir, team_name).ok();
-    report.runtime = Some(DoctorRuntimeHealth {
-        singleton_state: DoctorStatus::Healthy,
-        singleton_detail: "daemon singleton is owned by the active runtime".to_string(),
-        // TODO(phase-q): replace this placeholder with real cache-health
-        // inspection once the dedicated daemon status cache lands.
-        status_cache_state: DoctorStatus::Unavailable,
-        status_cache_detail: "status cache health: not yet implemented".to_string(),
-        sqlite_runtime_state: if sqlite_path.as_ref().is_some_and(|path| path.exists()) {
-            DoctorStatus::Healthy
-        } else {
-            DoctorStatus::Warning
-        },
-        sqlite_runtime_detail: sqlite_path
-            .map(|path| format!("runtime sees SQLite path {}", path.display()))
-            .unwrap_or_else(|| {
-                "runtime could not resolve a SQLite path for the active team".to_string()
-            }),
-    });
-    report
-}
-
 fn checkpoint_runtime_wal(home_dir: &Path) -> Result<(), AtmError> {
     checkpoint_runtime_wal_via_store(home_dir).map_err(|error| {
         AtmError::daemon_start_failed("failed to checkpoint SQLite WAL during shutdown")
@@ -1008,236 +831,4 @@ fn checkpoint_runtime_wal(home_dir: &Path) -> Result<(), AtmError> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::client::request_local;
-    use atm_core::observability::NullObservability;
-    use serial_test::serial;
-    use tempfile::TempDir;
-
-    const TEST_TEAM: &str = "test-team";
-    const TEST_SENDER: &str = "sender-a";
-
-    #[derive(Default)]
-    struct FakeDispatcher {
-        responses: std::sync::Mutex<Vec<DaemonResponse>>,
-        requests: std::sync::Mutex<Vec<DaemonRequest>>,
-    }
-
-    impl FakeDispatcher {
-        fn queue_response(&self, response: DaemonResponse) {
-            self.responses
-                .lock()
-                .expect("responses lock")
-                .push(response);
-        }
-
-        fn request_count(&self) -> usize {
-            self.requests.lock().expect("requests lock").len()
-        }
-    }
-
-    impl RequestDispatcher for FakeDispatcher {
-        fn dispatch(&self, request: DaemonRequest) -> Result<DaemonResponse, DispatchError> {
-            self.requests.lock().expect("requests lock").push(request);
-            self.responses
-                .lock()
-                .expect("responses lock")
-                .pop()
-                .ok_or_else(|| DispatchError::Unsupported(RequestKind::Heartbeat))
-        }
-    }
-
-    #[test]
-    fn test_socket_client_uses_dispatcher_contract() {
-        let dispatcher = FakeDispatcher::default();
-        dispatcher.queue_response(DaemonResponse {
-            kind: RequestKind::Doctor,
-            payload_json: "{\"summary\":{\"status\":\"healthy\"}}".to_string(),
-        });
-        let client = TestSocketClient::new(&dispatcher);
-        let response = client
-            .request(DaemonRequest {
-                team_name: TEST_TEAM.parse().expect("team"),
-                agent_name: TEST_SENDER.parse().expect("agent"),
-                payload: RequestPayload::Doctor(serde_json::json!({"team_override":TEST_TEAM})),
-            })
-            .expect("response");
-        assert_eq!(response.kind, RequestKind::Doctor);
-        assert_eq!(dispatcher.request_count(), 1);
-    }
-
-    #[test]
-    #[serial]
-    fn second_daemon_startup_fails_deterministically() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let home_dir = tempdir.path().to_path_buf();
-        let worker_threads = Arc::new(Mutex::new(Vec::new()));
-        let first = start_runtime(
-            DaemonConfig::from_home(home_dir.clone()),
-            Arc::clone(&worker_threads),
-            Arc::new(CoreDispatcher::new(
-                home_dir.clone(),
-                Arc::new(NullObservability),
-            )),
-        )
-        .expect("first daemon");
-        let error = match start_runtime(
-            DaemonConfig::from_home(home_dir),
-            Arc::new(Mutex::new(Vec::new())),
-            Arc::new(CoreDispatcher::new(
-                tempdir.path().to_path_buf(),
-                Arc::new(NullObservability),
-            )),
-        ) {
-            Ok(handle) => panic!(
-                "second daemon should fail, got endpoint {:?}",
-                handle.local_endpoint()
-            ),
-            Err(error) => error,
-        };
-        assert_eq!(error.code, AtmErrorCode::DaemonAlreadyRunning);
-        first.shutdown().expect("shutdown");
-    }
-
-    #[test]
-    #[serial]
-    fn stale_singleton_cleanup_allows_one_live_start_only() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let paths = DaemonPaths::from_home(tempdir.path());
-        fs::create_dir_all(&paths.state_dir).expect("state dir");
-        fs::write(&paths.singleton_path, br#"{"pid":999999}"#).expect("stale singleton");
-        let handle = start_runtime(
-            DaemonConfig::from_home(tempdir.path().to_path_buf()),
-            Arc::new(Mutex::new(Vec::new())),
-            Arc::new(CoreDispatcher::new(
-                tempdir.path().to_path_buf(),
-                Arc::new(NullObservability),
-            )),
-        )
-        .expect("daemon with stale singleton");
-        let error = match start_runtime(
-            DaemonConfig::from_home(tempdir.path().to_path_buf()),
-            Arc::new(Mutex::new(Vec::new())),
-            Arc::new(CoreDispatcher::new(
-                tempdir.path().to_path_buf(),
-                Arc::new(NullObservability),
-            )),
-        ) {
-            Ok(handle) => panic!(
-                "second daemon should still fail, got endpoint {:?}",
-                handle.local_endpoint()
-            ),
-            Err(error) => error,
-        };
-        assert_eq!(error.code, AtmErrorCode::DaemonAlreadyRunning);
-        handle.shutdown().expect("shutdown");
-    }
-
-    #[test]
-    #[serial]
-    fn local_same_host_daemon_api_flow_works() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let current_dir = tempdir.path().join("workspace");
-        fs::create_dir_all(&current_dir).expect("workspace dir");
-        fs::write(
-            current_dir.join(".atm.toml"),
-            format!("[atm]\ndefault_team = \"{TEST_TEAM}\"\n"),
-        )
-        .expect("atm toml");
-        let worker_threads = Arc::new(Mutex::new(Vec::new()));
-        let handle = start_runtime(
-            DaemonConfig::from_home(tempdir.path().to_path_buf()),
-            Arc::clone(&worker_threads),
-            Arc::new(
-                CoreDispatcher::new(tempdir.path().to_path_buf(), Arc::new(NullObservability))
-                    .with_worker_threads(Arc::clone(&worker_threads)),
-            ),
-        )
-        .expect("runtime");
-        let response = request_local(
-            tempdir.path(),
-            &DaemonRequest {
-                team_name: TEST_TEAM.parse().expect("team"),
-                agent_name: TEST_SENDER.parse().expect("agent"),
-                payload: RequestPayload::Heartbeat(serde_json::json!({"pid": 42})),
-            },
-            SAME_HOST_REQUEST_TIMEOUT,
-        )
-        .expect("local response");
-        assert_eq!(response.kind, RequestKind::Heartbeat);
-        let doctor = request_local(
-            tempdir.path(),
-            &DaemonRequest {
-                team_name: TEST_TEAM.parse().expect("team"),
-                agent_name: TEST_SENDER.parse().expect("agent"),
-                payload: RequestPayload::Doctor(serde_json::json!({
-                    "home_dir": tempdir.path(),
-                    "current_dir": current_dir,
-                    "team_override": TEST_TEAM
-                })),
-            },
-            SAME_HOST_REQUEST_TIMEOUT,
-        )
-        .expect("doctor response");
-        assert_eq!(doctor.kind, RequestKind::Doctor);
-        handle.shutdown().expect("shutdown");
-    }
-
-    #[test]
-    fn bounded_remote_host_unreachable_behavior_is_typed() {
-        let probe = TcpListener::bind(("127.0.0.1", 0)).expect("probe listener");
-        let address = probe.local_addr().expect("probe addr");
-        drop(probe);
-        let error = request_remote(
-            address,
-            &DaemonRequest {
-                team_name: TEST_TEAM.parse().expect("team"),
-                agent_name: TEST_SENDER.parse().expect("agent"),
-                payload: RequestPayload::Send(serde_json::json!({"message":"hello"})),
-            },
-            Duration::from_millis(250),
-        )
-        .expect_err("unreachable host");
-        assert_eq!(error.code, AtmErrorCode::DaemonRemoteUnavailable);
-    }
-
-    #[test]
-    fn remote_acceptance_is_required_for_send_success() {
-        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("listener");
-        listener
-            .set_nonblocking(true)
-            .expect("listener nonblocking");
-        let address = listener.local_addr().expect("local addr");
-        let dispatcher = Arc::new(FakeDispatcher::default());
-        dispatcher.queue_response(DaemonResponse {
-            kind: RequestKind::Send,
-            payload_json: "{\"ok\":true}".to_string(),
-        });
-        let inflight = Arc::new(AtomicUsize::new(0));
-        let worker_threads = Arc::new(Mutex::new(Vec::new()));
-        let stop = Arc::new(AtomicBool::new(false));
-        let worker = {
-            let inflight = Arc::clone(&inflight);
-            let worker_threads = Arc::clone(&worker_threads);
-            let dispatcher = dispatcher.clone();
-            let stop = Arc::clone(&stop);
-            thread::spawn(move || {
-                accept_tcp_loop(listener, stop, inflight, worker_threads, dispatcher, 8)
-            })
-        };
-        let response = request_remote(
-            address,
-            &DaemonRequest {
-                team_name: TEST_TEAM.parse().expect("team"),
-                agent_name: TEST_SENDER.parse().expect("agent"),
-                payload: RequestPayload::Send(serde_json::json!({"message":"hello"})),
-            },
-            Duration::from_secs(1),
-        )
-        .expect("remote response");
-        assert_eq!(response.kind, RequestKind::Send);
-        stop.store(true, Ordering::SeqCst);
-        let _ = worker.join();
-    }
-}
+mod tests;

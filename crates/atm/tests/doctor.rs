@@ -312,7 +312,7 @@ fn test_doctor_cli_auto_starts_daemon_when_absent() {
         fixture.stderr(&output)
     );
     let parsed = fixture.stdout_json(&output);
-    assert!(fixture.daemon_control_path().exists());
+    fixture.wait_for_daemon_ready();
     assert_eq!(parsed["runtime"]["singleton_state"], "healthy");
 }
 
@@ -474,6 +474,20 @@ impl Fixture {
             .join("control.json")
     }
 
+    fn wait_for_daemon_ready(&self) {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < deadline {
+            if self.daemon_control_path().exists() {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        panic!(
+            "daemon control state was not published at {} within 5s",
+            self.daemon_control_path().display()
+        );
+    }
+
     fn team(&self) -> TeamName {
         TEST_TEAM.parse().expect("team")
     }
@@ -506,7 +520,8 @@ impl EnvGuard {
     fn set(key: &str, value: &str) -> Self {
         let original = std::env::var_os(key);
         // SAFETY: these tests mutate process env in a bounded scope and do not
-        // execute concurrently with other env-sensitive doctor tests.
+        // execute concurrently with other env-sensitive doctor tests because
+        // every caller shares the #[serial(env)] isolation key.
         unsafe { std::env::set_var(key, value) };
         Self {
             key: key.to_string(),
