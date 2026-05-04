@@ -4,13 +4,16 @@
 
 This document defines the `atm-daemon` crate requirements.
 
-The `atm-daemon` crate owns the runtime wrapper around the Phase Q ATM system.
+The `atm-daemon` crate owns the runtime wrapper around the current ATM system.
 Product behavior remains defined in [`../requirements.md`](../requirements.md).
 `atm-daemon` must satisfy those product requirements without re-owning
 `atm-core` business logic.
 
 This crate is introduced by the Phase Q implementation line. It is not present
 in the pre-Phase-Q workspace yet.
+
+The crate-local machine-readable boundary inventory lives in:
+- [`./boundaries.md`](./boundaries.md)
 
 ## 2. Ownership
 
@@ -20,6 +23,7 @@ in the pre-Phase-Q workspace yet.
 - same-host daemon API transport
 - cross-host daemon-to-daemon transport
 - runtime composition of `atm-core` service boundaries
+- runtime composition of the current concrete adapter set used in production
 - live agent status cache
 - runtime watch/reconcile loop if enabled
 - daemon-side `sc-observability` emission
@@ -104,12 +108,14 @@ The `atm-daemon` crate docs must remain aligned with:
 - [`../architecture.md`](../architecture.md)
 - [`../project-plan.md`](../project-plan.md)
 - [`../plan-phase-Q.md`](../plan-phase-Q.md)
+- [`../plan-phase-R.md`](../plan-phase-R.md)
 - [`../team-member-state.md`](../team-member-state.md)
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
 - [`../atm-core/requirements.md`](../atm-core/requirements.md)
 - [`../atm-core/architecture.md`](../atm-core/architecture.md)
+- [`./boundaries.md`](./boundaries.md)
 
-## 5. Phase Q Runtime Requirements
+## 5. Phase R Runtime Requirements
 
 Requirement IDs:
 - `REQ-DAEMON-RUNTIME-001`
@@ -164,6 +170,12 @@ Required runtime rules:
   and any retry/re-export state needed after daemon crash must be durable rather
   than RAM-only
 - daemon code must not bypass `atm-core` subsystem boundaries
+- the current Phase R baseline keeps `atm-daemon` as the runtime composition
+  root for production runtime wiring unless a later ADR extracts a separate
+  composition crate
+- remote daemon-to-daemon client behavior uses the same shared `AtmProtocol`
+  and `ClientTransport` / `ServerTransport` contract family as local runtime
+  transport
 - daemon transport/runtime adapter implementations must remain private to the
   crate or tightly-scoped internal surfaces; public callers must not depend on
   concrete socket/runtime adapter types
