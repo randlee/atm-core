@@ -200,7 +200,19 @@ pub fn request_remote(
                         AtmError::daemon_request_timeout("failed to set remote write timeout")
                             .with_source(error)
                     })?;
-                return exchange_tcp(&mut stream, request);
+                match exchange_tcp(&mut stream, request) {
+                    Ok(response) => return Ok(response),
+                    Err(error) if is_remote_unavailable_exchange_error(&error) => {
+                        return Err(
+                            AtmError::daemon_remote_unavailable(format!(
+                                "remote daemon at {address} accepted a TCP connection but did not complete the ATM response handshake within {:?}",
+                                REMOTE_IO_TIMEOUT
+                            ))
+                            .with_source(error),
+                        );
+                    }
+                    Err(error) => return Err(error),
+                }
             }
             Err(error) => {
                 last_error = Some(error);
@@ -216,6 +228,33 @@ pub fn request_remote(
     // INVARIANT: the retry loop stores an error on every failed connect attempt,
     // and reaching this branch means at least one attempt elapsed before deadline.
     .with_source(last_error.expect("remote retry captured at least one error")))
+}
+
+fn is_remote_unavailable_exchange_error(error: &AtmError) -> bool {
+    if error.code != Code::DaemonProtocolFailed {
+        return false;
+    }
+    if error
+        .message
+        .contains("connection closed before a response frame was received")
+    {
+        return true;
+    }
+    error
+        .source
+        .as_ref()
+        .and_then(|source| source.downcast_ref::<std::io::Error>())
+        .is_some_and(|error| {
+            matches!(
+                error.kind(),
+                std::io::ErrorKind::TimedOut
+                    | std::io::ErrorKind::WouldBlock
+                    | std::io::ErrorKind::UnexpectedEof
+                    | std::io::ErrorKind::ConnectionReset
+                    | std::io::ErrorKind::ConnectionAborted
+                    | std::io::ErrorKind::BrokenPipe
+            )
+        })
 }
 
 pub fn auto_start_daemon(home_dir: &Path) -> Result<(), AtmError> {
@@ -410,9 +449,7 @@ pub(crate) fn dispatch_error_to_atm(error: DispatchError) -> AtmError {
         DispatchError::PayloadDecode(message) => AtmError::daemon_protocol(format!(
             "failed to decode daemon request payload: {message}"
         )),
-        DispatchError::Handler(message) => {
-            AtmError::daemon_runtime(format!("daemon request handler failed: {message}"))
-        }
+        DispatchError::Handler(error) => error,
         DispatchError::ResponseEncode(message) => AtmError::daemon_protocol(format!(
             "failed to encode daemon response payload: {message}"
         )),
@@ -705,7 +742,9 @@ mod tests {
     #[test]
     fn dispatch_error_to_atm_maps_variants_to_distinct_messages() {
         let payload = dispatch_error_to_atm(DispatchError::PayloadDecode("bad read query".into()));
-        let handler = dispatch_error_to_atm(DispatchError::Handler("read worker panicked".into()));
+        let handler = dispatch_error_to_atm(DispatchError::Handler(AtmError::daemon_runtime(
+            "read worker panicked",
+        )));
         let encode = dispatch_error_to_atm(DispatchError::ResponseEncode("bad json".into()));
         let unsupported = dispatch_error_to_atm(DispatchError::Unsupported(RequestKind::Send));
 
@@ -713,7 +752,7 @@ mod tests {
         assert!(payload.message.contains("decode daemon request payload"));
 
         assert_eq!(handler.code, Code::DaemonRuntimeFailed);
-        assert!(handler.message.contains("handler failed"));
+        assert!(handler.message.contains("read worker panicked"));
 
         assert_eq!(encode.code, Code::DaemonProtocolFailed);
         assert!(encode.message.contains("encode daemon response payload"));

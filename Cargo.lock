@@ -128,6 +128,7 @@ dependencies = [
  "signal-hook",
  "tempfile",
  "toml",
+ "tracing",
  "uuid",
  "windows-sys 0.59.0",
 ]

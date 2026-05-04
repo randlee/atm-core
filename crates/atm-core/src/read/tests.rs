@@ -8,14 +8,13 @@ use crate::error_codes::AtmErrorCode;
 use crate::mailbox::source::SourcedMessage;
 use crate::read::projection::idle_notification_sender;
 use crate::schema::{LegacyMessageId, MessageEnvelope};
-use crate::test_support::ROLE_TEAM_LEAD;
+use crate::test_support::{ROLE_TEAM_LEAD, TEST_TEAM};
 use crate::types::{
     AckActivationMode, AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
     TeamName,
 };
 use crate::workflow;
 
-const TEST_TEAM: &str = "test-team";
 const TEST_SOURCE_FILE: &str = "test-sender.json";
 
 fn malformed_idle_notification() -> String {

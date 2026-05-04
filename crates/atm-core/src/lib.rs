@@ -41,6 +41,8 @@ pub(crate) mod persistence;
 pub(crate) mod process;
 /// Mailbox read/query workflows and output models.
 pub mod read;
+/// Reserved production role constants shared across runtime and tests.
+pub mod roles;
 /// Durable roster-store contracts and records.
 pub mod roster_store;
 /// Public mailbox and team schema types shared with CLI tests and adapters.

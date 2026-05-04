@@ -1,3 +1,4 @@
+use crate::error::AtmError;
 use crate::store::StoreError;
 use crate::types::{AgentName, TeamName};
 use serde::{Deserialize, Serialize};
@@ -80,7 +81,7 @@ pub struct DaemonResponse {
 pub enum DispatchError {
     Store(StoreError),
     PayloadDecode(String),
-    Handler(String),
+    Handler(AtmError),
     ResponseEncode(String),
     Unsupported(RequestKind),
 }

@@ -14,7 +14,7 @@ use super::{
 use crate::error::AtmErrorCode;
 
 const TEST_MAILBOX: &str = "test-sender.json";
-const TEST_LEAD_MAILBOX: &str = "test-team-lead.json";
+const TEST_LEAD_MAILBOX: &str = "test-lead.json";
 
 struct ReadOnlyFilesystemGuard {
     original: Option<LockOperation>,

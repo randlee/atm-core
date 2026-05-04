@@ -24,6 +24,7 @@ use atm_core::read::{ReadQuery, read_mail_via_store};
 use atm_core::store::StoreError;
 use atm_rusqlite::{RusqliteStore, checkpoint_runtime_wal as checkpoint_runtime_wal_via_store};
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 
 #[cfg(unix)]
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -57,6 +58,8 @@ pub const ACCEPT_THREAD_JOIN_TIMEOUT: Duration = Duration::from_secs(2);
 pub const WORKER_THREAD_JOIN_TIMEOUT: Duration = Duration::from_secs(2);
 #[cfg(windows)]
 const WINDOWS_STOP_POLL_INTERVAL: Duration = Duration::from_millis(100);
+const DOCTOR_HANDLER_TIMEOUT_MESSAGE: &str = "doctor worker exceeded the handler budget";
+const DOCTOR_HANDLER_DISCONNECTED_MESSAGE: &str = "doctor worker exited before sending a result";
 pub const MAX_ACCEPTS: usize = 64;
 pub const MAX_INFLIGHT_PER_CONNECTION: usize = 32;
 /// Upper bound for one daemon frame payload after length-prefix decoding.
@@ -180,9 +183,9 @@ impl CoreDispatcher {
                 Ok(mut handles) => handles.push(handle),
                 Err(error) => {
                     let _ = handle.join();
-                    return Err(DispatchError::Handler(format!(
+                    return Err(DispatchError::Handler(AtmError::daemon_runtime(format!(
                         "worker thread registry lock poisoned while tracking doctor worker: {error}"
-                    )));
+                    ))));
                 }
             }
         }
@@ -212,10 +215,10 @@ fn join_doctor_worker_until(
     handle
         .join()
         .map_err(|payload| {
-            DispatchError::Handler(format!(
+            DispatchError::Handler(AtmError::daemon_runtime(format!(
                 "doctor worker panicked: {}",
                 shutdown::thread_panic_message(payload)
-            ))
+            )))
         })
         .map(|_| None)
 }
@@ -288,7 +291,7 @@ impl RequestDispatcher for CoreDispatcher {
                         )? {
                             self.register_worker_thread(handle)?;
                         }
-                        result.map_err(|error| DispatchError::Handler(error.to_string()))?
+                        result.map_err(DispatchError::Handler)?
                     }
                     Err(mpsc::RecvTimeoutError::Timeout) => {
                         cancelled.store(true, Ordering::SeqCst);
@@ -298,10 +301,9 @@ impl RequestDispatcher for CoreDispatcher {
                         )? {
                             self.register_worker_thread(handle)?;
                         }
-                        return Err(DispatchError::Handler(format!(
-                            "doctor worker exceeded the {:?} handler budget",
-                            DOCTOR_HANDLER_TIMEOUT
-                        )));
+                        return Err(DispatchError::Handler(AtmError::daemon_runtime(format!(
+                            "{DOCTOR_HANDLER_TIMEOUT_MESSAGE} ({DOCTOR_HANDLER_TIMEOUT:?})"
+                        ))));
                     }
                     Err(mpsc::RecvTimeoutError::Disconnected) => {
                         cancelled.store(true, Ordering::SeqCst);
@@ -311,9 +313,9 @@ impl RequestDispatcher for CoreDispatcher {
                         )? {
                             self.register_worker_thread(handle)?;
                         }
-                        return Err(DispatchError::Handler(
-                            "doctor worker exited before sending a result".to_string(),
-                        ));
+                        return Err(DispatchError::Handler(AtmError::daemon_runtime(
+                            DOCTOR_HANDLER_DISCONNECTED_MESSAGE,
+                        )));
                     }
                 };
                 let payload_json = serde_json::to_string(&report)
@@ -620,7 +622,7 @@ fn accept_unix_loop(
                 thread::sleep(Duration::from_millis(25));
             }
             Err(error) => {
-                eprintln!("daemon local accept loop error: {error}");
+                warn!(%error, "daemon local accept loop error");
                 thread::sleep(Duration::from_millis(25));
             }
         }
@@ -694,7 +696,7 @@ fn accept_tcp_loop_with_ready(
                 thread::sleep(Duration::from_millis(25));
             }
             Err(error) => {
-                eprintln!("daemon TCP accept loop error: {error}");
+                warn!(%error, "daemon TCP accept loop error");
                 thread::sleep(Duration::from_millis(25));
             }
         }
@@ -735,8 +737,9 @@ fn spawn_local_connection(
     match worker_threads.lock() {
         Ok(mut handles) => handles.push(handle),
         Err(error) => {
-            eprintln!(
-                "daemon worker-thread registry lock is poisoned; detaching local connection worker: {error}"
+            warn!(
+                %error,
+                "daemon worker-thread registry lock is poisoned; detaching local connection worker"
             );
         }
     }
@@ -775,8 +778,9 @@ fn spawn_tcp_connection(
     match worker_threads.lock() {
         Ok(mut handles) => handles.push(handle),
         Err(error) => {
-            eprintln!(
-                "daemon worker-thread registry lock is poisoned; detaching tcp connection worker: {error}"
+            warn!(
+                %error,
+                "daemon worker-thread registry lock is poisoned; detaching tcp connection worker"
             );
         }
     }
@@ -788,7 +792,7 @@ fn dispatch_atm_error(mut error: AtmError) -> DispatchError {
     {
         return DispatchError::Store(*store_error);
     }
-    DispatchError::Handler(error.to_string())
+    DispatchError::Handler(error)
 }
 
 pub fn run_foreground() -> Result<(), AtmError> {

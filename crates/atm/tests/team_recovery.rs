@@ -441,7 +441,7 @@ fn test_restore_preserves_team_lead_and_recomputes_highwatermark() {
     assert!(restored.get("activity").is_none());
 
     let team_lead_inbox =
-        fs::read_to_string(fixture.inbox_path(TEST_TEAM, ROLE_TEAM_LEAD)).expect("team-lead inbox");
+        fs::read_to_string(fixture.inbox_path(TEST_TEAM, ROLE_TEAM_LEAD)).expect("lead inbox");
     assert!(team_lead_inbox.contains("keep me"));
     let restored_inbox =
         fs::read_to_string(fixture.inbox_path(TEST_TEAM, TEST_SENDER)).expect("restored inbox");

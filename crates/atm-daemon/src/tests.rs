@@ -5,6 +5,8 @@ use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
 use serial_test::serial;
 use tempfile::TempDir;
 
+const LOOPBACK_PROBE_ATTEMPTS: usize = 8;
+
 #[derive(Default)]
 struct FakeDispatcher {
     // Test-only dispatcher state is guarded by a mutex so concurrent request
@@ -175,13 +177,13 @@ fn local_same_host_daemon_api_flow_works() {
 
 #[test]
 fn bounded_remote_host_unreachable_behavior_is_typed() {
-    let address = closed_loopback_address();
     let request = DaemonRequest {
         team_name: TEST_TEAM.parse().expect("team"),
         agent_name: TEST_SENDER.parse().expect("agent"),
         payload: RequestPayload::Send(serde_json::json!({"message":"hello"})),
     };
-    for attempt in 0..8 {
+    for attempt in 0..LOOPBACK_PROBE_ATTEMPTS {
+        let (_listener, address) = closed_loopback_address();
         match request_remote(address, &request, Duration::from_millis(250)) {
             Err(error) => {
                 assert_eq!(error.code, AtmErrorCode::DaemonRemoteUnavailable);
@@ -189,8 +191,8 @@ fn bounded_remote_host_unreachable_behavior_is_typed() {
             }
             Ok(response) => {
                 assert!(
-                    attempt < 7,
-                    "loopback probe address {address} was reclaimed on every attempt; last response kind: {:?}",
+                    attempt + 1 < LOOPBACK_PROBE_ATTEMPTS,
+                    "loopback probe address {address} was reclaimed on every attempt; last response: {:?}",
                     response.kind
                 );
             }
@@ -199,11 +201,10 @@ fn bounded_remote_host_unreachable_behavior_is_typed() {
     unreachable!("loopback retry guard must return or panic inside the loop");
 }
 
-fn closed_loopback_address() -> std::net::SocketAddr {
+fn closed_loopback_address() -> (TcpListener, std::net::SocketAddr) {
     let listener = TcpListener::bind(("127.0.0.1", 0)).expect("probe listener");
     let address = listener.local_addr().expect("probe addr");
-    drop(listener);
-    address
+    (listener, address)
 }
 
 #[test]

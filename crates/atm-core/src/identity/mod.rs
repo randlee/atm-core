@@ -82,12 +82,12 @@ mod tests {
     use std::env;
     #[cfg(unix)]
     use std::fs;
-    #[cfg(unix)]
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     use crate::config::AtmConfig;
     use crate::types::AgentName;
 
+    #[cfg(unix)]
+    use super::hook::ScopedHookFilePathOverride;
     use super::{resolve_hook_identity, resolve_runtime_sender_identity, resolve_sender_identity};
 
     #[test]
@@ -172,10 +172,11 @@ mod tests {
         let original_identity = env::var_os("ATM_IDENTITY");
         remove_env_var("ATM_IDENTITY");
 
-        let hook_path =
-            std::env::temp_dir().join(format!("atm-hook-{}.json", unsafe { libc::getppid() }));
-        let created_at = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let hook_path = tempdir.path().join("atm-hook-test.json");
+        let _guard = ScopedHookFilePathOverride::set(hook_path.clone());
+        let created_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
             .expect("system time")
             .as_secs_f64();
         fs::write(
@@ -196,7 +197,6 @@ mod tests {
             AgentName::from_validated("team-lead")
         );
 
-        let _ = fs::remove_file(hook_path);
         restore("ATM_IDENTITY", original_identity);
     }
 
