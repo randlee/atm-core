@@ -209,6 +209,11 @@ Acceptance:
 The items below are the active Phase R execution order. They depend on the
 hardened document set above and should drive the next implementation steps.
 
+### Wave 1: Boundary Establishment And Enforcement
+
+Wave 1 uses lint, parser, and skeleton work to establish and enforce hard code
+boundaries before substantive implementation begins.
+
 ### R.0 Lint Foundation
 
 ### R.0.1 Boundary Parser
@@ -329,6 +334,12 @@ Required outcome:
 Acceptance:
 - the remaining Phase R work is expressed as concrete implementation sprints on
   top of the enforced skeleton
+
+### Wave 2: Implementation Against Enforced Boundaries
+
+Wave 2 executes implementation work only after Wave 1 has established the lint
+gates, cleaned the baseline enough to make them useful, and created the new
+crate/trait skeleton that those gates can check concretely.
 
 ### R.4 Implementation
 
