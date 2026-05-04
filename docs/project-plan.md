@@ -2482,6 +2482,9 @@ Integration branch:
 
 ### Q.0 — Boundary Cleanup And Debt Retirement
 
+Status:
+- complete on `feature/pQ-s0-debt-retirement` at `01a252a`
+
 Scope:
 - align the existing codebase with the Phase Q target shape before store and
   daemon work begin
@@ -2519,31 +2522,6 @@ Acceptance:
 - shorthand and object-form `config.json` member parsing follow the same
   validation expectations where both remain supported
 - the codebase is simpler to migrate after Q.0 than before Q.0
-
-### Q.RULES-DOC-1 — Test Isolation Rules Formalization [COMPLETE]
-
-Objective:
-- formalize the architectural and requirements contracts for test subprocess
-  isolation before the broader Phase Q enforcement sweep turns those findings
-  into active merge blockers
-
-Delivered in:
-- commit `7649712fc5ffc3576f4c410a01b7ed2866d2f112`
-
-Deliverables:
-- `RULE-008` through `RULE-011` defined in `.claude/agents/arch-qa.md`
-- `REQ-CORE-TEST-001` added to product and crate requirements
-- `docs/cross-platform-guidelines.md` updated with test subprocess isolation
-  guidance
-- `crates/atm/tests/support/mod.rs` added with test-only constants and a
-  `TestEnvBuilder` scaffold
-
-Acceptance:
-- test subprocess isolation rules are explicit and auditable in the rule,
-  requirement, and architecture docs
-- blocking enforcement leaves room for explicit production-compatibility tests
-  that must exercise `ATM_TEAM`, `ATM_IDENTITY`, or role-significant names
-  such as `team-lead`
 
 ### Q.1 — Store And Boundary Foundation
 

@@ -639,7 +639,14 @@ Supersession note:
 
 Public entrypoint:
 
-`send::send_mail(request: SendRequest, observability: &dyn ObservabilityPort) -> Result<SendOutcome, AtmError>`
+`send::send_mail_via_store(request: SendRequest, store: &dyn SendStore, ingress: &dyn InboxIngress, exporter: &dyn InboxExport, observability: &dyn ObservabilityPort) -> Result<SendOutcome, AtmError>`
+
+Phase Q note:
+- Q.2 replaced the earlier `send_mail(request, observability)` entrypoint with
+  `send_mail_via_store(...)`
+- the store, ingress, and exporter parameters make the SQLite-first write,
+  ingest-before-export, and projection/export boundaries explicit at the public
+  service seam
 
 `SendRequest` contains:
 - home directory
@@ -667,7 +674,8 @@ Public entrypoint:
 | `agent` | `String` | Resolved target recipient. |
 | `sender` | `String` | Resolved sender identity. |
 | `outcome` | `&'static str` | Delivery result such as `sent` or `dry_run`. |
-| `message_id` | `Uuid` | ATM-authored UUID v4 for the send operation. |
+| `message_id` | `LegacyMessageId` | ATM-authored legacy UUID bridge identity for the send operation. |
+| `atm_message_id` | `AtmMessageId` | Canonical ATM ULID carried in SQLite and `metadata.atm.messageId`. |
 | `requires_ack` | `bool` | Whether the message requires acknowledgement. |
 | `task_id` | `Option<String>` | Optional task identifier persisted on the message. |
 | `summary` | `Option<String>` | Generated or caller-supplied summary text. |
@@ -685,14 +693,21 @@ Normal send JSON output includes:
 - `agent`
 - `outcome`
 - `message_id`
+- `atm_message_id`
 - `requires_ack`
 - `task_id`
 - `warnings` when send completed in a degraded but permitted mode
+
+For the ATM-authored inbox wire shape, the top-level legacy `message_id` is
+omitted; that legacy field appears only in compatibility-mode sends. The
+canonical send identity is `atm_message_id`, with the legacy UUID bridge
+retained only where older consumers still require it.
 
 Dry-run send JSON output includes:
 - `action = "send"`
 - `agent`
 - `team`
+- `atm_message_id`
 - `message`
 - `dry_run = true`
 - `requires_ack`
@@ -822,7 +837,7 @@ The CLI JSON output mirrors the current contract:
 
 Public entrypoint:
 
-`ack::ack_mail(request: AckRequest, observability: &dyn ObservabilityPort) -> Result<AckOutcome, AtmError>`
+`ack::ack_mail<S>(request: AckRequest, store: &S, observability: &dyn ObservabilityPort) -> Result<AckOutcome, AtmError> where S: AckStore`
 
 `AckRequest` contains:
 - home directory
@@ -840,6 +855,9 @@ Public entrypoint:
 - optional task id from the acknowledged message
 - reply target
 - reply message id
+  `AckOutcome.reply_message_id` remains `LegacyMessageId` for CLI/output
+  compatibility even though SQLite and `metadata.atm.messageId` carry the
+  canonical `AtmMessageId`
 - reply text
 - warnings: Vec<String>
 - Phase Q addition: `warnings` carries best-effort post-send-hook diagnostics
@@ -847,7 +865,9 @@ Public entrypoint:
 
 The ack service is responsible for the legal transition from `(Read, PendingAck)` to `(Read, Acknowledged)` plus the reply append.
 
-When the source message came from an origin inbox file in the merged surface, the acknowledgement writeback must update that source file atomically rather than projecting the change onto a different inbox file.
+Phase Q supersedes the legacy source-file writeback rule: SQLite is the
+authoritative durable store for ack state, while inbox/file-surface projection
+is deferred to the Q.4 export/runtime path.
 
 ### 6.4 Clear Service
 
@@ -964,7 +984,9 @@ Roster output rules:
 - show extra runtime members after the baseline set
 - snapshot `~/.claude/teams/*/inboxes/*.lock` at doctor start and end; any lock
   path present in both snapshots is stale and should surface as
-  `ATM_WARNING_STALE_MAILBOX_LOCK` with `rm -f <path>` recovery guidance
+  `ATM_WARNING_STALE_MAILBOX_LOCK` with recovery guidance that explicitly marks
+  the lock as a transitional compatibility diagnostic rather than a Phase Q
+  mail-correctness dependency
 
 ### 6.8 Team Recovery Services
 
@@ -984,19 +1006,21 @@ Architectural rules:
   ATM home directory
 - `add-member` is the retained local roster-repair path and must reject
   duplicates before mutating config
-- `backup` snapshots current team config, inboxes, and the ATM team task
-  bucket into a timestamped snapshot directory
+- `backup` snapshots current team config, the ATM-owned `.atm-state` tree
+  (including SQLite durable state and workflow compatibility state), inboxes,
+  and the ATM team task bucket into a timestamped snapshot directory
 - inbox backup excludes transient mailbox `*.lock` sentinels, dotfiles, and
   restore markers
 - `restore` is a local recovery path and must:
   - preserve the current team-lead entry and `leadSessionId`
   - restore only missing non-lead members
   - clear runtime-only restored-member state before persistence
+  - restore the ATM-owned `.atm-state` tree from the chosen snapshot when
+    present
   - restore non-lead inboxes from the chosen snapshot
-  - sweep stale mailbox `*.lock` sentinels before restored inbox files are copied in
-  - treat stale-sentinel sweep as result-bearing: if that cleanup hits a
-    read-only-filesystem failure, restore must stop and surface
-    `MailboxLockReadOnlyFilesystem` instead of warning and continuing
+  - treat stale mailbox `*.lock` sentinels as compatibility-only diagnostics;
+    restore must not require sweeping them in order to restore durable ATM
+    state or inbox compatibility files
   - recompute `.highwatermark` from the maximum restored task id
   - support a dry-run path without making changes
 - Claude Code project task-list restoration remains separate from the retained
@@ -1295,6 +1319,7 @@ Required families:
 - identity
 - team not found
 - agent not found
+- store
 - mailbox read
 - mailbox write
 - file policy
@@ -2124,6 +2149,8 @@ Auto-start path:
 - if the daemon is absent, the CLI/runtime path may perform exactly one
   auto-start attempt
 - after one auto-start attempt, the CLI/runtime path retries connect once
+- daemon startup waits at most `10s` for control-state publication
+  (`AUTO_START_PUBLISH_TIMEOUT`)
 - if the daemon remains unavailable, the command fails with a typed actionable
   error
 - there is no silent fallback from the production path to direct SQLite or
@@ -2385,11 +2412,13 @@ The daemon runtime must use one documented operational contract.
 Required architectural defaults:
 - graceful shutdown drain deadline: `5s`
 - force-cancel deadline: `10s` total
+- daemon auto-start publish deadline: `10s`
+  (`AUTO_START_PUBLISH_TIMEOUT`)
 - same-host daemon request deadline: `3s`
 - per-leg TCP/TLS connect deadline: `5s`
 - per-leg TCP/TLS read/write deadline: `5s`
 - total remote retry budget: `30s`
-- SQLite `busy_timeout`: `1500ms`
+- SQLite `busy_timeout`: `5000ms`
 - ingest batch processing slice: `2s`
 - doctor health query deadline: `3s`
 
@@ -2414,19 +2443,9 @@ Phase Q test architecture must keep:
 - core service logic testable in-process
 - transport/watch/runtime logic testable through fakes or harnesses
 - daemon process spawning out of the core test path
-- subprocess integration tests isolated from developer ATM filesystem and
-  identity state by temp-owned config/runtime roots and test-only fixture
-  identifiers
-- explicit production-compatibility exceptions for `ATM_TEAM`,
-  `ATM_IDENTITY`, and reserved role names such as `team-lead` only when those
-  values are the subject under test
 
 If a capability cannot be tested without real daemon spawning, that is treated
 as a design smell rather than the default approach.
-
-The authoritative architectural fitness rules that enforce these test-isolation
-constraints live in `.claude/agents/arch-qa.md` as `RULE-008`, `RULE-009`,
-`RULE-010`, and `RULE-011`.
 
 ### 21.8 Lock Elimination
 

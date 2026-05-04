@@ -709,7 +709,7 @@ Implementation details:
   - TCP/TLS connect `5s`
   - TCP/TLS read/write `5s`
   - remote retry budget `30s`
-  - SQLite `busy_timeout` `1500ms`
+  - SQLite `busy_timeout` `5000ms`
   - ingest batch slice `2s`
   - doctor query `3s`
 - resource caps:
@@ -733,6 +733,9 @@ Acceptance:
 - `read` and `clear` no longer require mailbox rewrite correctness
 - lock contention on inbox files does not block SQLite-owned state transitions
 - existing CLI output remains compatible
+- ack hook post-send payload includes roster-backed `recipient_pane_id` when
+  known; when roster truth leaves it `NULL`/absent, the hook still fires with
+  `recipient_pane_id` omitted instead of failing the successful ack transition
 - tests cover:
   - mixed imported legacy + forward ATM rows
   - repeated `read` after external Claude append
