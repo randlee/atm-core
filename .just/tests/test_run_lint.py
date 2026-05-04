@@ -18,6 +18,7 @@ from run_lint import LintTask
 from run_lint import preview_lines_for_task
 from run_lint import prioritize_error_lines
 from run_lint import resolve_task_names
+from run_lint import strip_ansi
 
 
 class RunLintTests(unittest.TestCase):
@@ -50,6 +51,21 @@ class RunLintTests(unittest.TestCase):
             [
                 "error[E0432]: unresolved import `uuid`",
                 "could not compile `agent-team-mail`",
+            ],
+        )
+
+    def test_strip_ansi_and_prioritize_error_lines_handles_colored_cargo_output(self) -> None:
+        lines = [
+            strip_ansi("\x1b[1m\x1b[92m  Downloaded\x1b[0m thiserror v2.0.18"),
+            strip_ansi("\x1b[1m\x1b[91merror[E0308]: mismatched types\x1b[0m"),
+            strip_ansi("\x1b[1m\x1b[91merror:\x1b[0m could not compile `agent-team-mail`"),
+        ]
+
+        self.assertEqual(
+            prioritize_error_lines(lines),
+            [
+                "error[E0308]: mismatched types",
+                "error: could not compile `agent-team-mail`",
             ],
         )
 

@@ -36,6 +36,8 @@ COUNT_PATTERNS = (
     ("errors:", "errors"),
 )
 FILE_FINDING_RE = re.compile(r"^[A-Za-z0-9_.-]+/.*:\d+:")
+ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+ERROR_MARKER_RE = re.compile(r"(?<![A-Za-z0-9_])(error|failed|traceback|exception)(?![A-Za-z0-9_])")
 
 
 @dataclass(frozen=True)
@@ -83,8 +85,12 @@ def resolve_task_names(target: str) -> list[str]:
     return [target]
 
 
+def strip_ansi(text: str) -> str:
+    return ANSI_ESCAPE_RE.sub("", text)
+
+
 def interesting_lines(output: str) -> list[str]:
-    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    lines = [strip_ansi(line).strip() for line in output.splitlines() if line.strip()]
     filtered = [line for line in lines if not line.startswith(("python ", "python3 ", "cargo "))]
     return filtered or lines
 
@@ -93,10 +99,7 @@ def prioritize_error_lines(lines: list[str]) -> list[str]:
     error_lines = [
         line
         for line in lines
-        if any(
-            token in line.lower()
-            for token in ("error", "failed", "traceback", "exception", "could not")
-        )
+        if ERROR_MARKER_RE.search(line.lower()) or "could not" in line.lower()
     ]
     return error_lines or lines
 

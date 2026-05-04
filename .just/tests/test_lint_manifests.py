@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from pathlib import PureWindowsPath
 import sys
 import tempfile
 import unittest
@@ -11,6 +12,7 @@ if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
 from lint_manifests import collect_manifest_violations
+from lint_manifests import relative_manifest_display
 
 
 ROOT_MANIFEST = """\
@@ -46,6 +48,15 @@ serde = "1"
 
 
 class LintManifestsTests(unittest.TestCase):
+    def test_relative_manifest_display_uses_posix_separators(self) -> None:
+        repo_root = PureWindowsPath(r"D:\a\atm-core\atm-core")
+        manifest_path = PureWindowsPath(r"D:\a\atm-core\atm-core\crates\atm-core\Cargo.toml")
+
+        self.assertEqual(
+            relative_manifest_display(manifest_path, repo_root),
+            "crates/atm-core/Cargo.toml",
+        )
+
     def write_repo(self, repo_root: Path) -> None:
         (repo_root / "Cargo.toml").write_text(ROOT_MANIFEST, encoding="utf-8")
         crate_dir = repo_root / "crates/atm-core"

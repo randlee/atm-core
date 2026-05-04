@@ -54,6 +54,10 @@ def member_manifests(repo_root: Path) -> list[Path]:
     return sorted((repo_root / "crates").glob("*/Cargo.toml"))
 
 
+def relative_manifest_display(manifest_path: Path, repo_root: Path) -> str:
+    return manifest_path.relative_to(repo_root).as_posix()
+
+
 def dependency_sections(manifest: dict) -> list[tuple[str, dict]]:
     sections: list[tuple[str, dict]] = []
     for section_name in ("dependencies", "dev-dependencies", "build-dependencies"):
@@ -79,7 +83,7 @@ def collect_manifest_violations(repo_root: Path) -> list[ManifestViolation]:
 
     for manifest_path in member_manifests(repo_root):
         manifest = tomllib_load(manifest_path)
-        rel_manifest = str(manifest_path.relative_to(repo_root))
+        rel_manifest = relative_manifest_display(manifest_path, repo_root)
         package = manifest.get("package", {})
         if not isinstance(package, dict):
             violations.append(ManifestViolation(rel_manifest, "missing [package] table"))
