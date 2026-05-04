@@ -26,14 +26,14 @@ use atm_rusqlite::RusqliteStore;
 use chrono::Utc;
 use fs2::FileExt;
 use serial_test::serial;
-use support::{PRODUCTION_TEAM_LEAD, ROLE_TEAM_LEAD};
+use support::ROLE_TEAM_LEAD;
 use tempfile::TempDir;
 use uuid::Uuid;
 
 const TEST_TEAM: &str = "test-team";
 const TEST_SENDER: &str = "sender-a";
 const TEST_RECIPIENT: &str = "recipient";
-const MISSING_CONFIG_NOTICE_LEAD: &str = PRODUCTION_TEAM_LEAD;
+const MISSING_CONFIG_NOTICE_LEAD: &str = ROLE_TEAM_LEAD;
 
 fn qualified(agent: &str) -> String {
     format!("{agent}@{TEST_TEAM}")
@@ -902,7 +902,8 @@ fn acquire_env_lock() -> File {
     const RETRY_INTERVAL: Duration = Duration::from_millis(100);
     const LOCK_TIMEOUT: Duration = Duration::from_secs(10);
 
-    let lock_path = std::env::temp_dir().join("atm-mailbox-locking-env.lock");
+    let scope = env_lock_scope();
+    let lock_path = std::env::temp_dir().join(format!("atm-mailbox-locking-env-{scope}.lock"));
     let deadline = Instant::now() + LOCK_TIMEOUT;
     loop {
         let file = OpenOptions::new()
@@ -924,6 +925,15 @@ fn acquire_env_lock() -> File {
             }
         }
     }
+}
+
+fn env_lock_scope() -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+    env!("CARGO_MANIFEST_DIR").hash(&mut hasher);
+    format!("{:016x}", hasher.finish())
 }
 
 struct EnvGuard {

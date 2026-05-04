@@ -8,9 +8,8 @@ mod support;
 
 #[allow(dead_code, unused_imports)]
 pub use support::{
-    PRODUCTION_TEAM_LEAD, ROLE_TEAM_LEAD, TEST_DAEMON, TEST_LEAD, TEST_LEAD_ADDRESS, TEST_ORIGIN,
-    TEST_QA, TEST_QA_AGENT, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER,
-    TEST_SENDER_ADDRESS, TEST_TEAM,
+    ROLE_TEAM_LEAD, TEST_DAEMON, TEST_LEAD, TEST_LEAD_ADDRESS, TEST_ORIGIN, TEST_QA, TEST_QA_AGENT,
+    TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_SENDER_ADDRESS, TEST_TEAM,
 };
 
 #[allow(dead_code)]
@@ -42,7 +41,9 @@ pub fn configure_atm_command<'a>(
     for key in [
         "PATH",
         "CARGO",
+        "CARGO_HOME",
         "HOME",
+        "RUSTUP_HOME",
         "USERPROFILE",
         "SYSTEMROOT",
         "TMPDIR",

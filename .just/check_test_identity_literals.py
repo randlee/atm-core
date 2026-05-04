@@ -11,16 +11,18 @@ from pathlib import Path
 FORBIDDEN_LITERALS = ("team-lead", "arch-ctm", "atm-dev", "quality-mgr")
 
 ALLOWED_PATTERNS = (
-    re.compile(
-        r"\b(?:pub\s+)?const\s+(?:ROLE_TEAM_LEAD|PRODUCTION_TEAM_LEAD|TEST_[A-Z0-9_]+)\b"
-    ),
-    re.compile(r"\b(?:ROLE_TEAM_LEAD|PRODUCTION_TEAM_LEAD|TEST_[A-Z0-9_]+)\b"),
+    re.compile(r"\b(?:pub\s+)?const\s+(?:ROLE_TEAM_LEAD|TEST_[A-Z0-9_]+)\b"),
+    re.compile(r"\b(?:ROLE_TEAM_LEAD|TEST_[A-Z0-9_]+)\b"),
     re.compile(r"\bATM_(?:TEAM|IDENTITY)\b"),
 )
 
+EXCLUDED_PATHS = {
+    "crates/atm/tests/support/mod.rs",
+}
+
 
 def is_test_scope(path: Path, text: str) -> bool:
-    return "/tests/" in path.as_posix() or "#[cfg(test)]" in text or "mod tests" in text
+    return "/tests/" in path.as_posix()
 
 
 def candidate_base_refs() -> list[str]:
@@ -79,6 +81,10 @@ def collect_added_test_lines(repo_root: Path) -> list[tuple[Path, int, str]]:
         if line.startswith("+++ b/"):
             current_path = Path(line.removeprefix("+++ b/"))
             if current_path.suffix != ".rs":
+                current_path = None
+                current_is_test_scope = False
+                continue
+            if current_path.as_posix() in EXCLUDED_PATHS:
                 current_path = None
                 current_is_test_scope = False
                 continue

@@ -9,6 +9,8 @@ const TEST_SENDER: &str = "sender-a";
 
 #[derive(Default)]
 struct FakeDispatcher {
+    // Test-only dispatcher state is guarded by a mutex so concurrent request
+    // handlers can record ordering without racing the fixture assertions.
     responses: std::sync::Mutex<Vec<DaemonResponse>>,
     requests: std::sync::Mutex<Vec<DaemonRequest>>,
 }
@@ -175,9 +177,7 @@ fn local_same_host_daemon_api_flow_works() {
 
 #[test]
 fn bounded_remote_host_unreachable_behavior_is_typed() {
-    let probe = TcpListener::bind(("127.0.0.1", 0)).expect("probe listener");
-    let address = probe.local_addr().expect("probe addr");
-    drop(probe);
+    let address = unreachable_loopback_address();
     let error = request_remote(
         address,
         &DaemonRequest {
@@ -189,6 +189,19 @@ fn bounded_remote_host_unreachable_behavior_is_typed() {
     )
     .expect_err("unreachable host");
     assert_eq!(error.code, AtmErrorCode::DaemonRemoteUnavailable);
+}
+
+fn unreachable_loopback_address() -> std::net::SocketAddr {
+    for _ in 0..16 {
+        let probe = TcpListener::bind(("127.0.0.1", 0)).expect("probe listener");
+        let address = probe.local_addr().expect("probe addr");
+        drop(probe);
+        match TcpStream::connect_timeout(&address, Duration::from_millis(10)) {
+            Err(_) => return address,
+            Ok(stream) => drop(stream),
+        }
+    }
+    panic!("failed to reserve an unreachable loopback address after repeated retries");
 }
 
 #[test]
