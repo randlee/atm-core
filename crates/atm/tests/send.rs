@@ -18,8 +18,8 @@ use atm_core::types::{AgentName, TeamName};
 use atm_core::{read_messages, write_messages};
 use atm_rusqlite::RusqliteStore;
 use helpers::{
-    PRODUCTION_TEAM_LEAD, ROLE_TEAM_LEAD, TEST_LEAD, TEST_QA_AGENT, TEST_RECIPIENT,
-    TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_SENDER_ADDRESS, TEST_TEAM, configure_atm_command,
+    PRODUCTION_TEAM_LEAD, ROLE_TEAM_LEAD, TEST_QA_AGENT, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS,
+    TEST_SENDER, TEST_SENDER_ADDRESS, TEST_TEAM, configure_atm_command,
 };
 use serde_json::Value;
 use serial_test::serial;
