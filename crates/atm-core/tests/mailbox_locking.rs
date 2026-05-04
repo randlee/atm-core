@@ -1,15 +1,19 @@
 #[cfg(unix)]
 use std::ffi::{OsStr, OsString};
 use std::fs;
+#[cfg(unix)]
 use std::fs::OpenOptions;
 use std::sync::{Arc, Barrier, mpsc};
 #[cfg(unix)]
 use std::sync::{Mutex, OnceLock};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(unix)]
+use std::time::Instant;
 
 use atm_core::ack::{AckRequest, ack_mail};
 use atm_core::clear::{ClearQuery, clear_mail};
+#[cfg(unix)]
 use atm_core::error::AtmErrorCode;
 use atm_core::observability::NullObservability;
 use atm_core::read::{ReadQuery, read_mail};
