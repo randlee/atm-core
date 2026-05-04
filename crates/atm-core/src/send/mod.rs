@@ -786,6 +786,7 @@ mod tests {
     use super::alert_state;
     use crate::home;
     use crate::process::process_is_alive;
+    use crate::roles::TEAM_LEAD_AGENT;
     use crate::send::{SendMessageSource, SendRequest};
     use crate::test_support::{ROLE_TEAM_LEAD, TEST_RECIPIENT, TEST_TEAM};
     use crate::types::{AgentName, TeamName};
@@ -860,12 +861,9 @@ mod tests {
         let team: TeamName = TEST_TEAM.parse().expect("team");
         let recipient: AgentName = TEST_RECIPIENT.parse().expect("agent");
         let team_dir = home::team_dir_from_home(tempdir.path(), &team).expect("team dir");
-        let lead_inbox = home::inbox_path_from_home(
-            tempdir.path(),
-            &team,
-            &AgentName::from_validated(ROLE_TEAM_LEAD),
-        )
-        .expect("lead inbox");
+        let team_lead = TEAM_LEAD_AGENT.clone();
+        let lead_inbox =
+            home::inbox_path_from_home(tempdir.path(), &team, &team_lead).expect("lead inbox");
         fs::create_dir_all(&team_dir).expect("team dir exists");
         fs::create_dir_all(&lead_inbox).expect("directory at lead inbox path");
 
