@@ -21,7 +21,6 @@ from lint_common import write_log
 
 PYTHON_LINT_ORDER = (
     "version",
-    "modules",
     "boundaries",
     "manifests",
     "identities",

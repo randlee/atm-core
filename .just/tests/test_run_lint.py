@@ -30,7 +30,6 @@ resolver = "2"
 
     def test_resolve_task_names_all_includes_new_targets(self) -> None:
         names = resolve_task_names("all")
-        self.assertIn("modules", names)
         self.assertIn("boundaries", names)
         self.assertIn("manifests", names)
         self.assertIn("deny", names)

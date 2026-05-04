@@ -33,7 +33,7 @@ SECTIONS = (
             ("lint fast", "Run the low-latency lint subset."),
             ("lint fmt", "Run only the format check."),
             ("lint clippy", "Run only Clippy with warnings denied."),
-            ("lint modules", "Run cargo-modules internal acyclic checks."),
+            ("lint modules", "Run cargo-modules internal acyclic checks (advisory/manual)."),
             ("lint deny", "Run cargo-deny advisories/bans/source checks."),
             ("lint shear", "Run cargo-shear unused-dependency checks."),
             ("lint boundaries", "Run the crate/source boundary checks."),
