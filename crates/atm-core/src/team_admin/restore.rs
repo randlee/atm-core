@@ -1,4 +1,5 @@
-// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
+// lint-identities: allow-start -- restore logic must preserve the reserved
+// `team-lead` production role while filtering backup members and inbox names.
 
 use std::collections::BTreeSet;
 use std::fs;

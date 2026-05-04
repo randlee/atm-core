@@ -29,6 +29,28 @@ Phase-R redesign note:
   in [`docs/plan-phase-R.md`](./plan-phase-R.md)
 - Phase R starts with boundary documents, ADR alignment, and lint/parser gates
   before new implementation work
+- the active integration branch for this redesign line is `integrate/phase-R`
+
+Phase R execution entry:
+- Wave 1 deliverable: the new Phase R skeleton
+  - new crates
+  - public boundary traits/facades
+  - major data structures
+- Wave 1 supporting sequence:
+  1. `R.0` lint foundation
+  2. `R.1` lint debt burn-down
+  3. `R.2` skeleton crates, boundary traits/facades, and major data structures
+  4. `R.2A` parallel lint hardening
+- `R.3` is a dedicated re-planning sprint after the Wave 1 skeleton lands
+- Wave 2 executes implementations only against the enforced boundary skeleton
+
+Phase R acceptance:
+- lint/parser gates exist before substantive implementation resumes
+- the current lint baseline is cleaned enough that new architectural failures
+  are actionable
+- the crate/trait/data-structure skeleton exists before Wave 2 starts
+- implementation sprint planning is rewritten against that skeleton before
+  implementation resumes
 
 Status:
 - Phases 0 through P have executed on the retained rewrite line.

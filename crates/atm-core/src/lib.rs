@@ -30,12 +30,17 @@ pub(crate) mod persistence;
 pub(crate) mod process;
 /// Mailbox read/query workflows and output models.
 pub mod read;
+/// Reserved production role constants shared across runtime and tests.
+pub mod roles;
 /// Public mailbox and team schema types shared with CLI tests and adapters.
 pub mod schema;
 /// Mailbox send workflows and request/response models.
 pub mod send;
 /// Retained local team discovery, roster repair, and backup/restore workflows.
 pub mod team_admin;
+/// Shared synthetic test identities and role constants used across crate tests.
+#[doc(hidden)]
+pub mod test_support;
 /// Internal text-formatting helpers used by ATM core surfaces.
 pub(crate) mod text;
 /// Shared enums and semantic newtypes used across ATM core workflows.

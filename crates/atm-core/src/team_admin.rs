@@ -1,4 +1,5 @@
-// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
+// lint-identities: allow-start -- production team-admin logic preserves the
+// reserved `team-lead` role ordering and canonical agent-id formatting.
 
 use std::fs;
 use std::path::{Path, PathBuf};

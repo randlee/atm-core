@@ -1,4 +1,5 @@
-// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
+// lint-identities: allow-start -- test-only identity resolution coverage below
+// intentionally exercises concrete ATM identity strings and env-var semantics.
 
 pub mod hook;
 
@@ -58,7 +59,9 @@ pub(crate) fn resolve_sender_identity(
 /// Returns [`AtmError`] with
 /// [`crate::error_codes::AtmErrorCode::IdentityUnavailable`] when
 /// `ATM_IDENTITY` is not set in the current environment.
-pub fn resolve_runtime_sender_identity(config: Option<&AtmConfig>) -> Result<AgentName, AtmError> {
+pub(crate) fn resolve_runtime_sender_identity(
+    config: Option<&AtmConfig>,
+) -> Result<AgentName, AtmError> {
     crate::config::resolve_identity(config).ok_or_else(AtmError::identity_unavailable)
 }
 
@@ -70,11 +73,11 @@ fn resolve_aliased_agent(value: &str, config: Option<&AtmConfig>) -> Result<Agen
 pub fn resolve_hook_identity(
     team_override: Option<&str>,
     config: Option<&AtmConfig>,
-) -> Result<(String, String), AtmError> {
+) -> Result<(AgentName, crate::types::TeamName), AtmError> {
     let agent = resolve_runtime_sender_identity(config)?;
     let team = crate::config::resolve_team(team_override, config)
         .ok_or_else(AtmError::team_unavailable)?;
-    Ok((agent.into_inner(), team.into_inner()))
+    Ok((agent, team))
 }
 
 #[cfg(test)]
@@ -88,7 +91,9 @@ mod tests {
     use crate::config::AtmConfig;
     use crate::types::AgentName;
 
-    use super::{resolve_hook_identity, resolve_runtime_sender_identity, resolve_sender_identity};
+    #[cfg(unix)]
+    use super::resolve_sender_identity;
+    use super::{resolve_hook_identity, resolve_runtime_sender_identity};
 
     #[test]
     #[serial_test::serial(env)]
@@ -136,8 +141,8 @@ mod tests {
         set_env_var("ATM_TEAM", "atm-dev");
 
         let (agent, team) = resolve_hook_identity(None, None).expect("hook identity");
-        assert_eq!(agent, "arch-ctm");
-        assert_eq!(team, "atm-dev");
+        assert_eq!(agent.as_str(), "arch-ctm");
+        assert_eq!(team.as_str(), "atm-dev");
 
         restore("ATM_IDENTITY", original_identity);
         restore("ATM_TEAM", original_team);
