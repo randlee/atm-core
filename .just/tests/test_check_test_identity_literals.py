@@ -23,13 +23,31 @@ forbidden_literals = [
 ]
 """
 
+ROOT_MANIFEST = """\
+[workspace]
+members = ["crates/atm-core"]
+resolver = "2"
+"""
+
 
 class CheckTestIdentityLiteralsTests(unittest.TestCase):
     def write_repo(self, repo_root: Path) -> None:
         (repo_root / ".just").mkdir()
         (repo_root / ".just/lint-config.toml").write_text(LINT_CONFIG, encoding="utf-8")
+        (repo_root / "Cargo.toml").write_text(ROOT_MANIFEST, encoding="utf-8")
         (repo_root / "crates/atm-core/src").mkdir(parents=True)
         (repo_root / "crates/atm-core/tests").mkdir(parents=True)
+        (repo_root / "crates/atm-core/Cargo.toml").write_text(
+            """\
+[package]
+name = "agent-team-mail-core"
+version = "1.1.2"
+
+[lib]
+name = "atm_core"
+""",
+            encoding="utf-8",
+        )
 
     def test_load_forbidden_literals_reads_config(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

@@ -23,6 +23,7 @@ Cargo.toml.ci
 .just/logs/
 .just/tests/__pycache__/
 .just/__pycache__/
+artifacts/view/
 
 # RustRover
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can

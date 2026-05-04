@@ -24,6 +24,16 @@ from lint_common import workspace_crate_section_lines
 from lint_common import workspace_crates
 
 
+ROOT_MANIFEST = """\
+[workspace]
+members = ["crates/atm", "crates/atm-core"]
+resolver = "2"
+
+[workspace.package]
+version = "1.1.2"
+"""
+
+
 class LintCommonTests(unittest.TestCase):
     def test_lint_slug_normalizes_names(self) -> None:
         self.assertEqual(lint_slug("Rule 8 / identities"), "rule-8-identities")
@@ -71,6 +81,7 @@ class LintCommonTests(unittest.TestCase):
     def test_workspace_crates_reads_package_and_crate_path(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
+            (repo_root / "Cargo.toml").write_text(ROOT_MANIFEST, encoding="utf-8")
             crates_dir = repo_root / "crates"
             atm_core_dir = crates_dir / "atm-core"
             atm_core_dir.mkdir(parents=True)
@@ -109,6 +120,10 @@ version = "1.1.2"
     def test_render_workspace_crate_table_supports_extra_columns(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
+            (repo_root / "Cargo.toml").write_text(
+                ROOT_MANIFEST.replace('"crates/atm", ', ""),
+                encoding="utf-8",
+            )
             crate_dir = repo_root / "crates" / "atm-core"
             crate_dir.mkdir(parents=True)
             (crate_dir / "Cargo.toml").write_text(
@@ -135,6 +150,10 @@ name = "atm_core"
     def test_workspace_crate_section_lines_wraps_table(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
+            (repo_root / "Cargo.toml").write_text(
+                ROOT_MANIFEST.replace('"crates/atm", ', ""),
+                encoding="utf-8",
+            )
             crate_dir = repo_root / "crates" / "atm-core"
             crate_dir.mkdir(parents=True)
             (crate_dir / "Cargo.toml").write_text(
