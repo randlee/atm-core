@@ -50,6 +50,10 @@ _lint-manifests:
 _lint-version:
     {{python_cmd}} .just/check_version_sync.py
 
+# Show current workspace version state or latest recommended direct dependency upgrades.
+version mode='current':
+    {{python_cmd}} .just/run_version.py {{mode}}
+
 # Enforce RULE-008 for test and cfg(test) code.
 [private]
 _lint-identities:
@@ -84,6 +88,10 @@ clean:
 # Run the repo lint suite.
 lint target='all':
     {{python_cmd}} .just/run_lint.py {{target}}
+
+# Generate architecture visualization artifacts.
+view target='all':
+    {{python_cmd}} .just/run_view.py {{target}}
 
 # Run the local CI-equivalent command set.
 ci: lint test

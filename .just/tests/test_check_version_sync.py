@@ -62,7 +62,10 @@ class CheckVersionSyncTests(unittest.TestCase):
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             manifest = repo_root / "crates/atm-rusqlite/Cargo.toml"
-            manifest.write_text(manifest.read_text(encoding="utf-8").replace("version.workspace = true\n", ""), encoding="utf-8")
+            manifest.write_text(
+                manifest.read_text(encoding="utf-8").replace("version.workspace = true\n", ""),
+                encoding="utf-8",
+            )
 
             with self.assertRaises(SystemExit) as error:
                 validate_crate_versions(repo_root, "1.1.2")
@@ -98,10 +101,28 @@ version = "1.1.2"
 
             self.assertIn("agent-team-mail-rusqlite missing from Cargo.lock", str(error.exception))
 
+    def test_validate_crate_versions_requires_internal_path_dep_pin(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            manifest = repo_root / "crates/atm/Cargo.toml"
+            manifest.write_text(
+                manifest.read_text(encoding="utf-8").replace(', version = "1.1.2"', ""),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(SystemExit) as error:
+                validate_crate_versions(repo_root, "1.1.2")
+
+            self.assertIn(
+                'crates/atm/Cargo.toml [dependencies.atm-core]: internal path dependency version must match workspace version "1.1.2"',
+                str(error.exception),
+            )
+
     def test_success_message_includes_workspace_version(self) -> None:
         self.assertEqual(
-            success_message("1.1.2"),
-            "version sync check passed: workspace_version=1.1.2; workspace, crate pin, Cargo.lock, winget, and Homebrew release wiring are aligned.",
+            success_message("1.1.2", ["workspace member versions", "internal path deps", "Cargo.lock"]),
+            "version sync check passed: workspace_version=1.1.2; workspace member versions, internal path deps, Cargo.lock are aligned.",
         )
 
 

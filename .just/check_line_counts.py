@@ -10,6 +10,7 @@ from lint_common import classify_rust_test_scope
 from lint_common import discover_repo_root
 from lint_common import is_code_line
 from lint_common import load_lint_config
+from lint_common import workspace_manifest_paths
 
 
 @dataclass(frozen=True)
@@ -23,6 +24,7 @@ class LineLimitConfig:
 @dataclass(frozen=True)
 class FileCounts:
     crate_name: str
+    crate_root: str
     path: str
     total_lines: int
     production_lines: int
@@ -86,27 +88,29 @@ def load_config(repo_root: Path) -> LineLimitConfig:
 
 def collect_file_counts(repo_root: Path, config: LineLimitConfig) -> list[FileCounts]:
     results: list[FileCounts] = []
-    for path in sorted((repo_root / "crates").rglob("*.rs")):
-        rel = path.relative_to(repo_root)
-        rel_posix = rel.as_posix()
-        if "/tests/" in rel_posix:
+    for manifest_path in workspace_manifest_paths(repo_root):
+        crate_root = manifest_path.parent
+        src_root = crate_root / "src"
+        if not src_root.exists():
             continue
-        if "/src/" not in rel_posix:
-            continue
-        if config.exclusions and rel_posix in config.exclusions:
-            continue
+        for path in sorted(src_root.rglob("*.rs")):
+            rel = path.relative_to(repo_root)
+            rel_posix = rel.as_posix()
+            if config.exclusions and rel_posix in config.exclusions:
+                continue
 
-        lines = path.read_text(encoding="utf-8").splitlines()
-        production_lines, test_lines = classify_lines(lines)
-        results.append(
-            FileCounts(
-                crate_name=rel.parts[1],
-                path=rel_posix,
-                total_lines=len(lines),
-                production_lines=production_lines,
-                test_lines=test_lines,
+            lines = path.read_text(encoding="utf-8").splitlines()
+            production_lines, test_lines = classify_lines(lines)
+            results.append(
+                FileCounts(
+                    crate_name=crate_root.name,
+                    crate_root=crate_root.relative_to(repo_root).as_posix(),
+                    path=rel_posix,
+                    total_lines=len(lines),
+                    production_lines=production_lines,
+                    test_lines=test_lines,
+                )
             )
-        )
     return results
 
 
@@ -136,7 +140,7 @@ def format_table(counts: list[FileCounts]) -> list[str]:
         return ["no eligible source files found"]
 
     crate_width = max(len("crate"), max(len(item.crate_name) for item in counts))
-    file_width = max(len("file"), max(len(Path(item.path).relative_to(f"crates/{item.crate_name}").as_posix()) for item in counts))
+    file_width = max(len("file"), max(len(Path(item.path).relative_to(item.crate_root).as_posix()) for item in counts))
     total_width = max(len("total"), max(len(str(item.total_lines)) for item in counts))
     prod_width = max(len("prod"), max(len(str(item.production_lines)) for item in counts))
     test_width = max(len("test"), max(len(str(item.test_lines)) for item in counts))
@@ -160,7 +164,7 @@ def format_table(counts: list[FileCounts]) -> list[str]:
     for crate_name in sorted(grouped):
         crate_rows = grouped[crate_name]
         for item in crate_rows:
-            file_name = Path(item.path).relative_to(f"crates/{crate_name}").as_posix()
+            file_name = Path(item.path).relative_to(item.crate_root).as_posix()
             rows.append(
                 f"{crate_name:<{crate_width}}  "
                 f"{file_name:<{file_width}}  "

@@ -6,7 +6,9 @@ import sys
 import tomllib
 from pathlib import Path
 
+from lint_common import load_lint_config
 from lint_common import workspace_crate_section_lines
+from lint_common import workspace_manifest_paths
 
 
 def fail(message: str) -> None:
@@ -15,6 +17,25 @@ def fail(message: str) -> None:
 
 def read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def dependency_sections(manifest: dict) -> list[tuple[str, dict]]:
+    sections: list[tuple[str, dict]] = []
+    for section_name in ("dependencies", "dev-dependencies", "build-dependencies"):
+        dependencies = manifest.get(section_name)
+        if isinstance(dependencies, dict):
+            sections.append((section_name, dependencies))
+
+    targets = manifest.get("target", {})
+    if isinstance(targets, dict):
+        for target_name, target in targets.items():
+            if not isinstance(target, dict):
+                continue
+            for section_name in ("dependencies", "dev-dependencies", "build-dependencies"):
+                dependencies = target.get(section_name)
+                if isinstance(dependencies, dict):
+                    sections.append((f"target.{target_name}.{section_name}", dependencies))
+    return sections
 
 
 def extract_version_from_url(url: str) -> str | None:
@@ -27,6 +48,13 @@ def extract_version_from_url(url: str) -> str | None:
     return None
 
 
+def version_sync_config(repo_root: Path) -> dict:
+    config = load_lint_config(repo_root).get("version_sync", {})
+    if not isinstance(config, dict):
+        raise SystemExit("[version_sync] must be a TOML table")
+    return config
+
+
 def validate_workspace_version(repo_root: Path) -> str:
     cargo_toml = tomllib.loads(read_text(repo_root / "Cargo.toml"))
     workspace_version = cargo_toml.get("workspace", {}).get("package", {}).get("version")
@@ -36,32 +64,34 @@ def validate_workspace_version(repo_root: Path) -> str:
 
 
 def validate_crate_versions(repo_root: Path, workspace_version: str) -> None:
-    manifests = sorted((repo_root / "crates").glob("*/Cargo.toml"))
+    manifests = workspace_manifest_paths(repo_root)
     if not manifests:
-        fail("no crate manifests found under crates/")
+        fail("no workspace member manifests found")
 
+    workspace_member_dirs = {manifest_path.parent.resolve() for manifest_path in manifests}
     manifest_texts = {path: read_text(path) for path in manifests}
     for path, text in manifest_texts.items():
+        rel_manifest = path.relative_to(repo_root).as_posix()
         if "version.workspace = true" not in text:
-            fail(f"{path.relative_to(repo_root)} must use version.workspace = true")
+            fail(f"{rel_manifest} must use version.workspace = true")
 
-    atm_toml_path = repo_root / "crates" / "atm" / "Cargo.toml"
-    atm_text = manifest_texts.get(atm_toml_path)
-    if atm_text is None:
-        fail("crates/atm/Cargo.toml missing")
-
-    dep_match = re.search(
-        r'agent-team-mail-core".*?version\s*=\s*"(?P<version>\d+\.\d+\.\d+)"',
-        atm_text,
-    )
-    if dep_match is None:
-        fail("crates/atm/Cargo.toml is missing the agent-team-mail-core path dependency version pin")
-    dep_version = dep_match.group("version")
-    if dep_version != workspace_version:
-        fail(
-            "crates/atm/Cargo.toml agent-team-mail-core dependency version "
-            f"({dep_version}) does not match workspace version ({workspace_version})"
-        )
+        manifest = tomllib.loads(text)
+        for section_name, dependencies in dependency_sections(manifest):
+            for dependency_name, dependency in dependencies.items():
+                if not isinstance(dependency, dict):
+                    continue
+                dependency_path = dependency.get("path")
+                if not isinstance(dependency_path, str):
+                    continue
+                resolved_path = (path.parent / dependency_path).resolve()
+                if resolved_path not in workspace_member_dirs:
+                    continue
+                pinned_version = dependency.get("version")
+                if pinned_version != workspace_version:
+                    fail(
+                        f"{rel_manifest} [{section_name}.{dependency_name}]: "
+                        f'internal path dependency version must match workspace version "{workspace_version}"'
+                    )
 
 
 def validate_lockfile(repo_root: Path, workspace_version: str) -> None:
@@ -69,7 +99,7 @@ def validate_lockfile(repo_root: Path, workspace_version: str) -> None:
     packages = lock.get("package", [])
     versions: dict[str, str] = {}
     workspace_packages: set[str] = set()
-    for manifest_path in sorted((repo_root / "crates").glob("*/Cargo.toml")):
+    for manifest_path in workspace_manifest_paths(repo_root):
         manifest = tomllib.loads(read_text(manifest_path))
         package_name = manifest.get("package", {}).get("name")
         if isinstance(package_name, str):
@@ -91,84 +121,106 @@ def validate_lockfile(repo_root: Path, workspace_version: str) -> None:
             )
 
 
-def validate_winget_manifest(repo_root: Path, workspace_version: str) -> None:
-    manifest_path = repo_root / ".winget" / "randlee.agent-team-mail.yaml"
-    text = read_text(manifest_path)
+def validate_winget_manifests(repo_root: Path, workspace_version: str, config: dict) -> bool:
+    winget = config.get("winget", {})
+    if not isinstance(winget, dict) or not winget.get("enabled", False):
+        return False
 
-    version_match = re.search(r"^PackageVersion:\s*(?P<version>\d+\.\d+\.\d+)\s*$", text, re.MULTILINE)
-    if version_match is None:
-        fail(f"{manifest_path.relative_to(repo_root)} is missing PackageVersion")
-    package_version = version_match.group("version")
-    if package_version != workspace_version:
-        fail(
-            f"{manifest_path.relative_to(repo_root)} PackageVersion ({package_version}) "
-            f"does not match workspace version ({workspace_version})"
-        )
+    manifest_glob = winget.get("manifest_glob")
+    if not isinstance(manifest_glob, str) or not manifest_glob.strip():
+        raise SystemExit("[version_sync.winget].manifest_glob must be a non-empty string when enabled")
 
-    manifest_version_match = re.search(
-        r"^ManifestVersion:\s*(?P<version>\d+\.\d+\.\d+)\s*$",
-        text,
-        re.MULTILINE,
-    )
-    if manifest_version_match is None:
-        fail(f"{manifest_path.relative_to(repo_root)} is missing ManifestVersion")
-    manifest_version = manifest_version_match.group("version")
-    if manifest_version != workspace_version:
-        fail(
-            f"{manifest_path.relative_to(repo_root)} ManifestVersion ({manifest_version}) "
-            f"does not match workspace version ({workspace_version})"
-        )
+    package_version_field = winget.get("package_version_field", "PackageVersion")
+    manifest_version_field = winget.get("manifest_version_field", "ManifestVersion")
+    installer_url_field = winget.get("installer_url_field", "InstallerUrl")
+    if not all(isinstance(item, str) and item for item in (package_version_field, manifest_version_field, installer_url_field)):
+        raise SystemExit("[version_sync.winget] field names must be non-empty strings")
 
-    installer_match = re.search(r"^\s*InstallerUrl:\s*(?P<url>\S+)\s*$", text, re.MULTILINE)
-    if installer_match is None:
-        fail(f"{manifest_path.relative_to(repo_root)} is missing InstallerUrl")
-    installer_url = installer_match.group("url")
-    installer_version = extract_version_from_url(installer_url)
-    if installer_version != workspace_version:
-        fail(
-            f"{manifest_path.relative_to(repo_root)} InstallerUrl version ({installer_version}) "
-            f"does not match workspace version ({workspace_version})"
-        )
+    manifest_paths = sorted(repo_root.glob(manifest_glob))
+    if not manifest_paths:
+        fail(f"no Winget manifests found for glob {manifest_glob!r}")
 
+    for manifest_path in manifest_paths:
+        rel_manifest = manifest_path.relative_to(repo_root).as_posix()
+        text = read_text(manifest_path)
 
-def validate_homebrew_release_wiring(repo_root: Path) -> None:
-    workflow_path = repo_root / ".github" / "workflows" / "release.yml"
-    text = read_text(workflow_path)
+        def extract_field(field_name: str) -> str:
+            match = re.search(rf"^{re.escape(field_name)}:\s*(?P<value>\S+)\s*$", text, re.MULTILINE)
+            if match is None:
+                fail(f"{rel_manifest} is missing {field_name}")
+            return match.group("value")
 
-    required_fragments = (
-        "update-homebrew:",
-        "repository: randlee/homebrew-tap",
-        "for formula in homebrew-tap/Formula/agent-team-mail.rb homebrew-tap/Formula/atm.rb; do",
-        'version=\'${{ needs.gate-and-tag.outputs.release_version }}\'',
-        'tarball_url="https://github.com/randlee/atm-core/releases/download/${tag}/atm_${version}_aarch64-apple-darwin.tar.gz"',
-        'sed -i "s|version \\"[^\\"]*\\"|version \\"${version}\\"|g" "$formula"',
-    )
-
-    for fragment in required_fragments:
-        if fragment not in text:
+        package_version = extract_field(package_version_field)
+        if package_version != workspace_version:
             fail(
-                ".github/workflows/release.yml no longer guarantees Homebrew formulas "
-                f"are updated from the shared release version: missing {fragment!r}"
+                f"{rel_manifest} {package_version_field} ({package_version}) "
+                f"does not match workspace version ({workspace_version})"
             )
 
+        manifest_version = extract_field(manifest_version_field)
+        if manifest_version != workspace_version:
+            fail(
+                f"{rel_manifest} {manifest_version_field} ({manifest_version}) "
+                f"does not match workspace version ({workspace_version})"
+            )
 
-def success_message(workspace_version: str) -> str:
+        installer_url = extract_field(installer_url_field)
+        installer_version = extract_version_from_url(installer_url)
+        if installer_version != workspace_version:
+            fail(
+                f"{rel_manifest} {installer_url_field} version ({installer_version}) "
+                f"does not match workspace version ({workspace_version})"
+            )
+    return True
+
+
+def validate_release_wiring(repo_root: Path, config: dict) -> bool:
+    release_wiring = config.get("release_wiring", {})
+    if not isinstance(release_wiring, dict) or not release_wiring.get("enabled", False):
+        return False
+
+    file_path = release_wiring.get("file")
+    fragments = release_wiring.get("required_fragments", [])
+    if not isinstance(file_path, str) or not file_path.strip():
+        raise SystemExit("[version_sync.release_wiring].file must be a non-empty string when enabled")
+    if not isinstance(fragments, list) or not all(isinstance(item, str) for item in fragments):
+        raise SystemExit("[version_sync.release_wiring].required_fragments must be an array of strings")
+
+    workflow_path = repo_root / file_path
+    text = read_text(workflow_path)
+    for fragment in fragments:
+        if fragment not in text:
+            fail(
+                f"{file_path} no longer guarantees release wiring from the shared workspace version: "
+                f"missing {fragment!r}"
+            )
+    return True
+
+
+def success_message(workspace_version: str, executed_checks: list[str]) -> str:
     return (
         f"version sync check passed: workspace_version={workspace_version}; "
-        "workspace, crate pin, Cargo.lock, winget, and Homebrew release wiring are aligned."
+        + ", ".join(executed_checks)
+        + " are aligned."
     )
 
 
 def main() -> int:
     repo_root = Path(__file__).resolve().parent.parent
+    config = version_sync_config(repo_root)
     workspace_version = validate_workspace_version(repo_root)
     validate_crate_versions(repo_root, workspace_version)
     validate_lockfile(repo_root, workspace_version)
-    validate_winget_manifest(repo_root, workspace_version)
-    validate_homebrew_release_wiring(repo_root)
+
+    executed_checks = ["workspace member versions", "internal path deps", "Cargo.lock"]
+    if validate_winget_manifests(repo_root, workspace_version, config):
+        executed_checks.append("winget")
+    if validate_release_wiring(repo_root, config):
+        executed_checks.append("release wiring")
+
     for line in workspace_crate_section_lines(repo_root):
         print(line)
-    print(success_message(workspace_version))
+    print(success_message(workspace_version, executed_checks))
     return 0
 
 

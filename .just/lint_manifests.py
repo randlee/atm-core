@@ -12,6 +12,7 @@ from lint_common import discover_repo_root
 from lint_common import monotonic_now
 from lint_common import print_report
 from lint_common import workspace_crate_section_lines
+from lint_common import workspace_manifest_paths
 
 
 LINT_NAME = "manifests"
@@ -51,7 +52,7 @@ def workspace_version(repo_root: Path) -> str:
 
 
 def member_manifests(repo_root: Path) -> list[Path]:
-    return sorted((repo_root / "crates").glob("*/Cargo.toml"))
+    return workspace_manifest_paths(repo_root)
 
 
 def relative_manifest_display(manifest_path: Path, repo_root: Path) -> str:

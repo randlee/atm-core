@@ -1,0 +1,60 @@
+---
+required_variables:
+  - title
+  - header_color
+  - accent_color
+  - fragment_source
+  - copy_json
+  - copy_context
+  - body_html
+defaults: {}
+metadata:
+  purpose: Tool panel XHTML fragment template for architecture view
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>{{ title }}</title>
+  <style type="text/css">
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; padding: 16px; color: #1f2937; background: #ffffff; }
+    .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+    h3 { margin: 0; padding-bottom: 8px; border-bottom: 2px solid {{ accent_color }}; color: {{ header_color }}; flex: 1; }
+    .meta { color: #64748b; font-size: 14px; margin-bottom: 12px; }
+    .actions { display: flex; gap: 8px; }
+    .icon-button { width: 30px; height: 30px; border-radius: 999px; border: 1px solid #cbd5e1; background: #ffffff; color: #334155; font-size: 14px; cursor: pointer; }
+    .source-tag { display: inline-block; padding: 3px 8px; border-radius: 999px; font-weight: 700; background: #eff6ff; color: #1e40af; }
+    .scratchpad { margin-top: 12px; padding: 12px; border-left: 4px solid #3b82f6; background: #eff6ff; }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+    th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #f3f4f6; }
+    pre { background: #111827; color: #e5e7eb; padding: 12px; border-radius: 8px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <div class="head">
+    <h3>{{ title }}</h3>
+    <div class="actions">
+      <button class="icon-button" title="Copy JSON" data-copy-text='{{ copy_json }}'>{}</button>
+      <button class="icon-button" title="Copy Context" data-copy-text='{{ copy_context }}'>⎘</button>
+    </div>
+  </div>
+  <p class="meta">
+    <span class="source-tag">{{ fragment_source }}</span>
+  </p>
+{{ body_html }}
+  <script type="text/javascript">
+    document.addEventListener("click", async function (event) {
+      const button = event.target.closest("[data-copy-text]");
+      if (!button) return;
+      const text = button.getAttribute("data-copy-text") || "";
+      try {
+        await navigator.clipboard.writeText(text);
+        button.setAttribute("title", "Copied");
+      } catch (err) {
+        button.setAttribute("title", "Copy failed");
+      }
+    });
+  </script>
+</body>
+</html>

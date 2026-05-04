@@ -22,6 +22,12 @@ from run_lint import strip_ansi
 
 
 class RunLintTests(unittest.TestCase):
+    ROOT_MANIFEST = """\
+[workspace]
+members = ["crates/atm-core"]
+resolver = "2"
+"""
+
     def test_resolve_task_names_all_includes_new_targets(self) -> None:
         names = resolve_task_names("all")
         self.assertIn("boundaries", names)
@@ -83,6 +89,12 @@ class RunLintTests(unittest.TestCase):
     def test_build_transcript_adds_crate_inventory_for_crate_scoped_lints(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
+            (repo_root / "Cargo.toml").write_text(self.ROOT_MANIFEST, encoding="utf-8")
+            (repo_root / ".just").mkdir()
+            (repo_root / ".just/lint-config.toml").write_text(
+                "[boundaries]\ndoc_glob = \"docs/*/boundaries.md\"\n",
+                encoding="utf-8",
+            )
             crate_dir = repo_root / "crates" / "atm-core"
             crate_dir.mkdir(parents=True)
             (crate_dir / "Cargo.toml").write_text(
@@ -132,6 +144,12 @@ version = "1.1.2"
     def test_build_transcript_adds_boundary_doc_inventory_for_boundaries(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
+            (repo_root / "Cargo.toml").write_text(self.ROOT_MANIFEST, encoding="utf-8")
+            (repo_root / ".just").mkdir()
+            (repo_root / ".just/lint-config.toml").write_text(
+                "[boundaries]\ndoc_glob = \"docs/*/boundaries.md\"\n",
+                encoding="utf-8",
+            )
             crate_dir = repo_root / "crates" / "atm-core"
             crate_dir.mkdir(parents=True)
             (crate_dir / "Cargo.toml").write_text(
