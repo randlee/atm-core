@@ -6,11 +6,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 import re
 import time
+import tomllib
 
 
 LOG_DIR = Path(".just/logs")
+CONFIG_PATH = Path(".just/lint-config.toml")
 TIMESTAMP_FORMAT = "%Y%m%d%H%M%S"
 LINT_NAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
+DIRECTIVE_RE = re.compile(
+    r"(?P<label>(?:lint-[A-Za-z0-9._-]+|rule-\d{3}|lint-all))\s*:\s*"
+    r"(?P<action>allow-next-line|allow-start|allow-end)\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -24,10 +31,27 @@ class LintReport:
     log_path: Path
 
 
+@dataclass(frozen=True)
+class LintDirectivePolicy:
+    tool_key: str
+    aliases: tuple[str, ...] = ()
+
+    @property
+    def labels(self) -> set[str]:
+        labels = {"lint-all", f"lint-{self.tool_key.lower()}"}
+        labels.update(alias.lower() for alias in self.aliases)
+        return labels
+
+
 def discover_repo_root(explicit_root: str | None = None) -> Path:
     if explicit_root is not None:
         return Path(explicit_root).resolve()
     return Path(__file__).resolve().parent.parent
+
+
+def load_lint_config(repo_root: Path) -> dict:
+    config_path = repo_root / CONFIG_PATH
+    return tomllib.loads(config_path.read_text(encoding="utf-8"))
 
 
 def lint_slug(lint_name: str) -> str:
@@ -139,3 +163,127 @@ def print_report(
 
 def monotonic_now() -> float:
     return time.perf_counter()
+
+
+def is_comment_line(line: str) -> bool:
+    stripped = line.strip()
+    return stripped.startswith(("//", "///", "//!", "/*", "*", "*/"))
+
+
+def is_comment_or_empty(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped:
+        return True
+    return is_comment_line(line)
+
+
+def is_code_line(line: str) -> bool:
+    return not is_comment_or_empty(line)
+
+
+def matching_directive_actions(line: str, policy: LintDirectivePolicy) -> list[str]:
+    actions: list[str] = []
+    for match in DIRECTIVE_RE.finditer(line):
+        label = match.group("label").lower()
+        if label in policy.labels:
+            actions.append(match.group("action").lower())
+    return actions
+
+
+def line_has_allow_next_line(
+    line_number: int,
+    lines: list[str],
+    policy: LintDirectivePolicy,
+) -> bool:
+    if line_number <= 1:
+        return False
+    index = line_number - 2
+    while index >= 0:
+        line = lines[index]
+        actions = matching_directive_actions(line, policy)
+        if "allow-next-line" in actions:
+            return True
+        if not is_comment_line(line):
+            return False
+        index -= 1
+    return False
+
+
+def line_is_inside_allow_block(
+    line_number: int,
+    lines: list[str],
+    policy: LintDirectivePolicy,
+) -> bool:
+    allow_depth = 0
+    for line in lines[: line_number - 1]:
+        for action in matching_directive_actions(line, policy):
+            if action == "allow-start":
+                allow_depth += 1
+            elif action == "allow-end":
+                allow_depth = max(0, allow_depth - 1)
+    return allow_depth > 0
+
+
+def line_is_suppressed(
+    line_number: int,
+    lines: list[str],
+    policy: LintDirectivePolicy,
+) -> bool:
+    return line_has_allow_next_line(line_number, lines, policy) or line_is_inside_allow_block(
+        line_number,
+        lines,
+        policy,
+    )
+
+
+def classify_rust_test_scope(
+    lines: list[str],
+    *,
+    treat_all_lines_as_test: bool = False,
+) -> list[bool]:
+    if treat_all_lines_as_test:
+        return [True] * len(lines)
+
+    scope: list[bool] = []
+    cfg_test_pending = False
+    cfg_test_attribute_active = False
+    test_block_depth: int | None = None
+    brace_balance = 0
+
+    for line in lines:
+        stripped = line.strip()
+
+        if "#[cfg(test)]" in stripped:
+            cfg_test_pending = True
+            cfg_test_attribute_active = True
+            scope.append(True)
+            continue
+
+        if cfg_test_pending and stripped.startswith("#[") and stripped.endswith("]"):
+            scope.append(True)
+            continue
+
+        current_scope_is_test = test_block_depth is not None or cfg_test_pending
+        scope.append(current_scope_is_test)
+
+        open_braces = line.count("{")
+        close_braces = line.count("}")
+
+        if cfg_test_pending and open_braces > 0:
+            brace_balance = open_braces - close_braces
+            test_block_depth = max(brace_balance, 0)
+            cfg_test_pending = False
+            cfg_test_attribute_active = False
+        elif cfg_test_pending and stripped.endswith(";"):
+            cfg_test_pending = False
+            cfg_test_attribute_active = False
+        elif test_block_depth is not None:
+            brace_balance += open_braces - close_braces
+            test_block_depth = max(brace_balance, 0)
+            if test_block_depth == 0:
+                test_block_depth = None
+        elif cfg_test_attribute_active and stripped and not stripped.startswith("#["):
+            cfg_test_pending = False
+            cfg_test_attribute_active = False
+
+    return scope

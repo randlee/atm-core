@@ -7,7 +7,7 @@ use std::sync::{Arc, Barrier, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
-#[path = "../../atm/tests/support/mod.rs"]
+#[path = "../../atm/tests/helpers/support.rs"]
 mod support;
 
 use atm_core::ack::{AckMessageId, AckRequest, ack_mail};

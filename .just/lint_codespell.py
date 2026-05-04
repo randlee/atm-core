@@ -23,7 +23,17 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv[1:])
     repo_root = discover_repo_root(args.root)
 
-    completed = subprocess.run(build_command(repo_root), cwd=repo_root)
+    completed = subprocess.run(
+        build_command(repo_root),
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if completed.stdout:
+        print(completed.stdout, end="")
+    if completed.stderr:
+        print(completed.stderr, end="", file=sys.stderr)
     return completed.returncode
 
 

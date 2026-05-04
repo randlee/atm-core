@@ -27,7 +27,6 @@ dependencies = [
 name = "agent-team-mail-core"
 version = "1.1.2"
 dependencies = [
- "anyhow",
  "atm-rusqlite",
  "chrono",
  "fs2",
@@ -116,11 +115,9 @@ name = "atm-daemon"
 version = "1.1.2"
 dependencies = [
  "agent-team-mail-core",
- "anyhow",
  "atm-rusqlite",
  "fs2",
  "libc",
- "rusqlite",
  "sc-observability-types",
  "serde",
  "serde_json",

@@ -3,7 +3,6 @@ use std::process::Command;
 
 use serde_json::Value;
 
-#[path = "../support/mod.rs"]
 mod support;
 
 #[allow(dead_code, unused_imports)]

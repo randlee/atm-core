@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 
 
@@ -32,14 +33,15 @@ class RunLintTests(unittest.TestCase):
         self.assertEqual(extract_count(["total violations: 58"]), 58)
 
     def test_build_tasks_contains_expected_commands(self) -> None:
-        repo_root = Path("/tmp/example")
-        tasks = build_tasks(repo_root)
-        self.assertEqual(tasks["boundaries"].command[-1], str(repo_root / ".just/lint_boundaries.py"))
-        self.assertEqual(tasks["manifests"].command[-1], str(repo_root / ".just/lint_manifests.py"))
-        self.assertEqual(tasks["deny"].command[-1], str(repo_root / ".just/lint_cargo_deny.py"))
-        self.assertEqual(tasks["shear"].command[-1], str(repo_root / ".just/lint_cargo_shear.py"))
-        self.assertEqual(tasks["spell"].command[-1], str(repo_root / ".just/lint_codespell.py"))
-        self.assertEqual(tasks["pytests"].command[-1], "test_*.py")
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            tasks = build_tasks(repo_root)
+            self.assertEqual(tasks["boundaries"].command[-1], str(repo_root / ".just/lint_boundaries.py"))
+            self.assertEqual(tasks["manifests"].command[-1], str(repo_root / ".just/lint_manifests.py"))
+            self.assertEqual(tasks["deny"].command[-1], str(repo_root / ".just/lint_cargo_deny.py"))
+            self.assertEqual(tasks["shear"].command[-1], str(repo_root / ".just/lint_cargo_shear.py"))
+            self.assertEqual(tasks["spell"].command[-1], str(repo_root / ".just/lint_codespell.py"))
+            self.assertEqual(tasks["pytests"].command[-1], "test_*.py")
 
 
 if __name__ == "__main__":

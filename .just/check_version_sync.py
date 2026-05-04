@@ -34,14 +34,19 @@ def validate_workspace_version(repo_root: Path) -> str:
 
 
 def validate_crate_versions(repo_root: Path, workspace_version: str) -> None:
-    atm_toml_path = repo_root / "crates" / "atm" / "Cargo.toml"
-    atm_core_toml_path = repo_root / "crates" / "atm-core" / "Cargo.toml"
-    atm_text = read_text(atm_toml_path)
-    atm_core_text = read_text(atm_core_toml_path)
+    manifests = sorted((repo_root / "crates").glob("*/Cargo.toml"))
+    if not manifests:
+        fail("no crate manifests found under crates/")
 
-    for path, text in ((atm_toml_path, atm_text), (atm_core_toml_path, atm_core_text)):
+    manifest_texts = {path: read_text(path) for path in manifests}
+    for path, text in manifest_texts.items():
         if "version.workspace = true" not in text:
             fail(f"{path.relative_to(repo_root)} must use version.workspace = true")
+
+    atm_toml_path = repo_root / "crates" / "atm" / "Cargo.toml"
+    atm_text = manifest_texts.get(atm_toml_path)
+    if atm_text is None:
+        fail("crates/atm/Cargo.toml missing")
 
     dep_match = re.search(
         r'agent-team-mail-core".*?version\s*=\s*"(?P<version>\d+\.\d+\.\d+)"',
@@ -61,13 +66,19 @@ def validate_lockfile(repo_root: Path, workspace_version: str) -> None:
     lock = tomllib.loads(read_text(repo_root / "Cargo.lock"))
     packages = lock.get("package", [])
     versions: dict[str, str] = {}
+    workspace_packages: set[str] = set()
+    for manifest_path in sorted((repo_root / "crates").glob("*/Cargo.toml")):
+        manifest = tomllib.loads(read_text(manifest_path))
+        package_name = manifest.get("package", {}).get("name")
+        if isinstance(package_name, str):
+            workspace_packages.add(package_name)
     for package in packages:
         name = package.get("name")
         version = package.get("version")
-        if name in {"agent-team-mail", "agent-team-mail-core"}:
+        if name in workspace_packages:
             versions[name] = version
 
-    for package_name in ("agent-team-mail", "agent-team-mail-core"):
+    for package_name in sorted(workspace_packages):
         version = versions.get(package_name)
         if version is None:
             fail(f"{package_name} missing from Cargo.lock")

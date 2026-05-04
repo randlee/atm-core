@@ -60,12 +60,8 @@ impl TestEnvBuilder {
         self
     }
 
-    pub fn members<I, S>(mut self, members: I) -> Self
-    where
-        I: IntoIterator<Item = S>,
-        S: Into<String>,
-    {
-        self.members = members.into_iter().map(Into::into).collect();
+    pub fn members(mut self, members: &[&str]) -> Self {
+        self.members = members.iter().map(|member| (*member).to_string()).collect();
         self
     }
 
@@ -76,46 +72,39 @@ impl TestEnvBuilder {
 
     pub fn build(self) -> io::Result<TestEnv> {
         let tempdir = tempfile::tempdir()?;
-        let atm_home = tempdir.path().join("atm-home");
-        let atm_config_home = tempdir.path().join("config-home");
-        let atm_teams_dir = atm_config_home.join(".claude").join("teams");
-        let team_dir = atm_teams_dir.join(&self.team);
-        let inboxes_dir = team_dir.join("inboxes");
-        let workflow_dir = team_dir.join(".atm-state").join("workflow");
-        let db_dir = atm_home.join("db");
-        let cwd = tempdir.path().join(&self.cwd_name);
+        let home_dir = tempdir.path().join("home");
+        let config_home = tempdir.path().join("config");
+        let teams_dir = config_home.join("teams");
+        let team_dir = teams_dir.join(&self.team);
+        let inbox_dir = team_dir.join("inbox");
+        let cwd = tempdir.path().join(self.cwd_name);
 
-        fs::create_dir_all(&atm_home)?;
-        fs::create_dir_all(&inboxes_dir)?;
-        fs::create_dir_all(&workflow_dir)?;
-        fs::create_dir_all(&db_dir)?;
+        fs::create_dir_all(&home_dir)?;
+        fs::create_dir_all(&inbox_dir)?;
         fs::create_dir_all(&cwd)?;
 
-        let config_path = team_dir.join("config.json");
-        let members = self
-            .members
-            .into_iter()
-            .map(|name| json!({ "name": name }))
-            .collect::<Vec<_>>();
+        let mut members = self.members;
+        if members.is_empty() {
+            members.push(TEST_SENDER.to_string());
+        }
+
+        let config = json!({
+            "teamName": self.team,
+            "members": members.into_iter().map(|name| json!({"name": name})).collect::<Vec<_>>(),
+        });
         fs::write(
-            config_path,
-            serde_json::to_vec_pretty(&json!({ "members": members }))?,
+            team_dir.join("config.json"),
+            serde_json::to_vec_pretty(&config).expect("serialize config"),
         )?;
 
-        let env_map = BTreeMap::from([
-            (
-                "ATM_HOME".to_string(),
-                atm_home.to_string_lossy().into_owned(),
-            ),
-            (
-                "ATM_CONFIG_HOME".to_string(),
-                atm_config_home.to_string_lossy().into_owned(),
-            ),
-            (
-                "ATM_TEAMS_DIR".to_string(),
-                atm_teams_dir.to_string_lossy().into_owned(),
-            ),
-        ]);
+        let mut env_map = BTreeMap::new();
+        env_map.insert("ATM_HOME".to_string(), home_dir.display().to_string());
+        env_map.insert(
+            "ATM_CONFIG_HOME".to_string(),
+            config_home.display().to_string(),
+        );
+        env_map.insert("ATM_TEAMS_DIR".to_string(), teams_dir.display().to_string());
+        env_map.insert("ATM_TEAM".to_string(), self.team);
 
         Ok(TestEnv {
             tempdir,
@@ -125,20 +114,12 @@ impl TestEnvBuilder {
     }
 }
 
-/// Default fixtures use `TEST_LEAD` instead of the reserved `ROLE_TEAM_LEAD`
-/// string so generic tests do not silently depend on production role naming.
-/// Tests that must exercise lead-role semantics should opt in explicitly by
-/// using `ROLE_TEAM_LEAD`.
 impl Default for TestEnvBuilder {
     fn default() -> Self {
         Self {
             team: TEST_TEAM.to_string(),
-            members: vec![
-                TEST_SENDER.to_string(),
-                TEST_RECIPIENT.to_string(),
-                TEST_LEAD.to_string(),
-            ],
-            cwd_name: "cwd".to_string(),
+            members: vec![TEST_SENDER.to_string()],
+            cwd_name: "repo".to_string(),
         }
     }
 }

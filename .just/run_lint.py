@@ -5,10 +5,12 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+import argparse
 import subprocess
 import sys
 import time
 
+from lint_common import discover_repo_root
 from lint_common import format_duration
 from lint_common import make_log_path
 from lint_common import relative_log_path
@@ -174,8 +176,12 @@ def run_parallel(tasks: list[LintTask], repo_root: Path) -> list[LintResult]:
 
 
 def main(argv: list[str]) -> int:
-    repo_root = Path(__file__).resolve().parent.parent
-    target = argv[1] if len(argv) > 1 else "all"
+    parser = argparse.ArgumentParser(description="Run repo lint targets.")
+    parser.add_argument("target", nargs="?", default="all")
+    parser.add_argument("--root", help="Repo root to inspect.")
+    args = parser.parse_args(argv[1:])
+    repo_root = discover_repo_root(args.root)
+    target = args.target
     try:
         task_names = resolve_task_names(target)
     except ValueError as error:

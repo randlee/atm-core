@@ -398,6 +398,9 @@ fn print_log_record_line(record: &AtmLogRecord) {
     }
 
     if !record.fields.is_empty() {
+        // Doctor/log output is best-effort human-facing rendering. If a field
+        // payload somehow fails to serialize here, retain the record and show
+        // an empty object instead of aborting the CLI output path.
         println!(
             "  fields: {}",
             serde_json::to_string(&record.fields).unwrap_or_else(|_| "{}".to_string())

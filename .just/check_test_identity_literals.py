@@ -1,104 +1,118 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import re
-import sys
+import argparse
+from dataclasses import dataclass
 from pathlib import Path
+import sys
+
+from lint_common import LintDirectivePolicy
+from lint_common import classify_rust_test_scope
+from lint_common import discover_repo_root
+from lint_common import is_code_line
+from lint_common import line_is_suppressed
+from lint_common import load_lint_config
 
 
-FORBIDDEN_LITERALS = ("team-lead", "arch-ctm", "atm-dev", "quality-mgr")
-
-ALLOW_NEXT_LINE_PATTERN = re.compile(r"rule-008:\s*allow-next-line\b", re.IGNORECASE)
-ALLOW_BLOCK_START_PATTERN = re.compile(r"rule-008:\s*allow-start\b", re.IGNORECASE)
-ALLOW_BLOCK_END_PATTERN = re.compile(r"rule-008:\s*allow-end\b", re.IGNORECASE)
-
-
-def should_scan(path: Path, text: str) -> bool:
-    return True
+LINT_NAME = "identities"
+DIRECTIVE_POLICY = LintDirectivePolicy(
+    tool_key=LINT_NAME,
+    aliases=("rule-008", "rule-009"),
+)
 
 
-def collect_test_lines(repo_root: Path) -> list[tuple[Path, int, str]]:
-    crate_root = repo_root / "crates"
-    results: list[tuple[Path, int, str]] = []
-    for abs_path in sorted(crate_root.rglob("*.rs")):
+@dataclass(frozen=True)
+class IdentityViolation:
+    path: str
+    line_number: int
+    line: str
+
+    def render(self) -> str:
+        return f"{self.path}:{self.line_number}: {self.line}"
+
+
+def load_forbidden_literals(repo_root: Path) -> tuple[str, ...]:
+    config = load_lint_config(repo_root).get("identities", {})
+    if not isinstance(config, dict):
+        raise SystemExit("[identities] must be a TOML table")
+    literals = config.get("forbidden_literals")
+    if not isinstance(literals, list) or not all(isinstance(item, str) for item in literals):
+        raise SystemExit("[identities].forbidden_literals must be an array of strings")
+    return tuple(literals)
+
+
+def iter_rust_files(repo_root: Path) -> list[Path]:
+    return sorted((repo_root / "crates").rglob("*.rs"))
+
+
+def file_scope(path: Path, lines: list[str]) -> list[bool]:
+    rel_posix = path.as_posix()
+    if "/tests/" in rel_posix:
+        return [True] * len(lines)
+    if "/src/" in rel_posix:
+        return classify_rust_test_scope(lines)
+    return [False] * len(lines)
+
+
+def collect_identity_violations(
+    repo_root: Path,
+    *,
+    forbidden_literals: tuple[str, ...],
+) -> list[IdentityViolation]:
+    violations: list[IdentityViolation] = []
+    for abs_path in iter_rust_files(repo_root):
         rel_path = abs_path.relative_to(repo_root)
-        text = abs_path.read_text(encoding="utf-8")
-        if not should_scan(rel_path, text):
-            continue
-        for line_number, line in enumerate(text.splitlines(), start=1):
-            results.append((rel_path, line_number, line))
+        lines = abs_path.read_text(encoding="utf-8").splitlines()
+        scope = file_scope(rel_path, lines)
 
-    return results
+        for line_number, (line, in_test_scope) in enumerate(zip(lines, scope, strict=True), start=1):
+            if not in_test_scope:
+                continue
+            if not is_code_line(line):
+                continue
+            if not any(literal in line for literal in forbidden_literals):
+                continue
+            if line_is_suppressed(line_number, lines, DIRECTIVE_POLICY):
+                continue
+            violations.append(
+                IdentityViolation(
+                    path=rel_path.as_posix(),
+                    line_number=line_number,
+                    line=line.strip(),
+                )
+            )
 
-
-def line_has_allow_next_line(line_number: int, lines: list[str]) -> bool:
-    if line_number <= 1:
-        return False
-    index = line_number - 2
-    while index >= 0:
-        line = lines[index]
-        if ALLOW_NEXT_LINE_PATTERN.search(line):
-            return True
-        if not is_comment_line(line):
-            return False
-        index -= 1
-    return False
-
-
-def line_is_inside_allow_block(line_number: int, lines: list[str]) -> bool:
-    allow_depth = 0
-    for line in lines[: line_number - 1]:
-        if ALLOW_BLOCK_START_PATTERN.search(line):
-            allow_depth += 1
-        if ALLOW_BLOCK_END_PATTERN.search(line):
-            allow_depth = max(0, allow_depth - 1)
-    return allow_depth > 0
+    return violations
 
 
-def is_comment_or_empty(line: str) -> bool:
-    stripped = line.strip()
-    if not stripped:
-        return True
-    return stripped.startswith(("//", "///", "//!", "/*", "*", "*/"))
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Check test and cfg(test) Rust code for forbidden production identity literals."
+    )
+    parser.add_argument("--root", help="Repo root to inspect.")
+    return parser.parse_args(argv[1:])
 
 
-def is_comment_line(line: str) -> bool:
-    stripped = line.strip()
-    return stripped.startswith(("//", "///", "//!", "/*", "*", "*/"))
+def main(argv: list[str]) -> int:
+    args = parse_args(argv)
+    repo_root = discover_repo_root(args.root)
+    forbidden_literals = load_forbidden_literals(repo_root)
+    violations = collect_identity_violations(
+        repo_root,
+        forbidden_literals=forbidden_literals,
+    )
 
-
-def main() -> int:
-    repo_root = Path(__file__).resolve().parent.parent
-    failures: list[tuple[str, int, str]] = []
-    scanned_lines = collect_test_lines(repo_root)
-    cached_lines: dict[str, list[str]] = {}
-    for path, line_number, line in scanned_lines:
-        if is_comment_or_empty(line):
-            continue
-        if not any(literal in line for literal in FORBIDDEN_LITERALS):
-            continue
-        path_key = path.as_posix()
-        if path_key not in cached_lines:
-            cached_lines[path_key] = (repo_root / path).read_text(encoding="utf-8").splitlines()
-        if line_has_allow_next_line(line_number, cached_lines[path_key]):
-            continue
-        if line_is_inside_allow_block(line_number, cached_lines[path_key]):
-            continue
-        failures.append((path.as_posix(), line_number, line.strip()))
-
-    if failures:
-        print("RULE-008 violation: raw production identity literals found in test/cfg(test) code.")
-        print(
-            "Use approved constants or explicit ATM_TEAM/ATM_IDENTITY env-var tests instead."
-        )
-        for path, line_number, line in failures:
-            print(f"{path}:{line_number}: {line}")
-        print(f"total violations: {len(failures)}")
+    if violations:
+        print("RULE-008/RULE-009 violation: raw production literals found in test/cfg(test) Rust code.")
+        print("Use test constants, centralized reserved-role constants, or explicit lint suppressions.")
+        for violation in violations:
+            print(violation.render())
+        print(f"total violations: {len(violations)}")
         return 1
 
-    print("RULE-008 check passed: no disallowed raw production identity literals found in test/cfg(test) code.")
+    print("RULE-008/RULE-009 check passed: no disallowed raw production literals found in test scope.")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv))

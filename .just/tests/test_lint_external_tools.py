@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 
 
@@ -16,31 +17,35 @@ from lint_codespell import build_command as build_codespell_command
 
 class ExternalLintToolTests(unittest.TestCase):
     def test_build_cargo_deny_command_targets_workspace_manifest(self) -> None:
-        repo_root = Path("/tmp/example")
-        self.assertEqual(
-            build_cargo_deny_command(repo_root),
-            [
-                "cargo-deny",
-                "check",
-                "advisories",
-                "bans",
-                "sources",
-            ],
-        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.assertEqual(
+                build_cargo_deny_command(repo_root),
+                [
+                    "cargo-deny",
+                    "check",
+                    "advisories",
+                    "bans",
+                    "licenses",
+                    "sources",
+                ],
+            )
 
     def test_build_cargo_shear_command_targets_workspace_manifest(self) -> None:
-        repo_root = Path("/tmp/example")
-        self.assertEqual(
-            build_cargo_shear_command(repo_root),
-            ["cargo-shear"],
-        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.assertEqual(
+                build_cargo_shear_command(repo_root),
+                ["cargo-shear"],
+            )
 
     def test_build_codespell_command_uses_repo_config(self) -> None:
-        repo_root = Path("/tmp/example")
-        command = build_codespell_command(repo_root)
-        self.assertEqual(command[:2], [sys.executable, "-c"])
-        self.assertIn("codespell_lib", command[2])
-        self.assertEqual(len(command), 3)
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            command = build_codespell_command(repo_root)
+            self.assertEqual(command[:2], [sys.executable, "-c"])
+            self.assertIn("codespell_lib", command[2])
+            self.assertEqual(len(command), 3)
 
 
 if __name__ == "__main__":

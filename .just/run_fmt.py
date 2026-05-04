@@ -7,13 +7,13 @@ from pathlib import Path
 
 
 FMT_STEPS = {
-    "write": "just _fmt-write",
-    "apply": "just _fmt-write",
-    "check": "just _fmt-check",
+    "write": ["just", "_fmt-write"],
+    "apply": ["just", "_fmt-write"],
+    "check": ["just", "_fmt-check"],
 }
 
 
-def resolve_command(mode: str) -> str | None:
+def resolve_command(mode: str) -> list[str] | None:
     return FMT_STEPS.get(mode)
 
 
@@ -28,7 +28,7 @@ def main(argv: list[str]) -> int:
         print(f"expected one of: {valid}", file=sys.stderr)
         return 2
 
-    completed = subprocess.run(command, shell=True, cwd=repo_root)
+    completed = subprocess.run(command, cwd=repo_root)
     return completed.returncode
 
 

@@ -28,7 +28,7 @@ use rusqlite::{Connection, OpenFlags};
 use serde_json::json;
 use tempfile::TempDir;
 
-#[path = "../../atm/tests/support/mod.rs"]
+#[path = "../../atm/tests/helpers/support.rs"]
 mod test_support;
 
 use crate::{

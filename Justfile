@@ -74,6 +74,7 @@ build:
 
 # Run the full workspace test suite.
 test:
+    cargo build --workspace
     cargo test --workspace
 
 # Remove workspace build artifacts.

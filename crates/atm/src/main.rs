@@ -2,7 +2,7 @@ mod commands;
 mod observability;
 mod output;
 #[cfg(test)]
-#[path = "../tests/support/mod.rs"]
+#[path = "../tests/helpers/support.rs"]
 pub(crate) mod test_support;
 
 use std::path::{Path, PathBuf};
@@ -679,6 +679,8 @@ mod adapter_tests {
 
     fn env_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        // Serializes test-only environment mutation across concurrent test
+        // threads so helpers can safely set and restore process globals.
         LOCK.get_or_init(|| Mutex::new(()))
     }
 

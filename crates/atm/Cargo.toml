@@ -31,10 +31,10 @@ serde_json.workspace = true
 time = "0.3"
 tracing.workspace = true
 tracing-subscriber.workspace = true
-uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 atm-rusqlite = { path = "../atm-rusqlite", version = "1.1.2" }
 sc-observability = { version = "1.0.0", features = ["fault-injection"] }
 serial_test = "3"
 tempfile = "3"
+uuid = { version = "1", features = ["v4"] }
