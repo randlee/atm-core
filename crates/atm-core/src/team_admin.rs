@@ -529,6 +529,8 @@ mod team_config_write_test_override {
     use std::cell::Cell;
 
     thread_local! {
+        // Test-only fault seam. `Cell<bool>` is enough because the override is
+        // toggled by one thread-scoped guard at a time and never shared.
         static OVERRIDE: Cell<bool> = const { Cell::new(false) };
     }
 

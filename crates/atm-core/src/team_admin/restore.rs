@@ -574,6 +574,8 @@ mod restore_test_override {
     use std::cell::Cell;
 
     thread_local! {
+        // Test-only fault seams. Each flag is toggled under a thread-scoped
+        // guard, so `Cell<bool>` avoids unnecessary borrow or sync machinery.
         static INBOX_STAGE_FAILURE: Cell<bool> = const { Cell::new(false) };
         static MARKER_REMOVE_FAILURE: Cell<bool> = const { Cell::new(false) };
     }

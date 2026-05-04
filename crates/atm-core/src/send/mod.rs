@@ -16,7 +16,7 @@ use crate::inbox_ingress::InboxIngress;
 use crate::mail_store::{AckStateRecord, MailStore, MessageSourceKind, StoredMessageRecord};
 use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
-use crate::roles::ROLE_TEAM_LEAD;
+use crate::roles::TEAM_LEAD_AGENT;
 use crate::roster_store::{RosterMemberRecord, RosterStore};
 use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
 use crate::store::{
@@ -250,6 +250,8 @@ where
             }
         }
 
+        // INVARIANT: persist the store row before exporting the shared inbox
+        // projection so retries can deduplicate against durable ATM truth.
         exporter.export_message(
             &prepared.home_dir(),
             &prepared.recipient.team,
@@ -614,11 +616,7 @@ fn notify_team_lead_missing_config(
         return;
     }
 
-    let team_lead_inbox = match home::inbox_path_from_home(
-        home_dir,
-        team,
-        &AgentName::from_validated(ROLE_TEAM_LEAD),
-    ) {
+    let team_lead_inbox = match home::inbox_path_from_home(home_dir, team, &TEAM_LEAD_AGENT) {
         Ok(path) => path,
         Err(error) => {
             warn!(
@@ -674,7 +672,7 @@ fn notify_team_lead_missing_config(
     if let Err(error) = append_mailbox_message_and_seed_workflow(
         home_dir,
         team,
-        &AgentName::from_validated(ROLE_TEAM_LEAD),
+        &TEAM_LEAD_AGENT,
         &team_lead_inbox,
         &notice,
     ) {
