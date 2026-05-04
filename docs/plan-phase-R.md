@@ -196,21 +196,75 @@ Acceptance:
 ### R.2.2 Lint Gates
 
 Status:
-- pending
+- in progress
 
 Initial lint passes:
 - schema validation
 - manifest dependency-edge checks
 - forbidden external-reference checks
+- active impl privacy / constructor / re-export checks
+- owner-crate test-bypass checks
 
 Deferred until after design freeze:
 - composition-root enforcement
-- deeper visibility/re-export checks
+- cargo-modules cycle gating beyond false-positive review
+- unsafe view hardening beyond cargo-geiger package-resolution failures
 
 Acceptance:
 - `just lint` can fail on the first hard architectural violations
 
 ### R.3 Implementation
+
+### R.3.0 Baseline Review
+
+Status:
+- complete
+
+Merged `integrate/phase-R` baseline reviewed at:
+- `dbe1eef` from the sprint brief
+- current worktree baseline after sync
+
+What is already landed:
+- `crates/atm-core/src/boundary/mod.rs` contains the first protocol/runtime
+  trait stubs and placeholder data structures for:
+  - `AtmProtocol`
+  - `ClientTransport`
+  - `ServerTransport`
+  - `RequestDispatcher`
+  - `NotificationSink`
+  - `StatusSource`
+  - `WatchEventSource`
+  - `ReconcileCoordinator`
+- boundary docs, ADR alignment, and the initial boundary-enforcement lint suite
+  are in place
+- `just lint` is already useful for:
+  - boundary schema and duplicate checks
+  - owner package / manifest consistency
+  - allowed-dependent / forbidden-edge checks
+  - forbidden external reference checks
+  - active implementation privacy / constructor / re-export checks
+  - owner-crate test-bypass checks
+
+What is not landed yet:
+- `crates/atm-daemon/` crate scaffold
+- `crates/atm-rusqlite/` crate scaffold
+- `MailStore`, `TaskStore`, `RosterStore`, `ConfigIngress`, `InboxIngress`, and
+  `InboxExport` Rust traits
+- adapter implementation shells for daemon/runtime, SQLite, config ingestion,
+  inbox ingestion/export, and notification/status plumbing
+- explicit composition modules that wire the CLI client root and daemon runtime
+  root through only the boundary contracts
+- service orchestration shells that route retained command behavior through the
+  new boundary-owned call graph
+
+Gate status before Wave 2:
+- authoritative now:
+  - boundary/manifests/reference/privacy lint checks
+- still tooling work or view-only:
+  - composition-root enforcement
+  - `cargo-modules --acyclic` cycle gating
+  - Graphviz-backed module view generation
+  - cargo-geiger-backed unsafe view generation
 
 ### R.3.1 Skeleton First
 
@@ -223,6 +277,53 @@ Required outcome:
 - composition point exists
 - illegal references are already blocked by lint and visibility
 
+Concrete checklist:
+1. `crates/atm-daemon`
+   - scaffold crate, manifest, and `src/lib.rs`
+   - add private runtime adapter shells for:
+     - `ServerTransport`
+     - `NotificationSink`
+     - `StatusSource`
+     - `WatchEventSource`
+     - `ReconcileCoordinator`
+   - add daemon composition module that becomes the only runtime wiring root
+2. `crates/atm-rusqlite`
+   - scaffold crate, manifest, and `src/lib.rs`
+   - add private adapter shells for:
+     - `MailStore`
+     - `TaskStore`
+     - `RosterStore`
+   - keep constructors private and expose only boundary-facing assembly hooks
+3. `crates/atm-core`
+   - extend `src/boundary/` beyond protocol/runtime stubs
+   - land Rust trait definitions plus request/result/error shells for:
+     - `MailStore`
+     - `TaskStore`
+     - `RosterStore`
+     - `ConfigIngress`
+     - `InboxIngress`
+     - `InboxExport`
+   - tighten protocol placeholder structures into named request/response/frame
+     types that the client/server transports and dispatcher will share
+4. `crates/atm`
+   - add an explicit client composition module that wires only:
+     - `ClientTransport`
+     - observability
+     - thin `send` / `receive` command entry points
+   - keep retained CLI behavior compiling while routing new construction through
+     the Phase R composition surface
+5. Shared data structures
+   - create the major boundary-owned DTO shells required by the first behavior
+     sprints:
+     - protocol request/response envelopes
+     - store query/command result shapes
+     - config/inbox import-export request and result shells
+     - notification/status/watch/reconcile event shells
+6. Lint compatibility required before closing `R.3.1`
+   - boundary records must point at landed crate/module paths
+   - no new public concrete adapter constructors
+   - no illegal caller edges to daemon internals or SQLite crates
+
 Acceptance:
 - the architecture can compile in skeleton form before feature behavior lands
 
@@ -232,11 +333,39 @@ Status:
 - pending
 
 Required order:
-1. protocol and transport skeleton
-2. store boundary skeleton
-3. config/inbox/notifier/watch boundaries
+1. protocol and transport
+2. store boundaries
+3. config / inbox / notifier / watch boundaries
 4. service orchestration
 5. thin client surfaces
+
+Ordered sprint breakdown:
+1. `R.4 Protocol + Transport`
+   - harden `AtmProtocol` request/response/frame types
+   - land callable `ClientTransport` and `ServerTransport` trait surfaces
+   - land `RequestDispatcher` request-routing contract
+   - connect CLI composition root and daemon composition root to these
+     contracts without introducing retained direct call paths
+2. `R.5 Store Boundaries`
+   - implement `MailStore`, `TaskStore`, and `RosterStore` trait contracts in
+     `atm-core`
+   - land private SQLite adapter shells in `atm-rusqlite`
+   - move current retained direct SQLite ownership behind those contracts
+3. `R.6 Config / Inbox / Notification / Watch`
+   - land `ConfigIngress`, `InboxIngress`, and `InboxExport`
+   - land `NotificationSink`, `StatusSource`, `WatchEventSource`, and
+     `ReconcileCoordinator`
+   - decide and implement the retained compatibility-policy locations inside
+     those adapters
+4. `R.7 Service Orchestration`
+   - route retained core command flows through the boundary-owned contracts
+   - eliminate direct retained call paths that bypass stores, config, inbox, or
+     runtime adapters
+   - make daemon runtime and CLI composition roots the only legal wiring points
+5. `R.8 Thin Client Surfaces`
+   - reshape CLI/graft-facing surfaces around thin `send` / `receive`
+   - keep `ack` folded into send-shaped requests
+   - finalize the public client surface once the service graph is stable
 
 Acceptance:
 - no feature sprint begins before the relevant boundary and lint guardrails are in place
