@@ -10,6 +10,7 @@ use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
 use crate::mailbox::lock;
 use crate::persistence;
+use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::AgentMember;
 
 use super::{RestoreOutcome, RestorePlan, RestoreRequest, RestoreResult};
@@ -26,7 +27,7 @@ pub(super) fn restore_team(request: RestoreRequest) -> Result<RestoreResult, Atm
     let members_to_restore = backup_config
         .members
         .iter()
-        .filter(|member| member.name != "team-lead")
+        .filter(|member| member.name != ROLE_TEAM_LEAD)
         .filter(|member| {
             !current_config
                 .members
@@ -39,7 +40,7 @@ pub(super) fn restore_team(request: RestoreRequest) -> Result<RestoreResult, Atm
 
     let mut inboxes_to_restore = list_backup_inboxes(&backup_dir)?;
     inboxes_to_restore.retain(|name| {
-        if name == "team-lead.json" {
+        if name == &format!("{ROLE_TEAM_LEAD}.json") {
             return false;
         }
         name.strip_suffix(".json").is_some_and(|member| {
@@ -68,7 +69,7 @@ pub(super) fn restore_team(request: RestoreRequest) -> Result<RestoreResult, Atm
     prepare_restore_workspace(&team_dir, &backup_dir)?;
     let mut updated_config = current_config.clone();
     for member in &backup_config.members {
-        if member.name == "team-lead" {
+        if member.name == ROLE_TEAM_LEAD {
             continue;
         }
         if updated_config
@@ -413,7 +414,7 @@ fn prepare_restore_staging_dir(team_dir: &Path) -> Result<(), AtmError> {
 }
 
 fn copy_restored_inbox_to_staging(from: &Path, staged: &Path) -> Result<u64, std::io::Error> {
-    if std::env::var_os("ATM_TEST_FAIL_RESTORE_INBOX_STAGE").is_some() {
+    if forced_restore_inbox_stage_failure() {
         return Err(std::io::Error::other(format!(
             "forced inbox staging failure for {}",
             staged.display()
@@ -533,7 +534,7 @@ pub(super) fn clear_restore_marker(team_dir: &Path) -> Result<(), AtmError> {
         return Ok(());
     }
 
-    if std::env::var_os("ATM_TEST_FAIL_RESTORE_MARKER_REMOVE").is_some() {
+    if forced_restore_marker_remove_failure() {
         return Err(AtmError::file_policy(format!(
             "failed to remove restore marker {}: forced test failure",
             marker.display()
@@ -553,23 +554,119 @@ pub(super) fn clear_restore_marker(team_dir: &Path) -> Result<(), AtmError> {
     })
 }
 
+fn forced_restore_inbox_stage_failure() -> bool {
+    if restore_test_override::inbox_stage_failure() {
+        return true;
+    }
+
+    std::env::var_os("ATM_TEST_FAIL_RESTORE_INBOX_STAGE").is_some()
+}
+
+fn forced_restore_marker_remove_failure() -> bool {
+    if restore_test_override::marker_remove_failure() {
+        return true;
+    }
+
+    std::env::var_os("ATM_TEST_FAIL_RESTORE_MARKER_REMOVE").is_some()
+}
+
+mod restore_test_override {
+    use std::cell::Cell;
+
+    thread_local! {
+        // Test-only fault seams. Each flag is toggled under a thread-scoped
+        // guard, so `Cell<bool>` avoids unnecessary borrow or sync machinery.
+        static INBOX_STAGE_FAILURE: Cell<bool> = const { Cell::new(false) };
+        static MARKER_REMOVE_FAILURE: Cell<bool> = const { Cell::new(false) };
+    }
+
+    pub(super) fn inbox_stage_failure() -> bool {
+        INBOX_STAGE_FAILURE.with(Cell::get)
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_inbox_stage_failure(enabled: bool) -> bool {
+        INBOX_STAGE_FAILURE.with(|cell| {
+            let original = cell.get();
+            cell.set(enabled);
+            original
+        })
+    }
+
+    pub(super) fn marker_remove_failure() -> bool {
+        MARKER_REMOVE_FAILURE.with(Cell::get)
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_marker_remove_failure(enabled: bool) -> bool {
+        MARKER_REMOVE_FAILURE.with(|cell| {
+            let original = cell.get();
+            cell.set(enabled);
+            original
+        })
+    }
+}
+
+#[cfg(test)]
+pub(crate) struct ScopedRestoreInboxStageFailureOverride {
+    original: bool,
+}
+
+#[cfg(test)]
+impl ScopedRestoreInboxStageFailureOverride {
+    pub(crate) fn enable() -> Self {
+        Self {
+            original: restore_test_override::set_inbox_stage_failure(true),
+        }
+    }
+}
+
+#[cfg(test)]
+impl Drop for ScopedRestoreInboxStageFailureOverride {
+    fn drop(&mut self) {
+        restore_test_override::set_inbox_stage_failure(self.original);
+    }
+}
+
+#[cfg(test)]
+pub(crate) struct ScopedRestoreMarkerRemoveFailureOverride {
+    original: bool,
+}
+
+#[cfg(test)]
+impl ScopedRestoreMarkerRemoveFailureOverride {
+    pub(crate) fn enable() -> Self {
+        Self {
+            original: restore_test_override::set_marker_remove_failure(true),
+        }
+    }
+}
+
+#[cfg(test)]
+impl Drop for ScopedRestoreMarkerRemoveFailureOverride {
+    fn drop(&mut self) {
+        restore_test_override::set_marker_remove_failure(self.original);
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::path::Path;
-    use std::sync::{Mutex, OnceLock};
-
     use chrono::Utc;
     use serde_json::json;
     use serial_test::serial;
+    use std::fs;
+    use std::path::Path;
     use tempfile::tempdir;
 
     use super::{
+        ScopedRestoreInboxStageFailureOverride, ScopedRestoreMarkerRemoveFailureOverride,
         clear_restore_marker, prepare_restore_workspace, restore_marker_path, restore_staging_dir,
         restore_task_state_from_backup, restore_team,
     };
     use crate::schema::TeamConfig;
     use crate::team_admin::RestoreRequest;
+    use crate::team_admin::ScopedTeamConfigWriteFailureOverride;
+    use crate::test_support::{ROLE_TEAM_LEAD, TEST_SENDER, TEST_TEAM};
 
     fn write_team_config(home_dir: &Path, team: &str, value: serde_json::Value) {
         write_json(
@@ -602,11 +699,11 @@ mod tests {
 
     fn write_inbox(path: &Path, text: &str) {
         let envelope = crate::schema::MessageEnvelope {
-            from: "team-lead".parse().expect("agent"),
+            from: ROLE_TEAM_LEAD.parse().expect("agent"),
             text: text.to_string(),
             timestamp: crate::types::IsoTimestamp::from_datetime(Utc::now()),
             read: false,
-            source_team: Some("atm-dev".parse().expect("team")),
+            source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: None,
             message_id: None,
             pending_ack_at: None,
@@ -621,55 +718,10 @@ mod tests {
         );
     }
 
-    fn env_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-    }
-
-    fn with_env_var_serial<T>(key: &'static str, value: &str, body: impl FnOnce() -> T) -> T {
-        let _guard = env_lock().lock().expect("env lock");
-        let _env_guard = EnvGuard::set_raw(key, value);
-        body()
-    }
-
-    struct EnvGuard {
-        key: &'static str,
-        original: Option<std::ffi::OsString>,
-    }
-
-    impl EnvGuard {
-        fn set_raw(key: &'static str, value: &str) -> Self {
-            let original = std::env::var_os(key);
-            set_env_var(key, value);
-            Self { key, original }
-        }
-    }
-
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            match self.original.take() {
-                Some(value) => set_env_var(self.key, value),
-                None => remove_env_var(self.key),
-            }
-        }
-    }
-
-    fn set_env_var<K: AsRef<std::ffi::OsStr>, V: AsRef<std::ffi::OsStr>>(key: K, value: V) {
-        // SAFETY: restore tests that mutate process environment run under
-        // `serial_test` and hold the shared env lock for the full mutation
-        // window.
-        unsafe { std::env::set_var(key, value) };
-    }
-
-    fn remove_env_var<K: AsRef<std::ffi::OsStr>>(key: K) {
-        // SAFETY: same serialization guarantee as above.
-        unsafe { std::env::remove_var(key) };
-    }
-
     #[test]
     fn prepare_restore_workspace_rejects_preexisting_staging_dir() {
         let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
         let backup_dir = tempdir.path().join("backup");
         fs::create_dir_all(restore_staging_dir(&team_dir)).expect("staging dir");
         fs::create_dir_all(&backup_dir).expect("backup dir");
@@ -689,7 +741,7 @@ mod tests {
     fn restore_task_state_from_backup_round_trips_highwatermark() {
         let tempdir = tempdir().expect("tempdir");
         let backup_tasks_dir = tempdir.path().join("backup").join("tasks");
-        let tasks_dir = tempdir.path().join(".claude").join("tasks").join("atm-dev");
+        let tasks_dir = tempdir.path().join(".claude").join("tasks").join(TEST_TEAM);
         write_json(
             &backup_tasks_dir.join("2.json"),
             &json!({"id":"2","status":"open"}),
@@ -724,28 +776,30 @@ mod tests {
         let tempdir = tempdir().expect("tempdir");
         write_team_config(
             tempdir.path(),
-            "atm-dev",
-            json!({"leadSessionId":"lead-current","members":[{"name":"team-lead"}]}),
+            TEST_TEAM,
+            json!({"leadSessionId":"lead-current","members":[{"name":ROLE_TEAM_LEAD}]}),
         );
         let backup_dir = tempdir
             .path()
             .join(".claude")
             .join("teams")
             .join(".backups")
-            .join("atm-dev")
+            .join(TEST_TEAM)
             .join("20260423T010203000000000Z");
         write_backup_config(
             &backup_dir,
             json!({
                 "leadSessionId":"lead-backup",
                 "members":[
-                    {"name":"team-lead"},
-                    {"name":"arch-ctm","agentType":"general-purpose","model":"sonnet","cwd":"/repo"}
+                    {"name":ROLE_TEAM_LEAD},
+                    {"name":TEST_SENDER,"agentType":"general-purpose","model":"sonnet","cwd":"/repo"}
                 ]
             }),
         );
         write_inbox(
-            &backup_dir.join("inboxes").join("arch-ctm.json"),
+            &backup_dir
+                .join("inboxes")
+                .join(format!("{TEST_SENDER}.json")),
             "restored worker inbox",
         );
         write_json(
@@ -753,30 +807,36 @@ mod tests {
             &json!({"id":"80"}),
         );
 
-        let result = with_env_var_serial("ATM_TEST_FAIL_TEAM_CONFIG_WRITE", "1", || {
+        let _guard = ScopedTeamConfigWriteFailureOverride::enable();
+        let result = {
             restore_team(RestoreRequest {
                 home_dir: tempdir.path().to_path_buf(),
-                team: "atm-dev".parse().expect("team"),
+                team: TEST_TEAM.parse().expect("team"),
                 from: Some(backup_dir.clone()),
                 dry_run: false,
             })
-        });
+        };
 
         let error = result.expect_err("restore failure");
         assert!(error.is_file_policy());
-        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
         let config: TeamConfig =
             serde_json::from_slice(&fs::read(team_dir.join("config.json")).expect("config"))
                 .expect("parse config");
         assert_eq!(config.members.len(), 1);
-        assert_eq!(config.members[0].name, "team-lead");
-        assert!(team_dir.join("inboxes").join("arch-ctm.json").is_file());
+        assert_eq!(config.members[0].name, ROLE_TEAM_LEAD);
+        assert!(
+            team_dir
+                .join("inboxes")
+                .join(format!("{TEST_SENDER}.json"))
+                .is_file()
+        );
         assert!(
             tempdir
                 .path()
                 .join(".claude")
                 .join("tasks")
-                .join("atm-dev")
+                .join(TEST_TEAM)
                 .join("80.json")
                 .is_file()
         );
@@ -789,45 +849,48 @@ mod tests {
         let tempdir = tempdir().expect("tempdir");
         write_team_config(
             tempdir.path(),
-            "atm-dev",
-            json!({"leadSessionId":"lead-current","members":[{"name":"team-lead"}]}),
+            TEST_TEAM,
+            json!({"leadSessionId":"lead-current","members":[{"name":ROLE_TEAM_LEAD}]}),
         );
         let backup_dir = tempdir
             .path()
             .join(".claude")
             .join("teams")
             .join(".backups")
-            .join("atm-dev")
+            .join(TEST_TEAM)
             .join("20260423T020304000000000Z");
         write_backup_config(
             &backup_dir,
             json!({
                 "leadSessionId":"lead-backup",
                 "members":[
-                    {"name":"team-lead"},
-                    {"name":"arch-ctm","agentType":"general-purpose","model":"sonnet","cwd":"/repo"}
+                    {"name":ROLE_TEAM_LEAD},
+                    {"name":TEST_SENDER,"agentType":"general-purpose","model":"sonnet","cwd":"/repo"}
                 ]
             }),
         );
         write_inbox(
-            &backup_dir.join("inboxes").join("arch-ctm.json"),
+            &backup_dir
+                .join("inboxes")
+                .join(format!("{TEST_SENDER}.json")),
             "restored worker inbox",
         );
 
-        let result = with_env_var_serial("ATM_TEST_FAIL_RESTORE_MARKER_REMOVE", "1", || {
+        let _guard = ScopedRestoreMarkerRemoveFailureOverride::enable();
+        let result = {
             restore_team(RestoreRequest {
                 home_dir: tempdir.path().to_path_buf(),
-                team: "atm-dev".parse().expect("team"),
+                team: TEST_TEAM.parse().expect("team"),
                 from: Some(backup_dir.clone()),
                 dry_run: false,
             })
-        });
+        };
 
         assert!(
             result.is_ok(),
             "restore should succeed despite marker cleanup"
         );
-        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
         assert!(restore_marker_path(&team_dir).is_file());
         let config: TeamConfig =
             serde_json::from_slice(&fs::read(team_dir.join("config.json")).expect("config"))
@@ -836,7 +899,7 @@ mod tests {
             config
                 .members
                 .iter()
-                .any(|member| member.name == "arch-ctm")
+                .any(|member| member.name == TEST_SENDER)
         );
     }
 
@@ -846,40 +909,43 @@ mod tests {
         let tempdir = tempdir().expect("tempdir");
         write_team_config(
             tempdir.path(),
-            "atm-dev",
-            json!({"leadSessionId":"lead-current","members":[{"name":"team-lead"}]}),
+            TEST_TEAM,
+            json!({"leadSessionId":"lead-current","members":[{"name":ROLE_TEAM_LEAD}]}),
         );
-        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
         let backup_dir = tempdir
             .path()
             .join(".claude")
             .join("teams")
             .join(".backups")
-            .join("atm-dev")
+            .join(TEST_TEAM)
             .join("20260424T022700000000000Z");
         write_backup_config(
             &backup_dir,
             json!({
                 "leadSessionId":"lead-backup",
                 "members":[
-                    {"name":"team-lead"},
-                    {"name":"arch-ctm","agentType":"general-purpose","model":"sonnet","cwd":"/repo"}
+                    {"name":ROLE_TEAM_LEAD},
+                    {"name":TEST_SENDER,"agentType":"general-purpose","model":"sonnet","cwd":"/repo"}
                 ]
             }),
         );
         write_inbox(
-            &backup_dir.join("inboxes").join("arch-ctm.json"),
+            &backup_dir
+                .join("inboxes")
+                .join(format!("{TEST_SENDER}.json")),
             "restored worker inbox",
         );
 
-        let result = with_env_var_serial("ATM_TEST_FAIL_RESTORE_INBOX_STAGE", "1", || {
+        let _guard = ScopedRestoreInboxStageFailureOverride::enable();
+        let result = {
             restore_team(RestoreRequest {
                 home_dir: tempdir.path().to_path_buf(),
-                team: "atm-dev".parse().expect("team"),
+                team: TEST_TEAM.parse().expect("team"),
                 from: Some(backup_dir.clone()),
                 dry_run: false,
             })
-        });
+        };
 
         let error = result.expect_err("restore should fail on injected inbox stage error");
         assert!(error.is_mailbox_write());
@@ -888,15 +954,20 @@ mod tests {
             serde_json::from_slice(&fs::read(team_dir.join("config.json")).expect("config"))
                 .expect("parse config");
         assert_eq!(config.members.len(), 1);
-        assert_eq!(config.members[0].name, "team-lead");
-        assert!(!team_dir.join("inboxes").join("arch-ctm.json").exists());
+        assert_eq!(config.members[0].name, ROLE_TEAM_LEAD);
+        assert!(
+            !team_dir
+                .join("inboxes")
+                .join(format!("{TEST_SENDER}.json"))
+                .exists()
+        );
         assert!(restore_marker_path(&team_dir).is_file());
     }
 
     #[test]
     fn clear_restore_marker_missing_file_is_ok() {
         let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
         fs::create_dir_all(&team_dir).expect("team dir");
 
         clear_restore_marker(&team_dir).expect("missing marker should be ok");

@@ -47,6 +47,23 @@ fn main() -> ExitCode {
             let _ = fs::write(&output_path, count.to_string());
             ExitCode::SUCCESS
         }
+        "append-line" => {
+            let line = extra_args.first().cloned().unwrap_or_default();
+            use std::io::Write;
+
+            let mut file = match fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&output_path)
+            {
+                Ok(file) => file,
+                Err(_) => return ExitCode::from(1),
+            };
+            if writeln!(file, "{line}").is_err() {
+                return ExitCode::from(1);
+            }
+            ExitCode::SUCCESS
+        }
         "result-debug" => {
             let _ = fs::write(&output_path, payload);
             println!(

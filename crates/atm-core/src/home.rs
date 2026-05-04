@@ -190,6 +190,9 @@ mod tests {
         unsafe { std::env::remove_var(key) }
     }
 
+    const TEST_TEAM_NAME: &str = "test-team";
+    const TEST_AGENT_NAME: &str = "test-sender";
+
     #[test]
     #[serial_test::serial]
     fn atm_home_prefers_atm_home_env() {
@@ -222,26 +225,30 @@ mod tests {
         let _atm_home = EnvGuard::set("ATM_HOME", tempdir.path());
 
         assert_eq!(
-            team_dir("atm-dev").expect("team dir"),
-            tempdir.path().join(".claude").join("teams").join("atm-dev")
-        );
-        assert_eq!(
-            inbox_path("atm-dev", "arch-ctm").expect("inbox path"),
+            team_dir(TEST_TEAM_NAME).expect("team dir"),
             tempdir
                 .path()
                 .join(".claude")
                 .join("teams")
-                .join("atm-dev")
+                .join(TEST_TEAM_NAME)
+        );
+        assert_eq!(
+            inbox_path(TEST_TEAM_NAME, TEST_AGENT_NAME).expect("inbox path"),
+            tempdir
+                .path()
+                .join(".claude")
+                .join("teams")
+                .join(TEST_TEAM_NAME)
                 .join("inboxes")
-                .join("arch-ctm.json")
+                .join(format!("{TEST_AGENT_NAME}.json"))
         );
         assert_eq!(
-            mail_db_path("atm-dev").expect("mail db path"),
+            mail_db_path(TEST_TEAM_NAME).expect("mail db path"),
             tempdir
                 .path()
                 .join(".claude")
                 .join("teams")
-                .join("atm-dev")
+                .join(TEST_TEAM_NAME)
                 .join(".atm-state")
                 .join("mail.db")
         );
@@ -259,8 +266,8 @@ mod tests {
     #[test]
     fn inbox_path_from_home_rejects_path_traversal_segments() {
         let tempdir = TempDir::new().expect("tempdir");
-        let error =
-            inbox_path_from_home(tempdir.path(), "atm-dev", "../evil").expect_err("invalid agent");
+        let error = inbox_path_from_home(tempdir.path(), TEST_TEAM_NAME, "../evil")
+            .expect_err("invalid agent");
 
         assert!(error.is_address());
         assert!(error.message.contains("agent name"));
@@ -271,16 +278,16 @@ mod tests {
         let tempdir = TempDir::new().expect("tempdir");
 
         assert_eq!(
-            workflow_state_path_from_home(tempdir.path(), "atm-dev", "arch-ctm")
+            workflow_state_path_from_home(tempdir.path(), TEST_TEAM_NAME, TEST_AGENT_NAME)
                 .expect("workflow state path"),
             tempdir
                 .path()
                 .join(".claude")
                 .join("teams")
-                .join("atm-dev")
+                .join(TEST_TEAM_NAME)
                 .join(".atm-state")
                 .join("workflow")
-                .join("arch-ctm.json")
+                .join(format!("{TEST_AGENT_NAME}.json"))
         );
     }
 
@@ -289,12 +296,12 @@ mod tests {
         let tempdir = TempDir::new().expect("tempdir");
 
         assert_eq!(
-            mail_db_path_from_home(tempdir.path(), "atm-dev").expect("mail db path"),
+            mail_db_path_from_home(tempdir.path(), TEST_TEAM_NAME).expect("mail db path"),
             tempdir
                 .path()
                 .join(".claude")
                 .join("teams")
-                .join("atm-dev")
+                .join(TEST_TEAM_NAME)
                 .join(".atm-state")
                 .join("mail.db")
         );

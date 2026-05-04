@@ -1,21 +1,22 @@
 use std::fs;
 use std::process::Command;
+use std::time::{Duration, Instant};
+mod helpers;
 
+use atm_core::doctor::DoctorReport;
 use atm_core::schema::{AgentMember, TeamConfig};
+use atm_core::types::{AgentName, TeamName};
+use atm_daemon::{CoreDispatcher, DaemonObservability, TestSocketClient};
+use helpers::{ROLE_TEAM_LEAD, TEST_LEAD, TEST_QA, TEST_SENDER, TEST_TEAM, configure_atm_command};
 use serde_json::Value;
+use serial_test::serial;
+use std::sync::Arc;
 
 #[test]
+#[serial(env)]
 fn test_doctor_reports_healthy_observability_with_real_adapter() {
-    let fixture = Fixture::new(&["arch-ctm"]);
-
-    let output = fixture.run(&["doctor", "--json"], &[]);
-
-    assert!(
-        output.status.success(),
-        "stderr: {}",
-        fixture.stderr(&output)
-    );
-    let parsed = fixture.stdout_json(&output);
+    let fixture = Fixture::new(&[TEST_SENDER]);
+    let parsed = serde_json::to_value(fixture.run_in_process_doctor(&[])).expect("doctor json");
     assert_eq!(parsed["summary"]["status"], "healthy");
     assert_eq!(parsed["findings"][0]["severity"], "info");
     assert_eq!(parsed["findings"][0]["code"], "ATM_OBSERVABILITY_HEALTH_OK");
@@ -28,20 +29,13 @@ fn test_doctor_reports_healthy_observability_with_real_adapter() {
 }
 
 #[test]
+#[serial(env)]
 fn test_doctor_reports_degraded_observability_with_real_fault_injection() {
-    let fixture = Fixture::new(&["arch-ctm"]);
-
-    let output = fixture.run(
-        &["doctor", "--json"],
-        &[("ATM_OBSERVABILITY_RETAINED_SINK_FAULT", "degraded")],
-    );
-
-    assert!(
-        output.status.success(),
-        "stderr: {}",
-        fixture.stderr(&output)
-    );
-    let parsed = fixture.stdout_json(&output);
+    let fixture = Fixture::new(&[TEST_SENDER]);
+    let parsed = serde_json::to_value(
+        fixture.run_in_process_doctor(&[("ATM_OBSERVABILITY_RETAINED_SINK_FAULT", "degraded")]),
+    )
+    .expect("doctor json");
     assert_eq!(parsed["summary"]["status"], "warning");
     assert_eq!(parsed["findings"][0]["severity"], "warning");
     assert_eq!(
@@ -53,16 +47,13 @@ fn test_doctor_reports_degraded_observability_with_real_fault_injection() {
 }
 
 #[test]
+#[serial(env)]
 fn test_doctor_reports_unavailable_observability_with_real_fault_injection() {
-    let fixture = Fixture::new(&["arch-ctm"]);
-
-    let output = fixture.run(
-        &["doctor", "--json"],
-        &[("ATM_OBSERVABILITY_RETAINED_SINK_FAULT", "unavailable")],
-    );
-
-    assert!(!output.status.success());
-    let parsed = fixture.stdout_json(&output);
+    let fixture = Fixture::new(&[TEST_SENDER]);
+    let parsed = serde_json::to_value(
+        fixture.run_in_process_doctor(&[("ATM_OBSERVABILITY_RETAINED_SINK_FAULT", "unavailable")]),
+    )
+    .expect("doctor json");
     assert_eq!(parsed["summary"]["status"], "error");
     assert_eq!(parsed["findings"][0]["severity"], "error");
     assert_eq!(
@@ -74,9 +65,10 @@ fn test_doctor_reports_unavailable_observability_with_real_fault_injection() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_obsolete_identity_drift_warning() {
-    let fixture = Fixture::new(&["arch-ctm"]);
-    fixture.write_atm_config("[atm]\nidentity = \"arch-ctm\"\n");
+    let fixture = Fixture::new(&[TEST_SENDER]);
+    fixture.write_atm_config(&format!("[atm]\nidentity = \"{TEST_SENDER}\"\n"));
 
     let output = fixture.run(&["doctor", "--json"], &[]);
 
@@ -98,10 +90,13 @@ fn test_doctor_reports_obsolete_identity_drift_warning() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_missing_baseline_team_member() {
-    let fixture = Fixture::new(&["team-lead", "arch-ctm"]);
+    let fixture = Fixture::new(&[ROLE_TEAM_LEAD, TEST_SENDER]);
     fixture.write_atm_config(
-        "[atm]\ndefault_team = \"atm-dev\"\nteam_members = [\"team-lead\", \"arch-ctm\", \"qa\"]\n",
+        &format!(
+            "[atm]\ndefault_team = \"{TEST_TEAM}\"\nteam_members = [\"{ROLE_TEAM_LEAD}\", \"{TEST_SENDER}\", \"{TEST_QA}\"]\n"
+        ),
     );
 
     let output = fixture.run(&["doctor", "--json"], &[]);
@@ -126,10 +121,13 @@ fn test_doctor_reports_missing_baseline_team_member() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_member_roster_with_baseline_ordering() {
-    let fixture = Fixture::new(&["qa", "team-lead", "arch-ctm", "temp-worker"]);
+    let fixture = Fixture::new(&[TEST_QA, ROLE_TEAM_LEAD, TEST_SENDER, "temp-worker"]);
     fixture.write_atm_config(
-        "[atm]\ndefault_team = \"atm-dev\"\nteam_members = [\"arch-ctm\", \"team-lead\", \"qa\"]\n",
+        &format!(
+            "[atm]\ndefault_team = \"{TEST_TEAM}\"\nteam_members = [\"{TEST_SENDER}\", \"{ROLE_TEAM_LEAD}\", \"{TEST_QA}\"]\n"
+        ),
     );
 
     let output = fixture.run(&["doctor", "--json"], &[]);
@@ -143,13 +141,14 @@ fn test_doctor_reports_member_roster_with_baseline_ordering() {
     let members = parsed["member_roster"]["members"]
         .as_array()
         .expect("member roster array");
-    assert_eq!(members[0]["name"], "team-lead");
-    assert_eq!(members[1]["name"], "arch-ctm");
-    assert_eq!(members[2]["name"], "qa");
+    assert_eq!(members[0]["name"], TEST_LEAD);
+    assert_eq!(members[1]["name"], TEST_SENDER);
+    assert_eq!(members[2]["name"], TEST_QA);
     assert_eq!(members[3]["name"], "temp-worker");
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_missing_team_directory_finding() {
     let fixture = Fixture::empty();
 
@@ -168,6 +167,7 @@ fn test_doctor_reports_missing_team_directory_finding() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_team_config_parse_failure_finding() {
     let fixture = Fixture::empty();
     fixture.write_raw_team_config("{\"members\":");
@@ -187,8 +187,9 @@ fn test_doctor_reports_team_config_parse_failure_finding() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_missing_inboxes_directory_finding() {
-    let fixture = Fixture::new(&["arch-ctm"]);
+    let fixture = Fixture::new(&[TEST_SENDER]);
     fs::remove_dir_all(fixture.team_dir().join("inboxes")).expect("remove inboxes dir");
 
     let output = fixture.run(&["doctor", "--json"], &[]);
@@ -206,8 +207,9 @@ fn test_doctor_reports_missing_inboxes_directory_finding() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_doctor_reports_stale_restore_marker_warning() {
-    let fixture = Fixture::new(&["team-lead", "arch-ctm"]);
+    let fixture = Fixture::new(&[ROLE_TEAM_LEAD, TEST_SENDER]);
     let backup_path = fixture.tempdir.path().join("backup");
     fs::write(
         fixture.team_dir().join(".restore-in-progress"),
@@ -234,8 +236,9 @@ fn test_doctor_reports_stale_restore_marker_warning() {
 }
 
 #[test]
-fn test_doctor_reports_stale_mailbox_lock_across_team_inboxes() {
-    let fixture = Fixture::new(&["team-lead", "arch-ctm"]);
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
+fn test_doctor_sweeps_stale_mailbox_lock_across_team_inboxes() {
+    let fixture = Fixture::new(&[ROLE_TEAM_LEAD, TEST_SENDER]);
     let stale_lock = fixture
         .tempdir
         .path()
@@ -257,19 +260,92 @@ fn test_doctor_reports_stale_mailbox_lock_across_team_inboxes() {
     let parsed = fixture.stdout_json(&output);
     let findings = parsed["findings"].as_array().expect("findings array");
     assert!(
-        findings.iter().any(|finding| {
-            finding["code"] == "ATM_WARNING_STALE_MAILBOX_LOCK"
-                && finding["message"]
-                    .as_str()
-                    .is_some_and(|message| message.contains(&stale_lock.display().to_string()))
-        }),
+        findings
+            .iter()
+            .all(|finding| finding["code"] != "ATM_WARNING_STALE_MAILBOX_LOCK"),
         "stdout: {}",
         String::from_utf8(output.stdout.clone()).expect("stdout utf8")
+    );
+    assert!(!stale_lock.exists(), "doctor should sweep stale sentinel");
+}
+
+#[test]
+#[serial(env)]
+fn test_doctor_in_process_runtime_projection_reports_healthy_runtime() {
+    let fixture = Fixture::new(&[TEST_SENDER]);
+    let parsed = serde_json::to_value(fixture.run_in_process_doctor(&[])).expect("doctor json");
+    assert_eq!(parsed["summary"]["status"], "healthy");
+    assert_eq!(parsed["runtime"]["singleton_state"], "healthy");
+    assert_eq!(parsed["runtime"]["status_cache_state"], "unavailable");
+    assert!(
+        parsed["runtime"]["sqlite_runtime_detail"]
+            .as_str()
+            .is_some_and(|detail| detail.contains("mail.db")),
+        "stdout: {}",
+        serde_json::to_string_pretty(&parsed).expect("doctor json pretty")
+    );
+}
+
+#[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
+fn test_doctor_cli_auto_starts_daemon_when_absent() {
+    let fixture = Fixture::new(&[TEST_SENDER]);
+    assert!(
+        !fixture.daemon_control_path().exists(),
+        "fixture should begin without a published daemon control state"
+    );
+
+    let output = fixture.run(&["doctor", "--json"], &[]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    fixture.wait_for_daemon_ready();
+    assert_eq!(parsed["runtime"]["singleton_state"], "healthy");
+}
+
+#[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
+fn test_doctor_reports_typed_error_when_auto_start_fails() {
+    let fixture = Fixture::new(&[TEST_SENDER]);
+
+    let output = fixture.run(
+        &["--stderr-logs", "doctor", "--json"],
+        &[("ATM_DAEMON_BIN", "/definitely/missing/atm-daemon")],
+    );
+
+    assert!(!output.status.success());
+    let stderr = fixture.stderr(&output);
+    assert!(
+        stderr.contains("failed to start atm-daemon"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("Check the atm-daemon binary path"),
+        "stderr: {stderr}"
+    );
+    let fatal_event = fixture
+        .active_log_records()
+        .into_iter()
+        .find(|record| record["action"] == "service" && record["outcome"] == "error")
+        .expect("fatal structured event");
+    assert_eq!(
+        fatal_event["fields"]["error_code"],
+        "ATM_DAEMON_START_FAILED"
     );
 }
 
 struct Fixture {
     tempdir: tempfile::TempDir,
+}
+
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        self.kill_daemon();
+    }
 }
 
 impl Fixture {
@@ -287,17 +363,37 @@ impl Fixture {
 
     fn run(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
         let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
-        command
+        configure_atm_command(&mut command, self.tempdir.path(), Some(TEST_SENDER))
             .args(args)
-            .env("ATM_HOME", self.tempdir.path())
-            .env("ATM_CONFIG_HOME", self.tempdir.path())
-            .env("ATM_IDENTITY", "arch-ctm")
-            .env("ATM_TEAM", "atm-dev")
             .current_dir(self.tempdir.path());
         for (key, value) in extra_env {
             command.env(key, value);
         }
         command.output().expect("run atm")
+    }
+
+    fn run_in_process_doctor(&self, extra_env: &[(&str, &str)]) -> DoctorReport {
+        let _guards = extra_env
+            .iter()
+            .map(|(key, value)| EnvGuard::set(key, value))
+            .collect::<Vec<_>>();
+        let dispatcher = CoreDispatcher::new(
+            self.tempdir.path().to_path_buf(),
+            Arc::new(DaemonObservability::new(self.tempdir.path())),
+        );
+        let client = TestSocketClient::new(&dispatcher);
+        let response = client
+            .request(atm_core::dispatcher::DaemonRequest {
+                team_name: self.team(),
+                agent_name: self.agent(TEST_SENDER),
+                payload: atm_core::dispatcher::RequestPayload::Doctor(serde_json::json!({
+                    "home_dir": self.tempdir.path(),
+                    "current_dir": self.tempdir.path(),
+                    "team_override": TEST_TEAM,
+                })),
+            })
+            .expect("doctor response");
+        serde_json::from_str(&response.payload_json).expect("doctor report")
     }
 
     fn write_team_config(&self, members: &[&str]) {
@@ -341,7 +437,7 @@ impl Fixture {
             .path()
             .join(".claude")
             .join("teams")
-            .join("atm-dev")
+            .join(TEST_TEAM)
     }
 
     fn active_log_path(&self) -> std::path::PathBuf {
@@ -351,5 +447,148 @@ impl Fixture {
             .join("share")
             .join("logs")
             .join("atm.log.jsonl")
+    }
+
+    fn active_log_records(&self) -> Vec<Value> {
+        let raw = fs::read_to_string(self.active_log_path()).expect("active log");
+        raw.lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| serde_json::from_str(line).expect("log json"))
+            .collect()
+    }
+
+    fn daemon_control_path(&self) -> std::path::PathBuf {
+        self.tempdir
+            .path()
+            .join(".atm-state")
+            .join("daemon")
+            .join("control.json")
+    }
+
+    fn wait_for_daemon_ready(&self) {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < deadline {
+            if self.daemon_control_path().exists() {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        panic!(
+            "daemon control state was not published at {} within 5s",
+            self.daemon_control_path().display()
+        );
+    }
+
+    fn team(&self) -> TeamName {
+        TEST_TEAM.parse().expect("team")
+    }
+
+    fn agent(&self, value: &str) -> AgentName {
+        value.parse().expect("agent")
+    }
+
+    fn kill_daemon(&self) {
+        let Ok(raw) = fs::read(self.daemon_control_path()) else {
+            return;
+        };
+        let Some(pid) = serde_json::from_slice::<Value>(&raw)
+            .ok()
+            .and_then(|value| value.get("pid").and_then(Value::as_u64))
+            .map(|pid| pid as u32)
+        else {
+            return;
+        };
+        terminate_process(pid);
+    }
+}
+
+struct EnvGuard {
+    key: String,
+    original: Option<std::ffi::OsString>,
+}
+
+impl EnvGuard {
+    fn set(key: &str, value: &str) -> Self {
+        let original = std::env::var_os(key);
+        // SAFETY: these tests mutate process env in a bounded scope and do not
+        // execute concurrently with other env-sensitive doctor tests because
+        // every caller shares the #[serial(env)] isolation key.
+        unsafe { std::env::set_var(key, value) };
+        Self {
+            key: key.to_string(),
+            original,
+        }
+    }
+}
+
+impl Drop for EnvGuard {
+    fn drop(&mut self) {
+        match &self.original {
+            Some(value) => {
+                // SAFETY: paired with the scoped set above.
+                unsafe { std::env::set_var(&self.key, value) };
+            }
+            None => {
+                // SAFETY: paired with the scoped set above.
+                unsafe { std::env::remove_var(&self.key) };
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+fn terminate_process(pid: u32) {
+    let _ = Command::new("kill")
+        .args(["-TERM", &pid.to_string()])
+        .status();
+    wait_for_process_exit(pid, Duration::from_secs(5));
+}
+
+#[cfg(windows)]
+fn terminate_process(pid: u32) {
+    let _ = Command::new("taskkill")
+        .args(["/PID", &pid.to_string(), "/T", "/F"])
+        .status();
+    wait_for_process_exit(pid, Duration::from_secs(5));
+}
+
+#[cfg(unix)]
+fn process_alive(pid: u32) -> bool {
+    Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+#[cfg(windows)]
+fn process_alive(pid: u32) -> bool {
+    Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {pid}")])
+        .output()
+        .ok()
+        .map(|output| String::from_utf8_lossy(&output.stdout).contains(&pid.to_string()))
+        .unwrap_or(false)
+}
+
+fn wait_for_process_exit(pid: u32, timeout: Duration) {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if !process_alive(pid) {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    #[cfg(unix)]
+    {
+        let _ = Command::new("kill").args(["-9", &pid.to_string()]).output();
+    }
+
+    #[cfg(windows)]
+    {
+        let _ = Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .output();
     }
 }

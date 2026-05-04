@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::warn;
 
@@ -11,11 +11,16 @@ use crate::config::{load_config, load_team_config, resolve_team};
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
 use crate::persistence;
+use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::{AgentMember, TeamConfig};
 use crate::types::{AgentName, TeamName};
 
 #[path = "team_admin/restore.rs"]
 mod restore;
+#[cfg(test)]
+pub(crate) use restore::{
+    ScopedRestoreInboxStageFailureOverride, ScopedRestoreMarkerRemoveFailureOverride,
+};
 
 /// One discovered team and its current member count.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -33,7 +38,7 @@ pub struct TeamsList {
 }
 
 /// One member entry from a team's live `config.json` roster.
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MemberSummary {
     pub name: AgentName,
     pub agent_id: String,
@@ -46,7 +51,7 @@ pub struct MemberSummary {
 }
 
 /// Result of listing all current members for one team.
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MembersList {
     pub team: TeamName,
     pub members: Vec<MemberSummary>,
@@ -270,12 +275,12 @@ pub fn list_members(query: MembersQuery) -> Result<MembersList, AtmError> {
     if let Some(team_lead) = config
         .members
         .iter()
-        .find(|member| member.name == "team-lead")
+        .find(|member| member.name == ROLE_TEAM_LEAD)
     {
         members.push(member_summary(team_lead));
     }
     for member in &config.members {
-        if member.name == "team-lead" {
+        if member.name == ROLE_TEAM_LEAD {
             continue;
         }
         members.push(member_summary(member));
@@ -494,7 +499,7 @@ fn write_team_config(team_dir: &Path, config: &TeamConfig) -> Result<(), AtmErro
 
 fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), AtmError> {
     // Test seam for deterministic rollback coverage in integration tests.
-    if std::env::var_os("ATM_TEST_FAIL_TEAM_CONFIG_WRITE").is_some() {
+    if forced_team_config_write_failure() {
         return Err(AtmError::file_policy(format!(
             "forced team config write failure for {}",
             path.display()
@@ -510,6 +515,58 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), AtmError> {
         "config",
         "Check config directory permissions and rerun the operation.",
     )
+}
+
+fn forced_team_config_write_failure() -> bool {
+    if team_config_write_test_override::get() {
+        return true;
+    }
+
+    std::env::var_os("ATM_TEST_FAIL_TEAM_CONFIG_WRITE").is_some()
+}
+
+mod team_config_write_test_override {
+    use std::cell::Cell;
+
+    thread_local! {
+        // Test-only fault seam. `Cell<bool>` is enough because the override is
+        // toggled by one thread-scoped guard at a time and never shared.
+        static OVERRIDE: Cell<bool> = const { Cell::new(false) };
+    }
+
+    pub(super) fn get() -> bool {
+        OVERRIDE.with(Cell::get)
+    }
+
+    #[cfg(test)]
+    pub(super) fn set(enabled: bool) -> bool {
+        OVERRIDE.with(|cell| {
+            let original = cell.get();
+            cell.set(enabled);
+            original
+        })
+    }
+}
+
+#[cfg(test)]
+pub(crate) struct ScopedTeamConfigWriteFailureOverride {
+    original: bool,
+}
+
+#[cfg(test)]
+impl ScopedTeamConfigWriteFailureOverride {
+    pub(crate) fn enable() -> Self {
+        Self {
+            original: team_config_write_test_override::set(true),
+        }
+    }
+}
+
+#[cfg(test)]
+impl Drop for ScopedTeamConfigWriteFailureOverride {
+    fn drop(&mut self) {
+        team_config_write_test_override::set(self.original);
+    }
 }
 
 fn copy_regular_files<F>(src: &Path, dst: &Path, include: F) -> Result<(), AtmError>
@@ -637,6 +694,7 @@ mod tests {
     };
     use crate::error_codes::AtmErrorCode;
     use crate::schema::TeamConfig;
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
 
     fn write_team_config(home_dir: &std::path::Path, team: &str) {
         let team_dir = home_dir.join(".claude").join("teams").join(team);
@@ -653,7 +711,7 @@ mod tests {
         let tempdir = tempdir().expect("tempdir");
         let error = AddMemberRequest::new(
             tempdir.path().to_path_buf(),
-            "atm-dev",
+            TEST_TEAM,
             "../evil",
             "worker".to_string(),
             "gpt-5".to_string(),
@@ -671,7 +729,7 @@ mod tests {
         let error = AddMemberRequest::new(
             tempdir.path().to_path_buf(),
             "../evil",
-            "arch-ctm",
+            TEST_SENDER,
             "worker".to_string(),
             "gpt-5".to_string(),
             tempdir.path().to_path_buf(),
@@ -686,12 +744,12 @@ mod tests {
     #[serial]
     fn add_member_normalizes_tmux_shape_when_pane_is_provided() {
         let tempdir = tempdir().expect("tempdir");
-        write_team_config(tempdir.path(), "atm-dev");
+        write_team_config(tempdir.path(), TEST_TEAM);
 
         add_member(AddMemberRequest {
             home_dir: tempdir.path().to_path_buf(),
-            team: "atm-dev".parse().expect("team"),
-            member: "arch-ctm".parse().expect("member"),
+            team: TEST_TEAM.parse().expect("team"),
+            member: TEST_SENDER.parse().expect("member"),
             agent_type: "worker".to_string(),
             model: "gpt-5".to_string(),
             cwd: tempdir.path().to_path_buf(),
@@ -699,7 +757,7 @@ mod tests {
         })
         .expect("add member");
 
-        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
         let config: TeamConfig = serde_json::from_slice(
             &std::fs::read(team_dir.join("config.json")).expect("read config"),
         )
@@ -707,7 +765,7 @@ mod tests {
         let member = config
             .members
             .iter()
-            .find(|member| member.name == "arch-ctm")
+            .find(|member| member.name == TEST_SENDER)
             .expect("member");
 
         assert_eq!(member.tmux_pane_id.as_deref(), Some("%7"));
@@ -718,12 +776,12 @@ mod tests {
     #[test]
     fn add_member_rejects_non_canonical_tmux_target_syntax() {
         let tempdir = tempdir().expect("tempdir");
-        write_team_config(tempdir.path(), "atm-dev");
+        write_team_config(tempdir.path(), TEST_TEAM);
 
         let error = add_member(AddMemberRequest {
             home_dir: tempdir.path().to_path_buf(),
-            team: "atm-dev".parse().expect("team"),
-            member: "arch-ctm".parse().expect("member"),
+            team: TEST_TEAM.parse().expect("team"),
+            member: TEST_SENDER.parse().expect("member"),
             agent_type: "worker".to_string(),
             model: "gpt-5".to_string(),
             cwd: tempdir.path().to_path_buf(),

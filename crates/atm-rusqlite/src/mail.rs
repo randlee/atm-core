@@ -196,11 +196,66 @@ impl MailStore for RusqliteStore {
         raw.map(convert_message_row).transpose()
     }
 
+    fn list_messages_for_recipient(
+        &self,
+        team_name: &TeamName,
+        recipient_agent: &AgentName,
+    ) -> Result<Vec<StoredMessageRecord>, StoreError> {
+        let connection = self.lock_connection()?;
+        let mut statement = connection
+            .prepare(&format!(
+                "{MESSAGE_SELECT_COLUMNS} WHERE team_name = ?1 AND recipient_agent = ?2 ORDER BY created_at, message_key"
+            ))
+            .map_err(|error| {
+                classify_store_error(error, "failed to prepare recipient message query")
+            })?;
+        let rows = statement
+            .query_map((team_name.as_str(), recipient_agent.as_str()), |row| {
+                Ok(RawMessageRow {
+                    message_key: row.get(0)?,
+                    team_name: row.get(1)?,
+                    recipient_agent: row.get(2)?,
+                    sender_display: row.get(3)?,
+                    sender_canonical: row.get(4)?,
+                    sender_team: row.get(5)?,
+                    body: row.get(6)?,
+                    summary: row.get(7)?,
+                    created_at: row.get(8)?,
+                    source_kind: row.get(9)?,
+                    legacy_message_id: row.get(10)?,
+                    atm_message_id: row.get(11)?,
+                    raw_metadata_json: row.get(12)?,
+                })
+            })
+            .map_err(|error| {
+                classify_store_error(error, "failed to query recipient message rows")
+            })?;
+
+        let mut messages = Vec::new();
+        for row in rows {
+            let raw =
+                row.map_err(|error| classify_store_error(error, "failed to read message row"))?;
+            messages.push(convert_message_row(raw)?);
+        }
+        Ok(messages)
+    }
+
     fn upsert_ack_state(&self, ack_state: &AckStateRecord) -> Result<AckStateRecord, StoreError> {
         let connection = self.lock_connection()?;
         upsert_ack_state_row(&connection, ack_state)
             .map_err(|error| classify_store_error(error, "failed to upsert ack state"))?;
         Ok(ack_state.clone())
+    }
+
+    fn upsert_ack_state_batch(&self, ack_states: &[AckStateRecord]) -> Result<(), StoreError> {
+        self.with_transaction(|transaction| {
+            for ack_state in ack_states {
+                upsert_ack_state_row(transaction, ack_state).map_err(|error| {
+                    classify_store_error(error, "failed to batch upsert ack state")
+                })?;
+            }
+            Ok(())
+        })
     }
 
     fn load_ack_state(
@@ -236,6 +291,20 @@ impl MailStore for RusqliteStore {
         upsert_visibility_row(&connection, visibility)
             .map_err(|error| classify_store_error(error, "failed to upsert visibility state"))?;
         Ok(visibility.clone())
+    }
+
+    fn upsert_visibility_batch(
+        &self,
+        visibility: &[VisibilityStateRecord],
+    ) -> Result<(), StoreError> {
+        self.with_transaction(|transaction| {
+            for row in visibility {
+                upsert_visibility_row(transaction, row).map_err(|error| {
+                    classify_store_error(error, "failed to batch upsert visibility state")
+                })?;
+            }
+            Ok(())
+        })
     }
 
     fn load_visibility(

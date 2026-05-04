@@ -135,6 +135,8 @@ impl RestoreCommand {
 }
 
 #[cfg(test)]
+// rule-008: allow-start -- CLI request-builder tests intentionally use raw
+// team/member strings as direct parsing inputs.
 mod tests {
     use super::AddMemberCommand;
 
@@ -176,3 +178,4 @@ mod tests {
         assert!(error.to_string().contains("agent name"));
     }
 }
+// rule-008: allow-end

@@ -84,6 +84,10 @@ where
     let source_paths = discover_source_paths(home_dir, team.as_str(), agent.as_str())?;
     let mut write_paths = source_paths.clone();
     write_paths.extend(extra_write_paths);
+    // TRANSITIONAL: compatibility only, pending Q.5+ lock retirement.
+    // SQLite/mail-state correctness must not depend on mailbox lock artifacts;
+    // this lock boundary remains only while the Claude inbox compatibility
+    // surface is still rewritten in-process.
     let _locks = lock::acquire_many_sorted(write_paths, timeout)?;
     let source_paths = rediscover_and_validate_source_paths(
         &source_paths,
@@ -97,6 +101,8 @@ where
 }
 
 #[cfg(test)]
+// rule-008: allow-start -- store-boundary tests use concrete fixture names in
+// mailbox JSON/path assertions to keep the persistence contract obvious.
 mod tests {
     use tempfile::tempdir;
 
@@ -263,3 +269,4 @@ mod tests {
         }
     }
 }
+// rule-008: allow-end

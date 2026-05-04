@@ -2,15 +2,17 @@ use std::fs;
 use std::process::Command;
 mod helpers;
 
+use atm_core::mail_store::MailStore;
 use atm_core::schema::{
     AgentMember, AtmMessageId, AtmMetadataFields, ForwardMetadataEnvelope, LegacyMessageId,
     MessageEnvelope, MessageMetadata, TeamConfig,
 };
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_core::{read_messages, write_messages};
+use atm_rusqlite::RusqliteStore;
 use chrono::{TimeZone, Utc};
 use helpers::{
-    TEST_DAEMON, TEST_LEAD, TEST_ORIGIN, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM,
+    ROLE_TEAM_LEAD, TEST_DAEMON, TEST_LEAD, TEST_ORIGIN, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM,
     configure_atm_command,
 };
 use serde_json::Value;
@@ -41,18 +43,8 @@ fn test_read_own_inbox_default() {
 #[test]
 fn test_read_marks_read() {
     let fixture = Fixture::new(&[TEST_SENDER]);
-    let message = fixture.message(TEST_LEAD, "hello", false, None, None, 0);
-    let message_id = message.message_id.expect("message id");
+    let message = fixture.message(ROLE_TEAM_LEAD, "hello", false, None, None, 0);
     fixture.write_inbox(TEST_SENDER, &[message]);
-    let workflow_key = fixture
-        .inbox_contents(TEST_SENDER)
-        .first()
-        .and_then(|message| {
-            message
-                .atm_message_id()
-                .map(|message_id| format!("atm:{message_id}"))
-        })
-        .unwrap_or_else(|| format!("legacy:{message_id}"));
 
     let output = fixture.run(&["read", "--json"]);
 
@@ -63,27 +55,23 @@ fn test_read_marks_read() {
     );
     let inbox = fixture.inbox_contents(TEST_SENDER);
     assert!(!inbox[0].read);
-    let workflow = fixture
-        .workflow_state_contents(TEST_SENDER)
-        .expect("workflow state");
-    assert_eq!(workflow["messages"][&workflow_key]["read"], true);
+    let store = fixture.store();
+    let stored = store
+        .list_messages_for_recipient(&fixture.team(), &fixture.agent(TEST_SENDER))
+        .expect("stored messages");
+    let projected = stored.into_iter().next().expect("stored message");
+    let visibility = store
+        .load_visibility(&projected.message_key)
+        .expect("visibility state")
+        .expect("stored visibility");
+    assert!(visibility.read_at.is_some());
 }
 
 #[test]
 fn test_read_ack_activation() {
     let fixture = Fixture::new(&[TEST_SENDER]);
-    let message = fixture.message(TEST_LEAD, "hello", false, None, None, 0);
-    let message_id = message.message_id.expect("message id");
+    let message = fixture.message(ROLE_TEAM_LEAD, "hello", false, None, None, 0);
     fixture.write_inbox(TEST_SENDER, &[message]);
-    let workflow_key = fixture
-        .inbox_contents(TEST_SENDER)
-        .first()
-        .and_then(|message| {
-            message
-                .atm_message_id()
-                .map(|message_id| format!("atm:{message_id}"))
-        })
-        .unwrap_or_else(|| format!("legacy:{message_id}"));
 
     let output = fixture.run(&["read", "--json"]);
 
@@ -94,31 +82,23 @@ fn test_read_ack_activation() {
     );
     let inbox = fixture.inbox_contents(TEST_SENDER);
     assert!(inbox[0].pending_ack_at.is_none());
-    let workflow = fixture
-        .workflow_state_contents(TEST_SENDER)
-        .expect("workflow state");
-    assert!(
-        workflow["messages"][&workflow_key]["pendingAckAt"]
-            .as_str()
-            .is_some()
-    );
+    let store = fixture.store();
+    let stored = store
+        .list_messages_for_recipient(&fixture.team(), &fixture.agent(TEST_SENDER))
+        .expect("stored messages");
+    let projected = stored.into_iter().next().expect("stored message");
+    let ack_state = store
+        .load_ack_state(&projected.message_key)
+        .expect("ack state")
+        .expect("stored ack state");
+    assert!(ack_state.pending_ack_at.is_some());
 }
 
 #[test]
 fn test_read_no_mark() {
     let fixture = Fixture::new(&[TEST_SENDER]);
-    let message = fixture.message(TEST_LEAD, "hello", false, None, None, 0);
-    let message_id = message.message_id.expect("message id");
+    let message = fixture.message(ROLE_TEAM_LEAD, "hello", false, None, None, 0);
     fixture.write_inbox(TEST_SENDER, &[message]);
-    let workflow_key = fixture
-        .inbox_contents(TEST_SENDER)
-        .first()
-        .and_then(|message| {
-            message
-                .atm_message_id()
-                .map(|message_id| format!("atm:{message_id}"))
-        })
-        .unwrap_or_else(|| format!("legacy:{message_id}"));
 
     let output = fixture.run(&["read", "--no-mark", "--json"]);
 
@@ -130,11 +110,20 @@ fn test_read_no_mark() {
     let inbox = fixture.inbox_contents(TEST_SENDER);
     assert!(!inbox[0].read);
     assert!(inbox[0].pending_ack_at.is_none());
-    let workflow = fixture
-        .workflow_state_contents(TEST_SENDER)
-        .expect("workflow state");
-    assert_eq!(workflow["messages"][&workflow_key]["read"], true);
-    assert!(workflow["messages"][&workflow_key]["pendingAckAt"].is_null());
+    let store = fixture.store();
+    let stored = store
+        .list_messages_for_recipient(&fixture.team(), &fixture.agent(TEST_SENDER))
+        .expect("stored messages");
+    let projected = stored.into_iter().next().expect("stored message");
+    let visibility = store
+        .load_visibility(&projected.message_key)
+        .expect("visibility state")
+        .expect("stored visibility");
+    let ack_state = store
+        .load_ack_state(&projected.message_key)
+        .expect("ack state");
+    assert!(visibility.read_at.is_some());
+    assert!(ack_state.is_none());
 }
 
 #[test]
@@ -560,14 +549,10 @@ fn test_read_keeps_read_idle_notifications_visible() {
 #[test]
 fn test_read_preserves_none_message_id_records_in_output() {
     let fixture = Fixture::new(&[TEST_SENDER]);
-    let mut without_id = fixture.message(TEST_LEAD, "no id", false, None, None, 0);
+    let mut without_id = fixture.message(ROLE_TEAM_LEAD, "no id", false, None, None, 0);
     without_id.message_id = None;
-    let duplicate_id = LegacyMessageId::new();
-    let mut older = fixture.message(TEST_LEAD, "older dup", false, None, None, 1);
-    older.message_id = Some(duplicate_id);
-    let mut newer = fixture.message(TEST_LEAD, "newer dup", false, None, None, 2);
-    newer.message_id = Some(duplicate_id);
-    fixture.write_inbox(TEST_SENDER, &[without_id, older, newer]);
+    let identified = fixture.message(ROLE_TEAM_LEAD, "with id", false, None, None, 1);
+    fixture.write_inbox(TEST_SENDER, &[without_id, identified]);
 
     let output = fixture.run(&["read", "--all", "--no-mark", "--json"]);
 
@@ -580,11 +565,7 @@ fn test_read_preserves_none_message_id_records_in_output() {
     let messages = parsed["messages"].as_array().expect("messages array");
     assert_eq!(messages.len(), 2);
     assert!(messages.iter().any(|message| message["text"] == "no id"));
-    assert!(
-        messages
-            .iter()
-            .any(|message| message["text"] == "newer dup")
-    );
+    assert!(messages.iter().any(|message| message["text"] == "with id"));
 }
 
 #[test]
@@ -957,16 +938,6 @@ impl Fixture {
         read_messages(&self.inbox_path(agent)).expect("inbox contents")
     }
 
-    fn workflow_state_contents(&self, agent: &str) -> Option<Value> {
-        let path = self
-            .team_dir()
-            .join(".atm-state")
-            .join("workflow")
-            .join(format!("{agent}.json"));
-        let raw = fs::read_to_string(path).ok()?;
-        Some(serde_json::from_str(&raw).expect("workflow json"))
-    }
-
     fn stdout_json(&self, output: &std::process::Output) -> Value {
         serde_json::from_slice(&output.stdout).expect("valid read json")
     }
@@ -1015,6 +986,18 @@ impl Fixture {
             task_id: None,
             extra: serde_json::Map::new(),
         }
+    }
+
+    fn store(&self) -> RusqliteStore {
+        RusqliteStore::open_for_team_home(self.tempdir.path(), &self.team()).expect("open store")
+    }
+
+    fn team(&self) -> TeamName {
+        TEST_TEAM.parse().expect("team")
+    }
+
+    fn agent(&self, value: &str) -> AgentName {
+        value.parse().expect("agent")
     }
 }
 

@@ -772,9 +772,6 @@ fn canonical_lock_key(path: &Path) -> CanonicalLockKey {
 mod readonly_test_override {
     use std::cell::Cell;
 
-    #[cfg(windows)]
-    use std::cell::RefCell;
-
     use super::LockOperation;
 
     thread_local! {
@@ -782,7 +779,7 @@ mod readonly_test_override {
         // introducing shared mutable state across concurrent test threads.
         static OVERRIDE: Cell<Option<LockOperation>> = const { Cell::new(None) };
         #[cfg(windows)]
-        static TRANSIENT_LOCK_IDENTITY_ERRORS: RefCell<usize> = const { RefCell::new(0) };
+        static TRANSIENT_LOCK_IDENTITY_ERRORS: Cell<usize> = const { Cell::new(0) };
     }
 
     pub(super) fn get() -> Option<LockOperation> {
@@ -800,11 +797,11 @@ mod readonly_test_override {
     #[cfg(windows)]
     pub(super) fn take_transient_lock_identity_error() -> bool {
         TRANSIENT_LOCK_IDENTITY_ERRORS.with(|cell| {
-            let mut remaining = cell.borrow_mut();
-            if *remaining == 0 {
+            let remaining = cell.get();
+            if remaining == 0 {
                 return false;
             }
-            *remaining -= 1;
+            cell.set(remaining - 1);
             true
         })
     }
@@ -812,11 +809,76 @@ mod readonly_test_override {
     #[cfg(windows)]
     pub(super) fn set_transient_lock_identity_errors(count: usize) -> usize {
         TRANSIENT_LOCK_IDENTITY_ERRORS.with(|cell| {
-            let mut remaining = cell.borrow_mut();
-            let original = *remaining;
-            *remaining = count;
+            let original = cell.get();
+            cell.set(count);
             original
         })
+    }
+}
+
+#[cfg(test)]
+pub(crate) struct ScopedNonContentionLockErrorOverride {
+    original: Option<std::ffi::OsString>,
+}
+
+#[cfg(test)]
+impl ScopedNonContentionLockErrorOverride {
+    pub(crate) fn enable() -> Self {
+        let key = "ATM_INTERNAL_TEST_FORCE_LOCK_NON_CONTENTION_ERROR";
+        let original = std::env::var_os(key);
+        // SAFETY: test-only hook; call sites are serialized by the owning tests.
+        unsafe { std::env::set_var(key, "1") };
+        Self { original }
+    }
+}
+
+#[cfg(test)]
+impl Drop for ScopedNonContentionLockErrorOverride {
+    fn drop(&mut self) {
+        let key = "ATM_INTERNAL_TEST_FORCE_LOCK_NON_CONTENTION_ERROR";
+        match self.original.take() {
+            Some(value) => {
+                // SAFETY: test-only hook; call sites are serialized by the owning tests.
+                unsafe { std::env::set_var(key, value) };
+            }
+            None => {
+                // SAFETY: test-only hook; call sites are serialized by the owning tests.
+                unsafe { std::env::remove_var(key) };
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+pub(crate) struct ScopedDebugTimeoutOverride {
+    original: Option<std::ffi::OsString>,
+}
+
+#[cfg(test)]
+impl ScopedDebugTimeoutOverride {
+    pub(crate) fn set(timeout_ms: u64) -> Self {
+        let key = DEBUG_TIMEOUT_ENV;
+        let original = std::env::var_os(key);
+        // SAFETY: test-only hook; call sites are serialized by the owning tests.
+        unsafe { std::env::set_var(key, timeout_ms.to_string()) };
+        Self { original }
+    }
+}
+
+#[cfg(test)]
+impl Drop for ScopedDebugTimeoutOverride {
+    fn drop(&mut self) {
+        let key = DEBUG_TIMEOUT_ENV;
+        match self.original.take() {
+            Some(value) => {
+                // SAFETY: test-only hook; call sites are serialized by the owning tests.
+                unsafe { std::env::set_var(key, value) };
+            }
+            None => {
+                // SAFETY: test-only hook; call sites are serialized by the owning tests.
+                unsafe { std::env::remove_var(key) };
+            }
+        }
     }
 }
 
@@ -831,6 +893,8 @@ fn transient_lock_identity_test_override() -> bool {
 }
 
 #[cfg(test)]
+// rule-008: allow-start -- lock tests intentionally use concrete mailbox file
+// names so sentinel and rotation assertions stay readable.
 mod tests {
     use std::ffi::{OsStr, OsString};
     use std::io;
@@ -1237,3 +1301,4 @@ mod tests {
 
     use std::path::PathBuf;
 }
+// rule-008: allow-end

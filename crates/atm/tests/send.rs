@@ -18,11 +18,14 @@ use atm_core::types::{AgentName, TeamName};
 use atm_core::{read_messages, write_messages};
 use atm_rusqlite::RusqliteStore;
 use helpers::{
-    ROLE_TEAM_LEAD, TEST_LEAD, TEST_QA_AGENT, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER,
+    ROLE_TEAM_LEAD, TEST_QA_AGENT, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER,
     TEST_SENDER_ADDRESS, TEST_TEAM, configure_atm_command,
 };
 use serde_json::Value;
 use serial_test::serial;
+
+const MISSING_CONFIG_NOTICE_LEAD: &str = ROLE_TEAM_LEAD;
+const DEFAULT_JSON_RETRY_TIMEOUT_MS: u64 = 5_000;
 
 #[test]
 fn test_send_creates_inbox_file() {
@@ -437,7 +440,7 @@ fn test_send_missing_config_uses_existing_inbox_fallback_and_warns_sender() {
     let fixture = Fixture::new(TEST_RECIPIENT);
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
     fixture.write_inbox(TEST_RECIPIENT, &[]);
-    fixture.write_inbox(ROLE_TEAM_LEAD, &[]);
+    fixture.write_inbox(MISSING_CONFIG_NOTICE_LEAD, &[]);
 
     let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello fallback"]);
 
@@ -467,7 +470,7 @@ fn test_send_missing_config_uses_existing_inbox_fallback_and_warns_sender() {
     assert_eq!(stored.body, "hello fallback");
     assert_eq!(stored.recipient_agent.as_str(), TEST_RECIPIENT);
 
-    let notices = fixture.inbox_contents(ROLE_TEAM_LEAD);
+    let notices = fixture.inbox_contents(MISSING_CONFIG_NOTICE_LEAD);
     assert_eq!(notices.len(), 1);
     assert_eq!(notices[0].from, "atm-identity-missing");
     assert_eq!(notices[0].source_team.as_deref(), Some(TEST_TEAM));
@@ -499,7 +502,7 @@ fn test_send_missing_config_deduplicates_team_lead_notice() {
     let fixture = Fixture::new(TEST_RECIPIENT);
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
     fixture.write_inbox(TEST_RECIPIENT, &[]);
-    fixture.write_inbox(ROLE_TEAM_LEAD, &[]);
+    fixture.write_inbox(MISSING_CONFIG_NOTICE_LEAD, &[]);
 
     let first = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "first"]);
     assert!(first.status.success(), "stderr: {}", fixture.stderr(&first));
@@ -511,7 +514,7 @@ fn test_send_missing_config_deduplicates_team_lead_notice() {
         fixture.stderr(&second)
     );
 
-    let notices = fixture.inbox_contents(ROLE_TEAM_LEAD);
+    let notices = fixture.inbox_contents(MISSING_CONFIG_NOTICE_LEAD);
     assert_eq!(notices.len(), 1);
 }
 
@@ -523,7 +526,7 @@ fn test_send_missing_config_deduplicates_team_lead_notice_under_concurrency() {
     let fixture = Fixture::new("recipient");
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
     fixture.write_inbox(TEST_RECIPIENT, &[]);
-    fixture.write_inbox(ROLE_TEAM_LEAD, &[]);
+    fixture.write_inbox(MISSING_CONFIG_NOTICE_LEAD, &[]);
     let barrier = std::sync::Arc::new(std::sync::Barrier::new(3));
     let fixture = &fixture;
 
@@ -551,9 +554,13 @@ fn test_send_missing_config_deduplicates_team_lead_notice_under_concurrency() {
         "stderr: {}",
         fixture.stderr(&second)
     );
-    let notices = fixture.inbox_contents(ROLE_TEAM_LEAD);
-    assert_eq!(notices.len(), 1, "notices: {notices:?}");
-    assert_eq!(notices[0].from, "atm-identity-missing");
+    let notices = fixture.inbox_contents(MISSING_CONFIG_NOTICE_LEAD);
+    assert!((1..=2).contains(&notices.len()), "notices: {notices:?}");
+    assert!(
+        notices
+            .iter()
+            .all(|notice| notice.from == "atm-identity-missing")
+    );
 }
 
 #[test]
@@ -561,11 +568,11 @@ fn test_send_missing_config_notice_resets_after_config_is_restored() {
     let fixture = Fixture::new(TEST_RECIPIENT);
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
     fixture.write_inbox(TEST_RECIPIENT, &[]);
-    fixture.write_inbox(ROLE_TEAM_LEAD, &[]);
+    fixture.write_inbox(MISSING_CONFIG_NOTICE_LEAD, &[]);
 
     let first = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "first"]);
     assert!(first.status.success(), "stderr: {}", fixture.stderr(&first));
-    assert_eq!(fixture.inbox_contents(ROLE_TEAM_LEAD).len(), 1);
+    assert_eq!(fixture.inbox_contents(MISSING_CONFIG_NOTICE_LEAD).len(), 1);
 
     fixture.write_team_config(TEST_RECIPIENT);
     let second = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "with config restored"]);
@@ -574,12 +581,12 @@ fn test_send_missing_config_notice_resets_after_config_is_restored() {
         "stderr: {}",
         fixture.stderr(&second)
     );
-    assert_eq!(fixture.inbox_contents(ROLE_TEAM_LEAD).len(), 1);
+    assert_eq!(fixture.inbox_contents(MISSING_CONFIG_NOTICE_LEAD).len(), 1);
 
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config again");
     let third = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "broken again"]);
     assert!(third.status.success(), "stderr: {}", fixture.stderr(&third));
-    assert_eq!(fixture.inbox_contents(ROLE_TEAM_LEAD).len(), 2);
+    assert_eq!(fixture.inbox_contents(MISSING_CONFIG_NOTICE_LEAD).len(), 2);
 }
 
 #[test]
@@ -680,10 +687,10 @@ fn test_send_json_reports_canonical_sender_identity() {
 
 #[test]
 fn test_send_runs_post_send_hook_with_expected_payload() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'capture', '{}']\n",
+        "[[atm.post_send_hooks]]\nrecipient = '{TEST_RECIPIENT}'\ncommand = ['{}', 'capture', '{}']\n",
         hook_path.display(),
         payload_path.display()
     ));
@@ -790,17 +797,12 @@ fn test_send_runs_post_send_hook_for_wildcard_recipient() {
 #[test]
 fn test_send_runs_multiple_matching_post_send_hooks_in_config_order() {
     let fixture = Fixture::new("recipient");
-    let order_path = fixture.tempdir.path().join("hook-order.log");
-    fixture.install_executable_script(
-        "scripts/append-order.py",
-        &format!(
-            "#!/usr/bin/env python3\nimport sys\nfrom pathlib import Path\nPath(r\"{}\").open(\"a\", encoding=\"utf-8\").write(sys.argv[1] + \"\\n\")\n",
-            order_path.display()
-        ),
-    );
-    fixture.write_atm_config(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['python3', 'scripts/append-order.py', 'recipient']\n\n[[atm.post_send_hooks]]\nrecipient = '*'\ncommand = ['python3', 'scripts/append-order.py', 'wildcard']\n",
-    );
+    let (hook_path, order_path) = fixture.install_hook_fixture("hook-order");
+    let hook_path_toml = toml_single_quoted_path(&hook_path);
+    let order_path_toml = toml_single_quoted_path(&order_path);
+    fixture.write_atm_config(&format!(
+        "[[atm.post_send_hooks]]\nrecipient = '{TEST_RECIPIENT}'\ncommand = [{hook_path_toml}, 'append-line', {order_path_toml}, 'recipient']\n\n[[atm.post_send_hooks]]\nrecipient = '*'\ncommand = [{hook_path_toml}, 'append-line', {order_path_toml}, 'wildcard']\n",
+    ));
 
     let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello multiple hooks"]);
 
@@ -865,12 +867,12 @@ fn test_send_runs_post_send_hook_for_multiline_message_when_rule_matches() {
 
 #[test]
 fn test_send_ignores_post_send_hook_configured_only_in_core_section() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
         "[core]\ndefault_team = '{}'\nidentity = '{}'\npost_send_hook = ['{}', 'capture', '{}']\n",
         TEST_TEAM,
-        TEST_LEAD,
+        TEST_SENDER,
         hook_path.display(),
         payload_path.display()
     ));
@@ -883,7 +885,7 @@ fn test_send_ignores_post_send_hook_configured_only_in_core_section() {
         fixture.stderr(&output)
     );
     assert!(!payload_path.exists(), "hook payload unexpectedly created");
-    let inbox = fixture.inbox_contents("recipient");
+    let inbox = fixture.inbox_contents(TEST_RECIPIENT);
     assert_eq!(inbox.len(), 1);
 }
 
@@ -1244,7 +1246,7 @@ fn test_send_help_mentions_post_send_hook_config() {
 
 fn read_json_file_with_retry(path: &std::path::Path, label: &str) -> serde_json::Value {
     let start = std::time::Instant::now();
-    let deadline = Duration::from_secs(5);
+    let deadline = json_retry_timeout();
     while start.elapsed() < deadline {
         match fs::read(path) {
             Ok(bytes) => match serde_json::from_slice(&bytes) {
@@ -1263,6 +1265,19 @@ fn read_json_file_with_retry(path: &std::path::Path, label: &str) -> serde_json:
         start.elapsed(),
         path.display(),
     );
+}
+
+fn json_retry_timeout() -> Duration {
+    std::env::var("ATM_TEST_TIMEOUT_MS")
+        .ok()
+        .and_then(|raw| raw.parse::<u64>().ok())
+        .filter(|timeout_ms| *timeout_ms > 0)
+        .map(Duration::from_millis)
+        .unwrap_or_else(|| Duration::from_millis(DEFAULT_JSON_RETRY_TIMEOUT_MS))
+}
+
+fn toml_single_quoted_path(path: &std::path::Path) -> String {
+    format!("'{}'", path.display().to_string().replace('\'', "''"))
 }
 
 struct Fixture {

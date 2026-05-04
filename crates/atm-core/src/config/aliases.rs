@@ -17,6 +17,8 @@ pub fn preferred_alias(canonical: &str, config: Option<&AtmConfig>) -> Option<St
 }
 
 #[cfg(test)]
+// rule-008: allow-start -- alias tests intentionally exercise literal alias
+// targets as the subject under test.
 mod tests {
     use std::collections::BTreeMap;
 
@@ -53,3 +55,4 @@ mod tests {
         assert_eq!(preferred_alias("arch-ctm", Some(&config)), None);
     }
 }
+// rule-008: allow-end

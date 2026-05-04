@@ -8,17 +8,20 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::config;
 use crate::error_codes::AtmErrorCode;
+use crate::mailbox::lock;
 use crate::observability::ObservabilityPort;
+use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::AgentMember;
 use crate::team_admin::{MemberSummary, MembersList};
 use crate::types::{AgentName, TeamName};
+use serde::{Deserialize, Serialize};
 
 pub use report::{
-    DoctorEnvironmentVisibility, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
-    DoctorSummary,
+    DoctorEnvironmentVisibility, DoctorFinding, DoctorReport, DoctorRuntimeHealth, DoctorSeverity,
+    DoctorStatus, DoctorSummary,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DoctorQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
@@ -74,6 +77,7 @@ pub fn run_doctor(
     let member_roster = resolved_team
         .as_deref()
         .and_then(|team| load_member_roster(&home_dir, team, config.as_ref(), &mut findings));
+    sweep_stale_mailbox_locks(&home_dir, &mut findings);
     push_stale_mailbox_lock_findings(
         &initial_lock_snapshot,
         &snapshot_mailbox_lock_paths(&home_dir),
@@ -96,6 +100,7 @@ pub fn run_doctor(
 
     let message = match status {
         DoctorStatus::Healthy => "ATM doctor completed with healthy findings only",
+        DoctorStatus::Unavailable => "ATM doctor completed with unavailable runtime details",
         DoctorStatus::Warning => "ATM doctor completed with warnings",
         DoctorStatus::Error => "ATM doctor found critical issues",
     };
@@ -113,7 +118,40 @@ pub fn run_doctor(
         environment,
         member_roster,
         observability: observability_health,
+        runtime: Some(default_runtime_health(&home_dir, resolved_team.as_ref())),
     })
+}
+
+fn default_runtime_health(
+    home_dir: &Path,
+    resolved_team: Option<&TeamName>,
+) -> DoctorRuntimeHealth {
+    let sqlite_runtime_detail = resolved_team
+        .and_then(|team| crate::home::mail_db_path_from_home(home_dir, team).ok())
+        .map(|path| {
+            if path.exists() {
+                format!("SQLite path {} exists but no daemon runtime supplied live health", path.display())
+            } else {
+                format!(
+                    "SQLite path {} is expected for the active team, but no daemon runtime supplied live health",
+                    path.display()
+                )
+            }
+        })
+        .unwrap_or_else(|| {
+            "doctor could not resolve a team-specific SQLite path because no active team was available"
+                .to_string()
+        });
+    DoctorRuntimeHealth {
+        singleton_state: DoctorStatus::Unavailable,
+        singleton_detail: "daemon runtime state unavailable in core-only doctor execution"
+            .to_string(),
+        status_cache_state: DoctorStatus::Unavailable,
+        status_cache_detail: "daemon status cache is unavailable in core-only doctor execution"
+            .to_string(),
+        sqlite_runtime_state: DoctorStatus::Unavailable,
+        sqlite_runtime_detail,
+    }
 }
 
 fn load_member_roster(
@@ -271,7 +309,10 @@ fn snapshot_mailbox_lock_paths(home_dir: &Path) -> BTreeSet<PathBuf> {
         };
         for lock_entry in lock_entries.filter_map(Result::ok) {
             let path = lock_entry.path();
-            if path.extension().and_then(|ext| ext.to_str()) != Some("lock") {
+            let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if !(file_name.ends_with(".lock") || file_name.contains(".lock.")) {
                 continue;
             }
             if !lock_entry
@@ -285,6 +326,23 @@ fn snapshot_mailbox_lock_paths(home_dir: &Path) -> BTreeSet<PathBuf> {
     }
 
     locks
+}
+
+fn sweep_stale_mailbox_locks(home_dir: &Path, findings: &mut Vec<DoctorFinding>) {
+    let teams_root = home_dir.join(".claude").join("teams");
+    let Ok(team_entries) = fs::read_dir(&teams_root) else {
+        return;
+    };
+
+    for team_entry in team_entries.filter_map(Result::ok) {
+        let inboxes_dir = team_entry.path().join("inboxes");
+        if !inboxes_dir.is_dir() {
+            continue;
+        }
+        if let Err(error) = lock::sweep_stale_lock_sentinels(&inboxes_dir) {
+            push_doctor_error(findings, DoctorSeverity::Error, error);
+        }
+    }
 }
 
 fn push_stale_mailbox_lock_findings(
@@ -330,15 +388,17 @@ fn ordered_member_summaries(members: &[AgentMember], baseline: &[TeamName]) -> V
     let mut ordered = Vec::new();
     let mut included = BTreeSet::new();
 
-    if baseline.iter().any(|member| member.as_str() == "team-lead")
-        && let Some(team_lead) = members.iter().find(|member| member.name == "team-lead")
+    if baseline
+        .iter()
+        .any(|member| member.as_str() == ROLE_TEAM_LEAD)
+        && let Some(team_lead) = members.iter().find(|member| member.name == ROLE_TEAM_LEAD)
     {
         ordered.push(member_summary(team_lead));
         included.insert(team_lead.name.clone());
     }
 
     for baseline_member in baseline {
-        if baseline_member.as_str() == "team-lead" {
+        if baseline_member.as_str() == ROLE_TEAM_LEAD {
             continue;
         }
         if let Some(member) = members
@@ -377,6 +437,8 @@ fn member_summary(member: &AgentMember) -> MemberSummary {
 }
 
 #[cfg(test)]
+// rule-008: allow-start -- doctor tests use explicit fixture identities in
+// serialized config/report payloads; exceptions stay visible at module scope.
 mod tests {
     use std::path::PathBuf;
 
@@ -732,7 +794,7 @@ mod tests {
     }
 
     #[test]
-    fn run_doctor_reports_stale_mailbox_lock_as_warning() {
+    fn run_doctor_sweeps_stale_mailbox_lock_before_reporting() {
         let paths = TestPaths::new();
         paths.write_team_layout(&["arch-ctm"]);
         let stale_lock = paths.team_dir().join("inboxes").join("arch-ctm.json.lock");
@@ -750,13 +812,15 @@ mod tests {
         )
         .expect("doctor report");
 
-        assert_eq!(report.summary.status, DoctorStatus::Warning);
+        assert_eq!(report.summary.status, DoctorStatus::Healthy);
         assert!(
-            report.findings.iter().any(|finding| {
-                finding.code == AtmErrorCode::WarningStaleMailboxLock
-                    && finding.message.contains(&stale_lock.display().to_string())
-            }),
+            report
+                .findings
+                .iter()
+                .all(|finding| finding.code != AtmErrorCode::WarningStaleMailboxLock),
             "{report:#?}"
         );
+        assert!(!stale_lock.exists(), "doctor should sweep stale sentinel");
     }
 }
+// rule-008: allow-end

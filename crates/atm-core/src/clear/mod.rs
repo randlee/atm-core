@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use chrono::{DateTime, TimeDelta, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::debug;
 
@@ -12,17 +12,19 @@ use crate::config;
 use crate::error::AtmError;
 use crate::home;
 use crate::identity;
+use crate::inbox_ingress::InboxIngress;
+use crate::mail_store::VisibilityStateRecord;
 use crate::mailbox;
 use crate::mailbox::source::{SourceFile, SourcedMessage, resolve_target};
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
-use crate::read::state;
+use crate::read::{self, ClassifiedMessage, ReadStore, project_messages_for_recipient, state};
 use crate::schema::MessageEnvelope;
-use crate::types::{AgentName, MessageClass, SourceIndex, TeamName};
+use crate::types::{AgentName, IsoTimestamp, MessageClass, SourceIndex, TeamName};
 use crate::workflow;
 
 /// Parameters for clearing read or acknowledged mailbox messages.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClearQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
@@ -35,22 +37,26 @@ pub struct ClearQuery {
 }
 
 /// Counts of removed mailbox messages by ATM display class.
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RemovedByClass {
     pub acknowledged: usize,
     pub read: usize,
 }
 
 /// Result of one mailbox cleanup command.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClearOutcome {
-    pub action: &'static str,
+    pub action: String,
     pub team: TeamName,
     pub agent: AgentName,
     pub removed_total: usize,
     pub remaining_total: usize,
     pub removed_by_class: RemovedByClass,
 }
+
+pub trait ClearStore: ReadStore {}
+
+impl<T> ClearStore for T where T: ReadStore + ?Sized {}
 
 /// Remove read or acknowledged messages from one mailbox surface.
 ///
@@ -161,7 +167,7 @@ pub fn clear_mail(
     };
 
     let outcome = ClearOutcome {
-        action: "clear",
+        action: "clear".to_string(),
         team: target.team.clone(),
         agent: target.agent.clone(),
         removed_total,
@@ -185,6 +191,135 @@ pub fn clear_mail(
     });
 
     Ok(outcome)
+}
+
+pub fn clear_mail_via_store(
+    query: ClearQuery,
+    store: &dyn ClearStore,
+    ingress: &dyn InboxIngress,
+    observability: &dyn ObservabilityPort,
+) -> Result<ClearOutcome, AtmError> {
+    let config = config::load_config(&query.current_dir)?;
+    let actor = identity::resolve_actor_identity(query.actor_override.as_deref(), config.as_ref())?;
+    let target = resolve_target(
+        query.target_address.as_ref(),
+        &actor,
+        query.team_override.as_ref(),
+        config.as_ref(),
+    )?;
+
+    let team_dir = home::team_dir_from_home(&query.home_dir, &target.team)?;
+    if !team_dir.exists() {
+        return Err(AtmError::team_not_found(&target.team).with_recovery(
+            "Create the team config for the requested team or target a different team before retrying `atm clear`.",
+        ));
+    }
+
+    let team_config = config::load_team_config(&team_dir)?;
+    if target.explicit
+        && !team_config
+            .members
+            .iter()
+            .any(|member| member.name == target.agent.as_str())
+    {
+        return Err(
+            AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
+                "Update the team membership in config.json or clear a different mailbox target.",
+            ),
+        );
+    }
+
+    ingress.ingest_mailbox_state(
+        &query.home_dir,
+        &target.team,
+        &target.agent,
+        store,
+        observability,
+    )?;
+
+    let cutoff = cutoff_timestamp(query.older_than)?;
+    let projected = project_messages_for_recipient(store, &target.team, &target.agent)?;
+    let (removable, removed_by_class, visible_total) =
+        removable_projected_messages(&projected, cutoff, query.idle_only);
+
+    let removed_total = removable.len();
+    if !query.dry_run && !removable.is_empty() {
+        let cleared_at = IsoTimestamp::now();
+        let updates = removable
+            .iter()
+            .map(|message| {
+                Ok(VisibilityStateRecord {
+                    message_key: read::projection::projected_message_key(message)?,
+                    read_at: message.envelope.read.then_some(message.envelope.timestamp),
+                    cleared_at: Some(cleared_at),
+                })
+            })
+            .collect::<Result<Vec<_>, AtmError>>()?;
+        store.upsert_visibility_batch(&updates).map_err(|error| {
+            AtmError::mailbox_write("failed to persist SQLite clear visibility state")
+                .with_source(error)
+        })?;
+    }
+
+    let outcome = ClearOutcome {
+        action: "clear".to_string(),
+        team: target.team.clone(),
+        agent: target.agent.clone(),
+        removed_total,
+        remaining_total: visible_total.saturating_sub(removed_total),
+        removed_by_class,
+    };
+
+    let _ = observability.emit(CommandEvent {
+        command: "clear",
+        action: "clear",
+        outcome: if query.dry_run { "dry_run" } else { "ok" },
+        team: outcome.team.clone(),
+        agent: outcome.agent.clone(),
+        sender: actor.clone(),
+        message_id: None,
+        requires_ack: false,
+        dry_run: query.dry_run,
+        task_id: None,
+        error_code: None,
+        error_message: None,
+    });
+
+    Ok(outcome)
+}
+
+fn removable_projected_messages(
+    messages: &[ClassifiedMessage],
+    cutoff: Option<DateTime<Utc>>,
+    idle_only: bool,
+) -> (Vec<ClassifiedMessage>, RemovedByClass, usize) {
+    let mut removed_by_class = RemovedByClass::default();
+    let removable = messages
+        .iter()
+        .filter(|message| is_clearable_projected(message, cutoff, idle_only))
+        .inspect(|message| {
+            count_removed(
+                &mut removed_by_class,
+                state::classify_message(&message.envelope),
+            )
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    (removable, removed_by_class, messages.len())
+}
+
+fn is_clearable_projected(
+    message: &ClassifiedMessage,
+    cutoff: Option<DateTime<Utc>>,
+    idle_only: bool,
+) -> bool {
+    matches!(
+        state::classify_message(&message.envelope),
+        MessageClass::Read | MessageClass::Acknowledged
+    ) && cutoff
+        .map(|cutoff| message.envelope.timestamp.into_inner() <= cutoff)
+        .unwrap_or(true)
+        && (!idle_only || is_idle_notification(&message.envelope))
 }
 
 fn merged_surface(

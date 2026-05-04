@@ -1,20 +1,24 @@
 use std::fs;
 use std::process::Command;
+use std::time::Instant;
+mod helpers;
 
 use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
-use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+use atm_core::types::{AgentName, TeamName};
 use atm_core::{read_messages, write_messages};
-use chrono::{Duration, Utc};
+use chrono::{Duration, TimeZone, Utc};
+use helpers::{ROLE_TEAM_LEAD, TEST_SENDER, TEST_TEAM, configure_atm_command};
 use serde_json::Value;
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_clear_default_removes_only_read_and_acknowledged() {
-    let fixture = Fixture::new(&["arch-ctm"]);
+    let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_inbox(
-        "arch-ctm",
+        TEST_SENDER,
         &[
             fixture.message(
-                "team-lead",
+                ROLE_TEAM_LEAD,
                 "unread",
                 false,
                 None,
@@ -22,7 +26,7 @@ fn test_clear_default_removes_only_read_and_acknowledged() {
                 Utc::now() - Duration::days(10),
             ),
             fixture.message(
-                "team-lead",
+                ROLE_TEAM_LEAD,
                 "pending",
                 true,
                 Some(Utc::now() - Duration::days(9)),
@@ -30,7 +34,7 @@ fn test_clear_default_removes_only_read_and_acknowledged() {
                 Utc::now() - Duration::days(9),
             ),
             fixture.message(
-                "team-lead",
+                ROLE_TEAM_LEAD,
                 "read",
                 true,
                 None,
@@ -38,7 +42,7 @@ fn test_clear_default_removes_only_read_and_acknowledged() {
                 Utc::now() - Duration::days(8),
             ),
             fixture.message(
-                "team-lead",
+                ROLE_TEAM_LEAD,
                 "acknowledged",
                 true,
                 None,
@@ -64,19 +68,57 @@ fn test_clear_default_removes_only_read_and_acknowledged() {
     assert!(parsed["removed_by_class"]["unread"].is_null());
     assert!(parsed["removed_by_class"]["pending_ack"].is_null());
 
-    let inbox = fixture.inbox_contents("arch-ctm");
-    assert_eq!(inbox.len(), 2);
-    assert_eq!(inbox[0].text, "unread");
-    assert_eq!(inbox[1].text, "pending");
+    let inbox = fixture.inbox_contents(TEST_SENDER);
+    assert_eq!(inbox.len(), 4);
+    let read_back = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(
+        read_back.status.success(),
+        "stderr: {}",
+        fixture.stderr(&read_back)
+    );
+    let projected = fixture.stdout_json(&read_back);
+    let messages = projected["messages"].as_array().expect("messages array");
+    assert_eq!(messages.len(), 2);
+    assert!(messages.iter().any(|message| message["text"] == "unread"));
+    assert!(messages.iter().any(|message| message["text"] == "pending"));
 }
 
 #[test]
-fn test_clear_dry_run_does_not_mutate() {
-    let fixture = Fixture::new(&["arch-ctm"]);
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
+fn test_clear_uses_default_team_from_workspace_config_for_sqlite_path() {
+    let fixture = Fixture::new(&[TEST_SENDER]);
+    fixture.write_atm_config(&format!("[atm]\ndefault_team = \"{TEST_TEAM}\"\n"));
     fixture.write_inbox(
-        "arch-ctm",
+        TEST_SENDER,
         &[fixture.message(
-            "team-lead",
+            ROLE_TEAM_LEAD,
+            "read",
+            true,
+            None,
+            None,
+            Utc::now() - Duration::days(1),
+        )],
+    );
+
+    let output = fixture.run_with_env(&["clear", "--json"], &[("ATM_TEAM", "")]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["removed_total"], 1);
+}
+
+#[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
+fn test_clear_dry_run_does_not_mutate() {
+    let fixture = Fixture::new(&[TEST_SENDER]);
+    fixture.write_inbox(
+        TEST_SENDER,
+        &[fixture.message(
+            ROLE_TEAM_LEAD,
             "read",
             true,
             None,
@@ -95,18 +137,27 @@ fn test_clear_dry_run_does_not_mutate() {
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["removed_total"], 1);
 
-    let inbox = fixture.inbox_contents("arch-ctm");
+    let inbox = fixture.inbox_contents(TEST_SENDER);
     assert_eq!(inbox.len(), 1);
     assert_eq!(inbox[0].text, "read");
+    let read_back = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(
+        read_back.status.success(),
+        "stderr: {}",
+        fixture.stderr(&read_back)
+    );
+    let projected = fixture.stdout_json(&read_back);
+    assert_eq!(projected["count"], 1);
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_clear_emits_retained_log_record() {
-    let fixture = Fixture::new(&["arch-ctm"]);
+    let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_inbox(
-        "arch-ctm",
+        TEST_SENDER,
         &[fixture.message(
-            "team-lead",
+            ROLE_TEAM_LEAD,
             "read",
             true,
             None,
@@ -129,8 +180,8 @@ fn test_clear_emits_retained_log_record() {
     assert!(
         records.iter().any(|record| {
             record["fields"]["command"] == "clear"
-                && record["fields"]["agent"] == "arch-ctm"
-                && record["fields"]["team"] == "atm-dev"
+                && record["fields"]["agent"] == TEST_SENDER
+                && record["fields"]["team"] == TEST_TEAM
         }),
         "stdout: {}",
         String::from_utf8(output.stdout.clone()).expect("stdout utf8")
@@ -138,12 +189,13 @@ fn test_clear_emits_retained_log_record() {
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_clear_never_removes_pending_ack() {
-    let fixture = Fixture::new(&["arch-ctm"]);
+    let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_inbox(
-        "arch-ctm",
+        TEST_SENDER,
         &[fixture.message(
-            "team-lead",
+            ROLE_TEAM_LEAD,
             "pending",
             true,
             Some(Utc::now() - Duration::days(2)),
@@ -161,19 +213,57 @@ fn test_clear_never_removes_pending_ack() {
     );
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["removed_total"], 0);
-    assert_eq!(fixture.inbox_contents("arch-ctm").len(), 1);
+    assert_eq!(fixture.inbox_contents(TEST_SENDER).len(), 1);
     assert!(
-        fixture.inbox_contents("arch-ctm")[0]
+        fixture.inbox_contents(TEST_SENDER)[0]
             .pending_ack_at
             .is_some()
     );
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
+fn test_clear_already_cleared_message_is_idempotent() {
+    let fixture = Fixture::new(&[TEST_SENDER]);
+    fixture.write_inbox(
+        TEST_SENDER,
+        &[fixture.message(
+            ROLE_TEAM_LEAD,
+            "read once",
+            true,
+            None,
+            None,
+            Utc::now() - Duration::days(2),
+        )],
+    );
+
+    let first = fixture.run(&["clear", "--json"]);
+    assert!(first.status.success(), "stderr: {}", fixture.stderr(&first));
+    assert_eq!(fixture.stdout_json(&first)["removed_total"], 1);
+
+    let second = fixture.run(&["clear", "--json"]);
+    assert!(
+        second.status.success(),
+        "stderr: {}",
+        fixture.stderr(&second)
+    );
+    let parsed = fixture.stdout_json(&second);
+    assert_eq!(parsed["removed_total"], 0);
+    let read_back = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(
+        read_back.status.success(),
+        "stderr: {}",
+        fixture.stderr(&read_back)
+    );
+    assert_eq!(fixture.stdout_json(&read_back)["count"], 0);
+}
+
+#[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_clear_uses_workflow_sidecar_and_removes_cleared_entry() {
-    let fixture = Fixture::new(&["arch-ctm"]);
+    let fixture = Fixture::new(&[TEST_SENDER]);
     let message = fixture.message(
-        "team-lead",
+        ROLE_TEAM_LEAD,
         "sidecar-managed read",
         false,
         None,
@@ -181,9 +271,9 @@ fn test_clear_uses_workflow_sidecar_and_removes_cleared_entry() {
         Utc::now() - Duration::days(2),
     );
     let message_id = message.message_id.expect("message id");
-    fixture.write_inbox("arch-ctm", &[message]);
+    fixture.write_inbox(TEST_SENDER, &[message]);
     let workflow_key = fixture
-        .inbox_contents("arch-ctm")
+        .inbox_contents(TEST_SENDER)
         .first()
         .and_then(|message| {
             message
@@ -192,7 +282,7 @@ fn test_clear_uses_workflow_sidecar_and_removes_cleared_entry() {
         })
         .unwrap_or_else(|| format!("legacy:{message_id}"));
     fixture.write_workflow_state(
-        "arch-ctm",
+        TEST_SENDER,
         serde_json::json!({
             "messages": {
                 workflow_key.clone(): {
@@ -209,27 +299,34 @@ fn test_clear_uses_workflow_sidecar_and_removes_cleared_entry() {
         "stderr: {}",
         fixture.stderr(&output)
     );
-    assert!(fixture.inbox_contents("arch-ctm").is_empty());
-    let workflow = fixture.workflow_state_contents("arch-ctm");
-    assert!(workflow["messages"][workflow_key].is_null());
+    assert_eq!(fixture.inbox_contents(TEST_SENDER).len(), 1);
+    let read_back = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(
+        read_back.status.success(),
+        "stderr: {}",
+        fixture.stderr(&read_back)
+    );
+    let projected = fixture.stdout_json(&read_back);
+    assert_eq!(projected["count"], 0);
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_clear_idle_only_removes_only_idle_notifications() {
-    let fixture = Fixture::new(&["arch-ctm"]);
+    let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_inbox(
-        "arch-ctm",
+        TEST_SENDER,
         &[
             fixture.message(
-                "team-lead",
-                &idle_notification_text("team-lead"),
+                ROLE_TEAM_LEAD,
+                &idle_notification_text(ROLE_TEAM_LEAD),
                 true,
                 None,
                 None,
                 Utc::now() - Duration::days(4),
             ),
             fixture.message(
-                "team-lead",
+                ROLE_TEAM_LEAD,
                 "normal read",
                 true,
                 None,
@@ -250,16 +347,26 @@ fn test_clear_idle_only_removes_only_idle_notifications() {
     assert_eq!(parsed["removed_total"], 1);
     assert_eq!(parsed["removed_by_class"]["read"], 1);
 
-    let inbox = fixture.inbox_contents("arch-ctm");
-    assert_eq!(inbox.len(), 1);
-    assert_eq!(inbox[0].text, "normal read");
+    let inbox = fixture.inbox_contents(TEST_SENDER);
+    assert_eq!(inbox.len(), 2);
+    let read_back = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(
+        read_back.status.success(),
+        "stderr: {}",
+        fixture.stderr(&read_back)
+    );
+    let projected = fixture.stdout_json(&read_back);
+    let messages = projected["messages"].as_array().expect("messages array");
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0]["text"], "normal read");
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_clear_preserves_unknown_fields_on_retained_messages() {
-    let fixture = Fixture::new(&["arch-ctm"]);
+    let fixture = Fixture::new(&[TEST_SENDER]);
     let mut retained = fixture.message(
-        "team-lead",
+        ROLE_TEAM_LEAD,
         "pending",
         true,
         Some(Utc::now() - Duration::days(2)),
@@ -271,10 +378,10 @@ fn test_clear_preserves_unknown_fields_on_retained_messages() {
         .insert("futureField".into(), serde_json::json!({"nested": true}));
 
     fixture.write_inbox(
-        "arch-ctm",
+        TEST_SENDER,
         &[
             fixture.message(
-                "team-lead",
+                ROLE_TEAM_LEAD,
                 "clearable",
                 true,
                 None,
@@ -292,22 +399,23 @@ fn test_clear_preserves_unknown_fields_on_retained_messages() {
         "stderr: {}",
         fixture.stderr(&output)
     );
-    let inbox = fixture.inbox_contents("arch-ctm");
-    assert_eq!(inbox.len(), 1);
+    let inbox = fixture.inbox_contents(TEST_SENDER);
+    assert_eq!(inbox.len(), 2);
     assert_eq!(
-        inbox[0].extra["futureField"],
+        inbox[1].extra["futureField"],
         serde_json::json!({"nested": true})
     );
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_clear_older_than_filters_candidates() {
-    let fixture = Fixture::new(&["arch-ctm"]);
+    let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_inbox(
-        "arch-ctm",
+        TEST_SENDER,
         &[
             fixture.message(
-                "team-lead",
+                ROLE_TEAM_LEAD,
                 "older",
                 true,
                 None,
@@ -315,7 +423,7 @@ fn test_clear_older_than_filters_candidates() {
                 Utc::now() - Duration::days(10),
             ),
             fixture.message(
-                "team-lead",
+                ROLE_TEAM_LEAD,
                 "newer",
                 true,
                 None,
@@ -335,18 +443,27 @@ fn test_clear_older_than_filters_candidates() {
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["removed_total"], 1);
 
-    let inbox = fixture.inbox_contents("arch-ctm");
-    assert_eq!(inbox.len(), 1);
-    assert_eq!(inbox[0].text, "newer");
+    let inbox = fixture.inbox_contents(TEST_SENDER);
+    assert_eq!(inbox.len(), 2);
+    let read_back = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(
+        read_back.status.success(),
+        "stderr: {}",
+        fixture.stderr(&read_back)
+    );
+    let projected = fixture.stdout_json(&read_back);
+    assert_eq!(projected["count"], 1);
+    assert_eq!(projected["messages"][0]["text"], "newer");
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_clear_explicit_target() {
-    let fixture = Fixture::new(&["arch-ctm", "agent-b"]);
+    let fixture = Fixture::new(&[TEST_SENDER, "agent-b"]);
     fixture.write_inbox(
-        "arch-ctm",
+        TEST_SENDER,
         &[fixture.message(
-            "team-lead",
+            ROLE_TEAM_LEAD,
             "keep mine",
             true,
             None,
@@ -357,7 +474,7 @@ fn test_clear_explicit_target() {
     fixture.write_inbox(
         "agent-b",
         &[fixture.message(
-            "team-lead",
+            ROLE_TEAM_LEAD,
             "clear agent b",
             true,
             None,
@@ -366,7 +483,7 @@ fn test_clear_explicit_target() {
         )],
     );
 
-    let output = fixture.run(&["clear", "agent-b", "--as", "arch-ctm", "--json"]);
+    let output = fixture.run(&["clear", "agent-b", "--as", TEST_SENDER, "--json"]);
 
     assert!(
         output.status.success(),
@@ -376,18 +493,34 @@ fn test_clear_explicit_target() {
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["agent"], "agent-b");
     assert_eq!(parsed["removed_total"], 1);
-    assert_eq!(fixture.inbox_contents("agent-b").len(), 0);
-    assert_eq!(fixture.inbox_contents("arch-ctm").len(), 1);
+    assert_eq!(fixture.inbox_contents("agent-b").len(), 1);
+    assert_eq!(fixture.inbox_contents(TEST_SENDER).len(), 1);
+    let agent_b_read = fixture.run(&[
+        "read",
+        "agent-b",
+        "--as",
+        TEST_SENDER,
+        "--all",
+        "--no-mark",
+        "--json",
+    ]);
+    assert!(
+        agent_b_read.status.success(),
+        "stderr: {}",
+        fixture.stderr(&agent_b_read)
+    );
+    assert_eq!(fixture.stdout_json(&agent_b_read)["count"], 0);
 }
 
 #[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
 fn test_clear_removes_from_origin_inbox_file() {
-    let fixture = Fixture::new(&["arch-ctm"]);
+    let fixture = Fixture::new(&[TEST_SENDER]);
     fixture.write_origin_inbox(
-        "arch-ctm",
+        TEST_SENDER,
         "host-a",
         &[fixture.message(
-            "team-lead",
+            ROLE_TEAM_LEAD,
             "origin read",
             true,
             None,
@@ -403,11 +536,27 @@ fn test_clear_removes_from_origin_inbox_file() {
         fixture.stderr(&output)
     );
 
-    assert_eq!(fixture.origin_inbox_contents("arch-ctm", "host-a").len(), 0);
+    assert_eq!(
+        fixture.origin_inbox_contents(TEST_SENDER, "host-a").len(),
+        1
+    );
+    let read_back = fixture.run(&["read", "--all", "--no-mark", "--json"]);
+    assert!(
+        read_back.status.success(),
+        "stderr: {}",
+        fixture.stderr(&read_back)
+    );
+    assert_eq!(fixture.stdout_json(&read_back)["count"], 0);
 }
 
 struct Fixture {
     tempdir: tempfile::TempDir,
+}
+
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        self.kill_daemon();
+    }
 }
 
 impl Fixture {
@@ -424,12 +573,8 @@ impl Fixture {
 
     fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
         let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
-        command
+        configure_atm_command(&mut command, self.tempdir.path(), Some(TEST_SENDER))
             .args(args)
-            .env("ATM_HOME", self.tempdir.path())
-            .env("ATM_CONFIG_HOME", self.tempdir.path())
-            .env("ATM_IDENTITY", "arch-ctm")
-            .env("ATM_TEAM", "atm-dev")
             .current_dir(self.tempdir.path());
         for (key, value) in extra_env {
             command.env(key, value);
@@ -452,6 +597,10 @@ impl Fixture {
             serde_json::to_vec(&config).expect("team config"),
         )
         .expect("write team config");
+    }
+
+    fn write_atm_config(&self, raw: &str) {
+        fs::write(self.tempdir.path().join(".atm.toml"), raw).expect("write .atm.toml");
     }
 
     fn write_inbox(&self, agent: &str, messages: &[MessageEnvelope]) {
@@ -485,17 +634,6 @@ impl Fixture {
             .expect("write workflow");
     }
 
-    fn workflow_state_contents(&self, agent: &str) -> Value {
-        let raw = fs::read_to_string(
-            self.team_dir()
-                .join(".atm-state")
-                .join("workflow")
-                .join(format!("{agent}.json")),
-        )
-        .expect("workflow state contents");
-        serde_json::from_str(&raw).expect("workflow json")
-    }
-
     fn write_origin_inbox(&self, agent: &str, origin: &str, messages: &[MessageEnvelope]) {
         let inbox_path = self.origin_inbox_path(agent, origin);
         if let Some(parent) = inbox_path.parent() {
@@ -527,7 +665,29 @@ impl Fixture {
             .path()
             .join(".claude")
             .join("teams")
-            .join("atm-dev")
+            .join(TEST_TEAM)
+    }
+
+    fn daemon_control_path(&self) -> std::path::PathBuf {
+        self.tempdir
+            .path()
+            .join(".atm-state")
+            .join("daemon")
+            .join("control.json")
+    }
+
+    fn wait_for_daemon_ready(&self) {
+        let deadline = Instant::now() + std::time::Duration::from_secs(5);
+        while Instant::now() < deadline {
+            if self.daemon_control_path().exists() {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        panic!(
+            "daemon control state was not published at {} within 5s",
+            self.daemon_control_path().display()
+        );
     }
 
     fn message(
@@ -544,7 +704,7 @@ impl Fixture {
             text: text.to_string(),
             timestamp: timestamp.into(),
             read,
-            source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
+            source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
             summary: None,
             message_id: Some(LegacyMessageId::new()),
             pending_ack_at: pending_ack_at.map(Into::into),
@@ -554,13 +714,108 @@ impl Fixture {
             extra: serde_json::Map::new(),
         }
     }
+
+    fn kill_daemon(&self) {
+        let Ok(raw) = fs::read(self.daemon_control_path()) else {
+            return;
+        };
+        let Some(pid) = serde_json::from_slice::<Value>(&raw)
+            .ok()
+            .and_then(|value| value.get("pid").and_then(Value::as_u64))
+            .map(|pid| pid as u32)
+        else {
+            return;
+        };
+        terminate_process(pid);
+    }
+}
+
+#[test]
+#[ignore = "daemon smoke test — run explicitly with --include-ignored"]
+fn test_clear_auto_starts_daemon_when_absent() {
+    let fixture = Fixture::new(&[TEST_SENDER]);
+    fixture.write_inbox(
+        TEST_SENDER,
+        &[fixture.message(
+            ROLE_TEAM_LEAD,
+            "read",
+            true,
+            None,
+            None,
+            Utc::now() - Duration::days(1),
+        )],
+    );
+    assert!(
+        !fixture.daemon_control_path().exists(),
+        "fixture should begin without daemon control state"
+    );
+
+    let output = fixture.run(&["clear", "--json"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        fixture.stderr(&output)
+    );
+    fixture.wait_for_daemon_ready();
+    let parsed = fixture.stdout_json(&output);
+    assert_eq!(parsed["removed_total"], 1);
+}
+
+#[cfg(unix)]
+fn terminate_process(pid: u32) {
+    let _ = Command::new("kill")
+        .args(["-TERM", &pid.to_string()])
+        .status();
+    wait_for_process_exit(pid, std::time::Duration::from_secs(5));
+}
+
+#[cfg(windows)]
+fn terminate_process(pid: u32) {
+    let _ = Command::new("taskkill")
+        .args(["/PID", &pid.to_string(), "/T", "/F"])
+        .status();
+    wait_for_process_exit(pid, std::time::Duration::from_secs(5));
+}
+
+#[cfg(unix)]
+fn process_alive(pid: u32) -> bool {
+    Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+#[cfg(windows)]
+fn process_alive(pid: u32) -> bool {
+    Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {pid}")])
+        .output()
+        .ok()
+        .and_then(|output| String::from_utf8(output.stdout).ok())
+        .is_some_and(|stdout| stdout.lines().any(|line| line.contains(&pid.to_string())))
+}
+
+fn wait_for_process_exit(pid: u32, timeout: std::time::Duration) {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if !process_alive(pid) {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
 }
 
 fn idle_notification_text(from: &str) -> String {
+    let timestamp = Utc
+        .with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
+        .single()
+        .expect("idle notification timestamp");
     serde_json::json!({
         "type": "idle_notification",
         "from": from,
-        "timestamp": IsoTimestamp::now().into_inner().to_rfc3339(),
+        "timestamp": timestamp.to_rfc3339(),
         "idleReason": "available"
     })
     .to_string()

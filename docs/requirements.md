@@ -1364,6 +1364,8 @@ Bare `atm teams` must:
 `atm teams backup` must:
 - create a timestamped snapshot under the ATM team backup area
 - capture the current `config.json`
+- capture the ATM-owned `.atm-state` tree, including SQLite durable state
+  (`mail.db`) and workflow compatibility state when present
 - capture team inbox files, excluding transient `*.lock` sentinels, dotfiles,
   and restore markers
 - capture the ATM team task bucket
@@ -1378,9 +1380,10 @@ Bare `atm teams` must:
 - add only missing non-lead members from the snapshot
 - clear runtime-only restored-member fields such as session, activity, and
   pane state before persisting them
+- restore the ATM-owned `.atm-state` tree from the chosen snapshot when present
 - restore non-lead inbox files from the chosen snapshot deterministically
-- sweep stale inbox `*.lock` sentinels before copying restored inbox files as a
-  self-heal step
+- treat stale inbox `*.lock` sentinels as transitional compatibility
+  diagnostics rather than a restore correctness gate
 - restore the ATM team task bucket and recompute `.highwatermark` from the
   maximum restored task id
 - fail with a structured error when backup material is missing or malformed

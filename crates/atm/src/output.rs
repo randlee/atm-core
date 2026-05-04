@@ -151,6 +151,7 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
         "Doctor status: {}",
         match report.summary.status {
             DoctorStatus::Healthy => "healthy",
+            DoctorStatus::Unavailable => "unavailable",
             DoctorStatus::Warning => "warning",
             DoctorStatus::Error => "error",
         }
@@ -318,7 +319,14 @@ pub fn print_restore_plan(plan: &RestorePlan, json: bool) -> Result<()> {
             .collect::<Vec<_>>()
             .join(", ")
     );
-    println!("  Inboxes: {}", plan.would_restore_inboxes.join(", "));
+    println!(
+        "  Inboxes: {}",
+        plan.would_restore_inboxes
+            .iter()
+            .map(|agent| agent.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
     println!("  Tasks: {}", plan.would_restore_tasks);
     Ok(())
 }

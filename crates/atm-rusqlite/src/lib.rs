@@ -136,6 +136,10 @@ impl RusqliteStore {
     pub fn open_path(database_path: impl AsRef<Path>) -> Result<Self, StoreError> {
         Self::open_path_with_options(
             database_path.as_ref(),
+            // INVARIANT: the default busy timeout intentionally fits inside the
+            // daemon's overall forced-shutdown budget. A blocked SQLite op can
+            // consume most of the graceful drain window, but the daemon waits
+            // for inflight work to quiesce before WAL checkpoint/teardown.
             BusyTimeoutMs::new(5000).expect("5000ms busy timeout is valid"),
             SqliteHandleBudget::DEFAULT,
         )
@@ -210,6 +214,36 @@ impl RusqliteStore {
         })?;
         Ok(result)
     }
+}
+
+pub fn checkpoint_runtime_wal(home_dir: &Path) -> Result<(), StoreError> {
+    let teams_root = home_dir.join(".claude").join("teams");
+    let Ok(entries) = fs::read_dir(&teams_root) else {
+        return Ok(());
+    };
+    for entry in entries.filter_map(Result::ok) {
+        let db_path = entry.path().join(".atm-state").join("mail.db");
+        if !db_path.exists() {
+            continue;
+        }
+        let connection = Connection::open(&db_path).map_err(|error| {
+            StoreError::open(format!(
+                "failed to open SQLite store for WAL checkpoint at {}",
+                db_path.display()
+            ))
+            .with_source(error)
+        })?;
+        connection
+            .pragma_update(None, "wal_checkpoint", "TRUNCATE")
+            .map_err(|error| {
+                StoreError::transaction(format!(
+                    "failed to checkpoint SQLite WAL at {}",
+                    db_path.display()
+                ))
+                .with_source(error)
+            })?;
+    }
+    Ok(())
 }
 
 impl StoreBoundary for RusqliteStore {

@@ -3,14 +3,18 @@ use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
+mod helpers;
 
 use atm_core::schema::{AgentMember, TeamConfig};
 use chrono::{Duration as ChronoDuration, Utc};
+use helpers::{
+    TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_TEAM, configure_atm_command,
+};
 
 #[test]
 fn test_log_snapshot_json_returns_recent_records() {
-    let fixture = Fixture::new(&["arch-ctm", "recipient"]);
-    fixture.send("recipient@atm-dev", "hello snapshot");
+    let fixture = Fixture::new(&[TEST_SENDER, TEST_RECIPIENT]);
+    fixture.send(TEST_RECIPIENT_ADDRESS, "hello snapshot");
     assert!(
         fixture.active_log_path().is_file(),
         "expected retained log file at {}",
@@ -44,8 +48,8 @@ fn test_log_snapshot_json_returns_recent_records() {
 
 #[test]
 fn test_log_filter_matches_structured_fields() {
-    let fixture = Fixture::new(&["arch-ctm", "recipient"]);
-    fixture.send("recipient@atm-dev", "hello filter");
+    let fixture = Fixture::new(&[TEST_SENDER, TEST_RECIPIENT]);
+    fixture.send(TEST_RECIPIENT_ADDRESS, "hello filter");
     let _ = fixture.run(&["read", "--json"]);
 
     let output = fixture.run(&["log", "filter", "--match", "command=send", "--json"]);
@@ -67,8 +71,8 @@ fn test_log_filter_matches_structured_fields() {
 
 #[test]
 fn test_log_snapshot_filters_by_level() {
-    let fixture = Fixture::new(&["arch-ctm", "recipient"]);
-    fixture.send("recipient@atm-dev", "hello level");
+    let fixture = Fixture::new(&[TEST_SENDER, TEST_RECIPIENT]);
+    fixture.send(TEST_RECIPIENT_ADDRESS, "hello level");
     let _ = fixture.run(&["read", "--json"]);
 
     let output = fixture.run(&["log", "snapshot", "--level", "info", "--json"]);
@@ -86,8 +90,8 @@ fn test_log_snapshot_filters_by_level() {
 
 #[test]
 fn test_log_snapshot_filters_by_since() {
-    let fixture = Fixture::new(&["arch-ctm", "recipient"]);
-    fixture.send("recipient@atm-dev", "hello since");
+    let fixture = Fixture::new(&[TEST_SENDER, TEST_RECIPIENT]);
+    fixture.send(TEST_RECIPIENT_ADDRESS, "hello since");
     let future = (Utc::now() + ChronoDuration::minutes(1)).to_rfc3339();
 
     let output = fixture.run(&["log", "snapshot", "--since", &future, "--json"]);
@@ -104,8 +108,8 @@ fn test_log_snapshot_filters_by_since() {
 
 #[test]
 fn test_log_filter_combines_level_and_match() {
-    let fixture = Fixture::new(&["arch-ctm", "recipient"]);
-    fixture.send("recipient@atm-dev", "hello combined");
+    let fixture = Fixture::new(&[TEST_SENDER, TEST_RECIPIENT]);
+    fixture.send(TEST_RECIPIENT_ADDRESS, "hello combined");
     let _ = fixture.run(&["read", "--json"]);
 
     let output = fixture.run(&[
@@ -135,7 +139,7 @@ fn test_log_filter_combines_level_and_match() {
 
 #[test]
 fn test_log_tail_streams_new_records() {
-    let fixture = Fixture::new(&["arch-ctm", "recipient"]);
+    let fixture = Fixture::new(&[TEST_SENDER, TEST_RECIPIENT]);
     let mut tail = fixture.spawn_tail(&[
         "log",
         "tail",
@@ -145,9 +149,9 @@ fn test_log_tail_streams_new_records() {
         "--poll-interval-ms",
         "25",
     ]);
-    fixture.wait_for_tail_ready(&mut tail, "recipient@atm-dev");
+    fixture.wait_for_tail_ready(&mut tail, TEST_RECIPIENT_ADDRESS);
 
-    fixture.send("recipient@atm-dev", "hello tail");
+    fixture.send(TEST_RECIPIENT_ADDRESS, "hello tail");
     let record = tail.read_record();
     assert_eq!(record["fields"]["command"], "send");
     tail.finish();
@@ -155,7 +159,7 @@ fn test_log_tail_streams_new_records() {
 
 #[test]
 fn test_log_help_lists_subcommands() {
-    let fixture = Fixture::new(&["arch-ctm"]);
+    let fixture = Fixture::new(&[TEST_SENDER]);
     let output = fixture.run(&["log", "--help"]);
 
     assert!(
@@ -171,9 +175,9 @@ fn test_log_help_lists_subcommands() {
 
 #[test]
 fn test_invalid_send_logs_error_code_and_exits_nonzero() {
-    let fixture = Fixture::new(&["arch-ctm", "recipient"]);
+    let fixture = Fixture::new(&[TEST_SENDER, TEST_RECIPIENT]);
 
-    let failed = fixture.run(&["send", "recipient@atm-dev", "oops", "--stdin"]);
+    let failed = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "oops", "--stdin"]);
     assert!(!failed.status.success());
 
     let output = fixture.run(&[
@@ -207,9 +211,9 @@ fn test_invalid_send_logs_error_code_and_exits_nonzero() {
 
 #[test]
 fn test_send_stdout_remains_clean_without_stderr_logs() {
-    let fixture = Fixture::new(&["arch-ctm", "recipient"]);
+    let fixture = Fixture::new(&[TEST_SENDER, TEST_RECIPIENT]);
 
-    let output = fixture.run(&["send", "recipient@atm-dev", "hello stdout", "--json"]);
+    let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello stdout", "--json"]);
 
     assert!(
         output.status.success(),
@@ -217,8 +221,8 @@ fn test_send_stdout_remains_clean_without_stderr_logs() {
         fixture.stderr(&output)
     );
     let parsed = fixture.stdout_json(&output);
-    assert_eq!(parsed["agent"], "recipient");
-    assert_eq!(parsed["team"], "atm-dev");
+    assert_eq!(parsed["agent"], TEST_RECIPIENT);
+    assert_eq!(parsed["team"], TEST_TEAM);
     assert!(
         fixture.stderr(&output).trim().is_empty(),
         "stderr: {}",
@@ -228,12 +232,12 @@ fn test_send_stdout_remains_clean_without_stderr_logs() {
 
 #[test]
 fn test_send_routes_retained_console_logs_to_stderr_when_requested() {
-    let fixture = Fixture::new(&["arch-ctm", "recipient"]);
+    let fixture = Fixture::new(&[TEST_SENDER, TEST_RECIPIENT]);
 
     let output = fixture.run(&[
         "--stderr-logs",
         "send",
-        "recipient@atm-dev",
+        TEST_RECIPIENT_ADDRESS,
         "hello stderr",
         "--json",
     ]);
@@ -244,8 +248,8 @@ fn test_send_routes_retained_console_logs_to_stderr_when_requested() {
         fixture.stderr(&output)
     );
     let parsed = fixture.stdout_json(&output);
-    assert_eq!(parsed["agent"], "recipient");
-    assert_eq!(parsed["team"], "atm-dev");
+    assert_eq!(parsed["agent"], TEST_RECIPIENT);
+    assert_eq!(parsed["team"], TEST_TEAM);
 
     let stderr = fixture.stderr(&output);
     assert!(
@@ -267,29 +271,21 @@ impl Fixture {
     }
 
     fn run(&self, args: &[&str]) -> std::process::Output {
-        Command::new(env!("CARGO_BIN_EXE_atm"))
+        let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
+        configure_atm_command(&mut command, self.tempdir.path(), Some(TEST_SENDER))
             .args(args)
-            .env("ATM_HOME", self.tempdir.path())
-            .env("ATM_CONFIG_HOME", self.tempdir.path())
-            .env("ATM_IDENTITY", "arch-ctm")
-            .env("ATM_TEAM", "atm-dev")
-            .current_dir(self.tempdir.path())
-            .output()
-            .expect("run atm")
+            .current_dir(self.tempdir.path());
+        command.output().expect("run atm")
     }
 
     fn spawn_tail(&self, args: &[&str]) -> TailReader {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_atm"))
+        let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
+        configure_atm_command(&mut command, self.tempdir.path(), Some(TEST_SENDER))
             .args(args)
-            .env("ATM_HOME", self.tempdir.path())
-            .env("ATM_CONFIG_HOME", self.tempdir.path())
-            .env("ATM_IDENTITY", "arch-ctm")
-            .env("ATM_TEAM", "atm-dev")
             .current_dir(self.tempdir.path())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .expect("spawn atm");
+            .stderr(Stdio::piped());
+        let mut child = command.spawn().expect("spawn atm");
         let stdout = child.stdout.take().expect("tail stdout");
         let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
@@ -349,7 +345,7 @@ impl Fixture {
             .path()
             .join(".claude")
             .join("teams")
-            .join("atm-dev")
+            .join(TEST_TEAM)
     }
 
     fn active_log_path(&self) -> std::path::PathBuf {

@@ -16,6 +16,9 @@ categories = ["command-line-utilities", "development-tools"]
 [lib]
 name = "atm_core"
 
+[features]
+test-support = []
+
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
@@ -29,6 +32,7 @@ ulid = { version = "1.2.1", features = ["serde"] }
 uuid.workspace = true
 fs2 = "0.4"
 same-file = "1"
+sc-observability-types = "1.0.0"
 
 [dev-dependencies]
 atm-rusqlite = { path = "../atm-rusqlite", version = "1.1.2" }

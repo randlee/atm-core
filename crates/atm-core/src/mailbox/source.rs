@@ -173,9 +173,64 @@ fn origin_inbox_enumeration_error(inboxes_dir: &Path, agent: &str, error: io::Er
     .with_source(error)
 }
 
+#[cfg(test)]
+fn forced_source_discovery_fault() -> Option<io::Error> {
+    if source_discovery_fault_test_override::get()
+        || std::env::var_os("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT").is_some()
+    {
+        return Some(io::Error::other(
+            "synthetic read_dir entry enumeration fault",
+        ));
+    }
+    None
+}
+
+#[cfg(not(test))]
 fn forced_source_discovery_fault() -> Option<io::Error> {
     std::env::var_os("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT")
         .map(|_| io::Error::other("synthetic read_dir entry enumeration fault"))
+}
+
+#[cfg(test)]
+mod source_discovery_fault_test_override {
+    use std::cell::Cell;
+
+    thread_local! {
+        static OVERRIDE: Cell<bool> = const { Cell::new(false) };
+    }
+
+    pub(super) fn get() -> bool {
+        OVERRIDE.with(Cell::get)
+    }
+
+    pub(super) fn set(enabled: bool) -> bool {
+        OVERRIDE.with(|cell| {
+            let original = cell.get();
+            cell.set(enabled);
+            original
+        })
+    }
+}
+
+#[cfg(test)]
+pub(crate) struct ScopedSourceDiscoveryFaultOverride {
+    original: bool,
+}
+
+#[cfg(test)]
+impl ScopedSourceDiscoveryFaultOverride {
+    pub(crate) fn enable() -> Self {
+        Self {
+            original: source_discovery_fault_test_override::set(true),
+        }
+    }
+}
+
+#[cfg(test)]
+impl Drop for ScopedSourceDiscoveryFaultOverride {
+    fn drop(&mut self) {
+        source_discovery_fault_test_override::set(self.original);
+    }
 }
 
 pub(crate) fn load_source_files(paths: &[PathBuf]) -> Result<Vec<SourceFile>, AtmError> {
@@ -202,6 +257,8 @@ pub(crate) fn load_source_files(paths: &[PathBuf]) -> Result<Vec<SourceFile>, At
 }
 
 #[cfg(test)]
+// rule-008: allow-start -- source-discovery tests use explicit mailbox and
+// alias fixture strings to keep path and alias assertions readable.
 mod tests {
     use std::collections::BTreeMap;
     use std::io;
@@ -210,10 +267,12 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        discover_origin_inboxes, load_source_files, origin_inbox_enumeration_error,
-        rediscover_and_validate_source_paths, resolve_target,
+        ScopedSourceDiscoveryFaultOverride, discover_origin_inboxes, load_source_files,
+        origin_inbox_enumeration_error, rediscover_and_validate_source_paths, resolve_target,
     };
     use crate::config::AtmConfig;
+
+    const TEST_AGENT: &str = "arch-ctm";
 
     #[test]
     fn discover_origin_inboxes_ignores_primary_and_sorts_matches() {
@@ -285,6 +344,22 @@ mod tests {
     }
 
     #[test]
+    fn discover_origin_inboxes_reports_synthetic_fault() {
+        let tempdir = tempdir().expect("tempdir");
+        let inboxes = tempdir.path();
+        std::fs::write(inboxes.join(format!("{TEST_AGENT}.host-a.json")), "").expect("host a");
+        let _fault = ScopedSourceDiscoveryFaultOverride::enable();
+
+        let error = discover_origin_inboxes(inboxes, TEST_AGENT).expect_err("synthetic fault");
+        assert!(error.is_mailbox_read());
+        assert!(
+            error
+                .message
+                .contains("failed to enumerate origin inbox entries")
+        );
+    }
+
+    #[test]
     fn rediscover_and_validate_source_paths_reports_drift() {
         let tempdir = tempdir().expect("tempdir");
         let home = tempdir.path();
@@ -326,3 +401,4 @@ mod tests {
         assert!(error.is_address());
     }
 }
+// rule-008: allow-end

@@ -134,6 +134,8 @@ fn find_git_root(start_dir: &Path) -> Option<PathBuf> {
 }
 
 #[cfg(test)]
+// rule-008: allow-start -- file-policy tests intentionally use explicit team
+// fixture names in path assertions.
 mod tests {
     use std::fs::{self, File};
 
@@ -181,3 +183,4 @@ mod tests {
         );
     }
 }
+// rule-008: allow-end

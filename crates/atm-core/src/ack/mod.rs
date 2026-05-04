@@ -795,6 +795,72 @@ fn set_atm_message_id(extra: &mut Map<String, serde_json::Value>, message_id: At
 }
 
 #[cfg(test)]
+pub(crate) struct ScopedReplyMessageIdOverride {
+    original: Option<String>,
+}
+
+#[cfg(test)]
+impl ScopedReplyMessageIdOverride {
+    pub(crate) fn set(message_id: LegacyMessageId) -> Self {
+        let key = "ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID";
+        let original = std::env::var(key).ok();
+        // SAFETY: test-only hook; call sites are serialized by the owning tests.
+        unsafe { std::env::set_var(key, message_id.to_string()) };
+        Self { original }
+    }
+}
+
+#[cfg(test)]
+impl Drop for ScopedReplyMessageIdOverride {
+    fn drop(&mut self) {
+        let key = "ATM_TEST_OVERRIDE_REPLY_MESSAGE_ID";
+        match self.original.take() {
+            Some(value) => {
+                // SAFETY: test-only hook; call sites are serialized by the owning tests.
+                unsafe { std::env::set_var(key, value) };
+            }
+            None => {
+                // SAFETY: test-only hook; call sites are serialized by the owning tests.
+                unsafe { std::env::remove_var(key) };
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+pub(crate) struct ScopedReplyAtmMessageIdOverride {
+    original: Option<String>,
+}
+
+#[cfg(test)]
+impl ScopedReplyAtmMessageIdOverride {
+    pub(crate) fn set(message_id: AtmMessageId) -> Self {
+        let key = "ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID";
+        let original = std::env::var(key).ok();
+        // SAFETY: test-only hook; call sites are serialized by the owning tests.
+        unsafe { std::env::set_var(key, message_id.to_string()) };
+        Self { original }
+    }
+}
+
+#[cfg(test)]
+impl Drop for ScopedReplyAtmMessageIdOverride {
+    fn drop(&mut self) {
+        let key = "ATM_TEST_OVERRIDE_REPLY_ATM_MESSAGE_ID";
+        match self.original.take() {
+            Some(value) => {
+                // SAFETY: test-only hook; call sites are serialized by the owning tests.
+                unsafe { std::env::set_var(key, value) };
+            }
+            None => {
+                // SAFETY: test-only hook; call sites are serialized by the owning tests.
+                unsafe { std::env::remove_var(key) };
+            }
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use serde_json::json;
 

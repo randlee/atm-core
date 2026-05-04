@@ -1,5 +1,6 @@
 use crate::store::StoreError;
 use crate::types::{AgentName, TeamName};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 #[cfg(test)]
 use std::collections::VecDeque;
@@ -8,7 +9,7 @@ use std::sync::Mutex;
 
 /// Qualified daemon request kinds. Transport layers must decode and dispatch
 /// immediately to an injected handler rather than accumulating business logic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RequestKind {
     Send,
     Ack,
@@ -18,7 +19,7 @@ pub enum RequestKind {
     Doctor,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RequestPayload {
     Send(Value),
     Ack(Value),
@@ -53,7 +54,7 @@ impl RequestPayload {
 }
 
 /// Minimal shared request envelope for local and remote transport adapters.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DaemonRequest {
     pub team_name: TeamName,
     pub agent_name: AgentName,
@@ -67,7 +68,7 @@ impl DaemonRequest {
 }
 
 /// Minimal shared daemon response envelope.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DaemonResponse {
     pub kind: RequestKind,
     pub payload_json: String,
@@ -78,7 +79,10 @@ pub struct DaemonResponse {
 #[derive(Debug)]
 pub enum DispatchError {
     Store(StoreError),
-    InvalidPayload(String),
+    PayloadDecode(String),
+    Handler(String),
+    ResponseEncode(String),
+    Unsupported(RequestKind),
 }
 
 /// Thin request-dispatch boundary shared by Unix-domain, TCP/TLS, and
@@ -114,6 +118,7 @@ impl TestSocketDispatcher {
 #[cfg(test)]
 impl RequestDispatcher for TestSocketDispatcher {
     fn dispatch(&self, request: DaemonRequest) -> Result<DaemonResponse, DispatchError> {
+        let request_kind = request.kind();
         self.requests
             .lock()
             .expect("test dispatcher requests lock")
@@ -122,11 +127,7 @@ impl RequestDispatcher for TestSocketDispatcher {
             .lock()
             .expect("test dispatcher responses lock")
             .pop_front()
-            .unwrap_or_else(|| {
-                Err(DispatchError::InvalidPayload(
-                    "test dispatcher had no queued response".to_string(),
-                ))
-            })
+            .unwrap_or_else(|| Err(DispatchError::Unsupported(request_kind)))
     }
 }
 
@@ -134,11 +135,14 @@ impl RequestDispatcher for TestSocketDispatcher {
 mod tests {
     use super::*;
 
+    const TEST_TEAM_NAME: &str = "test-team";
+    const TEST_AGENT_NAME: &str = "test-sender";
+
     #[test]
     fn test_socket_dispatcher_records_requests_and_returns_queued_response() {
         let dispatcher = TestSocketDispatcher::default();
-        let team_name: TeamName = "atm-dev".parse().expect("team");
-        let agent_name: AgentName = "arch-ctm".parse().expect("agent");
+        let team_name: TeamName = TEST_TEAM_NAME.parse().expect("team");
+        let agent_name: AgentName = TEST_AGENT_NAME.parse().expect("agent");
         dispatcher.queue_response(Ok(DaemonResponse {
             kind: RequestKind::Heartbeat,
             payload_json: "{\"ok\":true}".to_string(),
