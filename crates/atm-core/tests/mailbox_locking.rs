@@ -1,12 +1,19 @@
+#[cfg(unix)]
 use std::ffi::{OsStr, OsString};
 use std::fs;
+#[cfg(unix)]
 use std::fs::OpenOptions;
-use std::sync::{Arc, Barrier, Mutex, OnceLock, mpsc};
+use std::sync::{Arc, Barrier, mpsc};
+#[cfg(unix)]
+use std::sync::{Mutex, OnceLock};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(unix)]
+use std::time::Instant;
 
 use atm_core::ack::{AckRequest, ack_mail};
 use atm_core::clear::{ClearQuery, clear_mail};
+#[cfg(unix)]
 use atm_core::error::AtmErrorCode;
 use atm_core::observability::NullObservability;
 use atm_core::read::{ReadQuery, read_mail};
@@ -19,13 +26,14 @@ use atm_core::send::{SendMessageSource, SendRequest, send_mail};
 use atm_core::test_support::{TEST_QA, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
 use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
 use chrono::Utc;
+#[cfg(unix)]
 use fs2::FileExt;
-use serial_test::serial;
 use tempfile::TempDir;
 use uuid::Uuid;
 
 // Test-side ceiling guard only; production lock timeout defaults to 5s per
 // architecture §18.3.
+#[cfg(unix)]
 const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(2);
 const PRIMARY_TEAM: &str = TEST_TEAM;
 const PRIMARY_AGENT: &str = TEST_SENDER;
@@ -37,7 +45,7 @@ fn qualified(agent: &str) -> String {
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
@@ -100,7 +108,7 @@ fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() {
     let observability = Arc::new(NullObservability);
 
@@ -250,7 +258,7 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
@@ -323,7 +331,7 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() 
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
@@ -400,7 +408,7 @@ fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn missing_config_notice_seeds_team_lead_workflow_state() {
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -433,7 +441,7 @@ fn missing_config_notice_seeds_team_lead_workflow_state() {
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
@@ -497,7 +505,7 @@ fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn multi_source_read_and_clear_complete_without_deadlock() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
@@ -578,7 +586,8 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
 }
 
 #[test]
-#[serial]
+#[cfg(unix)]
+#[serial_test::serial(env)]
 fn send_times_out_under_bounded_lock_contention() {
     let _env_lock = env_lock().lock().expect("env lock");
     let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
@@ -609,7 +618,8 @@ fn send_times_out_under_bounded_lock_contention() {
 }
 
 #[test]
-#[serial]
+#[cfg(unix)]
+#[serial_test::serial(env)]
 fn clear_dry_run_does_not_wait_on_mailbox_lock() {
     let _env_lock = env_lock().lock().expect("env lock");
     let fixture = Fixture::new();
@@ -646,7 +656,8 @@ fn clear_dry_run_does_not_wait_on_mailbox_lock() {
 }
 
 #[test]
-#[serial]
+#[cfg(unix)]
+#[serial_test::serial(env)]
 fn read_possible_write_only_locks_when_display_mutation_is_required() {
     let _env_lock = env_lock().lock().expect("env lock");
     let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
@@ -712,7 +723,7 @@ fn read_possible_write_only_locks_when_display_mutation_is_required() {
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() {
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -768,7 +779,8 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
 }
 
 #[test]
-#[serial]
+#[cfg(unix)]
+#[serial_test::serial(env)]
 fn clear_fails_closed_on_synthetic_source_discovery_fault() {
     let _env_lock = env_lock().lock().expect("env lock");
     let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT", "1");
@@ -803,7 +815,8 @@ fn clear_fails_closed_on_synthetic_source_discovery_fault() {
 }
 
 #[test]
-#[serial]
+#[cfg(unix)]
+#[serial_test::serial(env)]
 fn send_reports_non_contention_lock_failures_without_timeout() {
     let _env_lock = env_lock().lock().expect("env lock");
     let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR", "1");
@@ -831,6 +844,7 @@ enum CommandOp {
 
 // Serializes process-environment mutation inside this test module. This is
 // process-local only; it does not coordinate with other test processes.
+#[cfg(unix)]
 fn env_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     // These tests mutate the process-global `ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS`,
@@ -842,11 +856,13 @@ fn env_lock() -> &'static Mutex<()> {
     LOCK.get_or_init(|| Mutex::new(()))
 }
 
+#[cfg(unix)]
 struct EnvGuard {
     key: &'static str,
     original: Option<OsString>,
 }
 
+#[cfg(unix)]
 impl EnvGuard {
     fn set_raw(key: &'static str, value: &str) -> Self {
         let original = std::env::var_os(key);
@@ -855,6 +871,7 @@ impl EnvGuard {
     }
 }
 
+#[cfg(unix)]
 impl Drop for EnvGuard {
     fn drop(&mut self) {
         match self.original.take() {
@@ -864,6 +881,7 @@ impl Drop for EnvGuard {
     }
 }
 
+#[cfg(unix)]
 fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
     // SAFETY: these tests take a process-wide mutex and use #[serial] before
     // mutating the environment, so the mutation is serialized within this
@@ -871,6 +889,7 @@ fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
     unsafe { std::env::set_var(key, value) }
 }
 
+#[cfg(unix)]
 fn remove_env_var<K: AsRef<OsStr>>(key: K) {
     // SAFETY: these tests take a process-wide mutex and use #[serial] before
     // mutating the environment, so the mutation is serialized within this

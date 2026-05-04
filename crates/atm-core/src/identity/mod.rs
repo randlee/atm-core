@@ -86,13 +86,14 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use crate::config::AtmConfig;
-    use crate::roles::ROLE_TEAM_LEAD;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::AgentName;
 
     #[cfg(unix)]
     use super::resolve_sender_identity;
     use super::{resolve_hook_identity, resolve_runtime_sender_identity};
+    #[cfg(unix)]
+    use crate::roles::ROLE_TEAM_LEAD;
 
     #[test]
     #[serial_test::serial(env)]
