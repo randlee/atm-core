@@ -577,7 +577,7 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
 }
 
 #[test]
-#[serial_test::serial]
+#[serial_test::serial(env)]
 fn send_times_out_under_bounded_lock_contention() {
     let _env_lock = env_lock().lock().expect("env lock");
     let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
@@ -608,7 +608,7 @@ fn send_times_out_under_bounded_lock_contention() {
 }
 
 #[test]
-#[serial_test::serial]
+#[serial_test::serial(env)]
 fn clear_dry_run_does_not_wait_on_mailbox_lock() {
     let _env_lock = env_lock().lock().expect("env lock");
     let fixture = Fixture::new();
@@ -645,7 +645,7 @@ fn clear_dry_run_does_not_wait_on_mailbox_lock() {
 }
 
 #[test]
-#[serial_test::serial]
+#[serial_test::serial(env)]
 fn read_possible_write_only_locks_when_display_mutation_is_required() {
     let _env_lock = env_lock().lock().expect("env lock");
     let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
@@ -767,7 +767,7 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
 }
 
 #[test]
-#[serial_test::serial]
+#[serial_test::serial(env)]
 fn clear_fails_closed_on_synthetic_source_discovery_fault() {
     let _env_lock = env_lock().lock().expect("env lock");
     let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT", "1");
@@ -802,7 +802,7 @@ fn clear_fails_closed_on_synthetic_source_discovery_fault() {
 }
 
 #[test]
-#[serial_test::serial]
+#[serial_test::serial(env)]
 fn send_reports_non_contention_lock_failures_without_timeout() {
     let _env_lock = env_lock().lock().expect("env lock");
     let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR", "1");

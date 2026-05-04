@@ -604,12 +604,12 @@ fn is_lock_contention_error(error: &io::Error) -> bool {
 
     #[cfg(windows)]
     {
-        return matches!(
+        matches!(
             error.raw_os_error(),
             Some(code)
                 if code == windows_sys::Win32::Foundation::ERROR_LOCK_VIOLATION as i32
                     || code == windows_sys::Win32::Foundation::ERROR_SHARING_VIOLATION as i32
-        );
+        )
     }
 
     #[cfg(not(any(unix, windows)))]
