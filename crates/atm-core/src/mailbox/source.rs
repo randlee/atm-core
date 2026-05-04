@@ -270,6 +270,8 @@ mod tests {
     };
     use crate::config::AtmConfig;
 
+    const TEST_AGENT: &str = "arch-ctm";
+
     #[test]
     fn discover_origin_inboxes_ignores_primary_and_sorts_matches() {
         let tempdir = tempdir().expect("tempdir");
@@ -343,10 +345,10 @@ mod tests {
     fn discover_origin_inboxes_reports_synthetic_fault() {
         let tempdir = tempdir().expect("tempdir");
         let inboxes = tempdir.path();
-        std::fs::write(inboxes.join("arch-ctm.host-a.json"), "").expect("host a");
+        std::fs::write(inboxes.join(format!("{TEST_AGENT}.host-a.json")), "").expect("host a");
         let _fault = ScopedSourceDiscoveryFaultOverride::enable();
 
-        let error = discover_origin_inboxes(inboxes, "arch-ctm").expect_err("synthetic fault");
+        let error = discover_origin_inboxes(inboxes, TEST_AGENT).expect_err("synthetic fault");
         assert!(error.is_mailbox_read());
         assert!(
             error
