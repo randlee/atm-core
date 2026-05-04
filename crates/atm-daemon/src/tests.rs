@@ -177,7 +177,7 @@ fn local_same_host_daemon_api_flow_works() {
 
 #[test]
 fn bounded_remote_host_unreachable_behavior_is_typed() {
-    let address = unreachable_loopback_address();
+    let address = closed_loopback_address();
     let error = request_remote(
         address,
         &DaemonRequest {
@@ -191,17 +191,11 @@ fn bounded_remote_host_unreachable_behavior_is_typed() {
     assert_eq!(error.code, AtmErrorCode::DaemonRemoteUnavailable);
 }
 
-fn unreachable_loopback_address() -> std::net::SocketAddr {
-    for _ in 0..16 {
-        let probe = TcpListener::bind(("127.0.0.1", 0)).expect("probe listener");
-        let address = probe.local_addr().expect("probe addr");
-        drop(probe);
-        match TcpStream::connect_timeout(&address, Duration::from_millis(10)) {
-            Err(_) => return address,
-            Ok(stream) => drop(stream),
-        }
-    }
-    panic!("failed to reserve an unreachable loopback address after repeated retries");
+fn closed_loopback_address() -> std::net::SocketAddr {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("probe listener");
+    let address = listener.local_addr().expect("probe addr");
+    drop(listener);
+    address
 }
 
 #[test]
@@ -248,14 +242,14 @@ fn remote_acceptance_is_required_for_send_success() {
     };
     assert_eq!(response.kind, RequestKind::Send);
     stop.store(true, Ordering::SeqCst);
-    let shutdown_deadline = std::time::Instant::now() + SHUTDOWN_FORCE_TIMEOUT;
+    let shutdown_deadline = std::time::Instant::now() + test_timeout_budget(SHUTDOWN_FORCE_TIMEOUT);
     while !worker.is_finished() && std::time::Instant::now() < shutdown_deadline {
         std::thread::sleep(Duration::from_millis(25));
     }
     assert!(
         worker.is_finished(),
         "tcp accept worker did not stop within {:?}",
-        SHUTDOWN_FORCE_TIMEOUT
+        test_timeout_budget(SHUTDOWN_FORCE_TIMEOUT)
     );
     if let Err(payload) = worker.join() {
         panic!(
@@ -263,4 +257,13 @@ fn remote_acceptance_is_required_for_send_success() {
             crate::shutdown::thread_panic_message(payload)
         );
     }
+}
+
+fn test_timeout_budget(default_timeout: Duration) -> Duration {
+    std::env::var("ATM_TEST_TIMEOUT_MS")
+        .ok()
+        .and_then(|raw| raw.parse::<u64>().ok())
+        .filter(|timeout_ms| *timeout_ms > 0)
+        .map(Duration::from_millis)
+        .unwrap_or(default_timeout)
 }
