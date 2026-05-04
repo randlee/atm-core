@@ -113,6 +113,104 @@ version = "1.1.2"
             ],
         )
 
+    def test_build_transcript_adds_boundary_doc_inventory_for_boundaries(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            crate_dir = repo_root / "crates" / "atm-core"
+            crate_dir.mkdir(parents=True)
+            (crate_dir / "Cargo.toml").write_text(
+                """\
+[package]
+name = "agent-team-mail-core"
+version = "1.1.2"
+""",
+                encoding="utf-8",
+            )
+            docs_dir = repo_root / "docs" / "atm-core"
+            docs_dir.mkdir(parents=True)
+            (docs_dir / "boundaries.md").write_text(
+                """\
+# Boundaries
+
+```yaml
+boundary_id: BOUNDARY-Test
+owner_package: atm-core
+owner_crate_path: atm_core
+name: TestBoundary
+
+public:
+  trait: TestTrait
+  facade: null
+
+implementation:
+  type: null
+  module: null
+  visibility: trait_only
+  constructor: none
+
+composition:
+  roots: []
+
+ownership:
+  io_owns:
+    - sqlite
+  io_forbidden:
+    - sockets
+
+dependencies:
+  allowed_dependents:
+    - atm
+  allowed_dependencies:
+    - atm-core
+  forbidden_edges:
+    - atm -> atm-rusqlite
+
+references:
+  scope: outside_owner_crate
+  forbidden:
+    - TestImpl
+
+contracts:
+  request_types: []
+  response_types: []
+  error_types:
+    - AtmError
+
+testing:
+  allowed_test_double_paths:
+    - atm_core::tests::TestDouble
+  forbidden_test_bypasses:
+    - rusqlite::Connection
+
+enforcement:
+  lint_rules:
+    - LINT_BOUNDARY_TEST
+  review_gates:
+    - no_public_impl
+
+status:
+  state: planned
+  notes: []
+```
+""",
+                encoding="utf-8",
+            )
+            result = LintResult(
+                task=LintTask("boundaries", ["just", "_lint-boundaries"]),
+                returncode=0,
+                stdout="boundaries passed [0.10s]\n",
+                stderr="",
+                duration_seconds=0.2,
+                log_path=repo_root / ".just/logs/example.log",
+            )
+
+            transcript = build_transcript(result.task, result, repo_root)
+            joined = "\n".join(transcript)
+
+            self.assertIn("boundary docs analyzed:", joined)
+            self.assertIn("docs/atm-core/boundaries.md", joined)
+            self.assertIn("boundary records validated: 1", joined)
+
 
 if __name__ == "__main__":
     unittest.main()

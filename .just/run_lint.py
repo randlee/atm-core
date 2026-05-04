@@ -153,6 +153,12 @@ def build_transcript(task: LintTask, result: LintResult, repo_root: Path) -> lis
     ]
     if task.name in CRATE_INVENTORY_LINTS:
         transcript.extend(workspace_crate_section_lines(repo_root))
+    if task.name == "boundaries":
+        from lint_boundaries import boundary_doc_section_lines
+        from lint_boundaries import parse_boundary_records
+
+        records, _violations = parse_boundary_records(repo_root)
+        transcript.extend(boundary_doc_section_lines(repo_root, records))
     transcript.extend(
         [
             "stdout:",
