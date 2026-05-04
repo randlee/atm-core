@@ -9,6 +9,7 @@ import sys
 import tempfile
 
 from lint_common import discover_repo_root
+from lint_common import workspace_crate_section_lines
 
 
 DEPRECATED_CONFIG_LINES = (
@@ -53,6 +54,9 @@ def main(argv: list[str]) -> int:
     if shutil.which("cargo-deny") is None:
         print("cargo-deny is not installed; install it to run this lint", file=sys.stderr)
         return 2
+
+    for line in workspace_crate_section_lines(repo_root):
+        print(line)
 
     runtime_config = build_runtime_config(repo_root)
     completed = subprocess.run(

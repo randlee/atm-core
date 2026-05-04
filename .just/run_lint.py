@@ -14,6 +14,7 @@ from lint_common import discover_repo_root
 from lint_common import format_duration
 from lint_common import make_log_path
 from lint_common import relative_log_path
+from lint_common import workspace_crate_section_lines
 from lint_common import write_log
 
 
@@ -113,7 +114,7 @@ def extract_count(lines: list[str]) -> int | None:
 
 
 def build_transcript(task: LintTask, result: LintResult, repo_root: Path) -> list[str]:
-    return [
+    transcript = [
         f"lint: {task.name}",
         f"repo_root: {repo_root}",
         f"recorded_at_utc: {datetime.now(timezone.utc).isoformat()}",
@@ -121,12 +122,19 @@ def build_transcript(task: LintTask, result: LintResult, repo_root: Path) -> lis
         f"command: {' '.join(task.command)}",
         f"exit_code: {result.returncode}",
         "",
-        "stdout:",
-        result.stdout.rstrip(),
-        "",
-        "stderr:",
-        result.stderr.rstrip(),
     ]
+    if task.name == "fmt":
+        transcript.extend(workspace_crate_section_lines(repo_root))
+    transcript.extend(
+        [
+            "stdout:",
+            result.stdout.rstrip(),
+            "",
+            "stderr:",
+            result.stderr.rstrip(),
+        ]
+    )
+    return transcript
 
 
 def run_task(task: LintTask, repo_root: Path) -> LintResult:

@@ -19,6 +19,9 @@ from lint_common import line_is_suppressed
 from lint_common import load_lint_config
 from lint_common import make_log_path
 from lint_common import relative_log_path
+from lint_common import render_workspace_crate_table
+from lint_common import workspace_crate_section_lines
+from lint_common import workspace_crates
 
 
 class LintCommonTests(unittest.TestCase):
@@ -64,6 +67,91 @@ class LintCommonTests(unittest.TestCase):
             config = load_lint_config(repo_root)
 
             self.assertEqual(config["identities"]["forbidden_literals"], ["team-lead"])
+
+    def test_workspace_crates_reads_package_and_crate_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            crates_dir = repo_root / "crates"
+            atm_core_dir = crates_dir / "atm-core"
+            atm_core_dir.mkdir(parents=True)
+            (atm_core_dir / "Cargo.toml").write_text(
+                """\
+[package]
+name = "agent-team-mail-core"
+version = "1.1.2"
+
+[lib]
+name = "atm_core"
+""",
+                encoding="utf-8",
+            )
+            atm_dir = crates_dir / "atm"
+            atm_dir.mkdir(parents=True)
+            (atm_dir / "Cargo.toml").write_text(
+                """\
+[package]
+name = "agent-team-mail"
+version = "1.1.2"
+""",
+                encoding="utf-8",
+            )
+
+            crates = workspace_crates(repo_root)
+
+            self.assertEqual(
+                [(crate.crate_dir, crate.package_name, crate.crate_path_name) for crate in crates],
+                [
+                    ("atm", "agent-team-mail", "atm"),
+                    ("atm-core", "agent-team-mail-core", "atm_core"),
+                ],
+            )
+
+    def test_render_workspace_crate_table_supports_extra_columns(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            crate_dir = repo_root / "crates" / "atm-core"
+            crate_dir.mkdir(parents=True)
+            (crate_dir / "Cargo.toml").write_text(
+                """\
+[package]
+name = "agent-team-mail-core"
+version = "1.1.2"
+
+[lib]
+name = "atm_core"
+""",
+                encoding="utf-8",
+            )
+
+            lines = render_workspace_crate_table(
+                repo_root,
+                extra_columns=[("lint_mode", "lint_mode", lambda _crate: "check")],
+            )
+
+            self.assertIn("crate", lines[0])
+            self.assertIn("lint_mode", lines[0])
+            self.assertTrue(any("atm-core" in line and "check" in line for line in lines))
+
+    def test_workspace_crate_section_lines_wraps_table(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            crate_dir = repo_root / "crates" / "atm-core"
+            crate_dir.mkdir(parents=True)
+            (crate_dir / "Cargo.toml").write_text(
+                """\
+[package]
+name = "agent-team-mail-core"
+version = "1.1.2"
+""",
+                encoding="utf-8",
+            )
+
+            lines = workspace_crate_section_lines(repo_root, title="inventory:")
+
+            self.assertEqual(lines[0], "inventory:")
+            self.assertIn("crate", lines[1])
+            self.assertIn("manifest", lines[1])
+            self.assertEqual(lines[-1], "")
 
     def test_line_is_suppressed_supports_tool_key_and_rule_aliases(self) -> None:
         lines = [

@@ -7,6 +7,7 @@ import subprocess
 import sys
 
 from lint_common import discover_repo_root
+from lint_common import workspace_crate_section_lines
 
 
 def build_command(repo_root: Path) -> list[str]:
@@ -22,6 +23,9 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--root", help="Repo root to inspect.")
     args = parser.parse_args(argv[1:])
     repo_root = discover_repo_root(args.root)
+
+    for line in workspace_crate_section_lines(repo_root):
+        print(line)
 
     completed = subprocess.run(
         build_command(repo_root),

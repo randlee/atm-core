@@ -11,7 +11,10 @@ if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
 from run_lint import build_tasks
+from run_lint import build_transcript
 from run_lint import extract_count
+from run_lint import LintResult
+from run_lint import LintTask
 from run_lint import prioritize_error_lines
 from run_lint import resolve_task_names
 
@@ -59,6 +62,35 @@ class RunLintTests(unittest.TestCase):
             self.assertEqual(tasks["shear"].command[-1], str(repo_root / ".just/lint_cargo_shear.py"))
             self.assertEqual(tasks["spell"].command[-1], str(repo_root / ".just/lint_codespell.py"))
             self.assertEqual(tasks["pytests"].command[-1], str(repo_root / ".just/run_pytests.py"))
+
+    def test_build_transcript_adds_crate_inventory_for_fmt(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            crate_dir = repo_root / "crates" / "atm-core"
+            crate_dir.mkdir(parents=True)
+            (crate_dir / "Cargo.toml").write_text(
+                """\
+[package]
+name = "agent-team-mail-core"
+version = "1.1.2"
+""",
+                encoding="utf-8",
+            )
+            result = LintResult(
+                task=LintTask("fmt", ["just", "_lint-fmt"]),
+                returncode=0,
+                stdout="",
+                stderr="",
+                duration_seconds=0.2,
+                log_path=repo_root / ".just/logs/example.log",
+            )
+
+            transcript = build_transcript(result.task, result, repo_root)
+
+            self.assertIn("crates analyzed:", transcript)
+            joined = "\n".join(transcript)
+            self.assertIn("crate_path", joined)
+            self.assertIn("atm-core", joined)
 
 
 if __name__ == "__main__":

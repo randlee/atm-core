@@ -10,6 +10,7 @@ import sys
 
 from lint_common import discover_repo_root
 from lint_common import load_lint_config
+from lint_common import workspace_crate_section_lines
 
 
 ERROR_SECTIONS = {"unlinked_files", "empty_files"}
@@ -193,6 +194,9 @@ def main(argv: list[str]) -> int:
     if shutil.which("cargo-shear") is None:
         print("cargo-shear is not installed; install it to run this lint", file=sys.stderr)
         return 2
+
+    for line in workspace_crate_section_lines(repo_root):
+        print(line)
 
     completed = subprocess.run(
         build_command(repo_root),

@@ -6,6 +6,8 @@ import sys
 import tomllib
 from pathlib import Path
 
+from lint_common import workspace_crate_section_lines
+
 
 def fail(message: str) -> None:
     raise SystemExit(message)
@@ -164,6 +166,8 @@ def main() -> int:
     validate_lockfile(repo_root, workspace_version)
     validate_winget_manifest(repo_root, workspace_version)
     validate_homebrew_release_wiring(repo_root)
+    for line in workspace_crate_section_lines(repo_root):
+        print(line)
     print(success_message(workspace_version))
     return 0
 

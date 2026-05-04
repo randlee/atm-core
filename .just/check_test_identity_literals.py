@@ -12,6 +12,7 @@ from lint_common import discover_repo_root
 from lint_common import is_code_line
 from lint_common import line_is_suppressed
 from lint_common import load_lint_config
+from lint_common import workspace_crate_section_lines
 
 
 LINT_NAME = "identities"
@@ -101,6 +102,9 @@ def main(argv: list[str]) -> int:
         repo_root,
         forbidden_literals=forbidden_literals,
     )
+
+    for line in workspace_crate_section_lines(repo_root):
+        print(line)
 
     if violations:
         print("RULE-008/RULE-009 violation: raw production literals found in test/cfg(test) Rust code.")

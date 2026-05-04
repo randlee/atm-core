@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import time
 import tomllib
+from typing import Callable
 
 
 LOG_DIR = Path(".just/logs")
@@ -43,6 +44,14 @@ class LintDirectivePolicy:
         return labels
 
 
+@dataclass(frozen=True)
+class WorkspaceCrate:
+    crate_dir: str
+    package_name: str
+    crate_path_name: str
+    manifest_path: str
+
+
 def discover_repo_root(explicit_root: str | None = None) -> Path:
     if explicit_root is not None:
         return Path(explicit_root).resolve()
@@ -52,6 +61,91 @@ def discover_repo_root(explicit_root: str | None = None) -> Path:
 def load_lint_config(repo_root: Path) -> dict:
     config_path = repo_root / CONFIG_PATH
     return tomllib.loads(config_path.read_text(encoding="utf-8"))
+
+
+def workspace_crates(repo_root: Path) -> list[WorkspaceCrate]:
+    crates: list[WorkspaceCrate] = []
+    for manifest_path in sorted((repo_root / "crates").glob("*/Cargo.toml")):
+        manifest = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
+        package = manifest.get("package", {})
+        package_name = package.get("name")
+        if not isinstance(package_name, str):
+            continue
+        lib = manifest.get("lib", {})
+        lib_name = lib.get("name") if isinstance(lib, dict) else None
+        crate_path_name = lib_name if isinstance(lib_name, str) else manifest_path.parent.name.replace("-", "_")
+        crates.append(
+            WorkspaceCrate(
+                crate_dir=manifest_path.parent.name,
+                package_name=package_name,
+                crate_path_name=crate_path_name,
+                manifest_path=manifest_path.relative_to(repo_root).as_posix(),
+            )
+        )
+    return crates
+
+
+def render_table(
+    rows: list[dict[str, str]],
+    columns: list[tuple[str, str]],
+) -> list[str]:
+    if not rows:
+        return []
+    widths: dict[str, int] = {}
+    for key, header in columns:
+        widths[key] = len(header)
+        for row in rows:
+            widths[key] = max(widths[key], len(row.get(key, "")))
+
+    header_line = "  " + "  ".join(header.ljust(widths[key]) for key, header in columns)
+    divider_line = "  " + "  ".join("-" * widths[key] for key, _header in columns)
+    body_lines = [
+        "  " + "  ".join(row.get(key, "").ljust(widths[key]) for key, _header in columns)
+        for row in rows
+    ]
+    return [header_line, divider_line, *body_lines]
+
+
+def render_workspace_crate_table(
+    repo_root: Path,
+    *,
+    extra_columns: list[tuple[str, str, Callable[[WorkspaceCrate], str]]] | None = None,
+) -> list[str]:
+    crates = workspace_crates(repo_root)
+    rows: list[dict[str, str]] = []
+    for crate in crates:
+        row = {
+            "crate": crate.crate_dir,
+            "package": crate.package_name,
+            "crate_path": crate.crate_path_name,
+            "manifest": crate.manifest_path,
+        }
+        if extra_columns:
+            for key, _header, value_fn in extra_columns:
+                row[key] = value_fn(crate)
+        rows.append(row)
+
+    columns: list[tuple[str, str]] = [
+        ("crate", "crate"),
+        ("package", "package"),
+        ("crate_path", "crate_path"),
+        ("manifest", "manifest"),
+    ]
+    if extra_columns:
+        columns.extend((key, header) for key, header, _value_fn in extra_columns)
+    return render_table(rows, columns)
+
+
+def workspace_crate_section_lines(
+    repo_root: Path,
+    *,
+    title: str = "crates analyzed:",
+    extra_columns: list[tuple[str, str, Callable[[WorkspaceCrate], str]]] | None = None,
+) -> list[str]:
+    lines = [title]
+    lines.extend(render_workspace_crate_table(repo_root, extra_columns=extra_columns))
+    lines.append("")
+    return lines
 
 
 def lint_slug(lint_name: str) -> str:

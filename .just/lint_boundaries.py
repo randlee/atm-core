@@ -13,6 +13,7 @@ from lint_common import discover_repo_root
 from lint_common import is_comment_line
 from lint_common import monotonic_now
 from lint_common import print_report
+from lint_common import workspace_crate_section_lines
 
 
 LINT_NAME = "boundaries"
@@ -1046,7 +1047,11 @@ def run(repo_root: Path) -> int:
 
     duration_seconds = monotonic_now() - started_monotonic
     findings = [violation.render() for violation in violations]
-    transcript_lines = findings or [f"validated {len(records)} boundary records"]
+    transcript_lines = workspace_crate_section_lines(repo_root)
+    transcript_lines.append(f"boundary docs analyzed: {len(boundary_docs(repo_root))}")
+    transcript_lines.append(f"boundary records validated: {len(records)}")
+    transcript_lines.append("")
+    transcript_lines.extend(findings or ["no boundary violations found"])
     report = build_report(
         lint_name=LINT_NAME,
         repo_root=repo_root,

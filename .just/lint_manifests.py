@@ -11,6 +11,7 @@ from lint_common import build_report
 from lint_common import discover_repo_root
 from lint_common import monotonic_now
 from lint_common import print_report
+from lint_common import workspace_crate_section_lines
 
 
 LINT_NAME = "manifests"
@@ -122,7 +123,8 @@ def run(repo_root: Path) -> int:
     violations = collect_manifest_violations(repo_root)
     duration_seconds = monotonic_now() - started_monotonic
     findings = [violation.render() for violation in violations]
-    transcript_lines = findings or ["no manifest violations found"]
+    transcript_lines = workspace_crate_section_lines(repo_root)
+    transcript_lines.extend(findings or ["no manifest violations found"])
     report = build_report(
         lint_name=LINT_NAME,
         repo_root=repo_root,
