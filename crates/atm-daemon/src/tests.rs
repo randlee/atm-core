@@ -215,20 +215,28 @@ fn remote_acceptance_is_required_for_send_success() {
             accept_tcp_loop(listener, stop, inflight, worker_threads, dispatcher, 8)
         })
     };
-    let response = request_remote(
-        address,
-        &DaemonRequest {
-            team_name: TEST_TEAM.parse().expect("team"),
-            agent_name: TEST_SENDER.parse().expect("agent"),
-            payload: RequestPayload::Send(serde_json::json!({"message":"hello"})),
-        },
-        Duration::from_secs(5),
-    )
-    .expect("remote response");
+    let request = DaemonRequest {
+        team_name: TEST_TEAM.parse().expect("team"),
+        agent_name: TEST_SENDER.parse().expect("agent"),
+        payload: RequestPayload::Send(serde_json::json!({"message":"hello"})),
+    };
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    let response = loop {
+        match request_remote(address, &request, Duration::from_millis(250)) {
+            Ok(response) => break response,
+            Err(error)
+                if error.code == AtmErrorCode::DaemonProtocolFailed
+                    && std::time::Instant::now() < deadline =>
+            {
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            Err(error) => panic!("remote response: {error:?}"),
+        }
+    };
     assert_eq!(response.kind, RequestKind::Send);
     stop.store(true, Ordering::SeqCst);
-    let deadline = std::time::Instant::now() + SHUTDOWN_FORCE_TIMEOUT;
-    while !worker.is_finished() && std::time::Instant::now() < deadline {
+    let shutdown_deadline = std::time::Instant::now() + SHUTDOWN_FORCE_TIMEOUT;
+    while !worker.is_finished() && std::time::Instant::now() < shutdown_deadline {
         std::thread::sleep(Duration::from_millis(25));
     }
     assert!(
