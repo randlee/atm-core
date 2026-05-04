@@ -8,7 +8,7 @@ use crate::mail_store::{
 use crate::mailbox::{self, MailboxReadReport};
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::MessageEnvelope;
-use crate::store::{InsertOutcome, MessageKey, SourceFingerprint, StoreError, StoreErrorKind};
+use crate::store::{InsertOutcome, MessageKey, SourceFingerprint, StoreError};
 use crate::task_store::{TaskRecord, TaskStatus, TaskStore};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use crate::workflow::{self, WorkflowStateFile};
@@ -308,19 +308,5 @@ fn sender_canonical(envelope: &MessageEnvelope) -> Option<AgentName> {
 }
 
 fn map_store_error(context: &str, error: StoreError) -> AtmError {
-    let kind = match error.kind {
-        StoreErrorKind::Busy => AtmErrorKind::Timeout,
-        StoreErrorKind::Constraint => AtmErrorKind::Validation,
-        StoreErrorKind::Open
-        | StoreErrorKind::Bootstrap
-        | StoreErrorKind::Migration
-        | StoreErrorKind::Query
-        | StoreErrorKind::Transaction => AtmErrorKind::MailboxWrite,
-    };
-    let mut atm_error =
-        AtmError::new_with_code(error.code, kind, format!("{context}: {}", error.message));
-    if let Some(recovery) = error.recovery.as_ref() {
-        atm_error = atm_error.with_recovery(recovery.clone());
-    }
-    atm_error.with_source(error)
+    error.into_atm_error(context)
 }

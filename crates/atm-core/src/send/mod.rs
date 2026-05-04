@@ -531,15 +531,7 @@ fn duplicate_send_error(identity: StoreDuplicateIdentity) -> AtmError {
 }
 
 fn map_store_error(context: &str, error: StoreError) -> AtmError {
-    let mut atm_error = AtmError::new_with_code(
-        error.code,
-        crate::error::AtmErrorKind::MailboxWrite,
-        format!("{context}: {}", error.message),
-    );
-    if let Some(recovery) = error.recovery.as_ref() {
-        atm_error = atm_error.with_recovery(recovery.clone());
-    }
-    atm_error.with_source(error)
+    error.into_atm_error(context)
 }
 
 #[derive(Debug)]

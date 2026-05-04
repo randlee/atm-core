@@ -18,7 +18,7 @@ use atm_core::types::{AgentName, TeamName};
 use atm_core::{read_messages, write_messages};
 use atm_rusqlite::RusqliteStore;
 use helpers::{
-    ROLE_TEAM_LEAD, TEST_LEAD, TEST_QA_AGENT, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER,
+    ROLE_TEAM_LEAD, TEST_QA_AGENT, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER,
     TEST_SENDER_ADDRESS, TEST_TEAM, configure_atm_command,
 };
 use serde_json::Value;
@@ -838,10 +838,10 @@ fn test_send_runs_post_send_hook_when_recipient_matches_rule() {
 
 #[test]
 fn test_send_runs_post_send_hook_for_multiline_message_when_rule_matches() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'capture', '{}']\n",
+        "[[atm.post_send_hooks]]\nrecipient = '{TEST_RECIPIENT}'\ncommand = ['{}', 'capture', '{}']\n",
         hook_path.display(),
         payload_path.display()
     ));
@@ -865,12 +865,12 @@ fn test_send_runs_post_send_hook_for_multiline_message_when_rule_matches() {
 
 #[test]
 fn test_send_ignores_post_send_hook_configured_only_in_core_section() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
         "[core]\ndefault_team = '{}'\nidentity = '{}'\npost_send_hook = ['{}', 'capture', '{}']\n",
         TEST_TEAM,
-        TEST_LEAD,
+        TEST_SENDER,
         hook_path.display(),
         payload_path.display()
     ));
@@ -883,7 +883,7 @@ fn test_send_ignores_post_send_hook_configured_only_in_core_section() {
         fixture.stderr(&output)
     );
     assert!(!payload_path.exists(), "hook payload unexpectedly created");
-    let inbox = fixture.inbox_contents("recipient");
+    let inbox = fixture.inbox_contents(TEST_RECIPIENT);
     assert_eq!(inbox.len(), 1);
 }
 

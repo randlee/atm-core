@@ -500,9 +500,7 @@ mod tests {
         hook_result_log_level, parse_post_send_hook_result,
     };
     use crate::config::types::HookRecipient;
-    use crate::test_support::ROLE_TEAM_LEAD;
-
-    const TEST_SENDER: &str = "test-sender";
+    use crate::test_support::{TEST_QA_AGENT, TEST_SENDER};
 
     #[test]
     fn hook_matches_recipient_exact_and_wildcard_values() {
@@ -515,7 +513,7 @@ mod tests {
             &TEST_SENDER.parse().expect("candidate")
         ));
         assert!(!hook_matches_recipient(
-            &HookRecipient::Named(ROLE_TEAM_LEAD.parse().expect("recipient")),
+            &HookRecipient::Named(TEST_QA_AGENT.parse().expect("recipient")),
             &TEST_SENDER.parse().expect("candidate")
         ));
     }
