@@ -70,6 +70,11 @@ pub fn read_hook_identity() -> Result<Option<AgentName>, AtmError> {
 }
 
 fn hook_file_path() -> Option<std::path::PathBuf> {
+    #[cfg(test)]
+    if let Some(path) = test_hook_file_override::path() {
+        return Some(path);
+    }
+
     let pid = parent_pid()?;
     Some(std::env::temp_dir().join(format!("atm-hook-{pid}.json")))
 }
@@ -85,5 +90,44 @@ fn parent_pid() -> Option<u32> {
     #[cfg(not(unix))]
     {
         None
+    }
+}
+
+#[cfg(test)]
+pub(super) struct ScopedHookFilePathOverride {
+    original: Option<std::path::PathBuf>,
+}
+
+#[cfg(test)]
+impl ScopedHookFilePathOverride {
+    pub(super) fn set(path: std::path::PathBuf) -> Self {
+        Self {
+            original: test_hook_file_override::set(Some(path)),
+        }
+    }
+}
+
+#[cfg(test)]
+impl Drop for ScopedHookFilePathOverride {
+    fn drop(&mut self) {
+        test_hook_file_override::set(self.original.take());
+    }
+}
+
+#[cfg(test)]
+mod test_hook_file_override {
+    use std::cell::RefCell;
+    use std::path::PathBuf;
+
+    thread_local! {
+        static OVERRIDE: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+    }
+
+    pub(super) fn path() -> Option<PathBuf> {
+        OVERRIDE.with(|value| value.borrow().clone())
+    }
+
+    pub(super) fn set(path: Option<PathBuf>) -> Option<PathBuf> {
+        OVERRIDE.with(|value| value.replace(path))
     }
 }

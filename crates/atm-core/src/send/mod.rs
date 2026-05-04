@@ -33,7 +33,7 @@ pub(super) mod hook;
 pub(crate) mod input;
 pub(crate) mod summary;
 
-const ROLE_TEAM_LEAD: &str = "team-lead";
+const MISSING_CONFIG_NOTICE_SENDER: &str = "atm-identity-missing";
 
 #[derive(Debug, Clone)]
 pub enum SendMessageSource {
@@ -603,11 +603,6 @@ fn notify_team_lead_missing_config(
     team: &TeamName,
     recipient: &AgentName,
 ) {
-    let alert_key = alert_state::missing_team_config_alert_key(team_dir);
-    if !alert_state::register_missing_team_config_alert(home_dir, &alert_key) {
-        return;
-    }
-
     let team_lead_inbox = match home::inbox_path_from_home(
         home_dir,
         team,
@@ -629,6 +624,11 @@ fn notify_team_lead_missing_config(
         return;
     }
 
+    let alert_key = alert_state::missing_team_config_alert_key(team_dir);
+    if !alert_state::register_missing_team_config_alert(home_dir, &alert_key) {
+        return;
+    }
+
     let config_path = team_dir.join("config.json");
     let (atm_message_id, timestamp) = AtmMessageId::new_with_timestamp();
     let mut extra = Map::new();
@@ -643,7 +643,7 @@ fn notify_team_lead_missing_config(
     );
 
     let notice = MessageEnvelope {
-        from: AgentName::from_validated("atm-identity-missing"),
+        from: AgentName::from_validated(MISSING_CONFIG_NOTICE_SENDER),
         text: format!(
             "ATM warning: send used existing inbox fallback for {recipient}@{team} because team config is missing at {}. Please restore config.json.",
             config_path.display()
@@ -672,6 +672,7 @@ fn notify_team_lead_missing_config(
         &team_lead_inbox,
         &notice,
     ) {
+        alert_state::clear_missing_team_config_alert(home_dir, &alert_key);
         warn!(
             code = %AtmErrorCode::WarningMissingTeamConfigFallback,
             %error,
@@ -783,9 +784,11 @@ mod tests {
     use tempfile::tempdir;
 
     use super::alert_state;
+    use crate::home;
     use crate::process::process_is_alive;
     use crate::send::{SendMessageSource, SendRequest};
     use crate::test_support::ROLE_TEAM_LEAD;
+    use crate::types::{AgentName, TeamName};
 
     const TEST_TEAM: &str = "test-team";
     const TEST_RECIPIENT: &str = "test-recipient";
@@ -838,6 +841,41 @@ mod tests {
         assert_eq!(pid.trim(), std::process::id().to_string());
         drop(guard);
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn notify_team_lead_missing_config_skips_dedup_state_when_lead_inbox_is_absent() {
+        let tempdir = tempdir().expect("tempdir");
+        let team: TeamName = TEST_TEAM.parse().expect("team");
+        let recipient: AgentName = TEST_RECIPIENT.parse().expect("agent");
+        let team_dir = home::team_dir_from_home(tempdir.path(), &team).expect("team dir");
+        fs::create_dir_all(&team_dir).expect("team dir exists");
+
+        super::notify_team_lead_missing_config(tempdir.path(), &team_dir, &team, &recipient);
+
+        let state = alert_state::load(&alert_state::state_path(tempdir.path())).expect("state");
+        assert!(state.missing_team_config_keys.is_empty(), "{state:?}");
+    }
+
+    #[test]
+    fn notify_team_lead_missing_config_clears_dedup_state_when_notice_write_fails() {
+        let tempdir = tempdir().expect("tempdir");
+        let team: TeamName = TEST_TEAM.parse().expect("team");
+        let recipient: AgentName = TEST_RECIPIENT.parse().expect("agent");
+        let team_dir = home::team_dir_from_home(tempdir.path(), &team).expect("team dir");
+        let lead_inbox = home::inbox_path_from_home(
+            tempdir.path(),
+            &team,
+            &AgentName::from_validated(ROLE_TEAM_LEAD),
+        )
+        .expect("lead inbox");
+        fs::create_dir_all(&team_dir).expect("team dir exists");
+        fs::create_dir_all(&lead_inbox).expect("directory at lead inbox path");
+
+        super::notify_team_lead_missing_config(tempdir.path(), &team_dir, &team, &recipient);
+
+        let state = alert_state::load(&alert_state::state_path(tempdir.path())).expect("state");
+        assert!(state.missing_team_config_keys.is_empty(), "{state:?}");
     }
 
     #[test]

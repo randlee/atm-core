@@ -22,8 +22,6 @@ pub(crate) use restore::{
     ScopedRestoreInboxStageFailureOverride, ScopedRestoreMarkerRemoveFailureOverride,
 };
 
-pub(crate) const ROLE_TEAM_LEAD: &str = "team-lead";
-
 /// One discovered team and its current member count.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct TeamSummary {
@@ -531,6 +529,8 @@ mod team_config_write_test_override {
     use std::cell::Cell;
 
     thread_local! {
+        // Test-only fault seam. `Cell<bool>` keeps the override process-local
+        // without introducing borrow state or synchronization into production paths.
         static OVERRIDE: Cell<bool> = const { Cell::new(false) };
     }
 

@@ -21,8 +21,6 @@ pub use report::{
     DoctorStatus, DoctorSummary,
 };
 
-const ROLE_TEAM_LEAD: &str = "team-lead";
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DoctorQuery {
     pub home_dir: PathBuf,
