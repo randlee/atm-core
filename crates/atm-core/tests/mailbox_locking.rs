@@ -26,12 +26,14 @@ use atm_core::send::{SendMessageSource, SendRequest, send_mail};
 use atm_core::test_support::{TEST_QA, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
 use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
 use chrono::Utc;
+#[cfg(unix)]
 use fs2::FileExt;
 use tempfile::TempDir;
 use uuid::Uuid;
 
 // Test-side ceiling guard only; production lock timeout defaults to 5s per
 // architecture §18.3.
+#[cfg(unix)]
 const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(2);
 const PRIMARY_TEAM: &str = TEST_TEAM;
 const PRIMARY_AGENT: &str = TEST_SENDER;
