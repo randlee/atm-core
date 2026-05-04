@@ -1364,6 +1364,8 @@ Bare `atm teams` must:
 `atm teams backup` must:
 - create a timestamped snapshot under the ATM team backup area
 - capture the current `config.json`
+- capture the ATM-owned `.atm-state` tree, including SQLite durable state
+  (`mail.db`) and workflow compatibility state when present
 - capture team inbox files, excluding transient `*.lock` sentinels, dotfiles,
   and restore markers
 - capture the ATM team task bucket
@@ -1378,9 +1380,10 @@ Bare `atm teams` must:
 - add only missing non-lead members from the snapshot
 - clear runtime-only restored-member fields such as session, activity, and
   pane state before persisting them
+- restore the ATM-owned `.atm-state` tree from the chosen snapshot when present
 - restore non-lead inbox files from the chosen snapshot deterministically
-- sweep stale inbox `*.lock` sentinels before copying restored inbox files as a
-  self-heal step
+- treat stale inbox `*.lock` sentinels as transitional compatibility
+  diagnostics rather than a restore correctness gate
 - restore the ATM team task bucket and recompute `.highwatermark` from the
   maximum restored task id
 - fail with a structured error when backup material is missing or malformed
@@ -1764,8 +1767,6 @@ Product requirement ID:
 Satisfied by:
 - intentionally undecomposed product requirement; this governs workspace-level
   test coverage expectations rather than a single crate-local requirement ID
-- `REQ-CORE-TEST-001` for subprocess-isolation, fixture-naming, and explicit
-  production-compatibility carve-out rules
 
 Because `sc-observability` is newly introduced into ATM, the rewrite must add explicit test coverage for:
 - ATM event emission through the observability port boundary
@@ -1795,33 +1796,6 @@ The implementation must include:
 - CLI integration tests for `atm clear`
 - CLI integration tests for `atm teams`
 - CLI integration tests for `atm members`
-
-### 18.1 Subprocess Isolation
-
-- `REQ-CORE-TEST-001` ATM test subprocesses must isolate filesystem and
-  environment state and must not hardcode production-like team or agent
-  identities except in explicit production-compatibility tests.
-
-  See also:
-  - [`cross-platform-guidelines.md`](./cross-platform-guidelines.md) §Test Subprocess Isolation
-
-  Required behavior:
-  - (a) tests use test-only fixture constants for all team, agent, and
-    role-significant names rather than raw repo-significant production names
-  - (b) subprocess tests provision isolated `ATM_HOME`, `ATM_CONFIG_HOME`, and
-    `ATM_TEAMS_DIR` as needed and pass `ATM_*` vars per-command rather than
-    through ambient process state
-  - (c) direct-call tests use explicit `team_override` / `actor_override`
-    inputs or TempDir-scoped config; `team_override: None` with an empty or
-    unrelated current directory is a violation
-  - (d) test fixtures write all required config to TempDir-owned state and do
-    not read repo `.atm.toml` or live mailbox directories
-  - tests that need the semantic role represented by `team-lead` centralize
-    that raw literal behind one named constant
-  - tests may set `ATM_TEAM` or `ATM_IDENTITY` when validating production
-    env-read behavior, but only inside the isolated subprocess harness
-  - ambient reuse of a developer workstation ATM home, team, or identity is
-    forbidden
 
 ## 19. Acceptance Criteria
 
