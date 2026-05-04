@@ -12,6 +12,7 @@ if str(JUST_DIR) not in sys.path:
 
 from check_version_sync import validate_crate_versions
 from check_version_sync import validate_lockfile
+from check_version_sync import success_message
 
 
 ROOT_MANIFEST = """\
@@ -96,6 +97,12 @@ version = "1.1.2"
                 validate_lockfile(repo_root, "1.1.2")
 
             self.assertIn("agent-team-mail-rusqlite missing from Cargo.lock", str(error.exception))
+
+    def test_success_message_includes_workspace_version(self) -> None:
+        self.assertEqual(
+            success_message("1.1.2"),
+            "version sync check passed: workspace_version=1.1.2; workspace, crate pin, Cargo.lock, winget, and Homebrew release wiring are aligned.",
+        )
 
 
 if __name__ == "__main__":

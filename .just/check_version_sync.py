@@ -150,6 +150,13 @@ def validate_homebrew_release_wiring(repo_root: Path) -> None:
             )
 
 
+def success_message(workspace_version: str) -> str:
+    return (
+        f"version sync check passed: workspace_version={workspace_version}; "
+        "workspace, crate pin, Cargo.lock, winget, and Homebrew release wiring are aligned."
+    )
+
+
 def main() -> int:
     repo_root = Path(__file__).resolve().parent.parent
     workspace_version = validate_workspace_version(repo_root)
@@ -157,10 +164,7 @@ def main() -> int:
     validate_lockfile(repo_root, workspace_version)
     validate_winget_manifest(repo_root, workspace_version)
     validate_homebrew_release_wiring(repo_root)
-    print(
-        "version sync check passed: workspace, crate pin, Cargo.lock, winget, "
-        "and Homebrew release wiring are aligned."
-    )
+    print(success_message(workspace_version))
     return 0
 
 
