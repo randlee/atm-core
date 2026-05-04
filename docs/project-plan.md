@@ -2553,6 +2553,7 @@ Scope:
 
 Implementation focus:
 - one shared inbox write boundary
+
 - one shared inbox hydration boundary
 - one owned message-id compatibility bridge
 - explicit roster/member construction instead of hidden defaults
@@ -2740,3 +2741,23 @@ QA invariants for every Phase Q pass:
 - SQLite remains the source of truth for mail and roster
 - live status remains daemon-memory truth
 - Claude compatibility remains Claude-native top-level plus `metadata.atm`
+
+## 22. Phase R — Boundary Establishment And Enforcement
+
+Detailed execution source:
+- [`docs/plan-phase-R.md`](./plan-phase-R.md)
+
+Summary:
+- Phase R is the active redesign line that replaces the abandoned Phase Q
+  implementation path.
+- Wave 1 establishes enforceable crate boundaries before substantive feature
+  work resumes:
+  - lint/parser foundation and debt burn-down
+  - the new crate skeleton
+  - public boundary traits/facades
+  - major shared data structures
+- Wave 2 implements behavior only against those enforced boundaries.
+
+Cross-reference:
+- The authoritative sprint-by-sprint Phase R plan lives in
+  [`docs/plan-phase-R.md`](./plan-phase-R.md).

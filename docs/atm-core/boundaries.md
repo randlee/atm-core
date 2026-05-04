@@ -20,8 +20,8 @@ owner_crate_path: atm_core
 name: AtmProtocol
 
 public:
-  trait: null
-  facade: AtmProtocol
+  trait: AtmProtocol
+  facade: null
 
 implementation:
   type: null
@@ -59,11 +59,9 @@ references:
 
 contracts:
   request_types:
-    - SendRequest
-    - ReceiveRequest
+    - AtmRequestEnvelope
   response_types:
-    - SendResponse
-    - ReceiveResponse
+    - AtmResponseEnvelope
   error_types:
     - AtmError
 
@@ -136,9 +134,9 @@ references:
 
 contracts:
   request_types:
-    - AtmProtocol requests
+    - AtmRequestEnvelope
   response_types:
-    - AtmProtocol responses
+    - AtmResponseEnvelope
   error_types:
     - AtmError
 
@@ -358,9 +356,9 @@ references:
 
 contracts:
   request_types:
-    - AtmProtocol requests
+    - AtmRequestEnvelope
   response_types:
-    - AtmProtocol responses
+    - AtmResponseEnvelope
   error_types:
     - AtmError
 
@@ -470,6 +468,7 @@ name: MailStore
 public:
   trait: MailStore
   facade: null
+  notes: planned trait name — not yet landed (Wave 2, R.4)
 
 implementation:
   type: null
@@ -523,8 +522,9 @@ enforcement:
     - no_concrete_store_leakage
 
 status:
-  state: planned
+  state: deferred
   notes:
+    - Wave 2 (R.4) — implementation sprint not yet scheduled
     - mail state remains distinct from task and roster state
 ```
 
@@ -545,6 +545,7 @@ name: TaskStore
 public:
   trait: TaskStore
   facade: null
+  notes: planned trait name — not yet landed (Wave 2, R.4)
 
 implementation:
   type: null
@@ -597,8 +598,9 @@ enforcement:
     - no_concrete_store_leakage
 
 status:
-  state: planned
+  state: deferred
   notes:
+    - Wave 2 (R.4) — implementation sprint not yet scheduled
     - ack-specific state changes belong here even when ack is modeled through send
 ```
 
@@ -619,6 +621,7 @@ name: RosterStore
 public:
   trait: RosterStore
   facade: null
+  notes: planned trait name — not yet landed (Wave 2, R.4)
 
 implementation:
   type: null
@@ -671,8 +674,9 @@ enforcement:
     - no_concrete_store_leakage
 
 status:
-  state: planned
+  state: deferred
   notes:
+    - Wave 2 (R.4) — implementation sprint not yet scheduled
     - live status belongs elsewhere; this boundary owns durable roster truth only
 ```
 
@@ -693,6 +697,7 @@ name: ConfigIngress
 public:
   trait: ConfigIngress
   facade: null
+  notes: planned trait name — not yet landed (Wave 2, R.4)
 
 implementation:
   type: null
@@ -746,8 +751,9 @@ enforcement:
     - no_direct_config_parser_calls
 
 status:
-  state: planned
+  state: deferred
   notes:
+    - Wave 2 (R.4) — implementation sprint not yet scheduled
     - this boundary replaces direct command/service calls into a concrete parser module
 ```
 
@@ -768,6 +774,7 @@ name: InboxIngress
 public:
   trait: InboxIngress
   facade: null
+  notes: planned trait name — not yet landed (Wave 2, R.4)
 
 implementation:
   type: null
@@ -819,8 +826,9 @@ enforcement:
     - no_direct_mailbox_helper_calls
 
 status:
-  state: planned
+  state: deferred
   notes:
+    - Wave 2 (R.4) — implementation sprint not yet scheduled
     - watcher-driven reconcile should call this boundary rather than store helpers directly
 ```
 
@@ -841,6 +849,7 @@ name: InboxExport
 public:
   trait: InboxExport
   facade: null
+  notes: planned trait name — not yet landed (Wave 2, R.4)
 
 implementation:
   type: null
@@ -893,8 +902,9 @@ enforcement:
     - no_direct_mailbox_helper_calls
 
 status:
-  state: planned
+  state: deferred
   notes:
+    - Wave 2 (R.4) — implementation sprint not yet scheduled
     - send and receive state transitions should reach compatibility files through this boundary only
 ```
 

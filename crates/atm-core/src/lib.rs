@@ -2,6 +2,8 @@
 pub mod ack;
 /// Public agent-address parsing and normalization helpers.
 pub mod address;
+/// Phase R boundary traits and placeholder contract types.
+pub mod boundary;
 /// Mailbox cleanup workflows for read and acknowledged messages.
 pub mod clear;
 /// Internal configuration discovery and resolution helpers.
@@ -47,3 +49,12 @@ pub(crate) mod text;
 pub mod types;
 /// Internal ATM-owned workflow-state helpers shared across mailbox services.
 pub(crate) mod workflow;
+
+pub use boundary::{
+    AtmFramePayload, AtmProtocol, AtmRequestEnvelope, AtmResponseEnvelope, ClientTransport,
+    ClientTransportRequest, ClientTransportResponse, DispatchRequestEnvelope,
+    DispatchResponseEnvelope, NotificationEvent, NotificationSink, ReconcileCoordinator,
+    ReconcileRequest, ReconcileResult, RequestDispatcher, RuntimeStatusSnapshot, ServerTransport,
+    ServerTransportRequest, ServerTransportResponse, StatusSource, WatchEventBatch,
+    WatchEventSource, WatchSubscriptionRequest,
+};
