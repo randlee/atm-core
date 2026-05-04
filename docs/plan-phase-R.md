@@ -214,6 +214,17 @@ hardened document set above and should drive the next implementation steps.
 Wave 1 uses lint, parser, and skeleton work to establish and enforce hard code
 boundaries before substantive implementation begins.
 
+Primary Wave 1 deliverable:
+- the new Phase R skeleton:
+  - new crates
+  - public boundary traits/facades
+  - major data structures
+
+Supporting prerequisites inside Wave 1:
+- `R.0` lint foundation
+- `R.1` current lint debt burn-down
+- `R.2A` parallel lint hardening
+
 ### R.0 Lint Foundation
 
 ### R.0.1 Boundary Parser
@@ -279,21 +290,26 @@ Required outcome:
 - create the new Phase R crate/module skeleton needed by the hardened boundary
   design
 - define the public boundary traits/facades first
+- define the major data structures needed by the new boundary-owned surfaces
 - create private implementation shells where the design already identifies the
   concrete owner
 - give lint concrete ownership surfaces to validate against
 
 Required shape:
+- new Phase R crate/module layout
 - `AtmProtocol` contract in `atm-core`
 - `ClientTransport` / `ServerTransport` traits
 - `RequestDispatcher` trait/facade
 - store boundary traits
+- major protocol/store/config/inbox boundary-owned data structures
 - config/inbox/notification/status/watch/reconcile traits
 - composition roots in `atm` and `atm-daemon`
 
 Acceptance:
 - the architecture can compile in skeleton form
 - lint has real crates/modules/traits/impl shells to inspect
+- Wave 1 produces the concrete boundary-owned skeleton that later implementation
+  sprints build on
 
 ### R.2A Parallel Lint Hardening
 
