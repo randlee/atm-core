@@ -1,3 +1,5 @@
+// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
+
 pub mod hook;
 
 use crate::config::AtmConfig;
@@ -217,3 +219,5 @@ mod tests {
         unsafe { env::remove_var(key) }
     }
 }
+
+// lint-identities: allow-end

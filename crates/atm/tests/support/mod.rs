@@ -1,3 +1,7 @@
+// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
+
+#![allow(dead_code)]
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::io;
@@ -6,9 +10,13 @@ use std::path::PathBuf;
 use serde_json::json;
 use tempfile::TempDir;
 
+#[allow(dead_code)]
 pub const TEST_TEAM: &str = "test-team";
+#[allow(dead_code)]
 pub const TEST_SENDER: &str = "test-sender";
+#[allow(dead_code)]
 pub const TEST_RECIPIENT: &str = "test-recipient";
+#[allow(dead_code)]
 pub const TEST_LEAD: &str = "test-lead";
 pub const ROLE_TEAM_LEAD: &str = "team-lead";
 
@@ -73,7 +81,10 @@ impl TestEnvBuilder {
             .into_iter()
             .map(|name| json!({ "name": name }))
             .collect::<Vec<_>>();
-        fs::write(config_path, serde_json::to_vec_pretty(&json!({ "members": members }))?)?;
+        fs::write(
+            config_path,
+            serde_json::to_vec_pretty(&json!({ "members": members }))?,
+        )?;
 
         let env_map = BTreeMap::from([
             (
@@ -115,3 +126,5 @@ impl Default for TestEnvBuilder {
         }
     }
 }
+
+// lint-identities: allow-end

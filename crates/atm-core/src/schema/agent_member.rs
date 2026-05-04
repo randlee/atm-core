@@ -1,3 +1,5 @@
+// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
+
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
@@ -189,3 +191,5 @@ mod tests {
         assert!(member.cwd.is_empty());
     }
 }
+
+// lint-identities: allow-end

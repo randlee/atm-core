@@ -1,3 +1,5 @@
+// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
+
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -566,3 +568,5 @@ mod tests {
         finish_abandoned_post_send_hook_stdout_capture(Some(handle), Path::new("hook"));
     }
 }
+
+// lint-identities: allow-end

@@ -1,3 +1,7 @@
+mod support;
+
+// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
+
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
@@ -410,3 +414,5 @@ impl TailReader {
         let _ = self.child.wait_with_output().expect("tail output");
     }
 }
+
+// lint-identities: allow-end

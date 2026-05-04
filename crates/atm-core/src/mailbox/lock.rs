@@ -1,3 +1,5 @@
+// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
+
 use std::fs::{self, File, OpenOptions};
 use std::io;
 use std::io::Write;
@@ -1235,3 +1237,5 @@ mod tests {
 
     use std::path::PathBuf;
 }
+
+// lint-identities: allow-end

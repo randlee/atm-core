@@ -1,3 +1,5 @@
+// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
+
 pub(crate) mod filters;
 pub(crate) mod seen_state;
 pub(crate) mod state;
@@ -821,3 +823,5 @@ mod tests {
         assert!(error.message.contains("agent name"));
     }
 }
+
+// lint-identities: allow-end

@@ -1,3 +1,7 @@
+mod support;
+
+// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
+
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -1139,3 +1143,5 @@ impl Fixture {
         String::from_utf8(output.stderr.clone()).expect("stderr utf8")
     }
 }
+
+// lint-identities: allow-end

@@ -8,6 +8,8 @@
 //! runtime sender identity resolution. Set `ATM_IDENTITY` instead and remove
 //! the deprecated config keys once the environment-based identity is in place.
 
+// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
+
 pub mod aliases;
 pub mod bridge;
 pub mod discovery;
@@ -801,3 +803,5 @@ post_send_hook_recipients = ["team-lead"]
         unsafe { env::remove_var(key) }
     }
 }
+
+// lint-identities: allow-end

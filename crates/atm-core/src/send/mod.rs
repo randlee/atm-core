@@ -1,5 +1,7 @@
 //! Send command service implementation and post-send hook handling.
 
+// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
+
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -620,3 +622,5 @@ mod tests {
         assert!(error.message.contains("team name"));
     }
 }
+
+// lint-identities: allow-end

@@ -1,3 +1,5 @@
+// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
+
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::fs::OpenOptions;
@@ -1244,3 +1246,5 @@ fn message_atm_id_from_extra(
         .and_then(serde_json::Value::as_str)
         .and_then(|value| value.parse().ok())
 }
+
+// lint-identities: allow-end

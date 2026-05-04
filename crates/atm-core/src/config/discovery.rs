@@ -1,5 +1,7 @@
 //! Post-send hook config normalization helpers.
 
+// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
+
 use std::path::{Path, PathBuf};
 
 use crate::address::validate_path_segment;
@@ -230,3 +232,5 @@ mod tests {
         assert!(error.message.contains("command program must not be empty"));
     }
 }
+
+// lint-identities: allow-end

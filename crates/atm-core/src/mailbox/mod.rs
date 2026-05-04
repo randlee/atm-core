@@ -1,5 +1,7 @@
 //! Mailbox read/write helpers, compatibility parsing, and lock-scoped mutation.
 
+// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
+
 pub(crate) mod atomic;
 pub(crate) mod hash;
 pub(crate) mod lock;
@@ -532,3 +534,5 @@ mod tests {
         }
     }
 }
+
+// lint-identities: allow-end

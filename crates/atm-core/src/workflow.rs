@@ -5,6 +5,8 @@
 //! project these fields onto the Claude-owned inbox surface, but command-layer
 //! code must not shape or persist workflow JSON directly.
 
+// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -366,3 +368,5 @@ mod tests {
         assert_eq!(state.messages.len(), 1);
     }
 }
+
+// lint-identities: allow-end

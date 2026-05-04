@@ -1,3 +1,7 @@
+mod support;
+
+// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
+
 use std::fs;
 use std::process::Command;
 
@@ -1034,3 +1038,5 @@ fn idle_notification_text(from: &str, idle_reason: &str) -> String {
     })
     .to_string()
 }
+
+// lint-identities: allow-end

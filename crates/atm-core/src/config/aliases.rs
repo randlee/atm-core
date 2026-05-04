@@ -1,3 +1,5 @@
+// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
+
 use super::AtmConfig;
 
 pub fn resolve_agent(value: &str, config: Option<&AtmConfig>) -> String {
@@ -53,3 +55,5 @@ mod tests {
         assert_eq!(preferred_alias("arch-ctm", Some(&config)), None);
     }
 }
+
+// lint-identities: allow-end
