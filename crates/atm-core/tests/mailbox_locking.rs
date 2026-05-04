@@ -833,12 +833,12 @@ enum CommandOp {
 // process-local only; it does not coordinate with other test processes.
 fn env_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    // These tests mutate process-global environment variables while exercising
+    // These tests mutate the process-global `ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS`,
+    // `ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT`, and
+    // `ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR` knobs while exercising
     // mailbox lock behavior. Keep a single process-wide mutex in addition to
     // `#[serial]` so a poisoned lock fails the suite closed instead of silently
-    // continuing with inconsistent shared state. The injected knobs still use
-    // the `ATM_TEST_*` prefix; there is no separate `ATM_INTERNAL_TEST_*`
-    // namespace on this branch.
+    // continuing with inconsistent shared state.
     LOCK.get_or_init(|| Mutex::new(()))
 }
 

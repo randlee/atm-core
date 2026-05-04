@@ -174,8 +174,6 @@ mod tests {
     use std::cell::Cell;
     use std::sync::{Mutex, OnceLock};
 
-    #[cfg(unix)]
-    use serial_test::serial;
     use tempfile::tempdir;
 
     use super::{atomic_write_bytes, temp_path_for_atomic_write};
@@ -266,7 +264,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial]
+    #[serial_test::serial]
     fn atomic_write_bytes_reports_parent_sync_failure_via_deterministic_hook() {
         let _env_lock = env_lock().lock().expect("env lock");
         let _fault = ParentSyncFailureGuard::enable();

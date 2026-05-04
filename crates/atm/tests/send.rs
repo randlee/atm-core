@@ -361,7 +361,7 @@ fn test_send_missing_config_deduplicates_team_lead_notice() {
 }
 
 #[test]
-fn test_send_missing_config_deduplicates_team_lead_notice_under_concurrency() {
+fn test_send_missing_config_retains_at_most_two_team_lead_notices_under_concurrency() {
     let fixture = Fixture::new(TEST_RECIPIENT);
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
     fixture.write_inbox(TEST_RECIPIENT, &[]);
