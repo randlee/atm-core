@@ -8,20 +8,9 @@ from pathlib import Path
 
 FORBIDDEN_LITERALS = ("team-lead", "arch-ctm", "atm-dev", "quality-mgr")
 
-ALLOWED_PATTERNS = (
-    re.compile(r"\b(?:pub\s+)?const\s+(?:ROLE_TEAM_LEAD|TEST_[A-Z0-9_]+)\b"),
-    re.compile(r"\b(?:ROLE_TEAM_LEAD|TEST_[A-Z0-9_]+)\b"),
-    re.compile(r"\bATM_(?:TEAM|IDENTITY)\b"),
-)
-
 ALLOW_NEXT_LINE_PATTERN = re.compile(r"rule-008:\s*allow-next-line\b", re.IGNORECASE)
 ALLOW_BLOCK_START_PATTERN = re.compile(r"rule-008:\s*allow-start\b", re.IGNORECASE)
 ALLOW_BLOCK_END_PATTERN = re.compile(r"rule-008:\s*allow-end\b", re.IGNORECASE)
-
-EXCLUDED_PATHS = {
-    "crates/atm/tests/support/mod.rs",
-    "crates/atm-core/tests/support.rs",
-}
 
 
 def is_test_scope(path: Path, text: str) -> bool:
@@ -33,8 +22,6 @@ def collect_test_lines(repo_root: Path) -> list[tuple[Path, int, str]]:
     results: list[tuple[Path, int, str]] = []
     for abs_path in sorted(crate_root.rglob("*.rs")):
         rel_path = abs_path.relative_to(repo_root)
-        if rel_path.as_posix() in EXCLUDED_PATHS:
-            continue
         text = abs_path.read_text(encoding="utf-8")
         if not is_test_scope(rel_path, text):
             continue
@@ -47,7 +34,15 @@ def collect_test_lines(repo_root: Path) -> list[tuple[Path, int, str]]:
 def line_has_allow_next_line(line_number: int, lines: list[str]) -> bool:
     if line_number <= 1:
         return False
-    return bool(ALLOW_NEXT_LINE_PATTERN.search(lines[line_number - 2]))
+    index = line_number - 2
+    while index >= 0:
+        line = lines[index]
+        if ALLOW_NEXT_LINE_PATTERN.search(line):
+            return True
+        if not is_comment_line(line):
+            return False
+        index -= 1
+    return False
 
 
 def line_is_inside_allow_block(line_number: int, lines: list[str]) -> bool:
@@ -60,15 +55,27 @@ def line_is_inside_allow_block(line_number: int, lines: list[str]) -> bool:
     return allow_depth > 0
 
 
+def is_comment_or_empty(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped:
+        return True
+    return stripped.startswith(("//", "///", "//!", "/*", "*", "*/"))
+
+
+def is_comment_line(line: str) -> bool:
+    stripped = line.strip()
+    return stripped.startswith(("//", "///", "//!", "/*", "*", "*/"))
+
+
 def main() -> int:
     repo_root = Path(__file__).resolve().parent.parent
     failures: list[tuple[str, int, str]] = []
     scanned_lines = collect_test_lines(repo_root)
     cached_lines: dict[str, list[str]] = {}
     for path, line_number, line in scanned_lines:
-        if not any(literal in line for literal in FORBIDDEN_LITERALS):
+        if is_comment_or_empty(line):
             continue
-        if any(pattern.search(line) for pattern in ALLOWED_PATTERNS):
+        if not any(literal in line for literal in FORBIDDEN_LITERALS):
             continue
         path_key = path.as_posix()
         if path_key not in cached_lines:

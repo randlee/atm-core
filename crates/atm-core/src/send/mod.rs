@@ -16,6 +16,7 @@ use crate::inbox_ingress::InboxIngress;
 use crate::mail_store::{AckStateRecord, MailStore, MessageSourceKind, StoredMessageRecord};
 use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
+use crate::roles::ROLE_TEAM_LEAD;
 use crate::roster_store::{RosterMemberRecord, RosterStore};
 use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
 use crate::store::{
@@ -23,7 +24,6 @@ use crate::store::{
 };
 use crate::task_store::{TaskRecord, TaskStatus, TaskStore};
 use crate::team_ingress;
-use crate::test_support::ROLE_TEAM_LEAD;
 use crate::types::{AgentName, TaskId, TeamName};
 use crate::workflow;
 

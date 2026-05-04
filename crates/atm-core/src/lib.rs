@@ -41,6 +41,8 @@ pub(crate) mod persistence;
 pub(crate) mod process;
 /// Mailbox read/query workflows and output models.
 pub mod read;
+/// Reserved production role constants shared across runtime and tests.
+pub mod roles;
 /// Durable roster-store contracts and records.
 pub mod roster_store;
 /// Public mailbox and team schema types shared with CLI tests and adapters.
@@ -57,6 +59,7 @@ pub mod team_admin;
 pub mod team_ingress;
 /// Shared synthetic test identities and role constants used across crate tests.
 #[doc(hidden)]
+#[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 /// Internal text-formatting helpers used by ATM core surfaces.
 pub(crate) mod text;

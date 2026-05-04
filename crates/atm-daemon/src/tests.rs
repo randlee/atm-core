@@ -188,7 +188,7 @@ fn bounded_remote_host_unreachable_behavior_is_typed() {
         payload: RequestPayload::Send(serde_json::json!({"message":"hello"})),
     };
     for attempt in 0..LOOPBACK_PROBE_ATTEMPTS {
-        let address = closed_loopback_address();
+        let (_listener, address) = closed_loopback_address();
         match request_remote(address, &request, Duration::from_millis(250)) {
             Err(error) => {
                 assert_eq!(error.code, AtmErrorCode::DaemonRemoteUnavailable);
@@ -206,11 +206,10 @@ fn bounded_remote_host_unreachable_behavior_is_typed() {
     unreachable!("loopback retry guard must return or panic inside the loop");
 }
 
-fn closed_loopback_address() -> std::net::SocketAddr {
+fn closed_loopback_address() -> (TcpListener, std::net::SocketAddr) {
     let listener = TcpListener::bind(("127.0.0.1", 0)).expect("probe listener");
     let address = listener.local_addr().expect("probe addr");
-    drop(listener);
-    address
+    (listener, address)
 }
 
 #[test]

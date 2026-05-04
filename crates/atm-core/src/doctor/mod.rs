@@ -10,9 +10,9 @@ use crate::config;
 use crate::error_codes::AtmErrorCode;
 use crate::mailbox::lock;
 use crate::observability::ObservabilityPort;
+use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::AgentMember;
 use crate::team_admin::{MemberSummary, MembersList};
-use crate::test_support::ROLE_TEAM_LEAD;
 use crate::types::{AgentName, TeamName};
 use serde::{Deserialize, Serialize};
 

@@ -10,8 +10,8 @@ use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
 use crate::mailbox::lock;
 use crate::persistence;
+use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::AgentMember;
-use crate::test_support::ROLE_TEAM_LEAD;
 
 use super::{RestoreOutcome, RestorePlan, RestoreRequest, RestoreResult};
 

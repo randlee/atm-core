@@ -127,6 +127,7 @@ mod tests {
     use std::sync::Arc;
 
     use atm_core::dispatcher::{DaemonRequest, RequestKind, RequestPayload};
+    use atm_core::roles::ROLE_TEAM_LEAD;
     use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
     use atm_core::write_messages;
     use atm_daemon::{CoreDispatcher, TestSocketClient};
@@ -134,7 +135,6 @@ mod tests {
 
     const TEST_TEAM: &str = "test-team";
     const TEST_SENDER: &str = "sender-a";
-    const ROLE_TEAM_LEAD: &str = "team-lead";
 
     #[test]
     fn build_query_rejects_invalid_target_before_core() {
