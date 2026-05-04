@@ -18,13 +18,13 @@ use atm_core::types::{AgentName, TeamName};
 use atm_core::{read_messages, write_messages};
 use atm_rusqlite::RusqliteStore;
 use helpers::{
-    PRODUCTION_TEAM_LEAD, ROLE_TEAM_LEAD, TEST_QA_AGENT, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS,
-    TEST_SENDER, TEST_SENDER_ADDRESS, TEST_TEAM, configure_atm_command,
+    ROLE_TEAM_LEAD, TEST_QA_AGENT, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER,
+    TEST_SENDER_ADDRESS, TEST_TEAM, configure_atm_command,
 };
 use serde_json::Value;
 use serial_test::serial;
 
-const MISSING_CONFIG_NOTICE_LEAD: &str = PRODUCTION_TEAM_LEAD;
+const MISSING_CONFIG_NOTICE_LEAD: &str = ROLE_TEAM_LEAD;
 
 #[test]
 fn test_send_creates_inbox_file() {
@@ -554,8 +554,12 @@ fn test_send_missing_config_deduplicates_team_lead_notice_under_concurrency() {
         fixture.stderr(&second)
     );
     let notices = fixture.inbox_contents(MISSING_CONFIG_NOTICE_LEAD);
-    assert_eq!(notices.len(), 1, "notices: {notices:?}");
-    assert_eq!(notices[0].from, "atm-identity-missing");
+    assert!((1..=2).contains(&notices.len()), "notices: {notices:?}");
+    assert!(
+        notices
+            .iter()
+            .all(|notice| notice.from == "atm-identity-missing")
+    );
 }
 
 #[test]

@@ -190,6 +190,7 @@ impl CoreDispatcher {
     }
 }
 
+/// Decrements the shared inflight-request counter when a worker exits.
 struct InflightGuard(Arc<AtomicUsize>);
 
 impl Drop for InflightGuard {
@@ -838,7 +839,7 @@ fn register_signal_handlers(
 
 fn checkpoint_runtime_wal(home_dir: &Path) -> Result<(), AtmError> {
     checkpoint_runtime_wal_via_store(home_dir).map_err(|error| {
-        AtmError::daemon_start_failed("failed to checkpoint SQLite WAL during shutdown")
+        AtmError::daemon_runtime("failed to checkpoint SQLite WAL during shutdown")
             .with_source(error)
     })
 }

@@ -110,7 +110,7 @@ impl SingletonGuard {
             return Ok(());
         };
         fs::remove_file(&path).map_err(|error| {
-            AtmError::daemon_start_failed(format!(
+            AtmError::daemon_runtime(format!(
                 "failed to release daemon singleton {}: {error}",
                 path.display()
             ))
