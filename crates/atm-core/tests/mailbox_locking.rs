@@ -1,7 +1,10 @@
+#[cfg(unix)]
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::fs::OpenOptions;
-use std::sync::{Arc, Barrier, Mutex, OnceLock, mpsc};
+use std::sync::{Arc, Barrier, mpsc};
+#[cfg(unix)]
+use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -36,7 +39,7 @@ fn qualified(agent: &str) -> String {
 }
 
 #[test]
-#[serial_test::serial]
+#[serial_test::serial(env)]
 fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
@@ -99,7 +102,7 @@ fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
 }
 
 #[test]
-#[serial_test::serial]
+#[serial_test::serial(env)]
 fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() {
     let observability = Arc::new(NullObservability);
 
@@ -249,7 +252,7 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
 }
 
 #[test]
-#[serial_test::serial]
+#[serial_test::serial(env)]
 fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
@@ -322,7 +325,7 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() 
 }
 
 #[test]
-#[serial_test::serial]
+#[serial_test::serial(env)]
 fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
@@ -399,7 +402,7 @@ fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
 }
 
 #[test]
-#[serial_test::serial]
+#[serial_test::serial(env)]
 fn missing_config_notice_seeds_team_lead_workflow_state() {
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -432,7 +435,7 @@ fn missing_config_notice_seeds_team_lead_workflow_state() {
 }
 
 #[test]
-#[serial_test::serial]
+#[serial_test::serial(env)]
 fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
@@ -496,7 +499,7 @@ fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()
 }
 
 #[test]
-#[serial_test::serial]
+#[serial_test::serial(env)]
 fn multi_source_read_and_clear_complete_without_deadlock() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
@@ -577,6 +580,7 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
 }
 
 #[test]
+#[cfg(unix)]
 #[serial_test::serial(env)]
 fn send_times_out_under_bounded_lock_contention() {
     let _env_lock = env_lock().lock().expect("env lock");
@@ -608,6 +612,7 @@ fn send_times_out_under_bounded_lock_contention() {
 }
 
 #[test]
+#[cfg(unix)]
 #[serial_test::serial(env)]
 fn clear_dry_run_does_not_wait_on_mailbox_lock() {
     let _env_lock = env_lock().lock().expect("env lock");
@@ -645,6 +650,7 @@ fn clear_dry_run_does_not_wait_on_mailbox_lock() {
 }
 
 #[test]
+#[cfg(unix)]
 #[serial_test::serial(env)]
 fn read_possible_write_only_locks_when_display_mutation_is_required() {
     let _env_lock = env_lock().lock().expect("env lock");
@@ -711,7 +717,7 @@ fn read_possible_write_only_locks_when_display_mutation_is_required() {
 }
 
 #[test]
-#[serial_test::serial]
+#[serial_test::serial(env)]
 fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() {
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -767,6 +773,7 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
 }
 
 #[test]
+#[cfg(unix)]
 #[serial_test::serial(env)]
 fn clear_fails_closed_on_synthetic_source_discovery_fault() {
     let _env_lock = env_lock().lock().expect("env lock");
@@ -802,6 +809,7 @@ fn clear_fails_closed_on_synthetic_source_discovery_fault() {
 }
 
 #[test]
+#[cfg(unix)]
 #[serial_test::serial(env)]
 fn send_reports_non_contention_lock_failures_without_timeout() {
     let _env_lock = env_lock().lock().expect("env lock");
@@ -830,6 +838,7 @@ enum CommandOp {
 
 // Serializes process-environment mutation inside this test module. This is
 // process-local only; it does not coordinate with other test processes.
+#[cfg(unix)]
 fn env_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     // These tests mutate the process-global `ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS`,
@@ -841,11 +850,13 @@ fn env_lock() -> &'static Mutex<()> {
     LOCK.get_or_init(|| Mutex::new(()))
 }
 
+#[cfg(unix)]
 struct EnvGuard {
     key: &'static str,
     original: Option<OsString>,
 }
 
+#[cfg(unix)]
 impl EnvGuard {
     fn set_raw(key: &'static str, value: &str) -> Self {
         let original = std::env::var_os(key);
@@ -854,6 +865,7 @@ impl EnvGuard {
     }
 }
 
+#[cfg(unix)]
 impl Drop for EnvGuard {
     fn drop(&mut self) {
         match self.original.take() {
@@ -863,6 +875,7 @@ impl Drop for EnvGuard {
     }
 }
 
+#[cfg(unix)]
 fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
     // SAFETY: these tests take a process-wide mutex and use #[serial] before
     // mutating the environment, so the mutation is serialized within this
@@ -870,6 +883,7 @@ fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
     unsafe { std::env::set_var(key, value) }
 }
 
+#[cfg(unix)]
 fn remove_env_var<K: AsRef<OsStr>>(key: K) {
     // SAFETY: these tests take a process-wide mutex and use #[serial] before
     // mutating the environment, so the mutation is serialized within this
