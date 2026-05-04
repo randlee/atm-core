@@ -24,6 +24,8 @@ use helpers::{
 use serde_json::Value;
 use serial_test::serial;
 
+const MISSING_CONFIG_NOTICE_LEAD: &str = "team-lead";
+
 #[test]
 fn test_send_creates_inbox_file() {
     let fixture = Fixture::new(TEST_RECIPIENT);
@@ -437,7 +439,7 @@ fn test_send_missing_config_uses_existing_inbox_fallback_and_warns_sender() {
     let fixture = Fixture::new(TEST_RECIPIENT);
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
     fixture.write_inbox(TEST_RECIPIENT, &[]);
-    fixture.write_inbox(ROLE_TEAM_LEAD, &[]);
+    fixture.write_inbox(MISSING_CONFIG_NOTICE_LEAD, &[]);
 
     let output = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "hello fallback"]);
 
@@ -467,7 +469,7 @@ fn test_send_missing_config_uses_existing_inbox_fallback_and_warns_sender() {
     assert_eq!(stored.body, "hello fallback");
     assert_eq!(stored.recipient_agent.as_str(), TEST_RECIPIENT);
 
-    let notices = fixture.inbox_contents(ROLE_TEAM_LEAD);
+    let notices = fixture.inbox_contents(MISSING_CONFIG_NOTICE_LEAD);
     assert_eq!(notices.len(), 1);
     assert_eq!(notices[0].from, "atm-identity-missing");
     assert_eq!(notices[0].source_team.as_deref(), Some(TEST_TEAM));
@@ -499,7 +501,7 @@ fn test_send_missing_config_deduplicates_team_lead_notice() {
     let fixture = Fixture::new(TEST_RECIPIENT);
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
     fixture.write_inbox(TEST_RECIPIENT, &[]);
-    fixture.write_inbox(ROLE_TEAM_LEAD, &[]);
+    fixture.write_inbox(MISSING_CONFIG_NOTICE_LEAD, &[]);
 
     let first = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "first"]);
     assert!(first.status.success(), "stderr: {}", fixture.stderr(&first));
@@ -511,7 +513,7 @@ fn test_send_missing_config_deduplicates_team_lead_notice() {
         fixture.stderr(&second)
     );
 
-    let notices = fixture.inbox_contents(ROLE_TEAM_LEAD);
+    let notices = fixture.inbox_contents(MISSING_CONFIG_NOTICE_LEAD);
     assert_eq!(notices.len(), 1);
 }
 
@@ -523,7 +525,7 @@ fn test_send_missing_config_deduplicates_team_lead_notice_under_concurrency() {
     let fixture = Fixture::new("recipient");
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
     fixture.write_inbox(TEST_RECIPIENT, &[]);
-    fixture.write_inbox(ROLE_TEAM_LEAD, &[]);
+    fixture.write_inbox(MISSING_CONFIG_NOTICE_LEAD, &[]);
     let barrier = std::sync::Arc::new(std::sync::Barrier::new(3));
     let fixture = &fixture;
 
@@ -551,7 +553,7 @@ fn test_send_missing_config_deduplicates_team_lead_notice_under_concurrency() {
         "stderr: {}",
         fixture.stderr(&second)
     );
-    let notices = fixture.inbox_contents(ROLE_TEAM_LEAD);
+    let notices = fixture.inbox_contents(MISSING_CONFIG_NOTICE_LEAD);
     assert_eq!(notices.len(), 1, "notices: {notices:?}");
     assert_eq!(notices[0].from, "atm-identity-missing");
 }
@@ -561,11 +563,11 @@ fn test_send_missing_config_notice_resets_after_config_is_restored() {
     let fixture = Fixture::new(TEST_RECIPIENT);
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
     fixture.write_inbox(TEST_RECIPIENT, &[]);
-    fixture.write_inbox(ROLE_TEAM_LEAD, &[]);
+    fixture.write_inbox(MISSING_CONFIG_NOTICE_LEAD, &[]);
 
     let first = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "first"]);
     assert!(first.status.success(), "stderr: {}", fixture.stderr(&first));
-    assert_eq!(fixture.inbox_contents(ROLE_TEAM_LEAD).len(), 1);
+    assert_eq!(fixture.inbox_contents(MISSING_CONFIG_NOTICE_LEAD).len(), 1);
 
     fixture.write_team_config(TEST_RECIPIENT);
     let second = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "with config restored"]);
@@ -574,12 +576,12 @@ fn test_send_missing_config_notice_resets_after_config_is_restored() {
         "stderr: {}",
         fixture.stderr(&second)
     );
-    assert_eq!(fixture.inbox_contents(ROLE_TEAM_LEAD).len(), 1);
+    assert_eq!(fixture.inbox_contents(MISSING_CONFIG_NOTICE_LEAD).len(), 1);
 
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config again");
     let third = fixture.run(&["send", TEST_RECIPIENT_ADDRESS, "broken again"]);
     assert!(third.status.success(), "stderr: {}", fixture.stderr(&third));
-    assert_eq!(fixture.inbox_contents(ROLE_TEAM_LEAD).len(), 2);
+    assert_eq!(fixture.inbox_contents(MISSING_CONFIG_NOTICE_LEAD).len(), 2);
 }
 
 #[test]
