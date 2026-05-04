@@ -1,0 +1,21 @@
+[identities]
+forbidden_literals = [
+  "team-lead",
+  "arch-ctm",
+  "arch-qa",
+  "arch-inj",
+  "arch-obs",
+  "quality-mgr",
+  "publisher",
+  "atm-dev",
+]
+
+[line_counts]
+max_total_lines = 0
+max_production_lines = 1000
+max_scoped_code_lines = 0
+
+[line_counts.exclusions]
+"crates/atm-core/src/mailbox/lock.rs" = "Q.6 split pending"
+"crates/atm-core/src/read/mod.rs" = "Q.6 split pending"
+"crates/atm-rusqlite/src/tests.rs" = "Q.6 split pending"

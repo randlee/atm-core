@@ -1,0 +1,5 @@
+# Rust baseline false positives.
+ser
+de
+
+# Add project-specific false positives here if codespell reports any.
