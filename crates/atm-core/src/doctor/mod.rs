@@ -8,6 +8,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::config;
 use crate::error_codes::AtmErrorCode;
+// Sweep-only import: doctor only calls stale-lock cleanup helpers and never
+// acquires live mailbox locks during report generation.
 use crate::mailbox::lock;
 use crate::observability::ObservabilityPort;
 use crate::roles::ROLE_TEAM_LEAD;

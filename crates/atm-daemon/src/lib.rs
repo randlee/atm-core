@@ -183,7 +183,7 @@ impl CoreDispatcher {
                 Ok(mut handles) => handles.push(handle),
                 Err(error) => {
                     let _ = handle.join();
-                    return Err(DispatchError::Handler(AtmError::daemon_runtime(format!(
+                    return Err(DispatchError::Handler(AtmError::daemon_doctor_failed(format!(
                         "worker thread registry lock poisoned while tracking doctor worker: {error}"
                     ))));
                 }
@@ -215,7 +215,7 @@ fn join_doctor_worker_until(
     handle
         .join()
         .map_err(|payload| {
-            DispatchError::Handler(AtmError::daemon_runtime(format!(
+            DispatchError::Handler(AtmError::daemon_doctor_failed(format!(
                 "doctor worker panicked: {}",
                 shutdown::thread_panic_message(payload)
             )))
@@ -301,7 +301,7 @@ impl RequestDispatcher for CoreDispatcher {
                         )? {
                             self.register_worker_thread(handle)?;
                         }
-                        return Err(DispatchError::Handler(AtmError::daemon_runtime(format!(
+                        return Err(DispatchError::Handler(AtmError::daemon_doctor_failed(format!(
                             "{DOCTOR_HANDLER_TIMEOUT_MESSAGE} ({DOCTOR_HANDLER_TIMEOUT:?})"
                         ))));
                     }
@@ -313,7 +313,7 @@ impl RequestDispatcher for CoreDispatcher {
                         )? {
                             self.register_worker_thread(handle)?;
                         }
-                        return Err(DispatchError::Handler(AtmError::daemon_runtime(
+                        return Err(DispatchError::Handler(AtmError::daemon_doctor_failed(
                             DOCTOR_HANDLER_DISCONNECTED_MESSAGE,
                         )));
                     }
@@ -787,10 +787,11 @@ fn spawn_tcp_connection(
 }
 
 fn dispatch_atm_error(mut error: AtmError) -> DispatchError {
-    if let Some(source) = error.source.take()
-        && let Ok(store_error) = source.downcast::<StoreError>()
-    {
-        return DispatchError::Store(*store_error);
+    if let Some(source) = error.source.take() {
+        match source.downcast::<StoreError>() {
+            Ok(store_error) => return DispatchError::Store(*store_error),
+            Err(source) => error.source = Some(source),
+        }
     }
     DispatchError::Handler(error)
 }

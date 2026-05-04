@@ -712,6 +712,9 @@ fn wire_error_to_atm(error: WireError) -> AtmError {
         Code::DaemonRuntimeFailed => {
             AtmError::daemon_runtime(error.message).with_recovery(recovery)
         }
+        Code::DaemonDoctorFailed => {
+            AtmError::daemon_doctor_failed(error.message).with_recovery(recovery)
+        }
         Code::DaemonRemoteUnavailable => {
             AtmError::daemon_remote_unavailable(error.message).with_recovery(recovery)
         }
@@ -745,6 +748,9 @@ mod tests {
         let handler = dispatch_error_to_atm(DispatchError::Handler(AtmError::daemon_runtime(
             "read worker panicked",
         )));
+        let doctor = dispatch_error_to_atm(DispatchError::Handler(AtmError::daemon_doctor_failed(
+            "doctor worker timed out",
+        )));
         let encode = dispatch_error_to_atm(DispatchError::ResponseEncode("bad json".into()));
         let unsupported = dispatch_error_to_atm(DispatchError::Unsupported(RequestKind::Send));
 
@@ -753,6 +759,9 @@ mod tests {
 
         assert_eq!(handler.code, Code::DaemonRuntimeFailed);
         assert!(handler.message.contains("read worker panicked"));
+
+        assert_eq!(doctor.code, Code::DaemonDoctorFailed);
+        assert!(doctor.message.contains("doctor worker timed out"));
 
         assert_eq!(encode.code, Code::DaemonProtocolFailed);
         assert!(encode.message.contains("encode daemon response payload"));

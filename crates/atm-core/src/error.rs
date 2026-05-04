@@ -294,6 +294,17 @@ impl AtmError {
         )
     }
 
+    pub fn daemon_doctor_failed(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::DaemonDoctorFailed,
+            AtmErrorKind::DaemonRuntime,
+            message,
+        )
+        .with_recovery(
+            "Inspect daemon logs with `atm log`, then rerun `atm doctor` after the daemon stabilizes.",
+        )
+    }
+
     pub fn missing_document(message: impl Into<String>) -> Self {
         Self::new(AtmErrorKind::MissingDocument, message).with_recovery(
             "Restore the missing ATM document or recreate it through the documented team-management workflow before retrying.",

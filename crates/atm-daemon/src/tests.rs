@@ -5,7 +5,42 @@ use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
 use serial_test::serial;
 use tempfile::TempDir;
 
+// CI should override this via ATM_TEST_TIMEOUT_MS when runners need a larger
+// retry budget, but tests must still work hermetically when that env var is
+// absent.
+const DEFAULT_TEST_TIMEOUT_MS: u64 = 5_000;
 const LOOPBACK_PROBE_ATTEMPTS: usize = 8;
+
+struct TestEnvBuilder {
+    team: &'static str,
+    cwd_name: &'static str,
+}
+
+struct TestEnv {
+    tempdir: TempDir,
+    cwd: std::path::PathBuf,
+}
+
+impl TestEnvBuilder {
+    fn new() -> Self {
+        Self {
+            team: TEST_TEAM,
+            cwd_name: "workspace",
+        }
+    }
+
+    fn build(self) -> TestEnv {
+        let tempdir = TempDir::new().expect("tempdir");
+        let cwd = tempdir.path().join(self.cwd_name);
+        fs::create_dir_all(&cwd).expect("workspace dir");
+        fs::write(
+            cwd.join(".atm.toml"),
+            format!("[atm]\ndefault_team = \"{}\"\n", self.team),
+        )
+        .expect("atm toml");
+        TestEnv { tempdir, cwd }
+    }
+}
 
 #[derive(Default)]
 struct FakeDispatcher {
@@ -128,14 +163,9 @@ fn stale_singleton_cleanup_allows_one_live_start_only() {
 #[test]
 #[serial]
 fn local_same_host_daemon_api_flow_works() {
-    let tempdir = TempDir::new().expect("tempdir");
-    let current_dir = tempdir.path().join("workspace");
-    fs::create_dir_all(&current_dir).expect("workspace dir");
-    fs::write(
-        current_dir.join(".atm.toml"),
-        format!("[atm]\ndefault_team = \"{TEST_TEAM}\"\n"),
-    )
-    .expect("atm toml");
+    let env = TestEnvBuilder::new().build();
+    let tempdir = &env.tempdir;
+    let current_dir = env.cwd;
     let worker_threads = Arc::new(Mutex::new(Vec::new()));
     let handle = start_runtime(
         DaemonConfig::from_home(tempdir.path().to_path_buf()),

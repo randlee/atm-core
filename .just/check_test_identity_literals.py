@@ -13,7 +13,7 @@ ALLOW_BLOCK_START_PATTERN = re.compile(r"rule-008:\s*allow-start\b", re.IGNORECA
 ALLOW_BLOCK_END_PATTERN = re.compile(r"rule-008:\s*allow-end\b", re.IGNORECASE)
 
 
-def is_test_scope(path: Path, text: str) -> bool:
+def should_scan(path: Path, text: str) -> bool:
     return True
 
 
@@ -23,7 +23,7 @@ def collect_test_lines(repo_root: Path) -> list[tuple[Path, int, str]]:
     for abs_path in sorted(crate_root.rglob("*.rs")):
         rel_path = abs_path.relative_to(repo_root)
         text = abs_path.read_text(encoding="utf-8")
-        if not is_test_scope(rel_path, text):
+        if not should_scan(rel_path, text):
             continue
         for line_number, line in enumerate(text.splitlines(), start=1):
             results.append((rel_path, line_number, line))

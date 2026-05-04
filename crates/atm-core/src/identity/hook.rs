@@ -120,6 +120,9 @@ mod test_hook_file_override {
     use std::path::PathBuf;
 
     thread_local! {
+        // Test-only hook-file seam. `RefCell<Option<PathBuf>>` is required here
+        // because `PathBuf` is not `Copy`, so `Cell` is inapplicable, and a
+        // `Mutex` would add needless synchronization inside thread_local! scope.
         static OVERRIDE: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
     }
 

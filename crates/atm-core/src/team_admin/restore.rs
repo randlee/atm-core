@@ -8,6 +8,8 @@ use tracing::warn;
 use crate::config::load_team_config;
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
+// Sweep-only import: restore ignores stale sentinel files for compatibility
+// inboxes but does not acquire live mailbox locks in this path.
 use crate::mailbox::lock;
 use crate::persistence;
 use crate::roles::ROLE_TEAM_LEAD;
@@ -579,8 +581,8 @@ mod restore_test_override {
     use std::cell::Cell;
 
     thread_local! {
-        // Test-only fault seams. `Cell<bool>` is sufficient because each
-        // override is toggled within one thread-scoped test guard.
+        // Test-only fault seams. Each flag is toggled under a thread-scoped
+        // guard, so `Cell<bool>` avoids unnecessary borrow or sync machinery.
         static INBOX_STAGE_FAILURE: Cell<bool> = const { Cell::new(false) };
         static MARKER_REMOVE_FAILURE: Cell<bool> = const { Cell::new(false) };
     }
