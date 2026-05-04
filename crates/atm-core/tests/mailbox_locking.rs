@@ -902,8 +902,7 @@ fn acquire_env_lock() -> File {
     const RETRY_INTERVAL: Duration = Duration::from_millis(100);
     const LOCK_TIMEOUT: Duration = Duration::from_secs(10);
 
-    let scope = env_lock_scope();
-    let lock_path = std::env::temp_dir().join(format!("atm-mailbox-locking-env-{scope}.lock"));
+    let lock_path = std::env::temp_dir().join("atm-core-test-env.lock");
     let deadline = Instant::now() + LOCK_TIMEOUT;
     loop {
         let file = OpenOptions::new()
@@ -925,15 +924,6 @@ fn acquire_env_lock() -> File {
             }
         }
     }
-}
-
-fn env_lock_scope() -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-
-    let mut hasher = DefaultHasher::new();
-    env!("CARGO_MANIFEST_DIR").hash(&mut hasher);
-    format!("{:016x}", hasher.finish())
 }
 
 struct EnvGuard {

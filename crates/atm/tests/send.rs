@@ -25,6 +25,7 @@ use serde_json::Value;
 use serial_test::serial;
 
 const MISSING_CONFIG_NOTICE_LEAD: &str = ROLE_TEAM_LEAD;
+const DEFAULT_JSON_RETRY_TIMEOUT_MS: u64 = 5_000;
 
 #[test]
 fn test_send_creates_inbox_file() {
@@ -686,10 +687,10 @@ fn test_send_json_reports_canonical_sender_identity() {
 
 #[test]
 fn test_send_runs_post_send_hook_with_expected_payload() {
-    let fixture = Fixture::new("recipient");
+    let fixture = Fixture::new(TEST_RECIPIENT);
     let (hook_path, payload_path) = fixture.install_hook_fixture("capture");
     fixture.write_atm_config(&format!(
-        "[[atm.post_send_hooks]]\nrecipient = 'recipient'\ncommand = ['{}', 'capture', '{}']\n",
+        "[[atm.post_send_hooks]]\nrecipient = '{TEST_RECIPIENT}'\ncommand = ['{}', 'capture', '{}']\n",
         hook_path.display(),
         payload_path.display()
     ));
@@ -1245,7 +1246,7 @@ fn test_send_help_mentions_post_send_hook_config() {
 
 fn read_json_file_with_retry(path: &std::path::Path, label: &str) -> serde_json::Value {
     let start = std::time::Instant::now();
-    let deadline = Duration::from_secs(5);
+    let deadline = json_retry_timeout();
     while start.elapsed() < deadline {
         match fs::read(path) {
             Ok(bytes) => match serde_json::from_slice(&bytes) {
@@ -1264,6 +1265,15 @@ fn read_json_file_with_retry(path: &std::path::Path, label: &str) -> serde_json:
         start.elapsed(),
         path.display(),
     );
+}
+
+fn json_retry_timeout() -> Duration {
+    std::env::var("ATM_TEST_TIMEOUT_MS")
+        .ok()
+        .and_then(|raw| raw.parse::<u64>().ok())
+        .filter(|timeout_ms| *timeout_ms > 0)
+        .map(Duration::from_millis)
+        .unwrap_or_else(|| Duration::from_millis(DEFAULT_JSON_RETRY_TIMEOUT_MS))
 }
 
 fn toml_single_quoted_path(path: &std::path::Path) -> String {
