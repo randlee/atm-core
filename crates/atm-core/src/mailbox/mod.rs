@@ -315,6 +315,10 @@ mod tests {
     use super::{MAX_MAILBOX_READ_BYTES, append_message, locked_read_modify_write, read_messages};
     use crate::mailbox::lock;
 
+    const ROLE_TEAM_LEAD: &str = "team-lead";
+    const TEST_SENDER: &str = "sender-a";
+    const TEST_TEAM: &str = "test-team";
+
     fn assert_round_trip_matches(actual: &[MessageEnvelope], expected: &[MessageEnvelope]) {
         assert_eq!(actual.len(), expected.len());
         for (actual, expected) in actual.iter().zip(expected) {
@@ -474,7 +478,7 @@ mod tests {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("malformed-message-id.jsonl");
         let contents = serde_json::json!({
-            "from": "team-lead",
+            "from": ROLE_TEAM_LEAD,
             "text": "valid body",
             "timestamp": "2026-03-30T00:00:00Z",
             "read": false,
@@ -498,7 +502,7 @@ mod tests {
         let path = tempdir.path().join("array-no-message-id.json");
         let contents = serde_json::json!([
             {
-                "from": "team-lead",
+                "from": ROLE_TEAM_LEAD,
                 "text": "from claude array",
                 "timestamp": "2026-03-30T00:00:00Z",
                 "read": false
@@ -533,14 +537,16 @@ mod tests {
         let path = tempdir.path().join("metadata-atm.json");
         fs::write(
             &path,
-            r#"{"from":"team-lead","text":"hello","timestamp":"2026-03-30T00:00:00Z","read":false,"summary":"hello","metadata":{"atm":{"messageId":"01JQYVB6W51Q2E7E6T3Y4Q9N2M","sourceTeam":"atm-dev","pendingAckAt":"2026-03-30T00:00:01Z","taskId":"TASK-123"}}}"#,
+            format!(
+                r#"{{"from":"{ROLE_TEAM_LEAD}","text":"hello","timestamp":"2026-03-30T00:00:00Z","read":false,"summary":"hello","metadata":{{"atm":{{"messageId":"01JQYVB6W51Q2E7E6T3Y4Q9N2M","sourceTeam":"{TEST_TEAM}","pendingAckAt":"2026-03-30T00:00:01Z","taskId":"TASK-123"}}}}}}"#
+            ),
         )
         .expect("write");
 
         let messages = read_messages(&path).expect("read");
         assert_eq!(messages.len(), 1);
         assert!(messages[0].message_id.is_some());
-        assert_eq!(messages[0].source_team.as_deref(), Some("atm-dev"));
+        assert_eq!(messages[0].source_team.as_deref(), Some(TEST_TEAM));
         assert!(messages[0].pending_ack_at.is_some());
         assert_eq!(
             messages[0].task_id.as_ref().map(|task_id| task_id.as_str()),
@@ -580,7 +586,7 @@ mod tests {
         let legacy_message_id = crate::schema::LegacyMessageId::from(message_id);
 
         MessageEnvelope {
-            from: "arch-ctm".parse::<AgentName>().expect("agent"),
+            from: TEST_SENDER.parse::<AgentName>().expect("agent"),
             text: body.into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -588,7 +594,7 @@ mod tests {
                     .expect("timestamp"),
             ),
             read: false,
-            source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
+            source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
             summary: None,
             message_id: Some(legacy_message_id),
             pending_ack_at: None,

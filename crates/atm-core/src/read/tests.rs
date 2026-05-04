@@ -3,7 +3,11 @@ use std::path::PathBuf;
 use serde_json::Map;
 use tempfile::tempdir;
 
+#[path = "../../tests/support.rs"]
+mod support;
+
 use super::{ReadQuery, selected_after_filters};
+use crate::error_codes::AtmErrorCode;
 use crate::mailbox::source::SourcedMessage;
 use crate::read::projection::idle_notification_sender;
 use crate::schema::{LegacyMessageId, MessageEnvelope};
@@ -13,7 +17,8 @@ use crate::types::{
 };
 use crate::workflow;
 
-const ROLE_TEAM_LEAD: &str = "team-lead";
+use support::ROLE_TEAM_LEAD;
+
 const TEST_TEAM: &str = "test-team";
 const TEST_SOURCE_FILE: &str = "test-sender.json";
 
@@ -117,6 +122,7 @@ fn read_query_new_rejects_invalid_target_before_command_execution() {
     )
     .expect_err("invalid target");
 
+    assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
     assert!(error.message.contains("agent name"));
 }
 
@@ -140,5 +146,6 @@ fn read_query_new_rejects_invalid_actor_before_command_execution() {
     )
     .expect_err("invalid actor");
 
+    assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
     assert!(error.message.contains("agent name"));
 }

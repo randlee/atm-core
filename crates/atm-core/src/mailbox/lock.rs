@@ -775,6 +775,9 @@ mod readonly_test_override {
     use super::LockOperation;
 
     thread_local! {
+        // Test helpers need cheap per-thread mutation of an optional Copy enum
+        // without borrow bookkeeping, so Cell keeps the override seam local to
+        // each test thread while avoiding shared mutable state.
         // Test-only seam for forcing one filesystem operation to fail without
         // introducing shared mutable state across concurrent test threads.
         static OVERRIDE: Cell<Option<LockOperation>> = const { Cell::new(None) };

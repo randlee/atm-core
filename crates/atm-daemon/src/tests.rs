@@ -213,12 +213,15 @@ fn remote_acceptance_is_required_for_send_success() {
     let inflight = Arc::new(AtomicUsize::new(0));
     let worker_threads = Arc::new(Mutex::new(Vec::new()));
     let stop = Arc::new(AtomicBool::new(false));
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel();
     let worker = {
         let inflight = Arc::clone(&inflight);
         let worker_threads = Arc::clone(&worker_threads);
         let dispatcher = dispatcher.clone();
         let stop = Arc::clone(&stop);
+        let ready_tx = ready_tx;
         thread::spawn(move || {
+            ready_tx.send(()).expect("accept loop ready");
             accept_tcp_loop(listener, stop, inflight, worker_threads, dispatcher, 8)
         })
     };
@@ -227,19 +230,11 @@ fn remote_acceptance_is_required_for_send_success() {
         agent_name: TEST_SENDER.parse().expect("agent"),
         payload: RequestPayload::Send(serde_json::json!({"message":"hello"})),
     };
-    let deadline = std::time::Instant::now() + Duration::from_secs(5);
-    let response = loop {
-        match request_remote(address, &request, Duration::from_millis(250)) {
-            Ok(response) => break response,
-            Err(error)
-                if error.code == AtmErrorCode::DaemonProtocolFailed
-                    && std::time::Instant::now() < deadline =>
-            {
-                std::thread::sleep(Duration::from_millis(25));
-            }
-            Err(error) => panic!("remote response: {error:?}"),
-        }
-    };
+    ready_rx
+        .recv_timeout(test_timeout_budget(Duration::from_secs(5)))
+        .expect("accept loop ready");
+    let response =
+        request_remote(address, &request, Duration::from_millis(250)).expect("remote response");
     assert_eq!(response.kind, RequestKind::Send);
     stop.store(true, Ordering::SeqCst);
     let shutdown_deadline = std::time::Instant::now() + test_timeout_budget(SHUTDOWN_FORCE_TIMEOUT);

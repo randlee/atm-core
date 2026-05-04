@@ -155,6 +155,9 @@ fn inbox_message(text: &str) -> MessageEnvelope {
 
 #[derive(Default)]
 struct RecordingObservability {
+    // ObservabilityPort::emit takes &self, so the fixture needs interior
+    // mutability to record emitted events without changing the production trait
+    // contract just for tests.
     // INVARIANT: Mutex protects the shared event sink so tests can assert the
     // exact emitted sequence after concurrent store callbacks finish.
     events: Mutex<Vec<CommandEvent>>,
