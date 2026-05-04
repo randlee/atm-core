@@ -19,7 +19,7 @@ pub(crate) fn join_accept_thread(
         thread::sleep(Duration::from_millis(25));
     }
     if !handle.is_finished() {
-        return Err(AtmError::daemon_start_failed(format!(
+        return Err(AtmError::daemon_runtime(format!(
             "{thread_name} did not stop within {:?}",
             ACCEPT_THREAD_JOIN_TIMEOUT
         )));
@@ -45,7 +45,7 @@ pub(crate) fn join_worker_threads(
 ) -> Result<(), AtmError> {
     let handles = {
         let mut handles = worker_threads.lock().map_err(|_| {
-            AtmError::daemon_start_failed("worker thread registry lock poisoned during shutdown")
+            AtmError::daemon_runtime("worker thread registry lock poisoned during shutdown")
         })?;
         std::mem::take(&mut *handles)
     };

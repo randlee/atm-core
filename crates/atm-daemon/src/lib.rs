@@ -59,6 +59,10 @@ pub const WORKER_THREAD_JOIN_TIMEOUT: Duration = Duration::from_secs(2);
 const WINDOWS_STOP_POLL_INTERVAL: Duration = Duration::from_millis(100);
 pub const MAX_ACCEPTS: usize = 64;
 pub const MAX_INFLIGHT_PER_CONNECTION: usize = 32;
+/// Upper bound for one daemon frame payload after length-prefix decoding.
+///
+/// This keeps local and remote transports on the same bounded memory contract
+/// and fails oversized protocol frames before JSON decode allocates further.
 pub(crate) const MAX_FRAME_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -150,6 +154,9 @@ impl WireResponseEnvelope {
 pub struct CoreDispatcher {
     home_dir: PathBuf,
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
+    // Shared with accept-loop spawned request handlers so doctor-owned worker
+    // threads can be registered at dispatch time and then drained from the
+    // coordinated daemon shutdown path.
     worker_threads: Option<Arc<Mutex<Vec<JoinHandle<()>>>>>,
 }
 
