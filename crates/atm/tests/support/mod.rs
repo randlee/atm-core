@@ -13,13 +13,14 @@ pub const TEST_SENDER: &str = "sender-a";
 pub const TEST_RECIPIENT: &str = "recipient";
 pub const TEST_QA: &str = "qa-a";
 pub const TEST_QA_AGENT: &str = TEST_QA;
-pub const ROLE_TEAM_LEAD: &str = "team-lead";
-pub const TEST_LEAD: &str = "test-team-lead";
+#[allow(unused_imports)]
+pub use atm_core::roles::ROLE_TEAM_LEAD;
+pub const TEST_LEAD: &str = "test-lead";
 pub const TEST_DAEMON: &str = "daemon";
 pub const TEST_ORIGIN: &str = "host-a";
 pub const TEST_SENDER_ADDRESS: &str = "sender-a@test-team";
 pub const TEST_RECIPIENT_ADDRESS: &str = "recipient@test-team";
-pub const TEST_LEAD_ADDRESS: &str = "test-team-lead@test-team";
+pub const TEST_LEAD_ADDRESS: &str = "test-lead@test-team";
 
 #[derive(Debug)]
 pub struct TestEnv {
@@ -112,7 +113,7 @@ impl TestEnvBuilder {
 
 /// Default fixtures use `TEST_LEAD` instead of the reserved `ROLE_TEAM_LEAD`
 /// string so generic tests do not silently depend on production role naming.
-/// Tests that must exercise `team-lead` semantics should opt in explicitly by
+/// Tests that must exercise lead-role semantics should opt in explicitly by
 /// using `ROLE_TEAM_LEAD`.
 impl Default for TestEnvBuilder {
     fn default() -> Self {

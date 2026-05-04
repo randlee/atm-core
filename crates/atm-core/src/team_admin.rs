@@ -11,8 +11,8 @@ use crate::config::{load_config, load_team_config, resolve_team};
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
 use crate::persistence;
+use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::{AgentMember, TeamConfig};
-use crate::test_support::ROLE_TEAM_LEAD;
 use crate::types::{AgentName, TeamName};
 
 #[path = "team_admin/restore.rs"]
