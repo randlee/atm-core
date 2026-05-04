@@ -468,6 +468,7 @@ name: MailStore
 public:
   trait: MailStore
   facade: null
+  notes: planned trait name — not yet landed (Wave 2, R.4)
 
 implementation:
   type: null
@@ -544,6 +545,7 @@ name: TaskStore
 public:
   trait: TaskStore
   facade: null
+  notes: planned trait name — not yet landed (Wave 2, R.4)
 
 implementation:
   type: null
@@ -619,6 +621,7 @@ name: RosterStore
 public:
   trait: RosterStore
   facade: null
+  notes: planned trait name — not yet landed (Wave 2, R.4)
 
 implementation:
   type: null
@@ -694,6 +697,7 @@ name: ConfigIngress
 public:
   trait: ConfigIngress
   facade: null
+  notes: planned trait name — not yet landed (Wave 2, R.4)
 
 implementation:
   type: null
@@ -770,6 +774,7 @@ name: InboxIngress
 public:
   trait: InboxIngress
   facade: null
+  notes: planned trait name — not yet landed (Wave 2, R.4)
 
 implementation:
   type: null
@@ -844,6 +849,7 @@ name: InboxExport
 public:
   trait: InboxExport
   facade: null
+  notes: planned trait name — not yet landed (Wave 2, R.4)
 
 implementation:
   type: null
