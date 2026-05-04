@@ -2,6 +2,10 @@
 
 This document captures CLI-owned concrete adapters for Phase R.
 
+Interpretation note:
+- `allowed_dependents: []` means no external crate should depend on the CLI's
+  private concrete adapters
+
 ## LocalSocketClientTransportAdapter
 
 ```yaml
@@ -21,7 +25,8 @@ implementation:
   constructor: private
 
 composition:
-  roots: []
+  roots:
+    - atm::bootstrap
 
 ownership:
   io_owns:

@@ -24,6 +24,12 @@ Phase-Q supersession note:
 - the current target line is Section 21 and the detailed design in
   `docs/plan-phase-Q.md`
 
+Phase-R redesign note:
+- the next execution line is the Phase R redesign and enforcement pass tracked
+  in [`docs/plan-phase-R.md`](./plan-phase-R.md)
+- Phase R starts with boundary documents, ADR alignment, and lint/parser gates
+  before new implementation work
+
 Status:
 - Phases 0 through P have executed on the retained rewrite line.
 - Phases G and H are complete retained-command phases, closed through the
@@ -78,12 +84,28 @@ Crate-local scope detail is owned by:
 
 - [`docs/atm-core/requirements.md`](./atm-core/requirements.md)
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
+- [`docs/atm-core/boundaries.md`](./atm-core/boundaries.md)
 - [`docs/atm/requirements.md`](./atm/requirements.md)
 - [`docs/atm/architecture.md`](./atm/architecture.md)
+- [`docs/atm/boundaries.md`](./atm/boundaries.md)
 - [`docs/atm-daemon/requirements.md`](./atm-daemon/requirements.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
+- [`docs/atm-daemon/boundaries.md`](./atm-daemon/boundaries.md)
 - [`docs/atm-rusqlite/requirements.md`](./atm-rusqlite/requirements.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
+- [`docs/atm-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
+
+Phase R sequencing rule:
+- no new implementation sprint begins until:
+  - the relevant boundary records exist
+  - architecture/requirements/ADR docs agree with those records
+  - the parser/lint pass for those records is in place
+- Phase R implementation proceeds in this order:
+  - boundary design
+  - document alignment
+  - lint/parser gates
+  - skeleton implementation
+  - feature behavior
 
 ## 4. Work Sequence
 

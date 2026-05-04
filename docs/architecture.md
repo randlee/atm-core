@@ -46,6 +46,14 @@ Phase-Q supersession note:
 - for the current mail/runtime target architecture, Section 21 is
   authoritative
 
+Phase-R redesign note:
+- the Phase Q implementation is not the architectural baseline for forward
+  work
+- the Phase R redesign starts from crate-local boundary inventories and ADRs,
+  then rebuilds the implementation under lint/visibility guardrails
+- Phase R treats thin-client extension pressure, including `atm-graft`, as a
+  first-class architectural input
+
 ## 2. Crate Boundaries
 
 The post-Q product runtime is implemented by four crates:
@@ -69,13 +77,39 @@ Product-level boundary rules:
 - `atm-daemon` must not become a second business-logic crate.
 - `atm-rusqlite` must not absorb workflow or command logic; it implements store
   contracts only.
+- crate-local boundary records in `docs/<crate>/boundaries.md` are the
+  machine-readable contract used to drive architectural linting and review
+- thin-client workflow surfaces should be modeled around `send` and `receive`
+  rather than a broad command inventory
+- `ack` may remain a retained CLI/user workflow, but thin-client protocol
+  surfaces should carry it through send-shaped request data rather than a
+  separate top-level method family
 
 Crate-local boundary detail is owned by:
 
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
+- [`docs/atm-core/boundaries.md`](./atm-core/boundaries.md)
 - [`docs/atm/architecture.md`](./atm/architecture.md)
+- [`docs/atm/boundaries.md`](./atm/boundaries.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
+- [`docs/atm-daemon/boundaries.md`](./atm-daemon/boundaries.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
+- [`docs/atm-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
+
+Current Phase R boundary direction:
+- shared protocol contract: `AtmProtocol` in `atm-core`
+- outbound transport boundary: `ClientTransport`
+- inbound transport boundary: `ServerTransport`
+- request routing boundary: `RequestDispatcher`
+- outbound notification boundary: `NotificationSink`
+- inbound runtime status boundary: `StatusSource`
+- watch/reconcile boundary family:
+  - `WatchEventSource`
+  - `ReconcileCoordinator`
+- current production composition ownership:
+  - `atm` is the CLI client composition root
+  - `atm-daemon` is the runtime composition root
+  - a separate composition crate remains out of scope unless an ADR opens it
 
 ### 2.3 Release Publication Boundary
 

@@ -7,6 +7,9 @@ This document defines the `atm` crate architectural boundary.
 It complements the product architecture in
 [`../architecture.md`](../architecture.md) and owns only CLI-layer decisions.
 
+The crate-local machine-readable boundary inventory lives in:
+- [`./boundaries.md`](./boundaries.md)
+
 ## 2. Responsibilities
 
 The `atm` crate is responsible for:
@@ -21,6 +24,61 @@ The `atm` crate is responsible for:
   `members`
 
 The `atm` crate must remain thin.
+
+Phase R redesign notes:
+- the CLI should depend on `AtmProtocol` and `ClientTransport`, not on daemon
+  internals or SQLite adapters
+- retained user-facing workflows may still include `ack`, but thin-client
+  transport shape should stay centered on `send` and `receive`
+
+## 1.1 ADRs
+
+## CLI uses shared protocol and client transport only
+
+```yaml
+adr_id: ADR-ATM-001
+crate: atm
+title: CLI uses shared protocol and client transport only
+status: accepted
+date: 2026-05-03
+deciders:
+  - team-lead
+  - arch-ctm
+tags:
+  - protocol
+  - transport
+  - privacy
+related_boundaries:
+  - BOUNDARY-AtmProtocol
+  - BOUNDARY-ClientTransport
+  - BOUNDARY-ClientTransport-CLI
+code_references:
+  - docs/atm/boundaries.md
+  - docs/atm-core/boundaries.md
+```
+
+Context:
+- Phase Q drift showed that letting CLI reach daemon internals or SQLite
+  adapters made architecture violations easy and review expensive.
+
+Decision:
+- The CLI depends on `AtmProtocol` and `ClientTransport` only.
+- It must not depend on daemon internals or SQLite adapter crates.
+- Retained user workflows may still include `ack`, but thin-client transport
+  shape remains `send` / `receive`.
+
+Consequences:
+- CLI runtime wiring stays thin.
+- Thin extension crates can mirror the same client shape without importing CLI
+  internals.
+
+Alternatives considered:
+- Let CLI call daemon internals directly.
+- Let CLI use concrete SQLite adapters for local shortcuts.
+
+Follow-up work:
+- Enforce the forbidden dependency edges in lint.
+- Keep CLI help and request mapping aligned with the thin-client shape.
 
 ## 3. Architectural Rules
 
@@ -43,13 +101,14 @@ The `atm` crate must remain thin.
 - `atm` must not access SQLite or inbox JSONL directly
 - `atm` must not own socket protocol semantics beyond client-side request
   mapping and error presentation
-- `atm` must not auto-spawn the daemon in production
+- `atm` must own the one documented daemon auto-start path in production and
+  must not silently bypass the daemon if startup fails
 - `atm` must preserve typed runtime error identity until the rendering
   boundary instead of collapsing failures into panic/unwrap control flow
 
-## 3.1 Phase Q CLI / Runtime Split
+## 3.1 Phase R CLI / Runtime Split
 
-Phase Q keeps the CLI thin by enforcing this split:
+Phase R keeps the CLI thin by enforcing this split:
 
 - `atm` owns parse -> request mapping -> render
 - `atm-core` owns business logic and service semantics

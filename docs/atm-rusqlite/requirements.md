@@ -5,7 +5,10 @@
 This document defines the `atm-rusqlite` crate requirements.
 
 The `atm-rusqlite` crate owns the first concrete SQLite implementation of the
-Phase Q durable store boundaries defined by `atm-core`.
+durable store boundaries defined by `atm-core`.
+
+The crate-local machine-readable boundary inventory lives in:
+- [`./boundaries.md`](./boundaries.md)
 
 ## 2. Ownership
 
@@ -42,7 +45,7 @@ Initial allocation:
 
 Initial crate requirement IDs:
 
-- `REQ-RUSQLITE-STORE-001` `atm-rusqlite` must implement the Phase Q
+- `REQ-RUSQLITE-STORE-001` `atm-rusqlite` must implement the
   `MailStore`, `TaskStore`, and `RosterStore` contracts without widening those
   interfaces. Satisfies:
   `REQ-CORE-RUNTIME-001`, `REQ-CORE-STORE-001`, `REQ-CORE-STORE-002`.
@@ -64,11 +67,13 @@ The `atm-rusqlite` crate docs must remain aligned with:
 - [`../architecture.md`](../architecture.md)
 - [`../project-plan.md`](../project-plan.md)
 - [`../plan-phase-Q.md`](../plan-phase-Q.md)
+- [`../plan-phase-R.md`](../plan-phase-R.md)
 - [`../atm-core/requirements.md`](../atm-core/requirements.md)
 - [`../atm-core/architecture.md`](../atm-core/architecture.md)
 - [`../atm-error-codes.md`](../atm-error-codes.md)
+- [`./boundaries.md`](./boundaries.md)
 
-## 5. Phase Q SQLite Implementation Rules
+## 5. Phase R SQLite Implementation Rules
 
 Requirement IDs:
 - `REQ-RUSQLITE-STORE-001`
@@ -77,10 +82,12 @@ Requirement IDs:
 - `REQ-RUSQLITE-TEST-001`
 
 Required rules:
-- only `atm-rusqlite` may own direct `rusqlite` calls in the first Phase Q
+- only `atm-rusqlite` may own direct `rusqlite` calls in the first
   implementation line
 - concrete SQLite details remain private to this crate
 - callers depend on `atm-core` store traits, not on `rusqlite` types
+- the current runtime composition owner may depend on this crate in order to
+  assemble production adapters, but thin callers and extension crates must not
 - schema bootstrap must be deterministic and idempotent
 - WAL / foreign-key / explicit-transaction policy must be enforced here
 - `MailStore`, `TaskStore`, and `RosterStore` may share one internal SQLite

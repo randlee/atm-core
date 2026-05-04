@@ -7,6 +7,53 @@ This document defines the `atm-rusqlite` crate architectural boundary.
 It complements the product and `atm-core` architecture documents and owns only
 the first concrete SQLite implementation of the Phase Q store family.
 
+The crate-local machine-readable boundary inventory lives in:
+- [`./boundaries.md`](./boundaries.md)
+
+## 1.1 ADRs
+
+## Concrete SQLite adapters remain private
+
+```yaml
+adr_id: ADR-ATM-RUSQLITE-001
+crate: atm-rusqlite
+title: Concrete SQLite adapters remain private
+status: accepted
+date: 2026-05-03
+deciders:
+  - team-lead
+  - arch-ctm
+tags:
+  - privacy
+  - sqlite
+related_boundaries:
+  - BOUNDARY-MailStore-Sqlite
+  - BOUNDARY-TaskStore-Sqlite
+  - BOUNDARY-RosterStore-Sqlite
+code_references:
+  - docs/atm-rusqlite/boundaries.md
+  - docs/atm-core/boundaries.md
+```
+
+Context:
+- Direct caller access to SQLite implementation types is one of the clearest
+  architecture violations from the Phase Q line.
+
+Decision:
+- Concrete SQLite adapter types, constructors, and re-exports remain private.
+- Callers depend on `atm-core` contracts, not on concrete SQLite types.
+
+Consequences:
+- CLI and thin extension crates cannot bypass store contracts.
+- Runtime composition may still assemble the concrete adapters through the
+  legal composition owner.
+
+Alternatives considered:
+- Public concrete store types with policy enforced only by review.
+
+Follow-up work:
+- Keep forbidden dependency edges and reference checks aligned with this rule.
+
 ## 2. Architectural Rules
 
 - `atm-rusqlite` implements store contracts; it does not define them.
@@ -19,6 +66,10 @@ the first concrete SQLite implementation of the Phase Q store family.
   and `RosterStore`, not on concrete SQLite structs.
 - routine database failure handling uses typed `Result`/error-enum paths rather
   than panic/unwrap.
+- thin callers and runtime callers should depend on `atm-core` contracts
+  rather than this crate directly
+- the current production runtime composition root may depend on this crate in
+  order to assemble concrete store adapters
 
 ## 3. Store Implementation Shape
 

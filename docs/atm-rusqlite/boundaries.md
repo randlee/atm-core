@@ -2,8 +2,9 @@
 
 This document captures the planned concrete SQLite adapters for Phase R.
 
-Until the final composition crate is settled, the adapter records intentionally
-leave `composition.roots` empty and forbid direct dependency from caller crates.
+Current design assumption:
+- `atm-daemon::bootstrap` is the production runtime composition root
+- thin callers and extension crates must not depend on `atm-rusqlite`
 
 ## SqliteMailStoreAdapter
 
@@ -24,7 +25,8 @@ implementation:
   constructor: private
 
 composition:
-  roots: []
+  roots:
+    - atm_daemon::bootstrap
 
 ownership:
   io_owns:
@@ -35,13 +37,13 @@ ownership:
     - process_spawn
 
 dependencies:
-  allowed_dependents: []
+  allowed_dependents:
+    - atm-daemon
   allowed_dependencies:
     - atm-core
     - rusqlite
   forbidden_edges:
     - atm -> atm-rusqlite
-    - atm-daemon -> atm-rusqlite
     - atm-graft -> atm-rusqlite
 
 references:
@@ -77,7 +79,7 @@ enforcement:
 status:
   state: planned
   notes:
-    - composition root remains to be named by a Phase R ADR
+    - assembled only by the daemon runtime composition root
 ```
 
 Purpose:
@@ -105,7 +107,8 @@ implementation:
   constructor: private
 
 composition:
-  roots: []
+  roots:
+    - atm_daemon::bootstrap
 
 ownership:
   io_owns:
@@ -116,13 +119,13 @@ ownership:
     - process_spawn
 
 dependencies:
-  allowed_dependents: []
+  allowed_dependents:
+    - atm-daemon
   allowed_dependencies:
     - atm-core
     - rusqlite
   forbidden_edges:
     - atm -> atm-rusqlite
-    - atm-daemon -> atm-rusqlite
     - atm-graft -> atm-rusqlite
 
 references:
@@ -186,7 +189,8 @@ implementation:
   constructor: private
 
 composition:
-  roots: []
+  roots:
+    - atm_daemon::bootstrap
 
 ownership:
   io_owns:
@@ -197,13 +201,13 @@ ownership:
     - process_spawn
 
 dependencies:
-  allowed_dependents: []
+  allowed_dependents:
+    - atm-daemon
   allowed_dependencies:
     - atm-core
     - rusqlite
   forbidden_edges:
     - atm -> atm-rusqlite
-    - atm-daemon -> atm-rusqlite
     - atm-graft -> atm-rusqlite
 
 references:
