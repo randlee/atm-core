@@ -131,13 +131,15 @@ impl AgentMember {
 #[cfg(test)]
 mod tests {
     use super::{AgentMember, AgentType};
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::AgentName;
 
     #[test]
     fn parse_name_only_record_defaults_optional_fields() {
-        let member: AgentMember = serde_json::from_str(r#"{"name":"arch-ctm"}"#).expect("member");
+        let member: AgentMember =
+            serde_json::from_str(&format!(r#"{{"name":"{TEST_SENDER}"}}"#)).expect("member");
 
-        assert_eq!(member.name, AgentName::from_validated("arch-ctm"));
+        assert_eq!(member.name, AgentName::from_validated(TEST_SENDER));
         assert!(member.agent_id.is_empty());
         assert_eq!(member.agent_type, AgentType::Unknown(String::new()));
         assert!(member.model.is_empty());
@@ -149,20 +151,22 @@ mod tests {
 
     #[test]
     fn parse_full_claude_code_record_preserves_values_and_extra() {
-        let raw = r#"{
-            "agentId":"arch-ctm@atm-dev",
-            "name":"arch-ctm",
+        let raw = format!(
+            r#"{{
+            "agentId":"{TEST_SENDER}@{TEST_TEAM}",
+            "name":"{TEST_SENDER}",
             "agentType":"general-purpose",
             "model":"claude-sonnet-4-5",
             "joinedAt":1770765919076,
             "tmuxPaneId":"%1",
             "cwd":"/workspace",
             "color":"blue"
-        }"#;
+        }}"#
+        );
 
-        let member: AgentMember = serde_json::from_str(raw).expect("member");
-        assert_eq!(member.agent_id, "arch-ctm@atm-dev");
-        assert_eq!(member.name, AgentName::from_validated("arch-ctm"));
+        let member: AgentMember = serde_json::from_str(&raw).expect("member");
+        assert_eq!(member.agent_id, format!("{TEST_SENDER}@{TEST_TEAM}"));
+        assert_eq!(member.name, AgentName::from_validated(TEST_SENDER));
         assert_eq!(member.agent_type, AgentType::GeneralPurpose);
         assert_eq!(member.model, "claude-sonnet-4-5");
         assert_eq!(member.joined_at, Some(1770765919076));
@@ -178,9 +182,10 @@ mod tests {
     #[test]
     fn parse_name_and_agent_type_record_succeeds() {
         let member: AgentMember =
-            serde_json::from_str(r#"{"name":"arch-ctm","agentType":"plan"}"#).expect("member");
+            serde_json::from_str(&format!(r#"{{"name":"{TEST_SENDER}","agentType":"plan"}}"#))
+                .expect("member");
 
-        assert_eq!(member.name, AgentName::from_validated("arch-ctm"));
+        assert_eq!(member.name, AgentName::from_validated(TEST_SENDER));
         assert_eq!(member.agent_type, AgentType::Plan);
         assert!(member.agent_id.is_empty());
         assert!(member.model.is_empty());

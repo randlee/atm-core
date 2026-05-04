@@ -19,16 +19,43 @@ restructured, product docs remain in `docs/` and crate-local detail moves into
 `docs/atm/`, `docs/atm-core/`, `docs/atm-daemon/`, and
 `docs/atm-rusqlite/`.
 
-Phase-Q supersession note:
+Phase-Q disposition note:
 - earlier daemon-free phases in this plan remain historical execution records
-- the current target line is Section 21 and the detailed design in
-  `docs/plan-phase-Q.md`
+- Phase Q is abandoned as an implementation line
+- `docs/plan-phase-Q.md` and Section 21 are retained as historical design and
+  execution records only
+- no new implementation work should target `integrate/phase-Q`
+- no Phase Q code should be merged into the active Phase R line
+- reuse from Phase Q is allowed only by selective cherry-pick or manual
+  reimplementation after review
 
 Phase-R redesign note:
 - the next execution line is the Phase R redesign and enforcement pass tracked
   in [`docs/plan-phase-R.md`](./plan-phase-R.md)
 - Phase R starts with boundary documents, ADR alignment, and lint/parser gates
   before new implementation work
+- the active integration branch for this redesign line is `integrate/phase-R`
+
+Phase R execution entry:
+- Wave 1 deliverable: the new Phase R skeleton
+  - new crates
+  - public boundary traits/facades
+  - major data structures
+- Wave 1 supporting sequence:
+  1. `R.0` lint foundation
+  2. `R.1` lint debt burn-down
+  3. `R.2` skeleton crates, boundary traits/facades, and major data structures
+  4. `R.2A` parallel lint hardening
+- `R.3` is a dedicated re-planning sprint after the Wave 1 skeleton lands
+- Wave 2 executes implementations only against the enforced boundary skeleton
+
+Phase R acceptance:
+- lint/parser gates exist before substantive implementation resumes
+- the current lint baseline is cleaned enough that new architectural failures
+  are actionable
+- the crate/trait/data-structure skeleton exists before Wave 2 starts
+- implementation sprint planning is rewritten against that skeleton before
+  implementation resumes
 
 Status:
 - Phases 0 through P have executed on the retained rewrite line.
@@ -47,11 +74,12 @@ Status:
 - Message schema ownership and metadata normalization are now implemented well
   enough for live shared-inbox adoption, while a separate ATM-native inbox
   remains deferred to a later version.
-- Phase Q planning is active on the SQLite source-of-truth and daemon-boundary
-  line; this phase supersedes mailbox-lock architecture as the target design.
+- Phase Q is retained only as an abandoned historical attempt at the SQLite
+  source-of-truth and daemon-boundary redesign.
+- Phase R is the only active redesign and implementation line.
 - The current workspace still contains `crates/atm-core` and `crates/atm`
-  only; `crates/atm-daemon` and `crates/atm-rusqlite` are introduced by the
-  Phase Q implementation line.
+  only; any additional crate introduction now belongs to the Phase R skeleton
+  line, not Phase Q.
 
 ## 2. Deliverables
 
@@ -73,7 +101,7 @@ Status:
 
 ## 3. Crates
 
-The Phase Q target implementation is split across:
+The abandoned Phase Q target implementation was split across:
 
 - `crates/atm-core`
 - `crates/atm`
@@ -2455,10 +2483,18 @@ Phase P completion gate:
 - the remaining external-writer limitations, if any, are documented as accepted
   compatibility boundaries rather than hidden assumptions
 
-## 21. Phase Q — SQLite Mail SSOT And Runtime Boundary [PLANNED]
+## 21. Phase Q — SQLite Mail SSOT And Runtime Boundary [ABANDONED]
 
 Detailed design source:
 - [`docs/plan-phase-Q.md`](./plan-phase-Q.md)
+
+Disposition:
+- abandoned
+- retained for historical traceability only
+- not an active execution line
+- Phase Q code is reference-only and must not be merged into Phase R
+- any retained value from Phase Q must be brought forward only by selective
+  cherry-pick or manual port after review
 
 Goal:
 - replace filesystem JSON as ATM's mail source of truth with SQLite

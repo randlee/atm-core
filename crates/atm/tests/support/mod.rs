@@ -1,16 +1,20 @@
+#![allow(dead_code)]
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
+use std::process::Command;
 
+#[allow(unused_imports)]
+pub use atm_core::roles::ROLE_TEAM_LEAD;
+#[allow(unused_imports)]
+pub use atm_core::test_support::{
+    TEST_DAEMON, TEST_LEAD, TEST_LEAD_ADDRESS, TEST_ORIGIN, TEST_QA, TEST_QA_AGENT, TEST_RECIPIENT,
+    TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_SENDER_ADDRESS, TEST_TEAM,
+};
 use serde_json::json;
 use tempfile::TempDir;
-
-pub const TEST_TEAM: &str = "test-team";
-pub const TEST_SENDER: &str = "test-sender";
-pub const TEST_RECIPIENT: &str = "test-recipient";
-pub const TEST_LEAD: &str = "test-lead";
-pub const ROLE_TEAM_LEAD: &str = "team-lead";
 
 #[derive(Debug)]
 pub struct TestEnv {
@@ -73,7 +77,10 @@ impl TestEnvBuilder {
             .into_iter()
             .map(|name| json!({ "name": name }))
             .collect::<Vec<_>>();
-        fs::write(config_path, serde_json::to_vec_pretty(&json!({ "members": members }))?)?;
+        fs::write(
+            config_path,
+            serde_json::to_vec_pretty(&json!({ "members": members }))?,
+        )?;
 
         let env_map = BTreeMap::from([
             (
@@ -114,4 +121,50 @@ impl Default for TestEnvBuilder {
             cwd_name: "cwd".to_string(),
         }
     }
+}
+
+pub fn qualified(agent: &str) -> String {
+    format!("{agent}@{TEST_TEAM}")
+}
+
+pub fn configure_atm_command<'a>(
+    command: &'a mut Command,
+    home_dir: &std::path::Path,
+    identity: Option<&str>,
+) -> &'a mut Command {
+    let daemon_bin = PathBuf::from(env!("CARGO_BIN_EXE_atm"))
+        .with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX));
+    assert!(
+        daemon_bin.exists(),
+        "expected hermetic test daemon binary beside {} but it was missing: {}",
+        env!("CARGO_BIN_EXE_atm"),
+        daemon_bin.display()
+    );
+    command.env_clear();
+    for key in [
+        "PATH",
+        "CARGO",
+        "CARGO_HOME",
+        "HOME",
+        "RUSTUP_HOME",
+        "USERPROFILE",
+        "SYSTEMROOT",
+        "TMPDIR",
+        "TMP",
+        "TEMP",
+        "ComSpec",
+    ] {
+        if let Some(value) = std::env::var_os(key) {
+            command.env(key, value);
+        }
+    }
+    command
+        .env("ATM_HOME", home_dir)
+        .env("ATM_CONFIG_HOME", home_dir)
+        .env("ATM_TEAM", TEST_TEAM)
+        .env("ATM_DAEMON_BIN", &daemon_bin);
+    if let Some(identity) = identity {
+        command.env("ATM_IDENTITY", identity);
+    }
+    command
 }

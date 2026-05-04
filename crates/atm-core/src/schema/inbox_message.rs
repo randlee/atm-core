@@ -473,6 +473,8 @@ mod tests {
         LegacyMessageId, MessageEnvelope, MessageMetadata, PendingAck,
         hydrate_legacy_fields_from_metadata, to_shared_inbox_value,
     };
+    use crate::roles::ROLE_TEAM_LEAD;
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
 
     #[test]
     fn alert_kind_round_trips_known_and_unknown_wire_values() {
@@ -499,7 +501,7 @@ mod tests {
         // Claude-native schema. Ownership is documented in
         // docs/legacy-atm-message-schema.md and docs/atm-message-schema.md.
         let envelope = MessageEnvelope {
-            from: "arch-ctm".parse().expect("agent"),
+            from: TEST_SENDER.parse().expect("agent"),
             text: "hello".into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -507,7 +509,7 @@ mod tests {
                     .expect("timestamp"),
             ),
             read: false,
-            source_team: Some("atm-dev".parse().expect("team")),
+            source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: Some("hello".into()),
             message_id: Some(LegacyMessageId::new()),
             pending_ack_at: Some(IsoTimestamp::from_datetime(
@@ -533,7 +535,7 @@ mod tests {
         // redefining external schemas documented in
         // docs/claude-code-message-schema.md.
         let json = json!({
-            "from": "team-lead",
+            "from": ROLE_TEAM_LEAD,
             "text": "hello",
             "timestamp": "2026-03-30T00:00:00Z",
             "read": false,
@@ -550,7 +552,7 @@ mod tests {
     #[test]
     fn message_id_is_optional() {
         let json = json!({
-            "from": "team-lead",
+            "from": ROLE_TEAM_LEAD,
             "text": "hello",
             "timestamp": "2026-03-30T00:00:00Z",
             "read": false
@@ -564,7 +566,7 @@ mod tests {
     #[test]
     fn blank_task_id_is_rejected() {
         let json = json!({
-            "from": "team-lead",
+            "from": ROLE_TEAM_LEAD,
             "text": "hello",
             "timestamp": "2026-03-30T00:00:00Z",
             "read": false,
@@ -580,7 +582,7 @@ mod tests {
     fn pending_ack_round_trips() {
         let pending_ack = PendingAck {
             message_id: LegacyMessageId::new(),
-            from: "team-lead".parse().expect("agent"),
+            from: ROLE_TEAM_LEAD.parse().expect("agent"),
             acked: true,
             acked_at: Some(IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 1)
@@ -603,7 +605,7 @@ mod tests {
             metadata: MessageMetadata {
                 atm: Some(AtmMetadataFields {
                     message_id: Some(message_id),
-                    source_team: Some("atm-dev".parse().expect("team name")),
+                    source_team: Some(TEST_TEAM.parse().expect("team name")),
                     from_identity: None,
                     pending_ack_at: None,
                     acknowledged_at: None,
@@ -663,7 +665,7 @@ mod tests {
     #[test]
     fn shared_inbox_write_shape_moves_machine_fields_into_metadata() {
         let envelope = MessageEnvelope {
-            from: "arch-ctm".parse().expect("agent"),
+            from: TEST_SENDER.parse().expect("agent"),
             text: "hello".into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -671,7 +673,7 @@ mod tests {
                     .expect("timestamp"),
             ),
             read: false,
-            source_team: Some("atm-dev".parse().expect("team")),
+            source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: Some("hello".into()),
             message_id: Some(LegacyMessageId::new()),
             pending_ack_at: Some(IsoTimestamp::from_datetime(
@@ -699,7 +701,7 @@ mod tests {
             .and_then(Value::as_object)
             .expect("metadata.atm");
         assert!(!atm.contains_key("messageId"));
-        assert_eq!(atm.get("sourceTeam"), Some(&json!("atm-dev")));
+        assert_eq!(atm.get("sourceTeam"), Some(&json!(TEST_TEAM)));
         assert_eq!(atm.get("taskId"), Some(&json!("TASK-123")));
     }
 
@@ -711,7 +713,7 @@ mod tests {
                 .expect("timestamp"),
         );
         let envelope = MessageEnvelope {
-            from: "arch-ctm".parse().expect("agent"),
+            from: TEST_SENDER.parse().expect("agent"),
             text: "ack reply".into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -719,7 +721,7 @@ mod tests {
                     .expect("timestamp"),
             ),
             read: false,
-            source_team: Some("atm-dev".parse().expect("team")),
+            source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: Some("ack reply".into()),
             message_id: Some(LegacyMessageId::new()),
             pending_ack_at: None,
@@ -750,7 +752,7 @@ mod tests {
     #[test]
     fn metadata_fields_hydrate_legacy_internal_shape() {
         let mut value = json!({
-            "from": "arch-ctm",
+            "from": TEST_SENDER,
             "text": "hello",
             "timestamp": "2026-03-30T00:00:00Z",
             "read": false,
@@ -758,7 +760,7 @@ mod tests {
             "metadata": {
                 "atm": {
                     "messageId": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
-                    "sourceTeam": "atm-dev",
+                    "sourceTeam": TEST_TEAM,
                     "pendingAckAt": "2026-03-30T00:00:01Z",
                     "taskId": "TASK-123"
                 }
@@ -768,14 +770,14 @@ mod tests {
         hydrate_legacy_fields_from_metadata(&mut value);
         let object = value.as_object().expect("object");
         assert!(object.contains_key("message_id"));
-        assert_eq!(object.get("source_team"), Some(&json!("atm-dev")));
+        assert_eq!(object.get("source_team"), Some(&json!(TEST_TEAM)));
         assert_eq!(object.get("taskId"), Some(&json!("TASK-123")));
     }
 
     #[test]
     fn metadata_fields_hydrate_legacy_ack_fields() {
         let mut value = json!({
-            "from": "arch-ctm",
+            "from": TEST_SENDER,
             "text": "ack reply",
             "timestamp": "2026-03-30T00:00:00Z",
             "read": false,
@@ -799,7 +801,7 @@ mod tests {
     #[test]
     fn hydrate_legacy_fields_ignores_malformed_metadata_without_panic() {
         let mut value = json!({
-            "from": "arch-ctm",
+            "from": TEST_SENDER,
             "text": "hello",
             "timestamp": "2026-03-30T00:00:00Z",
             "read": false,
@@ -820,7 +822,7 @@ mod tests {
     #[test]
     fn hydrate_legacy_fields_handles_partially_migrated_envelope() {
         let mut value = json!({
-            "from": "arch-ctm",
+            "from": TEST_SENDER,
             "text": "hello",
             "timestamp": "2026-03-30T00:00:00Z",
             "read": false,

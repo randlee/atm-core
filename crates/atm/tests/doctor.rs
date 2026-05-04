@@ -1,12 +1,16 @@
+mod support;
+
 use std::fs;
 use std::process::Command;
+
+use support::{TEST_DAEMON, TEST_LEAD, TEST_QA, TEST_SENDER, TEST_TEAM};
 
 use atm_core::schema::{AgentMember, TeamConfig};
 use serde_json::Value;
 
 #[test]
 fn test_doctor_reports_healthy_observability_with_real_adapter() {
-    let fixture = Fixture::new(&["arch-ctm"]);
+    let fixture = Fixture::new(&[TEST_LEAD]);
 
     let output = fixture.run(&["doctor", "--json"], &[]);
 
@@ -29,7 +33,7 @@ fn test_doctor_reports_healthy_observability_with_real_adapter() {
 
 #[test]
 fn test_doctor_reports_degraded_observability_with_real_fault_injection() {
-    let fixture = Fixture::new(&["arch-ctm"]);
+    let fixture = Fixture::new(&[TEST_LEAD]);
 
     let output = fixture.run(
         &["doctor", "--json"],
@@ -54,7 +58,7 @@ fn test_doctor_reports_degraded_observability_with_real_fault_injection() {
 
 #[test]
 fn test_doctor_reports_unavailable_observability_with_real_fault_injection() {
-    let fixture = Fixture::new(&["arch-ctm"]);
+    let fixture = Fixture::new(&[TEST_LEAD]);
 
     let output = fixture.run(
         &["doctor", "--json"],
@@ -75,8 +79,8 @@ fn test_doctor_reports_unavailable_observability_with_real_fault_injection() {
 
 #[test]
 fn test_doctor_reports_obsolete_identity_drift_warning() {
-    let fixture = Fixture::new(&["arch-ctm"]);
-    fixture.write_atm_config("[atm]\nidentity = \"arch-ctm\"\n");
+    let fixture = Fixture::new(&[TEST_LEAD]);
+    fixture.write_atm_config(&format!("[atm]\nidentity = \"{}\"\n", TEST_SENDER));
 
     let output = fixture.run(&["doctor", "--json"], &[]);
 
@@ -99,10 +103,11 @@ fn test_doctor_reports_obsolete_identity_drift_warning() {
 
 #[test]
 fn test_doctor_reports_missing_baseline_team_member() {
-    let fixture = Fixture::new(&["team-lead", "arch-ctm"]);
-    fixture.write_atm_config(
-        "[atm]\ndefault_team = \"atm-dev\"\nteam_members = [\"team-lead\", \"arch-ctm\", \"qa\"]\n",
-    );
+    let fixture = Fixture::new(&[TEST_LEAD, TEST_SENDER]);
+    fixture.write_atm_config(&format!(
+        "[atm]\ndefault_team = \"{}\"\nteam_members = [\"{}\", \"{}\", \"{}\"]\n",
+        TEST_TEAM, TEST_LEAD, TEST_SENDER, TEST_QA
+    ));
 
     let output = fixture.run(&["doctor", "--json"], &[]);
 
@@ -118,7 +123,7 @@ fn test_doctor_reports_missing_baseline_team_member() {
             finding["code"] == "ATM_WARNING_BASELINE_MEMBER_MISSING"
                 && finding["message"]
                     .as_str()
-                    .is_some_and(|message| message.contains("qa"))
+                    .is_some_and(|message| message.contains(TEST_QA))
         }),
         "stdout: {}",
         String::from_utf8(output.stdout.clone()).expect("stdout utf8")
@@ -127,10 +132,11 @@ fn test_doctor_reports_missing_baseline_team_member() {
 
 #[test]
 fn test_doctor_reports_member_roster_with_baseline_ordering() {
-    let fixture = Fixture::new(&["qa", "team-lead", "arch-ctm", "temp-worker"]);
-    fixture.write_atm_config(
-        "[atm]\ndefault_team = \"atm-dev\"\nteam_members = [\"arch-ctm\", \"team-lead\", \"qa\"]\n",
-    );
+    let fixture = Fixture::new(&[TEST_QA, TEST_SENDER, TEST_LEAD, TEST_DAEMON]);
+    fixture.write_atm_config(&format!(
+        "[atm]\ndefault_team = \"{}\"\nteam_members = [\"{}\", \"{}\", \"{}\"]\n",
+        TEST_TEAM, TEST_LEAD, TEST_SENDER, TEST_QA
+    ));
 
     let output = fixture.run(&["doctor", "--json"], &[]);
 
@@ -143,10 +149,10 @@ fn test_doctor_reports_member_roster_with_baseline_ordering() {
     let members = parsed["member_roster"]["members"]
         .as_array()
         .expect("member roster array");
-    assert_eq!(members[0]["name"], "team-lead");
-    assert_eq!(members[1]["name"], "arch-ctm");
-    assert_eq!(members[2]["name"], "qa");
-    assert_eq!(members[3]["name"], "temp-worker");
+    assert_eq!(members[0]["name"], TEST_LEAD);
+    assert_eq!(members[1]["name"], TEST_SENDER);
+    assert_eq!(members[2]["name"], TEST_QA);
+    assert_eq!(members[3]["name"], TEST_DAEMON);
 }
 
 #[test]
@@ -188,7 +194,7 @@ fn test_doctor_reports_team_config_parse_failure_finding() {
 
 #[test]
 fn test_doctor_reports_missing_inboxes_directory_finding() {
-    let fixture = Fixture::new(&["arch-ctm"]);
+    let fixture = Fixture::new(&[TEST_LEAD]);
     fs::remove_dir_all(fixture.team_dir().join("inboxes")).expect("remove inboxes dir");
 
     let output = fixture.run(&["doctor", "--json"], &[]);
@@ -207,7 +213,7 @@ fn test_doctor_reports_missing_inboxes_directory_finding() {
 
 #[test]
 fn test_doctor_reports_stale_restore_marker_warning() {
-    let fixture = Fixture::new(&["team-lead", "arch-ctm"]);
+    let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let backup_path = fixture.tempdir.path().join("backup");
     fs::write(
         fixture.team_dir().join(".restore-in-progress"),
@@ -235,7 +241,7 @@ fn test_doctor_reports_stale_restore_marker_warning() {
 
 #[test]
 fn test_doctor_reports_stale_mailbox_lock_across_team_inboxes() {
-    let fixture = Fixture::new(&["team-lead", "arch-ctm"]);
+    let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let stale_lock = fixture
         .tempdir
         .path()
@@ -291,8 +297,8 @@ impl Fixture {
             .args(args)
             .env("ATM_HOME", self.tempdir.path())
             .env("ATM_CONFIG_HOME", self.tempdir.path())
-            .env("ATM_IDENTITY", "arch-ctm")
-            .env("ATM_TEAM", "atm-dev")
+            .env("ATM_IDENTITY", TEST_LEAD)
+            .env("ATM_TEAM", TEST_TEAM)
             .current_dir(self.tempdir.path());
         for (key, value) in extra_env {
             command.env(key, value);
@@ -341,7 +347,7 @@ impl Fixture {
             .path()
             .join(".claude")
             .join("teams")
-            .join("atm-dev")
+            .join(TEST_TEAM)
     }
 
     fn active_log_path(&self) -> std::path::PathBuf {

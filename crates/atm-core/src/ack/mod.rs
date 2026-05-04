@@ -503,7 +503,9 @@ mod tests {
     use serde_json::json;
 
     use super::{canonical_sender_identity, resolve_reply_target};
+    use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::MessageEnvelope;
+    use crate::test_support::TEST_TEAM;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
     fn message_with_from(from: &str) -> MessageEnvelope {
@@ -512,7 +514,7 @@ mod tests {
             text: "hello".to_string(),
             timestamp: IsoTimestamp::now(),
             read: false,
-            source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
+            source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
             summary: None,
             message_id: None,
             pending_ack_at: None,
@@ -528,30 +530,30 @@ mod tests {
         let mut message = message_with_from("lead");
         message.extra.insert(
             "metadata".to_string(),
-            json!({"atm": {"fromIdentity": "team-lead"}}),
+            json!({"atm": {"fromIdentity": ROLE_TEAM_LEAD}}),
         );
 
         assert_eq!(
             canonical_sender_identity(&message).as_deref(),
-            Some("team-lead")
+            Some(ROLE_TEAM_LEAD)
         );
     }
 
     #[test]
     fn resolve_reply_target_prefers_canonical_sender_identity_metadata() {
         let mut message = message_with_from("lead");
-        message.source_team = Some("atm-dev".parse::<TeamName>().expect("team"));
+        message.source_team = Some(TEST_TEAM.parse::<TeamName>().expect("team"));
         message.extra.insert(
             "metadata".to_string(),
-            json!({"atm": {"fromIdentity": "team-lead"}}),
+            json!({"atm": {"fromIdentity": ROLE_TEAM_LEAD}}),
         );
 
-        let target = resolve_reply_target(&message, "atm-dev").expect("reply target");
+        let target = resolve_reply_target(&message, TEST_TEAM).expect("reply target");
         assert_eq!(
             target,
             (
-                "team-lead".parse().expect("agent"),
-                "atm-dev".parse().expect("team"),
+                ROLE_TEAM_LEAD.parse().expect("agent"),
+                TEST_TEAM.parse().expect("team"),
             )
         );
     }
