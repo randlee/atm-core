@@ -29,6 +29,8 @@ pub fn configure_atm_command<'a>(
     home_dir: &Path,
     identity: Option<&str>,
 ) -> &'a mut Command {
+    let daemon_bin = Path::new(env!("CARGO_BIN_EXE_atm"))
+        .with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX));
     command.env_clear();
     for key in [
         "PATH",
@@ -49,6 +51,9 @@ pub fn configure_atm_command<'a>(
         .env("ATM_HOME", home_dir)
         .env("ATM_CONFIG_HOME", home_dir)
         .env("ATM_TEAM", TEST_TEAM);
+    if daemon_bin.exists() {
+        command.env("ATM_DAEMON_BIN", daemon_bin);
+    }
     if let Some(identity) = identity {
         command.env("ATM_IDENTITY", identity);
     }

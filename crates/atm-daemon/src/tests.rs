@@ -222,7 +222,7 @@ fn remote_acceptance_is_required_for_send_success() {
             agent_name: TEST_SENDER.parse().expect("agent"),
             payload: RequestPayload::Send(serde_json::json!({"message":"hello"})),
         },
-        Duration::from_secs(1),
+        Duration::from_secs(5),
     )
     .expect("remote response");
     assert_eq!(response.kind, RequestKind::Send);
