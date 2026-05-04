@@ -21,6 +21,7 @@ use atm_core::home;
 use atm_core::inbox_ingress::default_inbox_ingress;
 use atm_core::observability::{CommandEvent, ObservabilityPort};
 use atm_core::read::{ReadQuery, read_mail_via_store};
+use atm_core::store::StoreError;
 use atm_rusqlite::{RusqliteStore, checkpoint_runtime_wal as checkpoint_runtime_wal_via_store};
 use serde::{Deserialize, Serialize};
 
@@ -58,6 +59,10 @@ pub const WORKER_THREAD_JOIN_TIMEOUT: Duration = Duration::from_secs(2);
 const WINDOWS_STOP_POLL_INTERVAL: Duration = Duration::from_millis(100);
 pub const MAX_ACCEPTS: usize = 64;
 pub const MAX_INFLIGHT_PER_CONNECTION: usize = 32;
+/// Upper bound for one daemon frame payload after length-prefix decoding.
+///
+/// This keeps local and remote transports on the same bounded memory contract
+/// and fails oversized protocol frames before JSON decode allocates further.
 pub(crate) const MAX_FRAME_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -149,6 +154,9 @@ impl WireResponseEnvelope {
 pub struct CoreDispatcher {
     home_dir: PathBuf,
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
+    // Shared with accept-loop spawned request handlers so doctor-owned worker
+    // threads can be registered at dispatch time and then drained from the
+    // coordinated daemon shutdown path.
     worker_threads: Option<Arc<Mutex<Vec<JoinHandle<()>>>>>,
 }
 
@@ -179,6 +187,14 @@ impl CoreDispatcher {
             }
         }
         Ok(())
+    }
+}
+
+struct InflightGuard(Arc<AtomicUsize>);
+
+impl Drop for InflightGuard {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
     }
 }
 
@@ -216,7 +232,7 @@ impl RequestDispatcher for CoreDispatcher {
                 let ingress = default_inbox_ingress();
                 let outcome =
                     read_mail_via_store(query, &store, &ingress, self.observability.as_ref())
-                        .map_err(|error| DispatchError::Handler(error.to_string()))?;
+                        .map_err(dispatch_atm_error)?;
                 let payload_json = serde_json::to_string(&outcome)
                     .map_err(|error| DispatchError::ResponseEncode(error.to_string()))?;
                 Ok(DaemonResponse {
@@ -232,7 +248,7 @@ impl RequestDispatcher for CoreDispatcher {
                 let ingress = default_inbox_ingress();
                 let outcome =
                     clear_mail_via_store(query, &store, &ingress, self.observability.as_ref())
-                        .map_err(|error| DispatchError::Handler(error.to_string()))?;
+                        .map_err(dispatch_atm_error)?;
                 let payload_json = serde_json::to_string(&outcome)
                     .map_err(|error| DispatchError::ResponseEncode(error.to_string()))?;
                 Ok(DaemonResponse {
@@ -682,12 +698,6 @@ fn spawn_local_connection(
     let _ = stream.set_read_timeout(Some(SAME_HOST_SERVER_IO_TIMEOUT));
     let _ = stream.set_write_timeout(Some(SAME_HOST_SERVER_IO_TIMEOUT));
     let handle = thread::spawn(move || {
-        struct InflightGuard(Arc<AtomicUsize>);
-        impl Drop for InflightGuard {
-            fn drop(&mut self) {
-                self.0.fetch_sub(1, Ordering::SeqCst);
-            }
-        }
         let _inflight_guard = InflightGuard(Arc::clone(&inflight));
         let envelope = match read_frame::<DaemonRequest, _>(&mut stream) {
             Ok(request) => match dispatcher.dispatch(request) {
@@ -728,12 +738,6 @@ fn spawn_tcp_connection(
     let _ = stream.set_read_timeout(Some(REMOTE_SERVER_IO_TIMEOUT));
     let _ = stream.set_write_timeout(Some(REMOTE_SERVER_IO_TIMEOUT));
     let handle = thread::spawn(move || {
-        struct InflightGuard(Arc<AtomicUsize>);
-        impl Drop for InflightGuard {
-            fn drop(&mut self) {
-                self.0.fetch_sub(1, Ordering::SeqCst);
-            }
-        }
         let _inflight_guard = InflightGuard(Arc::clone(&inflight));
         let envelope = match read_frame::<DaemonRequest, _>(&mut stream) {
             Ok(request) => match dispatcher.dispatch(request) {
@@ -752,6 +756,15 @@ fn spawn_tcp_connection(
             );
         }
     }
+}
+
+fn dispatch_atm_error(mut error: AtmError) -> DispatchError {
+    if let Some(source) = error.source.take()
+        && let Ok(store_error) = source.downcast::<StoreError>()
+    {
+        return DispatchError::Store(*store_error);
+    }
+    DispatchError::Handler(error.to_string())
 }
 
 pub fn run_foreground() -> Result<(), AtmError> {

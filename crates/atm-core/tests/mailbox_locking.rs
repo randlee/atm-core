@@ -33,6 +33,7 @@ use uuid::Uuid;
 const TEST_TEAM: &str = "test-team";
 const TEST_SENDER: &str = "sender-a";
 const TEST_RECIPIENT: &str = "recipient";
+const MISSING_CONFIG_NOTICE_LEAD: &str = "team-lead";
 
 fn qualified(agent: &str) -> String {
     format!("{agent}@{TEST_TEAM}")
@@ -467,7 +468,7 @@ fn missing_config_notice_seeds_team_lead_workflow_state() {
     let observability = NullObservability;
     fixture.create_team_without_config("broken-dev");
     fixture.write_primary_inbox_for_team("broken-dev", TEST_RECIPIENT, &[]);
-    fixture.write_primary_inbox_for_team("broken-dev", ROLE_TEAM_LEAD, &[]);
+    fixture.write_primary_inbox_for_team("broken-dev", MISSING_CONFIG_NOTICE_LEAD, &[]);
 
     send_via_store(
         fixture.send_request(ROLE_TEAM_LEAD, "recipient@broken-dev", "broken send"),
@@ -476,11 +477,12 @@ fn missing_config_notice_seeds_team_lead_workflow_state() {
     )
     .expect("missing-config send");
 
-    let notices = fixture.inbox_contents_for_team("broken-dev", ROLE_TEAM_LEAD);
+    let notices = fixture.inbox_contents_for_team("broken-dev", MISSING_CONFIG_NOTICE_LEAD);
     let notice = notices.first().expect("missing-config notice");
     assert_eq!(notice.from, "atm-identity-missing");
     assert_eq!(notice.source_team.as_deref(), Some("broken-dev"));
-    let workflow = fixture.workflow_state_contents_for_team("broken-dev", ROLE_TEAM_LEAD);
+    let workflow =
+        fixture.workflow_state_contents_for_team("broken-dev", MISSING_CONFIG_NOTICE_LEAD);
     let notice_atm_id = message_atm_id(notice);
     assert!(
         workflow["messages"][format!("atm:{notice_atm_id}")]
@@ -497,7 +499,7 @@ fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()
     let observability = Arc::new(NullObservability);
     fixture.create_team_without_config("broken-dev");
     fixture.write_primary_inbox_for_team("broken-dev", TEST_RECIPIENT, &[]);
-    fixture.write_primary_inbox_for_team("broken-dev", ROLE_TEAM_LEAD, &[]);
+    fixture.write_primary_inbox_for_team("broken-dev", MISSING_CONFIG_NOTICE_LEAD, &[]);
 
     let barrier = Arc::new(Barrier::new(3));
     let (tx, rx) = mpsc::channel();
@@ -547,9 +549,10 @@ fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()
             .any(|message| message.text == "broken send"),
         "missing-config recipient send was not persisted"
     );
-    let notices = fixture.inbox_contents_for_team("broken-dev", ROLE_TEAM_LEAD);
+    let notices = fixture.inbox_contents_for_team("broken-dev", MISSING_CONFIG_NOTICE_LEAD);
     let notice = notices.first().expect("missing-config notice");
-    let workflow = fixture.workflow_state_contents_for_team("broken-dev", ROLE_TEAM_LEAD);
+    let workflow =
+        fixture.workflow_state_contents_for_team("broken-dev", MISSING_CONFIG_NOTICE_LEAD);
     let notice_atm_id = message_atm_id(notice);
     assert!(
         workflow["messages"][format!("atm:{notice_atm_id}")]["pendingAckAt"].is_null(),

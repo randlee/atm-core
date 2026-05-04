@@ -23,7 +23,7 @@ pub(crate) fn bind_loopback_listener() -> Result<(TcpListener, LocalEndpoint), A
 }
 
 pub(crate) struct SingletonGuard {
-    path: PathBuf,
+    path: Option<PathBuf>,
 }
 
 impl SingletonGuard {
@@ -62,7 +62,7 @@ impl SingletonGuard {
                 })?;
                 drop(stale_eviction_lock);
                 Ok(Self {
-                    path: path.to_path_buf(),
+                    path: Some(path.to_path_buf()),
                 })
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
@@ -105,14 +105,23 @@ impl SingletonGuard {
         }
     }
 
-    pub(crate) fn release(&self) -> Result<(), AtmError> {
-        fs::remove_file(&self.path).map_err(|error| {
+    pub(crate) fn release(&mut self) -> Result<(), AtmError> {
+        let Some(path) = self.path.take() else {
+            return Ok(());
+        };
+        fs::remove_file(&path).map_err(|error| {
             AtmError::daemon_start_failed(format!(
                 "failed to release daemon singleton {}: {error}",
-                self.path.display()
+                path.display()
             ))
             .with_source(error)
         })
+    }
+}
+
+impl Drop for SingletonGuard {
+    fn drop(&mut self) {
+        let _ = self.release();
     }
 }
 

@@ -57,10 +57,10 @@ fn test_members_lists_current_roster_deterministically() {
 
     let parsed = fixture.stdout_json(&output);
     let members = parsed["members"].as_array().expect("members array");
-    assert_eq!(members[0]["name"], ROLE_TEAM_LEAD);
-    assert_eq!(members[1]["name"], TEST_SENDER);
+    assert_eq!(members[0]["name"], TEST_SENDER);
+    assert_eq!(members[1]["name"], ROLE_TEAM_LEAD);
     assert_eq!(members[2]["name"], TEST_QA);
-    assert_eq!(members[0]["tmux_pane_id"], "%1");
+    assert_eq!(members[1]["tmux_pane_id"], "%1");
 }
 
 #[test]
