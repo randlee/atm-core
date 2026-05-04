@@ -29,6 +29,22 @@ _lint-fmt:
 _lint-clippy:
     cargo clippy --workspace --all-targets -- -D warnings
 
+[private]
+_lint-deny:
+    {{python_cmd}} .just/lint_cargo_deny.py
+
+[private]
+_lint-shear:
+    {{python_cmd}} .just/lint_cargo_shear.py
+
+[private]
+_lint-boundaries:
+    {{python_cmd}} .just/lint_boundaries.py
+
+[private]
+_lint-manifests:
+    {{python_cmd}} .just/lint_manifests.py
+
 # Verify crate/release versions stay aligned.
 [private]
 _lint-version:
@@ -43,6 +59,14 @@ _lint-identities:
 [private]
 _lint-lines:
     {{python_cmd}} .just/check_line_counts.py
+
+[private]
+_lint-spell:
+    {{python_cmd}} .just/lint_codespell.py
+
+[private]
+_lint-pytests:
+    {{python_cmd}} -m unittest discover -s .just/tests -p "test_*.py"
 
 # Build the full workspace.
 build:

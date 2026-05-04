@@ -30,27 +30,40 @@ SECTIONS = (
             ("lint", "Run the full repo lint suite."),
             ("lint fmt", "Run only the format check."),
             ("lint clippy", "Run only Clippy with warnings denied."),
+            ("lint deny", "Run cargo-deny advisories/bans/source checks."),
+            ("lint shear", "Run cargo-shear unused-dependency checks."),
+            ("lint boundaries", "Run the crate/source boundary checks."),
+            ("lint manifests", "Run the Cargo manifest policy checks."),
             ("lint version", "Run only the version alignment checks."),
             ("lint identities", "Run only the RULE-008 identity literal guard."),
             ("lint lines", "Run only the RULE-003 line-count guard."),
+            ("lint spell", "Run the spelling/content check."),
+            ("lint pytests", "Run the Python lint-tool unit tests."),
         ),
     ),
 )
 
 
-def main() -> int:
-    repo_name = Path(__file__).resolve().parent.parent.name
-    print(f"{repo_name} task runner")
-    print()
-    print("Usage:")
-    print("  just <recipe>")
-    print()
+def render_help(repo_name: str) -> str:
+    lines = [
+        f"{repo_name} task runner",
+        "",
+        "Usage:",
+        "  just <recipe>",
+        "",
+    ]
     width = max(len(name) for _, recipes in SECTIONS for name, _ in recipes)
     for section_name, recipes in SECTIONS:
-        print(f"{section_name}:")
+        lines.append(f"{section_name}:")
         for name, description in recipes:
-            print(f"  {name.ljust(width)}  {description}")
-        print()
+            lines.append(f"  {name.ljust(width)}  {description}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def main() -> int:
+    repo_name = Path(__file__).resolve().parent.parent.name
+    print(render_help(repo_name), end="")
     return 0
 
 

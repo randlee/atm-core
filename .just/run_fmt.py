@@ -13,11 +13,15 @@ FMT_STEPS = {
 }
 
 
+def resolve_command(mode: str) -> str | None:
+    return FMT_STEPS.get(mode)
+
+
 def main(argv: list[str]) -> int:
     repo_root = Path(__file__).resolve().parent.parent
     mode = argv[1] if len(argv) > 1 else "check"
 
-    command = FMT_STEPS.get(mode)
+    command = resolve_command(mode)
     if command is None:
         valid = ", ".join(FMT_STEPS.keys())
         print(f"unknown fmt mode: {mode}", file=sys.stderr)
