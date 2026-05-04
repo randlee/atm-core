@@ -21,6 +21,7 @@ from lint_common import write_log
 
 PYTHON_LINT_ORDER = (
     "version",
+    "modules",
     "boundaries",
     "manifests",
     "identities",
@@ -29,8 +30,9 @@ PYTHON_LINT_ORDER = (
     "pytests",
 )
 CARGO_LINT_ORDER = ("fmt", "clippy", "deny", "shear")
+FAST_LINT_ORDER = ("fmt", "version", "boundaries", "manifests", "spell", "pytests")
 HIGH_VOLUME_LINTS = {"identities", "lines"}
-CRATE_INVENTORY_LINTS = {"fmt", "clippy", "boundaries", "manifests"}
+CRATE_INVENTORY_LINTS = {"fmt", "clippy", "modules", "boundaries", "manifests"}
 COUNT_PATTERNS = (
     ("total violations:", "violations"),
     ("errors:", "errors"),
@@ -61,6 +63,7 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
     return {
         "fmt": LintTask("fmt", ["just", "_lint-fmt"]),
         "clippy": LintTask("clippy", ["just", "_lint-clippy"]),
+        "modules": LintTask("modules", [python_executable, str(repo_root / ".just/lint_cargo_modules.py")]),
         "deny": LintTask("deny", [python_executable, str(repo_root / ".just/lint_cargo_deny.py")]),
         "shear": LintTask("shear", [python_executable, str(repo_root / ".just/lint_cargo_shear.py")]),
         "version": LintTask("version", [python_executable, str(repo_root / ".just/check_version_sync.py")]),
@@ -78,7 +81,9 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
 def resolve_task_names(target: str) -> list[str]:
     if target == "all":
         return [*CARGO_LINT_ORDER, *PYTHON_LINT_ORDER]
-    valid = {"all", *CARGO_LINT_ORDER, *PYTHON_LINT_ORDER}
+    if target == "fast":
+        return list(FAST_LINT_ORDER)
+    valid = {"all", "fast", *CARGO_LINT_ORDER, *PYTHON_LINT_ORDER}
     if target not in valid:
         valid_display = ", ".join(sorted(valid))
         raise ValueError(f"unknown lint target: {target}; expected one of: {valid_display}")

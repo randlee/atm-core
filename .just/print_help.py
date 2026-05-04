@@ -30,9 +30,10 @@ SECTIONS = (
         "Lint",
         (
             ("lint", "Run the full repo lint suite."),
-            ("lint fast", "Run the low-latency lint subset once implemented."),
+            ("lint fast", "Run the low-latency lint subset."),
             ("lint fmt", "Run only the format check."),
             ("lint clippy", "Run only Clippy with warnings denied."),
+            ("lint modules", "Run cargo-modules internal acyclic checks."),
             ("lint deny", "Run cargo-deny advisories/bans/source checks."),
             ("lint shear", "Run cargo-shear unused-dependency checks."),
             ("lint boundaries", "Run the crate/source boundary checks."),
@@ -49,6 +50,7 @@ SECTIONS = (
         (
             ("view", "Generate all implemented architecture-view artifacts."),
             ("view boundaries", "Generate boundary inventory artifacts."),
+            ("view lines", "Generate source-size inventory artifacts."),
             ("view modules", "Generate module-structure artifacts."),
             ("view deps", "Generate crate-dependency HTML artifacts."),
             ("view unsafe", "Generate unsafe-surface artifacts."),

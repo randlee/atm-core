@@ -14,6 +14,7 @@ if str(JUST_DIR) not in sys.path:
 
 from build_view_site import build_boundaries_panel
 from build_view_site import build_deps_panel
+from build_view_site import build_lines_panel
 from build_view_site import build_modules_panel
 from build_view_site import build_site
 from build_view_site import build_unsafe_panel
@@ -52,6 +53,23 @@ class ViewSiteTests(unittest.TestCase):
             self.assertEqual(panel.status, "PASS")
             self.assertIn("1 duplicates", panel.summary)
 
+    def test_build_lines_panel_uses_crate_totals(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            write_json(
+                repo_root / "artifacts/view/lines/summary.json",
+                {
+                    "limits": {"summary": "prod<=1000"},
+                    "files": [{"crate": "atm-core"}],
+                    "crate_totals": [{"crate": "atm-core", "total": 10, "prod": 8, "test": 1, "prod_test": 9}],
+                },
+            )
+            (repo_root / "artifacts/view/lines/summary.txt").write_text("ok\n", encoding="utf-8")
+            (repo_root / "artifacts/view/lines/table.txt").write_text("table\n", encoding="utf-8")
+            panel = build_lines_panel(repo_root, repo_root / "artifacts/view/panels/lines.xhtml")
+            self.assertEqual(panel.status, "PASS")
+            self.assertIn("1 crates", panel.summary)
+
     def test_build_modules_panel_marks_failure_from_latest_log(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
@@ -89,6 +107,12 @@ class ViewSiteTests(unittest.TestCase):
             )
             (repo_root / "artifacts/view/boundaries/summary.txt").write_text("ok\n", encoding="utf-8")
             (repo_root / "artifacts/view/boundaries/findings.txt").write_text("", encoding="utf-8")
+            write_json(
+                repo_root / "artifacts/view/lines/summary.json",
+                {"limits": {"summary": "prod<=1000"}, "files": [], "crate_totals": []},
+            )
+            (repo_root / "artifacts/view/lines/summary.txt").write_text("ok\n", encoding="utf-8")
+            (repo_root / "artifacts/view/lines/table.txt").write_text("table\n", encoding="utf-8")
             write_json(repo_root / "artifacts/view/deps/summary.json", {"graph_html": "artifacts/view/deps/index.html"})
             write_json(repo_root / "artifacts/view/deps/report.json", {"summary": {"total_dependencies": 1, "unique_crates": 1, "duplicate_crates": 0}, "diagnostics": {"duplicates": []}})
             (repo_root / "artifacts/view/deps/index.html").write_text("<html></html>", encoding="utf-8")
@@ -96,7 +120,7 @@ class ViewSiteTests(unittest.TestCase):
             index_path = build_site(repo_root)
             self.assertEqual(index_path, repo_root / "artifacts/view/index.html")
             model = json.loads((repo_root / "artifacts/view/index.json").read_text(encoding="utf-8"))
-            self.assertEqual(len(model["sections"]), 4)
+            self.assertEqual(len(model["sections"]), 5)
             self.assertTrue(render_template_mock.called)
             self.assertTrue(validate_xhtml_mock.called)
 

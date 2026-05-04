@@ -18,7 +18,7 @@ from run_view import resolve_task_names
 
 class RunViewTests(unittest.TestCase):
     def test_resolve_task_names_all_includes_expected_targets(self) -> None:
-        self.assertEqual(resolve_task_names("all"), ["boundaries", "modules", "deps", "unsafe"])
+        self.assertEqual(resolve_task_names("all"), ["boundaries", "lines", "modules", "deps", "unsafe"])
 
     def test_resolve_task_names_rejects_unknown_target(self) -> None:
         with self.assertRaises(ValueError):
@@ -29,6 +29,7 @@ class RunViewTests(unittest.TestCase):
             repo_root = Path(tempdir)
             tasks = build_tasks(repo_root)
             self.assertEqual(tasks["boundaries"].command[-1], str(repo_root / ".just/view_boundaries.py"))
+            self.assertEqual(tasks["lines"].command[-1], str(repo_root / ".just/view_lines.py"))
             self.assertEqual(tasks["modules"].command[-1], str(repo_root / ".just/view_modules.py"))
             self.assertEqual(tasks["deps"].command[-1], str(repo_root / ".just/view_deps.py"))
             self.assertEqual(tasks["unsafe"].command[-1], str(repo_root / ".just/view_unsafe.py"))

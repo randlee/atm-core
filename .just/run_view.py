@@ -17,7 +17,7 @@ from lint_common import write_log
 from build_view_site import build_site
 
 
-VIEW_ORDER = ("boundaries", "modules", "deps", "unsafe")
+VIEW_ORDER = ("boundaries", "lines", "modules", "deps", "unsafe")
 
 
 @dataclass(frozen=True)
@@ -40,6 +40,7 @@ def build_tasks(repo_root: Path) -> dict[str, ViewTask]:
     python_executable = sys.executable
     return {
         "boundaries": ViewTask("boundaries", [python_executable, str(repo_root / ".just/view_boundaries.py")]),
+        "lines": ViewTask("lines", [python_executable, str(repo_root / ".just/view_lines.py")]),
         "modules": ViewTask("modules", [python_executable, str(repo_root / ".just/view_modules.py")]),
         "deps": ViewTask("deps", [python_executable, str(repo_root / ".just/view_deps.py")]),
         "unsafe": ViewTask("unsafe", [python_executable, str(repo_root / ".just/view_unsafe.py")]),

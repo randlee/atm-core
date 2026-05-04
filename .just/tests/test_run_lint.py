@@ -30,6 +30,7 @@ resolver = "2"
 
     def test_resolve_task_names_all_includes_new_targets(self) -> None:
         names = resolve_task_names("all")
+        self.assertIn("modules", names)
         self.assertIn("boundaries", names)
         self.assertIn("manifests", names)
         self.assertIn("deny", names)
@@ -79,12 +80,19 @@ resolver = "2"
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
             tasks = build_tasks(repo_root)
+            self.assertEqual(tasks["modules"].command[-1], str(repo_root / ".just/lint_cargo_modules.py"))
             self.assertEqual(tasks["boundaries"].command[-1], str(repo_root / ".just/lint_boundaries.py"))
             self.assertEqual(tasks["manifests"].command[-1], str(repo_root / ".just/lint_manifests.py"))
             self.assertEqual(tasks["deny"].command[-1], str(repo_root / ".just/lint_cargo_deny.py"))
             self.assertEqual(tasks["shear"].command[-1], str(repo_root / ".just/lint_cargo_shear.py"))
             self.assertEqual(tasks["spell"].command[-1], str(repo_root / ".just/lint_codespell.py"))
             self.assertEqual(tasks["pytests"].command[-1], str(repo_root / ".just/run_pytests.py"))
+
+    def test_resolve_task_names_fast_is_low_latency_subset(self) -> None:
+        self.assertEqual(
+            resolve_task_names("fast"),
+            ["fmt", "version", "boundaries", "manifests", "spell", "pytests"],
+        )
 
     def test_build_transcript_adds_crate_inventory_for_crate_scoped_lints(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

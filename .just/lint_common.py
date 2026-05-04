@@ -125,6 +125,27 @@ def workspace_crates(repo_root: Path) -> list[WorkspaceCrate]:
     return crates
 
 
+def workspace_target_args(manifest_path: Path) -> list[str]:
+    manifest = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
+    lib = manifest.get("lib")
+    if isinstance(lib, dict):
+        return ["--lib"]
+
+    bins = manifest.get("bin")
+    if isinstance(bins, list) and bins:
+        first_bin = bins[0]
+        if isinstance(first_bin, dict):
+            name = first_bin.get("name")
+            if isinstance(name, str) and name:
+                return ["--bin", name]
+
+    package = manifest.get("package", {})
+    package_name = package.get("name") if isinstance(package, dict) else None
+    if isinstance(package_name, str) and (manifest_path.parent / "src/main.rs").exists():
+        return ["--bin", package_name]
+    raise SystemExit(f"could not determine cargo target for {manifest_path}")
+
+
 def render_table(
     rows: list[dict[str, str]],
     columns: list[tuple[str, str]],

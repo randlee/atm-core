@@ -164,13 +164,16 @@ def validate_winget_manifests(repo_root: Path, workspace_version: str, config: d
                 f"does not match workspace version ({workspace_version})"
             )
 
-        installer_url = extract_field(installer_url_field)
-        installer_version = extract_version_from_url(installer_url)
-        if installer_version != workspace_version:
-            fail(
-                f"{rel_manifest} {installer_url_field} version ({installer_version}) "
-                f"does not match workspace version ({workspace_version})"
-            )
+        installer_urls = re.findall(rf"^\s*{re.escape(installer_url_field)}:\s*(?P<value>\S+)\s*$", text, re.MULTILINE)
+        if not installer_urls:
+            fail(f"{rel_manifest} is missing {installer_url_field}")
+        for installer_url in installer_urls:
+            installer_version = extract_version_from_url(installer_url)
+            if installer_version != workspace_version:
+                fail(
+                    f"{rel_manifest} {installer_url_field} version ({installer_version}) "
+                    f"does not match workspace version ({workspace_version})"
+                )
     return True
 
 

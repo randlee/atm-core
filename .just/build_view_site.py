@@ -24,7 +24,7 @@ STATUS_CLASSES = {
     "ERROR": "status-error",
     "NOT_SUPPORTED": "status-not-supported",
 }
-PANEL_ORDER = ("boundaries", "deps", "modules", "unsafe")
+PANEL_ORDER = ("boundaries", "lines", "deps", "modules", "unsafe")
 
 
 @dataclass(frozen=True)
@@ -164,6 +164,41 @@ def build_deps_panel(repo_root: Path, panel_path: Path) -> ToolPanel:
     )
 
 
+def build_lines_panel(repo_root: Path, panel_path: Path) -> ToolPanel:
+    tool_dir = repo_root / VIEW_ROOT / "lines"
+    summary_json_path = tool_dir / "summary.json"
+    summary_txt_path = tool_dir / "summary.txt"
+    table_txt_path = tool_dir / "table.txt"
+    summary = read_json(summary_json_path) or {"limits": {"summary": "unknown"}, "files": [], "crate_totals": []}
+    totals = summary.get("crate_totals", [])
+    body = [
+        f"<p>Active limits: {html.escape(str(summary.get('limits', {}).get('summary', 'unknown')))}</p>",
+        html_table(
+            [{k: str(v) for k, v in row.items()} for row in totals],
+            [("crate", "Crate"), ("total", "Total"), ("prod", "Prod"), ("test", "Test"), ("prod_test", "Prod+Test")],
+        ),
+        "<h4>Artifacts</h4>",
+        html_links(
+            panel_path,
+            [
+                ("summary.txt", summary_txt_path),
+                ("table.txt", table_txt_path),
+                ("summary.json", summary_json_path),
+            ],
+        ),
+    ]
+    return ToolPanel(
+        tool_id="lines",
+        title="Source Size Inventory",
+        status="PASS" if summary_json_path.exists() else "ERROR",
+        summary=f"{len(totals)} crates, {len(summary.get('files', []))} files",
+        context_text=f"Source size inventory covers {len(totals)} crates and {len(summary.get('files', []))} files.",
+        body_html="".join(body),
+        json_payload=summary,
+        panel_path=panel_path,
+    )
+
+
 def crate_rows_from_index(index_data: dict[str, Any] | None) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     for entry in (index_data or {}).get("crates", []):
@@ -293,6 +328,7 @@ def build_unsafe_panel(repo_root: Path, panel_path: Path) -> ToolPanel:
 def panel_builders() -> dict[str, Any]:
     return {
         "boundaries": build_boundaries_panel,
+        "lines": build_lines_panel,
         "deps": build_deps_panel,
         "modules": build_modules_panel,
         "unsafe": build_unsafe_panel,
@@ -396,12 +432,13 @@ def build_site(repo_root: Path) -> Path:
     sections_html = "\n".join(section_html(panel, index_path) for panel in panels)
     summary_html = (
         "<p>Architecture view index linking the current boundary, dependency, module, and unsafe-surface artifacts.</p>"
-        "<p>Supported today: boundaries and dependency graph. Modules has partial raw output, and unsafe remains blocked by cargo-geiger.</p>"
+        "<p>Supported today: boundaries, lines, and dependency graph. Modules has partial raw output, and unsafe remains blocked by cargo-geiger.</p>"
     )
     recommendations_html = (
         "<ul>"
         "<li>Use the dependency graph HTML first for package-level structure.</li>"
         "<li>Use the boundary panel for current document coverage and validation state.</li>"
+        "<li>Use the lines panel for crate-level size pressure and line-count limits.</li>"
         "<li>Treat module and unsafe panels as current-state diagnostics until those generators stabilize.</li>"
         "</ul>"
     )

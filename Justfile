@@ -30,6 +30,10 @@ _lint-clippy:
     cargo clippy --workspace --all-targets -- -D warnings
 
 [private]
+_lint-modules:
+    {{python_cmd}} .just/lint_cargo_modules.py
+
+[private]
 _lint-deny:
     {{python_cmd}} .just/lint_cargo_deny.py
 
