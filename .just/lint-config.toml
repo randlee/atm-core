@@ -2,6 +2,7 @@
 forbidden_literals = [
   "team-lead",
   "arch-ctm",
+  "arch-qa",
   "arch-inj",
   "arch-obs",
   "quality-mgr",

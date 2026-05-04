@@ -66,7 +66,8 @@ class CheckVersionSyncTests(unittest.TestCase):
             with self.assertRaises(SystemExit) as error:
                 validate_crate_versions(repo_root, "1.1.2")
 
-            self.assertIn("crates/atm-rusqlite/Cargo.toml must use version.workspace = true", str(error.exception))
+            message = str(error.exception).replace("\\", "/")
+            self.assertIn("crates/atm-rusqlite/Cargo.toml must use version.workspace = true", message)
 
     def test_validate_lockfile_checks_all_workspace_packages(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

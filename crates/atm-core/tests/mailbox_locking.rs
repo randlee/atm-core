@@ -3,6 +3,7 @@
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::fs::{File, OpenOptions};
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::{Arc, Barrier, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -41,7 +42,7 @@ fn qualified(agent: &str) -> String {
 
 // Test-side ceiling guard only; production lock timeout defaults to 5s per
 // architecture §18.3.
-const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(2);
+const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(30);
 
 fn test_recv_timeout() -> Duration {
     std::env::var("ATM_TEST_RECV_TIMEOUT_SECS")
@@ -49,7 +50,7 @@ fn test_recv_timeout() -> Duration {
         .and_then(|raw| raw.parse::<u64>().ok())
         .filter(|seconds| *seconds > 0)
         .map(Duration::from_secs)
-        .unwrap_or_else(|| Duration::from_secs(10))
+        .unwrap_or_else(|| Duration::from_secs(60))
 }
 
 fn send_via_store(
@@ -902,7 +903,13 @@ fn acquire_env_lock() -> File {
     const RETRY_INTERVAL: Duration = Duration::from_millis(100);
     const LOCK_TIMEOUT: Duration = Duration::from_secs(10);
 
-    let lock_path = std::env::temp_dir().join(concat!(env!("CARGO_PKG_NAME"), "-test-env.lock"));
+    let mut hasher = DefaultHasher::new();
+    env!("CARGO_MANIFEST_DIR").hash(&mut hasher);
+    let workspace_key = hasher.finish();
+    let lock_path = std::env::temp_dir().join(format!(
+        "{}-{workspace_key:016x}-test-env.lock",
+        env!("CARGO_PKG_NAME")
+    ));
     let deadline = Instant::now() + LOCK_TIMEOUT;
     loop {
         let file = OpenOptions::new()

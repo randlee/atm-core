@@ -11,6 +11,7 @@ if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
 from lint_cargo_deny import build_command as build_cargo_deny_command
+from lint_cargo_deny import build_runtime_config
 from lint_cargo_shear import build_command as build_cargo_shear_command
 from lint_codespell import build_command as build_codespell_command
 
@@ -19,17 +20,44 @@ class ExternalLintToolTests(unittest.TestCase):
     def test_build_cargo_deny_command_targets_workspace_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
+            config_path = repo_root / "deny.runtime.toml"
             self.assertEqual(
-                build_cargo_deny_command(repo_root),
+                build_cargo_deny_command(repo_root, config_path),
                 [
                     "cargo-deny",
                     "check",
+                    "--config",
+                    str(config_path),
                     "advisories",
                     "bans",
                     "licenses",
                     "sources",
                 ],
             )
+
+    def test_build_runtime_config_strips_deprecated_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            (repo_root / "deny.toml").write_text(
+                """\
+[advisories]
+vulnerability = "deny"
+yanked = "deny"
+
+[licenses]
+unlicensed = "deny"
+allow = ["MIT"]
+""",
+                encoding="utf-8",
+            )
+
+            runtime_path = build_runtime_config(repo_root)
+            text = runtime_path.read_text(encoding="utf-8")
+
+            self.assertNotIn('vulnerability = "deny"', text)
+            self.assertNotIn('unlicensed = "deny"', text)
+            self.assertIn('yanked = "deny"', text)
+            self.assertIn('allow = ["MIT"]', text)
 
     def test_build_cargo_shear_command_targets_workspace_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

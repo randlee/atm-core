@@ -15,9 +15,9 @@ from lint_common import print_report
 
 
 LINT_NAME = "boundaries"
-RUSQLITE_ALLOWED_MANIFEST = "crates/atm-rusqlite/Cargo.toml"
-RUSQLITE_ALLOWED_SOURCE_ROOT = "crates/atm-rusqlite"
-ATM_CORE_MANIFEST = "crates/atm-core/Cargo.toml"
+RUSQLITE_ALLOWED_MANIFEST = Path("crates/atm-rusqlite/Cargo.toml")
+RUSQLITE_ALLOWED_SOURCE_ROOT = Path("crates/atm-rusqlite")
+ATM_CORE_MANIFEST = Path("crates/atm-core/Cargo.toml")
 ATM_RUSQLITE_PACKAGE = "atm-rusqlite"
 ATM_RUSQLITE_ALLOWED_SECTIONS = {"dev-dependencies"}
 SOURCE_IMPORT_PATTERNS = (
@@ -78,11 +78,12 @@ def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
     violations: list[BoundaryViolation] = []
     for manifest_path in workspace_manifests(repo_root):
         manifest = tomllib_load(manifest_path)
-        rel_manifest = str(manifest_path.relative_to(repo_root))
+        rel_manifest_path = manifest_path.relative_to(repo_root)
+        rel_manifest = rel_manifest_path.as_posix()
         for section_name, dependencies in dependency_sections(manifest):
             for dependency_name, dependency in dependencies.items():
                 package_name = dependency_package_name(dependency_name, dependency)
-                if package_name == "rusqlite" and rel_manifest != RUSQLITE_ALLOWED_MANIFEST:
+                if package_name == "rusqlite" and rel_manifest_path != RUSQLITE_ALLOWED_MANIFEST:
                     violations.append(
                         BoundaryViolation(
                             f"{rel_manifest} [{section_name}]",
@@ -91,7 +92,7 @@ def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
                     )
 
                 if (
-                    rel_manifest == ATM_CORE_MANIFEST
+                    rel_manifest_path == ATM_CORE_MANIFEST
                     and package_name == ATM_RUSQLITE_PACKAGE
                     and section_name not in ATM_RUSQLITE_ALLOWED_SECTIONS
                 ):
@@ -102,11 +103,11 @@ def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
                         )
                     )
 
-    allowed_source_root = repo_root / RUSQLITE_ALLOWED_SOURCE_ROOT
+    allowed_source_root = (repo_root / RUSQLITE_ALLOWED_SOURCE_ROOT).resolve()
     for source_path in rust_sources(repo_root):
-        if allowed_source_root in source_path.parents:
+        if allowed_source_root in source_path.resolve().parents:
             continue
-        rel_source = str(source_path.relative_to(repo_root))
+        rel_source = source_path.relative_to(repo_root).as_posix()
         text = source_path.read_text(encoding="utf-8")
         for line_number, line in enumerate(text.splitlines(), start=1):
             if any(pattern.search(line) for pattern in SOURCE_IMPORT_PATTERNS):

@@ -6,19 +6,42 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
 
 from lint_common import discover_repo_root
 
 
-def build_command(repo_root: Path) -> list[str]:
+DEPRECATED_CONFIG_LINES = (
+    "vulnerability = ",
+    "unlicensed = ",
+)
+
+
+def build_command(repo_root: Path, config_path: Path) -> list[str]:
     return [
         "cargo-deny",
         "check",
+        "--config",
+        str(config_path),
         "advisories",
         "bans",
         "licenses",
         "sources",
     ]
+
+
+def build_runtime_config(repo_root: Path) -> Path:
+    source_path = repo_root / "deny.toml"
+    text = source_path.read_text(encoding="utf-8")
+    filtered_lines = [
+        line
+        for line in text.splitlines()
+        if not any(line.lstrip().startswith(prefix) for prefix in DEPRECATED_CONFIG_LINES)
+    ]
+    temp_dir = Path(tempfile.mkdtemp(prefix="atm-lint-deny-"))
+    runtime_path = temp_dir / "deny.toml"
+    runtime_path.write_text("\n".join(filtered_lines).rstrip() + "\n", encoding="utf-8")
+    return runtime_path
 
 
 def main(argv: list[str]) -> int:
@@ -31,8 +54,9 @@ def main(argv: list[str]) -> int:
         print("cargo-deny is not installed; install it to run this lint", file=sys.stderr)
         return 2
 
+    runtime_config = build_runtime_config(repo_root)
     completed = subprocess.run(
-        build_command(repo_root),
+        build_command(repo_root, runtime_config),
         cwd=repo_root,
         capture_output=True,
         text=True,
