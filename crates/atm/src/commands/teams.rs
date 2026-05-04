@@ -1,5 +1,3 @@
-// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
-
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -139,12 +137,13 @@ impl RestoreCommand {
 #[cfg(test)]
 mod tests {
     use super::AddMemberCommand;
+    use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
 
     #[test]
     fn build_request_rejects_invalid_team_before_core() {
         let command = AddMemberCommand {
             team: "../evil".to_string(),
-            member: "arch-ctm".to_string(),
+            member: TEST_SENDER.to_string(),
             agent_type: "worker".to_string(),
             model: "gpt-5".to_string(),
             cwd: None,
@@ -162,7 +161,7 @@ mod tests {
     #[test]
     fn build_request_rejects_invalid_member_before_core() {
         let command = AddMemberCommand {
-            team: "atm-dev".to_string(),
+            team: TEST_TEAM.to_string(),
             member: "../evil".to_string(),
             agent_type: "worker".to_string(),
             model: "gpt-5".to_string(),
@@ -178,5 +177,3 @@ mod tests {
         assert!(error.to_string().contains("agent name"));
     }
 }
-
-// lint-identities: allow-end

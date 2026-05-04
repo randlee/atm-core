@@ -8,8 +8,6 @@
 //! runtime sender identity resolution. Set `ATM_IDENTITY` instead and remove
 //! the deprecated config keys once the environment-based identity is in place.
 
-// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
-
 pub mod aliases;
 pub mod bridge;
 pub mod discovery;
@@ -379,6 +377,8 @@ fn parse_team_member(config_path: &Path, index: usize, entry: &Value) -> Option<
 mod tests {
     use crate::config::types::HookRecipient;
     use crate::error_codes::AtmErrorCode;
+    use crate::roles::ROLE_TEAM_LEAD;
+    use crate::test_support::{TEST_QA, TEST_SENDER, TEST_TEAM};
     use crate::types::TeamName;
     use serde_json::Value;
     use std::env;
@@ -395,13 +395,13 @@ mod tests {
         fs::create_dir_all(&nested).expect("nested dir");
         fs::write(
             root.path().join(".atm.toml"),
-            "[atm]\nidentity = \"arch-ctm\"\ndefault_team = \"atm-dev\"\n",
+            format!("[atm]\nidentity = \"{TEST_SENDER}\"\ndefault_team = \"{TEST_TEAM}\"\n"),
         )
         .expect("config");
 
         let config = load_config(&nested).expect("config").expect("present");
-        assert_eq!(config.identity.as_deref(), Some("arch-ctm"));
-        assert_eq!(config.default_team.as_deref(), Some("atm-dev"));
+        assert_eq!(config.identity.as_deref(), Some(TEST_SENDER));
+        assert_eq!(config.default_team.as_deref(), Some(TEST_TEAM));
         assert_eq!(config.config_root, root.path());
         assert!(config.obsolete_identity_present);
     }
@@ -411,13 +411,13 @@ mod tests {
         let root = unique_temp_dir("legacy-config");
         fs::write(
             root.path().join(".atm.toml"),
-            "identity = \"arch-ctm\"\ndefault_team = \"atm-dev\"\n",
+            format!("identity = \"{TEST_SENDER}\"\ndefault_team = \"{TEST_TEAM}\"\n"),
         )
         .expect("config");
 
         let config = load_config(root.path()).expect("config").expect("present");
-        assert_eq!(config.identity.as_deref(), Some("arch-ctm"));
-        assert_eq!(config.default_team.as_deref(), Some("atm-dev"));
+        assert_eq!(config.identity.as_deref(), Some(TEST_SENDER));
+        assert_eq!(config.default_team.as_deref(), Some(TEST_TEAM));
         assert_eq!(config.config_root, root.path());
         assert!(config.obsolete_identity_present);
     }
@@ -427,23 +427,25 @@ mod tests {
         let root = unique_temp_dir("atm-config-surface");
         fs::write(
             root.path().join(".atm.toml"),
-            r#"[atm]
-default_team = "atm-dev"
-team_members = ["team-lead", "arch-ctm", " ", "qa"]
+            format!(
+                r#"[atm]
+default_team = "{TEST_TEAM}"
+team_members = ["{ROLE_TEAM_LEAD}", "{TEST_SENDER}", " ", "qa"]
 
 [[atm.post_send_hooks]]
-recipient = "team-lead"
-command = ["scripts/atm-nudge.sh", "team-lead"]
+recipient = "{ROLE_TEAM_LEAD}"
+command = ["scripts/atm-nudge.sh", "{ROLE_TEAM_LEAD}"]
 
 [[atm.post_send_hooks]]
 recipient = "*"
 command = ["bash", "-lc", "echo hi"]
 
 [atm.aliases]
-tl = "team-lead"
-qa = "quality-mgr"
+tl = "{ROLE_TEAM_LEAD}"
+qa = "{TEST_QA}"
 blank = ""
 "#,
+            ),
         )
         .expect("config");
 
@@ -451,15 +453,15 @@ blank = ""
         assert_eq!(
             config.team_members,
             vec![
-                "team-lead".parse::<TeamName>().expect("team member"),
-                "arch-ctm".parse::<TeamName>().expect("team member"),
+                ROLE_TEAM_LEAD.parse::<TeamName>().expect("team member"),
+                TEST_SENDER.parse::<TeamName>().expect("team member"),
                 "qa".parse::<TeamName>().expect("team member"),
             ]
         );
         assert_eq!(config.post_send_hooks.len(), 2);
         assert_eq!(
             config.post_send_hooks[0].recipient,
-            HookRecipient::Named("team-lead".parse().expect("recipient"))
+            HookRecipient::Named(ROLE_TEAM_LEAD.parse().expect("recipient"))
         );
         assert_eq!(
             config.post_send_hooks[0].command,
@@ -468,7 +470,7 @@ blank = ""
                     .join("scripts/atm-nudge.sh")
                     .display()
                     .to_string(),
-                "team-lead".to_string()
+                ROLE_TEAM_LEAD.to_string()
             ]
         );
         assert_eq!(config.post_send_hooks[1].recipient, HookRecipient::Wildcard);
@@ -478,12 +480,9 @@ blank = ""
         );
         assert_eq!(
             config.aliases.get("tl").map(String::as_str),
-            Some("team-lead")
+            Some(ROLE_TEAM_LEAD)
         );
-        assert_eq!(
-            config.aliases.get("qa").map(String::as_str),
-            Some("quality-mgr")
-        );
+        assert_eq!(config.aliases.get("qa").map(String::as_str), Some(TEST_QA));
         assert!(!config.aliases.contains_key("blank"));
     }
 
@@ -492,7 +491,7 @@ blank = ""
         let root = unique_temp_dir("atm-config-invalid-team-member");
         fs::write(
             root.path().join(".atm.toml"),
-            "[atm]\nteam_members = [\"team-lead\", \"bad/name\"]\n",
+            format!("[atm]\nteam_members = [\"{ROLE_TEAM_LEAD}\", \"bad/name\"]\n"),
         )
         .expect("config");
 
@@ -506,14 +505,16 @@ blank = ""
         let root = unique_temp_dir("core-config-hook-keys");
         fs::write(
             root.path().join(".atm.toml"),
-            r#"[core]
-default_team = "atm-dev"
-identity = "team-lead"
+            format!(
+                r#"[core]
+default_team = "{TEST_TEAM}"
+identity = "{ROLE_TEAM_LEAD}"
 
 [[atm.post_send_hooks]]
-recipient = "arch-ctm"
-command = ["scripts/atm-nudge.sh", "arch-ctm"]
-"#,
+recipient = "{TEST_SENDER}"
+command = ["scripts/atm-nudge.sh", "{TEST_SENDER}"]
+"#
+            ),
         )
         .expect("config");
 
@@ -529,9 +530,11 @@ command = ["scripts/atm-nudge.sh", "arch-ctm"]
         let root = unique_temp_dir("retired-hook-members");
         fs::write(
             root.path().join(".atm.toml"),
-            r#"[atm]
-post_send_hook_members = ["team-lead"]
-"#,
+            format!(
+                r#"[atm]
+post_send_hook_members = ["{ROLE_TEAM_LEAD}"]
+"#
+            ),
         )
         .expect("config");
 
@@ -558,10 +561,12 @@ post_send_hook_members = ["team-lead"]
         let root = unique_temp_dir("legacy-hook-filters");
         fs::write(
             root.path().join(".atm.toml"),
-            r#"[atm]
+            format!(
+                r#"[atm]
 post_send_hook = ["bin/hook"]
-post_send_hook_recipients = ["team-lead"]
-"#,
+post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
+"#
+            ),
         )
         .expect("config");
 
@@ -582,45 +587,39 @@ post_send_hook_recipients = ["team-lead"]
     #[test]
     fn parse_team_config_accepts_object_members() {
         let (_tempdir, config_path) = temp_config_path();
-        let config = parse_team_config(
-            &config_path,
-            r#"{"members":[{"name":"arch-ctm"},{"name":"team-lead"}]}"#,
-        )
-        .expect("team config");
+        let raw =
+            format!(r#"{{"members":[{{"name":"{TEST_SENDER}"}},{{"name":"{ROLE_TEAM_LEAD}"}}]}}"#);
+        let config = parse_team_config(&config_path, &raw).expect("team config");
 
         assert_eq!(config.members.len(), 2);
-        assert_eq!(config.members[0].name, "arch-ctm");
-        assert_eq!(config.members[1].name, "team-lead");
+        assert_eq!(config.members[0].name, TEST_SENDER);
+        assert_eq!(config.members[1].name, ROLE_TEAM_LEAD);
         assert!(config.extra.is_empty());
     }
 
     #[test]
     fn parse_team_config_accepts_string_member_compatibility() {
         let (_tempdir, config_path) = temp_config_path();
-        let config = parse_team_config(
-            &config_path,
-            r#"{"members":["arch-ctm",{"name":"team-lead"}]}"#,
-        )
-        .expect("team config");
+        let raw = format!(r#"{{"members":["{TEST_SENDER}",{{"name":"{ROLE_TEAM_LEAD}"}}]}}"#);
+        let config = parse_team_config(&config_path, &raw).expect("team config");
 
         assert_eq!(config.members.len(), 2);
-        assert_eq!(config.members[0].name, "arch-ctm");
-        assert_eq!(config.members[1].name, "team-lead");
+        assert_eq!(config.members[0].name, TEST_SENDER);
+        assert_eq!(config.members[1].name, ROLE_TEAM_LEAD);
         assert!(config.extra.is_empty());
     }
 
     #[test]
     fn parse_team_config_skips_invalid_member_records() {
         let (_tempdir, config_path) = temp_config_path();
-        let config = parse_team_config(
-            &config_path,
-            r#"{"members":[{"name":"arch-ctm"},{"broken":true},17,{"name":"team-lead"}]}"#,
-        )
-        .expect("team config");
+        let raw = format!(
+            r#"{{"members":[{{"name":"{TEST_SENDER}"}},{{"broken":true}},17,{{"name":"{ROLE_TEAM_LEAD}"}}]}}"#
+        );
+        let config = parse_team_config(&config_path, &raw).expect("team config");
 
         assert_eq!(config.members.len(), 2);
-        assert_eq!(config.members[0].name, "arch-ctm");
-        assert_eq!(config.members[1].name, "team-lead");
+        assert_eq!(config.members[0].name, TEST_SENDER);
+        assert_eq!(config.members[1].name, ROLE_TEAM_LEAD);
         assert!(config.extra.is_empty());
     }
 
@@ -636,11 +635,9 @@ post_send_hook_recipients = ["team-lead"]
     #[test]
     fn parse_team_config_preserves_root_extra_fields() {
         let (_tempdir, config_path) = temp_config_path();
-        let config = parse_team_config(
-            &config_path,
-            r#"{"leadSessionId":"lead-123","members":[{"name":"team-lead"}]}"#,
-        )
-        .expect("team config");
+        let raw =
+            format!(r#"{{"leadSessionId":"lead-123","members":[{{"name":"{ROLE_TEAM_LEAD}"}}]}}"#);
+        let config = parse_team_config(&config_path, &raw).expect("team config");
 
         assert_eq!(config.members.len(), 1);
         assert_eq!(
@@ -652,8 +649,8 @@ post_send_hook_recipients = ["team-lead"]
     #[test]
     fn parse_team_config_reports_json_syntax_errors_with_detail() {
         let (_tempdir, config_path) = temp_config_path();
-        let error = parse_team_config(&config_path, r#"{"members":[{"name":"arch-ctm"}"#)
-            .expect_err("syntax error");
+        let raw = format!(r#"{{"members":[{{"name":"{TEST_SENDER}""#);
+        let error = parse_team_config(&config_path, &raw).expect_err("syntax error");
 
         assert!(error.is_config());
         assert_eq!(error.code, AtmErrorCode::ConfigTeamParseFailed);
@@ -665,8 +662,8 @@ post_send_hook_recipients = ["team-lead"]
     #[test]
     fn parse_team_config_rejects_non_object_root() {
         let (_tempdir, config_path) = temp_config_path();
-        let error =
-            parse_team_config(&config_path, r#"["arch-ctm"]"#).expect_err("root shape error");
+        let raw = format!(r#"["{TEST_SENDER}"]"#);
+        let error = parse_team_config(&config_path, &raw).expect_err("root shape error");
 
         assert!(error.is_config());
         assert_eq!(error.code, AtmErrorCode::ConfigTeamParseFailed);
@@ -677,8 +674,8 @@ post_send_hook_recipients = ["team-lead"]
     #[test]
     fn parse_team_config_rejects_non_array_members() {
         let (_tempdir, config_path) = temp_config_path();
-        let error = parse_team_config(&config_path, r#"{"members":{"name":"arch-ctm"}}"#)
-            .expect_err("members shape error");
+        let raw = format!(r#"{{"members":{{"name":"{TEST_SENDER}"}}}}"#);
+        let error = parse_team_config(&config_path, &raw).expect_err("members shape error");
 
         assert!(error.is_config());
         assert_eq!(error.code, AtmErrorCode::ConfigTeamParseFailed);
@@ -803,5 +800,3 @@ post_send_hook_recipients = ["team-lead"]
         unsafe { env::remove_var(key) }
     }
 }
-
-// lint-identities: allow-end

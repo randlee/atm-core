@@ -1,5 +1,3 @@
-// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
-
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -216,22 +214,32 @@ mod tests {
         rediscover_and_validate_source_paths, resolve_target,
     };
     use crate::config::AtmConfig;
+    use crate::roles::ROLE_TEAM_LEAD;
+    use crate::test_support::{TEST_ORIGIN, TEST_SENDER, TEST_TEAM};
 
     #[test]
     fn discover_origin_inboxes_ignores_primary_and_sorts_matches() {
         let tempdir = tempdir().expect("tempdir");
         let inboxes = tempdir.path();
-        std::fs::write(inboxes.join("arch-ctm.json"), "").expect("primary");
-        std::fs::write(inboxes.join("arch-ctm.host-b.json"), "").expect("host b");
-        std::fs::write(inboxes.join("arch-ctm.host-a.json"), "").expect("host a");
+        std::fs::write(inboxes.join(format!("{TEST_SENDER}.json")), "").expect("primary");
+        std::fs::write(
+            inboxes.join(format!("{TEST_SENDER}.{}.json", TEST_ORIGIN)),
+            "",
+        )
+        .expect("host a");
+        std::fs::write(
+            inboxes.join(format!("{TEST_SENDER}.{}-b.json", TEST_ORIGIN)),
+            "",
+        )
+        .expect("host b");
         std::fs::write(inboxes.join("other.json"), "").expect("other");
 
-        let discovered = discover_origin_inboxes(inboxes, "arch-ctm").expect("discover");
+        let discovered = discover_origin_inboxes(inboxes, TEST_SENDER).expect("discover");
         assert_eq!(
             discovered,
             vec![
-                inboxes.join("arch-ctm.host-a.json"),
-                inboxes.join("arch-ctm.host-b.json")
+                inboxes.join(format!("{TEST_SENDER}.{}-b.json", TEST_ORIGIN)),
+                inboxes.join(format!("{TEST_SENDER}.{}.json", TEST_ORIGIN))
             ]
         );
     }
@@ -240,7 +248,7 @@ mod tests {
     fn origin_inbox_enumeration_error_is_mailbox_read_failure() {
         let error = origin_inbox_enumeration_error(
             Path::new("test-inbox-dir"),
-            "arch-ctm",
+            TEST_SENDER,
             io::Error::other("synthetic"),
         );
 
@@ -255,29 +263,28 @@ mod tests {
     #[test]
     fn resolve_target_canonicalizes_alias_before_mailbox_lookup() {
         let mut aliases = BTreeMap::new();
-        aliases.insert("tl".to_string(), "team-lead".to_string());
+        aliases.insert("tl".to_string(), ROLE_TEAM_LEAD.to_string());
         let config = AtmConfig {
-            default_team: Some("atm-dev".parse().expect("team")),
+            default_team: Some(TEST_TEAM.parse().expect("team")),
             aliases,
             ..Default::default()
         };
 
         let target = resolve_target(
             Some(&"tl".parse().expect("address")),
-            &"arch-ctm".parse().expect("agent"),
+            &TEST_SENDER.parse().expect("agent"),
             None,
             Some(&config),
         )
         .expect("target");
-        assert_eq!(target.agent, "team-lead");
-        assert_eq!(target.team, "atm-dev");
+        assert_eq!(target.agent, ROLE_TEAM_LEAD);
         assert!(target.explicit);
     }
 
     #[test]
     fn load_source_files_reports_disappearing_mailbox() {
         let tempdir = tempdir().expect("tempdir");
-        let path = tempdir.path().join("arch-ctm.json");
+        let path = tempdir.path().join(format!("{TEST_SENDER}.json"));
         std::fs::write(&path, "").expect("mailbox");
         std::fs::remove_file(&path).expect("remove");
 
@@ -293,18 +300,18 @@ mod tests {
         let inboxes = home
             .join(".claude")
             .join("teams")
-            .join("atm-dev")
+            .join(TEST_TEAM)
             .join("inboxes");
         std::fs::create_dir_all(&inboxes).expect("inboxes");
-        let locked = inboxes.join("arch-ctm.json");
-        let added = inboxes.join("arch-ctm.host-a.json");
+        let locked = inboxes.join(format!("{TEST_SENDER}.json"));
+        let added = inboxes.join(format!("{TEST_SENDER}.{}.json", TEST_ORIGIN));
         std::fs::write(&locked, "").expect("primary");
 
         let discovered =
-            super::discover_source_paths(home, "atm-dev", "arch-ctm").expect("discover");
+            super::discover_source_paths(home, TEST_TEAM, TEST_SENDER).expect("discover");
         std::fs::write(&added, "").expect("origin");
 
-        let error = rediscover_and_validate_source_paths(&discovered, home, "atm-dev", "arch-ctm")
+        let error = rediscover_and_validate_source_paths(&discovered, home, TEST_TEAM, TEST_SENDER)
             .expect_err("drift error");
         assert!(error.is_mailbox_lock());
         assert!(error.message.contains("source path set changed"));
@@ -314,7 +321,7 @@ mod tests {
     fn discover_source_paths_rejects_invalid_team_segment() {
         let tempdir = tempdir().expect("tempdir");
         let error =
-            super::discover_source_paths(tempdir.path(), "../evil", "arch-ctm").expect_err("team");
+            super::discover_source_paths(tempdir.path(), "../evil", TEST_SENDER).expect_err("team");
 
         assert!(error.is_address());
     }
@@ -323,10 +330,8 @@ mod tests {
     fn discover_source_paths_rejects_invalid_agent_segment() {
         let tempdir = tempdir().expect("tempdir");
         let error =
-            super::discover_source_paths(tempdir.path(), "atm-dev", "../evil").expect_err("agent");
+            super::discover_source_paths(tempdir.path(), TEST_TEAM, "../evil").expect_err("agent");
 
         assert!(error.is_address());
     }
 }
-
-// lint-identities: allow-end

@@ -1,5 +1,3 @@
-// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
-
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::observability::{
     self, AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, CommandEvent, LogTailSession,
@@ -144,6 +142,7 @@ mod tests {
         AtmLogQuery, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
         LogLevelFilter, LogMode, LogOrder, LogTailSession, ObservabilityPort,
     };
+    use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -196,9 +195,9 @@ mod tests {
             command: "send",
             action: "send",
             outcome: "sent",
-            team: "atm-dev".parse().expect("team"),
-            agent: "arch-ctm".parse().expect("agent"),
-            sender: "arch-ctm".to_string(),
+            team: TEST_TEAM.parse().expect("team"),
+            agent: TEST_SENDER.parse().expect("agent"),
+            sender: TEST_SENDER.to_string(),
             message_id: message_id.map(|value| value.parse().expect("legacy message id")),
             requires_ack: false,
             dry_run: false,
@@ -300,5 +299,3 @@ mod tests {
         observability.emit_fatal_error("service", &AtmError::validation("boom"));
     }
 }
-
-// lint-identities: allow-end

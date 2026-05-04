@@ -5,8 +5,6 @@
 //! project these fields onto the Claude-owned inbox surface, but command-layer
 //! code must not shape or persist workflow JSON directly.
 
-// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
-
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -262,15 +260,16 @@ mod tests {
         set_atm_message_id, workflow_key,
     };
     use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
+    use crate::test_support::{TEST_LEAD, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
     fn sample_message() -> MessageEnvelope {
         MessageEnvelope {
-            from: "team-lead".parse::<AgentName>().expect("agent"),
+            from: TEST_LEAD.parse::<AgentName>().expect("agent"),
             text: "hello".to_string(),
             timestamp: IsoTimestamp::now(),
             read: false,
-            source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
+            source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
             summary: None,
             message_id: Some(LegacyMessageId::new()),
             pending_ack_at: None,
@@ -284,7 +283,8 @@ mod tests {
     #[test]
     fn load_missing_workflow_state_returns_default() {
         let tempdir = TempDir::new().expect("tempdir");
-        let state = load_workflow_state(tempdir.path(), "atm-dev", "arch-ctm").expect("load state");
+        let state =
+            load_workflow_state(tempdir.path(), TEST_TEAM, TEST_SENDER).expect("load state");
 
         assert!(state.messages.is_empty());
     }
@@ -302,9 +302,9 @@ mod tests {
             },
         );
 
-        save_workflow_state(tempdir.path(), "atm-dev", "arch-ctm", &state).expect("save state");
+        save_workflow_state(tempdir.path(), TEST_TEAM, TEST_SENDER, &state).expect("save state");
         let loaded =
-            load_workflow_state(tempdir.path(), "atm-dev", "arch-ctm").expect("load state");
+            load_workflow_state(tempdir.path(), TEST_TEAM, TEST_SENDER).expect("load state");
 
         assert_eq!(loaded, state);
     }
@@ -368,5 +368,3 @@ mod tests {
         assert_eq!(state.messages.len(), 1);
     }
 }
-
-// lint-identities: allow-end

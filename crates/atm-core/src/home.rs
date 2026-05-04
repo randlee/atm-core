@@ -1,5 +1,3 @@
-// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
-
 use std::env;
 use std::path::{Path, PathBuf};
 
@@ -112,6 +110,7 @@ mod tests {
         atm_home, inbox_path, inbox_path_from_home, team_dir, team_dir_from_home,
         workflow_state_path_from_home,
     };
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
 
     // Serializes process-environment mutation inside this test module. This is
     // process-local only; it does not coordinate with other test processes.
@@ -200,18 +199,18 @@ mod tests {
         let _atm_home = EnvGuard::set("ATM_HOME", tempdir.path());
 
         assert_eq!(
-            team_dir("atm-dev").expect("team dir"),
-            tempdir.path().join(".claude").join("teams").join("atm-dev")
+            team_dir(TEST_TEAM).expect("team dir"),
+            tempdir.path().join(".claude").join("teams").join(TEST_TEAM)
         );
         assert_eq!(
-            inbox_path("atm-dev", "arch-ctm").expect("inbox path"),
+            inbox_path(TEST_TEAM, TEST_SENDER).expect("inbox path"),
             tempdir
                 .path()
                 .join(".claude")
                 .join("teams")
-                .join("atm-dev")
+                .join(TEST_TEAM)
                 .join("inboxes")
-                .join("arch-ctm.json")
+                .join(format!("{TEST_SENDER}.json"))
         );
     }
 
@@ -228,7 +227,7 @@ mod tests {
     fn inbox_path_from_home_rejects_path_traversal_segments() {
         let tempdir = TempDir::new().expect("tempdir");
         let error =
-            inbox_path_from_home(tempdir.path(), "atm-dev", "../evil").expect_err("invalid agent");
+            inbox_path_from_home(tempdir.path(), TEST_TEAM, "../evil").expect_err("invalid agent");
 
         assert!(error.is_address());
         assert!(error.message.contains("agent name"));
@@ -239,18 +238,16 @@ mod tests {
         let tempdir = TempDir::new().expect("tempdir");
 
         assert_eq!(
-            workflow_state_path_from_home(tempdir.path(), "atm-dev", "arch-ctm")
+            workflow_state_path_from_home(tempdir.path(), TEST_TEAM, TEST_SENDER)
                 .expect("workflow state path"),
             tempdir
                 .path()
                 .join(".claude")
                 .join("teams")
-                .join("atm-dev")
+                .join(TEST_TEAM)
                 .join(".atm-state")
                 .join("workflow")
-                .join("arch-ctm.json")
+                .join(format!("{TEST_SENDER}.json"))
         );
     }
 }
-
-// lint-identities: allow-end

@@ -1,5 +1,3 @@
-// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
-
 pub(crate) mod filters;
 pub(crate) mod seen_state;
 pub(crate) mod state;
@@ -696,7 +694,9 @@ mod tests {
 
     use super::{ReadQuery, idle_notification_sender, selected_after_filters};
     use crate::mailbox::source::SourcedMessage;
+    use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::{LegacyMessageId, MessageEnvelope};
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{
         AckActivationMode, AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
         TeamName,
@@ -706,11 +706,11 @@ mod tests {
     fn sourced_message(index: usize, text: &str) -> SourcedMessage {
         SourcedMessage {
             envelope: MessageEnvelope {
-                from: "team-lead".parse::<AgentName>().expect("agent"),
+                from: ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent"),
                 text: text.to_string(),
                 timestamp: IsoTimestamp::now(),
                 read: false,
-                source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
+                source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
                 summary: None,
                 message_id: Some(LegacyMessageId::new()),
                 pending_ack_at: None,
@@ -719,14 +719,18 @@ mod tests {
                 task_id: None,
                 extra: Map::new(),
             },
-            source_path: PathBuf::from("arch-ctm.json"),
+            source_path: PathBuf::from(format!("{TEST_SENDER}.json")),
             source_index: index.into(),
         }
     }
 
     #[test]
     fn idle_notification_sender_returns_none_for_malformed_json() {
-        let message = sourced_message(0, r#"{"type":"idle_notification","from":"team-lead""#);
+        let malformed = format!(
+            r#"{{"type":"idle_notification","from":"{}""#,
+            ROLE_TEAM_LEAD
+        );
+        let message = sourced_message(0, &malformed);
 
         assert_eq!(idle_notification_sender(&message.envelope), None);
     }
@@ -734,8 +738,12 @@ mod tests {
     #[test]
     fn malformed_idle_notification_adjacent_to_valid_records_remains_readable_and_classifiable() {
         let workflow_state = workflow::WorkflowStateFile::default();
+        let malformed = format!(
+            r#"{{"type":"idle_notification","from":"{}""#,
+            ROLE_TEAM_LEAD
+        );
         let messages = vec![
-            sourced_message(0, r#"{"type":"idle_notification","from":"team-lead""#),
+            sourced_message(0, &malformed),
             sourced_message(1, "normal unread"),
         ];
         let query = ReadQuery {
@@ -769,9 +777,7 @@ mod tests {
 
         let malformed = selected
             .iter()
-            .find(|message| {
-                message.envelope.text == r#"{"type":"idle_notification","from":"team-lead""#
-            })
+            .find(|message| message.envelope.text == malformed)
             .expect("malformed record");
         assert_eq!(malformed.class, MessageClass::Unread);
         assert_eq!(malformed.bucket, DisplayBucket::Unread);
@@ -783,9 +789,9 @@ mod tests {
         let error = ReadQuery::new(
             tempdir.path().to_path_buf(),
             tempdir.path().to_path_buf(),
-            Some("arch-ctm"),
+            Some(TEST_SENDER),
             Some("../evil"),
-            Some("atm-dev"),
+            Some(TEST_TEAM),
             ReadSelection::Actionable,
             false,
             false,
@@ -808,7 +814,7 @@ mod tests {
             tempdir.path().to_path_buf(),
             Some("../evil"),
             None,
-            Some("atm-dev"),
+            Some(TEST_TEAM),
             ReadSelection::Actionable,
             false,
             false,
@@ -823,5 +829,3 @@ mod tests {
         assert!(error.message.contains("agent name"));
     }
 }
-
-// lint-identities: allow-end

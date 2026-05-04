@@ -174,6 +174,7 @@ mod tests {
     use std::cell::Cell;
     use std::sync::{Mutex, OnceLock};
 
+    #[cfg(unix)]
     use serial_test::serial;
     use tempfile::tempdir;
 

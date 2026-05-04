@@ -1,5 +1,3 @@
-// lint-identities: allow-start -- R.1 debt sweep: this file retains explicit ATM identity literals in test/config fixtures or assertions; keep the exception visible until the Phase R skeleton rewrites land.
-
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -89,12 +87,13 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{load_seen_watermark, save_seen_watermark};
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::IsoTimestamp;
 
     #[test]
     fn load_missing_seen_state_returns_none() {
         let tempdir = TempDir::new().expect("tempdir");
-        let loaded = load_seen_watermark(tempdir.path(), "atm-dev", "arch-ctm").expect("load");
+        let loaded = load_seen_watermark(tempdir.path(), TEST_TEAM, TEST_SENDER).expect("load");
         assert!(loaded.is_none());
     }
 
@@ -108,8 +107,8 @@ mod tests {
                 .expect("timestamp"),
         );
 
-        save_seen_watermark(tempdir.path(), "atm-dev", "arch-ctm", timestamp).expect("save");
-        let loaded = load_seen_watermark(tempdir.path(), "atm-dev", "arch-ctm").expect("load");
+        save_seen_watermark(tempdir.path(), TEST_TEAM, TEST_SENDER, timestamp).expect("save");
+        let loaded = load_seen_watermark(tempdir.path(), TEST_TEAM, TEST_SENDER).expect("load");
 
         assert_eq!(loaded, Some(timestamp));
     }
@@ -118,7 +117,7 @@ mod tests {
     fn load_seen_state_rejects_invalid_team_segment() {
         let tempdir = TempDir::new().expect("tempdir");
         let error =
-            load_seen_watermark(tempdir.path(), "../evil", "arch-ctm").expect_err("invalid team");
+            load_seen_watermark(tempdir.path(), "../evil", TEST_SENDER).expect_err("invalid team");
 
         assert!(error.is_address());
     }
@@ -133,11 +132,9 @@ mod tests {
                 .expect("timestamp"),
         );
 
-        let error = save_seen_watermark(tempdir.path(), "atm-dev", "../evil", timestamp)
+        let error = save_seen_watermark(tempdir.path(), TEST_TEAM, "../evil", timestamp)
             .expect_err("invalid agent");
 
         assert!(error.is_address());
     }
 }
-
-// lint-identities: allow-end
