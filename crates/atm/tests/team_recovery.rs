@@ -127,7 +127,7 @@ fn test_add_member_normalizes_tmux_member_shape() {
         .expect("members")
         .iter()
         .find(|member| member["name"] == TEST_SENDER)
-        .expect("arch-ctm member");
+        .expect("member entry");
     assert_eq!(member["tmuxPaneId"], "%12");
     assert_eq!(member["backendType"], "tmux");
     assert_eq!(member["isActive"], true);
@@ -372,7 +372,9 @@ fn test_restore_preserves_team_lead_and_recomputes_highwatermark() {
         }),
     );
     fixture.write_inbox_at(
-        backup_dir.join("inboxes").join("team-lead.json"),
+        backup_dir
+            .join("inboxes")
+            .join(format!("{ROLE_TEAM_LEAD}.json")),
         TEST_SENDER,
         "do not restore",
     );
