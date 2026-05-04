@@ -1,5 +1,7 @@
 //! Phase R boundary skeleton contracts.
 
+use crate::error::AtmError;
+
 mod sealed {
     pub trait Sealed {}
 }
@@ -64,6 +66,54 @@ pub struct ReconcileRequest;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ReconcileResult;
 
+/// Stub mail-store request for the Phase R skeleton.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MailStoreRequest;
+
+/// Stub mail-store response for the Phase R skeleton.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MailStoreResponse;
+
+/// Stub task-store request for the Phase R skeleton.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TaskStoreRequest;
+
+/// Stub task-store response for the Phase R skeleton.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TaskStoreResponse;
+
+/// Stub roster-store request for the Phase R skeleton.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RosterStoreRequest;
+
+/// Stub roster-store response for the Phase R skeleton.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RosterStoreResponse;
+
+/// Stub config-ingress request for the Phase R skeleton.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ConfigLoadRequest;
+
+/// Stub config-ingress response for the Phase R skeleton.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ConfigLoadResponse;
+
+/// Stub inbox-ingress request for the Phase R skeleton.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct InboxIngressRequest;
+
+/// Stub inbox-ingress response for the Phase R skeleton.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct InboxIngressResponse;
+
+/// Stub inbox-export request for the Phase R skeleton.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct InboxExportRequest;
+
+/// Stub inbox-export response for the Phase R skeleton.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct InboxExportResponse;
+
 /// BOUNDARY-AtmProtocol — see docs/atm-core/boundaries.md.
 pub trait AtmProtocol: sealed::Sealed {}
 
@@ -87,3 +137,33 @@ pub trait WatchEventSource: sealed::Sealed {}
 
 /// BOUNDARY-ReconcileCoordinator — see docs/atm-core/boundaries.md.
 pub trait ReconcileCoordinator: sealed::Sealed {}
+
+/// BOUNDARY-MailStore — see docs/atm-core/boundaries.md.
+pub trait MailStore: sealed::Sealed {
+    fn mail_state(&self, request: MailStoreRequest) -> Result<MailStoreResponse, AtmError>;
+}
+
+/// BOUNDARY-TaskStore — see docs/atm-core/boundaries.md.
+pub trait TaskStore: sealed::Sealed {
+    fn task_state(&self, request: TaskStoreRequest) -> Result<TaskStoreResponse, AtmError>;
+}
+
+/// BOUNDARY-RosterStore — see docs/atm-core/boundaries.md.
+pub trait RosterStore: sealed::Sealed {
+    fn roster_state(&self, request: RosterStoreRequest) -> Result<RosterStoreResponse, AtmError>;
+}
+
+/// BOUNDARY-ConfigIngress — see docs/atm-core/boundaries.md.
+pub trait ConfigIngress: sealed::Sealed {
+    fn load_config(&self, request: ConfigLoadRequest) -> Result<ConfigLoadResponse, AtmError>;
+}
+
+/// BOUNDARY-InboxIngress — see docs/atm-core/boundaries.md.
+pub trait InboxIngress: sealed::Sealed {
+    fn import_inbox(&self, request: InboxIngressRequest) -> Result<InboxIngressResponse, AtmError>;
+}
+
+/// BOUNDARY-InboxExport — see docs/atm-core/boundaries.md.
+pub trait InboxExport: sealed::Sealed {
+    fn export_inbox(&self, request: InboxExportRequest) -> Result<InboxExportResponse, AtmError>;
+}

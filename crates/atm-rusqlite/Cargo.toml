@@ -1,0 +1,13 @@
+[package]
+name = "atm-rusqlite"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "ATM rusqlite adapter crate scaffold."
+repository.workspace = true
+homepage.workspace = true
+
+[lib]
+name = "atm_rusqlite"
