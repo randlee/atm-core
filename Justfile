@@ -66,7 +66,7 @@ _lint-spell:
 
 [private]
 _lint-pytests:
-    {{python_cmd}} -m unittest discover -s .just/tests -p "test_*.py"
+    {{python_cmd}} .just/run_pytests.py
 
 # Build the full workspace.
 build:

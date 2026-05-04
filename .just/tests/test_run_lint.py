@@ -58,7 +58,7 @@ class RunLintTests(unittest.TestCase):
             self.assertEqual(tasks["deny"].command[-1], str(repo_root / ".just/lint_cargo_deny.py"))
             self.assertEqual(tasks["shear"].command[-1], str(repo_root / ".just/lint_cargo_shear.py"))
             self.assertEqual(tasks["spell"].command[-1], str(repo_root / ".just/lint_codespell.py"))
-            self.assertEqual(tasks["pytests"].command[-1], "test_*.py")
+            self.assertEqual(tasks["pytests"].command[-1], str(repo_root / ".just/run_pytests.py"))
 
 
 if __name__ == "__main__":

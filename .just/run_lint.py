@@ -65,10 +65,7 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         "boundaries": LintTask("boundaries", [python_executable, str(repo_root / ".just/lint_boundaries.py")]),
         "manifests": LintTask("manifests", [python_executable, str(repo_root / ".just/lint_manifests.py")]),
         "spell": LintTask("spell", [python_executable, str(repo_root / ".just/lint_codespell.py")]),
-        "pytests": LintTask(
-            "pytests",
-            [python_executable, "-m", "unittest", "discover", "-s", str(repo_root / ".just/tests"), "-p", "test_*.py"],
-        ),
+        "pytests": LintTask("pytests", [python_executable, str(repo_root / ".just/run_pytests.py")]),
     }
 
 
