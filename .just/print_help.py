@@ -4,19 +4,37 @@ from __future__ import annotations
 from pathlib import Path
 
 
-RECIPES = (
-    ("help", "Show this help."),
-    ("fmt", "Format the Rust workspace in place."),
-    ("fmt-check", "Check Rust formatting."),
-    ("clippy", "Run Clippy with warnings denied."),
-    ("version-check", "Verify crate, lockfile, winget, and Homebrew release wiring stay aligned."),
-    ("lint-identities", "Enforce RULE-008 for raw production identity literals in test scope."),
-    ("lint-lines", "Enforce RULE-003 source file size limits."),
-    ("lint", "Run the full repo lint suite."),
-    ("build", "Build the full workspace."),
-    ("test", "Run the full workspace test suite."),
-    ("clean", "Remove workspace build artifacts."),
-    ("ci", "Run the local CI-equivalent command set."),
+SECTIONS = (
+    (
+        "General",
+        (
+            ("help", "Show this help."),
+            ("build", "Build the full workspace."),
+            ("test", "Run the full workspace test suite."),
+            ("clean", "Remove workspace build artifacts."),
+            ("ci", "Run the local CI-equivalent command set."),
+        ),
+    ),
+    (
+        "Formatting",
+        (
+            ("fmt", "Check Rust formatting."),
+            ("fmt check", "Check Rust formatting."),
+            ("fmt write", "Format the Rust workspace in place."),
+            ("fmt apply", "Format the Rust workspace in place."),
+        ),
+    ),
+    (
+        "Lint",
+        (
+            ("lint", "Run the full repo lint suite."),
+            ("lint fmt", "Run only the format check."),
+            ("lint clippy", "Run only Clippy with warnings denied."),
+            ("lint version", "Run only the version alignment checks."),
+            ("lint identities", "Run only the RULE-008 identity literal guard."),
+            ("lint lines", "Run only the RULE-003 line-count guard."),
+        ),
+    ),
 )
 
 
@@ -27,10 +45,12 @@ def main() -> int:
     print("Usage:")
     print("  just <recipe>")
     print()
-    print("Recipes:")
-    width = max(len(name) for name, _ in RECIPES)
-    for name, description in RECIPES:
-        print(f"  {name.ljust(width)}  {description}")
+    width = max(len(name) for _, recipes in SECTIONS for name, _ in recipes)
+    for section_name, recipes in SECTIONS:
+        print(f"{section_name}:")
+        for name, description in recipes:
+            print(f"  {name.ljust(width)}  {description}")
+        print()
     return 0
 
 

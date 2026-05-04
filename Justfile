@@ -9,28 +9,39 @@ default: help
 help:
     {{python_cmd}} .just/print_help.py
 
-# Format the Rust workspace in place.
-fmt:
+[private]
+_fmt-write:
     cargo fmt --all
 
-# Check Rust formatting.
-fmt-check:
+[private]
+_fmt-check:
     cargo fmt --all --check
 
-# Run Clippy with warnings denied.
-clippy:
+# Format the Rust workspace or run the formatting gate.
+fmt mode='check':
+    {{python_cmd}} .just/run_fmt.py {{mode}}
+
+[private]
+_lint-fmt:
+    @just fmt check
+
+[private]
+_lint-clippy:
     cargo clippy --workspace --all-targets -- -D warnings
 
 # Verify crate/release versions stay aligned.
-version-check:
+[private]
+_lint-version:
     {{python_cmd}} .just/check_version_sync.py
 
 # Enforce RULE-008 for test and cfg(test) code.
-lint-identities:
+[private]
+_lint-identities:
     {{python_cmd}} .just/check_test_identity_literals.py
 
 # Enforce RULE-003 source file size limits.
-lint-lines:
+[private]
+_lint-lines:
     {{python_cmd}} .just/check_line_counts.py
 
 # Build the full workspace.
@@ -46,7 +57,8 @@ clean:
     cargo clean
 
 # Run the repo lint suite.
-lint: fmt-check clippy version-check lint-identities lint-lines
+lint target='all':
+    {{python_cmd}} .just/run_lint.py {{target}}
 
 # Run the local CI-equivalent command set.
 ci: lint test
