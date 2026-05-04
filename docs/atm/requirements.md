@@ -9,6 +9,9 @@ Product behavior remains defined in [`../requirements.md`](../requirements.md).
 `atm` must satisfy those product requirements without re-owning `atm-core`
 business logic or `atm-daemon` runtime behavior.
 
+The crate-local machine-readable boundary inventory lives in:
+- [`./boundaries.md`](./boundaries.md)
+
 ## 2. Ownership
 
 `atm` owns:
@@ -61,12 +64,12 @@ Initial crate requirement IDs:
   into `atm-core`. Satisfies the CLI bootstrap/injection aspects of:
   `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-OBS-001`.
 - `REQ-ATM-RUNTIME-001` `atm` owns CLI-to-runtime request mapping and daemon
-  client use in production while preserving in-process testability. Satisfies
-  the CLI/runtime-entry aspects of:
+  client use in production over `AtmProtocol` and `ClientTransport` while
+  preserving in-process testability. Satisfies the CLI/runtime-entry aspects of:
   `REQ-CORE-DAEMON-002`, `REQ-CORE-TEST-RUNTIME-001`.
 - `REQ-ATM-RUNTIME-002` `atm` owns production daemon-unavailable behavior and
-  must not auto-spawn the daemon. Satisfies:
-  `REQ-P-RUNTIME-001`, `REQ-CORE-DAEMON-003`.
+  the one documented daemon auto-start attempt. Satisfies:
+  `REQ-P-RUNTIME-001`, `REQ-CORE-DAEMON-001`.
 - `REQ-ATM-ERROR-001` `atm` owns CLI-side rendering/preservation of typed
   runtime errors from `atm-core` and `atm-daemon`. Satisfies:
   `REQ-CORE-BOUNDARY-002`.
@@ -121,22 +124,28 @@ The `atm` crate docs must remain aligned with:
 - [`../project-plan.md`](../project-plan.md)
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
 - [`../plan-phase-Q.md`](../plan-phase-Q.md)
+- [`../plan-phase-R.md`](../plan-phase-R.md)
+- [`./boundaries.md`](./boundaries.md)
 
-## 6. Phase Q CLI Runtime Rules
+## 6. Phase R CLI Runtime Rules
 
 Requirement ID:
 - `REQ-ATM-RUNTIME-001`
 
-Required Phase Q rules:
+Required Phase R rules:
 - in production, `atm` acts as a client of the runtime/daemon API rather than
   talking to SQLite or inbox JSONL directly
+- in production, `atm` depends on the shared `AtmProtocol` and the
+  `ClientTransport` contract rather than daemon internals
 - `atm` must not contain business logic that duplicates `atm-core`
 - `atm` test coverage must be able to use in-process harnesses rather than
   depending on daemon process spawning
 - if a direct in-process service harness exists for tests, it must not become a
   second production path with divergent semantics
-- if the daemon is unavailable in production, `atm` must fail clearly with
-  recovery guidance rather than auto-spawning or silently bypassing the daemon
+- if the daemon is unavailable in production, `atm` must:
+  - attempt the one documented daemon auto-start path
+  - retry connection once
+  - fail clearly with recovery guidance rather than silently bypassing the daemon
 - `atm doctor` remains a CLI command, but its production runtime checks may
   query daemon state through the runtime boundary
 - CLI runtime failures must preserve typed error identity until the rendering

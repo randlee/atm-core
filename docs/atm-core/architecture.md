@@ -8,6 +8,99 @@ It complements the product architecture in
 [`../architecture.md`](../architecture.md) and owns crate-local structure and
 service boundaries.
 
+The crate-local machine-readable boundary inventory lives in:
+- [`./boundaries.md`](./boundaries.md)
+
+## 1.1 ADRs
+
+## Shared ATM protocol lives in atm-core
+
+```yaml
+adr_id: ADR-ATM-CORE-001
+crate: atm-core
+title: Shared ATM protocol lives in atm-core
+status: accepted
+date: 2026-05-03
+deciders:
+  - team-lead
+  - arch-ctm
+tags:
+  - protocol
+  - contracts
+related_boundaries:
+  - BOUNDARY-AtmProtocol
+  - BOUNDARY-ClientTransport
+  - BOUNDARY-ServerTransport
+  - BOUNDARY-RequestDispatcher
+code_references:
+  - docs/atm-core/boundaries.md
+  - docs/atm-daemon/boundaries.md
+  - docs/atm/boundaries.md
+```
+
+Context:
+- The protocol is shared by CLI clients, daemon server/runtime, in-process
+  transport tests, and thin extension crates such as atm-graft.
+
+Decision:
+- `AtmProtocol` is owned by `atm-core`, not by `atm-daemon`.
+- `atm-core` also owns the public transport and dispatcher contracts that
+  operate over that protocol.
+
+Consequences:
+- Thin callers do not need daemon-shaped API types.
+- Client and server transports share one contract family.
+
+Alternatives considered:
+- Keep the protocol modeled as daemon API types.
+- Move the protocol into a dedicated transport crate first.
+
+Follow-up work:
+- Keep crate-local boundary records aligned with this ownership rule.
+- Enforce daemon-shaped protocol naming as a lint failure.
+
+## Ack is folded into send-shaped thin-client requests
+
+```yaml
+adr_id: ADR-ATM-CORE-002
+crate: atm-core
+title: Ack is folded into send-shaped thin-client requests
+status: accepted
+date: 2026-05-03
+deciders:
+  - team-lead
+  - arch-ctm
+tags:
+  - workflow
+  - protocol
+related_boundaries:
+  - BOUNDARY-AtmProtocol
+  - BOUNDARY-TaskStore
+code_references:
+  - docs/atm-core/boundaries.md
+  - docs/requirements.md
+```
+
+Context:
+- Thin client surfaces should expose as few methods as possible while still
+  preserving ATM workflow semantics.
+
+Decision:
+- `ack` remains a retained user workflow, but thin-client protocol surfaces
+  carry acknowledgement through send-shaped request data rather than a separate
+  top-level protocol family.
+
+Consequences:
+- Thin extensions such as atm-graft expose a smaller public surface.
+- Task-state rules still remain explicit in store and workflow boundaries.
+
+Alternatives considered:
+- Preserve a first-class top-level `ack` protocol method family.
+
+Follow-up work:
+- Keep task-state ownership explicit in `TaskStore`.
+- Align thin-client docs with the `send` / `receive` shape.
+
 ## 2. Architectural Rules
 
 - `atm-core` exposes request/result/service boundaries, not clap surfaces.
@@ -35,20 +128,26 @@ Observability release boundary rules:
 - CLI JSON output remains wire-compatible with the current retained-log output
   shape after the boundary cleanup
 
-## 2.1 Phase Q Boundary Model
+## 2.1 Phase R Boundary Model
 
-Phase Q makes `atm-core` the owner of the service-layer boundaries while the
+Phase R makes `atm-core` the owner of the service-layer boundaries while the
 daemon remains a runtime wrapper only.
 
 Required subsystem boundaries:
+- `AtmProtocol` boundary
+- `ClientTransport` boundary
+- `ServerTransport` boundary
+- `RequestDispatcher` boundary
 - `MailStore` boundary
 - `TaskStore` boundary
 - `RosterStore` boundary
 - inbox-ingress boundary
 - inbox-export boundary
 - config-ingress boundary
-- watcher/reconcile boundary
-- notifier-facing service boundary
+- `WatchEventSource` boundary
+- `ReconcileCoordinator` boundary
+- `NotificationSink` boundary
+- `StatusSource` boundary
 
 Required architectural rules:
 - business logic must live in service modules, not in concrete adapters
@@ -90,9 +189,18 @@ Privacy rule:
 
 Those belong to the `atm-daemon` crate.
 
-## 2.2 Phase Q Semantic Wrapper Policy
+Phase R redesign notes:
+- `atm-core` owns the shared `AtmProtocol` contract
+- `atm-core` owns the public boundary contracts for transport, dispatch,
+  store, ingress/export, watch/reconcile, and notification/status surfaces
+- thin-client workflow surfaces should center on `send` and `receive`
+- `ack` remains a workflow/state concern, but thin-client protocol shape
+  should carry it inside send-shaped requests rather than a separate top-level
+  method family
 
-Phase Q should keep durable identifiers and runtime-cap settings typed across
+## 2.2 Phase R Semantic Wrapper Policy
+
+Phase R should keep durable identifiers and runtime-cap settings typed across
 the service boundary.
 
 Required wrappers:

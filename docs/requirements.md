@@ -68,6 +68,10 @@ Crate-local ownership docs live under:
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
 - [`docs/atm-rusqlite/requirements.md`](./atm-rusqlite/requirements.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
+- [`docs/atm-core/boundaries.md`](./atm-core/boundaries.md)
+- [`docs/atm-daemon/boundaries.md`](./atm-daemon/boundaries.md)
+- [`docs/atm-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
+- [`docs/atm/boundaries.md`](./atm/boundaries.md)
 
 During the cleanup/restructure phase, product requirements stay here while
 crate-local ownership is moved out of this file into the crate directories.
@@ -77,6 +81,13 @@ Phase-Q supersession note:
   the prior rewrite line
 - for mail/runtime architecture, the current authoritative direction is Section
   21
+
+Phase-R redesign note:
+- Phase R hardens the architecture by making crate-local boundary records part
+  of the enforceable contract before new implementation work proceeds
+- the thin-client extension surface should center on `send` and `receive`
+  over the shared ATM protocol, while the retained CLI may continue to expose
+  `ack` as a user-facing workflow
 
 ## 2. Scope
 

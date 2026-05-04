@@ -8,6 +8,9 @@ The `atm-core` crate owns the reusable ATM business logic, persistent-store
 contracts, and strict I/O subsystem boundaries. Product behavior remains
 defined in [`../requirements.md`](../requirements.md).
 
+The crate-local machine-readable boundary inventory lives in:
+- [`./boundaries.md`](./boundaries.md)
+
 ## 2. Ownership
 
 `atm-core` owns:
@@ -136,8 +139,8 @@ Initial crate requirement IDs:
   Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-BOUNDARY-001` `atm-core` owns the strict trait boundaries for
-  store, inbox ingress/export, config ingress, watcher/reconcile, and
-  notifier-facing service calls. Satisfies the subsystem-boundary aspects of:
+  store, protocol, transport, inbox ingress/export, config ingress,
+  watcher/reconcile, notification sink, and status-source calls. Satisfies the subsystem-boundary aspects of:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
 - `REQ-CORE-BOUNDARY-002` `atm-core` owns the typed error-model contracts used
   by service boundaries. Satisfies the structured-error aspects of:
@@ -152,11 +155,12 @@ Initial crate requirement IDs:
 - `REQ-CORE-DAEMON-002` `atm-core` owns the contract that daemon runtime
   orchestration stays outside mail business semantics. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
-- `REQ-CORE-TRANSPORT-001` `atm-core` owns the typed daemon API contract shared
-  by Unix domain socket, TCP/TLS, and in-process test transport. Satisfies:
+- `REQ-CORE-TRANSPORT-001` `atm-core` owns the shared `AtmProtocol` contract
+  used by client transport, server transport, and in-process test transport. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
-- `REQ-CORE-TRANSPORT-002` `atm-core` owns route-selection semantics between
-  local and cross-host daemon paths. Satisfies:
+- `REQ-CORE-TRANSPORT-002` `atm-core` owns the public `ClientTransport` and
+  `ServerTransport` contracts plus route-selection semantics between local and
+  cross-host daemon paths. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-TRANSPORT-003` `atm-core` owns the typed transport timeout and
   retry semantics exposed at service boundaries. Satisfies:
@@ -212,11 +216,13 @@ The `atm-core` crate docs must remain aligned with:
 - [`../legacy-atm-message-schema.md`](../legacy-atm-message-schema.md)
 - [`../atm-error-codes.md`](../atm-error-codes.md)
 - [`../plan-phase-Q.md`](../plan-phase-Q.md)
+- [`../plan-phase-R.md`](../plan-phase-R.md)
+- [`./boundaries.md`](./boundaries.md)
 - [`./design/dedup-metadata-schema.md`](./design/dedup-metadata-schema.md)
 - [`./design/sc-observability-integration.md`](./design/sc-observability-integration.md)
 - [`./design/sc-obs-1.0-integration.md`](./design/sc-obs-1.0-integration.md)
 
-## 6. Phase Q Store And Boundary Requirements
+## 6. Phase R Store And Boundary Requirements
 
 Requirement IDs:
 - `REQ-CORE-RUNTIME-001`

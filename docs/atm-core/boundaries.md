@@ -124,6 +124,7 @@ ownership:
 dependencies:
   allowed_dependents:
     - atm
+    - atm-daemon
     - atm-graft
   allowed_dependencies: []
   forbidden_edges: []
@@ -157,6 +158,7 @@ status:
   state: planned
   notes:
     - designed for thin callers such as atm-graft
+    - daemon-to-daemon remote delivery also depends on this outbound client boundary
 ```
 
 Purpose:
@@ -165,6 +167,152 @@ Purpose:
 Notes:
 - The public workflow surface above this boundary should stay centered on send
   and receive.
+
+## WatchEventSource
+
+```yaml
+boundary_id: BOUNDARY-WatchEventSource
+owner_package: atm-core
+owner_crate_path: atm_core
+name: WatchEventSource
+
+public:
+  trait: WatchEventSource
+  facade: null
+
+implementation:
+  type: null
+  module: null
+  visibility: trait_only
+  constructor: none
+
+composition:
+  roots: []
+
+ownership:
+  io_owns:
+    - filesystem_watch_events
+    - watch_event_delivery
+  io_forbidden:
+    - sqlite
+    - process_spawn
+
+dependencies:
+  allowed_dependents:
+    - atm-daemon
+  allowed_dependencies: []
+  forbidden_edges: []
+
+references:
+  scope: outside_owner_crate
+  forbidden:
+    - notify::recommended_watcher
+
+contracts:
+  request_types:
+    - watch subscription requests
+  response_types:
+    - watch event batches
+  error_types:
+    - AtmError
+
+testing:
+  allowed_test_double_paths:
+    - atm_core::test_support::StubWatchEventSource
+  forbidden_test_bypasses:
+    - notify::recommended_watcher
+
+enforcement:
+  lint_rules:
+    - LINT-BOUNDARY-WATCH-EVENT-SOURCE-REFERENCES
+  review_gates:
+    - no_watch_io_outside_boundary
+
+status:
+  state: planned
+  notes:
+    - watch source owns event capture only, not reconcile policy
+```
+
+Purpose:
+- Owns filesystem watch event capture and delivery to the runtime reconcile layer.
+
+Notes:
+- This keeps raw watch APIs out of store, transport, and service logic.
+
+## ReconcileCoordinator
+
+```yaml
+boundary_id: BOUNDARY-ReconcileCoordinator
+owner_package: atm-core
+owner_crate_path: atm_core
+name: ReconcileCoordinator
+
+public:
+  trait: ReconcileCoordinator
+  facade: null
+
+implementation:
+  type: null
+  module: null
+  visibility: trait_only
+  constructor: none
+
+composition:
+  roots: []
+
+ownership:
+  io_owns:
+    - watch_event_coalescing
+    - ingress_reconcile_triggering
+  io_forbidden:
+    - sqlite
+    - socket_io
+    - process_spawn
+
+dependencies:
+  allowed_dependents:
+    - atm-daemon
+  allowed_dependencies: []
+  forbidden_edges: []
+
+references:
+  scope: outside_owner_crate
+  forbidden:
+    - mailbox::store::observe_source_files
+    - mailbox::store::with_locked_source_files
+
+contracts:
+  request_types:
+    - reconcile requests
+  response_types:
+    - reconcile outcomes
+  error_types:
+    - AtmError
+
+testing:
+  allowed_test_double_paths:
+    - atm_core::test_support::StubReconcileCoordinator
+  forbidden_test_bypasses:
+    - mailbox::store::observe_source_files
+
+enforcement:
+  lint_rules:
+    - LINT-BOUNDARY-RECONCILE-COORDINATOR-REFERENCES
+  review_gates:
+    - no_store_or_transport_bypass_in_reconcile
+
+status:
+  state: planned
+  notes:
+    - reconcile owns coalescing and trigger policy, not raw watch APIs
+```
+
+Purpose:
+- Owns watch-driven reconcile policy and ingress triggering above raw watch events.
+
+Notes:
+- This closes the missing watch/reconcile boundary gap in the initial Phase R set.
 
 ## ServerTransport
 

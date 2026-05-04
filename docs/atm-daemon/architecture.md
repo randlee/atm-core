@@ -7,8 +7,60 @@ This document defines the `atm-daemon` crate architectural boundary.
 It complements the product architecture in
 [`../architecture.md`](../architecture.md) and owns runtime composition only.
 
+The crate-local machine-readable boundary inventory lives in:
+- [`./boundaries.md`](./boundaries.md)
+
 This crate is introduced by the Phase Q implementation line and is not part of
 the current pre-Phase-Q workspace yet.
+
+## 1.1 ADRs
+
+## Daemon is the current runtime composition root
+
+```yaml
+adr_id: ADR-ATM-DAEMON-001
+crate: atm-daemon
+title: Daemon is the current runtime composition root
+status: accepted
+date: 2026-05-03
+deciders:
+  - team-lead
+  - arch-ctm
+tags:
+  - composition
+  - runtime
+related_boundaries:
+  - BOUNDARY-ServerTransport-Socket
+  - BOUNDARY-RequestDispatcher-Daemon
+  - BOUNDARY-WatchEventSource-File
+  - BOUNDARY-ReconcileCoordinator-Daemon
+code_references:
+  - docs/atm-daemon/boundaries.md
+  - docs/atm-rusqlite/boundaries.md
+```
+
+Context:
+- The current crate set has no separate composition/app crate, but the runtime
+  still needs one legal owner that can assemble concrete adapters.
+
+Decision:
+- `atm-daemon` is the production runtime composition root in the current Phase
+  R design line.
+- It may assemble concrete runtime and store adapters while remaining thin and
+  business-logic-free.
+
+Consequences:
+- The runtime has one legal place to wire concrete adapters.
+- Forbidden dependency rules can still keep CLI and thin extensions away from
+  daemon and SQLite internals.
+
+Alternatives considered:
+- Leave composition ownership unspecified.
+- Add a separate composition crate before the boundary line is stable.
+
+Follow-up work:
+- Keep adapter assembly in daemon-owned composition code only.
+- Revisit only if a later ADR extracts a dedicated composition crate.
 
 ## 2. Responsibilities
 
@@ -25,6 +77,12 @@ The `atm-daemon` crate is responsible for:
 
 The `atm-daemon` crate must remain thin.
 
+Phase R redesign notes:
+- `atm-daemon` remains runtime-oriented, not business-logic-oriented
+- `atm-daemon` is the current runtime composition root for production wiring
+- remote daemon-to-daemon client behavior uses the same shared protocol and
+  client/server transport contract family rather than a separate daemon-only API
+
 ## 3. Architectural Rules
 
 - `atm-daemon` must not reimplement `atm-core` business logic.
@@ -32,7 +90,8 @@ The `atm-daemon` crate must remain thin.
   boundary.
 - `atm-daemon` must not parse or write inbox JSONL except through the
   `atm-core` ingress/export boundaries.
-- `atm-daemon` owns one protocol with multiple transport implementations:
+- `atm-daemon` owns runtime implementations of one shared ATM protocol with
+  multiple transport implementations:
   - Unix domain socket
   - TCP/TLS
   - in-process `test-socket`
