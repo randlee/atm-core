@@ -26,14 +26,14 @@ use atm_rusqlite::RusqliteStore;
 use chrono::Utc;
 use fs2::FileExt;
 use serial_test::serial;
-use support::ROLE_TEAM_LEAD;
+use support::{PRODUCTION_TEAM_LEAD, ROLE_TEAM_LEAD};
 use tempfile::TempDir;
 use uuid::Uuid;
 
 const TEST_TEAM: &str = "test-team";
 const TEST_SENDER: &str = "sender-a";
 const TEST_RECIPIENT: &str = "recipient";
-const MISSING_CONFIG_NOTICE_LEAD: &str = "team-lead";
+const MISSING_CONFIG_NOTICE_LEAD: &str = PRODUCTION_TEAM_LEAD;
 
 fn qualified(agent: &str) -> String {
     format!("{agent}@{TEST_TEAM}")

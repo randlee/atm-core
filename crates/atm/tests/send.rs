@@ -18,13 +18,13 @@ use atm_core::types::{AgentName, TeamName};
 use atm_core::{read_messages, write_messages};
 use atm_rusqlite::RusqliteStore;
 use helpers::{
-    ROLE_TEAM_LEAD, TEST_LEAD, TEST_QA_AGENT, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER,
-    TEST_SENDER_ADDRESS, TEST_TEAM, configure_atm_command,
+    PRODUCTION_TEAM_LEAD, ROLE_TEAM_LEAD, TEST_LEAD, TEST_QA_AGENT, TEST_RECIPIENT,
+    TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_SENDER_ADDRESS, TEST_TEAM, configure_atm_command,
 };
 use serde_json::Value;
 use serial_test::serial;
 
-const MISSING_CONFIG_NOTICE_LEAD: &str = "team-lead";
+const MISSING_CONFIG_NOTICE_LEAD: &str = PRODUCTION_TEAM_LEAD;
 
 #[test]
 fn test_send_creates_inbox_file() {
