@@ -374,6 +374,8 @@ fn parse_team_member(config_path: &Path, index: usize, entry: &Value) -> Option<
 }
 
 #[cfg(test)]
+// rule-008: allow-start -- config compatibility tests intentionally parse
+// production-shaped identity literals as the subject under test.
 mod tests {
     use crate::config::types::HookRecipient;
     use crate::error_codes::AtmErrorCode;
@@ -815,3 +817,4 @@ post_send_hook_recipients = ["team-lead"]
         unsafe { env::remove_var(key) }
     }
 }
+// rule-008: allow-end

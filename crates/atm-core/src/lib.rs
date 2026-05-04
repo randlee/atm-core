@@ -55,9 +55,9 @@ pub mod task_store;
 pub mod team_admin;
 /// Team-config ingress helpers projecting roster state into SQLite truth.
 pub mod team_ingress;
-#[cfg(test)]
-#[path = "../../atm/tests/support/mod.rs"]
-pub(crate) mod test_support;
+/// Shared synthetic test identities and role constants used across crate tests.
+#[doc(hidden)]
+pub mod test_support;
 /// Internal text-formatting helpers used by ATM core surfaces.
 pub(crate) mod text;
 /// Shared enums and semantic newtypes used across ATM core workflows.

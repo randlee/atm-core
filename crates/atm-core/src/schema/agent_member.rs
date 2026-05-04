@@ -123,6 +123,8 @@ impl AgentMember {
 }
 
 #[cfg(test)]
+// rule-008: allow-start -- schema compatibility tests intentionally preserve
+// production-shaped identity literals as the subject under test.
 mod tests {
     use super::{AgentMember, AgentType};
     use crate::types::AgentName;
@@ -197,3 +199,4 @@ mod tests {
         assert_eq!(member.cwd, None);
     }
 }
+// rule-008: allow-end

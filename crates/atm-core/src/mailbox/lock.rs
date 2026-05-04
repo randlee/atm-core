@@ -893,6 +893,8 @@ fn transient_lock_identity_test_override() -> bool {
 }
 
 #[cfg(test)]
+// rule-008: allow-start -- lock tests intentionally use concrete mailbox file
+// names so sentinel and rotation assertions stay readable.
 mod tests {
     use std::ffi::{OsStr, OsString};
     use std::io;
@@ -1299,3 +1301,4 @@ mod tests {
 
     use std::path::PathBuf;
 }
+// rule-008: allow-end

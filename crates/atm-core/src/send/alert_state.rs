@@ -137,7 +137,7 @@ pub(super) fn register_missing_team_config_alert(home_dir: &Path, key: &str) -> 
         warn!(
             code = %AtmErrorCode::WarningSendAlertStateDegraded,
             path = %lock_path.display(),
-            "failed to acquire send alert lock; skipping team-lead notification"
+            "failed to acquire send alert lock; skipping lead notification"
         );
         return false;
     };

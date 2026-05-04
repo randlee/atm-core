@@ -11,8 +11,9 @@ use crate::home;
 use crate::mailbox::lock;
 use crate::persistence;
 use crate::schema::AgentMember;
+use crate::test_support::ROLE_TEAM_LEAD;
 
-use super::{ROLE_TEAM_LEAD, RestoreOutcome, RestorePlan, RestoreRequest, RestoreResult};
+use super::{RestoreOutcome, RestorePlan, RestoreRequest, RestoreResult};
 
 pub(super) fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> {
     let team_dir = home::team_dir_from_home(&request.home_dir, &request.team)?;
@@ -668,6 +669,7 @@ mod tests {
     use crate::schema::TeamConfig;
     use crate::team_admin::RestoreRequest;
     use crate::team_admin::ScopedTeamConfigWriteFailureOverride;
+    use crate::test_support::{ROLE_TEAM_LEAD, TEST_SENDER, TEST_TEAM};
 
     fn write_team_config(home_dir: &Path, team: &str, value: serde_json::Value) {
         write_json(
@@ -700,11 +702,11 @@ mod tests {
 
     fn write_inbox(path: &Path, text: &str) {
         let envelope = crate::schema::MessageEnvelope {
-            from: "team-lead".parse().expect("agent"),
+            from: ROLE_TEAM_LEAD.parse().expect("agent"),
             text: text.to_string(),
             timestamp: crate::types::IsoTimestamp::from_datetime(Utc::now()),
             read: false,
-            source_team: Some("atm-dev".parse().expect("team")),
+            source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: None,
             message_id: None,
             pending_ack_at: None,
@@ -722,7 +724,7 @@ mod tests {
     #[test]
     fn prepare_restore_workspace_rejects_preexisting_staging_dir() {
         let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
         let backup_dir = tempdir.path().join("backup");
         fs::create_dir_all(restore_staging_dir(&team_dir)).expect("staging dir");
         fs::create_dir_all(&backup_dir).expect("backup dir");
@@ -742,7 +744,7 @@ mod tests {
     fn restore_task_state_from_backup_round_trips_highwatermark() {
         let tempdir = tempdir().expect("tempdir");
         let backup_tasks_dir = tempdir.path().join("backup").join("tasks");
-        let tasks_dir = tempdir.path().join(".claude").join("tasks").join("atm-dev");
+        let tasks_dir = tempdir.path().join(".claude").join("tasks").join(TEST_TEAM);
         write_json(
             &backup_tasks_dir.join("2.json"),
             &json!({"id":"2","status":"open"}),
@@ -777,28 +779,30 @@ mod tests {
         let tempdir = tempdir().expect("tempdir");
         write_team_config(
             tempdir.path(),
-            "atm-dev",
-            json!({"leadSessionId":"lead-current","members":[{"name":"team-lead"}]}),
+            TEST_TEAM,
+            json!({"leadSessionId":"lead-current","members":[{"name":ROLE_TEAM_LEAD}]}),
         );
         let backup_dir = tempdir
             .path()
             .join(".claude")
             .join("teams")
             .join(".backups")
-            .join("atm-dev")
+            .join(TEST_TEAM)
             .join("20260423T010203000000000Z");
         write_backup_config(
             &backup_dir,
             json!({
                 "leadSessionId":"lead-backup",
                 "members":[
-                    {"name":"team-lead"},
-                    {"name":"arch-ctm","agentType":"general-purpose","model":"sonnet","cwd":"/repo"}
+                    {"name":ROLE_TEAM_LEAD},
+                    {"name":TEST_SENDER,"agentType":"general-purpose","model":"sonnet","cwd":"/repo"}
                 ]
             }),
         );
         write_inbox(
-            &backup_dir.join("inboxes").join("arch-ctm.json"),
+            &backup_dir
+                .join("inboxes")
+                .join(format!("{TEST_SENDER}.json")),
             "restored worker inbox",
         );
         write_json(
@@ -810,7 +814,7 @@ mod tests {
         let result = {
             restore_team(RestoreRequest {
                 home_dir: tempdir.path().to_path_buf(),
-                team: "atm-dev".parse().expect("team"),
+                team: TEST_TEAM.parse().expect("team"),
                 from: Some(backup_dir.clone()),
                 dry_run: false,
             })
@@ -818,19 +822,24 @@ mod tests {
 
         let error = result.expect_err("restore failure");
         assert!(error.is_file_policy());
-        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
         let config: TeamConfig =
             serde_json::from_slice(&fs::read(team_dir.join("config.json")).expect("config"))
                 .expect("parse config");
         assert_eq!(config.members.len(), 1);
-        assert_eq!(config.members[0].name, "team-lead");
-        assert!(team_dir.join("inboxes").join("arch-ctm.json").is_file());
+        assert_eq!(config.members[0].name, ROLE_TEAM_LEAD);
+        assert!(
+            team_dir
+                .join("inboxes")
+                .join(format!("{TEST_SENDER}.json"))
+                .is_file()
+        );
         assert!(
             tempdir
                 .path()
                 .join(".claude")
                 .join("tasks")
-                .join("atm-dev")
+                .join(TEST_TEAM)
                 .join("80.json")
                 .is_file()
         );
@@ -843,28 +852,30 @@ mod tests {
         let tempdir = tempdir().expect("tempdir");
         write_team_config(
             tempdir.path(),
-            "atm-dev",
-            json!({"leadSessionId":"lead-current","members":[{"name":"team-lead"}]}),
+            TEST_TEAM,
+            json!({"leadSessionId":"lead-current","members":[{"name":ROLE_TEAM_LEAD}]}),
         );
         let backup_dir = tempdir
             .path()
             .join(".claude")
             .join("teams")
             .join(".backups")
-            .join("atm-dev")
+            .join(TEST_TEAM)
             .join("20260423T020304000000000Z");
         write_backup_config(
             &backup_dir,
             json!({
                 "leadSessionId":"lead-backup",
                 "members":[
-                    {"name":"team-lead"},
-                    {"name":"arch-ctm","agentType":"general-purpose","model":"sonnet","cwd":"/repo"}
+                    {"name":ROLE_TEAM_LEAD},
+                    {"name":TEST_SENDER,"agentType":"general-purpose","model":"sonnet","cwd":"/repo"}
                 ]
             }),
         );
         write_inbox(
-            &backup_dir.join("inboxes").join("arch-ctm.json"),
+            &backup_dir
+                .join("inboxes")
+                .join(format!("{TEST_SENDER}.json")),
             "restored worker inbox",
         );
 
@@ -872,7 +883,7 @@ mod tests {
         let result = {
             restore_team(RestoreRequest {
                 home_dir: tempdir.path().to_path_buf(),
-                team: "atm-dev".parse().expect("team"),
+                team: TEST_TEAM.parse().expect("team"),
                 from: Some(backup_dir.clone()),
                 dry_run: false,
             })
@@ -882,7 +893,7 @@ mod tests {
             result.is_ok(),
             "restore should succeed despite marker cleanup"
         );
-        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
         assert!(restore_marker_path(&team_dir).is_file());
         let config: TeamConfig =
             serde_json::from_slice(&fs::read(team_dir.join("config.json")).expect("config"))
@@ -891,7 +902,7 @@ mod tests {
             config
                 .members
                 .iter()
-                .any(|member| member.name == "arch-ctm")
+                .any(|member| member.name == TEST_SENDER)
         );
     }
 
@@ -901,29 +912,31 @@ mod tests {
         let tempdir = tempdir().expect("tempdir");
         write_team_config(
             tempdir.path(),
-            "atm-dev",
-            json!({"leadSessionId":"lead-current","members":[{"name":"team-lead"}]}),
+            TEST_TEAM,
+            json!({"leadSessionId":"lead-current","members":[{"name":ROLE_TEAM_LEAD}]}),
         );
-        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
         let backup_dir = tempdir
             .path()
             .join(".claude")
             .join("teams")
             .join(".backups")
-            .join("atm-dev")
+            .join(TEST_TEAM)
             .join("20260424T022700000000000Z");
         write_backup_config(
             &backup_dir,
             json!({
                 "leadSessionId":"lead-backup",
                 "members":[
-                    {"name":"team-lead"},
-                    {"name":"arch-ctm","agentType":"general-purpose","model":"sonnet","cwd":"/repo"}
+                    {"name":ROLE_TEAM_LEAD},
+                    {"name":TEST_SENDER,"agentType":"general-purpose","model":"sonnet","cwd":"/repo"}
                 ]
             }),
         );
         write_inbox(
-            &backup_dir.join("inboxes").join("arch-ctm.json"),
+            &backup_dir
+                .join("inboxes")
+                .join(format!("{TEST_SENDER}.json")),
             "restored worker inbox",
         );
 
@@ -931,7 +944,7 @@ mod tests {
         let result = {
             restore_team(RestoreRequest {
                 home_dir: tempdir.path().to_path_buf(),
-                team: "atm-dev".parse().expect("team"),
+                team: TEST_TEAM.parse().expect("team"),
                 from: Some(backup_dir.clone()),
                 dry_run: false,
             })
@@ -944,15 +957,20 @@ mod tests {
             serde_json::from_slice(&fs::read(team_dir.join("config.json")).expect("config"))
                 .expect("parse config");
         assert_eq!(config.members.len(), 1);
-        assert_eq!(config.members[0].name, "team-lead");
-        assert!(!team_dir.join("inboxes").join("arch-ctm.json").exists());
+        assert_eq!(config.members[0].name, ROLE_TEAM_LEAD);
+        assert!(
+            !team_dir
+                .join("inboxes")
+                .join(format!("{TEST_SENDER}.json"))
+                .exists()
+        );
         assert!(restore_marker_path(&team_dir).is_file());
     }
 
     #[test]
     fn clear_restore_marker_missing_file_is_ok() {
         let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
         fs::create_dir_all(&team_dir).expect("team dir");
 
         clear_restore_marker(&team_dir).expect("missing marker should be ok");

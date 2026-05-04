@@ -12,6 +12,7 @@ use crate::mailbox::lock;
 use crate::observability::ObservabilityPort;
 use crate::schema::AgentMember;
 use crate::team_admin::{MemberSummary, MembersList};
+use crate::test_support::ROLE_TEAM_LEAD;
 use crate::types::{AgentName, TeamName};
 use serde::{Deserialize, Serialize};
 
@@ -439,6 +440,8 @@ fn member_summary(member: &AgentMember) -> MemberSummary {
 }
 
 #[cfg(test)]
+// rule-008: allow-start -- doctor tests use explicit fixture identities in
+// serialized config/report payloads; exceptions stay visible at module scope.
 mod tests {
     use std::path::PathBuf;
 
@@ -827,3 +830,4 @@ mod tests {
         assert!(!stale_lock.exists(), "doctor should sweep stale sentinel");
     }
 }
+// rule-008: allow-end

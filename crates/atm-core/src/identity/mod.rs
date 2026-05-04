@@ -76,6 +76,8 @@ pub fn resolve_hook_identity(
 }
 
 #[cfg(test)]
+// rule-008: allow-start -- identity-resolution tests intentionally use raw
+// identity literals as the direct input/output contract under test.
 mod tests {
     use std::env;
     #[cfg(unix)]
@@ -217,3 +219,4 @@ mod tests {
         unsafe { env::remove_var(key) }
     }
 }
+// rule-008: allow-end

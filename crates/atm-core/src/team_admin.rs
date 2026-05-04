@@ -12,6 +12,7 @@ use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
 use crate::persistence;
 use crate::schema::{AgentMember, TeamConfig};
+use crate::test_support::ROLE_TEAM_LEAD;
 use crate::types::{AgentName, TeamName};
 
 #[path = "team_admin/restore.rs"]
@@ -693,6 +694,7 @@ mod tests {
     };
     use crate::error_codes::AtmErrorCode;
     use crate::schema::TeamConfig;
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
 
     fn write_team_config(home_dir: &std::path::Path, team: &str) {
         let team_dir = home_dir.join(".claude").join("teams").join(team);
@@ -709,7 +711,7 @@ mod tests {
         let tempdir = tempdir().expect("tempdir");
         let error = AddMemberRequest::new(
             tempdir.path().to_path_buf(),
-            "atm-dev",
+            TEST_TEAM,
             "../evil",
             "worker".to_string(),
             "gpt-5".to_string(),
@@ -727,7 +729,7 @@ mod tests {
         let error = AddMemberRequest::new(
             tempdir.path().to_path_buf(),
             "../evil",
-            "arch-ctm",
+            TEST_SENDER,
             "worker".to_string(),
             "gpt-5".to_string(),
             tempdir.path().to_path_buf(),
@@ -742,12 +744,12 @@ mod tests {
     #[serial]
     fn add_member_normalizes_tmux_shape_when_pane_is_provided() {
         let tempdir = tempdir().expect("tempdir");
-        write_team_config(tempdir.path(), "atm-dev");
+        write_team_config(tempdir.path(), TEST_TEAM);
 
         add_member(AddMemberRequest {
             home_dir: tempdir.path().to_path_buf(),
-            team: "atm-dev".parse().expect("team"),
-            member: "arch-ctm".parse().expect("member"),
+            team: TEST_TEAM.parse().expect("team"),
+            member: TEST_SENDER.parse().expect("member"),
             agent_type: "worker".to_string(),
             model: "gpt-5".to_string(),
             cwd: tempdir.path().to_path_buf(),
@@ -755,7 +757,7 @@ mod tests {
         })
         .expect("add member");
 
-        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
         let config: TeamConfig = serde_json::from_slice(
             &std::fs::read(team_dir.join("config.json")).expect("read config"),
         )
@@ -763,7 +765,7 @@ mod tests {
         let member = config
             .members
             .iter()
-            .find(|member| member.name == "arch-ctm")
+            .find(|member| member.name == TEST_SENDER)
             .expect("member");
 
         assert_eq!(member.tmux_pane_id.as_deref(), Some("%7"));
@@ -774,12 +776,12 @@ mod tests {
     #[test]
     fn add_member_rejects_non_canonical_tmux_target_syntax() {
         let tempdir = tempdir().expect("tempdir");
-        write_team_config(tempdir.path(), "atm-dev");
+        write_team_config(tempdir.path(), TEST_TEAM);
 
         let error = add_member(AddMemberRequest {
             home_dir: tempdir.path().to_path_buf(),
-            team: "atm-dev".parse().expect("team"),
-            member: "arch-ctm".parse().expect("member"),
+            team: TEST_TEAM.parse().expect("team"),
+            member: TEST_SENDER.parse().expect("member"),
             agent_type: "worker".to_string(),
             model: "gpt-5".to_string(),
             cwd: tempdir.path().to_path_buf(),
