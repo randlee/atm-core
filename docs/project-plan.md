@@ -21,8 +21,8 @@ restructured, product docs remain in `docs/` and crate-local detail moves into
 
 Phase-Q supersession note:
 - earlier daemon-free phases in this plan remain historical execution records
-- the current target line is Section 21 and the detailed design in
-  `docs/plan-phase-Q.md`
+- the architectural baseline being refined is still the Section 21 runtime line
+  and the detailed migration/design material in `docs/plan-phase-Q.md`
 
 Phase-R redesign note:
 - the next execution line is the Phase R redesign and enforcement pass tracked
@@ -47,8 +47,9 @@ Status:
 - Message schema ownership and metadata normalization are now implemented well
   enough for live shared-inbox adoption, while a separate ATM-native inbox
   remains deferred to a later version.
-- Phase Q planning is active on the SQLite source-of-truth and daemon-boundary
-  line; this phase supersedes mailbox-lock architecture as the target design.
+- Phase R planning is active on the SQLite source-of-truth and daemon-boundary
+  line; it hardens the target design and enforcement model before new
+  implementation work proceeds.
 - The current workspace still contains `crates/atm-core` and `crates/atm`
   only; `crates/atm-daemon` and `crates/atm-rusqlite` are introduced by the
   Phase Q implementation line.
@@ -73,7 +74,7 @@ Status:
 
 ## 3. Crates
 
-The Phase Q target implementation is split across:
+The Phase R target implementation is split across:
 
 - `crates/atm-core`
 - `crates/atm`

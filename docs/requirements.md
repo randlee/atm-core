@@ -6,7 +6,7 @@ Product requirement ID:
 - `REQ-P-PRODUCT-001` The retained ATM product surface consists of
   `send`, `read`, `ack`, `clear`, `log`, `doctor`, `teams`, and `members`,
   backed by a singleton daemon runtime and SQLite source-of-truth for mail and
-  roster state in the Phase Q architecture.
+  roster state in the current target architecture.
 
 Satisfied by:
 - intentionally undecomposed product requirement; this governs overall retained
@@ -15,10 +15,10 @@ Satisfied by:
 The product is a local command-line tool named `atm`.
 
 The current target architecture no longer treats daemon removal as a product
-goal. Phase Q reintroduces a tightly-bounded singleton daemon runtime because
-mail routing, native agent notification, and cross-host transport need one
-coordinating process, while ATM command behavior remains the user-facing
-surface.
+goal. The current runtime line uses one tightly-bounded singleton daemon
+runtime because mail routing, native agent notification, and cross-host
+transport need one coordinating process, while ATM command behavior remains
+the user-facing surface.
 
 The retained product surface is:
 - `atm send`
