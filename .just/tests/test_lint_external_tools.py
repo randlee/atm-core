@@ -160,6 +160,14 @@ shear/empty_files
     def test_annotate_sections_uses_crate_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
+            (repo_root / "Cargo.toml").write_text(
+                """\
+[workspace]
+members = ["crates/atm", "crates/atm-core"]
+resolver = "2"
+""",
+                encoding="utf-8",
+            )
             for crate_name, package_name in (
                 ("atm", "agent-team-mail"),
                 ("atm-core", "agent-team-mail-core"),

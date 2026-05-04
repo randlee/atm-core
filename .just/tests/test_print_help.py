@@ -15,10 +15,18 @@ from print_help import render_help
 class PrintHelpTests(unittest.TestCase):
     def test_render_help_mentions_new_lint_entries(self) -> None:
         output = render_help("atm-core")
+        self.assertIn("version latest", output)
+        self.assertIn("lint fast", output)
+        self.assertIn("lint modules", output)
         self.assertIn("lint boundaries", output)
         self.assertIn("lint manifests", output)
         self.assertIn("lint pytests", output)
         self.assertIn("fmt apply", output)
+        self.assertIn("view boundaries", output)
+        self.assertIn("view lines", output)
+        self.assertIn("view modules", output)
+        self.assertIn("view deps", output)
+        self.assertIn("view unsafe", output)
 
 
 if __name__ == "__main__":

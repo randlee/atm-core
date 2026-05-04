@@ -11,20 +11,17 @@ import sys
 from lint_common import build_report
 from lint_common import discover_repo_root
 from lint_common import is_comment_line
+from lint_common import load_lint_config
 from lint_common import monotonic_now
 from lint_common import print_report
 from lint_common import render_table
 from lint_common import workspace_crate_section_lines
+from lint_common import workspace_manifest_paths
 
 
 LINT_NAME = "boundaries"
-BOUNDARY_DOC_GLOB = "docs/*/boundaries.md"
 YAML_FENCE_START = "```yaml"
 YAML_FENCE_END = "```"
-RUSQLITE_ALLOWED_MANIFEST = Path("crates/atm-rusqlite/Cargo.toml")
-ATM_CORE_MANIFEST = Path("crates/atm-core/Cargo.toml")
-ATM_RUSQLITE_PACKAGE = "atm-rusqlite"
-ATM_RUSQLITE_ALLOWED_SECTIONS = {"dev-dependencies"}
 REQUIRED_BOUNDARY_FIELDS = (
     ("boundary_id",),
     ("owner_package",),
@@ -53,11 +50,6 @@ RUST_PATH_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 FORBIDDEN_EDGE_RE = re.compile(
     r"^(?P<left>[a-z0-9]+(?:[.-][a-z0-9]+)*)\s*->\s*(?P<right>[a-z0-9]+(?:[.-][a-z0-9]+)*)$"
-)
-SOURCE_IMPORT_PATTERNS = (
-    re.compile(r"\brusqlite::"),
-    re.compile(r"\buse\s+rusqlite\b"),
-    re.compile(r"\bextern\s+crate\s+rusqlite\b"),
 )
 PUBLIC_TYPE_TEMPLATE = r"^\s*pub(?:\([^)]*\))?\s+(?:struct|enum|type)\s+{name}\b"
 PUBLIC_REEXPORT_TEMPLATE = r"^\s*pub(?:\([^)]*\))?\s+use\b.*\b{name}\b"
@@ -123,6 +115,23 @@ class ManifestInfo:
         return tuple(sorted(aliases))
 
 
+@dataclass(frozen=True)
+class DependencyOwnershipRule:
+    dependency: str
+    allowed_manifest_paths: tuple[Path, ...]
+    allowed_source_roots: tuple[Path, ...]
+    manifest_message: str
+    source_message: str
+
+
+@dataclass(frozen=True)
+class ManifestSectionRule:
+    owner_manifest_path: Path
+    dependency_package: str
+    allowed_sections: tuple[str, ...]
+    message: str
+
+
 def dependency_sections(manifest: dict) -> list[tuple[str, dict]]:
     sections: list[tuple[str, dict]] = []
     for section_name in ("dependencies", "dev-dependencies", "build-dependencies"):
@@ -153,12 +162,35 @@ def dependency_package_name(dependency_name: str, dependency: object) -> str:
     return dependency_name
 
 
+def dependency_import_patterns(dependency: str) -> tuple[re.Pattern[str], ...]:
+    crate_path = dependency.replace("-", "_")
+    escaped = re.escape(crate_path)
+    return (
+        re.compile(rf"\b{escaped}::"),
+        re.compile(rf"\buse\s+{escaped}\b"),
+        re.compile(rf"\bextern\s+crate\s+{escaped}\b"),
+    )
+
+
+def boundary_config(repo_root: Path) -> dict:
+    config = load_lint_config(repo_root).get("boundaries", {})
+    if not isinstance(config, dict):
+        raise SystemExit("[boundaries] must be a TOML table")
+    return config
+
+
 def workspace_manifests(repo_root: Path) -> list[Path]:
-    return sorted((repo_root / "crates").glob("*/Cargo.toml"))
+    return workspace_manifest_paths(repo_root)
 
 
 def rust_sources(repo_root: Path) -> list[Path]:
-    return sorted((repo_root / "crates").glob("*/src/**/*.rs"))
+    sources: list[Path] = []
+    for manifest_path in workspace_manifest_paths(repo_root):
+        src_root = manifest_path.parent / "src"
+        if not src_root.exists():
+            continue
+        sources.extend(sorted(src_root.glob("**/*.rs")))
+    return sorted(set(sources))
 
 
 def rust_test_sources_for_crate(info: ManifestInfo) -> list[Path]:
@@ -169,7 +201,103 @@ def rust_test_sources_for_crate(info: ManifestInfo) -> list[Path]:
 
 
 def boundary_docs(repo_root: Path) -> list[Path]:
-    return sorted(repo_root.glob(BOUNDARY_DOC_GLOB))
+    config = boundary_config(repo_root)
+    doc_glob = config.get("doc_glob")
+    if not isinstance(doc_glob, str) or not doc_glob.strip():
+        raise SystemExit("[boundaries].doc_glob must be a non-empty string")
+    return sorted(repo_root.glob(doc_glob))
+
+
+def dependency_ownership_rules(repo_root: Path) -> list[DependencyOwnershipRule]:
+    config = boundary_config(repo_root)
+    raw_rules = config.get("global_dependency_ownership", [])
+    if not isinstance(raw_rules, list):
+        raise SystemExit("[[boundaries.global_dependency_ownership]] entries must be an array of tables")
+
+    rules: list[DependencyOwnershipRule] = []
+    for index, raw_rule in enumerate(raw_rules):
+        if not isinstance(raw_rule, dict):
+            raise SystemExit(
+                f"[boundaries.global_dependency_ownership][{index}] must be a TOML table"
+            )
+        dependency = raw_rule.get("dependency")
+        allowed_manifest_paths = raw_rule.get("allowed_manifest_paths", [])
+        allowed_source_roots = raw_rule.get("allowed_source_roots", [])
+        manifest_message = raw_rule.get("manifest_message")
+        source_message = raw_rule.get("source_message")
+        if not isinstance(dependency, str) or not dependency:
+            raise SystemExit(
+                f"[boundaries.global_dependency_ownership][{index}].dependency must be a non-empty string"
+            )
+        if not isinstance(allowed_manifest_paths, list) or not all(isinstance(item, str) for item in allowed_manifest_paths):
+            raise SystemExit(
+                f"[boundaries.global_dependency_ownership][{index}].allowed_manifest_paths must be an array of strings"
+            )
+        if not isinstance(allowed_source_roots, list) or not all(isinstance(item, str) for item in allowed_source_roots):
+            raise SystemExit(
+                f"[boundaries.global_dependency_ownership][{index}].allowed_source_roots must be an array of strings"
+            )
+        if not isinstance(manifest_message, str) or not manifest_message:
+            raise SystemExit(
+                f"[boundaries.global_dependency_ownership][{index}].manifest_message must be a non-empty string"
+            )
+        if not isinstance(source_message, str) or not source_message:
+            raise SystemExit(
+                f"[boundaries.global_dependency_ownership][{index}].source_message must be a non-empty string"
+            )
+        rules.append(
+            DependencyOwnershipRule(
+                dependency=dependency,
+                allowed_manifest_paths=tuple(Path(item) for item in allowed_manifest_paths),
+                allowed_source_roots=tuple(Path(item) for item in allowed_source_roots),
+                manifest_message=manifest_message,
+                source_message=source_message,
+            )
+        )
+    return rules
+
+
+def manifest_section_rules(repo_root: Path) -> list[ManifestSectionRule]:
+    config = boundary_config(repo_root)
+    raw_rules = config.get("manifest_section_rules", [])
+    if not isinstance(raw_rules, list):
+        raise SystemExit("[[boundaries.manifest_section_rules]] entries must be an array of tables")
+
+    rules: list[ManifestSectionRule] = []
+    for index, raw_rule in enumerate(raw_rules):
+        if not isinstance(raw_rule, dict):
+            raise SystemExit(
+                f"[boundaries.manifest_section_rules][{index}] must be a TOML table"
+            )
+        owner_manifest_path = raw_rule.get("owner_manifest_path")
+        dependency_package = raw_rule.get("dependency_package")
+        allowed_sections = raw_rule.get("allowed_sections", [])
+        message = raw_rule.get("message")
+        if not isinstance(owner_manifest_path, str) or not owner_manifest_path:
+            raise SystemExit(
+                f"[boundaries.manifest_section_rules][{index}].owner_manifest_path must be a non-empty string"
+            )
+        if not isinstance(dependency_package, str) or not dependency_package:
+            raise SystemExit(
+                f"[boundaries.manifest_section_rules][{index}].dependency_package must be a non-empty string"
+            )
+        if not isinstance(allowed_sections, list) or not all(isinstance(item, str) for item in allowed_sections):
+            raise SystemExit(
+                f"[boundaries.manifest_section_rules][{index}].allowed_sections must be an array of strings"
+            )
+        if not isinstance(message, str) or not message:
+            raise SystemExit(
+                f"[boundaries.manifest_section_rules][{index}].message must be a non-empty string"
+            )
+        rules.append(
+            ManifestSectionRule(
+                owner_manifest_path=Path(owner_manifest_path),
+                dependency_package=dependency_package,
+                allowed_sections=tuple(allowed_sections),
+                message=message,
+            )
+        )
+    return rules
 
 
 def tomllib_load(path: Path) -> dict:
@@ -964,6 +1092,9 @@ def collect_active_implementation_violations(repo_root: Path, records: list[Boun
 
 def collect_special_case_violations(repo_root: Path) -> list[BoundaryViolation]:
     violations: list[BoundaryViolation] = []
+    ownership_rules = dependency_ownership_rules(repo_root)
+    section_rules = manifest_section_rules(repo_root)
+
     for manifest_path in workspace_manifests(repo_root):
         manifest = tomllib_load(manifest_path)
         rel_manifest_path = manifest_path.relative_to(repo_root)
@@ -971,40 +1102,42 @@ def collect_special_case_violations(repo_root: Path) -> list[BoundaryViolation]:
         for section_name, dependencies in dependency_sections(manifest):
             for dependency_name, dependency in dependencies.items():
                 package_name = dependency_package_name(dependency_name, dependency)
-                if package_name == "rusqlite" and rel_manifest_path != RUSQLITE_ALLOWED_MANIFEST:
-                    violations.append(
-                        BoundaryViolation(
-                            f"{rel_manifest} [{section_name}]",
-                            "only crates/atm-rusqlite may depend on rusqlite",
+                for rule in ownership_rules:
+                    if package_name == rule.dependency and rel_manifest_path not in rule.allowed_manifest_paths:
+                        violations.append(
+                            BoundaryViolation(
+                                f"{rel_manifest} [{section_name}]",
+                                rule.manifest_message,
+                            )
                         )
-                    )
-                if (
-                    rel_manifest_path == ATM_CORE_MANIFEST
-                    and package_name == ATM_RUSQLITE_PACKAGE
-                    and section_name not in ATM_RUSQLITE_ALLOWED_SECTIONS
-                ):
-                    violations.append(
-                        BoundaryViolation(
-                            f"{rel_manifest} [{section_name}]",
-                            "atm-core may reference atm-rusqlite only in dev-dependencies",
+                for rule in section_rules:
+                    if (
+                        rel_manifest_path == rule.owner_manifest_path
+                        and package_name == rule.dependency_package
+                        and section_name not in rule.allowed_sections
+                    ):
+                        violations.append(
+                            BoundaryViolation(
+                                f"{rel_manifest} [{section_name}]",
+                                rule.message,
+                            )
                         )
-                    )
 
-    allowed_manifest = repo_root / RUSQLITE_ALLOWED_MANIFEST
-    allowed_source_root = allowed_manifest.parent / "src"
     for source_path in rust_sources(repo_root):
-        if allowed_source_root.exists() and allowed_source_root.resolve() in source_path.resolve().parents:
-            continue
         rel_source = source_path.relative_to(repo_root).as_posix()
         text = source_path.read_text(encoding="utf-8")
         for line_number, line in enumerate(text.splitlines(), start=1):
             if is_comment_line(line):
                 continue
-            if any(pattern.search(line) for pattern in SOURCE_IMPORT_PATTERNS):
+            for rule in ownership_rules:
+                if not any(pattern.search(line) for pattern in dependency_import_patterns(rule.dependency)):
+                    continue
+                if any((repo_root / allowed_root).resolve() in source_path.resolve().parents for allowed_root in rule.allowed_source_roots):
+                    continue
                 violations.append(
                     BoundaryViolation(
                         f"{rel_source}:{line_number}",
-                        "only crates/atm-rusqlite source may import rusqlite directly",
+                        rule.source_message,
                     )
                 )
     return violations

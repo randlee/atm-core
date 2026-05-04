@@ -12,6 +12,7 @@ if str(JUST_DIR) not in sys.path:
 
 from check_version_sync import validate_crate_versions
 from check_version_sync import validate_lockfile
+from check_version_sync import validate_winget_manifests
 from check_version_sync import success_message
 
 
@@ -62,7 +63,10 @@ class CheckVersionSyncTests(unittest.TestCase):
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             manifest = repo_root / "crates/atm-rusqlite/Cargo.toml"
-            manifest.write_text(manifest.read_text(encoding="utf-8").replace("version.workspace = true\n", ""), encoding="utf-8")
+            manifest.write_text(
+                manifest.read_text(encoding="utf-8").replace("version.workspace = true\n", ""),
+                encoding="utf-8",
+            )
 
             with self.assertRaises(SystemExit) as error:
                 validate_crate_versions(repo_root, "1.1.2")
@@ -98,11 +102,58 @@ version = "1.1.2"
 
             self.assertIn("agent-team-mail-rusqlite missing from Cargo.lock", str(error.exception))
 
+    def test_validate_crate_versions_requires_internal_path_dep_pin(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            manifest = repo_root / "crates/atm/Cargo.toml"
+            manifest.write_text(
+                manifest.read_text(encoding="utf-8").replace(', version = "1.1.2"', ""),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(SystemExit) as error:
+                validate_crate_versions(repo_root, "1.1.2")
+
+            self.assertIn(
+                'crates/atm/Cargo.toml [dependencies.atm-core]: internal path dependency version must match workspace version "1.1.2"',
+                str(error.exception),
+            )
+
     def test_success_message_includes_workspace_version(self) -> None:
         self.assertEqual(
-            success_message("1.1.2"),
-            "version sync check passed: workspace_version=1.1.2; workspace, crate pin, Cargo.lock, winget, and Homebrew release wiring are aligned.",
+            success_message("1.1.2", ["workspace member versions", "internal path deps", "Cargo.lock"]),
+            "version sync check passed: workspace_version=1.1.2; workspace member versions, internal path deps, Cargo.lock are aligned.",
         )
+
+    def test_validate_winget_manifests_reads_installer_url_from_installers_array(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            (repo_root / ".winget").mkdir(parents=True)
+            (repo_root / ".winget/randlee.agent-team-mail.yaml").write_text(
+                """\
+PackageIdentifier: randlee.agent-team-mail
+PackageVersion: 1.1.2
+Installers:
+  - Architecture: x64
+    InstallerType: zip
+    InstallerUrl: https://github.com/randlee/atm-core/releases/download/v1.1.2/atm_1.1.2_x86_64-pc-windows-msvc.zip
+ManifestType: installer
+ManifestVersion: 1.1.2
+""",
+                encoding="utf-8",
+            )
+            config = {
+                "winget": {
+                    "enabled": True,
+                    "manifest_glob": ".winget/*.yaml",
+                    "package_version_field": "PackageVersion",
+                    "manifest_version_field": "ManifestVersion",
+                    "installer_url_field": "InstallerUrl",
+                }
+            }
+
+            self.assertTrue(validate_winget_manifests(repo_root, "1.1.2", config))
 
 
 if __name__ == "__main__":

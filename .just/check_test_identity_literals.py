@@ -13,6 +13,7 @@ from lint_common import is_code_line
 from lint_common import line_is_suppressed
 from lint_common import load_lint_config
 from lint_common import workspace_crate_section_lines
+from lint_common import workspace_manifest_paths
 
 
 LINT_NAME = "identities"
@@ -43,7 +44,14 @@ def load_forbidden_literals(repo_root: Path) -> tuple[str, ...]:
 
 
 def iter_rust_files(repo_root: Path) -> list[Path]:
-    return sorted((repo_root / "crates").rglob("*.rs"))
+    paths: list[Path] = []
+    for manifest_path in workspace_manifest_paths(repo_root):
+        crate_root = manifest_path.parent
+        for directory_name in ("src", "tests"):
+            directory = crate_root / directory_name
+            if directory.exists():
+                paths.extend(sorted(directory.rglob("*.rs")))
+    return sorted(set(paths))
 
 
 def file_scope(path: Path, lines: list[str]) -> list[bool]:

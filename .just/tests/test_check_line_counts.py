@@ -61,6 +61,7 @@ class CheckLineCountsTests(unittest.TestCase):
         counts = [
             FileCounts(
                 crate_name="atm-core",
+                crate_root="crates/atm-core",
                 path="crates/atm-core/src/example.rs",
                 total_lines=1200,
                 production_lines=1001,
@@ -84,6 +85,7 @@ class CheckLineCountsTests(unittest.TestCase):
         counts = [
             FileCounts(
                 crate_name="atm-core",
+                crate_root="crates/atm-core",
                 path="crates/atm-core/src/a.rs",
                 total_lines=10,
                 production_lines=8,
@@ -91,6 +93,7 @@ class CheckLineCountsTests(unittest.TestCase):
             ),
             FileCounts(
                 crate_name="atm-core",
+                crate_root="crates/atm-core",
                 path="crates/atm-core/src/b.rs",
                 total_lines=20,
                 production_lines=15,
@@ -98,6 +101,7 @@ class CheckLineCountsTests(unittest.TestCase):
             ),
             FileCounts(
                 crate_name="atm",
+                crate_root="crates/atm",
                 path="crates/atm/src/main.rs",
                 total_lines=5,
                 production_lines=4,

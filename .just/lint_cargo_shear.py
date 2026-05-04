@@ -11,6 +11,7 @@ import sys
 from lint_common import discover_repo_root
 from lint_common import load_lint_config
 from lint_common import workspace_crate_section_lines
+from lint_common import workspace_crates
 
 
 ERROR_SECTIONS = {"unlinked_files", "empty_files"}
@@ -87,21 +88,10 @@ def extract_file_paths(body_lines: list[str] | tuple[str, ...]) -> list[str]:
 
 
 def package_to_crate_dir(repo_root: Path) -> dict[str, str]:
-    mapping: dict[str, str] = {}
-    crates_dir = repo_root / "crates"
-    if not crates_dir.exists():
-        return mapping
-    for manifest_path in sorted(crates_dir.glob("*/Cargo.toml")):
-        text = manifest_path.read_text(encoding="utf-8")
-        package_name = None
-        for line in text.splitlines():
-            stripped = line.strip()
-            if stripped.startswith("name = "):
-                package_name = stripped.split("=", 1)[1].strip().strip('"')
-                break
-        if package_name:
-            mapping[package_name] = manifest_path.parent.name
-    return mapping
+    return {
+        crate.package_name: Path(crate.manifest_path).parent.as_posix()
+        for crate in workspace_crates(repo_root)
+    }
 
 
 def load_policy_config(repo_root: Path) -> dict[str, dict[str, str]]:
@@ -173,7 +163,7 @@ def annotate_sections(sections: list[ShearSection], repo_root: Path) -> list[str
         crate_name = infer_package_name(section.body_lines)
         crate_dir = crate_map.get(crate_name, crate_name)
         for path in section.file_paths:
-            rendered.append(f"shear note: crates/{crate_dir}/{path} [{section.name}]")
+            rendered.append(f"shear note: {crate_dir}/{path} [{section.name}]")
     return rendered
 
 

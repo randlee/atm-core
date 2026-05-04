@@ -60,12 +60,52 @@ def discover_repo_root(explicit_root: str | None = None) -> Path:
 
 def load_lint_config(repo_root: Path) -> dict:
     config_path = repo_root / CONFIG_PATH
+    if not config_path.exists():
+        return {}
     return tomllib.loads(config_path.read_text(encoding="utf-8"))
+
+
+def workspace_manifest_paths(repo_root: Path) -> list[Path]:
+    root_manifest = tomllib.loads((repo_root / "Cargo.toml").read_text(encoding="utf-8"))
+    workspace = root_manifest.get("workspace", {})
+    if not isinstance(workspace, dict):
+        return []
+
+    members = workspace.get("members", [])
+    excludes = workspace.get("exclude", [])
+    if not isinstance(members, list) or not all(isinstance(item, str) for item in members):
+        return []
+
+    excluded_paths: set[Path] = set()
+    if isinstance(excludes, list):
+        for pattern in excludes:
+            if not isinstance(pattern, str):
+                continue
+            for match in repo_root.glob(pattern):
+                excluded_paths.add(match.resolve())
+
+    manifests: dict[Path, Path] = {}
+    for pattern in members:
+        for match in repo_root.glob(pattern):
+            resolved = match.resolve()
+            if resolved in excluded_paths:
+                continue
+            if match.is_dir():
+                manifest_path = match / "Cargo.toml"
+            elif match.is_file() and match.name == "Cargo.toml":
+                manifest_path = match
+            else:
+                continue
+            if not manifest_path.exists():
+                continue
+            manifests[manifest_path.resolve()] = manifest_path
+
+    return sorted(manifests.values())
 
 
 def workspace_crates(repo_root: Path) -> list[WorkspaceCrate]:
     crates: list[WorkspaceCrate] = []
-    for manifest_path in sorted((repo_root / "crates").glob("*/Cargo.toml")):
+    for manifest_path in workspace_manifest_paths(repo_root):
         manifest = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
         package = manifest.get("package", {})
         package_name = package.get("name")
@@ -83,6 +123,27 @@ def workspace_crates(repo_root: Path) -> list[WorkspaceCrate]:
             )
         )
     return crates
+
+
+def workspace_target_args(manifest_path: Path) -> list[str]:
+    manifest = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
+    lib = manifest.get("lib")
+    if isinstance(lib, dict):
+        return ["--lib"]
+
+    bins = manifest.get("bin")
+    if isinstance(bins, list) and bins:
+        first_bin = bins[0]
+        if isinstance(first_bin, dict):
+            name = first_bin.get("name")
+            if isinstance(name, str) and name:
+                return ["--bin", name]
+
+    package = manifest.get("package", {})
+    package_name = package.get("name") if isinstance(package, dict) else None
+    if isinstance(package_name, str) and (manifest_path.parent / "src/main.rs").exists():
+        return ["--bin", package_name]
+    raise SystemExit(f"could not determine cargo target for {manifest_path}")
 
 
 def render_table(

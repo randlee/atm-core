@@ -12,6 +12,8 @@ SECTIONS = (
             ("build", "Build the full workspace."),
             ("test", "Run the full workspace test suite."),
             ("clean", "Remove workspace build artifacts."),
+            ("version", "Show current workspace version state."),
+            ("version latest", "Show recommended direct dependency upgrades."),
             ("ci", "Run the local CI-equivalent command set."),
         ),
     ),
@@ -28,8 +30,10 @@ SECTIONS = (
         "Lint",
         (
             ("lint", "Run the full repo lint suite."),
+            ("lint fast", "Run the low-latency lint subset."),
             ("lint fmt", "Run only the format check."),
             ("lint clippy", "Run only Clippy with warnings denied."),
+            ("lint modules", "Run cargo-modules internal acyclic checks (advisory/manual)."),
             ("lint deny", "Run cargo-deny advisories/bans/source checks."),
             ("lint shear", "Run cargo-shear unused-dependency checks."),
             ("lint boundaries", "Run the crate/source boundary checks."),
@@ -39,6 +43,17 @@ SECTIONS = (
             ("lint lines", "Run only the RULE-003 line-count guard."),
             ("lint spell", "Run the spelling/content check."),
             ("lint pytests", "Run the Python lint-tool unit tests."),
+        ),
+    ),
+    (
+        "View",
+        (
+            ("view", "Generate all implemented architecture-view artifacts."),
+            ("view boundaries", "Generate boundary inventory artifacts."),
+            ("view lines", "Generate source-size inventory artifacts."),
+            ("view modules", "Generate module-structure artifacts."),
+            ("view deps", "Generate crate-dependency HTML artifacts."),
+            ("view unsafe", "Generate unsafe-surface artifacts."),
         ),
     ),
 )

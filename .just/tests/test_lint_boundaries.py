@@ -32,6 +32,24 @@ repository = "https://example.invalid/repo"
 homepage = "https://example.invalid/repo"
 """
 
+LINT_CONFIG = """\
+[boundaries]
+doc_glob = "docs/*/boundaries.md"
+
+[[boundaries.global_dependency_ownership]]
+dependency = "rusqlite"
+allowed_manifest_paths = ["crates/atm-rusqlite/Cargo.toml"]
+allowed_source_roots = ["crates/atm-rusqlite/src"]
+manifest_message = "only crates/atm-rusqlite may depend on rusqlite"
+source_message = "only crates/atm-rusqlite source may import rusqlite directly"
+
+[[boundaries.manifest_section_rules]]
+owner_manifest_path = "crates/atm-core/Cargo.toml"
+dependency_package = "atm-rusqlite"
+allowed_sections = ["dev-dependencies"]
+message = "atm-core may reference atm-rusqlite only in dev-dependencies"
+"""
+
 BASE_BOUNDARY_DOC = """\
 # Example Boundaries
 
@@ -110,6 +128,8 @@ status:
 class LintBoundariesTests(unittest.TestCase):
     def write_repo(self, repo_root: Path) -> None:
         (repo_root / "Cargo.toml").write_text(ROOT_MANIFEST, encoding="utf-8")
+        (repo_root / ".just").mkdir()
+        (repo_root / ".just/lint-config.toml").write_text(LINT_CONFIG, encoding="utf-8")
         for crate_name in ("atm-core", "atm-rusqlite", "atm", "atm-daemon"):
             crate_dir = repo_root / "crates" / crate_name
             crate_dir.mkdir(parents=True)
