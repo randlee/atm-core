@@ -13,6 +13,7 @@ from lint_common import discover_repo_root
 from lint_common import is_comment_line
 from lint_common import monotonic_now
 from lint_common import print_report
+from lint_common import render_table
 from lint_common import workspace_crate_section_lines
 
 
@@ -1030,6 +1031,62 @@ def build_summary(violations: list[BoundaryViolation], record_count: int) -> str
     return f"boundary rules violated ({len(violations)} findings across {record_count} records)"
 
 
+def boundary_doc_section_lines(repo_root: Path, records: list[BoundaryRecord]) -> list[str]:
+    record_counts_by_doc: dict[str, dict[str, int]] = {}
+    for doc_path in boundary_docs(repo_root):
+        record_counts_by_doc[doc_path.relative_to(repo_root).as_posix()] = {
+            "records": 0,
+            "active": 0,
+            "planned": 0,
+            "retired": 0,
+        }
+
+    for record in records:
+        if record.source_path.is_absolute():
+            doc_key = record.source_path.relative_to(repo_root).as_posix()
+        else:
+            doc_key = record.source_path.as_posix()
+        counts = record_counts_by_doc.setdefault(
+            doc_key,
+            {"records": 0, "active": 0, "planned": 0, "retired": 0},
+        )
+        counts["records"] += 1
+        if record.status_state in counts:
+            counts[record.status_state] += 1
+
+    rows: list[dict[str, str]] = []
+    for doc_display in sorted(record_counts_by_doc):
+        counts = record_counts_by_doc[doc_display]
+        rows.append(
+            {
+                "doc": doc_display,
+                "records": str(counts["records"]),
+                "active": str(counts["active"]),
+                "planned": str(counts["planned"]),
+                "retired": str(counts["retired"]),
+            }
+        )
+
+    lines = ["boundary docs analyzed:"]
+    lines.extend(
+        render_table(
+            rows,
+            [
+                ("doc", "doc"),
+                ("records", "records"),
+                ("active", "active"),
+                ("planned", "planned"),
+                ("retired", "retired"),
+            ],
+        )
+    )
+    lines.append("")
+    lines.append(f"boundary doc count: {len(rows)}")
+    lines.append(f"boundary records validated: {len(records)}")
+    lines.append("")
+    return lines
+
+
 def run(repo_root: Path) -> int:
     started_at = datetime.now(timezone.utc)
     started_monotonic = monotonic_now()
@@ -1048,9 +1105,7 @@ def run(repo_root: Path) -> int:
     duration_seconds = monotonic_now() - started_monotonic
     findings = [violation.render() for violation in violations]
     transcript_lines = workspace_crate_section_lines(repo_root)
-    transcript_lines.append(f"boundary docs analyzed: {len(boundary_docs(repo_root))}")
-    transcript_lines.append(f"boundary records validated: {len(records)}")
-    transcript_lines.append("")
+    transcript_lines.extend(boundary_doc_section_lines(repo_root, records))
     transcript_lines.extend(findings or ["no boundary violations found"])
     report = build_report(
         lint_name=LINT_NAME,

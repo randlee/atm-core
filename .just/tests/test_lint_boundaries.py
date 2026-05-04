@@ -12,6 +12,7 @@ if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
 from lint_boundaries import collect_boundary_violations
+from lint_boundaries import boundary_doc_section_lines
 from lint_boundaries import parse_boundary_records
 from lint_boundaries import parse_simple_yaml_document
 
@@ -235,6 +236,31 @@ atm-rusqlite = { path = "../atm-rusqlite", version = "1.1.2" }
             self.assertEqual(len(records), 1)
             self.assertEqual(records[0].boundary_id, "BOUNDARY-MailStore-Sqlite")
             self.assertFalse(records[0].is_active)
+
+    def test_boundary_doc_section_lines_reports_per_doc_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_doc(
+                repo_root,
+                "atm-core",
+                BASE_BOUNDARY_DOC.replace("owner_package: atm-rusqlite", "owner_package: atm-core").replace(
+                    "owner_crate_path: atm_rusqlite", "owner_crate_path: atm_core"
+                ),
+            )
+
+            records, violations = parse_boundary_records(repo_root)
+            self.assertEqual(violations, [])
+
+            lines = boundary_doc_section_lines(repo_root, records)
+            joined = "\n".join(lines)
+            self.assertIn("boundary docs analyzed:", joined)
+            self.assertIn("docs/atm-core/boundaries.md", joined)
+            self.assertIn("docs/atm-rusqlite/boundaries.md", joined)
+            self.assertIn("boundary doc count: 2", joined)
+            self.assertIn("boundary records validated: 2", joined)
 
     def test_parse_boundary_records_flags_missing_required_field(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

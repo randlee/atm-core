@@ -15,6 +15,7 @@ from run_lint import build_transcript
 from run_lint import extract_count
 from run_lint import LintResult
 from run_lint import LintTask
+from run_lint import preview_lines_for_task
 from run_lint import prioritize_error_lines
 from run_lint import resolve_task_names
 
@@ -63,7 +64,7 @@ class RunLintTests(unittest.TestCase):
             self.assertEqual(tasks["spell"].command[-1], str(repo_root / ".just/lint_codespell.py"))
             self.assertEqual(tasks["pytests"].command[-1], str(repo_root / ".just/run_pytests.py"))
 
-    def test_build_transcript_adds_crate_inventory_for_fmt(self) -> None:
+    def test_build_transcript_adds_crate_inventory_for_crate_scoped_lints(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
             crate_dir = repo_root / "crates" / "atm-core"
@@ -76,21 +77,41 @@ version = "1.1.2"
 """,
                 encoding="utf-8",
             )
-            result = LintResult(
-                task=LintTask("fmt", ["just", "_lint-fmt"]),
-                returncode=0,
-                stdout="",
-                stderr="",
-                duration_seconds=0.2,
-                log_path=repo_root / ".just/logs/example.log",
-            )
+            for lint_name in ("fmt", "clippy", "boundaries", "manifests"):
+                result = LintResult(
+                    task=LintTask(lint_name, ["just", f"_lint-{lint_name}"]),
+                    returncode=0,
+                    stdout="",
+                    stderr="",
+                    duration_seconds=0.2,
+                    log_path=repo_root / ".just/logs/example.log",
+                )
 
-            transcript = build_transcript(result.task, result, repo_root)
+                transcript = build_transcript(result.task, result, repo_root)
 
-            self.assertIn("crates analyzed:", transcript)
-            joined = "\n".join(transcript)
-            self.assertIn("crate_path", joined)
-            self.assertIn("atm-core", joined)
+                self.assertIn("crates analyzed:", transcript)
+                joined = "\n".join(transcript)
+                self.assertIn("crate_path", joined)
+                self.assertIn("atm-core", joined)
+
+    def test_preview_lines_for_identities_skips_inventory_rows(self) -> None:
+        lines = [
+            "crates analyzed:",
+            "crate     package               crate_path  manifest",
+            "atm       agent-team-mail       atm         crates/atm/Cargo.toml",
+            "atm-core  agent-team-mail-core  atm_core    crates/atm-core/Cargo.toml",
+            "RULE-008/RULE-009 violation: raw production literals found in test/cfg(test) Rust code.",
+            "crates/atm/tests/ack.rs:28: let fixture = Fixture::new(&[\"arch-ctm\", \"team-lead\"]);",
+            "total violations: 880",
+        ]
+
+        self.assertEqual(
+            preview_lines_for_task("identities", lines),
+            [
+                "RULE-008/RULE-009 violation: raw production literals found in test/cfg(test) Rust code.",
+                "crates/atm/tests/ack.rs:28: let fixture = Fixture::new(&[\"arch-ctm\", \"team-lead\"]);",
+            ],
+        )
 
 
 if __name__ == "__main__":

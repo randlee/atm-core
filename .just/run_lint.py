@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 import argparse
+import re
 import subprocess
 import sys
 import time
@@ -29,10 +30,12 @@ PYTHON_LINT_ORDER = (
 )
 CARGO_LINT_ORDER = ("fmt", "clippy", "deny", "shear")
 HIGH_VOLUME_LINTS = {"identities", "lines"}
+CRATE_INVENTORY_LINTS = {"fmt", "clippy", "boundaries", "manifests"}
 COUNT_PATTERNS = (
     ("total violations:", "violations"),
     ("errors:", "errors"),
 )
+FILE_FINDING_RE = re.compile(r"^[A-Za-z0-9_.-]+/.*:\d+:")
 
 
 @dataclass(frozen=True)
@@ -113,6 +116,31 @@ def extract_count(lines: list[str]) -> int | None:
     return None
 
 
+def preview_lines_for_task(task_name: str, lines: list[str]) -> list[str]:
+    if task_name != "identities":
+        return lines
+
+    filtered: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped == "crates analyzed:":
+            continue
+        if "crate_path" in stripped and "manifest" in stripped:
+            continue
+        if "Cargo.toml" in stripped:
+            continue
+        if stripped.lower().startswith("rule-"):
+            filtered.append(stripped)
+            continue
+        if FILE_FINDING_RE.match(stripped):
+            filtered.append(stripped)
+            continue
+
+    return filtered or lines
+
+
 def build_transcript(task: LintTask, result: LintResult, repo_root: Path) -> list[str]:
     transcript = [
         f"lint: {task.name}",
@@ -123,7 +151,7 @@ def build_transcript(task: LintTask, result: LintResult, repo_root: Path) -> lis
         f"exit_code: {result.returncode}",
         "",
     ]
-    if task.name == "fmt":
+    if task.name in CRATE_INVENTORY_LINTS:
         transcript.extend(workspace_crate_section_lines(repo_root))
     transcript.extend(
         [
@@ -170,7 +198,7 @@ def print_result(result: LintResult, repo_root: Path) -> None:
     log_display = relative_log_path(repo_root, result.log_path)
     print(f"{result.task.name} failed")
     if result.task.name in HIGH_VOLUME_LINTS:
-        preview = lines[:2]
+        preview = preview_lines_for_task(result.task.name, lines)[:2]
         for line in preview:
             print(f"  {line}")
         count = extract_count(lines)
