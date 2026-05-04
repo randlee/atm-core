@@ -51,6 +51,10 @@ pub mod types;
 pub(crate) mod workflow;
 
 pub use boundary::{
-    AtmProtocol, ClientTransport, NotificationSink, ReconcileCoordinator, RequestDispatcher,
-    ServerTransport, StatusSource, WatchEventSource,
+    AtmFramePayload, AtmProtocol, AtmRequestEnvelope, AtmResponseEnvelope, ClientTransport,
+    ClientTransportRequest, ClientTransportResponse, DispatchRequestEnvelope,
+    DispatchResponseEnvelope, NotificationEvent, NotificationSink, ReconcileCoordinator,
+    ReconcileRequest, ReconcileResult, RequestDispatcher, RuntimeStatusSnapshot, ServerTransport,
+    ServerTransportRequest, ServerTransportResponse, StatusSource, WatchEventBatch,
+    WatchEventSource, WatchSubscriptionRequest,
 };

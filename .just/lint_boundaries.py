@@ -46,7 +46,7 @@ REQUIRED_BOUNDARY_FIELDS = (
 VISIBILITY_VALUES = {"private", "pub(crate)", "public", "trait_only"}
 CONSTRUCTOR_VALUES = {"private", "pub(crate)", "public", "none"}
 REFERENCE_SCOPE_VALUES = {"global", "outside_owner_crate"}
-STATE_VALUES = {"planned", "active", "retired"}
+STATE_VALUES = {"planned", "active", "deferred", "retired"}
 PACKAGE_NAME_RE = re.compile(r"^[a-z0-9]+(?:[.-][a-z0-9]+)*$")
 CRATE_PATH_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 RUST_PATH_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$")
@@ -1038,6 +1038,7 @@ def boundary_doc_section_lines(repo_root: Path, records: list[BoundaryRecord]) -
             "records": 0,
             "active": 0,
             "planned": 0,
+            "deferred": 0,
             "retired": 0,
         }
 
@@ -1048,7 +1049,7 @@ def boundary_doc_section_lines(repo_root: Path, records: list[BoundaryRecord]) -
             doc_key = record.source_path.as_posix()
         counts = record_counts_by_doc.setdefault(
             doc_key,
-            {"records": 0, "active": 0, "planned": 0, "retired": 0},
+            {"records": 0, "active": 0, "planned": 0, "deferred": 0, "retired": 0},
         )
         counts["records"] += 1
         if record.status_state in counts:
@@ -1063,6 +1064,7 @@ def boundary_doc_section_lines(repo_root: Path, records: list[BoundaryRecord]) -
                 "records": str(counts["records"]),
                 "active": str(counts["active"]),
                 "planned": str(counts["planned"]),
+                "deferred": str(counts["deferred"]),
                 "retired": str(counts["retired"]),
             }
         )
@@ -1076,6 +1078,7 @@ def boundary_doc_section_lines(repo_root: Path, records: list[BoundaryRecord]) -
                 ("records", "records"),
                 ("active", "active"),
                 ("planned", "planned"),
+                ("deferred", "deferred"),
                 ("retired", "retired"),
             ],
         )
