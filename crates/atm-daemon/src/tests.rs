@@ -1,0 +1,231 @@
+use super::*;
+use crate::client::request_local;
+use atm_core::observability::NullObservability;
+use serial_test::serial;
+use tempfile::TempDir;
+
+const TEST_TEAM: &str = "test-team";
+const TEST_SENDER: &str = "sender-a";
+
+#[derive(Default)]
+struct FakeDispatcher {
+    responses: std::sync::Mutex<Vec<DaemonResponse>>,
+    requests: std::sync::Mutex<Vec<DaemonRequest>>,
+}
+
+impl FakeDispatcher {
+    fn queue_response(&self, response: DaemonResponse) {
+        self.responses
+            .lock()
+            .expect("responses lock")
+            .push(response);
+    }
+
+    fn request_count(&self) -> usize {
+        self.requests.lock().expect("requests lock").len()
+    }
+}
+
+impl RequestDispatcher for FakeDispatcher {
+    fn dispatch(&self, request: DaemonRequest) -> Result<DaemonResponse, DispatchError> {
+        self.requests.lock().expect("requests lock").push(request);
+        self.responses
+            .lock()
+            .expect("responses lock")
+            .pop()
+            .ok_or_else(|| DispatchError::Unsupported(RequestKind::Heartbeat))
+    }
+}
+
+#[test]
+fn test_socket_client_uses_dispatcher_contract() {
+    let dispatcher = FakeDispatcher::default();
+    dispatcher.queue_response(DaemonResponse {
+        kind: RequestKind::Doctor,
+        payload_json: "{\"summary\":{\"status\":\"healthy\"}}".to_string(),
+    });
+    let client = TestSocketClient::new(&dispatcher);
+    let response = client
+        .request(DaemonRequest {
+            team_name: TEST_TEAM.parse().expect("team"),
+            agent_name: TEST_SENDER.parse().expect("agent"),
+            payload: RequestPayload::Doctor(serde_json::json!({"team_override":TEST_TEAM})),
+        })
+        .expect("response");
+    assert_eq!(response.kind, RequestKind::Doctor);
+    assert_eq!(dispatcher.request_count(), 1);
+}
+
+#[test]
+#[serial]
+fn second_daemon_startup_fails_deterministically() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let home_dir = tempdir.path().to_path_buf();
+    let worker_threads = Arc::new(Mutex::new(Vec::new()));
+    let first = start_runtime(
+        DaemonConfig::from_home(home_dir.clone()),
+        Arc::clone(&worker_threads),
+        Arc::new(CoreDispatcher::new(
+            home_dir.clone(),
+            Arc::new(NullObservability),
+        )),
+    )
+    .expect("first daemon");
+    let error = match start_runtime(
+        DaemonConfig::from_home(home_dir),
+        Arc::new(Mutex::new(Vec::new())),
+        Arc::new(CoreDispatcher::new(
+            tempdir.path().to_path_buf(),
+            Arc::new(NullObservability),
+        )),
+    ) {
+        Ok(handle) => panic!(
+            "second daemon should fail, got endpoint {:?}",
+            handle.local_endpoint()
+        ),
+        Err(error) => error,
+    };
+    assert_eq!(error.code, AtmErrorCode::DaemonAlreadyRunning);
+    first.shutdown().expect("shutdown");
+}
+
+#[test]
+#[serial]
+fn stale_singleton_cleanup_allows_one_live_start_only() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let paths = DaemonPaths::from_home(tempdir.path());
+    fs::create_dir_all(&paths.state_dir).expect("state dir");
+    fs::write(&paths.singleton_path, br#"{"pid":999999}"#).expect("stale singleton");
+    let handle = start_runtime(
+        DaemonConfig::from_home(tempdir.path().to_path_buf()),
+        Arc::new(Mutex::new(Vec::new())),
+        Arc::new(CoreDispatcher::new(
+            tempdir.path().to_path_buf(),
+            Arc::new(NullObservability),
+        )),
+    )
+    .expect("daemon with stale singleton");
+    let error = match start_runtime(
+        DaemonConfig::from_home(tempdir.path().to_path_buf()),
+        Arc::new(Mutex::new(Vec::new())),
+        Arc::new(CoreDispatcher::new(
+            tempdir.path().to_path_buf(),
+            Arc::new(NullObservability),
+        )),
+    ) {
+        Ok(handle) => panic!(
+            "second daemon should still fail, got endpoint {:?}",
+            handle.local_endpoint()
+        ),
+        Err(error) => error,
+    };
+    assert_eq!(error.code, AtmErrorCode::DaemonAlreadyRunning);
+    handle.shutdown().expect("shutdown");
+}
+
+#[test]
+#[serial]
+fn local_same_host_daemon_api_flow_works() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let current_dir = tempdir.path().join("workspace");
+    fs::create_dir_all(&current_dir).expect("workspace dir");
+    fs::write(
+        current_dir.join(".atm.toml"),
+        format!("[atm]\ndefault_team = \"{TEST_TEAM}\"\n"),
+    )
+    .expect("atm toml");
+    let worker_threads = Arc::new(Mutex::new(Vec::new()));
+    let handle = start_runtime(
+        DaemonConfig::from_home(tempdir.path().to_path_buf()),
+        Arc::clone(&worker_threads),
+        Arc::new(
+            CoreDispatcher::new(tempdir.path().to_path_buf(), Arc::new(NullObservability))
+                .with_worker_threads(Arc::clone(&worker_threads)),
+        ),
+    )
+    .expect("runtime");
+    let response = request_local(
+        tempdir.path(),
+        &DaemonRequest {
+            team_name: TEST_TEAM.parse().expect("team"),
+            agent_name: TEST_SENDER.parse().expect("agent"),
+            payload: RequestPayload::Heartbeat(serde_json::json!({"pid": 42})),
+        },
+        SAME_HOST_REQUEST_TIMEOUT,
+    )
+    .expect("local response");
+    assert_eq!(response.kind, RequestKind::Heartbeat);
+    let doctor = request_local(
+        tempdir.path(),
+        &DaemonRequest {
+            team_name: TEST_TEAM.parse().expect("team"),
+            agent_name: TEST_SENDER.parse().expect("agent"),
+            payload: RequestPayload::Doctor(serde_json::json!({
+                "home_dir": tempdir.path(),
+                "current_dir": current_dir,
+                "team_override": TEST_TEAM
+            })),
+        },
+        SAME_HOST_REQUEST_TIMEOUT,
+    )
+    .expect("doctor response");
+    assert_eq!(doctor.kind, RequestKind::Doctor);
+    handle.shutdown().expect("shutdown");
+}
+
+#[test]
+fn bounded_remote_host_unreachable_behavior_is_typed() {
+    let probe = TcpListener::bind(("127.0.0.1", 0)).expect("probe listener");
+    let address = probe.local_addr().expect("probe addr");
+    drop(probe);
+    let error = request_remote(
+        address,
+        &DaemonRequest {
+            team_name: TEST_TEAM.parse().expect("team"),
+            agent_name: TEST_SENDER.parse().expect("agent"),
+            payload: RequestPayload::Send(serde_json::json!({"message":"hello"})),
+        },
+        Duration::from_millis(250),
+    )
+    .expect_err("unreachable host");
+    assert_eq!(error.code, AtmErrorCode::DaemonRemoteUnavailable);
+}
+
+#[test]
+fn remote_acceptance_is_required_for_send_success() {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("listener");
+    listener
+        .set_nonblocking(true)
+        .expect("listener nonblocking");
+    let address = listener.local_addr().expect("local addr");
+    let dispatcher = Arc::new(FakeDispatcher::default());
+    dispatcher.queue_response(DaemonResponse {
+        kind: RequestKind::Send,
+        payload_json: "{\"ok\":true}".to_string(),
+    });
+    let inflight = Arc::new(AtomicUsize::new(0));
+    let worker_threads = Arc::new(Mutex::new(Vec::new()));
+    let stop = Arc::new(AtomicBool::new(false));
+    let worker = {
+        let inflight = Arc::clone(&inflight);
+        let worker_threads = Arc::clone(&worker_threads);
+        let dispatcher = dispatcher.clone();
+        let stop = Arc::clone(&stop);
+        thread::spawn(move || {
+            accept_tcp_loop(listener, stop, inflight, worker_threads, dispatcher, 8)
+        })
+    };
+    let response = request_remote(
+        address,
+        &DaemonRequest {
+            team_name: TEST_TEAM.parse().expect("team"),
+            agent_name: TEST_SENDER.parse().expect("agent"),
+            payload: RequestPayload::Send(serde_json::json!({"message":"hello"})),
+        },
+        Duration::from_secs(1),
+    )
+    .expect("remote response");
+    assert_eq!(response.kind, RequestKind::Send);
+    stop.store(true, Ordering::SeqCst);
+    let _ = worker.join();
+}

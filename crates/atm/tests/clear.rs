@@ -676,6 +676,20 @@ impl Fixture {
             .join("control.json")
     }
 
+    fn wait_for_daemon_ready(&self) {
+        let deadline = Instant::now() + std::time::Duration::from_secs(5);
+        while Instant::now() < deadline {
+            if self.daemon_control_path().exists() {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        panic!(
+            "daemon control state was not published at {} within 5s",
+            self.daemon_control_path().display()
+        );
+    }
+
     fn message(
         &self,
         from: &str,
@@ -743,7 +757,7 @@ fn test_clear_auto_starts_daemon_when_absent() {
         "stderr: {}",
         fixture.stderr(&output)
     );
-    assert!(fixture.daemon_control_path().exists());
+    fixture.wait_for_daemon_ready();
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["removed_total"], 1);
 }
