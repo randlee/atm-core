@@ -5,8 +5,6 @@ use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io;
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::Command;
 #[cfg(test)]
@@ -39,16 +37,23 @@ pub fn env_lock() -> &'static Mutex<()> {
 
 #[cfg(test)]
 pub struct EnvGuard {
-    key: &'static str,
+    key: String,
     original: Option<OsString>,
+    _guard: std::sync::MutexGuard<'static, ()>,
 }
 
 #[cfg(test)]
 impl EnvGuard {
-    pub fn set_raw(key: &'static str, value: &str) -> Self {
-        let original = std::env::var_os(key);
-        set_env_var(key, value);
-        Self { key, original }
+    pub fn set_raw(key: impl Into<String>, value: &str) -> Self {
+        let key = key.into();
+        let guard = env_lock().lock().expect("env lock");
+        let original = std::env::var_os(&key);
+        set_env_var(&key, value);
+        Self {
+            key,
+            original,
+            _guard: guard,
+        }
     }
 }
 
@@ -56,8 +61,8 @@ impl EnvGuard {
 impl Drop for EnvGuard {
     fn drop(&mut self) {
         match self.original.take() {
-            Some(value) => set_env_var(self.key, value),
-            None => remove_env_var(self.key),
+            Some(value) => set_env_var(&self.key, value),
+            None => remove_env_var(&self.key),
         }
     }
 }
@@ -231,6 +236,12 @@ pub fn configure_atm_command<'a>(
 }
 
 fn ensure_test_daemon_launcher(home_dir: &std::path::Path) -> PathBuf {
+    #[allow(unused_variables)]
+    let hermetic_daemon = option_env!("CARGO_BIN_EXE_atm-daemon").map(PathBuf::from);
+    if let Some(path) = hermetic_daemon.as_ref().filter(|path| path.exists()) {
+        return path.clone();
+    }
+
     let sibling = PathBuf::from(env!("CARGO_BIN_EXE_atm"))
         .with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX));
     if sibling.exists() {
@@ -246,35 +257,11 @@ fn ensure_test_daemon_launcher(home_dir: &std::path::Path) -> PathBuf {
         return workspace_binary;
     }
 
-    #[cfg(unix)]
-    {
-        let wrapper = home_dir.join("atm-daemon-test-wrapper.sh");
-        let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .canonicalize()
-            .expect("workspace root");
-        fs::write(
-            &wrapper,
-            format!(
-                "#!/bin/sh\ncd '{}' || exit 1\nexec cargo run --quiet -p atm-daemon --bin atm-daemon -- \"$@\"\n",
-                workspace_root.display()
-            ),
-        )
-        .expect("write daemon wrapper");
-        let mut permissions = fs::metadata(&wrapper)
-            .expect("wrapper metadata")
-            .permissions();
-        permissions.set_mode(0o755);
-        fs::set_permissions(&wrapper, permissions).expect("chmod daemon wrapper");
-        wrapper
-    }
-
-    #[cfg(not(unix))]
-    {
-        panic!(
-            "expected hermetic test daemon binary beside {} but it was missing: {}",
-            env!("CARGO_BIN_EXE_atm"),
-            sibling.display()
-        );
-    }
+    let _ = home_dir;
+    panic!(
+        "expected hermetic test daemon binary at one of: {:?}, {}, {}",
+        hermetic_daemon,
+        sibling.display(),
+        workspace_binary.display()
+    );
 }

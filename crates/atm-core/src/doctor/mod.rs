@@ -82,7 +82,7 @@ fn run_doctor_with_runtime<R: RetainedServiceRuntime>(
             ),
         });
     }
-    let member_roster = resolved_team.as_deref().and_then(|team| {
+    let member_roster = resolved_team.as_ref().and_then(|team| {
         load_member_roster(runtime, &home_dir, team, config.as_ref(), &mut findings)
     });
     push_stale_mailbox_lock_findings(
@@ -130,7 +130,7 @@ fn run_doctor_with_runtime<R: RetainedServiceRuntime>(
 fn load_member_roster(
     runtime: &impl RetainedServiceRuntime,
     home_dir: &Path,
-    team: &str,
+    team: &TeamName,
     config: Option<&config::AtmConfig>,
     findings: &mut Vec<DoctorFinding>,
 ) -> Option<MembersList> {

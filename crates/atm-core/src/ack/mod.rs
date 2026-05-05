@@ -419,8 +419,8 @@ fn find_source_message(
     source_files: &[SourceFile],
     workflow_state: &workflow::WorkflowStateFile,
     message_id: LegacyMessageId,
-    actor: &str,
-    team: &str,
+    actor: &AgentName,
+    team: &TeamName,
 ) -> Result<SourcedMessage, AtmError> {
     dedupe_legacy_message_id_surface(
         merged_surface(source_files, workflow_state),

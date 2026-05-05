@@ -1029,11 +1029,17 @@ impl Fixture {
         let tempdir = tempfile::tempdir().expect("tempdir");
         let fixture = Self { tempdir };
         fixture.write_team_config(recipient);
+        fixture.warm_daemon();
         fixture
     }
 
     fn run(&self, args: &[&str]) -> std::process::Output {
         self.run_with_env(args, &[])
+    }
+
+    fn warm_daemon(&self) {
+        let output = self.run(&["read", "--all", "--no-mark", "--json"]);
+        assert!(output.status.success(), "stderr: {}", self.stderr(&output));
     }
 
     fn run_without_identity(&self, args: &[&str]) -> std::process::Output {

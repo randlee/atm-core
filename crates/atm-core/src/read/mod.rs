@@ -407,7 +407,7 @@ fn apply_idle_notification_dedup(
 fn dedupe_idle_notifications(
     index: usize,
     message: &SourcedMessage,
-    latest_idle_for_sender: &HashMap<String, usize>,
+    latest_idle_for_sender: &HashMap<AgentName, usize>,
 ) -> bool {
     if !is_unread_idle_notification(&message.envelope) {
         return true;
@@ -419,7 +419,7 @@ fn dedupe_idle_notifications(
         .unwrap_or(true)
 }
 
-fn messages_from_idle_sender(messages: &[SourcedMessage]) -> HashMap<String, usize> {
+fn messages_from_idle_sender(messages: &[SourcedMessage]) -> HashMap<AgentName, usize> {
     let mut latest_idle_for_sender = HashMap::new();
 
     for (index, message) in messages.iter().enumerate() {
@@ -442,11 +442,11 @@ fn is_unread_idle_notification(message: &MessageEnvelope) -> bool {
     !message.read && idle_notification_sender(message).is_some()
 }
 
-fn idle_sender(message: &MessageEnvelope) -> Option<String> {
+fn idle_sender(message: &MessageEnvelope) -> Option<AgentName> {
     idle_notification_sender(message)
 }
 
-fn idle_notification_sender(message: &MessageEnvelope) -> Option<String> {
+fn idle_notification_sender(message: &MessageEnvelope) -> Option<AgentName> {
     let value = match serde_json::from_str::<Value>(&message.text) {
         Ok(value) => value,
         Err(error) => {
@@ -467,7 +467,19 @@ fn idle_notification_sender(message: &MessageEnvelope) -> Option<String> {
     }
 
     match value.get("from").and_then(Value::as_str) {
-        Some(sender) => Some(sender.to_string()),
+        Some(sender) => match sender.parse() {
+            Ok(sender) => Some(sender),
+            Err(error) => {
+                debug!(
+                    %error,
+                    recovery = "Ensure Claude idle-notification payloads include a valid ATM agent name in `from`. ATM will continue treating the record as a normal mailbox message.",
+                    sender,
+                    message_text = %message.text,
+                    "ignoring malformed idle-notification payload with invalid `from`"
+                );
+                None
+            }
+        },
         None => {
             debug!(
                 recovery = "Ensure Claude idle-notification payloads include a string `from` field. ATM will continue treating the record as a normal mailbox message.",

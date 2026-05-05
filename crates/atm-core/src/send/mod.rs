@@ -374,7 +374,8 @@ fn notify_team_lead_missing_config(
         return;
     }
 
-    let team_lead_inbox = match runtime.inbox_path(home_dir, team, ROLE_TEAM_LEAD) {
+    let team_lead_agent = AgentName::from_validated(ROLE_TEAM_LEAD);
+    let team_lead_inbox = match runtime.inbox_path(home_dir, team, &team_lead_agent) {
         Ok(path) => path,
         Err(error) => {
             warn!(
@@ -522,7 +523,7 @@ fn set_canonical_sender_metadata(
     };
     atm.insert(
         "fromIdentity".to_string(),
-        serde_json::to_value(canonical_from).expect("AgentName serializes"),
+        serde_json::Value::String(canonical_from.to_string()),
     );
 }
 
