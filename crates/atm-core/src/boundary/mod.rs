@@ -13,79 +13,64 @@ pub mod sealed {
 }
 
 /// Stub ATM request envelope for the Phase R protocol skeleton.
-///
-/// Prefer `RequestEnvelope` from `atm_core::protocol` as the canonical type.
-pub type AtmRequestEnvelope = RequestEnvelope;
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AtmRequestEnvelope;
 
 /// Stub ATM response envelope for the Phase R protocol skeleton.
-///
-/// Prefer `ResponseEnvelope` from `atm_core::protocol` as the canonical type.
-pub type AtmResponseEnvelope = ResponseEnvelope;
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AtmResponseEnvelope;
 
 /// Stub ATM frame payload for the Phase R protocol skeleton.
-///
-/// Prefer `FramePayload` from `atm_core::protocol` as the canonical type.
-pub type AtmFramePayload = FramePayload;
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AtmFramePayload;
 
 /// Stub outbound client-transport request for the Phase R skeleton.
-///
-/// Compatibility alias to the canonical protocol request type.
-pub type ClientTransportRequest = RequestEnvelope;
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ClientTransportRequest;
 
 /// Stub outbound client-transport response for the Phase R skeleton.
-///
-/// Compatibility alias to the canonical protocol response type.
-pub type ClientTransportResponse = ResponseEnvelope;
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ClientTransportResponse;
 
 /// Stub inbound server-transport request for the Phase R skeleton.
-///
-/// Compatibility alias to the canonical protocol frame type.
-pub type ServerTransportRequest = FramePayload;
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ServerTransportRequest;
 
 /// Stub inbound server-transport response for the Phase R skeleton.
-///
-/// Compatibility alias to the canonical protocol frame type.
-pub type ServerTransportResponse = FramePayload;
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ServerTransportResponse;
 
 /// Stub dispatcher request envelope for the Phase R skeleton.
-///
-/// Compatibility alias to the canonical protocol request type.
-pub type DispatchRequestEnvelope = RequestEnvelope;
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DispatchRequestEnvelope;
 
 /// Stub dispatcher response envelope for the Phase R skeleton.
-///
-/// Compatibility alias to the canonical protocol response type.
-pub type DispatchResponseEnvelope = ResponseEnvelope;
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DispatchResponseEnvelope;
 
 /// Stub outbound notification event for the Phase R skeleton.
-///
-/// Canonical payload is `protocol::NotificationEvent`.
-pub type NotificationEvent = crate::protocol::NotificationEvent;
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NotificationEvent;
 
 /// Stub inbound runtime-status snapshot for the Phase R skeleton.
-///
-/// Canonical payload is `protocol::RuntimeStatusSnapshot`.
-pub type RuntimeStatusSnapshot = crate::protocol::RuntimeStatusSnapshot;
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RuntimeStatusSnapshot;
 
 /// Stub watch-subscription request for the Phase R skeleton.
-///
-/// Canonical payload is `protocol::WatchSubscriptionRequest`.
-pub type WatchSubscriptionRequest = crate::protocol::WatchSubscriptionRequest;
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WatchSubscriptionRequest;
 
 /// Stub watch event batch for the Phase R skeleton.
-///
-/// Canonical payload is `protocol::WatchEventBatch`.
-pub type WatchEventBatch = crate::protocol::WatchEventBatch;
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WatchEventBatch;
 
 /// Stub reconcile request for the Phase R skeleton.
-///
-/// Canonical payload is `protocol::ReconcileRequest`.
-pub type ReconcileRequest = crate::protocol::ReconcileRequest;
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ReconcileRequest;
 
 /// Stub reconcile result for the Phase R skeleton.
-///
-/// Canonical payload is `protocol::ReconcileResult`.
-pub type ReconcileResult = crate::protocol::ReconcileResult;
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ReconcileResult;
 
 /// Stub mail-store request for the Phase R skeleton.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

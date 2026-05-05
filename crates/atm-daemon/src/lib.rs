@@ -9,24 +9,23 @@ use std::error::Error as StdError;
 use std::fmt;
 
 use atm_core::{
+    RequestEnvelope, ResponseEnvelope,
     boundary::{
         self, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, InboxExport,
         InboxExportRecordRequest, InboxExportRecordResponse, InboxExportReexportMessageRequest,
         InboxExportReexportMessageResponse, InboxIngress, InboxIngressDiagnosticsRequest,
         InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,
         InboxIngressIdentityFingerprintResponse, InboxIngressImportRequest,
-        InboxIngressImportResponse, RequestDispatcher,
+        InboxIngressImportResponse, NotificationEvent, ReconcileRequest, ReconcileResult,
+        RequestDispatcher, RuntimeStatusSnapshot, WatchEventBatch, WatchSubscriptionRequest,
     },
     error::AtmError,
-    protocol::{
-        NotificationEvent, ReconcileRequest, ReconcileResult, RuntimeStatusSnapshot,
-        WatchEventBatch, WatchSubscriptionRequest,
-    },
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DaemonBoundaryStubError {
     ServerTransport,
+    RequestDispatcher,
     NotificationSink,
     StatusSource,
     WatchEventSource,
@@ -40,6 +39,7 @@ impl fmt::Display for DaemonBoundaryStubError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let message = match self {
             Self::ServerTransport => "daemon server transport scaffold is not wired",
+            Self::RequestDispatcher => "daemon request dispatcher scaffold is not wired",
             Self::NotificationSink => "daemon notification sink scaffold is not wired",
             Self::StatusSource => "daemon status source scaffold is not wired",
             Self::WatchEventSource => "daemon watch event source scaffold is not wired",
@@ -78,6 +78,27 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
         Err(daemon_boundary_stub_error(
             "daemon server transport stub is not implemented yet",
             DaemonBoundaryStubError::ServerTransport,
+        ))
+    }
+}
+
+/// Placeholder runtime dispatcher for daemon-owned protocol routing.
+#[derive(Debug, Default)]
+pub(crate) struct DaemonRequestDispatcher;
+
+impl DaemonRequestDispatcher {
+    pub(crate) const fn new() -> Self {
+        Self
+    }
+}
+
+impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
+
+impl boundary::RequestDispatcher for DaemonRequestDispatcher {
+    fn dispatch(&self, _request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+        Err(daemon_boundary_stub_error(
+            "daemon request dispatcher stub is not implemented yet",
+            DaemonBoundaryStubError::RequestDispatcher,
         ))
     }
 }

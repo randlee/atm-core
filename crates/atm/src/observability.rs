@@ -49,7 +49,11 @@ impl CliObservability {
         }
     }
 
-    pub fn emit_fatal_error(&self, stage: &'static str, error: &(dyn std::error::Error + 'static)) {
+    pub fn report_fatal_error(
+        &self,
+        stage: &'static str,
+        error: &(dyn std::error::Error + 'static),
+    ) {
         let (code, message) = if let Some(atm_error) = error.downcast_ref::<AtmError>() {
             (atm_error.code, atm_error.to_string())
         } else {
@@ -296,6 +300,6 @@ mod tests {
     #[test]
     fn emit_fatal_error_executes_secondary_failure_path_without_panicking() {
         let observability = CliObservability::from_test_port(FailingEmitObservability);
-        observability.emit_fatal_error("service", &AtmError::validation("boom"));
+        observability.report_fatal_error("service", &AtmError::validation("boom"));
     }
 }

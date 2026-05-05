@@ -1,12 +1,9 @@
 use crate::{
     DaemonConfigIngress, DaemonInboxExport, DaemonInboxIngress, DaemonNotificationSink,
-    DaemonReconcileCoordinator, DaemonStatusSource, FileWatchEventSource,
+    DaemonReconcileCoordinator, DaemonRequestDispatcher, DaemonStatusSource, FileWatchEventSource,
     LocalSocketServerTransport,
 };
-use atm_core::{
-    boundary::{RequestDispatcher, ServerTransport},
-    error::AtmError,
-};
+use atm_core::{boundary::ServerTransport, error::AtmError};
 use std::error::Error as StdError;
 use std::fmt;
 
@@ -31,6 +28,7 @@ impl StdError for RuntimeStartStubError {}
 #[derive(Debug, Default)]
 pub(crate) struct RuntimeComposition {
     server_transport: LocalSocketServerTransport,
+    request_dispatcher: DaemonRequestDispatcher,
     notification_sink: DaemonNotificationSink,
     status_source: DaemonStatusSource,
     watch_event_source: FileWatchEventSource,
@@ -44,6 +42,7 @@ impl RuntimeComposition {
     pub(crate) fn new() -> Self {
         Self {
             server_transport: LocalSocketServerTransport::new(),
+            request_dispatcher: DaemonRequestDispatcher::new(),
             notification_sink: DaemonNotificationSink::new(),
             status_source: DaemonStatusSource::new(),
             watch_event_source: FileWatchEventSource::new(),
@@ -60,6 +59,10 @@ impl RuntimeComposition {
 
     pub(crate) fn notification_sink(&self) -> &DaemonNotificationSink {
         &self.notification_sink
+    }
+
+    pub(crate) fn request_dispatcher(&self) -> &DaemonRequestDispatcher {
+        &self.request_dispatcher
     }
 
     pub(crate) fn status_source(&self) -> &DaemonStatusSource {
@@ -96,8 +99,8 @@ impl RuntimeComposition {
         .with_source(RuntimeStartStubError::RuntimeStartNotWired))
     }
 
-    pub(crate) fn serve(&self, dispatcher: &dyn RequestDispatcher) -> Result<(), AtmError> {
-        self.server_transport.serve(dispatcher)
+    pub(crate) fn serve(&self) -> Result<(), AtmError> {
+        self.server_transport.serve(&self.request_dispatcher)
     }
 }
 
