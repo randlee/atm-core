@@ -582,10 +582,13 @@ Review targets:
      - CLI public surface is thin and transport-driven
      - `ack` remains modeled inside `send`
      - thin clients do not require daemon-internal or sqlite-facing knowledge
+     - REQ-P-RUNTIME-001 preserved at `R.8` close:
+       - daemon auto-start when absent remains supported
+       - auto-start failure emits a typed actionable error rather than silent
+         fallback
+       - no in-process fallback is permitted
      - daemon lifecycle (`start` / `stop` / `health`) and all currently
        supported `atm` CLI commands remain functional at `R.8` close
-     - auto-start when the daemon is absent remains supported, with no silent
-       fallback to in-process execution
      - `lint_manifests.py` confirms the following ADR-001 dependency edges
        remain FORBIDDEN:
        - `atm -> atm-daemon`
