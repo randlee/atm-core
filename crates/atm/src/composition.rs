@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::fmt;
 use std::path::PathBuf;
 #[cfg(unix)]
@@ -5,9 +7,7 @@ use std::process::{Command, Stdio};
 use std::sync::Arc;
 #[cfg(unix)]
 use std::{
-    fs,
     io::{Read, Write},
-    os::unix::fs::MetadataExt,
     os::unix::net::UnixStream,
     thread,
     time::{Duration, Instant},
@@ -29,7 +29,6 @@ use atm_core::send::{SendOutcome, SendRequest};
 use crate::observability::CliObservability;
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
 pub(crate) struct SendCommandEntryPoint;
 
 impl SendCommandEntryPoint {
@@ -39,7 +38,6 @@ impl SendCommandEntryPoint {
 }
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
 pub(crate) struct ReceiveCommandEntryPoint;
 
 impl ReceiveCommandEntryPoint {
@@ -48,29 +46,18 @@ impl ReceiveCommandEntryPoint {
     }
 }
 
-#[cfg(unix)]
 #[derive(Debug)]
 struct LocalSocketClientTransport {
     socket_path: PathBuf,
     daemon_bin: PathBuf,
 }
 
-#[cfg(not(unix))]
-#[derive(Debug)]
-struct LocalSocketClientTransport;
-
 impl LocalSocketClientTransport {
-    #[cfg(unix)]
     fn new(socket_path: PathBuf, daemon_bin: PathBuf) -> Self {
         Self {
             socket_path,
             daemon_bin,
         }
-    }
-
-    #[cfg(not(unix))]
-    fn new(_socket_path: PathBuf, _daemon_bin: PathBuf) -> Self {
-        Self
     }
 
     fn ensure_daemon_available(&self) -> Result<(), AtmError> {
@@ -86,12 +73,8 @@ impl LocalSocketClientTransport {
             if self.try_connect().is_ok() {
                 return Ok(());
             }
-            let published_socket = fs::metadata(&self.socket_path)
-                .ok()
-                .map(|metadata| (metadata.dev(), metadata.ino()));
             self.spawn_daemon()?;
-            self.wait_for_socket_publish(published_socket)?;
-            let deadline = Instant::now() + Duration::from_millis(500);
+            let deadline = Instant::now() + Duration::from_secs(5);
             loop {
                 if self.try_connect().is_ok() {
                     return Ok(());
@@ -118,6 +101,14 @@ impl LocalSocketClientTransport {
             .with_source(source)
         })
     }
+
+    #[cfg(not(unix))]
+    fn try_connect(&self) -> Result<(), AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "ATM thin-client transport requires a Unix platform",
+        ))
+    }
+
     #[cfg(unix)]
     fn spawn_daemon(&self) -> Result<(), AtmError> {
         if !self.daemon_bin.is_file() {
@@ -146,27 +137,6 @@ impl LocalSocketClientTransport {
             .with_source(source)
         })?;
         Ok(())
-    }
-
-    #[cfg(unix)]
-    fn wait_for_socket_publish(
-        &self,
-        published_socket: Option<(u64, u64)>,
-    ) -> Result<(), AtmError> {
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while Instant::now() < deadline {
-            if let Ok(metadata) = fs::metadata(&self.socket_path) {
-                let observed_socket = (metadata.dev(), metadata.ino());
-                if published_socket != Some(observed_socket) {
-                    return Ok(());
-                }
-            }
-            thread::sleep(Duration::from_millis(25));
-        }
-        Err(AtmError::daemon_unavailable(format!(
-            "daemon socket was not published at {} after auto-start",
-            self.socket_path.display()
-        )))
     }
 
     #[cfg(unix)]
@@ -236,7 +206,6 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    #[allow(dead_code)]
     pub(crate) fn transport(&self) -> &(dyn ClientTransport + Send + Sync + 'a) {
         self.transport.as_ref()
     }
@@ -251,17 +220,14 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    #[allow(dead_code)]
     pub(crate) fn observability_port(&self) -> &(dyn ObservabilityPort + Send + Sync) {
         self.observability_port
     }
 
-    #[allow(dead_code)]
     pub(crate) fn send_command(&self) -> &SendCommandEntryPoint {
         &self.send_command
     }
 
-    #[allow(dead_code)]
     pub(crate) fn receive_command(&self) -> &ReceiveCommandEntryPoint {
         &self.receive_command
     }
