@@ -18,6 +18,7 @@ enum Scope {
 enum Directive {
     BoundaryAllow(Vec<String>),
     BoundaryInternalOnly,
+    BoundaryForbidExternalImpls,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,10 +68,11 @@ fn parse_directive(input: ParseStream<'_>) -> Result<Directive> {
             Ok(Directive::BoundaryAllow(rule_ids))
         }
         (Scope::Boundary, "internal_only") => Ok(Directive::BoundaryInternalOnly),
+        (Scope::Boundary, "forbid_external_impls") => Ok(Directive::BoundaryForbidExternalImpls),
         (Scope::Boundary, _) => Err(Error::new(
             action.span(),
             format!(
-                "unsupported boundary directive `{action_name}`; supported: allow(...), internal_only"
+                "unsupported boundary directive `{action_name}`; supported: allow(...), internal_only, forbid_external_impls"
             ),
         )),
     }
@@ -100,7 +102,7 @@ fn validate_attribute(input: &AttributeInput) -> Result<()> {
                     }
                 }
             }
-            Directive::BoundaryInternalOnly => {}
+            Directive::BoundaryInternalOnly | Directive::BoundaryForbidExternalImpls => {}
         }
     }
     Ok(())
@@ -148,9 +150,19 @@ mod tests {
     }
 
     #[test]
+    fn parses_boundary_forbid_external_impls() {
+        let parsed: AttributeInput = syn::parse2(quote!(boundary.forbid_external_impls)).unwrap();
+        assert_eq!(
+            parsed.directives,
+            vec![Directive::BoundaryForbidExternalImpls]
+        );
+    }
+
+    #[test]
     fn parses_multiple_directives() {
         let parsed: AttributeInput = syn::parse2(quote!(
             boundary.internal_only,
+            boundary.forbid_external_impls,
             boundary.allow("cycle.type_method_self_loop")
         ))
         .unwrap();
@@ -158,6 +170,7 @@ mod tests {
             parsed.directives,
             vec![
                 Directive::BoundaryInternalOnly,
+                Directive::BoundaryForbidExternalImpls,
                 Directive::BoundaryAllow(vec!["cycle.type_method_self_loop".to_string()]),
             ]
         );
@@ -174,6 +187,7 @@ mod tests {
         let expanded = expand_sc_lint(
             quote!(
                 boundary.internal_only,
+                boundary.forbid_external_impls,
                 boundary.allow("cycle.type_method_self_loop")
             ),
             quote!(

@@ -210,9 +210,11 @@ Current scaffold status:
     - crates
     - modules
     - types
+    - impls
     - variants
     - fields
     - traits
+    - trait references
     - functions
     - methods
   - emit a stable text findings summary
@@ -227,6 +229,7 @@ Current scaffold status:
   - enforce:
     - `SCB-BOUNDARY-001` internal_only visibility violation
     - `SCB-BOUNDARY-002` internal_only external reference
+    - `SCB-BOUNDARY-003` forbid_external_impls violation
 - `sc-lint-attributes` exists and already reserves the shared
   `#[sc_lint(...)]` namespace with compile-valid, no-op attribute parsing
 
@@ -278,6 +281,15 @@ The recommended canonical graph export is generic JSON:
   "edges": []
 }
 ```
+
+Current supported exports:
+
+- JSON
+- Turtle
+
+Current compatibility marker:
+
+- `schema_version = "0.1.0"`
 
 Do **not** target a specific graph database format in the MVP.
 

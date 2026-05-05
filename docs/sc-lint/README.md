@@ -8,6 +8,8 @@ Current contents:
   analyzer and the paired `sc-lint-attributes` plan
 - [`roadmap.md`](./roadmap.md) — decisions, rollout sequence, and what stays in
   Python vs what moves to Rust
+- [`graph-schema.md`](./graph-schema.md) — current graph/export contract and
+  rule-id inventory
 
 Current intended crate split:
 
@@ -38,9 +40,11 @@ Current scaffold status:
       - crates
       - modules
       - types
+      - impls
       - variants
       - fields
       - traits
+      - trait references
       - functions
       - methods
     - `#[sc_lint(...)]` attribute ingestion for `boundary.allow(...)` and
@@ -51,6 +55,7 @@ Current scaffold status:
     - boundary enforcement with:
       - `SCB-BOUNDARY-001` internal_only visibility violation
       - `SCB-BOUNDARY-002` internal_only external reference
+      - `SCB-BOUNDARY-003` forbid_external_impls violation
     - stable text/JSON findings output
     - graph export in:
       - JSON
@@ -66,5 +71,4 @@ Future documents that should also live here:
 
 - crate layout
 - rule inventory
-- JSON output schema
-- graph export schema
+- deeper RDF/Oxygraph integration notes

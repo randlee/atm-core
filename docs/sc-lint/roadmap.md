@@ -29,9 +29,10 @@ Current scaffold state:
   - initial `#[sc_lint(...)]` namespace reserved now
 - `sc-lint-boundary`
   - created
-  - crate/module/type/method graph scaffold in place now
+  - crate/module/type/impl graph scaffold in place now
   - initial `sc_lint` attribute ingestion in place now
   - first owner-graph cycle rules in place now
+  - first boundary enforcement rules in place now
 
 ### Analyzer strategy
 
@@ -102,7 +103,10 @@ The first useful deliverable is an internal analyzer that can:
 
 ## Immediate Rule Scope
 
-Only the cycle rule family is in the first sprint cut.
+The first sprint cut now includes:
+
+- cycle analysis
+- initial boundary enforcement
 
 The analyzer should be able to classify at least:
 
@@ -120,8 +124,10 @@ Current implementation status:
   - `trait_impl_self_loop`
   - `multi_owner_architectural_cycle`
   - `internal_only` visibility/reference enforcement
+  - `forbid_external_impls` enforcement
 - deferred:
   - dedicated value-container / recursive-model cycle policy
+  - additional boundary declarations beyond current attribute set
 
 ## What Is Explicitly Deferred
 
@@ -142,6 +148,7 @@ The intended rollout is:
    - CLI contract
    - JSON findings shape
    - graph export shape
+   - graph schema versioning
    - attribute namespace
 4. extract to a separate repository
 5. publish to crates.io

@@ -160,6 +160,7 @@ version = "1.1.2"
                 [
                     "sc-boundary failed",
                     "architectural cycle across owners: A, B",
+                    "full log: .just/logs/example.log",
                 ],
             ),
             ["architectural cycle across owners: A, B"],

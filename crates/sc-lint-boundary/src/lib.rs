@@ -60,6 +60,7 @@ pub enum GraphOutputFormat {
 pub struct FindingsReport {
     pub tool: &'static str,
     pub version: &'static str,
+    pub schema_version: &'static str,
     pub status: &'static str,
     pub scanned_crates: usize,
     pub findings: Vec<Finding>,
@@ -78,6 +79,7 @@ pub struct Finding {
 pub struct GraphExport {
     pub tool: &'static str,
     pub version: &'static str,
+    pub schema_version: &'static str,
     pub nodes: Vec<GraphNode>,
     pub edges: Vec<GraphEdge>,
 }
@@ -220,6 +222,7 @@ impl GraphBuilder {
         GraphExport {
             tool: "sc-lint-boundary",
             version: env!("CARGO_PKG_VERSION"),
+            schema_version: SC_LINT_SCHEMA_VERSION,
             nodes: self.nodes,
             edges: self.edges,
         }
@@ -230,12 +233,15 @@ impl GraphBuilder {
 enum ParsedLintDirective {
     BoundaryAllow(Vec<String>),
     BoundaryInternalOnly,
+    BoundaryForbidExternalImpls,
 }
 
 #[derive(Debug)]
 struct ParsedLintInput {
     directives: Vec<ParsedLintDirective>,
 }
+
+const SC_LINT_SCHEMA_VERSION: &str = "0.1.0";
 
 impl Parse for ParsedLintInput {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
@@ -261,6 +267,7 @@ pub fn analyze_workspace(options: &AnalyzeOptions) -> Result<FindingsReport> {
     }
     if filter.is_none() || matches!(filter, Some("boundaries" | "internal_only")) {
         findings.extend(analyze_internal_only(&graph));
+        findings.extend(analyze_forbid_external_impls(&graph));
     }
     findings.sort_by(|left, right| {
         finding_sort_key(left)
@@ -281,6 +288,7 @@ pub fn analyze_workspace(options: &AnalyzeOptions) -> Result<FindingsReport> {
     Ok(FindingsReport {
         tool: "sc-lint-boundary",
         version: env!("CARGO_PKG_VERSION"),
+        schema_version: SC_LINT_SCHEMA_VERSION,
         status,
         scanned_crates,
         findings,
@@ -748,6 +756,18 @@ fn ingest_module_items(
             Item::Impl(item_impl) => {
                 let owner_name = impl_owner_name(&item_impl.self_ty)?;
                 let owner_node_id = format!("{parent_module_id}::{owner_name}");
+                let trait_path = item_impl
+                    .trait_
+                    .as_ref()
+                    .map(|(_, path, _)| path_to_string(path));
+                let impl_node_id = if let Some(trait_path) = &trait_path {
+                    format!(
+                        "{owner_node_id}::impl::{}",
+                        hex_encode(trait_path.as_bytes())
+                    )
+                } else {
+                    format!("{owner_node_id}::impl::inherent")
+                };
 
                 if !builder.nodes.iter().any(|node| node.id == owner_node_id) {
                     builder.add_node(GraphNode {
@@ -771,6 +791,49 @@ fn ingest_module_items(
                     );
                 }
 
+                builder.add_node(GraphNode {
+                    id: impl_node_id.clone(),
+                    kind: "impl",
+                    label: trait_path
+                        .as_ref()
+                        .map(|path| format!("impl {path} for {owner_name}"))
+                        .unwrap_or_else(|| format!("impl {owner_name}")),
+                    visibility: None,
+                    package: context.package_name.clone(),
+                    target: Some(context.target_name.clone()),
+                    manifest_path: context.manifest_path.clone(),
+                    source_path: Some(source_path.display().to_string()),
+                    module_path: Some(module_path.to_string()),
+                    impl_kind: Some(if trait_path.is_some() {
+                        "trait"
+                    } else {
+                        "inherent"
+                    }),
+                    impl_trait: trait_path.clone(),
+                    attributes: Vec::new(),
+                });
+                builder.add_edge(
+                    "contains",
+                    parent_module_id.to_string(),
+                    impl_node_id.clone(),
+                );
+                builder.add_edge("targets", impl_node_id.clone(), owner_node_id.clone());
+
+                if let Some((_, path, _)) = &item_impl.trait_ {
+                    let trait_reference_path = path_to_string(path);
+                    let trait_target_node_id =
+                        resolve_reference_target(&impl_node_id, module_path, &trait_reference_path);
+                    ensure_trait_reference_node(
+                        builder,
+                        context,
+                        source_path,
+                        module_path,
+                        &trait_target_node_id,
+                        &trait_reference_path,
+                    );
+                    builder.add_edge("implements", impl_node_id.clone(), trait_target_node_id);
+                }
+
                 for impl_item in item_impl.items {
                     if let ImplItem::Fn(method) = impl_item {
                         let method_id = format!("{owner_node_id}::{}", method.sig.ident);
@@ -789,13 +852,11 @@ fn ingest_module_items(
                             } else {
                                 "inherent"
                             }),
-                            impl_trait: item_impl
-                                .trait_
-                                .as_ref()
-                                .map(|(_, path, _)| path_to_string(path)),
+                            impl_trait: trait_path.clone(),
                             attributes: parse_lint_attributes(&method.attrs)?,
                         });
                         builder.add_edge("declares", owner_node_id.clone(), method_id.clone());
+                        builder.add_edge("contains", impl_node_id.clone(), method_id.clone());
                         add_reference_edges(
                             builder,
                             &method_id,
@@ -925,6 +986,34 @@ fn add_field_nodes(
     }
 }
 
+fn ensure_trait_reference_node(
+    builder: &mut GraphBuilder,
+    context: &TargetContext,
+    source_path: &Path,
+    module_path: &str,
+    trait_node_id: &str,
+    trait_label: &str,
+) {
+    if builder.nodes.iter().any(|node| node.id == trait_node_id) {
+        return;
+    }
+
+    builder.add_node(GraphNode {
+        id: trait_node_id.to_string(),
+        kind: "trait_ref",
+        label: trait_label.to_string(),
+        visibility: None,
+        package: context.package_name.clone(),
+        target: Some(context.target_name.clone()),
+        manifest_path: context.manifest_path.clone(),
+        source_path: Some(source_path.display().to_string()),
+        module_path: Some(module_path.to_string()),
+        impl_kind: None,
+        impl_trait: None,
+        attributes: Vec::new(),
+    });
+}
+
 fn add_reference_edges(
     builder: &mut GraphBuilder,
     source_node_id: &str,
@@ -1007,6 +1096,13 @@ fn parse_lint_attributes(attrs: &[Attribute]) -> Result<Vec<LintAttribute>> {
                         values: Vec::new(),
                     });
                 }
+                ParsedLintDirective::BoundaryForbidExternalImpls => {
+                    parsed.push(LintAttribute {
+                        scope: "boundary",
+                        name: "forbid_external_impls",
+                        values: Vec::new(),
+                    });
+                }
             }
         }
     }
@@ -1042,10 +1138,13 @@ fn parse_directive(input: ParseStream<'_>) -> syn::Result<ParsedLintDirective> {
             Ok(ParsedLintDirective::BoundaryAllow(values))
         }
         ("boundary", "internal_only") => Ok(ParsedLintDirective::BoundaryInternalOnly),
+        ("boundary", "forbid_external_impls") => {
+            Ok(ParsedLintDirective::BoundaryForbidExternalImpls)
+        }
         ("boundary", _) => Err(syn::Error::new(
             action.span(),
             format!(
-                "unsupported boundary directive `{action_name}`; supported: allow(...), internal_only"
+                "unsupported boundary directive `{action_name}`; supported: allow(...), internal_only, forbid_external_impls"
             ),
         )),
         _ => Err(syn::Error::new(
@@ -1224,6 +1323,9 @@ fn analyze_cycles(graph: &GraphExport, _rule_filter: Option<&str>) -> Vec<Findin
                     .get(&source_node_id)
                     .and_then(|node| node.impl_trait.clone())
                     .unwrap_or_else(|| "unknown_trait".to_string());
+                if is_conversion_like_trait_impl(&trait_name) {
+                    continue;
+                }
                 let entry = trait_nodes.entry(trait_name).or_default();
                 for edge in source_edges {
                     for node_id in &edge.node_ids {
@@ -1255,6 +1357,15 @@ fn analyze_cycles(graph: &GraphExport, _rule_filter: Option<&str>) -> Vec<Findin
     }
 
     findings
+}
+
+fn is_conversion_like_trait_impl(trait_name: &str) -> bool {
+    trait_name.contains("From<")
+        || trait_name.contains("TryFrom<")
+        || trait_name.ends_with("FromStr")
+        || trait_name.ends_with("Default")
+        || trait_name.starts_with("Parse")
+        || trait_name.contains("Deserialize<")
 }
 
 fn analyze_internal_only(graph: &GraphExport) -> Vec<Finding> {
@@ -1328,10 +1439,56 @@ fn analyze_internal_only(graph: &GraphExport) -> Vec<Finding> {
     findings
 }
 
+fn analyze_forbid_external_impls(graph: &GraphExport) -> Vec<Finding> {
+    let node_map: BTreeMap<_, _> = graph
+        .nodes
+        .iter()
+        .map(|node| (node.id.clone(), node))
+        .collect();
+    let mut findings = Vec::new();
+
+    for trait_node in &graph.nodes {
+        let has_forbid_external_impls = trait_node
+            .attributes
+            .iter()
+            .any(|attr| attr.scope == "boundary" && attr.name == "forbid_external_impls");
+        if !has_forbid_external_impls {
+            continue;
+        }
+
+        for edge in graph
+            .edges
+            .iter()
+            .filter(|edge| edge.kind == "implements" && edge.to == trait_node.id)
+        {
+            let Some(impl_node) = node_map.get(&edge.from) else {
+                continue;
+            };
+            if impl_node.module_path == trait_node.module_path {
+                continue;
+            }
+            findings.push(Finding {
+                rule_id: "SCB-BOUNDARY-003".to_string(),
+                kind: "forbid_external_impls_violation".to_string(),
+                message: format!(
+                    "trait {} forbids external impls but is implemented from module {}",
+                    trait_node.id,
+                    impl_node.module_path.as_deref().unwrap_or("unknown_module")
+                ),
+                owner_ids: vec![trait_node.id.clone()],
+                node_ids: vec![impl_node.id.clone(), trait_node.id.clone()],
+            });
+        }
+    }
+
+    findings.sort_by(|left, right| left.message.cmp(&right.message));
+    findings
+}
+
 fn finding_is_failure(finding: &Finding) -> bool {
     matches!(
         finding.rule_id.as_str(),
-        "SCB-CYCLE-001" | "SCB-BOUNDARY-001" | "SCB-BOUNDARY-002"
+        "SCB-CYCLE-001" | "SCB-BOUNDARY-001" | "SCB-BOUNDARY-002" | "SCB-BOUNDARY-003"
     )
 }
 
@@ -1559,6 +1716,10 @@ fn render_graph_turtle(graph: &GraphExport) -> String {
     let mut lines = vec![
         "@prefix sc: <urn:sc-lint-boundary:predicate:> .".to_string(),
         "@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .".to_string(),
+        format!(
+            "<urn:sc-lint-boundary:graph> sc:schemaVersion {} .",
+            turtle_string_literal(graph.schema_version)
+        ),
         "".to_string(),
     ];
 
@@ -1693,6 +1854,7 @@ mod tests {
         let report = super::FindingsReport {
             tool: "sc-lint-boundary",
             version: "0.1.0",
+            schema_version: "0.1.0",
             status: "pass",
             scanned_crates: 2,
             findings: Vec::new(),
@@ -1708,12 +1870,14 @@ mod tests {
         let graph = GraphExport {
             tool: "sc-lint-boundary",
             version: "0.1.0",
+            schema_version: "0.1.0",
             nodes: Vec::new(),
             edges: Vec::new(),
         };
         let json = serde_json::to_string(&graph).unwrap();
         assert!(json.contains("\"tool\":\"sc-lint-boundary\""));
         assert!(json.contains("\"version\":\"0.1.0\""));
+        assert!(json.contains("\"schema_version\":\"0.1.0\""));
     }
 
     #[test]
@@ -1890,6 +2054,12 @@ mod tests {
                 && edge.from == "crate::example::example::module::crate::Wrapper::field::value"
                 && edge.to == "crate::example::example::module::crate::Inner"
         }));
+        assert!(graph.edges.iter().any(|edge| {
+            edge.kind == "contains"
+                && edge.from == "crate::example::example::module::crate::Choice::variant::Pair"
+                && edge.to
+                    == "crate::example::example::module::crate::Choice::variant::Pair::field::0"
+        }));
     }
 
     #[test]
@@ -1909,6 +2079,7 @@ mod tests {
         assert!(turtle.contains("rdf:type sc:type ."));
         assert!(turtle.contains("sc:visibility \"public\" ."));
         assert!(turtle.contains("sc:label \"Example\" ."));
+        assert!(turtle.contains("sc:schemaVersion \"0.1.0\" ."));
     }
 
     #[test]
@@ -2285,6 +2456,38 @@ mod tests {
     }
 
     #[test]
+    fn does_not_flag_conversion_like_trait_impl_self_loop() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                pub struct Loop;
+
+                impl core::str::FromStr for Loop {
+                    type Err = ();
+
+                    fn from_str(_s: &str) -> Result<Self, Self::Err> {
+                        Ok(Loop)
+                    }
+                }
+            "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("cycles".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "pass");
+        assert!(report.findings.is_empty());
+    }
+
+    #[test]
     fn reports_multi_owner_architectural_cycle_as_failure() {
         let fixture = WorkspaceFixture::new();
         fixture.write_workspace_root();
@@ -2440,6 +2643,87 @@ mod tests {
                 struct Secret;
 
                 struct Wrapper(Secret);
+            "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("boundaries".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "pass");
+        assert!(report.findings.is_empty());
+    }
+
+    #[test]
+    fn fails_when_forbid_external_impls_trait_is_implemented_elsewhere() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source("example", "lib.rs", "mod api; mod impls;");
+        fixture.write_source(
+            "example",
+            "api.rs",
+            r#"
+                #[sc_lint(boundary.forbid_external_impls)]
+                pub trait Tokenize {
+                    fn tokenize(&self) -> usize;
+                }
+
+                pub struct Thing;
+            "#,
+        );
+        fixture.write_source(
+            "example",
+            "impls.rs",
+            r#"
+                impl crate::api::Tokenize for crate::api::Thing {
+                    fn tokenize(&self) -> usize {
+                        1
+                    }
+                }
+            "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("boundaries".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "fail");
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| f.rule_id == "SCB-BOUNDARY-003")
+        );
+    }
+
+    #[test]
+    fn allows_forbid_external_impls_trait_impl_in_same_module() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                #[sc_lint(boundary.forbid_external_impls)]
+                pub trait Tokenize {
+                    fn tokenize(&self) -> usize;
+                }
+
+                pub struct Thing;
+
+                impl Tokenize for Thing {
+                    fn tokenize(&self) -> usize {
+                        1
+                    }
+                }
             "#,
         );
 

@@ -129,7 +129,11 @@ def extract_count(lines: list[str]) -> int | None:
 
 def preview_lines_for_task(task_name: str, lines: list[str]) -> list[str]:
     if task_name == "sc-boundary":
-        filtered = [line for line in lines if line.strip() != "sc-boundary failed"]
+        filtered = [
+            line
+            for line in lines
+            if line.strip() != "sc-boundary failed" and not line.strip().startswith("full log:")
+        ]
         return filtered or lines
     if task_name != "identities":
         return lines
