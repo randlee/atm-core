@@ -16,6 +16,7 @@ use syn::Ident;
 use syn::ImplItem;
 use syn::Item;
 use syn::LitStr;
+use syn::Receiver;
 use syn::Token;
 use syn::Type;
 use syn::parse::Parse;
@@ -95,6 +96,27 @@ pub struct GraphEdge {
     pub kind: &'static str,
     pub from: String,
     pub to: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum ReferenceKind {
+    Type,
+    Expr,
+}
+
+impl ReferenceKind {
+    fn edge_kind(self) -> &'static str {
+        match self {
+            Self::Type => "references_type",
+            Self::Expr => "references_expr",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct CollectedReference {
+    path: String,
+    kind: ReferenceKind,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -262,7 +284,7 @@ fn collect_owner_names(items: &[Item]) -> BTreeSet<String> {
 struct ReferenceCollector {
     owner_name: Option<String>,
     local_owner_names: BTreeSet<String>,
-    references: BTreeSet<String>,
+    references: BTreeSet<CollectedReference>,
 }
 
 impl ReferenceCollector {
@@ -274,11 +296,11 @@ impl ReferenceCollector {
         }
     }
 
-    fn into_references(self) -> BTreeSet<String> {
+    fn into_references(self) -> BTreeSet<CollectedReference> {
         self.references
     }
 
-    fn maybe_insert_path(&mut self, path: &syn::Path) {
+    fn maybe_insert_path(&mut self, path: &syn::Path, kind: ReferenceKind) {
         let mut segments: Vec<String> = path
             .segments
             .iter()
@@ -291,8 +313,15 @@ impl ReferenceCollector {
         if segments[0] == "Self" {
             if let Some(owner_name) = &self.owner_name {
                 segments[0] = owner_name.clone();
-                self.references.insert(segments.join("::"));
+                self.references.insert(CollectedReference {
+                    path: segments.join("::"),
+                    kind,
+                });
             }
+            return;
+        }
+
+        if matches!(kind, ReferenceKind::Expr) && segments.len() == 1 && segments[0] == "self" {
             return;
         }
 
@@ -303,28 +332,33 @@ impl ReferenceCollector {
             || self.local_owner_names.contains(last);
 
         if should_collect {
-            self.references.insert(segments.join("::"));
+            self.references.insert(CollectedReference {
+                path: segments.join("::"),
+                kind,
+            });
         }
     }
 }
 
 impl<'ast> Visit<'ast> for ReferenceCollector {
     fn visit_type_path(&mut self, type_path: &'ast syn::TypePath) {
-        self.maybe_insert_path(&type_path.path);
+        self.maybe_insert_path(&type_path.path, ReferenceKind::Type);
         syn::visit::visit_type_path(self, type_path);
     }
 
     fn visit_expr_path(&mut self, expr_path: &'ast syn::ExprPath) {
-        self.maybe_insert_path(&expr_path.path);
+        self.maybe_insert_path(&expr_path.path, ReferenceKind::Expr);
         syn::visit::visit_expr_path(self, expr_path);
     }
+
+    fn visit_receiver(&mut self, _receiver: &'ast Receiver) {}
 }
 
 fn collect_references_with(
     local_owner_names: &BTreeSet<String>,
     owner_name: Option<&str>,
     visit: impl FnOnce(&mut ReferenceCollector),
-) -> BTreeSet<String> {
+) -> BTreeSet<CollectedReference> {
     let mut collector = ReferenceCollector::new(local_owner_names, owner_name);
     visit(&mut collector);
     collector.into_references()
@@ -706,11 +740,16 @@ fn add_reference_edges(
     builder: &mut GraphBuilder,
     source_node_id: &str,
     module_path: &str,
-    referenced_paths: BTreeSet<String>,
+    referenced_paths: BTreeSet<CollectedReference>,
 ) {
-    for referenced_path in referenced_paths {
+    for referenced in referenced_paths {
         let target_node_id =
-            resolve_reference_target(source_node_id, module_path, &referenced_path);
+            resolve_reference_target(source_node_id, module_path, &referenced.path);
+        builder.add_edge(
+            referenced.kind.edge_kind(),
+            source_node_id.to_string(),
+            target_node_id.clone(),
+        );
         builder.add_edge("references", source_node_id.to_string(), target_node_id);
     }
 }
@@ -968,6 +1007,15 @@ fn analyze_cycles(graph: &GraphExport, _rule_filter: Option<&str>) -> Vec<Findin
                     && edge.source_impl_kind != Some("trait")
             });
             if is_type_method_self_loop {
+                let has_expr_ref = source_edges
+                    .iter()
+                    .any(|edge| edge.reference_kind == ReferenceKind::Expr);
+                let has_type_ref = source_edges
+                    .iter()
+                    .any(|edge| edge.reference_kind == ReferenceKind::Type);
+                if !has_expr_ref || has_type_ref {
+                    continue;
+                }
                 for edge in source_edges {
                     for node_id in &edge.node_ids {
                         inherent_nodes.insert(node_id.clone());
@@ -1028,6 +1076,7 @@ struct OwnerRefEdge {
     source_kind: &'static str,
     source_node_id: String,
     source_impl_kind: Option<&'static str>,
+    reference_kind: ReferenceKind,
     node_ids: Vec<String>,
 }
 
@@ -1044,7 +1093,11 @@ fn build_owner_graph<'a>(
 ) -> OwnerGraph {
     let mut owner_graph = OwnerGraph::default();
 
-    for edge in graph.edges.iter().filter(|edge| edge.kind == "references") {
+    for edge in graph
+        .edges
+        .iter()
+        .filter(|edge| matches!(edge.kind, "references_type" | "references_expr"))
+    {
         let Some(source_node) = node_map.get(&edge.from) else {
             continue;
         };
@@ -1066,6 +1119,11 @@ fn build_owner_graph<'a>(
             source_kind: source_node.kind,
             source_node_id: source_node.id.clone(),
             source_impl_kind: source_node.impl_kind,
+            reference_kind: match edge.kind {
+                "references_type" => ReferenceKind::Type,
+                "references_expr" => ReferenceKind::Expr,
+                _ => continue,
+            },
             node_ids: vec![source_node.id.clone(), target_node.id.clone()],
         };
 
@@ -1367,6 +1425,16 @@ mod tests {
                     == "crate::example::example::module::crate::inline_mod::InlineType::helper"
                 && edge.to == "crate::example::example::module::crate::inline_mod::InlineType"
         }));
+        assert!(graph.edges.iter().any(|edge| {
+            edge.kind == "references_expr"
+                && edge.from
+                    == "crate::example::example::module::crate::inline_mod::InlineType::helper"
+                && edge.to == "crate::example::example::module::crate::inline_mod::InlineType"
+        }));
+        assert!(!graph.edges.iter().any(|edge| {
+            edge.from == "crate::example::example::module::crate::inline_mod::InlineType::helper"
+                && edge.to == "crate::example::example::module::crate::inline_mod::self"
+        }));
     }
 
     #[test]
@@ -1440,8 +1508,9 @@ mod tests {
                 pub struct Loop;
 
                 impl Loop {
-                    pub fn build() -> Loop {
-                        Loop
+                    pub fn metric() -> usize {
+                        let _ = Loop;
+                        1
                     }
                 }
             "#,
@@ -1465,6 +1534,96 @@ mod tests {
     }
 
     #[test]
+    fn does_not_flag_constructor_factory_self_loop() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                pub struct Loop;
+
+                impl Loop {
+                    pub fn build() -> Loop {
+                        Loop
+                    }
+                }
+            "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("cycles".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "pass");
+        assert!(report.findings.is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_receiver_only_method_as_self_loop() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                pub struct Wrapper(String);
+
+                impl Wrapper {
+                    pub fn as_str(&self) -> &str {
+                        &self.0
+                    }
+                }
+            "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("cycles".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "pass");
+        assert!(report.findings.is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_signature_only_self_return_as_self_loop() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                pub struct Loop;
+
+                impl Loop {
+                    pub fn placeholder() -> Self {
+                        todo!()
+                    }
+                }
+            "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("cycles".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "pass");
+        assert!(report.findings.is_empty());
+    }
+
+    #[test]
     fn suppresses_type_method_self_loop_when_allowed() {
         let fixture = WorkspaceFixture::new();
         fixture.write_workspace_root();
@@ -1477,8 +1636,9 @@ mod tests {
                 pub struct Loop;
 
                 impl Loop {
-                    pub fn build() -> Loop {
-                        Loop
+                    pub fn metric() -> usize {
+                        let _ = Loop;
+                        1
                     }
                 }
             "#,
@@ -1508,8 +1668,9 @@ mod tests {
 
                 impl Loop {
                     #[sc_lint(boundary.allow("cycle.type_method_self_loop"))]
-                    pub fn build() -> Loop {
-                        Loop
+                    pub fn metric() -> usize {
+                        let _ = Loop;
+                        1
                     }
                 }
             "#,
@@ -1539,12 +1700,14 @@ mod tests {
 
                 impl Loop {
                     #[sc_lint(boundary.allow("cycle.type_method_self_loop"))]
-                    pub fn allowed() -> Loop {
-                        Loop
+                    pub fn allowed() -> usize {
+                        let _ = Loop;
+                        1
                     }
 
-                    pub fn flagged() -> Loop {
-                        Loop
+                    pub fn flagged() -> usize {
+                        let _ = Loop;
+                        2
                     }
                 }
             "#,
@@ -1586,8 +1749,9 @@ mod tests {
                 pub struct Loop;
 
                 impl Loop {
-                    pub fn build() -> Loop {
-                        Loop
+                    pub fn metric() -> usize {
+                        let _ = Loop;
+                        1
                     }
                 }
 
@@ -1789,7 +1953,7 @@ mod tests {
     }
 
     #[test]
-    fn classifies_newtype_helper_self_loop_with_current_generic_rule() {
+    fn does_not_flag_newtype_factory_self_loop() {
         let fixture = WorkspaceFixture::new();
         fixture.write_workspace_root();
         fixture.write_package_manifest("example");
@@ -1819,8 +1983,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(report.status, "pass");
-        assert_eq!(report.findings.len(), 1);
-        assert_eq!(report.findings[0].rule_id, "SCB-CYCLE-002");
+        assert!(report.findings.is_empty());
     }
 
     #[test]
