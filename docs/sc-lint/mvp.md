@@ -203,11 +203,24 @@ Current scaffold status:
 
 - `sc-lint-boundary` exists and can already:
   - discover workspace crates through `cargo_metadata`
+  - traverse inline and file-backed modules through `syn`
+  - emit graph nodes for:
+    - crates
+    - modules
+    - types
+    - traits
+    - functions
+    - methods
   - emit a stable text findings summary
   - emit JSON findings
-  - export an initial crate-level graph JSON skeleton
+  - export graph JSON
 - `sc-lint-attributes` exists and already reserves the shared
   `#[sc_lint(...)]` namespace with compile-valid, no-op attribute parsing
+
+Current implemented attribute ingestion in the analyzer:
+
+- `#[sc_lint(boundary.allow("..."))]`
+- `#[sc_lint(boundary.internal_only)]`
 
 ### JSON findings envelope
 

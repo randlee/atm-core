@@ -29,7 +29,8 @@ Current scaffold state:
   - initial `#[sc_lint(...)]` namespace reserved now
 - `sc-lint-boundary`
   - created
-  - initial discovery/output scaffold in place now
+  - crate/module/type/method graph scaffold in place now
+  - initial `sc_lint` attribute ingestion in place now
 
 ### Analyzer strategy
 

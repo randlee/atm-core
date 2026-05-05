@@ -33,8 +33,12 @@ Current scaffold status:
   - versioned independently at `0.1.0`
   - currently provides:
     - workspace discovery through `cargo_metadata`
+    - module-driven source traversal through `syn`
+    - graph nodes for crates/modules/types/traits/functions/methods
+    - `#[sc_lint(...)]` attribute ingestion for `boundary.allow(...)` and
+      `boundary.internal_only`
     - stable text/JSON findings output scaffolding
-    - initial graph JSON export scaffolding
+    - graph JSON export scaffolding
 
 Future documents that should also live here:
 
