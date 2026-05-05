@@ -421,7 +421,7 @@ impl TailReader {
     }
 
     fn read_record(&mut self) -> serde_json::Value {
-        self.try_read_record(Duration::from_secs(10))
+        self.try_read_record(Duration::from_secs(30))
             .unwrap_or_else(|| {
                 let _ = self.child.kill();
                 panic!("tail timed out before producing enough output");

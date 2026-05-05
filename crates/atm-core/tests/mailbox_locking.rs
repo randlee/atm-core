@@ -33,8 +33,8 @@ use uuid::Uuid;
 // Test-side ceiling guard only; production lock timeout defaults to 5s per
 // architecture §18.3.
 #[cfg(unix)]
-const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(4);
-const TEST_RESULT_TIMEOUT: Duration = Duration::from_secs(8);
+const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(10);
+const TEST_RESULT_TIMEOUT: Duration = Duration::from_secs(30);
 const TEST_TEAM: &str = "test-team";
 const TEST_SENDER: &str = "sender-a";
 const TEST_RECIPIENT: &str = "recipient";

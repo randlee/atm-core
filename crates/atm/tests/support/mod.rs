@@ -248,20 +248,10 @@ fn ensure_test_daemon_launcher(home_dir: &std::path::Path) -> PathBuf {
         return sibling;
     }
 
-    let workspace_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("target")
-        .join("debug")
-        .join(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX));
-    if workspace_binary.exists() {
-        return workspace_binary;
-    }
-
     let _ = home_dir;
     panic!(
-        "expected hermetic test daemon binary at one of: {:?}, {}, {}",
+        "expected hermetic test daemon binary at one of: {:?}, {}",
         hermetic_daemon,
-        sibling.display(),
-        workspace_binary.display()
+        sibling.display()
     );
 }
