@@ -239,10 +239,10 @@ enforcement:
     - no_watch_io_outside_boundary
 
 status:
-  state: stub_landed
+  state: active
   notes:
     - raw watch event capture stays runtime-private
-    - stub implementation currently lives at crate root and is assembled through atm_daemon::composition
+    - crate-root daemon adapter delegates through atm_core::boundary_support and is assembled through atm_daemon::composition
 ```
 
 Purpose:
@@ -317,10 +317,10 @@ enforcement:
     - no_store_or_transport_bypass_in_reconcile
 
 status:
-  state: stub_landed
+  state: active
   notes:
     - runtime reconcile remains separate from raw watch source implementation
-    - stub implementation currently lives at crate root and is assembled through atm_daemon::composition
+    - crate-root daemon adapter delegates through atm_core::boundary_support and is assembled through atm_daemon::composition
 ```
 
 Purpose:
@@ -474,9 +474,9 @@ enforcement:
     - no_direct_config_parser_calls
 
 status:
-  state: stub_landed
+  state: active
   notes:
-    - atm_core owns the contract; daemon runtime now supplies the crate-root stub adapter
+    - atm_core owns the contract; daemon runtime now supplies the crate-root support-backed adapter
     - composition must continue to avoid a direct atm-daemon -> atm-rusqlite dependency
 ```
 
@@ -484,7 +484,7 @@ Purpose:
 - Owns the daemon runtime adapter behind the ConfigIngress contract.
 
 Notes:
-- This is landed as a crate-root scaffold and remains unwired until a follow-on sprint.
+- This adapter is wired through `atm_core::boundary_support` while retained service cutover remains a later sprint concern.
 
 ## DaemonInboxIngressAdapter
 
@@ -554,9 +554,9 @@ enforcement:
     - no_direct_mailbox_helper_calls
 
 status:
-  state: stub_landed
+  state: active
   notes:
-    - atm_core owns the contract; daemon runtime now supplies the crate-root stub adapter
+    - atm_core owns the contract; daemon runtime now supplies the crate-root support-backed adapter
     - watcher-driven reconcile must continue to route through this boundary rather than directly to mailbox helpers
 ```
 
@@ -564,7 +564,7 @@ Purpose:
 - Owns the daemon runtime adapter behind the InboxIngress contract.
 
 Notes:
-- This is landed as a crate-root scaffold and remains unwired until a follow-on sprint.
+- This adapter is wired through `atm_core::boundary_support` while retained service cutover remains a later sprint concern.
 
 ## DaemonInboxExportAdapter
 
@@ -634,9 +634,9 @@ enforcement:
     - no_direct_mailbox_helper_calls
 
 status:
-  state: stub_landed
+  state: active
   notes:
-    - atm_core owns the contract; daemon runtime now supplies the crate-root stub adapter
+    - atm_core owns the contract; daemon runtime now supplies the crate-root support-backed adapter
     - send and receive compatibility writes must stay behind this adapter rather than reaching mailbox helpers directly
 ```
 
@@ -644,7 +644,7 @@ Purpose:
 - Owns the daemon runtime adapter behind the InboxExport contract.
 
 Notes:
-- This is landed as a crate-root scaffold and remains unwired until a follow-on sprint.
+- This adapter is wired through `atm_core::boundary_support` while retained service cutover remains a later sprint concern.
 
 ## DaemonNotificationSinkAdapter
 
@@ -712,9 +712,9 @@ enforcement:
     - no_process_spawn_outside_notification_boundary
 
 status:
-  state: stub_landed
+  state: active
   notes:
-    - stub implementation currently lives at crate root and is assembled through atm_daemon::composition
+    - crate-root daemon adapter delegates through atm_core::boundary_support and is assembled through atm_daemon::composition
 ```
 
 Purpose:
@@ -788,9 +788,9 @@ enforcement:
     - no_status_leakage_into_roster_store
 
 status:
-  state: stub_landed
+  state: active
   notes:
-    - stub implementation currently lives at crate root and is assembled through atm_daemon::composition
+    - crate-root daemon adapter delegates through atm_core::boundary_support and is assembled through atm_daemon::composition
 ```
 
 Purpose:
