@@ -337,7 +337,7 @@ fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         outcome: "ok",
         team,
         agent: actor.clone(),
-        sender: actor.clone(),
+        sender: actor,
         message_id: Some(request.message_id),
         requires_ack: false,
         dry_run: false,

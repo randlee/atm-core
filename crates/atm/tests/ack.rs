@@ -9,6 +9,7 @@ use atm_core::schema::{
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use chrono::{Duration, Utc};
 use serde_json::Value;
+use serial_test::serial;
 use support::{
     TEST_LEAD, TEST_LEAD_ADDRESS, TEST_ORIGIN, TEST_SENDER, TEST_SENDER_ADDRESS, TEST_TEAM,
 };
@@ -29,6 +30,7 @@ fn parse_inbox_values(raw: &str) -> Vec<Value> {
 }
 
 #[test]
+#[serial]
 fn test_ack_transitions_pending_ack_and_appends_reply() {
     let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let message_id = Uuid::new_v4();
@@ -101,6 +103,7 @@ fn test_ack_transitions_pending_ack_and_appends_reply() {
 }
 
 #[test]
+#[serial]
 fn test_ack_updates_origin_inbox_file() {
     let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let message_id = Uuid::new_v4();
@@ -137,6 +140,7 @@ fn test_ack_updates_origin_inbox_file() {
 }
 
 #[test]
+#[serial]
 fn test_ack_emits_retained_log_record() {
     let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let message_id = Uuid::new_v4();
@@ -175,6 +179,7 @@ fn test_ack_emits_retained_log_record() {
 }
 
 #[test]
+#[serial]
 fn test_ack_runs_post_send_hook_with_expected_payload() {
     let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let message_id = Uuid::new_v4();
@@ -220,6 +225,7 @@ fn test_ack_runs_post_send_hook_with_expected_payload() {
 }
 
 #[test]
+#[serial]
 fn test_ack_post_send_hook_failure_surfaces_warning() {
     let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let message_id = Uuid::new_v4();
@@ -258,6 +264,7 @@ fn test_ack_post_send_hook_failure_surfaces_warning() {
 }
 
 #[test]
+#[serial]
 fn test_ack_rejects_already_acknowledged_message() {
     let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let message_id = Uuid::new_v4();
@@ -284,6 +291,7 @@ fn test_ack_rejects_already_acknowledged_message() {
 }
 
 #[test]
+#[serial]
 fn test_ack_rejects_message_that_is_not_pending() {
     let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let message_id = Uuid::new_v4();

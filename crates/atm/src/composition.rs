@@ -108,6 +108,7 @@ impl LocalSocketClientTransport {
         ))
     }
 
+    #[cfg(unix)]
     fn spawn_daemon(&self) -> Result<(), AtmError> {
         if !self.daemon_bin.is_file() {
             return Err(

@@ -183,7 +183,7 @@ fn clear_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         outcome: if query.dry_run { "dry_run" } else { "ok" },
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
-        sender: actor.clone(),
+        sender: actor,
         message_id: None,
         requires_ack: false,
         dry_run: query.dry_run,
@@ -328,10 +328,9 @@ fn apply_removals(source_files: &mut [SourceFile], removable: &HashSet<(PathBuf,
 
 #[cfg(test)]
 mod tests {
-    use std::ffi::{OsStr, OsString};
-    use std::sync::{Mutex, OnceLock};
-    use std::{panic, panic::AssertUnwindSafe};
+    use std::{ffi::OsString, panic, panic::AssertUnwindSafe};
 
+    use crate::test_support::{EnvGuard, env_lock, remove_env_var, set_env_var};
     use serial_test::serial;
     #[test]
     #[serial]
@@ -353,44 +352,5 @@ mod tests {
             Some(OsString::from("original"))
         );
         remove_env_var("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD");
-    }
-
-    fn env_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-    }
-
-    struct EnvGuard {
-        key: &'static str,
-        original: Option<OsString>,
-    }
-
-    impl EnvGuard {
-        fn set_raw(key: &'static str, value: &str) -> Self {
-            let original = std::env::var_os(key);
-            set_env_var(key, value);
-            Self { key, original }
-        }
-    }
-
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            match self.original.take() {
-                Some(value) => set_env_var(self.key, value),
-                None => remove_env_var(self.key),
-            }
-        }
-    }
-
-    fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
-        // SAFETY: this test module uses #[serial] before mutating the process
-        // environment, so these mutations are serialized within this process.
-        unsafe { std::env::set_var(key, value) }
-    }
-
-    fn remove_env_var<K: AsRef<OsStr>>(key: K) {
-        // SAFETY: this test module uses #[serial] before mutating the process
-        // environment, so these mutations are serialized within this process.
-        unsafe { std::env::remove_var(key) }
     }
 }

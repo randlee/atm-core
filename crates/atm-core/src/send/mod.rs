@@ -289,7 +289,7 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         outcome: command_outcome,
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
-        sender: canonical_sender.clone(),
+        sender: canonical_sender,
         message_id: Some(outcome.message_id),
         requires_ack: outcome.requires_ack,
         dry_run: outcome.dry_run,
