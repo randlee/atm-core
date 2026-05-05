@@ -1072,7 +1072,7 @@ impl Fixture {
             .current_dir(self.tempdir.path())
             .output()
             .expect("run atm without identity");
-        if !crate::support::is_daemon_start_transient(&output) {
+        if output.status.success() || !crate::support::is_daemon_start_transient(&output) {
             return output;
         }
 
@@ -1094,7 +1094,7 @@ impl Fixture {
             first.env(key, value);
         }
         let output = first.output().expect("run atm");
-        if !crate::support::is_daemon_start_transient(&output) {
+        if output.status.success() || !crate::support::is_daemon_start_transient(&output) {
             return output;
         }
 

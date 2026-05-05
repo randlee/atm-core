@@ -48,18 +48,29 @@ impl ReceiveCommandEntryPoint {
     }
 }
 
+#[cfg(unix)]
 #[derive(Debug)]
 struct LocalSocketClientTransport {
     socket_path: PathBuf,
     daemon_bin: PathBuf,
 }
 
+#[cfg(not(unix))]
+#[derive(Debug)]
+struct LocalSocketClientTransport;
+
 impl LocalSocketClientTransport {
+    #[cfg(unix)]
     fn new(socket_path: PathBuf, daemon_bin: PathBuf) -> Self {
         Self {
             socket_path,
             daemon_bin,
         }
+    }
+
+    #[cfg(not(unix))]
+    fn new(_socket_path: PathBuf, _daemon_bin: PathBuf) -> Self {
+        Self
     }
 
     fn ensure_daemon_available(&self) -> Result<(), AtmError> {
@@ -107,14 +118,6 @@ impl LocalSocketClientTransport {
             .with_source(source)
         })
     }
-
-    #[cfg(not(unix))]
-    fn try_connect(&self) -> Result<(), AtmError> {
-        Err(AtmError::daemon_unavailable(
-            "ATM thin-client transport requires a Unix platform",
-        ))
-    }
-
     #[cfg(unix)]
     fn spawn_daemon(&self) -> Result<(), AtmError> {
         if !self.daemon_bin.is_file() {
