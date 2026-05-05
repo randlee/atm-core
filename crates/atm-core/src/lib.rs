@@ -46,6 +46,8 @@ pub mod send;
 /// Internal service-owned seams that isolate retained command orchestration
 /// from direct helper/path access.
 pub(crate) mod service_runtime;
+/// Transitional legacy store adapters used by the retained service runtime.
+pub(crate) mod service_runtime_store;
 /// Retained local team discovery, roster repair, and backup/restore workflows.
 pub mod team_admin;
 /// Shared synthetic test identities and role constants used across crate tests.

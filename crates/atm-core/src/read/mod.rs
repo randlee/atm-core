@@ -134,7 +134,8 @@ pub fn read_mail(
     query: ReadQuery,
     observability: &dyn ObservabilityPort,
 ) -> Result<ReadOutcome, AtmError> {
-    read_mail_with_runtime(query, observability, &LocalServiceRuntime)
+    let runtime = LocalServiceRuntime::default();
+    read_mail_with_runtime(query, observability, &runtime)
 }
 
 fn read_mail_with_runtime<R: RetainedServiceRuntime>(

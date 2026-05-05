@@ -94,7 +94,8 @@ pub fn ack_mail(
     request: AckRequest,
     observability: &dyn ObservabilityPort,
 ) -> Result<AckOutcome, AtmError> {
-    ack_mail_with_runtime(request, observability, &LocalServiceRuntime)
+    let runtime = LocalServiceRuntime::default();
+    ack_mail_with_runtime(request, observability, &runtime)
 }
 
 fn ack_mail_with_runtime<R: RetainedServiceRuntime>(

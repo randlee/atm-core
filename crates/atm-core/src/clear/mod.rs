@@ -72,7 +72,8 @@ pub fn clear_mail(
     query: ClearQuery,
     observability: &dyn ObservabilityPort,
 ) -> Result<ClearOutcome, AtmError> {
-    clear_mail_with_runtime(query, observability, &LocalServiceRuntime)
+    let runtime = LocalServiceRuntime::default();
+    clear_mail_with_runtime(query, observability, &runtime)
 }
 
 fn clear_mail_with_runtime<R: RetainedServiceRuntime>(
