@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::collections::BTreeMap;
 #[cfg(test)]
 use std::ffi::{OsStr, OsString};
@@ -17,25 +15,38 @@ pub use atm_core::roles::ROLE_TEAM_LEAD;
 use serde_json::json;
 use tempfile::TempDir;
 
+#[allow(dead_code)]
 pub const TEST_TEAM: &str = "test-team";
+#[allow(dead_code)]
 pub const TEST_SENDER: &str = "sender-a";
+#[allow(dead_code)]
 pub const TEST_RECIPIENT: &str = "recipient";
+#[allow(dead_code)]
 pub const TEST_QA: &str = "qa-a";
+#[allow(dead_code)]
 pub const TEST_QA_AGENT: &str = TEST_QA;
+#[allow(dead_code)]
 pub const TEST_LEAD: &str = "test-lead";
+#[allow(dead_code)]
 pub const TEST_DAEMON: &str = "daemon";
+#[allow(dead_code)]
 pub const TEST_ORIGIN: &str = "host-a";
+#[allow(dead_code)]
 pub const TEST_SENDER_ADDRESS: &str = "sender-a@test-team";
+#[allow(dead_code)]
 pub const TEST_RECIPIENT_ADDRESS: &str = "recipient@test-team";
+#[allow(dead_code)]
 pub const TEST_LEAD_ADDRESS: &str = "test-lead@test-team";
 
 #[cfg(test)]
+#[allow(dead_code)]
 pub fn env_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(()))
 }
 
 #[cfg(test)]
+#[allow(dead_code)]
 pub struct EnvGuard {
     key: String,
     original: Option<OsString>,
@@ -43,6 +54,7 @@ pub struct EnvGuard {
 }
 
 #[cfg(test)]
+#[allow(dead_code)]
 impl EnvGuard {
     pub fn set_raw(key: impl Into<String>, value: &str) -> Self {
         let key = key.into();
@@ -68,6 +80,7 @@ impl Drop for EnvGuard {
 }
 
 #[cfg(test)]
+#[allow(dead_code)]
 pub fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
     // SAFETY: test callers acquire the shared test env lock before mutating
     // the process environment.
@@ -75,6 +88,7 @@ pub fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
 }
 
 #[cfg(test)]
+#[allow(dead_code)]
 pub fn remove_env_var<K: AsRef<OsStr>>(key: K) {
     // SAFETY: test callers acquire the shared test env lock before mutating
     // the process environment.
@@ -82,6 +96,7 @@ pub fn remove_env_var<K: AsRef<OsStr>>(key: K) {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct TestEnv {
     pub tempdir: TempDir,
     pub env_map: BTreeMap<String, String>,
@@ -89,12 +104,14 @@ pub struct TestEnv {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct TestEnvBuilder {
     team: String,
     members: Vec<String>,
     cwd_name: String,
 }
 
+#[allow(dead_code)]
 impl TestEnvBuilder {
     pub fn new() -> Self {
         Self::default()
@@ -188,10 +205,12 @@ impl Default for TestEnvBuilder {
     }
 }
 
+#[allow(dead_code)]
 pub fn qualified(agent: &str) -> String {
     format!("{agent}@{TEST_TEAM}")
 }
 
+#[allow(dead_code)]
 pub fn configure_atm_command<'a>(
     command: &'a mut Command,
     home_dir: &std::path::Path,
@@ -228,6 +247,7 @@ pub fn configure_atm_command<'a>(
 }
 
 #[cfg(test)]
+#[allow(dead_code)]
 pub fn is_daemon_start_transient(output: &Output) -> bool {
     let stderr = String::from_utf8_lossy(&output.stderr);
     stderr.contains("failed to read daemon request frame")
@@ -239,6 +259,7 @@ pub fn is_daemon_start_transient(output: &Output) -> bool {
         || stderr.contains("failed to finalize daemon request frame")
 }
 
+#[allow(dead_code)]
 fn ensure_test_daemon_launcher(home_dir: &std::path::Path) -> PathBuf {
     #[allow(unused_variables)]
     let hermetic_daemon = option_env!("CARGO_BIN_EXE_atm-daemon").map(PathBuf::from);

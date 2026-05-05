@@ -1048,8 +1048,21 @@ impl Fixture {
     }
 
     fn warm_daemon(&self) {
-        let output = self.run(&["read", "--all", "--no-mark", "--json"]);
-        assert!(output.status.success(), "stderr: {}", self.stderr(&output));
+        for attempt in 0..3 {
+            let output = self.run(&["read", "--all", "--no-mark", "--json"]);
+            if output.status.success() {
+                return;
+            }
+            assert!(
+                crate::support::is_daemon_start_transient(&output),
+                "stderr: {}",
+                self.stderr(&output)
+            );
+            if attempt < 2 {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+        }
+        panic!("daemon warmup exhausted retries");
     }
 
     fn run_without_identity(&self, args: &[&str]) -> std::process::Output {
@@ -1069,7 +1082,7 @@ impl Fixture {
             .args(args)
             .current_dir(self.tempdir.path())
             .output()
-            .expect("retry atm without identity")
+            .unwrap_or_else(|error| panic!("retry atm without identity {:?} failed: {error}", args))
     }
 
     fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
@@ -1093,7 +1106,9 @@ impl Fixture {
         for (key, value) in extra_env {
             retry.env(key, value);
         }
-        retry.output().expect("retry atm")
+        retry
+            .output()
+            .unwrap_or_else(|error| panic!("retry atm {:?} failed: {error}", args))
     }
 
     fn write_team_config(&self, recipient: &str) {

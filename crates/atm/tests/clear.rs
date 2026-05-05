@@ -451,7 +451,9 @@ impl Fixture {
         for (key, value) in extra_env {
             retry.env(key, value);
         }
-        retry.output().expect("retry atm")
+        retry
+            .output()
+            .unwrap_or_else(|error| panic!("retry atm {:?} failed: {error}", args))
     }
 
     fn write_team_config(&self, members: &[&str]) {

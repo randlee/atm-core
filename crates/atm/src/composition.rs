@@ -80,11 +80,15 @@ impl LocalSocketClientTransport {
                 .map(|metadata| (metadata.dev(), metadata.ino()));
             self.spawn_daemon()?;
             self.wait_for_socket_publish(published_socket)?;
-            // The published socket inode can appear just before the daemon is
-            // ready to accept a client connection, so allow one short settle.
-            thread::sleep(Duration::from_millis(25));
-            if self.try_connect().is_ok() {
-                return Ok(());
+            let deadline = Instant::now() + Duration::from_millis(500);
+            loop {
+                if self.try_connect().is_ok() {
+                    return Ok(());
+                }
+                if Instant::now() >= deadline {
+                    break;
+                }
+                thread::sleep(Duration::from_millis(25));
             }
             Err(AtmError::daemon_unavailable(format!(
                 "failed to connect to daemon socket at {} after auto-start",
