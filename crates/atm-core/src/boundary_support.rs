@@ -1,4 +1,5 @@
 //! Hidden helper layer used by concrete boundary adapters.
+#![allow(dead_code)]
 
 use std::collections::HashSet;
 
