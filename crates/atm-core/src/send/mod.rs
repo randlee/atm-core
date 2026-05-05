@@ -274,6 +274,7 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
                 sender: &canonical_sender,
                 sender_team: sender_team.as_ref(),
                 recipient: &recipient,
+                recipient_pane_id: None,
                 message_id,
                 requires_ack,
                 is_ack: false,
@@ -311,6 +312,7 @@ pub(crate) struct PostSendHookContext<'a> {
     pub(crate) sender: &'a AgentName,
     pub(crate) sender_team: Option<&'a TeamName>,
     pub(crate) recipient: &'a ResolvedRecipient,
+    pub(crate) recipient_pane_id: Option<&'a str>,
     pub(crate) message_id: LegacyMessageId,
     pub(crate) requires_ack: bool,
     pub(crate) is_ack: bool,
@@ -522,7 +524,7 @@ fn set_canonical_sender_metadata(
     };
     atm.insert(
         "fromIdentity".to_string(),
-        serde_json::to_value(canonical_from).expect("AgentName serializes"),
+        serde_json::Value::String(canonical_from.to_string()),
     );
 }
 
