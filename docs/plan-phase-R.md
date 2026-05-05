@@ -415,6 +415,9 @@ Review targets:
        - `DaemonReconcileCoordinator`
      - add daemon-side `PeerClientTransport` and `DaemonRequestDispatcher`
        adapters if R.4 scope keeps them in wave 2
+     - when any new concrete runtime impl structs land, update the matching
+       boundary records with explicit `implementation.visibility` and
+       `implementation.constructor` expectations in the same sprint
    - `crates/atm-daemon/src/composition.rs`
      - wire runtime composition to the new transport/dispatcher method surfaces
        without introducing direct CLI or sqlite dependencies
@@ -426,6 +429,8 @@ Review targets:
      - zero-method runtime traits resolved by explicit method surfaces
      - CLI and daemon compositions compile against callable transport traits
      - no direct `atm -> atm-daemon` or `atm -> atm-rusqlite` edge appears
+     - QA verifies any new runtime impl structs are covered by active privacy /
+       constructor lint checks
 2. `R.5 Store Boundaries`
    - `crates/atm-core/src/boundary/mod.rs`
      - finalize request / response DTOs for:
@@ -442,6 +447,8 @@ Review targets:
        - `SqliteTaskStore`
        - `SqliteRosterStore`
      - keep constructors private and assembly boundary-facing only
+     - keep boundary records and lint privacy rules in lockstep with every new
+       concrete store implementation struct
    - Retained behavior cutover:
      - identify and replace direct store ownership in existing retained flows
        under:
@@ -459,6 +466,7 @@ Review targets:
      - retained core flows no longer own sqlite-facing logic directly
      - replacing the sqlite adapter does not require caller changes outside
        composition or adapter crates
+     - QA verifies store impl structs remain private and lint-enforced as such
 3. `R.6 Config / Inbox / Notification / Watch`
    - `crates/atm-core/src/boundary/mod.rs`
      - finalize method surfaces and DTOs for:
@@ -477,6 +485,8 @@ Review targets:
        - status reporting
        - watch capture
        - reconcile coordination
+     - keep boundary records and lint privacy expectations updated for every
+       newly landed daemon-owned implementation struct
    - Policy placement review:
      - document and implement where compatibility / recovery policy is allowed
        to live inside ingress/export adapters versus service orchestration
@@ -488,6 +498,8 @@ Review targets:
      - retained service code consumes those behaviors only through boundary
        traits
      - compatibility policy location is documented and matches implementation
+     - QA verifies newly introduced adapter impl structs are covered by privacy
+       and constructor lint rules
 4. `R.7 Service Orchestration`
    - Files in scope:
      - `crates/atm-core/src/send/`
@@ -511,6 +523,8 @@ Review targets:
      - direct retained bypasses are removed from service code
      - orchestration layer is explicit and thin
      - boundary lint remains green after routing changes
+     - QA verifies no orchestration change required widening adapter visibility
+       or bypassing boundary privacy rules
 5. `R.8 Thin Client Surfaces`
    - `crates/atm/src/`
      - finalize CLI composition around:
@@ -530,11 +544,23 @@ Review targets:
      - CLI public surface is thin and transport-driven
      - `ack` remains modeled inside `send`
      - thin clients do not require daemon-internal or sqlite-facing knowledge
+     - QA verifies no thin-client change introduces direct references to daemon
+       or adapter implementation structs
 
 Acceptance:
 - no feature sprint begins before the relevant boundary and lint guardrails are in place
 - `R.4` through `R.8` are reviewable as concrete sprint proposals with explicit
   files, traits, and acceptance criteria
+
+Cross-sprint hardening rule:
+- whenever a sprint introduces a new concrete implementation struct for a
+  boundary, that same sprint must also:
+  - add or update the `boundaries.md` record for that implementation
+  - set explicit `implementation.visibility` and
+    `implementation.constructor` requirements
+  - ensure boundary lint actively enforces those privacy expectations
+  - include QA verification that the privacy / constructor / re-export rules
+    are present and passing in `just lint`
 
 ## 6. Working Rule
 
