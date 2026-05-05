@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 const DB_MIGRATIONS: &str = r#"
+PRAGMA journal_mode=WAL;
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS mail_messages (
@@ -106,12 +107,28 @@ impl SharedDb {
             )
         })?;
         connection
-            .busy_timeout(std::time::Duration::from_secs(2))
+            .busy_timeout(std::time::Duration::from_millis(5000))
             .map_err(|error| sqlite_error("failed to configure sqlite busy timeout", error))?;
         connection
             .pragma_update(None, "foreign_keys", "ON")
             .map_err(|error| sqlite_error("failed to enable sqlite foreign keys", error))?;
         operation(&mut connection)
+    }
+
+    fn with_transaction<T>(
+        &self,
+        operation: impl FnOnce(&rusqlite::Transaction<'_>) -> Result<T, AtmError>,
+    ) -> Result<T, AtmError> {
+        self.with_connection(|connection| {
+            let transaction = connection
+                .transaction()
+                .map_err(|error| sqlite_error("failed to open sqlite transaction", error))?;
+            let value = operation(&transaction)?;
+            transaction
+                .commit()
+                .map_err(|error| sqlite_error("failed to commit sqlite transaction", error))?;
+            Ok(value)
+        })
     }
 }
 
@@ -211,12 +228,7 @@ impl boundary::MailStore for SqliteMailStore {
         &self,
         request: boundary::MailStoreTransactionRequest,
     ) -> Result<boundary::MailStoreTransactionResponse, AtmError> {
-        self.db.with_connection(|connection| {
-            let tx = connection
-                .transaction()
-                .map_err(|error| sqlite_error("failed to open mail-store transaction", error))?;
-            tx.commit()
-                .map_err(|error| sqlite_error("failed to commit mail-store transaction", error))?;
+        self.db.with_transaction(|_transaction| {
             Ok(boundary::MailStoreTransactionResponse {
                 team: request.team,
                 committed: true,
@@ -231,8 +243,8 @@ impl boundary::MailStore for SqliteMailStore {
     ) -> Result<boundary::MailStoreUpsertMessageResponse, AtmError> {
         let record = request.record;
         let envelope_json = serialize_json(&record.envelope, "mail-store envelope")?;
-        let inserted = self.db.with_connection(|connection| {
-            let existing: Option<i64> = connection
+        let inserted = self.db.with_transaction(|transaction| {
+            let existing: Option<i64> = transaction
                 .query_row(
                     "SELECT 1 FROM mail_messages WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
                     params![record.team.as_str(), record.agent.as_str(), record.message_key],
@@ -240,7 +252,7 @@ impl boundary::MailStore for SqliteMailStore {
                 )
                 .optional()
                 .map_err(|error| sqlite_error("failed to probe existing mail-store message", error))?;
-            connection
+            transaction
                 .execute(
                     "INSERT INTO mail_messages(team, agent, message_key, envelope_json, imported_from, recorded_at)
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6)
@@ -324,8 +336,8 @@ impl boundary::MailStore for SqliteMailStore {
         request: boundary::MailStoreUpsertVisibilityStateRequest,
     ) -> Result<boundary::MailStoreUpsertVisibilityStateResponse, AtmError> {
         let state_json = serialize_json(&request.state, "mail-store visibility state")?;
-        self.db.with_connection(|connection| {
-            connection
+        self.db.with_transaction(|transaction| {
+            transaction
                 .execute(
                     "INSERT INTO mail_visibility_states(team, agent, message_key, state_json)
                      VALUES (?1, ?2, ?3, ?4)
@@ -380,8 +392,8 @@ impl boundary::MailStore for SqliteMailStore {
         request: boundary::MailStoreRecordIngestReplayStateRequest,
     ) -> Result<boundary::MailStoreRecordIngestReplayStateResponse, AtmError> {
         let state_json = serialize_json(&request.state, "mail-store ingest replay state")?;
-        self.db.with_connection(|connection| {
-            connection
+        self.db.with_transaction(|transaction| {
+            transaction
                 .execute(
                     "INSERT INTO mail_ingest_replay_states(team, agent, source, state_json)
                      VALUES (?1, ?2, ?3, ?4)
@@ -560,41 +572,55 @@ impl SqliteTaskStore {
         Self { db }
     }
 
-    fn load_record(
-        &self,
+    fn load_record_in_connection(
+        connection: &Connection,
         team: &TeamName,
         task_id: &atm_core::types::TaskId,
     ) -> Result<Option<boundary::TaskStoreTaskRecord>, AtmError> {
-        let record_json = self.db.with_connection(|connection| {
-            connection
-                .query_row(
-                    "SELECT record_json FROM task_records WHERE team = ?1 AND task_id = ?2;",
-                    params![team.as_str(), task_id.as_str()],
-                    |row| row.get::<_, String>(0),
-                )
-                .optional()
-                .map_err(|error| sqlite_error("failed to load task-store record", error))
-        })?;
+        let record_json = connection
+            .query_row(
+                "SELECT record_json FROM task_records WHERE team = ?1 AND task_id = ?2;",
+                params![team.as_str(), task_id.as_str()],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(|error| sqlite_error("failed to load task-store record", error))?;
 
         record_json
             .map(|value| deserialize_json(&value, "task-store record"))
             .transpose()
     }
 
-    fn save_record(&self, record: &boundary::TaskStoreTaskRecord) -> Result<(), AtmError> {
+    fn save_record_in_connection(
+        connection: &Connection,
+        record: &boundary::TaskStoreTaskRecord,
+    ) -> Result<(), AtmError> {
         let record_json = serialize_json(record, "task-store record")?;
+        connection
+            .execute(
+                "INSERT INTO task_records(team, task_id, record_json)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT(team, task_id) DO UPDATE SET
+                   record_json = excluded.record_json;",
+                params![record.team.as_str(), record.task_id.as_str(), record_json],
+            )
+            .map_err(|error| sqlite_error("failed to save task-store record", error))?;
+        Ok(())
+    }
+
+    fn load_record(
+        &self,
+        team: &TeamName,
+        task_id: &atm_core::types::TaskId,
+    ) -> Result<Option<boundary::TaskStoreTaskRecord>, AtmError> {
         self.db.with_connection(|connection| {
-            connection
-                .execute(
-                    "INSERT INTO task_records(team, task_id, record_json)
-                     VALUES (?1, ?2, ?3)
-                     ON CONFLICT(team, task_id) DO UPDATE SET
-                       record_json = excluded.record_json;",
-                    params![record.team.as_str(), record.task_id.as_str(), record_json],
-                )
-                .map_err(|error| sqlite_error("failed to save task-store record", error))?;
-            Ok(())
+            Self::load_record_in_connection(connection, team, task_id)
         })
+    }
+
+    fn save_record(&self, record: &boundary::TaskStoreTaskRecord) -> Result<(), AtmError> {
+        self.db
+            .with_transaction(|transaction| Self::save_record_in_connection(transaction, record))
     }
 }
 
@@ -605,7 +631,10 @@ impl boundary::TaskStore for SqliteTaskStore {
         &self,
         request: boundary::TaskStoreCreateTaskRequest,
     ) -> Result<boundary::TaskStoreCreateTaskResponse, AtmError> {
-        self.save_record(&request.record)?;
+        self.db.with_transaction(|transaction| {
+            Self::save_record_in_connection(transaction, &request.record)?;
+            Ok(())
+        })?;
         Ok(boundary::TaskStoreCreateTaskResponse {
             record: request.record,
         })
@@ -624,127 +653,132 @@ impl boundary::TaskStore for SqliteTaskStore {
         &self,
         request: boundary::TaskStoreUpdateTaskRequest,
     ) -> Result<boundary::TaskStoreUpdateTaskResponse, AtmError> {
-        let mut record = self
-            .load_record(&request.team, &request.task_id)?
-            .ok_or_else(|| {
-                AtmError::validation(format!(
-                    "task-store update failed because task {} does not exist in team {}",
-                    request.task_id, request.team
-                ))
-                .with_recovery("Create the task through TaskStore::create_task before updating it.")
-            })?;
-        if let Some(owner) = request.owner {
-            record.owner = Some(owner);
-        }
-        if let Some(state) = request.state {
-            record.state = state;
-        }
-        if let Some(metadata) = request.metadata {
-            record.metadata = metadata;
-        }
-        for message_key in request.append_message_keys {
-            if !record
-                .linked_message_keys
-                .iter()
-                .any(|existing| existing == &message_key)
-            {
-                record.linked_message_keys.push(message_key);
+        self.db.with_transaction(|transaction| {
+            let mut record =
+                Self::load_record_in_connection(transaction, &request.team, &request.task_id)?
+                    .ok_or_else(|| {
+                        AtmError::validation(format!(
+                            "task-store update failed because task {} does not exist in team {}",
+                            request.task_id, request.team
+                        ))
+                        .with_recovery(
+                            "Create the task through TaskStore::create_task before updating it.",
+                        )
+                    })?;
+            if let Some(owner) = request.owner {
+                record.owner = Some(owner);
             }
-        }
-        record.updated_at = Some(atm_core::types::IsoTimestamp::now());
-        self.save_record(&record)?;
-        Ok(boundary::TaskStoreUpdateTaskResponse { record })
+            if let Some(state) = request.state {
+                record.state = state;
+            }
+            if let Some(metadata) = request.metadata {
+                record.metadata = metadata;
+            }
+            for message_key in request.append_message_keys {
+                if !record
+                    .linked_message_keys
+                    .iter()
+                    .any(|existing| existing == &message_key)
+                {
+                    record.linked_message_keys.push(message_key);
+                }
+            }
+            record.updated_at = Some(atm_core::types::IsoTimestamp::now());
+            Self::save_record_in_connection(transaction, &record)?;
+            Ok(boundary::TaskStoreUpdateTaskResponse { record })
+        })
     }
 
     fn attach_message_link(
         &self,
         request: boundary::TaskStoreAttachMessageLinkRequest,
     ) -> Result<boundary::TaskStoreAttachMessageLinkResponse, AtmError> {
-        let mut record = self
-            .load_record(&request.team, &request.task_id)?
-            .ok_or_else(|| {
-                AtmError::validation(format!(
-                    "task-store attach-link failed because task {} does not exist in team {}",
-                    request.task_id, request.team
-                ))
-                .with_recovery("Create the task through TaskStore::create_task before attaching message links.")
-            })?;
-        if !record
-            .linked_message_keys
-            .iter()
-            .any(|existing| existing == &request.message_key)
-        {
-            record.linked_message_keys.push(request.message_key);
-        }
-        record.updated_at = Some(atm_core::types::IsoTimestamp::now());
-        self.save_record(&record)?;
-        Ok(boundary::TaskStoreAttachMessageLinkResponse { record })
+        self.db.with_transaction(|transaction| {
+            let mut record = Self::load_record_in_connection(transaction, &request.team, &request.task_id)?
+                .ok_or_else(|| {
+                    AtmError::validation(format!(
+                        "task-store attach-link failed because task {} does not exist in team {}",
+                        request.task_id, request.team
+                    ))
+                    .with_recovery("Create the task through TaskStore::create_task before attaching message links.")
+                })?;
+            if !record
+                .linked_message_keys
+                .iter()
+                .any(|existing| existing == &request.message_key)
+            {
+                record.linked_message_keys.push(request.message_key);
+            }
+            record.updated_at = Some(atm_core::types::IsoTimestamp::now());
+            Self::save_record_in_connection(transaction, &record)?;
+            Ok(boundary::TaskStoreAttachMessageLinkResponse { record })
+        })
     }
 
     fn detach_message_link(
         &self,
         request: boundary::TaskStoreDetachMessageLinkRequest,
     ) -> Result<boundary::TaskStoreDetachMessageLinkResponse, AtmError> {
-        let mut record = self
-            .load_record(&request.team, &request.task_id)?
-            .ok_or_else(|| {
-                AtmError::validation(format!(
-                    "task-store detach-link failed because task {} does not exist in team {}",
-                    request.task_id, request.team
-                ))
-                .with_recovery("Create the task through TaskStore::create_task before detaching message links.")
-            })?;
-        record
-            .linked_message_keys
-            .retain(|existing| existing != &request.message_key);
-        record.updated_at = Some(atm_core::types::IsoTimestamp::now());
-        self.save_record(&record)?;
-        Ok(boundary::TaskStoreDetachMessageLinkResponse { record })
+        self.db.with_transaction(|transaction| {
+            let mut record = Self::load_record_in_connection(transaction, &request.team, &request.task_id)?
+                .ok_or_else(|| {
+                    AtmError::validation(format!(
+                        "task-store detach-link failed because task {} does not exist in team {}",
+                        request.task_id, request.team
+                    ))
+                    .with_recovery("Create the task through TaskStore::create_task before detaching message links.")
+                })?;
+            record
+                .linked_message_keys
+                .retain(|existing| existing != &request.message_key);
+            record.updated_at = Some(atm_core::types::IsoTimestamp::now());
+            Self::save_record_in_connection(transaction, &record)?;
+            Ok(boundary::TaskStoreDetachMessageLinkResponse { record })
+        })
     }
 
     fn record_ack_transition(
         &self,
         request: boundary::TaskStoreRecordAckTransitionRequest,
     ) -> Result<boundary::TaskStoreRecordAckTransitionResponse, AtmError> {
-        let mut record = self
-            .load_record(&request.team, &request.task_id)?
-            .ok_or_else(|| {
-                AtmError::validation(format!(
-                    "task-store ack transition failed because task {} does not exist in team {}",
-                    request.task_id, request.team
-                ))
-                .with_recovery("Create the task through TaskStore::create_task before recording ack transitions.")
-            })?;
-        record.metadata.fields.insert(
-            "last_ack_transition".to_string(),
-            request.transition.clone(),
-        );
-        record
-            .metadata
-            .fields
-            .insert("last_ack_actor".to_string(), request.actor.to_string());
-        record.metadata.fields.insert(
-            "last_ack_message_key".to_string(),
-            request.message_key.clone(),
-        );
-        record.metadata.fields.insert(
-            "last_ack_at".to_string(),
-            request.transitioned_at.into_inner().to_rfc3339(),
-        );
-        record.updated_at = Some(atm_core::types::IsoTimestamp::now());
-        self.save_record(&record)?;
-
         let transition_json = serialize_json(
             &serde_json::json!({
-                "message_key": request.message_key,
+                "message_key": request.message_key.clone(),
                 "actor": request.actor.to_string(),
                 "transitioned_at": request.transitioned_at.into_inner().to_rfc3339(),
-                "transition": request.transition,
+                "transition": request.transition.clone(),
             }),
             "task ack transition",
         )?;
-        self.db.with_connection(|connection| {
-            let next_index: i64 = connection
+        self.db.with_transaction(|transaction| {
+            let mut record = Self::load_record_in_connection(transaction, &request.team, &request.task_id)?
+                .ok_or_else(|| {
+                    AtmError::validation(format!(
+                        "task-store ack transition failed because task {} does not exist in team {}",
+                        request.task_id, request.team
+                    ))
+                    .with_recovery("Create the task through TaskStore::create_task before recording ack transitions.")
+                })?;
+            record.metadata.fields.insert(
+                "last_ack_transition".to_string(),
+                request.transition.clone(),
+            );
+            record
+                .metadata
+                .fields
+                .insert("last_ack_actor".to_string(), request.actor.to_string());
+            record.metadata.fields.insert(
+                "last_ack_message_key".to_string(),
+                request.message_key.clone(),
+            );
+            record.metadata.fields.insert(
+                "last_ack_at".to_string(),
+                request.transitioned_at.into_inner().to_rfc3339(),
+            );
+            record.updated_at = Some(atm_core::types::IsoTimestamp::now());
+            Self::save_record_in_connection(transaction, &record)?;
+
+            let next_index: i64 = transaction
                 .query_row(
                     "SELECT COALESCE(MAX(transition_index), -1) + 1
                      FROM task_ack_transitions
@@ -753,7 +787,7 @@ impl boundary::TaskStore for SqliteTaskStore {
                     |row| row.get(0),
                 )
                 .map_err(|error| sqlite_error("failed to query next task ack transition index", error))?;
-            connection
+            transaction
                 .execute(
                     "INSERT INTO task_ack_transitions(team, task_id, transition_index, transition_json)
                      VALUES (?1, ?2, ?3, ?4);",
@@ -765,10 +799,8 @@ impl boundary::TaskStore for SqliteTaskStore {
                     ],
                 )
                 .map_err(|error| sqlite_error("failed to persist task ack transition", error))?;
-            Ok(())
-        })?;
-
-        Ok(boundary::TaskStoreRecordAckTransitionResponse { record })
+            Ok(boundary::TaskStoreRecordAckTransitionResponse { record })
+        })
     }
 
     fn query_task_metadata(
@@ -857,8 +889,8 @@ impl boundary::RosterStore for SqliteRosterStore {
             .map(|response| response.roster.members.len() as u64)
             .unwrap_or(0);
         let roster_json = serialize_json(&request.roster, "roster-store snapshot")?;
-        self.db.with_connection(|connection| {
-            connection
+        self.db.with_transaction(|transaction| {
+            transaction
                 .execute(
                     "INSERT INTO rosters(team, roster_json, source, updated_at)
                      VALUES (?1, ?2, ?3, ?4)
@@ -1205,5 +1237,77 @@ mod tests {
             .health_snapshot(boundary::RosterStoreHealthSnapshotRequest { team: team() })
             .expect("health");
         assert_eq!(health.snapshot.member_count, 1);
+    }
+
+    #[test]
+    fn sqlite_boundary_enforces_wal_and_busy_timeout() {
+        let (_tempdir, path) = temp_db();
+        let assembly = assemble_boundary(&path).expect("assembly");
+
+        assembly
+            .mail_store()
+            .db
+            .with_connection(|connection| {
+                let journal_mode: String = connection
+                    .pragma_query_value(None, "journal_mode", |row| row.get(0))
+                    .map_err(|error| {
+                        sqlite_error("failed to read sqlite journal_mode pragma", error)
+                    })?;
+                let busy_timeout_ms: i64 = connection
+                    .pragma_query_value(None, "busy_timeout", |row| row.get(0))
+                    .map_err(|error| {
+                        sqlite_error("failed to read sqlite busy_timeout pragma", error)
+                    })?;
+                assert_eq!(journal_mode.to_ascii_lowercase(), "wal");
+                assert_eq!(busy_timeout_ms, 5000);
+                Ok(())
+            })
+            .expect("pragma verification");
+    }
+
+    #[test]
+    fn sqlite_transactions_roll_back_on_error() {
+        let (_tempdir, path) = temp_db();
+        let assembly = assemble_boundary(&path).expect("assembly");
+        let db = assembly.mail_store().db.clone();
+        let forced_failure_message = "force rollback";
+
+        let result: Result<(), AtmError> = db.with_transaction(|transaction| {
+            transaction
+                .execute(
+                    "INSERT INTO task_records(team, task_id, record_json) VALUES (?1, ?2, ?3);",
+                    params![
+                        team().as_str(),
+                        task_id().as_str(),
+                        "{\"state\":\"pending\"}"
+                    ],
+                )
+                .map_err(|error| {
+                    sqlite_error("failed to insert transactional rollback probe", error)
+                })?;
+            Err(AtmError::validation(forced_failure_message))
+        });
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains(forced_failure_message)
+        );
+
+        let persisted: Option<String> = db
+            .with_connection(|connection| {
+                connection
+                    .query_row(
+                        "SELECT record_json FROM task_records WHERE team = ?1 AND task_id = ?2;",
+                        params![team().as_str(), task_id().as_str()],
+                        |row| row.get::<_, String>(0),
+                    )
+                    .optional()
+                    .map_err(|error| {
+                        sqlite_error("failed to verify transactional rollback probe", error)
+                    })
+            })
+            .expect("rollback verification");
+        assert!(persisted.is_none());
     }
 }
