@@ -11,14 +11,16 @@ use std::fmt;
 use atm_core::{
     RequestEnvelope, ResponseEnvelope,
     boundary::{
-        self, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, InboxExport,
-        InboxExportRecordRequest, InboxExportRecordResponse, InboxExportReexportMessageRequest,
-        InboxExportReexportMessageResponse, InboxIngress, InboxIngressDiagnosticsRequest,
-        InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,
-        InboxIngressIdentityFingerprintResponse, InboxIngressImportRequest,
-        InboxIngressImportResponse, NotificationEvent, ReconcileRequest, ReconcileResult,
-        RequestDispatcher, RuntimeStatusSnapshot, WatchEventBatch, WatchSubscriptionRequest,
+        self, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, ConfigTeamLoadRequest,
+        ConfigTeamLoadResponse, InboxExport, InboxExportRecordRequest, InboxExportRecordResponse,
+        InboxExportReexportMessageRequest, InboxExportReexportMessageResponse, InboxIngress,
+        InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
+        InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
+        InboxIngressImportRequest, InboxIngressImportResponse, NotificationEvent, ReconcileRequest,
+        ReconcileResult, RequestDispatcher, RuntimeStatusSnapshot, WatchEventBatch,
+        WatchSubscriptionRequest,
     },
+    boundary_support,
     error::AtmError,
 };
 
@@ -118,11 +120,8 @@ impl DaemonNotificationSink {
 impl boundary::sealed::Sealed for DaemonNotificationSink {}
 
 impl boundary::NotificationSink for DaemonNotificationSink {
-    fn deliver(&self, _event: NotificationEvent) -> Result<(), AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon notification sink stub is not implemented yet",
-            DaemonBoundaryStubError::NotificationSink,
-        ))
+    fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError> {
+        boundary_support::deliver_notification(event)
     }
 }
 
@@ -161,10 +160,7 @@ impl boundary::sealed::Sealed for DaemonStatusSource {}
 
 impl boundary::StatusSource for DaemonStatusSource {
     fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon status source stub is not implemented yet",
-            DaemonBoundaryStubError::StatusSource,
-        ))
+        boundary_support::snapshot_status()
     }
 }
 
@@ -181,11 +177,8 @@ impl FileWatchEventSource {
 impl boundary::sealed::Sealed for FileWatchEventSource {}
 
 impl boundary::WatchEventSource for FileWatchEventSource {
-    fn poll(&self, _request: WatchSubscriptionRequest) -> Result<WatchEventBatch, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon watch event source stub is not implemented yet",
-            DaemonBoundaryStubError::WatchEventSource,
-        ))
+    fn poll(&self, request: WatchSubscriptionRequest) -> Result<WatchEventBatch, AtmError> {
+        boundary_support::poll_watch(request)
     }
 }
 
@@ -202,11 +195,8 @@ impl DaemonReconcileCoordinator {
 impl boundary::sealed::Sealed for DaemonReconcileCoordinator {}
 
 impl boundary::ReconcileCoordinator for DaemonReconcileCoordinator {
-    fn reconcile(&self, _request: ReconcileRequest) -> Result<ReconcileResult, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon reconcile coordinator stub is not implemented yet",
-            DaemonBoundaryStubError::ReconcileCoordinator,
-        ))
+    fn reconcile(&self, request: ReconcileRequest) -> Result<ReconcileResult, AtmError> {
+        boundary_support::reconcile(request)
     }
 }
 
@@ -223,11 +213,15 @@ impl DaemonConfigIngress {
 impl boundary::sealed::Sealed for DaemonConfigIngress {}
 
 impl ConfigIngress for DaemonConfigIngress {
-    fn load_config(&self, _request: ConfigLoadRequest) -> Result<ConfigLoadResponse, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon config ingress stub is not implemented yet",
-            DaemonBoundaryStubError::ConfigIngress,
-        ))
+    fn load_config(&self, request: ConfigLoadRequest) -> Result<ConfigLoadResponse, AtmError> {
+        boundary_support::load_workspace_config(request)
+    }
+
+    fn load_team_config(
+        &self,
+        request: ConfigTeamLoadRequest,
+    ) -> Result<ConfigTeamLoadResponse, AtmError> {
+        boundary_support::load_team_config(request)
     }
 }
 
@@ -246,32 +240,23 @@ impl boundary::sealed::Sealed for DaemonInboxIngress {}
 impl InboxIngress for DaemonInboxIngress {
     fn import_inbox_source(
         &self,
-        _request: InboxIngressImportRequest,
+        request: InboxIngressImportRequest,
     ) -> Result<InboxIngressImportResponse, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon inbox ingress import stub is not implemented yet",
-            DaemonBoundaryStubError::InboxIngress,
-        ))
+        boundary_support::import_inbox_source(request)
     }
 
     fn compute_identity_fingerprint(
         &self,
-        _request: InboxIngressIdentityFingerprintRequest,
+        request: InboxIngressIdentityFingerprintRequest,
     ) -> Result<InboxIngressIdentityFingerprintResponse, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon inbox ingress fingerprint stub is not implemented yet",
-            DaemonBoundaryStubError::InboxIngress,
-        ))
+        boundary_support::compute_identity_fingerprint(request)
     }
 
     fn report_diagnostics(
         &self,
-        _request: InboxIngressDiagnosticsRequest,
+        request: InboxIngressDiagnosticsRequest,
     ) -> Result<InboxIngressDiagnosticsResponse, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon inbox ingress diagnostics stub is not implemented yet",
-            DaemonBoundaryStubError::InboxIngress,
-        ))
+        boundary_support::report_inbox_diagnostics(request)
     }
 }
 
@@ -290,21 +275,15 @@ impl boundary::sealed::Sealed for DaemonInboxExport {}
 impl InboxExport for DaemonInboxExport {
     fn export_record(
         &self,
-        _request: InboxExportRecordRequest,
+        request: InboxExportRecordRequest,
     ) -> Result<InboxExportRecordResponse, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon inbox export record stub is not implemented yet",
-            DaemonBoundaryStubError::InboxExport,
-        ))
+        boundary_support::export_source_files(request)
     }
 
     fn reexport_message(
         &self,
-        _request: InboxExportReexportMessageRequest,
+        request: InboxExportReexportMessageRequest,
     ) -> Result<InboxExportReexportMessageResponse, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon inbox re-export stub is not implemented yet",
-            DaemonBoundaryStubError::InboxExport,
-        ))
+        boundary_support::reexport_messages(request)
     }
 }

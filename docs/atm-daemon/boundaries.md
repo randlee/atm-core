@@ -6,6 +6,9 @@ Current design assumption:
 - `atm-daemon` is the production runtime composition root
 - `allowed_dependents: []` means no external crate should depend on these
   daemon-private concrete adapters
+- Test doubles planned; not yet landed. Until they exist,
+  `allowed_test_double_paths` remains empty for the daemon-owned adapter
+  records below.
 
 ## SocketServerTransportAdapter
 
@@ -63,8 +66,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::InProcessServerTransport
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - tokio::net::UnixListener
 
@@ -145,8 +147,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::InProcessClientTransport
+  allowed_test_double_paths: []
   forbidden_test_bypasses: []
 
 enforcement:
@@ -224,8 +225,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubWatchEventSource
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - notify::recommended_watcher
 
@@ -239,10 +239,10 @@ enforcement:
     - no_watch_io_outside_boundary
 
 status:
-  state: stub_landed
+  state: active
   notes:
     - raw watch event capture stays runtime-private
-    - stub implementation currently lives at crate root and is assembled through atm_daemon::composition
+    - crate-root daemon adapter delegates through atm_core::boundary_support and is assembled through atm_daemon::composition
 ```
 
 Purpose:
@@ -304,8 +304,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubReconcileCoordinator
+  allowed_test_double_paths: []
   forbidden_test_bypasses: []
 
 enforcement:
@@ -318,10 +317,10 @@ enforcement:
     - no_store_or_transport_bypass_in_reconcile
 
 status:
-  state: stub_landed
+  state: active
   notes:
     - runtime reconcile remains separate from raw watch source implementation
-    - stub implementation currently lives at crate root and is assembled through atm_daemon::composition
+    - crate-root daemon adapter delegates through atm_core::boundary_support and is assembled through atm_daemon::composition
 ```
 
 Purpose:
@@ -382,8 +381,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubRequestDispatcher
+  allowed_test_double_paths: []
   forbidden_test_bypasses: []
 
 enforcement:
@@ -462,8 +460,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubConfigIngress
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - std::fs::read_to_string
 
@@ -477,9 +474,9 @@ enforcement:
     - no_direct_config_parser_calls
 
 status:
-  state: stub_landed
+  state: active
   notes:
-    - atm_core owns the contract; daemon runtime now supplies the crate-root stub adapter
+    - atm_core owns the contract; daemon runtime now supplies the crate-root support-backed adapter
     - composition must continue to avoid a direct atm-daemon -> atm-rusqlite dependency
 ```
 
@@ -487,7 +484,7 @@ Purpose:
 - Owns the daemon runtime adapter behind the ConfigIngress contract.
 
 Notes:
-- This is landed as a crate-root scaffold and remains unwired until a follow-on sprint.
+- This adapter is wired through `atm_core::boundary_support` while retained service cutover remains a later sprint concern.
 
 ## DaemonInboxIngressAdapter
 
@@ -543,8 +540,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubInboxIngress
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - mailbox::store::observe_source_files
 
@@ -558,9 +554,9 @@ enforcement:
     - no_direct_mailbox_helper_calls
 
 status:
-  state: stub_landed
+  state: active
   notes:
-    - atm_core owns the contract; daemon runtime now supplies the crate-root stub adapter
+    - atm_core owns the contract; daemon runtime now supplies the crate-root support-backed adapter
     - watcher-driven reconcile must continue to route through this boundary rather than directly to mailbox helpers
 ```
 
@@ -568,7 +564,7 @@ Purpose:
 - Owns the daemon runtime adapter behind the InboxIngress contract.
 
 Notes:
-- This is landed as a crate-root scaffold and remains unwired until a follow-on sprint.
+- This adapter is wired through `atm_core::boundary_support` while retained service cutover remains a later sprint concern.
 
 ## DaemonInboxExportAdapter
 
@@ -624,8 +620,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubInboxExport
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - mailbox::store::with_locked_source_files
 
@@ -639,9 +634,9 @@ enforcement:
     - no_direct_mailbox_helper_calls
 
 status:
-  state: stub_landed
+  state: active
   notes:
-    - atm_core owns the contract; daemon runtime now supplies the crate-root stub adapter
+    - atm_core owns the contract; daemon runtime now supplies the crate-root support-backed adapter
     - send and receive compatibility writes must stay behind this adapter rather than reaching mailbox helpers directly
 ```
 
@@ -649,7 +644,7 @@ Purpose:
 - Owns the daemon runtime adapter behind the InboxExport contract.
 
 Notes:
-- This is landed as a crate-root scaffold and remains unwired until a follow-on sprint.
+- This adapter is wired through `atm_core::boundary_support` while retained service cutover remains a later sprint concern.
 
 ## DaemonNotificationSinkAdapter
 
@@ -704,8 +699,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubNotificationSink
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - std::process::Command
 
@@ -718,9 +712,9 @@ enforcement:
     - no_process_spawn_outside_notification_boundary
 
 status:
-  state: stub_landed
+  state: active
   notes:
-    - stub implementation currently lives at crate root and is assembled through atm_daemon::composition
+    - crate-root daemon adapter delegates through atm_core::boundary_support and is assembled through atm_daemon::composition
 ```
 
 Purpose:
@@ -782,8 +776,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubStatusSource
+  allowed_test_double_paths: []
   forbidden_test_bypasses: []
 
 enforcement:
@@ -795,9 +788,9 @@ enforcement:
     - no_status_leakage_into_roster_store
 
 status:
-  state: stub_landed
+  state: active
   notes:
-    - stub implementation currently lives at crate root and is assembled through atm_daemon::composition
+    - crate-root daemon adapter delegates through atm_core::boundary_support and is assembled through atm_daemon::composition
 ```
 
 Purpose:

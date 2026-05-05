@@ -1,6 +1,6 @@
 # ATM-Rusqlite Boundary Inventory
 
-This document captures the planned concrete SQLite adapters for Phase R.
+This document captures the concrete SQLite adapters for Phase R.
 
 Current design assumption:
 - concrete sqlite adapters stay private to this crate
@@ -78,10 +78,10 @@ enforcement:
     - no_public_reexport
 
 status:
-  state: stub_landed
+  state: active
   notes:
-    - assembled only by the daemon runtime composition root
-    - stub implementation currently lives at crate root and is assembled through atm_rusqlite::SqliteBoundaryAssembly
+    - crate-root implementation remains temporary; module split is still deferred
+    - assembled through atm_rusqlite::SqliteBoundaryAssembly
 ```
 
 Purpose:
@@ -161,10 +161,11 @@ enforcement:
     - no_public_reexport
 
 status:
-  state: stub_landed
+  state: active
   notes:
     - ack-related task transitions still resolve through send-shape workflows, not a separate public ack API
-    - stub implementation currently lives at crate root and is assembled through atm_rusqlite::SqliteBoundaryAssembly
+    - crate-root implementation remains temporary; module split is still deferred
+    - assembled through atm_rusqlite::SqliteBoundaryAssembly
 ```
 
 Purpose:
@@ -244,10 +245,11 @@ enforcement:
     - no_public_reexport
 
 status:
-  state: stub_landed
+  state: active
   notes:
     - durable roster truth remains distinct from live status caches
-    - stub implementation currently lives at crate root and is assembled through atm_rusqlite::SqliteBoundaryAssembly
+    - crate-root implementation remains temporary; module split is still deferred
+    - assembled through atm_rusqlite::SqliteBoundaryAssembly
 ```
 
 Purpose:
