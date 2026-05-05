@@ -1,4 +1,5 @@
 mod commands;
+mod composition;
 mod observability;
 mod output;
 

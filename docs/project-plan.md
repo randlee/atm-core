@@ -49,6 +49,18 @@ Phase R execution entry:
 - `R.3` is a dedicated re-planning sprint after the Wave 1 skeleton lands
 - Wave 2 executes implementations only against the enforced boundary skeleton
 
+Current Phase R status:
+- `R.0` lint foundation is complete enough to enforce the boundary documents
+- `R.1` lint debt burn-down is complete on the active redesign line
+- `R.2` landed the first `atm-core` boundary skeleton in
+  `crates/atm-core/src/boundary/mod.rs`
+- `R.2A` tooling hardening remains in progress for view/module/unsafe follow-up
+- `R.3` is the active sprint and must convert the current merged baseline into
+  a concrete Wave 2 execution plan
+- the current merged baseline does not yet include `crates/atm-daemon` or
+  `crates/atm-rusqlite`; those crate introductions remain part of the next
+  skeleton work
+
 Phase R acceptance:
 - lint/parser gates exist before substantive implementation resumes
 - the current lint baseline is cleaned enough that new architectural failures
@@ -77,9 +89,9 @@ Status:
 - Phase Q is retained only as an abandoned historical attempt at the SQLite
   source-of-truth and daemon-boundary redesign.
 - Phase R is the only active redesign and implementation line.
-- The current workspace still contains `crates/atm-core` and `crates/atm`
-  only; any additional crate introduction now belongs to the Phase R skeleton
-  line, not Phase Q.
+- The current merged Wave 1 baseline still contains `crates/atm-core` and
+  `crates/atm` only; additional crate introduction remains active Phase R
+  skeleton work and is now tracked explicitly by `R.3.1`.
 
 ## 2. Deliverables
 
