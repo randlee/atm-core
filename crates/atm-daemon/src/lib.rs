@@ -11,13 +11,14 @@ use std::fmt;
 use atm_core::{
     RequestEnvelope, ResponseEnvelope,
     boundary::{
-        self, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, InboxExport,
-        InboxExportRecordRequest, InboxExportRecordResponse, InboxExportReexportMessageRequest,
-        InboxExportReexportMessageResponse, InboxIngress, InboxIngressDiagnosticsRequest,
-        InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,
-        InboxIngressIdentityFingerprintResponse, InboxIngressImportRequest,
-        InboxIngressImportResponse, NotificationEvent, ReconcileRequest, ReconcileResult,
-        RequestDispatcher, RuntimeStatusSnapshot, WatchEventBatch, WatchSubscriptionRequest,
+        self, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, ConfigTeamLoadRequest,
+        ConfigTeamLoadResponse, InboxExport, InboxExportRecordRequest, InboxExportRecordResponse,
+        InboxExportReexportMessageRequest, InboxExportReexportMessageResponse, InboxIngress,
+        InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
+        InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
+        InboxIngressImportRequest, InboxIngressImportResponse, NotificationEvent, ReconcileRequest,
+        ReconcileResult, RequestDispatcher, RuntimeStatusSnapshot, WatchEventBatch,
+        WatchSubscriptionRequest,
     },
     error::AtmError,
 };
@@ -226,6 +227,16 @@ impl ConfigIngress for DaemonConfigIngress {
     fn load_config(&self, _request: ConfigLoadRequest) -> Result<ConfigLoadResponse, AtmError> {
         Err(daemon_boundary_stub_error(
             "daemon config ingress stub is not implemented yet",
+            DaemonBoundaryStubError::ConfigIngress,
+        ))
+    }
+
+    fn load_team_config(
+        &self,
+        _request: ConfigTeamLoadRequest,
+    ) -> Result<ConfigTeamLoadResponse, AtmError> {
+        Err(daemon_boundary_stub_error(
+            "daemon config ingress team-config stub is not implemented yet",
             DaemonBoundaryStubError::ConfigIngress,
         ))
     }

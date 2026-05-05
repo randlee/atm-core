@@ -1818,11 +1818,10 @@ Single-write-path guardrail:
 
 Current owner-layer boundaries:
 - Claude-owned inbox compatibility surface:
-  `mailbox::store::observe_source_files(...)` for observational snapshots,
-  `mailbox::store::with_locked_source_files(...)` for shared mailbox
-  read/ack/clear lock+reload orchestration, and
-  `mailbox::store::commit_mailbox_state(...)` /
-  `mailbox::store::commit_source_files(...)` as the persistence leaf
+  retained mailbox commands now cross the `RetainedServiceRuntime` seam and
+  delegate through injected store adapters; low-level source-file discovery,
+  lock/reload orchestration, and persistence remain internal leaf helpers
+  behind that seam during the Phase R store transition
 - ATM-owned source-of-truth state:
   `workflow::{load_workflow_state(...), save_workflow_state(...),
   project_envelope(...), remember_initial_state(...),
@@ -2446,7 +2445,7 @@ Architectural rules:
 
 The daemon runtime must use one documented operational contract.
 
-Required architectural defaults:
+Phase R operational defaults:
 - graceful shutdown drain deadline: `5s`
 - force-cancel deadline: `10s` total
 - daemon auto-start publish deadline: `10s`

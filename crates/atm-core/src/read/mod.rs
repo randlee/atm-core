@@ -13,13 +13,13 @@ use tracing::debug;
 use crate::address::AgentAddress;
 use crate::config;
 use crate::error::AtmError;
-use crate::home;
 use crate::identity;
-use crate::mailbox;
 use crate::mailbox::source::{SourceFile, SourcedMessage, resolve_target};
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::MessageEnvelope;
+use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
+use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{
     AckActivationMode, AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
     SourceIndex, TeamName,
@@ -135,7 +135,16 @@ pub fn read_mail(
     query: ReadQuery,
     observability: &dyn ObservabilityPort,
 ) -> Result<ReadOutcome, AtmError> {
-    let config = config::load_config(&query.current_dir)?;
+    let runtime = LocalServiceRuntime::default();
+    read_mail_with_runtime(query, observability, &runtime)
+}
+
+fn read_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    query: ReadQuery,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+) -> Result<ReadOutcome, AtmError> {
+    let config = runtime.load_config(&query.current_dir)?;
     let actor = identity::resolve_actor_identity(query.actor_override.as_deref(), config.as_ref())?;
     let actor_team = config::resolve_team(query.team_override.as_deref(), config.as_ref());
     let target = resolve_target(
@@ -145,14 +154,14 @@ pub fn read_mail(
         config.as_ref(),
     )?;
 
-    let team_dir = home::team_dir_from_home(&query.home_dir, &target.team)?;
+    let team_dir = runtime.team_dir(&query.home_dir, &target.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&target.team).with_recovery(
             "Create the team config for the requested team or target a different team before retrying `atm read`.",
         ));
     }
 
-    let team_config = config::load_team_config(&team_dir)?;
+    let team_config = runtime.load_team_config(&team_dir)?;
     if target.explicit
         && !team_config
             .members
@@ -168,17 +177,17 @@ pub fn read_mail(
 
     let own_inbox = actor == target.agent && actor_team.as_deref() == Some(target.team.as_str());
     let seen_watermark = if query.seen_state_filter && query.selection_mode != ReadSelection::All {
-        seen_state::load_seen_watermark(&query.home_dir, &target.team, &target.agent)?
+        runtime.load_seen_watermark(&query.home_dir, &target.team, &target.agent)?
     } else {
         None
     };
 
     let workflow_path =
-        home::workflow_state_path_from_home(&query.home_dir, &target.team, &target.agent)?;
+        runtime.workflow_state_path(&query.home_dir, &target.team, &target.agent)?;
     let mut workflow_state =
-        workflow::load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
+        runtime.load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
     let mut source_files =
-        mailbox::store::observe_source_files(&query.home_dir, &target.team, &target.agent)?;
+        runtime.observe_source_files(&query.home_dir, &target.team, &target.agent)?;
     let (mut bucket_counts, mut selected) =
         selection_state_for_source_files(&source_files, &workflow_state, &query, seen_watermark);
     let mut timed_out = false;
@@ -191,7 +200,7 @@ pub fn read_mail(
             || {
                 Ok(apply_idle_notification_dedup(
                     dedupe_legacy_message_id_surface(
-                        merged_surface(&mailbox::store::observe_source_files(
+                        merged_surface(&runtime.observe_source_files(
                             &query.home_dir,
                             &target.team,
                             &target.agent,
@@ -210,9 +219,9 @@ pub fn read_mail(
 
         if wait_satisfied {
             workflow_state =
-                workflow::load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
+                runtime.load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
             source_files =
-                mailbox::store::observe_source_files(&query.home_dir, &target.team, &target.agent)?;
+                runtime.observe_source_files(&query.home_dir, &target.team, &target.agent)?;
             (bucket_counts, selected) = selection_state_for_source_files(
                 &source_files,
                 &workflow_state,
@@ -237,15 +246,15 @@ pub fn read_mail(
             bucket_counts,
         )
     } else {
-        mailbox::store::with_locked_source_files(
+        runtime.with_locked_source_files(
             &query.home_dir,
             &target.team,
             &target.agent,
             [workflow_path],
-            mailbox::lock::default_lock_timeout(),
+            runtime.default_lock_timeout(),
             |_source_paths, source_files| {
                 let mut workflow_state =
-                    workflow::load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
+                    runtime.load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
                 let (bucket_counts, mut selected) = selection_state_for_source_files(
                     source_files,
                     &workflow_state,
@@ -261,10 +270,10 @@ pub fn read_mail(
                     own_inbox,
                 );
                 if mutation.mailbox_changed {
-                    mailbox::store::commit_source_files(source_files)?;
+                    runtime.commit_source_files(source_files)?;
                 }
                 if mutation.workflow_changed {
-                    workflow::save_workflow_state(
+                    runtime.save_workflow_state(
                         &query.home_dir,
                         &target.team,
                         &target.agent,
@@ -285,7 +294,7 @@ pub fn read_mail(
             .map(|message| message.envelope.timestamp)
             .max()
     {
-        seen_state::save_seen_watermark(
+        runtime.save_seen_watermark(
             &query.home_dir,
             &target.team,
             &target.agent,

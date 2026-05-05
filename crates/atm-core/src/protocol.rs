@@ -1,4 +1,10 @@
-//! Shared protocol DTO stubs for the core transport boundary family.
+//! Shared protocol DTOs for the core transport boundary family.
+
+use std::path::PathBuf;
+
+use serde::{Deserialize, Serialize};
+
+use crate::types::{AgentName, TeamName};
 
 /// Shared protocol request envelope.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -13,25 +19,46 @@ pub struct ResponseEnvelope;
 pub struct FramePayload;
 
 /// Shared notification event payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct NotificationEvent;
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NotificationEvent {
+    pub kind: String,
+    pub detail: String,
+    pub team: Option<TeamName>,
+    pub agent: Option<AgentName>,
+}
 
 /// Runtime status snapshot transport payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct RuntimeStatusSnapshot;
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RuntimeStatusSnapshot {
+    pub status: String,
+    pub detail: Option<String>,
+}
 
 /// Watch subscription request payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct WatchSubscriptionRequest;
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WatchSubscriptionRequest {
+    pub home_dir: PathBuf,
+    pub team: TeamName,
+    pub agent: AgentName,
+}
 
 /// Watch event batch transport payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct WatchEventBatch;
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WatchEventBatch {
+    pub paths: Vec<PathBuf>,
+}
 
 /// Reconcile request transport payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ReconcileRequest;
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReconcileRequest {
+    pub home_dir: PathBuf,
+    pub team: TeamName,
+    pub agent: AgentName,
+}
 
 /// Reconcile outcome transport payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ReconcileResult;
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReconcileResult {
+    pub observed_paths: usize,
+    pub imported_sources: usize,
+}
