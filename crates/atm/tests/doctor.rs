@@ -2,13 +2,17 @@ mod support;
 
 use std::fs;
 use std::process::Command;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use support::{TEST_DAEMON, TEST_LEAD, TEST_QA, TEST_SENDER, TEST_TEAM};
 
 use atm_core::schema::{AgentMember, TeamConfig};
 use serde_json::Value;
+use serial_test::serial;
 
 #[test]
+#[serial]
 fn test_doctor_reports_healthy_observability_with_real_adapter() {
     let fixture = Fixture::new(&[TEST_LEAD]);
 
@@ -32,6 +36,7 @@ fn test_doctor_reports_healthy_observability_with_real_adapter() {
 }
 
 #[test]
+#[serial]
 fn test_doctor_reports_degraded_observability_with_real_fault_injection() {
     let fixture = Fixture::new(&[TEST_LEAD]);
 
@@ -57,6 +62,7 @@ fn test_doctor_reports_degraded_observability_with_real_fault_injection() {
 }
 
 #[test]
+#[serial]
 fn test_doctor_reports_unavailable_observability_with_real_fault_injection() {
     let fixture = Fixture::new(&[TEST_LEAD]);
 
@@ -78,6 +84,7 @@ fn test_doctor_reports_unavailable_observability_with_real_fault_injection() {
 }
 
 #[test]
+#[serial]
 fn test_doctor_reports_obsolete_identity_drift_warning() {
     let fixture = Fixture::new(&[TEST_LEAD]);
     fixture.write_atm_config(&format!("[atm]\nidentity = \"{}\"\n", TEST_SENDER));
@@ -102,6 +109,7 @@ fn test_doctor_reports_obsolete_identity_drift_warning() {
 }
 
 #[test]
+#[serial]
 fn test_doctor_reports_missing_baseline_team_member() {
     let fixture = Fixture::new(&[TEST_LEAD, TEST_SENDER]);
     fixture.write_atm_config(&format!(
@@ -131,6 +139,7 @@ fn test_doctor_reports_missing_baseline_team_member() {
 }
 
 #[test]
+#[serial]
 fn test_doctor_reports_member_roster_with_baseline_ordering() {
     let fixture = Fixture::new(&[TEST_QA, TEST_SENDER, TEST_LEAD, TEST_DAEMON]);
     fixture.write_atm_config(&format!(
@@ -156,6 +165,7 @@ fn test_doctor_reports_member_roster_with_baseline_ordering() {
 }
 
 #[test]
+#[serial]
 fn test_doctor_reports_missing_team_directory_finding() {
     let fixture = Fixture::empty();
 
@@ -174,6 +184,7 @@ fn test_doctor_reports_missing_team_directory_finding() {
 }
 
 #[test]
+#[serial]
 fn test_doctor_reports_team_config_parse_failure_finding() {
     let fixture = Fixture::empty();
     fixture.write_raw_team_config("{\"members\":");
@@ -193,6 +204,7 @@ fn test_doctor_reports_team_config_parse_failure_finding() {
 }
 
 #[test]
+#[serial]
 fn test_doctor_reports_missing_inboxes_directory_finding() {
     let fixture = Fixture::new(&[TEST_LEAD]);
     fs::remove_dir_all(fixture.team_dir().join("inboxes")).expect("remove inboxes dir");
@@ -212,6 +224,7 @@ fn test_doctor_reports_missing_inboxes_directory_finding() {
 }
 
 #[test]
+#[serial]
 fn test_doctor_reports_stale_restore_marker_warning() {
     let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let backup_path = fixture.tempdir.path().join("backup");
@@ -240,6 +253,7 @@ fn test_doctor_reports_stale_restore_marker_warning() {
 }
 
 #[test]
+#[serial]
 fn test_doctor_reports_stale_mailbox_lock_across_team_inboxes() {
     let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let stale_lock = fixture
@@ -292,6 +306,11 @@ impl Fixture {
     }
 
     fn run(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
+        self.warm_daemon();
+        self.execute(args, extra_env)
+    }
+
+    fn execute(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
         let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
         support::configure_atm_command(&mut command, self.tempdir.path(), Some(TEST_LEAD))
             .args(args)
@@ -300,6 +319,22 @@ impl Fixture {
             command.env(key, value);
         }
         command.output().expect("run atm")
+    }
+
+    fn warm_daemon(&self) {
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while Instant::now() < deadline {
+            let output = self.execute(&["doctor", "--json"], &[]);
+            if serde_json::from_slice::<Value>(&output.stdout).is_ok() {
+                return;
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+        panic!(
+            "daemon warmup did not return doctor json\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&self.execute(&["doctor", "--json"], &[]).stdout),
+            String::from_utf8_lossy(&self.execute(&["doctor", "--json"], &[]).stderr),
+        );
     }
 
     fn write_team_config(&self, members: &[&str]) {

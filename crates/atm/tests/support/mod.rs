@@ -221,6 +221,21 @@ pub fn configure_atm_command<'a>(
 }
 
 fn ensure_test_daemon_launcher(home_dir: &std::path::Path) -> PathBuf {
+    let sibling = PathBuf::from(env!("CARGO_BIN_EXE_atm"))
+        .with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX));
+    if sibling.exists() {
+        return sibling;
+    }
+
+    let workspace_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("target")
+        .join("debug")
+        .join(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX));
+    if workspace_binary.exists() {
+        return workspace_binary;
+    }
+
     #[cfg(unix)]
     {
         let wrapper = home_dir.join("atm-daemon-test-wrapper.sh");
@@ -246,11 +261,6 @@ fn ensure_test_daemon_launcher(home_dir: &std::path::Path) -> PathBuf {
 
     #[cfg(not(unix))]
     {
-        let sibling = PathBuf::from(env!("CARGO_BIN_EXE_atm"))
-            .with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX));
-        if sibling.exists() {
-            return sibling;
-        }
         panic!(
             "expected hermetic test daemon binary beside {} but it was missing: {}",
             env!("CARGO_BIN_EXE_atm"),

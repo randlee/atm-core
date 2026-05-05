@@ -336,11 +336,7 @@ impl Fixture {
 
     fn warm_daemon(&self) {
         let output = self.run(&["read", "--all", "--no-mark", "--json"]);
-        assert!(
-            output.status.success(),
-            "stderr: {}",
-            self.stderr(&output)
-        );
+        assert!(output.status.success(), "stderr: {}", self.stderr(&output));
     }
 
     fn write_atm_config(&self, body: &str) {
