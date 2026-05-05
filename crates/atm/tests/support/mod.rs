@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::collections::BTreeMap;
 #[cfg(test)]
 use std::ffi::{OsStr, OsString};
@@ -7,9 +9,9 @@ use std::path::PathBuf;
 use std::process::Command;
 #[cfg(test)]
 use std::process::Output;
+use std::sync::{Mutex, OnceLock};
 #[cfg(test)]
 use std::time::{Duration as StdDuration, Instant};
-use std::sync::{Mutex, OnceLock};
 
 #[allow(unused_imports)]
 pub use atm_core::roles::ROLE_TEAM_LEAD;

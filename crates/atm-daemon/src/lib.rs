@@ -232,6 +232,7 @@ impl SingletonGuard {
             .create(true)
             .read(true)
             .write(true)
+            .truncate(false)
             .open(&lock_path)
             .map_err(|source| {
                 AtmError::daemon_unavailable(format!(
