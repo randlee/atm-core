@@ -55,16 +55,20 @@ impl CliObservability {
 
         let identity = std::env::var("ATM_IDENTITY").unwrap_or_else(|_| "unknown".to_string());
         let team = std::env::var("ATM_TEAM").unwrap_or_else(|_| "unknown".to_string());
-        let agent = identity
-            .parse()
-            .unwrap_or_else(|_| AgentName::from_validated("unknown"));
+        let fallback_agent: AgentName = match "unknown".parse() {
+            Ok(agent) => agent,
+            Err(_) => return,
+        };
+        let fallback_team: TeamName = match "unknown".parse() {
+            Ok(team) => team,
+            Err(_) => return,
+        };
+        let agent = identity.parse().unwrap_or(fallback_agent);
         if let Err(emit_error) = self.emit(CommandEvent {
             command: "atm",
             action: stage,
             outcome: "error",
-            team: team
-                .parse()
-                .unwrap_or_else(|_| TeamName::from_validated("unknown")),
+            team: team.parse().unwrap_or(fallback_team),
             agent: agent.clone(),
             sender: agent,
             message_id: None,
