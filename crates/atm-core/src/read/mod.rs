@@ -39,7 +39,7 @@ pub struct ReadQuery {
     pub seen_state_update: bool,
     pub ack_activation_mode: AckActivationMode,
     pub limit: Option<usize>,
-    pub sender_filter: Option<String>,
+    pub sender_filter: Option<AgentName>,
     pub timestamp_filter: Option<IsoTimestamp>,
     pub timeout_secs: Option<u64>,
 }
@@ -57,7 +57,7 @@ impl ReadQuery {
         seen_state_update: bool,
         ack_activation_mode: AckActivationMode,
         limit: Option<usize>,
-        sender_filter: Option<String>,
+        sender_filter: Option<&str>,
         timestamp_filter: Option<IsoTimestamp>,
         timeout_secs: Option<u64>,
     ) -> Result<Self, AtmError> {
@@ -72,7 +72,7 @@ impl ReadQuery {
             seen_state_update,
             ack_activation_mode,
             limit,
-            sender_filter,
+            sender_filter: sender_filter.map(str::parse).transpose()?,
             timestamp_filter,
             timeout_secs,
         })
@@ -356,7 +356,7 @@ fn selection_state_for_source_files(
     let bucket_counts = bucket_counts_for(&classified_all);
     let filtered = apply_filters(
         classified_all.clone(),
-        query.sender_filter.as_deref(),
+        query.sender_filter.as_ref(),
         query.timestamp_filter,
     );
     let selected = select_messages(&filtered, query.selection_mode, seen_watermark);
@@ -503,7 +503,7 @@ fn classify_all(
 
 fn apply_filters(
     messages: Vec<ClassifiedMessage>,
-    sender_filter: Option<&str>,
+    sender_filter: Option<&AgentName>,
     timestamp_filter: Option<IsoTimestamp>,
 ) -> Vec<ClassifiedMessage> {
     filters::apply_timestamp_filter(
@@ -553,7 +553,7 @@ fn selected_after_filters(
     let classified = classify_all(messages.to_vec(), workflow_state);
     let filtered = apply_filters(
         classified,
-        query.sender_filter.as_deref(),
+        query.sender_filter.as_ref(),
         query.timestamp_filter,
     );
     select_messages(&filtered, query.selection_mode, seen_watermark)

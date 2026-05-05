@@ -9,7 +9,8 @@ use std::error::Error as StdError;
 use std::fmt;
 use std::fs;
 #[cfg(unix)]
-use std::io::{Read, Write};
+use std::io::Read;
+use std::io::Write;
 #[cfg(unix)]
 use std::os::unix::net::UnixListener;
 use std::path::{Path, PathBuf};
@@ -45,6 +46,7 @@ use atm_core::{
     schema::{MessageEnvelope, TeamConfig},
     send::send_mail,
 };
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DaemonBoundaryStubError {
@@ -153,10 +155,56 @@ fn write_mailbox_messages(path: &Path, messages: &[MessageEnvelope]) -> Result<(
         )
         .with_source(source)
     })?;
-    fs::write(path, encoded).map_err(|source| {
-        AtmError::mailbox_write(format!("failed to write mailbox at {}", path.display()))
-            .with_recovery("Repair mailbox directory permissions and retry.")
-            .with_source(source)
+    let parent = path.parent().ok_or_else(|| {
+        AtmError::mailbox_write(format!(
+            "failed to resolve mailbox parent directory for {}",
+            path.display()
+        ))
+        .with_recovery("Repair the mailbox path and retry.")
+    })?;
+    let temp_name = format!(
+        "{}.{}.tmp",
+        path.file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("mailbox.json"),
+        Uuid::new_v4()
+    );
+    let temp_path = parent.join(temp_name);
+    let mut temp_file = fs::File::create(&temp_path).map_err(|source| {
+        AtmError::mailbox_write(format!(
+            "failed to create mailbox temp file {}",
+            temp_path.display()
+        ))
+        .with_recovery("Repair mailbox directory permissions and retry.")
+        .with_source(source)
+    })?;
+    if let Err(source) = temp_file.write_all(&encoded) {
+        let _ = fs::remove_file(&temp_path);
+        return Err(AtmError::mailbox_write(format!(
+            "failed to write mailbox temp file {}",
+            temp_path.display()
+        ))
+        .with_recovery("Repair mailbox directory permissions and retry.")
+        .with_source(source));
+    }
+    if let Err(source) = temp_file.sync_all() {
+        let _ = fs::remove_file(&temp_path);
+        return Err(AtmError::mailbox_write(format!(
+            "failed to sync mailbox temp file {}",
+            temp_path.display()
+        ))
+        .with_recovery("Repair mailbox directory permissions and retry.")
+        .with_source(source));
+    }
+    drop(temp_file);
+    fs::rename(&temp_path, path).map_err(|source| {
+        let _ = fs::remove_file(&temp_path);
+        AtmError::mailbox_write(format!(
+            "failed to atomically replace mailbox at {}",
+            path.display()
+        ))
+        .with_recovery("Repair mailbox directory permissions and retry.")
+        .with_source(source)
     })
 }
 

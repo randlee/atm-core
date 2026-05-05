@@ -363,6 +363,12 @@ fn test_send_missing_config_deduplicates_team_lead_notice() {
 #[test]
 fn test_send_missing_config_retains_at_most_two_team_lead_notices_under_concurrency() {
     let fixture = Fixture::new(TEST_RECIPIENT);
+    let bootstrap = fixture.run(&["read", "--all", "--no-mark"]);
+    assert!(
+        bootstrap.status.success(),
+        "stderr: {}",
+        fixture.stderr(&bootstrap)
+    );
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
     fixture.write_inbox(TEST_RECIPIENT, &[]);
     fixture.write_inbox(ROLE_TEAM_LEAD, &[]);
@@ -387,6 +393,12 @@ fn test_send_missing_config_retains_at_most_two_team_lead_notices_under_concurre
         notices.len() <= 2,
         "concurrent missing-config fallback should retain at most two notices on the current file-backed path; got {}",
         notices.len()
+    );
+    let recipient_messages = fixture.inbox_contents(TEST_RECIPIENT);
+    assert_eq!(
+        recipient_messages.len(),
+        2,
+        "concurrent missing-config sends must still deliver both recipient messages"
     );
 }
 
@@ -643,18 +655,27 @@ fn test_send_runs_post_send_hook_for_wildcard_recipient() {
 #[test]
 fn test_send_runs_multiple_matching_post_send_hooks_in_config_order() {
     let fixture = Fixture::new(TEST_RECIPIENT);
-    let order_path = fixture.tempdir.path().join("hook-order.log");
+    let first_path = fixture.tempdir.path().join("hook-order-first.log");
+    let second_path = fixture.tempdir.path().join("hook-order-second.log");
     fixture.install_executable_script(
-        "scripts/append-order.py",
+        "scripts/write-first.py",
         &format!(
-            "#!/usr/bin/env python3\nimport sys\nfrom pathlib import Path\nPath(r\"{}\").open(\"a\", encoding=\"utf-8\").write(sys.argv[1] + \"\\n\")\n",
-            order_path.display()
+            "#!/usr/bin/env python3\nfrom pathlib import Path\nPath(r\"{}\").write_text(\"recipient\\n\", encoding=\"utf-8\")\n",
+            first_path.display()
+        ),
+    );
+    fixture.install_executable_script(
+        "scripts/write-second.py",
+        &format!(
+            "#!/usr/bin/env python3\nfrom pathlib import Path\nfirst = Path(r\"{}\").read_text(encoding=\"utf-8\")\nPath(r\"{}\").write_text(first + \"wildcard\\n\", encoding=\"utf-8\")\n",
+            first_path.display(),
+            second_path.display()
         ),
     );
     fixture.write_atm_config(
         &format!(
-            "[[atm.post_send_hooks]]\nrecipient = '{}'\ncommand = ['python3', 'scripts/append-order.py', '{}']\n\n[[atm.post_send_hooks]]\nrecipient = '*'\ncommand = ['python3', 'scripts/append-order.py', 'wildcard']\n",
-            TEST_RECIPIENT, TEST_RECIPIENT
+            "[[atm.post_send_hooks]]\nrecipient = '{}'\ncommand = ['python3', 'scripts/write-first.py']\n\n[[atm.post_send_hooks]]\nrecipient = '*'\ncommand = ['python3', 'scripts/write-second.py']\n",
+            TEST_RECIPIENT
         ),
     );
 
@@ -665,7 +686,7 @@ fn test_send_runs_multiple_matching_post_send_hooks_in_config_order() {
         "stderr: {}",
         fixture.stderr(&output)
     );
-    let hook_order = fs::read_to_string(order_path)
+    let hook_order = fs::read_to_string(second_path)
         .expect("hook order log")
         .replace("\r\n", "\n");
     assert_eq!(hook_order, "recipient\nwildcard\n");
@@ -984,10 +1005,11 @@ fn test_send_logs_structured_hook_result_stdout() {
 
 #[test]
 fn test_send_help_mentions_post_send_hook_config() {
-    let output = Command::new(env!("CARGO_BIN_EXE_atm"))
-        .args(["send", "--help"])
-        .output()
-        .expect("run atm send --help");
+    let fixture = Fixture::new(TEST_RECIPIENT);
+    let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
+    crate::support::configure_atm_command(&mut command, fixture.tempdir.path(), Some(TEST_SENDER))
+        .args(["send", "--help"]);
+    let output = command.output().expect("run atm send --help");
 
     assert!(output.status.success());
     let stdout = String::from_utf8(output.stdout).expect("stdout utf8");

@@ -595,7 +595,7 @@ Review targets:
          inbox-file access
      - daemon lifecycle (`start` / `stop` / `health`) and all currently
        supported `atm` CLI commands remain functional at `R.8` close
-     - `lint_manifests.py` confirms the following ADR-001 dependency edges
+     - `lint_boundaries.py` confirms the following ADR-001 dependency edges
        remain FORBIDDEN:
        - `atm -> atm-daemon`
        - `atm -> atm-rusqlite`

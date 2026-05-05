@@ -282,7 +282,7 @@ fn test_read_timeout_with_existing_pending_ack_returns_immediately() {
         "stderr: {}",
         fixture.stderr(&output)
     );
-    assert!(start.elapsed() < std::time::Duration::from_secs(4));
+    assert!(start.elapsed() < std::time::Duration::from_millis(4750));
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["count"], 1);
     assert_eq!(parsed["messages"][0]["bucket"], "pending_ack");

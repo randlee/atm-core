@@ -351,13 +351,13 @@ fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
 
 fn resolve_reply_target(
     message: &MessageEnvelope,
-    current_team: &str,
+    current_team: &TeamName,
 ) -> Result<(AgentName, TeamName), AtmError> {
     if let Some(identity) = canonical_sender_identity(message) {
         let team = message
             .source_team
             .clone()
-            .or_else(|| Some(current_team.parse().expect("validated team")))
+            .or_else(|| Some(current_team.clone()))
             .ok_or_else(AtmError::team_unavailable)?;
         return Ok((identity, team));
     }
@@ -568,7 +568,8 @@ mod tests {
             json!({"atm": {"fromIdentity": ROLE_TEAM_LEAD}}),
         );
 
-        let target = resolve_reply_target(&message, TEST_TEAM).expect("reply target");
+        let target = resolve_reply_target(&message, &TeamName::from_validated(TEST_TEAM))
+            .expect("reply target");
         assert_eq!(
             target,
             (

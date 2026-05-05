@@ -26,24 +26,18 @@ fn parse_inbox_values(raw: &str) -> Vec<Value> {
 #[test]
 fn test_clear_default_removes_only_read_and_acknowledged() {
     let fixture = Fixture::new(&[TEST_SENDER]);
+    let base = Utc::now() - Duration::days(10);
     fixture.write_inbox(
         TEST_SENDER,
         &[
-            fixture.message(
-                TEST_LEAD,
-                "unread",
-                false,
-                None,
-                None,
-                Utc::now() - Duration::days(10),
-            ),
+            fixture.message(TEST_LEAD, "unread", false, None, None, base),
             fixture.message(
                 TEST_LEAD,
                 "pending",
                 true,
-                Some(Utc::now() - Duration::days(9)),
+                Some(base + Duration::days(1)),
                 None,
-                Utc::now() - Duration::days(9),
+                base + Duration::days(1),
             ),
             fixture.message(
                 TEST_LEAD,
@@ -51,15 +45,15 @@ fn test_clear_default_removes_only_read_and_acknowledged() {
                 true,
                 None,
                 None,
-                Utc::now() - Duration::days(8),
+                base + Duration::days(2),
             ),
             fixture.message(
                 TEST_LEAD,
                 "acknowledged",
                 true,
                 None,
-                Some(Utc::now() - Duration::days(7)),
-                Utc::now() - Duration::days(7),
+                Some(base + Duration::days(3)),
+                base + Duration::days(3),
             ),
         ],
     );

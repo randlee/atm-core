@@ -3,7 +3,7 @@ use atm_core::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, CommandEvent, LogTailSession,
     ObservabilityPort,
 };
-use atm_core::types::AgentName;
+use atm_core::types::{AgentName, TeamName};
 /// Structured CLI-owned observability construction options.
 ///
 /// L.5 intentionally keeps the release surface narrow: one explicit
@@ -55,16 +55,16 @@ impl CliObservability {
 
         let identity = std::env::var("ATM_IDENTITY").unwrap_or_else(|_| "unknown".to_string());
         let team = std::env::var("ATM_TEAM").unwrap_or_else(|_| "unknown".to_string());
-        let agent: AgentName = identity
+        let agent = identity
             .parse()
-            .unwrap_or_else(|_| "unknown".parse().expect("agent"));
+            .unwrap_or_else(|_| AgentName::from_validated("unknown"));
         if let Err(emit_error) = self.emit(CommandEvent {
             command: "atm",
             action: stage,
             outcome: "error",
             team: team
                 .parse()
-                .unwrap_or_else(|_| "unknown".parse().expect("team")),
+                .unwrap_or_else(|_| TeamName::from_validated("unknown")),
             agent: agent.clone(),
             sender: agent,
             message_id: None,

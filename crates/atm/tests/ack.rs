@@ -487,7 +487,9 @@ impl Fixture {
         acknowledged_offset: Option<Duration>,
         message_id: Uuid,
     ) -> MessageEnvelope {
-        let timestamp = Utc::now() - Duration::minutes(30);
+        let timestamp = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+            .expect("timestamp")
+            .with_timezone(&Utc);
         MessageEnvelope {
             from: from.parse::<AgentName>().expect("agent"),
             text: text.to_string(),
