@@ -16,6 +16,7 @@ use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
 use crate::schema::MessageEnvelope;
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
+use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{AgentName, MessageClass, SourceIndex, TeamName};
 use crate::workflow;
 
@@ -76,7 +77,7 @@ pub fn clear_mail(
     clear_mail_with_runtime(query, observability, &runtime)
 }
 
-fn clear_mail_with_runtime<R: RetainedServiceRuntime>(
+fn clear_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     query: ClearQuery,
     observability: &dyn ObservabilityPort,
     runtime: &R,

@@ -15,6 +15,7 @@ use crate::read::state;
 use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
 use crate::send::{PostSendHookContext, ResolvedRecipient, input, summary};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
+use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use crate::workflow;
 
@@ -114,7 +115,7 @@ pub fn ack_mail(
     ack_mail_with_runtime(request, observability, &runtime)
 }
 
-fn ack_mail_with_runtime<R: RetainedServiceRuntime>(
+fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     request: AckRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
@@ -491,7 +492,7 @@ fn update_source_message(
 }
 
 fn append_reply_message(
-    runtime: &impl RetainedServiceRuntime,
+    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
     source_files: &mut Vec<SourceFile>,
     reply_inbox_path: &Path,
     reply_message: MessageEnvelope,

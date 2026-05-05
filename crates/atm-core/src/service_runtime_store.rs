@@ -7,6 +7,7 @@ use crate::mailbox;
 use crate::mailbox::source::SourceFile;
 use crate::schema::MessageEnvelope;
 use crate::schema::TeamConfig;
+use crate::service_runtime::LocalServiceRuntime;
 
 #[derive(Debug, Default)]
 struct LegacyMailStoreAdapter;
@@ -27,6 +28,44 @@ pub(crate) fn default_task_store() -> Arc<dyn boundary::TaskStore + Send + Sync>
 
 pub(crate) fn default_roster_store() -> Arc<dyn boundary::RosterStore + Send + Sync> {
     Arc::new(LegacyRosterStoreAdapter)
+}
+
+impl Default for LocalServiceRuntime {
+    fn default() -> Self {
+        Self {
+            mail_store: default_mail_store(),
+            task_store: default_task_store(),
+            roster_store: default_roster_store(),
+        }
+    }
+}
+
+pub(crate) trait RetainedMailboxRuntime {
+    fn observe_source_files(
+        &self,
+        home_dir: &Path,
+        team: &str,
+        agent: &str,
+    ) -> Result<Vec<SourceFile>, AtmError>;
+    fn commit_source_files(&self, source_files: &[SourceFile]) -> Result<(), AtmError>;
+    fn read_messages(&self, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError>;
+    fn commit_mailbox_state(
+        &self,
+        path: &Path,
+        messages: &[MessageEnvelope],
+    ) -> Result<(), AtmError>;
+    fn with_locked_source_files<T, I, F>(
+        &self,
+        home_dir: &Path,
+        team: &str,
+        agent: &str,
+        extra_write_paths: I,
+        timeout: std::time::Duration,
+        body: F,
+    ) -> Result<T, AtmError>
+    where
+        I: IntoIterator<Item = PathBuf>,
+        F: FnOnce(&[PathBuf], &mut Vec<SourceFile>) -> Result<T, AtmError>;
 }
 
 pub(crate) fn observe_source_files(
@@ -68,6 +107,54 @@ where
         timeout,
         body,
     )
+}
+
+impl RetainedMailboxRuntime for LocalServiceRuntime {
+    fn observe_source_files(
+        &self,
+        home_dir: &Path,
+        team: &str,
+        agent: &str,
+    ) -> Result<Vec<SourceFile>, AtmError> {
+        let _mail_store = self.mail_store.as_ref();
+        observe_source_files(home_dir, team, agent)
+    }
+
+    fn commit_source_files(&self, source_files: &[SourceFile]) -> Result<(), AtmError> {
+        let _mail_store = self.mail_store.as_ref();
+        commit_source_files(source_files)
+    }
+
+    fn read_messages(&self, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
+        let _mail_store = self.mail_store.as_ref();
+        crate::mailbox::read_messages(path)
+    }
+
+    fn commit_mailbox_state(
+        &self,
+        path: &Path,
+        messages: &[MessageEnvelope],
+    ) -> Result<(), AtmError> {
+        let _mail_store = self.mail_store.as_ref();
+        commit_mailbox_state(path, messages)
+    }
+
+    fn with_locked_source_files<T, I, F>(
+        &self,
+        home_dir: &Path,
+        team: &str,
+        agent: &str,
+        extra_write_paths: I,
+        timeout: std::time::Duration,
+        body: F,
+    ) -> Result<T, AtmError>
+    where
+        I: IntoIterator<Item = PathBuf>,
+        F: FnOnce(&[PathBuf], &mut Vec<SourceFile>) -> Result<T, AtmError>,
+    {
+        let _mail_store = self.mail_store.as_ref();
+        with_locked_source_files(home_dir, team, agent, extra_write_paths, timeout, body)
+    }
 }
 
 fn unsupported(what: &str) -> AtmError {

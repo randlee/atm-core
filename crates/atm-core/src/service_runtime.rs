@@ -1,16 +1,12 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::time::Duration;
 
-use crate::boundary::{MailStore, RosterStore, TaskStore};
 use crate::config::{self, AtmConfig};
 use crate::error::AtmError;
-use crate::mailbox::source::SourceFile;
 use crate::read::seen_state;
-use crate::schema::{MessageEnvelope, TeamConfig};
+use crate::schema::TeamConfig;
 use crate::send::{PostSendHookContext, maybe_run_post_send_hook};
-use crate::service_runtime_store;
 use crate::types::IsoTimestamp;
 use crate::workflow::{self, WorkflowStateFile};
 
@@ -37,19 +33,6 @@ pub(crate) trait RetainedServiceRuntime {
         team: &str,
         agent: &str,
         state: &WorkflowStateFile,
-    ) -> Result<(), AtmError>;
-    fn observe_source_files(
-        &self,
-        home_dir: &Path,
-        team: &str,
-        agent: &str,
-    ) -> Result<Vec<SourceFile>, AtmError>;
-    fn commit_source_files(&self, source_files: &[SourceFile]) -> Result<(), AtmError>;
-    fn read_messages(&self, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError>;
-    fn commit_mailbox_state(
-        &self,
-        path: &Path,
-        messages: &[MessageEnvelope],
     ) -> Result<(), AtmError>;
     fn load_seen_watermark(
         &self,
@@ -84,45 +67,22 @@ pub(crate) trait RetainedServiceRuntime {
     where
         I: IntoIterator<Item = PathBuf>,
         F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>;
-
-    fn with_locked_source_files<T, I, F>(
-        &self,
-        home_dir: &Path,
-        team: &str,
-        agent: &str,
-        extra_write_paths: I,
-        timeout: Duration,
-        body: F,
-    ) -> Result<T, AtmError>
-    where
-        I: IntoIterator<Item = PathBuf>,
-        F: FnOnce(&[PathBuf], &mut Vec<SourceFile>) -> Result<T, AtmError>;
 }
 
 #[derive(Clone)]
 pub(crate) struct LocalServiceRuntime {
-    mail_store: Arc<dyn MailStore + Send + Sync>,
-    task_store: Arc<dyn TaskStore + Send + Sync>,
-    roster_store: Arc<dyn RosterStore + Send + Sync>,
+    pub(crate) mail_store: std::sync::Arc<dyn crate::boundary::MailStore + Send + Sync>,
+    pub(crate) task_store: std::sync::Arc<dyn crate::boundary::TaskStore + Send + Sync>,
+    pub(crate) roster_store: std::sync::Arc<dyn crate::boundary::RosterStore + Send + Sync>,
 }
 
 impl fmt::Debug for LocalServiceRuntime {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LocalServiceRuntime")
-            .field("mail_store", &Arc::as_ptr(&self.mail_store))
-            .field("task_store", &Arc::as_ptr(&self.task_store))
-            .field("roster_store", &Arc::as_ptr(&self.roster_store))
+            .field("mail_store", &std::sync::Arc::as_ptr(&self.mail_store))
+            .field("task_store", &std::sync::Arc::as_ptr(&self.task_store))
+            .field("roster_store", &std::sync::Arc::as_ptr(&self.roster_store))
             .finish()
-    }
-}
-
-impl Default for LocalServiceRuntime {
-    fn default() -> Self {
-        Self {
-            mail_store: service_runtime_store::default_mail_store(),
-            task_store: service_runtime_store::default_task_store(),
-            roster_store: service_runtime_store::default_roster_store(),
-        }
     }
 }
 
@@ -171,31 +131,6 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         workflow::save_workflow_state(home_dir, team, agent, state)
     }
 
-    fn observe_source_files(
-        &self,
-        home_dir: &Path,
-        team: &str,
-        agent: &str,
-    ) -> Result<Vec<SourceFile>, AtmError> {
-        service_runtime_store::observe_source_files(home_dir, team, agent)
-    }
-
-    fn commit_source_files(&self, source_files: &[SourceFile]) -> Result<(), AtmError> {
-        service_runtime_store::commit_source_files(source_files)
-    }
-
-    fn read_messages(&self, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
-        crate::mailbox::read_messages(path)
-    }
-
-    fn commit_mailbox_state(
-        &self,
-        path: &Path,
-        messages: &[MessageEnvelope],
-    ) -> Result<(), AtmError> {
-        service_runtime_store::commit_mailbox_state(path, messages)
-    }
-
     fn load_seen_watermark(
         &self,
         home_dir: &Path,
@@ -242,28 +177,5 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
     {
         workflow::commit_workflow_state(home_dir, team, agent, extra_write_paths, timeout, body)
-    }
-
-    fn with_locked_source_files<T, I, F>(
-        &self,
-        home_dir: &Path,
-        team: &str,
-        agent: &str,
-        extra_write_paths: I,
-        timeout: Duration,
-        body: F,
-    ) -> Result<T, AtmError>
-    where
-        I: IntoIterator<Item = PathBuf>,
-        F: FnOnce(&[PathBuf], &mut Vec<SourceFile>) -> Result<T, AtmError>,
-    {
-        service_runtime_store::with_locked_source_files(
-            home_dir,
-            team,
-            agent,
-            extra_write_paths,
-            timeout,
-            body,
-        )
     }
 }
