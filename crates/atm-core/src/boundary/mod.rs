@@ -338,41 +338,66 @@ pub trait MailStore: sealed::Sealed {
         request: MailStoreBootstrapRequest,
     ) -> Result<MailStoreBootstrapResponse, AtmError>;
 
+    /// # Errors
+    ///
+    /// Returns `AtmError` when a mailbox transaction cannot run.
     fn run_transaction(
         &self,
         request: MailStoreTransactionRequest,
     ) -> Result<MailStoreTransactionResponse, AtmError>;
 
+    /// # Errors
+    ///
+    /// Returns `AtmError` when the mailbox transaction cannot be started,
+    /// executed, or committed safely.
     fn upsert_message(
         &self,
         request: MailStoreUpsertMessageRequest,
     ) -> Result<MailStoreUpsertMessageResponse, AtmError>;
 
+    /// # Errors
+    ///
+    /// Returns `AtmError` when the requested message cannot be loaded.
     fn load_message(
         &self,
         request: MailStoreLoadMessageRequest,
     ) -> Result<MailStoreLoadMessageResponse, AtmError>;
 
+    /// # Errors
+    ///
+    /// Returns `AtmError` when visibility state persistence fails.
     fn upsert_visibility_state(
         &self,
         request: MailStoreUpsertVisibilityStateRequest,
     ) -> Result<MailStoreUpsertVisibilityStateResponse, AtmError>;
 
+    /// # Errors
+    ///
+    /// Returns `AtmError` when visibility state cannot be loaded.
     fn load_visibility_state(
         &self,
         request: MailStoreLoadVisibilityStateRequest,
     ) -> Result<MailStoreLoadVisibilityStateResponse, AtmError>;
 
+    /// # Errors
+    ///
+    /// Returns `AtmError` when ingest-replay state persistence fails.
     fn record_ingest_replay_state(
         &self,
         request: MailStoreRecordIngestReplayStateRequest,
     ) -> Result<MailStoreRecordIngestReplayStateResponse, AtmError>;
 
+    /// # Errors
+    ///
+    /// Returns `AtmError` when ingest-replay state cannot be loaded.
     fn load_ingest_replay_state(
         &self,
         request: MailStoreLoadIngestReplayStateRequest,
     ) -> Result<MailStoreLoadIngestReplayStateResponse, AtmError>;
 
+    /// # Errors
+    ///
+    /// Returns `AtmError` when a mailbox health snapshot cannot be read.
     fn health_snapshot(
         &self,
         request: MailStoreHealthSnapshotRequest,
@@ -390,31 +415,49 @@ pub trait TaskStore: sealed::Sealed {
         request: TaskStoreCreateTaskRequest,
     ) -> Result<TaskStoreCreateTaskResponse, AtmError>;
 
+    /// # Errors
+    ///
+    /// Returns `AtmError` when the requested task cannot be loaded.
     fn load_task(
         &self,
         request: TaskStoreLoadTaskRequest,
     ) -> Result<TaskStoreLoadTaskResponse, AtmError>;
 
+    /// # Errors
+    ///
+    /// Returns `AtmError` when the requested task cannot be updated.
     fn update_task(
         &self,
         request: TaskStoreUpdateTaskRequest,
     ) -> Result<TaskStoreUpdateTaskResponse, AtmError>;
 
+    /// # Errors
+    ///
+    /// Returns `AtmError` when a message link cannot be attached.
     fn attach_message_link(
         &self,
         request: TaskStoreAttachMessageLinkRequest,
     ) -> Result<TaskStoreAttachMessageLinkResponse, AtmError>;
 
+    /// # Errors
+    ///
+    /// Returns `AtmError` when a message link cannot be detached.
     fn detach_message_link(
         &self,
         request: TaskStoreDetachMessageLinkRequest,
     ) -> Result<TaskStoreDetachMessageLinkResponse, AtmError>;
 
+    /// # Errors
+    ///
+    /// Returns `AtmError` when an ack transition cannot be recorded.
     fn record_ack_transition(
         &self,
         request: TaskStoreRecordAckTransitionRequest,
     ) -> Result<TaskStoreRecordAckTransitionResponse, AtmError>;
 
+    /// # Errors
+    ///
+    /// Returns `AtmError` when task metadata cannot be queried.
     fn query_task_metadata(
         &self,
         request: TaskStoreQueryTaskMetadataRequest,
@@ -432,16 +475,25 @@ pub trait RosterStore: sealed::Sealed {
         request: RosterStoreReplaceRosterRequest,
     ) -> Result<RosterStoreReplaceRosterResponse, AtmError>;
 
+    /// # Errors
+    ///
+    /// Returns `AtmError` when a roster snapshot cannot be loaded.
     fn load_roster(
         &self,
         request: RosterStoreLoadRosterRequest,
     ) -> Result<RosterStoreLoadRosterResponse, AtmError>;
 
+    /// # Errors
+    ///
+    /// Returns `AtmError` when roster membership cannot be queried.
     fn query_membership(
         &self,
         request: RosterStoreQueryMembershipRequest,
     ) -> Result<RosterStoreQueryMembershipResponse, AtmError>;
 
+    /// # Errors
+    ///
+    /// Returns `AtmError` when a roster health snapshot cannot be collected.
     fn health_snapshot(
         &self,
         request: RosterStoreHealthSnapshotRequest,
@@ -468,11 +520,17 @@ pub trait InboxIngress: sealed::Sealed {
         request: InboxIngressImportRequest,
     ) -> Result<InboxIngressImportResponse, AtmError>;
 
+    /// # Errors
+    ///
+    /// Returns `AtmError` when identity fingerprinting cannot be computed.
     fn compute_identity_fingerprint(
         &self,
         request: InboxIngressIdentityFingerprintRequest,
     ) -> Result<InboxIngressIdentityFingerprintResponse, AtmError>;
 
+    /// # Errors
+    ///
+    /// Returns `AtmError` when inbox diagnostics cannot be generated.
     fn report_diagnostics(
         &self,
         request: InboxIngressDiagnosticsRequest,
@@ -490,6 +548,9 @@ pub trait InboxExport: sealed::Sealed {
         request: InboxExportRecordRequest,
     ) -> Result<InboxExportRecordResponse, AtmError>;
 
+    /// # Errors
+    ///
+    /// Returns `AtmError` when the message re-export cannot be materialized.
     fn reexport_message(
         &self,
         request: InboxExportReexportMessageRequest,

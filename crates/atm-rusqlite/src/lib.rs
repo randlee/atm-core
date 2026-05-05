@@ -5,6 +5,33 @@
 
 use atm_core::boundary;
 use atm_core::error::AtmError;
+use std::error::Error as StdError;
+use std::fmt;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SqliteBoundaryStubError {
+    Mail,
+    Task,
+    Roster,
+}
+
+impl fmt::Display for SqliteBoundaryStubError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Mail => f.write_str("sqlite mail-store scaffold is not wired"),
+            Self::Task => f.write_str("sqlite task-store scaffold is not wired"),
+            Self::Roster => f.write_str("sqlite roster-store scaffold is not wired"),
+        }
+    }
+}
+
+impl StdError for SqliteBoundaryStubError {}
+
+fn sqlite_boundary_stub_error(message: &'static str, source: SqliteBoundaryStubError) -> AtmError {
+    AtmError::validation(message)
+        .with_recovery("Complete the Phase R sqlite boundary wiring before invoking this path.")
+        .with_source(source)
+}
 
 /// Internal assembly root for Phase R SQLite-backed boundary placeholders.
 #[derive(Debug, Default)]
@@ -56,63 +83,90 @@ impl boundary::MailStore for SqliteMailStore {
         &self,
         _request: boundary::MailStoreBootstrapRequest,
     ) -> Result<boundary::MailStoreBootstrapResponse, AtmError> {
-        todo!("Phase R SQLite mail-store bootstrap wiring is not implemented yet");
+        Err(sqlite_boundary_stub_error(
+            "Phase R SQLite mail-store bootstrap stub is not implemented yet",
+            SqliteBoundaryStubError::Mail,
+        ))
     }
 
     fn run_transaction(
         &self,
         _request: boundary::MailStoreTransactionRequest,
     ) -> Result<boundary::MailStoreTransactionResponse, AtmError> {
-        todo!("Phase R SQLite mail-store transaction wiring is not implemented yet");
+        Err(sqlite_boundary_stub_error(
+            "Phase R SQLite mail-store transaction stub is not implemented yet",
+            SqliteBoundaryStubError::Mail,
+        ))
     }
 
     fn upsert_message(
         &self,
         _request: boundary::MailStoreUpsertMessageRequest,
     ) -> Result<boundary::MailStoreUpsertMessageResponse, AtmError> {
-        todo!("Phase R SQLite mail-store message upsert wiring is not implemented yet");
+        Err(sqlite_boundary_stub_error(
+            "Phase R SQLite mail-store message upsert stub is not implemented yet",
+            SqliteBoundaryStubError::Mail,
+        ))
     }
 
     fn load_message(
         &self,
         _request: boundary::MailStoreLoadMessageRequest,
     ) -> Result<boundary::MailStoreLoadMessageResponse, AtmError> {
-        todo!("Phase R SQLite mail-store message load wiring is not implemented yet");
+        Err(sqlite_boundary_stub_error(
+            "Phase R SQLite mail-store message load stub is not implemented yet",
+            SqliteBoundaryStubError::Mail,
+        ))
     }
 
     fn upsert_visibility_state(
         &self,
         _request: boundary::MailStoreUpsertVisibilityStateRequest,
     ) -> Result<boundary::MailStoreUpsertVisibilityStateResponse, AtmError> {
-        todo!("Phase R SQLite mail-store visibility upsert wiring is not implemented yet");
+        Err(sqlite_boundary_stub_error(
+            "Phase R SQLite mail-store visibility upsert stub is not implemented yet",
+            SqliteBoundaryStubError::Mail,
+        ))
     }
 
     fn load_visibility_state(
         &self,
         _request: boundary::MailStoreLoadVisibilityStateRequest,
     ) -> Result<boundary::MailStoreLoadVisibilityStateResponse, AtmError> {
-        todo!("Phase R SQLite mail-store visibility load wiring is not implemented yet");
+        Err(sqlite_boundary_stub_error(
+            "Phase R SQLite mail-store visibility load stub is not implemented yet",
+            SqliteBoundaryStubError::Mail,
+        ))
     }
 
     fn record_ingest_replay_state(
         &self,
         _request: boundary::MailStoreRecordIngestReplayStateRequest,
     ) -> Result<boundary::MailStoreRecordIngestReplayStateResponse, AtmError> {
-        todo!("Phase R SQLite mail-store replay-state record wiring is not implemented yet");
+        Err(sqlite_boundary_stub_error(
+            "Phase R SQLite mail-store replay-state record stub is not implemented yet",
+            SqliteBoundaryStubError::Mail,
+        ))
     }
 
     fn load_ingest_replay_state(
         &self,
         _request: boundary::MailStoreLoadIngestReplayStateRequest,
     ) -> Result<boundary::MailStoreLoadIngestReplayStateResponse, AtmError> {
-        todo!("Phase R SQLite mail-store replay-state load wiring is not implemented yet");
+        Err(sqlite_boundary_stub_error(
+            "Phase R SQLite mail-store replay-state load stub is not implemented yet",
+            SqliteBoundaryStubError::Mail,
+        ))
     }
 
     fn health_snapshot(
         &self,
         _request: boundary::MailStoreHealthSnapshotRequest,
     ) -> Result<boundary::MailStoreHealthSnapshotResponse, AtmError> {
-        todo!("Phase R SQLite mail-store health wiring is not implemented yet");
+        Err(sqlite_boundary_stub_error(
+            "Phase R SQLite mail-store health stub is not implemented yet",
+            SqliteBoundaryStubError::Mail,
+        ))
     }
 }
 
@@ -132,49 +186,70 @@ impl boundary::TaskStore for SqliteTaskStore {
         &self,
         _request: boundary::TaskStoreCreateTaskRequest,
     ) -> Result<boundary::TaskStoreCreateTaskResponse, AtmError> {
-        todo!("Phase R SQLite task-store create wiring is not implemented yet");
+        Err(sqlite_boundary_stub_error(
+            "Phase R SQLite task-store create stub is not implemented yet",
+            SqliteBoundaryStubError::Task,
+        ))
     }
 
     fn load_task(
         &self,
         _request: boundary::TaskStoreLoadTaskRequest,
     ) -> Result<boundary::TaskStoreLoadTaskResponse, AtmError> {
-        todo!("Phase R SQLite task-store load wiring is not implemented yet");
+        Err(sqlite_boundary_stub_error(
+            "Phase R SQLite task-store load stub is not implemented yet",
+            SqliteBoundaryStubError::Task,
+        ))
     }
 
     fn update_task(
         &self,
         _request: boundary::TaskStoreUpdateTaskRequest,
     ) -> Result<boundary::TaskStoreUpdateTaskResponse, AtmError> {
-        todo!("Phase R SQLite task-store update wiring is not implemented yet");
+        Err(sqlite_boundary_stub_error(
+            "Phase R SQLite task-store update stub is not implemented yet",
+            SqliteBoundaryStubError::Task,
+        ))
     }
 
     fn attach_message_link(
         &self,
         _request: boundary::TaskStoreAttachMessageLinkRequest,
     ) -> Result<boundary::TaskStoreAttachMessageLinkResponse, AtmError> {
-        todo!("Phase R SQLite task-store attach-link wiring is not implemented yet");
+        Err(sqlite_boundary_stub_error(
+            "Phase R SQLite task-store attach-link stub is not implemented yet",
+            SqliteBoundaryStubError::Task,
+        ))
     }
 
     fn detach_message_link(
         &self,
         _request: boundary::TaskStoreDetachMessageLinkRequest,
     ) -> Result<boundary::TaskStoreDetachMessageLinkResponse, AtmError> {
-        todo!("Phase R SQLite task-store detach-link wiring is not implemented yet");
+        Err(sqlite_boundary_stub_error(
+            "Phase R SQLite task-store detach-link stub is not implemented yet",
+            SqliteBoundaryStubError::Task,
+        ))
     }
 
     fn record_ack_transition(
         &self,
         _request: boundary::TaskStoreRecordAckTransitionRequest,
     ) -> Result<boundary::TaskStoreRecordAckTransitionResponse, AtmError> {
-        todo!("Phase R SQLite task-store ack-transition wiring is not implemented yet");
+        Err(sqlite_boundary_stub_error(
+            "Phase R SQLite task-store ack-transition stub is not implemented yet",
+            SqliteBoundaryStubError::Task,
+        ))
     }
 
     fn query_task_metadata(
         &self,
         _request: boundary::TaskStoreQueryTaskMetadataRequest,
     ) -> Result<boundary::TaskStoreQueryTaskMetadataResponse, AtmError> {
-        todo!("Phase R SQLite task-store metadata wiring is not implemented yet");
+        Err(sqlite_boundary_stub_error(
+            "Phase R SQLite task-store metadata stub is not implemented yet",
+            SqliteBoundaryStubError::Task,
+        ))
     }
 }
 
@@ -194,27 +269,39 @@ impl boundary::RosterStore for SqliteRosterStore {
         &self,
         _request: boundary::RosterStoreReplaceRosterRequest,
     ) -> Result<boundary::RosterStoreReplaceRosterResponse, AtmError> {
-        todo!("Phase R SQLite roster-store replace wiring is not implemented yet");
+        Err(sqlite_boundary_stub_error(
+            "Phase R SQLite roster-store replace stub is not implemented yet",
+            SqliteBoundaryStubError::Roster,
+        ))
     }
 
     fn load_roster(
         &self,
         _request: boundary::RosterStoreLoadRosterRequest,
     ) -> Result<boundary::RosterStoreLoadRosterResponse, AtmError> {
-        todo!("Phase R SQLite roster-store load wiring is not implemented yet");
+        Err(sqlite_boundary_stub_error(
+            "Phase R SQLite roster-store load stub is not implemented yet",
+            SqliteBoundaryStubError::Roster,
+        ))
     }
 
     fn query_membership(
         &self,
         _request: boundary::RosterStoreQueryMembershipRequest,
     ) -> Result<boundary::RosterStoreQueryMembershipResponse, AtmError> {
-        todo!("Phase R SQLite roster-store membership wiring is not implemented yet");
+        Err(sqlite_boundary_stub_error(
+            "Phase R SQLite roster-store membership stub is not implemented yet",
+            SqliteBoundaryStubError::Roster,
+        ))
     }
 
     fn health_snapshot(
         &self,
         _request: boundary::RosterStoreHealthSnapshotRequest,
     ) -> Result<boundary::RosterStoreHealthSnapshotResponse, AtmError> {
-        todo!("Phase R SQLite roster-store health wiring is not implemented yet");
+        Err(sqlite_boundary_stub_error(
+            "Phase R SQLite roster-store health stub is not implemented yet",
+            SqliteBoundaryStubError::Roster,
+        ))
     }
 }
