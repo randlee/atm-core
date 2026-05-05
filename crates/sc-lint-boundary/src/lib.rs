@@ -84,6 +84,8 @@ pub struct GraphNode {
     pub manifest_path: String,
     pub source_path: Option<String>,
     pub module_path: Option<String>,
+    pub impl_kind: Option<&'static str>,
+    pub impl_trait: Option<String>,
     pub attributes: Vec<LintAttribute>,
 }
 
@@ -150,6 +152,8 @@ impl GraphBuilder {
             manifest_path: manifest_path.to_string(),
             source_path: Some(source_path.display().to_string()),
             module_path: Some("crate".to_string()),
+            impl_kind: None,
+            impl_trait: None,
             attributes: Vec::new(),
         });
     }
@@ -272,33 +276,44 @@ impl ReferenceCollector {
         self.references
     }
 
-    fn maybe_insert(&mut self, ident: &Ident) {
-        let name = ident.to_string();
-        if name == "Self" {
+    fn maybe_insert_path(&mut self, path: &syn::Path) {
+        let mut segments: Vec<String> = path
+            .segments
+            .iter()
+            .map(|segment| segment.ident.to_string())
+            .collect();
+        if segments.is_empty() {
+            return;
+        }
+
+        if segments[0] == "Self" {
             if let Some(owner_name) = &self.owner_name {
-                self.references.insert(owner_name.clone());
+                segments[0] = owner_name.clone();
+                self.references.insert(segments.join("::"));
             }
             return;
         }
 
-        if self.local_owner_names.contains(&name) {
-            self.references.insert(name);
+        let first = &segments[0];
+        let last = segments.last().unwrap();
+        let should_collect = matches!(first.as_str(), "crate" | "self" | "super")
+            || self.local_owner_names.contains(first)
+            || self.local_owner_names.contains(last);
+
+        if should_collect {
+            self.references.insert(segments.join("::"));
         }
     }
 }
 
 impl<'ast> Visit<'ast> for ReferenceCollector {
     fn visit_type_path(&mut self, type_path: &'ast syn::TypePath) {
-        if let Some(segment) = type_path.path.segments.last() {
-            self.maybe_insert(&segment.ident);
-        }
+        self.maybe_insert_path(&type_path.path);
         syn::visit::visit_type_path(self, type_path);
     }
 
     fn visit_expr_path(&mut self, expr_path: &'ast syn::ExprPath) {
-        if let Some(segment) = expr_path.path.segments.last() {
-            self.maybe_insert(&segment.ident);
-        }
+        self.maybe_insert_path(&expr_path.path);
         syn::visit::visit_expr_path(self, expr_path);
     }
 }
@@ -355,6 +370,8 @@ fn build_workspace_graph(root: &Path) -> Result<GraphExport> {
                 manifest_path: context.manifest_path.clone(),
                 source_path: Some(source_path.display().to_string()),
                 module_path: Some("crate".to_string()),
+                impl_kind: None,
+                impl_trait: None,
                 attributes: root_attributes,
             });
             builder.add_edge("contains", context.crate_id.clone(), root_module_id.clone());
@@ -407,6 +424,8 @@ fn ingest_module_items(
                     manifest_path: context.manifest_path.clone(),
                     source_path: Some(source_path.display().to_string()),
                     module_path: Some(child_module_path.clone()),
+                    impl_kind: None,
+                    impl_trait: None,
                     attributes,
                 });
                 builder.add_edge(
@@ -589,6 +608,8 @@ fn ingest_module_items(
                         manifest_path: context.manifest_path.clone(),
                         source_path: Some(source_path.display().to_string()),
                         module_path: Some(module_path.to_string()),
+                        impl_kind: None,
+                        impl_trait: None,
                         attributes: Vec::new(),
                     });
                     builder.add_edge(
@@ -610,6 +631,16 @@ fn ingest_module_items(
                             manifest_path: context.manifest_path.clone(),
                             source_path: Some(source_path.display().to_string()),
                             module_path: Some(module_path.to_string()),
+                            impl_kind: Some(if item_impl.trait_.is_some() {
+                                "trait"
+                            } else {
+                                "inherent"
+                            }),
+                            impl_trait: item_impl.trait_.as_ref().and_then(|(_, path, _)| {
+                                path.segments
+                                    .last()
+                                    .map(|segment| segment.ident.to_string())
+                            }),
                             attributes: parse_lint_attributes(&method.attrs)?,
                         });
                         builder.add_edge("declares", owner_node_id.clone(), method_id.clone());
@@ -655,6 +686,8 @@ fn add_item_node(
         manifest_path: context.manifest_path.clone(),
         source_path: Some(source_path.display().to_string()),
         module_path: Some(module_path.to_string()),
+        impl_kind: None,
+        impl_trait: None,
         attributes,
     });
     builder.add_edge("contains", parent_module_id.to_string(), id.clone());
@@ -665,18 +698,50 @@ fn add_reference_edges(
     builder: &mut GraphBuilder,
     source_node_id: &str,
     module_path: &str,
-    referenced_names: BTreeSet<String>,
+    referenced_paths: BTreeSet<String>,
 ) {
-    let module_node_id = source_node_id
-        .split("::module::")
-        .next()
-        .map(|crate_prefix| format!("{crate_prefix}::module::{module_path}"))
-        .unwrap_or_else(|| source_node_id.to_string());
-
-    for referenced_name in referenced_names {
-        let target_node_id = format!("{module_node_id}::{referenced_name}");
+    for referenced_path in referenced_paths {
+        let target_node_id =
+            resolve_reference_target(source_node_id, module_path, &referenced_path);
         builder.add_edge("references", source_node_id.to_string(), target_node_id);
     }
+}
+
+fn resolve_reference_target(
+    source_node_id: &str,
+    module_path: &str,
+    referenced_path: &str,
+) -> String {
+    let crate_prefix = source_node_id
+        .split("::module::")
+        .next()
+        .unwrap_or(source_node_id);
+
+    if let Some(rest) = referenced_path.strip_prefix("crate::") {
+        return format!("{crate_prefix}::module::crate::{rest}");
+    }
+
+    if let Some(rest) = referenced_path.strip_prefix("self::") {
+        return format!("{crate_prefix}::module::{module_path}::{rest}");
+    }
+
+    if referenced_path.starts_with("super::") {
+        let mut module_segments: Vec<String> =
+            module_path.split("::").map(ToOwned::to_owned).collect();
+        let mut rest = referenced_path;
+        while let Some(stripped) = rest.strip_prefix("super::") {
+            if module_segments.len() > 1 {
+                module_segments.pop();
+            }
+            rest = stripped;
+        }
+        return format!(
+            "{crate_prefix}::module::{}::{rest}",
+            module_segments.join("::")
+        );
+    }
+
+    format!("{crate_prefix}::module::{module_path}::{referenced_path}")
 }
 
 fn parse_lint_attributes(attrs: &[Attribute]) -> Result<Vec<LintAttribute>> {
@@ -855,42 +920,78 @@ fn analyze_cycles(graph: &GraphExport, rule_filter: Option<&str>) -> Vec<Finding
         if self_refs.is_empty() {
             continue;
         }
+        let mut per_source: BTreeMap<String, Vec<&OwnerRefEdge>> = BTreeMap::new();
+        for edge in self_refs {
+            per_source
+                .entry(edge.source_node_id.clone())
+                .or_default()
+                .push(edge);
+        }
 
-        let allow_rule = self_refs.iter().any(|edge| {
-            edge.node_ids.iter().any(|node_id| {
-                node_map
-                    .get(node_id)
-                    .map(|node| {
-                        node.attributes.iter().any(|attr| {
-                            attr.scope == "boundary"
-                                && attr.name == "allow"
-                                && attr
-                                    .values
-                                    .iter()
-                                    .any(|value| value == "cycle.type_method_self_loop")
+        for (source_node_id, source_edges) in per_source {
+            let allow_rule = source_edges.iter().any(|edge| {
+                edge.node_ids.iter().any(|node_id| {
+                    node_map
+                        .get(node_id)
+                        .map(|node| {
+                            node.attributes.iter().any(|attr| {
+                                attr.scope == "boundary"
+                                    && attr.name == "allow"
+                                    && attr
+                                        .values
+                                        .iter()
+                                        .any(|value| value == "cycle.type_method_self_loop")
+                            })
                         })
-                    })
-                    .unwrap_or(false)
-            })
-        });
-
-        let is_type_method_self_loop = self_refs.iter().all(|edge| {
-            edge.source_kind == "method"
-                && edge.owner_kind == "type"
-                && edge.target_owner_id == edge.source_owner_id
-        });
-
-        if is_type_method_self_loop && !allow_rule {
-            findings.push(Finding {
-                rule_id: "SCB-CYCLE-002".to_string(),
-                kind: "type_method_self_loop".to_string(),
-                message: format!("type/method self-loop on owner {owner_id}"),
-                owner_ids: vec![owner_id.clone()],
-                node_ids: self_refs
-                    .iter()
-                    .flat_map(|edge| edge.node_ids.clone())
-                    .collect(),
+                        .unwrap_or(false)
+                })
             });
+            if allow_rule {
+                continue;
+            }
+
+            let is_type_method_self_loop = source_edges.iter().all(|edge| {
+                edge.source_kind == "method"
+                    && edge.owner_kind == "type"
+                    && edge.target_owner_id == edge.source_owner_id
+                    && edge.source_impl_kind != Some("trait")
+            });
+            if is_type_method_self_loop {
+                findings.push(Finding {
+                    rule_id: "SCB-CYCLE-002".to_string(),
+                    kind: "type_method_self_loop".to_string(),
+                    message: format!("type/method self-loop on owner {owner_id}"),
+                    owner_ids: vec![owner_id.clone()],
+                    node_ids: source_edges
+                        .iter()
+                        .flat_map(|edge| edge.node_ids.clone())
+                        .collect(),
+                });
+                continue;
+            }
+
+            let is_trait_impl_self_loop = source_edges.iter().all(|edge| {
+                edge.source_kind == "method"
+                    && edge.owner_kind == "type"
+                    && edge.target_owner_id == edge.source_owner_id
+                    && edge.source_impl_kind == Some("trait")
+            });
+            if is_trait_impl_self_loop {
+                let trait_name = node_map
+                    .get(&source_node_id)
+                    .and_then(|node| node.impl_trait.clone())
+                    .unwrap_or_else(|| "unknown_trait".to_string());
+                findings.push(Finding {
+                    rule_id: "SCB-CYCLE-003".to_string(),
+                    kind: "trait_impl_self_loop".to_string(),
+                    message: format!("trait-impl self-loop on owner {owner_id} via {trait_name}"),
+                    owner_ids: vec![owner_id.clone()],
+                    node_ids: source_edges
+                        .iter()
+                        .flat_map(|edge| edge.node_ids.clone())
+                        .collect(),
+                });
+            }
         }
     }
 
@@ -903,6 +1004,8 @@ struct OwnerRefEdge {
     target_owner_id: String,
     owner_kind: &'static str,
     source_kind: &'static str,
+    source_node_id: String,
+    source_impl_kind: Option<&'static str>,
     node_ids: Vec<String>,
 }
 
@@ -939,6 +1042,8 @@ fn build_owner_graph<'a>(
             target_owner_id: target_owner_id.clone(),
             owner_kind: owner_kind_for_node_id(&source_owner_id, node_map).unwrap_or("module"),
             source_kind: source_node.kind,
+            source_node_id: source_node.id.clone(),
+            source_impl_kind: source_node.impl_kind,
             node_ids: vec![source_node.id.clone(), target_node.id.clone()],
         };
 
@@ -1336,6 +1441,70 @@ mod tests {
     }
 
     #[test]
+    fn suppresses_type_method_self_loop_when_allowed_on_method() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                pub struct Loop;
+
+                impl Loop {
+                    #[sc_lint(boundary.allow("cycle.type_method_self_loop"))]
+                    pub fn build() -> Loop {
+                        Loop
+                    }
+                }
+            "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("cycles".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "pass");
+        assert!(report.findings.is_empty());
+    }
+
+    #[test]
+    fn downgrades_trait_impl_self_loop() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                pub struct Loop;
+
+                impl core::fmt::Display for Loop {
+                    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                        let _ = Loop;
+                        write!(f, "loop")
+                    }
+                }
+            "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("cycles".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "pass");
+        assert_eq!(report.findings.len(), 1);
+        assert_eq!(report.findings[0].rule_id, "SCB-CYCLE-003");
+        assert_eq!(report.findings[0].kind, "trait_impl_self_loop");
+    }
+
+    #[test]
     fn reports_multi_owner_architectural_cycle_as_failure() {
         let fixture = WorkspaceFixture::new();
         fixture.write_workspace_root();
@@ -1371,6 +1540,107 @@ mod tests {
                 "crate::example::example::module::crate::Alpha".to_string(),
                 "crate::example::example::module::crate::Beta".to_string(),
             ]
+        );
+    }
+
+    #[test]
+    fn reports_multi_owner_cycle_across_modules_as_failure() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                mod left;
+                mod right;
+            "#,
+        );
+        fixture.write_source(
+            "example",
+            "left.rs",
+            "pub struct Alpha { pub beta: crate::right::Beta }",
+        );
+        fixture.write_source(
+            "example",
+            "right.rs",
+            "pub struct Beta { pub alpha: crate::left::Alpha }",
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("cycles".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "fail");
+        assert_eq!(report.findings.len(), 1);
+        assert_eq!(report.findings[0].rule_id, "SCB-CYCLE-001");
+    }
+
+    #[test]
+    fn does_not_flag_acyclic_chain() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                pub struct Alpha { pub beta: Beta }
+                pub struct Beta { pub value: usize }
+            "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("cycles".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "pass");
+        assert!(report.findings.is_empty());
+    }
+
+    #[test]
+    fn classifies_newtype_helper_self_loop_with_current_generic_rule() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                pub struct Wrapper(String);
+
+                impl Wrapper {
+                    pub fn into_inner(self) -> String {
+                        self.0
+                    }
+
+                    pub fn from_inner(inner: String) -> Wrapper {
+                        Wrapper(inner)
+                    }
+                }
+            "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("cycles".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "pass");
+        assert_eq!(report.findings.len(), 2);
+        assert!(
+            report
+                .findings
+                .iter()
+                .all(|finding| finding.rule_id == "SCB-CYCLE-002")
         );
     }
 

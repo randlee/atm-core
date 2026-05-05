@@ -217,6 +217,7 @@ Current scaffold status:
   - classify owner-graph cycles into:
     - `SCB-CYCLE-001` multi-owner architectural cycle
     - `SCB-CYCLE-002` type/method self-loop
+    - `SCB-CYCLE-003` trait-impl self-loop
 - `sc-lint-attributes` exists and already reserves the shared
   `#[sc_lint(...)]` namespace with compile-valid, no-op attribute parsing
 
@@ -229,6 +230,18 @@ Current implemented suppression use:
 
 - `boundary.allow("cycle.type_method_self_loop")`
   - suppresses `SCB-CYCLE-002` on annotated items
+
+Current rule behavior:
+
+- `SCB-CYCLE-001`
+  - hard failure
+  - owner SCC with `2+` distinct owners
+- `SCB-CYCLE-002`
+  - non-fatal signal
+  - inherent type/method self-loop
+- `SCB-CYCLE-003`
+  - non-fatal signal
+  - trait-impl self-loop downgraded out of the main failure path
 
 ### JSON findings envelope
 

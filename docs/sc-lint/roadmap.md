@@ -117,6 +117,7 @@ Current implementation status:
 
 - implemented:
   - `type_method_self_loop`
+  - `trait_impl_self_loop`
   - `multi_owner_architectural_cycle`
 - deferred:
   - `newtype_conversion_self_loop`

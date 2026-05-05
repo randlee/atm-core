@@ -40,6 +40,7 @@ Current scaffold status:
     - owner-graph cycle classification with:
       - `SCB-CYCLE-001` multi-owner architectural cycle
       - `SCB-CYCLE-002` type/method self-loop
+      - `SCB-CYCLE-003` trait-impl self-loop
     - stable text/JSON findings output scaffolding
     - graph JSON export scaffolding
 
