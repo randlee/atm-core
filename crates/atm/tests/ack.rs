@@ -4,6 +4,8 @@ mod support;
 
 use std::fs;
 use std::process::Command;
+use std::thread;
+use std::time::Duration as StdDuration;
 
 use atm_core::schema::{
     AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig, hydrate_legacy_fields_from_metadata,
@@ -315,16 +317,34 @@ impl Fixture {
         let tempdir = tempfile::tempdir().expect("tempdir");
         let fixture = Self { tempdir };
         fixture.write_team_config(members);
+        fixture.warm_daemon();
         fixture
     }
 
     fn run(&self, args: &[&str]) -> std::process::Output {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
-        support::configure_atm_command(&mut command, self.tempdir.path(), Some(TEST_SENDER))
+        let mut first = Command::new(env!("CARGO_BIN_EXE_atm"));
+        let output =
+            support::configure_atm_command(&mut first, self.tempdir.path(), Some(TEST_SENDER))
+                .args(args)
+                .current_dir(self.tempdir.path())
+                .output()
+                .expect("run atm");
+        if !support::is_daemon_start_transient(&output) {
+            return output;
+        }
+
+        thread::sleep(StdDuration::from_millis(50));
+        let mut retry = Command::new(env!("CARGO_BIN_EXE_atm"));
+        support::configure_atm_command(&mut retry, self.tempdir.path(), Some(TEST_SENDER))
             .args(args)
             .current_dir(self.tempdir.path())
             .output()
-            .expect("run atm")
+            .unwrap_or_else(|error| panic!("retry atm {:?} failed: {error}", args))
+    }
+
+    fn warm_daemon(&self) {
+        let output = self.run(&["read", "--all", "--no-mark", "--json"]);
+        assert!(output.status.success(), "stderr: {}", self.stderr(&output));
     }
 
     fn write_atm_config(&self, body: &str) {
