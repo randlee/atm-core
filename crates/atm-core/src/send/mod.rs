@@ -9,12 +9,11 @@ use tracing::warn;
 use crate::address::AgentAddress;
 use crate::config;
 use crate::error::{AtmError, AtmErrorCode};
-use crate::home;
 use crate::identity;
-use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
+use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::types::{AgentName, TaskId, TeamName};
 use crate::workflow;
 
@@ -122,7 +121,15 @@ pub fn send_mail(
     request: SendRequest,
     observability: &dyn ObservabilityPort,
 ) -> Result<SendOutcome, AtmError> {
-    let config = config::load_config(&request.current_dir)?;
+    send_mail_with_runtime(request, observability, &LocalServiceRuntime)
+}
+
+fn send_mail_with_runtime<R: RetainedServiceRuntime>(
+    request: SendRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+) -> Result<SendOutcome, AtmError> {
+    let config = runtime.load_config(&request.current_dir)?;
     let canonical_sender =
         identity::resolve_sender_identity(request.sender_override.as_deref(), config.as_ref())?;
     let recipient = resolve_recipient(
@@ -139,16 +146,15 @@ pub fn send_mail(
         config.as_ref(),
     );
 
-    let team_dir = home::team_dir_from_home(&request.home_dir, &recipient.team)?;
+    let team_dir = runtime.team_dir(&request.home_dir, &recipient.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&recipient.team));
     }
 
-    let inbox_path =
-        home::inbox_path_from_home(&request.home_dir, &recipient.team, &recipient.agent)?;
+    let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
     let mut warnings = Vec::new();
 
-    match config::load_team_config(&team_dir) {
+    match runtime.load_team_config(&team_dir) {
         Ok(team_config) => {
             alert_state::clear_missing_team_config_alert(
                 &request.home_dir,
@@ -189,6 +195,7 @@ pub fn send_mail(
 
             if !request.dry_run {
                 notify_team_lead_missing_config(
+                    runtime,
                     &request.home_dir,
                     &team_dir,
                     &recipient.team,
@@ -232,6 +239,7 @@ pub fn send_mail(
             extra,
         };
         append_mailbox_message_and_seed_workflow(
+            runtime,
             &request.home_dir,
             &recipient.team,
             &recipient.agent,
@@ -256,7 +264,7 @@ pub fn send_mail(
     };
 
     if !request.dry_run {
-        maybe_run_post_send_hook(
+        runtime.maybe_run_post_send_hook(
             &mut outcome.warnings,
             config.as_ref(),
             PostSendHookContext {
@@ -351,6 +359,7 @@ fn is_false(value: &bool) -> bool {
 }
 
 fn notify_team_lead_missing_config(
+    runtime: &impl RetainedServiceRuntime,
     home_dir: &Path,
     team_dir: &Path,
     team: &TeamName,
@@ -361,7 +370,7 @@ fn notify_team_lead_missing_config(
         return;
     }
 
-    let team_lead_inbox = match home::inbox_path_from_home(home_dir, team, ROLE_TEAM_LEAD) {
+    let team_lead_inbox = match runtime.inbox_path(home_dir, team, ROLE_TEAM_LEAD) {
         Ok(path) => path,
         Err(error) => {
             warn!(
@@ -414,6 +423,7 @@ fn notify_team_lead_missing_config(
     };
 
     if let Err(error) = append_mailbox_message_and_seed_workflow(
+        runtime,
         home_dir,
         team,
         &AgentName::from_validated(ROLE_TEAM_LEAD),
@@ -431,22 +441,23 @@ fn notify_team_lead_missing_config(
 }
 
 fn append_mailbox_message_and_seed_workflow(
+    runtime: &impl RetainedServiceRuntime,
     home_dir: &Path,
     team: &TeamName,
     agent: &AgentName,
     inbox_path: &Path,
     envelope: &MessageEnvelope,
 ) -> Result<(), AtmError> {
-    workflow::commit_workflow_state(
+    runtime.commit_workflow_state(
         home_dir,
         team,
         agent,
         [inbox_path.to_path_buf()],
-        mailbox::lock::default_lock_timeout(),
+        runtime.default_lock_timeout(),
         |workflow_state| {
-            let mut inbox_messages = mailbox::read_messages(inbox_path)?;
+            let mut inbox_messages = runtime.read_messages(inbox_path)?;
             inbox_messages.push(envelope.clone());
-            mailbox::store::commit_mailbox_state(inbox_path, &inbox_messages)?;
+            runtime.commit_mailbox_state(inbox_path, &inbox_messages)?;
             Ok((
                 (),
                 workflow::remember_initial_state(workflow_state, envelope),

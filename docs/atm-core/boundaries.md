@@ -50,6 +50,7 @@ dependencies:
     - atm
     - atm-daemon
     - atm-graft
+    - atm-rusqlite
   allowed_dependencies: []
   forbidden_edges: []
 
@@ -128,6 +129,7 @@ dependencies:
     - atm
     - atm-daemon
     - atm-graft
+    - atm-rusqlite
   allowed_dependencies: []
   forbidden_edges: []
 
@@ -201,6 +203,7 @@ ownership:
 
 dependencies:
   allowed_dependents:
+    - atm-rusqlite
     - atm-daemon
   allowed_dependencies: []
   forbidden_edges: []
@@ -274,6 +277,7 @@ ownership:
 
 dependencies:
   allowed_dependents:
+    - atm-rusqlite
     - atm-daemon
   allowed_dependencies: []
   forbidden_edges: []
@@ -349,6 +353,7 @@ ownership:
 
 dependencies:
   allowed_dependents:
+    - atm-rusqlite
     - atm-daemon
   allowed_dependencies: []
   forbidden_edges: []
@@ -420,6 +425,7 @@ ownership:
 
 dependencies:
   allowed_dependents:
+    - atm-rusqlite
     - atm-daemon
   allowed_dependencies: []
   forbidden_edges: []
@@ -472,7 +478,7 @@ name: MailStore
 public:
   trait: MailStore
   facade: null
-  notes: stub trait landed in atm_core::boundary; contract shape remains skeletal
+  notes: trait landed in atm_core::boundary; concrete implementation now lives in crates/atm-rusqlite/src/lib.rs as SqliteMailStore
 
 implementation:
   type: null
@@ -522,9 +528,10 @@ enforcement:
     - no_concrete_store_leakage
 
 status:
-  state: stub_landed
+  state: concrete_landed
   notes:
-    - trait plus request/response stubs landed in atm_core::boundary
+    - trait plus request/response structs landed in atm_core::boundary
+    - concrete store implementation landed in crates/atm-rusqlite/src/lib.rs as SqliteMailStore
     - mail state remains distinct from task and roster state
 ```
 
@@ -545,7 +552,7 @@ name: TaskStore
 public:
   trait: TaskStore
   facade: null
-  notes: stub trait landed in atm_core::boundary; contract shape remains skeletal
+  notes: trait landed in atm_core::boundary; concrete implementation now lives in crates/atm-rusqlite/src/lib.rs as SqliteTaskStore
 
 implementation:
   type: null
@@ -595,9 +602,10 @@ enforcement:
     - no_concrete_store_leakage
 
 status:
-  state: stub_landed
+  state: concrete_landed
   notes:
-    - trait plus request/response stubs landed in atm_core::boundary
+    - trait plus request/response structs landed in atm_core::boundary
+    - concrete store implementation landed in crates/atm-rusqlite/src/lib.rs as SqliteTaskStore
     - ack-specific state changes belong here even when ack is modeled through send
 ```
 
@@ -618,7 +626,7 @@ name: RosterStore
 public:
   trait: RosterStore
   facade: null
-  notes: stub trait landed in atm_core::boundary; contract shape remains skeletal
+  notes: trait landed in atm_core::boundary; concrete implementation now lives in crates/atm-rusqlite/src/roster_store.rs as SqliteRosterStore
 
 implementation:
   type: null
@@ -668,9 +676,10 @@ enforcement:
     - no_concrete_store_leakage
 
 status:
-  state: stub_landed
+  state: concrete_landed
   notes:
-    - trait plus request/response stubs landed in atm_core::boundary
+    - trait plus request/response structs landed in atm_core::boundary
+    - concrete store implementation landed in crates/atm-rusqlite/src/roster_store.rs as SqliteRosterStore
     - live status belongs elsewhere; this boundary owns durable roster truth only
 ```
 
@@ -715,6 +724,7 @@ dependencies:
   allowed_dependents:
     - atm
     - atm-daemon
+    - atm-rusqlite
   allowed_dependencies: []
   forbidden_edges: []
 
@@ -787,6 +797,7 @@ ownership:
 
 dependencies:
   allowed_dependents:
+    - atm-rusqlite
     - atm-daemon
   allowed_dependencies: []
   forbidden_edges: []
@@ -860,6 +871,7 @@ ownership:
 
 dependencies:
   allowed_dependents:
+    - atm-rusqlite
     - atm-daemon
   allowed_dependencies: []
   forbidden_edges: []
@@ -930,6 +942,7 @@ ownership:
 
 dependencies:
   allowed_dependents:
+    - atm-rusqlite
     - atm-daemon
   allowed_dependencies: []
   forbidden_edges: []
@@ -1002,6 +1015,7 @@ ownership:
 
 dependencies:
   allowed_dependents:
+    - atm-rusqlite
     - atm-daemon
   allowed_dependencies: []
   forbidden_edges: []

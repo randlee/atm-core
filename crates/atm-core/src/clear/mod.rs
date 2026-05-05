@@ -8,16 +8,14 @@ use serde_json::Value;
 use tracing::debug;
 
 use crate::address::AgentAddress;
-use crate::config;
 use crate::error::AtmError;
-use crate::home;
 use crate::identity;
-use crate::mailbox;
 use crate::mailbox::source::{SourceFile, SourcedMessage, resolve_target};
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
 use crate::schema::MessageEnvelope;
+use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::types::{AgentName, MessageClass, SourceIndex, TeamName};
 use crate::workflow;
 
@@ -74,7 +72,15 @@ pub fn clear_mail(
     query: ClearQuery,
     observability: &dyn ObservabilityPort,
 ) -> Result<ClearOutcome, AtmError> {
-    let config = config::load_config(&query.current_dir)?;
+    clear_mail_with_runtime(query, observability, &LocalServiceRuntime)
+}
+
+fn clear_mail_with_runtime<R: RetainedServiceRuntime>(
+    query: ClearQuery,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+) -> Result<ClearOutcome, AtmError> {
+    let config = runtime.load_config(&query.current_dir)?;
     let actor = identity::resolve_actor_identity(query.actor_override.as_deref(), config.as_ref())?;
     let target = resolve_target(
         query.target_address.as_ref(),
@@ -83,14 +89,14 @@ pub fn clear_mail(
         config.as_ref(),
     )?;
 
-    let team_dir = home::team_dir_from_home(&query.home_dir, &target.team)?;
+    let team_dir = runtime.team_dir(&query.home_dir, &target.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&target.team).with_recovery(
             "Create the team config for the requested team or target a different team before retrying `atm clear`.",
         ));
     }
 
-    let team_config = config::load_team_config(&team_dir)?;
+    let team_config = runtime.load_team_config(&team_dir)?;
     if target.explicit
         && !team_config
             .members
@@ -106,13 +112,13 @@ pub fn clear_mail(
 
     let cutoff = cutoff_timestamp(query.older_than)?;
     let workflow_path =
-        home::workflow_state_path_from_home(&query.home_dir, &target.team, &target.agent)?;
+        runtime.workflow_state_path(&query.home_dir, &target.team, &target.agent)?;
 
     let (removed_total, remaining_total, removed_by_class) = if query.dry_run {
         let workflow_state =
-            workflow::load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
+            runtime.load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
         let source_files =
-            mailbox::store::observe_source_files(&query.home_dir, &target.team, &target.agent)?;
+            runtime.observe_source_files(&query.home_dir, &target.team, &target.agent)?;
         // Clear intentionally does not apply read-surface idle-notification dedup.
         // Cleanup decisions must inspect the raw merged surface after legacy
         // message_id canonicalization only.
@@ -124,25 +130,25 @@ pub fn clear_mail(
             removed_by_class,
         )
     } else {
-        mailbox::store::with_locked_source_files(
+        runtime.with_locked_source_files(
             &query.home_dir,
             &target.team,
             &target.agent,
             [workflow_path],
-            mailbox::lock::default_lock_timeout(),
+            runtime.default_lock_timeout(),
             |_source_paths, source_files| {
                 let mut workflow_state =
-                    workflow::load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
+                    runtime.load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
                 let (removable, removed_by_class, _) =
                     removable_messages(source_files, &workflow_state, cutoff, query.idle_only);
                 let workflow_changed =
                     remove_workflow_state_entries(&mut workflow_state, source_files, &removable);
                 apply_removals(source_files, &removable);
                 if !removable.is_empty() {
-                    mailbox::store::commit_source_files(source_files)?;
+                    runtime.commit_source_files(source_files)?;
                 }
                 if workflow_changed {
-                    workflow::save_workflow_state(
+                    runtime.save_workflow_state(
                         &query.home_dir,
                         &target.team,
                         &target.agent,

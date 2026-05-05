@@ -223,6 +223,16 @@ impl ConfigIngress for DaemonConfigIngress {
     ) -> Result<ConfigTeamLoadResponse, AtmError> {
         boundary_support::load_team_config(request)
     }
+
+    fn load_team_config(
+        &self,
+        _request: ConfigTeamLoadRequest,
+    ) -> Result<ConfigTeamLoadResponse, AtmError> {
+        Err(daemon_boundary_stub_error(
+            "daemon config ingress team-config stub is not implemented yet",
+            DaemonBoundaryStubError::ConfigIngress,
+        ))
+    }
 }
 
 /// Placeholder runtime inbox ingress for daemon-owned import workflows.
