@@ -528,7 +528,7 @@ enforcement:
     - no_concrete_store_leakage
 
 status:
-  state: active
+  state: concrete_landed
   notes:
     - trait plus request/response structs landed in atm_core::boundary
     - concrete store implementation landed in crates/atm-rusqlite/src/lib.rs as SqliteMailStore
@@ -602,7 +602,7 @@ enforcement:
     - no_concrete_store_leakage
 
 status:
-  state: active
+  state: concrete_landed
   notes:
     - trait plus request/response structs landed in atm_core::boundary
     - concrete store implementation landed in crates/atm-rusqlite/src/lib.rs as SqliteTaskStore
@@ -626,7 +626,7 @@ name: RosterStore
 public:
   trait: RosterStore
   facade: null
-  notes: trait landed in atm_core::boundary; concrete implementation now lives in crates/atm-rusqlite/src/lib.rs as SqliteRosterStore
+  notes: trait landed in atm_core::boundary; concrete implementation now lives in crates/atm-rusqlite/src/roster_store.rs as SqliteRosterStore
 
 implementation:
   type: null
@@ -676,10 +676,10 @@ enforcement:
     - no_concrete_store_leakage
 
 status:
-  state: active
+  state: concrete_landed
   notes:
     - trait plus request/response structs landed in atm_core::boundary
-    - concrete store implementation landed in crates/atm-rusqlite/src/lib.rs as SqliteRosterStore
+    - concrete store implementation landed in crates/atm-rusqlite/src/roster_store.rs as SqliteRosterStore
     - live status belongs elsewhere; this boundary owns durable roster truth only
 ```
 

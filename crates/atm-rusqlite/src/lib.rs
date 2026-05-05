@@ -3,9 +3,10 @@
 
 //! SQLite-backed adapter implementations for the Phase R store boundaries.
 
+mod roster_store;
+
 use atm_core::boundary;
 use atm_core::error::AtmError;
-use atm_core::schema::TeamConfig;
 use atm_core::types::{IsoTimestamp, TeamName};
 use rusqlite::{Connection, Error as RusqliteError, OptionalExtension, params};
 use std::path::{Path, PathBuf};
@@ -155,6 +156,17 @@ fn deserialize_json<T: serde::de::DeserializeOwned>(
 ) -> Result<T, AtmError> {
     serde_json::from_str(value)
         .map_err(|error| json_error(format!("failed to decode {what}"), error))
+}
+
+#[derive(Debug)]
+struct SqliteRosterStore {
+    db: Arc<SharedDb>,
+}
+
+impl SqliteRosterStore {
+    fn new(db: Arc<SharedDb>) -> Self {
+        Self { db }
+    }
 }
 
 /// Internal assembly root for Phase R SQLite-backed boundary implementations.
@@ -863,161 +875,10 @@ impl boundary::TaskStore for SqliteTaskStore {
     }
 }
 
-#[derive(Debug)]
-struct SqliteRosterStore {
-    db: Arc<SharedDb>,
-}
-
-impl SqliteRosterStore {
-    fn new(db: Arc<SharedDb>) -> Self {
-        Self { db }
-    }
-}
-
-impl boundary::sealed::Sealed for SqliteRosterStore {}
-
-impl boundary::RosterStore for SqliteRosterStore {
-    fn replace_roster(
-        &self,
-        request: boundary::RosterStoreReplaceRosterRequest,
-    ) -> Result<boundary::RosterStoreReplaceRosterResponse, AtmError> {
-        let previous_member_count = self
-            .load_roster(boundary::RosterStoreLoadRosterRequest {
-                team: request.team.clone(),
-            })
-            .ok()
-            .map(|response| response.roster.members.len() as u64)
-            .unwrap_or(0);
-        let roster_json = serialize_json(&request.roster, "roster-store snapshot")?;
-        self.db.with_transaction(|transaction| {
-            transaction
-                .execute(
-                    "INSERT INTO rosters(team, roster_json, source, updated_at)
-                     VALUES (?1, ?2, ?3, ?4)
-                     ON CONFLICT(team) DO UPDATE SET
-                       roster_json = excluded.roster_json,
-                       source = excluded.source,
-                       updated_at = excluded.updated_at;",
-                    params![
-                        request.team.as_str(),
-                        roster_json,
-                        request.source,
-                        chrono::Utc::now().to_rfc3339(),
-                    ],
-                )
-                .map_err(|error| sqlite_error("failed to replace roster-store snapshot", error))?;
-            Ok(())
-        })?;
-
-        Ok(boundary::RosterStoreReplaceRosterResponse {
-            team: request.team,
-            previous_member_count,
-            current_member_count: request.roster.members.len() as u64,
-            replaced: true,
-        })
-    }
-
-    fn load_roster(
-        &self,
-        request: boundary::RosterStoreLoadRosterRequest,
-    ) -> Result<boundary::RosterStoreLoadRosterResponse, AtmError> {
-        let roster_json = self.db.with_connection(|connection| {
-            connection
-                .query_row(
-                    "SELECT roster_json FROM rosters WHERE team = ?1;",
-                    params![request.team.as_str()],
-                    |row| row.get::<_, String>(0),
-                )
-                .optional()
-                .map_err(|error| sqlite_error("failed to load roster-store snapshot", error))
-        })?;
-
-        let roster_json = roster_json.ok_or_else(|| {
-            AtmError::validation(format!(
-                "roster-store load failed because team {} has no persisted roster snapshot",
-                request.team
-            ))
-            .with_recovery(
-                "Replace the roster through RosterStore::replace_roster before loading it.",
-            )
-        })?;
-        let roster: TeamConfig = deserialize_json(&roster_json, "roster-store snapshot")?;
-
-        Ok(boundary::RosterStoreLoadRosterResponse {
-            team: request.team,
-            roster,
-        })
-    }
-
-    fn query_membership(
-        &self,
-        request: boundary::RosterStoreQueryMembershipRequest,
-    ) -> Result<boundary::RosterStoreQueryMembershipResponse, AtmError> {
-        let roster = self.load_roster(boundary::RosterStoreLoadRosterRequest {
-            team: request.team.clone(),
-        })?;
-        let member = roster
-            .roster
-            .members
-            .into_iter()
-            .find(|candidate| candidate.name == request.member);
-        let is_member = member.is_some();
-
-        Ok(boundary::RosterStoreQueryMembershipResponse {
-            team: request.team,
-            member,
-            is_member,
-        })
-    }
-
-    fn health_snapshot(
-        &self,
-        request: boundary::RosterStoreHealthSnapshotRequest,
-    ) -> Result<boundary::RosterStoreHealthSnapshotResponse, AtmError> {
-        let (roster_json, updated_at) = self.db.with_connection(|connection| {
-            connection
-                .query_row(
-                    "SELECT roster_json, updated_at FROM rosters WHERE team = ?1;",
-                    params![request.team.as_str()],
-                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
-                )
-                .optional()
-                .map_err(|error| sqlite_error("failed to load roster-store health snapshot", error))
-        })?
-        .ok_or_else(|| {
-            AtmError::validation(format!(
-                "roster-store health failed because team {} has no persisted roster snapshot",
-                request.team
-            ))
-            .with_recovery("Replace the roster through RosterStore::replace_roster before requesting health.")
-        })?;
-
-        let roster: TeamConfig = deserialize_json(&roster_json, "roster-store snapshot")?;
-        let refreshed_at = updated_at
-            .parse::<chrono::DateTime<chrono::Utc>>()
-            .map(IsoTimestamp::from_datetime)
-            .map_err(|error| {
-                AtmError::validation(format!(
-                    "failed to parse roster-store health timestamp: {error}"
-                ))
-                .with_recovery("Repair the sqlite-backed roster row or rewrite it through the owning boundary.")
-                .with_source(error)
-            })?;
-
-        Ok(boundary::RosterStoreHealthSnapshotResponse {
-            snapshot: boundary::RosterStoreHealthSnapshot {
-                team: request.team,
-                member_count: roster.members.len() as u64,
-                stale: false,
-                refreshed_at: Some(refreshed_at),
-            },
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use atm_core::schema::TeamConfig;
     use atm_core::schema::{AgentMember, MessageEnvelope};
     use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
     use atm_core::{MailStore, RosterStore, TaskStore};

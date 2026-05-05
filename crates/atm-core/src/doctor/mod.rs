@@ -11,6 +11,7 @@ use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
 use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::AgentMember;
+use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::team_admin::{MemberSummary, MembersList};
 use crate::types::{AgentName, TeamName};
 
@@ -36,7 +37,15 @@ pub fn run_doctor(
     query: DoctorQuery,
     observability: &dyn ObservabilityPort,
 ) -> Result<DoctorReport, crate::error::AtmError> {
-    let config = config::load_config(&query.current_dir)?;
+    run_doctor_with_runtime(query, observability, &LocalServiceRuntime)
+}
+
+fn run_doctor_with_runtime<R: RetainedServiceRuntime>(
+    query: DoctorQuery,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+) -> Result<DoctorReport, crate::error::AtmError> {
+    let config = runtime.load_config(&query.current_dir)?;
     let home_dir = query.home_dir.clone();
     let initial_lock_snapshot = snapshot_mailbox_lock_paths(&home_dir);
     let resolved_team = query
@@ -72,9 +81,9 @@ pub fn run_doctor(
             ),
         });
     }
-    let member_roster = resolved_team
-        .as_deref()
-        .and_then(|team| load_member_roster(&home_dir, team, config.as_ref(), &mut findings));
+    let member_roster = resolved_team.as_deref().and_then(|team| {
+        load_member_roster(runtime, &home_dir, team, config.as_ref(), &mut findings)
+    });
     push_stale_mailbox_lock_findings(
         &initial_lock_snapshot,
         &snapshot_mailbox_lock_paths(&home_dir),
@@ -118,12 +127,13 @@ pub fn run_doctor(
 }
 
 fn load_member_roster(
+    runtime: &impl RetainedServiceRuntime,
     home_dir: &Path,
     team: &str,
     config: Option<&config::AtmConfig>,
     findings: &mut Vec<DoctorFinding>,
 ) -> Option<MembersList> {
-    let team_dir = match crate::home::team_dir_from_home(home_dir, team) {
+    let team_dir = match runtime.team_dir(home_dir, team) {
         Ok(team_dir) => team_dir,
         Err(error) => {
             push_doctor_error(findings, DoctorSeverity::Error, error);
@@ -148,7 +158,7 @@ fn load_member_roster(
 
     check_restore_marker(team, &team_dir, findings);
 
-    let team_config = match config::load_team_config(&team_dir) {
+    let team_config = match runtime.load_team_config(&team_dir) {
         Ok(team_config) => team_config,
         Err(error) => {
             push_doctor_error(findings, DoctorSeverity::Error, error);
