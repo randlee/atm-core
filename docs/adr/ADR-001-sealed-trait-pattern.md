@@ -217,10 +217,10 @@ Option 3:
 
 | Action | Owner | Gate |
 |---|---|---|
-| Add `#[doc(hidden)]` to `pub mod sealed` in `atm-core` | arch-ctm | Phase R |
+| Add `#[doc(hidden)]` to `pub mod sealed` in `atm-core` | arch-ctm | R.4 |
 | Add sealed module doc comment (workspace-convention language) | arch-ctm | Done (49861c4) |
 | Verify boundary records reference permitted impl sites | arch-ctm | Phase R |
-| Add ADR reference to `AGENTS.md` — agents must not modify `pub mod sealed` without ADR review | team-lead | Phase R |
+| Add ADR reference to `AGENTS.md` — agents must not modify `pub mod sealed` without ADR review | team-lead | Done (cd70665) |
 | Close ARCH-001 | team-lead | Done |
 
 ---

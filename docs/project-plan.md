@@ -46,20 +46,22 @@ Phase R execution entry:
   2. `R.1` lint debt burn-down
   3. `R.2` skeleton crates, boundary traits/facades, and major data structures
   4. `R.2A` parallel lint hardening
-- `R.3` is a dedicated re-planning sprint after the Wave 1 skeleton lands
+- `R.3` is a dedicated review/re-planning stage after the Wave 1 skeleton lands
 - Wave 2 executes implementations only against the enforced boundary skeleton
 
 Current Phase R status:
 - `R.0` lint foundation is complete enough to enforce the boundary documents
 - `R.1` lint debt burn-down is complete on the active redesign line
-- `R.2` landed the first `atm-core` boundary skeleton in
-  `crates/atm-core/src/boundary/mod.rs`
+- `R.2` / `R.3.1` landed the Phase R skeleton context now carried by:
+  - `crates/atm-core/src/boundary/mod.rs`
+  - `crates/atm-daemon`
+  - `crates/atm-rusqlite`
+  - `crates/atm/src/composition.rs`
 - `R.2A` tooling hardening remains in progress for view/module/unsafe follow-up
-- `R.3` is the active sprint and must convert the current merged baseline into
-  a concrete Wave 2 execution plan
-- the current merged baseline does not yet include `crates/atm-daemon` or
-  `crates/atm-rusqlite`; those crate introductions remain part of the next
-  skeleton work
+- `R.3.1` skeleton-first work is complete on the active planning line pending
+  merge through the normal integration path
+- `R.3.2` is the active sprint and is reviewing / drilling the proposed
+  `R.4` through `R.8` Wave 2 sprints into concrete, reviewable assignments
 
 Phase R acceptance:
 - lint/parser gates exist before substantive implementation resumes

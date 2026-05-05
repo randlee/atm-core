@@ -206,9 +206,9 @@ Initial lint passes:
 - owner-crate test-bypass checks
 
 Deferred until after design freeze:
-- composition-root enforcement
-- cargo-modules cycle gating beyond false-positive review
-- unsafe view hardening beyond cargo-geiger package-resolution failures
+- composition-root enforcement (carry into `R.4`)
+- cargo-modules cycle gating beyond false-positive review (carry into `R.4`)
+- unsafe view hardening beyond cargo-geiger package-resolution failures (carry into `R.6`)
 
 Acceptance:
 - `just lint` can fail on the first hard architectural violations
@@ -365,10 +365,16 @@ Concrete checklist:
 Acceptance:
 - the architecture can compile in skeleton form before feature behavior lands
 
-### R.3.2 Behavior Sprints
+### R.3.2 Behavior Sprint Review
 
 Status:
-- pending
+- in progress
+
+Purpose:
+- review, drill, and finalize the proposed `R.4` through `R.8` sprint scopes
+- identify open scope decisions before Wave 2 implementation begins
+- convert the current wave outline into reviewable sprint checklists, not to
+  declare those sprints implicitly approved
 
 Required order:
 1. protocol and transport
@@ -377,39 +383,243 @@ Required order:
 4. service orchestration
 5. thin client surfaces
 
-Ordered sprint breakdown:
+Review targets:
 1. `R.4 Protocol + Transport`
-   - harden `AtmProtocol` request/response/frame types
-   - land callable `ClientTransport` and `ServerTransport` trait surfaces
-   - land `RequestDispatcher` request-routing contract
-   - review whether daemon-side `PeerClientTransport` and
-     `DaemonRequestDispatcher` stay in scope for this wave before landing their
-     concrete adapters
-   - connect CLI composition root and daemon composition root to these
-     contracts without introducing retained direct call paths
+   - Scope review required first:
+     - `ServerTransport`, `NotificationSink`, `StatusSource`,
+       `WatchEventSource`, and `ReconcileCoordinator` currently have zero
+       methods; define their minimal callable method surfaces before behavior
+       work starts
+     - no `R.4` implementation may start until that scope review is documented
+       and approved by team-lead
+     - `PeerClientTransport` and `DaemonRequestDispatcher`: define trait
+       surfaces in `R.4`; concrete daemon adapter implementations are deferred
+       to a later sprint
+   - `crates/atm-core/src/boundary/mod.rs`
+     - replace placeholder `AtmRequestEnvelope`, `AtmResponseEnvelope`, and
+       `AtmFramePayload` with:
+       - `RequestEnvelope`
+       - `ResponseEnvelope`
+       - `FramePayload`
+       in an explicit `atm_core::protocol` module or equivalent architecturally
+       correct home
+     - add callable methods to:
+       - `AtmProtocol`
+       - `ClientTransport`
+       - `ServerTransport`
+       - `RequestDispatcher`
+       - `NotificationSink`
+       - `StatusSource`
+       - `WatchEventSource`
+       - `ReconcileCoordinator`
+   - `crates/atm-daemon/src/lib.rs`
+     - implement stub method signatures for runtime-owned adapters:
+       - `LocalSocketServerTransport`
+       - `DaemonNotificationSink`
+       - `DaemonStatusSource`
+       - `FileWatchEventSource`
+       - `DaemonReconcileCoordinator`
+     - when any new concrete runtime impl structs land, update the matching
+       boundary records with explicit `implementation.visibility` and
+       `implementation.constructor` expectations in the same sprint
+   - `crates/atm-daemon/src/composition.rs`
+     - wire runtime composition to the new transport/dispatcher method surfaces
+       without introducing direct CLI or sqlite dependencies
+     - carry forward the remaining `R.3.1` runtime-composition residuals:
+       - define the trait-only composition path that preserves no direct
+         `atm-daemon -> atm-rusqlite` dependency
+       - map any remaining daemon/runtime module-split work needed by transport
+         and dispatcher ownership
+   - `crates/atm/src/composition.rs`
+     - wire `CliComposition` against the `ClientTransport` method surface only
+   - Acceptance:
+     - `RequestEnvelope`, `ResponseEnvelope`, and `FramePayload` are named
+       protocol DTO targets and exported from the agreed protocol home
+     - zero-method runtime traits resolved by explicit method surfaces
+     - CLI and daemon compositions compile against callable transport traits
+     - no direct `atm -> atm-daemon` or `atm -> atm-rusqlite` edge appears
+     - verify `lint_boundaries.py` rejects any impl of boundary traits outside
+       permitted impl sites documented in `docs/*/boundaries.md`
+     - verify the remaining open ADR-001 action item is closed by confirming
+       `lint_boundaries.py` and the boundary records reflect all current
+       permitted impl sites
+     - verify the `#[doc(hidden)]` ADR-001 action item is closed in the landed
+       `atm-core` boundary module implementation
+     - any new concrete implementation struct introduced in this sprint must:
+       (a) add boundary-record visibility/constructor rules; (b) have boundary
+       lint enforce them; (c) pass QA verification of those checks
+     - QA verifies any new runtime impl structs are covered by active privacy /
+       constructor lint checks
 2. `R.5 Store Boundaries`
-   - implement `MailStore`, `TaskStore`, and `RosterStore` trait contracts in
-     `atm-core`
-   - land private SQLite adapter shells in `atm-rusqlite`
-   - move current retained direct SQLite ownership behind those contracts
+   - Start gate:
+     - `R.5` may not begin until `R.4` acceptance criteria are signed off by
+       team-lead
+   - `crates/atm-core/src/boundary/mod.rs`
+     - finalize request / response DTOs for:
+       - `MailStore`
+       - `TaskStore`
+       - `RosterStore`
+     - ensure method families match actual retained behaviors:
+       - message persistence / visibility / replay state
+       - task creation / update / ack transition / message links
+       - roster replace / load / membership query / health
+   - `crates/atm-rusqlite/src/lib.rs`
+     - replace typed stub failures with real trait implementations for:
+       - `SqliteMailStore`
+       - `SqliteTaskStore`
+       - `SqliteRosterStore`
+     - keep constructors private and assembly boundary-facing only
+     - keep boundary records and lint privacy rules in lockstep with every new
+       concrete store implementation struct
+     - carry forward the remaining `R.3.1` sqlite residuals:
+       - complete the adapter/module split beyond the current crate-root
+         skeleton file
+       - keep the runtime-to-sqlite path trait-only rather than a direct daemon
+         dependency
+   - Retained behavior cutover:
+     - identify and replace direct store ownership in existing retained flows
+       under:
+       - `crates/atm-core/src/read/`
+       - `crates/atm-core/src/clear/`
+       - `crates/atm-core/src/send/`
+       - `crates/atm-core/src/ack/`
+       - `crates/atm-core/src/team_admin/`
+   - Tests:
+     - add store-contract coverage in `crates/atm-core/tests/`
+     - keep adapter-specific behavior tests in `crates/atm-rusqlite`
+   - Acceptance:
+     - SQLite-backed behavior lives behind `MailStore` / `TaskStore` /
+       `RosterStore`
+     - retained core flows no longer own sqlite-facing logic directly
+     - replacing the sqlite adapter does not require caller changes outside
+       composition or adapter crates
+     - any new concrete implementation struct introduced in this sprint must:
+       (a) add boundary-record visibility/constructor rules; (b) have boundary
+       lint enforce them; (c) pass QA verification of those checks
+     - QA verifies store impl structs remain private and lint-enforced as such
 3. `R.6 Config / Inbox / Notification / Watch`
-   - land `ConfigIngress`, `InboxIngress`, and `InboxExport`
-   - land `NotificationSink`, `StatusSource`, `WatchEventSource`, and
-     `ReconcileCoordinator`
-   - decide and implement the retained compatibility-policy locations inside
-     those adapters
+   - `crates/atm-core/src/boundary/mod.rs`
+     - finalize method surfaces and DTOs for:
+       - `ConfigIngress`
+       - `InboxIngress`
+       - `InboxExport`
+       - `NotificationSink`
+       - `StatusSource`
+       - `WatchEventSource`
+       - `ReconcileCoordinator`
+   - `crates/atm-daemon/src/lib.rs`
+     - implement real daemon-owned adapters for:
+       - config loading
+       - inbox import/export
+       - notification delivery
+       - status reporting
+       - watch capture
+       - reconcile coordination
+     - keep boundary records and lint privacy expectations updated for every
+       newly landed daemon-owned implementation struct
+   - Policy placement review:
+     - document and implement where compatibility / recovery policy is allowed
+       to live inside ingress/export adapters versus service orchestration
+   - Retained behavior cutover:
+     - remove direct config parsing, inbox compatibility handling, and watch
+       ownership from retained command/service code
+     - carry forward the remaining `R.3.1` service-shell residuals for these
+       domains before R.7 final orchestration cutover
+   - Acceptance:
+     - config/inbox/notification/watch behavior is owned by explicit adapters
+     - retained service code consumes those behaviors only through boundary
+       traits
+     - compatibility policy location is documented and matches implementation
+     - any new concrete implementation struct introduced in this sprint must:
+       (a) add boundary-record visibility/constructor rules; (b) have boundary
+       lint enforce them; (c) pass QA verification of those checks
+     - QA verifies newly introduced adapter impl structs are covered by privacy
+       and constructor lint rules
 4. `R.7 Service Orchestration`
-   - route retained core command flows through the boundary-owned contracts
-   - eliminate direct retained call paths that bypass stores, config, inbox, or
-     runtime adapters
-   - make daemon runtime and CLI composition roots the only legal wiring points
+   - Files in scope:
+     - `crates/atm-core/src/send/`
+     - `crates/atm-core/src/read/`
+     - `crates/atm-core/src/clear/`
+     - `crates/atm-core/src/ack/`
+     - `crates/atm-core/src/doctor/`
+     - retained shared helpers those flows still call directly
+   - Required routing changes:
+     - all retained command/service flows call boundary traits or service-owned
+       orchestration seams only
+     - remove parallel helper paths that bypass:
+       - store boundaries
+       - config ingress
+       - inbox ingress/export
+       - notification / status / watch adapters
+   - Composition constraints:
+     - daemon composition and CLI composition remain the only legal wiring roots
+     - no direct adapter construction from retained command modules
+   - Acceptance:
+     - direct retained bypasses are removed from service code
+     - orchestration layer is explicit and thin
+     - boundary lint remains green after routing changes
+     - any new concrete implementation struct introduced in this sprint must:
+       (a) add boundary-record visibility/constructor rules; (b) have boundary
+       lint enforce them; (c) pass QA verification of those checks
+     - QA verifies no orchestration change required widening adapter visibility
+       or bypassing boundary privacy rules
 5. `R.8 Thin Client Surfaces`
-   - reshape CLI/graft-facing surfaces around thin `send` / `receive`
-   - keep `ack` folded into send-shaped requests
-   - finalize the public client surface once the service graph is stable
+   - `crates/atm/src/`
+     - finalize CLI composition around:
+       - `ClientTransport`
+       - observability port
+       - thin `send` entry point
+       - thin `receive` entry point
+     - remove or isolate any retained command construction path that bypasses
+       the composition module
+   - Shared protocol surface:
+     - keep `ack` folded into send-shaped requests rather than a separate
+       top-level thin-client method family
+   - Extension readiness:
+     - ensure `atm-graft`-style thin client callers can stop at
+       `AtmProtocol` + `ClientTransport` without daemon or sqlite references
+   - Acceptance:
+     - CLI public surface is thin and transport-driven
+     - `ack` remains modeled inside `send`
+     - thin clients do not require daemon-internal or sqlite-facing knowledge
+     - REQ-P-RUNTIME-001 preserved at `R.8` close:
+       - daemon auto-start when absent remains supported
+       - auto-start failure emits a typed actionable error and recovery
+         guidance
+       - no production path may silently fall back to direct SQLite or
+         inbox-file access
+     - daemon lifecycle (`start` / `stop` / `health`) and all currently
+       supported `atm` CLI commands remain functional at `R.8` close
+     - `lint_manifests.py` confirms the following ADR-001 dependency edges
+       remain FORBIDDEN:
+       - `atm -> atm-daemon`
+       - `atm -> atm-rusqlite`
+       - `atm-core -> atm-daemon`
+       - `atm-core -> atm-rusqlite`
+       - `atm-daemon -> atm-rusqlite` (trait-only/reference-only)
+     - any new concrete implementation struct introduced in this sprint must:
+       (a) add boundary-record visibility/constructor rules; (b) have boundary
+       lint enforce them; (c) pass QA verification of those checks
+     - QA verifies no thin-client change introduces direct references to daemon
+       or adapter implementation structs
 
 Acceptance:
 - no feature sprint begins before the relevant boundary and lint guardrails are in place
+- `R.4` through `R.8` are reviewable as concrete sprint proposals with explicit
+  files, traits, and acceptance criteria
+
+Cross-sprint hardening rule:
+- whenever a sprint introduces a new concrete implementation struct for a
+  boundary, that same sprint must also:
+  - add or update the `boundaries.md` record for that implementation
+  - set explicit `implementation.visibility` and
+    `implementation.constructor` requirements
+  - ensure boundary lint actively enforces those privacy expectations
+  - include QA verification that the privacy / constructor / re-export rules
+    are present and passing in `just lint`
+- ADR-001 AGENTS.md guard note:
+  - complete at `cd70665`; no further sprint ownership needed unless the
+    prompt location changes again
 
 ## 6. Working Rule
 

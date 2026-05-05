@@ -53,6 +53,9 @@ Phase-R redesign note:
   then rebuilds the implementation under lint/visibility guardrails
 - Phase R treats thin-client extension pressure, including `atm-graft`, as a
   first-class architectural input
+- for the boundary / adapter model, Phase R supersedes any earlier
+  pre-Phase-R architecture statements in this document that conflict with the
+  crate-local boundary inventories, ADRs, or `docs/plan-phase-R.md`
 
 ## 2. Crate Boundaries
 
