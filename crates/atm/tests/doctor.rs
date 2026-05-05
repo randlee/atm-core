@@ -301,7 +301,9 @@ impl Fixture {
         for (key, value) in extra_env {
             command.env(key, value);
         }
-        let output = command.output().expect("run atm");
+        let output = command
+            .output()
+            .unwrap_or_else(|error| panic!("atm {args:?} failed: {error}"));
         if !support::is_daemon_start_transient(&output) {
             return output;
         }
@@ -314,7 +316,9 @@ impl Fixture {
         for (key, value) in extra_env {
             retry.env(key, value);
         }
-        retry.output().expect("retry atm")
+        retry
+            .output()
+            .unwrap_or_else(|error| panic!("atm {args:?} failed on retry: {error}"))
     }
 
     fn write_team_config(&self, members: &[&str]) {
