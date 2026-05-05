@@ -121,7 +121,8 @@ pub fn send_mail(
     request: SendRequest,
     observability: &dyn ObservabilityPort,
 ) -> Result<SendOutcome, AtmError> {
-    send_mail_with_runtime(request, observability, &LocalServiceRuntime)
+    let runtime = LocalServiceRuntime::default();
+    send_mail_with_runtime(request, observability, &runtime)
 }
 
 fn send_mail_with_runtime<R: RetainedServiceRuntime>(

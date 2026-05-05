@@ -37,7 +37,8 @@ pub fn run_doctor(
     query: DoctorQuery,
     observability: &dyn ObservabilityPort,
 ) -> Result<DoctorReport, crate::error::AtmError> {
-    run_doctor_with_runtime(query, observability, &LocalServiceRuntime)
+    let runtime = LocalServiceRuntime::default();
+    run_doctor_with_runtime(query, observability, &runtime)
 }
 
 fn run_doctor_with_runtime<R: RetainedServiceRuntime>(
