@@ -425,6 +425,11 @@ Review targets:
    - `crates/atm-daemon/src/composition.rs`
      - wire runtime composition to the new transport/dispatcher method surfaces
        without introducing direct CLI or sqlite dependencies
+     - carry forward the remaining `R.3.1` runtime-composition residuals:
+       - define the trait-only composition path that preserves no direct
+         `atm-daemon -> atm-rusqlite` dependency
+       - map any remaining daemon/runtime module-split work needed by transport
+         and dispatcher ownership
    - `crates/atm/src/composition.rs`
      - wire `CliComposition` against the `ClientTransport` method surface only
    - Acceptance:
@@ -435,6 +440,9 @@ Review targets:
      - no direct `atm -> atm-daemon` or `atm -> atm-rusqlite` edge appears
      - verify `lint_boundaries.py` rejects any impl of boundary traits outside
        permitted impl sites documented in `docs/*/boundaries.md`
+     - verify the remaining open ADR-001 action item is closed by confirming
+       `lint_boundaries.py` and the boundary records reflect all current
+       permitted impl sites
      - any new concrete implementation struct introduced in this sprint must:
        (a) add boundary-record visibility/constructor rules; (b) have boundary
        lint enforce them; (c) pass QA verification of those checks
@@ -458,6 +466,11 @@ Review targets:
      - keep constructors private and assembly boundary-facing only
      - keep boundary records and lint privacy rules in lockstep with every new
        concrete store implementation struct
+     - carry forward the remaining `R.3.1` sqlite residuals:
+       - complete the adapter/module split beyond the current crate-root
+         skeleton file
+       - keep the runtime-to-sqlite path trait-only rather than a direct daemon
+         dependency
    - Retained behavior cutover:
      - identify and replace direct store ownership in existing retained flows
        under:
@@ -505,6 +518,8 @@ Review targets:
    - Retained behavior cutover:
      - remove direct config parsing, inbox compatibility handling, and watch
        ownership from retained command/service code
+     - carry forward the remaining `R.3.1` service-shell residuals for these
+       domains before R.7 final orchestration cutover
    - Acceptance:
      - config/inbox/notification/watch behavior is owned by explicit adapters
      - retained service code consumes those behaviors only through boundary
@@ -562,8 +577,15 @@ Review targets:
      - CLI public surface is thin and transport-driven
      - `ack` remains modeled inside `send`
      - thin clients do not require daemon-internal or sqlite-facing knowledge
-     - `lint_manifests.py` confirms `atm -> atm-daemon` and
-       `atm -> atm-rusqlite` dependency edges remain FORBIDDEN (ADR-001)
+     - daemon lifecycle (`start` / `stop` / `health`) and all currently
+       supported `atm` CLI commands remain functional at `R.8` close
+     - `lint_manifests.py` confirms the following ADR-001 dependency edges
+       remain FORBIDDEN:
+       - `atm -> atm-daemon`
+       - `atm -> atm-rusqlite`
+       - `atm-core -> atm-daemon`
+       - `atm-core -> atm-rusqlite`
+       - `atm-daemon -> atm-rusqlite` (trait-only/reference-only)
      - any new concrete implementation struct introduced in this sprint must:
        (a) add boundary-record visibility/constructor rules; (b) have boundary
        lint enforce them; (c) pass QA verification of those checks
