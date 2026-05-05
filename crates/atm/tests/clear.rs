@@ -443,27 +443,25 @@ impl Fixture {
     }
 
     fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
-        support::configure_atm_command(&mut command, self.tempdir.path(), Some(TEST_SENDER))
-            .args(args)
-            .current_dir(self.tempdir.path());
-        for (key, value) in extra_env {
-            command.env(key, value);
-        }
-        let output = command.output().expect("run atm");
-        if !support::is_daemon_start_transient(&output) {
-            return output;
+        for attempt in 0..3 {
+            let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
+            support::configure_atm_command(&mut command, self.tempdir.path(), Some(TEST_SENDER))
+                .args(args)
+                .current_dir(self.tempdir.path());
+            for (key, value) in extra_env {
+                command.env(key, value);
+            }
+            let output = command.output().unwrap_or_else(|error| {
+                panic!("atm {:?} failed on attempt {attempt}: {error}", args)
+            });
+            if !support::is_daemon_start_transient(&output) || attempt == 2 {
+                return output;
+            }
+
+            std::thread::sleep(std::time::Duration::from_millis(50));
         }
 
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        let mut retry = Command::new(env!("CARGO_BIN_EXE_atm"));
-        support::configure_atm_command(&mut retry, self.tempdir.path(), Some(TEST_SENDER))
-            .args(args)
-            .current_dir(self.tempdir.path());
-        for (key, value) in extra_env {
-            retry.env(key, value);
-        }
-        retry.output().expect("retry atm")
+        unreachable!("clear fixture retries should always return");
     }
 
     fn write_team_config(&self, members: &[&str]) {
