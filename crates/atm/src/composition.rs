@@ -78,6 +78,7 @@ impl LocalSocketClientTransport {
             let published_socket = fs::metadata(&self.socket_path)
                 .ok()
                 .map(|metadata| (metadata.dev(), metadata.ino()));
+            let _ = fs::remove_file(&self.socket_path);
             self.spawn_daemon()?;
             self.wait_for_socket_publish(published_socket)?;
             thread::sleep(Duration::from_millis(25));

@@ -99,7 +99,10 @@ pub fn remove_env_var<K: AsRef<OsStr>>(key: K) {
 #[allow(dead_code)]
 pub fn is_daemon_start_transient(output: &Output) -> bool {
     let stderr = String::from_utf8_lossy(&output.stderr);
-    stderr.contains("failed to read daemon request frame")
+    let request_frame = stderr.contains("failed to read daemon request frame");
+    let response_frame = stderr.contains("failed to read daemon response frame");
+    let parse_eof = stderr.contains("EOF while parsing a value at line 1 column 0");
+    (response_frame || parse_eof) && request_frame
         || stderr.contains("daemon socket was not published")
         || stderr.contains("failed to connect to daemon socket")
 }
