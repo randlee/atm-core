@@ -365,10 +365,16 @@ Concrete checklist:
 Acceptance:
 - the architecture can compile in skeleton form before feature behavior lands
 
-### R.3.2 Behavior Sprints
+### R.3.2 Behavior Sprint Review
 
 Status:
-- pending
+- in progress
+
+Purpose:
+- review, drill, and finalize the proposed `R.4` through `R.8` sprint scopes
+- identify open scope decisions before Wave 2 implementation begins
+- convert the current wave outline into reviewable sprint checklists, not to
+  declare those sprints implicitly approved
 
 Required order:
 1. protocol and transport
@@ -377,39 +383,158 @@ Required order:
 4. service orchestration
 5. thin client surfaces
 
-Ordered sprint breakdown:
+Review targets:
 1. `R.4 Protocol + Transport`
-   - harden `AtmProtocol` request/response/frame types
-   - land callable `ClientTransport` and `ServerTransport` trait surfaces
-   - land `RequestDispatcher` request-routing contract
-   - review whether daemon-side `PeerClientTransport` and
-     `DaemonRequestDispatcher` stay in scope for this wave before landing their
-     concrete adapters
-   - connect CLI composition root and daemon composition root to these
-     contracts without introducing retained direct call paths
+   - Scope review required first:
+     - `ServerTransport`, `NotificationSink`, `StatusSource`,
+       `WatchEventSource`, and `ReconcileCoordinator` currently have zero
+       methods; define their minimal callable method surfaces before behavior
+       work starts
+     - confirm whether `PeerClientTransport` and daemon-side
+       `RequestDispatcher` concrete adapters stay in this wave or remain
+       deferred
+   - `crates/atm-core/src/boundary/mod.rs`
+     - replace placeholder `AtmRequestEnvelope`, `AtmResponseEnvelope`, and
+       `AtmFramePayload` with named protocol request / response / frame types
+       for thin `send` / `receive`
+     - add callable methods to:
+       - `AtmProtocol`
+       - `ClientTransport`
+       - `ServerTransport`
+       - `RequestDispatcher`
+       - `NotificationSink`
+       - `StatusSource`
+       - `WatchEventSource`
+       - `ReconcileCoordinator`
+   - `crates/atm-daemon/src/lib.rs`
+     - implement stub method signatures for runtime-owned adapters:
+       - `LocalSocketServerTransport`
+       - `DaemonNotificationSink`
+       - `DaemonStatusSource`
+       - `FileWatchEventSource`
+       - `DaemonReconcileCoordinator`
+     - add daemon-side `PeerClientTransport` and `DaemonRequestDispatcher`
+       adapters if R.4 scope keeps them in wave 2
+   - `crates/atm-daemon/src/composition.rs`
+     - wire runtime composition to the new transport/dispatcher method surfaces
+       without introducing direct CLI or sqlite dependencies
+   - `crates/atm/src/composition.rs`
+     - wire `CliComposition` against the `ClientTransport` method surface only
+   - Acceptance:
+     - protocol request / response / frame DTOs are named and exported from
+       `atm-core`
+     - zero-method runtime traits resolved by explicit method surfaces
+     - CLI and daemon compositions compile against callable transport traits
+     - no direct `atm -> atm-daemon` or `atm -> atm-rusqlite` edge appears
 2. `R.5 Store Boundaries`
-   - implement `MailStore`, `TaskStore`, and `RosterStore` trait contracts in
-     `atm-core`
-   - land private SQLite adapter shells in `atm-rusqlite`
-   - move current retained direct SQLite ownership behind those contracts
+   - `crates/atm-core/src/boundary/mod.rs`
+     - finalize request / response DTOs for:
+       - `MailStore`
+       - `TaskStore`
+       - `RosterStore`
+     - ensure method families match actual retained behaviors:
+       - message persistence / visibility / replay state
+       - task creation / update / ack transition / message links
+       - roster replace / load / membership query / health
+   - `crates/atm-rusqlite/src/lib.rs`
+     - replace typed stub failures with real trait implementations for:
+       - `SqliteMailStore`
+       - `SqliteTaskStore`
+       - `SqliteRosterStore`
+     - keep constructors private and assembly boundary-facing only
+   - Retained behavior cutover:
+     - identify and replace direct store ownership in existing retained flows
+       under:
+       - `crates/atm-core/src/read/`
+       - `crates/atm-core/src/clear/`
+       - `crates/atm-core/src/send/`
+       - `crates/atm-core/src/ack/`
+       - `crates/atm-core/src/team_admin/`
+   - Tests:
+     - add store-contract coverage in `crates/atm-core/tests/`
+     - keep adapter-specific behavior tests in `crates/atm-rusqlite`
+   - Acceptance:
+     - SQLite-backed behavior lives behind `MailStore` / `TaskStore` /
+       `RosterStore`
+     - retained core flows no longer own sqlite-facing logic directly
+     - replacing the sqlite adapter does not require caller changes outside
+       composition or adapter crates
 3. `R.6 Config / Inbox / Notification / Watch`
-   - land `ConfigIngress`, `InboxIngress`, and `InboxExport`
-   - land `NotificationSink`, `StatusSource`, `WatchEventSource`, and
-     `ReconcileCoordinator`
-   - decide and implement the retained compatibility-policy locations inside
-     those adapters
+   - `crates/atm-core/src/boundary/mod.rs`
+     - finalize method surfaces and DTOs for:
+       - `ConfigIngress`
+       - `InboxIngress`
+       - `InboxExport`
+       - `NotificationSink`
+       - `StatusSource`
+       - `WatchEventSource`
+       - `ReconcileCoordinator`
+   - `crates/atm-daemon/src/lib.rs`
+     - implement real daemon-owned adapters for:
+       - config loading
+       - inbox import/export
+       - notification delivery
+       - status reporting
+       - watch capture
+       - reconcile coordination
+   - Policy placement review:
+     - document and implement where compatibility / recovery policy is allowed
+       to live inside ingress/export adapters versus service orchestration
+   - Retained behavior cutover:
+     - remove direct config parsing, inbox compatibility handling, and watch
+       ownership from retained command/service code
+   - Acceptance:
+     - config/inbox/notification/watch behavior is owned by explicit adapters
+     - retained service code consumes those behaviors only through boundary
+       traits
+     - compatibility policy location is documented and matches implementation
 4. `R.7 Service Orchestration`
-   - route retained core command flows through the boundary-owned contracts
-   - eliminate direct retained call paths that bypass stores, config, inbox, or
-     runtime adapters
-   - make daemon runtime and CLI composition roots the only legal wiring points
+   - Files in scope:
+     - `crates/atm-core/src/send/`
+     - `crates/atm-core/src/read/`
+     - `crates/atm-core/src/clear/`
+     - `crates/atm-core/src/ack/`
+     - `crates/atm-core/src/doctor/`
+     - retained shared helpers those flows still call directly
+   - Required routing changes:
+     - all retained command/service flows call boundary traits or service-owned
+       orchestration seams only
+     - remove parallel helper paths that bypass:
+       - store boundaries
+       - config ingress
+       - inbox ingress/export
+       - notification / status / watch adapters
+   - Composition constraints:
+     - daemon composition and CLI composition remain the only legal wiring roots
+     - no direct adapter construction from retained command modules
+   - Acceptance:
+     - direct retained bypasses are removed from service code
+     - orchestration layer is explicit and thin
+     - boundary lint remains green after routing changes
 5. `R.8 Thin Client Surfaces`
-   - reshape CLI/graft-facing surfaces around thin `send` / `receive`
-   - keep `ack` folded into send-shaped requests
-   - finalize the public client surface once the service graph is stable
+   - `crates/atm/src/`
+     - finalize CLI composition around:
+       - `ClientTransport`
+       - observability port
+       - thin `send` entry point
+       - thin `receive` entry point
+     - remove or isolate any retained command construction path that bypasses
+       the composition module
+   - Shared protocol surface:
+     - keep `ack` folded into send-shaped requests rather than a separate
+       top-level thin-client method family
+   - Extension readiness:
+     - ensure `atm-graft`-style thin client callers can stop at
+       `AtmProtocol` + `ClientTransport` without daemon or sqlite references
+   - Acceptance:
+     - CLI public surface is thin and transport-driven
+     - `ack` remains modeled inside `send`
+     - thin clients do not require daemon-internal or sqlite-facing knowledge
 
 Acceptance:
 - no feature sprint begins before the relevant boundary and lint guardrails are in place
+- `R.4` through `R.8` are reviewable as concrete sprint proposals with explicit
+  files, traits, and acceptance criteria
 
 ## 6. Working Rule
 
