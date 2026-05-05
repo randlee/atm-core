@@ -584,9 +584,10 @@ Review targets:
      - thin clients do not require daemon-internal or sqlite-facing knowledge
      - REQ-P-RUNTIME-001 preserved at `R.8` close:
        - daemon auto-start when absent remains supported
-       - auto-start failure emits a typed actionable error rather than silent
-         fallback
-       - no in-process fallback is permitted
+       - auto-start failure emits a typed actionable error and recovery
+         guidance
+       - no production path may silently fall back to direct SQLite or
+         inbox-file access
      - daemon lifecycle (`start` / `stop` / `health`) and all currently
        supported `atm` CLI commands remain functional at `R.8` close
      - `lint_manifests.py` confirms the following ADR-001 dependency edges
