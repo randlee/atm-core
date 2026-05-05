@@ -227,6 +227,14 @@ pub fn configure_atm_command<'a>(
     command
 }
 
+#[cfg(test)]
+pub fn is_daemon_start_transient(output: &Output) -> bool {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    stderr.contains("failed to read daemon request frame")
+        || stderr.contains("daemon socket was not published")
+        || stderr.contains("failed to connect to daemon socket")
+}
+
 fn ensure_test_daemon_launcher(home_dir: &std::path::Path) -> PathBuf {
     #[allow(unused_variables)]
     let hermetic_daemon = option_env!("CARGO_BIN_EXE_atm-daemon").map(PathBuf::from);
