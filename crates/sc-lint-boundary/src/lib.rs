@@ -50,6 +50,12 @@ pub struct ExportGraphOptions {
     pub root: PathBuf,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GraphOutputFormat {
+    Json,
+    Turtle,
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct FindingsReport {
     pub tool: &'static str,
@@ -81,6 +87,7 @@ pub struct GraphNode {
     pub id: String,
     pub kind: &'static str,
     pub label: String,
+    pub visibility: Option<&'static str>,
     pub package: String,
     pub target: Option<String>,
     pub manifest_path: String,
@@ -134,6 +141,25 @@ struct TargetContext {
     crate_id: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ItemVisibility {
+    Private,
+    Public,
+    Crate,
+    Restricted,
+}
+
+impl ItemVisibility {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Private => "private",
+            Self::Public => "public",
+            Self::Crate => "crate",
+            Self::Restricted => "restricted",
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 struct GraphBuilder {
     nodes: Vec<GraphNode>,
@@ -170,6 +196,7 @@ impl GraphBuilder {
             id: crate_id,
             kind: "crate",
             label: target_name.to_string(),
+            visibility: None,
             package: package_name.to_string(),
             target: Some(target_name.to_string()),
             manifest_path: manifest_path.to_string(),
@@ -227,16 +254,25 @@ impl Parse for ParsedLintInput {
 pub fn analyze_workspace(options: &AnalyzeOptions) -> Result<FindingsReport> {
     validate_rule_filter(options.rule.as_deref())?;
     let graph = build_workspace_graph(&options.root)?;
-    let findings = analyze_cycles(&graph, options.rule.as_deref());
+    let mut findings = Vec::new();
+    let filter = options.rule.as_deref();
+    if filter.is_none() || filter == Some("cycles") {
+        findings.extend(analyze_cycles(&graph, filter));
+    }
+    if filter.is_none() || matches!(filter, Some("boundaries" | "internal_only")) {
+        findings.extend(analyze_internal_only(&graph));
+    }
+    findings.sort_by(|left, right| {
+        finding_sort_key(left)
+            .cmp(&finding_sort_key(right))
+            .then_with(|| left.message.cmp(&right.message))
+    });
     let scanned_crates = graph
         .nodes
         .iter()
         .filter(|node| node.kind == "crate")
         .count();
-    let status = if findings
-        .iter()
-        .any(|finding| finding.rule_id == "SCB-CYCLE-001")
-    {
+    let status = if findings.iter().any(finding_is_failure) {
         "fail"
     } else {
         "pass"
@@ -278,6 +314,20 @@ fn collect_owner_names(items: &[Item]) -> BTreeSet<String> {
         }
     }
     names
+}
+
+fn visibility_label(visibility: &syn::Visibility) -> ItemVisibility {
+    match visibility {
+        syn::Visibility::Inherited => ItemVisibility::Private,
+        syn::Visibility::Public(_) => ItemVisibility::Public,
+        syn::Visibility::Restricted(restricted) => {
+            if restricted.path.is_ident("crate") {
+                ItemVisibility::Crate
+            } else {
+                ItemVisibility::Restricted
+            }
+        }
+    }
 }
 
 #[derive(Default)]
@@ -401,6 +451,7 @@ fn build_workspace_graph(root: &Path) -> Result<GraphExport> {
                 id: root_module_id.clone(),
                 kind: "module",
                 label: "crate".to_string(),
+                visibility: None,
                 package: context.package_name.clone(),
                 target: Some(context.target_name.clone()),
                 manifest_path: context.manifest_path.clone(),
@@ -433,8 +484,10 @@ fn build_workspace_graph(root: &Path) -> Result<GraphExport> {
 
 fn validate_rule_filter(rule_filter: Option<&str>) -> Result<()> {
     match rule_filter {
-        None | Some("cycles") => Ok(()),
-        Some(other) => anyhow::bail!("unsupported rule filter `{other}`; supported: cycles"),
+        None | Some("cycles" | "boundaries" | "internal_only") => Ok(()),
+        Some(other) => anyhow::bail!(
+            "unsupported rule filter `{other}`; supported: cycles, boundaries, internal_only"
+        ),
     }
 }
 
@@ -462,6 +515,7 @@ fn ingest_module_items(
                     id: child_module_id.clone(),
                     kind: "module",
                     label: name.clone(),
+                    visibility: Some(visibility_label(&item_mod.vis).as_str()),
                     package: context.package_name.clone(),
                     target: Some(context.target_name.clone()),
                     manifest_path: context.manifest_path.clone(),
@@ -517,6 +571,7 @@ fn ingest_module_items(
                     source_path,
                     item_struct.ident.clone(),
                     "type",
+                    visibility_label(&item_struct.vis),
                     parse_lint_attributes(&item_struct.attrs)?,
                 );
                 add_reference_edges(
@@ -526,6 +581,16 @@ fn ingest_module_items(
                     collect_references_with(&local_owner_names, Some(&owner_name), |collector| {
                         collector.visit_fields(&item_struct.fields);
                     }),
+                );
+                add_field_nodes(
+                    builder,
+                    context,
+                    &node_id,
+                    module_path,
+                    source_path,
+                    &local_owner_names,
+                    Some(&owner_name),
+                    &item_struct.fields,
                 );
             }
             Item::Enum(item_enum) => {
@@ -538,6 +603,7 @@ fn ingest_module_items(
                     source_path,
                     item_enum.ident.clone(),
                     "type",
+                    visibility_label(&item_enum.vis),
                     parse_lint_attributes(&item_enum.attrs)?,
                 );
                 add_reference_edges(
@@ -550,6 +616,34 @@ fn ingest_module_items(
                         }
                     }),
                 );
+                for variant in &item_enum.variants {
+                    let variant_id = format!("{node_id}::variant::{}", variant.ident);
+                    builder.add_node(GraphNode {
+                        id: variant_id.clone(),
+                        kind: "variant",
+                        label: variant.ident.to_string(),
+                        visibility: None,
+                        package: context.package_name.clone(),
+                        target: Some(context.target_name.clone()),
+                        manifest_path: context.manifest_path.clone(),
+                        source_path: Some(source_path.display().to_string()),
+                        module_path: Some(module_path.to_string()),
+                        impl_kind: None,
+                        impl_trait: None,
+                        attributes: Vec::new(),
+                    });
+                    builder.add_edge("contains", node_id.clone(), variant_id.clone());
+                    add_field_nodes(
+                        builder,
+                        context,
+                        &variant_id,
+                        module_path,
+                        source_path,
+                        &local_owner_names,
+                        Some(&owner_name),
+                        &variant.fields,
+                    );
+                }
             }
             Item::Union(item_union) => {
                 let owner_name = item_union.ident.to_string();
@@ -561,6 +655,7 @@ fn ingest_module_items(
                     source_path,
                     item_union.ident.clone(),
                     "type",
+                    visibility_label(&item_union.vis),
                     parse_lint_attributes(&item_union.attrs)?,
                 );
                 add_reference_edges(
@@ -570,6 +665,16 @@ fn ingest_module_items(
                     collect_references_with(&local_owner_names, Some(&owner_name), |collector| {
                         collector.visit_fields_named(&item_union.fields);
                     }),
+                );
+                add_field_nodes(
+                    builder,
+                    context,
+                    &node_id,
+                    module_path,
+                    source_path,
+                    &local_owner_names,
+                    Some(&owner_name),
+                    &syn::Fields::Named(item_union.fields.clone()),
                 );
             }
             Item::Type(item_type) => {
@@ -582,6 +687,7 @@ fn ingest_module_items(
                     source_path,
                     item_type.ident.clone(),
                     "type",
+                    visibility_label(&item_type.vis),
                     parse_lint_attributes(&item_type.attrs)?,
                 );
                 add_reference_edges(
@@ -603,6 +709,7 @@ fn ingest_module_items(
                     source_path,
                     item_trait.ident.clone(),
                     "trait",
+                    visibility_label(&item_trait.vis),
                     parse_lint_attributes(&item_trait.attrs)?,
                 );
                 add_reference_edges(
@@ -626,6 +733,7 @@ fn ingest_module_items(
                     source_path,
                     function_ident,
                     "function",
+                    visibility_label(&item_fn.vis),
                     parse_lint_attributes(&item_fn.attrs)?,
                 );
                 add_reference_edges(
@@ -646,6 +754,7 @@ fn ingest_module_items(
                         id: owner_node_id.clone(),
                         kind: "type",
                         label: owner_name.to_string(),
+                        visibility: None,
                         package: context.package_name.clone(),
                         target: Some(context.target_name.clone()),
                         manifest_path: context.manifest_path.clone(),
@@ -669,6 +778,7 @@ fn ingest_module_items(
                             id: method_id.clone(),
                             kind: "method",
                             label: method.sig.ident.to_string(),
+                            visibility: Some(visibility_label(&method.vis).as_str()),
                             package: context.package_name.clone(),
                             target: Some(context.target_name.clone()),
                             manifest_path: context.manifest_path.clone(),
@@ -716,6 +826,7 @@ fn add_item_node(
     source_path: &Path,
     ident: Ident,
     kind: &'static str,
+    visibility: ItemVisibility,
     attributes: Vec<LintAttribute>,
 ) -> String {
     let id = format!("{parent_module_id}::{ident}");
@@ -723,6 +834,7 @@ fn add_item_node(
         id: id.clone(),
         kind,
         label: ident.to_string(),
+        visibility: Some(visibility.as_str()),
         package: context.package_name.clone(),
         target: Some(context.target_name.clone()),
         manifest_path: context.manifest_path.clone(),
@@ -734,6 +846,83 @@ fn add_item_node(
     });
     builder.add_edge("contains", parent_module_id.to_string(), id.clone());
     id
+}
+
+fn add_field_nodes(
+    builder: &mut GraphBuilder,
+    context: &TargetContext,
+    parent_id: &str,
+    module_path: &str,
+    source_path: &Path,
+    local_owner_names: &BTreeSet<String>,
+    owner_name: Option<&str>,
+    fields: &syn::Fields,
+) {
+    match fields {
+        syn::Fields::Named(named) => {
+            for field in &named.named {
+                let label = field
+                    .ident
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| "field".to_string());
+                let field_id = format!("{parent_id}::field::{label}");
+                builder.add_node(GraphNode {
+                    id: field_id.clone(),
+                    kind: "field",
+                    label: label.clone(),
+                    visibility: Some(visibility_label(&field.vis).as_str()),
+                    package: context.package_name.clone(),
+                    target: Some(context.target_name.clone()),
+                    manifest_path: context.manifest_path.clone(),
+                    source_path: Some(source_path.display().to_string()),
+                    module_path: Some(module_path.to_string()),
+                    impl_kind: None,
+                    impl_trait: None,
+                    attributes: Vec::new(),
+                });
+                builder.add_edge("contains", parent_id.to_string(), field_id.clone());
+                add_reference_edges(
+                    builder,
+                    &field_id,
+                    module_path,
+                    collect_references_with(local_owner_names, owner_name, |collector| {
+                        collector.visit_type(&field.ty);
+                    }),
+                );
+            }
+        }
+        syn::Fields::Unnamed(unnamed) => {
+            for (index, field) in unnamed.unnamed.iter().enumerate() {
+                let label = index.to_string();
+                let field_id = format!("{parent_id}::field::{label}");
+                builder.add_node(GraphNode {
+                    id: field_id.clone(),
+                    kind: "field",
+                    label: label.clone(),
+                    visibility: Some(visibility_label(&field.vis).as_str()),
+                    package: context.package_name.clone(),
+                    target: Some(context.target_name.clone()),
+                    manifest_path: context.manifest_path.clone(),
+                    source_path: Some(source_path.display().to_string()),
+                    module_path: Some(module_path.to_string()),
+                    impl_kind: None,
+                    impl_trait: None,
+                    attributes: Vec::new(),
+                });
+                builder.add_edge("contains", parent_id.to_string(), field_id.clone());
+                add_reference_edges(
+                    builder,
+                    &field_id,
+                    module_path,
+                    collect_references_with(local_owner_names, owner_name, |collector| {
+                        collector.visit_type(&field.ty);
+                    }),
+                );
+            }
+        }
+        syn::Fields::Unit => {}
+    }
 }
 
 fn add_reference_edges(
@@ -1068,6 +1257,89 @@ fn analyze_cycles(graph: &GraphExport, _rule_filter: Option<&str>) -> Vec<Findin
     findings
 }
 
+fn analyze_internal_only(graph: &GraphExport) -> Vec<Finding> {
+    let node_map: BTreeMap<_, _> = graph
+        .nodes
+        .iter()
+        .map(|node| (node.id.clone(), node))
+        .collect();
+    let mut findings = Vec::new();
+
+    for node in &graph.nodes {
+        let has_internal_only = node
+            .attributes
+            .iter()
+            .any(|attr| attr.scope == "boundary" && attr.name == "internal_only");
+        if !has_internal_only {
+            continue;
+        }
+
+        if node.visibility != Some("private") {
+            findings.push(Finding {
+                rule_id: "SCB-BOUNDARY-001".to_string(),
+                kind: "internal_only_visibility_violation".to_string(),
+                message: format!(
+                    "internal_only item {} must not be externally visible (visibility={})",
+                    node.id,
+                    node.visibility.unwrap_or("unknown")
+                ),
+                owner_ids: vec![node.id.clone()],
+                node_ids: vec![node.id.clone()],
+            });
+        }
+
+        let target_module_path = node.module_path.clone();
+        let mut seen_external_sources = BTreeSet::new();
+        for edge in graph.edges.iter().filter(|edge| {
+            matches!(edge.kind, "references_type" | "references_expr") && edge.to == node.id
+        }) {
+            let Some(source_node) = node_map.get(&edge.from) else {
+                continue;
+            };
+            if source_node.id == node.id {
+                continue;
+            }
+            if source_node.module_path == target_module_path {
+                continue;
+            }
+            let source_owner_id = owner_id_for_node_id(&source_node.id, source_node.kind)
+                .unwrap_or_else(|| source_node.id.clone());
+            if !seen_external_sources.insert(source_owner_id.clone()) {
+                continue;
+            }
+            findings.push(Finding {
+                rule_id: "SCB-BOUNDARY-002".to_string(),
+                kind: "internal_only_external_reference".to_string(),
+                message: format!(
+                    "internal_only item {} referenced from {}",
+                    node.id, source_owner_id
+                ),
+                owner_ids: vec![node.id.clone()],
+                node_ids: vec![source_owner_id, node.id.clone()],
+            });
+        }
+    }
+
+    findings.sort_by(|left, right| {
+        left.rule_id
+            .cmp(&right.rule_id)
+            .then_with(|| left.message.cmp(&right.message))
+    });
+    findings
+}
+
+fn finding_is_failure(finding: &Finding) -> bool {
+    matches!(
+        finding.rule_id.as_str(),
+        "SCB-CYCLE-001" | "SCB-BOUNDARY-001" | "SCB-BOUNDARY-002"
+    )
+}
+
+fn finding_sort_key(finding: &Finding) -> (u8, &str) {
+    let severity = if finding_is_failure(finding) { 0 } else { 1 };
+    (severity, finding.rule_id.as_str())
+}
+
 #[derive(Debug, Clone)]
 struct OwnerRefEdge {
     source_owner_id: String,
@@ -1180,6 +1452,17 @@ fn owner_id_for_node_id(node_id: &str, node_kind: &str) -> Option<String> {
         "method" => node_id
             .rsplit_once("::")
             .map(|(parent, _)| parent.to_string()),
+        "variant" => node_id
+            .rsplit_once("::variant::")
+            .map(|(parent, _)| parent.to_string()),
+        "field" => {
+            let (parent, _) = node_id.rsplit_once("::field::")?;
+            if let Some((enum_parent, _variant)) = parent.rsplit_once("::variant::") {
+                Some(enum_parent.to_string())
+            } else {
+                Some(parent.to_string())
+            }
+        }
         _ => None,
     }
 }
@@ -1264,6 +1547,129 @@ pub fn render_findings_report(report: &FindingsReport) -> String {
     )
 }
 
+pub fn render_graph_export(graph: &GraphExport, format: GraphOutputFormat) -> String {
+    match format {
+        GraphOutputFormat::Json => serde_json::to_string_pretty(graph)
+            .expect("graph export should always serialize to JSON"),
+        GraphOutputFormat::Turtle => render_graph_turtle(graph),
+    }
+}
+
+fn render_graph_turtle(graph: &GraphExport) -> String {
+    let mut lines = vec![
+        "@prefix sc: <urn:sc-lint-boundary:predicate:> .".to_string(),
+        "@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .".to_string(),
+        "".to_string(),
+    ];
+
+    for node in &graph.nodes {
+        let subject = node_iri(&node.id);
+        lines.push(format!("{subject} rdf:type sc:{} .", node.kind));
+        lines.push(format!(
+            "{subject} sc:id {} .",
+            turtle_string_literal(&node.id)
+        ));
+        lines.push(format!(
+            "{subject} sc:label {} .",
+            turtle_string_literal(&node.label)
+        ));
+        if let Some(visibility) = node.visibility {
+            lines.push(format!(
+                "{subject} sc:visibility {} .",
+                turtle_string_literal(visibility)
+            ));
+        }
+        lines.push(format!(
+            "{subject} sc:package {} .",
+            turtle_string_literal(&node.package)
+        ));
+        if let Some(target) = &node.target {
+            lines.push(format!(
+                "{subject} sc:target {} .",
+                turtle_string_literal(target)
+            ));
+        }
+        lines.push(format!(
+            "{subject} sc:manifestPath {} .",
+            turtle_string_literal(&node.manifest_path)
+        ));
+        if let Some(source_path) = &node.source_path {
+            lines.push(format!(
+                "{subject} sc:sourcePath {} .",
+                turtle_string_literal(source_path)
+            ));
+        }
+        if let Some(module_path) = &node.module_path {
+            lines.push(format!(
+                "{subject} sc:modulePath {} .",
+                turtle_string_literal(module_path)
+            ));
+        }
+        if let Some(impl_kind) = node.impl_kind {
+            lines.push(format!(
+                "{subject} sc:implKind {} .",
+                turtle_string_literal(impl_kind)
+            ));
+        }
+        if let Some(impl_trait) = &node.impl_trait {
+            lines.push(format!(
+                "{subject} sc:implTrait {} .",
+                turtle_string_literal(impl_trait)
+            ));
+        }
+        for attr in &node.attributes {
+            lines.push(format!(
+                "{subject} sc:attribute {} .",
+                turtle_string_literal(&format!(
+                    "{}.{}({})",
+                    attr.scope,
+                    attr.name,
+                    attr.values.join(",")
+                ))
+            ));
+        }
+        lines.push(String::new());
+    }
+
+    for edge in &graph.edges {
+        lines.push(format!(
+            "{} sc:{} {} .",
+            node_iri(&edge.from),
+            edge.kind,
+            node_iri(&edge.to)
+        ));
+    }
+
+    lines.join("\n")
+}
+
+fn node_iri(node_id: &str) -> String {
+    format!(
+        "<urn:sc-lint-boundary:node:{}>",
+        hex_encode(node_id.as_bytes())
+    )
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        output.push(HEX[(byte >> 4) as usize] as char);
+        output.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    output
+}
+
+fn turtle_string_literal(value: &str) -> String {
+    let escaped = value
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t");
+    format!("\"{escaped}\"")
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -1274,11 +1680,13 @@ mod tests {
     use super::AnalyzeOptions;
     use super::ExportGraphOptions;
     use super::GraphExport;
+    use super::GraphOutputFormat;
     use super::LintAttribute;
     use super::OutputFormat;
     use super::analyze_workspace;
     use super::export_workspace_graph;
     use super::render_findings_report;
+    use super::render_graph_export;
 
     #[test]
     fn findings_report_text_is_stable() {
@@ -1435,6 +1843,72 @@ mod tests {
             edge.from == "crate::example::example::module::crate::inline_mod::InlineType::helper"
                 && edge.to == "crate::example::example::module::crate::inline_mod::self"
         }));
+    }
+
+    #[test]
+    fn exports_field_and_variant_nodes_for_type_graph() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                pub struct Wrapper {
+                    pub value: Inner,
+                }
+
+                pub struct Inner;
+
+                pub enum Choice {
+                    Unit,
+                    Pair(Inner),
+                }
+            "#,
+        );
+
+        let graph = export_workspace_graph(&ExportGraphOptions {
+            root: fixture.root().to_path_buf(),
+        })
+        .unwrap();
+
+        assert!(graph.nodes.iter().any(|node| {
+            node.id == "crate::example::example::module::crate::Wrapper::field::value"
+                && node.kind == "field"
+                && node.visibility == Some("public")
+        }));
+        assert!(graph.nodes.iter().any(|node| {
+            node.id == "crate::example::example::module::crate::Choice::variant::Pair"
+                && node.kind == "variant"
+        }));
+        assert!(graph.nodes.iter().any(|node| {
+            node.id == "crate::example::example::module::crate::Choice::variant::Pair::field::0"
+                && node.kind == "field"
+        }));
+        assert!(graph.edges.iter().any(|edge| {
+            edge.kind == "references_type"
+                && edge.from == "crate::example::example::module::crate::Wrapper::field::value"
+                && edge.to == "crate::example::example::module::crate::Inner"
+        }));
+    }
+
+    #[test]
+    fn renders_graph_as_turtle() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source("example", "lib.rs", "pub struct Example;");
+
+        let graph = export_workspace_graph(&ExportGraphOptions {
+            root: fixture.root().to_path_buf(),
+        })
+        .unwrap();
+        let turtle = render_graph_export(&graph, GraphOutputFormat::Turtle);
+
+        assert!(turtle.contains("@prefix sc: <urn:sc-lint-boundary:predicate:> ."));
+        assert!(turtle.contains("rdf:type sc:type ."));
+        assert!(turtle.contains("sc:visibility \"public\" ."));
+        assert!(turtle.contains("sc:label \"Example\" ."));
     }
 
     #[test]
@@ -1890,6 +2364,94 @@ mod tests {
                 "crate::example::example::module::crate::right::Beta".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn fails_when_internal_only_item_is_public() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                #[sc_lint(boundary.internal_only)]
+                pub struct Secret;
+            "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("internal_only".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "fail");
+        assert_eq!(report.findings.len(), 1);
+        assert_eq!(report.findings[0].rule_id, "SCB-BOUNDARY-001");
+    }
+
+    #[test]
+    fn fails_when_internal_only_item_is_referenced_from_other_module() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source("example", "lib.rs", "mod owner; mod user;");
+        fixture.write_source(
+            "example",
+            "owner.rs",
+            r#"
+                #[sc_lint(boundary.internal_only)]
+                struct Secret;
+            "#,
+        );
+        fixture.write_source(
+            "example",
+            "user.rs",
+            r#"
+                pub struct Uses(crate::owner::Secret);
+            "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("boundaries".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "fail");
+        assert_eq!(report.findings.len(), 1);
+        assert_eq!(report.findings[0].rule_id, "SCB-BOUNDARY-002");
+        assert!(report.findings[0].message.contains("crate::owner::Secret"));
+    }
+
+    #[test]
+    fn allows_internal_only_item_inside_own_module() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                #[sc_lint(boundary.internal_only)]
+                struct Secret;
+
+                struct Wrapper(Secret);
+            "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("boundaries".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "pass");
+        assert!(report.findings.is_empty());
     }
 
     #[test]

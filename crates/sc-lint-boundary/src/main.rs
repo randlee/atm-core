@@ -5,10 +5,12 @@ use clap::Parser;
 use clap::Subcommand;
 use sc_lint_boundary::AnalyzeOptions;
 use sc_lint_boundary::ExportGraphOptions;
+use sc_lint_boundary::GraphOutputFormat;
 use sc_lint_boundary::OutputFormat;
 use sc_lint_boundary::analyze_workspace;
 use sc_lint_boundary::export_workspace_graph;
 use sc_lint_boundary::render_findings_report;
+use sc_lint_boundary::render_graph_export;
 
 #[derive(Debug, Parser)]
 #[command(name = "sc-lint-boundary")]
@@ -31,6 +33,8 @@ enum Command {
     ExportGraph {
         #[arg(long, default_value = ".")]
         root: PathBuf,
+        #[arg(long, default_value = "json")]
+        format: GraphFormatArg,
     },
 }
 
@@ -40,11 +44,26 @@ enum FormatArg {
     Json,
 }
 
+#[derive(Debug, Clone, clap::ValueEnum)]
+enum GraphFormatArg {
+    Json,
+    Turtle,
+}
+
 impl From<FormatArg> for OutputFormat {
     fn from(value: FormatArg) -> Self {
         match value {
             FormatArg::Text => OutputFormat::Text,
             FormatArg::Json => OutputFormat::Json,
+        }
+    }
+}
+
+impl From<GraphFormatArg> for GraphOutputFormat {
+    fn from(value: GraphFormatArg) -> Self {
+        match value {
+            GraphFormatArg::Json => GraphOutputFormat::Json,
+            GraphFormatArg::Turtle => GraphOutputFormat::Turtle,
         }
     }
 }
@@ -69,9 +88,9 @@ fn main() -> Result<()> {
                 }
             }
         }
-        Command::ExportGraph { root } => {
+        Command::ExportGraph { root, format } => {
             let graph = export_workspace_graph(&ExportGraphOptions { root })?;
-            println!("{}", serde_json::to_string_pretty(&graph)?);
+            println!("{}", render_graph_export(&graph, format.into()));
         }
     }
 

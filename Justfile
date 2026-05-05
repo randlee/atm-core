@@ -46,6 +46,10 @@ _lint-boundaries:
     {{python_cmd}} .just/lint_boundaries.py
 
 [private]
+_lint-sc-boundary:
+    {{python_cmd}} .just/lint_sc_boundary.py
+
+[private]
 _lint-manifests:
     {{python_cmd}} .just/lint_manifests.py
 

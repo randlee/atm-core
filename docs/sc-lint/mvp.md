@@ -128,6 +128,8 @@ The analyzer should build a property graph in memory with stable ids.
 - `crate`
 - `module`
 - `type`
+- `variant`
+- `field`
 - `trait`
 - `function`
 - `method`
@@ -208,16 +210,23 @@ Current scaffold status:
     - crates
     - modules
     - types
+    - variants
+    - fields
     - traits
     - functions
     - methods
   - emit a stable text findings summary
   - emit JSON findings
-  - export graph JSON
+  - export graph in:
+    - JSON
+    - Turtle
   - classify owner-graph cycles into:
     - `SCB-CYCLE-001` multi-owner architectural cycle
     - `SCB-CYCLE-002` type/method self-loop
     - `SCB-CYCLE-003` trait-impl self-loop
+  - enforce:
+    - `SCB-BOUNDARY-001` internal_only visibility violation
+    - `SCB-BOUNDARY-002` internal_only external reference
 - `sc-lint-attributes` exists and already reserves the shared
   `#[sc_lint(...)]` namespace with compile-valid, no-op attribute parsing
 

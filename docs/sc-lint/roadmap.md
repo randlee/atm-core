@@ -119,8 +119,9 @@ Current implementation status:
   - `type_method_self_loop`
   - `trait_impl_self_loop`
   - `multi_owner_architectural_cycle`
+  - `internal_only` visibility/reference enforcement
 - deferred:
-  - `newtype_conversion_self_loop`
+  - dedicated value-container / recursive-model cycle policy
 
 ## What Is Explicitly Deferred
 
@@ -156,3 +157,9 @@ Likely future integration:
 - JSON findings are logged and rendered through the existing lint tooling
 - `just lint modules` or a replacement rule target eventually uses the analyzer
   instead of raw `cargo-modules --acyclic`
+
+Current integration state:
+
+- `just lint sc-boundary`
+  - exists now as a separate preliminary/manual target
+  - is intentionally not part of default `just lint` yet

@@ -34,15 +34,33 @@ Current scaffold status:
   - currently provides:
     - workspace discovery through `cargo_metadata`
     - module-driven source traversal through `syn`
-    - graph nodes for crates/modules/types/traits/functions/methods
+    - graph nodes for:
+      - crates
+      - modules
+      - types
+      - variants
+      - fields
+      - traits
+      - functions
+      - methods
     - `#[sc_lint(...)]` attribute ingestion for `boundary.allow(...)` and
       `boundary.internal_only`
     - owner-graph cycle classification with:
       - `SCB-CYCLE-001` multi-owner architectural cycle
-      - `SCB-CYCLE-002` type/method self-loop
       - `SCB-CYCLE-003` trait-impl self-loop
-    - stable text/JSON findings output scaffolding
-    - graph JSON export scaffolding
+    - boundary enforcement with:
+      - `SCB-BOUNDARY-001` internal_only visibility violation
+      - `SCB-BOUNDARY-002` internal_only external reference
+    - stable text/JSON findings output
+    - graph export in:
+      - JSON
+      - Turtle
+
+Current repo integration status:
+
+- `just lint sc-boundary`
+  - exists now as a separate preliminary/manual target
+  - is intentionally not part of default `just lint` yet
 
 Future documents that should also live here:
 

@@ -28,10 +28,11 @@ PYTHON_LINT_ORDER = (
     "spell",
     "pytests",
 )
+EXTRA_LINTS = ("sc-boundary",)
 CARGO_LINT_ORDER = ("fmt", "clippy", "deny", "shear")
 FAST_LINT_ORDER = ("fmt", "version", "boundaries", "manifests", "spell", "pytests")
 HIGH_VOLUME_LINTS = {"identities", "lines"}
-CRATE_INVENTORY_LINTS = {"fmt", "clippy", "modules", "boundaries", "manifests"}
+CRATE_INVENTORY_LINTS = {"fmt", "clippy", "modules", "boundaries", "sc-boundary", "manifests"}
 COUNT_PATTERNS = (
     ("total violations:", "violations"),
     ("errors:", "errors"),
@@ -71,6 +72,9 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         ),
         "lines": LintTask("lines", [python_executable, str(repo_root / ".just/check_line_counts.py")]),
         "boundaries": LintTask("boundaries", [python_executable, str(repo_root / ".just/lint_boundaries.py")]),
+        "sc-boundary": LintTask(
+            "sc-boundary", [python_executable, str(repo_root / ".just/lint_sc_boundary.py")]
+        ),
         "manifests": LintTask("manifests", [python_executable, str(repo_root / ".just/lint_manifests.py")]),
         "spell": LintTask("spell", [python_executable, str(repo_root / ".just/lint_codespell.py")]),
         "pytests": LintTask("pytests", [python_executable, str(repo_root / ".just/run_pytests.py")]),
@@ -82,7 +86,7 @@ def resolve_task_names(target: str) -> list[str]:
         return [*CARGO_LINT_ORDER, *PYTHON_LINT_ORDER]
     if target == "fast":
         return list(FAST_LINT_ORDER)
-    valid = {"all", "fast", *CARGO_LINT_ORDER, *PYTHON_LINT_ORDER}
+    valid = {"all", "fast", *CARGO_LINT_ORDER, *PYTHON_LINT_ORDER, *EXTRA_LINTS}
     if target not in valid:
         valid_display = ", ".join(sorted(valid))
         raise ValueError(f"unknown lint target: {target}; expected one of: {valid_display}")
@@ -124,6 +128,9 @@ def extract_count(lines: list[str]) -> int | None:
 
 
 def preview_lines_for_task(task_name: str, lines: list[str]) -> list[str]:
+    if task_name == "sc-boundary":
+        filtered = [line for line in lines if line.strip() != "sc-boundary failed"]
+        return filtered or lines
     if task_name != "identities":
         return lines
 
@@ -207,7 +214,7 @@ def print_result(result: LintResult, repo_root: Path) -> None:
         print(f"{result.task.name} passed [{format_duration(result.duration_seconds)}]")
         return
 
-    lines = interesting_lines("\n".join((result.stdout, result.stderr)))
+    lines = preview_lines_for_task(result.task.name, interesting_lines("\n".join((result.stdout, result.stderr))))
     log_display = relative_log_path(repo_root, result.log_path)
     print(f"{result.task.name} failed")
     if result.task.name in HIGH_VOLUME_LINTS:
@@ -251,7 +258,7 @@ def main(argv: list[str]) -> int:
     selected_tasks = [tasks[name] for name in task_names]
 
     cargo_tasks = [task for task in selected_tasks if task.name in CARGO_LINT_ORDER]
-    python_tasks = [task for task in selected_tasks if task.name in PYTHON_LINT_ORDER]
+    python_tasks = [task for task in selected_tasks if task.name in PYTHON_LINT_ORDER or task.name in EXTRA_LINTS]
     results: list[LintResult] = []
 
     for task in cargo_tasks:
