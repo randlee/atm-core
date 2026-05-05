@@ -206,9 +206,9 @@ Initial lint passes:
 - owner-crate test-bypass checks
 
 Deferred until after design freeze:
-- composition-root enforcement
-- cargo-modules cycle gating beyond false-positive review
-- unsafe view hardening beyond cargo-geiger package-resolution failures
+- composition-root enforcement (carry into `R.4`)
+- cargo-modules cycle gating beyond false-positive review (carry into `R.4`)
+- unsafe view hardening beyond cargo-geiger package-resolution failures (carry into `R.6`)
 
 Acceptance:
 - `just lint` can fail on the first hard architectural violations
@@ -443,12 +443,17 @@ Review targets:
      - verify the remaining open ADR-001 action item is closed by confirming
        `lint_boundaries.py` and the boundary records reflect all current
        permitted impl sites
+     - verify the `#[doc(hidden)]` ADR-001 action item is closed in the landed
+       `atm-core` boundary module implementation
      - any new concrete implementation struct introduced in this sprint must:
        (a) add boundary-record visibility/constructor rules; (b) have boundary
        lint enforce them; (c) pass QA verification of those checks
      - QA verifies any new runtime impl structs are covered by active privacy /
        constructor lint checks
 2. `R.5 Store Boundaries`
+   - Start gate:
+     - `R.5` may not begin until `R.4` acceptance criteria are signed off by
+       team-lead
    - `crates/atm-core/src/boundary/mod.rs`
      - finalize request / response DTOs for:
        - `MailStore`
@@ -579,6 +584,8 @@ Review targets:
      - thin clients do not require daemon-internal or sqlite-facing knowledge
      - daemon lifecycle (`start` / `stop` / `health`) and all currently
        supported `atm` CLI commands remain functional at `R.8` close
+     - auto-start when the daemon is absent remains supported, with no silent
+       fallback to in-process execution
      - `lint_manifests.py` confirms the following ADR-001 dependency edges
        remain FORBIDDEN:
        - `atm -> atm-daemon`
@@ -606,6 +613,9 @@ Cross-sprint hardening rule:
   - ensure boundary lint actively enforces those privacy expectations
   - include QA verification that the privacy / constructor / re-export rules
     are present and passing in `just lint`
+- ADR-001 AGENTS.md guard note:
+  - complete at `cd70665`; no further sprint ownership needed unless the
+    prompt location changes again
 
 ## 6. Working Rule
 
