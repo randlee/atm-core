@@ -214,6 +214,9 @@ Current scaffold status:
   - emit a stable text findings summary
   - emit JSON findings
   - export graph JSON
+  - classify owner-graph cycles into:
+    - `SCB-CYCLE-001` multi-owner architectural cycle
+    - `SCB-CYCLE-002` type/method self-loop
 - `sc-lint-attributes` exists and already reserves the shared
   `#[sc_lint(...)]` namespace with compile-valid, no-op attribute parsing
 
@@ -221,6 +224,11 @@ Current implemented attribute ingestion in the analyzer:
 
 - `#[sc_lint(boundary.allow("..."))]`
 - `#[sc_lint(boundary.internal_only)]`
+
+Current implemented suppression use:
+
+- `boundary.allow("cycle.type_method_self_loop")`
+  - suppresses `SCB-CYCLE-002` on annotated items
 
 ### JSON findings envelope
 

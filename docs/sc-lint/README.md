@@ -37,6 +37,9 @@ Current scaffold status:
     - graph nodes for crates/modules/types/traits/functions/methods
     - `#[sc_lint(...)]` attribute ingestion for `boundary.allow(...)` and
       `boundary.internal_only`
+    - owner-graph cycle classification with:
+      - `SCB-CYCLE-001` multi-owner architectural cycle
+      - `SCB-CYCLE-002` type/method self-loop
     - stable text/JSON findings output scaffolding
     - graph JSON export scaffolding
 

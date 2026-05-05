@@ -31,6 +31,7 @@ Current scaffold state:
   - created
   - crate/module/type/method graph scaffold in place now
   - initial `sc_lint` attribute ingestion in place now
+  - first owner-graph cycle rules in place now
 
 ### Analyzer strategy
 
@@ -111,6 +112,14 @@ The analyzer should be able to classify at least:
 
 The exact names may change, but the rule categories should stay stable enough
 to support JSON findings and later config.
+
+Current implementation status:
+
+- implemented:
+  - `type_method_self_loop`
+  - `multi_owner_architectural_cycle`
+- deferred:
+  - `newtype_conversion_self_loop`
 
 ## What Is Explicitly Deferred
 

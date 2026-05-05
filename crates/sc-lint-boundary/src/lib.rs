@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fmt;
 use std::fs;
 use std::path::Path;
@@ -17,6 +19,7 @@ use syn::Token;
 use syn::Type;
 use syn::parse::Parse;
 use syn::parse::ParseStream;
+use syn::visit::Visit;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputFormat {
@@ -59,6 +62,8 @@ pub struct Finding {
     pub rule_id: String,
     pub kind: String,
     pub message: String,
+    pub owner_ids: Vec<String>,
+    pub node_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -194,23 +199,118 @@ impl Parse for ParsedLintInput {
 
 pub fn analyze_workspace(options: &AnalyzeOptions) -> Result<FindingsReport> {
     let graph = build_workspace_graph(&options.root)?;
+    let findings = analyze_cycles(&graph, options.rule.as_deref());
     let scanned_crates = graph
         .nodes
         .iter()
         .filter(|node| node.kind == "crate")
         .count();
+    let status = if findings
+        .iter()
+        .any(|finding| finding.rule_id == "SCB-CYCLE-001")
+    {
+        "fail"
+    } else {
+        "pass"
+    };
 
     Ok(FindingsReport {
         tool: "sc-lint-boundary",
         version: env!("CARGO_PKG_VERSION"),
-        status: "pass",
+        status,
         scanned_crates,
-        findings: Vec::new(),
+        findings,
     })
 }
 
 pub fn export_workspace_graph(options: &ExportGraphOptions) -> Result<GraphExport> {
     build_workspace_graph(&options.root)
+}
+
+fn collect_owner_names(items: &[Item]) -> BTreeSet<String> {
+    let mut names = BTreeSet::new();
+    for item in items {
+        match item {
+            Item::Struct(item_struct) => {
+                names.insert(item_struct.ident.to_string());
+            }
+            Item::Enum(item_enum) => {
+                names.insert(item_enum.ident.to_string());
+            }
+            Item::Union(item_union) => {
+                names.insert(item_union.ident.to_string());
+            }
+            Item::Type(item_type) => {
+                names.insert(item_type.ident.to_string());
+            }
+            Item::Trait(item_trait) => {
+                names.insert(item_trait.ident.to_string());
+            }
+            _ => {}
+        }
+    }
+    names
+}
+
+#[derive(Default)]
+struct ReferenceCollector {
+    owner_name: Option<String>,
+    local_owner_names: BTreeSet<String>,
+    references: BTreeSet<String>,
+}
+
+impl ReferenceCollector {
+    fn new(local_owner_names: &BTreeSet<String>, owner_name: Option<&str>) -> Self {
+        Self {
+            owner_name: owner_name.map(ToOwned::to_owned),
+            local_owner_names: local_owner_names.clone(),
+            references: BTreeSet::new(),
+        }
+    }
+
+    fn into_references(self) -> BTreeSet<String> {
+        self.references
+    }
+
+    fn maybe_insert(&mut self, ident: &Ident) {
+        let name = ident.to_string();
+        if name == "Self" {
+            if let Some(owner_name) = &self.owner_name {
+                self.references.insert(owner_name.clone());
+            }
+            return;
+        }
+
+        if self.local_owner_names.contains(&name) {
+            self.references.insert(name);
+        }
+    }
+}
+
+impl<'ast> Visit<'ast> for ReferenceCollector {
+    fn visit_type_path(&mut self, type_path: &'ast syn::TypePath) {
+        if let Some(segment) = type_path.path.segments.last() {
+            self.maybe_insert(&segment.ident);
+        }
+        syn::visit::visit_type_path(self, type_path);
+    }
+
+    fn visit_expr_path(&mut self, expr_path: &'ast syn::ExprPath) {
+        if let Some(segment) = expr_path.path.segments.last() {
+            self.maybe_insert(&segment.ident);
+        }
+        syn::visit::visit_expr_path(self, expr_path);
+    }
+}
+
+fn collect_references_with(
+    local_owner_names: &BTreeSet<String>,
+    owner_name: Option<&str>,
+    visit: impl FnOnce(&mut ReferenceCollector),
+) -> BTreeSet<String> {
+    let mut collector = ReferenceCollector::new(local_owner_names, owner_name);
+    visit(&mut collector);
+    collector.into_references()
 }
 
 fn build_workspace_graph(root: &Path) -> Result<GraphExport> {
@@ -287,6 +387,8 @@ fn ingest_module_items(
     source_path: &Path,
     file: File,
 ) -> Result<()> {
+    let local_owner_names = collect_owner_names(&file.items);
+
     for item in file.items {
         match item {
             Item::Mod(item_mod) => {
@@ -314,6 +416,11 @@ fn ingest_module_items(
                 );
 
                 if let Some((_, items)) = item_mod.content {
+                    let inline_file = File {
+                        shebang: None,
+                        attrs: Vec::new(),
+                        items,
+                    };
                     ingest_module_items(
                         builder,
                         context,
@@ -321,11 +428,7 @@ fn ingest_module_items(
                         &child_module_path,
                         &child_module_dir,
                         source_path,
-                        File {
-                            shebang: None,
-                            attrs: Vec::new(),
-                            items,
-                        },
+                        inline_file,
                     )?;
                 } else {
                     let child_source_path = resolve_module_source(module_dir, &name)
@@ -343,75 +446,133 @@ fn ingest_module_items(
                 }
             }
             Item::Struct(item_struct) => {
-                add_item_node(
+                let owner_name = item_struct.ident.to_string();
+                let node_id = add_item_node(
                     builder,
                     context,
                     parent_module_id,
                     module_path,
                     source_path,
-                    item_struct.ident,
+                    item_struct.ident.clone(),
                     "type",
                     parse_lint_attributes(&item_struct.attrs)?,
                 );
+                add_reference_edges(
+                    builder,
+                    &node_id,
+                    module_path,
+                    collect_references_with(&local_owner_names, Some(&owner_name), |collector| {
+                        collector.visit_fields(&item_struct.fields);
+                    }),
+                );
             }
             Item::Enum(item_enum) => {
-                add_item_node(
+                let owner_name = item_enum.ident.to_string();
+                let node_id = add_item_node(
                     builder,
                     context,
                     parent_module_id,
                     module_path,
                     source_path,
-                    item_enum.ident,
+                    item_enum.ident.clone(),
                     "type",
                     parse_lint_attributes(&item_enum.attrs)?,
                 );
+                add_reference_edges(
+                    builder,
+                    &node_id,
+                    module_path,
+                    collect_references_with(&local_owner_names, Some(&owner_name), |collector| {
+                        for variant in &item_enum.variants {
+                            collector.visit_fields(&variant.fields);
+                        }
+                    }),
+                );
             }
             Item::Union(item_union) => {
-                add_item_node(
+                let owner_name = item_union.ident.to_string();
+                let node_id = add_item_node(
                     builder,
                     context,
                     parent_module_id,
                     module_path,
                     source_path,
-                    item_union.ident,
+                    item_union.ident.clone(),
                     "type",
                     parse_lint_attributes(&item_union.attrs)?,
                 );
+                add_reference_edges(
+                    builder,
+                    &node_id,
+                    module_path,
+                    collect_references_with(&local_owner_names, Some(&owner_name), |collector| {
+                        collector.visit_fields_named(&item_union.fields);
+                    }),
+                );
             }
             Item::Type(item_type) => {
-                add_item_node(
+                let owner_name = item_type.ident.to_string();
+                let node_id = add_item_node(
                     builder,
                     context,
                     parent_module_id,
                     module_path,
                     source_path,
-                    item_type.ident,
+                    item_type.ident.clone(),
                     "type",
                     parse_lint_attributes(&item_type.attrs)?,
                 );
+                add_reference_edges(
+                    builder,
+                    &node_id,
+                    module_path,
+                    collect_references_with(&local_owner_names, Some(&owner_name), |collector| {
+                        collector.visit_type(&item_type.ty);
+                    }),
+                );
             }
             Item::Trait(item_trait) => {
-                add_item_node(
+                let owner_name = item_trait.ident.to_string();
+                let node_id = add_item_node(
                     builder,
                     context,
                     parent_module_id,
                     module_path,
                     source_path,
-                    item_trait.ident,
+                    item_trait.ident.clone(),
                     "trait",
                     parse_lint_attributes(&item_trait.attrs)?,
                 );
+                add_reference_edges(
+                    builder,
+                    &node_id,
+                    module_path,
+                    collect_references_with(&local_owner_names, Some(&owner_name), |collector| {
+                        for trait_item in &item_trait.items {
+                            collector.visit_trait_item(trait_item);
+                        }
+                    }),
+                );
             }
             Item::Fn(item_fn) => {
-                add_item_node(
+                let function_ident = item_fn.sig.ident.clone();
+                let node_id = add_item_node(
                     builder,
                     context,
                     parent_module_id,
                     module_path,
                     source_path,
-                    item_fn.sig.ident,
+                    function_ident,
                     "function",
                     parse_lint_attributes(&item_fn.attrs)?,
+                );
+                add_reference_edges(
+                    builder,
+                    &node_id,
+                    module_path,
+                    collect_references_with(&local_owner_names, None, |collector| {
+                        collector.visit_item_fn(&item_fn);
+                    }),
                 );
             }
             Item::Impl(item_impl) => {
@@ -451,7 +612,19 @@ fn ingest_module_items(
                             module_path: Some(module_path.to_string()),
                             attributes: parse_lint_attributes(&method.attrs)?,
                         });
-                        builder.add_edge("declares", owner_node_id.clone(), method_id);
+                        builder.add_edge("declares", owner_node_id.clone(), method_id.clone());
+                        add_reference_edges(
+                            builder,
+                            &method_id,
+                            module_path,
+                            collect_references_with(
+                                &local_owner_names,
+                                Some(&owner_name),
+                                |collector| {
+                                    collector.visit_impl_item_fn(&method);
+                                },
+                            ),
+                        );
                     }
                 }
             }
@@ -471,7 +644,7 @@ fn add_item_node(
     ident: Ident,
     kind: &'static str,
     attributes: Vec<LintAttribute>,
-) {
+) -> String {
     let id = format!("{parent_module_id}::{ident}");
     builder.add_node(GraphNode {
         id: id.clone(),
@@ -484,7 +657,26 @@ fn add_item_node(
         module_path: Some(module_path.to_string()),
         attributes,
     });
-    builder.add_edge("contains", parent_module_id.to_string(), id);
+    builder.add_edge("contains", parent_module_id.to_string(), id.clone());
+    id
+}
+
+fn add_reference_edges(
+    builder: &mut GraphBuilder,
+    source_node_id: &str,
+    module_path: &str,
+    referenced_names: BTreeSet<String>,
+) {
+    let module_node_id = source_node_id
+        .split("::module::")
+        .next()
+        .map(|crate_prefix| format!("{crate_prefix}::module::{module_path}"))
+        .unwrap_or_else(|| source_node_id.to_string());
+
+    for referenced_name in referenced_names {
+        let target_node_id = format!("{module_node_id}::{referenced_name}");
+        builder.add_edge("references", source_node_id.to_string(), target_node_id);
+    }
 }
 
 fn parse_lint_attributes(attrs: &[Attribute]) -> Result<Vec<LintAttribute>> {
@@ -624,6 +816,256 @@ fn load_metadata(root: &Path) -> Result<cargo_metadata::Metadata> {
         .current_dir(root)
         .exec()
         .with_context(|| format!("failed to load cargo metadata for {}", root.display()))
+}
+
+fn analyze_cycles(graph: &GraphExport, rule_filter: Option<&str>) -> Vec<Finding> {
+    if let Some(rule) = rule_filter {
+        if rule != "cycles" {
+            return Vec::new();
+        }
+    }
+
+    let node_map: BTreeMap<_, _> = graph
+        .nodes
+        .iter()
+        .map(|node| (node.id.clone(), node))
+        .collect();
+    let owner_graph = build_owner_graph(graph, &node_map);
+    let sccs = strongly_connected_components(&owner_graph);
+
+    let mut findings = Vec::new();
+    for component in sccs {
+        if component.len() > 1 {
+            let mut owners = component.clone();
+            owners.sort();
+            findings.push(Finding {
+                rule_id: "SCB-CYCLE-001".to_string(),
+                kind: "multi_owner_architectural_cycle".to_string(),
+                message: format!("architectural cycle across owners: {}", owners.join(", ")),
+                owner_ids: owners.clone(),
+                node_ids: owner_contributors(&owners, &owner_graph),
+            });
+            continue;
+        }
+
+        let owner_id = &component[0];
+        let Some(self_refs) = owner_graph.self_refs.get(owner_id) else {
+            continue;
+        };
+        if self_refs.is_empty() {
+            continue;
+        }
+
+        let allow_rule = self_refs.iter().any(|edge| {
+            edge.node_ids.iter().any(|node_id| {
+                node_map
+                    .get(node_id)
+                    .map(|node| {
+                        node.attributes.iter().any(|attr| {
+                            attr.scope == "boundary"
+                                && attr.name == "allow"
+                                && attr
+                                    .values
+                                    .iter()
+                                    .any(|value| value == "cycle.type_method_self_loop")
+                        })
+                    })
+                    .unwrap_or(false)
+            })
+        });
+
+        let is_type_method_self_loop = self_refs.iter().all(|edge| {
+            edge.source_kind == "method"
+                && edge.owner_kind == "type"
+                && edge.target_owner_id == edge.source_owner_id
+        });
+
+        if is_type_method_self_loop && !allow_rule {
+            findings.push(Finding {
+                rule_id: "SCB-CYCLE-002".to_string(),
+                kind: "type_method_self_loop".to_string(),
+                message: format!("type/method self-loop on owner {owner_id}"),
+                owner_ids: vec![owner_id.clone()],
+                node_ids: self_refs
+                    .iter()
+                    .flat_map(|edge| edge.node_ids.clone())
+                    .collect(),
+            });
+        }
+    }
+
+    findings
+}
+
+#[derive(Debug, Clone)]
+struct OwnerRefEdge {
+    source_owner_id: String,
+    target_owner_id: String,
+    owner_kind: &'static str,
+    source_kind: &'static str,
+    node_ids: Vec<String>,
+}
+
+#[derive(Default)]
+struct OwnerGraph {
+    adjacency: BTreeMap<String, BTreeSet<String>>,
+    self_refs: BTreeMap<String, Vec<OwnerRefEdge>>,
+    ref_edges: Vec<OwnerRefEdge>,
+}
+
+fn build_owner_graph<'a>(
+    graph: &'a GraphExport,
+    node_map: &BTreeMap<String, &'a GraphNode>,
+) -> OwnerGraph {
+    let mut owner_graph = OwnerGraph::default();
+
+    for edge in graph.edges.iter().filter(|edge| edge.kind == "references") {
+        let Some(source_node) = node_map.get(&edge.from) else {
+            continue;
+        };
+        let Some(target_node) = node_map.get(&edge.to) else {
+            continue;
+        };
+
+        let Some(source_owner_id) = owner_id_for_node_id(&source_node.id, source_node.kind) else {
+            continue;
+        };
+        let Some(target_owner_id) = owner_id_for_node_id(&target_node.id, target_node.kind) else {
+            continue;
+        };
+
+        let owner_edge = OwnerRefEdge {
+            source_owner_id: source_owner_id.clone(),
+            target_owner_id: target_owner_id.clone(),
+            owner_kind: owner_kind_for_node_id(&source_owner_id, node_map).unwrap_or("module"),
+            source_kind: source_node.kind,
+            node_ids: vec![source_node.id.clone(), target_node.id.clone()],
+        };
+
+        owner_graph
+            .adjacency
+            .entry(source_owner_id.clone())
+            .or_default()
+            .insert(target_owner_id.clone());
+        owner_graph
+            .adjacency
+            .entry(target_owner_id.clone())
+            .or_default();
+
+        if source_owner_id == target_owner_id {
+            owner_graph
+                .self_refs
+                .entry(source_owner_id.clone())
+                .or_default()
+                .push(owner_edge.clone());
+        }
+
+        owner_graph.ref_edges.push(owner_edge);
+    }
+
+    owner_graph
+}
+
+fn owner_contributors(owners: &[String], owner_graph: &OwnerGraph) -> Vec<String> {
+    let owner_set: BTreeSet<_> = owners.iter().cloned().collect();
+    let mut nodes = BTreeSet::new();
+    for edge in &owner_graph.ref_edges {
+        if owner_set.contains(&edge.source_owner_id) && owner_set.contains(&edge.target_owner_id) {
+            for node_id in &edge.node_ids {
+                nodes.insert(node_id.clone());
+            }
+        }
+    }
+    nodes.into_iter().collect()
+}
+
+fn owner_kind_for_node_id<'a>(
+    owner_id: &str,
+    node_map: &BTreeMap<String, &'a GraphNode>,
+) -> Option<&'static str> {
+    node_map.get(owner_id).map(|node| node.kind)
+}
+
+fn owner_id_for_node_id(node_id: &str, node_kind: &str) -> Option<String> {
+    match node_kind {
+        "module" | "type" | "trait" => Some(node_id.to_string()),
+        "function" => node_id
+            .rsplit_once("::")
+            .map(|(parent, _)| parent.to_string()),
+        "method" => node_id
+            .rsplit_once("::")
+            .map(|(parent, _)| parent.to_string()),
+        _ => None,
+    }
+}
+
+fn strongly_connected_components(owner_graph: &OwnerGraph) -> Vec<Vec<String>> {
+    fn visit(
+        node: &str,
+        owner_graph: &OwnerGraph,
+        visited: &mut BTreeSet<String>,
+        order: &mut Vec<String>,
+    ) {
+        if !visited.insert(node.to_string()) {
+            return;
+        }
+        if let Some(neighbors) = owner_graph.adjacency.get(node) {
+            for neighbor in neighbors {
+                visit(neighbor, owner_graph, visited, order);
+            }
+        }
+        order.push(node.to_string());
+    }
+
+    fn reverse_graph(owner_graph: &OwnerGraph) -> BTreeMap<String, BTreeSet<String>> {
+        let mut reversed = BTreeMap::new();
+        for (source, targets) in &owner_graph.adjacency {
+            reversed.entry(source.clone()).or_insert_with(BTreeSet::new);
+            for target in targets {
+                reversed
+                    .entry(target.clone())
+                    .or_insert_with(BTreeSet::new)
+                    .insert(source.clone());
+            }
+        }
+        reversed
+    }
+
+    fn collect_component(
+        node: &str,
+        reversed: &BTreeMap<String, BTreeSet<String>>,
+        visited: &mut BTreeSet<String>,
+        component: &mut Vec<String>,
+    ) {
+        if !visited.insert(node.to_string()) {
+            return;
+        }
+        component.push(node.to_string());
+        if let Some(neighbors) = reversed.get(node) {
+            for neighbor in neighbors {
+                collect_component(neighbor, reversed, visited, component);
+            }
+        }
+    }
+
+    let mut visited = BTreeSet::new();
+    let mut order = Vec::new();
+    for node in owner_graph.adjacency.keys() {
+        visit(node, owner_graph, &mut visited, &mut order);
+    }
+
+    let reversed = reverse_graph(owner_graph);
+    let mut assigned = BTreeSet::new();
+    let mut components = Vec::new();
+    while let Some(node) = order.pop() {
+        if assigned.contains(&node) {
+            continue;
+        }
+        let mut component = Vec::new();
+        collect_component(&node, &reversed, &mut assigned, &mut component);
+        components.push(component);
+    }
+    components
 }
 
 pub fn render_findings_report(report: &FindingsReport) -> String {
@@ -822,6 +1264,114 @@ mod tests {
         .unwrap();
 
         assert_eq!(report.scanned_crates, 1);
+        assert_eq!(report.status, "pass");
+        assert!(report.findings.is_empty());
+    }
+
+    #[test]
+    fn reports_type_method_self_loop_as_non_fatal_signal() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                pub struct Loop;
+
+                impl Loop {
+                    pub fn build() -> Loop {
+                        Loop
+                    }
+                }
+            "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("cycles".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "pass");
+        assert_eq!(report.findings.len(), 1);
+        assert_eq!(report.findings[0].rule_id, "SCB-CYCLE-002");
+        assert_eq!(report.findings[0].kind, "type_method_self_loop");
+        assert_eq!(
+            report.findings[0].owner_ids,
+            vec!["crate::example::example::module::crate::Loop".to_string()]
+        );
+    }
+
+    #[test]
+    fn suppresses_type_method_self_loop_when_allowed() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                #[sc_lint(boundary.allow("cycle.type_method_self_loop"))]
+                pub struct Loop;
+
+                impl Loop {
+                    pub fn build() -> Loop {
+                        Loop
+                    }
+                }
+            "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("cycles".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "pass");
+        assert!(report.findings.is_empty());
+    }
+
+    #[test]
+    fn reports_multi_owner_architectural_cycle_as_failure() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                pub struct Alpha {
+                    pub beta: Beta,
+                }
+
+                pub struct Beta {
+                    pub alpha: Alpha,
+                }
+            "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("cycles".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "fail");
+        assert_eq!(report.findings.len(), 1);
+        assert_eq!(report.findings[0].rule_id, "SCB-CYCLE-001");
+        assert_eq!(report.findings[0].kind, "multi_owner_architectural_cycle");
+        assert_eq!(
+            report.findings[0].owner_ids,
+            vec![
+                "crate::example::example::module::crate::Alpha".to_string(),
+                "crate::example::example::module::crate::Beta".to_string(),
+            ]
+        );
     }
 
     #[test]
