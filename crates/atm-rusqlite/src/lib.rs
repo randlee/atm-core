@@ -143,31 +143,31 @@ fn deserialize_json<T: serde::de::DeserializeOwned>(
 /// Internal assembly root for Phase R SQLite-backed boundary implementations.
 #[derive(Debug)]
 pub(crate) struct SqliteBoundaryAssembly {
-    mail_store: SqliteMailStore,
-    task_store: SqliteTaskStore,
-    roster_store: SqliteRosterStore,
+    mail_store: Arc<SqliteMailStore>,
+    task_store: Arc<SqliteTaskStore>,
+    roster_store: Arc<SqliteRosterStore>,
 }
 
 impl SqliteBoundaryAssembly {
     pub(crate) fn new(path: impl AsRef<Path>) -> Result<Self, AtmError> {
         let db = Arc::new(SharedDb::open(path)?);
         Ok(Self {
-            mail_store: SqliteMailStore::new(db.clone()),
-            task_store: SqliteTaskStore::new(db.clone()),
-            roster_store: SqliteRosterStore::new(db),
+            mail_store: Arc::new(SqliteMailStore::new(db.clone())),
+            task_store: Arc::new(SqliteTaskStore::new(db.clone())),
+            roster_store: Arc::new(SqliteRosterStore::new(db)),
         })
     }
 
-    pub(crate) fn mail_store(&self) -> &SqliteMailStore {
-        &self.mail_store
+    pub(crate) fn mail_store(&self) -> &dyn boundary::MailStore {
+        self.mail_store.as_ref()
     }
 
-    pub(crate) fn task_store(&self) -> &SqliteTaskStore {
-        &self.task_store
+    pub(crate) fn task_store(&self) -> &dyn boundary::TaskStore {
+        self.task_store.as_ref()
     }
 
-    pub(crate) fn roster_store(&self) -> &SqliteRosterStore {
-        &self.roster_store
+    pub(crate) fn roster_store(&self) -> &dyn boundary::RosterStore {
+        self.roster_store.as_ref()
     }
 }
 
@@ -988,7 +988,6 @@ mod tests {
     use super::*;
     use atm_core::schema::{AgentMember, MessageEnvelope};
     use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
-    use atm_core::{MailStore, RosterStore, TaskStore};
     use tempfile::TempDir;
 
     fn temp_db() -> (TempDir, PathBuf) {

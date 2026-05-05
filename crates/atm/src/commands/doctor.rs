@@ -1,8 +1,9 @@
 use anyhow::Result;
-use atm_core::doctor::{self, DoctorQuery};
+use atm_core::doctor::DoctorQuery;
 use atm_core::home;
 use clap::Args;
 
+use crate::composition::CliComposition;
 use crate::observability::CliObservability;
 use crate::output;
 
@@ -25,14 +26,12 @@ impl DoctorCommand {
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
-        let report = doctor::run_doctor(
-            DoctorQuery {
-                home_dir,
-                current_dir,
-                team_override: self.team.map(|value| value.parse()).transpose()?,
-            },
-            observability,
-        )?;
+        let composition = CliComposition::bootstrap(observability)?;
+        let report = composition.doctor(DoctorQuery {
+            home_dir,
+            current_dir,
+            team_override: self.team.map(|value| value.parse()).transpose()?,
+        })?;
 
         let has_errors = report.has_errors();
         output::print_doctor_result(&report, self.json)?;

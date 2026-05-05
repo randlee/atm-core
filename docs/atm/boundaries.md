@@ -20,19 +20,19 @@ public:
 
 implementation:
   type: LocalSocketClientTransport
-  module: atm::transport::local_socket
+  module: atm::composition
   visibility: private
   constructor: private
 
 composition:
   roots:
-    - atm::bootstrap
+    - atm::composition::CliComposition::bootstrap
 
 ownership:
   io_owns:
-    - outbound_local_socket_requests
-    - client_request_deadlines
-    - response_decode
+    - client_request_dispatch
+    - request_response_mapping
+    - thin_cli_transport_wiring
   io_forbidden:
     - sqlite
     - process_spawn_for_notifications
@@ -41,7 +41,6 @@ dependencies:
   allowed_dependents: []
   allowed_dependencies:
     - atm-core
-    - tokio
   forbidden_edges:
     - atm -> atm-daemon
     - atm -> atm-rusqlite
@@ -62,8 +61,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::InProcessClientTransport
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - atm_daemon::client
     - rusqlite::Connection
@@ -79,9 +77,10 @@ enforcement:
     - no_cli_to_sqlite_edge
 
 status:
-  state: planned
+  state: active
   notes:
     - thin extension clients such as atm-graft may reuse the contract shape without depending on atm internals
+    - the current Phase R implementation preserves the transport contract with a private in-process adapter while daemon socket transport remains follow-on work
 ```
 
 Purpose:

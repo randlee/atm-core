@@ -1,11 +1,22 @@
 #![allow(dead_code)]
 
+use atm_core::ack::{AckOutcome, AckRequest};
+use atm_core::boundary;
 use atm_core::boundary::ClientTransport;
+use atm_core::clear::{ClearOutcome, ClearQuery};
+use atm_core::doctor::{DoctorQuery, DoctorReport};
 use atm_core::error::AtmError;
-use atm_core::observability::{NullObservability, ObservabilityPort};
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
-use std::error::Error as StdError;
+use atm_core::observability::ObservabilityPort;
+use atm_core::protocol::{
+    RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
+};
+use atm_core::read::{ReadOutcome, ReadQuery};
+use atm_core::send::{SendOutcome, SendRequest};
 use std::fmt;
+use std::path::PathBuf;
+use std::process::{Command, Stdio};
+
+use crate::observability::CliObservability;
 
 #[derive(Debug, Default)]
 pub(crate) struct SendCommandEntryPoint;
@@ -25,31 +36,52 @@ impl ReceiveCommandEntryPoint {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum CliBootstrapStubError {
-    BootstrapNotWired,
+struct LocalSocketClientTransport<'a> {
+    observability: &'a (dyn ObservabilityPort + Send + Sync),
 }
 
-impl fmt::Display for CliBootstrapStubError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::BootstrapNotWired => {
-                f.write_str("CLI composition bootstrap scaffold is not wired")
+impl<'a> LocalSocketClientTransport<'a> {
+    fn new(observability: &'a (dyn ObservabilityPort + Send + Sync)) -> Self {
+        Self { observability }
+    }
+}
+
+impl boundary::sealed::Sealed for LocalSocketClientTransport<'_> {}
+
+impl ClientTransport for LocalSocketClientTransport<'_> {
+    fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+        match request {
+            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
+                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(
+                    atm_core::send::send_mail(request, self.observability)?,
+                )))
             }
+            RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
+                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
+                    atm_core::ack::ack_mail(request, self.observability)?,
+                )))
+            }
+            RequestEnvelope::Receive(query) => Ok(ResponseEnvelope::Receive(
+                atm_core::read::read_mail(query, self.observability)?,
+            )),
+            RequestEnvelope::Clear(query) => Ok(ResponseEnvelope::Clear(
+                atm_core::clear::clear_mail(query, self.observability)?,
+            )),
+            RequestEnvelope::Doctor(query) => Ok(ResponseEnvelope::Doctor(
+                atm_core::doctor::run_doctor(query, self.observability)?,
+            )),
         }
     }
 }
 
-impl StdError for CliBootstrapStubError {}
-
-pub(crate) struct CliComposition {
-    transport: Box<dyn ClientTransport>,
-    observability_port: Box<dyn ObservabilityPort + Send + Sync>,
+pub(crate) struct CliComposition<'a> {
+    transport: Box<dyn ClientTransport + 'a>,
+    observability_port: &'a (dyn ObservabilityPort + Send + Sync),
     send_command: SendCommandEntryPoint,
     receive_command: ReceiveCommandEntryPoint,
 }
 
-impl fmt::Debug for CliComposition {
+impl fmt::Debug for CliComposition<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CliComposition")
             .field("transport", &"dyn ClientTransport")
@@ -60,17 +92,20 @@ impl fmt::Debug for CliComposition {
     }
 }
 
-impl CliComposition {
-    pub(crate) fn from_transport(transport: Box<dyn ClientTransport>) -> Self {
+impl<'a> CliComposition<'a> {
+    pub(crate) fn from_transport(
+        transport: Box<dyn ClientTransport + 'a>,
+        observability_port: &'a (dyn ObservabilityPort + Send + Sync),
+    ) -> Self {
         Self {
             transport,
-            observability_port: Box::new(NullObservability),
+            observability_port,
             send_command: SendCommandEntryPoint::new(),
             receive_command: ReceiveCommandEntryPoint::new(),
         }
     }
 
-    pub(crate) fn transport(&self) -> &dyn ClientTransport {
+    pub(crate) fn transport(&self) -> &(dyn ClientTransport + 'a) {
         self.transport.as_ref()
     }
 
@@ -82,7 +117,7 @@ impl CliComposition {
     }
 
     pub(crate) fn observability_port(&self) -> &(dyn ObservabilityPort + Send + Sync) {
-        self.observability_port.as_ref()
+        self.observability_port
     }
 
     pub(crate) fn send_command(&self) -> &SendCommandEntryPoint {
@@ -93,13 +128,93 @@ impl CliComposition {
         &self.receive_command
     }
 
-    pub(crate) fn bootstrap() -> Result<Self, AtmError> {
-        Err(
-            AtmError::config("CLI composition bootstrap scaffold is not implemented yet")
-                .with_recovery(
-                    "Wire the CLI transport and command entry points before using bootstrap().",
-                )
-                .with_source(CliBootstrapStubError::BootstrapNotWired),
-        )
+    pub(crate) fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
+        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))? {
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => Ok(outcome),
+            other => Err(unexpected_response("send", other)),
+        }
     }
+
+    pub(crate) fn ack(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
+        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
+            request,
+        )))? {
+            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => Ok(outcome),
+            other => Err(unexpected_response("ack", other)),
+        }
+    }
+
+    pub(crate) fn receive(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
+        match self.send_request(RequestEnvelope::Receive(query))? {
+            ResponseEnvelope::Receive(outcome) => Ok(outcome),
+            other => Err(unexpected_response("receive", other)),
+        }
+    }
+
+    pub(crate) fn clear(&self, query: ClearQuery) -> Result<ClearOutcome, AtmError> {
+        match self.send_request(RequestEnvelope::Clear(query))? {
+            ResponseEnvelope::Clear(outcome) => Ok(outcome),
+            other => Err(unexpected_response("clear", other)),
+        }
+    }
+
+    pub(crate) fn doctor(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {
+        match self.send_request(RequestEnvelope::Doctor(query))? {
+            ResponseEnvelope::Doctor(report) => Ok(report),
+            other => Err(unexpected_response("doctor", other)),
+        }
+    }
+
+    pub(crate) fn bootstrap(observability: &'a CliObservability) -> Result<Self, AtmError> {
+        attempt_daemon_autostart()?;
+        Ok(Self::from_transport(
+            Box::new(LocalSocketClientTransport::new(observability)),
+            observability,
+        ))
+    }
+}
+
+fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError {
+    AtmError::validation(format!(
+        "transport returned an unexpected response for `{command}`: {response:?}"
+    ))
+}
+
+fn attempt_daemon_autostart() -> Result<(), AtmError> {
+    let Some(daemon_bin) = daemon_bin_path() else {
+        return Ok(());
+    };
+
+    if !daemon_bin.exists() {
+        return Err(
+            AtmError::config(format!(
+                "ATM_DAEMON_BIN points to a missing daemon binary: {}",
+                daemon_bin.display()
+            ))
+            .with_recovery(
+                "Set ATM_DAEMON_BIN to the Phase R daemon binary path or install the daemon artifact before retrying.",
+            ),
+        );
+    }
+
+    Command::new(&daemon_bin)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| {
+            AtmError::config(format!(
+                "failed to auto-start daemon binary {}",
+                daemon_bin.display()
+            ))
+            .with_recovery(
+                "Check the daemon binary permissions and runtime environment, then retry the CLI command.",
+            )
+            .with_source(error)
+        })
+}
+
+fn daemon_bin_path() -> Option<PathBuf> {
+    std::env::var_os("ATM_DAEMON_BIN").map(PathBuf::from)
 }
