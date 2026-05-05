@@ -103,6 +103,7 @@ pub fn is_daemon_start_transient(output: &Output) -> bool {
     let response_frame = stderr.contains("failed to read daemon response frame");
     let parse_eof = stderr.contains("EOF while parsing a value at line 1 column 0");
     (response_frame || parse_eof) && request_frame
+        || stderr.contains("failed to write daemon request frame")
         || stderr.contains("daemon socket was not published")
         || stderr.contains("failed to connect to daemon socket")
 }
