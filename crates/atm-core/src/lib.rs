@@ -30,6 +30,8 @@ pub mod observability;
 pub(crate) mod persistence;
 /// Internal process-liveness helpers shared across lock implementations.
 pub(crate) mod process;
+/// Shared protocol DTOs used by boundary transport and adapter contracts.
+pub mod protocol;
 /// Mailbox read/query workflows and output models.
 pub mod read;
 /// Reserved production role constants shared across runtime and tests.
@@ -51,16 +53,15 @@ pub mod types;
 pub(crate) mod workflow;
 
 pub use boundary::{
-    AtmFramePayload, AtmProtocol, AtmRequestEnvelope, AtmResponseEnvelope, ClientTransport,
-    ClientTransportRequest, ClientTransportResponse, ConfigIngress, ConfigLoadRequest,
-    ConfigLoadResponse, DispatchRequestEnvelope, DispatchResponseEnvelope, InboxExport,
-    InboxExportReexportMessageRequest, InboxExportReexportMessageResponse, InboxExportRequest,
-    InboxExportResponse, InboxIngress, InboxIngressDiagnosticsRequest,
+    AtmProtocol, ClientTransport, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse,
+    InboxExport, InboxExportReexportMessageRequest, InboxExportReexportMessageResponse,
+    InboxExportRequest, InboxExportResponse, InboxIngress, InboxIngressDiagnosticsRequest,
     InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,
     InboxIngressIdentityFingerprintResponse, InboxIngressRequest, InboxIngressResponse, MailStore,
     MailStoreRequest, MailStoreResponse, NotificationEvent, NotificationSink, ReconcileCoordinator,
     ReconcileRequest, ReconcileResult, RequestDispatcher, RosterStore, RosterStoreRequest,
-    RosterStoreResponse, RuntimeStatusSnapshot, ServerTransport, ServerTransportRequest,
-    ServerTransportResponse, StatusSource, TaskStore, TaskStoreRequest, TaskStoreResponse,
-    WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
+    RosterStoreResponse, RuntimeStatusSnapshot, ServerTransport, StatusSource, TaskStore,
+    TaskStoreRequest, TaskStoreResponse, WatchEventBatch, WatchEventSource,
+    WatchSubscriptionRequest,
 };
+pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};

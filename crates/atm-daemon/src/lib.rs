@@ -9,27 +9,43 @@ use std::error::Error as StdError;
 use std::fmt;
 
 use atm_core::{
+    RequestEnvelope, ResponseEnvelope,
     boundary::{
         self, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, InboxExport,
         InboxExportRecordRequest, InboxExportRecordResponse, InboxExportReexportMessageRequest,
         InboxExportReexportMessageResponse, InboxIngress, InboxIngressDiagnosticsRequest,
         InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,
         InboxIngressIdentityFingerprintResponse, InboxIngressImportRequest,
-        InboxIngressImportResponse,
+        InboxIngressImportResponse, NotificationEvent, ReconcileRequest, ReconcileResult,
+        RequestDispatcher, RuntimeStatusSnapshot, WatchEventBatch, WatchSubscriptionRequest,
     },
     error::AtmError,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DaemonBoundaryStubError {
+    ServerTransport,
+    RequestDispatcher,
+    NotificationSink,
+    StatusSource,
+    WatchEventSource,
+    ReconcileCoordinator,
     ConfigIngress,
     InboxIngress,
     InboxExport,
+    PeerClientTransport,
 }
 
 impl fmt::Display for DaemonBoundaryStubError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let message = match self {
+            Self::ServerTransport => "daemon server transport scaffold is not wired",
+            Self::PeerClientTransport => "daemon peer client transport scaffold is not wired",
+            Self::RequestDispatcher => "daemon request dispatcher scaffold is not wired",
+            Self::NotificationSink => "daemon notification sink scaffold is not wired",
+            Self::StatusSource => "daemon status source scaffold is not wired",
+            Self::WatchEventSource => "daemon watch event source scaffold is not wired",
+            Self::ReconcileCoordinator => "daemon reconcile coordinator scaffold is not wired",
             Self::ConfigIngress => "daemon config ingress scaffold is not wired",
             Self::InboxIngress => "daemon inbox ingress scaffold is not wired",
             Self::InboxExport => "daemon inbox export scaffold is not wired",
@@ -42,7 +58,7 @@ impl fmt::Display for DaemonBoundaryStubError {
 impl StdError for DaemonBoundaryStubError {}
 
 fn daemon_boundary_stub_error(message: &'static str, source: DaemonBoundaryStubError) -> AtmError {
-    AtmError::validation(message)
+    AtmError::config(message)
         .with_recovery("Complete the Phase R daemon boundary wiring before invoking this path.")
         .with_source(source)
 }
@@ -59,7 +75,35 @@ impl LocalSocketServerTransport {
 
 impl boundary::sealed::Sealed for LocalSocketServerTransport {}
 
-impl boundary::ServerTransport for LocalSocketServerTransport {}
+impl boundary::ServerTransport for LocalSocketServerTransport {
+    fn serve(&self, _dispatcher: &dyn RequestDispatcher) -> Result<(), AtmError> {
+        Err(daemon_boundary_stub_error(
+            "daemon server transport stub is not implemented yet",
+            DaemonBoundaryStubError::ServerTransport,
+        ))
+    }
+}
+
+/// Placeholder runtime dispatcher for daemon-owned protocol routing.
+#[derive(Debug, Default)]
+struct DaemonRequestDispatcher;
+
+impl DaemonRequestDispatcher {
+    const fn new() -> Self {
+        Self
+    }
+}
+
+impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
+
+impl boundary::RequestDispatcher for DaemonRequestDispatcher {
+    fn dispatch(&self, _request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+        Err(daemon_boundary_stub_error(
+            "daemon request dispatcher stub is not implemented yet",
+            DaemonBoundaryStubError::RequestDispatcher,
+        ))
+    }
+}
 
 /// Placeholder runtime sink for daemon-emitted notifications.
 #[derive(Debug, Default)]
@@ -73,7 +117,35 @@ impl DaemonNotificationSink {
 
 impl boundary::sealed::Sealed for DaemonNotificationSink {}
 
-impl boundary::NotificationSink for DaemonNotificationSink {}
+impl boundary::NotificationSink for DaemonNotificationSink {
+    fn deliver(&self, _event: NotificationEvent) -> Result<(), AtmError> {
+        Err(daemon_boundary_stub_error(
+            "daemon notification sink stub is not implemented yet",
+            DaemonBoundaryStubError::NotificationSink,
+        ))
+    }
+}
+
+/// Placeholder runtime client transport for peer-to-peer daemon delivery.
+#[derive(Debug, Default)]
+struct PeerClientTransport;
+
+impl PeerClientTransport {
+    const fn new() -> Self {
+        Self
+    }
+}
+
+impl boundary::sealed::Sealed for PeerClientTransport {}
+
+impl boundary::ClientTransport for PeerClientTransport {
+    fn send(&self, _request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+        Err(daemon_boundary_stub_error(
+            "daemon peer client transport stub is not implemented yet",
+            DaemonBoundaryStubError::PeerClientTransport,
+        ))
+    }
+}
 
 /// Placeholder runtime source for daemon status snapshots.
 #[derive(Debug, Default)]
@@ -87,7 +159,14 @@ impl DaemonStatusSource {
 
 impl boundary::sealed::Sealed for DaemonStatusSource {}
 
-impl boundary::StatusSource for DaemonStatusSource {}
+impl boundary::StatusSource for DaemonStatusSource {
+    fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError> {
+        Err(daemon_boundary_stub_error(
+            "daemon status source stub is not implemented yet",
+            DaemonBoundaryStubError::StatusSource,
+        ))
+    }
+}
 
 /// Placeholder runtime source for daemon watch events.
 #[derive(Debug, Default)]
@@ -101,7 +180,14 @@ impl FileWatchEventSource {
 
 impl boundary::sealed::Sealed for FileWatchEventSource {}
 
-impl boundary::WatchEventSource for FileWatchEventSource {}
+impl boundary::WatchEventSource for FileWatchEventSource {
+    fn poll(&self, _request: WatchSubscriptionRequest) -> Result<WatchEventBatch, AtmError> {
+        Err(daemon_boundary_stub_error(
+            "daemon watch event source stub is not implemented yet",
+            DaemonBoundaryStubError::WatchEventSource,
+        ))
+    }
+}
 
 /// Placeholder runtime coordinator for daemon reconcile work.
 #[derive(Debug, Default)]
@@ -115,7 +201,14 @@ impl DaemonReconcileCoordinator {
 
 impl boundary::sealed::Sealed for DaemonReconcileCoordinator {}
 
-impl boundary::ReconcileCoordinator for DaemonReconcileCoordinator {}
+impl boundary::ReconcileCoordinator for DaemonReconcileCoordinator {
+    fn reconcile(&self, _request: ReconcileRequest) -> Result<ReconcileResult, AtmError> {
+        Err(daemon_boundary_stub_error(
+            "daemon reconcile coordinator stub is not implemented yet",
+            DaemonBoundaryStubError::ReconcileCoordinator,
+        ))
+    }
+}
 
 /// Placeholder runtime config ingress for daemon-owned config loading.
 #[derive(Debug, Default)]
