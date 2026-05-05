@@ -4,6 +4,7 @@ use std::fs;
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
 use std::sync::mpsc::{self, Receiver};
+use std::thread;
 use std::time::Duration;
 
 use crate::support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM, qualified};
@@ -270,12 +271,31 @@ impl Fixture {
     }
 
     fn run(&self, args: &[&str]) -> std::process::Output {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
-        crate::support::configure_atm_command(&mut command, self.tempdir.path(), Some(TEST_SENDER))
+        self.run_with_env(args, &[])
+    }
+
+    fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
+        for attempt in 0..3 {
+            let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
+            crate::support::configure_atm_command(
+                &mut command,
+                self.tempdir.path(),
+                Some(TEST_SENDER),
+            )
             .args(args)
-            .current_dir(self.tempdir.path())
-            .output()
-            .expect("run atm")
+            .current_dir(self.tempdir.path());
+            for (key, value) in extra_env {
+                command.env(key, value);
+            }
+            let output = command.output().expect("run atm");
+            if output.status.success() || !crate::support::is_daemon_start_transient(&output) {
+                return output;
+            }
+            if attempt < 2 {
+                thread::sleep(Duration::from_millis(100));
+            }
+        }
+        unreachable!("transient retry loop must return on final attempt")
     }
 
     fn spawn_tail(&self, args: &[&str]) -> TailReader {
