@@ -4,7 +4,8 @@ mod support;
 
 use std::fs;
 use std::ops::Deref;
-use std::process::Command;
+use std::process::{Child, Command};
+use std::time::{Duration, Instant};
 
 use crate::support::{
     CliFixture, ROLE_TEAM_LEAD, TEST_LEAD, TEST_QA, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS,
@@ -347,6 +348,7 @@ fn test_send_missing_config_deduplicates_team_lead_notice() {
 #[test]
 fn test_send_missing_config_retains_at_most_two_team_lead_notices_under_concurrency() {
     let fixture = Fixture::new(TEST_RECIPIENT);
+    let _daemon = spawn_test_daemon(&fixture);
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
     fixture.write_inbox(TEST_RECIPIENT, &[]);
     fixture.write_inbox(ROLE_TEAM_LEAD, &[]);
@@ -996,4 +998,34 @@ impl Deref for Fixture {
     fn deref(&self) -> &Self::Target {
         &self.0
     }
+}
+
+struct DaemonGuard(Child);
+
+impl Drop for DaemonGuard {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+fn spawn_test_daemon(fixture: &Fixture) -> DaemonGuard {
+    let mut command = Command::new(crate::support::test_daemon_launcher(fixture.tempdir.path()));
+    crate::support::configure_atm_command(&mut command, fixture.tempdir.path(), Some(TEST_SENDER))
+        .current_dir(fixture.tempdir.path());
+    let mut child = command.spawn().expect("start atm-daemon");
+    let socket_path = fixture.tempdir.path().join("atm-daemon.sock");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !socket_path.exists() {
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "daemon socket was not published at {}",
+                socket_path.display()
+            );
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    DaemonGuard(child)
 }

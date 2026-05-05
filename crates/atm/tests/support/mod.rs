@@ -12,21 +12,26 @@ use std::time::{Duration as StdDuration, Instant};
 
 #[allow(unused_imports)]
 pub use atm_core::roles::ROLE_TEAM_LEAD;
+#[cfg(test)]
+use atm_core::schema::{
+    AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig, hydrate_legacy_fields_from_metadata,
+};
 #[allow(unused_imports)]
 pub use atm_core::test_support::{
     TEST_DAEMON, TEST_LEAD, TEST_LEAD_ADDRESS, TEST_ORIGIN, TEST_QA, TEST_QA_AGENT, TEST_RECIPIENT,
     TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_SENDER_ADDRESS, TEST_TEAM,
 };
 #[cfg(test)]
-use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig, hydrate_legacy_fields_from_metadata};
-#[cfg(test)]
 use atm_core::types::{AgentName, TeamName};
 #[cfg(test)]
 use chrono::{DateTime, Utc};
-use serde_json::json;
 #[cfg(test)]
 use serde_json::Value;
+use serde_json::json;
 use tempfile::TempDir;
+
+#[cfg(test)]
+const DAEMON_RETRY_WINDOW: StdDuration = StdDuration::from_secs(5);
 
 #[derive(Debug)]
 pub struct TestEnv {
@@ -219,6 +224,11 @@ fn ensure_test_daemon_launcher(home_dir: &std::path::Path) -> PathBuf {
 }
 
 #[cfg(test)]
+pub fn test_daemon_launcher(home_dir: &std::path::Path) -> PathBuf {
+    ensure_test_daemon_launcher(home_dir)
+}
+
+#[cfg(test)]
 fn parse_inbox_values(raw: &str) -> Vec<Value> {
     if raw.trim().is_empty() {
         return Vec::new();
@@ -262,7 +272,7 @@ impl CliFixture {
     }
 
     pub fn warm_daemon(&self) {
-        let deadline = Instant::now() + StdDuration::from_secs(2);
+        let deadline = Instant::now() + DAEMON_RETRY_WINDOW;
         loop {
             let output = self.run(&["read", "--all", "--no-mark", "--json"]);
             if output.status.success() {
@@ -281,7 +291,7 @@ impl CliFixture {
     }
 
     pub fn run_without_identity(&self, args: &[&str]) -> std::process::Output {
-        let deadline = Instant::now() + StdDuration::from_secs(2);
+        let deadline = Instant::now() + DAEMON_RETRY_WINDOW;
         let mut attempt = 0usize;
         loop {
             attempt += 1;
@@ -306,12 +316,8 @@ impl CliFixture {
         }
     }
 
-    pub fn run_with_env(
-        &self,
-        args: &[&str],
-        extra_env: &[(&str, &str)],
-    ) -> std::process::Output {
-        let deadline = Instant::now() + StdDuration::from_secs(2);
+    pub fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
+        let deadline = Instant::now() + DAEMON_RETRY_WINDOW;
         let mut attempt = 0usize;
         loop {
             attempt += 1;
