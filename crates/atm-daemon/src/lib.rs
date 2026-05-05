@@ -1,6 +1,5 @@
 #![forbid(unsafe_code)]
 #![allow(dead_code)]
-
 //! Skeleton crate for Phase R daemon runtime work.
 
 pub(crate) mod composition;
@@ -211,7 +210,7 @@ fn discover_source_paths(request: &WatchSubscriptionRequest) -> Result<Vec<PathB
 fn load_workspace_config_direct(
     request: ConfigLoadRequest,
 ) -> Result<ConfigLoadResponse, AtmError> {
-    let _ = fs::metadata(&request.current_dir).map_err(|source| {
+    fs::metadata(&request.current_dir).map_err(|source| {
         AtmError::config(format!(
             "failed to inspect workspace directory {}",
             request.current_dir.display()
@@ -219,7 +218,13 @@ fn load_workspace_config_direct(
         .with_recovery("Repair the workspace path before retrying daemon-owned config ingress.")
         .with_source(source)
     })?;
-    Ok(ConfigLoadResponse { config: None })
+    Err(AtmError::config(format!(
+        "daemon workspace config ingress is not implemented for {}",
+        request.current_dir.display()
+    ))
+    .with_recovery(
+        "Use the in-process ATM config loader or complete daemon workspace config ingress before routing this path through atm-daemon.",
+    ))
 }
 
 fn load_team_config_direct(
@@ -516,7 +521,16 @@ impl DaemonNotificationSink {
 impl boundary::sealed::Sealed for DaemonNotificationSink {}
 
 impl boundary::NotificationSink for DaemonNotificationSink {
-    fn deliver(&self, _event: NotificationEvent) -> Result<(), AtmError> {
+    fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError> {
+        let mut stderr = std::io::stderr().lock();
+        serde_json::to_writer(&mut stderr, &event).map_err(|source| {
+            AtmError::observability_emit("failed to encode daemon notification event")
+                .with_source(source)
+        })?;
+        writeln!(&mut stderr).map_err(|source| {
+            AtmError::observability_emit("failed to write daemon notification event")
+                .with_source(source)
+        })?;
         Ok(())
     }
 }
@@ -556,9 +570,13 @@ impl boundary::sealed::Sealed for DaemonStatusSource {}
 
 impl boundary::StatusSource for DaemonStatusSource {
     fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError> {
+        let socket_path = atm_core::protocol::daemon_socket_path()?;
         Ok(RuntimeStatusSnapshot {
             status: "ready".to_string(),
-            detail: Some("daemon runtime adapters are active".to_string()),
+            detail: Some(format!(
+                "daemon runtime adapters are active on {}",
+                socket_path.display()
+            )),
         })
     }
 }

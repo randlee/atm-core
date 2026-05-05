@@ -247,6 +247,7 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
             &recipient.agent,
             &inbox_path,
             &envelope,
+            false,
         )?;
     }
 
@@ -288,7 +289,7 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         outcome: command_outcome,
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
-        sender: canonical_sender.to_string(),
+        sender: canonical_sender.clone(),
         message_id: Some(outcome.message_id),
         requires_ack: outcome.requires_ack,
         dry_run: outcome.dry_run,
@@ -386,10 +387,6 @@ fn notify_team_lead_missing_config(
         }
     };
 
-    if !team_lead_inbox.exists() {
-        return;
-    }
-
     let config_path = team_dir.join("config.json");
     let (atm_message_id, timestamp) = AtmMessageId::new_with_timestamp();
     let mut extra = Map::new();
@@ -432,6 +429,7 @@ fn notify_team_lead_missing_config(
         &AgentName::from_validated(ROLE_TEAM_LEAD),
         &team_lead_inbox,
         &notice,
+        true,
     ) {
         warn!(
             code = %AtmErrorCode::WarningMissingTeamConfigFallback,
@@ -450,6 +448,7 @@ fn append_mailbox_message_and_seed_workflow(
     agent: &AgentName,
     inbox_path: &Path,
     envelope: &MessageEnvelope,
+    require_existing_inbox: bool,
 ) -> Result<(), AtmError> {
     runtime.commit_workflow_state(
         home_dir,
@@ -458,6 +457,9 @@ fn append_mailbox_message_and_seed_workflow(
         [inbox_path.to_path_buf()],
         runtime.default_lock_timeout(),
         |workflow_state| {
+            if require_existing_inbox && !inbox_path.exists() {
+                return Ok(((), false));
+            }
             let mut inbox_messages = runtime.read_messages(inbox_path)?;
             inbox_messages.push(envelope.clone());
             runtime.commit_mailbox_state(inbox_path, &inbox_messages)?;

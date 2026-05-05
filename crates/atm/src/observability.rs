@@ -72,7 +72,9 @@ impl CliObservability {
             agent: identity
                 .parse()
                 .unwrap_or_else(|_| "unknown".parse().expect("agent")),
-            sender: identity,
+            sender: identity
+                .parse()
+                .unwrap_or_else(|_| "unknown".parse().expect("agent")),
             message_id: None,
             requires_ack: false,
             dry_run: false,
@@ -201,7 +203,7 @@ mod tests {
             outcome: "sent",
             team: TEST_TEAM.parse().expect("team"),
             agent: TEST_SENDER.parse().expect("agent"),
-            sender: TEST_SENDER.to_string(),
+            sender: TEST_SENDER.parse().expect("agent"),
             message_id: message_id.map(|value| value.parse().expect("legacy message id")),
             requires_ack: false,
             dry_run: false,
