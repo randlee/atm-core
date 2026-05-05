@@ -336,12 +336,16 @@ impl Fixture {
     }
 
     fn wait_for_tail_ready(&self, tail: &mut TailReader, target: &str) {
-        for attempt in 0..40 {
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        let mut attempt = 0usize;
+        while std::time::Instant::now() < deadline {
             self.send(target, &format!("tail readiness barrier {attempt}"));
-            if let Some(record) = tail.try_read_record(Duration::from_millis(300)) {
+            let probe = Duration::from_millis((50 * (attempt + 1) as u64).min(500));
+            if let Some(record) = tail.try_read_record(probe) {
                 assert_eq!(record["fields"]["command"], "send");
                 return;
             }
+            attempt += 1;
         }
 
         panic!("tail never produced a readiness record after repeated barrier sends");

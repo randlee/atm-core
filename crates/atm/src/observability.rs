@@ -36,6 +36,8 @@ impl CliObservability {
         Self { inner }
     }
 
+    /// Test-bootstrap escape hatch; production paths must use
+    /// `CliObservability::new`.
     pub fn fallback() -> Self {
         Self {
             inner: Box::new(atm_core::observability::NullObservability),

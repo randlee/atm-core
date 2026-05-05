@@ -324,6 +324,7 @@ fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
             sender: &actor,
             sender_team: Some(&team),
             recipient: &hook_reply_recipient,
+            recipient_pane_id: None,
             message_id: reply_message_id,
             requires_ack: false,
             is_ack: true,

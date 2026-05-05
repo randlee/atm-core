@@ -979,24 +979,26 @@ impl Fixture {
     }
 
     fn run(&self, args: &[&str]) -> std::process::Output {
-        let mut first = Command::new(env!("CARGO_BIN_EXE_atm"));
-        let output =
-            support::configure_atm_command(&mut first, self.tempdir.path(), Some(TEST_SENDER))
-                .args(args)
-                .current_dir(self.tempdir.path())
-                .output()
-                .expect("run atm");
-        if !support::is_daemon_start_transient(&output) {
-            return output;
-        }
+        for attempt in 0..3 {
+            let mut first = Command::new(env!("CARGO_BIN_EXE_atm"));
+            let output =
+                support::configure_atm_command(&mut first, self.tempdir.path(), Some(TEST_SENDER))
+                    .args(args)
+                    .current_dir(self.tempdir.path())
+                    .output()
+                    .unwrap_or_else(|error| {
+                        panic!("atm {:?} failed on attempt {attempt}: {error}", args)
+                    });
+            if output.status.success()
+                || !support::is_daemon_start_transient(&output)
+                || attempt == 2
+            {
+                return output;
+            }
 
-        thread::sleep(Duration::from_millis(50));
-        let mut retry = Command::new(env!("CARGO_BIN_EXE_atm"));
-        support::configure_atm_command(&mut retry, self.tempdir.path(), Some(TEST_SENDER))
-            .args(args)
-            .current_dir(self.tempdir.path())
-            .output()
-            .unwrap_or_else(|error| panic!("retry atm {:?} failed: {error}", args))
+            thread::sleep(Duration::from_millis(50));
+        }
+        unreachable!("team_recovery retries should always return")
     }
 
     fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
