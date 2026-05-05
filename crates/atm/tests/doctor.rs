@@ -2,6 +2,8 @@ mod support;
 
 use std::fs;
 use std::process::Command;
+use std::thread;
+use std::time::Duration;
 
 use support::{TEST_DAEMON, TEST_LEAD, TEST_QA, TEST_SENDER, TEST_TEAM};
 
@@ -299,7 +301,20 @@ impl Fixture {
         for (key, value) in extra_env {
             command.env(key, value);
         }
-        command.output().expect("run atm")
+        let output = command.output().expect("run atm");
+        if !support::is_daemon_start_transient(&output) {
+            return output;
+        }
+
+        thread::sleep(Duration::from_millis(50));
+        let mut retry = Command::new(env!("CARGO_BIN_EXE_atm"));
+        support::configure_atm_command(&mut retry, self.tempdir.path(), Some(TEST_LEAD))
+            .args(args)
+            .current_dir(self.tempdir.path());
+        for (key, value) in extra_env {
+            retry.env(key, value);
+        }
+        retry.output().expect("retry atm")
     }
 
     fn write_team_config(&self, members: &[&str]) {
