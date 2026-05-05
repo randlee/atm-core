@@ -215,7 +215,7 @@ fn push_doctor_error(
     });
 }
 
-fn check_inbox_directory(team: &str, inboxes_dir: &Path, findings: &mut Vec<DoctorFinding>) {
+fn check_inbox_directory(team: &TeamName, inboxes_dir: &Path, findings: &mut Vec<DoctorFinding>) {
     if !inboxes_dir.is_dir() {
         findings.push(DoctorFinding {
             severity: DoctorSeverity::Error,
@@ -248,7 +248,7 @@ fn check_inbox_directory(team: &str, inboxes_dir: &Path, findings: &mut Vec<Doct
     }
 }
 
-fn check_restore_marker(team: &str, team_dir: &Path, findings: &mut Vec<DoctorFinding>) {
+fn check_restore_marker(team: &TeamName, team_dir: &Path, findings: &mut Vec<DoctorFinding>) {
     let marker = team_dir.join(".restore-in-progress");
     if !marker.is_file() {
         return;

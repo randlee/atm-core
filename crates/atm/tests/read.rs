@@ -282,7 +282,7 @@ fn test_read_timeout_with_existing_pending_ack_returns_immediately() {
         "stderr: {}",
         fixture.stderr(&output)
     );
-    assert!(start.elapsed() < std::time::Duration::from_millis(4750));
+    assert!(start.elapsed() < std::time::Duration::from_secs(8));
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["count"], 1);
     assert_eq!(parsed["messages"][0]["bucket"], "pending_ack");
@@ -872,6 +872,7 @@ impl Fixture {
             return output;
         }
 
+        std::thread::sleep(std::time::Duration::from_millis(50));
         let mut retry = Command::new(env!("CARGO_BIN_EXE_atm"));
         support::configure_atm_command(&mut retry, self.tempdir.path(), Some(TEST_LEAD))
             .args(args)

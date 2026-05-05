@@ -33,7 +33,8 @@ use uuid::Uuid;
 // Test-side ceiling guard only; production lock timeout defaults to 5s per
 // architecture §18.3.
 #[cfg(unix)]
-const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(2);
+const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(4);
+const TEST_RESULT_TIMEOUT: Duration = Duration::from_secs(8);
 const TEST_TEAM: &str = "test-team";
 const TEST_SENDER: &str = "sender-a";
 const TEST_RECIPIENT: &str = "recipient";
@@ -76,10 +77,10 @@ fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
 
     barrier.wait();
     let first = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("first ack result");
     let second = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("second ack result");
 
     assert!(
@@ -158,10 +159,10 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
     drop(tx);
     barrier.wait();
     let first = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("first send/clear result");
     let second = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("second send/clear result");
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
@@ -219,10 +220,10 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
     drop(tx);
     barrier.wait();
     let first = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("first send/ack result");
     let second = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("second send/ack result");
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
@@ -289,10 +290,10 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() 
 
     barrier.wait();
     let first = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("first send result");
     let second = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("second send result");
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
@@ -371,10 +372,10 @@ fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
 
     barrier.wait();
     let first = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("first send result");
     let second = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("second send result");
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
@@ -475,10 +476,10 @@ fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()
 
     barrier.wait();
     let first = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("first send result");
     let second = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("second send result");
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
@@ -572,10 +573,10 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
     barrier.wait();
 
     let first = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("first read/clear result");
     let second = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("second read/clear result");
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);

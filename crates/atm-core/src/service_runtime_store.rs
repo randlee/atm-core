@@ -8,6 +8,7 @@ use crate::mailbox::source::SourceFile;
 use crate::schema::MessageEnvelope;
 use crate::schema::TeamConfig;
 use crate::service_runtime::LocalServiceRuntime;
+use crate::types::{AgentName, TeamName};
 
 #[derive(Debug, Default)]
 struct LegacyMailStoreAdapter;
@@ -44,8 +45,8 @@ pub(crate) trait RetainedMailboxRuntime {
     fn observe_source_files(
         &self,
         home_dir: &Path,
-        team: &str,
-        agent: &str,
+        team: &TeamName,
+        agent: &AgentName,
     ) -> Result<Vec<SourceFile>, AtmError>;
     fn commit_source_files(&self, source_files: &[SourceFile]) -> Result<(), AtmError>;
     fn read_messages(&self, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError>;
@@ -57,8 +58,8 @@ pub(crate) trait RetainedMailboxRuntime {
     fn with_locked_source_files<T, I, F>(
         &self,
         home_dir: &Path,
-        team: &str,
-        agent: &str,
+        team: &TeamName,
+        agent: &AgentName,
         extra_write_paths: I,
         timeout: std::time::Duration,
         body: F,
@@ -70,10 +71,10 @@ pub(crate) trait RetainedMailboxRuntime {
 
 pub(crate) fn observe_source_files(
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
 ) -> Result<Vec<SourceFile>, AtmError> {
-    mailbox::store::observe_source_files(home_dir, team, agent)
+    mailbox::store::observe_source_files(home_dir, team.as_ref(), agent.as_ref())
 }
 
 pub(crate) fn commit_source_files(source_files: &[SourceFile]) -> Result<(), AtmError> {
@@ -89,8 +90,8 @@ pub(crate) fn commit_mailbox_state(
 
 pub(crate) fn with_locked_source_files<T, I, F>(
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
     extra_write_paths: I,
     timeout: std::time::Duration,
     body: F,
@@ -101,8 +102,8 @@ where
 {
     mailbox::store::with_locked_source_files(
         home_dir,
-        team,
-        agent,
+        team.as_ref(),
+        agent.as_ref(),
         extra_write_paths,
         timeout,
         body,
@@ -113,8 +114,8 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
     fn observe_source_files(
         &self,
         home_dir: &Path,
-        team: &str,
-        agent: &str,
+        team: &TeamName,
+        agent: &AgentName,
     ) -> Result<Vec<SourceFile>, AtmError> {
         let _mail_store = self.mail_store.as_ref();
         observe_source_files(home_dir, team, agent)
@@ -142,8 +143,8 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
     fn with_locked_source_files<T, I, F>(
         &self,
         home_dir: &Path,
-        team: &str,
-        agent: &str,
+        team: &TeamName,
+        agent: &AgentName,
         extra_write_paths: I,
         timeout: std::time::Duration,
         body: F,

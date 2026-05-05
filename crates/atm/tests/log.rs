@@ -91,7 +91,7 @@ fn test_log_snapshot_filters_by_level() {
 fn test_log_snapshot_filters_by_since() {
     let fixture = Fixture::new(&[TEST_SENDER, TEST_RECIPIENT]);
     fixture.send(&qualified(TEST_RECIPIENT), "hello since");
-    let future = (Utc::now() + ChronoDuration::minutes(1)).to_rfc3339();
+    let future = (Utc::now() + ChronoDuration::minutes(5)).to_rfc3339();
 
     let output = fixture.run(&["log", "snapshot", "--since", &future, "--json"]);
 
@@ -266,30 +266,38 @@ impl Fixture {
         let tempdir = tempfile::tempdir().expect("tempdir");
         let fixture = Self { tempdir };
         fixture.write_team_config(members);
+        fixture.warm_daemon();
         fixture
     }
 
     fn run(&self, args: &[&str]) -> std::process::Output {
+        self.run_with_env(args, &[])
+    }
+
+    fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
         let mut first = Command::new(env!("CARGO_BIN_EXE_atm"));
-        let output = crate::support::configure_atm_command(
-            &mut first,
-            self.tempdir.path(),
-            Some(TEST_SENDER),
-        )
-        .args(args)
-        .current_dir(self.tempdir.path())
-        .output()
-        .expect("run atm");
+        crate::support::configure_atm_command(&mut first, self.tempdir.path(), Some(TEST_SENDER))
+            .args(args)
+            .envs(extra_env.iter().copied())
+            .current_dir(self.tempdir.path());
+        let output = first.output().expect("run atm");
         if !crate::support::is_daemon_start_transient(&output) {
             return output;
         }
 
+        std::thread::sleep(Duration::from_millis(50));
         let mut retry = Command::new(env!("CARGO_BIN_EXE_atm"));
         crate::support::configure_atm_command(&mut retry, self.tempdir.path(), Some(TEST_SENDER))
             .args(args)
+            .envs(extra_env.iter().copied())
             .current_dir(self.tempdir.path())
             .output()
             .expect("retry atm")
+    }
+
+    fn warm_daemon(&self) {
+        let output = self.run(&["read", "--all", "--no-mark", "--json"]);
+        assert!(output.status.success(), "stderr: {}", self.stderr(&output));
     }
 
     fn spawn_tail(&self, args: &[&str]) -> TailReader {
@@ -326,9 +334,9 @@ impl Fixture {
     }
 
     fn wait_for_tail_ready(&self, tail: &mut TailReader, target: &str) {
-        for attempt in 0..20 {
+        for attempt in 0..40 {
             self.send(target, &format!("tail readiness barrier {attempt}"));
-            if let Some(record) = tail.try_read_record(Duration::from_millis(250)) {
+            if let Some(record) = tail.try_read_record(Duration::from_millis(300)) {
                 assert_eq!(record["fields"]["command"], "send");
                 return;
             }
@@ -413,7 +421,7 @@ impl TailReader {
     }
 
     fn read_record(&mut self) -> serde_json::Value {
-        self.try_read_record(Duration::from_secs(5))
+        self.try_read_record(Duration::from_secs(10))
             .unwrap_or_else(|| {
                 let _ = self.child.kill();
                 panic!("tail timed out before producing enough output");

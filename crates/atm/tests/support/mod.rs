@@ -81,14 +81,6 @@ pub fn remove_env_var<K: AsRef<OsStr>>(key: K) {
     unsafe { std::env::remove_var(key) }
 }
 
-#[cfg(test)]
-pub fn is_daemon_start_transient(output: &Output) -> bool {
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    stderr.contains("failed to read daemon request frame")
-        || stderr.contains("daemon socket was not published")
-        || stderr.contains("failed to connect to daemon socket")
-}
-
 #[derive(Debug)]
 pub struct TestEnv {
     pub tempdir: TempDir,
