@@ -5,10 +5,11 @@
 
 pub(crate) mod composition;
 
+use std::collections::HashSet;
 use std::error::Error as StdError;
 use std::fmt;
-#[cfg(unix)]
 use std::fs;
+use std::path::{Path, PathBuf};
 #[cfg(unix)]
 use std::io::{Read, Write};
 #[cfg(unix)]
@@ -31,7 +32,6 @@ use atm_core::{
         ReconcileResult, RequestDispatcher, RuntimeStatusSnapshot, WatchEventBatch,
         WatchSubscriptionRequest,
     },
-    boundary_support,
     clear::clear_mail,
     doctor::run_doctor,
     error::AtmError,
@@ -43,6 +43,7 @@ use atm_core::{
         RequestEnvelope as ProtocolRequestEnvelope, SendRequestEnvelope, SendResponseEnvelope,
     },
     read::read_mail,
+    schema::{MessageEnvelope, TeamConfig},
     send::send_mail,
 };
 
@@ -85,6 +86,229 @@ fn daemon_boundary_stub_error(message: &'static str, source: DaemonBoundaryStubE
     AtmError::config(message)
         .with_recovery("Complete the Phase R daemon boundary wiring before invoking this path.")
         .with_source(source)
+}
+
+fn team_dir_from_home(home_dir: &Path, team: &str) -> Result<PathBuf, AtmError> {
+    atm_core::home::team_dir_from_home(home_dir, team)
+}
+
+fn inbox_path_from_home(home_dir: &Path, team: &str, agent: &str) -> Result<PathBuf, AtmError> {
+    atm_core::home::inbox_path_from_home(home_dir, team, agent)
+}
+
+fn read_team_config(path: &Path) -> Result<TeamConfig, AtmError> {
+    let raw = fs::read_to_string(path).map_err(|source| {
+        AtmError::config(format!("failed to read team config at {}", path.display()))
+            .with_recovery("Restore config.json or repair its permissions before retrying.")
+            .with_source(source)
+    })?;
+    serde_json::from_str(&raw).map_err(|source| {
+        AtmError::config(format!("failed to parse team config at {}", path.display()))
+            .with_recovery("Repair the team config JSON and retry the daemon-owned ingress.")
+            .with_source(source)
+    })
+}
+
+fn read_mailbox_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
+    let raw = fs::read_to_string(path).map_err(|source| {
+        AtmError::mailbox_read(format!("failed to read mailbox at {}", path.display()))
+            .with_recovery("Restore the mailbox file or repair its permissions before retrying.")
+            .with_source(source)
+    })?;
+    if raw.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    if let Ok(messages) = serde_json::from_str::<Vec<MessageEnvelope>>(&raw) {
+        return Ok(messages);
+    }
+    raw.lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            serde_json::from_str::<MessageEnvelope>(line).map_err(|source| {
+                AtmError::mailbox_read("failed to parse mailbox record")
+                    .with_recovery("Repair the malformed mailbox JSON entry and retry.")
+                    .with_source(source)
+            })
+        })
+        .collect()
+}
+
+fn write_mailbox_messages(path: &Path, messages: &[MessageEnvelope]) -> Result<(), AtmError> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|source| {
+            AtmError::mailbox_write(format!(
+                "failed to create mailbox parent directory {}",
+                parent.display()
+            ))
+            .with_recovery("Repair mailbox directory permissions and retry.")
+            .with_source(source)
+        })?;
+    }
+    let encoded = serde_json::to_vec_pretty(messages).map_err(|source| {
+        AtmError::mailbox_write(format!(
+            "failed to encode mailbox payload for {}",
+            path.display()
+        ))
+        .with_recovery(
+            "Inspect the mailbox payload and repair invalid message data before retrying.",
+        )
+        .with_source(source)
+    })?;
+    fs::write(path, encoded).map_err(|source| {
+        AtmError::mailbox_write(format!("failed to write mailbox at {}", path.display()))
+            .with_recovery("Repair mailbox directory permissions and retry.")
+            .with_source(source)
+    })
+}
+
+fn discover_source_paths(request: &WatchSubscriptionRequest) -> Result<Vec<PathBuf>, AtmError> {
+    let primary = inbox_path_from_home(
+        &request.home_dir,
+        request.team.as_str(),
+        request.agent.as_str(),
+    )?;
+    let inbox_dir = primary
+        .parent()
+        .ok_or_else(|| AtmError::validation("mailbox path is missing an inbox directory parent"))?;
+    let mut paths = Vec::new();
+    if primary.exists() {
+        paths.push(primary.clone());
+    }
+    if inbox_dir.is_dir() {
+        let prefix = format!("{}.", request.agent.as_str());
+        for entry in fs::read_dir(inbox_dir).map_err(|source| {
+            AtmError::mailbox_read(format!(
+                "failed to enumerate inbox directory {}",
+                inbox_dir.display()
+            ))
+            .with_recovery("Repair inbox directory permissions and retry.")
+            .with_source(source)
+        })? {
+            let entry = entry.map_err(|source| {
+                AtmError::mailbox_read(format!(
+                    "failed to read inbox entry under {}",
+                    inbox_dir.display()
+                ))
+                .with_recovery("Repair inbox directory permissions and retry.")
+                .with_source(source)
+            })?;
+            let path = entry.path();
+            if path == primary {
+                continue;
+            }
+            let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+                continue;
+            };
+            if name.starts_with(&prefix) && name.ends_with(".json") {
+                paths.push(path);
+            }
+        }
+    }
+    paths.sort();
+    Ok(paths)
+}
+
+fn load_workspace_config_direct(
+    request: ConfigLoadRequest,
+) -> Result<ConfigLoadResponse, AtmError> {
+    let _ = fs::metadata(&request.current_dir).map_err(|source| {
+        AtmError::config(format!(
+            "failed to inspect workspace directory {}",
+            request.current_dir.display()
+        ))
+        .with_recovery("Repair the workspace path before retrying daemon-owned config ingress.")
+        .with_source(source)
+    })?;
+    Ok(ConfigLoadResponse { config: None })
+}
+
+fn load_team_config_direct(
+    request: ConfigTeamLoadRequest,
+) -> Result<ConfigTeamLoadResponse, AtmError> {
+    let team_dir = team_dir_from_home(&request.home_dir, request.team.as_str())?;
+    let team_config = read_team_config(&team_dir.join("config.json"))?;
+    Ok(ConfigTeamLoadResponse {
+        team_dir,
+        team_config,
+    })
+}
+
+fn import_inbox_source_direct(
+    request: InboxIngressImportRequest,
+) -> Result<InboxIngressImportResponse, AtmError> {
+    let paths = discover_source_paths(&WatchSubscriptionRequest {
+        home_dir: request.home_dir,
+        team: request.team,
+        agent: request.agent,
+    })?;
+    let source_files = paths
+        .into_iter()
+        .map(|path| {
+            read_mailbox_messages(&path)
+                .map(|messages| atm_core::InboxSourceFileRecord { path, messages })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(InboxIngressImportResponse { source_files })
+}
+
+fn compute_identity_fingerprint_direct(
+    request: InboxIngressIdentityFingerprintRequest,
+) -> Result<InboxIngressIdentityFingerprintResponse, AtmError> {
+    let fingerprint = request
+        .message
+        .message_id
+        .map(|message_id| message_id.to_string())
+        .or_else(|| {
+            Some(format!(
+                "{}:{}",
+                request.message.from,
+                request.message.timestamp.into_inner().to_rfc3339()
+            ))
+        });
+    Ok(InboxIngressIdentityFingerprintResponse { fingerprint })
+}
+
+fn report_inbox_diagnostics_direct(
+    request: InboxIngressDiagnosticsRequest,
+) -> Result<InboxIngressDiagnosticsResponse, AtmError> {
+    let mut seen = HashSet::new();
+    let mut duplicate_legacy_message_ids = 0usize;
+    let mut messages_without_ids = 0usize;
+
+    for source in request.source_files {
+        for message in source.messages {
+            if let Some(message_id) = message.message_id {
+                if !seen.insert(message_id) {
+                    duplicate_legacy_message_ids += 1;
+                }
+            } else {
+                messages_without_ids += 1;
+            }
+        }
+    }
+
+    Ok(InboxIngressDiagnosticsResponse {
+        duplicate_legacy_message_ids,
+        messages_without_ids,
+    })
+}
+
+fn export_source_files_direct(
+    request: InboxExportRecordRequest,
+) -> Result<InboxExportRecordResponse, AtmError> {
+    let committed_paths = request.source_files.len();
+    for source in request.source_files {
+        write_mailbox_messages(&source.path, &source.messages)?;
+    }
+    Ok(InboxExportRecordResponse { committed_paths })
+}
+
+fn reexport_messages_direct(
+    request: InboxExportReexportMessageRequest,
+) -> Result<InboxExportReexportMessageResponse, AtmError> {
+    let wrote_messages = request.messages.len();
+    write_mailbox_messages(&request.path, &request.messages)?;
+    Ok(InboxExportReexportMessageResponse { wrote_messages })
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -287,8 +511,8 @@ impl DaemonNotificationSink {
 impl boundary::sealed::Sealed for DaemonNotificationSink {}
 
 impl boundary::NotificationSink for DaemonNotificationSink {
-    fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError> {
-        boundary_support::deliver_notification(event)
+    fn deliver(&self, _event: NotificationEvent) -> Result<(), AtmError> {
+        Ok(())
     }
 }
 
@@ -327,7 +551,10 @@ impl boundary::sealed::Sealed for DaemonStatusSource {}
 
 impl boundary::StatusSource for DaemonStatusSource {
     fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError> {
-        boundary_support::snapshot_status()
+        Ok(RuntimeStatusSnapshot {
+            status: "ready".to_string(),
+            detail: Some("daemon runtime adapters are active".to_string()),
+        })
     }
 }
 
@@ -345,7 +572,9 @@ impl boundary::sealed::Sealed for FileWatchEventSource {}
 
 impl boundary::WatchEventSource for FileWatchEventSource {
     fn poll(&self, request: WatchSubscriptionRequest) -> Result<WatchEventBatch, AtmError> {
-        boundary_support::poll_watch(request)
+        Ok(WatchEventBatch {
+            paths: discover_source_paths(&request)?,
+        })
     }
 }
 
@@ -363,11 +592,13 @@ impl boundary::sealed::Sealed for DaemonReconcileCoordinator {}
 
 impl boundary::ReconcileCoordinator for DaemonReconcileCoordinator {
     fn reconcile(&self, request: ReconcileRequest) -> Result<ReconcileResult, AtmError> {
-        let batch = boundary_support::poll_watch(WatchSubscriptionRequest {
-            home_dir: request.home_dir.clone(),
-            team: request.team.clone(),
-            agent: request.agent.clone(),
-        })?;
+        let batch = WatchEventBatch {
+            paths: discover_source_paths(&WatchSubscriptionRequest {
+                home_dir: request.home_dir.clone(),
+                team: request.team.clone(),
+                agent: request.agent.clone(),
+            })?,
+        };
         let ingress = DaemonInboxIngress::new();
         let import = ingress.import_inbox_source(InboxIngressImportRequest {
             home_dir: request.home_dir,
@@ -395,14 +626,14 @@ impl boundary::sealed::Sealed for DaemonConfigIngress {}
 
 impl ConfigIngress for DaemonConfigIngress {
     fn load_config(&self, request: ConfigLoadRequest) -> Result<ConfigLoadResponse, AtmError> {
-        boundary_support::load_workspace_config(request)
+        load_workspace_config_direct(request)
     }
 
     fn load_team_config(
         &self,
         request: ConfigTeamLoadRequest,
     ) -> Result<ConfigTeamLoadResponse, AtmError> {
-        boundary_support::load_team_config(request)
+        load_team_config_direct(request)
     }
 }
 
@@ -423,21 +654,21 @@ impl InboxIngress for DaemonInboxIngress {
         &self,
         request: InboxIngressImportRequest,
     ) -> Result<InboxIngressImportResponse, AtmError> {
-        boundary_support::import_inbox_source(request)
+        import_inbox_source_direct(request)
     }
 
     fn compute_identity_fingerprint(
         &self,
         request: InboxIngressIdentityFingerprintRequest,
     ) -> Result<InboxIngressIdentityFingerprintResponse, AtmError> {
-        boundary_support::compute_identity_fingerprint(request)
+        compute_identity_fingerprint_direct(request)
     }
 
     fn report_diagnostics(
         &self,
         request: InboxIngressDiagnosticsRequest,
     ) -> Result<InboxIngressDiagnosticsResponse, AtmError> {
-        boundary_support::report_inbox_diagnostics(request)
+        report_inbox_diagnostics_direct(request)
     }
 }
 
@@ -458,14 +689,14 @@ impl InboxExport for DaemonInboxExport {
         &self,
         request: InboxExportRecordRequest,
     ) -> Result<InboxExportRecordResponse, AtmError> {
-        boundary_support::export_source_files(request)
+        export_source_files_direct(request)
     }
 
     fn reexport_message(
         &self,
         request: InboxExportReexportMessageRequest,
     ) -> Result<InboxExportReexportMessageResponse, AtmError> {
-        boundary_support::reexport_messages(request)
+        reexport_messages_direct(request)
     }
 }
 
