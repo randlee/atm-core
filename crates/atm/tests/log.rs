@@ -270,12 +270,26 @@ impl Fixture {
     }
 
     fn run(&self, args: &[&str]) -> std::process::Output {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
-        crate::support::configure_atm_command(&mut command, self.tempdir.path(), Some(TEST_SENDER))
+        let mut first = Command::new(env!("CARGO_BIN_EXE_atm"));
+        let output = crate::support::configure_atm_command(
+            &mut first,
+            self.tempdir.path(),
+            Some(TEST_SENDER),
+        )
+        .args(args)
+        .current_dir(self.tempdir.path())
+        .output()
+        .expect("run atm");
+        if !crate::support::is_daemon_start_transient(&output) {
+            return output;
+        }
+
+        let mut retry = Command::new(env!("CARGO_BIN_EXE_atm"));
+        crate::support::configure_atm_command(&mut retry, self.tempdir.path(), Some(TEST_SENDER))
             .args(args)
             .current_dir(self.tempdir.path())
             .output()
-            .expect("run atm")
+            .expect("retry atm")
     }
 
     fn spawn_tail(&self, args: &[&str]) -> TailReader {

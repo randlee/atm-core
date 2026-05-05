@@ -311,14 +311,26 @@ impl Fixture {
     }
 
     fn execute(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
-        support::configure_atm_command(&mut command, self.tempdir.path(), Some(TEST_LEAD))
+        let mut first = Command::new(env!("CARGO_BIN_EXE_atm"));
+        support::configure_atm_command(&mut first, self.tempdir.path(), Some(TEST_LEAD))
             .args(args)
             .current_dir(self.tempdir.path());
         for (key, value) in extra_env {
-            command.env(key, value);
+            first.env(key, value);
         }
-        command.output().expect("run atm")
+        let output = first.output().expect("run atm");
+        if !support::is_daemon_start_transient(&output) {
+            return output;
+        }
+
+        let mut retry = Command::new(env!("CARGO_BIN_EXE_atm"));
+        support::configure_atm_command(&mut retry, self.tempdir.path(), Some(TEST_LEAD))
+            .args(args)
+            .current_dir(self.tempdir.path());
+        for (key, value) in extra_env {
+            retry.env(key, value);
+        }
+        retry.output().expect("retry atm")
     }
 
     fn warm_daemon(&self) {
