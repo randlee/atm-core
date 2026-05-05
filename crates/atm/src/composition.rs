@@ -9,7 +9,6 @@ use std::sync::Arc;
 use std::{
     fs,
     io::{Read, Write},
-    os::unix::fs::MetadataExt,
     os::unix::net::UnixStream,
     thread,
     time::{Duration, Instant},
@@ -75,15 +74,17 @@ impl LocalSocketClientTransport {
             if self.try_connect().is_ok() {
                 return Ok(());
             }
-            let published_socket = fs::metadata(&self.socket_path)
-                .ok()
-                .map(|metadata| (metadata.dev(), metadata.ino()));
             let _ = fs::remove_file(&self.socket_path);
             self.spawn_daemon()?;
-            self.wait_for_socket_publish(published_socket)?;
-            thread::sleep(Duration::from_millis(25));
-            if self.try_connect().is_ok() {
-                return Ok(());
+            let deadline = Instant::now() + Duration::from_secs(5);
+            loop {
+                if self.try_connect().is_ok() {
+                    return Ok(());
+                }
+                if Instant::now() >= deadline {
+                    break;
+                }
+                thread::sleep(Duration::from_millis(25));
             }
             Err(AtmError::daemon_unavailable(format!(
                 "failed to connect to daemon socket at {} after auto-start",
@@ -138,27 +139,6 @@ impl LocalSocketClientTransport {
             .with_source(source)
         })?;
         Ok(())
-    }
-
-    #[cfg(unix)]
-    fn wait_for_socket_publish(
-        &self,
-        published_socket: Option<(u64, u64)>,
-    ) -> Result<(), AtmError> {
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while Instant::now() < deadline {
-            if let Ok(metadata) = fs::metadata(&self.socket_path) {
-                let observed_socket = (metadata.dev(), metadata.ino());
-                if published_socket != Some(observed_socket) {
-                    return Ok(());
-                }
-            }
-            thread::sleep(Duration::from_millis(25));
-        }
-        Err(AtmError::daemon_unavailable(format!(
-            "daemon socket was not published at {} after auto-start",
-            self.socket_path.display()
-        )))
     }
 
     #[cfg(unix)]
