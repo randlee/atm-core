@@ -33,12 +33,14 @@ enum DaemonBoundaryStubError {
     ConfigIngress,
     InboxIngress,
     InboxExport,
+    PeerClientTransport,
 }
 
 impl fmt::Display for DaemonBoundaryStubError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let message = match self {
             Self::ServerTransport => "daemon server transport scaffold is not wired",
+            Self::PeerClientTransport => "daemon peer client transport scaffold is not wired",
             Self::RequestDispatcher => "daemon request dispatcher scaffold is not wired",
             Self::NotificationSink => "daemon notification sink scaffold is not wired",
             Self::StatusSource => "daemon status source scaffold is not wired",
@@ -84,10 +86,10 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
 
 /// Placeholder runtime dispatcher for daemon-owned protocol routing.
 #[derive(Debug, Default)]
-pub(crate) struct DaemonRequestDispatcher;
+struct DaemonRequestDispatcher;
 
 impl DaemonRequestDispatcher {
-    pub(crate) const fn new() -> Self {
+    const fn new() -> Self {
         Self
     }
 }
@@ -120,6 +122,27 @@ impl boundary::NotificationSink for DaemonNotificationSink {
         Err(daemon_boundary_stub_error(
             "daemon notification sink stub is not implemented yet",
             DaemonBoundaryStubError::NotificationSink,
+        ))
+    }
+}
+
+/// Placeholder runtime client transport for peer-to-peer daemon delivery.
+#[derive(Debug, Default)]
+struct PeerClientTransport;
+
+impl PeerClientTransport {
+    const fn new() -> Self {
+        Self
+    }
+}
+
+impl boundary::sealed::Sealed for PeerClientTransport {}
+
+impl boundary::ClientTransport for PeerClientTransport {
+    fn send(&self, _request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+        Err(daemon_boundary_stub_error(
+            "daemon peer client transport stub is not implemented yet",
+            DaemonBoundaryStubError::PeerClientTransport,
         ))
     }
 }

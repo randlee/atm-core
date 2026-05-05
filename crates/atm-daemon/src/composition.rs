@@ -1,9 +1,15 @@
 use crate::{
     DaemonConfigIngress, DaemonInboxExport, DaemonInboxIngress, DaemonNotificationSink,
     DaemonReconcileCoordinator, DaemonRequestDispatcher, DaemonStatusSource, FileWatchEventSource,
-    LocalSocketServerTransport,
+    LocalSocketServerTransport, PeerClientTransport,
 };
-use atm_core::{boundary::ServerTransport, error::AtmError};
+use atm_core::{
+    boundary::{
+        ClientTransport, ConfigIngress, InboxExport, InboxIngress, NotificationSink,
+        ReconcileCoordinator, RequestDispatcher, ServerTransport, StatusSource, WatchEventSource,
+    },
+    error::AtmError,
+};
 use std::error::Error as StdError;
 use std::fmt;
 
@@ -36,6 +42,7 @@ pub(crate) struct RuntimeComposition {
     config_ingress: DaemonConfigIngress,
     inbox_ingress: DaemonInboxIngress,
     inbox_export: DaemonInboxExport,
+    peer_client_transport: PeerClientTransport,
 }
 
 impl RuntimeComposition {
@@ -50,43 +57,48 @@ impl RuntimeComposition {
             config_ingress: DaemonConfigIngress::new(),
             inbox_ingress: DaemonInboxIngress::new(),
             inbox_export: DaemonInboxExport::new(),
+            peer_client_transport: PeerClientTransport::new(),
         }
     }
 
-    pub(crate) fn server_transport(&self) -> &LocalSocketServerTransport {
+    pub(crate) fn server_transport(&self) -> &dyn ServerTransport {
         &self.server_transport
     }
 
-    pub(crate) fn notification_sink(&self) -> &DaemonNotificationSink {
+    pub(crate) fn notification_sink(&self) -> &dyn NotificationSink {
         &self.notification_sink
     }
 
-    pub(crate) fn request_dispatcher(&self) -> &DaemonRequestDispatcher {
+    pub(crate) fn request_dispatcher(&self) -> &dyn RequestDispatcher {
         &self.request_dispatcher
     }
 
-    pub(crate) fn status_source(&self) -> &DaemonStatusSource {
+    pub(crate) fn status_source(&self) -> &dyn StatusSource {
         &self.status_source
     }
 
-    pub(crate) fn watch_event_source(&self) -> &FileWatchEventSource {
+    pub(crate) fn watch_event_source(&self) -> &dyn WatchEventSource {
         &self.watch_event_source
     }
 
-    pub(crate) fn reconcile_coordinator(&self) -> &DaemonReconcileCoordinator {
+    pub(crate) fn reconcile_coordinator(&self) -> &dyn ReconcileCoordinator {
         &self.reconcile_coordinator
     }
 
-    pub(crate) fn config_ingress(&self) -> &DaemonConfigIngress {
+    pub(crate) fn config_ingress(&self) -> &dyn ConfigIngress {
         &self.config_ingress
     }
 
-    pub(crate) fn inbox_ingress(&self) -> &DaemonInboxIngress {
+    pub(crate) fn inbox_ingress(&self) -> &dyn InboxIngress {
         &self.inbox_ingress
     }
 
-    pub(crate) fn inbox_export(&self) -> &DaemonInboxExport {
+    pub(crate) fn inbox_export(&self) -> &dyn InboxExport {
         &self.inbox_export
+    }
+
+    pub(crate) fn peer_client_transport(&self) -> &dyn ClientTransport {
+        &self.peer_client_transport
     }
 
     pub(crate) fn start(&self) -> Result<(), AtmError> {
@@ -100,7 +112,7 @@ impl RuntimeComposition {
     }
 
     pub(crate) fn serve(&self) -> Result<(), AtmError> {
-        self.server_transport.serve(&self.request_dispatcher)
+        self.server_transport().serve(self.request_dispatcher())
     }
 }
 

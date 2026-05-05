@@ -159,10 +159,10 @@ enforcement:
     - no_cli_to_daemon_edge
 
 status:
-  state: planned
+  state: stub_landed
   notes:
     - remote daemon-to-daemon delivery uses the same shared client transport family
-    - runtime composition will land through atm_daemon::composition when this adapter is introduced
+    - stub implementation currently lives at crate root and is assembled through atm_daemon::composition
 ```
 
 Purpose:
@@ -396,7 +396,7 @@ enforcement:
     - no_socket_specific_business_logic
 
 status:
-  state: planned
+  state: stub_landed
   notes:
     - dispatcher remains thin and runtime-owned
     - runtime composition will land through atm_daemon::composition when this adapter is introduced
