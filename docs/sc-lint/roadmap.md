@@ -1,0 +1,135 @@
+# `sc-lint` Roadmap
+
+## Current Decisions
+
+These points are considered settled for the initial spike.
+
+### Crate split
+
+Two crates from the start:
+
+- `sc-lint-boundary`
+  - analyzer CLI + library
+- `sc-lint-attributes`
+  - proc-macro attribute crate
+
+Reason:
+
+- real Rust attributes need a proc-macro crate anyway
+- creating it early avoids late packaging churn
+- the analyzer crate should not carry proc-macro concerns
+
+### Analyzer strategy
+
+Use `syn` directly for cycle logic and boundary analysis.
+
+Do **not** use `cargo-modules` as the primary source of truth for semantic
+cycle detection.
+
+Reason:
+
+- `cargo-modules` currently reports self-loop noise
+- post-processing its textual output is weaker than owning the graph model
+- `syn` gives a better base for future boundary rules
+
+### Graph-first design
+
+The analyzer should build an internal code graph first and derive findings from
+that graph.
+
+This is intentionally broader than a one-off cycle checker, because the same
+graph can later support:
+
+- cycle rules
+- visibility/sealed rules
+- unsafe ownership rules
+- type-coupling analysis
+- external graph export
+
+### Attribute philosophy
+
+Attributes are primarily for **declarative boundary intent**, not suppression.
+
+Good early uses:
+
+- internal-only items
+- forbidden external implementations
+- forbidden external use classes
+- boundary roots
+
+Suppression, if it ever becomes necessary, should be:
+
+- rule-specific
+- explicit
+- auditable
+
+### Python scope
+
+Keep Python for:
+
+- orchestration
+- config loading
+- report generation
+- external tool wrapping
+- simple manifest/text checks
+
+Do not grow complicated Rust parsing logic in Python.
+
+## First Deliverable
+
+The first useful deliverable is an internal analyzer that can:
+
+1. discover workspace crates and targets
+2. parse source trees with `syn`
+3. build a graph for crate/module/type/method ownership
+4. export graph JSON
+5. classify cycle shapes
+6. distinguish self-loop/tool-noise cases from multi-owner architectural cycles
+
+## Immediate Rule Scope
+
+Only the cycle rule family is in the first sprint cut.
+
+The analyzer should be able to classify at least:
+
+- `type_method_self_loop`
+- `newtype_conversion_self_loop`
+- `multi_owner_architectural_cycle`
+
+The exact names may change, but the rule categories should stay stable enough
+to support JSON findings and later config.
+
+## What Is Explicitly Deferred
+
+- full visibility enforcement
+- full sealed-trait enforcement
+- unsafe rule enforcement
+- dead-code detection
+- graph database integration
+- full attribute-driven policy expression
+
+## Extraction Path
+
+The intended rollout is:
+
+1. internal workspace crates now
+2. prove the model on ATM
+3. stabilize:
+   - CLI contract
+   - JSON findings shape
+   - graph export shape
+   - attribute namespace
+4. extract to a separate repository
+5. publish to crates.io
+
+## Near-Term Integration Expectation
+
+The analyzer is expected to plug into the existing lint surface rather than
+replace it wholesale.
+
+Likely future integration:
+
+- Python runner invokes `sc-lint-boundary`
+- JSON findings are logged and rendered through the existing lint tooling
+- `just lint modules` or a replacement rule target eventually uses the analyzer
+  instead of raw `cargo-modules --acyclic`
