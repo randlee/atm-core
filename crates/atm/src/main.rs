@@ -401,7 +401,7 @@ fn map_command_event(
     );
     fields.insert(
         "sender".to_string(),
-        serde_json::Value::String(event.sender.clone()),
+        serde_json::Value::String(event.sender.to_string()),
     );
     fields.insert(
         "requires_ack".to_string(),

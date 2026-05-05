@@ -6,6 +6,9 @@ Current design assumption:
 - `atm-daemon` is the production runtime composition root
 - `allowed_dependents: []` means no external crate should depend on these
   daemon-private concrete adapters
+- Test doubles planned; not yet landed. Until they exist,
+  `allowed_test_double_paths` remains empty for the daemon-owned adapter
+  records below.
 
 ## SocketServerTransportAdapter
 
@@ -63,8 +66,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::InProcessServerTransport
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - tokio::net::UnixListener
 
@@ -145,8 +147,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::InProcessClientTransport
+  allowed_test_double_paths: []
   forbidden_test_bypasses: []
 
 enforcement:
@@ -224,8 +225,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubWatchEventSource
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - notify::recommended_watcher
 
@@ -304,8 +304,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubReconcileCoordinator
+  allowed_test_double_paths: []
   forbidden_test_bypasses: []
 
 enforcement:
@@ -382,8 +381,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubRequestDispatcher
+  allowed_test_double_paths: []
   forbidden_test_bypasses: []
 
 enforcement:
@@ -462,8 +460,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubConfigIngress
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - std::fs::read_to_string
 
@@ -543,8 +540,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubInboxIngress
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - mailbox::store::observe_source_files
 
@@ -624,8 +620,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubInboxExport
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - mailbox::store::with_locked_source_files
 
@@ -704,8 +699,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubNotificationSink
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - std::process::Command
 
@@ -782,8 +776,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubStatusSource
+  allowed_test_double_paths: []
   forbidden_test_bypasses: []
 
 enforcement:

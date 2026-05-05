@@ -175,7 +175,7 @@ pub fn clear_mail(
         outcome: if query.dry_run { "dry_run" } else { "ok" },
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
-        sender: actor.to_string(),
+        sender: actor.clone(),
         message_id: None,
         requires_ack: false,
         dry_run: query.dry_run,
