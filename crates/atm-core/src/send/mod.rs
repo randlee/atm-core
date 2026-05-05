@@ -372,7 +372,8 @@ fn notify_team_lead_missing_config(
         return;
     }
 
-    let team_lead_inbox = match runtime.inbox_path(home_dir, team, ROLE_TEAM_LEAD) {
+    let team_lead = AgentName::from_validated(ROLE_TEAM_LEAD);
+    let team_lead_inbox = match runtime.inbox_path(home_dir, team, &team_lead) {
         Ok(path) => path,
         Err(error) => {
             warn!(
@@ -428,7 +429,7 @@ fn notify_team_lead_missing_config(
         runtime,
         home_dir,
         team,
-        &AgentName::from_validated(ROLE_TEAM_LEAD),
+        &team_lead,
         &team_lead_inbox,
         &notice,
     ) {

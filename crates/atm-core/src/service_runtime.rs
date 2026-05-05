@@ -7,44 +7,49 @@ use crate::error::AtmError;
 use crate::read::seen_state;
 use crate::schema::TeamConfig;
 use crate::send::{PostSendHookContext, maybe_run_post_send_hook};
-use crate::types::IsoTimestamp;
+use crate::types::{AgentName, IsoTimestamp, TeamName};
 use crate::workflow::{self, WorkflowStateFile};
 
 pub(crate) trait RetainedServiceRuntime {
     fn load_config(&self, current_dir: &Path) -> Result<Option<AtmConfig>, AtmError>;
     fn load_team_config(&self, team_dir: &Path) -> Result<TeamConfig, AtmError>;
-    fn team_dir(&self, home_dir: &Path, team: &str) -> Result<PathBuf, AtmError>;
-    fn inbox_path(&self, home_dir: &Path, team: &str, agent: &str) -> Result<PathBuf, AtmError>;
+    fn team_dir(&self, home_dir: &Path, team: &TeamName) -> Result<PathBuf, AtmError>;
+    fn inbox_path(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<PathBuf, AtmError>;
     fn workflow_state_path(
         &self,
         home_dir: &Path,
-        team: &str,
-        agent: &str,
+        team: &TeamName,
+        agent: &AgentName,
     ) -> Result<PathBuf, AtmError>;
     fn load_workflow_state(
         &self,
         home_dir: &Path,
-        team: &str,
-        agent: &str,
+        team: &TeamName,
+        agent: &AgentName,
     ) -> Result<WorkflowStateFile, AtmError>;
     fn save_workflow_state(
         &self,
         home_dir: &Path,
-        team: &str,
-        agent: &str,
+        team: &TeamName,
+        agent: &AgentName,
         state: &WorkflowStateFile,
     ) -> Result<(), AtmError>;
     fn load_seen_watermark(
         &self,
         home_dir: &Path,
-        team: &str,
-        agent: &str,
+        team: &TeamName,
+        agent: &AgentName,
     ) -> Result<Option<IsoTimestamp>, AtmError>;
     fn save_seen_watermark(
         &self,
         home_dir: &Path,
-        team: &str,
-        agent: &str,
+        team: &TeamName,
+        agent: &AgentName,
         timestamp: IsoTimestamp,
     ) -> Result<(), AtmError>;
     fn default_lock_timeout(&self) -> Duration;
@@ -58,8 +63,8 @@ pub(crate) trait RetainedServiceRuntime {
     fn commit_workflow_state<T, I, F>(
         &self,
         home_dir: &Path,
-        team: &str,
-        agent: &str,
+        team: &TeamName,
+        agent: &AgentName,
         extra_write_paths: I,
         timeout: Duration,
         body: F,
@@ -95,19 +100,24 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         config::load_team_config(team_dir)
     }
 
-    fn team_dir(&self, home_dir: &Path, team: &str) -> Result<PathBuf, AtmError> {
+    fn team_dir(&self, home_dir: &Path, team: &TeamName) -> Result<PathBuf, AtmError> {
         crate::home::team_dir_from_home(home_dir, team)
     }
 
-    fn inbox_path(&self, home_dir: &Path, team: &str, agent: &str) -> Result<PathBuf, AtmError> {
+    fn inbox_path(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<PathBuf, AtmError> {
         crate::home::inbox_path_from_home(home_dir, team, agent)
     }
 
     fn workflow_state_path(
         &self,
         home_dir: &Path,
-        team: &str,
-        agent: &str,
+        team: &TeamName,
+        agent: &AgentName,
     ) -> Result<PathBuf, AtmError> {
         crate::home::workflow_state_path_from_home(home_dir, team, agent)
     }
@@ -115,8 +125,8 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     fn load_workflow_state(
         &self,
         home_dir: &Path,
-        team: &str,
-        agent: &str,
+        team: &TeamName,
+        agent: &AgentName,
     ) -> Result<WorkflowStateFile, AtmError> {
         workflow::load_workflow_state(home_dir, team, agent)
     }
@@ -124,8 +134,8 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     fn save_workflow_state(
         &self,
         home_dir: &Path,
-        team: &str,
-        agent: &str,
+        team: &TeamName,
+        agent: &AgentName,
         state: &WorkflowStateFile,
     ) -> Result<(), AtmError> {
         workflow::save_workflow_state(home_dir, team, agent, state)
@@ -134,8 +144,8 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     fn load_seen_watermark(
         &self,
         home_dir: &Path,
-        team: &str,
-        agent: &str,
+        team: &TeamName,
+        agent: &AgentName,
     ) -> Result<Option<IsoTimestamp>, AtmError> {
         seen_state::load_seen_watermark(home_dir, team, agent)
     }
@@ -143,8 +153,8 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     fn save_seen_watermark(
         &self,
         home_dir: &Path,
-        team: &str,
-        agent: &str,
+        team: &TeamName,
+        agent: &AgentName,
         timestamp: IsoTimestamp,
     ) -> Result<(), AtmError> {
         seen_state::save_seen_watermark(home_dir, team, agent, timestamp)
@@ -166,8 +176,8 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     fn commit_workflow_state<T, I, F>(
         &self,
         home_dir: &Path,
-        team: &str,
-        agent: &str,
+        team: &TeamName,
+        agent: &AgentName,
         extra_write_paths: I,
         timeout: Duration,
         body: F,
