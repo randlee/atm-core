@@ -3,6 +3,7 @@
 use atm_core::boundary::ClientTransport;
 use atm_core::error::AtmError;
 use atm_core::observability::{NullObservability, ObservabilityPort};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use std::error::Error as StdError;
 use std::fmt;
 
@@ -48,6 +49,17 @@ pub(crate) struct CliComposition {
     receive_command: ReceiveCommandEntryPoint,
 }
 
+impl fmt::Debug for CliComposition {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CliComposition")
+            .field("transport", &"dyn ClientTransport")
+            .field("observability_port", &"dyn ObservabilityPort")
+            .field("send_command", &self.send_command)
+            .field("receive_command", &self.receive_command)
+            .finish()
+    }
+}
+
 impl CliComposition {
     pub(crate) fn from_transport(transport: Box<dyn ClientTransport>) -> Self {
         Self {
@@ -60,6 +72,13 @@ impl CliComposition {
 
     pub(crate) fn transport(&self) -> &dyn ClientTransport {
         self.transport.as_ref()
+    }
+
+    pub(crate) fn send_request(
+        &self,
+        request: RequestEnvelope,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        self.transport.send(request)
     }
 
     pub(crate) fn observability_port(&self) -> &(dyn ObservabilityPort + Send + Sync) {
@@ -75,10 +94,12 @@ impl CliComposition {
     }
 
     pub(crate) fn bootstrap() -> Result<Self, AtmError> {
-        Err(AtmError::observability_bootstrap(
-            "CLI composition bootstrap scaffold is not implemented yet",
+        Err(
+            AtmError::config("CLI composition bootstrap scaffold is not implemented yet")
+                .with_recovery(
+                    "Wire the CLI transport and command entry points before using bootstrap().",
+                )
+                .with_source(CliBootstrapStubError::BootstrapNotWired),
         )
-        .with_recovery("Wire the CLI transport and command entry points before using bootstrap().")
-        .with_source(CliBootstrapStubError::BootstrapNotWired))
     }
 }

@@ -11,6 +11,9 @@ Contract-owner records intentionally use:
 That means `atm-core` owns the public contract and semantics, but not a default
 concrete adapter in this crate.
 
+Test doubles planned; not yet landed. Until they exist, `allowed_test_double_paths`
+remains empty for the `atm-core` contract-owner records below.
+
 ## AtmProtocol
 
 ```yaml
@@ -59,9 +62,9 @@ references:
 
 contracts:
   request_types:
-    - AtmRequestEnvelope
+    - RequestEnvelope
   response_types:
-    - AtmResponseEnvelope
+    - ResponseEnvelope
   error_types:
     - AtmError
 
@@ -78,7 +81,7 @@ enforcement:
 status:
   state: stub_landed
   notes:
-    - trait plus request/response/frame stubs landed in atm_core::boundary
+    - trait plus protocol request/response/frame DTOs landed in atm_core::protocol
     - ack is represented inside send-shape request data, not as a top-level protocol family
 ```
 
@@ -135,15 +138,14 @@ references:
 
 contracts:
   request_types:
-    - AtmRequestEnvelope
+    - RequestEnvelope
   response_types:
-    - AtmResponseEnvelope
+    - ResponseEnvelope
   error_types:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::InProcessClientTransport
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - atm_daemon::client
 
@@ -217,8 +219,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubWatchEventSource
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - notify::recommended_watcher
 
@@ -292,8 +293,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubReconcileCoordinator
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - mailbox::store::observe_source_files
 
@@ -360,15 +360,14 @@ references:
 
 contracts:
   request_types:
-    - AtmRequestEnvelope
+    - RequestEnvelope
   response_types:
-    - AtmResponseEnvelope
+    - ResponseEnvelope
   error_types:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::InProcessServerTransport
+  allowed_test_double_paths: []
   forbidden_test_bypasses: []
 
 enforcement:
@@ -440,8 +439,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubRequestDispatcher
+  allowed_test_double_paths: []
   forbidden_test_bypasses: []
 
 enforcement:
@@ -513,8 +511,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::InMemoryMailStore
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - rusqlite::Connection
 
@@ -587,8 +584,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::InMemoryTaskStore
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - rusqlite::Connection
 
@@ -661,8 +657,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::InMemoryRosterStore
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - rusqlite::Connection
 
@@ -736,8 +731,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubConfigIngress
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - std::fs::read_to_string
 
@@ -810,8 +804,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubInboxIngress
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - mailbox::store::observe_source_files
 
@@ -884,8 +877,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubInboxExport
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - mailbox::store::with_locked_source_files
 
@@ -957,8 +949,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubNotificationSink
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - std::process::Command
 
@@ -1028,8 +1019,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubStatusSource
+  allowed_test_double_paths: []
   forbidden_test_bypasses: []
 
 enforcement:

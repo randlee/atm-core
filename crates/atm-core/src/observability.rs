@@ -19,7 +19,7 @@ pub struct CommandEvent {
     pub outcome: &'static str,
     pub team: TeamName,
     pub agent: AgentName,
-    pub sender: String,
+    pub sender: AgentName,
     pub message_id: Option<LegacyMessageId>,
     pub requires_ack: bool,
     pub dry_run: bool,
