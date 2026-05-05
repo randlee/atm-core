@@ -9,7 +9,8 @@ use std::error::Error as StdError;
 use std::fmt;
 use std::fs;
 #[cfg(unix)]
-use std::io::{Read, Write};
+use std::io::Read;
+use std::io::Write;
 #[cfg(unix)]
 use std::os::unix::net::UnixListener;
 use std::path::{Path, PathBuf};
@@ -18,6 +19,8 @@ use std::thread;
 #[cfg(unix)]
 use std::time::{Duration, Instant};
 
+#[cfg(unix)]
+use atm_core::protocol::RequestEnvelope as ProtocolRequestEnvelope;
 use atm_core::{
     RequestEnvelope, ResponseEnvelope,
     ack::ack_mail,
@@ -38,9 +41,7 @@ use atm_core::{
         AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
         CommandEvent, LogTailSession, ObservabilityPort,
     },
-    protocol::{
-        RequestEnvelope as ProtocolRequestEnvelope, SendRequestEnvelope, SendResponseEnvelope,
-    },
+    protocol::{SendRequestEnvelope, SendResponseEnvelope},
     read::read_mail,
     schema::{MessageEnvelope, TeamConfig},
     send::send_mail,

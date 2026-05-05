@@ -3,10 +3,10 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::io;
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::Command;
+#[cfg(test)]
+use std::process::Output;
 
 #[allow(unused_imports)]
 pub use atm_core::roles::ROLE_TEAM_LEAD;
@@ -164,41 +164,41 @@ pub fn configure_atm_command<'a>(
     command
 }
 
+#[cfg(test)]
+pub fn is_daemon_start_transient(output: &Output) -> bool {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    stderr.contains("failed to read daemon request frame")
+        || stderr.contains("daemon socket was not published")
+        || stderr.contains("failed to connect to daemon socket")
+}
+
 fn ensure_test_daemon_launcher(home_dir: &std::path::Path) -> PathBuf {
-    #[cfg(unix)]
-    {
-        let wrapper = home_dir.join("atm-daemon-test-wrapper.sh");
-        let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .canonicalize()
-            .expect("workspace root");
-        fs::write(
-            &wrapper,
-            format!(
-                "#!/bin/sh\ncd '{}' || exit 1\nexec cargo run --quiet -p atm-daemon --bin atm-daemon -- \"$@\"\n",
-                workspace_root.display()
-            ),
-        )
-        .expect("write daemon wrapper");
-        let mut permissions = fs::metadata(&wrapper)
-            .expect("wrapper metadata")
-            .permissions();
-        permissions.set_mode(0o755);
-        fs::set_permissions(&wrapper, permissions).expect("chmod daemon wrapper");
-        wrapper
+    #[allow(unused_variables)]
+    let hermetic_daemon = option_env!("CARGO_BIN_EXE_atm-daemon").map(PathBuf::from);
+    if let Some(path) = hermetic_daemon.as_ref().filter(|path| path.exists()) {
+        return path.clone();
     }
 
-    #[cfg(not(unix))]
-    {
-        let sibling = PathBuf::from(env!("CARGO_BIN_EXE_atm"))
-            .with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX));
-        if sibling.exists() {
-            return sibling;
-        }
-        panic!(
-            "expected hermetic test daemon binary beside {} but it was missing: {}",
-            env!("CARGO_BIN_EXE_atm"),
-            sibling.display()
-        );
+    let sibling = PathBuf::from(env!("CARGO_BIN_EXE_atm"))
+        .with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX));
+    if sibling.exists() {
+        return sibling;
     }
+
+    let workspace_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("target")
+        .join("debug")
+        .join(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX));
+    if workspace_binary.exists() {
+        return workspace_binary;
+    }
+
+    let _ = home_dir;
+    panic!(
+        "expected hermetic test daemon binary at one of: {:?}, {}, {}",
+        hermetic_daemon,
+        sibling.display(),
+        workspace_binary.display()
+    );
 }

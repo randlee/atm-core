@@ -1007,6 +1007,7 @@ impl Fixture {
         let tempdir = tempfile::tempdir().expect("tempdir");
         let fixture = Self { tempdir };
         fixture.write_team_config(recipient);
+        fixture.warm_daemon();
         fixture
     }
 
@@ -1014,24 +1015,51 @@ impl Fixture {
         self.run_with_env(args, &[])
     }
 
+    fn warm_daemon(&self) {
+        let output = self.run(&["read", "--all", "--no-mark", "--json"]);
+        assert!(output.status.success(), "stderr: {}", self.stderr(&output));
+    }
+
     fn run_without_identity(&self, args: &[&str]) -> std::process::Output {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
-        crate::support::configure_atm_command(&mut command, self.tempdir.path(), None)
+        let mut first = Command::new(env!("CARGO_BIN_EXE_atm"));
+        let output = crate::support::configure_atm_command(&mut first, self.tempdir.path(), None)
             .args(args)
             .current_dir(self.tempdir.path())
             .output()
-            .expect("run atm without identity")
+            .expect("run atm without identity");
+        if !crate::support::is_daemon_start_transient(&output) {
+            return output;
+        }
+
+        let mut retry = Command::new(env!("CARGO_BIN_EXE_atm"));
+        crate::support::configure_atm_command(&mut retry, self.tempdir.path(), None)
+            .args(args)
+            .current_dir(self.tempdir.path())
+            .output()
+            .expect("retry atm without identity")
     }
 
     fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
-        crate::support::configure_atm_command(&mut command, self.tempdir.path(), Some(TEST_SENDER))
+        let mut first = Command::new(env!("CARGO_BIN_EXE_atm"));
+        crate::support::configure_atm_command(&mut first, self.tempdir.path(), Some(TEST_SENDER))
             .args(args)
             .current_dir(self.tempdir.path());
         for (key, value) in extra_env {
-            command.env(key, value);
+            first.env(key, value);
         }
-        command.output().expect("run atm")
+        let output = first.output().expect("run atm");
+        if !crate::support::is_daemon_start_transient(&output) {
+            return output;
+        }
+
+        let mut retry = Command::new(env!("CARGO_BIN_EXE_atm"));
+        crate::support::configure_atm_command(&mut retry, self.tempdir.path(), Some(TEST_SENDER))
+            .args(args)
+            .current_dir(self.tempdir.path());
+        for (key, value) in extra_env {
+            retry.env(key, value);
+        }
+        retry.output().expect("retry atm")
     }
 
     fn write_team_config(&self, recipient: &str) {
