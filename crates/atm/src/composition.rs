@@ -2,6 +2,7 @@
 
 use std::fmt;
 use std::path::PathBuf;
+#[cfg(unix)]
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 #[cfg(unix)]
