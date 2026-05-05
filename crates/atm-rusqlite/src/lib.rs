@@ -47,7 +47,11 @@ impl SqliteMailStore {
     fn new() -> Self {
         Self
     }
+}
 
+impl boundary::sealed::Sealed for SqliteMailStore {}
+
+impl boundary::MailStore for SqliteMailStore {
     fn bootstrap(
         &self,
         _request: boundary::MailStoreBootstrapRequest,
@@ -112,73 +116,6 @@ impl SqliteMailStore {
     }
 }
 
-impl boundary::sealed::Sealed for SqliteMailStore {}
-
-impl boundary::MailStore for SqliteMailStore {
-    fn bootstrap(
-        &self,
-        request: boundary::MailStoreBootstrapRequest,
-    ) -> Result<boundary::MailStoreBootstrapResponse, AtmError> {
-        Self::bootstrap(self, request)
-    }
-
-    fn run_transaction(
-        &self,
-        request: boundary::MailStoreTransactionRequest,
-    ) -> Result<boundary::MailStoreTransactionResponse, AtmError> {
-        Self::run_transaction(self, request)
-    }
-
-    fn upsert_message(
-        &self,
-        request: boundary::MailStoreUpsertMessageRequest,
-    ) -> Result<boundary::MailStoreUpsertMessageResponse, AtmError> {
-        Self::upsert_message(self, request)
-    }
-
-    fn load_message(
-        &self,
-        request: boundary::MailStoreLoadMessageRequest,
-    ) -> Result<boundary::MailStoreLoadMessageResponse, AtmError> {
-        Self::load_message(self, request)
-    }
-
-    fn upsert_visibility_state(
-        &self,
-        request: boundary::MailStoreUpsertVisibilityStateRequest,
-    ) -> Result<boundary::MailStoreUpsertVisibilityStateResponse, AtmError> {
-        Self::upsert_visibility_state(self, request)
-    }
-
-    fn load_visibility_state(
-        &self,
-        request: boundary::MailStoreLoadVisibilityStateRequest,
-    ) -> Result<boundary::MailStoreLoadVisibilityStateResponse, AtmError> {
-        Self::load_visibility_state(self, request)
-    }
-
-    fn record_ingest_replay_state(
-        &self,
-        request: boundary::MailStoreRecordIngestReplayStateRequest,
-    ) -> Result<boundary::MailStoreRecordIngestReplayStateResponse, AtmError> {
-        Self::record_ingest_replay_state(self, request)
-    }
-
-    fn load_ingest_replay_state(
-        &self,
-        request: boundary::MailStoreLoadIngestReplayStateRequest,
-    ) -> Result<boundary::MailStoreLoadIngestReplayStateResponse, AtmError> {
-        Self::load_ingest_replay_state(self, request)
-    }
-
-    fn health_snapshot(
-        &self,
-        request: boundary::MailStoreHealthSnapshotRequest,
-    ) -> Result<boundary::MailStoreHealthSnapshotResponse, AtmError> {
-        Self::health_snapshot(self, request)
-    }
-}
-
 #[derive(Debug, Default)]
 struct SqliteTaskStore;
 
@@ -186,7 +123,11 @@ impl SqliteTaskStore {
     fn new() -> Self {
         Self
     }
+}
 
+impl boundary::sealed::Sealed for SqliteTaskStore {}
+
+impl boundary::TaskStore for SqliteTaskStore {
     fn create_task(
         &self,
         _request: boundary::TaskStoreCreateTaskRequest,
@@ -237,59 +178,6 @@ impl SqliteTaskStore {
     }
 }
 
-impl boundary::sealed::Sealed for SqliteTaskStore {}
-
-impl boundary::TaskStore for SqliteTaskStore {
-    fn create_task(
-        &self,
-        request: boundary::TaskStoreCreateTaskRequest,
-    ) -> Result<boundary::TaskStoreCreateTaskResponse, AtmError> {
-        Self::create_task(self, request)
-    }
-
-    fn load_task(
-        &self,
-        request: boundary::TaskStoreLoadTaskRequest,
-    ) -> Result<boundary::TaskStoreLoadTaskResponse, AtmError> {
-        Self::load_task(self, request)
-    }
-
-    fn update_task(
-        &self,
-        request: boundary::TaskStoreUpdateTaskRequest,
-    ) -> Result<boundary::TaskStoreUpdateTaskResponse, AtmError> {
-        Self::update_task(self, request)
-    }
-
-    fn attach_message_link(
-        &self,
-        request: boundary::TaskStoreAttachMessageLinkRequest,
-    ) -> Result<boundary::TaskStoreAttachMessageLinkResponse, AtmError> {
-        Self::attach_message_link(self, request)
-    }
-
-    fn detach_message_link(
-        &self,
-        request: boundary::TaskStoreDetachMessageLinkRequest,
-    ) -> Result<boundary::TaskStoreDetachMessageLinkResponse, AtmError> {
-        Self::detach_message_link(self, request)
-    }
-
-    fn record_ack_transition(
-        &self,
-        request: boundary::TaskStoreRecordAckTransitionRequest,
-    ) -> Result<boundary::TaskStoreRecordAckTransitionResponse, AtmError> {
-        Self::record_ack_transition(self, request)
-    }
-
-    fn query_task_metadata(
-        &self,
-        request: boundary::TaskStoreQueryTaskMetadataRequest,
-    ) -> Result<boundary::TaskStoreQueryTaskMetadataResponse, AtmError> {
-        Self::query_task_metadata(self, request)
-    }
-}
-
 #[derive(Debug, Default)]
 struct SqliteRosterStore;
 
@@ -297,7 +185,11 @@ impl SqliteRosterStore {
     fn new() -> Self {
         Self
     }
+}
 
+impl boundary::sealed::Sealed for SqliteRosterStore {}
+
+impl boundary::RosterStore for SqliteRosterStore {
     fn replace_roster(
         &self,
         _request: boundary::RosterStoreReplaceRosterRequest,
@@ -324,37 +216,5 @@ impl SqliteRosterStore {
         _request: boundary::RosterStoreHealthSnapshotRequest,
     ) -> Result<boundary::RosterStoreHealthSnapshotResponse, AtmError> {
         todo!("Phase R SQLite roster-store health wiring is not implemented yet");
-    }
-}
-
-impl boundary::sealed::Sealed for SqliteRosterStore {}
-
-impl boundary::RosterStore for SqliteRosterStore {
-    fn replace_roster(
-        &self,
-        request: boundary::RosterStoreReplaceRosterRequest,
-    ) -> Result<boundary::RosterStoreReplaceRosterResponse, AtmError> {
-        Self::replace_roster(self, request)
-    }
-
-    fn load_roster(
-        &self,
-        request: boundary::RosterStoreLoadRosterRequest,
-    ) -> Result<boundary::RosterStoreLoadRosterResponse, AtmError> {
-        Self::load_roster(self, request)
-    }
-
-    fn query_membership(
-        &self,
-        request: boundary::RosterStoreQueryMembershipRequest,
-    ) -> Result<boundary::RosterStoreQueryMembershipResponse, AtmError> {
-        Self::query_membership(self, request)
-    }
-
-    fn health_snapshot(
-        &self,
-        request: boundary::RosterStoreHealthSnapshotRequest,
-    ) -> Result<boundary::RosterStoreHealthSnapshotResponse, AtmError> {
-        Self::health_snapshot(self, request)
     }
 }

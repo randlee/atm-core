@@ -76,8 +76,9 @@ enforcement:
     - no_daemon_shaped_protocol_types
 
 status:
-  state: planned
+  state: stub_landed
   notes:
+    - trait plus request/response/frame stubs landed in atm_core::boundary
     - ack is represented inside send-shape request data, not as a top-level protocol family
 ```
 
@@ -153,8 +154,9 @@ enforcement:
     - no_cli_to_daemon_internal_edge
 
 status:
-  state: planned
+  state: stub_landed
   notes:
+    - stub trait plus request/response shells landed in atm_core::boundary
     - designed for thin callers such as atm-graft
     - daemon-to-daemon remote delivery also depends on this outbound client boundary
 ```
@@ -227,8 +229,9 @@ enforcement:
     - no_watch_io_outside_boundary
 
 status:
-  state: planned
+  state: stub_landed
   notes:
+    - stub trait plus request/response shells landed in atm_core::boundary
     - watch source owns event capture only, not reconcile policy
 ```
 
@@ -301,8 +304,9 @@ enforcement:
     - no_store_or_transport_bypass_in_reconcile
 
 status:
-  state: planned
+  state: stub_landed
   notes:
+    - stub trait plus request/response shells landed in atm_core::boundary
     - reconcile owns coalescing and trigger policy, not raw watch APIs
 ```
 
@@ -374,8 +378,9 @@ enforcement:
     - no_server_business_logic
 
 status:
-  state: planned
+  state: stub_landed
   notes:
+    - stub trait plus request/response shells landed in atm_core::boundary
     - server transports stay runtime-only and are not exposed to thin client crates
 ```
 
@@ -446,8 +451,9 @@ enforcement:
     - no_socket_specific_dispatch_logic
 
 status:
-  state: planned
+  state: stub_landed
   notes:
+    - stub trait plus request/response shells landed in atm_core::boundary
     - dispatcher is a service boundary, not a socket adapter
 ```
 
@@ -963,8 +969,9 @@ enforcement:
     - no_direct_process_spawn
 
 status:
-  state: planned
+  state: stub_landed
   notes:
+    - stub trait plus request/response shells landed in atm_core::boundary
     - a thin extension crate should never need to reach into process-spawn internals
 ```
 
@@ -1032,8 +1039,9 @@ enforcement:
     - no_status_leakage_into_roster_store
 
 status:
-  state: planned
+  state: stub_landed
   notes:
+    - stub trait plus request/response shells landed in atm_core::boundary
     - live status remains separate from durable roster truth
 ```
 

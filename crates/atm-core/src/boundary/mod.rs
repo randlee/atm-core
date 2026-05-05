@@ -2,6 +2,10 @@
 
 use crate::error::AtmError;
 
+/// Workspace-convention seal only; not compiler-enforced outside this crate.
+///
+/// Only ATM workspace crates may implement boundary traits. Enforced by
+/// boundary lint, forbidden-edge rules, and review gates.
 pub mod sealed {
     pub trait Sealed {}
 }
@@ -138,7 +142,9 @@ pub struct MailStoreHealthSnapshotRequest;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MailStoreHealthSnapshotResponse;
 
+/// Bootstrap-variant compatibility alias for the initial Phase R mail-store stub.
 pub type MailStoreRequest = MailStoreBootstrapRequest;
+/// Bootstrap-variant compatibility alias for the initial Phase R mail-store stub.
 pub type MailStoreResponse = MailStoreBootstrapResponse;
 
 /// Stub task-store request for the Phase R skeleton.
@@ -197,7 +203,9 @@ pub struct TaskStoreQueryTaskMetadataRequest;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TaskStoreQueryTaskMetadataResponse;
 
+/// Bootstrap-variant compatibility alias for the initial Phase R task-store stub.
 pub type TaskStoreRequest = TaskStoreCreateTaskRequest;
+/// Bootstrap-variant compatibility alias for the initial Phase R task-store stub.
 pub type TaskStoreResponse = TaskStoreCreateTaskResponse;
 
 /// Stub roster-store request for the Phase R skeleton.
@@ -232,7 +240,9 @@ pub struct RosterStoreHealthSnapshotRequest;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RosterStoreHealthSnapshotResponse;
 
+/// Bootstrap-variant compatibility alias for the initial Phase R roster-store stub.
 pub type RosterStoreRequest = RosterStoreReplaceRosterRequest;
+/// Bootstrap-variant compatibility alias for the initial Phase R roster-store stub.
 pub type RosterStoreResponse = RosterStoreReplaceRosterResponse;
 
 /// Stub config-ingress request for the Phase R skeleton.
@@ -267,7 +277,9 @@ pub struct InboxIngressDiagnosticsRequest;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct InboxIngressDiagnosticsResponse;
 
+/// Import-variant compatibility alias for the initial Phase R inbox-ingress stub.
 pub type InboxIngressRequest = InboxIngressImportRequest;
+/// Import-variant compatibility alias for the initial Phase R inbox-ingress stub.
 pub type InboxIngressResponse = InboxIngressImportResponse;
 
 /// Stub inbox-export request for the Phase R skeleton.
@@ -286,7 +298,9 @@ pub struct InboxExportReexportMessageRequest;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct InboxExportReexportMessageResponse;
 
+/// Record-export compatibility alias for the initial Phase R inbox-export stub.
 pub type InboxExportRequest = InboxExportRecordRequest;
+/// Record-export compatibility alias for the initial Phase R inbox-export stub.
 pub type InboxExportResponse = InboxExportRecordResponse;
 
 /// BOUNDARY-AtmProtocol — see docs/atm-core/boundaries.md.
@@ -315,6 +329,10 @@ pub trait ReconcileCoordinator: sealed::Sealed {}
 
 /// BOUNDARY-MailStore — see docs/atm-core/boundaries.md.
 pub trait MailStore: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when durable mailbox persistence, transaction
+    /// boundaries, or replay-state access cannot satisfy the contract.
     fn bootstrap(
         &self,
         request: MailStoreBootstrapRequest,
@@ -363,6 +381,10 @@ pub trait MailStore: sealed::Sealed {
 
 /// BOUNDARY-TaskStore — see docs/atm-core/boundaries.md.
 pub trait TaskStore: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when durable task-state persistence or task/message
+    /// linkage updates fail to satisfy the contract.
     fn create_task(
         &self,
         request: TaskStoreCreateTaskRequest,
@@ -401,6 +423,10 @@ pub trait TaskStore: sealed::Sealed {
 
 /// BOUNDARY-RosterStore — see docs/atm-core/boundaries.md.
 pub trait RosterStore: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when durable roster persistence or membership
+    /// queries fail to satisfy the contract.
     fn replace_roster(
         &self,
         request: RosterStoreReplaceRosterRequest,
@@ -424,11 +450,19 @@ pub trait RosterStore: sealed::Sealed {
 
 /// BOUNDARY-ConfigIngress — see docs/atm-core/boundaries.md.
 pub trait ConfigIngress: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when persisted ATM/team configuration cannot be
+    /// loaded, parsed, or validated into typed models.
     fn load_config(&self, request: ConfigLoadRequest) -> Result<ConfigLoadResponse, AtmError>;
 }
 
 /// BOUNDARY-InboxIngress — see docs/atm-core/boundaries.md.
 pub trait InboxIngress: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when compatibility inbox material cannot be
+    /// imported, fingerprinted, or diagnosed into ATM-owned state.
     fn import_inbox_source(
         &self,
         request: InboxIngressImportRequest,
@@ -447,6 +481,10 @@ pub trait InboxIngress: sealed::Sealed {
 
 /// BOUNDARY-InboxExport — see docs/atm-core/boundaries.md.
 pub trait InboxExport: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when ATM-owned state cannot be projected back to the
+    /// compatibility inbox/export surfaces.
     fn export_record(
         &self,
         request: InboxExportRecordRequest,

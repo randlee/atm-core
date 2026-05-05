@@ -266,7 +266,7 @@ Gate status before Wave 2:
 ### R.3.1 Skeleton First
 
 Status:
-- in progress
+- complete
 
 Current landed subset:
 - `crates/atm-daemon` and `crates/atm-rusqlite` exist as crate-root skeletons
@@ -294,16 +294,20 @@ Current landed subset:
   - no direct CLI-to-daemon edge
   - no direct CLI-to-sqlite edge
   - no direct daemon-to-sqlite edge permitted by the boundary contract
+- daemon boundary inventory now records landed stub runtime adapters for:
+  - `ConfigIngress`
+  - `InboxIngress`
+  - `InboxExport`
+- `PeerClientTransport` and `RequestDispatcher` daemon runtime adapters are
+  formally deferred to `R.4` scope review rather than blocking skeleton close
 
-Still required before `R.3.1` can close:
-- config ingress and inbox ingress/export adapter shells
+Follow-on work after `R.3.1` close:
 - final daemon/rusqlite adapter module splits beyond the current crate-root skeletons
-- completion of the retained planned runtime shells that still exist only in docs
-  if Wave 2 continues to keep them in scope:
-  - peer client transport
-  - request dispatcher
 - a trait-only composition path for sqlite-backed runtime assembly that does not
   require a direct `atm-daemon -> atm-rusqlite` dependency
+- `R.4` scope review for:
+  - peer client transport
+  - request dispatcher
 
 Required outcome:
 - traits/facades exist
@@ -378,6 +382,9 @@ Ordered sprint breakdown:
    - harden `AtmProtocol` request/response/frame types
    - land callable `ClientTransport` and `ServerTransport` trait surfaces
    - land `RequestDispatcher` request-routing contract
+   - review whether daemon-side `PeerClientTransport` and
+     `DaemonRequestDispatcher` stay in scope for this wave before landing their
+     concrete adapters
    - connect CLI composition root and daemon composition root to these
      contracts without introducing retained direct call paths
 2. `R.5 Store Boundaries`

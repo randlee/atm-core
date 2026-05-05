@@ -408,6 +408,249 @@ Purpose:
 Notes:
 - This adapter exists to keep transport loops and service logic separate.
 
+## DaemonConfigIngressAdapter
+
+```yaml
+boundary_id: BOUNDARY-ConfigIngress-Daemon
+owner_package: atm-daemon
+owner_crate_path: atm_daemon
+name: DaemonConfigIngressAdapter
+
+public:
+  trait: ConfigIngress
+  facade: null
+
+implementation:
+  type: DaemonConfigIngress
+  module: atm_daemon
+  visibility: pub(crate)
+  constructor: pub(crate)
+
+composition:
+  roots:
+    - atm_daemon::composition::compose_runtime
+
+ownership:
+  io_owns:
+    - persisted_config_loading
+    - config_document_validation
+  io_forbidden:
+    - sqlite
+    - socket_io
+    - process_spawn
+
+dependencies:
+  allowed_dependents: []
+  allowed_dependencies:
+    - atm-core
+  forbidden_edges:
+    - atm -> atm-daemon
+    - atm-graft -> atm-daemon
+    - atm-daemon -> atm-rusqlite
+
+references:
+  scope: outside_owner_crate
+  forbidden:
+    - DaemonConfigIngress
+
+contracts:
+  request_types:
+    - config load requests
+  response_types:
+    - typed ATM config models
+  error_types:
+    - AtmError
+
+testing:
+  allowed_test_double_paths:
+    - atm_core::test_support::StubConfigIngress
+  forbidden_test_bypasses:
+    - std::fs::read_to_string
+
+enforcement:
+  lint_rules:
+    - LINT-BOUNDARY-CONFIG-INGRESS-DAEMON-EDGES
+    - LINT-BOUNDARY-CONFIG-INGRESS-DAEMON-REFERENCES
+  review_gates:
+    - no_public_impl
+    - no_public_constructor
+    - no_direct_config_parser_calls
+
+status:
+  state: stub_landed
+  notes:
+    - atm_core owns the contract; daemon runtime now supplies the crate-root stub adapter
+    - composition must continue to avoid a direct atm-daemon -> atm-rusqlite dependency
+```
+
+Purpose:
+- Owns the daemon runtime adapter behind the ConfigIngress contract.
+
+Notes:
+- This is landed as a crate-root scaffold and remains unwired until a follow-on sprint.
+
+## DaemonInboxIngressAdapter
+
+```yaml
+boundary_id: BOUNDARY-InboxIngress-Daemon
+owner_package: atm-daemon
+owner_crate_path: atm_daemon
+name: DaemonInboxIngressAdapter
+
+public:
+  trait: InboxIngress
+  facade: null
+
+implementation:
+  type: DaemonInboxIngress
+  module: atm_daemon
+  visibility: pub(crate)
+  constructor: pub(crate)
+
+composition:
+  roots:
+    - atm_daemon::composition::compose_runtime
+
+ownership:
+  io_owns:
+    - inbound_mailbox_import
+    - compatibility_surface_translation
+  io_forbidden:
+    - sqlite
+    - socket_io
+    - process_spawn
+
+dependencies:
+  allowed_dependents: []
+  allowed_dependencies:
+    - atm-core
+  forbidden_edges:
+    - atm -> atm-daemon
+    - atm-graft -> atm-daemon
+    - atm-daemon -> atm-rusqlite
+
+references:
+  scope: outside_owner_crate
+  forbidden:
+    - DaemonInboxIngress
+
+contracts:
+  request_types:
+    - ingress scan requests
+  response_types:
+    - typed ingress result models
+  error_types:
+    - AtmError
+
+testing:
+  allowed_test_double_paths:
+    - atm_core::test_support::StubInboxIngress
+  forbidden_test_bypasses:
+    - mailbox::store::observe_source_files
+
+enforcement:
+  lint_rules:
+    - LINT-BOUNDARY-INBOX-INGRESS-DAEMON-EDGES
+    - LINT-BOUNDARY-INBOX-INGRESS-DAEMON-REFERENCES
+  review_gates:
+    - no_public_impl
+    - no_public_constructor
+    - no_direct_mailbox_helper_calls
+
+status:
+  state: stub_landed
+  notes:
+    - atm_core owns the contract; daemon runtime now supplies the crate-root stub adapter
+    - watcher-driven reconcile must continue to route through this boundary rather than directly to mailbox helpers
+```
+
+Purpose:
+- Owns the daemon runtime adapter behind the InboxIngress contract.
+
+Notes:
+- This is landed as a crate-root scaffold and remains unwired until a follow-on sprint.
+
+## DaemonInboxExportAdapter
+
+```yaml
+boundary_id: BOUNDARY-InboxExport-Daemon
+owner_package: atm-daemon
+owner_crate_path: atm_daemon
+name: DaemonInboxExportAdapter
+
+public:
+  trait: InboxExport
+  facade: null
+
+implementation:
+  type: DaemonInboxExport
+  module: atm_daemon
+  visibility: pub(crate)
+  constructor: pub(crate)
+
+composition:
+  roots:
+    - atm_daemon::composition::compose_runtime
+
+ownership:
+  io_owns:
+    - outbound_mailbox_projection
+    - compatibility_surface_translation
+  io_forbidden:
+    - sqlite
+    - socket_io
+    - process_spawn
+
+dependencies:
+  allowed_dependents: []
+  allowed_dependencies:
+    - atm-core
+  forbidden_edges:
+    - atm -> atm-daemon
+    - atm-graft -> atm-daemon
+    - atm-daemon -> atm-rusqlite
+
+references:
+  scope: outside_owner_crate
+  forbidden:
+    - DaemonInboxExport
+
+contracts:
+  request_types:
+    - export write requests
+  response_types:
+    - typed export result models
+  error_types:
+    - AtmError
+
+testing:
+  allowed_test_double_paths:
+    - atm_core::test_support::StubInboxExport
+  forbidden_test_bypasses:
+    - mailbox::store::with_locked_source_files
+
+enforcement:
+  lint_rules:
+    - LINT-BOUNDARY-INBOX-EXPORT-DAEMON-EDGES
+    - LINT-BOUNDARY-INBOX-EXPORT-DAEMON-REFERENCES
+  review_gates:
+    - no_public_impl
+    - no_public_constructor
+    - no_direct_mailbox_helper_calls
+
+status:
+  state: stub_landed
+  notes:
+    - atm_core owns the contract; daemon runtime now supplies the crate-root stub adapter
+    - send and receive compatibility writes must stay behind this adapter rather than reaching mailbox helpers directly
+```
+
+Purpose:
+- Owns the daemon runtime adapter behind the InboxExport contract.
+
+Notes:
+- This is landed as a crate-root scaffold and remains unwired until a follow-on sprint.
+
 ## DaemonNotificationSinkAdapter
 
 ```yaml
