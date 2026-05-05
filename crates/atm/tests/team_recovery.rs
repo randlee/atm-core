@@ -973,9 +973,7 @@ impl Fixture {
             format!("default_team = \"{}\"\n", TEST_TEAM),
         )
         .expect("config");
-        let fixture = Self { tempdir };
-        fixture.warm_daemon();
-        fixture
+        Self { tempdir }
     }
 
     fn run(&self, args: &[&str]) -> std::process::Output {
@@ -1009,12 +1007,6 @@ impl Fixture {
         }
         command.output().expect("run atm")
     }
-
-    fn warm_daemon(&self) {
-        let output = self.run(&["read", "--all", "--no-mark", "--json"]);
-        assert!(output.status.success(), "stderr: {}", self.stderr(&output));
-    }
-
     fn write_team_config_value(&self, team: &str, value: Value) {
         self.write_json(self.team_dir(team).join("config.json"), &value);
     }
