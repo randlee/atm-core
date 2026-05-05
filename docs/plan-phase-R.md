@@ -626,6 +626,50 @@ Cross-sprint hardening rule:
   - complete at `cd70665`; no further sprint ownership needed unless the
     prompt location changes again
 
+## 5. Phase R Branch Consolidation (2026-05-05)
+
+### Policy
+
+All Phase R stabilization work routes exclusively to `feature/pR-s10-thin-client`. Branches `feature/pR-s8-config-notify` (R.6) and `feature/pR-s9-service-orch` (R.7) are frozen and treated as historical record only.
+
+**Surviving branch:** `feature/pR-s10-thin-client` (PR #181)
+**Frozen branches:** `feature/pR-s8-config-notify` (PR #182), `feature/pR-s9-service-orch` (PR #180)
+
+### Rationale
+
+RULE-011 and ARCH-SINGLETON requirements were added to develop after the per-sprint QA passes ran. Applying retroactive fixes branch-by-branch would require three separate remediation rounds on overlapping codebases. Consolidating to R.8 eliminates duplicate work and provides one clear merge path to `integrate/phase-R`.
+
+### Ancestry
+
+Verified 2026-05-05: merge-forward is complete.
+- 75b5031 (R.6 head) is ancestor of cc3a70a (R.7 head)
+- cc3a70a (R.7 head) is ancestor of fc604ce (R.8 head)
+- No further merge-forward needed.
+
+### Enforcement
+
+- No QA rounds on frozen branches. Findings on R.6 or R.7 are superseded.
+- No commits to `feature/pR-s8-config-notify` or `feature/pR-s9-service-orch`.
+- All daemon fixes, ARCH-SINGLETON sweep, CI-WIN-001, and carry-forward findings apply to `feature/pR-s10-thin-client` only.
+- quality-mgr: reject any new assignments targeting frozen branches.
+
+### Open Findings on R.8 (TASK-939 scope)
+
+**Blocking:**
+- ARCH-SINGLETON [B]: `spawn_test_daemon`/`DaemonGuard` in `crates/atm/tests/send.rs` and other test files — replace with `CliComposition::from_transport()` + in-process `FakeClientTransport`
+- CI-WIN-001 [B]: ungated unix-only imports in `atm-daemon/src/lib.rs` — gate with `#[cfg(unix)]`
+
+**Important carry-forward (R.6/R.7/R.8):**
+- ATM-QA-014, ATM-QA-006, ATM-QA-009, FTQ-006, NEW-004, NEW-002
+
+**Minor carry-forward:**
+- ATM-QA-005, RBP-F001, RBP-F002/F003
+
+### Merge Sequence (pending QA PASS 0B+0I+0m + user authorization)
+
+1. `feature/pR-s10-thin-client` → `integrate/phase-R` (after R.5 #179 already merged)
+2. `integrate/phase-R` → `develop` (user authorization required)
+
 ## 6. Working Rule
 
 Phase R does not advance by ad hoc implementation.
