@@ -108,6 +108,7 @@ impl LocalSocketClientTransport {
         ))
     }
 
+    #[cfg(unix)]
     fn spawn_daemon(&self) -> Result<(), AtmError> {
         if !self.daemon_bin.is_file() {
             return Err(
@@ -260,7 +261,7 @@ impl<'a> CliComposition<'a> {
                     outcome: if outcome.dry_run { "dry_run" } else { "sent" },
                     team: outcome.team.clone(),
                     agent: outcome.agent.clone(),
-                    sender: outcome.sender.to_string(),
+                    sender: outcome.sender.clone(),
                     message_id: Some(outcome.message_id),
                     requires_ack: outcome.requires_ack,
                     dry_run: outcome.dry_run,
@@ -285,7 +286,7 @@ impl<'a> CliComposition<'a> {
                     outcome: "ok",
                     team: outcome.team.clone(),
                     agent: outcome.agent.clone(),
-                    sender: outcome.agent.to_string(),
+                    sender: outcome.agent.clone(),
                     message_id: Some(outcome.message_id),
                     requires_ack: false,
                     dry_run: false,
@@ -308,7 +309,7 @@ impl<'a> CliComposition<'a> {
                     outcome: "ok",
                     team: outcome.team.clone(),
                     agent: outcome.agent.clone(),
-                    sender: outcome.agent.to_string(),
+                    sender: outcome.agent.clone(),
                     message_id: None,
                     requires_ack: false,
                     dry_run: false,
@@ -331,7 +332,7 @@ impl<'a> CliComposition<'a> {
                     outcome: "ok",
                     team: outcome.team.clone(),
                     agent: outcome.agent.clone(),
-                    sender: outcome.agent.to_string(),
+                    sender: outcome.agent.clone(),
                     message_id: None,
                     requires_ack: false,
                     dry_run: false,
