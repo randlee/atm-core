@@ -230,10 +230,12 @@ pub fn configure_atm_command<'a>(
 #[cfg(test)]
 pub fn is_daemon_start_transient(output: &Output) -> bool {
     let stderr = String::from_utf8_lossy(&output.stderr);
-    stderr.contains("failed to read daemon request frame")
+    stderr.contains("failed to read daemon response frame")
         || stderr.contains("daemon socket was not published")
         || stderr.contains("failed to connect to daemon socket")
+        || stderr.contains("failed to connect to daemon socket after auto-start")
         || stderr.contains("failed to write daemon request frame")
+        || stderr.contains("failed to finalize daemon request frame")
 }
 
 fn ensure_test_daemon_launcher(home_dir: &std::path::Path) -> PathBuf {

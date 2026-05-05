@@ -443,6 +443,7 @@ impl Fixture {
             return output;
         }
 
+        std::thread::sleep(std::time::Duration::from_millis(50));
         let mut retry = Command::new(env!("CARGO_BIN_EXE_atm"));
         support::configure_atm_command(&mut retry, self.tempdir.path(), Some(TEST_SENDER))
             .args(args)

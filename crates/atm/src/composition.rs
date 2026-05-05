@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::fmt;
 use std::path::PathBuf;
 #[cfg(unix)]
@@ -31,6 +29,7 @@ use atm_core::send::{SendOutcome, SendRequest};
 use crate::observability::CliObservability;
 
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 pub(crate) struct SendCommandEntryPoint;
 
 impl SendCommandEntryPoint {
@@ -40,6 +39,7 @@ impl SendCommandEntryPoint {
 }
 
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 pub(crate) struct ReceiveCommandEntryPoint;
 
 impl ReceiveCommandEntryPoint {
@@ -80,6 +80,8 @@ impl LocalSocketClientTransport {
                 .map(|metadata| (metadata.dev(), metadata.ino()));
             self.spawn_daemon()?;
             self.wait_for_socket_publish(published_socket)?;
+            // The published socket inode can appear just before the daemon is
+            // ready to accept a client connection, so allow one short settle.
             thread::sleep(Duration::from_millis(25));
             if self.try_connect().is_ok() {
                 return Ok(());
@@ -227,6 +229,7 @@ impl<'a> CliComposition<'a> {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn transport(&self) -> &(dyn ClientTransport + Send + Sync + 'a) {
         self.transport.as_ref()
     }
@@ -241,14 +244,17 @@ impl<'a> CliComposition<'a> {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn observability_port(&self) -> &(dyn ObservabilityPort + Send + Sync) {
         self.observability_port
     }
 
+    #[allow(dead_code)]
     pub(crate) fn send_command(&self) -> &SendCommandEntryPoint {
         &self.send_command
     }
 
+    #[allow(dead_code)]
     pub(crate) fn receive_command(&self) -> &ReceiveCommandEntryPoint {
         &self.receive_command
     }

@@ -369,9 +369,14 @@ fn test_send_missing_config_retains_at_most_two_team_lead_notices_under_concurre
         "stderr: {}",
         fixture.stderr(&bootstrap)
     );
-    // Let the warmed daemon finish publishing its socket before the two
-    // concurrent send processes start competing on the same fixture path.
-    std::thread::sleep(std::time::Duration::from_millis(50));
+    let socket_path = fixture.tempdir.path().join("atm-daemon.sock");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
+    while std::time::Instant::now() < deadline {
+        if std::os::unix::net::UnixStream::connect(&socket_path).is_ok() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
     fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
     fixture.write_inbox(TEST_RECIPIENT, &[]);
     fixture.write_inbox(ROLE_TEAM_LEAD, &[]);
