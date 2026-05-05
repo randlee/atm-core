@@ -161,6 +161,7 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     }
 
     fn default_lock_timeout(&self) -> Duration {
+        // TODO(phase-R): move this retained mailbox-lock default behind a boundary-owned timeout policy.
         crate::mailbox::lock::default_lock_timeout()
     }
 

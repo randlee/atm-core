@@ -143,7 +143,7 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     let display_sender = display_sender_identity(
         &canonical_sender,
         request.sender_override.as_deref(),
-        sender_team.as_deref(),
+        sender_team.as_ref(),
         &recipient.team,
         config.as_ref(),
     );
@@ -404,16 +404,14 @@ fn notify_team_lead_missing_config(
     );
 
     let notice = MessageEnvelope {
-        from: "atm-identity-missing"
-            .parse()
-            .expect("system sender is valid"),
+        from: AgentName::from_validated("atm-identity-missing"),
         text: format!(
             "ATM warning: send used existing inbox fallback for {recipient}@{team} because team config is missing at {}. Please restore config.json.",
             config_path.display()
         ),
         timestamp,
         read: false,
-        source_team: Some(team.parse().expect("team name")),
+        source_team: Some(team.clone()),
         summary: Some(format!(
             "ATM warning: missing team config fallback used for {recipient}@{team}"
         )),
@@ -472,8 +470,8 @@ fn append_mailbox_message_and_seed_workflow(
 fn display_sender_identity(
     canonical_sender: &AgentName,
     sender_override: Option<&str>,
-    sender_team: Option<&str>,
-    recipient_team: &str,
+    sender_team: Option<&TeamName>,
+    recipient_team: &TeamName,
     config: Option<&config::AtmConfig>,
 ) -> String {
     let cross_team = sender_team.is_some_and(|team| team != recipient_team);
@@ -493,7 +491,10 @@ fn display_sender_identity(
         .unwrap_or_else(|| canonical_sender.to_string())
 }
 
-pub(super) fn qualified_sender_identity(sender: &AgentName, sender_team: Option<&str>) -> String {
+pub(super) fn qualified_sender_identity(
+    sender: &AgentName,
+    sender_team: Option<&TeamName>,
+) -> String {
     sender_team
         .map(|team| format!("{sender}@{team}"))
         .unwrap_or_else(|| sender.to_string())
