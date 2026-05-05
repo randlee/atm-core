@@ -82,7 +82,7 @@ fn run_doctor_with_runtime<R: RetainedServiceRuntime>(
             ),
         });
     }
-    let member_roster = resolved_team.as_deref().and_then(|team| {
+    let member_roster = resolved_team.as_ref().and_then(|team| {
         load_member_roster(runtime, &home_dir, team, config.as_ref(), &mut findings)
     });
     push_stale_mailbox_lock_findings(
@@ -130,7 +130,7 @@ fn run_doctor_with_runtime<R: RetainedServiceRuntime>(
 fn load_member_roster(
     runtime: &impl RetainedServiceRuntime,
     home_dir: &Path,
-    team: &str,
+    team: &TeamName,
     config: Option<&config::AtmConfig>,
     findings: &mut Vec<DoctorFinding>,
 ) -> Option<MembersList> {
@@ -197,7 +197,7 @@ fn load_member_roster(
     }
 
     Some(MembersList {
-        team: TeamName::from_validated(team.to_string()),
+        team: team.clone(),
         members: ordered_member_summaries(&team_config.members, baseline),
     })
 }
@@ -215,7 +215,7 @@ fn push_doctor_error(
     });
 }
 
-fn check_inbox_directory(team: &str, inboxes_dir: &Path, findings: &mut Vec<DoctorFinding>) {
+fn check_inbox_directory(team: &TeamName, inboxes_dir: &Path, findings: &mut Vec<DoctorFinding>) {
     if !inboxes_dir.is_dir() {
         findings.push(DoctorFinding {
             severity: DoctorSeverity::Error,
@@ -248,7 +248,7 @@ fn check_inbox_directory(team: &str, inboxes_dir: &Path, findings: &mut Vec<Doct
     }
 }
 
-fn check_restore_marker(team: &str, team_dir: &Path, findings: &mut Vec<DoctorFinding>) {
+fn check_restore_marker(team: &TeamName, team_dir: &Path, findings: &mut Vec<DoctorFinding>) {
     let marker = team_dir.join(".restore-in-progress");
     if !marker.is_file() {
         return;
@@ -283,7 +283,10 @@ fn snapshot_mailbox_lock_paths(home_dir: &Path) -> BTreeSet<PathBuf> {
         };
         for lock_entry in lock_entries.filter_map(Result::ok) {
             let path = lock_entry.path();
-            if path.extension().and_then(|ext| ext.to_str()) != Some("lock") {
+            let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if !(file_name.ends_with(".lock") || file_name.contains(".lock.")) {
                 continue;
             }
             if !lock_entry

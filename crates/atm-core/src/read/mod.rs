@@ -324,7 +324,7 @@ fn read_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         outcome: if timed_out { "timeout" } else { "ok" },
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
-        sender: actor,
+        sender: actor.clone(),
         message_id: None,
         requires_ack: false,
         dry_run: false,

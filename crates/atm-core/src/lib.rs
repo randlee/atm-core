@@ -6,7 +6,7 @@ pub mod address;
 pub mod boundary;
 /// Hidden support helpers used by concrete boundary adapter crates.
 #[doc(hidden)]
-pub(crate) mod boundary_support;
+pub mod boundary_support;
 /// Mailbox cleanup workflows for read and acknowledged messages.
 pub mod clear;
 /// Internal configuration discovery and resolution helpers.

@@ -263,6 +263,18 @@ pub fn configure_atm_command<'a>(
     command
 }
 
+#[cfg(test)]
+pub fn is_daemon_start_transient(output: &Output) -> bool {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    stderr.contains("failed to read daemon request frame")
+        || stderr.contains("failed to read daemon response frame")
+        || stderr.contains("daemon socket was not published")
+        || stderr.contains("failed to connect to daemon socket")
+        || stderr.contains("failed to connect to daemon socket after auto-start")
+        || stderr.contains("failed to write daemon request frame")
+        || stderr.contains("failed to finalize daemon request frame")
+}
+
 fn ensure_test_daemon_launcher(home_dir: &std::path::Path) -> PathBuf {
     #[allow(unused_variables)]
     let hermetic_daemon = option_env!("CARGO_BIN_EXE_atm-daemon").map(PathBuf::from);
@@ -276,10 +288,20 @@ fn ensure_test_daemon_launcher(home_dir: &std::path::Path) -> PathBuf {
         return sibling;
     }
 
+    let workspace_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("target")
+        .join("debug")
+        .join(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX));
+    if workspace_binary.exists() {
+        return workspace_binary;
+    }
+
     let _ = home_dir;
     panic!(
-        "expected hermetic test daemon binary at one of: {:?}, {}",
+        "expected hermetic test daemon binary at one of: {:?}, {}, {}",
         hermetic_daemon,
-        sibling.display()
+        sibling.display(),
+        workspace_binary.display()
     );
 }

@@ -37,8 +37,22 @@ impl CliObservability {
     }
 
     pub fn fallback() -> Self {
-        Self {
-            inner: Box::new(atm_core::observability::NullObservability),
+        #[cfg(test)]
+        if let Ok(observability) = Self::new(
+            &std::env::temp_dir().join("atm-bootstrap-observability"),
+            CliObservabilityOptions::default(),
+        ) {
+            observability
+        } else {
+            Self {
+                inner: Box::new(atm_core::observability::NullObservability),
+            }
+        }
+        #[cfg(not(test))]
+        {
+            Self {
+                inner: Box::new(atm_core::observability::NullObservability),
+            }
         }
     }
 

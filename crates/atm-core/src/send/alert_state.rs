@@ -3,7 +3,7 @@ use std::fs;
 use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use tracing::warn;
@@ -87,7 +87,9 @@ pub(super) fn acquire_lock(path: &Path) -> Option<SendAlertLock> {
         return None;
     }
 
-    for _ in 0..100 {
+    let mut backoff = Duration::from_millis(1);
+    let deadline = Instant::now() + Duration::from_millis(2500);
+    loop {
         match OpenOptions::new().write(true).create_new(true).open(path) {
             Ok(mut file) => {
                 let pid = std::process::id().to_string();
@@ -107,10 +109,15 @@ pub(super) fn acquire_lock(path: &Path) -> Option<SendAlertLock> {
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
                 if evict_stale_send_alert_lock(path) {
-                    thread::sleep(Duration::from_millis(10));
                     continue;
                 }
-                thread::sleep(Duration::from_millis(10));
+                let now = Instant::now();
+                if now >= deadline {
+                    break;
+                }
+
+                thread::sleep(backoff.min(deadline.saturating_duration_since(now)));
+                backoff = backoff.saturating_mul(2).min(Duration::from_millis(25));
             }
             Err(error) => {
                 warn!(
@@ -346,6 +353,27 @@ mod tests {
         drop(guard);
         assert!(!path.exists());
     }
+
+    #[test]
+    fn acquire_send_alert_lock_immediately_reclaims_stale_pid_lock() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = lock_path(tempdir.path());
+        fs::create_dir_all(path.parent().expect("lock parent")).expect("lock parent");
+        fs::write(&path, "999999").expect("stale lock file");
+
+        let guard = acquire_lock(&path).expect("reclaimed lock guard");
+
+        assert_eq!(
+            fs::read_to_string(&path)
+                .expect("reclaimed lock contents")
+                .trim(),
+            std::process::id().to_string()
+        );
+
+        drop(guard);
+        assert!(!path.exists());
+    }
+
     #[test]
     fn register_missing_team_config_alert_deduplicates_key() {
         let tempdir = tempdir().expect("tempdir");

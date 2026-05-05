@@ -143,7 +143,7 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     let display_sender = display_sender_identity(
         &canonical_sender,
         request.sender_override.as_deref(),
-        sender_team.as_deref(),
+        sender_team.as_ref(),
         &recipient.team,
         config.as_ref(),
     );
@@ -223,11 +223,11 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     if !request.dry_run {
         let mut extra = Map::new();
         workflow::set_atm_message_id(&mut extra, atm_message_id);
-        if display_sender != canonical_sender.as_str() {
+        if display_sender != canonical_sender.clone() {
             set_canonical_sender_metadata(&mut extra, &canonical_sender);
         }
         let envelope = MessageEnvelope {
-            from: display_sender.parse().expect("display sender is valid"),
+            from: display_sender.clone(),
             text: body.clone(),
             timestamp,
             read: false,
@@ -288,7 +288,7 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         outcome: command_outcome,
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
-        sender: canonical_sender,
+        sender: canonical_sender.clone(),
         message_id: Some(outcome.message_id),
         requires_ack: outcome.requires_ack,
         dry_run: outcome.dry_run,
@@ -373,7 +373,8 @@ fn notify_team_lead_missing_config(
         return;
     }
 
-    let team_lead_inbox = match runtime.inbox_path(home_dir, team, ROLE_TEAM_LEAD) {
+    let team_lead = AgentName::from_validated(ROLE_TEAM_LEAD);
+    let team_lead_inbox = match runtime.inbox_path(home_dir, team, &team_lead) {
         Ok(path) => path,
         Err(error) => {
             warn!(
@@ -385,10 +386,6 @@ fn notify_team_lead_missing_config(
             return;
         }
     };
-
-    if !team_lead_inbox.exists() {
-        return;
-    }
 
     let config_path = team_dir.join("config.json");
     let (atm_message_id, timestamp) = AtmMessageId::new_with_timestamp();
@@ -404,16 +401,14 @@ fn notify_team_lead_missing_config(
     );
 
     let notice = MessageEnvelope {
-        from: "atm-identity-missing"
-            .parse()
-            .expect("system sender is valid"),
+        from: AgentName::from_validated("atm-identity-missing"),
         text: format!(
             "ATM warning: send used existing inbox fallback for {recipient}@{team} because team config is missing at {}. Please restore config.json.",
             config_path.display()
         ),
         timestamp,
         read: false,
-        source_team: Some(team.parse().expect("team name")),
+        source_team: Some(team.clone()),
         summary: Some(format!(
             "ATM warning: missing team config fallback used for {recipient}@{team}"
         )),
@@ -429,7 +424,7 @@ fn notify_team_lead_missing_config(
         runtime,
         home_dir,
         team,
-        &AgentName::from_validated(ROLE_TEAM_LEAD),
+        &team_lead,
         &team_lead_inbox,
         &notice,
     ) {
@@ -472,13 +467,13 @@ fn append_mailbox_message_and_seed_workflow(
 fn display_sender_identity(
     canonical_sender: &AgentName,
     sender_override: Option<&str>,
-    sender_team: Option<&str>,
-    recipient_team: &str,
+    sender_team: Option<&TeamName>,
+    recipient_team: &TeamName,
     config: Option<&config::AtmConfig>,
-) -> String {
+) -> AgentName {
     let cross_team = sender_team.is_some_and(|team| team != recipient_team);
     if !cross_team {
-        return canonical_sender.to_string();
+        return canonical_sender.clone();
     }
 
     if let Some(sender_override) = sender_override
@@ -486,14 +481,18 @@ fn display_sender_identity(
         .filter(|value| !value.is_empty())
         && config::aliases::resolve_agent(sender_override, config) == canonical_sender.as_str()
     {
-        return sender_override.to_string();
+        return AgentName::from_validated(sender_override);
     }
 
     config::aliases::preferred_alias(canonical_sender.as_str(), config)
-        .unwrap_or_else(|| canonical_sender.to_string())
+        .map(AgentName::from_validated)
+        .unwrap_or_else(|| canonical_sender.clone())
 }
 
-pub(super) fn qualified_sender_identity(sender: &AgentName, sender_team: Option<&str>) -> String {
+pub(super) fn qualified_sender_identity(
+    sender: &AgentName,
+    sender_team: Option<&TeamName>,
+) -> String {
     sender_team
         .map(|team| format!("{sender}@{team}"))
         .unwrap_or_else(|| sender.to_string())

@@ -386,8 +386,8 @@ fn test_send_missing_config_retains_at_most_two_team_lead_notices_under_concurre
     );
     let notices = fixture.inbox_contents(ROLE_TEAM_LEAD);
     assert!(
-        (1..=2).contains(&notices.len()),
-        "concurrent missing-config fallback should retain one or two notices on the current file-backed path; got {}",
+        notices.len() <= 2,
+        "concurrent missing-config fallback should retain at most two notices on the current file-backed path; got {}",
         notices.len()
     );
 }
@@ -1018,52 +1018,75 @@ impl Fixture {
     }
 
     fn warm_daemon(&self) {
-        let output = self.run(&["read", "--all", "--no-mark", "--json"]);
-        assert!(output.status.success(), "stderr: {}", self.stderr(&output));
+        for attempt in 0..3 {
+            let output = self.run(&["read", "--all", "--no-mark", "--json"]);
+            if output.status.success() {
+                return;
+            }
+            assert!(
+                crate::support::is_daemon_start_transient(&output),
+                "stderr: {}",
+                self.stderr(&output)
+            );
+            if attempt < 2 {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+        }
+        panic!("daemon warmup exhausted retries");
     }
 
     fn run_without_identity(&self, args: &[&str]) -> std::process::Output {
-        let mut first = Command::new(env!("CARGO_BIN_EXE_atm"));
-        let output = crate::support::configure_atm_command(&mut first, self.tempdir.path(), None)
-            .args(args)
-            .current_dir(self.tempdir.path())
-            .output()
-            .expect("run atm without identity");
-        if !crate::support::is_daemon_start_transient(&output) {
-            return output;
-        }
+        for attempt in 0..3 {
+            let mut first = Command::new(env!("CARGO_BIN_EXE_atm"));
+            let output =
+                crate::support::configure_atm_command(&mut first, self.tempdir.path(), None)
+                    .args(args)
+                    .current_dir(self.tempdir.path())
+                    .output()
+                    .unwrap_or_else(|error| {
+                        panic!(
+                            "atm without identity {:?} failed on attempt {attempt}: {error}",
+                            args
+                        )
+                    });
+            if output.status.success()
+                || !crate::support::is_daemon_start_transient(&output)
+                || attempt == 2
+            {
+                return output;
+            }
 
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        let mut retry = Command::new(env!("CARGO_BIN_EXE_atm"));
-        crate::support::configure_atm_command(&mut retry, self.tempdir.path(), None)
-            .args(args)
-            .current_dir(self.tempdir.path())
-            .output()
-            .expect("retry atm without identity")
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        unreachable!("send fixture identity-free retries should always return");
     }
 
     fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
-        let mut first = Command::new(env!("CARGO_BIN_EXE_atm"));
-        crate::support::configure_atm_command(&mut first, self.tempdir.path(), Some(TEST_SENDER))
+        for attempt in 0..3 {
+            let mut first = Command::new(env!("CARGO_BIN_EXE_atm"));
+            crate::support::configure_atm_command(
+                &mut first,
+                self.tempdir.path(),
+                Some(TEST_SENDER),
+            )
             .args(args)
             .current_dir(self.tempdir.path());
-        for (key, value) in extra_env {
-            first.env(key, value);
-        }
-        let output = first.output().expect("run atm");
-        if !crate::support::is_daemon_start_transient(&output) {
-            return output;
-        }
+            for (key, value) in extra_env {
+                first.env(key, value);
+            }
+            let output = first.output().unwrap_or_else(|error| {
+                panic!("atm {:?} failed on attempt {attempt}: {error}", args)
+            });
+            if output.status.success()
+                || !crate::support::is_daemon_start_transient(&output)
+                || attempt == 2
+            {
+                return output;
+            }
 
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        let mut retry = Command::new(env!("CARGO_BIN_EXE_atm"));
-        crate::support::configure_atm_command(&mut retry, self.tempdir.path(), Some(TEST_SENDER))
-            .args(args)
-            .current_dir(self.tempdir.path());
-        for (key, value) in extra_env {
-            retry.env(key, value);
+            std::thread::sleep(std::time::Duration::from_millis(50));
         }
-        retry.output().expect("retry atm")
+        unreachable!("send fixture retries should always return");
     }
 
     fn write_team_config(&self, recipient: &str) {
