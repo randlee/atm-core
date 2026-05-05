@@ -20,7 +20,7 @@ pub use report::{
     DoctorSummary,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DoctorQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
@@ -409,7 +409,7 @@ mod tests {
         health: StubHealth,
     }
 
-    impl crate::observability::sealed::Sealed for StubObservability {}
+    impl crate::boundary::sealed::Sealed for StubObservability {}
 
     impl ObservabilityPort for StubObservability {
         fn emit(&self, _event: crate::observability::CommandEvent) -> Result<(), AtmError> {

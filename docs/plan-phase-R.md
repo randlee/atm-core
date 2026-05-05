@@ -525,6 +525,11 @@ Review targets:
        ownership from retained command/service code
      - carry forward the remaining `R.3.1` service-shell residuals for these
        domains before R.7 final orchestration cutover
+     - formal R.6 disposition:
+       daemon-owned config/inbox/watch adapters land in this sprint, but the
+       retained `send` / `read` / `ack` / `clear` command-family cutover to
+       `ConfigIngress` / `InboxIngress` / `InboxExport` remains deferred to
+       `R.7`
    - Acceptance:
      - config/inbox/notification/watch behavior is owned by explicit adapters
      - retained service code consumes those behaviors only through boundary

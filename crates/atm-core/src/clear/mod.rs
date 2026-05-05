@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use chrono::{DateTime, TimeDelta, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::debug;
 
@@ -20,7 +20,7 @@ use crate::types::{AgentName, MessageClass, SourceIndex, TeamName};
 use crate::workflow;
 
 /// Parameters for clearing read or acknowledged mailbox messages.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClearQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
@@ -33,16 +33,16 @@ pub struct ClearQuery {
 }
 
 /// Counts of removed mailbox messages by ATM display class.
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RemovedByClass {
     pub acknowledged: usize,
     pub read: usize,
 }
 
 /// Result of one mailbox cleanup command.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClearOutcome {
-    pub action: &'static str,
+    pub action: String,
     pub team: TeamName,
     pub agent: AgentName,
     pub removed_total: usize,
@@ -167,7 +167,7 @@ fn clear_mail_with_runtime<R: RetainedServiceRuntime>(
     };
 
     let outcome = ClearOutcome {
-        action: "clear",
+        action: "clear".to_string(),
         team: target.team.clone(),
         agent: target.agent.clone(),
         removed_total,
@@ -181,7 +181,7 @@ fn clear_mail_with_runtime<R: RetainedServiceRuntime>(
         outcome: if query.dry_run { "dry_run" } else { "ok" },
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
-        sender: actor.clone(),
+        sender: actor.to_string(),
         message_id: None,
         requires_ack: false,
         dry_run: query.dry_run,
