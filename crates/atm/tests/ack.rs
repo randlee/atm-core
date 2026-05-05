@@ -337,7 +337,7 @@ impl Fixture {
             .args(args)
             .current_dir(self.tempdir.path())
             .output()
-            .expect("retry atm")
+            .unwrap_or_else(|error| panic!("retry atm {:?} failed: {error}", args))
     }
 
     fn warm_daemon(&self) {
