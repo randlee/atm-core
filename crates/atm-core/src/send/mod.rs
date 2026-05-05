@@ -223,11 +223,11 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     if !request.dry_run {
         let mut extra = Map::new();
         workflow::set_atm_message_id(&mut extra, atm_message_id);
-        if display_sender != canonical_sender.as_str() {
+        if display_sender != canonical_sender.clone() {
             set_canonical_sender_metadata(&mut extra, &canonical_sender);
         }
         let envelope = MessageEnvelope {
-            from: display_sender.parse().expect("display sender is valid"),
+            from: display_sender.clone(),
             text: body.clone(),
             timestamp,
             read: false,
@@ -473,10 +473,10 @@ fn display_sender_identity(
     sender_team: Option<&TeamName>,
     recipient_team: &TeamName,
     config: Option<&config::AtmConfig>,
-) -> String {
+) -> AgentName {
     let cross_team = sender_team.is_some_and(|team| team != recipient_team);
     if !cross_team {
-        return canonical_sender.to_string();
+        return canonical_sender.clone();
     }
 
     if let Some(sender_override) = sender_override
@@ -484,11 +484,12 @@ fn display_sender_identity(
         .filter(|value| !value.is_empty())
         && config::aliases::resolve_agent(sender_override, config) == canonical_sender.as_str()
     {
-        return sender_override.to_string();
+        return AgentName::from_validated(sender_override);
     }
 
     config::aliases::preferred_alias(canonical_sender.as_str(), config)
-        .unwrap_or_else(|| canonical_sender.to_string())
+        .map(AgentName::from_validated)
+        .unwrap_or_else(|| canonical_sender.clone())
 }
 
 pub(super) fn qualified_sender_identity(
