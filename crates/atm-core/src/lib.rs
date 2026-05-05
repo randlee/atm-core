@@ -43,6 +43,9 @@ pub mod roles;
 pub mod schema;
 /// Mailbox send workflows and request/response models.
 pub mod send;
+/// Internal service-owned seams that isolate retained command orchestration
+/// from direct helper/path access.
+pub(crate) mod service_runtime;
 /// Retained local team discovery, roster repair, and backup/restore workflows.
 pub mod team_admin;
 /// Shared synthetic test identities and role constants used across crate tests.
