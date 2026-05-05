@@ -323,14 +323,17 @@ impl boundary::sealed::Sealed for DaemonObservability {}
 
 impl ObservabilityPort for DaemonObservability {
     fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {
+        // The daemon currently uses a null-object observability sink until the retained log adapter lands.
         Ok(())
     }
 
     fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
+        // Query returns an empty snapshot because the daemon does not expose a retained log backend yet.
         Ok(AtmLogSnapshot::default())
     }
 
     fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, AtmError> {
+        // Follow returns an empty session because live daemon log streaming is not implemented yet.
         Ok(LogTailSession::empty())
     }
 

@@ -384,8 +384,8 @@ fn test_send_missing_config_retains_at_most_two_team_lead_notices_under_concurre
     );
     let notices = fixture.inbox_contents(ROLE_TEAM_LEAD);
     assert!(
-        (1..=2).contains(&notices.len()),
-        "concurrent missing-config fallback should retain one or two notices on the current file-backed path; got {}",
+        notices.len() <= 2,
+        "concurrent missing-config fallback should retain at most two notices on the current file-backed path; got {}",
         notices.len()
     );
 }

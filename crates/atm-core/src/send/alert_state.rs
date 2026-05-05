@@ -87,6 +87,7 @@ pub(super) fn acquire_lock(path: &Path) -> Option<SendAlertLock> {
         return None;
     }
 
+    let mut backoff = Duration::from_millis(1);
     for _ in 0..100 {
         match OpenOptions::new().write(true).create_new(true).open(path) {
             Ok(mut file) => {
@@ -107,10 +108,12 @@ pub(super) fn acquire_lock(path: &Path) -> Option<SendAlertLock> {
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
                 if evict_stale_send_alert_lock(path) {
-                    thread::sleep(Duration::from_millis(10));
+                    thread::sleep(backoff);
+                    backoff = backoff.saturating_mul(2).min(Duration::from_millis(25));
                     continue;
                 }
-                thread::sleep(Duration::from_millis(10));
+                thread::sleep(backoff);
+                backoff = backoff.saturating_mul(2).min(Duration::from_millis(25));
             }
             Err(error) => {
                 warn!(
