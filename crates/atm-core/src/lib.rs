@@ -30,6 +30,8 @@ pub mod observability;
 pub(crate) mod persistence;
 /// Internal process-liveness helpers shared across lock implementations.
 pub(crate) mod process;
+/// Shared protocol DTOs used by boundary transport and adapter contracts.
+pub mod protocol;
 /// Mailbox read/query workflows and output models.
 pub mod read;
 /// Reserved production role constants shared across runtime and tests.
@@ -64,3 +66,4 @@ pub use boundary::{
     ServerTransportResponse, StatusSource, TaskStore, TaskStoreRequest, TaskStoreResponse,
     WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
 };
+pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};

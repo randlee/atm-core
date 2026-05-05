@@ -1,6 +1,7 @@
 //! Phase R boundary skeleton contracts.
 
 use crate::error::AtmError;
+use crate::protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};
 
 /// Workspace-convention seal only; not compiler-enforced outside this crate.
 ///
@@ -12,64 +13,79 @@ pub mod sealed {
 }
 
 /// Stub ATM request envelope for the Phase R protocol skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct AtmRequestEnvelope;
+///
+/// Prefer `RequestEnvelope` from `atm_core::protocol` as the canonical type.
+pub type AtmRequestEnvelope = RequestEnvelope;
 
 /// Stub ATM response envelope for the Phase R protocol skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct AtmResponseEnvelope;
+///
+/// Prefer `ResponseEnvelope` from `atm_core::protocol` as the canonical type.
+pub type AtmResponseEnvelope = ResponseEnvelope;
 
 /// Stub ATM frame payload for the Phase R protocol skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct AtmFramePayload;
+///
+/// Prefer `FramePayload` from `atm_core::protocol` as the canonical type.
+pub type AtmFramePayload = FramePayload;
 
 /// Stub outbound client-transport request for the Phase R skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ClientTransportRequest;
+///
+/// Compatibility alias to the canonical protocol request type.
+pub type ClientTransportRequest = RequestEnvelope;
 
 /// Stub outbound client-transport response for the Phase R skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ClientTransportResponse;
+///
+/// Compatibility alias to the canonical protocol response type.
+pub type ClientTransportResponse = ResponseEnvelope;
 
 /// Stub inbound server-transport request for the Phase R skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ServerTransportRequest;
+///
+/// Compatibility alias to the canonical protocol frame type.
+pub type ServerTransportRequest = FramePayload;
 
 /// Stub inbound server-transport response for the Phase R skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ServerTransportResponse;
+///
+/// Compatibility alias to the canonical protocol frame type.
+pub type ServerTransportResponse = FramePayload;
 
 /// Stub dispatcher request envelope for the Phase R skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct DispatchRequestEnvelope;
+///
+/// Compatibility alias to the canonical protocol request type.
+pub type DispatchRequestEnvelope = RequestEnvelope;
 
 /// Stub dispatcher response envelope for the Phase R skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct DispatchResponseEnvelope;
+///
+/// Compatibility alias to the canonical protocol response type.
+pub type DispatchResponseEnvelope = ResponseEnvelope;
 
 /// Stub outbound notification event for the Phase R skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct NotificationEvent;
+///
+/// Canonical payload is `protocol::NotificationEvent`.
+pub type NotificationEvent = crate::protocol::NotificationEvent;
 
 /// Stub inbound runtime-status snapshot for the Phase R skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct RuntimeStatusSnapshot;
+///
+/// Canonical payload is `protocol::RuntimeStatusSnapshot`.
+pub type RuntimeStatusSnapshot = crate::protocol::RuntimeStatusSnapshot;
 
 /// Stub watch-subscription request for the Phase R skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct WatchSubscriptionRequest;
+///
+/// Canonical payload is `protocol::WatchSubscriptionRequest`.
+pub type WatchSubscriptionRequest = crate::protocol::WatchSubscriptionRequest;
 
 /// Stub watch event batch for the Phase R skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct WatchEventBatch;
+///
+/// Canonical payload is `protocol::WatchEventBatch`.
+pub type WatchEventBatch = crate::protocol::WatchEventBatch;
 
 /// Stub reconcile request for the Phase R skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ReconcileRequest;
+///
+/// Canonical payload is `protocol::ReconcileRequest`.
+pub type ReconcileRequest = crate::protocol::ReconcileRequest;
 
 /// Stub reconcile result for the Phase R skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ReconcileResult;
+///
+/// Canonical payload is `protocol::ReconcileResult`.
+pub type ReconcileResult = crate::protocol::ReconcileResult;
 
 /// Stub mail-store request for the Phase R skeleton.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -305,28 +321,92 @@ pub type InboxExportRequest = InboxExportRecordRequest;
 pub type InboxExportResponse = InboxExportRecordResponse;
 
 /// BOUNDARY-AtmProtocol — see docs/atm-core/boundaries.md.
-pub trait AtmProtocol: sealed::Sealed {}
+pub trait AtmProtocol: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when a protocol request envelope cannot be converted
+    /// into a frame payload.
+    fn request_to_frame(&self, request: RequestEnvelope) -> Result<FramePayload, AtmError>;
+
+    /// # Errors
+    ///
+    /// Returns `AtmError` when a frame payload cannot be decoded into a
+    /// protocol request envelope.
+    fn request_from_frame(&self, frame: FramePayload) -> Result<RequestEnvelope, AtmError>;
+
+    /// # Errors
+    ///
+    /// Returns `AtmError` when a protocol response envelope cannot be
+    /// converted into a frame payload.
+    fn response_to_frame(&self, response: ResponseEnvelope) -> Result<FramePayload, AtmError>;
+
+    /// # Errors
+    ///
+    /// Returns `AtmError` when a frame payload cannot be decoded into a
+    /// protocol response envelope.
+    fn response_from_frame(&self, frame: FramePayload) -> Result<ResponseEnvelope, AtmError>;
+}
 
 /// BOUNDARY-ClientTransport — see docs/atm-core/boundaries.md.
-pub trait ClientTransport: sealed::Sealed {}
+pub trait ClientTransport: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when the framed request cannot be delivered or when
+    /// the peer returns an unrecoverable protocol response.
+    fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError>;
+}
 
 /// BOUNDARY-ServerTransport — see docs/atm-core/boundaries.md.
-pub trait ServerTransport: sealed::Sealed {}
+pub trait ServerTransport: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when framing, transport serving, or dispatch handoff
+    /// cannot proceed reliably.
+    fn serve(&self, dispatcher: &dyn RequestDispatcher) -> Result<(), AtmError>;
+}
 
 /// BOUNDARY-RequestDispatcher — see docs/atm-core/boundaries.md.
-pub trait RequestDispatcher: sealed::Sealed {}
+pub trait RequestDispatcher: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when protocol request routing or handler dispatch
+    /// cannot produce a valid response.
+    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError>;
+}
 
 /// BOUNDARY-NotificationSink — see docs/atm-core/boundaries.md.
-pub trait NotificationSink: sealed::Sealed {}
+pub trait NotificationSink: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when notification delivery cannot be executed.
+    fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError>;
+}
 
 /// BOUNDARY-StatusSource — see docs/atm-core/boundaries.md.
-pub trait StatusSource: sealed::Sealed {}
+pub trait StatusSource: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when a runtime status snapshot cannot be collected.
+    fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError>;
+}
 
 /// BOUNDARY-WatchEventSource — see docs/atm-core/boundaries.md.
-pub trait WatchEventSource: sealed::Sealed {}
+pub trait WatchEventSource: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when watch subscriptions cannot be created or events
+    /// cannot be delivered as a batch.
+    fn poll(&self, request: WatchSubscriptionRequest) -> Result<WatchEventBatch, AtmError>;
+}
 
 /// BOUNDARY-ReconcileCoordinator — see docs/atm-core/boundaries.md.
-pub trait ReconcileCoordinator: sealed::Sealed {}
+pub trait ReconcileCoordinator: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when reconcile policy cannot be executed for the
+    /// request input.
+    fn reconcile(&self, request: ReconcileRequest) -> Result<ReconcileResult, AtmError>;
+}
 
 /// BOUNDARY-MailStore — see docs/atm-core/boundaries.md.
 pub trait MailStore: sealed::Sealed {

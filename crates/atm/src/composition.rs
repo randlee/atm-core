@@ -3,6 +3,7 @@
 use atm_core::boundary::ClientTransport;
 use atm_core::error::AtmError;
 use atm_core::observability::{NullObservability, ObservabilityPort};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use std::error::Error as StdError;
 use std::fmt;
 
@@ -60,6 +61,13 @@ impl CliComposition {
 
     pub(crate) fn transport(&self) -> &dyn ClientTransport {
         self.transport.as_ref()
+    }
+
+    pub(crate) fn send_request(
+        &self,
+        request: RequestEnvelope,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        self.transport.send(request)
     }
 
     pub(crate) fn observability_port(&self) -> &(dyn ObservabilityPort + Send + Sync) {

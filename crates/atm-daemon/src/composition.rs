@@ -3,7 +3,10 @@ use crate::{
     DaemonReconcileCoordinator, DaemonStatusSource, FileWatchEventSource,
     LocalSocketServerTransport,
 };
-use atm_core::error::AtmError;
+use atm_core::{
+    boundary::{RequestDispatcher, ServerTransport},
+    error::AtmError,
+};
 use std::error::Error as StdError;
 use std::fmt;
 
@@ -91,6 +94,10 @@ impl RuntimeComposition {
             "Finish RuntimeComposition startup wiring before invoking the daemon entrypoint.",
         )
         .with_source(RuntimeStartStubError::RuntimeStartNotWired))
+    }
+
+    pub(crate) fn serve(&self, dispatcher: &dyn RequestDispatcher) -> Result<(), AtmError> {
+        self.server_transport.serve(dispatcher)
     }
 }
 
