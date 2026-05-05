@@ -684,6 +684,7 @@ dependencies = [
  "anyhow",
  "cargo_metadata",
  "clap",
+ "quote",
  "serde",
  "serde_json",
  "syn",

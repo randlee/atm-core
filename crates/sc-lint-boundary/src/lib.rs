@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use anyhow::Context;
 use anyhow::Result;
 use cargo_metadata::MetadataCommand;
+use quote::ToTokens;
 use serde::Serialize;
 use syn::Attribute;
 use syn::File;
@@ -202,6 +203,7 @@ impl Parse for ParsedLintInput {
 }
 
 pub fn analyze_workspace(options: &AnalyzeOptions) -> Result<FindingsReport> {
+    validate_rule_filter(options.rule.as_deref())?;
     let graph = build_workspace_graph(&options.root)?;
     let findings = analyze_cycles(&graph, options.rule.as_deref());
     let scanned_crates = graph
@@ -393,6 +395,13 @@ fn build_workspace_graph(root: &Path) -> Result<GraphExport> {
     }
 
     Ok(builder.finish())
+}
+
+fn validate_rule_filter(rule_filter: Option<&str>) -> Result<()> {
+    match rule_filter {
+        None | Some("cycles") => Ok(()),
+        Some(other) => anyhow::bail!("unsupported rule filter `{other}`; supported: cycles"),
+    }
 }
 
 fn ingest_module_items(
@@ -595,7 +604,7 @@ fn ingest_module_items(
                 );
             }
             Item::Impl(item_impl) => {
-                let owner_name = impl_owner_name(&item_impl.self_ty);
+                let owner_name = impl_owner_name(&item_impl.self_ty)?;
                 let owner_node_id = format!("{parent_module_id}::{owner_name}");
 
                 if !builder.nodes.iter().any(|node| node.id == owner_node_id) {
@@ -636,11 +645,10 @@ fn ingest_module_items(
                             } else {
                                 "inherent"
                             }),
-                            impl_trait: item_impl.trait_.as_ref().and_then(|(_, path, _)| {
-                                path.segments
-                                    .last()
-                                    .map(|segment| segment.ident.to_string())
-                            }),
+                            impl_trait: item_impl
+                                .trait_
+                                .as_ref()
+                                .map(|(_, path, _)| path_to_string(path)),
                             attributes: parse_lint_attributes(&method.attrs)?,
                         });
                         builder.add_edge("declares", owner_node_id.clone(), method_id.clone());
@@ -849,16 +857,23 @@ fn parse_rust_file(path: &Path) -> Result<File> {
         .with_context(|| format!("failed to parse Rust source {}", path.display()))
 }
 
-fn impl_owner_name(self_ty: &Type) -> String {
+fn impl_owner_name(self_ty: &Type) -> Result<String> {
     match self_ty {
         Type::Path(type_path) => type_path
             .path
             .segments
             .last()
             .map(|segment| segment.ident.to_string())
-            .unwrap_or_else(|| "impl_owner".to_string()),
-        _ => "impl_owner".to_string(),
+            .ok_or_else(|| anyhow::anyhow!("impl owner path is missing a terminal segment")),
+        _ => anyhow::bail!(
+            "unsupported impl owner type `{}`; only path owners are supported",
+            self_ty.to_token_stream()
+        ),
     }
+}
+
+fn path_to_string(path: &syn::Path) -> String {
+    path.to_token_stream().to_string().replace(' ', "")
 }
 
 fn is_supported_target(target: &cargo_metadata::Target) -> bool {
@@ -883,13 +898,7 @@ fn load_metadata(root: &Path) -> Result<cargo_metadata::Metadata> {
         .with_context(|| format!("failed to load cargo metadata for {}", root.display()))
 }
 
-fn analyze_cycles(graph: &GraphExport, rule_filter: Option<&str>) -> Vec<Finding> {
-    if let Some(rule) = rule_filter {
-        if rule != "cycles" {
-            return Vec::new();
-        }
-    }
-
+fn analyze_cycles(graph: &GraphExport, _rule_filter: Option<&str>) -> Vec<Finding> {
     let node_map: BTreeMap<_, _> = graph
         .nodes
         .iter()
@@ -927,6 +936,8 @@ fn analyze_cycles(graph: &GraphExport, rule_filter: Option<&str>) -> Vec<Finding
                 .or_default()
                 .push(edge);
         }
+        let mut inherent_nodes = BTreeSet::new();
+        let mut trait_nodes: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
 
         for (source_node_id, source_edges) in per_source {
             let allow_rule = source_edges.iter().any(|edge| {
@@ -957,16 +968,11 @@ fn analyze_cycles(graph: &GraphExport, rule_filter: Option<&str>) -> Vec<Finding
                     && edge.source_impl_kind != Some("trait")
             });
             if is_type_method_self_loop {
-                findings.push(Finding {
-                    rule_id: "SCB-CYCLE-002".to_string(),
-                    kind: "type_method_self_loop".to_string(),
-                    message: format!("type/method self-loop on owner {owner_id}"),
-                    owner_ids: vec![owner_id.clone()],
-                    node_ids: source_edges
-                        .iter()
-                        .flat_map(|edge| edge.node_ids.clone())
-                        .collect(),
-                });
+                for edge in source_edges {
+                    for node_id in &edge.node_ids {
+                        inherent_nodes.insert(node_id.clone());
+                    }
+                }
                 continue;
             }
 
@@ -981,17 +987,33 @@ fn analyze_cycles(graph: &GraphExport, rule_filter: Option<&str>) -> Vec<Finding
                     .get(&source_node_id)
                     .and_then(|node| node.impl_trait.clone())
                     .unwrap_or_else(|| "unknown_trait".to_string());
-                findings.push(Finding {
-                    rule_id: "SCB-CYCLE-003".to_string(),
-                    kind: "trait_impl_self_loop".to_string(),
-                    message: format!("trait-impl self-loop on owner {owner_id} via {trait_name}"),
-                    owner_ids: vec![owner_id.clone()],
-                    node_ids: source_edges
-                        .iter()
-                        .flat_map(|edge| edge.node_ids.clone())
-                        .collect(),
-                });
+                let entry = trait_nodes.entry(trait_name).or_default();
+                for edge in source_edges {
+                    for node_id in &edge.node_ids {
+                        entry.insert(node_id.clone());
+                    }
+                }
             }
+        }
+
+        if !inherent_nodes.is_empty() {
+            findings.push(Finding {
+                rule_id: "SCB-CYCLE-002".to_string(),
+                kind: "type_method_self_loop".to_string(),
+                message: format!("type/method self-loop on owner {owner_id}"),
+                owner_ids: vec![owner_id.clone()],
+                node_ids: inherent_nodes.into_iter().collect(),
+            });
+        }
+
+        for (trait_name, node_ids) in trait_nodes {
+            findings.push(Finding {
+                rule_id: "SCB-CYCLE-003".to_string(),
+                kind: "trait_impl_self_loop".to_string(),
+                message: format!("trait-impl self-loop on owner {owner_id} via {trait_name}"),
+                owner_ids: vec![owner_id.clone()],
+                node_ids: node_ids.into_iter().collect(),
+            });
         }
     }
 
@@ -1248,7 +1270,7 @@ mod tests {
 
                     impl InlineType {
                         #[sc_lint(boundary.allow("cycle.type_method_self_loop"))]
-                        pub fn helper(&self) {}
+                        pub fn helper(&self) -> InlineType { InlineType }
                     }
                 }
             "#,
@@ -1333,6 +1355,18 @@ mod tests {
                 values: vec!["cycle.type_method_self_loop".to_string()],
             }]
         );
+        assert!(graph.edges.iter().any(|edge| {
+            edge.kind == "declares"
+                && edge.from == "crate::example::example::module::crate::inline_mod::InlineType"
+                && edge.to
+                    == "crate::example::example::module::crate::inline_mod::InlineType::helper"
+        }));
+        assert!(graph.edges.iter().any(|edge| {
+            edge.kind == "references"
+                && edge.from
+                    == "crate::example::example::module::crate::inline_mod::InlineType::helper"
+                && edge.to == "crate::example::example::module::crate::inline_mod::InlineType"
+        }));
     }
 
     #[test]
@@ -1371,6 +1405,27 @@ mod tests {
         assert_eq!(report.scanned_crates, 1);
         assert_eq!(report.status, "pass");
         assert!(report.findings.is_empty());
+    }
+
+    #[test]
+    fn rejects_unknown_rule_filter() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source("example", "lib.rs", "pub struct Example;");
+
+        let error = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("unknown".to_string()),
+        })
+        .unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains("unsupported rule filter `unknown`")
+        );
     }
 
     #[test]
@@ -1469,6 +1524,93 @@ mod tests {
 
         assert_eq!(report.status, "pass");
         assert!(report.findings.is_empty());
+    }
+
+    #[test]
+    fn keeps_unsuppressed_method_flagged_when_other_method_is_allowed() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                pub struct Loop;
+
+                impl Loop {
+                    #[sc_lint(boundary.allow("cycle.type_method_self_loop"))]
+                    pub fn allowed() -> Loop {
+                        Loop
+                    }
+
+                    pub fn flagged() -> Loop {
+                        Loop
+                    }
+                }
+            "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("cycles".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "pass");
+        assert_eq!(report.findings.len(), 1);
+        assert_eq!(report.findings[0].rule_id, "SCB-CYCLE-002");
+        assert!(
+            report.findings[0]
+                .node_ids
+                .iter()
+                .any(|id| id.ends_with("::flagged"))
+        );
+        assert!(
+            !report.findings[0]
+                .node_ids
+                .iter()
+                .any(|id| id.ends_with("::allowed"))
+        );
+    }
+
+    #[test]
+    fn emits_both_inherent_and_trait_self_loop_findings_for_same_owner() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                pub struct Loop;
+
+                impl Loop {
+                    pub fn build() -> Loop {
+                        Loop
+                    }
+                }
+
+                impl core::fmt::Display for Loop {
+                    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                        let _ = Loop;
+                        write!(f, "loop")
+                    }
+                }
+            "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("cycles".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "pass");
+        assert_eq!(report.findings.len(), 2);
+        assert!(report.findings.iter().any(|f| f.rule_id == "SCB-CYCLE-002"));
+        assert!(report.findings.iter().any(|f| f.rule_id == "SCB-CYCLE-003"));
     }
 
     #[test]
@@ -1577,6 +1719,13 @@ mod tests {
         assert_eq!(report.status, "fail");
         assert_eq!(report.findings.len(), 1);
         assert_eq!(report.findings[0].rule_id, "SCB-CYCLE-001");
+        assert_eq!(
+            report.findings[0].owner_ids,
+            vec![
+                "crate::example::example::module::crate::left::Alpha".to_string(),
+                "crate::example::example::module::crate::right::Beta".to_string(),
+            ]
+        );
     }
 
     #[test]
@@ -1591,6 +1740,41 @@ mod tests {
                 pub struct Alpha { pub beta: Beta }
                 pub struct Beta { pub value: usize }
             "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("cycles".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "pass");
+        assert!(report.findings.is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_cross_module_acyclic_chain() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                mod left;
+                mod right;
+            "#,
+        );
+        fixture.write_source(
+            "example",
+            "left.rs",
+            "pub struct Alpha { pub beta: crate::right::Beta }",
+        );
+        fixture.write_source(
+            "example",
+            "right.rs",
+            "pub struct Beta { pub value: usize }",
         );
 
         let report = analyze_workspace(&AnalyzeOptions {
@@ -1635,13 +1819,157 @@ mod tests {
         .unwrap();
 
         assert_eq!(report.status, "pass");
-        assert_eq!(report.findings.len(), 2);
-        assert!(
-            report
-                .findings
-                .iter()
-                .all(|finding| finding.rule_id == "SCB-CYCLE-002")
+        assert_eq!(report.findings.len(), 1);
+        assert_eq!(report.findings[0].rule_id, "SCB-CYCLE-002");
+    }
+
+    #[test]
+    fn resolves_self_prefixed_references() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                pub struct Alpha;
+                pub struct Beta(self::Alpha);
+            "#,
         );
+
+        let graph = export_workspace_graph(&ExportGraphOptions {
+            root: fixture.root().to_path_buf(),
+        })
+        .unwrap();
+
+        assert!(graph.edges.iter().any(|edge| {
+            edge.kind == "references"
+                && edge.from == "crate::example::example::module::crate::Beta"
+                && edge.to == "crate::example::example::module::crate::Alpha"
+        }));
+    }
+
+    #[test]
+    fn resolves_super_prefixed_references() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                pub struct Alpha;
+                mod inner;
+            "#,
+        );
+        fixture.write_source("example", "inner.rs", "pub struct Beta(super::Alpha);");
+
+        let graph = export_workspace_graph(&ExportGraphOptions {
+            root: fixture.root().to_path_buf(),
+        })
+        .unwrap();
+
+        assert!(graph.edges.iter().any(|edge| {
+            edge.kind == "references"
+                && edge.from == "crate::example::example::module::crate::inner::Beta"
+                && edge.to == "crate::example::example::module::crate::Alpha"
+        }));
+    }
+
+    #[test]
+    fn does_not_promote_function_owned_references_into_module_cycles() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                mod left;
+                mod right;
+            "#,
+        );
+        fixture.write_source(
+            "example",
+            "left.rs",
+            "pub fn use_right() -> crate::right::Beta { todo!() }\npub struct Alpha;",
+        );
+        fixture.write_source(
+            "example",
+            "right.rs",
+            "pub fn use_left() -> crate::left::Alpha { todo!() }\npub struct Beta;",
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("cycles".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "pass");
+        assert!(report.findings.is_empty());
+    }
+
+    #[test]
+    fn preserves_full_trait_path_in_trait_impl_self_loop_messages() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                mod one { pub trait Display { fn render(&self); } }
+                pub struct Loop;
+
+                impl one::Display for Loop {
+                    fn render(&self) {
+                        let _ = Loop;
+                    }
+                }
+            "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("cycles".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.findings.len(), 1);
+        assert_eq!(report.findings[0].rule_id, "SCB-CYCLE-003");
+        assert!(report.findings[0].message.contains("one::Display"));
+    }
+
+    #[test]
+    fn rejects_non_path_impl_owners() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                pub struct Loop;
+
+                impl core::fmt::Display for &Loop {
+                    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                        write!(f, "loop")
+                    }
+                }
+            "#,
+        );
+
+        let error = export_workspace_graph(&ExportGraphOptions {
+            root: fixture.root().to_path_buf(),
+        })
+        .unwrap_err();
+
+        let message = error.to_string();
+        assert!(message.contains("unsupported impl owner type"));
+        assert!(message.contains("&Loop") || message.contains("& Loop"));
     }
 
     #[test]
@@ -1702,6 +2030,90 @@ mod tests {
                 .to_string()
                 .contains("boundary.allow rule ids must not be empty")
         );
+    }
+
+    #[test]
+    fn fails_when_sc_lint_attribute_has_no_allow_args() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            "#[sc_lint(boundary.allow())] pub struct Example;",
+        );
+
+        let error = export_workspace_graph(&ExportGraphOptions {
+            root: fixture.root().to_path_buf(),
+        })
+        .unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains("boundary.allow requires at least one rule id string")
+        );
+    }
+
+    #[test]
+    fn fails_when_sc_lint_attribute_uses_unknown_boundary_directive() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            "#[sc_lint(boundary.unknown(\"x\"))] pub struct Example;",
+        );
+
+        let error = export_workspace_graph(&ExportGraphOptions {
+            root: fixture.root().to_path_buf(),
+        })
+        .unwrap_err();
+
+        assert!(error.to_string().contains("unsupported boundary directive"));
+    }
+
+    #[test]
+    fn fails_when_sc_lint_attribute_uses_unknown_scope() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            "#[sc_lint(other.internal_only)] pub struct Example;",
+        );
+
+        let error = export_workspace_graph(&ExportGraphOptions {
+            root: fixture.root().to_path_buf(),
+        })
+        .unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains("unsupported sc_lint scope `other`")
+        );
+    }
+
+    #[test]
+    fn fails_when_sc_lint_attribute_has_mixed_valid_and_invalid_directives() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            "#[sc_lint(boundary.internal_only, boundary.unknown(\"x\"))] pub struct Example;",
+        );
+
+        let error = export_workspace_graph(&ExportGraphOptions {
+            root: fixture.root().to_path_buf(),
+        })
+        .unwrap_err();
+
+        assert!(error.to_string().contains("unsupported boundary directive"));
     }
 
     struct WorkspaceFixture {
