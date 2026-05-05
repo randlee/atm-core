@@ -4,15 +4,44 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use crate::ack::{AckOutcome, AckRequest};
+use crate::clear::{ClearOutcome, ClearQuery};
+use crate::doctor::{DoctorQuery, DoctorReport};
+use crate::read::{ReadOutcome, ReadQuery};
+use crate::send::{SendOutcome, SendRequest};
 use crate::types::{AgentName, TeamName};
 
+/// Shared protocol send-shaped request envelope.
+#[derive(Debug, Clone)]
+pub enum SendRequestEnvelope {
+    Compose(SendRequest),
+    Acknowledge(AckRequest),
+}
+
+/// Shared protocol send-shaped response envelope.
+#[derive(Debug, Clone, Serialize)]
+pub enum SendResponseEnvelope {
+    Sent(SendOutcome),
+    Acknowledged(AckOutcome),
+}
+
 /// Shared protocol request envelope.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct RequestEnvelope;
+#[derive(Debug, Clone)]
+pub enum RequestEnvelope {
+    Send(SendRequestEnvelope),
+    Receive(ReadQuery),
+    Clear(ClearQuery),
+    Doctor(DoctorQuery),
+}
 
 /// Shared protocol response envelope.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ResponseEnvelope;
+#[derive(Debug, Clone, Serialize)]
+pub enum ResponseEnvelope {
+    Send(SendResponseEnvelope),
+    Receive(ReadOutcome),
+    Clear(ClearOutcome),
+    Doctor(DoctorReport),
+}
 
 /// Raw protocol frame payload.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

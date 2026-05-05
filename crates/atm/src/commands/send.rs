@@ -2,10 +2,11 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use atm_core::home;
-use atm_core::send::{self, SendMessageSource, SendRequest};
+use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::types::TaskId;
 use clap::Args;
 
+use crate::composition::CliComposition;
 use crate::observability::CliObservability;
 use crate::output;
 
@@ -55,8 +56,9 @@ impl SendCommand {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
         let json = self.json;
+        let composition = CliComposition::bootstrap(observability)?;
         let request = self.build_request(home_dir, current_dir)?;
-        let outcome = send::send_mail(request, observability)?;
+        let outcome = composition.send(request)?;
 
         output::print_send_result(&outcome, json)
     }
