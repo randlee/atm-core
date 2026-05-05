@@ -53,17 +53,15 @@ pub mod types;
 pub(crate) mod workflow;
 
 pub use boundary::{
-    AtmFramePayload, AtmProtocol, AtmRequestEnvelope, AtmResponseEnvelope, ClientTransport,
-    ClientTransportRequest, ClientTransportResponse, ConfigIngress, ConfigLoadRequest,
-    ConfigLoadResponse, DispatchRequestEnvelope, DispatchResponseEnvelope, InboxExport,
-    InboxExportReexportMessageRequest, InboxExportReexportMessageResponse, InboxExportRequest,
-    InboxExportResponse, InboxIngress, InboxIngressDiagnosticsRequest,
+    AtmProtocol, ClientTransport, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse,
+    InboxExport, InboxExportReexportMessageRequest, InboxExportReexportMessageResponse,
+    InboxExportRequest, InboxExportResponse, InboxIngress, InboxIngressDiagnosticsRequest,
     InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,
     InboxIngressIdentityFingerprintResponse, InboxIngressRequest, InboxIngressResponse, MailStore,
     MailStoreRequest, MailStoreResponse, NotificationEvent, NotificationSink, ReconcileCoordinator,
     ReconcileRequest, ReconcileResult, RequestDispatcher, RosterStore, RosterStoreRequest,
-    RosterStoreResponse, RuntimeStatusSnapshot, ServerTransport, ServerTransportRequest,
-    ServerTransportResponse, StatusSource, TaskStore, TaskStoreRequest, TaskStoreResponse,
-    WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
+    RosterStoreResponse, RuntimeStatusSnapshot, ServerTransport, StatusSource, TaskStore,
+    TaskStoreRequest, TaskStoreResponse, WatchEventBatch, WatchEventSource,
+    WatchSubscriptionRequest,
 };
 pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};

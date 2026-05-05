@@ -635,8 +635,8 @@ fn render_diagnostic_summary(summary: sc_observability_types::DiagnosticSummary)
     }
 }
 
-#[cfg(test)]
-pub(crate) fn new_adapter_port_for_tests(
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn new_adapter_port(
     home_dir: &std::path::Path,
     stderr_logs: bool,
 ) -> Result<Box<dyn ObservabilityPort + Send + Sync>, AtmError> {

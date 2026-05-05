@@ -102,9 +102,7 @@ impl RuntimeComposition {
     }
 
     pub(crate) fn start(&self) -> Result<(), AtmError> {
-        Err(AtmError::observability_bootstrap(
-            "daemon runtime start scaffold is not implemented yet",
-        )
+        Err(AtmError::config("daemon runtime start scaffold is not implemented yet")
         .with_recovery(
             "Finish RuntimeComposition startup wiring before invoking the daemon entrypoint.",
         )

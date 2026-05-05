@@ -49,6 +49,17 @@ pub(crate) struct CliComposition {
     receive_command: ReceiveCommandEntryPoint,
 }
 
+impl fmt::Debug for CliComposition {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CliComposition")
+            .field("transport", &"dyn ClientTransport")
+            .field("observability_port", &"dyn ObservabilityPort")
+            .field("send_command", &self.send_command)
+            .field("receive_command", &self.receive_command)
+            .finish()
+    }
+}
+
 impl CliComposition {
     pub(crate) fn from_transport(transport: Box<dyn ClientTransport>) -> Self {
         Self {
@@ -83,10 +94,12 @@ impl CliComposition {
     }
 
     pub(crate) fn bootstrap() -> Result<Self, AtmError> {
-        Err(AtmError::observability_bootstrap(
-            "CLI composition bootstrap scaffold is not implemented yet",
+        Err(
+            AtmError::config("CLI composition bootstrap scaffold is not implemented yet")
+                .with_recovery(
+                    "Wire the CLI transport and command entry points before using bootstrap().",
+                )
+                .with_source(CliBootstrapStubError::BootstrapNotWired),
         )
-        .with_recovery("Wire the CLI transport and command entry points before using bootstrap().")
-        .with_source(CliBootstrapStubError::BootstrapNotWired))
     }
 }

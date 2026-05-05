@@ -155,6 +155,12 @@ impl AtmError {
         .with_recovery("Set ATM_HOME or ensure the OS home directory can be resolved.")
     }
 
+    pub fn config(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorKind::Config, message).with_recovery(
+            "Check the active ATM configuration, runtime wiring, and local path settings before retrying.",
+        )
+    }
+
     pub fn address_parse(message: impl Into<String>) -> Self {
         Self::new(
             AtmErrorKind::Address,
@@ -412,6 +418,14 @@ mod tests {
         assert!(rendered.contains("boom"));
         assert!(!rendered.contains("Backtrace:"));
         assert!(error.backtrace().is_some());
+    }
+
+    #[test]
+    fn config_helper_uses_config_kind() {
+        let error = AtmError::config("config failed");
+
+        assert!(error.is_config());
+        assert_eq!(error.code, AtmErrorCode::ConfigParseFailed);
     }
 
     #[test]

@@ -93,12 +93,12 @@ impl CliObservability {
         }
     }
 
-    #[cfg(test)]
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn new(
         home_dir: &std::path::Path,
         options: CliObservabilityOptions,
     ) -> Result<Self, AtmError> {
-        Ok(Self::from_boxed_port(crate::new_adapter_port_for_tests(
+        Ok(Self::from_boxed_port(crate::new_adapter_port(
             home_dir,
             options.stderr_logs,
         )?))

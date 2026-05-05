@@ -16,42 +16,6 @@ pub mod sealed {
     pub trait Sealed {}
 }
 
-/// Stub ATM request envelope for the Phase R protocol skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct AtmRequestEnvelope;
-
-/// Stub ATM response envelope for the Phase R protocol skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct AtmResponseEnvelope;
-
-/// Stub ATM frame payload for the Phase R protocol skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct AtmFramePayload;
-
-/// Stub outbound client-transport request for the Phase R skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ClientTransportRequest;
-
-/// Stub outbound client-transport response for the Phase R skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ClientTransportResponse;
-
-/// Stub inbound server-transport request for the Phase R skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ServerTransportRequest;
-
-/// Stub inbound server-transport response for the Phase R skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ServerTransportResponse;
-
-/// Stub dispatcher request envelope for the Phase R skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct DispatchRequestEnvelope;
-
-/// Stub dispatcher response envelope for the Phase R skeleton.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct DispatchResponseEnvelope;
-
 /// Stub mail-store request for the Phase R skeleton.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MailStoreBootstrapRequest;

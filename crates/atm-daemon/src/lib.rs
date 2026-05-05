@@ -58,7 +58,7 @@ impl fmt::Display for DaemonBoundaryStubError {
 impl StdError for DaemonBoundaryStubError {}
 
 fn daemon_boundary_stub_error(message: &'static str, source: DaemonBoundaryStubError) -> AtmError {
-    AtmError::validation(message)
+    AtmError::config(message)
         .with_recovery("Complete the Phase R daemon boundary wiring before invoking this path.")
         .with_source(source)
 }
