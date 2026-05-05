@@ -65,9 +65,9 @@ impl LocalSocketClientTransport {
     fn ensure_daemon_available(&self) -> Result<(), AtmError> {
         #[cfg(not(unix))]
         {
-            return Err(AtmError::daemon_unavailable(
+            Err(AtmError::daemon_unavailable(
                 "ATM thin-client transport requires a Unix platform",
-            ));
+            ))
         }
 
         #[cfg(unix)]

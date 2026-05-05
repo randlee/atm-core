@@ -2,6 +2,8 @@ mod support;
 
 use std::fs;
 use std::process::Command;
+use std::thread;
+use std::time::Duration;
 
 use atm_core::schema::MessageEnvelope;
 use atm_core::types::{AgentName, TeamName};
@@ -971,11 +973,30 @@ impl Fixture {
             format!("default_team = \"{}\"\n", TEST_TEAM),
         )
         .expect("config");
-        Self { tempdir }
+        let fixture = Self { tempdir };
+        fixture.warm_daemon();
+        fixture
     }
 
     fn run(&self, args: &[&str]) -> std::process::Output {
-        self.run_with_env(args, &[])
+        let mut first = Command::new(env!("CARGO_BIN_EXE_atm"));
+        let output =
+            support::configure_atm_command(&mut first, self.tempdir.path(), Some(TEST_SENDER))
+                .args(args)
+                .current_dir(self.tempdir.path())
+                .output()
+                .expect("run atm");
+        if !support::is_daemon_start_transient(&output) {
+            return output;
+        }
+
+        thread::sleep(Duration::from_millis(50));
+        let mut retry = Command::new(env!("CARGO_BIN_EXE_atm"));
+        support::configure_atm_command(&mut retry, self.tempdir.path(), Some(TEST_SENDER))
+            .args(args)
+            .current_dir(self.tempdir.path())
+            .output()
+            .unwrap_or_else(|error| panic!("retry atm {:?} failed: {error}", args))
     }
 
     fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
@@ -987,6 +1008,11 @@ impl Fixture {
             command.env(key, value);
         }
         command.output().expect("run atm")
+    }
+
+    fn warm_daemon(&self) {
+        let output = self.run(&["read", "--all", "--no-mark", "--json"]);
+        assert!(output.status.success(), "stderr: {}", self.stderr(&output));
     }
 
     fn write_team_config_value(&self, team: &str, value: Value) {
