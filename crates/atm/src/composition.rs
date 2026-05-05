@@ -6,10 +6,12 @@ use std::process::{Command, Stdio};
 use std::sync::Arc;
 #[cfg(unix)]
 use std::{
+    fs,
     io::{Read, Write},
+    os::unix::fs::MetadataExt,
     os::unix::net::UnixStream,
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use atm_core::ack::{AckOutcome, AckRequest};
@@ -60,21 +62,32 @@ impl LocalSocketClientTransport {
     }
 
     fn ensure_daemon_available(&self) -> Result<(), AtmError> {
-        if self.try_connect().is_ok() {
-            return Ok(());
+        #[cfg(not(unix))]
+        {
+            return Err(AtmError::daemon_unavailable(
+                "ATM thin-client transport requires a Unix platform",
+            ));
         }
-        self.spawn_daemon()?;
-        for _ in 0..200 {
+
+        #[cfg(unix)]
+        {
             if self.try_connect().is_ok() {
                 return Ok(());
             }
-            #[cfg(unix)]
-            thread::sleep(Duration::from_millis(50));
+            let published_socket = fs::metadata(&self.socket_path)
+                .ok()
+                .map(|metadata| (metadata.dev(), metadata.ino()));
+            self.spawn_daemon()?;
+            self.wait_for_socket_publish(published_socket)?;
+            thread::sleep(Duration::from_millis(25));
+            if self.try_connect().is_ok() {
+                return Ok(());
+            }
+            Err(AtmError::daemon_unavailable(format!(
+                "failed to connect to daemon socket at {} after auto-start",
+                self.socket_path.display()
+            )))
         }
-        Err(AtmError::daemon_unavailable(format!(
-            "failed to connect to daemon socket at {} after auto-start",
-            self.socket_path.display()
-        )))
     }
 
     #[cfg(unix)]
@@ -125,14 +138,29 @@ impl LocalSocketClientTransport {
     }
 
     #[cfg(unix)]
-    fn exchange(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        let mut stream = match self.try_connect() {
-            Ok(stream) => stream,
-            Err(_) => {
-                self.ensure_daemon_available()?;
-                self.try_connect()?
+    fn wait_for_socket_publish(
+        &self,
+        published_socket: Option<(u64, u64)>,
+    ) -> Result<(), AtmError> {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < deadline {
+            if let Ok(metadata) = fs::metadata(&self.socket_path) {
+                let observed_socket = (metadata.dev(), metadata.ino());
+                if published_socket != Some(observed_socket) {
+                    return Ok(());
+                }
             }
-        };
+            thread::sleep(Duration::from_millis(25));
+        }
+        Err(AtmError::daemon_unavailable(format!(
+            "daemon socket was not published at {} after auto-start",
+            self.socket_path.display()
+        )))
+    }
+
+    #[cfg(unix)]
+    fn exchange(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+        let mut stream = self.try_connect()?;
         let encoded = serde_json::to_vec(&request).map_err(AtmError::from)?;
         stream.write_all(&encoded).map_err(|source| {
             AtmError::daemon_unavailable("failed to write daemon request frame").with_source(source)
@@ -205,7 +233,10 @@ impl<'a> CliComposition<'a> {
         &self,
         request: RequestEnvelope,
     ) -> Result<ResponseEnvelope, AtmError> {
-        self.transport.send(request)
+        match self.transport.send(request)? {
+            ResponseEnvelope::Error(error) => Err(error.into_atm_error()),
+            response => Ok(response),
+        }
     }
 
     pub(crate) fn observability_port(&self) -> &(dyn ObservabilityPort + Send + Sync) {
@@ -223,7 +254,7 @@ impl<'a> CliComposition<'a> {
     pub(crate) fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
         match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))? {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
-                self.emit_success(CommandEvent {
+                let _ = self.observability_port.emit(CommandEvent {
                     command: "send",
                     action: "send",
                     outcome: if outcome.dry_run { "dry_run" } else { "sent" },
@@ -248,7 +279,7 @@ impl<'a> CliComposition<'a> {
             request,
         )))? {
             ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
-                self.emit_success(CommandEvent {
+                let _ = self.observability_port.emit(CommandEvent {
                     command: "ack",
                     action: "ack",
                     outcome: "ok",
@@ -271,7 +302,7 @@ impl<'a> CliComposition<'a> {
     pub(crate) fn receive(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
         match self.send_request(RequestEnvelope::Receive(query))? {
             ResponseEnvelope::Receive(outcome) => {
-                self.emit_success(CommandEvent {
+                let _ = self.observability_port.emit(CommandEvent {
                     command: "read",
                     action: "read",
                     outcome: "ok",
@@ -294,7 +325,7 @@ impl<'a> CliComposition<'a> {
     pub(crate) fn clear(&self, query: ClearQuery) -> Result<ClearOutcome, AtmError> {
         match self.send_request(RequestEnvelope::Clear(query))? {
             ResponseEnvelope::Clear(outcome) => {
-                self.emit_success(CommandEvent {
+                let _ = self.observability_port.emit(CommandEvent {
                     command: "clear",
                     action: "clear",
                     outcome: "ok",
@@ -327,10 +358,6 @@ impl<'a> CliComposition<'a> {
         let transport = Arc::new(LocalSocketClientTransport::new(socket_path, daemon_bin));
         transport.ensure_daemon_available()?;
         Ok(Self::from_transport(transport, observability))
-    }
-
-    fn emit_success(&self, event: CommandEvent) {
-        let _ = self.observability_port.emit(event);
     }
 }
 

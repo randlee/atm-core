@@ -9,11 +9,11 @@ use std::collections::HashSet;
 use std::error::Error as StdError;
 use std::fmt;
 use std::fs;
-use std::path::{Path, PathBuf};
 #[cfg(unix)]
 use std::io::{Read, Write};
 #[cfg(unix)]
 use std::os::unix::net::UnixListener;
+use std::path::{Path, PathBuf};
 #[cfg(unix)]
 use std::thread;
 #[cfg(unix)]
@@ -407,7 +407,7 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
                 .with_source(source)
         })?;
 
-        let idle_timeout = Duration::from_millis(250);
+        let idle_timeout = Duration::from_secs(1);
         let poll_interval = Duration::from_millis(25);
         let mut last_activity = Instant::now();
         loop {
@@ -424,7 +424,12 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
                     }
                     let request: ProtocolRequestEnvelope =
                         serde_json::from_slice(&bytes).map_err(AtmError::from)?;
-                    let response = _dispatcher.dispatch(request)?;
+                    let response = match _dispatcher.dispatch(request) {
+                        Ok(response) => response,
+                        Err(error) => ResponseEnvelope::Error(
+                            atm_core::protocol::ProtocolErrorEnvelope::from_error(&error),
+                        ),
+                    };
                     let encoded = serde_json::to_vec(&response).map_err(AtmError::from)?;
                     stream.write_all(&encoded).map_err(|source| {
                         AtmError::daemon_unavailable("failed to write daemon response frame")

@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 use crate::ack::{AckOutcome, AckRequest};
 use crate::clear::{ClearOutcome, ClearQuery};
 use crate::doctor::{DoctorQuery, DoctorReport};
-use crate::error::AtmError;
+use crate::error::{AtmError, AtmErrorKind};
+use crate::error_codes::AtmErrorCode;
 use crate::home;
 use crate::read::{ReadOutcome, ReadQuery};
 use crate::send::{SendOutcome, SendRequest};
@@ -44,6 +45,85 @@ pub enum ResponseEnvelope {
     Receive(ReadOutcome),
     Clear(ClearOutcome),
     Doctor(DoctorReport),
+    Error(ProtocolErrorEnvelope),
+}
+
+/// Serialized daemon-side ATM error for protocol transport.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProtocolErrorEnvelope {
+    pub code: AtmErrorCode,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recovery: Option<String>,
+}
+
+impl ProtocolErrorEnvelope {
+    pub fn from_error(error: &AtmError) -> Self {
+        Self {
+            code: error.code,
+            message: error.message.clone(),
+            recovery: error.recovery.clone(),
+        }
+    }
+
+    pub fn into_atm_error(self) -> AtmError {
+        let error =
+            AtmError::new_with_code(self.code, error_kind_for_code(self.code), self.message);
+        match self.recovery {
+            Some(recovery) => error.with_recovery(recovery),
+            None => error,
+        }
+    }
+}
+
+const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
+    match code {
+        AtmErrorCode::ConfigHomeUnavailable
+        | AtmErrorCode::ConfigParseFailed
+        | AtmErrorCode::ConfigRetiredHookMembersKey
+        | AtmErrorCode::ConfigRetiredLegacyHookKeys
+        | AtmErrorCode::ConfigTeamParseFailed
+        | AtmErrorCode::ConfigTeamMissing => AtmErrorKind::Config,
+        AtmErrorCode::IdentityUnavailable | AtmErrorCode::WarningIdentityDrift => {
+            AtmErrorKind::Identity
+        }
+        AtmErrorCode::DaemonUnavailable => AtmErrorKind::DaemonUnavailable,
+        AtmErrorCode::AddressParseFailed => AtmErrorKind::Address,
+        AtmErrorCode::TeamUnavailable | AtmErrorCode::TeamNotFound => AtmErrorKind::TeamNotFound,
+        AtmErrorCode::AgentNotFound => AtmErrorKind::AgentNotFound,
+        AtmErrorCode::MailboxReadFailed | AtmErrorCode::WarningMailboxRecordSkipped => {
+            AtmErrorKind::MailboxRead
+        }
+        AtmErrorCode::MailboxWriteFailed => AtmErrorKind::MailboxWrite,
+        AtmErrorCode::MailboxLockFailed
+        | AtmErrorCode::MailboxLockReadOnlyFilesystem
+        | AtmErrorCode::MailboxLockTimeout
+        | AtmErrorCode::WarningStaleMailboxLock => AtmErrorKind::MailboxLock,
+        AtmErrorCode::FilePolicyRejected | AtmErrorCode::FileReferenceRewriteFailed => {
+            AtmErrorKind::FilePolicy
+        }
+        AtmErrorCode::SerializationFailed => AtmErrorKind::Serialization,
+        AtmErrorCode::WaitTimeout => AtmErrorKind::Timeout,
+        AtmErrorCode::ObservabilityEmitFailed => AtmErrorKind::ObservabilityEmit,
+        AtmErrorCode::ObservabilityQueryFailed => AtmErrorKind::ObservabilityQuery,
+        AtmErrorCode::ObservabilityFollowFailed => AtmErrorKind::ObservabilityFollow,
+        AtmErrorCode::ObservabilityHealthFailed
+        | AtmErrorCode::ObservabilityHealthOk
+        | AtmErrorCode::WarningObservabilityHealthDegraded => AtmErrorKind::ObservabilityHealth,
+        AtmErrorCode::ObservabilityBootstrapFailed => AtmErrorKind::ObservabilityBootstrap,
+        AtmErrorCode::MessageValidationFailed
+        | AtmErrorCode::AckInvalidState
+        | AtmErrorCode::ClearInvalidState
+        | AtmErrorCode::WarningInvalidTeamMemberSkipped
+        | AtmErrorCode::WarningMalformedAtmFieldIgnored
+        | AtmErrorCode::WarningOriginInboxEntrySkipped
+        | AtmErrorCode::WarningMissingTeamConfigFallback
+        | AtmErrorCode::WarningSendAlertStateDegraded
+        | AtmErrorCode::WarningBaselineMemberMissing
+        | AtmErrorCode::WarningRestoreInProgress
+        | AtmErrorCode::WarningHookSkipped
+        | AtmErrorCode::WarningHookExecutionFailed => AtmErrorKind::Validation,
+    }
 }
 
 /// Raw protocol frame payload.
