@@ -851,6 +851,7 @@ impl Fixture {
         let tempdir = tempfile::tempdir().expect("tempdir");
         let fixture = Self { tempdir };
         fixture.write_team_config(members);
+        fixture.warm_daemon();
         fixture
     }
 
@@ -866,6 +867,11 @@ impl Fixture {
             .current_dir(self.tempdir.path())
             .output()
             .expect("run atm")
+    }
+
+    fn warm_daemon(&self) {
+        let output = self.run(&["read", "--all", "--no-mark", "--json"]);
+        assert!(output.status.success(), "stderr: {}", self.stderr(&output));
     }
 
     fn write_team_config(&self, members: &[&str]) {
