@@ -142,8 +142,8 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     let sender_team = config::resolve_team(None, config.as_ref());
     let display_sender = display_sender_identity(
         &canonical_sender,
-        request.sender_override.as_deref(),
-        sender_team.as_deref(),
+        request.sender_override.as_ref(),
+        sender_team.as_ref(),
         &recipient.team,
         config.as_ref(),
     );
