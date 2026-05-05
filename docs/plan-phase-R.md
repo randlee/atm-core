@@ -390,13 +390,19 @@ Review targets:
        `WatchEventSource`, and `ReconcileCoordinator` currently have zero
        methods; define their minimal callable method surfaces before behavior
        work starts
-     - confirm whether `PeerClientTransport` and daemon-side
-       `RequestDispatcher` concrete adapters stay in this wave or remain
-       deferred
+     - no `R.4` implementation may start until that scope review is documented
+       and approved by team-lead
+     - `PeerClientTransport` and `DaemonRequestDispatcher`: define trait
+       surfaces in `R.4`; concrete daemon adapter implementations are deferred
+       to a later sprint
    - `crates/atm-core/src/boundary/mod.rs`
      - replace placeholder `AtmRequestEnvelope`, `AtmResponseEnvelope`, and
-       `AtmFramePayload` with named protocol request / response / frame types
-       for thin `send` / `receive`
+       `AtmFramePayload` with:
+       - `RequestEnvelope`
+       - `ResponseEnvelope`
+       - `FramePayload`
+       in an explicit `atm_core::protocol` module or equivalent architecturally
+       correct home
      - add callable methods to:
        - `AtmProtocol`
        - `ClientTransport`
@@ -413,8 +419,6 @@ Review targets:
        - `DaemonStatusSource`
        - `FileWatchEventSource`
        - `DaemonReconcileCoordinator`
-     - add daemon-side `PeerClientTransport` and `DaemonRequestDispatcher`
-       adapters if R.4 scope keeps them in wave 2
      - when any new concrete runtime impl structs land, update the matching
        boundary records with explicit `implementation.visibility` and
        `implementation.constructor` expectations in the same sprint
@@ -424,11 +428,16 @@ Review targets:
    - `crates/atm/src/composition.rs`
      - wire `CliComposition` against the `ClientTransport` method surface only
    - Acceptance:
-     - protocol request / response / frame DTOs are named and exported from
-       `atm-core`
+     - `RequestEnvelope`, `ResponseEnvelope`, and `FramePayload` are named
+       protocol DTO targets and exported from the agreed protocol home
      - zero-method runtime traits resolved by explicit method surfaces
      - CLI and daemon compositions compile against callable transport traits
      - no direct `atm -> atm-daemon` or `atm -> atm-rusqlite` edge appears
+     - verify `lint_boundaries.py` rejects any impl of boundary traits outside
+       permitted impl sites documented in `docs/*/boundaries.md`
+     - any new concrete implementation struct introduced in this sprint must:
+       (a) add boundary-record visibility/constructor rules; (b) have boundary
+       lint enforce them; (c) pass QA verification of those checks
      - QA verifies any new runtime impl structs are covered by active privacy /
        constructor lint checks
 2. `R.5 Store Boundaries`
@@ -466,6 +475,9 @@ Review targets:
      - retained core flows no longer own sqlite-facing logic directly
      - replacing the sqlite adapter does not require caller changes outside
        composition or adapter crates
+     - any new concrete implementation struct introduced in this sprint must:
+       (a) add boundary-record visibility/constructor rules; (b) have boundary
+       lint enforce them; (c) pass QA verification of those checks
      - QA verifies store impl structs remain private and lint-enforced as such
 3. `R.6 Config / Inbox / Notification / Watch`
    - `crates/atm-core/src/boundary/mod.rs`
@@ -498,6 +510,9 @@ Review targets:
      - retained service code consumes those behaviors only through boundary
        traits
      - compatibility policy location is documented and matches implementation
+     - any new concrete implementation struct introduced in this sprint must:
+       (a) add boundary-record visibility/constructor rules; (b) have boundary
+       lint enforce them; (c) pass QA verification of those checks
      - QA verifies newly introduced adapter impl structs are covered by privacy
        and constructor lint rules
 4. `R.7 Service Orchestration`
@@ -523,6 +538,9 @@ Review targets:
      - direct retained bypasses are removed from service code
      - orchestration layer is explicit and thin
      - boundary lint remains green after routing changes
+     - any new concrete implementation struct introduced in this sprint must:
+       (a) add boundary-record visibility/constructor rules; (b) have boundary
+       lint enforce them; (c) pass QA verification of those checks
      - QA verifies no orchestration change required widening adapter visibility
        or bypassing boundary privacy rules
 5. `R.8 Thin Client Surfaces`
@@ -544,6 +562,11 @@ Review targets:
      - CLI public surface is thin and transport-driven
      - `ack` remains modeled inside `send`
      - thin clients do not require daemon-internal or sqlite-facing knowledge
+     - `lint_manifests.py` confirms `atm -> atm-daemon` and
+       `atm -> atm-rusqlite` dependency edges remain FORBIDDEN (ADR-001)
+     - any new concrete implementation struct introduced in this sprint must:
+       (a) add boundary-record visibility/constructor rules; (b) have boundary
+       lint enforce them; (c) pass QA verification of those checks
      - QA verifies no thin-client change introduces direct references to daemon
        or adapter implementation structs
 
