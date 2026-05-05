@@ -134,3 +134,11 @@ After a FAIL verdict, include a short flat list of blocking findings with:
 - Keep all fix routing through team-lead.
 - Prefer structured reviewer outputs over narrative summaries.
 - Use `quality-management-gh` for PR reporting rather than ad hoc markdown.
+- Never accept boundary relaxation as a fix. If any change loosens an
+  established boundary requirement — widens visibility of sealed types or
+  modules, removes enforcement layers, expands permitted impl sites, or
+  bypasses `lint_boundaries.py` / `lint_manifests.py` checks — reject it as
+  BLOCKING and escalate to team-lead for a ruling. `It compiles` or `tests
+  pass` is not justification. The correct path is: team-lead ruling -> ADR ->
+  boundary record update -> lint verification. `arch-qa` RULE-012 governs
+  this; `quality-mgr` must not override or suppress it.

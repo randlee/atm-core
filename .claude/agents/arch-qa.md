@@ -167,6 +167,29 @@ Allowed narrow exceptions:
 Ambient reuse of a developer workstation ATM home, team, or identity is a
 blocking failure.
 
+### RULE-012: Boundary requirements must not be loosened
+Severity: CRITICAL
+
+Any change that weakens an established boundary constraint is a blocking
+violation regardless of functional justification. This includes:
+- Widening visibility of sealed types or modules (e.g., `mod sealed` ->
+  `pub mod sealed`) without a team-lead ruling and ADR
+- Adding new crates to permitted impl sites without updating boundary records
+  in `docs/*/boundaries.md` and team-lead approval
+- Removing or bypassing enforcement layers: lint rules, boundary records,
+  `lint_boundaries.py`, `lint_manifests.py`, or CI checks
+- Implementing `sealed::Sealed` or any boundary trait in a crate not listed as
+  a permitted impl site in the corresponding boundary record
+
+The correct path for any boundary relaxation is:
+1. team-lead ruling
+2. ADR or documented decision record
+3. boundary record update
+4. lint verification
+
+Do not accept `it compiles` or `tests pass` as justification for loosening a
+boundary. Reject and route to team-lead.
+
 ## Evaluation Process
 
 1. Read the input JSON.
