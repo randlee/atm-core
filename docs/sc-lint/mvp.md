@@ -32,11 +32,16 @@ tool.
 - package: `sc-lint-boundary`
 - library crate: `sc_lint_boundary`
 - binary: `sc-lint-boundary`
+- initial crate version: `0.1.0`
 
-Planned paired attribute crate:
+Implemented paired attribute crate:
 
 - package: `sc-lint-attributes`
 - library crate: `sc_lint_attributes`
+- initial crate version: `0.1.0`
+
+These crates should **not** inherit the ATM workspace package version. They are
+new tool crates with their own version line starting at `0.1.0`.
 
 ## Non-Goals
 
@@ -194,6 +199,16 @@ The analyzer should support:
 - JSON findings for the Python runner
 - graph export
 
+Current scaffold status:
+
+- `sc-lint-boundary` exists and can already:
+  - discover workspace crates through `cargo_metadata`
+  - emit a stable text findings summary
+  - emit JSON findings
+  - export an initial crate-level graph JSON skeleton
+- `sc-lint-attributes` exists and already reserves the shared
+  `#[sc_lint(...)]` namespace with compile-valid, no-op attribute parsing
+
 ### JSON findings envelope
 
 Suggested high-level shape:
@@ -251,13 +266,20 @@ Good future uses:
 Real Rust attributes such as:
 
 ```rust
-#[sc_lint_boundary(internal_only)]
+#[sc_lint(boundary.internal_only)]
 ```
 
 require a separate proc-macro crate.
 
 This design now assumes that crate exists from the start as
 `sc-lint-attributes`, even if the first implementation is only a placeholder.
+
+The initial supported syntax is:
+
+```rust
+#[sc_lint(boundary.allow("cycle.type_method_self_loop"))]
+#[sc_lint(boundary.internal_only)]
+```
 
 ### MVP attribute stance
 

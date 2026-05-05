@@ -1,0 +1,26 @@
+[package]
+name = "sc-lint-boundary"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "AST-sensitive Rust boundary analyzer."
+repository.workspace = true
+homepage.workspace = true
+
+[[bin]]
+name = "sc-lint-boundary"
+path = "src/main.rs"
+
+[lib]
+name = "sc_lint_boundary"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow.workspace = true
+cargo_metadata.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+clap = { version = "4", features = ["derive"] }
+

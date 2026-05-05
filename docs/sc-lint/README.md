@@ -20,6 +20,22 @@ Current intended crate split:
   - exists early so source-level declarations can be added without late
     packaging churn
 
+Current scaffold status:
+
+- `sc-lint-attributes`
+  - exists now
+  - versioned independently at `0.1.0`
+  - currently provides compile-valid, no-op `#[sc_lint(...)]` support for:
+    - `boundary.allow("cycle.type_method_self_loop")`
+    - `boundary.internal_only`
+- `sc-lint-boundary`
+  - exists now
+  - versioned independently at `0.1.0`
+  - currently provides:
+    - workspace discovery through `cargo_metadata`
+    - stable text/JSON findings output scaffolding
+    - initial graph JSON export scaffolding
+
 Future documents that should also live here:
 
 - crate layout

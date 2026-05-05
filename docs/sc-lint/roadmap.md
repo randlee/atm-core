@@ -10,14 +10,26 @@ Two crates from the start:
 
 - `sc-lint-boundary`
   - analyzer CLI + library
+  - own version line starting at `0.1.0`
 - `sc-lint-attributes`
   - proc-macro attribute crate
+  - own version line starting at `0.1.0`
 
 Reason:
 
 - real Rust attributes need a proc-macro crate anyway
 - creating it early avoids late packaging churn
 - the analyzer crate should not carry proc-macro concerns
+
+Current scaffold state:
+
+- `sc-lint-attributes`
+  - created
+  - compile-valid
+  - initial `#[sc_lint(...)]` namespace reserved now
+- `sc-lint-boundary`
+  - created
+  - initial discovery/output scaffold in place now
 
 ### Analyzer strategy
 
