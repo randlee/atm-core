@@ -41,11 +41,17 @@ impl CliObservability {
             &std::env::temp_dir().join("atm-bootstrap-observability"),
             CliObservabilityOptions::default(),
         ) {
-            return observability;
+            observability
+        } else {
+            Self {
+                inner: Box::new(atm_core::observability::NullObservability),
+            }
         }
-
-        Self {
-            inner: Box::new(atm_core::observability::NullObservability),
+        #[cfg(not(test))]
+        {
+            Self {
+                inner: Box::new(atm_core::observability::NullObservability),
+            }
         }
     }
 
