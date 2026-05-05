@@ -438,8 +438,18 @@ impl Fixture {
     }
 
     fn warm_daemon(&self) {
-        let output = self.run(&["read", "--all", "--no-mark", "--json"]);
-        assert!(output.status.success(), "stderr: {}", self.stderr(&output));
+        let mut attempts = 0;
+        loop {
+            let output = self.run(&["read", "--all", "--no-mark", "--json"]);
+            if output.status.success() {
+                return;
+            }
+            attempts += 1;
+            if attempts >= 3 {
+                panic!("stderr: {}", self.stderr(&output));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
     }
 
     fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
@@ -463,7 +473,9 @@ impl Fixture {
         for (key, value) in extra_env {
             retry.env(key, value);
         }
-        retry.output().expect("retry atm")
+        retry
+            .output()
+            .unwrap_or_else(|error| panic!("retry atm {:?} failed: {error}", args))
     }
 
     fn write_team_config(&self, members: &[&str]) {

@@ -315,16 +315,34 @@ impl Fixture {
         let tempdir = tempfile::tempdir().expect("tempdir");
         let fixture = Self { tempdir };
         fixture.write_team_config(members);
+        fixture.warm_daemon();
         fixture
     }
 
     fn run(&self, args: &[&str]) -> std::process::Output {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
-        support::configure_atm_command(&mut command, self.tempdir.path(), Some(TEST_SENDER))
+        let mut first = Command::new(env!("CARGO_BIN_EXE_atm"));
+        let output =
+            support::configure_atm_command(&mut first, self.tempdir.path(), Some(TEST_SENDER))
+                .args(args)
+                .current_dir(self.tempdir.path())
+                .output()
+                .expect("run atm");
+        if !support::is_daemon_start_transient(&output) {
+            return output;
+        }
+
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        let mut retry = Command::new(env!("CARGO_BIN_EXE_atm"));
+        support::configure_atm_command(&mut retry, self.tempdir.path(), Some(TEST_SENDER))
             .args(args)
             .current_dir(self.tempdir.path())
             .output()
-            .expect("run atm")
+            .expect("retry atm")
+    }
+
+    fn warm_daemon(&self) {
+        let output = self.run(&["read", "--all", "--no-mark", "--json"]);
+        assert!(output.status.success(), "stderr: {}", self.stderr(&output));
     }
 
     fn write_atm_config(&self, body: &str) {
