@@ -80,16 +80,14 @@ impl Drop for EnvGuard {
 }
 
 #[cfg(test)]
-#[allow(dead_code)]
-pub fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
+fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
     // SAFETY: test callers acquire the shared test env lock before mutating
     // the process environment.
     unsafe { std::env::set_var(key, value) }
 }
 
 #[cfg(test)]
-#[allow(dead_code)]
-pub fn remove_env_var<K: AsRef<OsStr>>(key: K) {
+fn remove_env_var<K: AsRef<OsStr>>(key: K) {
     // SAFETY: test callers acquire the shared test env lock before mutating
     // the process environment.
     unsafe { std::env::remove_var(key) }
@@ -236,6 +234,7 @@ pub fn configure_atm_command<'a>(
     identity: Option<&str>,
 ) -> &'a mut Command {
     let daemon_bin = ensure_test_daemon_launcher(home_dir);
+    let teams_dir = home_dir.join(".claude").join("teams");
     command.env_clear();
     for key in [
         "PATH",
@@ -254,9 +253,13 @@ pub fn configure_atm_command<'a>(
             command.env(key, value);
         }
     }
+    // Integration fixtures intentionally share one hermetic root for ATM home,
+    // config home, and teams discovery so subprocess daemon bootstrap resolves
+    // the same workspace state as the parent test process.
     command
         .env("ATM_HOME", home_dir)
         .env("ATM_CONFIG_HOME", home_dir)
+        .env("ATM_TEAMS_DIR", &teams_dir)
         .env("ATM_TEAM", TEST_TEAM)
         .env("ATM_DAEMON_BIN", &daemon_bin);
     if let Some(identity) = identity {

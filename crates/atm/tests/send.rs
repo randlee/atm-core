@@ -1018,7 +1018,9 @@ impl Fixture {
     }
 
     fn warm_daemon(&self) {
-        for attempt in 0..3 {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let mut attempt = 0usize;
+        loop {
             let output = self.run(&["read", "--all", "--no-mark", "--json"]);
             if output.status.success() {
                 return;
@@ -1028,11 +1030,15 @@ impl Fixture {
                 "stderr: {}",
                 self.stderr(&output)
             );
-            if attempt < 2 {
-                std::thread::sleep(std::time::Duration::from_millis(100));
+            if std::time::Instant::now() >= deadline {
+                break;
             }
+            attempt += 1;
+            std::thread::sleep(std::time::Duration::from_millis(
+                (attempt.min(10) as u64) * 50,
+            ));
         }
-        panic!("daemon warmup exhausted retries");
+        panic!("daemon warmup exhausted deadline");
     }
 
     fn run_without_identity(&self, args: &[&str]) -> std::process::Output {

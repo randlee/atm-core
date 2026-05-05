@@ -36,6 +36,8 @@ impl CliObservability {
         Self { inner }
     }
 
+    /// Test-bootstrap escape hatch; production paths must use
+    /// `CliObservability::new`.
     pub fn fallback() -> Self {
         #[cfg(test)]
         if let Ok(observability) = Self::new(

@@ -860,33 +860,47 @@ impl Fixture {
     }
 
     fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
-        let mut first = Command::new(env!("CARGO_BIN_EXE_atm"));
-        let output =
-            support::configure_atm_command(&mut first, self.tempdir.path(), Some(TEST_LEAD))
-                .args(args)
-                .envs(extra_env.iter().copied())
-                .current_dir(self.tempdir.path())
-                .output()
-                .expect("run atm");
-        if !support::is_daemon_start_transient(&output) {
-            return output;
-        }
+        for attempt in 0..3 {
+            let mut first = Command::new(env!("CARGO_BIN_EXE_atm"));
+            let output =
+                support::configure_atm_command(&mut first, self.tempdir.path(), Some(TEST_LEAD))
+                    .args(args)
+                    .envs(extra_env.iter().copied())
+                    .current_dir(self.tempdir.path())
+                    .output()
+                    .unwrap_or_else(|error| {
+                        panic!("atm {:?} failed on attempt {attempt}: {error}", args)
+                    });
+            if output.status.success()
+                || !support::is_daemon_start_transient(&output)
+                || attempt == 2
+            {
+                return output;
+            }
 
-        // The CLI fixture has no explicit daemon-ready signal here beyond the
-        // transient stderr classifier, so keep a short bounded retry pause.
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        let mut retry = Command::new(env!("CARGO_BIN_EXE_atm"));
-        support::configure_atm_command(&mut retry, self.tempdir.path(), Some(TEST_LEAD))
-            .args(args)
-            .envs(extra_env.iter().copied())
-            .current_dir(self.tempdir.path())
-            .output()
-            .expect("retry atm")
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        unreachable!("read fixture retries should always return")
     }
 
     fn warm_daemon(&self) {
-        let output = self.run(&["read", "--all", "--no-mark", "--json"]);
-        assert!(output.status.success(), "stderr: {}", self.stderr(&output));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            let output = self.run(&["read", "--all", "--no-mark", "--json"]);
+            if output.status.success() {
+                return;
+            }
+            assert!(
+                support::is_daemon_start_transient(&output),
+                "stderr: {}",
+                self.stderr(&output)
+            );
+            if std::time::Instant::now() >= deadline {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        panic!("read daemon warmup exhausted deadline");
     }
 
     fn write_team_config(&self, members: &[&str]) {

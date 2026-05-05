@@ -617,11 +617,14 @@ pub trait ServerTransport: sealed::Sealed {
     ///
     /// Returns `AtmError` when framing, transport serving, or dispatch handoff
     /// cannot proceed reliably.
-    fn serve(&self, dispatcher: &dyn RequestDispatcher) -> Result<(), AtmError>;
+    fn serve(
+        &self,
+        dispatcher: std::sync::Arc<dyn RequestDispatcher + Send + Sync>,
+    ) -> Result<(), AtmError>;
 }
 
 /// BOUNDARY-RequestDispatcher — see docs/atm-core/boundaries.md.
-pub trait RequestDispatcher: sealed::Sealed {
+pub trait RequestDispatcher: sealed::Sealed + Send + Sync {
     /// # Errors
     ///
     /// Returns `AtmError` when protocol request routing or handler dispatch
