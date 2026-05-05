@@ -52,6 +52,7 @@ pub(crate) mod service_runtime_store;
 pub mod team_admin;
 /// Shared synthetic test identities and role constants used across crate tests.
 #[doc(hidden)]
+#[cfg(test)]
 pub mod test_support;
 /// Internal text-formatting helpers used by ATM core surfaces.
 pub(crate) mod text;
