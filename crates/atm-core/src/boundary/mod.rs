@@ -6,6 +6,7 @@ use crate::error::AtmError;
 ///
 /// Only ATM workspace crates may implement boundary traits. Enforced by
 /// boundary lint, forbidden-edge rules, and review gates.
+#[doc(hidden)]
 pub mod sealed {
     pub trait Sealed {}
 }
