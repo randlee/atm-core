@@ -7,7 +7,6 @@ use std::process::{Command, Stdio};
 use std::sync::Arc;
 #[cfg(unix)]
 use std::{
-    fs,
     io::{Read, Write},
     os::unix::net::UnixStream,
     thread,
@@ -74,7 +73,6 @@ impl LocalSocketClientTransport {
             if self.try_connect().is_ok() {
                 return Ok(());
             }
-            let _ = fs::remove_file(&self.socket_path);
             self.spawn_daemon()?;
             let deadline = Instant::now() + Duration::from_secs(5);
             loop {

@@ -12,7 +12,7 @@ use std::fs;
 #[cfg(unix)]
 use std::io::{Read, Write};
 #[cfg(unix)]
-use std::os::unix::net::UnixListener;
+use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 #[cfg(unix)]
 use std::thread;
@@ -377,31 +377,24 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
                 .with_source(source)
             })?;
         }
-        if socket_path.exists() {
-            fs::remove_file(&socket_path).map_err(|source| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to replace stale daemon socket at {}",
-                    socket_path.display()
-                ))
-                .with_source(source)
-            })?;
-        }
-
-        struct SocketGuard<'a>(&'a std::path::Path);
-        impl Drop for SocketGuard<'_> {
-            fn drop(&mut self) {
-                let _ = fs::remove_file(self.0);
+        let listener = loop {
+            match UnixListener::bind(&socket_path) {
+                Ok(listener) => break listener,
+                Err(source) if source.kind() == std::io::ErrorKind::AddrInUse => {
+                    if UnixStream::connect(&socket_path).is_ok() {
+                        return Ok(());
+                    }
+                    let _ = fs::remove_file(&socket_path);
+                }
+                Err(source) => {
+                    return Err(AtmError::daemon_unavailable(format!(
+                        "failed to bind daemon socket at {}",
+                        socket_path.display()
+                    ))
+                    .with_source(source));
+                }
             }
-        }
-
-        let _guard = SocketGuard(&socket_path);
-        let listener = UnixListener::bind(&socket_path).map_err(|source| {
-            AtmError::daemon_unavailable(format!(
-                "failed to bind daemon socket at {}",
-                socket_path.display()
-            ))
-            .with_source(source)
-        })?;
+        };
         listener.set_nonblocking(true).map_err(|source| {
             AtmError::daemon_unavailable("failed to configure daemon socket listener")
                 .with_source(source)
