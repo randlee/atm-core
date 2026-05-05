@@ -14,6 +14,7 @@ use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
+use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{AgentName, TaskId, TeamName};
 use crate::workflow;
 
@@ -125,7 +126,7 @@ pub fn send_mail(
     send_mail_with_runtime(request, observability, &runtime)
 }
 
-fn send_mail_with_runtime<R: RetainedServiceRuntime>(
+fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     request: SendRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
@@ -360,7 +361,7 @@ fn is_false(value: &bool) -> bool {
 }
 
 fn notify_team_lead_missing_config(
-    runtime: &impl RetainedServiceRuntime,
+    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
     home_dir: &Path,
     team_dir: &Path,
     team: &TeamName,
@@ -442,7 +443,7 @@ fn notify_team_lead_missing_config(
 }
 
 fn append_mailbox_message_and_seed_workflow(
-    runtime: &impl RetainedServiceRuntime,
+    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
     home_dir: &Path,
     team: &TeamName,
     agent: &AgentName,

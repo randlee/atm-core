@@ -19,6 +19,7 @@ use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::MessageEnvelope;
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
+use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{
     AckActivationMode, AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
     SourceIndex, TeamName,
@@ -138,7 +139,7 @@ pub fn read_mail(
     read_mail_with_runtime(query, observability, &runtime)
 }
 
-fn read_mail_with_runtime<R: RetainedServiceRuntime>(
+fn read_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     query: ReadQuery,
     observability: &dyn ObservabilityPort,
     runtime: &R,
