@@ -7,9 +7,20 @@ pub(crate) mod composition;
 
 use std::error::Error as StdError;
 use std::fmt;
+#[cfg(unix)]
+use std::fs;
+#[cfg(unix)]
+use std::io::{Read, Write};
+#[cfg(unix)]
+use std::os::unix::net::UnixListener;
+#[cfg(unix)]
+use std::thread;
+#[cfg(unix)]
+use std::time::{Duration, Instant};
 
 use atm_core::{
     RequestEnvelope, ResponseEnvelope,
+    ack::ack_mail,
     boundary::{
         self, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, ConfigTeamLoadRequest,
         ConfigTeamLoadResponse, InboxExport, InboxExportRecordRequest, InboxExportRecordResponse,
@@ -21,7 +32,18 @@ use atm_core::{
         WatchSubscriptionRequest,
     },
     boundary_support,
+    clear::clear_mail,
+    doctor::run_doctor,
     error::AtmError,
+    observability::{
+        AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
+        CommandEvent, LogTailSession, ObservabilityPort,
+    },
+    protocol::{
+        RequestEnvelope as ProtocolRequestEnvelope, SendRequestEnvelope, SendResponseEnvelope,
+    },
+    read::read_mail,
+    send::send_mail,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,6 +87,47 @@ fn daemon_boundary_stub_error(message: &'static str, source: DaemonBoundaryStubE
         .with_source(source)
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+struct DaemonObservability;
+
+impl boundary::sealed::Sealed for DaemonObservability {}
+
+impl ObservabilityPort for DaemonObservability {
+    fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {
+        Ok(())
+    }
+
+    fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
+        Ok(AtmLogSnapshot::default())
+    }
+
+    fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, AtmError> {
+        Ok(LogTailSession::empty())
+    }
+
+    fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
+        let active_log_path = atm_core::home::atm_home()?
+            .join(".local")
+            .join("share")
+            .join("logs")
+            .join("atm.log.jsonl");
+        let fault = std::env::var("ATM_OBSERVABILITY_RETAINED_SINK_FAULT")
+            .ok()
+            .map(|value| value.trim().to_ascii_lowercase());
+        let logging_state = match fault.as_deref() {
+            Some("degraded") => AtmObservabilityHealthState::Degraded,
+            Some("unavailable") => AtmObservabilityHealthState::Unavailable,
+            _ => AtmObservabilityHealthState::Healthy,
+        };
+        Ok(AtmObservabilityHealth {
+            active_log_path: Some(active_log_path),
+            logging_state,
+            query_state: Some(AtmObservabilityHealthState::Healthy),
+            detail: None,
+        })
+    }
+}
+
 /// Placeholder runtime transport for the daemon server boundary.
 #[derive(Debug, Default)]
 pub(crate) struct LocalSocketServerTransport;
@@ -78,10 +141,96 @@ impl LocalSocketServerTransport {
 impl boundary::sealed::Sealed for LocalSocketServerTransport {}
 
 impl boundary::ServerTransport for LocalSocketServerTransport {
+    #[cfg(unix)]
     fn serve(&self, _dispatcher: &dyn RequestDispatcher) -> Result<(), AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon server transport stub is not implemented yet",
-            DaemonBoundaryStubError::ServerTransport,
+        let socket_path = atm_core::protocol::daemon_socket_path()?;
+        if let Some(parent) = socket_path.parent() {
+            fs::create_dir_all(parent).map_err(|source| {
+                AtmError::daemon_unavailable(format!(
+                    "failed to create daemon socket directory at {}",
+                    parent.display()
+                ))
+                .with_source(source)
+            })?;
+        }
+        if socket_path.exists() {
+            fs::remove_file(&socket_path).map_err(|source| {
+                AtmError::daemon_unavailable(format!(
+                    "failed to replace stale daemon socket at {}",
+                    socket_path.display()
+                ))
+                .with_source(source)
+            })?;
+        }
+
+        struct SocketGuard<'a>(&'a std::path::Path);
+        impl Drop for SocketGuard<'_> {
+            fn drop(&mut self) {
+                let _ = fs::remove_file(self.0);
+            }
+        }
+
+        let _guard = SocketGuard(&socket_path);
+        let listener = UnixListener::bind(&socket_path).map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to bind daemon socket at {}",
+                socket_path.display()
+            ))
+            .with_source(source)
+        })?;
+        listener.set_nonblocking(true).map_err(|source| {
+            AtmError::daemon_unavailable("failed to configure daemon socket listener")
+                .with_source(source)
+        })?;
+
+        let idle_timeout = Duration::from_millis(250);
+        let poll_interval = Duration::from_millis(25);
+        let mut last_activity = Instant::now();
+        loop {
+            match listener.accept() {
+                Ok((mut stream, _)) => {
+                    last_activity = Instant::now();
+                    let mut bytes = Vec::new();
+                    stream.read_to_end(&mut bytes).map_err(|source| {
+                        AtmError::daemon_unavailable("failed to read daemon request frame")
+                            .with_source(source)
+                    })?;
+                    if bytes.is_empty() {
+                        continue;
+                    }
+                    let request: ProtocolRequestEnvelope =
+                        serde_json::from_slice(&bytes).map_err(AtmError::from)?;
+                    let response = _dispatcher.dispatch(request)?;
+                    let encoded = serde_json::to_vec(&response).map_err(AtmError::from)?;
+                    stream.write_all(&encoded).map_err(|source| {
+                        AtmError::daemon_unavailable("failed to write daemon response frame")
+                            .with_source(source)
+                    })?;
+                    stream.flush().map_err(|source| {
+                        AtmError::daemon_unavailable("failed to flush daemon response frame")
+                            .with_source(source)
+                    })?;
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    if last_activity.elapsed() >= idle_timeout {
+                        return Ok(());
+                    }
+                    thread::sleep(poll_interval);
+                }
+                Err(source) => {
+                    return Err(AtmError::daemon_unavailable(
+                        "failed while accepting daemon connection",
+                    )
+                    .with_source(source));
+                }
+            }
+        }
+    }
+
+    #[cfg(not(unix))]
+    fn serve(&self, _dispatcher: &dyn RequestDispatcher) -> Result<(), AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "atm-daemon socket transport requires a Unix platform",
         ))
     }
 }
@@ -99,11 +248,29 @@ impl DaemonRequestDispatcher {
 impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
 impl boundary::RequestDispatcher for DaemonRequestDispatcher {
-    fn dispatch(&self, _request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon request dispatcher stub is not implemented yet",
-            DaemonBoundaryStubError::RequestDispatcher,
-        ))
+    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+        let observability = DaemonObservability;
+        match request {
+            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
+                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(
+                    send_mail(request, &observability)?,
+                )))
+            }
+            RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
+                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
+                    ack_mail(request, &observability)?,
+                )))
+            }
+            RequestEnvelope::Receive(query) => {
+                Ok(ResponseEnvelope::Receive(read_mail(query, &observability)?))
+            }
+            RequestEnvelope::Clear(query) => {
+                Ok(ResponseEnvelope::Clear(clear_mail(query, &observability)?))
+            }
+            RequestEnvelope::Doctor(query) => {
+                Ok(ResponseEnvelope::Doctor(run_doctor(query, &observability)?))
+            }
+        }
     }
 }
 
@@ -196,7 +363,21 @@ impl boundary::sealed::Sealed for DaemonReconcileCoordinator {}
 
 impl boundary::ReconcileCoordinator for DaemonReconcileCoordinator {
     fn reconcile(&self, request: ReconcileRequest) -> Result<ReconcileResult, AtmError> {
-        boundary_support::reconcile(request)
+        let batch = boundary_support::poll_watch(WatchSubscriptionRequest {
+            home_dir: request.home_dir.clone(),
+            team: request.team.clone(),
+            agent: request.agent.clone(),
+        })?;
+        let ingress = DaemonInboxIngress::new();
+        let import = ingress.import_inbox_source(InboxIngressImportRequest {
+            home_dir: request.home_dir,
+            team: request.team,
+            agent: request.agent,
+        })?;
+        Ok(ReconcileResult {
+            observed_paths: batch.paths.len(),
+            imported_sources: import.source_files.len(),
+        })
     }
 }
 
@@ -286,4 +467,13 @@ impl InboxExport for DaemonInboxExport {
     ) -> Result<InboxExportReexportMessageResponse, AtmError> {
         boundary_support::reexport_messages(request)
     }
+}
+
+/// Run the daemon entrypoint with the currently assembled runtime composition.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the daemon transport cannot start or serve.
+pub fn run_daemon() -> Result<(), AtmError> {
+    composition::compose_runtime().serve()
 }

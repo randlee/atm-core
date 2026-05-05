@@ -859,12 +859,9 @@ impl Fixture {
     }
 
     fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
-        Command::new(env!("CARGO_BIN_EXE_atm"))
+        let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
+        support::configure_atm_command(&mut command, self.tempdir.path(), Some(TEST_LEAD))
             .args(args)
-            .env("ATM_HOME", self.tempdir.path())
-            .env("ATM_CONFIG_HOME", self.tempdir.path())
-            .env("ATM_IDENTITY", TEST_LEAD)
-            .env("ATM_TEAM", TEST_TEAM)
             .envs(extra_env.iter().copied())
             .current_dir(self.tempdir.path())
             .output()

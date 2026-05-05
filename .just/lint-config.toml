@@ -40,6 +40,24 @@ dependency_package = "atm-rusqlite"
 allowed_sections = ["dev-dependencies"]
 message = "atm-core may reference atm-rusqlite only in dev-dependencies"
 
+[[boundaries.manifest_section_rules]]
+owner_manifest_path = "crates/atm/Cargo.toml"
+dependency_package = "atm-daemon"
+allowed_sections = []
+message = "atm must not depend on atm-daemon"
+
+[[boundaries.manifest_section_rules]]
+owner_manifest_path = "crates/atm-core/Cargo.toml"
+dependency_package = "atm-daemon"
+allowed_sections = []
+message = "atm-core must not depend on atm-daemon"
+
+[[boundaries.manifest_section_rules]]
+owner_manifest_path = "crates/atm-daemon/Cargo.toml"
+dependency_package = "atm-rusqlite"
+allowed_sections = []
+message = "atm-daemon must not depend on atm-rusqlite"
+
 [version_sync.winget]
 enabled = true
 manifest_glob = ".winget/*.yaml"

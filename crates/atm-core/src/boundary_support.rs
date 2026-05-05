@@ -18,8 +18,7 @@ use crate::home;
 use crate::mailbox;
 use crate::mailbox::source::SourceFile;
 use crate::protocol::{
-    NotificationEvent, ReconcileRequest, ReconcileResult, RuntimeStatusSnapshot, WatchEventBatch,
-    WatchSubscriptionRequest,
+    NotificationEvent, RuntimeStatusSnapshot, WatchEventBatch, WatchSubscriptionRequest,
 };
 
 fn to_boundary_source_file(source: SourceFile) -> InboxSourceFileRecord {
@@ -151,21 +150,4 @@ pub fn poll_watch(request: WatchSubscriptionRequest) -> Result<WatchEventBatch, 
         request.agent.as_str(),
     )?;
     Ok(WatchEventBatch { paths })
-}
-
-pub fn reconcile(request: ReconcileRequest) -> Result<ReconcileResult, AtmError> {
-    let batch = poll_watch(WatchSubscriptionRequest {
-        home_dir: request.home_dir.clone(),
-        team: request.team.clone(),
-        agent: request.agent.clone(),
-    })?;
-    let import = import_inbox_source(InboxIngressImportRequest {
-        home_dir: request.home_dir,
-        team: request.team,
-        agent: request.agent,
-    })?;
-    Ok(ReconcileResult {
-        observed_paths: batch.paths.len(),
-        imported_sources: import.source_files.len(),
-    })
 }

@@ -242,12 +242,21 @@ pub struct MailStoreHealthSnapshotResponse {
 }
 
 /// Canonical Phase R mail-store request entrypoint payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct MailStoreRequest;
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MailStoreRequest {
+    pub team_dir: PathBuf,
+    pub team: TeamName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub team_config: Option<TeamConfig>,
+}
 
 /// Canonical Phase R mail-store response entrypoint payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct MailStoreResponse;
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MailStoreResponse {
+    pub team: TeamName,
+    pub bootstrapped: bool,
+    pub opened: bool,
+}
 
 /// Stub task-store request for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -363,12 +372,17 @@ pub struct TaskStoreQueryTaskMetadataResponse {
 }
 
 /// Canonical Phase R task-store request entrypoint payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct TaskStoreRequest;
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskStoreRequest {
+    pub team: TeamName,
+    pub record: TaskStoreTaskRecord,
+}
 
 /// Canonical Phase R task-store response entrypoint payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct TaskStoreResponse;
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskStoreResponse {
+    pub record: TaskStoreTaskRecord,
+}
 
 /// Stub roster-store request for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -431,12 +445,22 @@ pub struct RosterStoreHealthSnapshotResponse {
 }
 
 /// Canonical Phase R roster-store request entrypoint payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct RosterStoreRequest;
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RosterStoreRequest {
+    pub team: TeamName,
+    pub roster: TeamConfig,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+}
 
 /// Canonical Phase R roster-store response entrypoint payload.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct RosterStoreResponse;
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RosterStoreResponse {
+    pub team: TeamName,
+    pub previous_member_count: u64,
+    pub current_member_count: u64,
+    pub replaced: bool,
+}
 
 /// Stub config-ingress request for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

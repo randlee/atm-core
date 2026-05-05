@@ -476,7 +476,7 @@ enforcement:
 status:
   state: active
   notes:
-    - atm_core owns the contract; daemon runtime now supplies the crate-root support-backed adapter
+    - atm_core owns the contract; daemon runtime now supplies the crate-root adapter implementation
     - composition must continue to avoid a direct atm-daemon -> atm-rusqlite dependency
 ```
 
@@ -484,7 +484,7 @@ Purpose:
 - Owns the daemon runtime adapter behind the ConfigIngress contract.
 
 Notes:
-- This adapter is wired through `atm_core::boundary_support` while retained service cutover remains a later sprint concern.
+- This adapter owns the daemon-side `ConfigIngress` implementation at the adapter boundary.
 
 ## DaemonInboxIngressAdapter
 
@@ -556,15 +556,15 @@ enforcement:
 status:
   state: active
   notes:
-    - atm_core owns the contract; daemon runtime now supplies the crate-root support-backed adapter
-    - watcher-driven reconcile must continue to route through this boundary rather than directly to mailbox helpers
+    - atm_core owns the contract; daemon runtime now supplies the crate-root adapter implementation
+    - watcher-driven reconcile now routes through this boundary rather than directly to mailbox helpers
 ```
 
 Purpose:
 - Owns the daemon runtime adapter behind the InboxIngress contract.
 
 Notes:
-- This adapter is wired through `atm_core::boundary_support` while retained service cutover remains a later sprint concern.
+- This adapter owns compatibility inbox import, fingerprint, and diagnostic behavior at the daemon boundary.
 
 ## DaemonInboxExportAdapter
 
@@ -636,7 +636,7 @@ enforcement:
 status:
   state: active
   notes:
-    - atm_core owns the contract; daemon runtime now supplies the crate-root support-backed adapter
+    - atm_core owns the contract; daemon runtime now supplies the crate-root adapter implementation
     - send and receive compatibility writes must stay behind this adapter rather than reaching mailbox helpers directly
 ```
 
@@ -644,7 +644,18 @@ Purpose:
 - Owns the daemon runtime adapter behind the InboxExport contract.
 
 Notes:
-- This adapter is wired through `atm_core::boundary_support` while retained service cutover remains a later sprint concern.
+- This adapter owns compatibility export and write-bound projection behavior at the daemon boundary.
+
+## Policy Placement
+
+Compatibility and recovery policy placement for daemon-owned config/inbox adapters:
+
+- `ConfigIngress` may own document loading, syntax validation, and translation into typed ATM config models.
+- `ConfigIngress` must not own daemon auto-start policy, retained command fallback policy, or mailbox/task workflow mutation.
+- `InboxIngress` may own compatibility-shape translation, identity fingerprint derivation, and ingress diagnostics over imported source files.
+- `InboxIngress` must not own read/ack/clear business policy, workflow-state mutation policy, or mailbox lifecycle transitions beyond import normalization.
+- `InboxExport` may own projection from ATM-owned source records back into compatibility mailbox shapes and write-bound export validation.
+- `InboxExport` must not own read-path reconciliation, task-state updates, or notification/runtime policy.
 
 ## DaemonNotificationSinkAdapter
 

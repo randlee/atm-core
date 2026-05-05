@@ -1015,12 +1015,9 @@ impl Fixture {
     }
 
     fn run_without_identity(&self, args: &[&str]) -> std::process::Output {
-        Command::new(env!("CARGO_BIN_EXE_atm"))
+        let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
+        crate::support::configure_atm_command(&mut command, self.tempdir.path(), None)
             .args(args)
-            .env("ATM_HOME", self.tempdir.path())
-            .env("ATM_CONFIG_HOME", self.tempdir.path())
-            .env_remove("ATM_IDENTITY")
-            .env("ATM_TEAM", TEST_TEAM)
             .current_dir(self.tempdir.path())
             .output()
             .expect("run atm without identity")
@@ -1028,12 +1025,8 @@ impl Fixture {
 
     fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
         let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
-        command
+        crate::support::configure_atm_command(&mut command, self.tempdir.path(), Some(TEST_SENDER))
             .args(args)
-            .env("ATM_HOME", self.tempdir.path())
-            .env("ATM_CONFIG_HOME", self.tempdir.path())
-            .env("ATM_IDENTITY", TEST_SENDER)
-            .env("ATM_TEAM", TEST_TEAM)
             .current_dir(self.tempdir.path());
         for (key, value) in extra_env {
             command.env(key, value);

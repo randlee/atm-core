@@ -80,7 +80,7 @@ status:
   state: active
   notes:
     - thin extension clients such as atm-graft may reuse the contract shape without depending on atm internals
-    - the current Phase R implementation preserves the transport contract with a private in-process adapter while daemon socket transport remains follow-on work
+    - the current Phase R implementation uses a private Unix socket adapter with connect-first daemon auto-start
 ```
 
 Purpose:

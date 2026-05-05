@@ -317,12 +317,9 @@ impl Fixture {
     }
 
     fn run(&self, args: &[&str]) -> std::process::Output {
-        Command::new(env!("CARGO_BIN_EXE_atm"))
+        let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
+        support::configure_atm_command(&mut command, self.tempdir.path(), Some(TEST_SENDER))
             .args(args)
-            .env("ATM_HOME", self.tempdir.path())
-            .env("ATM_CONFIG_HOME", self.tempdir.path())
-            .env("ATM_IDENTITY", TEST_SENDER)
-            .env("ATM_TEAM", TEST_TEAM)
             .current_dir(self.tempdir.path())
             .output()
             .expect("run atm")

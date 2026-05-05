@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Map;
 use tracing::warn;
 
@@ -23,7 +23,7 @@ pub(super) mod hook;
 pub(crate) mod input;
 pub(crate) mod summary;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SendMessageSource {
     Inline(String),
     Stdin,
@@ -33,7 +33,7 @@ pub enum SendMessageSource {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SendRequest {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
@@ -77,13 +77,13 @@ impl SendRequest {
 }
 
 /// Result of sending one ATM mailbox message.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SendOutcome {
-    pub action: &'static str,
+    pub action: String,
     pub team: TeamName,
     pub agent: AgentName,
     pub sender: AgentName,
-    pub outcome: &'static str,
+    pub outcome: String,
     pub message_id: LegacyMessageId,
     pub requires_ack: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -248,12 +248,13 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime>(
         )?;
     }
 
+    let command_outcome = if request.dry_run { "dry_run" } else { "sent" };
     let mut outcome = SendOutcome {
-        action: "send",
+        action: "send".to_string(),
         team: recipient.team.clone(),
         agent: recipient.agent.clone(),
         sender: canonical_sender.clone(),
-        outcome: if request.dry_run { "dry_run" } else { "sent" },
+        outcome: command_outcome.to_string(),
         message_id,
         requires_ack,
         task_id: task_id.clone(),
@@ -282,10 +283,10 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime>(
     let _ = observability.emit(CommandEvent {
         command: "send",
         action: "send",
-        outcome: outcome.outcome,
+        outcome: command_outcome,
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
-        sender: canonical_sender.clone(),
+        sender: canonical_sender.to_string(),
         message_id: Some(outcome.message_id),
         requires_ack: outcome.requires_ack,
         dry_run: outcome.dry_run,

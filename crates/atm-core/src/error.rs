@@ -10,6 +10,7 @@ pub(crate) enum AtmErrorKind {
     MissingDocument,
     Address,
     Identity,
+    DaemonUnavailable,
     TeamNotFound,
     AgentNotFound,
     MailboxLock,
@@ -74,6 +75,10 @@ impl AtmError {
 
     pub fn is_team_not_found(&self) -> bool {
         self.kind == AtmErrorKind::TeamNotFound
+    }
+
+    pub fn is_daemon_unavailable(&self) -> bool {
+        self.kind == AtmErrorKind::DaemonUnavailable
     }
 
     pub fn is_agent_not_found(&self) -> bool {
@@ -178,6 +183,17 @@ impl AtmError {
             "identity is not configured",
         )
         .with_recovery("Set ATM_IDENTITY or provide an explicit command identity override when the command supports one.")
+    }
+
+    pub fn daemon_unavailable(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::DaemonUnavailable,
+            AtmErrorKind::DaemonUnavailable,
+            message,
+        )
+        .with_recovery(
+            "Ensure the atm-daemon binary is installed, the daemon socket path is reachable, and ATM_DAEMON_BIN/ATM_HOME are set correctly before retrying.",
+        )
     }
 
     pub fn team_unavailable() -> Self {
@@ -348,6 +364,7 @@ impl AtmErrorKind {
             Self::MissingDocument => AtmErrorCode::ConfigTeamMissing,
             Self::Address => AtmErrorCode::AddressParseFailed,
             Self::Identity => AtmErrorCode::IdentityUnavailable,
+            Self::DaemonUnavailable => AtmErrorCode::DaemonUnavailable,
             Self::TeamNotFound => AtmErrorCode::TeamNotFound,
             Self::AgentNotFound => AtmErrorCode::AgentNotFound,
             Self::MailboxLock => AtmErrorCode::MailboxLockFailed,

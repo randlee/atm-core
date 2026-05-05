@@ -1,18 +1,28 @@
 #![allow(dead_code)]
 
+use std::fmt;
+use std::path::PathBuf;
+use std::process::{Command, Stdio};
+#[cfg(unix)]
+use std::{
+    io::{Read, Write},
+    os::unix::net::UnixStream,
+    thread,
+    time::Duration,
+};
+
 use atm_core::ack::{AckOutcome, AckRequest};
 use atm_core::boundary;
 use atm_core::boundary::ClientTransport;
 use atm_core::clear::{ClearOutcome, ClearQuery};
 use atm_core::doctor::{DoctorQuery, DoctorReport};
 use atm_core::error::AtmError;
-use atm_core::observability::ObservabilityPort;
+use atm_core::observability::{CommandEvent, ObservabilityPort};
 use atm_core::protocol::{
     RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
 };
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
-use std::fmt;
 
 use crate::observability::CliObservability;
 
@@ -34,41 +44,124 @@ impl ReceiveCommandEntryPoint {
     }
 }
 
-struct LocalSocketClientTransport<'a> {
-    observability: &'a (dyn ObservabilityPort + Send + Sync),
+#[derive(Debug)]
+struct LocalSocketClientTransport {
+    socket_path: PathBuf,
+    daemon_bin: PathBuf,
 }
 
-impl<'a> LocalSocketClientTransport<'a> {
-    fn new(observability: &'a (dyn ObservabilityPort + Send + Sync)) -> Self {
-        Self { observability }
+impl LocalSocketClientTransport {
+    fn new(socket_path: PathBuf, daemon_bin: PathBuf) -> Self {
+        Self {
+            socket_path,
+            daemon_bin,
+        }
+    }
+
+    fn ensure_daemon_available(&self) -> Result<(), AtmError> {
+        if self.try_connect().is_ok() {
+            return Ok(());
+        }
+        self.spawn_daemon()?;
+        for _ in 0..200 {
+            if self.try_connect().is_ok() {
+                return Ok(());
+            }
+            #[cfg(unix)]
+            thread::sleep(Duration::from_millis(50));
+        }
+        Err(AtmError::daemon_unavailable(format!(
+            "failed to connect to daemon socket at {} after auto-start",
+            self.socket_path.display()
+        )))
+    }
+
+    #[cfg(unix)]
+    fn try_connect(&self) -> Result<UnixStream, AtmError> {
+        UnixStream::connect(&self.socket_path).map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to connect to daemon socket at {}",
+                self.socket_path.display()
+            ))
+            .with_source(source)
+        })
+    }
+
+    #[cfg(not(unix))]
+    fn try_connect(&self) -> Result<(), AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "ATM thin-client transport requires a Unix platform",
+        ))
+    }
+
+    fn spawn_daemon(&self) -> Result<(), AtmError> {
+        if !self.daemon_bin.is_file() {
+            return Err(
+                AtmError::daemon_unavailable(format!(
+                    "daemon binary is missing at {}",
+                    self.daemon_bin.display()
+                ))
+                .with_recovery(
+                    "Build or install atm-daemon, or set ATM_DAEMON_BIN to the correct executable before retrying.",
+                ),
+            );
+        }
+
+        let mut command = Command::new(&self.daemon_bin);
+        command
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::inherit())
+            .env("ATM_DAEMON_SOCKET", &self.socket_path);
+        command.spawn().map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to spawn daemon binary at {}",
+                self.daemon_bin.display()
+            ))
+            .with_source(source)
+        })?;
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    fn exchange(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+        let mut stream = match self.try_connect() {
+            Ok(stream) => stream,
+            Err(_) => {
+                self.ensure_daemon_available()?;
+                self.try_connect()?
+            }
+        };
+        let encoded = serde_json::to_vec(&request).map_err(AtmError::from)?;
+        stream.write_all(&encoded).map_err(|source| {
+            AtmError::daemon_unavailable("failed to write daemon request frame").with_source(source)
+        })?;
+        stream
+            .shutdown(std::net::Shutdown::Write)
+            .map_err(|source| {
+                AtmError::daemon_unavailable("failed to finalize daemon request frame")
+                    .with_source(source)
+            })?;
+        let mut bytes = Vec::new();
+        stream.read_to_end(&mut bytes).map_err(|source| {
+            AtmError::daemon_unavailable("failed to read daemon response frame").with_source(source)
+        })?;
+        serde_json::from_slice(&bytes).map_err(AtmError::from)
+    }
+
+    #[cfg(not(unix))]
+    fn exchange(&self, _request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "ATM thin-client transport requires a Unix platform",
+        ))
     }
 }
 
-impl boundary::sealed::Sealed for LocalSocketClientTransport<'_> {}
+impl boundary::sealed::Sealed for LocalSocketClientTransport {}
 
-impl ClientTransport for LocalSocketClientTransport<'_> {
+impl ClientTransport for LocalSocketClientTransport {
     fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        match request {
-            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(
-                    atm_core::send::send_mail(request, self.observability)?,
-                )))
-            }
-            RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
-                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
-                    atm_core::ack::ack_mail(request, self.observability)?,
-                )))
-            }
-            RequestEnvelope::Receive(query) => Ok(ResponseEnvelope::Receive(
-                atm_core::read::read_mail(query, self.observability)?,
-            )),
-            RequestEnvelope::Clear(query) => Ok(ResponseEnvelope::Clear(
-                atm_core::clear::clear_mail(query, self.observability)?,
-            )),
-            RequestEnvelope::Doctor(query) => Ok(ResponseEnvelope::Doctor(
-                atm_core::doctor::run_doctor(query, self.observability)?,
-            )),
-        }
+        self.exchange(request)
     }
 }
 
@@ -128,7 +221,23 @@ impl<'a> CliComposition<'a> {
 
     pub(crate) fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
         match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))? {
-            ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => Ok(outcome),
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+                self.emit_success(CommandEvent {
+                    command: "send",
+                    action: "send",
+                    outcome: if outcome.dry_run { "dry_run" } else { "sent" },
+                    team: outcome.team.clone(),
+                    agent: outcome.agent.clone(),
+                    sender: outcome.sender.to_string(),
+                    message_id: Some(outcome.message_id),
+                    requires_ack: outcome.requires_ack,
+                    dry_run: outcome.dry_run,
+                    task_id: outcome.task_id.clone(),
+                    error_code: None,
+                    error_message: None,
+                });
+                Ok(outcome)
+            }
             other => Err(unexpected_response("send", other)),
         }
     }
@@ -137,21 +246,69 @@ impl<'a> CliComposition<'a> {
         match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
             request,
         )))? {
-            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => Ok(outcome),
+            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
+                self.emit_success(CommandEvent {
+                    command: "ack",
+                    action: "ack",
+                    outcome: "ok",
+                    team: outcome.team.clone(),
+                    agent: outcome.agent.clone(),
+                    sender: outcome.agent.to_string(),
+                    message_id: Some(outcome.message_id),
+                    requires_ack: false,
+                    dry_run: false,
+                    task_id: outcome.task_id.clone(),
+                    error_code: None,
+                    error_message: None,
+                });
+                Ok(outcome)
+            }
             other => Err(unexpected_response("ack", other)),
         }
     }
 
     pub(crate) fn receive(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
         match self.send_request(RequestEnvelope::Receive(query))? {
-            ResponseEnvelope::Receive(outcome) => Ok(outcome),
+            ResponseEnvelope::Receive(outcome) => {
+                self.emit_success(CommandEvent {
+                    command: "read",
+                    action: "read",
+                    outcome: "ok",
+                    team: outcome.team.clone(),
+                    agent: outcome.agent.clone(),
+                    sender: outcome.agent.to_string(),
+                    message_id: None,
+                    requires_ack: false,
+                    dry_run: false,
+                    task_id: None,
+                    error_code: None,
+                    error_message: None,
+                });
+                Ok(outcome)
+            }
             other => Err(unexpected_response("receive", other)),
         }
     }
 
     pub(crate) fn clear(&self, query: ClearQuery) -> Result<ClearOutcome, AtmError> {
         match self.send_request(RequestEnvelope::Clear(query))? {
-            ResponseEnvelope::Clear(outcome) => Ok(outcome),
+            ResponseEnvelope::Clear(outcome) => {
+                self.emit_success(CommandEvent {
+                    command: "clear",
+                    action: "clear",
+                    outcome: "ok",
+                    team: outcome.team.clone(),
+                    agent: outcome.agent.clone(),
+                    sender: outcome.agent.to_string(),
+                    message_id: None,
+                    requires_ack: false,
+                    dry_run: false,
+                    task_id: None,
+                    error_code: None,
+                    error_message: None,
+                });
+                Ok(outcome)
+            }
             other => Err(unexpected_response("clear", other)),
         }
     }
@@ -164,11 +321,27 @@ impl<'a> CliComposition<'a> {
     }
 
     pub(crate) fn bootstrap(observability: &'a CliObservability) -> Result<Self, AtmError> {
-        Ok(Self::from_transport(
-            Box::new(LocalSocketClientTransport::new(observability)),
-            observability,
-        ))
+        let socket_path = atm_core::protocol::daemon_socket_path()?;
+        let daemon_bin = resolve_daemon_bin()?;
+        let transport = LocalSocketClientTransport::new(socket_path, daemon_bin);
+        transport.ensure_daemon_available()?;
+        Ok(Self::from_transport(Box::new(transport), observability))
     }
+
+    fn emit_success(&self, event: CommandEvent) {
+        let _ = self.observability_port.emit(event);
+    }
+}
+
+fn resolve_daemon_bin() -> Result<PathBuf, AtmError> {
+    if let Some(path) = std::env::var_os("ATM_DAEMON_BIN").filter(|value| !value.is_empty()) {
+        return Ok(PathBuf::from(path));
+    }
+    let current = std::env::current_exe().map_err(|source| {
+        AtmError::daemon_unavailable("failed to resolve the current atm executable path")
+            .with_source(source)
+    })?;
+    Ok(current.with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX)))
 }
 
 fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError {

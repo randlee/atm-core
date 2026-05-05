@@ -6,7 +6,7 @@ pub(crate) mod wait;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::debug;
 
@@ -26,7 +26,7 @@ use crate::types::{
 use crate::workflow;
 
 /// Parameters for querying and optionally mutating one mailbox display surface.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
@@ -79,7 +79,7 @@ impl ReadQuery {
 }
 
 /// Bucket counts for one classified mailbox surface.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BucketCounts {
     pub unread: usize,
     pub pending_ack: usize,
@@ -87,7 +87,7 @@ pub struct BucketCounts {
 }
 
 /// One mailbox message classified for ATM display output.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClassifiedMessage {
     #[serde(skip)]
     source_index: SourceIndex,
@@ -100,9 +100,9 @@ pub struct ClassifiedMessage {
 }
 
 /// Result of one mailbox read/query command.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadOutcome {
-    pub action: &'static str,
+    pub action: String,
     pub team: TeamName,
     pub agent: AgentName,
     pub selection_mode: ReadSelection,
@@ -305,7 +305,7 @@ fn read_mail_with_runtime<R: RetainedServiceRuntime>(
         && bucket_counts.history > 0;
 
     let outcome = ReadOutcome {
-        action: "read",
+        action: "read".to_string(),
         team: target.team.clone(),
         agent: target.agent.clone(),
         selection_mode: query.selection_mode,
@@ -322,7 +322,7 @@ fn read_mail_with_runtime<R: RetainedServiceRuntime>(
         outcome: if timed_out { "timeout" } else { "ok" },
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
-        sender: actor.clone(),
+        sender: actor.to_string(),
         message_id: None,
         requires_ack: false,
         dry_run: false,

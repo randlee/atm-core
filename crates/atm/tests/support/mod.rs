@@ -3,6 +3,8 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::io;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -132,14 +134,7 @@ pub fn configure_atm_command<'a>(
     home_dir: &std::path::Path,
     identity: Option<&str>,
 ) -> &'a mut Command {
-    let daemon_bin = PathBuf::from(env!("CARGO_BIN_EXE_atm"))
-        .with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX));
-    assert!(
-        daemon_bin.exists(),
-        "expected hermetic test daemon binary beside {} but it was missing: {}",
-        env!("CARGO_BIN_EXE_atm"),
-        daemon_bin.display()
-    );
+    let daemon_bin = ensure_test_daemon_launcher(home_dir);
     command.env_clear();
     for key in [
         "PATH",
@@ -167,4 +162,43 @@ pub fn configure_atm_command<'a>(
         command.env("ATM_IDENTITY", identity);
     }
     command
+}
+
+fn ensure_test_daemon_launcher(home_dir: &std::path::Path) -> PathBuf {
+    #[cfg(unix)]
+    {
+        let wrapper = home_dir.join("atm-daemon-test-wrapper.sh");
+        let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .expect("workspace root");
+        fs::write(
+            &wrapper,
+            format!(
+                "#!/bin/sh\ncd '{}' || exit 1\nexec cargo run --quiet -p atm-daemon --bin atm-daemon -- \"$@\"\n",
+                workspace_root.display()
+            ),
+        )
+        .expect("write daemon wrapper");
+        let mut permissions = fs::metadata(&wrapper)
+            .expect("wrapper metadata")
+            .permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&wrapper, permissions).expect("chmod daemon wrapper");
+        wrapper
+    }
+
+    #[cfg(not(unix))]
+    {
+        let sibling = PathBuf::from(env!("CARGO_BIN_EXE_atm"))
+            .with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX));
+        if sibling.exists() {
+            return sibling;
+        }
+        panic!(
+            "expected hermetic test daemon binary beside {} but it was missing: {}",
+            env!("CARGO_BIN_EXE_atm"),
+            sibling.display()
+        );
+    }
 }

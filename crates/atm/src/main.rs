@@ -295,7 +295,7 @@ impl ScObservabilityAdapter {
     }
 }
 
-impl atm_core::observability::sealed::Sealed for ScObservabilityAdapter {}
+impl atm_core::boundary::sealed::Sealed for ScObservabilityAdapter {}
 
 impl ObservabilityPort for ScObservabilityAdapter {
     fn emit(&self, event: CommandEvent) -> Result<(), AtmError> {
@@ -401,7 +401,7 @@ fn map_command_event(
     );
     fields.insert(
         "sender".to_string(),
-        serde_json::Value::String(event.sender.to_string()),
+        serde_json::Value::String(event.sender.clone()),
     );
     fields.insert(
         "requires_ack".to_string(),
