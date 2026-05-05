@@ -140,11 +140,13 @@ mod tests {
         AtmLogQuery, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
         LogLevelFilter, LogMode, LogOrder, LogTailSession, ObservabilityPort,
     };
-    use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
     use serial_test::serial;
     use tempfile::TempDir;
 
     use super::{CliObservability, CliObservabilityOptions, fatal_emit_failure_message};
+
+    const TEST_TEAM: &str = "test-team";
+    const TEST_SENDER: &str = "sender-a";
 
     struct FailingEmitObservability;
 

@@ -109,7 +109,8 @@ impl SendCommand {
 mod tests {
     use super::SendCommand;
     use atm_core::roles::ROLE_TEAM_LEAD;
-    use atm_core::test_support::TEST_TEAM;
+
+    const TEST_TEAM: &str = "test-team";
 
     #[test]
     fn build_request_rejects_invalid_target_before_core() {

@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 #[cfg(test)]
 use std::ffi::{OsStr, OsString};
 #[cfg(test)]

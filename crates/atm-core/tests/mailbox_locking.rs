@@ -23,7 +23,6 @@ use atm_core::schema::{
     hydrate_legacy_fields_from_metadata,
 };
 use atm_core::send::{SendMessageSource, SendRequest, send_mail};
-use atm_core::test_support::{TEST_QA, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
 use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
 use chrono::Utc;
 #[cfg(unix)]
@@ -35,6 +34,10 @@ use uuid::Uuid;
 // architecture §18.3.
 #[cfg(unix)]
 const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(2);
+const TEST_TEAM: &str = "test-team";
+const TEST_SENDER: &str = "sender-a";
+const TEST_RECIPIENT: &str = "recipient";
+const TEST_QA: &str = "qa-a";
 const PRIMARY_TEAM: &str = TEST_TEAM;
 const PRIMARY_AGENT: &str = TEST_SENDER;
 const SECONDARY_AGENT: &str = TEST_QA;
