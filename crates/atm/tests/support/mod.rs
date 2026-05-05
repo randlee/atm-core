@@ -1,14 +1,12 @@
-#![allow(dead_code)]
-
 use std::collections::BTreeMap;
 #[cfg(test)]
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io;
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::Command;
+#[cfg(test)]
+use std::process::Output;
 #[cfg(test)]
 use std::sync::{Mutex, OnceLock};
 
@@ -17,36 +15,57 @@ pub use atm_core::roles::ROLE_TEAM_LEAD;
 use serde_json::json;
 use tempfile::TempDir;
 
+#[allow(dead_code)]
 pub const TEST_TEAM: &str = "test-team";
+#[allow(dead_code)]
 pub const TEST_SENDER: &str = "sender-a";
+#[allow(dead_code)]
 pub const TEST_RECIPIENT: &str = "recipient";
+#[allow(dead_code)]
 pub const TEST_QA: &str = "qa-a";
+#[allow(dead_code)]
 pub const TEST_QA_AGENT: &str = TEST_QA;
+#[allow(dead_code)]
 pub const TEST_LEAD: &str = "test-lead";
+#[allow(dead_code)]
 pub const TEST_DAEMON: &str = "daemon";
+#[allow(dead_code)]
 pub const TEST_ORIGIN: &str = "host-a";
+#[allow(dead_code)]
 pub const TEST_SENDER_ADDRESS: &str = "sender-a@test-team";
+#[allow(dead_code)]
 pub const TEST_RECIPIENT_ADDRESS: &str = "recipient@test-team";
+#[allow(dead_code)]
 pub const TEST_LEAD_ADDRESS: &str = "test-lead@test-team";
 
 #[cfg(test)]
+#[allow(dead_code)]
 pub fn env_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(()))
 }
 
 #[cfg(test)]
+#[allow(dead_code)]
 pub struct EnvGuard {
-    key: &'static str,
+    key: String,
     original: Option<OsString>,
+    _guard: std::sync::MutexGuard<'static, ()>,
 }
 
 #[cfg(test)]
 impl EnvGuard {
-    pub fn set_raw(key: &'static str, value: &str) -> Self {
-        let original = std::env::var_os(key);
-        set_env_var(key, value);
-        Self { key, original }
+    #[allow(dead_code)]
+    pub fn set_raw(key: impl Into<String>, value: &str) -> Self {
+        let key = key.into();
+        let guard = env_lock().lock().expect("env lock");
+        let original = std::env::var_os(&key);
+        set_env_var(&key, value);
+        Self {
+            key,
+            original,
+            _guard: guard,
+        }
     }
 }
 
@@ -54,13 +73,14 @@ impl EnvGuard {
 impl Drop for EnvGuard {
     fn drop(&mut self) {
         match self.original.take() {
-            Some(value) => set_env_var(self.key, value),
-            None => remove_env_var(self.key),
+            Some(value) => set_env_var(&self.key, value),
+            None => remove_env_var(&self.key),
         }
     }
 }
 
 #[cfg(test)]
+#[allow(dead_code)]
 pub fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
     // SAFETY: test callers acquire the shared test env lock before mutating
     // the process environment.
@@ -68,12 +88,23 @@ pub fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
 }
 
 #[cfg(test)]
+#[allow(dead_code)]
 pub fn remove_env_var<K: AsRef<OsStr>>(key: K) {
     // SAFETY: test callers acquire the shared test env lock before mutating
     // the process environment.
     unsafe { std::env::remove_var(key) }
 }
 
+#[cfg(test)]
+#[allow(dead_code)]
+pub fn is_daemon_start_transient(output: &Output) -> bool {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    stderr.contains("failed to read daemon request frame")
+        || stderr.contains("daemon socket was not published")
+        || stderr.contains("failed to connect to daemon socket")
+}
+
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct TestEnv {
     pub tempdir: TempDir,
@@ -81,6 +112,7 @@ pub struct TestEnv {
     pub cwd: PathBuf,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct TestEnvBuilder {
     team: String,
@@ -89,15 +121,18 @@ pub struct TestEnvBuilder {
 }
 
 impl TestEnvBuilder {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self::default()
     }
 
+    #[allow(dead_code)]
     pub fn team(mut self, team: impl Into<String>) -> Self {
         self.team = team.into();
         self
     }
 
+    #[allow(dead_code)]
     pub fn members<I, S>(mut self, members: I) -> Self
     where
         I: IntoIterator<Item = S>,
@@ -107,11 +142,13 @@ impl TestEnvBuilder {
         self
     }
 
+    #[allow(dead_code)]
     pub fn cwd_name(mut self, cwd_name: impl Into<String>) -> Self {
         self.cwd_name = cwd_name.into();
         self
     }
 
+    #[allow(dead_code)]
     pub fn build(self) -> io::Result<TestEnv> {
         let tempdir = tempfile::tempdir()?;
         let atm_home = tempdir.path().join("atm-home");
@@ -181,10 +218,12 @@ impl Default for TestEnvBuilder {
     }
 }
 
+#[allow(dead_code)]
 pub fn qualified(agent: &str) -> String {
     format!("{agent}@{TEST_TEAM}")
 }
 
+#[allow(dead_code)]
 pub fn configure_atm_command<'a>(
     command: &'a mut Command,
     home_dir: &std::path::Path,
@@ -221,40 +260,32 @@ pub fn configure_atm_command<'a>(
 }
 
 fn ensure_test_daemon_launcher(home_dir: &std::path::Path) -> PathBuf {
-    #[cfg(unix)]
-    {
-        let wrapper = home_dir.join("atm-daemon-test-wrapper.sh");
-        let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .canonicalize()
-            .expect("workspace root");
-        fs::write(
-            &wrapper,
-            format!(
-                "#!/bin/sh\ncd '{}' || exit 1\nexec cargo run --quiet -p atm-daemon --bin atm-daemon -- \"$@\"\n",
-                workspace_root.display()
-            ),
-        )
-        .expect("write daemon wrapper");
-        let mut permissions = fs::metadata(&wrapper)
-            .expect("wrapper metadata")
-            .permissions();
-        permissions.set_mode(0o755);
-        fs::set_permissions(&wrapper, permissions).expect("chmod daemon wrapper");
-        wrapper
+    #[allow(unused_variables)]
+    let hermetic_daemon = option_env!("CARGO_BIN_EXE_atm-daemon").map(PathBuf::from);
+    if let Some(path) = hermetic_daemon.as_ref().filter(|path| path.exists()) {
+        return path.clone();
     }
 
-    #[cfg(not(unix))]
-    {
-        let sibling = PathBuf::from(env!("CARGO_BIN_EXE_atm"))
-            .with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX));
-        if sibling.exists() {
-            return sibling;
-        }
-        panic!(
-            "expected hermetic test daemon binary beside {} but it was missing: {}",
-            env!("CARGO_BIN_EXE_atm"),
-            sibling.display()
-        );
+    let sibling = PathBuf::from(env!("CARGO_BIN_EXE_atm"))
+        .with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX));
+    if sibling.exists() {
+        return sibling;
     }
+
+    let workspace_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("target")
+        .join("debug")
+        .join(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX));
+    if workspace_binary.exists() {
+        return workspace_binary;
+    }
+
+    let _ = home_dir;
+    panic!(
+        "expected hermetic test daemon binary at one of: {:?}, {}, {}",
+        hermetic_daemon,
+        sibling.display(),
+        workspace_binary.display()
+    );
 }
