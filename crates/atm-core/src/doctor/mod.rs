@@ -409,7 +409,7 @@ mod tests {
         health: StubHealth,
     }
 
-    impl crate::observability::sealed::Sealed for StubObservability {}
+    impl crate::boundary::sealed::Sealed for StubObservability {}
 
     impl ObservabilityPort for StubObservability {
         fn emit(&self, _event: crate::observability::CommandEvent) -> Result<(), AtmError> {

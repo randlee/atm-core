@@ -755,7 +755,7 @@ status:
   state: stub_landed
   notes:
     - typed workspace and team config request/response contracts landed in atm_core::boundary
-    - retained command/service cutover to this boundary remains a later sprint concern
+    - retained command/service cutover to this boundary is formally deferred to R.7 in docs/plan-phase-R.md
 ```
 
 Purpose:
@@ -830,6 +830,7 @@ status:
   notes:
     - typed import, fingerprint, and diagnostics request/response contracts landed in atm_core::boundary
     - watcher-driven reconcile should call this boundary rather than store helpers directly
+    - retained send/read/ack/clear cutover to this boundary is formally deferred to R.7 in docs/plan-phase-R.md
 ```
 
 Purpose:

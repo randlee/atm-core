@@ -1,6 +1,6 @@
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::observability::{
-    self, AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, CommandEvent, LogTailSession,
+    AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, CommandEvent, LogTailSession,
     ObservabilityPort,
 };
 /// Structured CLI-owned observability construction options.
@@ -133,7 +133,7 @@ impl ObservabilityPort for CliObservability {
 // - UNI-003 retained as a defer decision: DoctorCommand injectability does not
 //   participate in the ObservabilityPort contract; defer injectability to a
 //   future sprint unless a concrete testing or feature need appears.
-impl observability::sealed::Sealed for CliObservability {}
+impl atm_core::boundary::sealed::Sealed for CliObservability {}
 
 fn fatal_emit_failure_message(stage: &str, emit_error: &AtmError) -> String {
     format!("ATM fatal diagnostic emission failed during {stage}: {emit_error}")
@@ -154,7 +154,7 @@ mod tests {
 
     struct FailingEmitObservability;
 
-    impl atm_core::observability::sealed::Sealed for FailingEmitObservability {}
+    impl atm_core::boundary::sealed::Sealed for FailingEmitObservability {}
 
     impl ObservabilityPort for FailingEmitObservability {
         fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {

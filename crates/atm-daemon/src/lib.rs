@@ -196,7 +196,21 @@ impl boundary::sealed::Sealed for DaemonReconcileCoordinator {}
 
 impl boundary::ReconcileCoordinator for DaemonReconcileCoordinator {
     fn reconcile(&self, request: ReconcileRequest) -> Result<ReconcileResult, AtmError> {
-        boundary_support::reconcile(request)
+        let batch = boundary_support::poll_watch(WatchSubscriptionRequest {
+            home_dir: request.home_dir.clone(),
+            team: request.team.clone(),
+            agent: request.agent.clone(),
+        })?;
+        let ingress = DaemonInboxIngress::new();
+        let import = ingress.import_inbox_source(InboxIngressImportRequest {
+            home_dir: request.home_dir,
+            team: request.team,
+            agent: request.agent,
+        })?;
+        Ok(ReconcileResult {
+            observed_paths: batch.paths.len(),
+            imported_sources: import.source_files.len(),
+        })
     }
 }
 
@@ -222,16 +236,6 @@ impl ConfigIngress for DaemonConfigIngress {
         request: ConfigTeamLoadRequest,
     ) -> Result<ConfigTeamLoadResponse, AtmError> {
         boundary_support::load_team_config(request)
-    }
-
-    fn load_team_config(
-        &self,
-        _request: ConfigTeamLoadRequest,
-    ) -> Result<ConfigTeamLoadResponse, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon config ingress team-config stub is not implemented yet",
-            DaemonBoundaryStubError::ConfigIngress,
-        ))
     }
 }
 

@@ -397,11 +397,6 @@ pub struct AtmObservabilityHealth {
     pub detail: Option<String>,
 }
 
-#[doc(hidden)]
-pub mod sealed {
-    pub trait Sealed {}
-}
-
 trait LogFollowPort: Send {
     fn poll(&mut self) -> Result<AtmLogSnapshot, AtmError>;
 }
@@ -466,7 +461,7 @@ impl LogTailSession {
     }
 }
 
-pub trait ObservabilityPort: sealed::Sealed {
+pub trait ObservabilityPort: crate::boundary::sealed::Sealed {
     /// Emit one ATM command event into the configured observability sink.
     ///
     /// # Errors
@@ -504,7 +499,7 @@ pub trait ObservabilityPort: sealed::Sealed {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct NullObservability;
 
-impl sealed::Sealed for NullObservability {}
+impl crate::boundary::sealed::Sealed for NullObservability {}
 
 impl ObservabilityPort for NullObservability {
     fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {
