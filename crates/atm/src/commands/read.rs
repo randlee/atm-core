@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
 use atm_core::home;
-use atm_core::read::{self, ReadQuery};
+use atm_core::read::ReadQuery;
 use atm_core::types::{AckActivationMode, IsoTimestamp, ReadSelection};
 use clap::Args;
 
+use crate::composition::CliComposition;
 use crate::observability::CliObservability;
 use crate::output;
 
@@ -64,8 +65,9 @@ impl ReadCommand {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
         let json = self.json;
+        let composition = CliComposition::bootstrap(observability)?;
         let query = self.build_query(home_dir, current_dir)?;
-        let outcome = read::read_mail(query, observability)?;
+        let outcome = composition.receive(query)?;
         output::print_read_result(&outcome, json)
     }
 
@@ -93,7 +95,7 @@ impl ReadCommand {
                 AckActivationMode::PromoteDisplayedUnread
             },
             self.limit,
-            self.from,
+            self.from.as_deref(),
             timestamp_filter,
             self.timeout,
         )

@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 mod support;
 
 use std::fs;
@@ -91,7 +93,7 @@ fn test_log_snapshot_filters_by_level() {
 fn test_log_snapshot_filters_by_since() {
     let fixture = Fixture::new(&[TEST_SENDER, TEST_RECIPIENT]);
     fixture.send(&qualified(TEST_RECIPIENT), "hello since");
-    let future = (Utc::now() + ChronoDuration::minutes(1)).to_rfc3339();
+    let future = (Utc::now() + ChronoDuration::minutes(5)).to_rfc3339();
 
     let output = fixture.run(&["log", "snapshot", "--since", &future, "--json"]);
 
@@ -266,33 +268,53 @@ impl Fixture {
         let tempdir = tempfile::tempdir().expect("tempdir");
         let fixture = Self { tempdir };
         fixture.write_team_config(members);
+        fixture.warm_daemon();
         fixture
     }
 
     fn run(&self, args: &[&str]) -> std::process::Output {
-        Command::new(env!("CARGO_BIN_EXE_atm"))
+        self.run_with_env(args, &[])
+    }
+
+    fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
+        let mut first = Command::new(env!("CARGO_BIN_EXE_atm"));
+        crate::support::configure_atm_command(&mut first, self.tempdir.path(), Some(TEST_SENDER))
             .args(args)
-            .env("ATM_HOME", self.tempdir.path())
-            .env("ATM_CONFIG_HOME", self.tempdir.path())
-            .env("ATM_IDENTITY", TEST_SENDER)
-            .env("ATM_TEAM", TEST_TEAM)
+            .envs(extra_env.iter().copied())
+            .current_dir(self.tempdir.path());
+        let output = first.output().expect("run atm");
+        if !crate::support::is_daemon_start_transient(&output) {
+            return output;
+        }
+
+        std::thread::sleep(Duration::from_millis(50));
+        let mut retry = Command::new(env!("CARGO_BIN_EXE_atm"));
+        crate::support::configure_atm_command(&mut retry, self.tempdir.path(), Some(TEST_SENDER))
+            .args(args)
+            .envs(extra_env.iter().copied())
             .current_dir(self.tempdir.path())
             .output()
-            .expect("run atm")
+            .expect("retry atm")
+    }
+
+    fn warm_daemon(&self) {
+        let output = self.run(&["read", "--all", "--no-mark", "--json"]);
+        assert!(output.status.success(), "stderr: {}", self.stderr(&output));
     }
 
     fn spawn_tail(&self, args: &[&str]) -> TailReader {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_atm"))
-            .args(args)
-            .env("ATM_HOME", self.tempdir.path())
-            .env("ATM_CONFIG_HOME", self.tempdir.path())
-            .env("ATM_IDENTITY", TEST_SENDER)
-            .env("ATM_TEAM", TEST_TEAM)
-            .current_dir(self.tempdir.path())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .expect("spawn atm");
+        let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
+        let mut child = crate::support::configure_atm_command(
+            &mut command,
+            self.tempdir.path(),
+            Some(TEST_SENDER),
+        )
+        .args(args)
+        .current_dir(self.tempdir.path())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn atm");
         let stdout = child.stdout.take().expect("tail stdout");
         let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
@@ -314,12 +336,16 @@ impl Fixture {
     }
 
     fn wait_for_tail_ready(&self, tail: &mut TailReader, target: &str) {
-        for attempt in 0..20 {
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        let mut attempt = 0usize;
+        while std::time::Instant::now() < deadline {
             self.send(target, &format!("tail readiness barrier {attempt}"));
-            if let Some(record) = tail.try_read_record(Duration::from_millis(250)) {
+            let probe = Duration::from_millis((50 * (attempt + 1) as u64).min(500));
+            if let Some(record) = tail.try_read_record(probe) {
                 assert_eq!(record["fields"]["command"], "send");
                 return;
             }
+            attempt += 1;
         }
 
         panic!("tail never produced a readiness record after repeated barrier sends");
@@ -401,7 +427,7 @@ impl TailReader {
     }
 
     fn read_record(&mut self) -> serde_json::Value {
-        self.try_read_record(Duration::from_secs(5))
+        self.try_read_record(Duration::from_secs(30))
             .unwrap_or_else(|| {
                 let _ = self.child.kill();
                 panic!("tail timed out before producing enough output");

@@ -1,8 +1,9 @@
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::observability::{
-    self, AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, CommandEvent, LogTailSession,
+    AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, CommandEvent, LogTailSession,
     ObservabilityPort,
 };
+use atm_core::types::{AgentName, TeamName};
 /// Structured CLI-owned observability construction options.
 ///
 /// L.5 intentionally keeps the release surface narrow: one explicit
@@ -35,15 +36,9 @@ impl CliObservability {
         Self { inner }
     }
 
+    /// Test-bootstrap escape hatch; production paths must use
+    /// `CliObservability::new`.
     pub fn fallback() -> Self {
-        #[cfg(test)]
-        if let Ok(observability) = Self::new(
-            &std::env::temp_dir().join("atm-bootstrap-observability"),
-            CliObservabilityOptions::default(),
-        ) {
-            return observability;
-        }
-
         Self {
             inner: Box::new(atm_core::observability::NullObservability),
         }
@@ -62,19 +57,22 @@ impl CliObservability {
 
         let identity = std::env::var("ATM_IDENTITY").unwrap_or_else(|_| "unknown".to_string());
         let team = std::env::var("ATM_TEAM").unwrap_or_else(|_| "unknown".to_string());
+        let fallback_agent: AgentName = match "unknown".parse() {
+            Ok(agent) => agent,
+            Err(_) => return,
+        };
+        let fallback_team: TeamName = match "unknown".parse() {
+            Ok(team) => team,
+            Err(_) => return,
+        };
+        let agent = identity.parse().unwrap_or(fallback_agent);
         if let Err(emit_error) = self.emit(CommandEvent {
             command: "atm",
             action: stage,
             outcome: "error",
-            team: team
-                .parse()
-                .unwrap_or_else(|_| "unknown".parse().expect("team")),
-            agent: identity
-                .parse()
-                .unwrap_or_else(|_| "unknown".parse().expect("agent")),
-            sender: identity
-                .parse()
-                .unwrap_or_else(|_| "unknown".parse().expect("agent")),
+            team: team.parse().unwrap_or(fallback_team),
+            agent: agent.clone(),
+            sender: agent,
             message_id: None,
             requires_ack: false,
             dry_run: false,
@@ -135,7 +133,7 @@ impl ObservabilityPort for CliObservability {
 // - UNI-003 retained as a defer decision: DoctorCommand injectability does not
 //   participate in the ObservabilityPort contract; defer injectability to a
 //   future sprint unless a concrete testing or feature need appears.
-impl observability::sealed::Sealed for CliObservability {}
+impl atm_core::boundary::sealed::Sealed for CliObservability {}
 
 fn fatal_emit_failure_message(stage: &str, emit_error: &AtmError) -> String {
     format!("ATM fatal diagnostic emission failed during {stage}: {emit_error}")
@@ -148,15 +146,17 @@ mod tests {
         AtmLogQuery, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
         LogLevelFilter, LogMode, LogOrder, LogTailSession, ObservabilityPort,
     };
-    use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
     use serial_test::serial;
     use tempfile::TempDir;
 
     use super::{CliObservability, CliObservabilityOptions, fatal_emit_failure_message};
 
+    const TEST_TEAM: &str = "test-team";
+    const TEST_SENDER: &str = "sender-a";
+
     struct FailingEmitObservability;
 
-    impl atm_core::observability::sealed::Sealed for FailingEmitObservability {}
+    impl atm_core::boundary::sealed::Sealed for FailingEmitObservability {}
 
     impl ObservabilityPort for FailingEmitObservability {
         fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {
@@ -203,7 +203,7 @@ mod tests {
             outcome: "sent",
             team: TEST_TEAM.parse().expect("team"),
             agent: TEST_SENDER.parse().expect("agent"),
-            sender: TEST_SENDER.parse().expect("sender"),
+            sender: TEST_SENDER.parse().expect("agent"),
             message_id: message_id.map(|value| value.parse().expect("legacy message id")),
             requires_ack: false,
             dry_run: false,

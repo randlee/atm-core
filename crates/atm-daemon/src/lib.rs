@@ -1,15 +1,37 @@
 #![forbid(unsafe_code)]
-#![allow(dead_code)]
-
 //! Skeleton crate for Phase R daemon runtime work.
 
 pub(crate) mod composition;
 
 use std::error::Error as StdError;
 use std::fmt;
+use std::fs::{self, File, OpenOptions};
+#[cfg(unix)]
+use std::io::Read;
+use std::io::Write;
+#[cfg(unix)]
+use std::os::unix::net::{UnixListener, UnixStream};
+use std::path::PathBuf;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, AtomicUsize, Ordering},
+};
+#[cfg(unix)]
+use std::thread;
+#[cfg(unix)]
+use std::time::{Duration, Instant};
 
+use fs2::FileExt;
+#[cfg(unix)]
+use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGTERM};
+#[cfg(unix)]
+use signal_hook::flag;
+
+#[cfg(unix)]
+use atm_core::protocol::RequestEnvelope as ProtocolRequestEnvelope;
 use atm_core::{
     RequestEnvelope, ResponseEnvelope,
+    ack::ack_mail,
     boundary::{
         self, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, ConfigTeamLoadRequest,
         ConfigTeamLoadResponse, InboxExport, InboxExportRecordRequest, InboxExportRecordResponse,
@@ -20,39 +42,40 @@ use atm_core::{
         ReconcileResult, RequestDispatcher, RuntimeStatusSnapshot, WatchEventBatch,
         WatchSubscriptionRequest,
     },
+    clear::clear_mail,
+    doctor::run_doctor,
     error::AtmError,
+    observability::{
+        AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
+        CommandEvent, LogTailSession, ObservabilityPort,
+    },
+    protocol::{SendRequestEnvelope, SendResponseEnvelope},
+    read::read_mail,
+    send::send_mail,
 };
+#[cfg(unix)]
+const MAX_CONCURRENT_CONNECTIONS: usize = 64;
+#[cfg(unix)]
+const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
+#[cfg(unix)]
+const SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_millis(25);
+#[cfg(unix)]
+const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
+#[cfg(unix)]
+const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DaemonBoundaryStubError {
-    ServerTransport,
-    RequestDispatcher,
-    NotificationSink,
-    StatusSource,
-    WatchEventSource,
-    ReconcileCoordinator,
-    ConfigIngress,
-    InboxIngress,
-    InboxExport,
     PeerClientTransport,
 }
 
 impl fmt::Display for DaemonBoundaryStubError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let message = match self {
-            Self::ServerTransport => "daemon server transport scaffold is not wired",
-            Self::PeerClientTransport => "daemon peer client transport scaffold is not wired",
-            Self::RequestDispatcher => "daemon request dispatcher scaffold is not wired",
-            Self::NotificationSink => "daemon notification sink scaffold is not wired",
-            Self::StatusSource => "daemon status source scaffold is not wired",
-            Self::WatchEventSource => "daemon watch event source scaffold is not wired",
-            Self::ReconcileCoordinator => "daemon reconcile coordinator scaffold is not wired",
-            Self::ConfigIngress => "daemon config ingress scaffold is not wired",
-            Self::InboxIngress => "daemon inbox ingress scaffold is not wired",
-            Self::InboxExport => "daemon inbox export scaffold is not wired",
-        };
-
-        f.write_str(message)
+        match self {
+            Self::PeerClientTransport => {
+                f.write_str("daemon peer client transport scaffold is not wired")
+            }
+        }
     }
 }
 
@@ -62,6 +85,267 @@ fn daemon_boundary_stub_error(message: &'static str, source: DaemonBoundaryStubE
     AtmError::config(message)
         .with_recovery("Complete the Phase R daemon boundary wiring before invoking this path.")
         .with_source(source)
+}
+fn load_workspace_config_direct(
+    request: ConfigLoadRequest,
+) -> Result<ConfigLoadResponse, AtmError> {
+    atm_core::boundary_support::load_workspace_config(request)
+}
+
+fn load_team_config_direct(
+    request: ConfigTeamLoadRequest,
+) -> Result<ConfigTeamLoadResponse, AtmError> {
+    atm_core::boundary_support::load_team_config(request)
+}
+
+fn import_inbox_source_direct(
+    request: InboxIngressImportRequest,
+) -> Result<InboxIngressImportResponse, AtmError> {
+    atm_core::boundary_support::import_inbox_source(request)
+}
+
+fn compute_identity_fingerprint_direct(
+    request: InboxIngressIdentityFingerprintRequest,
+) -> Result<InboxIngressIdentityFingerprintResponse, AtmError> {
+    atm_core::boundary_support::compute_identity_fingerprint(request)
+}
+
+fn report_inbox_diagnostics_direct(
+    request: InboxIngressDiagnosticsRequest,
+) -> Result<InboxIngressDiagnosticsResponse, AtmError> {
+    atm_core::boundary_support::report_inbox_diagnostics(request)
+}
+
+fn export_source_files_direct(
+    request: InboxExportRecordRequest,
+) -> Result<InboxExportRecordResponse, AtmError> {
+    atm_core::boundary_support::export_source_files(request)
+}
+
+fn reexport_messages_direct(
+    request: InboxExportReexportMessageRequest,
+) -> Result<InboxExportReexportMessageResponse, AtmError> {
+    atm_core::boundary_support::reexport_messages(request)
+}
+
+#[derive(Debug, Clone)]
+struct DaemonObservability {
+    home_dir: PathBuf,
+}
+
+impl DaemonObservability {
+    fn new(home_dir: PathBuf) -> Self {
+        Self { home_dir }
+    }
+}
+
+impl boundary::sealed::Sealed for DaemonObservability {}
+
+impl ObservabilityPort for DaemonObservability {
+    fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {
+        Ok(())
+    }
+
+    fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
+        Ok(AtmLogSnapshot::default())
+    }
+
+    fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, AtmError> {
+        Ok(LogTailSession::empty())
+    }
+
+    fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
+        let active_log_path = self
+            .home_dir
+            .join(".local")
+            .join("share")
+            .join("logs")
+            .join("atm.log.jsonl");
+        let fault = std::env::var("ATM_OBSERVABILITY_RETAINED_SINK_FAULT")
+            .ok()
+            .map(|value| value.trim().to_ascii_lowercase());
+        let logging_state = match fault.as_deref() {
+            Some("degraded") => AtmObservabilityHealthState::Degraded,
+            Some("unavailable") => AtmObservabilityHealthState::Unavailable,
+            _ => AtmObservabilityHealthState::Healthy,
+        };
+        Ok(AtmObservabilityHealth {
+            active_log_path: Some(active_log_path),
+            logging_state,
+            query_state: Some(AtmObservabilityHealthState::Healthy),
+            detail: None,
+        })
+    }
+}
+
+#[cfg(unix)]
+#[derive(Debug)]
+struct DaemonShutdownSignals {
+    terminate: Arc<AtomicBool>,
+    reload: Arc<AtomicBool>,
+}
+
+#[cfg(unix)]
+impl DaemonShutdownSignals {
+    fn install() -> Result<Self, AtmError> {
+        let terminate = Arc::new(AtomicBool::new(false));
+        let reload = Arc::new(AtomicBool::new(false));
+        for signal in [SIGINT, SIGTERM] {
+            flag::register(signal, Arc::clone(&terminate)).map_err(|source| {
+                AtmError::daemon_unavailable("failed to install daemon shutdown signal handler")
+                    .with_source(source)
+            })?;
+        }
+        flag::register(SIGHUP, Arc::clone(&reload)).map_err(|source| {
+            AtmError::daemon_unavailable("failed to install daemon reload signal handler")
+                .with_source(source)
+        })?;
+        Ok(Self { terminate, reload })
+    }
+}
+
+#[cfg(unix)]
+#[derive(Debug)]
+struct SingletonGuard {
+    socket_path: PathBuf,
+    lock_path: PathBuf,
+    lock_file: File,
+}
+
+#[cfg(unix)]
+impl SingletonGuard {
+    fn acquire(socket_path: &std::path::Path) -> Result<Self, AtmError> {
+        let lock_path = socket_path.with_extension("lock");
+        if let Some(parent) = lock_path.parent() {
+            fs::create_dir_all(parent).map_err(|source| {
+                AtmError::daemon_unavailable(format!(
+                    "failed to create daemon lock directory at {}",
+                    parent.display()
+                ))
+                .with_source(source)
+            })?;
+        }
+
+        let mut lock_file = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .open(&lock_path)
+            .map_err(|source| {
+                AtmError::daemon_unavailable(format!(
+                    "failed to open daemon singleton lock at {}",
+                    lock_path.display()
+                ))
+                .with_source(source)
+            })?;
+        lock_file.try_lock_exclusive().map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "a live ATM daemon already owns {}",
+                socket_path.display()
+            ))
+            .with_recovery(
+                "Stop the existing daemon or wait for it to exit before starting another instance.",
+            )
+            .with_source(source)
+        })?;
+        lock_file.set_len(0).map_err(|source| {
+            AtmError::daemon_unavailable("failed to reset daemon singleton lock metadata")
+                .with_source(source)
+        })?;
+        writeln!(&mut lock_file, "{}", std::process::id()).map_err(|source| {
+            AtmError::daemon_unavailable("failed to write daemon singleton lock metadata")
+                .with_source(source)
+        })?;
+        lock_file.sync_all().map_err(|source| {
+            AtmError::daemon_unavailable("failed to sync daemon singleton lock metadata")
+                .with_source(source)
+        })?;
+        if socket_path.exists() && UnixStream::connect(socket_path).is_err() {
+            let _ = fs::remove_file(socket_path);
+        }
+        Ok(Self {
+            socket_path: socket_path.to_path_buf(),
+            lock_path,
+            lock_file,
+        })
+    }
+}
+
+#[cfg(unix)]
+impl Drop for SingletonGuard {
+    fn drop(&mut self) {
+        let _ = self.lock_file.unlock();
+        let _ = fs::remove_file(&self.socket_path);
+        let _ = fs::remove_file(&self.lock_path);
+    }
+}
+
+#[cfg(unix)]
+struct ActiveConnectionGuard {
+    active_connections: Arc<AtomicUsize>,
+}
+
+#[cfg(unix)]
+impl ActiveConnectionGuard {
+    fn new(active_connections: Arc<AtomicUsize>) -> Self {
+        Self { active_connections }
+    }
+}
+
+#[cfg(unix)]
+impl Drop for ActiveConnectionGuard {
+    fn drop(&mut self) {
+        self.active_connections.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+#[cfg(unix)]
+fn handle_connection(
+    stream: &mut UnixStream,
+    dispatcher: &dyn RequestDispatcher,
+) -> Result<(), AtmError> {
+    stream
+        .set_read_timeout(Some(REQUEST_DEADLINE))
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to apply daemon request read deadline")
+                .with_source(source)
+        })?;
+    stream
+        .set_write_timeout(Some(REQUEST_DEADLINE))
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to apply daemon response write deadline")
+                .with_source(source)
+        })?;
+
+    let mut bytes = Vec::new();
+    stream.read_to_end(&mut bytes).map_err(|source| {
+        AtmError::daemon_unavailable("failed to read daemon request frame").with_source(source)
+    })?;
+    if bytes.is_empty() {
+        return Ok(());
+    }
+    let request: ProtocolRequestEnvelope =
+        serde_json::from_slice(&bytes).map_err(AtmError::from)?;
+    let started = Instant::now();
+    // TODO(phase-R): enforce a max 32 inflight requests per connection once framed multiplexing lands.
+    let response = match dispatcher.dispatch(request) {
+        Ok(response) if started.elapsed() <= REQUEST_DEADLINE => response,
+        Ok(_) => ResponseEnvelope::Error(atm_core::protocol::ProtocolErrorEnvelope::from_error(
+            &AtmError::daemon_unavailable("daemon request exceeded the 3s runtime deadline"),
+        )),
+        Err(error) => ResponseEnvelope::Error(
+            atm_core::protocol::ProtocolErrorEnvelope::from_error(&error),
+        ),
+    };
+    let encoded = serde_json::to_vec(&response).map_err(AtmError::from)?;
+    stream.write_all(&encoded).map_err(|source| {
+        AtmError::daemon_unavailable("failed to write daemon response frame").with_source(source)
+    })?;
+    stream.flush().map_err(|source| {
+        AtmError::daemon_unavailable("failed to flush daemon response frame").with_source(source)
+    })?;
+    Ok(())
 }
 
 /// Placeholder runtime transport for the daemon server boundary.
@@ -77,10 +361,102 @@ impl LocalSocketServerTransport {
 impl boundary::sealed::Sealed for LocalSocketServerTransport {}
 
 impl boundary::ServerTransport for LocalSocketServerTransport {
-    fn serve(&self, _dispatcher: &dyn RequestDispatcher) -> Result<(), AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon server transport stub is not implemented yet",
-            DaemonBoundaryStubError::ServerTransport,
+    #[cfg(unix)]
+    fn serve(&self, dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
+        let socket_path = atm_core::protocol::daemon_socket_path()?;
+        let signals = DaemonShutdownSignals::install()?;
+        let _singleton = SingletonGuard::acquire(&socket_path)?;
+        if let Some(parent) = socket_path.parent() {
+            fs::create_dir_all(parent).map_err(|source| {
+                AtmError::daemon_unavailable(format!(
+                    "failed to create daemon socket directory at {}",
+                    parent.display()
+                ))
+                .with_source(source)
+            })?;
+        }
+        let listener = UnixListener::bind(&socket_path).map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to bind daemon socket at {}",
+                socket_path.display()
+            ))
+            .with_source(source)
+        })?;
+        listener.set_nonblocking(true).map_err(|source| {
+            AtmError::daemon_unavailable("failed to configure daemon socket listener")
+                .with_source(source)
+        })?;
+
+        let active_connections = Arc::new(AtomicUsize::new(0));
+        thread::scope(|scope| -> Result<(), AtmError> {
+            loop {
+                if signals.reload.swap(false, Ordering::SeqCst) {
+                    tracing::info!(
+                        "TODO(phase-R): bounded SIGHUP-triggered config/roster reload is not wired yet"
+                    );
+                }
+                if signals.terminate.load(Ordering::SeqCst) {
+                    break;
+                }
+
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        if active_connections.load(Ordering::SeqCst) >= MAX_CONCURRENT_CONNECTIONS {
+                            let response = ResponseEnvelope::Error(
+                                atm_core::protocol::ProtocolErrorEnvelope::from_error(
+                                    &AtmError::daemon_unavailable(
+                                        "daemon connection cap exceeded (max 64 concurrent accepts)",
+                                    ),
+                                ),
+                            );
+                            let encoded = serde_json::to_vec(&response).map_err(AtmError::from)?;
+                            let _ = stream.write_all(&encoded);
+                            let _ = stream.flush();
+                            continue;
+                        }
+
+                        let dispatcher = Arc::clone(&dispatcher);
+                        let active_connections = Arc::clone(&active_connections);
+                        active_connections.fetch_add(1, Ordering::SeqCst);
+                        scope.spawn(move || {
+                            let _active = ActiveConnectionGuard::new(active_connections);
+                            if let Err(error) = handle_connection(&mut stream, dispatcher.as_ref())
+                            {
+                                tracing::warn!(%error, "daemon connection handling failed");
+                            }
+                        });
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(SHUTDOWN_POLL_INTERVAL);
+                    }
+                    Err(source) => {
+                        return Err(AtmError::daemon_unavailable(
+                            "failed while accepting daemon connection",
+                        )
+                        .with_source(source));
+                    }
+                }
+            }
+
+            let shutdown_started = Instant::now();
+            while active_connections.load(Ordering::SeqCst) > 0
+                && shutdown_started.elapsed() < GRACEFUL_DRAIN_DEADLINE
+            {
+                thread::sleep(SHUTDOWN_POLL_INTERVAL);
+            }
+            while active_connections.load(Ordering::SeqCst) > 0
+                && shutdown_started.elapsed() < FORCE_CANCEL_DEADLINE
+            {
+                thread::sleep(SHUTDOWN_POLL_INTERVAL);
+            }
+            Ok(())
+        })
+    }
+
+    #[cfg(not(unix))]
+    fn serve(&self, _dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "atm-daemon socket transport requires a Unix platform",
         ))
     }
 }
@@ -98,11 +474,29 @@ impl DaemonRequestDispatcher {
 impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
 impl boundary::RequestDispatcher for DaemonRequestDispatcher {
-    fn dispatch(&self, _request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon request dispatcher stub is not implemented yet",
-            DaemonBoundaryStubError::RequestDispatcher,
-        ))
+    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+        let observability = DaemonObservability::new(atm_core::home::atm_home()?);
+        match request {
+            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
+                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(
+                    send_mail(request, &observability)?,
+                )))
+            }
+            RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
+                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
+                    ack_mail(request, &observability)?,
+                )))
+            }
+            RequestEnvelope::Receive(query) => {
+                Ok(ResponseEnvelope::Receive(read_mail(query, &observability)?))
+            }
+            RequestEnvelope::Clear(query) => {
+                Ok(ResponseEnvelope::Clear(clear_mail(query, &observability)?))
+            }
+            RequestEnvelope::Doctor(query) => {
+                Ok(ResponseEnvelope::Doctor(run_doctor(query, &observability)?))
+            }
+        }
     }
 }
 
@@ -119,11 +513,8 @@ impl DaemonNotificationSink {
 impl boundary::sealed::Sealed for DaemonNotificationSink {}
 
 impl boundary::NotificationSink for DaemonNotificationSink {
-    fn deliver(&self, _event: NotificationEvent) -> Result<(), AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon notification sink stub is not implemented yet",
-            DaemonBoundaryStubError::NotificationSink,
-        ))
+    fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError> {
+        atm_core::boundary_support::deliver_notification(event)
     }
 }
 
@@ -162,10 +553,7 @@ impl boundary::sealed::Sealed for DaemonStatusSource {}
 
 impl boundary::StatusSource for DaemonStatusSource {
     fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon status source stub is not implemented yet",
-            DaemonBoundaryStubError::StatusSource,
-        ))
+        atm_core::boundary_support::snapshot_status()
     }
 }
 
@@ -182,11 +570,8 @@ impl FileWatchEventSource {
 impl boundary::sealed::Sealed for FileWatchEventSource {}
 
 impl boundary::WatchEventSource for FileWatchEventSource {
-    fn poll(&self, _request: WatchSubscriptionRequest) -> Result<WatchEventBatch, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon watch event source stub is not implemented yet",
-            DaemonBoundaryStubError::WatchEventSource,
-        ))
+    fn poll(&self, request: WatchSubscriptionRequest) -> Result<WatchEventBatch, AtmError> {
+        atm_core::boundary_support::poll_watch(request)
     }
 }
 
@@ -203,11 +588,8 @@ impl DaemonReconcileCoordinator {
 impl boundary::sealed::Sealed for DaemonReconcileCoordinator {}
 
 impl boundary::ReconcileCoordinator for DaemonReconcileCoordinator {
-    fn reconcile(&self, _request: ReconcileRequest) -> Result<ReconcileResult, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon reconcile coordinator stub is not implemented yet",
-            DaemonBoundaryStubError::ReconcileCoordinator,
-        ))
+    fn reconcile(&self, request: ReconcileRequest) -> Result<ReconcileResult, AtmError> {
+        atm_core::boundary_support::reconcile(request)
     }
 }
 
@@ -224,21 +606,15 @@ impl DaemonConfigIngress {
 impl boundary::sealed::Sealed for DaemonConfigIngress {}
 
 impl ConfigIngress for DaemonConfigIngress {
-    fn load_config(&self, _request: ConfigLoadRequest) -> Result<ConfigLoadResponse, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon config ingress stub is not implemented yet",
-            DaemonBoundaryStubError::ConfigIngress,
-        ))
+    fn load_config(&self, request: ConfigLoadRequest) -> Result<ConfigLoadResponse, AtmError> {
+        load_workspace_config_direct(request)
     }
 
     fn load_team_config(
         &self,
-        _request: ConfigTeamLoadRequest,
+        request: ConfigTeamLoadRequest,
     ) -> Result<ConfigTeamLoadResponse, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon config ingress team-config stub is not implemented yet",
-            DaemonBoundaryStubError::ConfigIngress,
-        ))
+        load_team_config_direct(request)
     }
 }
 
@@ -257,32 +633,23 @@ impl boundary::sealed::Sealed for DaemonInboxIngress {}
 impl InboxIngress for DaemonInboxIngress {
     fn import_inbox_source(
         &self,
-        _request: InboxIngressImportRequest,
+        request: InboxIngressImportRequest,
     ) -> Result<InboxIngressImportResponse, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon inbox ingress import stub is not implemented yet",
-            DaemonBoundaryStubError::InboxIngress,
-        ))
+        import_inbox_source_direct(request)
     }
 
     fn compute_identity_fingerprint(
         &self,
-        _request: InboxIngressIdentityFingerprintRequest,
+        request: InboxIngressIdentityFingerprintRequest,
     ) -> Result<InboxIngressIdentityFingerprintResponse, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon inbox ingress fingerprint stub is not implemented yet",
-            DaemonBoundaryStubError::InboxIngress,
-        ))
+        compute_identity_fingerprint_direct(request)
     }
 
     fn report_diagnostics(
         &self,
-        _request: InboxIngressDiagnosticsRequest,
+        request: InboxIngressDiagnosticsRequest,
     ) -> Result<InboxIngressDiagnosticsResponse, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon inbox ingress diagnostics stub is not implemented yet",
-            DaemonBoundaryStubError::InboxIngress,
-        ))
+        report_inbox_diagnostics_direct(request)
     }
 }
 
@@ -301,21 +668,24 @@ impl boundary::sealed::Sealed for DaemonInboxExport {}
 impl InboxExport for DaemonInboxExport {
     fn export_record(
         &self,
-        _request: InboxExportRecordRequest,
+        request: InboxExportRecordRequest,
     ) -> Result<InboxExportRecordResponse, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon inbox export record stub is not implemented yet",
-            DaemonBoundaryStubError::InboxExport,
-        ))
+        export_source_files_direct(request)
     }
 
     fn reexport_message(
         &self,
-        _request: InboxExportReexportMessageRequest,
+        request: InboxExportReexportMessageRequest,
     ) -> Result<InboxExportReexportMessageResponse, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon inbox re-export stub is not implemented yet",
-            DaemonBoundaryStubError::InboxExport,
-        ))
+        reexport_messages_direct(request)
     }
+}
+
+/// Run the daemon entrypoint with the currently assembled runtime composition.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the daemon transport cannot start or serve.
+pub fn run_daemon() -> Result<(), AtmError> {
+    composition::compose_runtime().serve()
 }

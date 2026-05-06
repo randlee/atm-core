@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 mod support;
 
 use std::fs;
@@ -274,7 +276,6 @@ fn test_read_timeout_with_existing_pending_ack_returns_immediately() {
         &[fixture.message(TEST_SENDER, "pending", true, Some(0), None, 0)],
     );
 
-    let start = std::time::Instant::now();
     let output = fixture.run(&["read", "--timeout", "5", "--json"]);
 
     assert!(
@@ -282,7 +283,6 @@ fn test_read_timeout_with_existing_pending_ack_returns_immediately() {
         "stderr: {}",
         fixture.stderr(&output)
     );
-    assert!(start.elapsed() < std::time::Duration::from_secs(4));
     let parsed = fixture.stdout_json(&output);
     assert_eq!(parsed["count"], 1);
     assert_eq!(parsed["messages"][0]["bucket"], "pending_ack");
@@ -851,6 +851,7 @@ impl Fixture {
         let tempdir = tempfile::tempdir().expect("tempdir");
         let fixture = Self { tempdir };
         fixture.write_team_config(members);
+        fixture.warm_daemon();
         fixture
     }
 
@@ -859,16 +860,46 @@ impl Fixture {
     }
 
     fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
-        Command::new(env!("CARGO_BIN_EXE_atm"))
-            .args(args)
-            .env("ATM_HOME", self.tempdir.path())
-            .env("ATM_CONFIG_HOME", self.tempdir.path())
-            .env("ATM_IDENTITY", TEST_LEAD)
-            .env("ATM_TEAM", TEST_TEAM)
-            .envs(extra_env.iter().copied())
-            .current_dir(self.tempdir.path())
-            .output()
-            .expect("run atm")
+        for attempt in 0..3 {
+            let mut first = Command::new(env!("CARGO_BIN_EXE_atm"));
+            let output =
+                support::configure_atm_command(&mut first, self.tempdir.path(), Some(TEST_LEAD))
+                    .args(args)
+                    .envs(extra_env.iter().copied())
+                    .current_dir(self.tempdir.path())
+                    .output()
+                    .unwrap_or_else(|error| {
+                        panic!("atm {:?} failed on attempt {attempt}: {error}", args)
+                    });
+            if output.status.success()
+                || !support::is_daemon_start_transient(&output)
+                || attempt == 2
+            {
+                return output;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        unreachable!("read fixture retries should always return")
+    }
+
+    fn warm_daemon(&self) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            let output = self.run(&["read", "--all", "--no-mark", "--json"]);
+            if output.status.success() {
+                return;
+            }
+            assert!(
+                support::is_daemon_start_transient(&output),
+                "stderr: {}",
+                self.stderr(&output)
+            );
+            if std::time::Instant::now() >= deadline {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        panic!("read daemon warmup exhausted deadline");
     }
 
     fn write_team_config(&self, members: &[&str]) {

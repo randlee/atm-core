@@ -114,6 +114,9 @@ fn execute_post_send_hook(
     if let Some(task_id) = context.task_id {
         payload["task_id"] = Value::String(task_id.to_string());
     }
+    if let Some(recipient_pane_id) = context.recipient_pane_id {
+        payload["recipient_pane_id"] = Value::String(recipient_pane_id.to_string());
+    }
 
     debug!(
         sender = %context.sender,

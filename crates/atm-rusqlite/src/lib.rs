@@ -172,31 +172,31 @@ impl SqliteRosterStore {
 /// Internal assembly root for Phase R SQLite-backed boundary implementations.
 #[derive(Debug)]
 pub(crate) struct SqliteBoundaryAssembly {
-    mail_store: SqliteMailStore,
-    task_store: SqliteTaskStore,
-    roster_store: SqliteRosterStore,
+    mail_store: Arc<SqliteMailStore>,
+    task_store: Arc<SqliteTaskStore>,
+    roster_store: Arc<SqliteRosterStore>,
 }
 
 impl SqliteBoundaryAssembly {
     pub(crate) fn new(path: impl AsRef<Path>) -> Result<Self, AtmError> {
         let db = Arc::new(SharedDb::open(path)?);
         Ok(Self {
-            mail_store: SqliteMailStore::new(db.clone()),
-            task_store: SqliteTaskStore::new(db.clone()),
-            roster_store: SqliteRosterStore::new(db),
+            mail_store: Arc::new(SqliteMailStore::new(db.clone())),
+            task_store: Arc::new(SqliteTaskStore::new(db.clone())),
+            roster_store: Arc::new(SqliteRosterStore::new(db)),
         })
     }
 
-    pub(crate) fn mail_store(&self) -> &SqliteMailStore {
-        &self.mail_store
+    pub(crate) fn mail_store(&self) -> &dyn boundary::MailStore {
+        self.mail_store.as_ref()
     }
 
-    pub(crate) fn task_store(&self) -> &SqliteTaskStore {
-        &self.task_store
+    pub(crate) fn task_store(&self) -> &dyn boundary::TaskStore {
+        self.task_store.as_ref()
     }
 
-    pub(crate) fn roster_store(&self) -> &SqliteRosterStore {
-        &self.roster_store
+    pub(crate) fn roster_store(&self) -> &dyn boundary::RosterStore {
+        self.roster_store.as_ref()
     }
 }
 
@@ -881,7 +881,6 @@ mod tests {
     use atm_core::schema::TeamConfig;
     use atm_core::schema::{AgentMember, MessageEnvelope};
     use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
-    use atm_core::{MailStore, RosterStore, TaskStore};
     use tempfile::TempDir;
 
     fn temp_db() -> (TempDir, PathBuf) {
@@ -1106,7 +1105,7 @@ mod tests {
         let assembly = assemble_boundary(&path).expect("assembly");
 
         assembly
-            .mail_store()
+            .mail_store
             .db
             .with_connection(|connection| {
                 let journal_mode: String = connection
@@ -1130,7 +1129,7 @@ mod tests {
     fn sqlite_transactions_roll_back_on_error() {
         let (_tempdir, path) = temp_db();
         let assembly = assemble_boundary(&path).expect("assembly");
-        let db = assembly.mail_store().db.clone();
+        let db = assembly.mail_store.db.clone();
         let forced_failure_message = "force rollback";
 
         let result: Result<(), AtmError> = db.with_transaction(|transaction| {

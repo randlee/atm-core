@@ -1,49 +1,29 @@
+#![cfg(unix)]
+
 mod support;
 
-use std::fs;
-use std::process::Command;
+use std::ops::Deref;
 
-use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
-use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+use crate::support::CliFixture;
+use atm_core::types::IsoTimestamp;
 use chrono::{Duration, Utc};
-use serde_json::Value;
 use support::{TEST_LEAD, TEST_ORIGIN, TEST_SENDER, TEST_TEAM};
-
-fn parse_inbox_values(raw: &str) -> Vec<Value> {
-    if raw.trim().is_empty() {
-        return Vec::new();
-    }
-
-    match raw.chars().find(|ch| !ch.is_whitespace()) {
-        Some('[') => serde_json::from_str(raw).expect("json array"),
-        _ => raw
-            .lines()
-            .map(|line| serde_json::from_str(line).expect("json line"))
-            .collect(),
-    }
-}
 
 #[test]
 fn test_clear_default_removes_only_read_and_acknowledged() {
     let fixture = Fixture::new(&[TEST_SENDER]);
+    let base = Utc::now() - Duration::days(10);
     fixture.write_inbox(
         TEST_SENDER,
         &[
-            fixture.message(
-                TEST_LEAD,
-                "unread",
-                false,
-                None,
-                None,
-                Utc::now() - Duration::days(10),
-            ),
+            fixture.message(TEST_LEAD, "unread", false, None, None, base),
             fixture.message(
                 TEST_LEAD,
                 "pending",
                 true,
-                Some(Utc::now() - Duration::days(9)),
+                Some(base + Duration::days(1)),
                 None,
-                Utc::now() - Duration::days(9),
+                base + Duration::days(1),
             ),
             fixture.message(
                 TEST_LEAD,
@@ -51,15 +31,15 @@ fn test_clear_default_removes_only_read_and_acknowledged() {
                 true,
                 None,
                 None,
-                Utc::now() - Duration::days(8),
+                base + Duration::days(2),
             ),
             fixture.message(
                 TEST_LEAD,
                 "acknowledged",
                 true,
                 None,
-                Some(Utc::now() - Duration::days(7)),
-                Utc::now() - Duration::days(7),
+                Some(base + Duration::days(3)),
+                base + Duration::days(3),
             ),
         ],
     );
@@ -418,178 +398,18 @@ fn test_clear_removes_from_origin_inbox_file() {
     );
 }
 
-struct Fixture {
-    tempdir: tempfile::TempDir,
-}
+struct Fixture(CliFixture);
 
 impl Fixture {
     fn new(members: &[&str]) -> Self {
-        let tempdir = tempfile::tempdir().expect("tempdir");
-        let fixture = Self { tempdir };
-        fixture.write_team_config(members);
-        fixture
+        Self(CliFixture::new_with_members(members))
     }
+}
 
-    fn run(&self, args: &[&str]) -> std::process::Output {
-        self.run_with_env(args, &[])
-    }
-
-    fn run_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_atm"));
-        command
-            .args(args)
-            .env("ATM_HOME", self.tempdir.path())
-            .env("ATM_CONFIG_HOME", self.tempdir.path())
-            .env("ATM_IDENTITY", TEST_SENDER)
-            .env("ATM_TEAM", TEST_TEAM)
-            .current_dir(self.tempdir.path());
-        for (key, value) in extra_env {
-            command.env(key, value);
-        }
-        command.output().expect("run atm")
-    }
-
-    fn write_team_config(&self, members: &[&str]) {
-        let team_dir = self.team_dir();
-        fs::create_dir_all(&team_dir).expect("team dir");
-        let config = TeamConfig {
-            members: members
-                .iter()
-                .map(|member| AgentMember::with_name((*member).parse().expect("agent")))
-                .collect(),
-            ..Default::default()
-        };
-        fs::write(
-            team_dir.join("config.json"),
-            serde_json::to_vec(&config).expect("team config"),
-        )
-        .expect("write team config");
-    }
-
-    fn write_inbox(&self, agent: &str, messages: &[MessageEnvelope]) {
-        let inbox_path = self.inbox_path(agent);
-        if let Some(parent) = inbox_path.parent() {
-            fs::create_dir_all(parent).expect("inbox dir");
-        }
-        let values: Vec<Value> = messages
-            .iter()
-            .map(|message| serde_json::to_value(message).expect("json value"))
-            .collect();
-        fs::write(
-            inbox_path,
-            serde_json::to_string_pretty(&values).expect("json array"),
-        )
-        .expect("write inbox");
-    }
-
-    fn inbox_path(&self, agent: &str) -> std::path::PathBuf {
-        self.team_dir()
-            .join("inboxes")
-            .join(format!("{agent}.json"))
-    }
-
-    fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {
-        let raw = fs::read_to_string(self.inbox_path(agent)).expect("inbox contents");
-        parse_inbox_values(&raw)
-            .into_iter()
-            .map(|value| serde_json::from_value(value).expect("message envelope"))
-            .collect()
-    }
-
-    fn write_workflow_state(&self, agent: &str, value: Value) {
-        let path = self
-            .team_dir()
-            .join(".atm-state")
-            .join("workflow")
-            .join(format!("{agent}.json"));
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).expect("workflow dir");
-        }
-        fs::write(path, serde_json::to_vec(&value).expect("workflow json"))
-            .expect("write workflow");
-    }
-
-    fn workflow_state_contents(&self, agent: &str) -> Value {
-        let raw = fs::read_to_string(
-            self.team_dir()
-                .join(".atm-state")
-                .join("workflow")
-                .join(format!("{agent}.json")),
-        )
-        .expect("workflow state contents");
-        serde_json::from_str(&raw).expect("workflow json")
-    }
-
-    fn write_origin_inbox(&self, agent: &str, origin: &str, messages: &[MessageEnvelope]) {
-        let inbox_path = self.origin_inbox_path(agent, origin);
-        if let Some(parent) = inbox_path.parent() {
-            fs::create_dir_all(parent).expect("origin inbox dir");
-        }
-        let values: Vec<Value> = messages
-            .iter()
-            .map(|message| serde_json::to_value(message).expect("json value"))
-            .collect();
-        fs::write(
-            inbox_path,
-            serde_json::to_string_pretty(&values).expect("json array"),
-        )
-        .expect("write origin inbox");
-    }
-
-    fn origin_inbox_path(&self, agent: &str, origin: &str) -> std::path::PathBuf {
-        self.team_dir()
-            .join("inboxes")
-            .join(format!("{agent}.{origin}.json"))
-    }
-
-    fn origin_inbox_contents(&self, agent: &str, origin: &str) -> Vec<MessageEnvelope> {
-        let raw = fs::read_to_string(self.origin_inbox_path(agent, origin))
-            .expect("origin inbox contents");
-        parse_inbox_values(&raw)
-            .into_iter()
-            .map(|value| serde_json::from_value(value).expect("message envelope"))
-            .collect()
-    }
-
-    fn stdout_json(&self, output: &std::process::Output) -> Value {
-        serde_json::from_slice(&output.stdout).expect("valid clear json")
-    }
-
-    fn stderr(&self, output: &std::process::Output) -> String {
-        String::from_utf8(output.stderr.clone()).expect("stderr utf8")
-    }
-
-    fn team_dir(&self) -> std::path::PathBuf {
-        self.tempdir
-            .path()
-            .join(".claude")
-            .join("teams")
-            .join(TEST_TEAM)
-    }
-
-    fn message(
-        &self,
-        from: &str,
-        text: &str,
-        read: bool,
-        pending_ack_at: Option<chrono::DateTime<Utc>>,
-        acknowledged_at: Option<chrono::DateTime<Utc>>,
-        timestamp: chrono::DateTime<Utc>,
-    ) -> MessageEnvelope {
-        MessageEnvelope {
-            from: from.parse::<AgentName>().expect("agent"),
-            text: text.to_string(),
-            timestamp: timestamp.into(),
-            read,
-            source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
-            summary: None,
-            message_id: Some(LegacyMessageId::new()),
-            pending_ack_at: pending_ack_at.map(Into::into),
-            acknowledged_at: acknowledged_at.map(Into::into),
-            acknowledges_message_id: None,
-            task_id: None,
-            extra: serde_json::Map::new(),
-        }
+impl Deref for Fixture {
+    type Target = CliFixture;
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 

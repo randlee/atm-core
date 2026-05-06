@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Map;
 use tracing::warn;
 
@@ -24,7 +24,7 @@ pub(super) mod hook;
 pub(crate) mod input;
 pub(crate) mod summary;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SendMessageSource {
     Inline(String),
     Stdin,
@@ -34,7 +34,7 @@ pub enum SendMessageSource {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SendRequest {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
@@ -78,13 +78,13 @@ impl SendRequest {
 }
 
 /// Result of sending one ATM mailbox message.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SendOutcome {
-    pub action: &'static str,
+    pub action: String,
     pub team: TeamName,
     pub agent: AgentName,
     pub sender: AgentName,
-    pub outcome: &'static str,
+    pub outcome: String,
     pub message_id: LegacyMessageId,
     pub requires_ack: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -142,7 +142,7 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     let sender_team = config::resolve_team(None, config.as_ref());
     let display_sender = display_sender_identity(
         &canonical_sender,
-        request.sender_override.as_deref(),
+        request.sender_override.as_ref(),
         sender_team.as_ref(),
         &recipient.team,
         config.as_ref(),
@@ -247,15 +247,17 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
             &recipient.agent,
             &inbox_path,
             &envelope,
+            false,
         )?;
     }
 
+    let command_outcome = if request.dry_run { "dry_run" } else { "sent" };
     let mut outcome = SendOutcome {
-        action: "send",
+        action: "send".to_string(),
         team: recipient.team.clone(),
         agent: recipient.agent.clone(),
         sender: canonical_sender.clone(),
-        outcome: if request.dry_run { "dry_run" } else { "sent" },
+        outcome: command_outcome.to_string(),
         message_id,
         requires_ack,
         task_id: task_id.clone(),
@@ -273,6 +275,7 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
                 sender: &canonical_sender,
                 sender_team: sender_team.as_ref(),
                 recipient: &recipient,
+                recipient_pane_id: None,
                 message_id,
                 requires_ack,
                 is_ack: false,
@@ -284,10 +287,10 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     let _ = observability.emit(CommandEvent {
         command: "send",
         action: "send",
-        outcome: outcome.outcome,
+        outcome: command_outcome,
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
-        sender: canonical_sender.clone(),
+        sender: canonical_sender,
         message_id: Some(outcome.message_id),
         requires_ack: outcome.requires_ack,
         dry_run: outcome.dry_run,
@@ -310,6 +313,7 @@ pub(crate) struct PostSendHookContext<'a> {
     pub(crate) sender: &'a AgentName,
     pub(crate) sender_team: Option<&'a TeamName>,
     pub(crate) recipient: &'a ResolvedRecipient,
+    pub(crate) recipient_pane_id: Option<&'a str>,
     pub(crate) message_id: LegacyMessageId,
     pub(crate) requires_ack: bool,
     pub(crate) is_ack: bool,
@@ -372,8 +376,8 @@ fn notify_team_lead_missing_config(
         return;
     }
 
-    let team_lead = AgentName::from_validated(ROLE_TEAM_LEAD);
-    let team_lead_inbox = match runtime.inbox_path(home_dir, team, &team_lead) {
+    let team_lead_agent = AgentName::from_validated(ROLE_TEAM_LEAD);
+    let team_lead_inbox = match runtime.inbox_path(home_dir, team, &team_lead_agent) {
         Ok(path) => path,
         Err(error) => {
             warn!(
@@ -385,10 +389,6 @@ fn notify_team_lead_missing_config(
             return;
         }
     };
-
-    if !team_lead_inbox.exists() {
-        return;
-    }
 
     let config_path = team_dir.join("config.json");
     let (atm_message_id, timestamp) = AtmMessageId::new_with_timestamp();
@@ -427,9 +427,10 @@ fn notify_team_lead_missing_config(
         runtime,
         home_dir,
         team,
-        &team_lead,
+        &AgentName::from_validated(ROLE_TEAM_LEAD),
         &team_lead_inbox,
         &notice,
+        true,
     ) {
         warn!(
             code = %AtmErrorCode::WarningMissingTeamConfigFallback,
@@ -448,6 +449,7 @@ fn append_mailbox_message_and_seed_workflow(
     agent: &AgentName,
     inbox_path: &Path,
     envelope: &MessageEnvelope,
+    require_existing_inbox: bool,
 ) -> Result<(), AtmError> {
     runtime.commit_workflow_state(
         home_dir,
@@ -456,6 +458,9 @@ fn append_mailbox_message_and_seed_workflow(
         [inbox_path.to_path_buf()],
         runtime.default_lock_timeout(),
         |workflow_state| {
+            if require_existing_inbox && !inbox_path.exists() {
+                return Ok(((), false));
+            }
             let mut inbox_messages = runtime.read_messages(inbox_path)?;
             inbox_messages.push(envelope.clone());
             runtime.commit_mailbox_state(inbox_path, &inbox_messages)?;
@@ -469,7 +474,7 @@ fn append_mailbox_message_and_seed_workflow(
 
 fn display_sender_identity(
     canonical_sender: &AgentName,
-    sender_override: Option<&str>,
+    sender_override: Option<&AgentName>,
     sender_team: Option<&TeamName>,
     recipient_team: &TeamName,
     config: Option<&config::AtmConfig>,
@@ -480,11 +485,9 @@ fn display_sender_identity(
     }
 
     if let Some(sender_override) = sender_override
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
         && config::aliases::resolve_agent(sender_override, config) == canonical_sender.as_str()
     {
-        return AgentName::from_validated(sender_override);
+        return sender_override.clone();
     }
 
     config::aliases::preferred_alias(canonical_sender.as_str(), config)
@@ -525,7 +528,7 @@ fn set_canonical_sender_metadata(
     };
     atm.insert(
         "fromIdentity".to_string(),
-        serde_json::to_value(canonical_from).expect("AgentName serializes"),
+        serde_json::Value::String(canonical_from.to_string()),
     );
 }
 

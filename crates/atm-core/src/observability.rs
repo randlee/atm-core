@@ -381,7 +381,7 @@ pub struct AtmLogSnapshot {
     pub truncated: bool,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AtmObservabilityHealthState {
     Healthy,
@@ -389,17 +389,12 @@ pub enum AtmObservabilityHealthState {
     Unavailable,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AtmObservabilityHealth {
     pub active_log_path: Option<PathBuf>,
     pub logging_state: AtmObservabilityHealthState,
     pub query_state: Option<AtmObservabilityHealthState>,
     pub detail: Option<String>,
-}
-
-#[doc(hidden)]
-pub mod sealed {
-    pub trait Sealed {}
 }
 
 trait LogFollowPort: Send {
@@ -466,7 +461,7 @@ impl LogTailSession {
     }
 }
 
-pub trait ObservabilityPort: sealed::Sealed {
+pub trait ObservabilityPort: crate::boundary::sealed::Sealed {
     /// Emit one ATM command event into the configured observability sink.
     ///
     /// # Errors
@@ -504,7 +499,7 @@ pub trait ObservabilityPort: sealed::Sealed {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct NullObservability;
 
-impl sealed::Sealed for NullObservability {}
+impl crate::boundary::sealed::Sealed for NullObservability {}
 
 impl ObservabilityPort for NullObservability {
     fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {

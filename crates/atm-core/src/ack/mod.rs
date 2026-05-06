@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Map;
 use tracing::trace;
 
@@ -20,7 +20,7 @@ use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use crate::workflow;
 
 /// Parameters for acknowledging one pending-ack mailbox message.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AckRequest {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
@@ -31,9 +31,9 @@ pub struct AckRequest {
 }
 
 /// Summary of one successful acknowledgement and reply emission.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AckOutcome {
-    pub action: &'static str,
+    pub action: String,
     pub team: TeamName,
     pub agent: AgentName,
     pub message_id: LegacyMessageId,
@@ -70,6 +70,22 @@ impl Serialize for ReplyTarget {
         S: Serializer,
     {
         serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for ReplyTarget {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        let (agent, team) = value
+            .split_once('@')
+            .ok_or_else(|| serde::de::Error::custom("expected <agent>@<team> reply target"))?;
+        Ok(Self::new(
+            agent.parse().map_err(serde::de::Error::custom)?,
+            team.parse().map_err(serde::de::Error::custom)?,
+        ))
     }
 }
 
@@ -286,7 +302,7 @@ fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     let hook_reply_agent = reply_agent.clone();
     let hook_reply_team = reply_team.clone();
     let mut outcome = AckOutcome {
-        action: "ack",
+        action: "ack".to_string(),
         team: team.clone(),
         agent: actor.clone(),
         message_id: request.message_id,
@@ -308,6 +324,7 @@ fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
             sender: &actor,
             sender_team: Some(&team),
             recipient: &hook_reply_recipient,
+            recipient_pane_id: None,
             message_id: reply_message_id,
             requires_ack: false,
             is_ack: true,
@@ -321,7 +338,7 @@ fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         outcome: "ok",
         team,
         agent: actor.clone(),
-        sender: actor.clone(),
+        sender: actor,
         message_id: Some(request.message_id),
         requires_ack: false,
         dry_run: false,
@@ -335,13 +352,13 @@ fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
 
 fn resolve_reply_target(
     message: &MessageEnvelope,
-    current_team: &str,
+    current_team: &TeamName,
 ) -> Result<(AgentName, TeamName), AtmError> {
     if let Some(identity) = canonical_sender_identity(message) {
         let team = message
             .source_team
             .clone()
-            .or_else(|| Some(current_team.parse().expect("validated team")))
+            .or_else(|| Some(current_team.clone()))
             .ok_or_else(AtmError::team_unavailable)?;
         return Ok((identity, team));
     }
@@ -403,8 +420,8 @@ fn find_source_message(
     source_files: &[SourceFile],
     workflow_state: &workflow::WorkflowStateFile,
     message_id: LegacyMessageId,
-    actor: &str,
-    team: &str,
+    actor: &AgentName,
+    team: &TeamName,
 ) -> Result<SourcedMessage, AtmError> {
     dedupe_legacy_message_id_surface(
         merged_surface(source_files, workflow_state),
@@ -552,7 +569,8 @@ mod tests {
             json!({"atm": {"fromIdentity": ROLE_TEAM_LEAD}}),
         );
 
-        let target = resolve_reply_target(&message, TEST_TEAM).expect("reply target");
+        let target = resolve_reply_target(&message, &TeamName::from_validated(TEST_TEAM))
+            .expect("reply target");
         assert_eq!(
             target,
             (

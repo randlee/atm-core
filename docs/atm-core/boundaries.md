@@ -52,7 +52,8 @@ dependencies:
     - atm-graft
     - atm-rusqlite
   allowed_dependencies: []
-  forbidden_edges: []
+  forbidden_edges:
+    - atm-core -> atm-daemon
 
 references:
   scope: global
@@ -131,7 +132,8 @@ dependencies:
     - atm-graft
     - atm-rusqlite
   allowed_dependencies: []
-  forbidden_edges: []
+  forbidden_edges:
+    - atm-core -> atm-daemon
 
 references:
   scope: outside_owner_crate
@@ -235,7 +237,7 @@ enforcement:
 status:
   state: stub_landed
   notes:
-    - stub trait plus request/response shells landed in atm_core::boundary
+    - callable watch trait and named watch subscription/event DTOs landed in atm_core::boundary
     - watch source owns event capture only, not reconcile policy
 ```
 
@@ -310,7 +312,7 @@ enforcement:
 status:
   state: stub_landed
   notes:
-    - stub trait plus request/response shells landed in atm_core::boundary
+    - callable reconcile trait and named reconcile request/result DTOs landed in atm_core::boundary
     - reconcile owns coalescing and trigger policy, not raw watch APIs
 ```
 
@@ -700,7 +702,7 @@ name: ConfigIngress
 public:
   trait: ConfigIngress
   facade: null
-  notes: stub trait landed in atm_core::boundary; contract shape remains skeletal
+  notes: trait and typed workspace/team config DTOs landed in atm_core::boundary
 
 implementation:
   type: null
@@ -754,8 +756,8 @@ enforcement:
 status:
   state: stub_landed
   notes:
-    - trait plus request/response stubs landed in atm_core::boundary
-    - this boundary replaces direct command/service calls into a concrete parser module
+    - typed workspace and team config request/response contracts landed in atm_core::boundary
+    - retained command/service cutover to this boundary is formally deferred to R.7 in docs/plan-phase-R.md
 ```
 
 Purpose:
@@ -775,7 +777,7 @@ name: InboxIngress
 public:
   trait: InboxIngress
   facade: null
-  notes: stub trait landed in atm_core::boundary; contract shape remains skeletal
+  notes: trait and typed inbox import/diagnostic DTOs landed in atm_core::boundary
 
 implementation:
   type: null
@@ -828,8 +830,9 @@ enforcement:
 status:
   state: stub_landed
   notes:
-    - trait plus request/response stubs landed in atm_core::boundary
+    - typed import, fingerprint, and diagnostics request/response contracts landed in atm_core::boundary
     - watcher-driven reconcile should call this boundary rather than store helpers directly
+    - retained send/read/ack/clear cutover to this boundary is formally deferred to R.7 in docs/plan-phase-R.md
 ```
 
 Purpose:
@@ -849,7 +852,7 @@ name: InboxExport
 public:
   trait: InboxExport
   facade: null
-  notes: stub trait landed in atm_core::boundary; contract shape remains skeletal
+  notes: trait and typed inbox export DTOs landed in atm_core::boundary
 
 implementation:
   type: null
@@ -902,7 +905,7 @@ enforcement:
 status:
   state: stub_landed
   notes:
-    - trait plus request/response stubs landed in atm_core::boundary
+    - typed record/export request and response contracts landed in atm_core::boundary
     - send and receive state transitions should reach compatibility files through this boundary only
 ```
 
@@ -975,7 +978,7 @@ enforcement:
 status:
   state: stub_landed
   notes:
-    - stub trait plus request/response shells landed in atm_core::boundary
+    - callable notification trait and named event DTOs landed in atm_core::boundary
     - a thin extension crate should never need to reach into process-spawn internals
 ```
 
@@ -1045,7 +1048,7 @@ enforcement:
 status:
   state: stub_landed
   notes:
-    - stub trait plus request/response shells landed in atm_core::boundary
+    - callable status trait and named snapshot DTOs landed in atm_core::boundary
     - live status remains separate from durable roster truth
 ```
 

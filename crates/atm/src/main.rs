@@ -295,7 +295,7 @@ impl ScObservabilityAdapter {
     }
 }
 
-impl atm_core::observability::sealed::Sealed for ScObservabilityAdapter {}
+impl atm_core::boundary::sealed::Sealed for ScObservabilityAdapter {}
 
 impl ObservabilityPort for ScObservabilityAdapter {
     fn emit(&self, event: CommandEvent) -> Result<(), AtmError> {

@@ -12,7 +12,9 @@ use atm_core::{
 };
 use std::error::Error as StdError;
 use std::fmt;
+use std::sync::Arc;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RuntimeStartStubError {
     RuntimeStartNotWired,
@@ -31,10 +33,11 @@ impl fmt::Display for RuntimeStartStubError {
 impl StdError for RuntimeStartStubError {}
 
 /// Internal root for Phase R daemon runtime wiring.
+#[allow(dead_code)]
 #[derive(Debug, Default)]
 pub(crate) struct RuntimeComposition {
     server_transport: LocalSocketServerTransport,
-    request_dispatcher: DaemonRequestDispatcher,
+    request_dispatcher: Arc<DaemonRequestDispatcher>,
     notification_sink: DaemonNotificationSink,
     status_source: DaemonStatusSource,
     watch_event_source: FileWatchEventSource,
@@ -45,11 +48,12 @@ pub(crate) struct RuntimeComposition {
     peer_client_transport: PeerClientTransport,
 }
 
+#[allow(dead_code)]
 impl RuntimeComposition {
     pub(crate) fn new() -> Self {
         Self {
             server_transport: LocalSocketServerTransport::new(),
-            request_dispatcher: DaemonRequestDispatcher::new(),
+            request_dispatcher: Arc::new(DaemonRequestDispatcher::new()),
             notification_sink: DaemonNotificationSink::new(),
             status_source: DaemonStatusSource::new(),
             watch_event_source: FileWatchEventSource::new(),
@@ -69,8 +73,8 @@ impl RuntimeComposition {
         &self.notification_sink
     }
 
-    pub(crate) fn request_dispatcher(&self) -> &dyn RequestDispatcher {
-        &self.request_dispatcher
+    pub(crate) fn request_dispatcher(&self) -> Arc<dyn RequestDispatcher + Send + Sync> {
+        self.request_dispatcher.clone()
     }
 
     pub(crate) fn status_source(&self) -> &dyn StatusSource {
@@ -102,11 +106,11 @@ impl RuntimeComposition {
     }
 
     pub(crate) fn start(&self) -> Result<(), AtmError> {
-        Err(AtmError::config("daemon runtime start scaffold is not implemented yet")
-        .with_recovery(
-            "Finish RuntimeComposition startup wiring before invoking the daemon entrypoint.",
-        )
-        .with_source(RuntimeStartStubError::RuntimeStartNotWired))
+        Err(AtmError::daemon_unavailable("daemon runtime start scaffold is not implemented yet")
+            .with_recovery(
+                "Finish RuntimeComposition startup wiring before invoking the daemon entrypoint.",
+            )
+            .with_source(RuntimeStartStubError::RuntimeStartNotWired))
     }
 
     pub(crate) fn serve(&self) -> Result<(), AtmError> {

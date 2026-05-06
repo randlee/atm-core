@@ -137,7 +137,9 @@ impl RestoreCommand {
 #[cfg(test)]
 mod tests {
     use super::AddMemberCommand;
-    use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
+
+    const TEST_SENDER: &str = "sender-a";
+    const TEST_TEAM: &str = "test-team";
 
     #[test]
     fn build_request_rejects_invalid_team_before_core() {

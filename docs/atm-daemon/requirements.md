@@ -45,6 +45,7 @@ Initial allocation:
 - `REQ-DAEMON-RUNTIME-*`
 - `REQ-DAEMON-TRANSPORT-*`
 - `REQ-DAEMON-STATUS-*`
+- `REQ-DAEMON-CONFIG-*`
 - `REQ-DAEMON-TEST-*`
 - `REQ-DAEMON-OBS-*`
 - `REQ-DAEMON-HEALTH-*`
@@ -53,8 +54,10 @@ Initial allocation:
 Initial crate requirement IDs:
 
 - `REQ-DAEMON-RUNTIME-001` `atm-daemon` owns singleton runtime enforcement and
-  must make it impossible for two active daemons to run on one host. Satisfies
-  the runtime ownership aspects of:
+  must make it impossible for more than one `atm-daemon` process to exist
+  anywhere on the host for the supported runtime model. Singleton is daemon
+  requirement `#1` and is not subordinate to convenience test or tooling
+  flows. Satisfies the runtime ownership aspects of:
   `REQ-CORE-DAEMON-001`, `REQ-CORE-QA-RUNTIME-001`.
 - `REQ-DAEMON-RUNTIME-002` `atm-daemon` owns runtime composition only and must
   remain a thin wrapper over `atm-core` service boundaries. Satisfies:
@@ -72,7 +75,8 @@ Initial crate requirement IDs:
   production transport implementations plus one test transport:
   - Unix domain socket for same-host
   - TCP/TLS for cross-host daemon-to-daemon traffic
-  - `test-socket` for in-process transport-boundary tests
+  - `test-socket` — implemented as `LoopbackClientTransport`; see ADR-003
+    §Tier 2 — for in-process transport-boundary tests
   Satisfies:
   `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`.
 - `REQ-DAEMON-TRANSPORT-002` `atm-daemon` owns bounded transient retry for
@@ -86,10 +90,19 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-STATUS-001` `atm-daemon` owns the live agent-status cache and
   must keep it separate from SQLite roster/mail truth. Satisfies:
   `REQ-CORE-RUNTIME-002`.
+- `REQ-DAEMON-CONFIG-001` `atm-daemon` owns daemon config validation at startup
+  and on `SIGHUP` rescan. Invalid config must produce a typed failure or
+  bounded reload rejection rather than a silent degraded state. Satisfies:
+  `REQ-CORE-CONFIG-001`, `REQ-CORE-CONFIG-003`, `REQ-DAEMON-SIGNAL-001`.
 - `REQ-DAEMON-TEST-001` `atm-daemon` must not define the core test strategy.
   Core correctness must remain testable without daemon process spawning.
   Satisfies:
   `REQ-CORE-TEST-RUNTIME-001`.
+- `REQ-DAEMON-TEST-002` `atm-daemon` must not introduce or bless a test-only
+  daemon launch path for ordinary ATM correctness tests. Any real daemon
+  process coverage is limited to a narrow daemon-runtime suite for singleton,
+  startup, shutdown, and recovery requirements. Satisfies:
+  `REQ-CORE-TEST-RUNTIME-001`, `REQ-P-TEST-001`.
 - `REQ-DAEMON-OBS-001` `atm-daemon` owns daemon/runtime/transport structured
   event emission through `sc-observability`. Satisfies:
   `REQ-CORE-OBS-002`.
@@ -109,6 +122,7 @@ The `atm-daemon` crate docs must remain aligned with:
 - [`../project-plan.md`](../project-plan.md)
 - [`../plan-phase-Q.md`](../plan-phase-Q.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)
+- [`../testing-guidelines.md`](../testing-guidelines.md)
 - [`../team-member-state.md`](../team-member-state.md)
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
 - [`../atm-core/requirements.md`](../atm-core/requirements.md)
@@ -127,19 +141,36 @@ Requirement IDs:
 - `REQ-DAEMON-TRANSPORT-002`
 - `REQ-DAEMON-TRANSPORT-003`
 - `REQ-DAEMON-STATUS-001`
+- `REQ-DAEMON-CONFIG-001`
 - `REQ-DAEMON-TEST-001`
+- `REQ-DAEMON-TEST-002`
 - `REQ-DAEMON-OBS-001`
 - `REQ-DAEMON-HEALTH-001`
 - `REQ-DAEMON-SIGNAL-001`
 
 Required runtime rules:
-- exactly one daemon may be active on a host at a time
+- exactly one daemon process may be active on a host at a time
+- singleton enforcement is host-wide rather than socket-path-local; changing
+  `ATM_HOME`, socket path, or test working directory must not create a legal
+  second daemon
+- daemon startup is blocked by at least two runtime guard layers:
+  - a pre-spawn launch gate that serializes daemon creation attempts
+  - a daemon-side startup gate that refuses serving state when ownership is
+    already held
 - daemon startup must fail deterministically if a live daemon already owns the
   runtime
+- daemon startup must not publish a serving socket or accept requests before
+  singleton ownership is confirmed
 - stale ownership cleanup must never allow two live daemons
+- stale ownership cleanup must preserve the same singleton guarantee as normal
+  startup; cleanup is recovery, not an alternate launch path
 - graceful shutdown must stop accepts, drain or cancel inflight work within one
   bounded deadline, checkpoint WAL, and release singleton ownership
 - signal handlers must be installed before listeners are opened
+- daemon config must validate once at startup before listeners are opened
+- `SIGHUP`-driven config or roster rescan must either apply a fully valid
+  configuration or fail with a typed reload error while retaining the prior
+  serving configuration
 - remote delivery must be daemon-to-daemon only
 - the same transport protocol must be exercisable through an in-process
   `test-socket` without changing handler/business logic
@@ -153,6 +184,8 @@ Required runtime rules:
 - daemon memory must retain the current agent `pid` as a first-class liveness
   field, cached from SQLite; `pid` is durable roster truth rather than
   advisory metadata
+- `pid` is a semantic newtype candidate and must not remain an unvalidated raw
+  integer at the daemon boundary once the runtime API hardening slice lands
 - SQLite must not own live `last_active_at`; it owns durable roster state and
   the current per-member `pid`
 - the daemon-managed member fields (`pid`, `last_active_at`, `state`) must
@@ -186,6 +219,8 @@ Required runtime rules:
 - daemon unavailability after one documented auto-start attempt must surface as
   explicit runtime failure rather than hidden fallback to direct SQLite or
   inbox-file access
+- tests and tools are not exempt from the singleton rule; any attempt to start
+  a second daemon process must fail through the same runtime ownership checks
 - the socket receive loop must remain a thin dispatcher only:
   - read framed request
   - parse qualified request type
@@ -206,3 +241,5 @@ Required runtime rules:
   rather than collapsing into panic/unwrap control flow
 - daemon runtime and transport paths must emit structured observability events
 - daemon must expose one explicit health/status query interface for `atm doctor`
+- no `atm-daemon` crate API, helper, or test support path may bless daemon
+  spawning as a routine correctness strategy

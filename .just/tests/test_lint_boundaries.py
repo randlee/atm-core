@@ -48,6 +48,24 @@ owner_manifest_path = "crates/atm-core/Cargo.toml"
 dependency_package = "atm-rusqlite"
 allowed_sections = ["dev-dependencies"]
 message = "atm-core may reference atm-rusqlite only in dev-dependencies"
+
+[[boundaries.manifest_section_rules]]
+owner_manifest_path = "crates/atm/Cargo.toml"
+dependency_package = "atm-daemon"
+allowed_sections = []
+message = "atm must not depend on atm-daemon"
+
+[[boundaries.manifest_section_rules]]
+owner_manifest_path = "crates/atm-core/Cargo.toml"
+dependency_package = "atm-daemon"
+allowed_sections = []
+message = "atm-core must not depend on atm-daemon"
+
+[[boundaries.manifest_section_rules]]
+owner_manifest_path = "crates/atm-daemon/Cargo.toml"
+dependency_package = "atm-rusqlite"
+allowed_sections = []
+message = "atm-daemon must not depend on atm-rusqlite"
 """
 
 BASE_BOUNDARY_DOC = """\
@@ -144,6 +162,7 @@ class LintBoundariesTests(unittest.TestCase):
         *,
         atm_dependencies: str = 'atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.2" }\n',
         atm_rusqlite_dependencies: str = 'rusqlite = "0.37"\natm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.2" }\n',
+        atm_daemon_dependencies: str = 'atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.2" }\n',
     ) -> None:
         (repo_root / "crates/atm-core/Cargo.toml").write_text(
             """\
@@ -219,11 +238,65 @@ homepage.workspace = true
 name = "atm_daemon"
 
 [dependencies]
-atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.2" }
-atm-rusqlite = { path = "../atm-rusqlite", version = "1.1.2" }
-""",
+"""
+            + atm_daemon_dependencies,
             encoding="utf-8",
         )
+
+    def test_collect_boundary_violations_flags_cli_daemon_edge(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(
+                repo_root,
+                atm_dependencies='atm-daemon = { path = "../atm-daemon", version = "1.1.2" }\n',
+            )
+            self.write_doc(repo_root, "atm-rusqlite")
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertIn(
+                "crates/atm/Cargo.toml [dependencies]: atm must not depend on atm-daemon",
+                rendered,
+            )
+
+    def test_collect_boundary_violations_flags_core_daemon_edge(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_doc(repo_root, "atm-rusqlite")
+            (repo_root / "crates/atm-core/Cargo.toml").write_text(
+                """\
+[package]
+name = "agent-team-mail-core"
+
+[dependencies]
+atm-daemon = { path = "../atm-daemon", version = "1.1.2" }
+""",
+                encoding="utf-8",
+            )
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertIn(
+                "crates/atm-core/Cargo.toml [dependencies]: atm-core must not depend on atm-daemon",
+                rendered,
+            )
+
+    def test_collect_boundary_violations_flags_daemon_rusqlite_edge(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(
+                repo_root,
+                atm_daemon_dependencies='atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.2" }\natm-rusqlite = { path = "../atm-rusqlite", version = "1.1.2" }\n',
+            )
+            self.write_doc(repo_root, "atm-rusqlite")
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertIn(
+                "crates/atm-daemon/Cargo.toml [dependencies]: atm-daemon must not depend on atm-rusqlite",
+                rendered,
+            )
 
     def write_doc(self, repo_root: Path, crate_name: str, text: str = BASE_BOUNDARY_DOC) -> None:
         (repo_root / "docs" / crate_name / "boundaries.md").write_text(text, encoding="utf-8")
