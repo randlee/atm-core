@@ -744,6 +744,8 @@ Directly addresses:
 - add semantic path newtypes for daemon binary and socket path
   - `DaemonBinaryPath` and `DaemonSocketPath`
   - invariants: non-empty and valid UTF-8 path representation at the boundary
+  - both types must implement `AsRef<Path>` for ergonomic filesystem call-site
+    use
   - failures return typed parse/validation errors rather than panic/expect
 - remove unreachable stub patterns that hide impossible paths behind routine
   `Result`
@@ -806,7 +808,8 @@ Directly addresses:
 Acceptance:
 - no new daemon-spawn pattern can land without a deliberate lint/CI change
 - lint gate must document explicit allow-list for Tier 3 daemon-runtime suite
-  patterns
+  patterns; allowed exceptions for the narrow daemon-runtime suite are governed
+  by `docs/testing-guidelines.md §4.3`
 
 ### Merge Sequence (pending QA PASS 0B+0I+0m + user authorization)
 

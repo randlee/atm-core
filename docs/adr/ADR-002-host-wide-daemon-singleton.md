@@ -116,13 +116,15 @@ Error-model note:
 - these failure modes require stable ATM-owned error codes with structured
   context and recovery guidance following the direction in
   `.claude/skills/rust-best-practices/patterns/error-context-recovery-plan.md`
-- placeholder code names are acceptable during planning as long as they are
-  treated as a required inventory rather than optional follow-up:
-  - `DAEMON_LAUNCH_GATE_REJECTED`
-  - `DAEMON_SERVING_STATE_REJECTED`
-  - `DAEMON_STALE_OWNER_RECOVERY_FAILED`
-  - `DAEMON_AUTO_START_FAILED`
-  - `TEST_FAKE_TRANSPORT_INJECTION_FAILED`
+- required inventory for the Phase R/R.10 line:
+
+| Code | Cause | Recovery steps |
+| --- | --- | --- |
+| `ATM_DAEMON_LAUNCH_GATE_REJECTED` | the client-side pre-spawn singleton gate detected an already-owned daemon runtime and refused to fork a second process | connect to the existing daemon if it is healthy; otherwise resolve stale ownership through the documented recovery path instead of forcing a second spawn |
+| `ATM_DAEMON_SERVING_STATE_REJECTED` | the daemon-side serving gate determined ownership was already held before the process could enter serving state | stop launching duplicate daemons; inspect the existing daemon process and its runtime health before retrying |
+| `ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED` | startup could not safely recover a stale owner record while preserving singleton guarantees | inspect the recorded owner, confirm no live daemon remains, repair ownership metadata, then retry startup |
+| `ATM_DAEMON_AUTO_START_FAILED` | the CLI exhausted the documented auto-start retry budget without reaching a healthy daemon serving state | inspect daemon stderr/logs, fix the startup fault, and retry only after the daemon runtime can pass the documented readiness checks |
+| `ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED` | a test requested an invalid or incomplete in-process transport seam instead of an approved Tier 1 or Tier 2 transport double | fix the test seam configuration so it uses a valid `FakeClientTransport` or `LoopbackClientTransport` instance before rerunning the test |
 
 ## Consequences
 

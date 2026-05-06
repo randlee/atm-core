@@ -75,7 +75,8 @@ Initial crate requirement IDs:
   production transport implementations plus one test transport:
   - Unix domain socket for same-host
   - TCP/TLS for cross-host daemon-to-daemon traffic
-  - `test-socket` for in-process transport-boundary tests
+  - `test-socket` — implemented as `LoopbackClientTransport`; see ADR-003
+    §Tier 2 — for in-process transport-boundary tests
   Satisfies:
   `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`.
 - `REQ-DAEMON-TRANSPORT-002` `atm-daemon` owns bounded transient retry for

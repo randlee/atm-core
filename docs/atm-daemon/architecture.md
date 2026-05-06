@@ -94,14 +94,15 @@ Phase R redesign notes:
   multiple transport implementations:
   - Unix domain socket
   - TCP/TLS
-  - in-process `test-socket`
+  - in-process `LoopbackClientTransport` (`test-socket`)
 - cross-host delivery is daemon-to-daemon only.
 - remote delivery may use bounded transient retry for short intermittent
   failures, but not a durable long-lived remote outbox.
 - remote send success is defined by remote daemon acceptance within the bounded
   retry window.
-- bounded transient retry uses exponential backoff with jitter, a documented
-  maximum delay per attempt, and a hard total retry ceiling; it must not
+- bounded transient retry uses exponential backoff with jitter, an initial
+  delay of 250ms, a per-attempt maximum of 5s, jitter of +/-20%, and a hard
+  total retry ceiling within the documented timeout budget; it must not
   collapse into fixed sleeps or unbounded churn
 - daemon runtime failures must remain typed and must not depend on
   panic/unwrap for routine transport, socket, or store-boundary failure.
