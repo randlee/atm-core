@@ -35,6 +35,7 @@ resolver = "2"
         self.assertIn("deny", names)
         self.assertIn("shear", names)
         self.assertIn("spell", names)
+        self.assertIn("daemon-singleton", names)
         self.assertIn("pytests", names)
 
     def test_resolve_task_names_rejects_unknown_target(self) -> None:
@@ -85,6 +86,10 @@ resolver = "2"
             self.assertEqual(tasks["deny"].command[-1], str(repo_root / ".just/lint_cargo_deny.py"))
             self.assertEqual(tasks["shear"].command[-1], str(repo_root / ".just/lint_cargo_shear.py"))
             self.assertEqual(tasks["spell"].command[-1], str(repo_root / ".just/lint_codespell.py"))
+            self.assertEqual(
+                tasks["daemon-singleton"].command[-1],
+                str(repo_root / "scripts/lint_daemon_singleton.py"),
+            )
             self.assertEqual(tasks["pytests"].command[-1], str(repo_root / ".just/run_pytests.py"))
 
     def test_resolve_task_names_fast_is_low_latency_subset(self) -> None:

@@ -18,6 +18,7 @@ class PrintHelpTests(unittest.TestCase):
         self.assertIn("version latest", output)
         self.assertIn("lint fast", output)
         self.assertIn("lint modules", output)
+        self.assertIn("lint daemon-singleton", output)
         self.assertIn("lint boundaries", output)
         self.assertIn("lint manifests", output)
         self.assertIn("lint pytests", output)
