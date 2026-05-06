@@ -1,28 +1,26 @@
 use std::path::{Path, PathBuf};
 
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Map;
 use tracing::trace;
 
 use crate::address::AgentAddress;
 use crate::config;
 use crate::error::AtmError;
-use crate::home;
 use crate::identity;
-use crate::mailbox;
 use crate::mailbox::source::{SourceFile, SourcedMessage};
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
 use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
-use crate::send::{
-    PostSendHookContext, ResolvedRecipient, input, maybe_run_post_send_hook, summary,
-};
+use crate::send::{PostSendHookContext, ResolvedRecipient, input, summary};
+use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
+use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use crate::workflow;
 
 /// Parameters for acknowledging one pending-ack mailbox message.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AckRequest {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
@@ -33,9 +31,9 @@ pub struct AckRequest {
 }
 
 /// Summary of one successful acknowledgement and reply emission.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AckOutcome {
-    pub action: &'static str,
+    pub action: String,
     pub team: TeamName,
     pub agent: AgentName,
     pub message_id: LegacyMessageId,
@@ -75,6 +73,22 @@ impl Serialize for ReplyTarget {
     }
 }
 
+impl<'de> Deserialize<'de> for ReplyTarget {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        let (agent, team) = value
+            .split_once('@')
+            .ok_or_else(|| serde::de::Error::custom("expected <agent>@<team> reply target"))?;
+        Ok(Self::new(
+            agent.parse().map_err(serde::de::Error::custom)?,
+            team.parse().map_err(serde::de::Error::custom)?,
+        ))
+    }
+}
+
 /// Acknowledge one previously read pending-ack message and append a reply.
 ///
 /// # Errors
@@ -97,17 +111,26 @@ pub fn ack_mail(
     request: AckRequest,
     observability: &dyn ObservabilityPort,
 ) -> Result<AckOutcome, AtmError> {
-    let config = config::load_config(&request.current_dir)?;
+    let runtime = LocalServiceRuntime::default();
+    ack_mail_with_runtime(request, observability, &runtime)
+}
+
+fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    request: AckRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+) -> Result<AckOutcome, AtmError> {
+    let config = runtime.load_config(&request.current_dir)?;
     let actor =
         identity::resolve_actor_identity(request.actor_override.as_deref(), config.as_ref())?;
     let team = config::resolve_team(request.team_override.as_deref(), config.as_ref())
         .ok_or_else(AtmError::team_unavailable)?;
-    let team_dir = home::team_dir_from_home(&request.home_dir, &team)?;
+    let team_dir = runtime.team_dir(&request.home_dir, &team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&team));
     }
 
-    let team_config = config::load_team_config(&team_dir)?;
+    let team_config = runtime.load_team_config(&team_dir)?;
     if !team_config
         .members
         .iter()
@@ -116,10 +139,9 @@ pub fn ack_mail(
         return Err(AtmError::agent_not_found(&actor, &team));
     }
 
-    let source_workflow_path =
-        home::workflow_state_path_from_home(&request.home_dir, &team, &actor)?;
-    let source_workflow_state = workflow::load_workflow_state(&request.home_dir, &team, &actor)?;
-    let source_files = mailbox::store::observe_source_files(&request.home_dir, &team, &actor)?;
+    let source_workflow_path = runtime.workflow_state_path(&request.home_dir, &team, &actor)?;
+    let source_workflow_state = runtime.load_workflow_state(&request.home_dir, &team, &actor)?;
+    let source_files = runtime.observe_source_files(&request.home_dir, &team, &actor)?;
     // Ack intentionally does not apply read-surface idle-notification dedup.
     // It must preserve the raw merged surface after legacy message_id
     // canonicalization so acknowledgement lookup does not depend on read-only
@@ -158,12 +180,12 @@ pub fn ack_mail(
     }
 
     let (reply_agent, reply_team) = resolve_reply_target(&source_message.envelope, &team)?;
-    let reply_team_dir = home::team_dir_from_home(&request.home_dir, &reply_team)?;
+    let reply_team_dir = runtime.team_dir(&request.home_dir, &reply_team)?;
     if !reply_team_dir.exists() {
         return Err(AtmError::team_not_found(&reply_team));
     }
 
-    let reply_team_config = config::load_team_config(&reply_team_dir)?;
+    let reply_team_config = runtime.load_team_config(&reply_team_dir)?;
     if !reply_team_config
         .members
         .iter()
@@ -193,17 +215,16 @@ pub fn ack_mail(
         extra: reply_extra,
     };
 
-    let reply_inbox_path =
-        home::inbox_path_from_home(&request.home_dir, &reply_team, &reply_agent)?;
+    let reply_inbox_path = runtime.inbox_path(&request.home_dir, &reply_team, &reply_agent)?;
     let reply_workflow_path =
-        home::workflow_state_path_from_home(&request.home_dir, &reply_team, &reply_agent)?;
+        runtime.workflow_state_path(&request.home_dir, &reply_team, &reply_agent)?;
     let reply_targets_source_mailbox =
         reply_team.as_str() == team.as_str() && reply_agent.as_str() == actor.as_str();
     // Ack intentionally does not hold a subset lock and then upgrade it.
     // Resolve the reply target from an unlocked preflight, then let the shared
     // commit helper acquire the final sorted superset, reload, and re-validate
     // before mutating either inbox.
-    mailbox::store::with_locked_source_files(
+    runtime.with_locked_source_files(
         &request.home_dir,
         &team,
         &actor,
@@ -212,14 +233,12 @@ pub fn ack_mail(
             source_workflow_path,
             reply_workflow_path,
         ],
-        mailbox::lock::default_lock_timeout(),
+        runtime.default_lock_timeout(),
         |_source_paths, source_files| {
             let mut source_workflow_state =
-                workflow::load_workflow_state(&request.home_dir, &team, &actor)?;
+                runtime.load_workflow_state(&request.home_dir, &team, &actor)?;
             let mut reply_workflow_state = (!reply_targets_source_mailbox)
-                .then(|| {
-                    workflow::load_workflow_state(&request.home_dir, &reply_team, &reply_agent)
-                })
+                .then(|| runtime.load_workflow_state(&request.home_dir, &reply_team, &reply_agent))
                 .transpose()?;
             let source_message = find_source_message(
                 source_files,
@@ -249,18 +268,18 @@ pub fn ack_mail(
                 &source_message,
                 ack_timestamp,
             )?;
-            append_reply_message(source_files, &reply_inbox_path, reply_message.clone())?;
-            mailbox::store::commit_source_files(source_files)?;
+            append_reply_message(runtime, source_files, &reply_inbox_path, reply_message.clone())?;
+            runtime.commit_source_files(source_files)?;
             if reply_targets_source_mailbox {
                 workflow::remember_initial_state(&mut source_workflow_state, &reply_message);
-                workflow::save_workflow_state(
+                runtime.save_workflow_state(
                     &request.home_dir,
                     &team,
                     &actor,
                     &source_workflow_state,
                 )?;
             } else {
-                workflow::save_workflow_state(
+                runtime.save_workflow_state(
                     &request.home_dir,
                     &team,
                     &actor,
@@ -269,7 +288,7 @@ pub fn ack_mail(
             }
             if let Some(reply_workflow_state) = reply_workflow_state.as_mut() {
                 workflow::remember_initial_state(reply_workflow_state, &reply_message);
-                workflow::save_workflow_state(
+                runtime.save_workflow_state(
                     &request.home_dir,
                     &reply_team,
                     &reply_agent,
@@ -283,7 +302,7 @@ pub fn ack_mail(
     let hook_reply_agent = reply_agent.clone();
     let hook_reply_team = reply_team.clone();
     let mut outcome = AckOutcome {
-        action: "ack",
+        action: "ack".to_string(),
         team: team.clone(),
         agent: actor.clone(),
         message_id: request.message_id,
@@ -298,13 +317,14 @@ pub fn ack_mail(
         agent: hook_reply_agent,
         team: hook_reply_team,
     };
-    maybe_run_post_send_hook(
+    runtime.maybe_run_post_send_hook(
         &mut outcome.warnings,
         config.as_ref(),
         PostSendHookContext {
             sender: &actor,
             sender_team: Some(&team),
             recipient: &hook_reply_recipient,
+            recipient_pane_id: None,
             message_id: reply_message_id,
             requires_ack: false,
             is_ack: true,
@@ -318,7 +338,7 @@ pub fn ack_mail(
         outcome: "ok",
         team,
         agent: actor.clone(),
-        sender: actor.to_string(),
+        sender: actor,
         message_id: Some(request.message_id),
         requires_ack: false,
         dry_run: false,
@@ -332,13 +352,13 @@ pub fn ack_mail(
 
 fn resolve_reply_target(
     message: &MessageEnvelope,
-    current_team: &str,
+    current_team: &TeamName,
 ) -> Result<(AgentName, TeamName), AtmError> {
     if let Some(identity) = canonical_sender_identity(message) {
         let team = message
             .source_team
             .clone()
-            .or_else(|| Some(current_team.parse().expect("validated team")))
+            .or_else(|| Some(current_team.clone()))
             .ok_or_else(AtmError::team_unavailable)?;
         return Ok((identity, team));
     }
@@ -400,8 +420,8 @@ fn find_source_message(
     source_files: &[SourceFile],
     workflow_state: &workflow::WorkflowStateFile,
     message_id: LegacyMessageId,
-    actor: &str,
-    team: &str,
+    actor: &AgentName,
+    team: &TeamName,
 ) -> Result<SourcedMessage, AtmError> {
     dedupe_legacy_message_id_surface(
         merged_surface(source_files, workflow_state),
@@ -473,6 +493,7 @@ fn update_source_message(
 }
 
 fn append_reply_message(
+    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
     source_files: &mut Vec<SourceFile>,
     reply_inbox_path: &Path,
     reply_message: MessageEnvelope,
@@ -487,7 +508,7 @@ fn append_reply_message(
 
     source_files.push(SourceFile {
         path: reply_inbox_path.to_path_buf(),
-        messages: mailbox::read_messages(reply_inbox_path)?,
+        messages: runtime.read_messages(reply_inbox_path)?,
     });
     source_files
         .last_mut()
@@ -548,7 +569,8 @@ mod tests {
             json!({"atm": {"fromIdentity": ROLE_TEAM_LEAD}}),
         );
 
-        let target = resolve_reply_target(&message, TEST_TEAM).expect("reply target");
+        let target = resolve_reply_target(&message, &TeamName::from_validated(TEST_TEAM))
+            .expect("reply target");
         assert_eq!(
             target,
             (

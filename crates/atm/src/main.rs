@@ -1,4 +1,5 @@
 mod commands;
+mod composition;
 mod observability;
 mod output;
 
@@ -70,14 +71,14 @@ fn run() -> anyhow::Result<()> {
             }
             let validation_error = atm_core::error::AtmError::validation(error.to_string());
             observability::CliObservability::fallback()
-                .emit_fatal_error("parse", &validation_error);
+                .report_fatal_error("parse", &validation_error);
             return Err(error.into());
         }
     };
 
     if let Err(error) = init_tracing(cli.stderr_logs()) {
         let fallback = observability::CliObservability::fallback();
-        fallback.emit_fatal_error("bootstrap", &error);
+        fallback.report_fatal_error("bootstrap", &error);
         return Err(error.into());
     }
 
@@ -85,7 +86,7 @@ fn run() -> anyhow::Result<()> {
         Ok(observability) => observability,
         Err(error) => {
             let fallback = observability::CliObservability::fallback();
-            fallback.emit_fatal_error("bootstrap", &error);
+            fallback.report_fatal_error("bootstrap", &error);
             return Err(error.into());
         }
     };
@@ -93,7 +94,7 @@ fn run() -> anyhow::Result<()> {
     match cli.run(&observability) {
         Ok(()) => Ok(()),
         Err(error) => {
-            observability.emit_fatal_error("service", error.as_ref());
+            observability.report_fatal_error("service", error.as_ref());
             Err(error)
         }
     }
@@ -294,7 +295,7 @@ impl ScObservabilityAdapter {
     }
 }
 
-impl atm_core::observability::sealed::Sealed for ScObservabilityAdapter {}
+impl atm_core::boundary::sealed::Sealed for ScObservabilityAdapter {}
 
 impl ObservabilityPort for ScObservabilityAdapter {
     fn emit(&self, event: CommandEvent) -> Result<(), AtmError> {
@@ -400,7 +401,7 @@ fn map_command_event(
     );
     fields.insert(
         "sender".to_string(),
-        serde_json::Value::String(event.sender.clone()),
+        serde_json::Value::String(event.sender.to_string()),
     );
     fields.insert(
         "requires_ack".to_string(),
@@ -634,8 +635,8 @@ fn render_diagnostic_summary(summary: sc_observability_types::DiagnosticSummary)
     }
 }
 
-#[cfg(test)]
-pub(crate) fn new_adapter_port_for_tests(
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn new_adapter_port(
     home_dir: &std::path::Path,
     stderr_logs: bool,
 ) -> Result<Box<dyn ObservabilityPort + Send + Sync>, AtmError> {

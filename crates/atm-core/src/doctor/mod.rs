@@ -11,6 +11,7 @@ use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
 use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::AgentMember;
+use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::team_admin::{MemberSummary, MembersList};
 use crate::types::{AgentName, TeamName};
 
@@ -19,7 +20,7 @@ pub use report::{
     DoctorSummary,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DoctorQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
@@ -36,7 +37,16 @@ pub fn run_doctor(
     query: DoctorQuery,
     observability: &dyn ObservabilityPort,
 ) -> Result<DoctorReport, crate::error::AtmError> {
-    let config = config::load_config(&query.current_dir)?;
+    let runtime = LocalServiceRuntime::default();
+    run_doctor_with_runtime(query, observability, &runtime)
+}
+
+fn run_doctor_with_runtime<R: RetainedServiceRuntime>(
+    query: DoctorQuery,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+) -> Result<DoctorReport, crate::error::AtmError> {
+    let config = runtime.load_config(&query.current_dir)?;
     let home_dir = query.home_dir.clone();
     let initial_lock_snapshot = snapshot_mailbox_lock_paths(&home_dir);
     let resolved_team = query
@@ -72,9 +82,9 @@ pub fn run_doctor(
             ),
         });
     }
-    let member_roster = resolved_team
-        .as_deref()
-        .and_then(|team| load_member_roster(&home_dir, team, config.as_ref(), &mut findings));
+    let member_roster = resolved_team.as_ref().and_then(|team| {
+        load_member_roster(runtime, &home_dir, team, config.as_ref(), &mut findings)
+    });
     push_stale_mailbox_lock_findings(
         &initial_lock_snapshot,
         &snapshot_mailbox_lock_paths(&home_dir),
@@ -118,12 +128,13 @@ pub fn run_doctor(
 }
 
 fn load_member_roster(
+    runtime: &impl RetainedServiceRuntime,
     home_dir: &Path,
-    team: &str,
+    team: &TeamName,
     config: Option<&config::AtmConfig>,
     findings: &mut Vec<DoctorFinding>,
 ) -> Option<MembersList> {
-    let team_dir = match crate::home::team_dir_from_home(home_dir, team) {
+    let team_dir = match runtime.team_dir(home_dir, team) {
         Ok(team_dir) => team_dir,
         Err(error) => {
             push_doctor_error(findings, DoctorSeverity::Error, error);
@@ -148,7 +159,7 @@ fn load_member_roster(
 
     check_restore_marker(team, &team_dir, findings);
 
-    let team_config = match config::load_team_config(&team_dir) {
+    let team_config = match runtime.load_team_config(&team_dir) {
         Ok(team_config) => team_config,
         Err(error) => {
             push_doctor_error(findings, DoctorSeverity::Error, error);
@@ -186,7 +197,7 @@ fn load_member_roster(
     }
 
     Some(MembersList {
-        team: TeamName::from_validated(team.to_string()),
+        team: team.clone(),
         members: ordered_member_summaries(&team_config.members, baseline),
     })
 }
@@ -204,7 +215,7 @@ fn push_doctor_error(
     });
 }
 
-fn check_inbox_directory(team: &str, inboxes_dir: &Path, findings: &mut Vec<DoctorFinding>) {
+fn check_inbox_directory(team: &TeamName, inboxes_dir: &Path, findings: &mut Vec<DoctorFinding>) {
     if !inboxes_dir.is_dir() {
         findings.push(DoctorFinding {
             severity: DoctorSeverity::Error,
@@ -237,7 +248,7 @@ fn check_inbox_directory(team: &str, inboxes_dir: &Path, findings: &mut Vec<Doct
     }
 }
 
-fn check_restore_marker(team: &str, team_dir: &Path, findings: &mut Vec<DoctorFinding>) {
+fn check_restore_marker(team: &TeamName, team_dir: &Path, findings: &mut Vec<DoctorFinding>) {
     let marker = team_dir.join(".restore-in-progress");
     if !marker.is_file() {
         return;
@@ -272,7 +283,10 @@ fn snapshot_mailbox_lock_paths(home_dir: &Path) -> BTreeSet<PathBuf> {
         };
         for lock_entry in lock_entries.filter_map(Result::ok) {
             let path = lock_entry.path();
-            if path.extension().and_then(|ext| ext.to_str()) != Some("lock") {
+            let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if !(file_name.ends_with(".lock") || file_name.contains(".lock.")) {
                 continue;
             }
             if !lock_entry
@@ -399,7 +413,7 @@ mod tests {
         health: StubHealth,
     }
 
-    impl crate::observability::sealed::Sealed for StubObservability {}
+    impl crate::boundary::sealed::Sealed for StubObservability {}
 
     impl ObservabilityPort for StubObservability {
         fn emit(&self, _event: crate::observability::CommandEvent) -> Result<(), AtmError> {

@@ -4,6 +4,8 @@ members = [
     "crates/atm",
     "crates/sc-lint-attributes",
     "crates/sc-lint-boundary",
+    "crates/atm-daemon",
+    "crates/atm-rusqlite",
 ]
 resolver = "2"
 

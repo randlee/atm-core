@@ -168,6 +168,11 @@ Initial crate requirement IDs:
 - `REQ-CORE-TRANSPORT-004` `atm-core` owns the remote-acceptance and
   no-durable-remote-outbox semantics above transport implementations. Satisfies:
   `REQ-P-RELIABILITY-001`.
+- `REQ-CORE-TRANSPORT-005` `atm-core` owns the thread-safe client transport
+  contract used by production, fake, and loopback transports. The shared
+  `ClientTransport` boundary must remain object-safe and include `Send + Sync`
+  semantics so callers do not have to restate them ad hoc. Satisfies:
+  `REQ-P-TEST-001`, `REQ-P-CONTRACT-001`.
 - `REQ-CORE-LOCK-RETIRE-001` `atm-core` owns the service-layer rule that normal
   ATM mail correctness must not depend on mailbox locks in the Phase Q target
   architecture. Satisfies:
@@ -217,6 +222,7 @@ The `atm-core` crate docs must remain aligned with:
 - [`../atm-error-codes.md`](../atm-error-codes.md)
 - [`../plan-phase-Q.md`](../plan-phase-Q.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)
+- [`../testing-guidelines.md`](../testing-guidelines.md)
 - [`./boundaries.md`](./boundaries.md)
 - [`./design/dedup-metadata-schema.md`](./design/dedup-metadata-schema.md)
 - [`./design/sc-observability-integration.md`](./design/sc-observability-integration.md)
@@ -258,6 +264,12 @@ Required `atm-core` crate rules:
 - `atm-core` must model `message_key` as a semantic newtype at the service and
   store boundaries; durable identities must not remain raw `String` values
 - `atm-core` must model resource-cap and timeout settings with typed wrappers
+- `ClientTransport` remains the shared request/response seam for:
+  - production local socket transport
+  - fake in-process transport doubles
+  - loopback in-process transport
+- `ClientTransport` must be strong enough for shared ownership and concurrent
+  request execution without downstream callers restating `Send + Sync`
   rather than passing raw integer literals through the service boundary
 - `atm-core` owns the ingest replay/degradation contract and must not silently
   drop parseable external rows

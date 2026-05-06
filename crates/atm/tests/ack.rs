@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 mod support;
 
 use std::fs;
@@ -9,6 +11,7 @@ use atm_core::schema::{
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use chrono::{Duration, Utc};
 use serde_json::Value;
+use serial_test::serial;
 use support::{
     TEST_LEAD, TEST_LEAD_ADDRESS, TEST_ORIGIN, TEST_SENDER, TEST_SENDER_ADDRESS, TEST_TEAM,
 };
@@ -29,6 +32,7 @@ fn parse_inbox_values(raw: &str) -> Vec<Value> {
 }
 
 #[test]
+#[serial]
 fn test_ack_transitions_pending_ack_and_appends_reply() {
     let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let message_id = Uuid::new_v4();
@@ -101,6 +105,7 @@ fn test_ack_transitions_pending_ack_and_appends_reply() {
 }
 
 #[test]
+#[serial]
 fn test_ack_updates_origin_inbox_file() {
     let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let message_id = Uuid::new_v4();
@@ -137,6 +142,7 @@ fn test_ack_updates_origin_inbox_file() {
 }
 
 #[test]
+#[serial]
 fn test_ack_emits_retained_log_record() {
     let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let message_id = Uuid::new_v4();
@@ -175,6 +181,7 @@ fn test_ack_emits_retained_log_record() {
 }
 
 #[test]
+#[serial]
 fn test_ack_runs_post_send_hook_with_expected_payload() {
     let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let message_id = Uuid::new_v4();
@@ -220,6 +227,7 @@ fn test_ack_runs_post_send_hook_with_expected_payload() {
 }
 
 #[test]
+#[serial]
 fn test_ack_post_send_hook_failure_surfaces_warning() {
     let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let message_id = Uuid::new_v4();
@@ -258,6 +266,7 @@ fn test_ack_post_send_hook_failure_surfaces_warning() {
 }
 
 #[test]
+#[serial]
 fn test_ack_rejects_already_acknowledged_message() {
     let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let message_id = Uuid::new_v4();
@@ -284,6 +293,7 @@ fn test_ack_rejects_already_acknowledged_message() {
 }
 
 #[test]
+#[serial]
 fn test_ack_rejects_message_that_is_not_pending() {
     let fixture = Fixture::new(&[TEST_SENDER, TEST_LEAD]);
     let message_id = Uuid::new_v4();
@@ -313,19 +323,34 @@ impl Fixture {
         let tempdir = tempfile::tempdir().expect("tempdir");
         let fixture = Self { tempdir };
         fixture.write_team_config(members);
+        fixture.warm_daemon();
         fixture
     }
 
     fn run(&self, args: &[&str]) -> std::process::Output {
-        Command::new(env!("CARGO_BIN_EXE_atm"))
+        let mut first = Command::new(env!("CARGO_BIN_EXE_atm"));
+        let output =
+            support::configure_atm_command(&mut first, self.tempdir.path(), Some(TEST_SENDER))
+                .args(args)
+                .current_dir(self.tempdir.path())
+                .output()
+                .expect("run atm");
+        if !support::is_daemon_start_transient(&output) {
+            return output;
+        }
+
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        let mut retry = Command::new(env!("CARGO_BIN_EXE_atm"));
+        support::configure_atm_command(&mut retry, self.tempdir.path(), Some(TEST_SENDER))
             .args(args)
-            .env("ATM_HOME", self.tempdir.path())
-            .env("ATM_CONFIG_HOME", self.tempdir.path())
-            .env("ATM_IDENTITY", TEST_SENDER)
-            .env("ATM_TEAM", TEST_TEAM)
             .current_dir(self.tempdir.path())
             .output()
-            .expect("run atm")
+            .expect("retry atm")
+    }
+
+    fn warm_daemon(&self) {
+        let output = self.run(&["read", "--all", "--no-mark", "--json"]);
+        assert!(output.status.success(), "stderr: {}", self.stderr(&output));
     }
 
     fn write_atm_config(&self, body: &str) {
@@ -482,7 +507,9 @@ impl Fixture {
         acknowledged_offset: Option<Duration>,
         message_id: Uuid,
     ) -> MessageEnvelope {
-        let timestamp = Utc::now() - Duration::minutes(30);
+        let timestamp = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+            .expect("timestamp")
+            .with_timezone(&Utc);
         MessageEnvelope {
             from: from.parse::<AgentName>().expect("agent"),
             text: text.to_string(),

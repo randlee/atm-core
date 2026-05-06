@@ -53,6 +53,9 @@ Phase-R redesign note:
   then rebuilds the implementation under lint/visibility guardrails
 - Phase R treats thin-client extension pressure, including `atm-graft`, as a
   first-class architectural input
+- for the boundary / adapter model, Phase R supersedes any earlier
+  pre-Phase-R architecture statements in this document that conflict with the
+  crate-local boundary inventories, ADRs, or `docs/plan-phase-R.md`
 
 ## 2. Crate Boundaries
 
@@ -1815,11 +1818,10 @@ Single-write-path guardrail:
 
 Current owner-layer boundaries:
 - Claude-owned inbox compatibility surface:
-  `mailbox::store::observe_source_files(...)` for observational snapshots,
-  `mailbox::store::with_locked_source_files(...)` for shared mailbox
-  read/ack/clear lock+reload orchestration, and
-  `mailbox::store::commit_mailbox_state(...)` /
-  `mailbox::store::commit_source_files(...)` as the persistence leaf
+  retained mailbox commands now cross the `RetainedServiceRuntime` seam and
+  delegate through injected store adapters; low-level source-file discovery,
+  lock/reload orchestration, and persistence remain internal leaf helpers
+  behind that seam during the Phase R store transition
 - ATM-owned source-of-truth state:
   `workflow::{load_workflow_state(...), save_workflow_state(...),
   project_envelope(...), remember_initial_state(...),
@@ -2443,7 +2445,19 @@ Architectural rules:
 
 The daemon runtime must use one documented operational contract.
 
-Required architectural defaults:
+Daemon singleton is requirement `#1`.
+
+Architectural rules:
+- only one `atm-daemon` process may exist anywhere on the host for the
+  supported runtime model
+- singleton enforcement uses at least:
+  - a pre-spawn launch gate before fork/exec
+  - a daemon-side startup gate before serving state
+  - a static lint/CI gate that rejects daemon-spawn patterns in ordinary tests
+- no test, tool, alternate socket path, or alternate `ATM_HOME` value is
+  exempt from the singleton rule
+
+Phase R operational defaults:
 - graceful shutdown drain deadline: `5s`
 - force-cancel deadline: `10s` total
 - daemon auto-start publish deadline: `10s`
@@ -2473,10 +2487,22 @@ Required signal behavior:
 
 The daemon is not the test strategy.
 
-Phase Q test architecture must keep:
+The target daemon-runtime test architecture must keep:
 - core service logic testable in-process
 - transport/watch/runtime logic testable through fakes or harnesses
 - daemon process spawning out of the core test path
+- default correctness suites free of:
+  - daemon spawn
+  - socket publication timing
+  - retry sleeps
+  - environment mutation races
+  - auto-start side effects
+
+Required test tiers:
+- `FakeClientTransport` for deterministic CLI/composition tests
+- in-process loopback transport for request/handler integration
+- a narrow daemon-runtime suite for true singleton/startup/shutdown/recovery
+  requirements only
 
 If a capability cannot be tested without real daemon spawning, that is treated
 as a design smell rather than the default approach.

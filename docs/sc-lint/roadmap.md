@@ -111,7 +111,7 @@ The first sprint cut now includes:
 The analyzer should be able to classify at least:
 
 - `type_method_self_loop`
-- `newtype_conversion_self_loop`
+- `trait_impl_self_loop`
 - `multi_owner_architectural_cycle`
 
 The exact names may change, but the rule categories should stay stable enough

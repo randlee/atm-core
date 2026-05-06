@@ -102,7 +102,7 @@ fn execute_post_send_hook(
     };
     let command_path = resolve_command_path(config, command_path);
     let mut payload = json!({
-        "from": qualified_sender_identity(context.sender, context.sender_team.map(|team| team.as_str())),
+        "from": qualified_sender_identity(context.sender, context.sender_team),
         "to": format!("{}@{}", context.recipient.agent, context.recipient.team),
         "sender": context.sender.as_str(),
         "recipient": context.recipient.agent,
@@ -113,6 +113,9 @@ fn execute_post_send_hook(
     });
     if let Some(task_id) = context.task_id {
         payload["task_id"] = Value::String(task_id.to_string());
+    }
+    if let Some(recipient_pane_id) = context.recipient_pane_id {
+        payload["recipient_pane_id"] = Value::String(recipient_pane_id.to_string());
     }
 
     debug!(

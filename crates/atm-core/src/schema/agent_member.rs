@@ -30,6 +30,7 @@ impl From<String> for AgentType {
             "lead" => Self::Lead,
             "qa" => Self::Qa,
             "worker" => Self::Worker,
+            _ if value.trim().is_empty() => Self::Unknown(value),
             _ => {
                 warn!(
                     raw_agent_type = %value,

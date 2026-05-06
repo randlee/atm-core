@@ -43,7 +43,14 @@ REQUIRED_BOUNDARY_FIELDS = (
 VISIBILITY_VALUES = {"private", "pub(crate)", "public", "trait_only"}
 CONSTRUCTOR_VALUES = {"private", "pub(crate)", "public", "none"}
 REFERENCE_SCOPE_VALUES = {"global", "outside_owner_crate"}
-STATE_VALUES = {"planned", "active", "deferred", "retired"}
+STATE_VALUES = {
+    "planned",
+    "active",
+    "deferred",
+    "retired",
+    "stub_landed",
+    "concrete_landed",
+}
 PACKAGE_NAME_RE = re.compile(r"^[a-z0-9]+(?:[.-][a-z0-9]+)*$")
 CRATE_PATH_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 RUST_PATH_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$")
@@ -94,7 +101,7 @@ class BoundaryRecord:
 
     @property
     def is_active(self) -> bool:
-        return self.status_state == "active"
+        return self.status_state in {"active", "stub_landed", "concrete_landed"}
 
     @property
     def location(self) -> str:

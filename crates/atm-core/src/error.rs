@@ -10,6 +10,7 @@ pub(crate) enum AtmErrorKind {
     MissingDocument,
     Address,
     Identity,
+    DaemonUnavailable,
     TeamNotFound,
     AgentNotFound,
     MailboxLock,
@@ -74,6 +75,10 @@ impl AtmError {
 
     pub fn is_team_not_found(&self) -> bool {
         self.kind == AtmErrorKind::TeamNotFound
+    }
+
+    pub fn is_daemon_unavailable(&self) -> bool {
+        self.kind == AtmErrorKind::DaemonUnavailable
     }
 
     pub fn is_agent_not_found(&self) -> bool {
@@ -155,6 +160,12 @@ impl AtmError {
         .with_recovery("Set ATM_HOME or ensure the OS home directory can be resolved.")
     }
 
+    pub fn config(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorKind::Config, message).with_recovery(
+            "Check the active ATM configuration, runtime wiring, and local path settings before retrying.",
+        )
+    }
+
     pub fn address_parse(message: impl Into<String>) -> Self {
         Self::new(
             AtmErrorKind::Address,
@@ -172,6 +183,17 @@ impl AtmError {
             "identity is not configured",
         )
         .with_recovery("Set ATM_IDENTITY or provide an explicit command identity override when the command supports one.")
+    }
+
+    pub fn daemon_unavailable(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::DaemonUnavailable,
+            AtmErrorKind::DaemonUnavailable,
+            message,
+        )
+        .with_recovery(
+            "Ensure the atm-daemon binary is installed, the daemon socket path is reachable, and ATM_DAEMON_BIN/ATM_HOME are set correctly before retrying.",
+        )
     }
 
     pub fn team_unavailable() -> Self {
@@ -342,6 +364,7 @@ impl AtmErrorKind {
             Self::MissingDocument => AtmErrorCode::ConfigTeamMissing,
             Self::Address => AtmErrorCode::AddressParseFailed,
             Self::Identity => AtmErrorCode::IdentityUnavailable,
+            Self::DaemonUnavailable => AtmErrorCode::DaemonUnavailable,
             Self::TeamNotFound => AtmErrorCode::TeamNotFound,
             Self::AgentNotFound => AtmErrorCode::AgentNotFound,
             Self::MailboxLock => AtmErrorCode::MailboxLockFailed,
@@ -412,6 +435,14 @@ mod tests {
         assert!(rendered.contains("boom"));
         assert!(!rendered.contains("Backtrace:"));
         assert!(error.backtrace().is_some());
+    }
+
+    #[test]
+    fn config_helper_uses_config_kind() {
+        let error = AtmError::config("config failed");
+
+        assert!(error.is_config());
+        assert_eq!(error.code, AtmErrorCode::ConfigParseFailed);
     }
 
     #[test]

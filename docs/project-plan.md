@@ -46,8 +46,22 @@ Phase R execution entry:
   2. `R.1` lint debt burn-down
   3. `R.2` skeleton crates, boundary traits/facades, and major data structures
   4. `R.2A` parallel lint hardening
-- `R.3` is a dedicated re-planning sprint after the Wave 1 skeleton lands
+- `R.3` is a dedicated review/re-planning stage after the Wave 1 skeleton lands
 - Wave 2 executes implementations only against the enforced boundary skeleton
+
+Current Phase R status:
+- `R.0` lint foundation is complete enough to enforce the boundary documents
+- `R.1` lint debt burn-down is complete on the active redesign line
+- `R.2` / `R.3.1` landed the Phase R skeleton context now carried by:
+  - `crates/atm-core/src/boundary/mod.rs`
+  - `crates/atm-daemon`
+  - `crates/atm-rusqlite`
+  - `crates/atm/src/composition.rs`
+- `R.2A` tooling hardening remains in progress for view/module/unsafe follow-up
+- `R.3.1` skeleton-first work is complete on the active planning line pending
+  merge through the normal integration path
+- `R.3.2` is the active sprint and is reviewing / drilling the proposed
+  `R.4` through `R.8` Wave 2 sprints into concrete, reviewable assignments
 
 Phase R acceptance:
 - lint/parser gates exist before substantive implementation resumes
@@ -77,9 +91,9 @@ Status:
 - Phase Q is retained only as an abandoned historical attempt at the SQLite
   source-of-truth and daemon-boundary redesign.
 - Phase R is the only active redesign and implementation line.
-- The current workspace still contains `crates/atm-core` and `crates/atm`
-  only; any additional crate introduction now belongs to the Phase R skeleton
-  line, not Phase Q.
+- The current merged Wave 1 baseline still contains `crates/atm-core` and
+  `crates/atm` only; additional crate introduction remains active Phase R
+  skeleton work and is now tracked explicitly by `R.3.1`.
 
 ## 2. Deliverables
 
@@ -2761,3 +2775,59 @@ Summary:
 Cross-reference:
 - The authoritative sprint-by-sprint Phase R plan lives in
   [`docs/plan-phase-R.md`](./plan-phase-R.md).
+
+## 23. Phase R.9 / R.10 — Daemon Singleton And Test Fidelity Hardening
+
+Goal:
+- finish the design and execution plan needed to make daemon singleton the
+  first-class runtime invariant
+- remove daemon-spawn-driven test strategy from the ordinary correctness path
+- replace it with production-faithful in-process transport seams and narrow
+  daemon-runtime coverage
+
+Authoritative design references:
+- [`docs/adr/ADR-002-host-wide-daemon-singleton.md`](./adr/ADR-002-host-wide-daemon-singleton.md)
+- [`docs/adr/ADR-003-test-fidelity-and-daemon-isolation.md`](./adr/ADR-003-test-fidelity-and-daemon-isolation.md)
+- [`docs/testing-guidelines.md`](./testing-guidelines.md)
+- [`docs/plan-phase-R.md`](./plan-phase-R.md)
+
+Execution shape:
+- `R.9` is the planning, requirements, ADR, and lint-design sprint
+- `R.10` is the implementation and test-migration sprint
+
+R.9 deliverables:
+- explicit requirement language that bans the current daemon-spawn test pattern
+- ADR for host-wide daemon singleton
+- ADR for test fidelity and daemon isolation
+- singleton lint gate design integrated into `just lint`
+- transport test-seam design:
+  - `FakeClientTransport`
+  - loopback/in-process transport
+  - narrow daemon-runtime harness
+- mapped resolution plan for:
+  - ARCH-SINGLETON
+  - CI-WIN-001
+  - singleton review findings `RBP-F001` through `RBP-F012`
+  - QA carry-forward items affecting singleton and test fidelity
+
+R.10 deliverables:
+- client-side pre-spawn launch gate
+- daemon-side serving gate and stale-owner recovery hardening
+- typed boundary/runtime fixes required by the singleton/test redesign
+- deletion of daemon-spawn helpers from ordinary tests
+- migration of CLI tests to fake or loopback transport seams
+
+Lint gate decision:
+- existing generic tools such as `clippy` are not sufficient to enforce the
+  singleton/test-fidelity architecture rule
+- Phase R therefore adds a dedicated repository lint gate, integrated into
+  `just lint`, with an initial planned entrypoint of
+  `scripts/lint_daemon_singleton.py`, that rejects banned daemon-spawn
+  patterns and related timing workarounds in ordinary tests
+
+Acceptance:
+- requirements, architecture, ADRs, and testing guidelines agree on the
+  singleton rule and approved test tiers
+- there is no approved ordinary test-daemon launch path
+- the implementation plan explicitly prevents new daemon-spawn helpers from
+  proliferating

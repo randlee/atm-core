@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
-use atm_core::ack::{self, AckRequest};
+use atm_core::ack::AckRequest;
 use atm_core::home;
 use atm_core::schema::LegacyMessageId;
 use clap::Args;
 
+use crate::composition::CliComposition;
 use crate::observability::CliObservability;
 use crate::output;
 
@@ -28,22 +29,20 @@ impl AckCommand {
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
+        let composition = CliComposition::bootstrap(observability)?;
         let message_id = self
             .message_id
             .parse::<LegacyMessageId>()
             .with_context(|| format!("invalid message id: {}", self.message_id))?;
 
-        let outcome = ack::ack_mail(
-            AckRequest {
-                home_dir,
-                current_dir,
-                actor_override: self.actor.map(|value| value.parse()).transpose()?,
-                team_override: self.team.map(|value| value.parse()).transpose()?,
-                message_id,
-                reply_body: self.reply,
-            },
-            observability,
-        )?;
+        let outcome = composition.ack(AckRequest {
+            home_dir,
+            current_dir,
+            actor_override: self.actor.map(|value| value.parse()).transpose()?,
+            team_override: self.team.map(|value| value.parse()).transpose()?,
+            message_id,
+            reply_body: self.reply,
+        })?;
 
         output::print_ack_result(&outcome, self.json)
     }

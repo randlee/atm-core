@@ -4,6 +4,9 @@ pub mod ack;
 pub mod address;
 /// Phase R boundary traits and placeholder contract types.
 pub mod boundary;
+/// Hidden support helpers used by concrete boundary adapter crates.
+#[doc(hidden)]
+pub mod boundary_support;
 /// Mailbox cleanup workflows for read and acknowledged messages.
 pub mod clear;
 /// Internal configuration discovery and resolution helpers.
@@ -30,6 +33,8 @@ pub mod observability;
 pub(crate) mod persistence;
 /// Internal process-liveness helpers shared across lock implementations.
 pub(crate) mod process;
+/// Shared protocol DTOs used by boundary transport and adapter contracts.
+pub mod protocol;
 /// Mailbox read/query workflows and output models.
 pub mod read;
 /// Reserved production role constants shared across runtime and tests.
@@ -38,6 +43,11 @@ pub mod roles;
 pub mod schema;
 /// Mailbox send workflows and request/response models.
 pub mod send;
+/// Internal service-owned seams that isolate retained command orchestration
+/// from direct helper/path access.
+pub(crate) mod service_runtime;
+/// Transitional legacy store adapters used by the retained service runtime.
+pub(crate) mod service_runtime_store;
 /// Retained local team discovery, roster repair, and backup/restore workflows.
 pub mod team_admin;
 /// Shared synthetic test identities and role constants used across crate tests.
@@ -51,10 +61,36 @@ pub mod types;
 pub(crate) mod workflow;
 
 pub use boundary::{
-    AtmFramePayload, AtmProtocol, AtmRequestEnvelope, AtmResponseEnvelope, ClientTransport,
-    ClientTransportRequest, ClientTransportResponse, DispatchRequestEnvelope,
-    DispatchResponseEnvelope, NotificationEvent, NotificationSink, ReconcileCoordinator,
-    ReconcileRequest, ReconcileResult, RequestDispatcher, RuntimeStatusSnapshot, ServerTransport,
-    ServerTransportRequest, ServerTransportResponse, StatusSource, WatchEventBatch,
-    WatchEventSource, WatchSubscriptionRequest,
+    AtmProtocol, ClientTransport, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse,
+    ConfigTeamLoadRequest, ConfigTeamLoadResponse, InboxExport, InboxExportReexportMessageRequest,
+    InboxExportReexportMessageResponse, InboxExportRequest, InboxExportResponse, InboxIngress,
+    InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
+    InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
+    InboxIngressImportRequest, InboxIngressImportResponse, InboxIngressRequest,
+    InboxIngressResponse, InboxSourceFileRecord, MailStore, MailStoreBootstrapRequest,
+    MailStoreBootstrapResponse, MailStoreHealthSnapshot, MailStoreHealthSnapshotRequest,
+    MailStoreHealthSnapshotResponse, MailStoreIngestReplayState,
+    MailStoreLoadIngestReplayStateRequest, MailStoreLoadIngestReplayStateResponse,
+    MailStoreLoadMessageRequest, MailStoreLoadMessageResponse, MailStoreLoadVisibilityStateRequest,
+    MailStoreLoadVisibilityStateResponse, MailStoreMessageRecord,
+    MailStoreRecordIngestReplayStateRequest, MailStoreRecordIngestReplayStateResponse,
+    MailStoreRequest, MailStoreResponse, MailStoreTransactionRequest, MailStoreTransactionResponse,
+    MailStoreUpsertMessageRequest, MailStoreUpsertMessageResponse,
+    MailStoreUpsertVisibilityStateRequest, MailStoreUpsertVisibilityStateResponse,
+    MailStoreVisibilityState, NotificationEvent, NotificationSink, ReconcileCoordinator,
+    ReconcileRequest, ReconcileResult, RequestDispatcher, RosterStore, RosterStoreHealthSnapshot,
+    RosterStoreHealthSnapshotRequest, RosterStoreHealthSnapshotResponse,
+    RosterStoreLoadRosterRequest, RosterStoreLoadRosterResponse, RosterStoreQueryMembershipRequest,
+    RosterStoreQueryMembershipResponse, RosterStoreReplaceRosterRequest,
+    RosterStoreReplaceRosterResponse, RosterStoreRequest, RosterStoreResponse,
+    RuntimeStatusSnapshot, ServerTransport, StatusSource, TaskStore,
+    TaskStoreAttachMessageLinkRequest, TaskStoreAttachMessageLinkResponse,
+    TaskStoreCreateTaskRequest, TaskStoreCreateTaskResponse, TaskStoreDetachMessageLinkRequest,
+    TaskStoreDetachMessageLinkResponse, TaskStoreLoadTaskRequest, TaskStoreLoadTaskResponse,
+    TaskStoreQueryTaskMetadataRequest, TaskStoreQueryTaskMetadataResponse,
+    TaskStoreRecordAckTransitionRequest, TaskStoreRecordAckTransitionResponse, TaskStoreRequest,
+    TaskStoreResponse, TaskStoreTaskMetadata, TaskStoreTaskRecord, TaskStoreUpdateTaskRequest,
+    TaskStoreUpdateTaskResponse, WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
 };
+pub use config::AtmConfig;
+pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};
