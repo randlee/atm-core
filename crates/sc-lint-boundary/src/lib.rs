@@ -485,8 +485,19 @@ impl GraphBuilder {
 
 pub fn analyze_workspace(options: &AnalyzeOptions) -> Result<FindingsReport> {
     if options.rule == Some(RuleFilter::Portability) {
-        let findings = portability::analyze_portability(&options.root)?;
-        let scanned_crates = portability::count_scanned_crates(&options.root)?;
+        let findings = portability::analyze_portability(&options.root).with_context(|| {
+            format!(
+                "failed to analyze portability for root: {}",
+                options.root.display()
+            )
+        })?;
+        let scanned_crates =
+            portability::count_scanned_crates(&options.root).with_context(|| {
+                format!(
+                    "failed to count scanned crates for root: {}",
+                    options.root.display()
+                )
+            })?;
         let status = if findings.iter().any(analysis::finding_is_failure) {
             "fail"
         } else {
