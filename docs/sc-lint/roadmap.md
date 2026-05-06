@@ -123,10 +123,11 @@ Current implementation status:
   - `type_method_self_loop`
   - `trait_impl_self_loop`
   - `multi_owner_architectural_cycle`
+  - explicit recursive container/value allowance through
+    `boundary.allow("cycle.recursive_value_container")`
   - `internal_only` visibility/reference enforcement
   - `forbid_external_impls` enforcement
 - deferred:
-  - dedicated value-container / recursive-model cycle policy
   - additional boundary declarations beyond current attribute set
 
 ## What Is Explicitly Deferred
@@ -170,3 +171,17 @@ Current integration state:
 - `just lint sc-boundary`
   - exists now as a separate preliminary/manual target
   - is intentionally not part of default `just lint` yet
+
+## Default Rule Policy
+
+`sc-lint-boundary` ships with an embedded default rule config at:
+
+- `crates/sc-lint-boundary/config/defaults.toml`
+
+It currently carries the built-in `trait_self_loop` policy through:
+
+- `ignored_trait_paths`
+- `ignored_trait_names`
+
+This is the default-install extension point for common non-architectural trait
+families such as comparison, hashing, conversion, and serde traits.

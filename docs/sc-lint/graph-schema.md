@@ -108,6 +108,31 @@ Current implemented rule ids:
 - `SCB-BOUNDARY-002`
 - `SCB-BOUNDARY-003`
 
+## Source-Level Allowances
+
+Current implemented source-level allowances:
+
+- `boundary.allow("cycle.type_method_self_loop")`
+- `boundary.allow("cycle.recursive_value_container")`
+
+`cycle.recursive_value_container` is intended for deliberate recursive
+container/value models where every owner participating in the recursive cycle
+opts in explicitly.
+
+## Default Trait Policy
+
+The analyzer includes an embedded default policy file:
+
+- `crates/sc-lint-boundary/config/defaults.toml`
+
+Current trait self-loop filtering is configured through:
+
+- `trait_self_loop.ignored_trait_paths`
+- `trait_self_loop.ignored_trait_names`
+
+This keeps common ecosystem trait families configurable without baking
+repo-specific names into analyzer code.
+
 ## Stability Notes
 
 Stable enough to build against now:

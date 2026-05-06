@@ -29,6 +29,7 @@ Current scaffold status:
   - versioned independently at `0.1.0`
   - currently provides compile-valid, no-op `#[sc_lint(...)]` support for:
     - `boundary.allow("cycle.type_method_self_loop")`
+    - `boundary.allow("cycle.recursive_value_container")`
     - `boundary.internal_only`
 - `sc-lint-boundary`
   - exists now
@@ -52,6 +53,8 @@ Current scaffold status:
     - owner-graph cycle classification with:
       - `SCB-CYCLE-001` multi-owner architectural cycle
       - `SCB-CYCLE-003` trait-impl self-loop
+    - built-in default trait-self-loop policy from:
+      - `crates/sc-lint-boundary/config/defaults.toml`
     - boundary enforcement with:
       - `SCB-BOUNDARY-001` internal_only visibility violation
       - `SCB-BOUNDARY-002` internal_only external reference

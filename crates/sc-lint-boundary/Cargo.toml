@@ -25,6 +25,7 @@ serde_json.workspace = true
 clap = { version = "4", features = ["derive"] }
 syn = { version = "2", features = ["full", "parsing", "visit"] }
 quote = "1"
+toml = "0.8"
 
 [dev-dependencies]
 tempfile = "3"

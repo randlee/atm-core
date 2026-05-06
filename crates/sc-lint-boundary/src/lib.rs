@@ -4,11 +4,13 @@ use std::fmt;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 use anyhow::Context;
 use anyhow::Result;
 use cargo_metadata::MetadataCommand;
 use quote::ToTokens;
+use serde::Deserialize;
 use serde::Serialize;
 use syn::Attribute;
 use syn::File;
@@ -22,6 +24,20 @@ use syn::Type;
 use syn::parse::Parse;
 use syn::parse::ParseStream;
 use syn::visit::Visit;
+
+const SC_LINT_SCHEMA_VERSION: &str = "0.1.0";
+const DEFAULT_RULES_TOML: &str = include_str!("../config/defaults.toml");
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+struct RuleDefaults {
+    trait_self_loop: TraitSelfLoopDefaults,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+struct TraitSelfLoopDefaults {
+    ignored_trait_paths: Vec<String>,
+    ignored_trait_names: Vec<String>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputFormat {
@@ -240,8 +256,6 @@ enum ParsedLintDirective {
 struct ParsedLintInput {
     directives: Vec<ParsedLintDirective>,
 }
-
-const SC_LINT_SCHEMA_VERSION: &str = "0.1.0";
 
 impl Parse for ParsedLintInput {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
@@ -759,7 +773,7 @@ fn ingest_module_items(
                 let trait_path = item_impl
                     .trait_
                     .as_ref()
-                    .map(|(_, path, _)| path_to_string(path));
+                    .map(|(_, path, _)| trait_path_key(path));
                 let impl_node_id = if let Some(trait_path) = &trait_path {
                     format!(
                         "{owner_node_id}::impl::{}",
@@ -820,7 +834,7 @@ fn ingest_module_items(
                 builder.add_edge("targets", impl_node_id.clone(), owner_node_id.clone());
 
                 if let Some((_, path, _)) = &item_impl.trait_ {
-                    let trait_reference_path = path_to_string(path);
+                    let trait_reference_path = trait_path_key(path);
                     let trait_target_node_id =
                         resolve_reference_target(&impl_node_id, module_path, &trait_reference_path);
                     ensure_trait_reference_node(
@@ -1110,6 +1124,14 @@ fn parse_lint_attributes(attrs: &[Attribute]) -> Result<Vec<LintAttribute>> {
     Ok(parsed)
 }
 
+fn node_has_allow_rule(node: &GraphNode, rule_id: &str) -> bool {
+    node.attributes.iter().any(|attr| {
+        attr.scope == "boundary"
+            && attr.name == "allow"
+            && attr.values.iter().any(|value| value == rule_id)
+    })
+}
+
 fn parse_directive(input: ParseStream<'_>) -> syn::Result<ParsedLintDirective> {
     let scope = input.parse::<Ident>()?;
     let scope_name = scope.to_string();
@@ -1199,8 +1221,24 @@ fn impl_owner_name(self_ty: &Type) -> Result<String> {
     }
 }
 
-fn path_to_string(path: &syn::Path) -> String {
-    path.to_token_stream().to_string().replace(' ', "")
+fn trait_path_key(path: &syn::Path) -> String {
+    path.segments
+        .iter()
+        .map(|segment| segment.ident.to_string())
+        .collect::<Vec<_>>()
+        .join("::")
+}
+
+fn trait_terminal_name(trait_path: &str) -> &str {
+    trait_path.rsplit("::").next().unwrap_or(trait_path)
+}
+
+fn default_rule_defaults() -> &'static RuleDefaults {
+    static DEFAULTS: OnceLock<RuleDefaults> = OnceLock::new();
+    DEFAULTS.get_or_init(|| {
+        toml::from_str(DEFAULT_RULES_TOML)
+            .expect("embedded sc-lint-boundary default rule config must parse")
+    })
 }
 
 fn is_supported_target(target: &cargo_metadata::Target) -> bool {
@@ -1237,6 +1275,9 @@ fn analyze_cycles(graph: &GraphExport, _rule_filter: Option<&str>) -> Vec<Findin
     let mut findings = Vec::new();
     for component in sccs {
         if component.len() > 1 {
+            if component_allows_recursive_value_container(&component, &node_map) {
+                continue;
+            }
             let mut owners = component.clone();
             owners.sort();
             findings.push(Finding {
@@ -1271,16 +1312,7 @@ fn analyze_cycles(graph: &GraphExport, _rule_filter: Option<&str>) -> Vec<Findin
                 edge.node_ids.iter().any(|node_id| {
                     node_map
                         .get(node_id)
-                        .map(|node| {
-                            node.attributes.iter().any(|attr| {
-                                attr.scope == "boundary"
-                                    && attr.name == "allow"
-                                    && attr
-                                        .values
-                                        .iter()
-                                        .any(|value| value == "cycle.type_method_self_loop")
-                            })
-                        })
+                        .map(|node| node_has_allow_rule(node, "cycle.type_method_self_loop"))
                         .unwrap_or(false)
                 })
             });
@@ -1323,7 +1355,7 @@ fn analyze_cycles(graph: &GraphExport, _rule_filter: Option<&str>) -> Vec<Findin
                     .get(&source_node_id)
                     .and_then(|node| node.impl_trait.clone())
                     .unwrap_or_else(|| "unknown_trait".to_string());
-                if is_conversion_like_trait_impl(&trait_name) {
+                if is_non_architectural_trait_impl_self_loop(&trait_name) {
                     continue;
                 }
                 let entry = trait_nodes.entry(trait_name).or_default();
@@ -1359,13 +1391,30 @@ fn analyze_cycles(graph: &GraphExport, _rule_filter: Option<&str>) -> Vec<Findin
     findings
 }
 
-fn is_conversion_like_trait_impl(trait_name: &str) -> bool {
-    trait_name.contains("From<")
-        || trait_name.contains("TryFrom<")
-        || trait_name.ends_with("FromStr")
-        || trait_name.ends_with("Default")
-        || trait_name.starts_with("Parse")
-        || trait_name.contains("Deserialize<")
+fn component_allows_recursive_value_container<'a>(
+    owners: &[String],
+    node_map: &BTreeMap<String, &'a GraphNode>,
+) -> bool {
+    owners.iter().all(|owner_id| {
+        node_map
+            .get(owner_id)
+            .map(|node| {
+                node.kind == "type" && node_has_allow_rule(node, "cycle.recursive_value_container")
+            })
+            .unwrap_or(false)
+    })
+}
+
+fn is_non_architectural_trait_impl_self_loop(trait_path: &str) -> bool {
+    let defaults = &default_rule_defaults().trait_self_loop;
+    defaults
+        .ignored_trait_paths
+        .iter()
+        .any(|ignored| ignored == trait_path)
+        || defaults
+            .ignored_trait_names
+            .iter()
+            .any(|ignored| ignored == trait_terminal_name(trait_path))
 }
 
 fn analyze_internal_only(graph: &GraphExport) -> Vec<Finding> {
@@ -2488,6 +2537,63 @@ mod tests {
     }
 
     #[test]
+    fn does_not_flag_comparison_like_trait_impl_self_loop() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                #[derive(Debug, Clone)]
+                pub struct Loop(String);
+
+                impl core::cmp::PartialEq for Loop {
+                    fn eq(&self, other: &Self) -> bool {
+                        self.0 == other.0
+                    }
+                }
+
+                impl core::cmp::Eq for Loop {}
+            "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("cycles".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "pass");
+        assert!(report.findings.is_empty());
+    }
+
+    #[test]
+    fn normalizes_trait_paths_for_exact_policy_matching() {
+        let path: syn::Path = syn::parse_quote!(serde::Deserialize<'de>);
+        assert_eq!(crate::trait_path_key(&path), "serde::Deserialize");
+
+        let path: syn::Path = syn::parse_quote!(core::cmp::PartialEq);
+        assert_eq!(crate::trait_path_key(&path), "core::cmp::PartialEq");
+    }
+
+    #[test]
+    fn default_rule_config_ignores_common_non_architectural_trait_paths() {
+        assert!(crate::is_non_architectural_trait_impl_self_loop(
+            "core::cmp::PartialEq"
+        ));
+        assert!(crate::is_non_architectural_trait_impl_self_loop(
+            "serde::Deserialize"
+        ));
+        assert!(crate::is_non_architectural_trait_impl_self_loop("FromStr"));
+        assert!(crate::is_non_architectural_trait_impl_self_loop("Parse"));
+        assert!(!crate::is_non_architectural_trait_impl_self_loop(
+            "one::Display"
+        ));
+    }
+
+    #[test]
     fn reports_multi_owner_architectural_cycle_as_failure() {
         let fixture = WorkspaceFixture::new();
         fixture.write_workspace_root();
@@ -2524,6 +2630,70 @@ mod tests {
                 "crate::example::example::module::crate::Beta".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn suppresses_recursive_value_container_cycle_when_all_owners_allow_it() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                #[sc_lint(boundary.allow("cycle.recursive_value_container"))]
+                pub enum Value {
+                    Object(Map),
+                }
+
+                #[sc_lint(boundary.allow("cycle.recursive_value_container"))]
+                pub struct Map {
+                    entries: Vec<Value>,
+                }
+            "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("cycles".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "pass");
+        assert!(report.findings.is_empty());
+    }
+
+    #[test]
+    fn keeps_recursive_value_container_cycle_when_only_one_owner_allows_it() {
+        let fixture = WorkspaceFixture::new();
+        fixture.write_workspace_root();
+        fixture.write_package_manifest("example");
+        fixture.write_source(
+            "example",
+            "lib.rs",
+            r#"
+                #[sc_lint(boundary.allow("cycle.recursive_value_container"))]
+                pub enum Value {
+                    Object(Map),
+                }
+
+                pub struct Map {
+                    entries: Vec<Value>,
+                }
+            "#,
+        );
+
+        let report = analyze_workspace(&AnalyzeOptions {
+            root: fixture.root().to_path_buf(),
+            format: OutputFormat::Json,
+            rule: Some("cycles".to_string()),
+        })
+        .unwrap();
+
+        assert_eq!(report.status, "fail");
+        assert_eq!(report.findings.len(), 1);
+        assert_eq!(report.findings[0].rule_id, "SCB-CYCLE-001");
     }
 
     #[test]

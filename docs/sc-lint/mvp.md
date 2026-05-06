@@ -201,6 +201,18 @@ The analyzer should support:
 - JSON findings for the Python runner
 - graph export
 
+The current trait-self-loop default policy should be data-driven rather than
+hardcoded in analyzer logic. The initial implementation uses an embedded
+default TOML config with:
+
+- exact ignored trait paths
+- ignored terminal trait names for imported/common traits
+
+The analyzer should also support explicit source-level allowances for accepted
+recursive container/value models via:
+
+- `#[sc_lint(boundary.allow("cycle.recursive_value_container"))]`
+
 Current scaffold status:
 
 - `sc-lint-boundary` exists and can already:

@@ -29,6 +29,7 @@ dependencies = [
  "fs2",
  "libc",
  "same-file",
+ "sc-lint-attributes",
  "serde",
  "serde_json",
  "serial_test",
@@ -689,6 +690,7 @@ dependencies = [
  "serde_json",
  "syn",
  "tempfile",
+ "toml",
 ]
 
 [[package]]
