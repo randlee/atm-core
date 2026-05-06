@@ -330,12 +330,11 @@ fn apply_removals(source_files: &mut [SourceFile], removable: &HashSet<(PathBuf,
 mod tests {
     use std::{ffi::OsString, panic, panic::AssertUnwindSafe};
 
-    use crate::test_support::{EnvGuard, env_lock, remove_env_var, set_env_var};
+    use crate::test_support::{EnvGuard, remove_env_var, set_env_var};
     use serial_test::serial;
     #[test]
     #[serial]
     fn env_guard_restores_original_value_after_panic() {
-        let _env_lock = env_lock().lock().expect("env lock");
         set_env_var("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD", "original");
 
         let result = panic::catch_unwind(AssertUnwindSafe(|| {

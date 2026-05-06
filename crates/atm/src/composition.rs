@@ -538,6 +538,7 @@ mod tests {
     use std::fs;
     use std::sync::Arc;
 
+    use atm_core::ack::AckRequest;
     use atm_core::boundary::{self, ClientTransport};
     use atm_core::clear::ClearQuery;
     use atm_core::doctor::{DoctorQuery, DoctorStatus};
@@ -552,7 +553,8 @@ mod tests {
     };
     use atm_core::read::ReadQuery;
     use atm_core::schema::{
-        AgentMember, MessageEnvelope, TeamConfig, hydrate_legacy_fields_from_metadata,
+        AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig,
+        hydrate_legacy_fields_from_metadata,
     };
     use atm_core::send::{SendMessageSource, SendRequest};
     use atm_core::test_support::{
@@ -563,7 +565,7 @@ mod tests {
     use serde_json::Value;
     use tempfile::TempDir;
 
-    use super::CliComposition;
+    use super::{CliComposition, DaemonBinaryPath, DaemonSocketPath};
     use crate::observability::CliObservability;
 
     #[derive(Clone)]
@@ -771,6 +773,17 @@ mod tests {
             .expect("send request")
         }
 
+        fn ack_request(&self, message_id: LegacyMessageId, reply_body: &str) -> AckRequest {
+            AckRequest {
+                home_dir: self.home_dir.clone(),
+                current_dir: self.current_dir.clone(),
+                actor_override: Some(TEST_SENDER.parse().expect("actor")),
+                team_override: Some(TEST_TEAM.parse().expect("team")),
+                message_id,
+                reply_body: reply_body.to_string(),
+            }
+        }
+
         fn read_query(&self) -> ReadQuery {
             ReadQuery::new(
                 self.home_dir.clone(),
@@ -826,6 +839,14 @@ mod tests {
                 task_id: None,
                 extra: serde_json::Map::new(),
             }
+        }
+
+        fn pending_ack_message(&self, text: &str) -> (LegacyMessageId, MessageEnvelope) {
+            let message_id = LegacyMessageId::new();
+            let mut message = self.message(text, true);
+            message.message_id = Some(message_id);
+            message.pending_ack_at = Some(Utc::now().into());
+            (message_id, message)
         }
     }
 
@@ -981,5 +1002,73 @@ mod tests {
 
         assert_eq!(report.summary.status, DoctorStatus::Healthy);
         assert_eq!(report.summary.error_count, 0);
+    }
+
+    #[test]
+    fn loopback_transport_ack_appends_reply_without_daemon() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let (message_id, pending_ack) = fixture.pending_ack_message("please ack");
+        fixture.write_inbox_messages(TEST_SENDER, &[pending_ack]);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(Arc::new(
+                atm_core::observability::NullObservability,
+            ))),
+            &composition_observability,
+        );
+
+        let outcome = composition
+            .ack(fixture.ack_request(message_id, "received and starting"))
+            .expect("ack outcome");
+
+        assert_eq!(outcome.team.as_str(), TEST_TEAM);
+        assert_eq!(outcome.agent.as_str(), TEST_SENDER);
+        assert_eq!(outcome.message_id, message_id);
+        assert_eq!(
+            outcome.reply_target.to_string(),
+            format!("{TEST_LEAD}@{TEST_TEAM}")
+        );
+
+        let sender_inbox = fixture.inbox_contents(TEST_SENDER);
+        assert_eq!(sender_inbox.len(), 1);
+        assert!(sender_inbox[0].pending_ack_at.is_some());
+        assert!(sender_inbox[0].acknowledged_at.is_none());
+        let replies = fixture.inbox_contents(TEST_LEAD);
+        assert_eq!(replies.len(), 1);
+        assert_eq!(replies[0].text, "received and starting");
+        assert_eq!(replies[0].acknowledges_message_id, Some(message_id));
+    }
+
+    #[test]
+    fn daemon_path_newtypes_reject_empty_paths_and_preserve_path_access() {
+        let socket =
+            DaemonSocketPath::new(std::path::PathBuf::from("/tmp/atm.sock")).expect("socket path");
+        let daemon = DaemonBinaryPath::new(std::path::PathBuf::from("/tmp/atm-daemon"))
+            .expect("daemon path");
+
+        assert_eq!(socket.as_ref(), std::path::Path::new("/tmp/atm.sock"));
+        assert_eq!(daemon.as_ref(), std::path::Path::new("/tmp/atm-daemon"));
+
+        let socket_error = DaemonSocketPath::new(std::path::PathBuf::new()).expect_err("empty");
+        assert!(socket_error.to_string().contains("daemon socket path"));
+
+        let daemon_error = DaemonBinaryPath::new(std::path::PathBuf::new()).expect_err("empty");
+        assert!(daemon_error.to_string().contains("daemon binary path"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn daemon_path_newtypes_reject_non_utf8_paths_at_boundary() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let invalid = std::ffi::OsString::from_vec(vec![0x66, 0x6f, 0x80]);
+
+        let socket_error =
+            DaemonSocketPath::new(std::path::PathBuf::from(invalid.clone())).expect_err("utf8");
+        assert!(socket_error.to_string().contains("valid UTF-8"));
+
+        let daemon_error =
+            DaemonBinaryPath::new(std::path::PathBuf::from(invalid)).expect_err("utf8");
+        assert!(daemon_error.to_string().contains("valid UTF-8"));
     }
 }

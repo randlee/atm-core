@@ -1,7 +1,7 @@
 #[cfg(test)]
 use std::ffi::{OsStr, OsString};
 #[cfg(test)]
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Mutex, MutexGuard, OnceLock};
 
 pub const TEST_TEAM: &str = "test-team";
 pub const TEST_SENDER: &str = "sender-a";
@@ -26,14 +26,20 @@ pub fn env_lock() -> &'static Mutex<()> {
 pub struct EnvGuard {
     key: &'static str,
     original: Option<OsString>,
+    _guard: MutexGuard<'static, ()>,
 }
 
 #[cfg(test)]
 impl EnvGuard {
     pub fn set_raw(key: &'static str, value: &str) -> Self {
+        let guard = env_lock().lock().expect("env lock");
         let original = std::env::var_os(key);
         set_env_var(key, value);
-        Self { key, original }
+        Self {
+            key,
+            original,
+            _guard: guard,
+        }
     }
 }
 
