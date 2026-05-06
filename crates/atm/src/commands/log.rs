@@ -243,7 +243,9 @@ fn parse_relative_duration(raw: &str) -> Result<IsoTimestamp> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_relative_duration;
+    use atm_core::observability::{LogFieldValue, LogLevelFilter, LogMode};
+
+    use super::{CliLogLevel, QueryArgs, parse_match_expression, parse_relative_duration};
 
     #[test]
     fn parse_relative_duration_rejects_multibyte_suffix_without_panicking() {
@@ -252,5 +254,75 @@ mod tests {
             error.to_string().contains("supported units are s, m, h, d"),
             "error: {error}"
         );
+    }
+
+    #[test]
+    fn snapshot_query_defaults_limit_and_orders_newest_first() {
+        let args = QueryArgs {
+            levels: vec![CliLogLevel::Info],
+            matches: vec!["command=send".to_string()],
+            since: None,
+            limit: None,
+            json: true,
+        };
+
+        let query = args.build_query(LogMode::Snapshot).expect("query");
+
+        assert_eq!(query.mode, LogMode::Snapshot);
+        assert_eq!(query.levels, vec![LogLevelFilter::Info]);
+        assert_eq!(query.limit, Some(super::DEFAULT_SNAPSHOT_LIMIT));
+        assert_eq!(query.field_matches.len(), 1);
+        assert_eq!(query.order, atm_core::observability::LogOrder::NewestFirst);
+    }
+
+    #[test]
+    fn tail_query_preserves_explicit_limit_without_defaulting() {
+        let args = QueryArgs {
+            levels: vec![],
+            matches: vec!["success=true".to_string()],
+            since: Some("15m".to_string()),
+            limit: Some(3),
+            json: false,
+        };
+
+        let query = args.build_query(LogMode::Tail).expect("query");
+
+        assert_eq!(query.mode, LogMode::Tail);
+        assert_eq!(query.limit, Some(3));
+        assert!(query.since.is_some());
+        assert_eq!(query.field_matches[0].value, LogFieldValue::bool(true));
+    }
+
+    #[test]
+    fn filter_mode_requires_at_least_one_predicate() {
+        let args = QueryArgs {
+            levels: vec![],
+            matches: vec![],
+            since: None,
+            limit: None,
+            json: false,
+        };
+
+        let error = args.ensure_filter_present().expect_err("missing filter");
+
+        assert!(error.to_string().contains("requires at least one"));
+    }
+
+    #[test]
+    fn parse_match_expression_coerces_supported_json_scalars() {
+        let boolean = parse_match_expression("success=false").expect("bool");
+        let null = parse_match_expression("task_id=null").expect("null");
+        let number = parse_match_expression("attempts=7").expect("number");
+        let string = parse_match_expression("command=send").expect("string");
+
+        assert_eq!(boolean.value, LogFieldValue::bool(false));
+        assert_eq!(null.value, LogFieldValue::null());
+        assert_eq!(
+            number.value,
+            LogFieldValue::number(
+                atm_core::observability::AtmJsonNumber::new("7".to_string()).expect("number")
+            )
+        );
+        assert_eq!(string.value, LogFieldValue::string("send".to_string()));
     }
 }

@@ -685,6 +685,27 @@ mod tests {
             .expect("send request")
         }
 
+        fn send_request_with_flags(
+            &self,
+            body: &str,
+            requires_ack: bool,
+            task_id: Option<atm_core::types::TaskId>,
+        ) -> SendRequest {
+            SendRequest::new(
+                self.home_dir.clone(),
+                self.current_dir.clone(),
+                Some(TEST_SENDER),
+                TEST_RECIPIENT_ADDRESS,
+                Some(TEST_TEAM),
+                SendMessageSource::Inline(body.to_string()),
+                None,
+                requires_ack,
+                task_id,
+                false,
+            )
+            .expect("send request")
+        }
+
         fn ack_request(&self, message_id: LegacyMessageId, reply_body: &str) -> AckRequest {
             AckRequest {
                 home_dir: self.home_dir.clone(),
@@ -815,7 +836,7 @@ mod tests {
     }
 
     #[test]
-    fn loopback_transport_missing_config_notice_retains_at_most_two_team_lead_messages_under_concurrency()
+    fn loopback_transport_missing_config_notice_retains_at_most_one_team_lead_message_under_concurrency()
      {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
@@ -854,6 +875,40 @@ mod tests {
             "loopback missing-config fallback should retain at most one notice; got {}",
             notices.len()
         );
+    }
+
+    #[test]
+    fn loopback_transport_send_preserves_ack_and_task_metadata_without_daemon() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(Arc::new(
+                atm_core::observability::NullObservability,
+            ))),
+            &composition_observability,
+        );
+
+        let outcome = composition
+            .send(fixture.send_request_with_flags(
+                "needs acknowledgement",
+                false,
+                Some("TASK-314".parse().expect("task id")),
+            ))
+            .expect("send outcome");
+
+        assert!(outcome.requires_ack);
+        assert_eq!(
+            outcome.task_id.as_ref().map(|value| value.as_str()),
+            Some("TASK-314")
+        );
+
+        let inbox = fixture.inbox_contents(TEST_RECIPIENT);
+        assert_eq!(inbox.len(), 1);
+        assert_eq!(
+            inbox[0].task_id.as_ref().map(|value| value.as_str()),
+            Some("TASK-314")
+        );
+        assert!(inbox[0].pending_ack_at.is_some());
     }
 
     #[test]

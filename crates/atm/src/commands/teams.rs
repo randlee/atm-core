@@ -115,28 +115,35 @@ impl AddMemberCommand {
 
 impl BackupCommand {
     fn run(self, home_dir: PathBuf) -> Result<()> {
-        let outcome = team_admin::backup_team(BackupRequest::new(home_dir, &self.team)?)?;
-        output::print_backup_result(&outcome, self.json)
+        let json = self.json;
+        let outcome = team_admin::backup_team(self.build_request(home_dir)?)?;
+        output::print_backup_result(&outcome, json)
+    }
+
+    fn build_request(self, home_dir: PathBuf) -> Result<BackupRequest> {
+        BackupRequest::new(home_dir, &self.team).map_err(Into::into)
     }
 }
 
 impl RestoreCommand {
     fn run(self, home_dir: PathBuf) -> Result<()> {
-        match team_admin::restore_team(RestoreRequest::new(
-            home_dir,
-            &self.team,
-            self.from,
-            self.dry_run,
-        )?)? {
-            RestoreResult::Applied(outcome) => output::print_restore_result(&outcome, self.json),
-            RestoreResult::DryRun(plan) => output::print_restore_plan(&plan, self.json),
+        let json = self.json;
+        match team_admin::restore_team(self.build_request(home_dir)?)? {
+            RestoreResult::Applied(outcome) => output::print_restore_result(&outcome, json),
+            RestoreResult::DryRun(plan) => output::print_restore_plan(&plan, json),
         }
+    }
+
+    fn build_request(self, home_dir: PathBuf) -> Result<RestoreRequest> {
+        RestoreRequest::new(home_dir, &self.team, self.from, self.dry_run).map_err(Into::into)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::AddMemberCommand;
+    use std::path::PathBuf;
+
+    use super::{AddMemberCommand, BackupCommand, RestoreCommand};
 
     const TEST_SENDER: &str = "sender-a";
     const TEST_TEAM: &str = "test-team";
@@ -177,5 +184,39 @@ mod tests {
             .expect_err("invalid member");
 
         assert!(error.to_string().contains("agent name"));
+    }
+
+    #[test]
+    fn backup_build_request_preserves_team() {
+        let command = BackupCommand {
+            team: TEST_TEAM.to_string(),
+            json: true,
+        };
+
+        let request = command
+            .build_request(PathBuf::from("/tmp/home"))
+            .expect("request");
+
+        assert_eq!(request.team.as_str(), TEST_TEAM);
+        assert_eq!(request.home_dir, PathBuf::from("/tmp/home"));
+    }
+
+    #[test]
+    fn restore_build_request_preserves_from_path_and_dry_run() {
+        let command = RestoreCommand {
+            team: TEST_TEAM.to_string(),
+            from: Some(PathBuf::from("/tmp/backup")),
+            dry_run: true,
+            json: false,
+        };
+
+        let request = command
+            .build_request(PathBuf::from("/tmp/home"))
+            .expect("request");
+
+        assert_eq!(request.team.as_str(), TEST_TEAM);
+        assert_eq!(request.home_dir, PathBuf::from("/tmp/home"));
+        assert_eq!(request.from, Some(PathBuf::from("/tmp/backup")));
+        assert!(request.dry_run);
     }
 }
