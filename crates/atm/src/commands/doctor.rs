@@ -64,7 +64,6 @@ impl DoctorCommand {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
     use std::sync::Arc;
 
     use atm_core::doctor::{
@@ -74,14 +73,17 @@ mod tests {
     use atm_core::observability::{AtmObservabilityHealth, AtmObservabilityHealthState};
     use atm_core::protocol::{ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope};
     use atm_core::transport::testing::FakeClientTransport;
+    use tempfile::TempDir;
 
     use super::DoctorCommand;
     use crate::composition::CliComposition;
     use crate::observability::CliObservability;
 
-    fn test_paths() -> (PathBuf, PathBuf) {
-        let root = std::env::temp_dir().join("atm-doctor-command-tests");
-        (root.join("home"), root.join("cwd"))
+    fn test_paths() -> (TempDir, std::path::PathBuf, std::path::PathBuf) {
+        let tempdir = TempDir::new().expect("tempdir");
+        let home_dir = tempdir.path().join("home");
+        let current_dir = tempdir.path().join("cwd");
+        (tempdir, home_dir, current_dir)
     }
 
     fn healthy_report() -> DoctorReport {
@@ -118,7 +120,7 @@ mod tests {
             json: true,
         };
 
-        let (home_dir, current_dir) = test_paths();
+        let (_tempdir, home_dir, current_dir) = test_paths();
         let query = command.build_query(home_dir, current_dir).expect("query");
 
         assert_eq!(
@@ -140,7 +142,7 @@ mod tests {
             json: false,
         };
 
-        let (home_dir, current_dir) = test_paths();
+        let (_tempdir, home_dir, current_dir) = test_paths();
         let report = command
             .execute(&composition, home_dir, current_dir)
             .expect("report");
@@ -165,7 +167,7 @@ mod tests {
             json: false,
         };
 
-        let (home_dir, current_dir) = test_paths();
+        let (_tempdir, home_dir, current_dir) = test_paths();
         let error = command
             .execute(&composition, home_dir, current_dir)
             .expect_err("doctor error");

@@ -233,6 +233,22 @@ fn evict_stale_send_alert_lock(path: &Path) -> bool {
     let Ok(pid) = raw.trim().parse::<u32>() else {
         return false;
     };
+    if pid == 0 {
+        return match fs::remove_file(path) {
+            Ok(()) => true,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+            Err(error) => {
+                warn!(
+                    code = %AtmErrorCode::WarningSendAlertStateDegraded,
+                    %error,
+                    path = %path.display(),
+                    pid,
+                    "failed to evict invalid send alert lock pid"
+                );
+                false
+            }
+        };
+    }
     if process_is_alive(pid) {
         return false;
     }
@@ -365,7 +381,7 @@ mod tests {
         let tempdir = tempdir().expect("tempdir");
         let path = lock_path(tempdir.path());
         fs::create_dir_all(path.parent().expect("lock parent")).expect("lock parent");
-        fs::write(&path, "999999").expect("stale lock file");
+        fs::write(&path, "0").expect("stale lock file");
 
         let guard = acquire_lock(&path).expect("reclaimed lock guard");
 

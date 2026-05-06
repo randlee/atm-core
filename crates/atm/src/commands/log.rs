@@ -168,7 +168,9 @@ impl TailArgs {
                 return Ok(());
             }
 
-            thread::sleep(Duration::from_millis(self.poll_interval_ms));
+            if self.max_polls.is_none() {
+                thread::sleep(Duration::from_millis(self.poll_interval_ms));
+            }
         }
     }
 }

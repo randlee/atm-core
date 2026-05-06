@@ -112,6 +112,7 @@ mod tests {
     use super::SendCommand;
     use atm_core::roles::ROLE_TEAM_LEAD;
     use atm_core::send::SendMessageSource;
+    use tempfile::TempDir;
 
     const TEST_TEAM: &str = "test-team";
 
@@ -214,9 +215,10 @@ mod tests {
             dry_run: true,
             json: true,
         };
+        let tempdir = TempDir::new().expect("tempdir");
 
         let request = command
-            .build_request("/tmp/home".into(), "/tmp/cwd".into())
+            .build_request(tempdir.path().join("home"), tempdir.path().join("cwd"))
             .expect("request");
 
         assert_eq!(
@@ -256,9 +258,10 @@ mod tests {
             dry_run: false,
             json: false,
         };
+        let tempdir = TempDir::new().expect("tempdir");
 
         let request = command
-            .build_request("/tmp/home".into(), "/tmp/cwd".into())
+            .build_request(tempdir.path().join("home"), tempdir.path().join("cwd"))
             .expect("request");
 
         match request.message_source {

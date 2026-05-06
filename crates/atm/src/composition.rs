@@ -31,6 +31,9 @@ use fs2::FileExt;
 
 use crate::observability::CliObservability;
 
+const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
+const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
+
 #[derive(Debug, Default)]
 pub(crate) struct SendCommandEntryPoint;
 
@@ -138,13 +141,13 @@ impl LocalSocketClientTransport {
     fn exchange(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         let mut stream = self.try_connect()?;
         stream
-            .set_write_timeout(Some(Duration::from_secs(5)))
+            .set_write_timeout(Some(SAME_HOST_REQUEST_DEADLINE))
             .map_err(|source| {
                 AtmError::daemon_unavailable("failed to configure daemon socket write timeout")
                     .with_source(source)
             })?;
         stream
-            .set_read_timeout(Some(Duration::from_secs(5)))
+            .set_read_timeout(Some(SAME_HOST_REQUEST_DEADLINE))
             .map_err(|source| {
                 AtmError::daemon_unavailable("failed to configure daemon socket read timeout")
                     .with_source(source)
@@ -221,7 +224,7 @@ impl DaemonSupervisor {
             if _transport.try_connect().is_ok() {
                 return Ok(());
             }
-            let deadline = Instant::now() + Duration::from_secs(5);
+            let deadline = Instant::now() + AUTO_START_PUBLISH_TIMEOUT;
             loop {
                 if _transport.try_connect().is_ok() {
                     return Ok(());
@@ -1008,9 +1011,9 @@ mod tests {
 
     #[test]
     fn daemon_path_newtypes_reject_empty_paths_and_preserve_path_access() {
-        let root = std::env::temp_dir().join("atm-daemon-path-tests");
-        let socket_path = root.join("atm.sock");
-        let daemon_path = root.join("atm-daemon");
+        let tempdir = TempDir::new().expect("tempdir");
+        let socket_path = tempdir.path().join("atm.sock");
+        let daemon_path = tempdir.path().join("atm-daemon");
         let socket = DaemonSocketPath::new(socket_path.clone()).expect("socket path");
         let daemon = DaemonBinaryPath::new(daemon_path.clone()).expect("daemon path");
 

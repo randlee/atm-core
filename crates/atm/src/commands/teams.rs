@@ -273,7 +273,8 @@ mod tests {
             json: true,
         };
 
-        let home_dir = std::env::temp_dir().join("atm-teams-backup-home");
+        let tempdir = TempDir::new().expect("tempdir");
+        let home_dir = tempdir.path().join("home");
         let request = command.build_request(home_dir.clone()).expect("request");
 
         assert_eq!(request.team.as_str(), TEST_TEAM);
@@ -282,22 +283,21 @@ mod tests {
 
     #[test]
     fn restore_build_request_preserves_from_path_and_dry_run() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let backup_path = tempdir.path().join("backup");
         let command = RestoreCommand {
             team: TEST_TEAM.to_string(),
-            from: Some(std::env::temp_dir().join("atm-teams-backup")),
+            from: Some(backup_path.clone()),
             dry_run: true,
             json: false,
         };
 
-        let home_dir = std::env::temp_dir().join("atm-teams-restore-home");
+        let home_dir = tempdir.path().join("home");
         let request = command.build_request(home_dir.clone()).expect("request");
 
         assert_eq!(request.team.as_str(), TEST_TEAM);
         assert_eq!(request.home_dir, home_dir);
-        assert_eq!(
-            request.from,
-            Some(std::env::temp_dir().join("atm-teams-backup"))
-        );
+        assert_eq!(request.from, Some(backup_path));
         assert!(request.dry_run);
     }
 

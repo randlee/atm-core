@@ -126,6 +126,7 @@ fn parse_timestamp(value: &str) -> Result<IsoTimestamp> {
 #[cfg(test)]
 mod tests {
     use atm_core::types::{AckActivationMode, ReadSelection};
+    use tempfile::TempDir;
 
     use super::ReadCommand;
 
@@ -261,10 +262,11 @@ mod tests {
             timeout: Some(12),
             actor: Some("reader-a".to_string()),
         };
+        let tempdir = TempDir::new().expect("tempdir");
+        let home_dir = tempdir.path().join("home");
+        let current_dir = tempdir.path().join("cwd");
 
-        let query = command
-            .build_query("/tmp/home".into(), "/tmp/cwd".into())
-            .expect("query");
+        let query = command.build_query(home_dir, current_dir).expect("query");
 
         assert_eq!(query.selection_mode, ReadSelection::UnreadOnly);
         assert!(!query.seen_state_filter);

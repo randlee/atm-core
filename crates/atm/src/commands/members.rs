@@ -106,17 +106,20 @@ mod tests {
             team: Some("test-team".to_string()),
             json: true,
         };
+        let tempdir = TempDir::new().expect("tempdir");
+        let home_dir = tempdir.path().join("home");
+        let current_dir = tempdir.path().join("cwd");
 
         let query = command
-            .build_query("/tmp/home".into(), "/tmp/cwd".into())
+            .build_query(home_dir.clone(), current_dir.clone())
             .expect("query");
 
         assert_eq!(
             query.team_override.as_ref().map(|value| value.as_str()),
             Some("test-team")
         );
-        assert_eq!(query.home_dir, std::path::PathBuf::from("/tmp/home"));
-        assert_eq!(query.current_dir, std::path::PathBuf::from("/tmp/cwd"));
+        assert_eq!(query.home_dir, home_dir);
+        assert_eq!(query.current_dir, current_dir);
     }
 
     #[test]
@@ -125,9 +128,10 @@ mod tests {
             team: Some("../evil".to_string()),
             json: false,
         };
+        let tempdir = TempDir::new().expect("tempdir");
 
         let error = command
-            .build_query("/tmp/home".into(), "/tmp/cwd".into())
+            .build_query(tempdir.path().join("home"), tempdir.path().join("cwd"))
             .expect_err("invalid team");
 
         assert!(error.to_string().contains("team name"));

@@ -481,6 +481,8 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
                                 ),
                             );
                             let encoded = serde_json::to_vec(&response).map_err(AtmError::from)?;
+                            let _ = stream.set_read_timeout(Some(REQUEST_DEADLINE));
+                            let _ = stream.set_write_timeout(Some(REQUEST_DEADLINE));
                             let _ = stream.write_all(&encoded);
                             let _ = stream.flush();
                             continue;

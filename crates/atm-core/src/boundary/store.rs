@@ -1,0 +1,448 @@
+use crate::config::AtmConfig;
+use crate::error::AtmError;
+use crate::schema::{AgentMember, MessageEnvelope, TeamConfig};
+use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+use super::{AckTransition, MessageKey, TaskState, sealed};
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct TaskStoreTaskMetadata {
+    #[serde(default)]
+    pub fields: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskStoreTaskRecord {
+    pub team: TeamName,
+    pub task_id: TaskId,
+    pub state: TaskState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<AgentName>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub linked_message_keys: Vec<MessageKey>,
+    #[serde(default)]
+    pub metadata: TaskStoreTaskMetadata,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<IsoTimestamp>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RosterStoreHealthSnapshot {
+    pub team: TeamName,
+    pub member_count: u64,
+    #[serde(default)]
+    pub stale: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refreshed_at: Option<IsoTimestamp>,
+}
+
+/// Stub task-store request for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskStoreCreateTaskRequest {
+    pub team: TeamName,
+    pub record: TaskStoreTaskRecord,
+}
+
+/// Stub task-store response for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskStoreCreateTaskResponse {
+    pub record: TaskStoreTaskRecord,
+}
+
+/// Stub task-store load-task request for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskStoreLoadTaskRequest {
+    pub team: TeamName,
+    pub task_id: TaskId,
+}
+
+/// Stub task-store load-task response for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskStoreLoadTaskResponse {
+    #[serde(default)]
+    pub record: Option<TaskStoreTaskRecord>,
+}
+
+/// Stub task-store update-task request for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskStoreUpdateTaskRequest {
+    pub team: TeamName,
+    pub task_id: TaskId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<AgentName>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state: Option<TaskState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<TaskStoreTaskMetadata>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub append_message_keys: Vec<MessageKey>,
+}
+
+/// Stub task-store update-task response for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskStoreUpdateTaskResponse {
+    pub record: TaskStoreTaskRecord,
+}
+
+/// Stub task-store attach-message-link request for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskStoreAttachMessageLinkRequest {
+    pub team: TeamName,
+    pub task_id: TaskId,
+    pub message_key: MessageKey,
+}
+
+/// Stub task-store attach-message-link response for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskStoreAttachMessageLinkResponse {
+    pub record: TaskStoreTaskRecord,
+}
+
+/// Stub task-store detach-message-link request for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskStoreDetachMessageLinkRequest {
+    pub team: TeamName,
+    pub task_id: TaskId,
+    pub message_key: MessageKey,
+}
+
+/// Stub task-store detach-message-link response for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskStoreDetachMessageLinkResponse {
+    pub record: TaskStoreTaskRecord,
+}
+
+/// Stub task-store record-ack-transition request for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskStoreRecordAckTransitionRequest {
+    pub team: TeamName,
+    pub task_id: TaskId,
+    pub message_key: MessageKey,
+    pub actor: AgentName,
+    pub transitioned_at: IsoTimestamp,
+    pub transition: AckTransition,
+}
+
+/// Stub task-store record-ack-transition response for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskStoreRecordAckTransitionResponse {
+    pub record: TaskStoreTaskRecord,
+}
+
+/// Stub task-store query-task-metadata request for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskStoreQueryTaskMetadataRequest {
+    pub team: TeamName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task_id: Option<TaskId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message_key: Option<MessageKey>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state: Option<TaskState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<usize>,
+}
+
+/// Stub task-store query-task-metadata response for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskStoreQueryTaskMetadataResponse {
+    pub records: Vec<TaskStoreTaskRecord>,
+}
+
+/// Canonical Phase R task-store request entrypoint payload.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskStoreRequest {
+    pub team: TeamName,
+    pub record: TaskStoreTaskRecord,
+}
+
+/// Canonical Phase R task-store response entrypoint payload.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskStoreResponse {
+    pub record: TaskStoreTaskRecord,
+}
+
+/// Stub roster-store request for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RosterStoreReplaceRosterRequest {
+    pub team: TeamName,
+    pub roster: TeamConfig,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+}
+
+/// Stub roster-store response for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RosterStoreReplaceRosterResponse {
+    pub team: TeamName,
+    pub previous_member_count: u64,
+    pub current_member_count: u64,
+    pub replaced: bool,
+}
+
+/// Stub roster-store load-roster request for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RosterStoreLoadRosterRequest {
+    pub team: TeamName,
+}
+
+/// Stub roster-store load-roster response for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RosterStoreLoadRosterResponse {
+    pub team: TeamName,
+    pub roster: TeamConfig,
+}
+
+/// Stub roster-store query-membership request for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RosterStoreQueryMembershipRequest {
+    pub team: TeamName,
+    pub member: AgentName,
+}
+
+/// Stub roster-store query-membership response for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RosterStoreQueryMembershipResponse {
+    pub team: TeamName,
+    #[serde(default)]
+    pub member: Option<AgentMember>,
+    #[serde(default)]
+    pub is_member: bool,
+}
+
+/// Stub roster-store health-snapshot request for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RosterStoreHealthSnapshotRequest {
+    pub team: TeamName,
+}
+
+/// Stub roster-store health-snapshot response for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RosterStoreHealthSnapshotResponse {
+    pub snapshot: RosterStoreHealthSnapshot,
+}
+
+/// Canonical Phase R roster-store request entrypoint payload.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RosterStoreRequest {
+    pub team: TeamName,
+    pub roster: TeamConfig,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+}
+
+/// Canonical Phase R roster-store response entrypoint payload.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RosterStoreResponse {
+    pub team: TeamName,
+    pub previous_member_count: u64,
+    pub current_member_count: u64,
+    pub replaced: bool,
+}
+
+/// Stub config-ingress request for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ConfigLoadRequest {
+    pub current_dir: PathBuf,
+}
+
+/// Stub config-ingress response for the Phase R skeleton.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfigLoadResponse {
+    pub config: Option<AtmConfig>,
+}
+
+/// Team-config load request for the Phase R config-ingress boundary.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ConfigTeamLoadRequest {
+    pub home_dir: PathBuf,
+    pub team: TeamName,
+}
+
+/// Team-config load response for the Phase R config-ingress boundary.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ConfigTeamLoadResponse {
+    pub team_dir: PathBuf,
+    pub team_config: TeamConfig,
+}
+
+/// Imported source-file snapshot returned by inbox ingress.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InboxSourceFileRecord {
+    pub path: PathBuf,
+    pub messages: Vec<MessageEnvelope>,
+}
+
+/// Stub inbox-ingress request for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct InboxIngressImportRequest {
+    pub home_dir: PathBuf,
+    pub team: TeamName,
+    pub agent: AgentName,
+}
+
+/// Stub inbox-ingress response for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InboxIngressImportResponse {
+    pub source_files: Vec<InboxSourceFileRecord>,
+}
+
+/// Stub inbox-ingress identity-fingerprint request for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InboxIngressIdentityFingerprintRequest {
+    pub message: MessageEnvelope,
+}
+
+/// Stub inbox-ingress identity-fingerprint response for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct InboxIngressIdentityFingerprintResponse {
+    pub fingerprint: Option<String>,
+}
+
+/// Stub inbox-ingress diagnostics request for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InboxIngressDiagnosticsRequest {
+    pub source_files: Vec<InboxSourceFileRecord>,
+}
+
+/// Stub inbox-ingress diagnostics response for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct InboxIngressDiagnosticsResponse {
+    pub duplicate_legacy_message_ids: usize,
+    pub messages_without_ids: usize,
+}
+
+/// Canonical Phase R inbox-ingress request entrypoint payload.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct InboxIngressRequest;
+
+/// Canonical Phase R inbox-ingress response entrypoint payload.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct InboxIngressResponse;
+
+/// Stub inbox-export request for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InboxExportRecordRequest {
+    pub source_files: Vec<InboxSourceFileRecord>,
+}
+
+/// Stub inbox-export response for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct InboxExportRecordResponse {
+    pub committed_paths: usize,
+}
+
+/// Stub inbox-export re-export request for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InboxExportReexportMessageRequest {
+    pub path: PathBuf,
+    pub messages: Vec<MessageEnvelope>,
+}
+
+/// Stub inbox-export re-export response for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct InboxExportReexportMessageResponse {
+    pub wrote_messages: usize,
+}
+
+/// Canonical Phase R inbox-export request entrypoint payload.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct InboxExportRequest;
+
+/// Canonical Phase R inbox-export response entrypoint payload.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct InboxExportResponse;
+
+/// BOUNDARY-TaskStore — see docs/atm-core/boundaries.md.
+pub trait TaskStore: sealed::Sealed {
+    fn create_task(
+        &self,
+        request: TaskStoreCreateTaskRequest,
+    ) -> Result<TaskStoreCreateTaskResponse, AtmError>;
+    fn load_task(
+        &self,
+        request: TaskStoreLoadTaskRequest,
+    ) -> Result<TaskStoreLoadTaskResponse, AtmError>;
+    fn update_task(
+        &self,
+        request: TaskStoreUpdateTaskRequest,
+    ) -> Result<TaskStoreUpdateTaskResponse, AtmError>;
+    fn attach_message_link(
+        &self,
+        request: TaskStoreAttachMessageLinkRequest,
+    ) -> Result<TaskStoreAttachMessageLinkResponse, AtmError>;
+    fn detach_message_link(
+        &self,
+        request: TaskStoreDetachMessageLinkRequest,
+    ) -> Result<TaskStoreDetachMessageLinkResponse, AtmError>;
+    fn record_ack_transition(
+        &self,
+        request: TaskStoreRecordAckTransitionRequest,
+    ) -> Result<TaskStoreRecordAckTransitionResponse, AtmError>;
+    fn query_task_metadata(
+        &self,
+        request: TaskStoreQueryTaskMetadataRequest,
+    ) -> Result<TaskStoreQueryTaskMetadataResponse, AtmError>;
+}
+
+/// BOUNDARY-RosterStore — see docs/atm-core/boundaries.md.
+pub trait RosterStore: sealed::Sealed {
+    fn replace_roster(
+        &self,
+        request: RosterStoreReplaceRosterRequest,
+    ) -> Result<RosterStoreReplaceRosterResponse, AtmError>;
+    fn load_roster(
+        &self,
+        request: RosterStoreLoadRosterRequest,
+    ) -> Result<RosterStoreLoadRosterResponse, AtmError>;
+    fn query_membership(
+        &self,
+        request: RosterStoreQueryMembershipRequest,
+    ) -> Result<RosterStoreQueryMembershipResponse, AtmError>;
+    fn health_snapshot(
+        &self,
+        request: RosterStoreHealthSnapshotRequest,
+    ) -> Result<RosterStoreHealthSnapshotResponse, AtmError>;
+}
+
+/// BOUNDARY-ConfigIngress — see docs/atm-core/boundaries.md.
+pub trait ConfigIngress: sealed::Sealed {
+    fn load_config(&self, request: ConfigLoadRequest) -> Result<ConfigLoadResponse, AtmError>;
+    fn load_team_config(
+        &self,
+        request: ConfigTeamLoadRequest,
+    ) -> Result<ConfigTeamLoadResponse, AtmError>;
+}
+
+/// BOUNDARY-InboxIngress — see docs/atm-core/boundaries.md.
+pub trait InboxIngress: sealed::Sealed {
+    fn import_inbox_source(
+        &self,
+        request: InboxIngressImportRequest,
+    ) -> Result<InboxIngressImportResponse, AtmError>;
+    fn compute_identity_fingerprint(
+        &self,
+        request: InboxIngressIdentityFingerprintRequest,
+    ) -> Result<InboxIngressIdentityFingerprintResponse, AtmError>;
+    fn report_diagnostics(
+        &self,
+        request: InboxIngressDiagnosticsRequest,
+    ) -> Result<InboxIngressDiagnosticsResponse, AtmError>;
+}
+
+/// BOUNDARY-InboxExport — see docs/atm-core/boundaries.md.
+pub trait InboxExport: sealed::Sealed {
+    fn export_record(
+        &self,
+        request: InboxExportRecordRequest,
+    ) -> Result<InboxExportRecordResponse, AtmError>;
+    fn reexport_message(
+        &self,
+        request: InboxExportReexportMessageRequest,
+    ) -> Result<InboxExportReexportMessageResponse, AtmError>;
+}
