@@ -94,12 +94,16 @@ Phase R redesign notes:
   multiple transport implementations:
   - Unix domain socket
   - TCP/TLS
-  - in-process `test-socket`
+  - in-process `LoopbackClientTransport` (`test-socket`)
 - cross-host delivery is daemon-to-daemon only.
 - remote delivery may use bounded transient retry for short intermittent
   failures, but not a durable long-lived remote outbox.
 - remote send success is defined by remote daemon acceptance within the bounded
   retry window.
+- bounded transient retry uses exponential backoff with jitter, an initial
+  delay of 250ms, a per-attempt maximum of 5s, jitter of +/-20%, and a hard
+  total retry ceiling within the documented timeout budget; it must not
+  collapse into fixed sleeps or unbounded churn
 - daemon runtime failures must remain typed and must not depend on
   panic/unwrap for routine transport, socket, or store-boundary failure.
 - daemon observability remains structured through `sc-observability`; no ad hoc
@@ -120,12 +124,19 @@ Phase R redesign notes:
 ## 3.1 Singleton Runtime
 
 Hard invariant:
-- it must be impossible for two active ATM daemons to run on one host at the
-  same time
+- it must be impossible for more than one `atm-daemon` process to exist
+  anywhere on the host for the supported runtime model
 
 Architectural rule:
 - singleton enforcement belongs in the runtime wrapper only
 - the runtime must fail closed rather than allowing split ownership
+- singleton enforcement must use multiple layers:
+  - a pre-spawn launch gate before client-side fork/exec
+  - a daemon-side startup gate before serving state
+  - a repository lint/CI gate that prevents ordinary tests from designing
+    around the runtime invariant
+- no alternate socket path, alternate `ATM_HOME`, or test-only helper is an
+  exception to the singleton rule
 
 Lifecycle state model:
 - the daemon runtime must explicitly model:
@@ -225,6 +236,9 @@ Architectural rules:
 - signal handlers install before any listener begins accepting
 - signal-triggered shutdown uses the same drain/checkpoint/release path as an
   explicit runtime stop
+- `SIGHUP` rescan validates candidate configuration before it replaces the
+  active runtime view; invalid configuration yields a typed reload error and
+  preserves the last known-good serving configuration
 - singleton ownership artifacts must be released on normal signal-driven exit
   and retained only on crash/fail-stop paths where the process cannot run
   cleanup code
@@ -280,7 +294,7 @@ Required timeout defaults:
 - per-leg TCP/TLS connect deadline: `5s`
 - per-leg TCP/TLS read/write deadline: `5s`
 - total remote retry budget: `30s`
-- SQLite `busy_timeout`: `1500ms`
+- SQLite `busy_timeout`: `5000ms`
 - ingest batch processing slice: `2s` max before yielding
 - daemon health query used by `atm doctor`: `3s`
 
@@ -291,12 +305,26 @@ The daemon is not the core test strategy.
 Architectural rules:
 - `atm-daemon` should be testable primarily through in-process harnesses and
   fakes around its adapters
-- if process-level daemon smoke tests exist, they must remain small and
-  separate
+- most tests must not depend on:
+  - daemon spawn
+  - socket publication timing
+  - retry sleeps
+  - environment mutation races
+  - auto-start side effects
+- if process-level daemon runtime tests exist, they must remain small,
+  separate, and limited to true daemon-runtime requirements
 - no core ATM correctness rule should require a real daemon process for normal
   validation
 - `atm doctor` and other daemon-querying CLI flows must rely on explicit daemon
   request/response paths, not private inspection shortcuts
+
+Doctor health contract distinction:
+- liveness answers whether the daemon process is present and still owns the
+  runtime
+- readiness answers whether the daemon is accepting requests and able to serve
+  them through the documented request boundary
+- `atm doctor` must report both dimensions explicitly rather than treating
+  process existence as equivalent to request-serving readiness
 
 ## 3.6 Crash Recovery
 

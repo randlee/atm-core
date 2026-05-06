@@ -663,7 +663,153 @@ Verified 2026-05-05: merge-forward is complete.
 - ATM-QA-014, ATM-QA-006, ATM-QA-009, FTQ-006, NEW-004, NEW-002
 
 **Minor carry-forward:**
-- ATM-QA-005, RBP-F001, RBP-F002/F003
+- ATM-QA-005
+
+## 5.1 R.9 Planning Task List
+
+Status:
+- in progress on `feature/pR-s9-singleton-planning`
+
+Scope:
+- convert daemon singleton and test fidelity from scattered review comments
+  into explicit requirements, ADRs, testing guidance, and implementation
+  planning
+
+Task list:
+1. strengthen product and crate requirements so singleton is daemon
+   requirement `#1`
+2. explicitly prohibit the current daemon-spawn test pattern by name:
+   - `spawn_test_daemon`
+   - `warm_daemon`
+   - `DaemonGuard`
+   - `ATM_DAEMON_BIN`
+   - direct `Command::new(...atm-daemon...)`
+3. define at least two runtime singleton guard layers plus one lint/CI gate
+4. write ADR-002 for host-wide daemon singleton
+5. write ADR-003 for test fidelity and daemon isolation
+6. define the singleton lint gate and decide whether existing tools are
+   sufficient
+   - decision: existing generic tools are not sufficient by themselves;
+     add `scripts/lint_daemon_singleton.py` as a dedicated repository lint
+     integrated into `just lint`
+7. define the approved test tiers:
+   - `FakeClientTransport`
+   - loopback/in-process transport
+   - narrow daemon-runtime harness
+8. map the planning response to current findings:
+   - ARCH-SINGLETON
+   - CI-WIN-001
+   - singleton review findings `RBP-F001` through `RBP-F012`
+   - ATM-QA-014
+   - ATM-QA-006
+   - ATM-QA-009
+   - NEW-004
+   - NEW-002
+   - ATM-QA-005
+   - FTQ-006
+
+Acceptance:
+- the requirements/ADR/plan set is explicit enough to guide implementation
+  without re-litigating the singleton rule
+
+## 5.2 R.10 Implementation Task List
+
+Status:
+- planned
+
+Execution slices:
+
+### R.10.1 Runtime Singleton Hardening
+
+- add the client-side pre-spawn launch gate before daemon fork/exec
+- keep the daemon-side startup gate as the final ownership rejection layer
+- harden stale-owner recovery without allowing split ownership
+- make startup failure typed and deterministic when ownership is already held
+- ensure signal installation and stale socket cleanup are idempotent and
+  correctly surfaced
+- gate Unix-only daemon runtime code explicitly so Windows CI does not compile
+  unsupported imports or paths by accident
+
+Directly addresses:
+- RBP-F003
+- RBP-F011
+- RBP-F012
+- ARCH-SINGLETON
+- CI-WIN-001
+
+### R.10.2 Boundary And API Hardening
+
+- make `ClientTransport` include `Send + Sync`
+- separate daemon supervision from transport construction
+- add semantic path newtypes for daemon binary and socket path
+  - `DaemonBinaryPath` and `DaemonSocketPath`
+  - invariants: non-empty and valid UTF-8 path representation at the boundary
+  - both types must implement `AsRef<Path>` for ergonomic filesystem call-site
+    use
+  - failures return typed parse/validation errors rather than panic/expect
+- remove unreachable stub patterns that hide impossible paths behind routine
+  `Result`
+- resolve deadline-overrun semantics so callers can distinguish committed work
+  from clean rejection
+- bound daemon request framing instead of unbounded `read_to_end`
+- inject daemon home/observability dependencies once rather than recomputing
+  them per request
+- fix fixture/setup boundary ambiguities and missing command-local environment
+  injection coverage identified by NEW-004 and NEW-002
+
+Directly addresses:
+- RBP-F004
+- RBP-F005
+- RBP-F007
+- RBP-F008
+- RBP-F009
+- ATM-QA-014
+- ATM-QA-006
+- NEW-004
+- NEW-002
+
+### R.10.3 Test Fidelity Migration
+
+- delete `spawn_test_daemon` and `DaemonGuard`
+- remove `warm_daemon` from ordinary CLI tests
+- delete `ATM_DAEMON_BIN`-driven daemon launch from ordinary tests
+- replace routine CLI daemon usage with `CliComposition::from_transport(...)`
+  plus `FakeClientTransport`
+- add loopback/in-process transport where request/handler integration needs
+  more realism than a pure fake
+- fix `EnvGuard` ownership so test environment cleanup cannot race
+- gate Unix-only daemon-dependent tests explicitly or migrate them to approved
+  in-process seams
+- remove obsolete launcher-only panic paths and unused helper parameters as the
+  daemon-spawn helpers disappear
+- resolve remaining test-harness shutdown semantics such as ATM-QA-005 inside
+  the Tier 3 daemon-runtime suite rather than leaving them as implicit polling
+  behavior
+
+Directly addresses:
+- RBP-F001
+- RBP-F002
+- RBP-F006
+- RBP-F010
+- ATM-QA-009
+- ATM-QA-005
+- FTQ-006
+
+### R.10.4 Lint Gate Delivery
+
+- add a dedicated repository lint to `just lint`
+- script entrypoint: `scripts/lint_daemon_singleton.py`
+- scan test code for prohibited daemon-spawn patterns
+- fail on timing-based daemon warmup shortcuts in ordinary tests
+- document the allowed exceptions for the narrow daemon-runtime suite
+- include platform gating checks for Unix-only daemon-runtime code where the
+  default workspace targets Windows CI too
+
+Acceptance:
+- no new daemon-spawn pattern can land without a deliberate lint/CI change
+- lint gate must document explicit allow-list for Tier 3 daemon-runtime suite
+  patterns; allowed exceptions for the narrow daemon-runtime suite are governed
+  by `docs/testing-guidelines.md §4.3`
 
 ### Merge Sequence (pending QA PASS 0B+0I+0m + user authorization)
 

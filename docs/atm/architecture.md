@@ -103,6 +103,10 @@ Follow-up work:
   mapping and error presentation
 - `atm` must own the one documented daemon auto-start path in production and
   must not silently bypass the daemon if startup fails
+- daemon auto-start must be an explicit runtime-entry step, not a hidden side
+  effect of transport object construction
+- the client-side launch path must acquire the documented pre-spawn launch gate
+  before daemon fork/exec
 - `atm` must preserve typed runtime error identity until the rendering
   boundary instead of collapsing failures into panic/unwrap control flow
 
@@ -117,6 +121,8 @@ Phase R keeps the CLI thin by enforcing this split:
 Test strategy rule:
 - CLI tests must be able to target an in-process harness without requiring a
   daemon process
+- `CliComposition::from_transport(...)` is the primary seam for fake or
+  loopback transport tests
 
 Doctor/runtime rule:
 - `atm doctor` remains a CLI command, but its runtime-facing checks must query
