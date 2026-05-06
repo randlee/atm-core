@@ -26,6 +26,7 @@ PYTHON_LINT_ORDER = (
     "identities",
     "lines",
     "spell",
+    "daemon-singleton",
     "pytests",
 )
 EXTRA_LINTS = ("sc-boundary", "sc-portability")
@@ -80,6 +81,10 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         ),
         "manifests": LintTask("manifests", [python_executable, str(repo_root / ".just/lint_manifests.py")]),
         "spell": LintTask("spell", [python_executable, str(repo_root / ".just/lint_codespell.py")]),
+        "daemon-singleton": LintTask(
+            "daemon-singleton",
+            [python_executable, str(repo_root / "scripts/lint_daemon_singleton.py")],
+        ),
         "pytests": LintTask("pytests", [python_executable, str(repo_root / ".just/run_pytests.py")]),
     }
 

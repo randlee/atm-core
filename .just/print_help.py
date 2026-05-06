@@ -44,6 +44,7 @@ SECTIONS = (
             ("lint identities", "Run only the RULE-008 identity literal guard."),
             ("lint lines", "Run only the RULE-003 line-count guard."),
             ("lint spell", "Run the spelling/content check."),
+            ("lint daemon-singleton", "Run the daemon singleton/no-spawn test gate."),
             ("lint pytests", "Run the Python lint-tool unit tests."),
         ),
     ),

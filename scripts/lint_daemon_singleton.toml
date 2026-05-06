@@ -1,0 +1,11 @@
+[daemon_singleton]
+# Explicit Tier 3 daemon-runtime exceptions belong here when they exist.
+# An empty allow-list is explicit: no exceptions are currently approved.
+# Each entry should be narrow, file-scoped, category-scoped, and carry a reason.
+#
+# Example:
+# [[daemon_singleton.allow]]
+# path = "crates/atm/tests/daemon_runtime.rs"
+# categories = ["spawn_test_daemon", "daemon_guard", "direct_atm_daemon_command", "daemon_socket_path"]
+# reason = "Dedicated Tier 3 daemon-runtime suite for singleton ownership."
+# require_unix_gating = true

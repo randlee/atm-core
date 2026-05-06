@@ -799,8 +799,14 @@ Directly addresses:
 
 - add a dedicated repository lint to `just lint`
 - script entrypoint: `scripts/lint_daemon_singleton.py`
-- scan test code for prohibited daemon-spawn patterns
-- fail on timing-based daemon warmup shortcuts in ordinary tests
+- scan test code for prohibited daemon-spawn patterns:
+  - `spawn_test_daemon`
+  - `warm_daemon`
+  - `DaemonGuard`
+  - `ATM_DAEMON_BIN`
+  - `atm-daemon.sock`
+  - direct `Command::new(...atm-daemon...)`
+  - timing-based daemon warmup shortcuts in ordinary tests
 - document the allowed exceptions for the narrow daemon-runtime suite
 - include platform gating checks for Unix-only daemon-runtime code where the
   default workspace targets Windows CI too

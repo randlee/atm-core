@@ -84,6 +84,10 @@ _lint-spell:
 _lint-pytests:
     {{python_cmd}} .just/run_pytests.py
 
+[private]
+_lint-daemon-singleton:
+    {{python_cmd}} scripts/lint_daemon_singleton.py
+
 # Build the full workspace.
 build:
     cargo build --workspace
