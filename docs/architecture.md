@@ -2467,6 +2467,7 @@ Phase R operational defaults:
 - per-leg TCP/TLS read/write deadline: `5s`
 - total remote retry budget: `30s`
 - SQLite `busy_timeout`: `5000ms`
+  - authoritative since `R.5`; supersedes the pre-`R.5` `1500ms` baseline
 - ingest batch processing slice: `2s`
 - doctor health query deadline: `3s`
 

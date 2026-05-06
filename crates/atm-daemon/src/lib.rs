@@ -345,7 +345,11 @@ fn remove_stale_socket(socket_path: &std::path::Path) -> Result<(), AtmError> {
 fn handle_connection(
     stream: &mut UnixStream,
     dispatcher: &dyn RequestDispatcher,
+    force_shutdown: &AtomicBool,
 ) -> Result<(), AtmError> {
+    if force_shutdown.load(Ordering::SeqCst) {
+        return Ok(());
+    }
     stream
         .set_read_timeout(Some(REQUEST_DEADLINE))
         .map_err(|source| {
@@ -435,6 +439,7 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
         })?;
 
         let active_connections = Arc::new(AtomicUsize::new(0));
+        let force_shutdown = Arc::new(AtomicBool::new(false));
         thread::scope(|scope| -> Result<(), AtmError> {
             loop {
                 if signals.reload.swap(false, Ordering::SeqCst) {
@@ -469,11 +474,15 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
 
                         let dispatcher = Arc::clone(&dispatcher);
                         let active_connections = Arc::clone(&active_connections);
+                        let force_shutdown = Arc::clone(&force_shutdown);
                         active_connections.fetch_add(1, Ordering::SeqCst);
                         scope.spawn(move || {
                             let _active = ActiveConnectionGuard::new(active_connections);
-                            if let Err(error) = handle_connection(&mut stream, dispatcher.as_ref())
-                            {
+                            if let Err(error) = handle_connection(
+                                &mut stream,
+                                dispatcher.as_ref(),
+                                force_shutdown.as_ref(),
+                            ) {
                                 tracing::warn!(%error, "daemon connection handling failed");
                             }
                         });
@@ -491,6 +500,10 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
             }
 
             let shutdown_started = Instant::now();
+            tracing::info!(
+                active_connections = active_connections.load(Ordering::SeqCst),
+                "daemon shutdown signal received; starting graceful drain"
+            );
             let graceful_deadline = shutdown_started + GRACEFUL_DRAIN_DEADLINE;
             let force_cancel_deadline = shutdown_started + FORCE_CANCEL_DEADLINE;
             while active_connections.load(Ordering::SeqCst) > 0
@@ -498,10 +511,29 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
             {
                 thread::sleep(SHUTDOWN_POLL_INTERVAL);
             }
+            let remaining_after_graceful = active_connections.load(Ordering::SeqCst);
+            if remaining_after_graceful == 0 {
+                tracing::info!("daemon graceful drain completed cleanly");
+            } else {
+                tracing::info!(
+                    active_connections = remaining_after_graceful,
+                    "daemon graceful drain hit deadline; continuing toward forced exit"
+                );
+            }
             while active_connections.load(Ordering::SeqCst) > 0
                 && Instant::now() < force_cancel_deadline
             {
                 thread::sleep(SHUTDOWN_POLL_INTERVAL);
+            }
+            let remaining_connections = active_connections.load(Ordering::SeqCst);
+            if remaining_connections > 0 {
+                force_shutdown.store(true, Ordering::SeqCst);
+                tracing::error!(
+                    remaining_connections,
+                    "forced exit: {} connections still active after FORCE_CANCEL_DEADLINE",
+                    remaining_connections
+                );
+                std::process::exit(1);
             }
             Ok(())
         })
