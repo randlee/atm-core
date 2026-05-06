@@ -30,6 +30,10 @@ The governing requirement is:
 No test, tool, CLI shortcut, alternate socket path, or alternate `ATM_HOME`
 value is exempt from this rule.
 
+Cross-reference note:
+- `REQ-P-RUNTIME-002` and `REQ-P-RUNTIME-003` are the authoritative product
+  requirement anchors after the branch merges complete
+
 ## Decision Drivers
 
 - daemon singleton is the first daemon requirement
@@ -99,6 +103,26 @@ Required failure rule:
   runtime error
 - no code path may silently bypass the daemon by reaching directly into SQLite
   or inbox files
+
+Required singleton error inventory:
+- singleton launch gate rejection
+- daemon serving-state rejection after ownership is already held
+- stale-owner recovery failure
+- daemon auto-start failure after the documented retry budget
+- `FakeClientTransport` injection failure when a test requests an invalid
+  runtime seam
+
+Error-model note:
+- these failure modes require stable ATM-owned error codes with structured
+  context and recovery guidance following the direction in
+  `.claude/skills/rust-best-practices/patterns/error-context-recovery-plan.md`
+- placeholder code names are acceptable during planning as long as they are
+  treated as a required inventory rather than optional follow-up:
+  - `DAEMON_LAUNCH_GATE_REJECTED`
+  - `DAEMON_SERVING_STATE_REJECTED`
+  - `DAEMON_STALE_OWNER_RECOVERY_FAILED`
+  - `DAEMON_AUTO_START_FAILED`
+  - `TEST_FAKE_TRANSPORT_INJECTION_FAILED`
 
 ## Consequences
 

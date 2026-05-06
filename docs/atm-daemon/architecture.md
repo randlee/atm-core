@@ -100,6 +100,9 @@ Phase R redesign notes:
   failures, but not a durable long-lived remote outbox.
 - remote send success is defined by remote daemon acceptance within the bounded
   retry window.
+- bounded transient retry uses exponential backoff with jitter, a documented
+  maximum delay per attempt, and a hard total retry ceiling; it must not
+  collapse into fixed sleeps or unbounded churn
 - daemon runtime failures must remain typed and must not depend on
   panic/unwrap for routine transport, socket, or store-boundary failure.
 - daemon observability remains structured through `sc-observability`; no ad hoc
@@ -232,6 +235,9 @@ Architectural rules:
 - signal handlers install before any listener begins accepting
 - signal-triggered shutdown uses the same drain/checkpoint/release path as an
   explicit runtime stop
+- `SIGHUP` rescan validates candidate configuration before it replaces the
+  active runtime view; invalid configuration yields a typed reload error and
+  preserves the last known-good serving configuration
 - singleton ownership artifacts must be released on normal signal-driven exit
   and retained only on crash/fail-stop paths where the process cannot run
   cleanup code
@@ -310,6 +316,14 @@ Architectural rules:
   validation
 - `atm doctor` and other daemon-querying CLI flows must rely on explicit daemon
   request/response paths, not private inspection shortcuts
+
+Doctor health contract distinction:
+- liveness answers whether the daemon process is present and still owns the
+  runtime
+- readiness answers whether the daemon is accepting requests and able to serve
+  them through the documented request boundary
+- `atm doctor` must report both dimensions explicitly rather than treating
+  process existence as equivalent to request-serving readiness
 
 ## 3.6 Crash Recovery
 

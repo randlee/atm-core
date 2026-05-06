@@ -1844,8 +1844,8 @@ Required testing architecture:
 - the primary test tiers are:
   - CLI/composition tests using injected transport doubles such as
     `FakeClientTransport`
-  - in-process integration tests using loopback transport over the shared
-    request/response contracts
+  - in-process integration tests using `LoopbackClientTransport` over the
+    shared request/response contracts
   - a narrow daemon-runtime suite for singleton/startup/shutdown/recovery
     requirements only
 - real daemon process tests, if any, must be isolated to the daemon-runtime
@@ -2648,7 +2648,8 @@ mail correctness.
   - same-host transport: Unix domain socket
   - cross-host transport: TCP/TLS
   - test transport: in-process `test-socket` implementation of the same
-    protocol/interface for subsystem and daemon-boundary tests
+    protocol/interface for subsystem and daemon-boundary tests; this is the
+    Tier 2 `LoopbackClientTransport` shape in the testing guidelines
   - these are implementations of one protocol/interface, not separate systems
   - socket receive logic must remain a small framed-message loop that:
     - reads one request frame

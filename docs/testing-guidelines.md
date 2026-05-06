@@ -10,6 +10,14 @@ singleton decision. It complements:
 - [`adr/ADR-002-host-wide-daemon-singleton.md`](./adr/ADR-002-host-wide-daemon-singleton.md)
 - [`adr/ADR-003-test-fidelity-and-daemon-isolation.md`](./adr/ADR-003-test-fidelity-and-daemon-isolation.md)
 
+## 1.1 Backing Requirements
+
+This guidance derives directly from:
+
+- `REQ-P-TEST-001`
+- `REQ-CORE-TEST-RUNTIME-001`
+- `REQ-DAEMON-TEST-002`
+
 ## 2. Default Rule
 
 Ordinary ATM correctness tests must not require a real daemon process.
@@ -51,6 +59,8 @@ Use `FakeClientTransport` for deterministic CLI/composition tests.
 Required properties:
 - implements the shared `ClientTransport` contract
 - returns typed `ResponseEnvelope` / `AtmError` values directly
+- any `AtmError` returned by the fake must use the registered ATM error-code
+  inventory rather than ad hoc string-only failures
 - never opens a socket
 - never spawns `atm-daemon`
 - plugs into `CliComposition::from_transport(...)`
@@ -64,7 +74,7 @@ Use this tier for:
 
 ### 4.2 Loopback Transport Tests
 
-Use a loopback or in-process `ClientTransport` when tests need real request /
+Use `LoopbackClientTransport`, an in-process `ClientTransport`, when tests need real request /
 handler behavior without a real daemon process.
 
 Required properties:
@@ -72,6 +82,10 @@ Required properties:
 - routes requests to in-process dispatcher/handler logic
 - preserves typed request/response behavior
 - does not depend on socket publication or process supervision
+
+The older term `test-socket` refers to this Tier 2 transport shape: an
+in-process dispatcher-backed transport used for subsystem and daemon-boundary
+tests without a real daemon process.
 
 Use this tier for:
 - service orchestration
@@ -117,11 +131,17 @@ gate integrated into `just lint`.
 Initial planned entrypoint:
 - `scripts/lint_daemon_singleton.py`
 
+Current status:
+- this script does not exist yet
+- creating it is an `R.10.4` deliverable
+
 Required behavior:
 - fail on prohibited daemon-spawn patterns in test code
 - fail on new ad hoc daemon launch helpers
 - fail on timing-based daemon stabilization patterns that bypass the approved
   test tiers
+- document an explicit allow-list for Tier 3 daemon-runtime suite patterns so
+  the narrow exceptions remain auditable
 
 Existing generic tools such as `clippy` are not sufficient on their own for
 this repository-specific architectural rule.

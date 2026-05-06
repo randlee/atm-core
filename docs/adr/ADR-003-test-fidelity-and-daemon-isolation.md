@@ -86,13 +86,18 @@ Primary seam:
 
 ### Tier 2 — Loopback Transport Tests
 
-Use a loopback or in-process `ClientTransport` when tests need real dispatcher
-or handler behavior without a real daemon process.
+Use `LoopbackClientTransport`, an in-process `ClientTransport`, when tests need
+real dispatcher or handler behavior without a real daemon process.
 
 Definition:
 - same `ClientTransport` contract
 - routes requests to in-process dispatcher / handler logic
 - preserves typed request/response behavior without process or socket timing
+
+Naming note:
+- the older term `test-socket` refers to this Tier 2 transport shape
+- Tier 1 `FakeClientTransport` is a pure fake and does not dispatch to real
+  handlers
 
 ### Tier 3 — Daemon Runtime Tests
 

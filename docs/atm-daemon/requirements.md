@@ -45,6 +45,7 @@ Initial allocation:
 - `REQ-DAEMON-RUNTIME-*`
 - `REQ-DAEMON-TRANSPORT-*`
 - `REQ-DAEMON-STATUS-*`
+- `REQ-DAEMON-CONFIG-*`
 - `REQ-DAEMON-TEST-*`
 - `REQ-DAEMON-OBS-*`
 - `REQ-DAEMON-HEALTH-*`
@@ -88,6 +89,10 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-STATUS-001` `atm-daemon` owns the live agent-status cache and
   must keep it separate from SQLite roster/mail truth. Satisfies:
   `REQ-CORE-RUNTIME-002`.
+- `REQ-DAEMON-CONFIG-001` `atm-daemon` owns daemon config validation at startup
+  and on `SIGHUP` rescan. Invalid config must produce a typed failure or
+  bounded reload rejection rather than a silent degraded state. Satisfies:
+  `REQ-CORE-CONFIG-001`, `REQ-CORE-CONFIG-003`, `REQ-DAEMON-SIGNAL-001`.
 - `REQ-DAEMON-TEST-001` `atm-daemon` must not define the core test strategy.
   Core correctness must remain testable without daemon process spawning.
   Satisfies:
@@ -135,6 +140,7 @@ Requirement IDs:
 - `REQ-DAEMON-TRANSPORT-002`
 - `REQ-DAEMON-TRANSPORT-003`
 - `REQ-DAEMON-STATUS-001`
+- `REQ-DAEMON-CONFIG-001`
 - `REQ-DAEMON-TEST-001`
 - `REQ-DAEMON-TEST-002`
 - `REQ-DAEMON-OBS-001`
@@ -160,6 +166,10 @@ Required runtime rules:
 - graceful shutdown must stop accepts, drain or cancel inflight work within one
   bounded deadline, checkpoint WAL, and release singleton ownership
 - signal handlers must be installed before listeners are opened
+- daemon config must validate once at startup before listeners are opened
+- `SIGHUP`-driven config or roster rescan must either apply a fully valid
+  configuration or fail with a typed reload error while retaining the prior
+  serving configuration
 - remote delivery must be daemon-to-daemon only
 - the same transport protocol must be exercisable through an in-process
   `test-socket` without changing handler/business logic
@@ -173,6 +183,8 @@ Required runtime rules:
 - daemon memory must retain the current agent `pid` as a first-class liveness
   field, cached from SQLite; `pid` is durable roster truth rather than
   advisory metadata
+- `pid` is a semantic newtype candidate and must not remain an unvalidated raw
+  integer at the daemon boundary once the runtime API hardening slice lands
 - SQLite must not own live `last_active_at`; it owns durable roster state and
   the current per-member `pid`
 - the daemon-managed member fields (`pid`, `last_active_at`, `state`) must

@@ -703,6 +703,9 @@ Task list:
    - ATM-QA-014
    - ATM-QA-006
    - ATM-QA-009
+   - NEW-004
+   - NEW-002
+   - ATM-QA-005
    - FTQ-006
 
 Acceptance:
@@ -739,6 +742,9 @@ Directly addresses:
 - make `ClientTransport` include `Send + Sync`
 - separate daemon supervision from transport construction
 - add semantic path newtypes for daemon binary and socket path
+  - `DaemonBinaryPath` and `DaemonSocketPath`
+  - invariants: non-empty and valid UTF-8 path representation at the boundary
+  - failures return typed parse/validation errors rather than panic/expect
 - remove unreachable stub patterns that hide impossible paths behind routine
   `Result`
 - resolve deadline-overrun semantics so callers can distinguish committed work
@@ -746,6 +752,8 @@ Directly addresses:
 - bound daemon request framing instead of unbounded `read_to_end`
 - inject daemon home/observability dependencies once rather than recomputing
   them per request
+- fix fixture/setup boundary ambiguities and missing command-local environment
+  injection coverage identified by NEW-004 and NEW-002
 
 Directly addresses:
 - RBP-F004
@@ -755,6 +763,8 @@ Directly addresses:
 - RBP-F009
 - ATM-QA-014
 - ATM-QA-006
+- NEW-004
+- NEW-002
 
 ### R.10.3 Test Fidelity Migration
 
@@ -770,6 +780,9 @@ Directly addresses:
   in-process seams
 - remove obsolete launcher-only panic paths and unused helper parameters as the
   daemon-spawn helpers disappear
+- resolve remaining test-harness shutdown semantics such as ATM-QA-005 inside
+  the Tier 3 daemon-runtime suite rather than leaving them as implicit polling
+  behavior
 
 Directly addresses:
 - RBP-F001
@@ -777,11 +790,13 @@ Directly addresses:
 - RBP-F006
 - RBP-F010
 - ATM-QA-009
+- ATM-QA-005
 - FTQ-006
 
 ### R.10.4 Lint Gate Delivery
 
 - add a dedicated repository lint to `just lint`
+- script entrypoint: `scripts/lint_daemon_singleton.py`
 - scan test code for prohibited daemon-spawn patterns
 - fail on timing-based daemon warmup shortcuts in ordinary tests
 - document the allowed exceptions for the narrow daemon-runtime suite
@@ -790,6 +805,8 @@ Directly addresses:
 
 Acceptance:
 - no new daemon-spawn pattern can land without a deliberate lint/CI change
+- lint gate must document explicit allow-list for Tier 3 daemon-runtime suite
+  patterns
 
 ### Merge Sequence (pending QA PASS 0B+0I+0m + user authorization)
 
