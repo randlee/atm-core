@@ -5,22 +5,24 @@ pub(crate) mod composition;
 
 use std::error::Error as StdError;
 use std::fmt;
+#[cfg(unix)]
 use std::fs::{self, File, OpenOptions};
 #[cfg(unix)]
 use std::io::Read;
+#[cfg(unix)]
 use std::io::Write;
 #[cfg(unix)]
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, AtomicUsize, Ordering},
-};
+use std::sync::Arc;
+#[cfg(unix)]
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 #[cfg(unix)]
 use std::thread;
 #[cfg(unix)]
 use std::time::{Duration, Instant};
 
+#[cfg(unix)]
 use fs2::FileExt;
 #[cfg(unix)]
 use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGTERM};
