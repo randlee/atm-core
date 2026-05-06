@@ -414,6 +414,11 @@ Classification rules:
 | `ATM_DAEMON_SIGNAL_RELOAD_FAILED` | `operator_actionable` |
 | `ATM_DAEMON_UNAVAILABLE` | `operator_actionable` |
 | `ATM_DAEMON_CLIENT_TIMEOUT` | `retryable` |
+| `ATM_DAEMON_LAUNCH_GATE_REJECTED` | `fail_closed` |
+| `ATM_DAEMON_SERVING_STATE_REJECTED` | `fail_closed` |
+| `ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED` | `operator_actionable` |
+| `ATM_DAEMON_AUTO_START_FAILED` | `operator_actionable` |
+| `ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED` | `operator_actionable` |
 
 ## 8. Evolution Rules
 
