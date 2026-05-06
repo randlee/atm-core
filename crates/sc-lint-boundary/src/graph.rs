@@ -250,7 +250,8 @@ fn ingest_module_items(
                         inline_file,
                     )?;
                 } else {
-                    let child_source_path = resolve_module_source(module_dir, &name)
+                    let child_source_path =
+                        resolve_module_source(source_path, module_dir, &name, &item_mod.attrs)
                         .with_context(|| format!("while resolving module `{child_module_path}`"))?;
                     let child_file = parse_rust_file(&child_source_path)?;
                     ingest_module_items(
@@ -818,7 +819,22 @@ pub(crate) fn node_has_allow_rule(node: &GraphNode, rule_id: &str) -> bool {
     })
 }
 
-fn resolve_module_source(module_dir: &Path, module_name: &str) -> Result<PathBuf> {
+fn resolve_module_source(
+    declaring_source_path: &Path,
+    module_dir: &Path,
+    module_name: &str,
+    attrs: &[Attribute],
+) -> Result<PathBuf> {
+    if let Some(explicit_path) = explicit_module_source(declaring_source_path, attrs)? {
+        if explicit_path.is_file() {
+            return Ok(explicit_path);
+        }
+        anyhow::bail!(
+            "module `{module_name}` path attribute resolved to missing file {}",
+            explicit_path.display()
+        );
+    }
+
     let flat = module_dir.join(format!("{module_name}.rs"));
     let nested = module_dir.join(module_name).join("mod.rs");
 
@@ -839,6 +855,44 @@ fn resolve_module_source(module_dir: &Path, module_name: &str) -> Result<PathBuf
             nested.display()
         ),
     }
+}
+
+fn explicit_module_source(declaring_source_path: &Path, attrs: &[Attribute]) -> Result<Option<PathBuf>> {
+    for attr in attrs {
+        if !attr.path().is_ident("path") {
+            continue;
+        }
+
+        match &attr.meta {
+            syn::Meta::NameValue(name_value) => match &name_value.value {
+                syn::Expr::Lit(expr_lit) => match &expr_lit.lit {
+                    syn::Lit::Str(lit) => {
+                        let declaring_dir = declaring_source_path.parent().ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "declaring source path has no parent: {}",
+                                declaring_source_path.display()
+                            )
+                        })?;
+                        return Ok(Some(declaring_dir.join(lit.value())));
+                    }
+                    _ => anyhow::bail!(
+                        "path attribute must use a string literal: {}",
+                        attr.to_token_stream()
+                    ),
+                },
+                _ => anyhow::bail!(
+                    "path attribute must use a string literal: {}",
+                    attr.to_token_stream()
+                ),
+            },
+            _ => anyhow::bail!(
+                "unsupported path attribute syntax: {}",
+                attr.to_token_stream()
+            ),
+        }
+    }
+
+    Ok(None)
 }
 
 fn parse_rust_file(path: &Path) -> Result<File> {

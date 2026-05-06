@@ -255,6 +255,24 @@ fn resolves_mod_rs_module_layout() {
 }
 
 #[test]
+fn resolves_path_attribute_module_layout() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_source("example", "lib.rs", "#[path = \"support/aliased.rs\"] mod custom;");
+    fixture.write_source("example", "support/aliased.rs", "pub struct FromPathAttr;");
+
+    let graph = export_workspace_graph(&ExportGraphOptions {
+        root: fixture.root().to_path_buf(),
+    })
+    .unwrap();
+
+    assert!(graph.nodes.iter().any(|node| {
+        node.id == "crate::example::example::module::crate::custom::FromPathAttr"
+    }));
+}
+
+#[test]
 fn analyze_workspace_counts_crate_targets() {
     let fixture = WorkspaceFixture::new();
     fixture.write_workspace_root();
