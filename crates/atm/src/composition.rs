@@ -532,3 +532,269 @@ fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError {
         "transport returned an unexpected response for `{command}`: {response:?}"
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::sync::Arc;
+
+    use atm_core::boundary::{self, ClientTransport};
+    use atm_core::error::AtmError;
+    use atm_core::protocol::{
+        ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
+        SendResponseEnvelope,
+    };
+    use atm_core::schema::{
+        AgentMember, MessageEnvelope, TeamConfig, hydrate_legacy_fields_from_metadata,
+    };
+    use atm_core::send::{SendMessageSource, SendRequest};
+    use atm_core::test_support::{
+        ROLE_TEAM_LEAD, TEST_LEAD, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_TEAM,
+    };
+    use serde_json::Value;
+    use tempfile::TempDir;
+
+    use super::CliComposition;
+    use crate::observability::CliObservability;
+
+    #[derive(Clone)]
+    struct FakeClientTransport {
+        handler: Arc<dyn Fn(RequestEnvelope) -> Result<ResponseEnvelope, AtmError> + Send + Sync>,
+    }
+
+    impl std::fmt::Debug for FakeClientTransport {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("FakeClientTransport")
+                .finish_non_exhaustive()
+        }
+    }
+
+    impl FakeClientTransport {
+        fn new<F>(handler: F) -> Self
+        where
+            F: Fn(RequestEnvelope) -> Result<ResponseEnvelope, AtmError> + Send + Sync + 'static,
+        {
+            Self {
+                handler: Arc::new(handler),
+            }
+        }
+    }
+
+    impl boundary::sealed::Sealed for FakeClientTransport {}
+
+    impl ClientTransport for FakeClientTransport {
+        fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+            (self.handler)(request)
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct LoopbackClientTransport;
+
+    impl boundary::sealed::Sealed for LoopbackClientTransport {}
+
+    impl ClientTransport for LoopbackClientTransport {
+        fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+            let observability = atm_core::observability::NullObservability;
+            match request {
+                RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
+                    atm_core::send::send_mail(request, &observability)
+                        .map(|outcome| ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
+                }
+                RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
+                    atm_core::ack::ack_mail(request, &observability).map(|outcome| {
+                        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
+                    })
+                }
+                RequestEnvelope::Receive(query) => {
+                    atm_core::read::read_mail(query, &observability).map(ResponseEnvelope::Receive)
+                }
+                RequestEnvelope::Clear(query) => {
+                    atm_core::clear::clear_mail(query, &observability).map(ResponseEnvelope::Clear)
+                }
+                RequestEnvelope::Doctor(query) => {
+                    atm_core::doctor::run_doctor(query, &observability)
+                        .map(ResponseEnvelope::Doctor)
+                }
+            }
+        }
+    }
+
+    struct LoopbackFixture {
+        tempdir: TempDir,
+        home_dir: std::path::PathBuf,
+        current_dir: std::path::PathBuf,
+    }
+
+    impl LoopbackFixture {
+        fn new(recipient: &str) -> Self {
+            let tempdir = tempfile::tempdir().expect("tempdir");
+            let home_dir = tempdir.path().to_path_buf();
+            let current_dir = tempdir.path().join("cwd");
+            fs::create_dir_all(&current_dir).expect("cwd");
+            let fixture = Self {
+                tempdir,
+                home_dir,
+                current_dir,
+            };
+            fixture.write_team_config(recipient);
+            fixture
+        }
+
+        fn team_dir(&self) -> std::path::PathBuf {
+            self.home_dir.join(".claude").join("teams").join(TEST_TEAM)
+        }
+
+        fn inbox_path(&self, agent: &str) -> std::path::PathBuf {
+            self.team_dir()
+                .join("inboxes")
+                .join(format!("{agent}.json"))
+        }
+
+        fn write_team_config(&self, recipient: &str) {
+            let team_dir = self.team_dir();
+            fs::create_dir_all(&team_dir).expect("team dir");
+            let config = TeamConfig {
+                members: vec![
+                    AgentMember::with_name(recipient.parse().expect("recipient")),
+                    AgentMember::with_name(TEST_LEAD.parse().expect("lead")),
+                ],
+                ..Default::default()
+            };
+            fs::write(
+                team_dir.join("config.json"),
+                serde_json::to_vec(&config).expect("team config"),
+            )
+            .expect("write team config");
+        }
+
+        fn write_inbox_values(&self, agent: &str, values: &[Value]) {
+            let inbox_path = self.inbox_path(agent);
+            if let Some(parent) = inbox_path.parent() {
+                fs::create_dir_all(parent).expect("inbox dir");
+            }
+            fs::write(
+                inbox_path,
+                serde_json::to_string_pretty(values).expect("json array"),
+            )
+            .expect("write inbox");
+        }
+
+        fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {
+            let raw = fs::read_to_string(self.inbox_path(agent)).expect("inbox contents");
+            let values: Vec<Value> = serde_json::from_str(&raw).expect("json array");
+            values
+                .into_iter()
+                .map(|mut value| {
+                    hydrate_legacy_fields_from_metadata(&mut value);
+                    serde_json::from_value(value).expect("message envelope")
+                })
+                .collect()
+        }
+
+        fn send_request(&self, body: &str) -> SendRequest {
+            SendRequest::new(
+                self.home_dir.clone(),
+                self.current_dir.clone(),
+                Some(TEST_SENDER),
+                TEST_RECIPIENT_ADDRESS,
+                Some(TEST_TEAM),
+                SendMessageSource::Inline(body.to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("send request")
+        }
+    }
+
+    #[test]
+    fn fake_transport_maps_protocol_error_envelope_to_atm_error() {
+        let observability = CliObservability::fallback();
+        let transport = Arc::new(FakeClientTransport::new(|_| {
+            Ok(ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
+                &AtmError::daemon_unavailable("synthetic daemon failure")
+                    .with_recovery("retry after the daemon is reachable"),
+            )))
+        }));
+        let composition = CliComposition::from_transport(transport, &observability);
+
+        let error = composition
+            .send_request(RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {
+                home_dir: std::env::temp_dir(),
+                current_dir: std::env::temp_dir(),
+                team_override: None,
+            }))
+            .expect_err("protocol error");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::DaemonUnavailable
+        );
+        assert!(error.to_string().contains("synthetic daemon failure"));
+        assert_eq!(
+            error.recovery.as_deref(),
+            Some("retry after the daemon is reachable")
+        );
+    }
+
+    #[test]
+    fn loopback_transport_send_persists_inbox_without_daemon() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let observability = CliObservability::fallback();
+        let composition =
+            CliComposition::from_transport(Arc::new(LoopbackClientTransport), &observability);
+
+        let outcome = composition
+            .send(fixture.send_request("hello from loopback"))
+            .expect("send outcome");
+
+        assert_eq!(outcome.agent.as_str(), TEST_RECIPIENT);
+        assert_eq!(outcome.sender.as_str(), TEST_SENDER);
+        let inbox = fixture.inbox_contents(TEST_RECIPIENT);
+        assert_eq!(inbox.len(), 1);
+        assert_eq!(inbox[0].text, "hello from loopback");
+        assert_eq!(inbox[0].from.as_str(), TEST_SENDER);
+    }
+
+    #[test]
+    fn loopback_transport_missing_config_notice_retains_at_most_two_team_lead_messages_under_concurrency()
+     {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        fs::remove_file(fixture.team_dir().join("config.json")).expect("remove config");
+        fixture.write_inbox_values(TEST_RECIPIENT, &[]);
+        fixture.write_inbox_values(ROLE_TEAM_LEAD, &[]);
+
+        let transport = Arc::new(LoopbackClientTransport);
+        let (first, second) = std::thread::scope(|scope| {
+            let first_request = fixture.send_request("first");
+            let second_request = fixture.send_request("second");
+            let first_transport = transport.clone();
+            let second_transport = transport.clone();
+            let first = scope.spawn(move || {
+                first_transport.send(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+                    first_request,
+                )))
+            });
+            let second = scope.spawn(move || {
+                second_transport.send(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+                    second_request,
+                )))
+            });
+            (
+                first.join().expect("first transport result"),
+                second.join().expect("second transport result"),
+            )
+        });
+
+        assert!(first.is_ok(), "first response: {first:?}");
+        assert!(second.is_ok(), "second response: {second:?}");
+        let notices = fixture.inbox_contents(ROLE_TEAM_LEAD);
+        assert!(
+            notices.len() <= 2,
+            "loopback missing-config fallback should retain at most two notices; got {}",
+            notices.len()
+        );
+    }
+}
