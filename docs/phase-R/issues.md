@@ -326,6 +326,25 @@ complete structurally but does not own or manage runtime state.
 
 ---
 
+### I-016 — std::env::set_var() in test code — PORT-003 violations
+**Source**: arch-inj TASK-993 sc-portability advisory (feature/pR-s3-boundary-lint)
+**Files**:
+- `crates/atm/src/main.rs:686,697`
+- `crates/atm-core/src/config/mod.rs:793`
+- `crates/atm-core/src/home.rs:161`
+- `crates/atm-core/src/identity/mod.rs:218`
+- `crates/atm-core/src/mailbox/lock.rs:1233`
+- `crates/atm-core/src/team_admin/restore.rs:664`
+- `crates/atm-core/tests/mailbox_locking.rs:893`
+
+8 call sites use `std::env::set_var()` for test environment setup. Unsafe in multi-threaded
+contexts per Rust 2024 edition; mutation affects the entire process environment globally.
+
+**Fix**: Replace subprocess setup with `cmd.env("KEY", "value")`. Replace in-process test
+mutation with `temp_env::with_var(...)` for scoped, safe environment overrides.
+
+---
+
 ## MINOR FINDINGS
 
 ### m-001 — Plan doc R.10 status stale
