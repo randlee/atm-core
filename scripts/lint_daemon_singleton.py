@@ -30,6 +30,7 @@ PROHIBITED_CATEGORY_DESCRIPTIONS = {
     "warm_daemon": "warm_daemon helper in ordinary tests",
     "daemon_guard": "DaemonGuard daemon lifecycle helper in ordinary tests",
     "atm_daemon_bin": "ATM_DAEMON_BIN usage in ordinary tests",
+    "daemon_socket_path": "atm-daemon.sock path construction in ordinary tests",
     "direct_atm_daemon_command": "direct atm-daemon Command::new spawn path",
     "timing_warmup_shortcut": "timing-based daemon warmup shortcut",
 }
@@ -39,6 +40,7 @@ PROHIBITED_PATTERNS = {
     "warm_daemon": re.compile(r"\bwarm_daemon\b"),
     "daemon_guard": re.compile(r"\bDaemonGuard\b"),
     "atm_daemon_bin": re.compile(r"\bATM_DAEMON_BIN\b"),
+    "daemon_socket_path": re.compile(r"atm-daemon\.sock"),
 }
 
 SLEEP_PATTERN = re.compile(r"\b(?:std::thread::sleep|thread::sleep)\s*\(")
@@ -72,6 +74,7 @@ class Violation:
     line_number: int
     category: str
     detail: str
+    unix_gated: bool = False
 
     def render(self) -> str:
         return f"{self.path}:{self.line_number}: [{self.category}] {self.detail}"
@@ -97,6 +100,7 @@ def load_allow_entries(repo_root: Path, config_path: Path) -> list[AllowEntry]:
         return []
 
     allow_entries: list[AllowEntry] = []
+    seen_keys: set[tuple[str, str]] = set()
     for entry in entries:
         if not isinstance(entry, dict):
             continue
@@ -108,6 +112,13 @@ def load_allow_entries(repo_root: Path, config_path: Path) -> list[AllowEntry]:
             continue
         if not isinstance(categories, list) or not all(isinstance(item, str) for item in categories):
             continue
+        for category in categories:
+            key = (path, category)
+            if key in seen_keys:
+                raise ValueError(
+                    f"duplicate daemon_singleton allow entry for {path} [{category}] in {absolute_config.as_posix()}"
+                )
+            seen_keys.add(key)
         allow_entries.append(
             AllowEntry(
                 path=path,
@@ -131,6 +142,17 @@ def rust_sources(repo_root: Path) -> list[Path]:
 
 def line_number_for_offset(source: str, offset: int) -> int:
     return source.count("\n", 0, offset) + 1
+
+
+def line_offsets(source: str) -> list[int]:
+    offsets: list[int] = []
+    offset = 0
+    for line in source.splitlines(keepends=True):
+        offsets.append(offset)
+        offset += len(line)
+    if source and source[-1] != "\n":
+        return offsets
+    return offsets
 
 
 def find_cfg_test_scopes(source: str) -> list[SourceScope]:
@@ -174,20 +196,60 @@ def test_scopes(path: Path, source: str) -> list[SourceScope]:
     return find_cfg_test_scopes(source)
 
 
+def header_start_for_open(source: str, open_index: int) -> int:
+    header_start = source.rfind("\n", 0, open_index) + 1
+    while header_start > 0:
+        previous_line_end = header_start - 1
+        previous_line_start = source.rfind("\n", 0, previous_line_end) + 1
+        previous_line = source[previous_line_start:previous_line_end].strip()
+        if previous_line.startswith("#["):
+            header_start = previous_line_start
+            continue
+        break
+    return header_start
+
+
+def iter_block_ranges(source: str) -> list[tuple[int, int]]:
+    blocks: list[tuple[int, int]] = []
+    stack: list[int] = []
+    for index, character in enumerate(source):
+        if character == "{":
+            stack.append(index)
+        elif character == "}":
+            if not stack:
+                continue
+            open_index = stack.pop()
+            blocks.append((header_start_for_open(source, open_index), index + 1))
+    return sorted(blocks, key=lambda item: (item[0], item[1] - item[0]))
+
+
+def block_sources_for_offset(source: str, offset: int) -> list[str]:
+    matching_ranges = [(start, end) for start, end in iter_block_ranges(source) if start <= offset < end]
+    matching_ranges.sort(key=lambda item: item[1] - item[0])
+    return [source[start:end] for start, end in matching_ranges]
+
+
+def unix_gating_for_offset(source: str, offset: int) -> bool:
+    return any(has_unix_gating(block_source) for block_source in block_sources_for_offset(source, offset))
+
+
 def find_direct_atm_daemon_commands(relative_path: str, scope: SourceScope) -> list[Violation]:
     violations: list[Violation] = []
     lines = scope.source.splitlines()
+    offsets = line_offsets(scope.source)
     for index, line in enumerate(lines):
         if "Command::new(" not in line:
             continue
         window = "\n".join(lines[index : min(index + 8, len(lines))])
         if "atm-daemon" in window or "test_daemon_launcher" in window:
+            offset = offsets[index]
             violations.append(
                 Violation(
                     path=relative_path,
                     line_number=scope.base_line_number + index + 1,
                     category="direct_atm_daemon_command",
                     detail=PROHIBITED_CATEGORY_DESCRIPTIONS["direct_atm_daemon_command"],
+                    unix_gated=unix_gating_for_offset(scope.source, offset),
                 )
             )
     return violations
@@ -196,6 +258,7 @@ def find_direct_atm_daemon_commands(relative_path: str, scope: SourceScope) -> l
 def find_timing_warmup_shortcuts(relative_path: str, scope: SourceScope) -> list[Violation]:
     violations: list[Violation] = []
     lines = scope.source.splitlines()
+    offsets = line_offsets(scope.source)
     for index, line in enumerate(lines):
         if not SLEEP_PATTERN.search(line):
             continue
@@ -203,12 +266,14 @@ def find_timing_warmup_shortcuts(relative_path: str, scope: SourceScope) -> list
         context_end = min(len(lines), index + 9)
         window = "\n".join(lines[context_start:context_end])
         if any(anchor in window for anchor in DAEMON_TIMING_ANCHORS):
+            offset = offsets[index]
             violations.append(
                 Violation(
                     path=relative_path,
                     line_number=scope.base_line_number + index + 1,
                     category="timing_warmup_shortcut",
                     detail=PROHIBITED_CATEGORY_DESCRIPTIONS["timing_warmup_shortcut"],
+                    unix_gated=unix_gating_for_offset(scope.source, offset),
                 )
             )
     return violations
@@ -224,12 +289,14 @@ def collect_violations(repo_root: Path) -> list[Violation]:
         for scope in test_scopes(path, source):
             for category, pattern in PROHIBITED_PATTERNS.items():
                 for match in pattern.finditer(scope.source):
+                    match_offset = match.start()
                     violations.append(
                         Violation(
                             path=relative_path,
-                            line_number=scope.base_line_number + line_number_for_offset(scope.source, match.start()),
+                            line_number=scope.base_line_number + line_number_for_offset(scope.source, match_offset),
                             category=category,
                             detail=PROHIBITED_CATEGORY_DESCRIPTIONS[category],
+                            unix_gated=unix_gating_for_offset(scope.source, match_offset),
                         )
                     )
 
@@ -260,17 +327,18 @@ def apply_allow_entries(
             continue
 
         if entry.require_unix_gating:
-            source = source_cache.setdefault(
+            source_cache.setdefault(
                 violation.path,
                 (repo_root / violation.path).read_text(encoding="utf-8"),
             )
-            if not has_unix_gating(source):
+            if not violation.unix_gated:
                 remaining.append(
                     Violation(
                         path=violation.path,
                         line_number=violation.line_number,
                         category=violation.category,
                         detail=f"{violation.detail}; allow-list entry requires explicit #[cfg(unix)] gating",
+                        unix_gated=False,
                     )
                 )
                 continue
@@ -294,7 +362,25 @@ def build_summary(violations: list[Violation], allow_entries: list[AllowEntry], 
 def run(repo_root: Path, config_path: Path) -> int:
     started_at = datetime.now(timezone.utc)
     started_monotonic = monotonic_now()
-    allow_entries = load_allow_entries(repo_root, config_path)
+    try:
+        allow_entries = load_allow_entries(repo_root, config_path)
+    except ValueError as error:
+        duration_seconds = monotonic_now() - started_monotonic
+        report = build_report(
+            lint_name=LINT_NAME,
+            repo_root=repo_root,
+            passed=False,
+            summary="daemon singleton policy configuration is invalid",
+            findings=[str(error)],
+            transcript_lines=[
+                f"config: {(config_path if config_path.is_absolute() else config_path).as_posix()}",
+                str(error),
+            ],
+            started_at=started_at,
+            duration_seconds=duration_seconds,
+        )
+        print_report(report, repo_root=repo_root, preview_limit=4, direct_threshold=4)
+        return 1
     violations = collect_violations(repo_root)
     filtered_violations, allowed_messages = apply_allow_entries(repo_root, violations, allow_entries)
     duration_seconds = monotonic_now() - started_monotonic
@@ -302,7 +388,10 @@ def run(repo_root: Path, config_path: Path) -> int:
     findings = [violation.render() for violation in filtered_violations]
     transcript_lines = workspace_crate_section_lines(repo_root)
     transcript_lines.append(f"config: {(config_path if config_path.is_absolute() else config_path).as_posix()}")
-    transcript_lines.append(f"allow entries: {len(allow_entries)}")
+    if allow_entries:
+        transcript_lines.append(f"allow entries: {len(allow_entries)}")
+    else:
+        transcript_lines.append("allow entries: 0 (explicitly no exceptions)")
     transcript_lines.append("")
     if allowed_messages:
         transcript_lines.append("allowed matches:")

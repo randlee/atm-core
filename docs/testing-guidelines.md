@@ -128,12 +128,11 @@ Restrictions:
 The singleton/test-fidelity rule is enforced by a dedicated repository lint
 gate integrated into `just lint`.
 
-Initial planned entrypoint:
+Entrypoint:
 - `scripts/lint_daemon_singleton.py`
 
 Current status:
-- this script does not exist yet
-- creating it is an `R.10.4` deliverable
+- this script exists and is the `R.10.4` lint-gate deliverable
 
 Required behavior:
 - fail on prohibited daemon-spawn patterns in test code
@@ -142,6 +141,7 @@ Required behavior:
   test tiers
 - document an explicit allow-list for Tier 3 daemon-runtime suite patterns so
   the narrow exceptions remain auditable
+- treat an empty allow-list as explicit "no approved exceptions"
 
 Existing generic tools such as `clippy` are not sufficient on their own for
 this repository-specific architectural rule.
