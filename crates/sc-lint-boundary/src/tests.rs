@@ -224,7 +224,7 @@ fn renders_graph_as_turtle() {
         root: fixture.root().to_path_buf(),
     })
     .unwrap();
-    let turtle = render_graph_export(&graph, GraphOutputFormat::Turtle);
+    let turtle = render_graph_export(&graph, GraphOutputFormat::Turtle).unwrap();
 
     assert!(turtle.contains("@prefix sc: <urn:sc-lint-boundary:predicate:> ."));
     assert!(turtle.contains("rdf:type sc:type ."));
@@ -275,22 +275,10 @@ fn analyze_workspace_counts_crate_targets() {
 
 #[test]
 fn rejects_unknown_rule_filter() {
-    let fixture = WorkspaceFixture::new();
-    fixture.write_workspace_root();
-    fixture.write_package_manifest("example");
-    fixture.write_source("example", "lib.rs", "pub struct Example;");
-
-    let error = analyze_workspace(&AnalyzeOptions {
-        root: fixture.root().to_path_buf(),
-        format: OutputFormat::Json,
-        rule: Some("unknown".to_string()),
-    })
-    .unwrap_err();
-
-    assert!(
-        error
-            .to_string()
-            .contains("unsupported rule filter `unknown`")
+    let error = RuleFilter::try_from("unknown").unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "unsupported rule filter `unknown`; supported: cycles, boundaries, internal_only, forbid_external_impls"
     );
 }
 
@@ -317,13 +305,13 @@ fn reports_type_method_self_loop_as_non_fatal_signal() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("cycles".to_string()),
+        rule: Some(RuleFilter::Cycles),
     })
     .unwrap();
 
     assert_eq!(report.status, "pass");
     assert_eq!(report.findings.len(), 1);
-    assert_eq!(report.findings[0].rule_id, "SCB-CYCLE-002");
+    assert_eq!(report.findings[0].rule_id, RuleId::ScbCycle002);
     assert_eq!(report.findings[0].kind, "type_method_self_loop");
     assert_eq!(
         report.findings[0].owner_ids,
@@ -353,7 +341,7 @@ fn does_not_flag_constructor_factory_self_loop() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("cycles".to_string()),
+        rule: Some(RuleFilter::Cycles),
     })
     .unwrap();
 
@@ -383,7 +371,7 @@ fn does_not_flag_receiver_only_method_as_self_loop() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("cycles".to_string()),
+        rule: Some(RuleFilter::Cycles),
     })
     .unwrap();
 
@@ -413,7 +401,7 @@ fn does_not_flag_signature_only_self_return_as_self_loop() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("cycles".to_string()),
+        rule: Some(RuleFilter::Cycles),
     })
     .unwrap();
 
@@ -445,7 +433,7 @@ fn suppresses_type_method_self_loop_when_allowed() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("cycles".to_string()),
+        rule: Some(RuleFilter::Cycles),
     })
     .unwrap();
 
@@ -477,7 +465,7 @@ fn suppresses_type_method_self_loop_when_allowed_on_method() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("cycles".to_string()),
+        rule: Some(RuleFilter::Cycles),
     })
     .unwrap();
 
@@ -514,13 +502,13 @@ fn keeps_unsuppressed_method_flagged_when_other_method_is_allowed() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("cycles".to_string()),
+        rule: Some(RuleFilter::Cycles),
     })
     .unwrap();
 
     assert_eq!(report.status, "pass");
     assert_eq!(report.findings.len(), 1);
-    assert_eq!(report.findings[0].rule_id, "SCB-CYCLE-002");
+    assert_eq!(report.findings[0].rule_id, RuleId::ScbCycle002);
     assert!(
         report.findings[0]
             .node_ids
@@ -565,14 +553,24 @@ fn emits_both_inherent_and_trait_self_loop_findings_for_same_owner() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("cycles".to_string()),
+        rule: Some(RuleFilter::Cycles),
     })
     .unwrap();
 
     assert_eq!(report.status, "pass");
     assert_eq!(report.findings.len(), 2);
-    assert!(report.findings.iter().any(|f| f.rule_id == "SCB-CYCLE-002"));
-    assert!(report.findings.iter().any(|f| f.rule_id == "SCB-CYCLE-003"));
+    assert!(
+        report
+            .findings
+            .iter()
+            .any(|f| f.rule_id == RuleId::ScbCycle002)
+    );
+    assert!(
+        report
+            .findings
+            .iter()
+            .any(|f| f.rule_id == RuleId::ScbCycle003)
+    );
 }
 
 #[test]
@@ -598,13 +596,13 @@ fn downgrades_trait_impl_self_loop() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("cycles".to_string()),
+        rule: Some(RuleFilter::Cycles),
     })
     .unwrap();
 
     assert_eq!(report.status, "pass");
     assert_eq!(report.findings.len(), 1);
-    assert_eq!(report.findings[0].rule_id, "SCB-CYCLE-003");
+    assert_eq!(report.findings[0].rule_id, RuleId::ScbCycle003);
     assert_eq!(report.findings[0].kind, "trait_impl_self_loop");
 }
 
@@ -632,7 +630,7 @@ fn does_not_flag_conversion_like_trait_impl_self_loop() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("cycles".to_string()),
+        rule: Some(RuleFilter::Cycles),
     })
     .unwrap();
 
@@ -665,7 +663,7 @@ fn does_not_flag_comparison_like_trait_impl_self_loop() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("cycles".to_string()),
+        rule: Some(RuleFilter::Cycles),
     })
     .unwrap();
 
@@ -721,13 +719,13 @@ fn reports_multi_owner_architectural_cycle_as_failure() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("cycles".to_string()),
+        rule: Some(RuleFilter::Cycles),
     })
     .unwrap();
 
     assert_eq!(report.status, "fail");
     assert_eq!(report.findings.len(), 1);
-    assert_eq!(report.findings[0].rule_id, "SCB-CYCLE-001");
+    assert_eq!(report.findings[0].rule_id, RuleId::ScbCycle001);
     assert_eq!(report.findings[0].kind, "multi_owner_architectural_cycle");
     assert_eq!(
         report.findings[0].owner_ids,
@@ -762,7 +760,7 @@ fn suppresses_recursive_value_container_cycle_when_all_owners_allow_it() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("cycles".to_string()),
+        rule: Some(RuleFilter::Cycles),
     })
     .unwrap();
 
@@ -793,13 +791,13 @@ fn keeps_recursive_value_container_cycle_when_only_one_owner_allows_it() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("cycles".to_string()),
+        rule: Some(RuleFilter::Cycles),
     })
     .unwrap();
 
     assert_eq!(report.status, "fail");
     assert_eq!(report.findings.len(), 1);
-    assert_eq!(report.findings[0].rule_id, "SCB-CYCLE-001");
+    assert_eq!(report.findings[0].rule_id, RuleId::ScbCycle001);
 }
 
 #[test]
@@ -829,13 +827,13 @@ fn reports_multi_owner_cycle_across_modules_as_failure() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("cycles".to_string()),
+        rule: Some(RuleFilter::Cycles),
     })
     .unwrap();
 
     assert_eq!(report.status, "fail");
     assert_eq!(report.findings.len(), 1);
-    assert_eq!(report.findings[0].rule_id, "SCB-CYCLE-001");
+    assert_eq!(report.findings[0].rule_id, RuleId::ScbCycle001);
     assert_eq!(
         report.findings[0].owner_ids,
         vec![
@@ -862,13 +860,13 @@ fn fails_when_internal_only_item_is_public() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("internal_only".to_string()),
+        rule: Some(RuleFilter::InternalOnly),
     })
     .unwrap();
 
     assert_eq!(report.status, "fail");
     assert_eq!(report.findings.len(), 1);
-    assert_eq!(report.findings[0].rule_id, "SCB-BOUNDARY-001");
+    assert_eq!(report.findings[0].rule_id, RuleId::ScbBoundary001);
 }
 
 #[test]
@@ -896,13 +894,13 @@ fn fails_when_internal_only_item_is_referenced_from_other_module() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("boundaries".to_string()),
+        rule: Some(RuleFilter::InternalOnly),
     })
     .unwrap();
 
     assert_eq!(report.status, "fail");
     assert_eq!(report.findings.len(), 1);
-    assert_eq!(report.findings[0].rule_id, "SCB-BOUNDARY-002");
+    assert_eq!(report.findings[0].rule_id, RuleId::ScbBoundary002);
     assert!(report.findings[0].message.contains("crate::owner::Secret"));
 }
 
@@ -925,7 +923,7 @@ fn allows_internal_only_item_inside_own_module() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("boundaries".to_string()),
+        rule: Some(RuleFilter::InternalOnly),
     })
     .unwrap();
 
@@ -966,7 +964,7 @@ fn fails_when_forbid_external_impls_trait_is_implemented_elsewhere() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("boundaries".to_string()),
+        rule: Some(RuleFilter::Boundaries),
     })
     .unwrap();
 
@@ -975,7 +973,7 @@ fn fails_when_forbid_external_impls_trait_is_implemented_elsewhere() {
         report
             .findings
             .iter()
-            .any(|f| f.rule_id == "SCB-BOUNDARY-003")
+            .any(|f| f.rule_id == RuleId::ScbBoundary003)
     );
 }
 
@@ -1006,7 +1004,7 @@ fn allows_forbid_external_impls_trait_impl_in_same_module() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("boundaries".to_string()),
+        rule: Some(RuleFilter::Boundaries),
     })
     .unwrap();
 
@@ -1031,7 +1029,7 @@ fn does_not_flag_acyclic_chain() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("cycles".to_string()),
+        rule: Some(RuleFilter::Cycles),
     })
     .unwrap();
 
@@ -1066,7 +1064,7 @@ fn does_not_flag_cross_module_acyclic_chain() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("cycles".to_string()),
+        rule: Some(RuleFilter::Cycles),
     })
     .unwrap();
 
@@ -1100,7 +1098,7 @@ fn does_not_flag_newtype_factory_self_loop() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("cycles".to_string()),
+        rule: Some(RuleFilter::Cycles),
     })
     .unwrap();
 
@@ -1188,7 +1186,7 @@ fn does_not_promote_function_owned_references_into_module_cycles() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("cycles".to_string()),
+        rule: Some(RuleFilter::Cycles),
     })
     .unwrap();
 
@@ -1219,12 +1217,12 @@ fn preserves_full_trait_path_in_trait_impl_self_loop_messages() {
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
         format: OutputFormat::Json,
-        rule: Some("cycles".to_string()),
+        rule: Some(RuleFilter::Cycles),
     })
     .unwrap();
 
     assert_eq!(report.findings.len(), 1);
-    assert_eq!(report.findings[0].rule_id, "SCB-CYCLE-003");
+    assert_eq!(report.findings[0].rule_id, RuleId::ScbCycle003);
     assert!(report.findings[0].message.contains("one::Display"));
 }
 

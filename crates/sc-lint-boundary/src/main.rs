@@ -7,6 +7,7 @@ use sc_lint_boundary::AnalyzeOptions;
 use sc_lint_boundary::ExportGraphOptions;
 use sc_lint_boundary::GraphOutputFormat;
 use sc_lint_boundary::OutputFormat;
+use sc_lint_boundary::RuleFilter;
 use sc_lint_boundary::analyze_workspace;
 use sc_lint_boundary::export_workspace_graph;
 use sc_lint_boundary::render_findings_report;
@@ -28,7 +29,7 @@ enum Command {
         #[arg(long, default_value = "text")]
         format: FormatArg,
         #[arg(long)]
-        rule: Option<String>,
+        rule: Option<RuleFilterArg>,
     },
     ExportGraph {
         #[arg(long, default_value = ".")]
@@ -50,6 +51,14 @@ enum GraphFormatArg {
     Turtle,
 }
 
+#[derive(Debug, Clone, clap::ValueEnum)]
+enum RuleFilterArg {
+    Cycles,
+    Boundaries,
+    InternalOnly,
+    ForbidExternalImpls,
+}
+
 impl From<FormatArg> for OutputFormat {
     fn from(value: FormatArg) -> Self {
         match value {
@@ -68,6 +77,17 @@ impl From<GraphFormatArg> for GraphOutputFormat {
     }
 }
 
+impl From<RuleFilterArg> for RuleFilter {
+    fn from(value: RuleFilterArg) -> Self {
+        match value {
+            RuleFilterArg::Cycles => RuleFilter::Cycles,
+            RuleFilterArg::Boundaries => RuleFilter::Boundaries,
+            RuleFilterArg::InternalOnly => RuleFilter::InternalOnly,
+            RuleFilterArg::ForbidExternalImpls => RuleFilter::ForbidExternalImpls,
+        }
+    }
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -76,7 +96,7 @@ fn main() -> Result<()> {
             let options = AnalyzeOptions {
                 root,
                 format: format.clone().into(),
-                rule,
+                rule: rule.map(Into::into),
             };
             let report = analyze_workspace(&options)?;
             match OutputFormat::from(format) {
@@ -90,7 +110,7 @@ fn main() -> Result<()> {
         }
         Command::ExportGraph { root, format } => {
             let graph = export_workspace_graph(&ExportGraphOptions { root })?;
-            println!("{}", render_graph_export(&graph, format.into()));
+            println!("{}", render_graph_export(&graph, format.into())?);
         }
     }
 

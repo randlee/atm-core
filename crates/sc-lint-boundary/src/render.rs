@@ -1,4 +1,5 @@
 use super::*;
+use serde_json::Error as JsonError;
 
 pub fn render_findings_report(report: &FindingsReport) -> String {
     format!(
@@ -11,11 +12,13 @@ pub fn render_findings_report(report: &FindingsReport) -> String {
     )
 }
 
-pub fn render_graph_export(graph: &GraphExport, format: GraphOutputFormat) -> String {
+pub fn render_graph_export(
+    graph: &GraphExport,
+    format: GraphOutputFormat,
+) -> Result<String, JsonError> {
     match format {
-        GraphOutputFormat::Json => serde_json::to_string_pretty(graph)
-            .expect("graph export should always serialize to JSON"),
-        GraphOutputFormat::Turtle => render_graph_turtle(graph),
+        GraphOutputFormat::Json => serde_json::to_string_pretty(graph),
+        GraphOutputFormat::Turtle => Ok(render_graph_turtle(graph)),
     }
 }
 

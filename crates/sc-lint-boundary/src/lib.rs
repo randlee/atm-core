@@ -12,6 +12,7 @@ use cargo_metadata::MetadataCommand;
 use quote::ToTokens;
 use serde::Deserialize;
 use serde::Serialize;
+use serde::Serializer;
 use syn::Attribute;
 use syn::File;
 use syn::Ident;
@@ -22,6 +23,10 @@ use syn::Type;
 use syn::visit::Visit;
 
 mod analysis;
+// The attribute parser lives in the proc-macro crate source because proc-macro
+// crates cannot expose normal library APIs. We include the shared parser file
+// directly here so the analyzer and attribute macro validate the same directive
+// syntax. If directives.rs changes, both crates must be kept in sync.
 #[path = "../../sc-lint-attributes/src/directives.rs"]
 mod directive_parser;
 mod graph;
@@ -62,7 +67,7 @@ impl fmt::Display for OutputFormat {
 pub struct AnalyzeOptions {
     pub root: PathBuf,
     pub format: OutputFormat,
-    pub rule: Option<String>,
+    pub rule: Option<RuleFilter>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,11 +93,107 @@ pub struct FindingsReport {
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct Finding {
-    pub rule_id: String,
+    pub rule_id: RuleId,
     pub kind: String,
     pub message: String,
     pub owner_ids: Vec<String>,
     pub node_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RuleId {
+    ScbCycle001,
+    ScbCycle002,
+    ScbCycle003,
+    ScbBoundary001,
+    ScbBoundary002,
+    ScbBoundary003,
+}
+
+impl RuleId {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ScbCycle001 => "SCB-CYCLE-001",
+            Self::ScbCycle002 => "SCB-CYCLE-002",
+            Self::ScbCycle003 => "SCB-CYCLE-003",
+            Self::ScbBoundary001 => "SCB-BOUNDARY-001",
+            Self::ScbBoundary002 => "SCB-BOUNDARY-002",
+            Self::ScbBoundary003 => "SCB-BOUNDARY-003",
+        }
+    }
+}
+
+impl Serialize for RuleId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuleFilter {
+    Cycles,
+    Boundaries,
+    InternalOnly,
+    ForbidExternalImpls,
+}
+
+impl RuleFilter {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Cycles => "cycles",
+            Self::Boundaries => "boundaries",
+            Self::InternalOnly => "internal_only",
+            Self::ForbidExternalImpls => "forbid_external_impls",
+        }
+    }
+}
+
+impl fmt::Display for RuleFilter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuleFilterParseError {
+    invalid_value: String,
+}
+
+impl RuleFilterParseError {
+    fn new(invalid_value: impl Into<String>) -> Self {
+        Self {
+            invalid_value: invalid_value.into(),
+        }
+    }
+}
+
+impl fmt::Display for RuleFilterParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "unsupported rule filter `{}`; supported: cycles, boundaries, internal_only, forbid_external_impls",
+            self.invalid_value
+        )
+    }
+}
+
+impl std::error::Error for RuleFilterParseError {}
+
+impl TryFrom<&str> for RuleFilter {
+    type Error = RuleFilterParseError;
+
+    fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
+        match value {
+            "cycles" => Ok(Self::Cycles),
+            "boundaries" => Ok(Self::Boundaries),
+            "internal_only" => Ok(Self::InternalOnly),
+            "forbid_external_impls" => Ok(Self::ForbidExternalImpls),
+            other => Err(RuleFilterParseError::new(other)),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -250,15 +351,22 @@ impl GraphBuilder {
 }
 
 pub fn analyze_workspace(options: &AnalyzeOptions) -> Result<FindingsReport> {
-    graph::validate_rule_filter(options.rule.as_deref())?;
     let graph = graph::build_workspace_graph(&options.root)?;
     let mut findings = Vec::new();
-    let filter = options.rule.as_deref();
-    if filter.is_none() || filter == Some("cycles") {
-        findings.extend(analysis::analyze_cycles(&graph, filter));
+    let filter = options.rule;
+    if filter.is_none() || filter == Some(RuleFilter::Cycles) {
+        findings.extend(analysis::analyze_cycles(&graph));
     }
-    if filter.is_none() || matches!(filter, Some("boundaries" | "internal_only")) {
+    if filter.is_none()
+        || filter == Some(RuleFilter::Boundaries)
+        || filter == Some(RuleFilter::InternalOnly)
+    {
         findings.extend(analysis::analyze_internal_only(&graph));
+    }
+    if filter.is_none()
+        || filter == Some(RuleFilter::Boundaries)
+        || filter == Some(RuleFilter::ForbidExternalImpls)
+    {
         findings.extend(analysis::analyze_forbid_external_impls(&graph));
     }
     findings.sort_by(|left, right| {
@@ -295,6 +403,9 @@ pub fn render_findings_report(report: &FindingsReport) -> String {
     render::render_findings_report(report)
 }
 
-pub fn render_graph_export(graph: &GraphExport, format: GraphOutputFormat) -> String {
+pub fn render_graph_export(
+    graph: &GraphExport,
+    format: GraphOutputFormat,
+) -> std::result::Result<String, serde_json::Error> {
     render::render_graph_export(graph, format)
 }

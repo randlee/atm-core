@@ -1,6 +1,6 @@
 use super::*;
 
-pub(crate) fn analyze_cycles(graph: &GraphExport, _rule_filter: Option<&str>) -> Vec<Finding> {
+pub(crate) fn analyze_cycles(graph: &GraphExport) -> Vec<Finding> {
     let node_map: BTreeMap<_, _> = graph
         .nodes
         .iter()
@@ -18,7 +18,7 @@ pub(crate) fn analyze_cycles(graph: &GraphExport, _rule_filter: Option<&str>) ->
             let mut owners = component.clone();
             owners.sort();
             findings.push(Finding {
-                rule_id: "SCB-CYCLE-001".to_string(),
+                rule_id: RuleId::ScbCycle001,
                 kind: "multi_owner_architectural_cycle".to_string(),
                 message: format!("architectural cycle across owners: {}", owners.join(", ")),
                 owner_ids: owners.clone(),
@@ -106,7 +106,7 @@ pub(crate) fn analyze_cycles(graph: &GraphExport, _rule_filter: Option<&str>) ->
 
         if !inherent_nodes.is_empty() {
             findings.push(Finding {
-                rule_id: "SCB-CYCLE-002".to_string(),
+                rule_id: RuleId::ScbCycle002,
                 kind: "type_method_self_loop".to_string(),
                 message: format!("type/method self-loop on owner {owner_id}"),
                 owner_ids: vec![owner_id.clone()],
@@ -116,7 +116,7 @@ pub(crate) fn analyze_cycles(graph: &GraphExport, _rule_filter: Option<&str>) ->
 
         for (trait_name, node_ids) in trait_nodes {
             findings.push(Finding {
-                rule_id: "SCB-CYCLE-003".to_string(),
+                rule_id: RuleId::ScbCycle003,
                 kind: "trait_impl_self_loop".to_string(),
                 message: format!("trait-impl self-loop on owner {owner_id} via {trait_name}"),
                 owner_ids: vec![owner_id.clone()],
@@ -174,7 +174,7 @@ pub(crate) fn analyze_internal_only(graph: &GraphExport) -> Vec<Finding> {
 
         if node.visibility != Some("private") {
             findings.push(Finding {
-                rule_id: "SCB-BOUNDARY-001".to_string(),
+                rule_id: RuleId::ScbBoundary001,
                 kind: "internal_only_visibility_violation".to_string(),
                 message: format!(
                     "internal_only item {} must not be externally visible (visibility={})",
@@ -206,7 +206,7 @@ pub(crate) fn analyze_internal_only(graph: &GraphExport) -> Vec<Finding> {
                 continue;
             }
             findings.push(Finding {
-                rule_id: "SCB-BOUNDARY-002".to_string(),
+                rule_id: RuleId::ScbBoundary002,
                 kind: "internal_only_external_reference".to_string(),
                 message: format!(
                     "internal_only item {} referenced from {}",
@@ -255,7 +255,7 @@ pub(crate) fn analyze_forbid_external_impls(graph: &GraphExport) -> Vec<Finding>
                 continue;
             }
             findings.push(Finding {
-                rule_id: "SCB-BOUNDARY-003".to_string(),
+                rule_id: RuleId::ScbBoundary003,
                 kind: "forbid_external_impls_violation".to_string(),
                 message: format!(
                     "trait {} forbids external impls but is implemented from module {}",
@@ -274,14 +274,17 @@ pub(crate) fn analyze_forbid_external_impls(graph: &GraphExport) -> Vec<Finding>
 
 pub(crate) fn finding_is_failure(finding: &Finding) -> bool {
     matches!(
-        finding.rule_id.as_str(),
-        "SCB-CYCLE-001" | "SCB-BOUNDARY-001" | "SCB-BOUNDARY-002" | "SCB-BOUNDARY-003"
+        finding.rule_id,
+        RuleId::ScbCycle001
+            | RuleId::ScbBoundary001
+            | RuleId::ScbBoundary002
+            | RuleId::ScbBoundary003
     )
 }
 
-pub(crate) fn finding_sort_key(finding: &Finding) -> (u8, &str) {
+pub(crate) fn finding_sort_key(finding: &Finding) -> (u8, RuleId) {
     let severity = if finding_is_failure(finding) { 0 } else { 1 };
-    (severity, finding.rule_id.as_str())
+    (severity, finding.rule_id)
 }
 
 #[derive(Debug, Clone)]
@@ -430,13 +433,13 @@ fn strongly_connected_components(owner_graph: &OwnerGraph) -> Vec<Vec<String>> {
     }
 
     fn reverse_graph(owner_graph: &OwnerGraph) -> BTreeMap<String, BTreeSet<String>> {
-        let mut reversed = BTreeMap::new();
+        let mut reversed: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
         for (source, targets) in &owner_graph.adjacency {
-            reversed.entry(source.clone()).or_insert_with(BTreeSet::new);
+            reversed.entry(source.clone()).or_default();
             for target in targets {
                 reversed
                     .entry(target.clone())
-                    .or_insert_with(BTreeSet::new)
+                    .or_default()
                     .insert(source.clone());
             }
         }

@@ -194,15 +194,6 @@ pub(crate) fn build_workspace_graph(root: &Path) -> Result<GraphExport> {
     Ok(builder.finish())
 }
 
-pub(crate) fn validate_rule_filter(rule_filter: Option<&str>) -> Result<()> {
-    match rule_filter {
-        None | Some("cycles" | "boundaries" | "internal_only") => Ok(()),
-        Some(other) => anyhow::bail!(
-            "unsupported rule filter `{other}`; supported: cycles, boundaries, internal_only"
-        ),
-    }
-}
-
 fn ingest_module_items(
     builder: &mut GraphBuilder,
     context: &TargetContext,
