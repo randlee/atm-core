@@ -2,18 +2,19 @@
 
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Map;
 use tracing::warn;
 
 use crate::address::AgentAddress;
 use crate::config;
 use crate::error::{AtmError, AtmErrorCode};
-use crate::home;
 use crate::identity;
-use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
+use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
+use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
+use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{AgentName, TaskId, TeamName};
 use crate::workflow;
 
@@ -23,7 +24,7 @@ pub(super) mod hook;
 pub(crate) mod input;
 pub(crate) mod summary;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SendMessageSource {
     Inline(String),
     Stdin,
@@ -33,7 +34,7 @@ pub enum SendMessageSource {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SendRequest {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
@@ -77,13 +78,13 @@ impl SendRequest {
 }
 
 /// Result of sending one ATM mailbox message.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SendOutcome {
-    pub action: &'static str,
+    pub action: String,
     pub team: TeamName,
     pub agent: AgentName,
     pub sender: AgentName,
-    pub outcome: &'static str,
+    pub outcome: String,
     pub message_id: LegacyMessageId,
     pub requires_ack: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -121,7 +122,16 @@ pub fn send_mail(
     request: SendRequest,
     observability: &dyn ObservabilityPort,
 ) -> Result<SendOutcome, AtmError> {
-    let config = config::load_config(&request.current_dir)?;
+    let runtime = LocalServiceRuntime::default();
+    send_mail_with_runtime(request, observability, &runtime)
+}
+
+fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    request: SendRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+) -> Result<SendOutcome, AtmError> {
+    let config = runtime.load_config(&request.current_dir)?;
     let canonical_sender =
         identity::resolve_sender_identity(request.sender_override.as_deref(), config.as_ref())?;
     let recipient = resolve_recipient(
@@ -132,22 +142,21 @@ pub fn send_mail(
     let sender_team = config::resolve_team(None, config.as_ref());
     let display_sender = display_sender_identity(
         &canonical_sender,
-        request.sender_override.as_deref(),
-        sender_team.as_deref(),
+        request.sender_override.as_ref(),
+        sender_team.as_ref(),
         &recipient.team,
         config.as_ref(),
     );
 
-    let team_dir = home::team_dir_from_home(&request.home_dir, &recipient.team)?;
+    let team_dir = runtime.team_dir(&request.home_dir, &recipient.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&recipient.team));
     }
 
-    let inbox_path =
-        home::inbox_path_from_home(&request.home_dir, &recipient.team, &recipient.agent)?;
+    let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
     let mut warnings = Vec::new();
 
-    match config::load_team_config(&team_dir) {
+    match runtime.load_team_config(&team_dir) {
         Ok(team_config) => {
             alert_state::clear_missing_team_config_alert(
                 &request.home_dir,
@@ -188,6 +197,7 @@ pub fn send_mail(
 
             if !request.dry_run {
                 notify_team_lead_missing_config(
+                    runtime,
                     &request.home_dir,
                     &team_dir,
                     &recipient.team,
@@ -213,11 +223,11 @@ pub fn send_mail(
     if !request.dry_run {
         let mut extra = Map::new();
         workflow::set_atm_message_id(&mut extra, atm_message_id);
-        if display_sender != canonical_sender.as_str() {
+        if display_sender != canonical_sender.clone() {
             set_canonical_sender_metadata(&mut extra, &canonical_sender);
         }
         let envelope = MessageEnvelope {
-            from: display_sender.parse().expect("display sender is valid"),
+            from: display_sender.clone(),
             text: body.clone(),
             timestamp,
             read: false,
@@ -231,20 +241,23 @@ pub fn send_mail(
             extra,
         };
         append_mailbox_message_and_seed_workflow(
+            runtime,
             &request.home_dir,
             &recipient.team,
             &recipient.agent,
             &inbox_path,
             &envelope,
+            false,
         )?;
     }
 
+    let command_outcome = if request.dry_run { "dry_run" } else { "sent" };
     let mut outcome = SendOutcome {
-        action: "send",
+        action: "send".to_string(),
         team: recipient.team.clone(),
         agent: recipient.agent.clone(),
         sender: canonical_sender.clone(),
-        outcome: if request.dry_run { "dry_run" } else { "sent" },
+        outcome: command_outcome.to_string(),
         message_id,
         requires_ack,
         task_id: task_id.clone(),
@@ -255,13 +268,14 @@ pub fn send_mail(
     };
 
     if !request.dry_run {
-        maybe_run_post_send_hook(
+        runtime.maybe_run_post_send_hook(
             &mut outcome.warnings,
             config.as_ref(),
             PostSendHookContext {
                 sender: &canonical_sender,
                 sender_team: sender_team.as_ref(),
                 recipient: &recipient,
+                recipient_pane_id: None,
                 message_id,
                 requires_ack,
                 is_ack: false,
@@ -273,10 +287,10 @@ pub fn send_mail(
     let _ = observability.emit(CommandEvent {
         command: "send",
         action: "send",
-        outcome: outcome.outcome,
+        outcome: command_outcome,
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
-        sender: canonical_sender.to_string(),
+        sender: canonical_sender,
         message_id: Some(outcome.message_id),
         requires_ack: outcome.requires_ack,
         dry_run: outcome.dry_run,
@@ -299,6 +313,7 @@ pub(crate) struct PostSendHookContext<'a> {
     pub(crate) sender: &'a AgentName,
     pub(crate) sender_team: Option<&'a TeamName>,
     pub(crate) recipient: &'a ResolvedRecipient,
+    pub(crate) recipient_pane_id: Option<&'a str>,
     pub(crate) message_id: LegacyMessageId,
     pub(crate) requires_ack: bool,
     pub(crate) is_ack: bool,
@@ -350,6 +365,7 @@ fn is_false(value: &bool) -> bool {
 }
 
 fn notify_team_lead_missing_config(
+    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
     home_dir: &Path,
     team_dir: &Path,
     team: &TeamName,
@@ -360,22 +376,19 @@ fn notify_team_lead_missing_config(
         return;
     }
 
-    let team_lead_inbox = match home::inbox_path_from_home(home_dir, team, "team-lead") {
+    let team_lead_agent = AgentName::from_validated(ROLE_TEAM_LEAD);
+    let team_lead_inbox = match runtime.inbox_path(home_dir, team, &team_lead_agent) {
         Ok(path) => path,
         Err(error) => {
             warn!(
                 code = %AtmErrorCode::WarningMissingTeamConfigFallback,
                 %error,
                 team = %team,
-                "failed to resolve team-lead inbox for missing-config notice"
+                "failed to resolve reserved missing-config inbox for notice"
             );
             return;
         }
     };
-
-    if !team_lead_inbox.exists() {
-        return;
-    }
 
     let config_path = team_dir.join("config.json");
     let (atm_message_id, timestamp) = AtmMessageId::new_with_timestamp();
@@ -391,16 +404,14 @@ fn notify_team_lead_missing_config(
     );
 
     let notice = MessageEnvelope {
-        from: "atm-identity-missing"
-            .parse()
-            .expect("system sender is valid"),
+        from: AgentName::from_validated("atm-identity-missing"),
         text: format!(
             "ATM warning: send used existing inbox fallback for {recipient}@{team} because team config is missing at {}. Please restore config.json.",
             config_path.display()
         ),
         timestamp,
         read: false,
-        source_team: Some(team.parse().expect("team name")),
+        source_team: Some(team.clone()),
         summary: Some(format!(
             "ATM warning: missing team config fallback used for {recipient}@{team}"
         )),
@@ -413,11 +424,13 @@ fn notify_team_lead_missing_config(
     };
 
     if let Err(error) = append_mailbox_message_and_seed_workflow(
+        runtime,
         home_dir,
         team,
-        &AgentName::from_validated("team-lead"),
+        &AgentName::from_validated(ROLE_TEAM_LEAD),
         &team_lead_inbox,
         &notice,
+        true,
     ) {
         warn!(
             code = %AtmErrorCode::WarningMissingTeamConfigFallback,
@@ -430,22 +443,27 @@ fn notify_team_lead_missing_config(
 }
 
 fn append_mailbox_message_and_seed_workflow(
+    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
     home_dir: &Path,
     team: &TeamName,
     agent: &AgentName,
     inbox_path: &Path,
     envelope: &MessageEnvelope,
+    require_existing_inbox: bool,
 ) -> Result<(), AtmError> {
-    workflow::commit_workflow_state(
+    runtime.commit_workflow_state(
         home_dir,
         team,
         agent,
         [inbox_path.to_path_buf()],
-        mailbox::lock::default_lock_timeout(),
+        runtime.default_lock_timeout(),
         |workflow_state| {
-            let mut inbox_messages = mailbox::read_messages(inbox_path)?;
+            if require_existing_inbox && !inbox_path.exists() {
+                return Ok(((), false));
+            }
+            let mut inbox_messages = runtime.read_messages(inbox_path)?;
             inbox_messages.push(envelope.clone());
-            mailbox::store::commit_mailbox_state(inbox_path, &inbox_messages)?;
+            runtime.commit_mailbox_state(inbox_path, &inbox_messages)?;
             Ok((
                 (),
                 workflow::remember_initial_state(workflow_state, envelope),
@@ -456,29 +474,31 @@ fn append_mailbox_message_and_seed_workflow(
 
 fn display_sender_identity(
     canonical_sender: &AgentName,
-    sender_override: Option<&str>,
-    sender_team: Option<&str>,
-    recipient_team: &str,
+    sender_override: Option<&AgentName>,
+    sender_team: Option<&TeamName>,
+    recipient_team: &TeamName,
     config: Option<&config::AtmConfig>,
-) -> String {
+) -> AgentName {
     let cross_team = sender_team.is_some_and(|team| team != recipient_team);
     if !cross_team {
-        return canonical_sender.to_string();
+        return canonical_sender.clone();
     }
 
     if let Some(sender_override) = sender_override
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
         && config::aliases::resolve_agent(sender_override, config) == canonical_sender.as_str()
     {
-        return sender_override.to_string();
+        return sender_override.clone();
     }
 
     config::aliases::preferred_alias(canonical_sender.as_str(), config)
-        .unwrap_or_else(|| canonical_sender.to_string())
+        .map(AgentName::from_validated)
+        .unwrap_or_else(|| canonical_sender.clone())
 }
 
-pub(super) fn qualified_sender_identity(sender: &AgentName, sender_team: Option<&str>) -> String {
+pub(super) fn qualified_sender_identity(
+    sender: &AgentName,
+    sender_team: Option<&TeamName>,
+) -> String {
     sender_team
         .map(|team| format!("{sender}@{team}"))
         .unwrap_or_else(|| sender.to_string())
@@ -508,7 +528,7 @@ fn set_canonical_sender_metadata(
     };
     atm.insert(
         "fromIdentity".to_string(),
-        serde_json::to_value(canonical_from).expect("AgentName serializes"),
+        serde_json::Value::String(canonical_from.to_string()),
     );
 }
 
@@ -527,7 +547,9 @@ mod tests {
 
     use super::alert_state;
     use crate::process::process_is_alive;
+    use crate::roles::ROLE_TEAM_LEAD;
     use crate::send::{SendMessageSource, SendRequest};
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
 
     #[test]
     fn load_send_alert_state_parse_errors_are_config_errors() {
@@ -549,7 +571,7 @@ mod tests {
         let mut state = alert_state::SendAlertState::default();
         state
             .missing_team_config_keys
-            .insert("teams/atm-dev/config.json".to_string());
+            .insert(format!("teams/{TEST_TEAM}/config.json"));
 
         alert_state::save(&path, &state).expect("save");
         let loaded = alert_state::load(&path).expect("load");
@@ -586,9 +608,9 @@ mod tests {
         let error = SendRequest::new(
             tempdir.path().to_path_buf(),
             tempdir.path().to_path_buf(),
-            Some("team-lead"),
+            Some(ROLE_TEAM_LEAD),
             "../evil",
-            Some("atm-dev"),
+            Some(TEST_TEAM),
             SendMessageSource::Inline("hello".to_string()),
             None,
             false,
@@ -606,8 +628,8 @@ mod tests {
         let error = SendRequest::new(
             tempdir.path().to_path_buf(),
             tempdir.path().to_path_buf(),
-            Some("team-lead"),
-            "arch-ctm",
+            Some(ROLE_TEAM_LEAD),
+            TEST_SENDER,
             Some("../evil"),
             SendMessageSource::Inline("hello".to_string()),
             None,

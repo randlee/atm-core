@@ -99,6 +99,7 @@ mod tests {
     use super::{command_looks_like_path, normalize_post_send_hooks};
     use crate::config::RawPostSendHookRule;
     use crate::config::types::HookRecipient;
+    use crate::roles::ROLE_TEAM_LEAD;
 
     fn config_root_fixture() -> (tempfile::TempDir, PathBuf) {
         let tempdir = tempdir().expect("tempdir");
@@ -111,8 +112,8 @@ mod tests {
     fn normalize_post_send_hooks_resolves_relative_script_commands() {
         let (_tempdir, config_root) = config_root_fixture();
         let hooks = vec![RawPostSendHookRule {
-            recipient: "team-lead".into(),
-            command: vec!["scripts/atm-nudge.sh".into(), "team-lead".into()],
+            recipient: ROLE_TEAM_LEAD.into(),
+            command: vec!["scripts/atm-nudge.sh".into(), ROLE_TEAM_LEAD.into()],
         }];
 
         let hooks = normalize_post_send_hooks(hooks, &config_root).expect("hooks");
@@ -126,7 +127,7 @@ mod tests {
         );
         assert_eq!(
             hooks[0].recipient,
-            HookRecipient::Named("team-lead".parse().expect("recipient"))
+            HookRecipient::Named(ROLE_TEAM_LEAD.parse().expect("recipient"))
         );
     }
 
@@ -205,7 +206,7 @@ mod tests {
         let (_tempdir, config_root) = config_root_fixture();
         let error = normalize_post_send_hooks(
             vec![RawPostSendHookRule {
-                recipient: "team-lead".into(),
+                recipient: ROLE_TEAM_LEAD.into(),
                 command: Vec::new(),
             }],
             &config_root,
@@ -220,7 +221,7 @@ mod tests {
         let (_tempdir, config_root) = config_root_fixture();
         let error = normalize_post_send_hooks(
             vec![RawPostSendHookRule {
-                recipient: "team-lead".into(),
+                recipient: ROLE_TEAM_LEAD.into(),
                 command: vec!["   ".into(), "arg".into()],
             }],
             &config_root,

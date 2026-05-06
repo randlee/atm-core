@@ -10,38 +10,7 @@ Repeat the Phase Q line properly:
 
 This document is the execution tracker for that work.
 
-## 2. Current Planning Baseline
-
-Status:
-- design and documentation baseline complete
-
-Completed baseline:
-- boundary model review completed
-- cross-boundary ownership review completed
-- composition ownership documented
-- crate-local boundary inventories written
-- top-level architecture, requirements, project plan, and crate docs aligned
-- documentation hardening loop completed
-
-Current completeness:
-- documentation/design contract: strong first complete draft
-- lint/parser execution: started
-- implementation skeleton: not started
-- behavior sprints: not replanned yet against the new skeleton
-
-Current branch-state checks:
-- boundary parser/lint foundation is in progress on `feature/pR-s0-arch-foundation`
-- current `just lint` on that branch fails in two active areas:
-  - shear:
-    - `tests/support/mod.rs` `unlinked_files`
-    - `src/config/bridge.rs` `empty_files`
-    - `src/log/filters.rs` `empty_files`
-    - `src/mailbox/hash.rs` `empty_files`
-  - identities:
-    - `RULE-008` / `RULE-009`
-    - about `880` current findings
-
-## 3. Completed Design Work
+## 2. Design Tasks
 
 ### R.0.1 Boundary Model Review
 
@@ -94,7 +63,7 @@ Acceptance:
 - the boundary inventories and crate architecture docs agree on the legal
   composition owner
 
-## 4. Completed Documentation Work
+## 3. Documentation Tasks
 
 ### R.1.1 Boundary Inventories
 
@@ -204,30 +173,15 @@ Required ADRs:
 Acceptance:
 - each major Phase R design decision has one crate-local ADR record
 
-## 5. Active Execution Phases
+## 4. Downstream Execution Phases
 
-The items below are the active Phase R execution order. They depend on the
-hardened document set above and should drive the next implementation steps.
+The items below are not part of the completed documentation hardening loop.
+They depend on the hardened document set above and move into parser, lint, and
+implementation execution.
 
-### Wave 1: Boundary Establishment And Enforcement
+### R.2 Tooling
 
-Wave 1 uses lint, parser, and skeleton work to establish and enforce hard code
-boundaries before substantive implementation begins.
-
-Primary Wave 1 deliverable:
-- the new Phase R skeleton:
-  - new crates
-  - public boundary traits/facades
-  - major data structures
-
-Supporting prerequisites inside Wave 1:
-- `R.0` lint foundation
-- `R.1` current lint debt burn-down
-- `R.2A` parallel lint hardening
-
-### R.0 Lint Foundation
-
-### R.0.1 Boundary Parser
+### R.2.1 Boundary Parser
 
 Status:
 - in progress by `arch-inj`
@@ -239,7 +193,7 @@ Scope:
 Acceptance:
 - parser can read all current `boundaries.md` files without ambiguity
 
-### R.0.2 Boundary Lint Gates
+### R.2.2 Lint Gates
 
 Status:
 - in progress
@@ -252,117 +206,108 @@ Initial lint passes:
 - owner-crate test-bypass checks
 
 Deferred until after design freeze:
-- composition-root enforcement
+- composition-root enforcement (carry into `R.4`)
+- cargo-modules cycle gating beyond false-positive review (carry into `R.4`)
+- unsafe view hardening beyond cargo-geiger package-resolution failures (carry into `R.6`)
 
 Acceptance:
 - `just lint` can fail on the first hard architectural violations
 
-### R.1 Current Lint Debt Burn-Down
+### R.3 Implementation
+
+### R.3.0 Baseline Review
 
 Status:
-- pending
+- complete
 
-Required outcome:
-- make the current lint baseline actionable before skeleton work expands
-- either fix or explicitly reclassify any non-architectural backlog that blocks
-  the new boundary checks from becoming useful
+Merged `integrate/phase-R` baseline reviewed at:
+- `dbe1eef` from the sprint brief
+- current worktree baseline after sync
 
-Current failure set:
-- shear:
-  - `tests/support/mod.rs` `unlinked_files`
-  - `src/config/bridge.rs` `empty_files`
-  - `src/log/filters.rs` `empty_files`
-  - `src/mailbox/hash.rs` `empty_files`
-- identities:
-  - `RULE-008` / `RULE-009`
-  - about `880` current findings on the current lint branch baseline
+What is already landed:
+- `crates/atm-core/src/boundary/mod.rs` contains the first protocol/runtime
+  trait stubs and placeholder data structures for:
+  - `AtmProtocol`
+  - `ClientTransport`
+  - `ServerTransport`
+  - `RequestDispatcher`
+  - `NotificationSink`
+  - `StatusSource`
+  - `WatchEventSource`
+  - `ReconcileCoordinator`
+- boundary docs, ADR alignment, and the initial boundary-enforcement lint suite
+  are in place
+- `just lint` is already useful for:
+  - boundary schema and duplicate checks
+  - owner package / manifest consistency
+  - allowed-dependent / forbidden-edge checks
+  - forbidden external reference checks
+  - active implementation privacy / constructor / re-export checks
+  - owner-crate test-bypass checks
 
-Acceptance:
-- `just lint` either passes on the current baseline or fails only on the
-  intentional next architectural gaps being addressed by the active sprint
+What is not landed yet:
+- config ingestion and inbox ingress/export adapter shells
+- final module splits that move daemon/runtime and sqlite adapters out of the
+  current crate-root skeleton files
+- any future composition path that connects runtime wiring to sqlite-backed
+  adapters without introducing a direct `atm-daemon -> atm-rusqlite` edge
+- service orchestration shells that route retained command behavior through the
+  new boundary-owned call graph
 
-### R.2 Skeleton Crates And Boundary Traits
+Gate status before Wave 2:
+- authoritative now:
+  - boundary/manifests/reference/privacy lint checks
+- still tooling work or view-only:
+  - composition-root enforcement
+  - `cargo-modules --acyclic` cycle gating
+  - Graphviz-backed module view generation
+  - cargo-geiger-backed unsafe view generation
 
-Status:
-- pending
-
-Required outcome:
-- create the new Phase R crate/module skeleton needed by the hardened boundary
-  design
-- define the public boundary traits/facades first
-- define the major data structures needed by the new boundary-owned surfaces
-- create private implementation shells where the design already identifies the
-  concrete owner
-- give lint concrete ownership surfaces to validate against
-
-Required shape:
-- new Phase R crate/module layout
-- `AtmProtocol` contract in `atm-core`
-- `ClientTransport` / `ServerTransport` traits
-- `RequestDispatcher` trait/facade
-- store boundary traits
-- major protocol/store/config/inbox boundary-owned data structures
-- config/inbox/notification/status/watch/reconcile traits
-- composition roots in `atm` and `atm-daemon`
-
-Acceptance:
-- the architecture can compile in skeleton form
-- lint has real crates/modules/traits/impl shells to inspect
-- Wave 1 produces the concrete boundary-owned skeleton that later implementation
-  sprints build on
-
-### R.2A Parallel Lint Hardening
+### R.3.1 Skeleton First
 
 Status:
-- pending
+- complete
 
-Required outcome:
-- run a second lint-improvement round in parallel with the skeleton sprint
-- use the newly created crate/module/trait surfaces from `R.2` to harden the
-  architectural checks beyond the current parser-first baseline
-- tighten the tooling before behavior work begins
+Current landed subset:
+- `crates/atm-daemon` and `crates/atm-rusqlite` exist as crate-root skeletons
+- `crates/atm-core/src/boundary/mod.rs` now carries stub traits plus request/result shells for:
+  - `MailStore`
+  - `TaskStore`
+  - `RosterStore`
+  - `ConfigIngress`
+  - `InboxIngress`
+  - `InboxExport`
+- daemon runtime stub adapters are landed for:
+  - `ServerTransport`
+  - `NotificationSink`
+  - `StatusSource`
+  - `WatchEventSource`
+  - `ReconcileCoordinator`
+- sqlite stub adapters are landed for:
+  - `MailStore`
+  - `TaskStore`
+  - `RosterStore`
+- explicit composition modules exist in:
+  - `crates/atm-daemon/src/composition.rs`
+  - `crates/atm/src/composition.rs`
+- `just lint` passes on the current skeleton branch with:
+  - no direct CLI-to-daemon edge
+  - no direct CLI-to-sqlite edge
+  - no direct daemon-to-sqlite edge permitted by the boundary contract
+- daemon boundary inventory now records landed stub runtime adapters for:
+  - `ConfigIngress`
+  - `InboxIngress`
+  - `InboxExport`
+- `PeerClientTransport` and `RequestDispatcher` daemon runtime adapters are
+  formally deferred to `R.4` scope review rather than blocking skeleton close
 
-Focus areas:
-- composition-root enforcement
-- stronger privacy / constructor / re-export enforcement
-- crate-local forbidden-import precision
-- improved boundary-to-code path mapping
-- better diagnostics for ownership and dependency violations
-
-Acceptance:
-- the lint suite can validate the new skeleton at a more concrete level than
-  the current document-and-manifest-only baseline
-
-### R.3 Sprint Replan After Skeleton
-
-Status:
-- pending
-
-Required outcome:
-- once the skeleton and lint baseline exist, rewrite the remaining implementation
-  work into concrete Phase R sprints
-- plan the actual work against the new crates, public traits, and legal
-  composition roots rather than against Phase Q carry-over modules
-- incorporate the results of both:
-  - `R.2` skeleton creation
-  - `R.2A` lint hardening
-
-Acceptance:
-- the remaining Phase R work is expressed as concrete implementation sprints on
-  top of the enforced skeleton
-
-### Wave 2: Implementation Against Enforced Boundaries
-
-Wave 2 executes implementation work only after Wave 1 has established the lint
-gates, cleaned the baseline enough to make them useful, and created the new
-crate/trait skeleton that those gates can check concretely.
-
-### R.4 Implementation
-
-### R.4.1 Skeleton First
-
-Status:
-- pending
+Follow-on work after `R.3.1` close:
+- final daemon/rusqlite adapter module splits beyond the current crate-root skeletons
+- a trait-only composition path for sqlite-backed runtime assembly that does not
+  require a direct `atm-daemon -> atm-rusqlite` dependency
+- `R.4` scope review for:
+  - peer client transport
+  - request dispatcher
 
 Required outcome:
 - traits/facades exist
@@ -370,23 +315,512 @@ Required outcome:
 - composition point exists
 - illegal references are already blocked by lint and visibility
 
+Concrete checklist:
+1. `crates/atm-daemon`
+   - scaffold crate, manifest, and `src/lib.rs`
+   - add private runtime adapter shells for:
+     - `ServerTransport`
+     - `NotificationSink`
+     - `StatusSource`
+     - `WatchEventSource`
+     - `ReconcileCoordinator`
+   - add daemon composition module that becomes the only runtime wiring root
+2. `crates/atm-rusqlite`
+   - scaffold crate, manifest, and `src/lib.rs`
+   - add private adapter shells for:
+     - `MailStore`
+     - `TaskStore`
+     - `RosterStore`
+   - keep constructors private and expose only boundary-facing assembly hooks
+3. `crates/atm-core`
+   - extend `src/boundary/` beyond protocol/runtime stubs
+   - land Rust trait definitions plus request/result/error shells for:
+     - `MailStore`
+     - `TaskStore`
+     - `RosterStore`
+     - `ConfigIngress`
+     - `InboxIngress`
+     - `InboxExport`
+   - tighten protocol placeholder structures into named request/response/frame
+     types that the client/server transports and dispatcher will share
+4. `crates/atm`
+   - add an explicit client composition module that wires only:
+     - `ClientTransport`
+     - observability
+     - thin `send` / `receive` command entry points
+   - keep retained CLI behavior compiling while routing new construction through
+     the Phase R composition surface
+5. Shared data structures
+   - create the major boundary-owned DTO shells required by the first behavior
+     sprints:
+     - protocol request/response envelopes
+     - store query/command result shapes
+     - config/inbox import-export request and result shells
+     - notification/status/watch/reconcile event shells
+6. Lint compatibility required before closing `R.3.1`
+   - boundary records must point at landed crate/module paths
+   - no new public concrete adapter constructors
+   - no illegal caller edges to daemon internals or SQLite crates
+
 Acceptance:
 - the architecture can compile in skeleton form before feature behavior lands
 
-### R.4.2 Behavior Sprints
+### R.3.2 Behavior Sprint Review
 
 Status:
-- pending
+- in progress
+
+Purpose:
+- review, drill, and finalize the proposed `R.4` through `R.8` sprint scopes
+- identify open scope decisions before Wave 2 implementation begins
+- convert the current wave outline into reviewable sprint checklists, not to
+  declare those sprints implicitly approved
 
 Required order:
-1. protocol and transport skeleton
-2. store boundary skeleton
-3. config/inbox/notifier/watch boundaries
+1. protocol and transport
+2. store boundaries
+3. config / inbox / notifier / watch boundaries
 4. service orchestration
 5. thin client surfaces
 
+Review targets:
+1. `R.4 Protocol + Transport`
+   - Scope review required first:
+     - `ServerTransport`, `NotificationSink`, `StatusSource`,
+       `WatchEventSource`, and `ReconcileCoordinator` currently have zero
+       methods; define their minimal callable method surfaces before behavior
+       work starts
+     - no `R.4` implementation may start until that scope review is documented
+       and approved by team-lead
+     - `PeerClientTransport` and `DaemonRequestDispatcher`: define trait
+       surfaces in `R.4`; concrete daemon adapter implementations are deferred
+       to a later sprint
+   - `crates/atm-core/src/boundary/mod.rs`
+     - replace placeholder `AtmRequestEnvelope`, `AtmResponseEnvelope`, and
+       `AtmFramePayload` with:
+       - `RequestEnvelope`
+       - `ResponseEnvelope`
+       - `FramePayload`
+       in an explicit `atm_core::protocol` module or equivalent architecturally
+       correct home
+     - add callable methods to:
+       - `AtmProtocol`
+       - `ClientTransport`
+       - `ServerTransport`
+       - `RequestDispatcher`
+       - `NotificationSink`
+       - `StatusSource`
+       - `WatchEventSource`
+       - `ReconcileCoordinator`
+   - `crates/atm-daemon/src/lib.rs`
+     - implement stub method signatures for runtime-owned adapters:
+       - `LocalSocketServerTransport`
+       - `DaemonNotificationSink`
+       - `DaemonStatusSource`
+       - `FileWatchEventSource`
+       - `DaemonReconcileCoordinator`
+     - when any new concrete runtime impl structs land, update the matching
+       boundary records with explicit `implementation.visibility` and
+       `implementation.constructor` expectations in the same sprint
+   - `crates/atm-daemon/src/composition.rs`
+     - wire runtime composition to the new transport/dispatcher method surfaces
+       without introducing direct CLI or sqlite dependencies
+     - carry forward the remaining `R.3.1` runtime-composition residuals:
+       - define the trait-only composition path that preserves no direct
+         `atm-daemon -> atm-rusqlite` dependency
+       - map any remaining daemon/runtime module-split work needed by transport
+         and dispatcher ownership
+   - `crates/atm/src/composition.rs`
+     - wire `CliComposition` against the `ClientTransport` method surface only
+   - Acceptance:
+     - `RequestEnvelope`, `ResponseEnvelope`, and `FramePayload` are named
+       protocol DTO targets and exported from the agreed protocol home
+     - zero-method runtime traits resolved by explicit method surfaces
+     - CLI and daemon compositions compile against callable transport traits
+     - no direct `atm -> atm-daemon` or `atm -> atm-rusqlite` edge appears
+     - verify `lint_boundaries.py` rejects any impl of boundary traits outside
+       permitted impl sites documented in `docs/*/boundaries.md`
+     - verify the remaining open ADR-001 action item is closed by confirming
+       `lint_boundaries.py` and the boundary records reflect all current
+       permitted impl sites
+     - verify the `#[doc(hidden)]` ADR-001 action item is closed in the landed
+       `atm-core` boundary module implementation
+     - any new concrete implementation struct introduced in this sprint must:
+       (a) add boundary-record visibility/constructor rules; (b) have boundary
+       lint enforce them; (c) pass QA verification of those checks
+     - QA verifies any new runtime impl structs are covered by active privacy /
+       constructor lint checks
+2. `R.5 Store Boundaries`
+   - Start gate:
+     - `R.5` may not begin until `R.4` acceptance criteria are signed off by
+       team-lead
+   - `crates/atm-core/src/boundary/mod.rs`
+     - finalize request / response DTOs for:
+       - `MailStore`
+       - `TaskStore`
+       - `RosterStore`
+     - ensure method families match actual retained behaviors:
+       - message persistence / visibility / replay state
+       - task creation / update / ack transition / message links
+       - roster replace / load / membership query / health
+   - `crates/atm-rusqlite/src/lib.rs`
+     - replace typed stub failures with real trait implementations for:
+       - `SqliteMailStore`
+       - `SqliteTaskStore`
+       - `SqliteRosterStore`
+     - keep constructors private and assembly boundary-facing only
+     - keep boundary records and lint privacy rules in lockstep with every new
+       concrete store implementation struct
+     - carry forward the remaining `R.3.1` sqlite residuals:
+       - complete the adapter/module split beyond the current crate-root
+         skeleton file
+       - keep the runtime-to-sqlite path trait-only rather than a direct daemon
+         dependency
+   - Retained behavior cutover:
+     - identify and replace direct store ownership in existing retained flows
+       under:
+       - `crates/atm-core/src/read/`
+       - `crates/atm-core/src/clear/`
+       - `crates/atm-core/src/send/`
+       - `crates/atm-core/src/ack/`
+       - `crates/atm-core/src/team_admin/`
+   - Tests:
+     - add store-contract coverage in `crates/atm-core/tests/`
+     - keep adapter-specific behavior tests in `crates/atm-rusqlite`
+   - Acceptance:
+     - SQLite-backed behavior lives behind `MailStore` / `TaskStore` /
+       `RosterStore`
+     - retained core flows no longer own sqlite-facing logic directly
+     - replacing the sqlite adapter does not require caller changes outside
+       composition or adapter crates
+     - any new concrete implementation struct introduced in this sprint must:
+       (a) add boundary-record visibility/constructor rules; (b) have boundary
+       lint enforce them; (c) pass QA verification of those checks
+     - QA verifies store impl structs remain private and lint-enforced as such
+3. `R.6 Config / Inbox / Notification / Watch`
+   - `crates/atm-core/src/boundary/mod.rs`
+     - finalize method surfaces and DTOs for:
+       - `ConfigIngress`
+       - `InboxIngress`
+       - `InboxExport`
+       - `NotificationSink`
+       - `StatusSource`
+       - `WatchEventSource`
+       - `ReconcileCoordinator`
+   - `crates/atm-daemon/src/lib.rs`
+     - implement real daemon-owned adapters for:
+       - config loading
+       - inbox import/export
+       - notification delivery
+       - status reporting
+       - watch capture
+       - reconcile coordination
+     - keep boundary records and lint privacy expectations updated for every
+       newly landed daemon-owned implementation struct
+   - Policy placement review:
+     - document and implement where compatibility / recovery policy is allowed
+       to live inside ingress/export adapters versus service orchestration
+   - Retained behavior cutover:
+     - remove direct config parsing, inbox compatibility handling, and watch
+       ownership from retained command/service code
+     - carry forward the remaining `R.3.1` service-shell residuals for these
+       domains before R.7 final orchestration cutover
+     - formal R.6 disposition:
+       daemon-owned config/inbox/watch adapters land in this sprint, but the
+       retained `send` / `read` / `ack` / `clear` command-family cutover to
+       `ConfigIngress` / `InboxIngress` / `InboxExport` remains deferred to
+       `R.7`
+   - Acceptance:
+     - config/inbox/notification/watch behavior is owned by explicit adapters
+     - retained service code consumes those behaviors only through boundary
+       traits
+     - compatibility policy location is documented and matches implementation
+     - any new concrete implementation struct introduced in this sprint must:
+       (a) add boundary-record visibility/constructor rules; (b) have boundary
+       lint enforce them; (c) pass QA verification of those checks
+     - QA verifies newly introduced adapter impl structs are covered by privacy
+       and constructor lint rules
+4. `R.7 Service Orchestration`
+   - Files in scope:
+     - `crates/atm-core/src/send/`
+     - `crates/atm-core/src/read/`
+     - `crates/atm-core/src/clear/`
+     - `crates/atm-core/src/ack/`
+     - `crates/atm-core/src/doctor/`
+     - retained shared helpers those flows still call directly
+   - Required routing changes:
+     - all retained command/service flows call boundary traits or service-owned
+       orchestration seams only
+     - remove parallel helper paths that bypass:
+       - store boundaries
+       - config ingress
+       - inbox ingress/export
+       - notification / status / watch adapters
+   - Composition constraints:
+     - daemon composition and CLI composition remain the only legal wiring roots
+     - no direct adapter construction from retained command modules
+   - Acceptance:
+     - direct retained bypasses are removed from service code
+     - orchestration layer is explicit and thin
+     - boundary lint remains green after routing changes
+     - any new concrete implementation struct introduced in this sprint must:
+       (a) add boundary-record visibility/constructor rules; (b) have boundary
+       lint enforce them; (c) pass QA verification of those checks
+     - QA verifies no orchestration change required widening adapter visibility
+       or bypassing boundary privacy rules
+5. `R.8 Thin Client Surfaces`
+   - `crates/atm/src/`
+     - finalize CLI composition around:
+       - `ClientTransport`
+       - observability port
+       - thin `send` entry point
+       - thin `receive` entry point
+     - remove or isolate any retained command construction path that bypasses
+       the composition module
+   - Shared protocol surface:
+     - keep `ack` folded into send-shaped requests rather than a separate
+       top-level thin-client method family
+   - Extension readiness:
+     - ensure `atm-graft`-style thin client callers can stop at
+       `AtmProtocol` + `ClientTransport` without daemon or sqlite references
+   - Acceptance:
+     - CLI public surface is thin and transport-driven
+     - `ack` remains modeled inside `send`
+     - thin clients do not require daemon-internal or sqlite-facing knowledge
+     - REQ-P-RUNTIME-001 preserved at `R.8` close:
+       - daemon auto-start when absent remains supported
+       - auto-start failure emits a typed actionable error and recovery
+         guidance
+       - no production path may silently fall back to direct SQLite or
+         inbox-file access
+     - daemon lifecycle (`start` / `stop` / `health`) and all currently
+       supported `atm` CLI commands remain functional at `R.8` close
+     - `lint_boundaries.py` confirms the following ADR-001 dependency edges
+       remain FORBIDDEN:
+       - `atm -> atm-daemon`
+       - `atm -> atm-rusqlite`
+       - `atm-core -> atm-daemon`
+       - `atm-core -> atm-rusqlite`
+       - `atm-daemon -> atm-rusqlite` (trait-only/reference-only)
+     - any new concrete implementation struct introduced in this sprint must:
+       (a) add boundary-record visibility/constructor rules; (b) have boundary
+       lint enforce them; (c) pass QA verification of those checks
+     - QA verifies no thin-client change introduces direct references to daemon
+       or adapter implementation structs
+
 Acceptance:
 - no feature sprint begins before the relevant boundary and lint guardrails are in place
+- `R.4` through `R.8` are reviewable as concrete sprint proposals with explicit
+  files, traits, and acceptance criteria
+
+Cross-sprint hardening rule:
+- whenever a sprint introduces a new concrete implementation struct for a
+  boundary, that same sprint must also:
+  - add or update the `boundaries.md` record for that implementation
+  - set explicit `implementation.visibility` and
+    `implementation.constructor` requirements
+  - ensure boundary lint actively enforces those privacy expectations
+  - include QA verification that the privacy / constructor / re-export rules
+    are present and passing in `just lint`
+- ADR-001 AGENTS.md guard note:
+  - complete at `cd70665`; no further sprint ownership needed unless the
+    prompt location changes again
+
+## 5. Phase R Branch Consolidation (2026-05-05)
+
+### Policy
+
+All Phase R stabilization work routes exclusively to `feature/pR-s10-thin-client`. Branches `feature/pR-s8-config-notify` (R.6) and `feature/pR-s9-service-orch` (R.7) are frozen and treated as historical record only.
+
+**Surviving branch:** `feature/pR-s10-thin-client` (PR #181)
+**Frozen branches:** `feature/pR-s8-config-notify` (PR #182), `feature/pR-s9-service-orch` (PR #180)
+
+### Rationale
+
+RULE-011 and ARCH-SINGLETON requirements were added to develop after the per-sprint QA passes ran. Applying retroactive fixes branch-by-branch would require three separate remediation rounds on overlapping codebases. Consolidating to R.8 eliminates duplicate work and provides one clear merge path to `integrate/phase-R`.
+
+### Ancestry
+
+Verified 2026-05-05: merge-forward is complete.
+- 75b5031 (R.6 head) is ancestor of cc3a70a (R.7 head)
+- cc3a70a (R.7 head) is ancestor of fc604ce (R.8 head)
+- No further merge-forward needed.
+
+### Enforcement
+
+- No QA rounds on frozen branches. Findings on R.6 or R.7 are superseded.
+- No commits to `feature/pR-s8-config-notify` or `feature/pR-s9-service-orch`.
+- All daemon fixes, ARCH-SINGLETON sweep, CI-WIN-001, and carry-forward findings apply to `feature/pR-s10-thin-client` only.
+- quality-mgr: reject any new assignments targeting frozen branches.
+
+### Open Findings on R.8 (TASK-939 scope)
+
+**Blocking:**
+- ARCH-SINGLETON [B]: `spawn_test_daemon`/`DaemonGuard` in `crates/atm/tests/send.rs` and other test files — replace with `CliComposition::from_transport()` + in-process `FakeClientTransport`
+- CI-WIN-001 [B]: ungated unix-only imports in `atm-daemon/src/lib.rs` — gate with `#[cfg(unix)]`
+
+**Important carry-forward (R.6/R.7/R.8):**
+- ATM-QA-014, ATM-QA-006, ATM-QA-009, FTQ-006, NEW-004, NEW-002
+
+**Minor carry-forward:**
+- ATM-QA-005
+
+## 5.1 R.9 Planning Task List
+
+Status:
+- in progress on `feature/pR-s9-singleton-planning`
+
+Scope:
+- convert daemon singleton and test fidelity from scattered review comments
+  into explicit requirements, ADRs, testing guidance, and implementation
+  planning
+
+Task list:
+1. strengthen product and crate requirements so singleton is daemon
+   requirement `#1`
+2. explicitly prohibit the current daemon-spawn test pattern by name:
+   - `spawn_test_daemon`
+   - `warm_daemon`
+   - `DaemonGuard`
+   - `ATM_DAEMON_BIN`
+   - direct `Command::new(...atm-daemon...)`
+3. define at least two runtime singleton guard layers plus one lint/CI gate
+4. write ADR-002 for host-wide daemon singleton
+5. write ADR-003 for test fidelity and daemon isolation
+6. define the singleton lint gate and decide whether existing tools are
+   sufficient
+   - decision: existing generic tools are not sufficient by themselves;
+     add `scripts/lint_daemon_singleton.py` as a dedicated repository lint
+     integrated into `just lint`
+7. define the approved test tiers:
+   - `FakeClientTransport`
+   - loopback/in-process transport
+   - narrow daemon-runtime harness
+8. map the planning response to current findings:
+   - ARCH-SINGLETON
+   - CI-WIN-001
+   - singleton review findings `RBP-F001` through `RBP-F012`
+   - ATM-QA-014
+   - ATM-QA-006
+   - ATM-QA-009
+   - NEW-004
+   - NEW-002
+   - ATM-QA-005
+   - FTQ-006
+
+Acceptance:
+- the requirements/ADR/plan set is explicit enough to guide implementation
+  without re-litigating the singleton rule
+
+## 5.2 R.10 Implementation Task List
+
+Status:
+- planned
+
+Execution slices:
+
+### R.10.1 Runtime Singleton Hardening
+
+- add the client-side pre-spawn launch gate before daemon fork/exec
+- keep the daemon-side startup gate as the final ownership rejection layer
+- harden stale-owner recovery without allowing split ownership
+- make startup failure typed and deterministic when ownership is already held
+- ensure signal installation and stale socket cleanup are idempotent and
+  correctly surfaced
+- gate Unix-only daemon runtime code explicitly so Windows CI does not compile
+  unsupported imports or paths by accident
+
+Directly addresses:
+- RBP-F003
+- RBP-F011
+- RBP-F012
+- ARCH-SINGLETON
+- CI-WIN-001
+
+### R.10.2 Boundary And API Hardening
+
+- make `ClientTransport` include `Send + Sync`
+- separate daemon supervision from transport construction
+- add semantic path newtypes for daemon binary and socket path
+  - `DaemonBinaryPath` and `DaemonSocketPath`
+  - invariants: non-empty and valid UTF-8 path representation at the boundary
+  - both types must implement `AsRef<Path>` for ergonomic filesystem call-site
+    use
+  - failures return typed parse/validation errors rather than panic/expect
+- remove unreachable stub patterns that hide impossible paths behind routine
+  `Result`
+- resolve deadline-overrun semantics so callers can distinguish committed work
+  from clean rejection
+- bound daemon request framing instead of unbounded `read_to_end`
+- inject daemon home/observability dependencies once rather than recomputing
+  them per request
+- fix fixture/setup boundary ambiguities and missing command-local environment
+  injection coverage identified by NEW-004 and NEW-002
+
+Directly addresses:
+- RBP-F004
+- RBP-F005
+- RBP-F007
+- RBP-F008
+- RBP-F009
+- ATM-QA-014
+- ATM-QA-006
+- NEW-004
+- NEW-002
+
+### R.10.3 Test Fidelity Migration
+
+- delete `spawn_test_daemon` and `DaemonGuard`
+- remove `warm_daemon` from ordinary CLI tests
+- delete `ATM_DAEMON_BIN`-driven daemon launch from ordinary tests
+- replace routine CLI daemon usage with `CliComposition::from_transport(...)`
+  plus `FakeClientTransport`
+- add loopback/in-process transport where request/handler integration needs
+  more realism than a pure fake
+- fix `EnvGuard` ownership so test environment cleanup cannot race
+- gate Unix-only daemon-dependent tests explicitly or migrate them to approved
+  in-process seams
+- remove obsolete launcher-only panic paths and unused helper parameters as the
+  daemon-spawn helpers disappear
+- resolve remaining test-harness shutdown semantics such as ATM-QA-005 inside
+  the Tier 3 daemon-runtime suite rather than leaving them as implicit polling
+  behavior
+
+Directly addresses:
+- RBP-F001
+- RBP-F002
+- RBP-F006
+- RBP-F010
+- ATM-QA-009
+- ATM-QA-005
+- FTQ-006
+
+### R.10.4 Lint Gate Delivery
+
+- add a dedicated repository lint to `just lint`
+- script entrypoint: `scripts/lint_daemon_singleton.py`
+- scan test code for prohibited daemon-spawn patterns:
+  - `spawn_test_daemon`
+  - `warm_daemon`
+  - `DaemonGuard`
+  - `ATM_DAEMON_BIN`
+  - `atm-daemon.sock`
+  - direct `Command::new(...atm-daemon...)`
+  - timing-based daemon warmup shortcuts in ordinary tests
+- document the allowed exceptions for the narrow daemon-runtime suite
+- include platform gating checks for Unix-only daemon-runtime code where the
+  default workspace targets Windows CI too
+
+Acceptance:
+- no new daemon-spawn pattern can land without a deliberate lint/CI change
+- lint gate must document explicit allow-list for Tier 3 daemon-runtime suite
+  patterns; allowed exceptions for the narrow daemon-runtime suite are governed
+  by `docs/testing-guidelines.md §4.3`
+
+### Merge Sequence (pending QA PASS 0B+0I+0m + user authorization)
+
+1. `feature/pR-s10-thin-client` → `integrate/phase-R` (after R.5 #179 already merged)
+2. `integrate/phase-R` → `develop` (user authorization required)
 
 ## 6. Working Rule
 
@@ -397,8 +831,5 @@ Required order:
 2. boundary record
 3. architecture/requirements/ADR alignment
 4. lint/parser support
-5. current lint debt burn-down
-6. implementation skeleton
-7. parallel lint hardening on the skeleton
-8. sprint replanning
-9. feature behavior
+5. implementation skeleton
+6. feature behavior

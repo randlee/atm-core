@@ -9,7 +9,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::config;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
+use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::AgentMember;
+use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::team_admin::{MemberSummary, MembersList};
 use crate::types::{AgentName, TeamName};
 
@@ -18,7 +20,7 @@ pub use report::{
     DoctorSummary,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DoctorQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
@@ -35,7 +37,16 @@ pub fn run_doctor(
     query: DoctorQuery,
     observability: &dyn ObservabilityPort,
 ) -> Result<DoctorReport, crate::error::AtmError> {
-    let config = config::load_config(&query.current_dir)?;
+    let runtime = LocalServiceRuntime::default();
+    run_doctor_with_runtime(query, observability, &runtime)
+}
+
+fn run_doctor_with_runtime<R: RetainedServiceRuntime>(
+    query: DoctorQuery,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+) -> Result<DoctorReport, crate::error::AtmError> {
+    let config = runtime.load_config(&query.current_dir)?;
     let home_dir = query.home_dir.clone();
     let initial_lock_snapshot = snapshot_mailbox_lock_paths(&home_dir);
     let resolved_team = query
@@ -71,9 +82,9 @@ pub fn run_doctor(
             ),
         });
     }
-    let member_roster = resolved_team
-        .as_deref()
-        .and_then(|team| load_member_roster(&home_dir, team, config.as_ref(), &mut findings));
+    let member_roster = resolved_team.as_ref().and_then(|team| {
+        load_member_roster(runtime, &home_dir, team, config.as_ref(), &mut findings)
+    });
     push_stale_mailbox_lock_findings(
         &initial_lock_snapshot,
         &snapshot_mailbox_lock_paths(&home_dir),
@@ -117,12 +128,13 @@ pub fn run_doctor(
 }
 
 fn load_member_roster(
+    runtime: &impl RetainedServiceRuntime,
     home_dir: &Path,
-    team: &str,
+    team: &TeamName,
     config: Option<&config::AtmConfig>,
     findings: &mut Vec<DoctorFinding>,
 ) -> Option<MembersList> {
-    let team_dir = match crate::home::team_dir_from_home(home_dir, team) {
+    let team_dir = match runtime.team_dir(home_dir, team) {
         Ok(team_dir) => team_dir,
         Err(error) => {
             push_doctor_error(findings, DoctorSeverity::Error, error);
@@ -147,7 +159,7 @@ fn load_member_roster(
 
     check_restore_marker(team, &team_dir, findings);
 
-    let team_config = match config::load_team_config(&team_dir) {
+    let team_config = match runtime.load_team_config(&team_dir) {
         Ok(team_config) => team_config,
         Err(error) => {
             push_doctor_error(findings, DoctorSeverity::Error, error);
@@ -185,7 +197,7 @@ fn load_member_roster(
     }
 
     Some(MembersList {
-        team: TeamName::from_validated(team.to_string()),
+        team: team.clone(),
         members: ordered_member_summaries(&team_config.members, baseline),
     })
 }
@@ -203,7 +215,7 @@ fn push_doctor_error(
     });
 }
 
-fn check_inbox_directory(team: &str, inboxes_dir: &Path, findings: &mut Vec<DoctorFinding>) {
+fn check_inbox_directory(team: &TeamName, inboxes_dir: &Path, findings: &mut Vec<DoctorFinding>) {
     if !inboxes_dir.is_dir() {
         findings.push(DoctorFinding {
             severity: DoctorSeverity::Error,
@@ -236,7 +248,7 @@ fn check_inbox_directory(team: &str, inboxes_dir: &Path, findings: &mut Vec<Doct
     }
 }
 
-fn check_restore_marker(team: &str, team_dir: &Path, findings: &mut Vec<DoctorFinding>) {
+fn check_restore_marker(team: &TeamName, team_dir: &Path, findings: &mut Vec<DoctorFinding>) {
     let marker = team_dir.join(".restore-in-progress");
     if !marker.is_file() {
         return;
@@ -271,7 +283,10 @@ fn snapshot_mailbox_lock_paths(home_dir: &Path) -> BTreeSet<PathBuf> {
         };
         for lock_entry in lock_entries.filter_map(Result::ok) {
             let path = lock_entry.path();
-            if path.extension().and_then(|ext| ext.to_str()) != Some("lock") {
+            let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if !(file_name.ends_with(".lock") || file_name.contains(".lock.")) {
                 continue;
             }
             if !lock_entry
@@ -330,15 +345,17 @@ fn ordered_member_summaries(members: &[AgentMember], baseline: &[TeamName]) -> V
     let mut ordered = Vec::new();
     let mut included = BTreeSet::new();
 
-    if baseline.iter().any(|member| member.as_str() == "team-lead")
-        && let Some(team_lead) = members.iter().find(|member| member.name == "team-lead")
+    if baseline
+        .iter()
+        .any(|member| member.as_str() == ROLE_TEAM_LEAD)
+        && let Some(team_lead) = members.iter().find(|member| member.name == ROLE_TEAM_LEAD)
     {
         ordered.push(member_summary(team_lead));
         included.insert(team_lead.name.clone());
     }
 
     for baseline_member in baseline {
-        if baseline_member.as_str() == "team-lead" {
+        if baseline_member.as_str() == ROLE_TEAM_LEAD {
             continue;
         }
         if let Some(member) = members
@@ -384,6 +401,7 @@ mod tests {
         LogTailSession, ObservabilityPort,
     };
     use crate::schema::{AgentMember, TeamConfig};
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::AgentName;
 
     enum StubHealth {
@@ -395,7 +413,7 @@ mod tests {
         health: StubHealth,
     }
 
-    impl crate::observability::sealed::Sealed for StubObservability {}
+    impl crate::boundary::sealed::Sealed for StubObservability {}
 
     impl ObservabilityPort for StubObservability {
         fn emit(&self, _event: crate::observability::CommandEvent) -> Result<(), AtmError> {
@@ -446,7 +464,7 @@ mod tests {
         }
 
         fn team_dir(&self) -> PathBuf {
-            self.home_dir.join(".claude").join("teams").join("atm-dev")
+            self.home_dir.join(".claude").join("teams").join(TEST_TEAM)
         }
 
         fn write_team_layout(&self, members: &[&str]) {
@@ -477,14 +495,14 @@ mod tests {
         DoctorQuery {
             home_dir: paths.home_dir.clone(),
             current_dir: paths.current_dir.clone(),
-            team_override: Some("atm-dev".parse().expect("team")),
+            team_override: Some(TEST_TEAM.parse().expect("team")),
         }
     }
 
     #[test]
     fn run_doctor_reports_healthy_observability() {
         let paths = TestPaths::new();
-        paths.write_team_layout(&["arch-ctm"]);
+        paths.write_team_layout(&[TEST_SENDER]);
         let report = run_doctor(
             query(&paths),
             &StubObservability {
@@ -536,10 +554,10 @@ mod tests {
     #[test]
     fn run_doctor_reports_obsolete_identity_drift_as_warning() {
         let paths = TestPaths::new();
-        paths.write_team_layout(&["arch-ctm"]);
+        paths.write_team_layout(&[TEST_SENDER]);
         std::fs::write(
             paths.current_dir.join(".atm.toml"),
-            "[atm]\nidentity = \"arch-ctm\"\n",
+            format!("[atm]\nidentity = \"{TEST_SENDER}\"\n"),
         )
         .expect("config");
         let report = run_doctor(
@@ -569,7 +587,7 @@ mod tests {
     #[test]
     fn run_doctor_reports_degraded_observability_as_warning() {
         let paths = TestPaths::new();
-        paths.write_team_layout(&["arch-ctm"]);
+        paths.write_team_layout(&[TEST_SENDER]);
         let report = run_doctor(
             query(&paths),
             &StubObservability {
@@ -594,7 +612,7 @@ mod tests {
     #[test]
     fn run_doctor_reports_unavailable_observability_as_error() {
         let paths = TestPaths::new();
-        paths.write_team_layout(&["arch-ctm"]);
+        paths.write_team_layout(&[TEST_SENDER]);
         let report = run_doctor(
             query(&paths),
             &StubObservability {
@@ -619,7 +637,7 @@ mod tests {
     #[test]
     fn run_doctor_reports_observability_health_errors() {
         let paths = TestPaths::new();
-        paths.write_team_layout(&["arch-ctm"]);
+        paths.write_team_layout(&[TEST_SENDER]);
         let report = run_doctor(
             query(&paths),
             &StubObservability {
@@ -703,7 +721,7 @@ mod tests {
     #[test]
     fn run_doctor_reports_missing_inboxes_directory_as_error() {
         let paths = TestPaths::new();
-        paths.write_raw_team_config(r#"{"members":[{"name":"arch-ctm"}]}"#);
+        paths.write_raw_team_config(&format!(r#"{{"members":[{{"name":"{TEST_SENDER}"}}]}}"#));
         let report = run_doctor(
             query(&paths),
             &StubObservability {
@@ -730,8 +748,11 @@ mod tests {
     #[test]
     fn run_doctor_reports_stale_mailbox_lock_as_warning() {
         let paths = TestPaths::new();
-        paths.write_team_layout(&["arch-ctm"]);
-        let stale_lock = paths.team_dir().join("inboxes").join("arch-ctm.json.lock");
+        paths.write_team_layout(&[TEST_SENDER]);
+        let stale_lock = paths
+            .team_dir()
+            .join("inboxes")
+            .join(format!("{TEST_SENDER}.json.lock"));
         std::fs::write(&stale_lock, u32::MAX.to_string()).expect("stale lock");
         let report = run_doctor(
             query(&paths),

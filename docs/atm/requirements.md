@@ -70,6 +70,14 @@ Initial crate requirement IDs:
 - `REQ-ATM-RUNTIME-002` `atm` owns production daemon-unavailable behavior and
   the one documented daemon auto-start attempt. Satisfies:
   `REQ-P-RUNTIME-001`, `REQ-CORE-DAEMON-001`.
+- `REQ-ATM-RUNTIME-003` `atm` owns the client-side pre-spawn launch gate for
+  daemon auto-start and must serialize concurrent CLI spawn attempts before
+  fork/exec. Satisfies:
+  `REQ-P-RUNTIME-002`, `REQ-P-RUNTIME-003`.
+- `REQ-ATM-RUNTIME-004` `atm` owns CLI test seams for runtime access and must
+  support injected in-process transport doubles without real daemon spawning as
+  the ordinary test path. Satisfies:
+  `REQ-P-TEST-001`, `REQ-CORE-TEST-RUNTIME-001`.
 - `REQ-ATM-ERROR-001` `atm` owns CLI-side rendering/preservation of typed
   runtime errors from `atm-core` and `atm-daemon`. Satisfies:
   `REQ-CORE-BOUNDARY-002`.
@@ -125,6 +133,7 @@ The `atm` crate docs must remain aligned with:
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
 - [`../plan-phase-Q.md`](../plan-phase-Q.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)
+- [`../testing-guidelines.md`](../testing-guidelines.md)
 - [`./boundaries.md`](./boundaries.md)
 
 ## 6. Phase R CLI Runtime Rules
@@ -140,6 +149,15 @@ Required Phase R rules:
 - `atm` must not contain business logic that duplicates `atm-core`
 - `atm` test coverage must be able to use in-process harnesses rather than
   depending on daemon process spawning
+- daemon auto-start is a supervised runtime entry concern, not a side effect of
+  transport object construction
+- the CLI-side auto-start path must acquire the documented pre-spawn launch
+  gate before daemon fork/exec so concurrent CLIs cannot race into second-daemon
+  startup attempts
+- CLI tests must not rely on `warm_daemon`, `ATM_DAEMON_BIN`, or other daemon
+  spawn helpers to exercise normal command behavior
+- `CliComposition::from_transport(...)` remains the primary seam for injected
+  `FakeClientTransport` and loopback transport tests
 - if a direct in-process service harness exists for tests, it must not become a
   second production path with divergent semantics
 - if the daemon is unavailable in production, `atm` must:

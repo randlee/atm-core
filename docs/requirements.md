@@ -104,7 +104,22 @@ Satisfied by:
 - `REQ-P-RUNTIME-001` Production ATM commands must connect to the daemon and
   auto-start it when absent.
 
-  Required behavior:
+- `REQ-P-RUNTIME-002` Daemon singleton is ATM daemon requirement `#1`:
+  exactly one `atm-daemon` process may exist anywhere on the host for the
+  supported runtime model, and no code path may intentionally or accidentally
+  allow a second daemon to reach serving state.
+
+- `REQ-P-RUNTIME-003` Daemon singleton enforcement must use multiple guard
+  layers:
+  - a pre-spawn launch gate that serializes daemon creation attempts
+  - a daemon-side startup gate that refuses serving state when ownership is
+    already held
+  - a static lint/CI gate that rejects test-only or ad hoc daemon launch
+    patterns
+  No test, tool, or alternate CLI path is exempt from these guards.
+
+  Required behavior across `REQ-P-RUNTIME-001` through
+  `REQ-P-RUNTIME-003`:
   - the production CLI/runtime path first attempts to connect to an
     already-running daemon
   - if the daemon is not running, the production CLI/runtime path auto-starts
@@ -113,6 +128,8 @@ Satisfied by:
     guidance
   - no production path may silently bypass the daemon by talking directly to
     SQLite or inbox files
+  - every daemon launch path is subordinate to `REQ-P-RUNTIME-002` and
+    `REQ-P-RUNTIME-003`
 
 ### 2.1 In Scope
 
@@ -152,10 +169,8 @@ Satisfied by:
   interface
 - CI monitoring
 - TUI and MCP features
-- daemon spawning as the core correctness test strategy
-  - bounded daemon smoke tests for the auto-start path are permitted when
-    isolated from default test runs per
-    [Testing Constraints](docs/plan-phase-Q.md#testing-constraints)
+- routine daemon process spawning as a correctness test strategy
+- a test-only daemon launch path
 - manual daemon-start discipline as a product requirement
   - production CLI auto-start when the daemon is absent is in scope under
     `REQ-P-RUNTIME-001`
@@ -1808,6 +1823,35 @@ The implementation must include:
 - CLI integration tests for `atm teams`
 - CLI integration tests for `atm members`
 
+Required testing architecture:
+- default test suites and all core correctness tests must not depend on:
+  - daemon spawn
+  - socket publication timing
+  - retry sleeps
+  - environment mutation races
+  - auto-start side effects
+- these patterns are treated as sources of flake and false confidence rather
+  than as acceptable test infrastructure
+- test code must not use or reintroduce the current daemon-spawn pattern by
+  name:
+  - `spawn_test_daemon`
+  - `warm_daemon`
+  - `DaemonGuard`
+  - `ATM_DAEMON_BIN`
+  - direct `Command::new(...atm-daemon...)`
+- there is no approved "test daemon launch" path for ordinary ATM correctness
+  tests
+- the primary test tiers are:
+  - CLI/composition tests using injected transport doubles such as
+    `FakeClientTransport`
+  - in-process integration tests using `LoopbackClientTransport` over the
+    shared request/response contracts
+  - a narrow daemon-runtime suite for singleton/startup/shutdown/recovery
+    requirements only
+- real daemon process tests, if any, must be isolated to the daemon-runtime
+  suite and must never become the default validation path for CLI or core
+  business correctness
+
 ## 19. Acceptance Criteria
 
 Product requirement ID:
@@ -1837,6 +1881,12 @@ The rewrite is ready when:
   explicitly acknowledges them through `atm ack`
 - observability integration is exercised by automated tests
 - the file-by-file migration plan is complete enough to implement directly
+- daemon singleton is enforced as requirement `#1` with the documented
+  multi-layer guards
+- the default test and CI paths contain no banned daemon-spawn helpers or
+  timing-based daemon orchestration patterns
+- the lint gate that enforces singleton/test-fidelity rules passes in `just
+  lint`
 
 Cross-document invariants that must remain true:
 - `taskId` implies ack-required behavior at send time
@@ -2598,7 +2648,8 @@ mail correctness.
   - same-host transport: Unix domain socket
   - cross-host transport: TCP/TLS
   - test transport: in-process `test-socket` implementation of the same
-    protocol/interface for subsystem and daemon-boundary tests
+    protocol/interface for subsystem and daemon-boundary tests; this is the
+    Tier 2 `LoopbackClientTransport` shape in the testing guidelines
   - these are implementations of one protocol/interface, not separate systems
   - socket receive logic must remain a small framed-message loop that:
     - reads one request frame
@@ -2678,7 +2729,7 @@ mail correctness.
   - per-leg TCP/TLS connect deadline: `5s`
   - per-leg TCP/TLS read/write deadline: `5s`
   - total remote retry budget: `30s`
-  - SQLite `busy_timeout`: `1500ms`
+  - SQLite `busy_timeout`: `5000ms`
   - ingest batch processing slice: `2s`
   - doctor health query deadline: `3s`
   - max concurrent accepts: `64`
@@ -2730,8 +2781,8 @@ mail correctness.
 
 ### 21.7 Test Strategy Constraints
 
-- `REQ-CORE-TEST-RUNTIME-001` Core Phase Q behavior must be testable without
-  daemon process spawning.
+- `REQ-CORE-TEST-RUNTIME-001` Core target daemon-runtime behavior must be
+  testable without daemon process spawning.
 
   Required behavior:
   - daemon spawning is not part of the core test strategy
@@ -2740,11 +2791,15 @@ mail correctness.
     harnesses
   - no default test path may depend on daemon process lifecycle to validate ATM
     mail correctness
+  - there is no approved test-only daemon launch path for ordinary ATM
+    correctness tests
+  - ordinary tests must not depend on socket publication timing, retry sleeps,
+    parent-process environment mutation, or auto-start side effects
 
 ### 21.8 Observability Requirements
 
-- `REQ-CORE-OBS-002` Phase Q must keep structured observability first-class at
-  both CLI and daemon boundaries.
+- `REQ-CORE-OBS-002` The target daemon-runtime architecture must keep
+  structured observability first-class at both CLI and daemon boundaries.
 
   Required behavior:
   - CLI entry, daemon runtime, transport, ingest/export, and service
@@ -2762,8 +2817,8 @@ mail correctness.
 
 ### 21.8.1 Doctor Health Interface
 
-- `REQ-CORE-DOCTOR-002` The Phase Q runtime must expose a daemon health query
-  interface consumable by `atm doctor`.
+- `REQ-CORE-DOCTOR-002` The target daemon runtime must expose a daemon health
+  query interface consumable by `atm doctor`.
 
   Required behavior:
   - `atm doctor` remains a CLI command
@@ -2784,6 +2839,7 @@ mail correctness.
 
   Required behavior:
   - impossible to run two active ATM daemons on one host
+  - daemon singleton remains host-wide rather than socket-path-local
   - daemon unavailability after one auto-start attempt fails clearly with no
     hidden direct I/O fallback
   - every subsystem performs external I/O only through its owning trait
@@ -2792,6 +2848,8 @@ mail correctness.
     of panic/unwrap for fallible runtime paths
   - daemon/runtime code remains thin and does not accumulate business logic
   - daemon spawning is not the test strategy
+  - banned daemon-spawn helpers and launch shortcuts are absent from the
+    default test path
   - SQLite remains the source of truth for mail and roster
   - live agent status remains runtime-owned state
   - structured `sc-observability` coverage remains present at both CLI and

@@ -3,26 +3,25 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use chrono::{DateTime, TimeDelta, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::debug;
 
 use crate::address::AgentAddress;
-use crate::config;
 use crate::error::AtmError;
-use crate::home;
 use crate::identity;
-use crate::mailbox;
 use crate::mailbox::source::{SourceFile, SourcedMessage, resolve_target};
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
 use crate::schema::MessageEnvelope;
+use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
+use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{AgentName, MessageClass, SourceIndex, TeamName};
 use crate::workflow;
 
 /// Parameters for clearing read or acknowledged mailbox messages.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClearQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
@@ -35,16 +34,16 @@ pub struct ClearQuery {
 }
 
 /// Counts of removed mailbox messages by ATM display class.
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RemovedByClass {
     pub acknowledged: usize,
     pub read: usize,
 }
 
 /// Result of one mailbox cleanup command.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClearOutcome {
-    pub action: &'static str,
+    pub action: String,
     pub team: TeamName,
     pub agent: AgentName,
     pub removed_total: usize,
@@ -74,7 +73,16 @@ pub fn clear_mail(
     query: ClearQuery,
     observability: &dyn ObservabilityPort,
 ) -> Result<ClearOutcome, AtmError> {
-    let config = config::load_config(&query.current_dir)?;
+    let runtime = LocalServiceRuntime::default();
+    clear_mail_with_runtime(query, observability, &runtime)
+}
+
+fn clear_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    query: ClearQuery,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+) -> Result<ClearOutcome, AtmError> {
+    let config = runtime.load_config(&query.current_dir)?;
     let actor = identity::resolve_actor_identity(query.actor_override.as_deref(), config.as_ref())?;
     let target = resolve_target(
         query.target_address.as_ref(),
@@ -83,14 +91,14 @@ pub fn clear_mail(
         config.as_ref(),
     )?;
 
-    let team_dir = home::team_dir_from_home(&query.home_dir, &target.team)?;
+    let team_dir = runtime.team_dir(&query.home_dir, &target.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&target.team).with_recovery(
             "Create the team config for the requested team or target a different team before retrying `atm clear`.",
         ));
     }
 
-    let team_config = config::load_team_config(&team_dir)?;
+    let team_config = runtime.load_team_config(&team_dir)?;
     if target.explicit
         && !team_config
             .members
@@ -106,13 +114,13 @@ pub fn clear_mail(
 
     let cutoff = cutoff_timestamp(query.older_than)?;
     let workflow_path =
-        home::workflow_state_path_from_home(&query.home_dir, &target.team, &target.agent)?;
+        runtime.workflow_state_path(&query.home_dir, &target.team, &target.agent)?;
 
     let (removed_total, remaining_total, removed_by_class) = if query.dry_run {
         let workflow_state =
-            workflow::load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
+            runtime.load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
         let source_files =
-            mailbox::store::observe_source_files(&query.home_dir, &target.team, &target.agent)?;
+            runtime.observe_source_files(&query.home_dir, &target.team, &target.agent)?;
         // Clear intentionally does not apply read-surface idle-notification dedup.
         // Cleanup decisions must inspect the raw merged surface after legacy
         // message_id canonicalization only.
@@ -124,25 +132,25 @@ pub fn clear_mail(
             removed_by_class,
         )
     } else {
-        mailbox::store::with_locked_source_files(
+        runtime.with_locked_source_files(
             &query.home_dir,
             &target.team,
             &target.agent,
             [workflow_path],
-            mailbox::lock::default_lock_timeout(),
+            runtime.default_lock_timeout(),
             |_source_paths, source_files| {
                 let mut workflow_state =
-                    workflow::load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
+                    runtime.load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
                 let (removable, removed_by_class, _) =
                     removable_messages(source_files, &workflow_state, cutoff, query.idle_only);
                 let workflow_changed =
                     remove_workflow_state_entries(&mut workflow_state, source_files, &removable);
                 apply_removals(source_files, &removable);
                 if !removable.is_empty() {
-                    mailbox::store::commit_source_files(source_files)?;
+                    runtime.commit_source_files(source_files)?;
                 }
                 if workflow_changed {
-                    workflow::save_workflow_state(
+                    runtime.save_workflow_state(
                         &query.home_dir,
                         &target.team,
                         &target.agent,
@@ -161,7 +169,7 @@ pub fn clear_mail(
     };
 
     let outcome = ClearOutcome {
-        action: "clear",
+        action: "clear".to_string(),
         team: target.team.clone(),
         agent: target.agent.clone(),
         removed_total,
@@ -175,7 +183,7 @@ pub fn clear_mail(
         outcome: if query.dry_run { "dry_run" } else { "ok" },
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
-        sender: actor.to_string(),
+        sender: actor,
         message_id: None,
         requires_ack: false,
         dry_run: query.dry_run,
@@ -320,15 +328,13 @@ fn apply_removals(source_files: &mut [SourceFile], removable: &HashSet<(PathBuf,
 
 #[cfg(test)]
 mod tests {
-    use std::ffi::{OsStr, OsString};
-    use std::sync::{Mutex, OnceLock};
-    use std::{panic, panic::AssertUnwindSafe};
+    use std::{ffi::OsString, panic, panic::AssertUnwindSafe};
 
+    use crate::test_support::{EnvGuard, remove_env_var, set_env_var};
     use serial_test::serial;
     #[test]
     #[serial]
     fn env_guard_restores_original_value_after_panic() {
-        let _env_lock = env_lock().lock().expect("env lock");
         set_env_var("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD", "original");
 
         let result = panic::catch_unwind(AssertUnwindSafe(|| {
@@ -345,44 +351,5 @@ mod tests {
             Some(OsString::from("original"))
         );
         remove_env_var("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD");
-    }
-
-    fn env_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-    }
-
-    struct EnvGuard {
-        key: &'static str,
-        original: Option<OsString>,
-    }
-
-    impl EnvGuard {
-        fn set_raw(key: &'static str, value: &str) -> Self {
-            let original = std::env::var_os(key);
-            set_env_var(key, value);
-            Self { key, original }
-        }
-    }
-
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            match self.original.take() {
-                Some(value) => set_env_var(self.key, value),
-                None => remove_env_var(self.key),
-            }
-        }
-    }
-
-    fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
-        // SAFETY: this test module uses #[serial] before mutating the process
-        // environment, so these mutations are serialized within this process.
-        unsafe { std::env::set_var(key, value) }
-    }
-
-    fn remove_env_var<K: AsRef<OsStr>>(key: K) {
-        // SAFETY: this test module uses #[serial] before mutating the process
-        // environment, so these mutations are serialized within this process.
-        unsafe { std::env::remove_var(key) }
     }
 }

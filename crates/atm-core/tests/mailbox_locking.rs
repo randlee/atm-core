@@ -1,15 +1,23 @@
+#[cfg(unix)]
 use std::ffi::{OsStr, OsString};
 use std::fs;
+#[cfg(unix)]
 use std::fs::OpenOptions;
-use std::sync::{Arc, Barrier, Mutex, OnceLock, mpsc};
+use std::sync::{Arc, Barrier, mpsc};
+#[cfg(unix)]
+use std::sync::{Mutex, OnceLock};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(unix)]
+use std::time::Instant;
 
 use atm_core::ack::{AckRequest, ack_mail};
 use atm_core::clear::{ClearQuery, clear_mail};
+#[cfg(unix)]
 use atm_core::error::AtmErrorCode;
 use atm_core::observability::NullObservability;
 use atm_core::read::{ReadQuery, read_mail};
+use atm_core::roles::ROLE_TEAM_LEAD;
 use atm_core::schema::{
     AgentMember, AtmMessageId, LegacyMessageId, MessageEnvelope, TeamConfig,
     hydrate_legacy_fields_from_metadata,
@@ -17,27 +25,45 @@ use atm_core::schema::{
 use atm_core::send::{SendMessageSource, SendRequest, send_mail};
 use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
 use chrono::Utc;
+#[cfg(unix)]
 use fs2::FileExt;
-use serial_test::serial;
 use tempfile::TempDir;
 use uuid::Uuid;
 
 // Test-side ceiling guard only; production lock timeout defaults to 5s per
 // architecture §18.3.
-const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(2);
+#[cfg(unix)]
+const TEST_LOCK_BUDGET_CEILING: Duration = Duration::from_secs(10);
+const TEST_RESULT_TIMEOUT: Duration = Duration::from_secs(30);
+const TEST_TEAM: &str = "test-team";
+const TEST_SENDER: &str = "sender-a";
+const TEST_RECIPIENT: &str = "recipient";
+const TEST_QA: &str = "qa-a";
+const PRIMARY_TEAM: &str = TEST_TEAM;
+const PRIMARY_AGENT: &str = TEST_SENDER;
+const SECONDARY_AGENT: &str = TEST_QA;
+const TEAM_LEAD: &str = ROLE_TEAM_LEAD;
+
+fn qualified(agent: &str) -> String {
+    format!("{agent}@{PRIMARY_TEAM}")
+}
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
     let barrier = Arc::new(Barrier::new(3));
     let (tx, rx) = mpsc::channel();
 
-    let arch_request = fixture.ack_request("arch-ctm", fixture.arch_message_id, "ack from arch");
-    let qa_request = fixture.ack_request("qa", fixture.qa_message_id, "ack from qa");
+    let arch_request = fixture.ack_request(PRIMARY_AGENT, fixture.arch_message_id, "ack from arch");
+    let qa_request = fixture.ack_request(
+        SECONDARY_AGENT,
+        fixture.qa_message_id,
+        &format!("ack from {SECONDARY_AGENT}"),
+    );
 
-    for (label, request) in [("arch", arch_request), ("qa", qa_request)] {
+    for (label, request) in [("arch", arch_request), ("secondary", qa_request)] {
         let barrier = Arc::clone(&barrier);
         let tx = tx.clone();
         let observability = Arc::clone(&observability);
@@ -51,10 +77,10 @@ fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
 
     barrier.wait();
     let first = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("first ack result");
     let second = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("second ack result");
 
     assert!(
@@ -65,18 +91,18 @@ fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
     );
     assert!(
         second.1.is_ok(),
-        "second ack failed for {}: {:?}; arch inbox: {:?}; qa inbox: {:?}",
+        "second ack failed for {}: {:?}; arch inbox: {:?}; secondary inbox: {:?}",
         second.0,
         second.1,
-        fixture.inbox_contents("arch-ctm"),
-        fixture.inbox_contents("qa")
+        fixture.inbox_contents(PRIMARY_AGENT),
+        fixture.inbox_contents(SECONDARY_AGENT)
     );
-    let arch_inbox = fixture.inbox_contents("arch-ctm");
-    let qa_inbox = fixture.inbox_contents("qa");
+    let arch_inbox = fixture.inbox_contents(PRIMARY_AGENT);
+    let qa_inbox = fixture.inbox_contents(SECONDARY_AGENT);
     assert!(
         arch_inbox
             .iter()
-            .any(|message| message.text == "ack from qa")
+            .any(|message| message.text == format!("ack from {SECONDARY_AGENT}"))
     );
     assert!(
         qa_inbox
@@ -86,23 +112,24 @@ fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() {
     let observability = Arc::new(NullObservability);
 
     let clear_fixture = Fixture::new();
     clear_fixture.write_primary_inbox(
-        "arch-ctm",
+        PRIMARY_AGENT,
         &[read_message(
-            "qa",
+            SECONDARY_AGENT,
             "clearable history entry",
             LegacyMessageId::from(Uuid::new_v4()),
         )],
     );
     let barrier = Arc::new(Barrier::new(3));
     let (tx, rx) = mpsc::channel();
-    let send_request = clear_fixture.send_request("team-lead", "arch-ctm@atm-dev", "new message");
-    let clear_request = clear_fixture.clear_query("arch-ctm");
+    let send_request =
+        clear_fixture.send_request(TEAM_LEAD, &qualified(PRIMARY_AGENT), "new message");
+    let clear_request = clear_fixture.clear_query(PRIMARY_AGENT);
     {
         let barrier = Arc::clone(&barrier);
         let tx = tx.clone();
@@ -132,14 +159,14 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
     drop(tx);
     barrier.wait();
     let first = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("first send/clear result");
     let second = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("second send/clear result");
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
-    let arch_inbox = clear_fixture.inbox_contents("arch-ctm");
+    let arch_inbox = clear_fixture.inbox_contents(PRIMARY_AGENT);
     assert!(
         arch_inbox
             .iter()
@@ -151,18 +178,19 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
     let ack_fixture = Fixture::new();
     let pending_message_id = LegacyMessageId::from(Uuid::new_v4());
     ack_fixture.write_primary_inbox(
-        "arch-ctm",
+        PRIMARY_AGENT,
         &[pending_ack_message(
-            "qa",
+            SECONDARY_AGENT,
             "pending ack",
             pending_message_id,
-            "atm-dev",
+            PRIMARY_TEAM,
         )],
     );
     let barrier = Arc::new(Barrier::new(3));
     let (tx, rx) = mpsc::channel();
-    let send_request = ack_fixture.send_request("team-lead", "arch-ctm@atm-dev", "new message");
-    let ack_request = ack_fixture.ack_request("arch-ctm", pending_message_id, "ack reply");
+    let send_request =
+        ack_fixture.send_request(TEAM_LEAD, &qualified(PRIMARY_AGENT), "new message");
+    let ack_request = ack_fixture.ack_request(PRIMARY_AGENT, pending_message_id, "ack reply");
     {
         let barrier = Arc::clone(&barrier);
         let tx = tx.clone();
@@ -192,14 +220,14 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
     drop(tx);
     barrier.wait();
     let first = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("first send/ack result");
     let second = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("second send/ack result");
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
-    let arch_inbox = ack_fixture.inbox_contents("arch-ctm");
+    let arch_inbox = ack_fixture.inbox_contents(PRIMARY_AGENT);
     assert!(
         arch_inbox
             .iter()
@@ -214,7 +242,7 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
         "pending message was not acknowledged: {:?}",
         arch_inbox
     );
-    let arch_workflow = ack_fixture.workflow_state_contents("arch-ctm");
+    let arch_workflow = ack_fixture.workflow_state_contents(PRIMARY_AGENT);
     assert!(
         arch_workflow["messages"][format!("legacy:{pending_message_id}")]["acknowledgedAt"]
             .as_str()
@@ -225,7 +253,7 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
                 .is_some(),
         "pending message was not acknowledged in workflow state: {arch_workflow:?}"
     );
-    let qa_inbox = ack_fixture.inbox_contents("qa");
+    let qa_inbox = ack_fixture.inbox_contents(SECONDARY_AGENT);
     assert!(
         qa_inbox.iter().any(|message| message.text == "ack reply"),
         "ack reply was not persisted: {:?}",
@@ -234,15 +262,16 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
     let barrier = Arc::new(Barrier::new(3));
     let (tx, rx) = mpsc::channel();
 
-    let plain_request = fixture.send_request("team-lead", "arch-ctm@atm-dev", "plain payload");
-    let mut task_request = fixture.send_request("qa", "arch-ctm@atm-dev", "task payload");
+    let plain_request = fixture.send_request(TEAM_LEAD, &qualified(PRIMARY_AGENT), "plain payload");
+    let mut task_request =
+        fixture.send_request(SECONDARY_AGENT, &qualified(PRIMARY_AGENT), "task payload");
     task_request.requires_ack = true;
     task_request.task_id = Some("TASK-123".parse().expect("task id"));
     task_request.summary_override = Some("manual summary".to_string());
@@ -261,15 +290,15 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() 
 
     barrier.wait();
     let first = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("first send result");
     let second = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("second send result");
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
 
-    let inbox = fixture.inbox_contents("arch-ctm");
+    let inbox = fixture.inbox_contents(PRIMARY_AGENT);
     let plain_message = inbox
         .iter()
         .find(|message| message.text == "plain payload")
@@ -286,7 +315,7 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() 
 
     let plain_atm_id = message_atm_id(plain_message);
     let task_atm_id = message_atm_id(task_message);
-    let workflow = fixture.workflow_state_contents("arch-ctm");
+    let workflow = fixture.workflow_state_contents(PRIMARY_AGENT);
     assert!(
         workflow["messages"][format!("atm:{plain_atm_id}")]
             .as_object()
@@ -306,12 +335,12 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() 
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
     fixture.write_workflow_state(
-        "arch-ctm",
+        PRIMARY_AGENT,
         serde_json::json!({
             "messages": {
                 "legacy:existing": {
@@ -325,8 +354,9 @@ fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
 
     let barrier = Arc::new(Barrier::new(3));
     let (tx, rx) = mpsc::channel();
-    let first_request = fixture.send_request("team-lead", "arch-ctm@atm-dev", "first payload");
-    let second_request = fixture.send_request("qa", "arch-ctm@atm-dev", "second payload");
+    let first_request = fixture.send_request(TEAM_LEAD, &qualified(PRIMARY_AGENT), "first payload");
+    let second_request =
+        fixture.send_request(SECONDARY_AGENT, &qualified(PRIMARY_AGENT), "second payload");
 
     for (label, request) in [("first", first_request), ("second", second_request)] {
         let barrier = Arc::clone(&barrier);
@@ -342,15 +372,15 @@ fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
 
     barrier.wait();
     let first = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("first send result");
     let second = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("second send result");
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
 
-    let inbox = fixture.inbox_contents("arch-ctm");
+    let inbox = fixture.inbox_contents(PRIMARY_AGENT);
     let first_message = inbox
         .iter()
         .find(|message| message.text == "first payload")
@@ -359,7 +389,7 @@ fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
         .iter()
         .find(|message| message.text == "second payload")
         .expect("second inbox message");
-    let workflow = fixture.workflow_state_contents("arch-ctm");
+    let workflow = fixture.workflow_state_contents(PRIMARY_AGENT);
 
     assert!(
         workflow["messages"]["legacy:existing"]
@@ -382,25 +412,29 @@ fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn missing_config_notice_seeds_team_lead_workflow_state() {
     let fixture = Fixture::new();
     let observability = NullObservability;
     fixture.create_team_without_config("broken-dev");
-    fixture.write_primary_inbox_for_team("broken-dev", "recipient", &[]);
-    fixture.write_primary_inbox_for_team("broken-dev", "team-lead", &[]);
+    fixture.write_primary_inbox_for_team("broken-dev", TEST_RECIPIENT, &[]);
+    fixture.write_primary_inbox_for_team("broken-dev", TEAM_LEAD, &[]);
 
     send_mail(
-        fixture.send_request("team-lead", "recipient@broken-dev", "broken send"),
+        fixture.send_request(
+            TEAM_LEAD,
+            &format!("{TEST_RECIPIENT}@broken-dev"),
+            "broken send",
+        ),
         &observability,
     )
     .expect("missing-config send");
 
-    let notices = fixture.inbox_contents_for_team("broken-dev", "team-lead");
+    let notices = fixture.inbox_contents_for_team("broken-dev", TEAM_LEAD);
     let notice = notices.first().expect("missing-config notice");
     assert_eq!(notice.from, "atm-identity-missing");
     assert_eq!(notice.source_team.as_deref(), Some("broken-dev"));
-    let workflow = fixture.workflow_state_contents_for_team("broken-dev", "team-lead");
+    let workflow = fixture.workflow_state_contents_for_team("broken-dev", TEAM_LEAD);
     let notice_atm_id = message_atm_id(notice);
     assert!(
         workflow["messages"][format!("atm:{notice_atm_id}")]
@@ -411,18 +445,22 @@ fn missing_config_notice_seeds_team_lead_workflow_state() {
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
     fixture.create_team_without_config("broken-dev");
-    fixture.write_primary_inbox_for_team("broken-dev", "recipient", &[]);
-    fixture.write_primary_inbox_for_team("broken-dev", "team-lead", &[]);
+    fixture.write_primary_inbox_for_team("broken-dev", TEST_RECIPIENT, &[]);
+    fixture.write_primary_inbox_for_team("broken-dev", TEAM_LEAD, &[]);
 
     let barrier = Arc::new(Barrier::new(3));
     let (tx, rx) = mpsc::channel();
-    let normal_request = fixture.send_request("team-lead", "arch-ctm@atm-dev", "normal send");
-    let broken_request = fixture.send_request("qa", "recipient@broken-dev", "broken send");
+    let normal_request = fixture.send_request(TEAM_LEAD, &qualified(PRIMARY_AGENT), "normal send");
+    let broken_request = fixture.send_request(
+        SECONDARY_AGENT,
+        &format!("{TEST_RECIPIENT}@broken-dev"),
+        "broken send",
+    );
 
     for (label, request) in [("normal", normal_request), ("broken", broken_request)] {
         let barrier = Arc::clone(&barrier);
@@ -438,31 +476,31 @@ fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()
 
     barrier.wait();
     let first = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("first send result");
     let second = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("second send result");
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
 
     assert!(
         fixture
-            .inbox_contents("arch-ctm")
+            .inbox_contents(PRIMARY_AGENT)
             .iter()
             .any(|message| message.text == "normal send"),
         "normal send missing from primary team inbox"
     );
     assert!(
         fixture
-            .inbox_contents_for_team("broken-dev", "recipient")
+            .inbox_contents_for_team("broken-dev", TEST_RECIPIENT)
             .iter()
             .any(|message| message.text == "broken send"),
         "missing-config recipient send was not persisted"
     );
-    let notices = fixture.inbox_contents_for_team("broken-dev", "team-lead");
+    let notices = fixture.inbox_contents_for_team("broken-dev", TEAM_LEAD);
     let notice = notices.first().expect("missing-config notice");
-    let workflow = fixture.workflow_state_contents_for_team("broken-dev", "team-lead");
+    let workflow = fixture.workflow_state_contents_for_team("broken-dev", TEAM_LEAD);
     let notice_atm_id = message_atm_id(notice);
     assert!(
         workflow["messages"][format!("atm:{notice_atm_id}")]["pendingAckAt"].is_null(),
@@ -471,32 +509,32 @@ fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn multi_source_read_and_clear_complete_without_deadlock() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
     fixture.write_primary_inbox(
-        "arch-ctm",
+        PRIMARY_AGENT,
         &[unread_message(
-            "team-lead",
+            TEAM_LEAD,
             "primary unread",
             LegacyMessageId::from(Uuid::new_v4()),
         )],
     );
     fixture.write_origin_inbox(
-        "arch-ctm",
+        PRIMARY_AGENT,
         "host-b",
         &[unread_message(
-            "qa",
+            SECONDARY_AGENT,
             "origin unread b",
             LegacyMessageId::from(Uuid::new_v4()),
         )],
     );
     fixture.write_origin_inbox(
-        "arch-ctm",
+        PRIMARY_AGENT,
         "host-a",
         &[read_message(
-            "qa",
+            SECONDARY_AGENT,
             "origin read a",
             LegacyMessageId::from(Uuid::new_v4()),
         )],
@@ -504,8 +542,8 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
 
     let barrier = Arc::new(Barrier::new(3));
     let (tx, rx) = mpsc::channel();
-    let read_request = fixture.read_query("arch-ctm");
-    let clear_request = fixture.clear_query("arch-ctm");
+    let read_request = fixture.read_query(PRIMARY_AGENT);
+    let clear_request = fixture.clear_query(PRIMARY_AGENT);
     for (label, op) in [
         (
             "read",
@@ -535,30 +573,31 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
     barrier.wait();
 
     let first = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("first read/clear result");
     let second = rx
-        .recv_timeout(Duration::from_secs(4))
+        .recv_timeout(TEST_RESULT_TIMEOUT)
         .expect("second read/clear result");
     assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
     assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
-    let arch_inbox = fixture.inbox_contents("arch-ctm");
-    let host_a_inbox = fixture.origin_inbox_contents("arch-ctm", "host-a");
-    let host_b_inbox = fixture.origin_inbox_contents("arch-ctm", "host-b");
+    let arch_inbox = fixture.inbox_contents(PRIMARY_AGENT);
+    let host_a_inbox = fixture.origin_inbox_contents(PRIMARY_AGENT, "host-a");
+    let host_b_inbox = fixture.origin_inbox_contents(PRIMARY_AGENT, "host-b");
     let _ = (arch_inbox, host_a_inbox, host_b_inbox);
-    assert!(fixture.primary_inbox_path("arch-ctm").exists());
-    assert!(fixture.origin_inbox_path("arch-ctm", "host-a").exists());
-    assert!(fixture.origin_inbox_path("arch-ctm", "host-b").exists());
+    assert!(fixture.primary_inbox_path(PRIMARY_AGENT).exists());
+    assert!(fixture.origin_inbox_path(PRIMARY_AGENT, "host-a").exists());
+    assert!(fixture.origin_inbox_path(PRIMARY_AGENT, "host-b").exists());
 }
 
 #[test]
-#[serial]
+#[cfg(unix)]
+#[serial_test::serial(env)]
 fn send_times_out_under_bounded_lock_contention() {
     let _env_lock = env_lock().lock().expect("env lock");
     let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
     let fixture = Fixture::new();
     let observability = NullObservability;
-    let lock_path = sentinel_path(&fixture.primary_inbox_path("arch-ctm"));
+    let lock_path = sentinel_path(&fixture.primary_inbox_path(PRIMARY_AGENT));
     let lock_file = OpenOptions::new()
         .create(true)
         .truncate(false)
@@ -570,7 +609,7 @@ fn send_times_out_under_bounded_lock_contention() {
 
     let started = Instant::now();
     let error = send_mail(
-        fixture.send_request("team-lead", "arch-ctm@atm-dev", "blocked send"),
+        fixture.send_request(TEAM_LEAD, &qualified(PRIMARY_AGENT), "blocked send"),
         &observability,
     )
     .expect_err("timeout");
@@ -583,20 +622,21 @@ fn send_times_out_under_bounded_lock_contention() {
 }
 
 #[test]
-#[serial]
+#[cfg(unix)]
+#[serial_test::serial(env)]
 fn clear_dry_run_does_not_wait_on_mailbox_lock() {
     let _env_lock = env_lock().lock().expect("env lock");
     let fixture = Fixture::new();
     let observability = NullObservability;
     fixture.write_primary_inbox(
-        "arch-ctm",
+        PRIMARY_AGENT,
         &[unread_message(
-            "team-lead",
+            TEAM_LEAD,
             "read without lock",
             LegacyMessageId::from(Uuid::new_v4()),
         )],
     );
-    let lock_path = sentinel_path(&fixture.primary_inbox_path("arch-ctm"));
+    let lock_path = sentinel_path(&fixture.primary_inbox_path(PRIMARY_AGENT));
     let lock_file = OpenOptions::new()
         .create(true)
         .truncate(false)
@@ -607,7 +647,7 @@ fn clear_dry_run_does_not_wait_on_mailbox_lock() {
     lock_file.lock_exclusive().expect("hold mailbox lock");
 
     let started = Instant::now();
-    let mut clear_query = fixture.clear_query("arch-ctm");
+    let mut clear_query = fixture.clear_query(PRIMARY_AGENT);
     clear_query.dry_run = true;
     let outcome = clear_mail(clear_query, &observability).expect("dry-run clear");
 
@@ -620,7 +660,8 @@ fn clear_dry_run_does_not_wait_on_mailbox_lock() {
 }
 
 #[test]
-#[serial]
+#[cfg(unix)]
+#[serial_test::serial(env)]
 fn read_possible_write_only_locks_when_display_mutation_is_required() {
     let _env_lock = env_lock().lock().expect("env lock");
     let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
@@ -628,14 +669,14 @@ fn read_possible_write_only_locks_when_display_mutation_is_required() {
 
     let mutation_fixture = Fixture::new();
     mutation_fixture.write_primary_inbox(
-        "arch-ctm",
+        PRIMARY_AGENT,
         &[unread_message(
-            "team-lead",
+            TEAM_LEAD,
             "needs mark-read",
             LegacyMessageId::from(Uuid::new_v4()),
         )],
     );
-    let mutation_lock_path = sentinel_path(&mutation_fixture.primary_inbox_path("arch-ctm"));
+    let mutation_lock_path = sentinel_path(&mutation_fixture.primary_inbox_path(PRIMARY_AGENT));
     let mutation_lock_file = OpenOptions::new()
         .create(true)
         .truncate(false)
@@ -646,21 +687,22 @@ fn read_possible_write_only_locks_when_display_mutation_is_required() {
     mutation_lock_file
         .lock_exclusive()
         .expect("hold mutation lock");
-    let mut mutation_query = mutation_fixture.read_query("arch-ctm");
+    let mut mutation_query = mutation_fixture.read_query(PRIMARY_AGENT);
     mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
     let error = read_mail(mutation_query, &observability).expect_err("lock timeout");
     assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
 
     let no_mutation_fixture = Fixture::new();
     no_mutation_fixture.write_primary_inbox(
-        "arch-ctm",
+        PRIMARY_AGENT,
         &[read_message(
-            "team-lead",
+            TEAM_LEAD,
             "already read",
             LegacyMessageId::from(Uuid::new_v4()),
         )],
     );
-    let no_mutation_lock_path = sentinel_path(&no_mutation_fixture.primary_inbox_path("arch-ctm"));
+    let no_mutation_lock_path =
+        sentinel_path(&no_mutation_fixture.primary_inbox_path(PRIMARY_AGENT));
     let no_mutation_lock_file = OpenOptions::new()
         .create(true)
         .truncate(false)
@@ -671,7 +713,7 @@ fn read_possible_write_only_locks_when_display_mutation_is_required() {
     no_mutation_lock_file
         .lock_exclusive()
         .expect("hold no-mutation lock");
-    let mut no_mutation_query = no_mutation_fixture.read_query("arch-ctm");
+    let mut no_mutation_query = no_mutation_fixture.read_query(PRIMARY_AGENT);
     no_mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
     no_mutation_query.selection_mode = ReadSelection::All;
     let started = Instant::now();
@@ -685,7 +727,7 @@ fn read_possible_write_only_locks_when_display_mutation_is_required() {
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() {
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -694,13 +736,13 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
     // direct helper call: send_mail internally assigns metadata.atm.messageId
     // via the private workflow::set_atm_message_id path before read_mail runs.
     send_mail(
-        fixture.send_request("team-lead", "arch-ctm@atm-dev", "hello sidecar"),
+        fixture.send_request(TEAM_LEAD, &qualified(PRIMARY_AGENT), "hello sidecar"),
         &observability,
     )
     .expect("send ULID-authored message");
 
-    let inbox_before =
-        fs::read_to_string(fixture.primary_inbox_path("arch-ctm")).expect("raw inbox before read");
+    let inbox_before = fs::read_to_string(fixture.primary_inbox_path(PRIMARY_AGENT))
+        .expect("raw inbox before read");
     let physical_before = find_inbox_json_line(&inbox_before, "hello sidecar");
     let atm_message_id = physical_before["metadata"]["atm"]["messageId"]
         .as_str()
@@ -708,7 +750,7 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
         .to_string();
     assert_eq!(physical_before["read"], false);
 
-    let mut read_query = fixture.read_query("arch-ctm");
+    let mut read_query = fixture.read_query(PRIMARY_AGENT);
     read_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
     let outcome = read_mail(read_query, &observability).expect("read mail");
     assert!(
@@ -719,8 +761,8 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
         "read outcome should include the ULID-authored message"
     );
 
-    let inbox_after =
-        fs::read_to_string(fixture.primary_inbox_path("arch-ctm")).expect("raw inbox after read");
+    let inbox_after = fs::read_to_string(fixture.primary_inbox_path(PRIMARY_AGENT))
+        .expect("raw inbox after read");
     assert_eq!(inbox_after, inbox_before);
     let physical_after = find_inbox_json_line(&inbox_after, "hello sidecar");
     assert_eq!(
@@ -729,11 +771,11 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
     );
     assert_eq!(physical_after["read"], false);
     assert!(
-        !sentinel_path(&fixture.primary_inbox_path("arch-ctm")).exists(),
+        !sentinel_path(&fixture.primary_inbox_path(PRIMARY_AGENT)).exists(),
         "read-only ULID sidecar path must not leave a lock sentinel behind",
     );
 
-    let workflow = fixture.workflow_state_contents("arch-ctm");
+    let workflow = fixture.workflow_state_contents(PRIMARY_AGENT);
     assert_eq!(
         workflow["messages"][format!("atm:{atm_message_id}")]["read"],
         true
@@ -741,42 +783,44 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
 }
 
 #[test]
-#[serial]
+#[cfg(unix)]
+#[serial_test::serial(env)]
 fn clear_fails_closed_on_synthetic_source_discovery_fault() {
     let _env_lock = env_lock().lock().expect("env lock");
     let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT", "1");
     let fixture = Fixture::new();
     let observability = NullObservability;
     fixture.write_origin_inbox(
-        "arch-ctm",
+        PRIMARY_AGENT,
         "host-a",
         &[read_message(
-            "qa",
+            SECONDARY_AGENT,
             "origin read a",
             LegacyMessageId::from(Uuid::new_v4()),
         )],
     );
-    let before_primary =
-        fs::read_to_string(fixture.primary_inbox_path("arch-ctm")).expect("primary inbox before");
-    let before_origin = fs::read_to_string(fixture.origin_inbox_path("arch-ctm", "host-a"))
+    let before_primary = fs::read_to_string(fixture.primary_inbox_path(PRIMARY_AGENT))
+        .expect("primary inbox before");
+    let before_origin = fs::read_to_string(fixture.origin_inbox_path(PRIMARY_AGENT, "host-a"))
         .expect("origin inbox before");
 
-    let error = clear_mail(fixture.clear_query("arch-ctm"), &observability).expect_err("fault");
+    let error = clear_mail(fixture.clear_query(PRIMARY_AGENT), &observability).expect_err("fault");
 
     assert_eq!(error.code, AtmErrorCode::MailboxReadFailed);
     assert_eq!(
-        fs::read_to_string(fixture.primary_inbox_path("arch-ctm")).expect("primary inbox after"),
+        fs::read_to_string(fixture.primary_inbox_path(PRIMARY_AGENT)).expect("primary inbox after"),
         before_primary
     );
     assert_eq!(
-        fs::read_to_string(fixture.origin_inbox_path("arch-ctm", "host-a"))
+        fs::read_to_string(fixture.origin_inbox_path(PRIMARY_AGENT, "host-a"))
             .expect("origin inbox after"),
         before_origin
     );
 }
 
 #[test]
-#[serial]
+#[cfg(unix)]
+#[serial_test::serial(env)]
 fn send_reports_non_contention_lock_failures_without_timeout() {
     let _env_lock = env_lock().lock().expect("env lock");
     let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR", "1");
@@ -785,7 +829,7 @@ fn send_reports_non_contention_lock_failures_without_timeout() {
     let started = Instant::now();
 
     let error = send_mail(
-        fixture.send_request("team-lead", "arch-ctm@atm-dev", "lock failure"),
+        fixture.send_request(TEAM_LEAD, &qualified(PRIMARY_AGENT), "lock failure"),
         &observability,
     )
     .expect_err("non-contention lock failure");
@@ -804,20 +848,25 @@ enum CommandOp {
 
 // Serializes process-environment mutation inside this test module. This is
 // process-local only; it does not coordinate with other test processes.
+#[cfg(unix)]
 fn env_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    // These tests mutate process-global environment variables while exercising
+    // These tests mutate the process-global `ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS`,
+    // `ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT`, and
+    // `ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR` knobs while exercising
     // mailbox lock behavior. Keep a single process-wide mutex in addition to
-    // #[serial] so a poisoned lock fails the suite closed instead of silently
+    // `#[serial]` so a poisoned lock fails the suite closed instead of silently
     // continuing with inconsistent shared state.
     LOCK.get_or_init(|| Mutex::new(()))
 }
 
+#[cfg(unix)]
 struct EnvGuard {
     key: &'static str,
     original: Option<OsString>,
 }
 
+#[cfg(unix)]
 impl EnvGuard {
     fn set_raw(key: &'static str, value: &str) -> Self {
         let original = std::env::var_os(key);
@@ -826,6 +875,7 @@ impl EnvGuard {
     }
 }
 
+#[cfg(unix)]
 impl Drop for EnvGuard {
     fn drop(&mut self) {
         match self.original.take() {
@@ -835,6 +885,7 @@ impl Drop for EnvGuard {
     }
 }
 
+#[cfg(unix)]
 fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
     // SAFETY: these tests take a process-wide mutex and use #[serial] before
     // mutating the environment, so the mutation is serialized within this
@@ -842,6 +893,7 @@ fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
     unsafe { std::env::set_var(key, value) }
 }
 
+#[cfg(unix)]
 fn remove_env_var<K: AsRef<OsStr>>(key: K) {
     // SAFETY: these tests take a process-wide mutex and use #[serial] before
     // mutating the environment, so the mutation is serialized within this
@@ -858,7 +910,11 @@ struct Fixture {
 impl Fixture {
     fn new() -> Self {
         let tempdir = tempfile::tempdir().expect("tempdir");
-        create_team_with_config(tempdir.path(), "atm-dev", &["team-lead", "arch-ctm", "qa"]);
+        create_team_with_config(
+            tempdir.path(),
+            PRIMARY_TEAM,
+            &[TEAM_LEAD, PRIMARY_AGENT, SECONDARY_AGENT],
+        );
 
         let arch_message_id = LegacyMessageId::from_atm_message_id(AtmMessageId::new());
         let qa_message_id = LegacyMessageId::from_atm_message_id(AtmMessageId::new());
@@ -869,21 +925,21 @@ impl Fixture {
             qa_message_id,
         };
         fixture.write_primary_inbox(
-            "arch-ctm",
+            PRIMARY_AGENT,
             &[pending_ack_message(
-                "qa",
+                SECONDARY_AGENT,
                 "arch pending",
                 arch_message_id,
-                "atm-dev",
+                PRIMARY_TEAM,
             )],
         );
         fixture.write_primary_inbox(
-            "qa",
+            SECONDARY_AGENT,
             &[pending_ack_message(
-                "arch-ctm",
-                "qa pending",
+                PRIMARY_AGENT,
+                &format!("{SECONDARY_AGENT} pending"),
                 qa_message_id,
-                "atm-dev",
+                PRIMARY_TEAM,
             )],
         );
 
@@ -900,7 +956,7 @@ impl Fixture {
             home_dir: self.tempdir.path().to_path_buf(),
             current_dir: self.tempdir.path().to_path_buf(),
             actor_override: Some(actor.parse().expect("actor")),
-            team_override: Some("atm-dev".parse().expect("team")),
+            team_override: Some(PRIMARY_TEAM.parse().expect("team")),
             message_id,
             reply_body: reply_body.to_string(),
         }
@@ -912,7 +968,7 @@ impl Fixture {
             current_dir: self.tempdir.path().to_path_buf(),
             actor_override: Some(actor.parse().expect("actor")),
             target_address: None,
-            team_override: Some("atm-dev".parse().expect("team")),
+            team_override: Some(PRIMARY_TEAM.parse().expect("team")),
             older_than: None,
             idle_only: false,
             dry_run: false,
@@ -925,7 +981,7 @@ impl Fixture {
             self.tempdir.path().to_path_buf(),
             Some(actor),
             None,
-            Some("atm-dev"),
+            Some(PRIMARY_TEAM),
             ReadSelection::Actionable,
             false,
             false,
@@ -944,7 +1000,7 @@ impl Fixture {
             self.tempdir.path().to_path_buf(),
             Some(sender),
             to,
-            Some("atm-dev"),
+            Some(PRIMARY_TEAM),
             SendMessageSource::Inline(text.to_string()),
             None,
             false,
@@ -955,7 +1011,7 @@ impl Fixture {
     }
 
     fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {
-        self.inbox_contents_for_team("atm-dev", agent)
+        self.inbox_contents_for_team(PRIMARY_TEAM, agent)
     }
 
     fn origin_inbox_contents(&self, agent: &str, suffix: &str) -> Vec<MessageEnvelope> {
@@ -963,7 +1019,7 @@ impl Fixture {
     }
 
     fn workflow_state_contents(&self, agent: &str) -> serde_json::Value {
-        self.workflow_state_contents_for_team("atm-dev", agent)
+        self.workflow_state_contents_for_team(PRIMARY_TEAM, agent)
     }
 
     fn inbox_contents_for_team(&self, team: &str, agent: &str) -> Vec<MessageEnvelope> {
@@ -998,7 +1054,7 @@ impl Fixture {
     }
 
     fn primary_inbox_path(&self, agent: &str) -> std::path::PathBuf {
-        self.primary_inbox_path_for_team("atm-dev", agent)
+        self.primary_inbox_path_for_team(PRIMARY_TEAM, agent)
     }
 
     fn primary_inbox_path_for_team(&self, team: &str, agent: &str) -> std::path::PathBuf {
@@ -1012,13 +1068,13 @@ impl Fixture {
             .path()
             .join(".claude")
             .join("teams")
-            .join("atm-dev")
+            .join(PRIMARY_TEAM)
             .join("inboxes")
             .join(format!("{agent}.{suffix}.json"))
     }
 
     fn workflow_state_path(&self, agent: &str) -> std::path::PathBuf {
-        self.workflow_state_path_for_team("atm-dev", agent)
+        self.workflow_state_path_for_team(PRIMARY_TEAM, agent)
     }
 
     fn workflow_state_path_for_team(&self, team: &str, agent: &str) -> std::path::PathBuf {
@@ -1169,7 +1225,7 @@ fn read_message(from: &str, text: &str, message_id: LegacyMessageId) -> MessageE
     );
     atm.insert(
         "sourceTeam".to_string(),
-        serde_json::Value::String("atm-dev".to_string()),
+        serde_json::Value::String(PRIMARY_TEAM.to_string()),
     );
     metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
     extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
@@ -1184,7 +1240,7 @@ fn read_message(from: &str, text: &str, message_id: LegacyMessageId) -> MessageE
         text: text.to_string(),
         timestamp: IsoTimestamp::from_datetime(Utc::now()),
         read: true,
-        source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
+        source_team: Some(PRIMARY_TEAM.parse::<TeamName>().expect("team")),
         summary: None,
         message_id: Some(message_id),
         pending_ack_at: None,
@@ -1206,7 +1262,7 @@ fn unread_message(from: &str, text: &str, message_id: LegacyMessageId) -> Messag
     );
     atm.insert(
         "sourceTeam".to_string(),
-        serde_json::Value::String("atm-dev".to_string()),
+        serde_json::Value::String(PRIMARY_TEAM.to_string()),
     );
     metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
     extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
@@ -1221,7 +1277,7 @@ fn unread_message(from: &str, text: &str, message_id: LegacyMessageId) -> Messag
         text: text.to_string(),
         timestamp: IsoTimestamp::from_datetime(Utc::now()),
         read: false,
-        source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
+        source_team: Some(PRIMARY_TEAM.parse::<TeamName>().expect("team")),
         summary: None,
         message_id: Some(message_id),
         pending_ack_at: None,

@@ -248,7 +248,9 @@ mod tests {
     use tempfile::TempDir;
     use uuid::Uuid;
 
+    use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::MessageEnvelope;
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
     use super::{MAX_MAILBOX_READ_BYTES, append_message, locked_read_modify_write, read_messages};
@@ -392,7 +394,7 @@ mod tests {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("malformed-message-id.jsonl");
         let contents = serde_json::json!({
-            "from": "team-lead",
+            "from": ROLE_TEAM_LEAD,
             "text": "valid body",
             "timestamp": "2026-03-30T00:00:00Z",
             "read": false,
@@ -416,7 +418,7 @@ mod tests {
         let path = tempdir.path().join("array-no-message-id.json");
         let contents = serde_json::json!([
             {
-                "from": "team-lead",
+                "from": ROLE_TEAM_LEAD,
                 "text": "from claude array",
                 "timestamp": "2026-03-30T00:00:00Z",
                 "read": false
@@ -449,16 +451,27 @@ mod tests {
     fn read_messages_hydrates_fields_from_metadata_atm() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("metadata-atm.json");
-        fs::write(
-            &path,
-            r#"{"from":"team-lead","text":"hello","timestamp":"2026-03-30T00:00:00Z","read":false,"summary":"hello","metadata":{"atm":{"messageId":"01JQYVB6W51Q2E7E6T3Y4Q9N2M","sourceTeam":"atm-dev","pendingAckAt":"2026-03-30T00:00:01Z","taskId":"TASK-123"}}}"#,
-        )
-        .expect("write");
+        let contents = serde_json::json!({
+            "from": ROLE_TEAM_LEAD,
+            "text": "hello",
+            "timestamp": "2026-03-30T00:00:00Z",
+            "read": false,
+            "summary": "hello",
+            "metadata": {
+                "atm": {
+                    "messageId": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
+                    "sourceTeam": TEST_TEAM,
+                    "pendingAckAt": "2026-03-30T00:00:01Z",
+                    "taskId": "TASK-123"
+                }
+            }
+        });
+        fs::write(&path, serde_json::to_vec(&contents).expect("json")).expect("write");
 
         let messages = read_messages(&path).expect("read");
         assert_eq!(messages.len(), 1);
         assert!(messages[0].message_id.is_some());
-        assert_eq!(messages[0].source_team.as_deref(), Some("atm-dev"));
+        assert_eq!(messages[0].source_team.as_deref(), Some(TEST_TEAM));
         assert!(messages[0].pending_ack_at.is_some());
         assert_eq!(
             messages[0].task_id.as_ref().map(|task_id| task_id.as_str()),
@@ -507,13 +520,13 @@ mod tests {
         );
         atm.insert(
             "sourceTeam".to_string(),
-            serde_json::Value::String("atm-dev".to_string()),
+            serde_json::Value::String(TEST_TEAM.to_string()),
         );
         metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
         extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
 
         MessageEnvelope {
-            from: "arch-ctm".parse::<AgentName>().expect("agent"),
+            from: TEST_SENDER.parse::<AgentName>().expect("agent"),
             text: body.into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -521,7 +534,7 @@ mod tests {
                     .expect("timestamp"),
             ),
             read: false,
-            source_team: Some("atm-dev".parse::<TeamName>().expect("team")),
+            source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
             summary: None,
             message_id: Some(message_id),
             pending_ack_at: None,

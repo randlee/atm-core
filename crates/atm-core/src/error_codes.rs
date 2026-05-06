@@ -25,6 +25,8 @@ pub enum AtmErrorCode {
     ConfigTeamMissing,
     /// Sender identity could not be resolved.
     IdentityUnavailable,
+    /// The daemon transport could not be reached or started.
+    DaemonUnavailable,
     /// Address parsing failed.
     AddressParseFailed,
     /// Team could not be resolved from config or input.
@@ -107,6 +109,7 @@ impl AtmErrorCode {
             Self::ConfigTeamParseFailed => "ATM_CONFIG_TEAM_PARSE_FAILED",
             Self::ConfigTeamMissing => "ATM_CONFIG_TEAM_MISSING",
             Self::IdentityUnavailable => "ATM_IDENTITY_UNAVAILABLE",
+            Self::DaemonUnavailable => "ATM_DAEMON_UNAVAILABLE",
             Self::AddressParseFailed => "ATM_ADDRESS_PARSE_FAILED",
             Self::TeamUnavailable => "ATM_TEAM_UNAVAILABLE",
             Self::TeamNotFound => "ATM_TEAM_NOT_FOUND",
@@ -158,6 +161,7 @@ impl FromStr for AtmErrorCode {
             "ATM_CONFIG_TEAM_PARSE_FAILED" => Ok(Self::ConfigTeamParseFailed),
             "ATM_CONFIG_TEAM_MISSING" => Ok(Self::ConfigTeamMissing),
             "ATM_IDENTITY_UNAVAILABLE" => Ok(Self::IdentityUnavailable),
+            "ATM_DAEMON_UNAVAILABLE" => Ok(Self::DaemonUnavailable),
             "ATM_ADDRESS_PARSE_FAILED" => Ok(Self::AddressParseFailed),
             "ATM_TEAM_UNAVAILABLE" => Ok(Self::TeamUnavailable),
             "ATM_TEAM_NOT_FOUND" => Ok(Self::TeamNotFound),

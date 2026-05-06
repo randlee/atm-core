@@ -1,0 +1,78 @@
+[identities]
+forbidden_literals = [
+  "team-lead",
+  "arch-ctm",
+  "arch-qa",
+  "arch-inj",
+  "arch-obs",
+  "quality-mgr",
+  "publisher",
+  "atm-dev",
+]
+
+[line_counts]
+max_total_lines = 0
+max_production_lines = 1000
+max_scoped_code_lines = 0
+
+[line_counts.exclusions]
+"crates/atm-core/src/mailbox/lock.rs" = "Q.6 split pending"
+"crates/atm-core/src/read/mod.rs" = "Q.6 split pending"
+"crates/atm-rusqlite/src/tests.rs" = "Q.6 split pending"
+
+[cargo_shear.allowed_empty_files]
+
+[cargo_shear.allowed_unlinked_files]
+
+[boundaries]
+doc_glob = "docs/*/boundaries.md"
+
+[[boundaries.global_dependency_ownership]]
+dependency = "rusqlite"
+allowed_manifest_paths = ["crates/atm-rusqlite/Cargo.toml"]
+allowed_source_roots = ["crates/atm-rusqlite/src"]
+manifest_message = "only crates/atm-rusqlite may depend on rusqlite"
+source_message = "only crates/atm-rusqlite source may import rusqlite directly"
+
+[[boundaries.manifest_section_rules]]
+owner_manifest_path = "crates/atm-core/Cargo.toml"
+dependency_package = "atm-rusqlite"
+allowed_sections = ["dev-dependencies"]
+message = "atm-core may reference atm-rusqlite only in dev-dependencies"
+
+[[boundaries.manifest_section_rules]]
+owner_manifest_path = "crates/atm/Cargo.toml"
+dependency_package = "atm-daemon"
+allowed_sections = []
+message = "atm must not depend on atm-daemon"
+
+[[boundaries.manifest_section_rules]]
+owner_manifest_path = "crates/atm-core/Cargo.toml"
+dependency_package = "atm-daemon"
+allowed_sections = []
+message = "atm-core must not depend on atm-daemon"
+
+[[boundaries.manifest_section_rules]]
+owner_manifest_path = "crates/atm-daemon/Cargo.toml"
+dependency_package = "atm-rusqlite"
+allowed_sections = []
+message = "atm-daemon must not depend on atm-rusqlite"
+
+[version_sync.winget]
+enabled = true
+manifest_glob = ".winget/*.yaml"
+package_version_field = "PackageVersion"
+manifest_version_field = "ManifestVersion"
+installer_url_field = "InstallerUrl"
+
+[version_sync.release_wiring]
+enabled = true
+file = ".github/workflows/release.yml"
+required_fragments = [
+  "update-homebrew:",
+  "repository: randlee/homebrew-tap",
+  "for formula in homebrew-tap/Formula/agent-team-mail.rb homebrew-tap/Formula/atm.rb; do",
+  "version='${{ needs.gate-and-tag.outputs.release_version }}'",
+  "tarball_url=\"https://github.com/randlee/atm-core/releases/download/${tag}/atm_${version}_aarch64-apple-darwin.tar.gz\"",
+  "sed -i \"s|version \\\"[^\\\"]*\\\"|version \\\"${version}\\\"|g\" \"$formula\"",
+]

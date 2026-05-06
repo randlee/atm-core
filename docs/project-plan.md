@@ -19,16 +19,57 @@ restructured, product docs remain in `docs/` and crate-local detail moves into
 `docs/atm/`, `docs/atm-core/`, `docs/atm-daemon/`, and
 `docs/atm-rusqlite/`.
 
-Phase-Q supersession note:
+Phase-Q disposition note:
 - earlier daemon-free phases in this plan remain historical execution records
-- the architectural baseline being refined is still the Section 21 runtime line
-  and the detailed migration/design material in `docs/plan-phase-Q.md`
+- Phase Q is abandoned as an implementation line
+- `docs/plan-phase-Q.md` and Section 21 are retained as historical design and
+  execution records only
+- no new implementation work should target `integrate/phase-Q`
+- no Phase Q code should be merged into the active Phase R line
+- reuse from Phase Q is allowed only by selective cherry-pick or manual
+  reimplementation after review
 
 Phase-R redesign note:
 - the next execution line is the Phase R redesign and enforcement pass tracked
   in [`docs/plan-phase-R.md`](./plan-phase-R.md)
 - Phase R starts with boundary documents, ADR alignment, and lint/parser gates
   before new implementation work
+- the active integration branch for this redesign line is `integrate/phase-R`
+
+Phase R execution entry:
+- Wave 1 deliverable: the new Phase R skeleton
+  - new crates
+  - public boundary traits/facades
+  - major data structures
+- Wave 1 supporting sequence:
+  1. `R.0` lint foundation
+  2. `R.1` lint debt burn-down
+  3. `R.2` skeleton crates, boundary traits/facades, and major data structures
+  4. `R.2A` parallel lint hardening
+- `R.3` is a dedicated review/re-planning stage after the Wave 1 skeleton lands
+- Wave 2 executes implementations only against the enforced boundary skeleton
+
+Current Phase R status:
+- `R.0` lint foundation is complete enough to enforce the boundary documents
+- `R.1` lint debt burn-down is complete on the active redesign line
+- `R.2` / `R.3.1` landed the Phase R skeleton context now carried by:
+  - `crates/atm-core/src/boundary/mod.rs`
+  - `crates/atm-daemon`
+  - `crates/atm-rusqlite`
+  - `crates/atm/src/composition.rs`
+- `R.2A` tooling hardening remains in progress for view/module/unsafe follow-up
+- `R.3.1` skeleton-first work is complete on the active planning line pending
+  merge through the normal integration path
+- `R.3.2` is the active sprint and is reviewing / drilling the proposed
+  `R.4` through `R.8` Wave 2 sprints into concrete, reviewable assignments
+
+Phase R acceptance:
+- lint/parser gates exist before substantive implementation resumes
+- the current lint baseline is cleaned enough that new architectural failures
+  are actionable
+- the crate/trait/data-structure skeleton exists before Wave 2 starts
+- implementation sprint planning is rewritten against that skeleton before
+  implementation resumes
 
 Status:
 - Phases 0 through P have executed on the retained rewrite line.
@@ -47,12 +88,12 @@ Status:
 - Message schema ownership and metadata normalization are now implemented well
   enough for live shared-inbox adoption, while a separate ATM-native inbox
   remains deferred to a later version.
-- Phase R planning is active on the SQLite source-of-truth and daemon-boundary
-  line; it hardens the target design and enforcement model before new
-  implementation work proceeds.
-- The current workspace still contains `crates/atm-core` and `crates/atm`
-  only; `crates/atm-daemon` and `crates/atm-rusqlite` are introduced by the
-  Phase Q implementation line.
+- Phase Q is retained only as an abandoned historical attempt at the SQLite
+  source-of-truth and daemon-boundary redesign.
+- Phase R is the only active redesign and implementation line.
+- The current merged Wave 1 baseline still contains `crates/atm-core` and
+  `crates/atm` only; additional crate introduction remains active Phase R
+  skeleton work and is now tracked explicitly by `R.3.1`.
 
 ## 2. Deliverables
 
@@ -74,7 +115,7 @@ Status:
 
 ## 3. Crates
 
-The Phase R target implementation is split across:
+The abandoned Phase Q target implementation was split across:
 
 - `crates/atm-core`
 - `crates/atm`
@@ -2456,10 +2497,18 @@ Phase P completion gate:
 - the remaining external-writer limitations, if any, are documented as accepted
   compatibility boundaries rather than hidden assumptions
 
-## 21. Phase Q — SQLite Mail SSOT And Runtime Boundary [PLANNED]
+## 21. Phase Q — SQLite Mail SSOT And Runtime Boundary [ABANDONED]
 
 Detailed design source:
 - [`docs/plan-phase-Q.md`](./plan-phase-Q.md)
+
+Disposition:
+- abandoned
+- retained for historical traceability only
+- not an active execution line
+- Phase Q code is reference-only and must not be merged into Phase R
+- any retained value from Phase Q must be brought forward only by selective
+  cherry-pick or manual port after review
 
 Goal:
 - replace filesystem JSON as ATM's mail source of truth with SQLite
@@ -2518,6 +2567,7 @@ Scope:
 
 Implementation focus:
 - one shared inbox write boundary
+
 - one shared inbox hydration boundary
 - one owned message-id compatibility bridge
 - explicit roster/member construction instead of hidden defaults
@@ -2705,3 +2755,79 @@ QA invariants for every Phase Q pass:
 - SQLite remains the source of truth for mail and roster
 - live status remains daemon-memory truth
 - Claude compatibility remains Claude-native top-level plus `metadata.atm`
+
+## 22. Phase R — Boundary Establishment And Enforcement
+
+Detailed execution source:
+- [`docs/plan-phase-R.md`](./plan-phase-R.md)
+
+Summary:
+- Phase R is the active redesign line that replaces the abandoned Phase Q
+  implementation path.
+- Wave 1 establishes enforceable crate boundaries before substantive feature
+  work resumes:
+  - lint/parser foundation and debt burn-down
+  - the new crate skeleton
+  - public boundary traits/facades
+  - major shared data structures
+- Wave 2 implements behavior only against those enforced boundaries.
+
+Cross-reference:
+- The authoritative sprint-by-sprint Phase R plan lives in
+  [`docs/plan-phase-R.md`](./plan-phase-R.md).
+
+## 23. Phase R.9 / R.10 — Daemon Singleton And Test Fidelity Hardening
+
+Goal:
+- finish the design and execution plan needed to make daemon singleton the
+  first-class runtime invariant
+- remove daemon-spawn-driven test strategy from the ordinary correctness path
+- replace it with production-faithful in-process transport seams and narrow
+  daemon-runtime coverage
+
+Authoritative design references:
+- [`docs/adr/ADR-002-host-wide-daemon-singleton.md`](./adr/ADR-002-host-wide-daemon-singleton.md)
+- [`docs/adr/ADR-003-test-fidelity-and-daemon-isolation.md`](./adr/ADR-003-test-fidelity-and-daemon-isolation.md)
+- [`docs/testing-guidelines.md`](./testing-guidelines.md)
+- [`docs/plan-phase-R.md`](./plan-phase-R.md)
+
+Execution shape:
+- `R.9` is the planning, requirements, ADR, and lint-design sprint
+- `R.10` is the implementation and test-migration sprint
+
+R.9 deliverables:
+- explicit requirement language that bans the current daemon-spawn test pattern
+- ADR for host-wide daemon singleton
+- ADR for test fidelity and daemon isolation
+- singleton lint gate design integrated into `just lint`
+- transport test-seam design:
+  - `FakeClientTransport`
+  - loopback/in-process transport
+  - narrow daemon-runtime harness
+- mapped resolution plan for:
+  - ARCH-SINGLETON
+  - CI-WIN-001
+  - singleton review findings `RBP-F001` through `RBP-F012`
+  - QA carry-forward items affecting singleton and test fidelity
+
+R.10 deliverables:
+- client-side pre-spawn launch gate
+- daemon-side serving gate and stale-owner recovery hardening
+- typed boundary/runtime fixes required by the singleton/test redesign
+- deletion of daemon-spawn helpers from ordinary tests
+- migration of CLI tests to fake or loopback transport seams
+
+Lint gate decision:
+- existing generic tools such as `clippy` are not sufficient to enforce the
+  singleton/test-fidelity architecture rule
+- Phase R therefore adds a dedicated repository lint gate, integrated into
+  `just lint`, with an initial planned entrypoint of
+  `scripts/lint_daemon_singleton.py`, that rejects banned daemon-spawn
+  patterns and related timing workarounds in ordinary tests
+
+Acceptance:
+- requirements, architecture, ADRs, and testing guidelines agree on the
+  singleton rule and approved test tiers
+- there is no approved ordinary test-daemon launch path
+- the implementation plan explicitly prevents new daemon-spawn helpers from
+  proliferating

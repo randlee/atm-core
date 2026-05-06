@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "Daemon-free core library for local agent team mail workflows."
+description = "Core library for local agent team mail workflows."
 repository.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/agent-team-mail-core"
@@ -16,11 +16,12 @@ categories = ["command-line-utilities", "development-tools"]
 [lib]
 name = "atm_core"
 
+[features]
+test-utils = []
+
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
-thiserror.workspace = true
-anyhow.workspace = true
 tracing.workspace = true
 libc = "0.2"
 chrono = { version = "0.4", features = ["serde"] }

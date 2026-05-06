@@ -3,3 +3,7 @@
 //! ATM 1.0 does not own a model registry. This placeholder remains to reserve
 //! the crate boundary for future metadata lookups if model-aware workflows are
 //! introduced in a later phase.
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
+pub(crate) struct DeferredModelRegistryScope;

@@ -11,6 +11,9 @@ Contract-owner records intentionally use:
 That means `atm-core` owns the public contract and semantics, but not a default
 concrete adapter in this crate.
 
+Test doubles planned; not yet landed. Until they exist, `allowed_test_double_paths`
+remains empty for the `atm-core` contract-owner records below.
+
 ## AtmProtocol
 
 ```yaml
@@ -20,8 +23,8 @@ owner_crate_path: atm_core
 name: AtmProtocol
 
 public:
-  trait: null
-  facade: AtmProtocol
+  trait: AtmProtocol
+  facade: null
 
 implementation:
   type: null
@@ -47,8 +50,10 @@ dependencies:
     - atm
     - atm-daemon
     - atm-graft
+    - atm-rusqlite
   allowed_dependencies: []
-  forbidden_edges: []
+  forbidden_edges:
+    - atm-core -> atm-daemon
 
 references:
   scope: global
@@ -59,11 +64,9 @@ references:
 
 contracts:
   request_types:
-    - SendRequest
-    - ReceiveRequest
+    - RequestEnvelope
   response_types:
-    - SendResponse
-    - ReceiveResponse
+    - ResponseEnvelope
   error_types:
     - AtmError
 
@@ -78,8 +81,9 @@ enforcement:
     - no_daemon_shaped_protocol_types
 
 status:
-  state: planned
+  state: stub_landed
   notes:
+    - trait plus protocol request/response/frame DTOs landed in atm_core::protocol
     - ack is represented inside send-shape request data, not as a top-level protocol family
 ```
 
@@ -126,8 +130,10 @@ dependencies:
     - atm
     - atm-daemon
     - atm-graft
+    - atm-rusqlite
   allowed_dependencies: []
-  forbidden_edges: []
+  forbidden_edges:
+    - atm-core -> atm-daemon
 
 references:
   scope: outside_owner_crate
@@ -136,15 +142,14 @@ references:
 
 contracts:
   request_types:
-    - AtmProtocol requests
+    - RequestEnvelope
   response_types:
-    - AtmProtocol responses
+    - ResponseEnvelope
   error_types:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::InProcessClientTransport
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - atm_daemon::client
 
@@ -155,8 +160,9 @@ enforcement:
     - no_cli_to_daemon_internal_edge
 
 status:
-  state: planned
+  state: stub_landed
   notes:
+    - stub trait plus request/response shells landed in atm_core::boundary
     - designed for thin callers such as atm-graft
     - daemon-to-daemon remote delivery also depends on this outbound client boundary
 ```
@@ -199,6 +205,7 @@ ownership:
 
 dependencies:
   allowed_dependents:
+    - atm-rusqlite
     - atm-daemon
   allowed_dependencies: []
   forbidden_edges: []
@@ -217,8 +224,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubWatchEventSource
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - notify::recommended_watcher
 
@@ -229,8 +235,9 @@ enforcement:
     - no_watch_io_outside_boundary
 
 status:
-  state: planned
+  state: stub_landed
   notes:
+    - callable watch trait and named watch subscription/event DTOs landed in atm_core::boundary
     - watch source owns event capture only, not reconcile policy
 ```
 
@@ -272,6 +279,7 @@ ownership:
 
 dependencies:
   allowed_dependents:
+    - atm-rusqlite
     - atm-daemon
   allowed_dependencies: []
   forbidden_edges: []
@@ -291,8 +299,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubReconcileCoordinator
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - mailbox::store::observe_source_files
 
@@ -303,8 +310,9 @@ enforcement:
     - no_store_or_transport_bypass_in_reconcile
 
 status:
-  state: planned
+  state: stub_landed
   notes:
+    - callable reconcile trait and named reconcile request/result DTOs landed in atm_core::boundary
     - reconcile owns coalescing and trigger policy, not raw watch APIs
 ```
 
@@ -347,6 +355,7 @@ ownership:
 
 dependencies:
   allowed_dependents:
+    - atm-rusqlite
     - atm-daemon
   allowed_dependencies: []
   forbidden_edges: []
@@ -358,15 +367,14 @@ references:
 
 contracts:
   request_types:
-    - AtmProtocol requests
+    - RequestEnvelope
   response_types:
-    - AtmProtocol responses
+    - ResponseEnvelope
   error_types:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::InProcessServerTransport
+  allowed_test_double_paths: []
   forbidden_test_bypasses: []
 
 enforcement:
@@ -376,8 +384,9 @@ enforcement:
     - no_server_business_logic
 
 status:
-  state: planned
+  state: stub_landed
   notes:
+    - stub trait plus request/response shells landed in atm_core::boundary
     - server transports stay runtime-only and are not exposed to thin client crates
 ```
 
@@ -418,6 +427,7 @@ ownership:
 
 dependencies:
   allowed_dependents:
+    - atm-rusqlite
     - atm-daemon
   allowed_dependencies: []
   forbidden_edges: []
@@ -437,8 +447,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubRequestDispatcher
+  allowed_test_double_paths: []
   forbidden_test_bypasses: []
 
 enforcement:
@@ -448,8 +457,9 @@ enforcement:
     - no_socket_specific_dispatch_logic
 
 status:
-  state: planned
+  state: stub_landed
   notes:
+    - stub trait plus request/response shells landed in atm_core::boundary
     - dispatcher is a service boundary, not a socket adapter
 ```
 
@@ -470,6 +480,7 @@ name: MailStore
 public:
   trait: MailStore
   facade: null
+  notes: trait landed in atm_core::boundary; concrete implementation now lives in crates/atm-rusqlite/src/lib.rs as SqliteMailStore
 
 implementation:
   type: null
@@ -497,10 +508,7 @@ dependencies:
 
 references:
   scope: outside_owner_crate
-  forbidden:
-    - SqliteMailStore
-    - RusqliteStore
-    - rusqlite::Connection
+  forbidden: []
 
 contracts:
   request_types:
@@ -511,8 +519,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::InMemoryMailStore
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - rusqlite::Connection
 
@@ -523,8 +530,10 @@ enforcement:
     - no_concrete_store_leakage
 
 status:
-  state: planned
+  state: concrete_landed
   notes:
+    - trait plus request/response structs landed in atm_core::boundary
+    - concrete store implementation landed in crates/atm-rusqlite/src/lib.rs as SqliteMailStore
     - mail state remains distinct from task and roster state
 ```
 
@@ -545,6 +554,7 @@ name: TaskStore
 public:
   trait: TaskStore
   facade: null
+  notes: trait landed in atm_core::boundary; concrete implementation now lives in crates/atm-rusqlite/src/lib.rs as SqliteTaskStore
 
 implementation:
   type: null
@@ -572,9 +582,7 @@ dependencies:
 
 references:
   scope: outside_owner_crate
-  forbidden:
-    - SqliteTaskStore
-    - rusqlite::Connection
+  forbidden: []
 
 contracts:
   request_types:
@@ -585,8 +593,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::InMemoryTaskStore
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - rusqlite::Connection
 
@@ -597,8 +604,10 @@ enforcement:
     - no_concrete_store_leakage
 
 status:
-  state: planned
+  state: concrete_landed
   notes:
+    - trait plus request/response structs landed in atm_core::boundary
+    - concrete store implementation landed in crates/atm-rusqlite/src/lib.rs as SqliteTaskStore
     - ack-specific state changes belong here even when ack is modeled through send
 ```
 
@@ -619,6 +628,7 @@ name: RosterStore
 public:
   trait: RosterStore
   facade: null
+  notes: trait landed in atm_core::boundary; concrete implementation now lives in crates/atm-rusqlite/src/roster_store.rs as SqliteRosterStore
 
 implementation:
   type: null
@@ -646,9 +656,7 @@ dependencies:
 
 references:
   scope: outside_owner_crate
-  forbidden:
-    - SqliteRosterStore
-    - rusqlite::Connection
+  forbidden: []
 
 contracts:
   request_types:
@@ -659,8 +667,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::InMemoryRosterStore
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - rusqlite::Connection
 
@@ -671,8 +678,10 @@ enforcement:
     - no_concrete_store_leakage
 
 status:
-  state: planned
+  state: concrete_landed
   notes:
+    - trait plus request/response structs landed in atm_core::boundary
+    - concrete store implementation landed in crates/atm-rusqlite/src/roster_store.rs as SqliteRosterStore
     - live status belongs elsewhere; this boundary owns durable roster truth only
 ```
 
@@ -693,6 +702,7 @@ name: ConfigIngress
 public:
   trait: ConfigIngress
   facade: null
+  notes: trait and typed workspace/team config DTOs landed in atm_core::boundary
 
 implementation:
   type: null
@@ -716,14 +726,13 @@ dependencies:
   allowed_dependents:
     - atm
     - atm-daemon
+    - atm-rusqlite
   allowed_dependencies: []
   forbidden_edges: []
 
 references:
   scope: outside_owner_crate
-  forbidden:
-    - load_team_config
-    - std::fs::read_to_string
+  forbidden: []
 
 contracts:
   request_types:
@@ -734,8 +743,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubConfigIngress
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - std::fs::read_to_string
 
@@ -746,9 +754,10 @@ enforcement:
     - no_direct_config_parser_calls
 
 status:
-  state: planned
+  state: stub_landed
   notes:
-    - this boundary replaces direct command/service calls into a concrete parser module
+    - typed workspace and team config request/response contracts landed in atm_core::boundary
+    - retained command/service cutover to this boundary is formally deferred to R.7 in docs/plan-phase-R.md
 ```
 
 Purpose:
@@ -768,6 +777,7 @@ name: InboxIngress
 public:
   trait: InboxIngress
   facade: null
+  notes: trait and typed inbox import/diagnostic DTOs landed in atm_core::boundary
 
 implementation:
   type: null
@@ -789,14 +799,14 @@ ownership:
 
 dependencies:
   allowed_dependents:
+    - atm-rusqlite
     - atm-daemon
   allowed_dependencies: []
   forbidden_edges: []
 
 references:
   scope: outside_owner_crate
-  forbidden:
-    - mailbox::store::observe_source_files
+  forbidden: []
 
 contracts:
   request_types:
@@ -807,8 +817,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubInboxIngress
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - mailbox::store::observe_source_files
 
@@ -819,9 +828,11 @@ enforcement:
     - no_direct_mailbox_helper_calls
 
 status:
-  state: planned
+  state: stub_landed
   notes:
+    - typed import, fingerprint, and diagnostics request/response contracts landed in atm_core::boundary
     - watcher-driven reconcile should call this boundary rather than store helpers directly
+    - retained send/read/ack/clear cutover to this boundary is formally deferred to R.7 in docs/plan-phase-R.md
 ```
 
 Purpose:
@@ -841,6 +852,7 @@ name: InboxExport
 public:
   trait: InboxExport
   facade: null
+  notes: trait and typed inbox export DTOs landed in atm_core::boundary
 
 implementation:
   type: null
@@ -862,15 +874,14 @@ ownership:
 
 dependencies:
   allowed_dependents:
+    - atm-rusqlite
     - atm-daemon
   allowed_dependencies: []
   forbidden_edges: []
 
 references:
   scope: outside_owner_crate
-  forbidden:
-    - mailbox::store::with_locked_source_files
-    - mailbox::store::commit_source_files
+  forbidden: []
 
 contracts:
   request_types:
@@ -881,8 +892,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubInboxExport
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - mailbox::store::with_locked_source_files
 
@@ -893,8 +903,9 @@ enforcement:
     - no_direct_mailbox_helper_calls
 
 status:
-  state: planned
+  state: stub_landed
   notes:
+    - typed record/export request and response contracts landed in atm_core::boundary
     - send and receive state transitions should reach compatibility files through this boundary only
 ```
 
@@ -934,6 +945,7 @@ ownership:
 
 dependencies:
   allowed_dependents:
+    - atm-rusqlite
     - atm-daemon
   allowed_dependencies: []
   forbidden_edges: []
@@ -953,8 +965,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubNotificationSink
+  allowed_test_double_paths: []
   forbidden_test_bypasses:
     - std::process::Command
 
@@ -965,8 +976,9 @@ enforcement:
     - no_direct_process_spawn
 
 status:
-  state: planned
+  state: stub_landed
   notes:
+    - callable notification trait and named event DTOs landed in atm_core::boundary
     - a thin extension crate should never need to reach into process-spawn internals
 ```
 
@@ -1006,6 +1018,7 @@ ownership:
 
 dependencies:
   allowed_dependents:
+    - atm-rusqlite
     - atm-daemon
   allowed_dependencies: []
   forbidden_edges: []
@@ -1023,8 +1036,7 @@ contracts:
     - AtmError
 
 testing:
-  allowed_test_double_paths:
-    - atm_core::test_support::StubStatusSource
+  allowed_test_double_paths: []
   forbidden_test_bypasses: []
 
 enforcement:
@@ -1034,8 +1046,9 @@ enforcement:
     - no_status_leakage_into_roster_store
 
 status:
-  state: planned
+  state: stub_landed
   notes:
+    - callable status trait and named snapshot DTOs landed in atm_core::boundary
     - live status remains separate from durable roster truth
 ```
 
