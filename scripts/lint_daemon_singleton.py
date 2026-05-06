@@ -24,6 +24,7 @@ from lint_common import workspace_crate_section_lines
 
 LINT_NAME = "daemon-singleton"
 DEFAULT_CONFIG_PATH = Path("scripts/lint_daemon_singleton.toml")
+CFG_TEST_LINE_RE = re.compile(r"(?m)^\s*#\[\s*cfg\s*\(\s*test\s*\)\s*\]")
 
 PROHIBITED_CATEGORY_DESCRIPTIONS = {
     "spawn_test_daemon": "spawn_test_daemon helper in ordinary tests",
@@ -133,7 +134,7 @@ def load_allow_entries(repo_root: Path, config_path: Path) -> list[AllowEntry]:
 def is_test_code(path: Path, source: str) -> bool:
     if "tests" in path.parts:
         return True
-    return "#[cfg(test)]" in source or "cfg(test)" in source
+    return bool(CFG_TEST_LINE_RE.search(source))
 
 
 def rust_sources(repo_root: Path) -> list[Path]:
@@ -150,8 +151,6 @@ def line_offsets(source: str) -> list[int]:
     for line in source.splitlines(keepends=True):
         offsets.append(offset)
         offset += len(line)
-    if source and source[-1] != "\n":
-        return offsets
     return offsets
 
 
@@ -166,6 +165,10 @@ def find_cfg_test_scopes(source: str) -> list[SourceScope]:
         brace_index = source.find("{", marker_index)
         if brace_index == -1:
             break
+        # This brace walk is intentionally lightweight and does not attempt
+        # string/comment-aware Rust parsing. It is sufficient for the current
+        # `#[cfg(test)] mod tests { ... }` shapes but may miss pathological
+        # cases where brace-like text appears before the matching module close.
         depth = 0
         end_index = brace_index
         while end_index < len(source):
@@ -240,6 +243,11 @@ def find_direct_atm_daemon_commands(relative_path: str, scope: SourceScope) -> l
     for index, line in enumerate(lines):
         if "Command::new(" not in line:
             continue
+        # We intentionally scan only a short forward window because current
+        # launcher patterns keep the resolved daemon path near the callsite.
+        # If the relevant trigger moves farther away than eight lines, this
+        # detector will miss it; the gap is accepted to avoid a much noisier
+        # whole-function search.
         window = "\n".join(lines[index : min(index + 8, len(lines))])
         if "atm-daemon" in window or "test_daemon_launcher" in window:
             offset = offsets[index]
@@ -311,14 +319,12 @@ def has_unix_gating(source: str) -> bool:
 
 
 def apply_allow_entries(
-    repo_root: Path,
     violations: list[Violation],
     allow_entries: list[AllowEntry],
 ) -> tuple[list[Violation], list[str]]:
     allowed_messages: list[str] = []
     remaining: list[Violation] = []
     allow_by_key = {(entry.path, category): entry for entry in allow_entries for category in entry.categories}
-    source_cache: dict[str, str] = {}
 
     for violation in violations:
         entry = allow_by_key.get((violation.path, violation.category))
@@ -327,10 +333,6 @@ def apply_allow_entries(
             continue
 
         if entry.require_unix_gating:
-            source_cache.setdefault(
-                violation.path,
-                (repo_root / violation.path).read_text(encoding="utf-8"),
-            )
             if not violation.unix_gated:
                 remaining.append(
                     Violation(
@@ -382,7 +384,7 @@ def run(repo_root: Path, config_path: Path) -> int:
         print_report(report, repo_root=repo_root, preview_limit=4, direct_threshold=4)
         return 1
     violations = collect_violations(repo_root)
-    filtered_violations, allowed_messages = apply_allow_entries(repo_root, violations, allow_entries)
+    filtered_violations, allowed_messages = apply_allow_entries(violations, allow_entries)
     duration_seconds = monotonic_now() - started_monotonic
 
     findings = [violation.render() for violation in filtered_violations]

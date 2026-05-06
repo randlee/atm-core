@@ -96,6 +96,18 @@ fn launch() {
             "direct_atm_daemon_command",
         )
 
+    def test_direct_atm_daemon_command_positive_with_launcher_indirection(self) -> None:
+        self.assert_category_present(
+            """
+use std::process::Command;
+
+fn launch() {
+    let _ = Command::new(test_daemon_launcher());
+}
+""",
+            "direct_atm_daemon_command",
+        )
+
     def test_direct_atm_daemon_command_negative(self) -> None:
         self.assert_category_absent(
             """
@@ -117,6 +129,21 @@ use std::time::Duration;
 fn wait_for_daemon() {
     warm_daemon();
     thread::sleep(Duration::from_millis(25));
+}
+""",
+            "timing_warmup_shortcut",
+        )
+
+    def test_timing_warmup_shortcut_positive_with_is_daemon_start_transient(self) -> None:
+        self.assert_category_present(
+            """
+use std::thread;
+use std::time::Duration;
+
+fn wait_for_daemon() {
+    if is_daemon_start_transient() {
+        thread::sleep(Duration::from_millis(25));
+    }
 }
 """,
             "timing_warmup_shortcut",
@@ -148,6 +175,22 @@ fn wait_for_work() {
             violations = collect_violations(repo_root)
             self.assertEqual(violations, [])
 
+    def test_collect_violations_ignores_cfg_test_in_comment_and_string(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_workspace(repo_root)
+            self.write_test(
+                repo_root,
+                "crates/atm-core/src/error.rs",
+                """
+// cfg(test) belongs in docs here, not as an attribute.
+const NOTE: &str = "cfg(test) is mentioned in this recovery string";
+""",
+            )
+
+            violations = collect_violations(repo_root)
+            self.assertEqual(violations, [])
+
     def test_collect_violations_ignores_production_lines_in_cfg_test_source_file(self) -> None:
         source = """
 pub const RECOVERY: &str = "Set ATM_DAEMON_BIN before retrying.";
@@ -165,7 +208,7 @@ mod tests {
             violations = collect_violations(repo_root)
             self.assertEqual(len(violations), 1)
             self.assertEqual(violations[0].category, "warm_daemon")
-            self.assertGreater(violations[0].line_number, source.splitlines().index("pub const RECOVERY: &str = \"Set ATM_DAEMON_BIN before retrying.\";") + 1)
+            self.assertGreater(violations[0].line_number, 3)
 
     def test_collect_violations_detects_cfg_test_scoped_direct_spawn(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -216,7 +259,7 @@ reason = "temporary tier 3 exception"
 
             allow_entries = load_allow_entries(repo_root, Path("scripts/lint_daemon_singleton.toml"))
             violations = collect_violations(repo_root)
-            remaining, allowed = apply_allow_entries(repo_root, violations, allow_entries)
+            remaining, allowed = apply_allow_entries(violations, allow_entries)
 
             self.assertEqual(len(allowed), 1)
             self.assertTrue(any(violation.category == "warm_daemon" for violation in remaining))
@@ -249,7 +292,7 @@ require_unix_gating = true
 
             allow_entries = load_allow_entries(repo_root, Path("scripts/lint_daemon_singleton.toml"))
             violations = collect_violations(repo_root)
-            remaining, _allowed = apply_allow_entries(repo_root, violations, allow_entries)
+            remaining, _allowed = apply_allow_entries(violations, allow_entries)
             self.assertEqual(len(remaining), 1)
             self.assertIn("requires explicit #[cfg(unix)] gating", remaining[0].detail)
 
@@ -281,7 +324,7 @@ require_unix_gating = true
 
             allow_entries = load_allow_entries(repo_root, Path("scripts/lint_daemon_singleton.toml"))
             violations = collect_violations(repo_root)
-            remaining, allowed = apply_allow_entries(repo_root, violations, allow_entries)
+            remaining, allowed = apply_allow_entries(violations, allow_entries)
             self.assertEqual(remaining, [])
             self.assertEqual(len(allowed), 1)
 
@@ -315,7 +358,7 @@ require_unix_gating = true
 
             allow_entries = load_allow_entries(repo_root, Path("scripts/lint_daemon_singleton.toml"))
             violations = collect_violations(repo_root)
-            remaining, _allowed = apply_allow_entries(repo_root, violations, allow_entries)
+            remaining, _allowed = apply_allow_entries(violations, allow_entries)
             self.assertEqual(len(remaining), 1)
             self.assertIn("requires explicit #[cfg(unix)] gating", remaining[0].detail)
 

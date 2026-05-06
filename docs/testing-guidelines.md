@@ -41,7 +41,12 @@ singleton lint gate:
 - `warm_daemon`
 - `DaemonGuard`
 - `ATM_DAEMON_BIN`
+- `atm-daemon.sock`
 - direct `Command::new(...atm-daemon...)`
+- launcher indirection such as `test_daemon_launcher(...)` used to hide the
+  daemon binary behind helper resolution
+- daemon-start retry helpers such as `is_daemon_start_transient(...)` when used
+  to justify fixed warmup sleeps in ordinary tests
 - ad hoc daemon auto-start retries used as test stabilization
 - fixed sleeps that attempt to wait for daemon socket publication
 - parent-process environment mutation when command-local `Command::env(...)`

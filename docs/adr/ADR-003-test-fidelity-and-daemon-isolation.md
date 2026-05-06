@@ -125,7 +125,11 @@ Prohibited named patterns:
 - `warm_daemon`
 - `DaemonGuard`
 - `ATM_DAEMON_BIN`
+- `atm-daemon.sock`
 - direct `Command::new(...atm-daemon...)`
+- launcher indirection such as `test_daemon_launcher(...)`
+- daemon-start retry helpers such as `is_daemon_start_transient(...)` when
+  paired with ordinary-test warmup sleeps
 
 ## Enforcement
 
