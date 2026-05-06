@@ -345,6 +345,28 @@ mutation with `temp_env::with_var(...)` for scoped, safe environment overrides.
 
 ---
 
+### I-017 — sc-lint-boundary: raw kind strings instead of NodeKind enum
+**Source**: quality-mgr RBP-SC9-001 (SC-LINT-QA-9 — pre-existing, deferred)
+**File**: `crates/sc-lint-boundary/src/graph.rs` (9 sites)
+
+Graph node kind is represented as raw `&str` / `String` at 9 call sites. No NodeKind enum exists.
+Compiler cannot distinguish kind values; typos and invalid values are invisible until runtime.
+
+**Fix**: Introduce `NodeKind` enum. Replace all 9 raw-string kind sites.
+
+---
+
+### I-018 — sc-lint-boundary: NodeId not threaded through internal function boundaries
+**Source**: quality-mgr RBP-SC9-002 (SC-LINT-QA-9 — pre-existing, deferred)
+**File**: `crates/sc-lint-boundary/src/graph.rs`
+
+`NodeId` newtype exists but is not passed across internal graph-building function boundaries.
+Functions accept/return raw `String` instead, losing type safety at call sites.
+
+**Fix**: Thread `NodeId` through all internal graph function signatures.
+
+---
+
 ## MINOR FINDINGS
 
 ### m-001 — Plan doc R.10 status stale
