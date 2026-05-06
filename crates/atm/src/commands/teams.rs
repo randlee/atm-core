@@ -144,6 +144,7 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
 
+    use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::schema::{AgentMember, TeamConfig};
     use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD, TEST_SENDER, TEST_TEAM};
     use serial_test::serial;
@@ -157,6 +158,24 @@ mod tests {
         _tempdir: TempDir,
         home_dir: PathBuf,
         current_dir: PathBuf,
+    }
+
+    struct CwdGuard {
+        original: PathBuf,
+    }
+
+    impl CwdGuard {
+        fn change_to(path: &std::path::Path) -> Self {
+            let original = std::env::current_dir().expect("current dir");
+            std::env::set_current_dir(path).expect("set current dir");
+            Self { original }
+        }
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            std::env::set_current_dir(&self.original).expect("restore current dir");
+        }
     }
 
     impl Fixture {
@@ -202,11 +221,8 @@ mod tests {
 
         fn with_env_and_cwd<T>(&self, f: impl FnOnce() -> T) -> T {
             let _atm_home = EnvGuard::set_raw("ATM_HOME", self.home_dir.to_str().expect("utf8"));
-            let original = std::env::current_dir().expect("current dir");
-            std::env::set_current_dir(&self.current_dir).expect("set current dir");
-            let result = f();
-            std::env::set_current_dir(original).expect("restore current dir");
-            result
+            let _cwd = CwdGuard::change_to(&self.current_dir);
+            f()
         }
     }
 
@@ -226,7 +242,8 @@ mod tests {
             .build_request(".".into(), ".".into())
             .expect_err("invalid team");
 
-        assert!(error.to_string().contains("team name"));
+        let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
+        assert_eq!(atm_error.code, AtmErrorCode::AddressParseFailed);
     }
 
     #[test]
@@ -245,7 +262,8 @@ mod tests {
             .build_request(".".into(), ".".into())
             .expect_err("invalid member");
 
-        assert!(error.to_string().contains("agent name"));
+        let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
+        assert_eq!(atm_error.code, AtmErrorCode::AddressParseFailed);
     }
 
     #[test]
@@ -255,30 +273,31 @@ mod tests {
             json: true,
         };
 
-        let request = command
-            .build_request(PathBuf::from("/tmp/home"))
-            .expect("request");
+        let home_dir = std::env::temp_dir().join("atm-teams-backup-home");
+        let request = command.build_request(home_dir.clone()).expect("request");
 
         assert_eq!(request.team.as_str(), TEST_TEAM);
-        assert_eq!(request.home_dir, PathBuf::from("/tmp/home"));
+        assert_eq!(request.home_dir, home_dir);
     }
 
     #[test]
     fn restore_build_request_preserves_from_path_and_dry_run() {
         let command = RestoreCommand {
             team: TEST_TEAM.to_string(),
-            from: Some(PathBuf::from("/tmp/backup")),
+            from: Some(std::env::temp_dir().join("atm-teams-backup")),
             dry_run: true,
             json: false,
         };
 
-        let request = command
-            .build_request(PathBuf::from("/tmp/home"))
-            .expect("request");
+        let home_dir = std::env::temp_dir().join("atm-teams-restore-home");
+        let request = command.build_request(home_dir.clone()).expect("request");
 
         assert_eq!(request.team.as_str(), TEST_TEAM);
-        assert_eq!(request.home_dir, PathBuf::from("/tmp/home"));
-        assert_eq!(request.from, Some(PathBuf::from("/tmp/backup")));
+        assert_eq!(request.home_dir, home_dir);
+        assert_eq!(
+            request.from,
+            Some(std::env::temp_dir().join("atm-teams-backup"))
+        );
         assert!(request.dry_run);
     }
 

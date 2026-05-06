@@ -146,6 +146,7 @@ mod tests {
         AtmLogQuery, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
         LogLevelFilter, LogMode, LogOrder, LogTailSession, ObservabilityPort,
     };
+    use atm_core::test_support::EnvGuard;
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -217,6 +218,7 @@ mod tests {
     #[serial]
     fn concrete_adapter_emits_queries_follows_and_reports_health() {
         let tempdir = TempDir::new().expect("tempdir");
+        let _atm_log = EnvGuard::set_raw("ATM_LOG", "info");
         let observability =
             CliObservability::new(tempdir.path(), CliObservabilityOptions::default())
                 .expect("concrete adapter");

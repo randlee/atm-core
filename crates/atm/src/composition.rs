@@ -1008,13 +1008,14 @@ mod tests {
 
     #[test]
     fn daemon_path_newtypes_reject_empty_paths_and_preserve_path_access() {
-        let socket =
-            DaemonSocketPath::new(std::path::PathBuf::from("/tmp/atm.sock")).expect("socket path");
-        let daemon = DaemonBinaryPath::new(std::path::PathBuf::from("/tmp/atm-daemon"))
-            .expect("daemon path");
+        let root = std::env::temp_dir().join("atm-daemon-path-tests");
+        let socket_path = root.join("atm.sock");
+        let daemon_path = root.join("atm-daemon");
+        let socket = DaemonSocketPath::new(socket_path.clone()).expect("socket path");
+        let daemon = DaemonBinaryPath::new(daemon_path.clone()).expect("daemon path");
 
-        assert_eq!(socket.as_ref(), std::path::Path::new("/tmp/atm.sock"));
-        assert_eq!(daemon.as_ref(), std::path::Path::new("/tmp/atm-daemon"));
+        assert_eq!(socket.as_ref(), socket_path.as_path());
+        assert_eq!(daemon.as_ref(), daemon_path.as_path());
 
         let socket_error = DaemonSocketPath::new(std::path::PathBuf::new()).expect_err("empty");
         assert!(socket_error.to_string().contains("daemon socket path"));

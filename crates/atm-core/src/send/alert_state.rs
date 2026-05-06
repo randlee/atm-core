@@ -75,6 +75,10 @@ pub(super) fn save(path: &Path, state: &SendAlertState) -> Result<(), AtmError> 
 }
 
 pub(super) fn acquire_lock(path: &Path) -> Option<SendAlertLock> {
+    acquire_lock_with_timeout(path, Duration::from_millis(5000))
+}
+
+fn acquire_lock_with_timeout(path: &Path, timeout: Duration) -> Option<SendAlertLock> {
     if let Some(parent) = path.parent()
         && let Err(error) = fs::create_dir_all(parent)
     {
@@ -88,7 +92,7 @@ pub(super) fn acquire_lock(path: &Path) -> Option<SendAlertLock> {
     }
 
     let mut backoff = Duration::from_millis(1);
-    let deadline = Instant::now() + Duration::from_millis(5000);
+    let deadline = Instant::now() + timeout;
     loop {
         match OpenOptions::new().write(true).create_new(true).open(path) {
             Ok(mut file) => {
@@ -252,12 +256,14 @@ fn evict_stale_send_alert_lock(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::time::Duration;
 
     use tempfile::tempdir;
 
     use super::{
-        SendAlertState, acquire_lock, clear_missing_team_config_alert, load, lock_path,
-        missing_team_config_alert_key, register_missing_team_config_alert, save, state_path,
+        SendAlertState, acquire_lock, acquire_lock_with_timeout, clear_missing_team_config_alert,
+        load, lock_path, missing_team_config_alert_key, register_missing_team_config_alert, save,
+        state_path,
     };
 
     #[test]
@@ -344,7 +350,7 @@ mod tests {
         let guard = acquire_lock(&path).expect("first lock");
         let initial_contents = fs::read_to_string(&path).expect("initial lock contents");
 
-        assert!(acquire_lock(&path).is_none());
+        assert!(acquire_lock_with_timeout(&path, Duration::from_millis(10)).is_none());
         assert_eq!(
             fs::read_to_string(&path).expect("lock contents after second attempt"),
             initial_contents

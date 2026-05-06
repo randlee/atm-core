@@ -777,7 +777,7 @@ impl boundary::TaskStore for SqliteTaskStore {
                 })?;
             record.metadata.fields.insert(
                 "last_ack_transition".to_string(),
-                request.transition.clone(),
+                request.transition.to_string(),
             );
             record
                 .metadata
@@ -1017,7 +1017,7 @@ mod tests {
         let record = boundary::TaskStoreTaskRecord {
             team: team(),
             task_id: task_id(),
-            state: "active".to_string(),
+            state: "active".parse().expect("task state"),
             owner: Some(agent()),
             linked_message_keys: vec![message_key("atm:test-1")],
             metadata: boundary::TaskStoreTaskMetadata::default(),
@@ -1044,7 +1044,7 @@ mod tests {
                 team: team(),
                 task_id: task_id(),
                 owner: None,
-                state: Some("acknowledged".to_string()),
+                state: Some("acknowledged".parse().expect("task state")),
                 metadata: None,
                 append_message_keys: vec![message_key("atm:test-2")],
             })
@@ -1063,7 +1063,7 @@ mod tests {
                 team: team(),
                 task_id: Some(task_id()),
                 message_key: None,
-                state: Some("acknowledged".to_string()),
+                state: Some("acknowledged".parse().expect("task state")),
                 limit: Some(10),
             })
             .expect("metadata query");

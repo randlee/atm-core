@@ -201,6 +201,7 @@ impl DaemonShutdownSignals {
     fn install() -> Result<Self, AtmError> {
         static SIGNALS: OnceLock<SharedDaemonShutdownSignals> = OnceLock::new();
         static INSTALL_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        // OnceLock owns global registration; Mutex serializes the read-check-write window.
         let _guard = INSTALL_LOCK
             .get_or_init(|| Mutex::new(()))
             .lock()

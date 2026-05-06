@@ -79,6 +79,11 @@ mod tests {
     use crate::composition::CliComposition;
     use crate::observability::CliObservability;
 
+    fn test_paths() -> (PathBuf, PathBuf) {
+        let root = std::env::temp_dir().join("atm-doctor-command-tests");
+        (root.join("home"), root.join("cwd"))
+    }
+
     fn healthy_report() -> DoctorReport {
         DoctorReport {
             summary: DoctorSummary {
@@ -113,9 +118,8 @@ mod tests {
             json: true,
         };
 
-        let query = command
-            .build_query(PathBuf::from("/tmp/home"), PathBuf::from("/tmp/cwd"))
-            .expect("query");
+        let (home_dir, current_dir) = test_paths();
+        let query = command.build_query(home_dir, current_dir).expect("query");
 
         assert_eq!(
             query.team_override.as_ref().map(|value| value.as_str()),
@@ -136,12 +140,9 @@ mod tests {
             json: false,
         };
 
+        let (home_dir, current_dir) = test_paths();
         let report = command
-            .execute(
-                &composition,
-                PathBuf::from("/tmp/home"),
-                PathBuf::from("/tmp/cwd"),
-            )
+            .execute(&composition, home_dir, current_dir)
             .expect("report");
 
         assert_eq!(report.summary.status, DoctorStatus::Healthy);
@@ -164,12 +165,9 @@ mod tests {
             json: false,
         };
 
+        let (home_dir, current_dir) = test_paths();
         let error = command
-            .execute(
-                &composition,
-                PathBuf::from("/tmp/home"),
-                PathBuf::from("/tmp/cwd"),
-            )
+            .execute(&composition, home_dir, current_dir)
             .expect_err("doctor error");
 
         let atm_error = error

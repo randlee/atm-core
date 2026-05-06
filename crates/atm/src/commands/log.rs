@@ -251,7 +251,8 @@ mod tests {
         CommandEvent, LogTailSession, ObservabilityPort,
     };
     use atm_core::observability::{LogFieldValue, LogLevelFilter, LogMode};
-    use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
+    use atm_core::test_support::{EnvGuard, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
+    use serial_test::serial;
     use tempfile::TempDir;
 
     use super::{
@@ -262,6 +263,7 @@ mod tests {
 
     #[derive(Debug)]
     struct StubObservability {
+        // Tests move this stub behind Arc<dyn ObservabilityPort + Send + Sync>.
         snapshot: Mutex<Option<Result<AtmLogSnapshot, AtmError>>>,
     }
 
@@ -436,8 +438,10 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn run_snapshot_reads_real_retained_log_without_daemon() {
         let tempdir = TempDir::new().expect("tempdir");
+        let _atm_log = EnvGuard::set_raw("ATM_LOG", "info");
         let observability =
             CliObservability::new(tempdir.path(), CliObservabilityOptions::default())
                 .expect("observability");

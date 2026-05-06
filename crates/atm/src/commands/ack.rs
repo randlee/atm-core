@@ -59,9 +59,16 @@ impl AckCommand {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::AckCommand;
 
     const VALID_MESSAGE_ID: &str = "550e8400-e29b-41d4-a716-446655440000";
+
+    fn test_paths() -> (PathBuf, PathBuf) {
+        let root = std::env::temp_dir().join("atm-ack-command-tests");
+        (root.join("home"), root.join("cwd"))
+    }
 
     #[test]
     fn build_request_rejects_empty_message_id() {
@@ -73,8 +80,9 @@ mod tests {
             json: false,
         };
 
+        let (home_dir, current_dir) = test_paths();
         let error = command
-            .build_request("/tmp/home".into(), "/tmp/cwd".into())
+            .build_request(home_dir, current_dir)
             .expect_err("empty message id");
 
         assert!(error.to_string().contains("invalid message id"));
@@ -90,8 +98,9 @@ mod tests {
             json: false,
         };
 
+        let (home_dir, current_dir) = test_paths();
         let error = command
-            .build_request("/tmp/home".into(), "/tmp/cwd".into())
+            .build_request(home_dir, current_dir)
             .expect_err("whitespace message id");
 
         assert!(error.to_string().contains("invalid message id"));
@@ -107,8 +116,9 @@ mod tests {
             json: true,
         };
 
+        let (home_dir, current_dir) = test_paths();
         let request = command
-            .build_request("/tmp/home".into(), "/tmp/cwd".into())
+            .build_request(home_dir, current_dir)
             .expect("request");
 
         assert_eq!(

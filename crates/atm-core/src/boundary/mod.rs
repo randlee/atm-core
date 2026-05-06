@@ -64,6 +64,94 @@ impl FromStr for MessageKey {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(transparent)]
+pub struct TaskState(String);
+
+impl TaskState {
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] when the state is blank or only whitespace.
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            return Err(
+                AtmError::validation("task state must not be blank").with_recovery(
+                    "Populate a non-empty task state before calling the Phase R boundary.",
+                ),
+            );
+        }
+        Ok(Self(value))
+    }
+}
+
+impl AsRef<str> for TaskState {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for TaskState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_ref())
+    }
+}
+
+impl FromStr for TaskState {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::new(value)
+    }
+}
+
+impl PartialEq<&str> for TaskState {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_ref() == *other
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(transparent)]
+pub struct AckTransition(String);
+
+impl AckTransition {
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] when the transition is blank or only whitespace.
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            return Err(
+                AtmError::validation("ack transition must not be blank").with_recovery(
+                    "Populate a non-empty ack transition before calling the Phase R boundary.",
+                ),
+            );
+        }
+        Ok(Self(value))
+    }
+}
+
+impl AsRef<str> for AckTransition {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for AckTransition {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_ref())
+    }
+}
+
+impl FromStr for AckTransition {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::new(value)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MailStoreMessageRecord {
     pub team: TeamName,
@@ -125,7 +213,7 @@ pub struct TaskStoreTaskMetadata {
 pub struct TaskStoreTaskRecord {
     pub team: TeamName,
     pub task_id: TaskId,
-    pub state: String,
+    pub state: TaskState,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner: Option<AgentName>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -336,7 +424,7 @@ pub struct TaskStoreUpdateTaskRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner: Option<AgentName>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub state: Option<String>,
+    pub state: Option<TaskState>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<TaskStoreTaskMetadata>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -385,7 +473,7 @@ pub struct TaskStoreRecordAckTransitionRequest {
     pub message_key: MessageKey,
     pub actor: AgentName,
     pub transitioned_at: IsoTimestamp,
-    pub transition: String,
+    pub transition: AckTransition,
 }
 
 /// Stub task-store record-ack-transition response for the Phase R skeleton.
@@ -403,7 +491,7 @@ pub struct TaskStoreQueryTaskMetadataRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message_key: Option<MessageKey>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub state: Option<String>,
+    pub state: Option<TaskState>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<usize>,
 }
