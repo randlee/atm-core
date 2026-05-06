@@ -8,13 +8,15 @@ use std::fmt;
 #[cfg(unix)]
 use std::fs::{self, File, OpenOptions};
 #[cfg(unix)]
-use std::io::Read;
-#[cfg(unix)]
 use std::io::Write;
 #[cfg(unix)]
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
 use std::sync::Arc;
+#[cfg(unix)]
+use std::sync::Mutex;
+#[cfg(unix)]
+use std::sync::OnceLock;
 #[cfg(unix)]
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 #[cfg(unix)]
@@ -188,21 +190,46 @@ struct DaemonShutdownSignals {
 }
 
 #[cfg(unix)]
+#[derive(Debug)]
+struct SharedDaemonShutdownSignals {
+    terminate: Arc<AtomicBool>,
+    reload: Arc<AtomicBool>,
+}
+
+#[cfg(unix)]
 impl DaemonShutdownSignals {
     fn install() -> Result<Self, AtmError> {
-        let terminate = Arc::new(AtomicBool::new(false));
-        let reload = Arc::new(AtomicBool::new(false));
-        for signal in [SIGINT, SIGTERM] {
-            flag::register(signal, Arc::clone(&terminate)).map_err(|source| {
-                AtmError::daemon_unavailable("failed to install daemon shutdown signal handler")
+        static SIGNALS: OnceLock<SharedDaemonShutdownSignals> = OnceLock::new();
+        static INSTALL_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        // OnceLock owns global registration; Mutex serializes the read-check-write window.
+        let _guard = INSTALL_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("daemon signal install lock");
+        if SIGNALS.get().is_none() {
+            let terminate = Arc::new(AtomicBool::new(false));
+            let reload = Arc::new(AtomicBool::new(false));
+            for signal in [SIGINT, SIGTERM] {
+                flag::register(signal, Arc::clone(&terminate)).map_err(|source| {
+                    AtmError::daemon_unavailable("failed to install daemon shutdown signal handler")
+                        .with_source(source)
+                })?;
+            }
+            flag::register(SIGHUP, Arc::clone(&reload)).map_err(|source| {
+                AtmError::daemon_unavailable("failed to install daemon reload signal handler")
                     .with_source(source)
             })?;
+            let _ = SIGNALS.set(SharedDaemonShutdownSignals { terminate, reload });
         }
-        flag::register(SIGHUP, Arc::clone(&reload)).map_err(|source| {
-            AtmError::daemon_unavailable("failed to install daemon reload signal handler")
-                .with_source(source)
-        })?;
-        Ok(Self { terminate, reload })
+        let shared = SIGNALS
+            .get()
+            .expect("daemon shutdown signals should be initialized");
+        shared.terminate.store(false, Ordering::SeqCst);
+        shared.reload.store(false, Ordering::SeqCst);
+        Ok(Self {
+            terminate: Arc::clone(&shared.terminate),
+            reload: Arc::clone(&shared.reload),
+        })
     }
 }
 
@@ -263,9 +290,7 @@ impl SingletonGuard {
             AtmError::daemon_unavailable("failed to sync daemon singleton lock metadata")
                 .with_source(source)
         })?;
-        if socket_path.exists() && UnixStream::connect(socket_path).is_err() {
-            let _ = fs::remove_file(socket_path);
-        }
+        remove_stale_socket(socket_path)?;
         Ok(Self {
             socket_path: socket_path.to_path_buf(),
             lock_path,
@@ -303,10 +328,28 @@ impl Drop for ActiveConnectionGuard {
 }
 
 #[cfg(unix)]
+fn remove_stale_socket(socket_path: &std::path::Path) -> Result<(), AtmError> {
+    if !socket_path.exists() {
+        return Ok(());
+    }
+    fs::remove_file(socket_path).map_err(|source| {
+        AtmError::daemon_unavailable(format!(
+            "failed to remove stale daemon socket at {}",
+            socket_path.display()
+        ))
+        .with_source(source)
+    })
+}
+
+#[cfg(unix)]
 fn handle_connection(
     stream: &mut UnixStream,
     dispatcher: &dyn RequestDispatcher,
+    force_shutdown: &AtomicBool,
 ) -> Result<(), AtmError> {
+    if force_shutdown.load(Ordering::SeqCst) {
+        return Ok(());
+    }
     stream
         .set_read_timeout(Some(REQUEST_DEADLINE))
         .map_err(|source| {
@@ -320,10 +363,11 @@ fn handle_connection(
                 .with_source(source)
         })?;
 
-    let mut bytes = Vec::new();
-    stream.read_to_end(&mut bytes).map_err(|source| {
-        AtmError::daemon_unavailable("failed to read daemon request frame").with_source(source)
-    })?;
+    let bytes = atm_core::protocol::read_bounded_stream(
+        stream,
+        "failed to read daemon request frame",
+        "daemon request frame exceeded the maximum supported size",
+    )?;
     if bytes.is_empty() {
         return Ok(());
     }
@@ -334,7 +378,12 @@ fn handle_connection(
     let response = match dispatcher.dispatch(request) {
         Ok(response) if started.elapsed() <= REQUEST_DEADLINE => response,
         Ok(_) => ResponseEnvelope::Error(atm_core::protocol::ProtocolErrorEnvelope::from_error(
-            &AtmError::daemon_unavailable("daemon request exceeded the 3s runtime deadline"),
+            &AtmError::daemon_unavailable(
+                "daemon request exceeded the 3s runtime deadline after the handler completed; the operation may have succeeded",
+            )
+            .with_recovery(
+                "Check the destination mailbox or service-side effects before retrying this ATM command.",
+            ),
         )),
         Err(error) => ResponseEnvelope::Error(
             atm_core::protocol::ProtocolErrorEnvelope::from_error(&error),
@@ -390,6 +439,7 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
         })?;
 
         let active_connections = Arc::new(AtomicUsize::new(0));
+        let force_shutdown = Arc::new(AtomicBool::new(false));
         thread::scope(|scope| -> Result<(), AtmError> {
             loop {
                 if signals.reload.swap(false, Ordering::SeqCst) {
@@ -408,10 +458,15 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
                                 atm_core::protocol::ProtocolErrorEnvelope::from_error(
                                     &AtmError::daemon_unavailable(
                                         "daemon connection cap exceeded (max 64 concurrent accepts)",
+                                    )
+                                    .with_recovery(
+                                        "Wait for in-flight ATM commands to complete before retrying, or reduce concurrent atm invocations.",
                                     ),
                                 ),
                             );
                             let encoded = serde_json::to_vec(&response).map_err(AtmError::from)?;
+                            let _ = stream.set_read_timeout(Some(REQUEST_DEADLINE));
+                            let _ = stream.set_write_timeout(Some(REQUEST_DEADLINE));
                             let _ = stream.write_all(&encoded);
                             let _ = stream.flush();
                             continue;
@@ -419,11 +474,15 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
 
                         let dispatcher = Arc::clone(&dispatcher);
                         let active_connections = Arc::clone(&active_connections);
+                        let force_shutdown = Arc::clone(&force_shutdown);
                         active_connections.fetch_add(1, Ordering::SeqCst);
                         scope.spawn(move || {
                             let _active = ActiveConnectionGuard::new(active_connections);
-                            if let Err(error) = handle_connection(&mut stream, dispatcher.as_ref())
-                            {
+                            if let Err(error) = handle_connection(
+                                &mut stream,
+                                dispatcher.as_ref(),
+                                force_shutdown.as_ref(),
+                            ) {
                                 tracing::warn!(%error, "daemon connection handling failed");
                             }
                         });
@@ -441,15 +500,40 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
             }
 
             let shutdown_started = Instant::now();
+            tracing::info!(
+                active_connections = active_connections.load(Ordering::SeqCst),
+                "daemon shutdown signal received; starting graceful drain"
+            );
+            let graceful_deadline = shutdown_started + GRACEFUL_DRAIN_DEADLINE;
+            let force_cancel_deadline = shutdown_started + FORCE_CANCEL_DEADLINE;
             while active_connections.load(Ordering::SeqCst) > 0
-                && shutdown_started.elapsed() < GRACEFUL_DRAIN_DEADLINE
+                && Instant::now() < graceful_deadline
             {
                 thread::sleep(SHUTDOWN_POLL_INTERVAL);
             }
+            let remaining_after_graceful = active_connections.load(Ordering::SeqCst);
+            if remaining_after_graceful == 0 {
+                tracing::info!("daemon graceful drain completed cleanly");
+            } else {
+                tracing::info!(
+                    active_connections = remaining_after_graceful,
+                    "daemon graceful drain hit deadline; continuing toward forced exit"
+                );
+            }
             while active_connections.load(Ordering::SeqCst) > 0
-                && shutdown_started.elapsed() < FORCE_CANCEL_DEADLINE
+                && Instant::now() < force_cancel_deadline
             {
                 thread::sleep(SHUTDOWN_POLL_INTERVAL);
+            }
+            let remaining_connections = active_connections.load(Ordering::SeqCst);
+            if remaining_connections > 0 {
+                force_shutdown.store(true, Ordering::SeqCst);
+                tracing::error!(
+                    remaining_connections,
+                    "forced exit: {} connections still active after FORCE_CANCEL_DEADLINE",
+                    remaining_connections
+                );
+                std::process::exit(1);
             }
             Ok(())
         })
@@ -464,12 +548,16 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
 }
 
 /// Placeholder runtime dispatcher for daemon-owned protocol routing.
-#[derive(Debug, Default)]
-struct DaemonRequestDispatcher;
+#[derive(Debug, Clone)]
+struct DaemonRequestDispatcher {
+    observability: DaemonObservability,
+}
 
 impl DaemonRequestDispatcher {
-    const fn new() -> Self {
-        Self
+    fn new(home_dir: PathBuf) -> Self {
+        Self {
+            observability: DaemonObservability::new(home_dir),
+        }
     }
 }
 
@@ -477,27 +565,29 @@ impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
 impl boundary::RequestDispatcher for DaemonRequestDispatcher {
     fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        let observability = DaemonObservability::new(atm_core::home::atm_home()?);
         match request {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
                 Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(
-                    send_mail(request, &observability)?,
+                    send_mail(request, &self.observability)?,
                 )))
             }
             RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
                 Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
-                    ack_mail(request, &observability)?,
+                    ack_mail(request, &self.observability)?,
                 )))
             }
-            RequestEnvelope::Receive(query) => {
-                Ok(ResponseEnvelope::Receive(read_mail(query, &observability)?))
-            }
-            RequestEnvelope::Clear(query) => {
-                Ok(ResponseEnvelope::Clear(clear_mail(query, &observability)?))
-            }
-            RequestEnvelope::Doctor(query) => {
-                Ok(ResponseEnvelope::Doctor(run_doctor(query, &observability)?))
-            }
+            RequestEnvelope::Receive(query) => Ok(ResponseEnvelope::Receive(read_mail(
+                query,
+                &self.observability,
+            )?)),
+            RequestEnvelope::Clear(query) => Ok(ResponseEnvelope::Clear(clear_mail(
+                query,
+                &self.observability,
+            )?)),
+            RequestEnvelope::Doctor(query) => Ok(ResponseEnvelope::Doctor(run_doctor(
+                query,
+                &self.observability,
+            )?)),
         }
     }
 }
@@ -689,5 +779,5 @@ impl InboxExport for DaemonInboxExport {
 ///
 /// Returns [`AtmError`] when the daemon transport cannot start or serve.
 pub fn run_daemon() -> Result<(), AtmError> {
-    composition::compose_runtime().serve()
+    composition::compose_runtime()?.serve()
 }

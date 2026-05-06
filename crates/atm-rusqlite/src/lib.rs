@@ -259,7 +259,11 @@ impl boundary::MailStore for SqliteMailStore {
             let existing: Option<i64> = transaction
                 .query_row(
                     "SELECT 1 FROM mail_messages WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
-                    params![record.team.as_str(), record.agent.as_str(), record.message_key],
+                    params![
+                        record.team.as_str(),
+                        record.agent.as_str(),
+                        record.message_key.as_ref()
+                    ],
                     |row| row.get(0),
                 )
                 .optional()
@@ -275,7 +279,7 @@ impl boundary::MailStore for SqliteMailStore {
                     params![
                         record.team.as_str(),
                         record.agent.as_str(),
-                        record.message_key,
+                        record.message_key.as_ref(),
                         envelope_json,
                         record.imported_from,
                         record.recorded_at.map(|value| value.into_inner().to_rfc3339()),
@@ -301,7 +305,7 @@ impl boundary::MailStore for SqliteMailStore {
                     params![
                         request.team.as_str(),
                         request.agent.as_str(),
-                        request.message_key
+                        request.message_key.as_ref()
                     ],
                     |row| {
                         Ok((
@@ -358,7 +362,7 @@ impl boundary::MailStore for SqliteMailStore {
                     params![
                         request.team.as_str(),
                         request.agent.as_str(),
-                        request.state.message_key.clone(),
+                        request.state.message_key.as_ref(),
                         state_json,
                     ],
                 )
@@ -384,7 +388,7 @@ impl boundary::MailStore for SqliteMailStore {
                     params![
                         request.team.as_str(),
                         request.agent.as_str(),
-                        request.message_key
+                        request.message_key.as_ref()
                     ],
                     |row| row.get::<_, String>(0),
                 )
@@ -773,7 +777,7 @@ impl boundary::TaskStore for SqliteTaskStore {
                 })?;
             record.metadata.fields.insert(
                 "last_ack_transition".to_string(),
-                request.transition.clone(),
+                request.transition.to_string(),
             );
             record
                 .metadata
@@ -781,7 +785,7 @@ impl boundary::TaskStore for SqliteTaskStore {
                 .insert("last_ack_actor".to_string(), request.actor.to_string());
             record.metadata.fields.insert(
                 "last_ack_message_key".to_string(),
-                request.message_key.clone(),
+                request.message_key.to_string(),
             );
             record.metadata.fields.insert(
                 "last_ack_at".to_string(),
@@ -878,6 +882,7 @@ impl boundary::TaskStore for SqliteTaskStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use atm_core::MessageKey;
     use atm_core::schema::TeamConfig;
     use atm_core::schema::{AgentMember, MessageEnvelope};
     use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
@@ -903,6 +908,10 @@ mod tests {
 
     fn task_id() -> TaskId {
         "task-123".parse().expect("task id")
+    }
+
+    fn message_key(value: &str) -> MessageKey {
+        MessageKey::new(value).expect("message key")
     }
 
     fn envelope() -> MessageEnvelope {
@@ -939,7 +948,7 @@ mod tests {
         let record = boundary::MailStoreMessageRecord {
             team: team(),
             agent: agent(),
-            message_key: "atm:test-1".to_string(),
+            message_key: message_key("atm:test-1"),
             envelope: envelope(),
             imported_from: Some("cli-send".to_string()),
             recorded_at: Some(IsoTimestamp::now()),
@@ -955,7 +964,7 @@ mod tests {
             .load_message(boundary::MailStoreLoadMessageRequest {
                 team: team(),
                 agent: agent(),
-                message_key: "atm:test-1".to_string(),
+                message_key: message_key("atm:test-1"),
             })
             .expect("load");
         assert_eq!(loaded.record, Some(record.clone()));
@@ -964,7 +973,7 @@ mod tests {
             team: team(),
             agent: agent(),
             actor: actor(),
-            message_key: "atm:test-1".to_string(),
+            message_key: message_key("atm:test-1"),
             read: true,
             pending_ack_at: record.envelope.pending_ack_at,
             acknowledged_at: None,
@@ -983,7 +992,7 @@ mod tests {
                 team: team(),
                 agent: agent(),
                 actor: actor(),
-                message_key: "atm:test-1".to_string(),
+                message_key: message_key("atm:test-1"),
             })
             .expect("load visibility");
         assert_eq!(loaded_visibility.state, Some(visibility));
@@ -1008,9 +1017,9 @@ mod tests {
         let record = boundary::TaskStoreTaskRecord {
             team: team(),
             task_id: task_id(),
-            state: "active".to_string(),
+            state: "active".parse().expect("task state"),
             owner: Some(agent()),
-            linked_message_keys: vec!["atm:test-1".to_string()],
+            linked_message_keys: vec![message_key("atm:test-1")],
             metadata: boundary::TaskStoreTaskMetadata::default(),
             created_at: Some(IsoTimestamp::now()),
             updated_at: None,
@@ -1035,9 +1044,9 @@ mod tests {
                 team: team(),
                 task_id: task_id(),
                 owner: None,
-                state: Some("acknowledged".to_string()),
+                state: Some("acknowledged".parse().expect("task state")),
                 metadata: None,
-                append_message_keys: vec!["atm:test-2".to_string()],
+                append_message_keys: vec![message_key("atm:test-2")],
             })
             .expect("update");
         assert_eq!(updated.record.state, "acknowledged");
@@ -1046,7 +1055,7 @@ mod tests {
                 .record
                 .linked_message_keys
                 .iter()
-                .any(|value| value == "atm:test-2")
+                .any(|value| value.as_ref() == "atm:test-2")
         );
 
         let metadata = store
@@ -1054,7 +1063,7 @@ mod tests {
                 team: team(),
                 task_id: Some(task_id()),
                 message_key: None,
-                state: Some("acknowledged".to_string()),
+                state: Some("acknowledged".parse().expect("task state")),
                 limit: Some(10),
             })
             .expect("metadata query");

@@ -1,5 +1,3 @@
-mod support;
-
 /// Verifies that the version field on the agent-team-mail-core path dependency
 /// in crates/atm/Cargo.toml matches the workspace version, and that Cargo.lock
 /// records the same version for both crates.

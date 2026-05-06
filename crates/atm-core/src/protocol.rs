@@ -1,6 +1,7 @@
 //! Shared protocol DTOs for the core transport boundary family.
 
 use std::env;
+use std::io::Read;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -130,6 +131,38 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FramePayload {
     pub bytes: Vec<u8>,
+}
+
+/// Maximum encoded daemon request/response frame size.
+pub const MAX_DAEMON_FRAME_BYTES: usize = 1024 * 1024;
+
+/// Read one daemon frame into memory while enforcing the shared size cap.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the stream cannot be read or when the payload
+/// exceeds [`MAX_DAEMON_FRAME_BYTES`].
+pub fn read_bounded_stream(
+    stream: &mut impl Read,
+    read_error: &'static str,
+    oversize_error: &'static str,
+) -> Result<Vec<u8>, AtmError> {
+    let mut bytes = Vec::new();
+    let mut chunk = [0u8; 8192];
+    loop {
+        let read = stream
+            .read(&mut chunk)
+            .map_err(|source| AtmError::daemon_unavailable(read_error).with_source(source))?;
+        if read == 0 {
+            return Ok(bytes);
+        }
+        if bytes.len().saturating_add(read) > MAX_DAEMON_FRAME_BYTES {
+            return Err(AtmError::daemon_unavailable(oversize_error).with_recovery(
+                "Reduce the daemon request/response payload size before retrying the ATM command.",
+            ));
+        }
+        bytes.extend_from_slice(&chunk[..read]);
+    }
 }
 
 /// Resolve the active daemon socket path for the ATM request transport.
