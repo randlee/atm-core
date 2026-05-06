@@ -57,6 +57,7 @@ enum RuleFilterArg {
     Boundaries,
     InternalOnly,
     ForbidExternalImpls,
+    Portability,
 }
 
 impl From<FormatArg> for OutputFormat {
@@ -84,6 +85,7 @@ impl From<RuleFilterArg> for RuleFilter {
             RuleFilterArg::Boundaries => RuleFilter::Boundaries,
             RuleFilterArg::InternalOnly => RuleFilter::InternalOnly,
             RuleFilterArg::ForbidExternalImpls => RuleFilter::ForbidExternalImpls,
+            RuleFilterArg::Portability => RuleFilter::Portability,
         }
     }
 }

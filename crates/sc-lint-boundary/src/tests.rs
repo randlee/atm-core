@@ -278,7 +278,232 @@ fn rejects_unknown_rule_filter() {
     let error = RuleFilter::try_from("unknown").unwrap_err();
     assert_eq!(
         error.to_string(),
-        "unsupported rule filter `unknown`; supported: cycles, boundaries, internal_only, forbid_external_impls"
+        "unsupported rule filter `unknown`; supported: cycles, boundaries, internal_only, forbid_external_impls, portability"
+    );
+}
+
+#[test]
+fn flags_hardcoded_tmp_path_in_test_scope() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_lint_config(
+        r#"
+        [portability]
+        config_home_env = "ATM_CONFIG_HOME"
+        "#,
+    );
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+            #[cfg(test)]
+            mod tests {
+                use std::path::PathBuf;
+
+                #[test]
+                fn writes_artifact() {
+                    let _ = PathBuf::from("/tmp/test-artifact");
+                }
+            }
+        "#,
+    );
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Portability),
+    })
+    .unwrap();
+
+    assert_eq!(report.status, "fail");
+    assert_eq!(report.findings.len(), 1);
+    assert_eq!(report.findings[0].rule_id, RuleId::Port001);
+}
+
+#[test]
+fn passes_temp_dir_usage_in_test_scope() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_lint_config(
+        r#"
+        [portability]
+        config_home_env = "ATM_CONFIG_HOME"
+        "#,
+    );
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+            #[cfg(test)]
+            mod tests {
+                #[test]
+                fn writes_artifact() {
+                    let _ = std::env::temp_dir().join("test-artifact");
+                }
+            }
+        "#,
+    );
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Portability),
+    })
+    .unwrap();
+
+    assert_eq!(report.status, "pass");
+    assert!(report.findings.is_empty());
+}
+
+#[test]
+fn does_not_flag_unix_only_production_code() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_lint_config(
+        r#"
+        [portability]
+        config_home_env = "ATM_CONFIG_HOME"
+        "#,
+    );
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+            #[cfg(unix)]
+            pub fn socket_path() -> std::path::PathBuf {
+                std::path::PathBuf::from("/tmp/runtime-socket")
+            }
+        "#,
+    );
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Portability),
+    })
+    .unwrap();
+
+    assert_eq!(report.status, "pass");
+    assert!(report.findings.is_empty());
+}
+
+#[test]
+fn flags_dirs_home_dir_without_override_check() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_lint_config(
+        r#"
+        [portability]
+        config_home_env = "ATM_CONFIG_HOME"
+        "#,
+    );
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+            #[cfg(test)]
+            mod tests {
+                fn config_root() -> std::path::PathBuf {
+                    dirs::home_dir().expect("home")
+                }
+            }
+        "#,
+    );
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Portability),
+    })
+    .unwrap();
+
+    assert_eq!(report.status, "fail");
+    assert_eq!(report.findings.len(), 1);
+    assert_eq!(report.findings[0].rule_id, RuleId::Port002);
+    assert!(report.findings[0].message.contains("ATM_CONFIG_HOME"));
+}
+
+#[test]
+fn passes_dirs_home_dir_after_override_check() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_lint_config(
+        r#"
+        [portability]
+        config_home_env = "ATM_CONFIG_HOME"
+        "#,
+    );
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+            #[cfg(test)]
+            mod tests {
+                fn get_os_home_dir() -> std::path::PathBuf {
+                    if let Ok(home) = std::env::var("ATM_CONFIG_HOME") {
+                        return std::path::PathBuf::from(home);
+                    }
+                    dirs::home_dir().expect("home")
+                }
+            }
+        "#,
+    );
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Portability),
+    })
+    .unwrap();
+
+    assert_eq!(report.status, "pass");
+    assert!(report.findings.is_empty());
+}
+
+#[test]
+fn flags_set_var_in_test_scope() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_lint_config(
+        r#"
+        [portability]
+        config_home_env = "ATM_CONFIG_HOME"
+        "#,
+    );
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+            #[cfg(test)]
+            mod tests {
+                #[test]
+                fn mutates_env() {
+                    unsafe { std::env::set_var("HOME", "test-home") };
+                }
+            }
+        "#,
+    );
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Portability),
+    })
+    .unwrap();
+
+    assert_eq!(report.status, "fail");
+    assert_eq!(report.findings.len(), 1);
+    assert!(
+        report
+            .findings
+            .iter()
+            .any(|finding| finding.rule_id == RuleId::Port003)
     );
 }
 
@@ -1444,6 +1669,10 @@ impl WorkspaceFixture {
             &format!("crates/{package_name}/src/{relative_path}"),
             contents,
         );
+    }
+
+    fn write_lint_config(&self, contents: &str) {
+        self.write(".just/lint-config.toml", contents);
     }
 
     fn write(&self, relative_path: &str, contents: &str) {

@@ -50,6 +50,10 @@ _lint-sc-boundary:
     {{python_cmd}} .just/lint_sc_boundary.py
 
 [private]
+_lint-sc-portability:
+    {{python_cmd}} .just/lint_sc_portability.py
+
+[private]
 _lint-manifests:
     {{python_cmd}} .just/lint_manifests.py
 

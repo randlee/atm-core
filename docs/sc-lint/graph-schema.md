@@ -107,6 +107,9 @@ Current implemented rule ids:
 - `SCB-BOUNDARY-001`
 - `SCB-BOUNDARY-002`
 - `SCB-BOUNDARY-003`
+- `PORT-001`
+- `PORT-002`
+- `PORT-003`
 
 ## Source-Level Allowances
 

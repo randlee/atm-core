@@ -38,6 +38,7 @@ SECTIONS = (
             ("lint shear", "Run cargo-shear unused-dependency checks."),
             ("lint boundaries", "Run the crate/source boundary checks."),
             ("lint sc-boundary", "Run the preliminary syn-based boundary analyzer."),
+            ("lint sc-portability", "Run the preliminary syn-based portability analyzer."),
             ("lint manifests", "Run the Cargo manifest policy checks."),
             ("lint version", "Run only the version alignment checks."),
             ("lint identities", "Run only the RULE-008 identity literal guard."),

@@ -59,6 +59,10 @@ Current scaffold status:
       - `SCB-BOUNDARY-001` internal_only visibility violation
       - `SCB-BOUNDARY-002` internal_only external reference
       - `SCB-BOUNDARY-003` forbid_external_impls violation
+    - portability enforcement with:
+      - `PORT-001` hardcoded Unix-only absolute paths in test code
+      - `PORT-002` direct `dirs::home_dir()` without configured override check
+      - `PORT-003` `std::env::set_var()` in test code
     - stable text/JSON findings output
     - graph export in:
       - JSON
@@ -67,6 +71,9 @@ Current scaffold status:
 Current repo integration status:
 
 - `just lint sc-boundary`
+  - exists now as a separate preliminary/manual target
+  - is intentionally not part of default `just lint` yet
+- `just lint sc-portability`
   - exists now as a separate preliminary/manual target
   - is intentionally not part of default `just lint` yet
 

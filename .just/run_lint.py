@@ -28,11 +28,11 @@ PYTHON_LINT_ORDER = (
     "spell",
     "pytests",
 )
-EXTRA_LINTS = ("sc-boundary",)
+EXTRA_LINTS = ("sc-boundary", "sc-portability")
 CARGO_LINT_ORDER = ("fmt", "clippy", "deny", "shear")
 FAST_LINT_ORDER = ("fmt", "version", "boundaries", "manifests", "spell", "pytests")
 HIGH_VOLUME_LINTS = {"identities", "lines"}
-CRATE_INVENTORY_LINTS = {"fmt", "clippy", "modules", "boundaries", "sc-boundary", "manifests"}
+CRATE_INVENTORY_LINTS = {"fmt", "clippy", "modules", "boundaries", "sc-boundary", "sc-portability", "manifests"}
 COUNT_PATTERNS = (
     ("total violations:", "violations"),
     ("errors:", "errors"),
@@ -74,6 +74,9 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         "boundaries": LintTask("boundaries", [python_executable, str(repo_root / ".just/lint_boundaries.py")]),
         "sc-boundary": LintTask(
             "sc-boundary", [python_executable, str(repo_root / ".just/lint_sc_boundary.py")]
+        ),
+        "sc-portability": LintTask(
+            "sc-portability", [python_executable, str(repo_root / ".just/lint_sc_portability.py")]
         ),
         "manifests": LintTask("manifests", [python_executable, str(repo_root / ".just/lint_manifests.py")]),
         "spell": LintTask("spell", [python_executable, str(repo_root / ".just/lint_codespell.py")]),

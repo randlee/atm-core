@@ -37,6 +37,7 @@ resolver = "2"
         self.assertIn("spell", names)
         self.assertIn("pytests", names)
         self.assertNotIn("sc-boundary", names)
+        self.assertNotIn("sc-portability", names)
 
     def test_resolve_task_names_rejects_unknown_target(self) -> None:
         with self.assertRaises(ValueError):
@@ -44,6 +45,9 @@ resolver = "2"
 
     def test_resolve_task_names_accepts_sc_boundary_manual_target(self) -> None:
         self.assertEqual(resolve_task_names("sc-boundary"), ["sc-boundary"])
+
+    def test_resolve_task_names_accepts_sc_portability_manual_target(self) -> None:
+        self.assertEqual(resolve_task_names("sc-portability"), ["sc-portability"])
 
     def test_extract_count_understands_total_violations(self) -> None:
         self.assertEqual(extract_count(["total violations: 58"]), 58)
@@ -86,6 +90,7 @@ resolver = "2"
             self.assertEqual(tasks["modules"].command[-1], str(repo_root / ".just/lint_cargo_modules.py"))
             self.assertEqual(tasks["boundaries"].command[-1], str(repo_root / ".just/lint_boundaries.py"))
             self.assertEqual(tasks["sc-boundary"].command[-1], str(repo_root / ".just/lint_sc_boundary.py"))
+            self.assertEqual(tasks["sc-portability"].command[-1], str(repo_root / ".just/lint_sc_portability.py"))
             self.assertEqual(tasks["manifests"].command[-1], str(repo_root / ".just/lint_manifests.py"))
             self.assertEqual(tasks["deny"].command[-1], str(repo_root / ".just/lint_cargo_deny.py"))
             self.assertEqual(tasks["shear"].command[-1], str(repo_root / ".just/lint_cargo_shear.py"))

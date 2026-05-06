@@ -30,6 +30,7 @@ mod analysis;
 #[path = "../../sc-lint-attributes/src/directives.rs"]
 mod directive_parser;
 mod graph;
+mod portability;
 mod render;
 #[cfg(test)]
 mod tests;
@@ -40,12 +41,18 @@ const DEFAULT_RULES_TOML: &str = include_str!("../config/defaults.toml");
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 struct RuleDefaults {
     trait_self_loop: TraitSelfLoopDefaults,
+    portability: PortabilityDefaults,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 struct TraitSelfLoopDefaults {
     ignored_trait_paths: Vec<String>,
     ignored_trait_names: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+struct PortabilityDefaults {
+    unix_path_prefixes: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -108,6 +115,9 @@ pub enum RuleId {
     ScbBoundary001,
     ScbBoundary002,
     ScbBoundary003,
+    Port001,
+    Port002,
+    Port003,
 }
 
 impl RuleId {
@@ -119,6 +129,9 @@ impl RuleId {
             Self::ScbBoundary001 => "SCB-BOUNDARY-001",
             Self::ScbBoundary002 => "SCB-BOUNDARY-002",
             Self::ScbBoundary003 => "SCB-BOUNDARY-003",
+            Self::Port001 => "PORT-001",
+            Self::Port002 => "PORT-002",
+            Self::Port003 => "PORT-003",
         }
     }
 }
@@ -138,6 +151,7 @@ pub enum RuleFilter {
     Boundaries,
     InternalOnly,
     ForbidExternalImpls,
+    Portability,
 }
 
 impl RuleFilter {
@@ -147,6 +161,7 @@ impl RuleFilter {
             Self::Boundaries => "boundaries",
             Self::InternalOnly => "internal_only",
             Self::ForbidExternalImpls => "forbid_external_impls",
+            Self::Portability => "portability",
         }
     }
 }
@@ -174,7 +189,7 @@ impl fmt::Display for RuleFilterParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "unsupported rule filter `{}`; supported: cycles, boundaries, internal_only, forbid_external_impls",
+            "unsupported rule filter `{}`; supported: cycles, boundaries, internal_only, forbid_external_impls, portability",
             self.invalid_value
         )
     }
@@ -191,6 +206,7 @@ impl TryFrom<&str> for RuleFilter {
             "boundaries" => Ok(Self::Boundaries),
             "internal_only" => Ok(Self::InternalOnly),
             "forbid_external_impls" => Ok(Self::ForbidExternalImpls),
+            "portability" => Ok(Self::Portability),
             other => Err(RuleFilterParseError::new(other)),
         }
     }
@@ -351,6 +367,24 @@ impl GraphBuilder {
 }
 
 pub fn analyze_workspace(options: &AnalyzeOptions) -> Result<FindingsReport> {
+    if options.rule == Some(RuleFilter::Portability) {
+        let findings = portability::analyze_portability(&options.root)?;
+        let scanned_crates = portability::count_scanned_crates(&options.root)?;
+        let status = if findings.iter().any(analysis::finding_is_failure) {
+            "fail"
+        } else {
+            "pass"
+        };
+        return Ok(FindingsReport {
+            tool: "sc-lint-boundary",
+            version: env!("CARGO_PKG_VERSION"),
+            schema_version: SC_LINT_SCHEMA_VERSION,
+            status,
+            scanned_crates,
+            findings,
+        });
+    }
+
     let graph = graph::build_workspace_graph(&options.root)?;
     let mut findings = Vec::new();
     let filter = options.rule;

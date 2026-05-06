@@ -26,3 +26,11 @@ ignored_trait_names = [
   "Deserialize",
   "Parse",
 ]
+
+[portability]
+unix_path_prefixes = [
+  "/tmp/",
+  "/home/",
+  "/usr/",
+  "/etc/",
+]

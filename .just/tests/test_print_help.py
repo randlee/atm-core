@@ -20,6 +20,7 @@ class PrintHelpTests(unittest.TestCase):
         self.assertIn("lint modules", output)
         self.assertIn("lint boundaries", output)
         self.assertIn("lint sc-boundary", output)
+        self.assertIn("lint sc-portability", output)
         self.assertIn("lint manifests", output)
         self.assertIn("lint pytests", output)
         self.assertIn("fmt apply", output)

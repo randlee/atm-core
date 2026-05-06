@@ -879,7 +879,7 @@ pub(crate) fn default_rule_defaults() -> &'static RuleDefaults {
     })
 }
 
-fn is_supported_target(target: &cargo_metadata::Target) -> bool {
+pub(crate) fn is_supported_target(target: &cargo_metadata::Target) -> bool {
     target.kind.iter().any(|kind| {
         matches!(
             kind,
@@ -894,7 +894,7 @@ pub(crate) fn crate_id(package_name: &str, target_name: &str) -> String {
     format!("crate::{package_name}::{target_name}")
 }
 
-fn load_metadata(root: &Path) -> Result<cargo_metadata::Metadata> {
+pub(crate) fn load_metadata(root: &Path) -> Result<cargo_metadata::Metadata> {
     MetadataCommand::new()
         .current_dir(root)
         .exec()
