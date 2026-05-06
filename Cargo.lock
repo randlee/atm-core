@@ -19,7 +19,6 @@ dependencies = [
  "time",
  "tracing",
  "tracing-subscriber",
- "uuid",
 ]
 
 [[package]]

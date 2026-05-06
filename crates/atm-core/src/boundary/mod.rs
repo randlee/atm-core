@@ -10,6 +10,7 @@ use crate::schema::{AgentMember, MessageEnvelope, TeamConfig};
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 use std::path::PathBuf;
 
 /// Workspace-convention seal only; not compiler-enforced outside this crate.
@@ -21,11 +22,44 @@ pub mod sealed {
     pub trait Sealed {}
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(transparent)]
+pub struct MessageKey(String);
+
+impl MessageKey {
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] when the key is blank or only whitespace.
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            return Err(
+                AtmError::validation("message key must not be blank").with_recovery(
+                    "Populate a stable ATM message key before calling the Phase R boundary.",
+                ),
+            );
+        }
+        Ok(Self(value))
+    }
+}
+
+impl AsRef<str> for MessageKey {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for MessageKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_ref())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MailStoreMessageRecord {
     pub team: TeamName,
     pub agent: AgentName,
-    pub message_key: String,
+    pub message_key: MessageKey,
     pub envelope: MessageEnvelope,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imported_from: Option<String>,
@@ -38,7 +72,7 @@ pub struct MailStoreVisibilityState {
     pub team: TeamName,
     pub agent: AgentName,
     pub actor: AgentName,
-    pub message_key: String,
+    pub message_key: MessageKey,
     pub read: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pending_ack_at: Option<IsoTimestamp>,
@@ -86,7 +120,7 @@ pub struct TaskStoreTaskRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner: Option<AgentName>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub linked_message_keys: Vec<String>,
+    pub linked_message_keys: Vec<MessageKey>,
     #[serde(default)]
     pub metadata: TaskStoreTaskMetadata,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -157,7 +191,7 @@ pub struct MailStoreUpsertMessageResponse {
 pub struct MailStoreLoadMessageRequest {
     pub team: TeamName,
     pub agent: AgentName,
-    pub message_key: String,
+    pub message_key: MessageKey,
 }
 
 /// Stub mail-store load-message response for the Phase R skeleton.
@@ -188,7 +222,7 @@ pub struct MailStoreLoadVisibilityStateRequest {
     pub team: TeamName,
     pub agent: AgentName,
     pub actor: AgentName,
-    pub message_key: String,
+    pub message_key: MessageKey,
 }
 
 /// Stub mail-store load-visibility response for the Phase R skeleton.
@@ -297,7 +331,7 @@ pub struct TaskStoreUpdateTaskRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<TaskStoreTaskMetadata>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub append_message_keys: Vec<String>,
+    pub append_message_keys: Vec<MessageKey>,
 }
 
 /// Stub task-store update-task response for the Phase R skeleton.
@@ -311,7 +345,7 @@ pub struct TaskStoreUpdateTaskResponse {
 pub struct TaskStoreAttachMessageLinkRequest {
     pub team: TeamName,
     pub task_id: TaskId,
-    pub message_key: String,
+    pub message_key: MessageKey,
 }
 
 /// Stub task-store attach-message-link response for the Phase R skeleton.
@@ -325,7 +359,7 @@ pub struct TaskStoreAttachMessageLinkResponse {
 pub struct TaskStoreDetachMessageLinkRequest {
     pub team: TeamName,
     pub task_id: TaskId,
-    pub message_key: String,
+    pub message_key: MessageKey,
 }
 
 /// Stub task-store detach-message-link response for the Phase R skeleton.
@@ -339,7 +373,7 @@ pub struct TaskStoreDetachMessageLinkResponse {
 pub struct TaskStoreRecordAckTransitionRequest {
     pub team: TeamName,
     pub task_id: TaskId,
-    pub message_key: String,
+    pub message_key: MessageKey,
     pub actor: AgentName,
     pub transitioned_at: IsoTimestamp,
     pub transition: String,
@@ -358,7 +392,7 @@ pub struct TaskStoreQueryTaskMetadataRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub message_key: Option<String>,
+    pub message_key: Option<MessageKey>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub state: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

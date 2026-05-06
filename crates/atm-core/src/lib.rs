@@ -55,6 +55,10 @@ pub mod team_admin;
 pub mod test_support;
 /// Internal text-formatting helpers used by ATM core surfaces.
 pub(crate) mod text;
+/// Hidden transport test utilities shared by CLI-layer tests.
+#[doc(hidden)]
+#[cfg(feature = "test-utils")]
+pub mod transport;
 /// Shared enums and semantic newtypes used across ATM core workflows.
 pub mod types;
 /// Internal ATM-owned workflow-state helpers shared across mailbox services.
@@ -77,9 +81,9 @@ pub use boundary::{
     MailStoreRequest, MailStoreResponse, MailStoreTransactionRequest, MailStoreTransactionResponse,
     MailStoreUpsertMessageRequest, MailStoreUpsertMessageResponse,
     MailStoreUpsertVisibilityStateRequest, MailStoreUpsertVisibilityStateResponse,
-    MailStoreVisibilityState, NotificationEvent, NotificationSink, ReconcileCoordinator,
-    ReconcileRequest, ReconcileResult, RequestDispatcher, RosterStore, RosterStoreHealthSnapshot,
-    RosterStoreHealthSnapshotRequest, RosterStoreHealthSnapshotResponse,
+    MailStoreVisibilityState, MessageKey, NotificationEvent, NotificationSink,
+    ReconcileCoordinator, ReconcileRequest, ReconcileResult, RequestDispatcher, RosterStore,
+    RosterStoreHealthSnapshot, RosterStoreHealthSnapshotRequest, RosterStoreHealthSnapshotResponse,
     RosterStoreLoadRosterRequest, RosterStoreLoadRosterResponse, RosterStoreQueryMembershipRequest,
     RosterStoreQueryMembershipResponse, RosterStoreReplaceRosterRequest,
     RosterStoreReplaceRosterResponse, RosterStoreRequest, RosterStoreResponse,

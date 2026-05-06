@@ -18,9 +18,6 @@ exclude = ["src/bin/atm_post_send_hook_fixture.rs"]
 name = "atm"
 path = "src/main.rs"
 
-[features]
-daemon-integration-tests = []
-
 [dependencies]
 atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.2" }
 anyhow.workspace = true
@@ -35,7 +32,7 @@ tracing-subscriber.workspace = true
 fs2 = "0.4"
 
 [dev-dependencies]
+atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.2", features = ["test-utils"] }
 sc-observability = { version = "1.0.0", features = ["fault-injection"] }
 serial_test = "3"
 tempfile = "3"
-uuid = { version = "1", features = ["v4"] }

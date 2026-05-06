@@ -137,7 +137,27 @@ impl LocalSocketClientTransport {
     #[cfg(unix)]
     fn exchange(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         let mut stream = self.try_connect()?;
+        stream
+            .set_write_timeout(Some(Duration::from_secs(5)))
+            .map_err(|source| {
+                AtmError::daemon_unavailable("failed to configure daemon socket write timeout")
+                    .with_source(source)
+            })?;
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .map_err(|source| {
+                AtmError::daemon_unavailable("failed to configure daemon socket read timeout")
+                    .with_source(source)
+            })?;
         let encoded = serde_json::to_vec(&request).map_err(AtmError::from)?;
+        if encoded.len() > atm_core::protocol::MAX_DAEMON_FRAME_BYTES {
+            return Err(AtmError::daemon_unavailable(
+                "daemon request frame exceeded the maximum supported size",
+            )
+            .with_recovery(
+                "Reduce the daemon request payload size before retrying the ATM command.",
+            ));
+        }
         stream.write_all(&encoded).map_err(|source| {
             AtmError::daemon_unavailable("failed to write daemon request frame").with_source(source)
         })?;
@@ -539,17 +559,12 @@ mod tests {
     use std::sync::Arc;
 
     use atm_core::ack::AckRequest;
-    use atm_core::boundary::{self, ClientTransport};
+    use atm_core::boundary::ClientTransport;
     use atm_core::clear::ClearQuery;
     use atm_core::doctor::{DoctorQuery, DoctorStatus};
     use atm_core::error::AtmError;
-    use atm_core::observability::{
-        AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
-        CommandEvent, LogTailSession, ObservabilityPort,
-    };
     use atm_core::protocol::{
         ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
-        SendResponseEnvelope,
     };
     use atm_core::read::ReadQuery;
     use atm_core::schema::{
@@ -560,6 +575,9 @@ mod tests {
     use atm_core::test_support::{
         ROLE_TEAM_LEAD, TEST_LEAD, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_TEAM,
     };
+    use atm_core::transport::testing::{
+        FakeClientTransport, HealthyObservability, LoopbackClientTransport,
+    };
     use atm_core::types::{AckActivationMode, ReadSelection};
     use chrono::Utc;
     use serde_json::Value;
@@ -567,112 +585,6 @@ mod tests {
 
     use super::{CliComposition, DaemonBinaryPath, DaemonSocketPath};
     use crate::observability::CliObservability;
-
-    #[derive(Clone)]
-    struct FakeClientTransport {
-        handler: Arc<dyn Fn(RequestEnvelope) -> Result<ResponseEnvelope, AtmError> + Send + Sync>,
-    }
-
-    impl std::fmt::Debug for FakeClientTransport {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.debug_struct("FakeClientTransport")
-                .finish_non_exhaustive()
-        }
-    }
-
-    impl FakeClientTransport {
-        fn new<F>(handler: F) -> Self
-        where
-            F: Fn(RequestEnvelope) -> Result<ResponseEnvelope, AtmError> + Send + Sync + 'static,
-        {
-            Self {
-                handler: Arc::new(handler),
-            }
-        }
-    }
-
-    impl boundary::sealed::Sealed for FakeClientTransport {}
-
-    impl ClientTransport for FakeClientTransport {
-        fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-            (self.handler)(request)
-        }
-    }
-
-    struct LoopbackClientTransport {
-        observability: Arc<dyn ObservabilityPort + Send + Sync>,
-    }
-
-    impl std::fmt::Debug for LoopbackClientTransport {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.debug_struct("LoopbackClientTransport")
-                .finish_non_exhaustive()
-        }
-    }
-
-    impl LoopbackClientTransport {
-        fn new(observability: Arc<dyn ObservabilityPort + Send + Sync>) -> Self {
-            Self { observability }
-        }
-    }
-
-    impl boundary::sealed::Sealed for LoopbackClientTransport {}
-
-    impl ClientTransport for LoopbackClientTransport {
-        fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-            match request {
-                RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                    atm_core::send::send_mail(request, self.observability.as_ref())
-                        .map(|outcome| ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
-                }
-                RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
-                    atm_core::ack::ack_mail(request, self.observability.as_ref()).map(|outcome| {
-                        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
-                    })
-                }
-                RequestEnvelope::Receive(query) => {
-                    atm_core::read::read_mail(query, self.observability.as_ref())
-                        .map(ResponseEnvelope::Receive)
-                }
-                RequestEnvelope::Clear(query) => {
-                    atm_core::clear::clear_mail(query, self.observability.as_ref())
-                        .map(ResponseEnvelope::Clear)
-                }
-                RequestEnvelope::Doctor(query) => {
-                    atm_core::doctor::run_doctor(query, self.observability.as_ref())
-                        .map(ResponseEnvelope::Doctor)
-                }
-            }
-        }
-    }
-
-    #[derive(Debug, Default)]
-    struct HealthyObservability;
-
-    impl boundary::sealed::Sealed for HealthyObservability {}
-
-    impl ObservabilityPort for HealthyObservability {
-        fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
-            Ok(AtmLogSnapshot::default())
-        }
-
-        fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, AtmError> {
-            Ok(LogTailSession::empty())
-        }
-
-        fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
-            Ok(AtmObservabilityHealth {
-                active_log_path: None,
-                logging_state: AtmObservabilityHealthState::Healthy,
-                query_state: Some(AtmObservabilityHealthState::Healthy),
-                detail: None,
-            })
-        }
-    }
 
     struct LoopbackFixture {
         tempdir: TempDir,
