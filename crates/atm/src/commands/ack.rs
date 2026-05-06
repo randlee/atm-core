@@ -30,20 +30,95 @@ impl AckCommand {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
         let composition = CliComposition::bootstrap(observability)?;
+        let json = self.json;
+        let outcome = composition.ack(self.build_request(home_dir, current_dir)?)?;
+
+        output::print_ack_result(&outcome, json)
+    }
+
+    fn build_request(
+        self,
+        home_dir: std::path::PathBuf,
+        current_dir: std::path::PathBuf,
+    ) -> Result<AckRequest> {
         let message_id = self
             .message_id
             .parse::<LegacyMessageId>()
             .with_context(|| format!("invalid message id: {}", self.message_id))?;
 
-        let outcome = composition.ack(AckRequest {
+        Ok(AckRequest {
             home_dir,
             current_dir,
             actor_override: self.actor.map(|value| value.parse()).transpose()?,
             team_override: self.team.map(|value| value.parse()).transpose()?,
             message_id,
             reply_body: self.reply,
-        })?;
+        })
+    }
+}
 
-        output::print_ack_result(&outcome, self.json)
+#[cfg(test)]
+mod tests {
+    use super::AckCommand;
+
+    const VALID_MESSAGE_ID: &str = "550e8400-e29b-41d4-a716-446655440000";
+
+    #[test]
+    fn build_request_rejects_empty_message_id() {
+        let command = AckCommand {
+            message_id: String::new(),
+            reply: "working on it".to_string(),
+            team: None,
+            actor: None,
+            json: false,
+        };
+
+        let error = command
+            .build_request("/tmp/home".into(), "/tmp/cwd".into())
+            .expect_err("empty message id");
+
+        assert!(error.to_string().contains("invalid message id"));
+    }
+
+    #[test]
+    fn build_request_rejects_whitespace_only_message_id() {
+        let command = AckCommand {
+            message_id: "   ".to_string(),
+            reply: "working on it".to_string(),
+            team: None,
+            actor: None,
+            json: false,
+        };
+
+        let error = command
+            .build_request("/tmp/home".into(), "/tmp/cwd".into())
+            .expect_err("whitespace message id");
+
+        assert!(error.to_string().contains("invalid message id"));
+    }
+
+    #[test]
+    fn build_request_preserves_team_override_and_actor() {
+        let command = AckCommand {
+            message_id: VALID_MESSAGE_ID.to_string(),
+            reply: "received".to_string(),
+            team: Some("test-team".to_string()),
+            actor: Some("sender-a".to_string()),
+            json: true,
+        };
+
+        let request = command
+            .build_request("/tmp/home".into(), "/tmp/cwd".into())
+            .expect("request");
+
+        assert_eq!(
+            request.team_override.as_ref().map(|value| value.as_str()),
+            Some("test-team")
+        );
+        assert_eq!(
+            request.actor_override.as_ref().map(|value| value.as_str()),
+            Some("sender-a")
+        );
+        assert_eq!(request.reply_body, "received");
     }
 }
