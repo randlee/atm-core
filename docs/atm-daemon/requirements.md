@@ -53,8 +53,10 @@ Initial allocation:
 Initial crate requirement IDs:
 
 - `REQ-DAEMON-RUNTIME-001` `atm-daemon` owns singleton runtime enforcement and
-  must make it impossible for two active daemons to run on one host. Satisfies
-  the runtime ownership aspects of:
+  must make it impossible for more than one `atm-daemon` process to exist
+  anywhere on the host for the supported runtime model. Singleton is daemon
+  requirement `#1` and is not subordinate to convenience test or tooling
+  flows. Satisfies the runtime ownership aspects of:
   `REQ-CORE-DAEMON-001`, `REQ-CORE-QA-RUNTIME-001`.
 - `REQ-DAEMON-RUNTIME-002` `atm-daemon` owns runtime composition only and must
   remain a thin wrapper over `atm-core` service boundaries. Satisfies:
@@ -90,6 +92,11 @@ Initial crate requirement IDs:
   Core correctness must remain testable without daemon process spawning.
   Satisfies:
   `REQ-CORE-TEST-RUNTIME-001`.
+- `REQ-DAEMON-TEST-002` `atm-daemon` must not introduce or bless a test-only
+  daemon launch path for ordinary ATM correctness tests. Any real daemon
+  process coverage is limited to a narrow daemon-runtime suite for singleton,
+  startup, shutdown, and recovery requirements. Satisfies:
+  `REQ-CORE-TEST-RUNTIME-001`, `REQ-P-TEST-001`.
 - `REQ-DAEMON-OBS-001` `atm-daemon` owns daemon/runtime/transport structured
   event emission through `sc-observability`. Satisfies:
   `REQ-CORE-OBS-002`.
@@ -109,6 +116,7 @@ The `atm-daemon` crate docs must remain aligned with:
 - [`../project-plan.md`](../project-plan.md)
 - [`../plan-phase-Q.md`](../plan-phase-Q.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)
+- [`../testing-guidelines.md`](../testing-guidelines.md)
 - [`../team-member-state.md`](../team-member-state.md)
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
 - [`../atm-core/requirements.md`](../atm-core/requirements.md)
@@ -128,15 +136,27 @@ Requirement IDs:
 - `REQ-DAEMON-TRANSPORT-003`
 - `REQ-DAEMON-STATUS-001`
 - `REQ-DAEMON-TEST-001`
+- `REQ-DAEMON-TEST-002`
 - `REQ-DAEMON-OBS-001`
 - `REQ-DAEMON-HEALTH-001`
 - `REQ-DAEMON-SIGNAL-001`
 
 Required runtime rules:
-- exactly one daemon may be active on a host at a time
+- exactly one daemon process may be active on a host at a time
+- singleton enforcement is host-wide rather than socket-path-local; changing
+  `ATM_HOME`, socket path, or test working directory must not create a legal
+  second daemon
+- daemon startup is blocked by at least two runtime guard layers:
+  - a pre-spawn launch gate that serializes daemon creation attempts
+  - a daemon-side startup gate that refuses serving state when ownership is
+    already held
 - daemon startup must fail deterministically if a live daemon already owns the
   runtime
+- daemon startup must not publish a serving socket or accept requests before
+  singleton ownership is confirmed
 - stale ownership cleanup must never allow two live daemons
+- stale ownership cleanup must preserve the same singleton guarantee as normal
+  startup; cleanup is recovery, not an alternate launch path
 - graceful shutdown must stop accepts, drain or cancel inflight work within one
   bounded deadline, checkpoint WAL, and release singleton ownership
 - signal handlers must be installed before listeners are opened
@@ -186,6 +206,8 @@ Required runtime rules:
 - daemon unavailability after one documented auto-start attempt must surface as
   explicit runtime failure rather than hidden fallback to direct SQLite or
   inbox-file access
+- tests and tools are not exempt from the singleton rule; any attempt to start
+  a second daemon process must fail through the same runtime ownership checks
 - the socket receive loop must remain a thin dispatcher only:
   - read framed request
   - parse qualified request type
@@ -206,3 +228,5 @@ Required runtime rules:
   rather than collapsing into panic/unwrap control flow
 - daemon runtime and transport paths must emit structured observability events
 - daemon must expose one explicit health/status query interface for `atm doctor`
+- no `atm-daemon` crate API, helper, or test support path may bless daemon
+  spawning as a routine correctness strategy

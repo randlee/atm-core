@@ -120,12 +120,19 @@ Phase R redesign notes:
 ## 3.1 Singleton Runtime
 
 Hard invariant:
-- it must be impossible for two active ATM daemons to run on one host at the
-  same time
+- it must be impossible for more than one `atm-daemon` process to exist
+  anywhere on the host for the supported runtime model
 
 Architectural rule:
 - singleton enforcement belongs in the runtime wrapper only
 - the runtime must fail closed rather than allowing split ownership
+- singleton enforcement must use multiple layers:
+  - a pre-spawn launch gate before client-side fork/exec
+  - a daemon-side startup gate before serving state
+  - a repository lint/CI gate that prevents ordinary tests from designing
+    around the runtime invariant
+- no alternate socket path, alternate `ATM_HOME`, or test-only helper is an
+  exception to the singleton rule
 
 Lifecycle state model:
 - the daemon runtime must explicitly model:
@@ -280,7 +287,7 @@ Required timeout defaults:
 - per-leg TCP/TLS connect deadline: `5s`
 - per-leg TCP/TLS read/write deadline: `5s`
 - total remote retry budget: `30s`
-- SQLite `busy_timeout`: `1500ms`
+- SQLite `busy_timeout`: `5000ms`
 - ingest batch processing slice: `2s` max before yielding
 - daemon health query used by `atm doctor`: `3s`
 
@@ -291,8 +298,14 @@ The daemon is not the core test strategy.
 Architectural rules:
 - `atm-daemon` should be testable primarily through in-process harnesses and
   fakes around its adapters
-- if process-level daemon smoke tests exist, they must remain small and
-  separate
+- most tests must not depend on:
+  - daemon spawn
+  - socket publication timing
+  - retry sleeps
+  - environment mutation races
+  - auto-start side effects
+- if process-level daemon runtime tests exist, they must remain small,
+  separate, and limited to true daemon-runtime requirements
 - no core ATM correctness rule should require a real daemon process for normal
   validation
 - `atm doctor` and other daemon-querying CLI flows must rely on explicit daemon
