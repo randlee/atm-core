@@ -8,8 +8,6 @@ use std::fmt;
 #[cfg(unix)]
 use std::fs::{self, File, OpenOptions};
 #[cfg(unix)]
-use std::io::Read;
-#[cfg(unix)]
 use std::io::Write;
 #[cfg(unix)]
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -67,6 +65,8 @@ const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 const SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_millis(25);
 #[cfg(unix)]
 const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
+#[cfg(unix)]
+const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DaemonBoundaryStubError {
@@ -342,30 +342,6 @@ fn remove_stale_socket(socket_path: &std::path::Path) -> Result<(), AtmError> {
 }
 
 #[cfg(unix)]
-fn read_bounded_stream(
-    stream: &mut impl Read,
-    read_error: &'static str,
-    oversize_error: &'static str,
-) -> Result<Vec<u8>, AtmError> {
-    let mut bytes = Vec::new();
-    let mut chunk = [0u8; 8192];
-    loop {
-        let read = stream
-            .read(&mut chunk)
-            .map_err(|source| AtmError::daemon_unavailable(read_error).with_source(source))?;
-        if read == 0 {
-            return Ok(bytes);
-        }
-        if bytes.len().saturating_add(read) > atm_core::protocol::MAX_DAEMON_FRAME_BYTES {
-            return Err(AtmError::daemon_unavailable(oversize_error).with_recovery(
-                "Reduce the daemon request/response payload size before retrying the ATM command.",
-            ));
-        }
-        bytes.extend_from_slice(&chunk[..read]);
-    }
-}
-
-#[cfg(unix)]
 fn handle_connection(
     stream: &mut UnixStream,
     dispatcher: &dyn RequestDispatcher,
@@ -383,7 +359,7 @@ fn handle_connection(
                 .with_source(source)
         })?;
 
-    let bytes = read_bounded_stream(
+    let bytes = atm_core::protocol::read_bounded_stream(
         stream,
         "failed to read daemon request frame",
         "daemon request frame exceeded the maximum supported size",
@@ -477,6 +453,9 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
                                 atm_core::protocol::ProtocolErrorEnvelope::from_error(
                                     &AtmError::daemon_unavailable(
                                         "daemon connection cap exceeded (max 64 concurrent accepts)",
+                                    )
+                                    .with_recovery(
+                                        "Wait for in-flight ATM commands to complete before retrying, or reduce concurrent atm invocations.",
                                     ),
                                 ),
                             );
@@ -512,8 +491,15 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
             }
 
             let shutdown_started = Instant::now();
+            let graceful_deadline = shutdown_started + GRACEFUL_DRAIN_DEADLINE;
+            let force_cancel_deadline = shutdown_started + FORCE_CANCEL_DEADLINE;
             while active_connections.load(Ordering::SeqCst) > 0
-                && shutdown_started.elapsed() < GRACEFUL_DRAIN_DEADLINE
+                && Instant::now() < graceful_deadline
+            {
+                thread::sleep(SHUTDOWN_POLL_INTERVAL);
+            }
+            while active_connections.load(Ordering::SeqCst) > 0
+                && Instant::now() < force_cancel_deadline
             {
                 thread::sleep(SHUTDOWN_POLL_INTERVAL);
             }

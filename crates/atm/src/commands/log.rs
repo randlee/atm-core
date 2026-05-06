@@ -265,7 +265,7 @@ mod tests {
 
     #[derive(Debug)]
     struct StubObservability {
-        // Tests move this stub behind Arc<dyn ObservabilityPort + Send + Sync>.
+        // &self query/follow methods require interior mutability once tests store this behind Arc<dyn ObservabilityPort + Send + Sync>.
         snapshot: Mutex<Option<Result<AtmLogSnapshot, AtmError>>>,
     }
 

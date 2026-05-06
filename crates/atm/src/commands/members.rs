@@ -58,6 +58,24 @@ mod tests {
         current_dir: PathBuf,
     }
 
+    struct CwdGuard {
+        original: PathBuf,
+    }
+
+    impl CwdGuard {
+        fn change_to(path: &std::path::Path) -> Self {
+            let original = std::env::current_dir().expect("current dir");
+            std::env::set_current_dir(path).expect("set current dir");
+            Self { original }
+        }
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            std::env::set_current_dir(&self.original).expect("restore current dir");
+        }
+    }
+
     impl Fixture {
         fn new() -> Self {
             let tempdir = TempDir::new().expect("tempdir");
@@ -92,11 +110,8 @@ mod tests {
 
         fn with_env_and_cwd<T>(&self, f: impl FnOnce() -> T) -> T {
             let _atm_home = EnvGuard::set_raw("ATM_HOME", self.home_dir.to_str().expect("utf8"));
-            let original = std::env::current_dir().expect("current dir");
-            std::env::set_current_dir(&self.current_dir).expect("set current dir");
-            let result = f();
-            std::env::set_current_dir(original).expect("restore current dir");
-            result
+            let _cwd = CwdGuard::change_to(&self.current_dir);
+            f()
         }
     }
 

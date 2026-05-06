@@ -360,30 +360,52 @@ pub struct InboxExportResponse;
 
 /// BOUNDARY-TaskStore — see docs/atm-core/boundaries.md.
 pub trait TaskStore: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when task-state persistence or task-link mutation
+    /// cannot satisfy the durable task-store contract.
     fn create_task(
         &self,
         request: TaskStoreCreateTaskRequest,
     ) -> Result<TaskStoreCreateTaskResponse, AtmError>;
+    /// # Errors
+    ///
+    /// Returns `AtmError` when one task record cannot be loaded.
     fn load_task(
         &self,
         request: TaskStoreLoadTaskRequest,
     ) -> Result<TaskStoreLoadTaskResponse, AtmError>;
+    /// # Errors
+    ///
+    /// Returns `AtmError` when one task record cannot be updated safely.
     fn update_task(
         &self,
         request: TaskStoreUpdateTaskRequest,
     ) -> Result<TaskStoreUpdateTaskResponse, AtmError>;
+    /// # Errors
+    ///
+    /// Returns `AtmError` when one task/message link cannot be recorded.
     fn attach_message_link(
         &self,
         request: TaskStoreAttachMessageLinkRequest,
     ) -> Result<TaskStoreAttachMessageLinkResponse, AtmError>;
+    /// # Errors
+    ///
+    /// Returns `AtmError` when one task/message link cannot be removed.
     fn detach_message_link(
         &self,
         request: TaskStoreDetachMessageLinkRequest,
     ) -> Result<TaskStoreDetachMessageLinkResponse, AtmError>;
+    /// # Errors
+    ///
+    /// Returns `AtmError` when one ack transition cannot be persisted.
     fn record_ack_transition(
         &self,
         request: TaskStoreRecordAckTransitionRequest,
     ) -> Result<TaskStoreRecordAckTransitionResponse, AtmError>;
+    /// # Errors
+    ///
+    /// Returns `AtmError` when task metadata cannot be queried.
     fn query_task_metadata(
         &self,
         request: TaskStoreQueryTaskMetadataRequest,
@@ -392,18 +414,30 @@ pub trait TaskStore: sealed::Sealed {
 
 /// BOUNDARY-RosterStore — see docs/atm-core/boundaries.md.
 pub trait RosterStore: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when roster replacement cannot be applied safely.
     fn replace_roster(
         &self,
         request: RosterStoreReplaceRosterRequest,
     ) -> Result<RosterStoreReplaceRosterResponse, AtmError>;
+    /// # Errors
+    ///
+    /// Returns `AtmError` when one roster snapshot cannot be loaded.
     fn load_roster(
         &self,
         request: RosterStoreLoadRosterRequest,
     ) -> Result<RosterStoreLoadRosterResponse, AtmError>;
+    /// # Errors
+    ///
+    /// Returns `AtmError` when membership cannot be queried.
     fn query_membership(
         &self,
         request: RosterStoreQueryMembershipRequest,
     ) -> Result<RosterStoreQueryMembershipResponse, AtmError>;
+    /// # Errors
+    ///
+    /// Returns `AtmError` when roster health cannot be collected.
     fn health_snapshot(
         &self,
         request: RosterStoreHealthSnapshotRequest,
@@ -412,7 +446,14 @@ pub trait RosterStore: sealed::Sealed {
 
 /// BOUNDARY-ConfigIngress — see docs/atm-core/boundaries.md.
 pub trait ConfigIngress: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when persisted ATM configuration cannot be loaded,
+    /// parsed, or validated into typed models.
     fn load_config(&self, request: ConfigLoadRequest) -> Result<ConfigLoadResponse, AtmError>;
+    /// # Errors
+    ///
+    /// Returns `AtmError` when one team config cannot be loaded or validated.
     fn load_team_config(
         &self,
         request: ConfigTeamLoadRequest,
@@ -421,14 +462,24 @@ pub trait ConfigIngress: sealed::Sealed {
 
 /// BOUNDARY-InboxIngress — see docs/atm-core/boundaries.md.
 pub trait InboxIngress: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when compatibility inbox material cannot be
+    /// imported, fingerprinted, or diagnosed into ATM-owned state.
     fn import_inbox_source(
         &self,
         request: InboxIngressImportRequest,
     ) -> Result<InboxIngressImportResponse, AtmError>;
+    /// # Errors
+    ///
+    /// Returns `AtmError` when identity fingerprinting cannot be computed.
     fn compute_identity_fingerprint(
         &self,
         request: InboxIngressIdentityFingerprintRequest,
     ) -> Result<InboxIngressIdentityFingerprintResponse, AtmError>;
+    /// # Errors
+    ///
+    /// Returns `AtmError` when inbox diagnostics cannot be generated.
     fn report_diagnostics(
         &self,
         request: InboxIngressDiagnosticsRequest,
@@ -437,10 +488,17 @@ pub trait InboxIngress: sealed::Sealed {
 
 /// BOUNDARY-InboxExport — see docs/atm-core/boundaries.md.
 pub trait InboxExport: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when ATM-owned state cannot be projected back to the
+    /// compatibility inbox/export surfaces.
     fn export_record(
         &self,
         request: InboxExportRecordRequest,
     ) -> Result<InboxExportRecordResponse, AtmError>;
+    /// # Errors
+    ///
+    /// Returns `AtmError` when the message re-export cannot be materialized.
     fn reexport_message(
         &self,
         request: InboxExportReexportMessageRequest,

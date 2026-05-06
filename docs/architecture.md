@@ -2483,6 +2483,13 @@ Required signal behavior:
 - `SIGINT` and `SIGTERM` enter graceful shutdown
 - `SIGHUP` triggers bounded rescan/reload without dropping singleton ownership
 
+Accepted limitations tracked into `R.11`:
+- per-connection inflight cap `32` is documented now, but the current daemon
+  still processes one request per accepted connection until framed
+  multiplexing lands in `R.11`
+- `SIGHUP` handler registration is live now, but the bounded config/roster
+  reload implementation itself is deferred to `R.11`
+
 ### 21.7 Test Strategy
 
 The daemon is not the test strategy.

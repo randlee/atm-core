@@ -5,13 +5,14 @@ use std::path::{Path, PathBuf};
 #[cfg(unix)]
 use std::process::{Command, Stdio};
 use std::sync::Arc;
+use std::time::Duration;
 #[cfg(unix)]
 use std::{
     fs::{self, File, OpenOptions},
-    io::{Read, Write},
+    io::Write,
     os::unix::net::UnixStream,
     thread,
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use atm_core::ack::{AckOutcome, AckRequest};
@@ -170,7 +171,7 @@ impl LocalSocketClientTransport {
                 AtmError::daemon_unavailable("failed to finalize daemon request frame")
                     .with_source(source)
             })?;
-        let bytes = read_bounded_stream(
+        let bytes = atm_core::protocol::read_bounded_stream(
             &mut stream,
             "failed to read daemon response frame",
             "daemon response frame exceeded the maximum supported size",
@@ -229,6 +230,9 @@ impl DaemonSupervisor {
                 if _transport.try_connect().is_ok() {
                     return Ok(());
                 }
+                // LaunchGateGuard uses a single non-blocking open/create plus
+                // try_lock_exclusive; the wall-clock budget remains approximate
+                // only for those filesystem syscalls, not for any sleep/retry loop.
                 if let Some(_guard) = LaunchGateGuard::try_acquire(&self.socket_path)? {
                     if _transport.try_connect().is_ok() {
                         return Ok(());
@@ -338,30 +342,6 @@ impl Drop for LaunchGateGuard {
     fn drop(&mut self) {
         let _ = self.file.unlock();
         let _ = fs::remove_file(&self.path);
-    }
-}
-
-#[cfg(unix)]
-fn read_bounded_stream(
-    stream: &mut impl Read,
-    read_error: &'static str,
-    oversize_error: &'static str,
-) -> Result<Vec<u8>, AtmError> {
-    let mut bytes = Vec::new();
-    let mut chunk = [0u8; 8192];
-    loop {
-        let read = stream
-            .read(&mut chunk)
-            .map_err(|source| AtmError::daemon_unavailable(read_error).with_source(source))?;
-        if read == 0 {
-            return Ok(bytes);
-        }
-        if bytes.len().saturating_add(read) > atm_core::protocol::MAX_DAEMON_FRAME_BYTES {
-            return Err(AtmError::daemon_unavailable(oversize_error).with_recovery(
-                "Reduce the daemon request/response payload size before retrying the ATM command.",
-            ));
-        }
-        bytes.extend_from_slice(&chunk[..read]);
     }
 }
 
@@ -788,6 +768,7 @@ mod tests {
 
     #[test]
     fn fake_transport_maps_protocol_error_envelope_to_atm_error() {
+        let tempdir = TempDir::new().expect("tempdir");
         let observability = CliObservability::fallback();
         let transport = Arc::new(FakeClientTransport::new(|_| {
             Ok(ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
@@ -799,8 +780,8 @@ mod tests {
 
         let error = composition
             .send_request(RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {
-                home_dir: std::env::temp_dir(),
-                current_dir: std::env::temp_dir(),
+                home_dir: tempdir.path().join("home"),
+                current_dir: tempdir.path().join("cwd"),
                 team_override: None,
             }))
             .expect_err("protocol error");
