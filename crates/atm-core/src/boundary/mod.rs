@@ -603,7 +603,7 @@ pub trait AtmProtocol: sealed::Sealed {
 }
 
 /// BOUNDARY-ClientTransport — see docs/atm-core/boundaries.md.
-pub trait ClientTransport: sealed::Sealed {
+pub trait ClientTransport: sealed::Sealed + Send + Sync {
     /// # Errors
     ///
     /// Returns `AtmError` when the framed request cannot be delivered or when

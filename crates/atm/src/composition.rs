@@ -1,12 +1,13 @@
 #![allow(dead_code)]
 
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 #[cfg(unix)]
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 #[cfg(unix)]
 use std::{
+    fs::{self, File, OpenOptions},
     io::{Read, Write},
     os::unix::net::UnixStream,
     thread,
@@ -25,6 +26,8 @@ use atm_core::protocol::{
 };
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
+#[cfg(unix)]
+use fs2::FileExt;
 
 use crate::observability::CliObservability;
 
@@ -46,54 +49,76 @@ impl ReceiveCommandEntryPoint {
     }
 }
 
+#[derive(Debug, Clone)]
+struct DaemonSocketPath(PathBuf);
+
+impl DaemonSocketPath {
+    fn new(path: PathBuf) -> Result<Self, AtmError> {
+        validate_daemon_path("daemon socket path", &path)?;
+        Ok(Self(path))
+    }
+
+    #[cfg(unix)]
+    fn launch_gate_path(&self) -> PathBuf {
+        self.0.with_extension("launch.lock")
+    }
+
+    fn display(&self) -> std::path::Display<'_> {
+        self.0.display()
+    }
+}
+
+impl AsRef<Path> for DaemonSocketPath {
+    fn as_ref(&self) -> &Path {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone)]
+struct DaemonBinaryPath(PathBuf);
+
+impl DaemonBinaryPath {
+    fn new(path: PathBuf) -> Result<Self, AtmError> {
+        validate_daemon_path("daemon binary path", &path)?;
+        Ok(Self(path))
+    }
+
+    fn display(&self) -> std::path::Display<'_> {
+        self.0.display()
+    }
+}
+
+impl AsRef<Path> for DaemonBinaryPath {
+    fn as_ref(&self) -> &Path {
+        &self.0
+    }
+}
+
+fn validate_daemon_path(label: &str, path: &Path) -> Result<(), AtmError> {
+    if path.as_os_str().is_empty() {
+        return Err(AtmError::validation(format!("{label} must not be empty")));
+    }
+    if path.to_str().is_none() {
+        return Err(AtmError::validation(format!(
+            "{label} must be valid UTF-8 at the ATM boundary"
+        )));
+    }
+    Ok(())
+}
+
 #[derive(Debug)]
 struct LocalSocketClientTransport {
-    socket_path: PathBuf,
-    daemon_bin: PathBuf,
+    socket_path: DaemonSocketPath,
 }
 
 impl LocalSocketClientTransport {
-    fn new(socket_path: PathBuf, daemon_bin: PathBuf) -> Self {
-        Self {
-            socket_path,
-            daemon_bin,
-        }
-    }
-
-    fn ensure_daemon_available(&self) -> Result<(), AtmError> {
-        #[cfg(not(unix))]
-        {
-            Err(AtmError::daemon_unavailable(
-                "ATM thin-client transport requires a Unix platform",
-            ))
-        }
-
-        #[cfg(unix)]
-        {
-            if self.try_connect().is_ok() {
-                return Ok(());
-            }
-            self.spawn_daemon()?;
-            let deadline = Instant::now() + Duration::from_secs(5);
-            loop {
-                if self.try_connect().is_ok() {
-                    return Ok(());
-                }
-                if Instant::now() >= deadline {
-                    break;
-                }
-                thread::sleep(Duration::from_millis(25));
-            }
-            Err(AtmError::daemon_unavailable(format!(
-                "failed to connect to daemon socket at {} after auto-start",
-                self.socket_path.display()
-            )))
-        }
+    fn new(socket_path: DaemonSocketPath) -> Self {
+        Self { socket_path }
     }
 
     #[cfg(unix)]
     fn try_connect(&self) -> Result<UnixStream, AtmError> {
-        UnixStream::connect(&self.socket_path).map_err(|source| {
+        UnixStream::connect(self.socket_path.as_ref()).map_err(|source| {
             AtmError::daemon_unavailable(format!(
                 "failed to connect to daemon socket at {}",
                 self.socket_path.display()
@@ -110,36 +135,6 @@ impl LocalSocketClientTransport {
     }
 
     #[cfg(unix)]
-    fn spawn_daemon(&self) -> Result<(), AtmError> {
-        if !self.daemon_bin.is_file() {
-            return Err(
-                AtmError::daemon_unavailable(format!(
-                    "daemon binary is missing at {}",
-                    self.daemon_bin.display()
-                ))
-                .with_recovery(
-                    "Build or install atm-daemon, or set ATM_DAEMON_BIN to the correct executable before retrying.",
-                ),
-            );
-        }
-
-        let mut command = Command::new(&self.daemon_bin);
-        command
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::inherit())
-            .env("ATM_DAEMON_SOCKET", &self.socket_path);
-        command.spawn().map_err(|source| {
-            AtmError::daemon_unavailable(format!(
-                "failed to spawn daemon binary at {}",
-                self.daemon_bin.display()
-            ))
-            .with_source(source)
-        })?;
-        Ok(())
-    }
-
-    #[cfg(unix)]
     fn exchange(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         let mut stream = self.try_connect()?;
         let encoded = serde_json::to_vec(&request).map_err(AtmError::from)?;
@@ -152,10 +147,11 @@ impl LocalSocketClientTransport {
                 AtmError::daemon_unavailable("failed to finalize daemon request frame")
                     .with_source(source)
             })?;
-        let mut bytes = Vec::new();
-        stream.read_to_end(&mut bytes).map_err(|source| {
-            AtmError::daemon_unavailable("failed to read daemon response frame").with_source(source)
-        })?;
+        let bytes = read_bounded_stream(
+            &mut stream,
+            "failed to read daemon response frame",
+            "daemon response frame exceeded the maximum supported size",
+        )?;
         serde_json::from_slice(&bytes).map_err(AtmError::from)
     }
 
@@ -172,6 +168,177 @@ impl boundary::sealed::Sealed for LocalSocketClientTransport {}
 impl ClientTransport for LocalSocketClientTransport {
     fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         self.exchange(request)
+    }
+}
+
+#[derive(Debug)]
+struct DaemonSupervisor {
+    socket_path: DaemonSocketPath,
+    daemon_bin: DaemonBinaryPath,
+}
+
+impl DaemonSupervisor {
+    fn new(socket_path: DaemonSocketPath, daemon_bin: DaemonBinaryPath) -> Self {
+        Self {
+            socket_path,
+            daemon_bin,
+        }
+    }
+
+    fn ensure_daemon_available(
+        &self,
+        _transport: &LocalSocketClientTransport,
+    ) -> Result<(), AtmError> {
+        #[cfg(not(unix))]
+        {
+            Err(AtmError::daemon_unavailable(
+                "ATM thin-client transport requires a Unix platform",
+            ))
+        }
+
+        #[cfg(unix)]
+        {
+            if _transport.try_connect().is_ok() {
+                return Ok(());
+            }
+            let deadline = Instant::now() + Duration::from_secs(5);
+            loop {
+                if _transport.try_connect().is_ok() {
+                    return Ok(());
+                }
+                if let Some(_guard) = LaunchGateGuard::try_acquire(&self.socket_path)? {
+                    if _transport.try_connect().is_ok() {
+                        return Ok(());
+                    }
+                    self.spawn_daemon()?;
+                    while Instant::now() < deadline {
+                        if _transport.try_connect().is_ok() {
+                            return Ok(());
+                        }
+                        thread::sleep(Duration::from_millis(25));
+                    }
+                    break;
+                }
+                if Instant::now() >= deadline {
+                    break;
+                }
+                thread::sleep(Duration::from_millis(25));
+            }
+            Err(AtmError::daemon_unavailable(format!(
+                "failed to connect to daemon socket at {} after auto-start",
+                self.socket_path.display()
+            )))
+        }
+    }
+
+    #[cfg(unix)]
+    fn spawn_daemon(&self) -> Result<(), AtmError> {
+        if !self.daemon_bin.as_ref().is_file() {
+            return Err(
+                AtmError::daemon_unavailable(format!(
+                    "daemon binary is missing at {}",
+                    self.daemon_bin.display()
+                ))
+                .with_recovery(
+                    "Build or install atm-daemon, or set ATM_DAEMON_BIN to the correct executable before retrying.",
+                ),
+            );
+        }
+
+        let mut command = Command::new(self.daemon_bin.as_ref());
+        command
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::inherit())
+            .env("ATM_DAEMON_SOCKET", self.socket_path.as_ref());
+        command.spawn().map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to spawn daemon binary at {}",
+                self.daemon_bin.display()
+            ))
+            .with_source(source)
+        })?;
+        Ok(())
+    }
+}
+
+#[cfg(unix)]
+#[derive(Debug)]
+struct LaunchGateGuard {
+    path: PathBuf,
+    file: File,
+}
+
+#[cfg(unix)]
+impl LaunchGateGuard {
+    fn try_acquire(socket_path: &DaemonSocketPath) -> Result<Option<Self>, AtmError> {
+        let lock_path = socket_path.launch_gate_path();
+        if let Some(parent) = lock_path.parent() {
+            fs::create_dir_all(parent).map_err(|source| {
+                AtmError::daemon_unavailable(format!(
+                    "failed to create daemon launch lock directory at {}",
+                    parent.display()
+                ))
+                .with_source(source)
+            })?;
+        }
+        let file = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .open(&lock_path)
+            .map_err(|source| {
+                AtmError::daemon_unavailable(format!(
+                    "failed to open daemon launch gate at {}",
+                    lock_path.display()
+                ))
+                .with_source(source)
+            })?;
+        match file.try_lock_exclusive() {
+            Ok(()) => Ok(Some(Self {
+                path: lock_path,
+                file,
+            })),
+            Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
+            Err(source) => Err(AtmError::daemon_unavailable(format!(
+                "failed to acquire daemon launch gate at {}",
+                lock_path.display()
+            ))
+            .with_source(source)),
+        }
+    }
+}
+
+#[cfg(unix)]
+impl Drop for LaunchGateGuard {
+    fn drop(&mut self) {
+        let _ = self.file.unlock();
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
+#[cfg(unix)]
+fn read_bounded_stream(
+    stream: &mut impl Read,
+    read_error: &'static str,
+    oversize_error: &'static str,
+) -> Result<Vec<u8>, AtmError> {
+    let mut bytes = Vec::new();
+    let mut chunk = [0u8; 8192];
+    loop {
+        let read = stream
+            .read(&mut chunk)
+            .map_err(|source| AtmError::daemon_unavailable(read_error).with_source(source))?;
+        if read == 0 {
+            return Ok(bytes);
+        }
+        if bytes.len().saturating_add(read) > atm_core::protocol::MAX_DAEMON_FRAME_BYTES {
+            return Err(AtmError::daemon_unavailable(oversize_error).with_recovery(
+                "Reduce the daemon request/response payload size before retrying the ATM command.",
+            ));
+        }
+        bytes.extend_from_slice(&chunk[..read]);
     }
 }
 
@@ -334,23 +501,30 @@ impl<'a> CliComposition<'a> {
     }
 
     pub(crate) fn bootstrap(observability: &'a CliObservability) -> Result<Self, AtmError> {
-        let socket_path = atm_core::protocol::daemon_socket_path()?;
+        let socket_path = resolve_daemon_socket_path()?;
         let daemon_bin = resolve_daemon_bin()?;
-        let transport = Arc::new(LocalSocketClientTransport::new(socket_path, daemon_bin));
-        transport.ensure_daemon_available()?;
+        let transport = Arc::new(LocalSocketClientTransport::new(socket_path.clone()));
+        let supervisor = DaemonSupervisor::new(socket_path, daemon_bin);
+        supervisor.ensure_daemon_available(transport.as_ref())?;
         Ok(Self::from_transport(transport, observability))
     }
 }
 
-fn resolve_daemon_bin() -> Result<PathBuf, AtmError> {
+fn resolve_daemon_socket_path() -> Result<DaemonSocketPath, AtmError> {
+    DaemonSocketPath::new(atm_core::protocol::daemon_socket_path()?)
+}
+
+fn resolve_daemon_bin() -> Result<DaemonBinaryPath, AtmError> {
     if let Some(path) = std::env::var_os("ATM_DAEMON_BIN").filter(|value| !value.is_empty()) {
-        return Ok(PathBuf::from(path));
+        return DaemonBinaryPath::new(PathBuf::from(path));
     }
     let current = std::env::current_exe().map_err(|source| {
         AtmError::daemon_unavailable("failed to resolve the current atm executable path")
             .with_source(source)
     })?;
-    Ok(current.with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX)))
+    DaemonBinaryPath::new(
+        current.with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX)),
+    )
 }
 
 fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError {

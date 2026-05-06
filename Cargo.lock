@@ -10,6 +10,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
+ "fs2",
  "sc-observability",
  "sc-observability-types",
  "serde_json",

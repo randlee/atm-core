@@ -1,4 +1,4 @@
-#![cfg(unix)]
+#![cfg(all(unix, feature = "daemon-integration-tests"))]
 
 mod support;
 

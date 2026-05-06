@@ -12,6 +12,7 @@ use atm_core::{
 };
 use std::error::Error as StdError;
 use std::fmt;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 #[allow(dead_code)]
@@ -34,7 +35,7 @@ impl StdError for RuntimeStartStubError {}
 
 /// Internal root for Phase R daemon runtime wiring.
 #[allow(dead_code)]
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct RuntimeComposition {
     server_transport: LocalSocketServerTransport,
     request_dispatcher: Arc<DaemonRequestDispatcher>,
@@ -50,10 +51,10 @@ pub(crate) struct RuntimeComposition {
 
 #[allow(dead_code)]
 impl RuntimeComposition {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(home_dir: PathBuf) -> Self {
         Self {
             server_transport: LocalSocketServerTransport::new(),
-            request_dispatcher: Arc::new(DaemonRequestDispatcher::new()),
+            request_dispatcher: Arc::new(DaemonRequestDispatcher::new(home_dir)),
             notification_sink: DaemonNotificationSink::new(),
             status_source: DaemonStatusSource::new(),
             watch_event_source: FileWatchEventSource::new(),
@@ -118,6 +119,6 @@ impl RuntimeComposition {
     }
 }
 
-pub(crate) fn compose_runtime() -> RuntimeComposition {
-    RuntimeComposition::new()
+pub(crate) fn compose_runtime() -> Result<RuntimeComposition, AtmError> {
+    Ok(RuntimeComposition::new(atm_core::home::atm_home()?))
 }

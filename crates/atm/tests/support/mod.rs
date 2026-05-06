@@ -263,6 +263,12 @@ pub fn configure_atm_command<'a>(
 
 fn ensure_test_daemon_launcher(home_dir: &std::path::Path) -> PathBuf {
     #[allow(unused_variables)]
+    let hermetic_test_daemon = option_env!("CARGO_BIN_EXE_atm-test-daemon").map(PathBuf::from);
+    if let Some(path) = hermetic_test_daemon.as_ref().filter(|path| path.exists()) {
+        return path.clone();
+    }
+
+    #[allow(unused_variables)]
     let hermetic_daemon = option_env!("CARGO_BIN_EXE_atm-daemon").map(PathBuf::from);
     if let Some(path) = hermetic_daemon.as_ref().filter(|path| path.exists()) {
         return path.clone();
@@ -285,7 +291,8 @@ fn ensure_test_daemon_launcher(home_dir: &std::path::Path) -> PathBuf {
 
     let _ = home_dir;
     panic!(
-        "expected hermetic test daemon binary at one of: {:?}, {}, {}",
+        "expected hermetic test daemon binary at one of: {:?}, {:?}, {}, {}. If this is a local validation run, build the test wrapper with `cargo build -p agent-team-mail --bin atm-test-daemon` before retrying.",
+        hermetic_test_daemon,
         hermetic_daemon,
         sibling.display(),
         workspace_binary.display()

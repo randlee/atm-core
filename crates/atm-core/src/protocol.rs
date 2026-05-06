@@ -132,6 +132,9 @@ pub struct FramePayload {
     pub bytes: Vec<u8>,
 }
 
+/// Maximum encoded daemon request/response frame size.
+pub const MAX_DAEMON_FRAME_BYTES: usize = 1024 * 1024;
+
 /// Resolve the active daemon socket path for the ATM request transport.
 ///
 /// # Errors
