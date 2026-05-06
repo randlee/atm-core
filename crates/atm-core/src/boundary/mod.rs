@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 /// Workspace-convention seal only; not compiler-enforced outside this crate.
 ///
@@ -52,6 +53,14 @@ impl AsRef<str> for MessageKey {
 impl fmt::Display for MessageKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_ref())
+    }
+}
+
+impl FromStr for MessageKey {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::new(value)
     }
 }
 

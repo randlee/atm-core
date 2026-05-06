@@ -67,8 +67,6 @@ const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 const SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_millis(25);
 #[cfg(unix)]
 const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
-#[cfg(unix)]
-const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DaemonBoundaryStubError {
@@ -333,9 +331,6 @@ fn remove_stale_socket(socket_path: &std::path::Path) -> Result<(), AtmError> {
     if !socket_path.exists() {
         return Ok(());
     }
-    if UnixStream::connect(socket_path).is_ok() {
-        return Ok(());
-    }
     fs::remove_file(socket_path).map_err(|source| {
         AtmError::daemon_unavailable(format!(
             "failed to remove stale daemon socket at {}",
@@ -516,11 +511,6 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
             let shutdown_started = Instant::now();
             while active_connections.load(Ordering::SeqCst) > 0
                 && shutdown_started.elapsed() < GRACEFUL_DRAIN_DEADLINE
-            {
-                thread::sleep(SHUTDOWN_POLL_INTERVAL);
-            }
-            while active_connections.load(Ordering::SeqCst) > 0
-                && shutdown_started.elapsed() < FORCE_CANCEL_DEADLINE
             {
                 thread::sleep(SHUTDOWN_POLL_INTERVAL);
             }

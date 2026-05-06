@@ -88,7 +88,7 @@ pub(super) fn acquire_lock(path: &Path) -> Option<SendAlertLock> {
     }
 
     let mut backoff = Duration::from_millis(1);
-    let deadline = Instant::now() + Duration::from_millis(2500);
+    let deadline = Instant::now() + Duration::from_millis(5000);
     loop {
         match OpenOptions::new().write(true).create_new(true).open(path) {
             Ok(mut file) => {

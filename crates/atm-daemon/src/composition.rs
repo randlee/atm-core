@@ -119,6 +119,34 @@ impl RuntimeComposition {
     }
 }
 
+fn validate_runtime_socket_path() -> Result<(), AtmError> {
+    let socket_path = atm_core::protocol::daemon_socket_path()?;
+    if socket_path.as_os_str().is_empty() {
+        return Err(AtmError::daemon_unavailable("daemon socket path must not be empty")
+            .with_recovery(
+                "Set ATM_DAEMON_SOCKET or ATM_HOME so atm-daemon resolves a concrete socket path before startup.",
+            ));
+    }
+    if socket_path.file_name().is_none() {
+        return Err(AtmError::daemon_unavailable(
+            "daemon socket path must include a socket file name",
+        )
+        .with_recovery(
+            "Set ATM_DAEMON_SOCKET to a full socket path or ensure ATM_HOME resolves to a writable daemon socket location.",
+        ));
+    }
+    if socket_path.parent().is_none() {
+        return Err(AtmError::daemon_unavailable(
+            "daemon socket path must include a parent directory",
+        )
+        .with_recovery(
+            "Set ATM_DAEMON_SOCKET or ATM_HOME so atm-daemon resolves a socket path inside a real directory.",
+        ));
+    }
+    Ok(())
+}
+
 pub(crate) fn compose_runtime() -> Result<RuntimeComposition, AtmError> {
+    validate_runtime_socket_path()?;
     Ok(RuntimeComposition::new(atm_core::home::atm_home()?))
 }

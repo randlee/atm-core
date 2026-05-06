@@ -850,8 +850,8 @@ mod tests {
         assert!(second.is_ok(), "second response: {second:?}");
         let notices = fixture.inbox_contents(ROLE_TEAM_LEAD);
         assert!(
-            notices.len() <= 2,
-            "loopback missing-config fallback should retain at most two notices; got {}",
+            notices.len() <= 1,
+            "loopback missing-config fallback should retain at most one notice; got {}",
             notices.len()
         );
     }
