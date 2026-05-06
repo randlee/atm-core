@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fmt;
 use std::fs;
+use std::ops::Deref;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -82,6 +83,122 @@ pub struct ExportGraphOptions {
     pub root: PathBuf,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(transparent)]
+pub struct NodeId(String);
+
+impl NodeId {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl AsRef<str> for NodeId {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl Deref for NodeId {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl fmt::Display for NodeId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl From<String> for NodeId {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl From<&str> for NodeId {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
+}
+
+impl PartialEq<&str> for NodeId {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+
+impl PartialEq<String> for NodeId {
+    fn eq(&self, other: &String) -> bool {
+        self.as_str() == other
+    }
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(transparent)]
+pub struct OwnerId(String);
+
+impl OwnerId {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl AsRef<str> for OwnerId {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl Deref for OwnerId {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl fmt::Display for OwnerId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl From<String> for OwnerId {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl From<&str> for OwnerId {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
+}
+
+impl PartialEq<&str> for OwnerId {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+
+impl PartialEq<String> for OwnerId {
+    fn eq(&self, other: &String) -> bool {
+        self.as_str() == other
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GraphOutputFormat {
     Json,
@@ -103,8 +220,8 @@ pub struct Finding {
     pub rule_id: RuleId,
     pub kind: String,
     pub message: String,
-    pub owner_ids: Vec<String>,
-    pub node_ids: Vec<String>,
+    pub owner_ids: Vec<OwnerId>,
+    pub node_ids: Vec<NodeId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -223,7 +340,7 @@ pub struct GraphExport {
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct GraphNode {
-    pub id: String,
+    pub id: NodeId,
     pub kind: &'static str,
     pub label: String,
     pub visibility: Option<&'static str>,
@@ -240,8 +357,8 @@ pub struct GraphNode {
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct GraphEdge {
     pub kind: &'static str,
-    pub from: String,
-    pub to: String,
+    pub from: NodeId,
+    pub to: NodeId,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -312,7 +429,7 @@ impl GraphBuilder {
         }
     }
 
-    fn add_edge(&mut self, kind: &'static str, from: impl Into<String>, to: impl Into<String>) {
+    fn add_edge(&mut self, kind: &'static str, from: impl Into<NodeId>, to: impl Into<NodeId>) {
         let edge = GraphEdge {
             kind,
             from: from.into(),
@@ -332,7 +449,7 @@ impl GraphBuilder {
     ) {
         let crate_id = graph::crate_id(package_name, target_name);
         self.add_node(GraphNode {
-            id: crate_id,
+            id: NodeId::new(crate_id),
             kind: "crate",
             label: target_name.to_string(),
             visibility: None,
@@ -385,7 +502,12 @@ pub fn analyze_workspace(options: &AnalyzeOptions) -> Result<FindingsReport> {
         });
     }
 
-    let graph = graph::build_workspace_graph(&options.root)?;
+    let graph = graph::build_workspace_graph(&options.root).with_context(|| {
+        format!(
+            "failed to build workspace graph for root: {}",
+            options.root.display()
+        )
+    })?;
     let mut findings = Vec::new();
     let filter = options.rule;
     if filter.is_none() || filter == Some(RuleFilter::Cycles) {
@@ -430,7 +552,12 @@ pub fn analyze_workspace(options: &AnalyzeOptions) -> Result<FindingsReport> {
 }
 
 pub fn export_workspace_graph(options: &ExportGraphOptions) -> Result<GraphExport> {
-    graph::build_workspace_graph(&options.root)
+    graph::build_workspace_graph(&options.root).with_context(|| {
+        format!(
+            "failed to build workspace graph for root: {}",
+            options.root.display()
+        )
+    })
 }
 
 pub fn render_findings_report(report: &FindingsReport) -> String {

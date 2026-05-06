@@ -20,7 +20,14 @@ pub(crate) fn analyze_cycles(graph: &GraphExport) -> Vec<Finding> {
             findings.push(Finding {
                 rule_id: RuleId::ScbCycle001,
                 kind: "multi_owner_architectural_cycle".to_string(),
-                message: format!("architectural cycle across owners: {}", owners.join(", ")),
+                message: format!(
+                    "architectural cycle across owners: {}",
+                    owners
+                        .iter()
+                        .map(OwnerId::as_str)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
                 owner_ids: owners.clone(),
                 node_ids: owner_contributors(&owners, &owner_graph),
             });
@@ -34,7 +41,7 @@ pub(crate) fn analyze_cycles(graph: &GraphExport) -> Vec<Finding> {
         if self_refs.is_empty() {
             continue;
         }
-        let mut per_source: BTreeMap<String, Vec<&OwnerRefEdge>> = BTreeMap::new();
+        let mut per_source: BTreeMap<NodeId, Vec<&OwnerRefEdge>> = BTreeMap::new();
         for edge in self_refs {
             per_source
                 .entry(edge.source_node_id.clone())
@@ -42,7 +49,7 @@ pub(crate) fn analyze_cycles(graph: &GraphExport) -> Vec<Finding> {
                 .push(edge);
         }
         let mut inherent_nodes = BTreeSet::new();
-        let mut trait_nodes: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        let mut trait_nodes: BTreeMap<String, BTreeSet<NodeId>> = BTreeMap::new();
 
         for (source_node_id, source_edges) in per_source {
             let allow_rule = source_edges.iter().any(|edge| {
@@ -129,12 +136,12 @@ pub(crate) fn analyze_cycles(graph: &GraphExport) -> Vec<Finding> {
 }
 
 fn component_allows_recursive_value_container(
-    owners: &[String],
-    node_map: &BTreeMap<String, &GraphNode>,
+    owners: &[OwnerId],
+    node_map: &BTreeMap<NodeId, &GraphNode>,
 ) -> bool {
     owners.iter().all(|owner_id| {
         node_map
-            .get(owner_id)
+            .get(&NodeId::new(owner_id.as_str()))
             .map(|node| {
                 node.kind == "type"
                     && graph::node_has_allow_rule(node, "cycle.recursive_value_container")
@@ -178,10 +185,10 @@ pub(crate) fn analyze_internal_only(graph: &GraphExport) -> Vec<Finding> {
                 kind: "internal_only_visibility_violation".to_string(),
                 message: format!(
                     "internal_only item {} must not be externally visible (visibility={})",
-                    node.id,
+                    node.id.as_str(),
                     node.visibility.unwrap_or("unknown")
                 ),
-                owner_ids: vec![node.id.clone()],
+                owner_ids: vec![OwnerId::new(node.id.as_str())],
                 node_ids: vec![node.id.clone()],
             });
         }
@@ -201,7 +208,7 @@ pub(crate) fn analyze_internal_only(graph: &GraphExport) -> Vec<Finding> {
                 continue;
             }
             let source_owner_id = owner_id_for_node_id(&source_node.id, source_node.kind)
-                .unwrap_or_else(|| source_node.id.clone());
+                .unwrap_or_else(|| OwnerId::new(source_node.id.as_str()));
             if !seen_external_sources.insert(source_owner_id.clone()) {
                 continue;
             }
@@ -210,10 +217,11 @@ pub(crate) fn analyze_internal_only(graph: &GraphExport) -> Vec<Finding> {
                 kind: "internal_only_external_reference".to_string(),
                 message: format!(
                     "internal_only item {} referenced from {}",
-                    node.id, source_owner_id
+                    node.id.as_str(),
+                    source_owner_id.as_str()
                 ),
-                owner_ids: vec![node.id.clone()],
-                node_ids: vec![source_owner_id, node.id.clone()],
+                owner_ids: vec![OwnerId::new(node.id.as_str())],
+                node_ids: vec![NodeId::new(source_owner_id.as_str()), node.id.clone()],
             });
         }
     }
@@ -259,10 +267,10 @@ pub(crate) fn analyze_forbid_external_impls(graph: &GraphExport) -> Vec<Finding>
                 kind: "forbid_external_impls_violation".to_string(),
                 message: format!(
                     "trait {} forbids external impls but is implemented from module {}",
-                    trait_node.id,
+                    trait_node.id.as_str(),
                     impl_node.module_path.as_deref().unwrap_or("unknown_module")
                 ),
-                owner_ids: vec![trait_node.id.clone()],
+                owner_ids: vec![OwnerId::new(trait_node.id.as_str())],
                 node_ids: vec![impl_node.id.clone(), trait_node.id.clone()],
             });
         }
@@ -292,26 +300,26 @@ pub(crate) fn finding_sort_key(finding: &Finding) -> (u8, RuleId) {
 
 #[derive(Debug, Clone)]
 struct OwnerRefEdge {
-    source_owner_id: String,
-    target_owner_id: String,
+    source_owner_id: OwnerId,
+    target_owner_id: OwnerId,
     owner_kind: &'static str,
     source_kind: &'static str,
-    source_node_id: String,
+    source_node_id: NodeId,
     source_impl_kind: Option<&'static str>,
     reference_kind: ReferenceKind,
-    node_ids: Vec<String>,
+    node_ids: Vec<NodeId>,
 }
 
 #[derive(Default)]
 struct OwnerGraph {
-    adjacency: BTreeMap<String, BTreeSet<String>>,
-    self_refs: BTreeMap<String, Vec<OwnerRefEdge>>,
+    adjacency: BTreeMap<OwnerId, BTreeSet<OwnerId>>,
+    self_refs: BTreeMap<OwnerId, Vec<OwnerRefEdge>>,
     ref_edges: Vec<OwnerRefEdge>,
 }
 
 fn build_owner_graph<'a>(
     graph: &'a GraphExport,
-    node_map: &BTreeMap<String, &'a GraphNode>,
+    node_map: &BTreeMap<NodeId, &'a GraphNode>,
 ) -> OwnerGraph {
     let mut owner_graph = OwnerGraph::default();
 
@@ -373,7 +381,7 @@ fn build_owner_graph<'a>(
     owner_graph
 }
 
-fn owner_contributors(owners: &[String], owner_graph: &OwnerGraph) -> Vec<String> {
+fn owner_contributors(owners: &[OwnerId], owner_graph: &OwnerGraph) -> Vec<NodeId> {
     let owner_set: BTreeSet<_> = owners.iter().cloned().collect();
     let mut nodes = BTreeSet::new();
     for edge in &owner_graph.ref_edges {
@@ -387,44 +395,46 @@ fn owner_contributors(owners: &[String], owner_graph: &OwnerGraph) -> Vec<String
 }
 
 fn owner_kind_for_node_id(
-    owner_id: &str,
-    node_map: &BTreeMap<String, &GraphNode>,
+    owner_id: &OwnerId,
+    node_map: &BTreeMap<NodeId, &GraphNode>,
 ) -> Option<&'static str> {
-    node_map.get(owner_id).map(|node| node.kind)
+    node_map
+        .get(&NodeId::new(owner_id.as_str()))
+        .map(|node| node.kind)
 }
 
-fn owner_id_for_node_id(node_id: &str, node_kind: &str) -> Option<String> {
+fn owner_id_for_node_id(node_id: &NodeId, node_kind: &str) -> Option<OwnerId> {
     match node_kind {
-        "module" | "type" | "trait" => Some(node_id.to_string()),
+        "module" | "type" | "trait" => Some(OwnerId::new(node_id.as_str())),
         "function" => node_id
             .rsplit_once("::")
-            .map(|(parent, _)| parent.to_string()),
+            .map(|(parent, _)| OwnerId::new(parent)),
         "method" => node_id
             .rsplit_once("::")
-            .map(|(parent, _)| parent.to_string()),
+            .map(|(parent, _)| OwnerId::new(parent)),
         "variant" => node_id
             .rsplit_once("::variant::")
-            .map(|(parent, _)| parent.to_string()),
+            .map(|(parent, _)| OwnerId::new(parent)),
         "field" => {
             let (parent, _) = node_id.rsplit_once("::field::")?;
             if let Some((enum_parent, _variant)) = parent.rsplit_once("::variant::") {
-                Some(enum_parent.to_string())
+                Some(OwnerId::new(enum_parent))
             } else {
-                Some(parent.to_string())
+                Some(OwnerId::new(parent))
             }
         }
         _ => None,
     }
 }
 
-fn strongly_connected_components(owner_graph: &OwnerGraph) -> Vec<Vec<String>> {
+fn strongly_connected_components(owner_graph: &OwnerGraph) -> Vec<Vec<OwnerId>> {
     fn visit(
-        node: &str,
+        node: &OwnerId,
         owner_graph: &OwnerGraph,
-        visited: &mut BTreeSet<String>,
-        order: &mut Vec<String>,
+        visited: &mut BTreeSet<OwnerId>,
+        order: &mut Vec<OwnerId>,
     ) {
-        if !visited.insert(node.to_string()) {
+        if !visited.insert(node.clone()) {
             return;
         }
         if let Some(neighbors) = owner_graph.adjacency.get(node) {
@@ -432,11 +442,11 @@ fn strongly_connected_components(owner_graph: &OwnerGraph) -> Vec<Vec<String>> {
                 visit(neighbor, owner_graph, visited, order);
             }
         }
-        order.push(node.to_string());
+        order.push(node.clone());
     }
 
-    fn reverse_graph(owner_graph: &OwnerGraph) -> BTreeMap<String, BTreeSet<String>> {
-        let mut reversed: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    fn reverse_graph(owner_graph: &OwnerGraph) -> BTreeMap<OwnerId, BTreeSet<OwnerId>> {
+        let mut reversed: BTreeMap<OwnerId, BTreeSet<OwnerId>> = BTreeMap::new();
         for (source, targets) in &owner_graph.adjacency {
             reversed.entry(source.clone()).or_default();
             for target in targets {
@@ -450,15 +460,15 @@ fn strongly_connected_components(owner_graph: &OwnerGraph) -> Vec<Vec<String>> {
     }
 
     fn collect_component(
-        node: &str,
-        reversed: &BTreeMap<String, BTreeSet<String>>,
-        visited: &mut BTreeSet<String>,
-        component: &mut Vec<String>,
+        node: &OwnerId,
+        reversed: &BTreeMap<OwnerId, BTreeSet<OwnerId>>,
+        visited: &mut BTreeSet<OwnerId>,
+        component: &mut Vec<OwnerId>,
     ) {
-        if !visited.insert(node.to_string()) {
+        if !visited.insert(node.clone()) {
             return;
         }
-        component.push(node.to_string());
+        component.push(node.clone());
         if let Some(neighbors) = reversed.get(node) {
             for neighbor in neighbors {
                 collect_component(neighbor, reversed, visited, component);

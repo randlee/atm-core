@@ -160,7 +160,7 @@ pub(crate) fn build_workspace_graph(root: &Path) -> Result<GraphExport> {
             let root_module_id = format!("{}::module::crate", context.crate_id);
             let root_attributes = Vec::new();
             builder.add_node(GraphNode {
-                id: root_module_id.clone(),
+                id: NodeId::new(root_module_id.clone()),
                 kind: "module",
                 label: "crate".to_string(),
                 visibility: None,
@@ -215,7 +215,7 @@ fn ingest_module_items(
                 let attributes = parse_lint_attributes(&item_mod.attrs)?;
 
                 builder.add_node(GraphNode {
-                    id: child_module_id.clone(),
+                    id: NodeId::new(child_module_id.clone()),
                     kind: "module",
                     label: name.clone(),
                     visibility: Some(visibility_label(&item_mod.vis).as_str()),
@@ -328,7 +328,7 @@ fn ingest_module_items(
                 for variant in &item_enum.variants {
                     let variant_id = format!("{node_id}::variant::{}", variant.ident);
                     builder.add_node(GraphNode {
-                        id: variant_id.clone(),
+                        id: NodeId::new(variant_id.clone()),
                         kind: "variant",
                         label: variant.ident.to_string(),
                         visibility: None,
@@ -483,9 +483,13 @@ fn ingest_module_items(
                     format!("{owner_node_id}::impl::inherent")
                 };
 
-                if !builder.nodes.iter().any(|node| node.id == owner_node_id) {
+                if !builder
+                    .nodes
+                    .iter()
+                    .any(|node| node.id == owner_node_id.as_str())
+                {
                     builder.add_node(GraphNode {
-                        id: owner_node_id.clone(),
+                        id: NodeId::new(owner_node_id.clone()),
                         kind: "type",
                         label: owner_name.to_string(),
                         visibility: None,
@@ -506,7 +510,7 @@ fn ingest_module_items(
                 }
 
                 builder.add_node(GraphNode {
-                    id: impl_node_id.clone(),
+                    id: NodeId::new(impl_node_id.clone()),
                     kind: "impl",
                     label: trait_path
                         .as_ref()
@@ -552,7 +556,7 @@ fn ingest_module_items(
                     if let ImplItem::Fn(method) = impl_item {
                         let method_id = format!("{owner_node_id}::{}", method.sig.ident);
                         builder.add_node(GraphNode {
-                            id: method_id.clone(),
+                            id: NodeId::new(method_id.clone()),
                             kind: "method",
                             label: method.sig.ident.to_string(),
                             visibility: Some(visibility_label(&method.vis).as_str()),
@@ -597,10 +601,10 @@ fn add_item_node(
     builder: &mut GraphBuilder,
     context: &TargetContext,
     args: ItemNodeArgs<'_>,
-) -> String {
+) -> NodeId {
     let id = format!("{}::{}", args.parent_module_id, args.ident);
     builder.add_node(GraphNode {
-        id: id.clone(),
+        id: NodeId::new(id.clone()),
         kind: args.kind,
         label: args.ident.to_string(),
         visibility: Some(args.visibility.as_str()),
@@ -614,7 +618,7 @@ fn add_item_node(
         attributes: args.attributes,
     });
     builder.add_edge("contains", args.parent_module_id.to_string(), id.clone());
-    id
+    NodeId::new(id)
 }
 
 fn add_field_nodes(builder: &mut GraphBuilder, context: &TargetContext, args: FieldNodeArgs<'_>) {
@@ -628,7 +632,7 @@ fn add_field_nodes(builder: &mut GraphBuilder, context: &TargetContext, args: Fi
                     .unwrap_or_else(|| "field".to_string());
                 let field_id = format!("{}::field::{label}", args.parent_id);
                 builder.add_node(GraphNode {
-                    id: field_id.clone(),
+                    id: NodeId::new(field_id.clone()),
                     kind: "field",
                     label: label.clone(),
                     visibility: Some(visibility_label(&field.vis).as_str()),
@@ -657,7 +661,7 @@ fn add_field_nodes(builder: &mut GraphBuilder, context: &TargetContext, args: Fi
                 let label = index.to_string();
                 let field_id = format!("{}::field::{label}", args.parent_id);
                 builder.add_node(GraphNode {
-                    id: field_id.clone(),
+                    id: NodeId::new(field_id.clone()),
                     kind: "field",
                     label: label.clone(),
                     visibility: Some(visibility_label(&field.vis).as_str()),
@@ -698,7 +702,7 @@ fn ensure_trait_reference_node(
     }
 
     builder.add_node(GraphNode {
-        id: trait_node_id.to_string(),
+        id: NodeId::new(trait_node_id.to_string()),
         kind: "trait_ref",
         label: trait_label.to_string(),
         visibility: None,

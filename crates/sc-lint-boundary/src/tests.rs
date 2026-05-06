@@ -1475,7 +1475,7 @@ fn rejects_non_path_impl_owners() {
     })
     .unwrap_err();
 
-    let message = error.to_string();
+    let message = format!("{error:#}");
     assert!(message.contains("unsupported impl owner type"));
     assert!(message.contains("&Loop") || message.contains("& Loop"));
 }
@@ -1492,7 +1492,7 @@ fn fails_when_external_module_is_missing() {
     })
     .unwrap_err();
 
-    let message = error.to_string();
+    let message = format!("{error:#}");
     assert!(message.contains("while resolving module `crate::missing`"));
 }
 
@@ -1510,7 +1510,7 @@ fn fails_when_module_resolution_is_ambiguous() {
     })
     .unwrap_err();
 
-    let message = error.to_string();
+    let message = format!("{error:#}");
     assert!(message.contains("while resolving module `crate::dup`"));
 }
 
@@ -1533,11 +1533,7 @@ fn fails_when_sc_lint_attribute_is_invalid() {
     })
     .unwrap_err();
 
-    assert!(
-        error
-            .to_string()
-            .contains("boundary.allow rule ids must not be empty")
-    );
+    assert!(format!("{error:#}").contains("boundary.allow rule ids must not be empty"));
 }
 
 #[test]
@@ -1556,11 +1552,7 @@ fn fails_when_sc_lint_attribute_has_no_allow_args() {
     })
     .unwrap_err();
 
-    assert!(
-        error
-            .to_string()
-            .contains("boundary.allow requires at least one rule id string")
-    );
+    assert!(format!("{error:#}").contains("boundary.allow requires at least one rule id string"));
 }
 
 #[test]
@@ -1579,7 +1571,7 @@ fn fails_when_sc_lint_attribute_uses_unknown_boundary_directive() {
     })
     .unwrap_err();
 
-    assert!(error.to_string().contains("unsupported boundary directive"));
+    assert!(format!("{error:#}").contains("unsupported boundary directive"));
 }
 
 #[test]
@@ -1598,11 +1590,7 @@ fn fails_when_sc_lint_attribute_uses_unknown_scope() {
     })
     .unwrap_err();
 
-    assert!(
-        error
-            .to_string()
-            .contains("unsupported sc_lint scope `other`")
-    );
+    assert!(format!("{error:#}").contains("unsupported sc_lint scope `other`"));
 }
 
 #[test]
@@ -1621,7 +1609,7 @@ fn fails_when_sc_lint_attribute_has_mixed_valid_and_invalid_directives() {
     })
     .unwrap_err();
 
-    assert!(error.to_string().contains("unsupported boundary directive"));
+    assert!(format!("{error:#}").contains("unsupported boundary directive"));
 }
 
 struct WorkspaceFixture {

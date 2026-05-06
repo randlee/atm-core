@@ -25,6 +25,8 @@ use syn::spanned::Spanned;
 use syn::visit::Visit;
 
 use crate::Finding;
+use crate::NodeId;
+use crate::OwnerId;
 use crate::RuleId;
 
 #[derive(Debug, Clone, Deserialize, Default, PartialEq, Eq)]
@@ -115,8 +117,11 @@ pub(crate) fn analyze_portability(root: &Path) -> Result<Vec<Finding>> {
                 finding.line,
                 finding.message
             ),
-            owner_ids: vec![format!("crate::{}::{}", finding.package, finding.target)],
-            node_ids: vec![finding.node_label],
+            owner_ids: vec![OwnerId::new(format!(
+                "crate::{}::{}",
+                finding.package, finding.target
+            ))],
+            node_ids: vec![NodeId::new(finding.node_label)],
         })
         .collect())
 }

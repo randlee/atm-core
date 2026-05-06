@@ -12,6 +12,11 @@ pub fn render_findings_report(report: &FindingsReport) -> String {
     )
 }
 
+/// Render a graph export to the requested wire format.
+///
+/// JSON rendering is fallible because it relies on `serde_json` serialization.
+/// Turtle rendering is currently infallible because it formats the already-built
+/// graph export into a string without additional fallible I/O or encoding work.
 pub fn render_graph_export(
     graph: &GraphExport,
     format: GraphOutputFormat,
@@ -38,7 +43,7 @@ fn render_graph_turtle(graph: &GraphExport) -> String {
         lines.push(format!("{subject} rdf:type sc:{} .", node.kind));
         lines.push(format!(
             "{subject} sc:id {} .",
-            turtle_string_literal(&node.id)
+            turtle_string_literal(node.id.as_str())
         ));
         lines.push(format!(
             "{subject} sc:label {} .",
@@ -114,10 +119,10 @@ fn render_graph_turtle(graph: &GraphExport) -> String {
     lines.join("\n")
 }
 
-fn node_iri(node_id: &str) -> String {
+fn node_iri(node_id: &NodeId) -> String {
     format!(
         "<urn:sc-lint-boundary:node:{}>",
-        hex_encode(node_id.as_bytes())
+        hex_encode(node_id.as_str().as_bytes())
     )
 }
 
