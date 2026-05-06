@@ -539,11 +539,18 @@ mod tests {
     use std::sync::Arc;
 
     use atm_core::boundary::{self, ClientTransport};
+    use atm_core::clear::ClearQuery;
+    use atm_core::doctor::{DoctorQuery, DoctorStatus};
     use atm_core::error::AtmError;
+    use atm_core::observability::{
+        AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
+        CommandEvent, LogTailSession, ObservabilityPort,
+    };
     use atm_core::protocol::{
         ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
         SendResponseEnvelope,
     };
+    use atm_core::read::ReadQuery;
     use atm_core::schema::{
         AgentMember, MessageEnvelope, TeamConfig, hydrate_legacy_fields_from_metadata,
     };
@@ -551,6 +558,8 @@ mod tests {
     use atm_core::test_support::{
         ROLE_TEAM_LEAD, TEST_LEAD, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_TEAM,
     };
+    use atm_core::types::{AckActivationMode, ReadSelection};
+    use chrono::Utc;
     use serde_json::Value;
     use tempfile::TempDir;
 
@@ -588,35 +597,78 @@ mod tests {
         }
     }
 
-    #[derive(Debug, Default)]
-    struct LoopbackClientTransport;
+    struct LoopbackClientTransport {
+        observability: Arc<dyn ObservabilityPort + Send + Sync>,
+    }
+
+    impl std::fmt::Debug for LoopbackClientTransport {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("LoopbackClientTransport")
+                .finish_non_exhaustive()
+        }
+    }
+
+    impl LoopbackClientTransport {
+        fn new(observability: Arc<dyn ObservabilityPort + Send + Sync>) -> Self {
+            Self { observability }
+        }
+    }
 
     impl boundary::sealed::Sealed for LoopbackClientTransport {}
 
     impl ClientTransport for LoopbackClientTransport {
         fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-            let observability = atm_core::observability::NullObservability;
             match request {
                 RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                    atm_core::send::send_mail(request, &observability)
+                    atm_core::send::send_mail(request, self.observability.as_ref())
                         .map(|outcome| ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
                 }
                 RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
-                    atm_core::ack::ack_mail(request, &observability).map(|outcome| {
+                    atm_core::ack::ack_mail(request, self.observability.as_ref()).map(|outcome| {
                         ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
                     })
                 }
                 RequestEnvelope::Receive(query) => {
-                    atm_core::read::read_mail(query, &observability).map(ResponseEnvelope::Receive)
+                    atm_core::read::read_mail(query, self.observability.as_ref())
+                        .map(ResponseEnvelope::Receive)
                 }
                 RequestEnvelope::Clear(query) => {
-                    atm_core::clear::clear_mail(query, &observability).map(ResponseEnvelope::Clear)
+                    atm_core::clear::clear_mail(query, self.observability.as_ref())
+                        .map(ResponseEnvelope::Clear)
                 }
                 RequestEnvelope::Doctor(query) => {
-                    atm_core::doctor::run_doctor(query, &observability)
+                    atm_core::doctor::run_doctor(query, self.observability.as_ref())
                         .map(ResponseEnvelope::Doctor)
                 }
             }
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct HealthyObservability;
+
+    impl boundary::sealed::Sealed for HealthyObservability {}
+
+    impl ObservabilityPort for HealthyObservability {
+        fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
+            Ok(AtmLogSnapshot::default())
+        }
+
+        fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, AtmError> {
+            Ok(LogTailSession::empty())
+        }
+
+        fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
+            Ok(AtmObservabilityHealth {
+                active_log_path: None,
+                logging_state: AtmObservabilityHealthState::Healthy,
+                query_state: Some(AtmObservabilityHealthState::Healthy),
+                detail: None,
+            })
         }
     }
 
@@ -654,8 +706,11 @@ mod tests {
         fn write_team_config(&self, recipient: &str) {
             let team_dir = self.team_dir();
             fs::create_dir_all(&team_dir).expect("team dir");
+            fs::create_dir_all(team_dir.join("inboxes")).expect("inboxes dir");
+            fs::create_dir_all(team_dir.join(".atm-state").join("workflow")).expect("workflow dir");
             let config = TeamConfig {
                 members: vec![
+                    AgentMember::with_name(TEST_SENDER.parse().expect("sender")),
                     AgentMember::with_name(recipient.parse().expect("recipient")),
                     AgentMember::with_name(TEST_LEAD.parse().expect("lead")),
                 ],
@@ -692,6 +747,14 @@ mod tests {
                 .collect()
         }
 
+        fn write_inbox_messages(&self, agent: &str, messages: &[MessageEnvelope]) {
+            let values = messages
+                .iter()
+                .map(|message| serde_json::to_value(message).expect("message value"))
+                .collect::<Vec<_>>();
+            self.write_inbox_values(agent, &values);
+        }
+
         fn send_request(&self, body: &str) -> SendRequest {
             SendRequest::new(
                 self.home_dir.clone(),
@@ -706,6 +769,63 @@ mod tests {
                 false,
             )
             .expect("send request")
+        }
+
+        fn read_query(&self) -> ReadQuery {
+            ReadQuery::new(
+                self.home_dir.clone(),
+                self.current_dir.clone(),
+                Some(TEST_SENDER),
+                Some(TEST_RECIPIENT_ADDRESS),
+                Some(TEST_TEAM),
+                ReadSelection::All,
+                false,
+                false,
+                AckActivationMode::ReadOnly,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("read query")
+        }
+
+        fn clear_query(&self) -> ClearQuery {
+            ClearQuery {
+                home_dir: self.home_dir.clone(),
+                current_dir: self.current_dir.clone(),
+                actor_override: Some(TEST_SENDER.parse().expect("actor")),
+                target_address: Some(TEST_RECIPIENT_ADDRESS.parse().expect("recipient")),
+                team_override: Some(TEST_TEAM.parse().expect("team")),
+                older_than: None,
+                idle_only: false,
+                dry_run: false,
+            }
+        }
+
+        fn doctor_query(&self) -> DoctorQuery {
+            DoctorQuery {
+                home_dir: self.home_dir.clone(),
+                current_dir: self.current_dir.clone(),
+                team_override: Some(TEST_TEAM.parse().expect("team")),
+            }
+        }
+
+        fn message(&self, text: &str, read: bool) -> MessageEnvelope {
+            MessageEnvelope {
+                from: TEST_LEAD.parse().expect("lead"),
+                text: text.to_string(),
+                timestamp: Utc::now().into(),
+                read,
+                source_team: Some(TEST_TEAM.parse().expect("team")),
+                summary: None,
+                message_id: None,
+                pending_ack_at: None,
+                acknowledged_at: None,
+                acknowledges_message_id: None,
+                task_id: None,
+                extra: serde_json::Map::new(),
+            }
         }
     }
 
@@ -742,9 +862,12 @@ mod tests {
     #[test]
     fn loopback_transport_send_persists_inbox_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
-        let observability = CliObservability::fallback();
-        let composition =
-            CliComposition::from_transport(Arc::new(LoopbackClientTransport), &observability);
+        let transport_observability = Arc::new(atm_core::observability::NullObservability);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(transport_observability)),
+            &composition_observability,
+        );
 
         let outcome = composition
             .send(fixture.send_request("hello from loopback"))
@@ -766,7 +889,9 @@ mod tests {
         fixture.write_inbox_values(TEST_RECIPIENT, &[]);
         fixture.write_inbox_values(ROLE_TEAM_LEAD, &[]);
 
-        let transport = Arc::new(LoopbackClientTransport);
+        let transport = Arc::new(LoopbackClientTransport::new(Arc::new(
+            atm_core::observability::NullObservability,
+        )));
         let (first, second) = std::thread::scope(|scope| {
             let first_request = fixture.send_request("first");
             let second_request = fixture.send_request("second");
@@ -796,5 +921,65 @@ mod tests {
             "loopback missing-config fallback should retain at most two notices; got {}",
             notices.len()
         );
+    }
+
+    #[test]
+    fn loopback_transport_read_surfaces_messages_without_daemon() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        fixture.write_inbox_messages(TEST_RECIPIENT, &[fixture.message("read me", false)]);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(Arc::new(
+                atm_core::observability::NullObservability,
+            ))),
+            &composition_observability,
+        );
+
+        let outcome = composition
+            .receive(fixture.read_query())
+            .expect("read outcome");
+
+        assert_eq!(outcome.agent.as_str(), TEST_RECIPIENT);
+        assert_eq!(outcome.count, 1);
+        assert_eq!(outcome.messages[0].envelope.text, "read me");
+    }
+
+    #[test]
+    fn loopback_transport_clear_removes_read_messages_without_daemon() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        fixture.write_inbox_messages(TEST_RECIPIENT, &[fixture.message("done", true)]);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(Arc::new(
+                atm_core::observability::NullObservability,
+            ))),
+            &composition_observability,
+        );
+
+        let outcome = composition
+            .clear(fixture.clear_query())
+            .expect("clear outcome");
+
+        assert_eq!(outcome.removed_total, 1);
+        assert_eq!(outcome.remaining_total, 0);
+        assert!(fixture.inbox_contents(TEST_RECIPIENT).is_empty());
+    }
+
+    #[test]
+    fn loopback_transport_doctor_reports_health_without_daemon() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let observability = Arc::new(HealthyObservability);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport(
+            Arc::new(LoopbackClientTransport::new(observability)),
+            &composition_observability,
+        );
+
+        let report = composition
+            .doctor(fixture.doctor_query())
+            .expect("doctor report");
+
+        assert_eq!(report.summary.status, DoctorStatus::Healthy);
+        assert_eq!(report.summary.error_count, 0);
     }
 }

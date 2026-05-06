@@ -87,7 +87,7 @@ impl CliObservability {
     /// Test-only helper for injecting a synthetic observability port without
     /// exposing the boxed inner field to production callers.
     #[cfg(test)]
-    fn from_test_port(port: impl ObservabilityPort + Send + Sync + 'static) -> Self {
+    pub(crate) fn from_test_port(port: impl ObservabilityPort + Send + Sync + 'static) -> Self {
         Self {
             inner: Box::new(port),
         }
