@@ -1010,4 +1010,42 @@ mod tests {
             1
         );
     }
+
+    #[test]
+    fn expired_ephemeral_message_is_cleaned_from_all_views() {
+        let message_id = LegacyMessageId::new();
+        let stale_at =
+            IsoTimestamp::from_datetime(chrono::Utc::now() - chrono::Duration::minutes(1));
+        let messages = vec![SourcedMessage {
+            envelope: MessageEnvelope {
+                stale_at: Some(stale_at),
+                ..message("expired ephemeral", message_id, None, None, false)
+            },
+            source_path: PathBuf::from("recipient.json"),
+            source_index: 0.into(),
+        }];
+        let workflow_state = workflow::WorkflowStateFile::default();
+        let actionable = ReadQuery {
+            home_dir: PathBuf::new(),
+            current_dir: PathBuf::new(),
+            actor_override: None,
+            target_address: None,
+            team_override: None,
+            selection_mode: ReadSelection::Actionable,
+            seen_state_filter: false,
+            seen_state_update: false,
+            ack_activation_mode: AckActivationMode::ReadOnly,
+            limit: None,
+            sender_filter: None,
+            timestamp_filter: None,
+            timeout_secs: None,
+        };
+        let all = ReadQuery {
+            selection_mode: ReadSelection::All,
+            ..actionable.clone()
+        };
+
+        assert!(selected_after_filters(&messages, &workflow_state, &actionable, None).is_empty());
+        assert!(selected_after_filters(&messages, &workflow_state, &all, None).is_empty());
+    }
 }

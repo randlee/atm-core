@@ -1,5 +1,5 @@
 use super::SqliteRosterStore;
-use super::{deserialize_json, serialize_json, sqlite_error};
+use super::{deserialize_json, serialize_json};
 use atm_core::boundary;
 use atm_core::error::AtmError;
 use atm_core::schema::TeamConfig;
@@ -37,7 +37,10 @@ impl boundary::RosterStore for SqliteRosterStore {
                         chrono::Utc::now().to_rfc3339(),
                     ],
                 )
-                .map_err(|error| sqlite_error("failed to replace roster-store snapshot", error))?;
+                .map_err(|error| {
+                    self.db
+                        .error("failed to replace roster-store snapshot", error)
+                })?;
             Ok(())
         })?;
 
@@ -61,7 +64,7 @@ impl boundary::RosterStore for SqliteRosterStore {
                     |row| row.get::<_, String>(0),
                 )
                 .optional()
-                .map_err(|error| sqlite_error("failed to load roster-store snapshot", error))
+                .map_err(|error| self.db.error("failed to load roster-store snapshot", error))
         })?;
 
         let roster_json = roster_json.ok_or_else(|| {
@@ -117,7 +120,8 @@ impl boundary::RosterStore for SqliteRosterStore {
                     )
                     .optional()
                     .map_err(|error| {
-                        sqlite_error("failed to load roster-store health snapshot", error)
+                        self.db
+                            .error("failed to load roster-store health snapshot", error)
                     })
             })?
             .ok_or_else(|| {

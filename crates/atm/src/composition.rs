@@ -1047,6 +1047,7 @@ mod tests {
         assert_eq!(replies.len(), 1);
         assert_eq!(replies[0].text, "received and starting");
         assert_eq!(replies[0].acknowledges_message_id, Some(message_id));
+        assert!(replies[0].pending_ack_at.is_none());
     }
 
     #[test]
