@@ -2693,7 +2693,7 @@ mail correctness.
   - per-leg TCP/TLS connect deadline: `5s`
   - per-leg TCP/TLS read/write deadline: `5s`
   - total remote retry budget: `30s`
-  - SQLite `busy_timeout`: `1500ms`
+  - SQLite `busy_timeout`: `5000ms`
   - ingest batch processing slice: `2s`
   - doctor health query deadline: `3s`
   - max concurrent accepts: `64`
