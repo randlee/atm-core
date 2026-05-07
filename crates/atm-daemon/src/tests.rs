@@ -11,11 +11,13 @@ use atm_core::protocol::{
     RuntimeReadinessState, TeamMemberHeartbeatRequest,
 };
 use atm_core::schema::{AgentMember, TeamConfig};
+use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_rusqlite::assemble_boundary;
 use serial_test::serial;
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
+#[cfg(unix)]
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, mpsc};
@@ -134,6 +136,7 @@ fn singleton_guard_recovers_stale_owner_once_lock_is_released() {
     drop(guard);
 }
 
+#[cfg(unix)]
 #[test]
 fn blocked_connection_is_interrupted_on_force_cancel() {
     let tempdir = TempDir::new().expect("tempdir");
@@ -201,14 +204,14 @@ fn heartbeat_updates_status_cache_and_doctor_projection() {
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
 
-    install_test_roster(&db_path, &["team-lead", "qa-a"]);
-    write_team_config(&atm_home, &["team-lead", "qa-a"]);
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD, "qa-a"]);
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD, "qa-a"]);
 
     let status_cache = RuntimeStatusCache::new();
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache.clone(), db_path);
     let team: TeamName = "test-team".parse().expect("team");
-    let member: AgentName = "team-lead".parse().expect("member");
+    let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
     let response = dispatcher
         .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
@@ -260,8 +263,8 @@ fn dispatcher_hydrates_unknown_members_from_team_roster_on_startup() {
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
 
-    install_test_roster(&db_path, &["team-lead", "qa-a"]);
-    write_team_config(&atm_home, &["team-lead", "qa-a"]);
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD, "qa-a"]);
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD, "qa-a"]);
 
     let status_cache = RuntimeStatusCache::new();
     let _dispatcher =
@@ -282,12 +285,12 @@ fn heartbeat_rejects_live_pid_conflict() {
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
 
-    install_test_roster(&db_path, &["team-lead"]);
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
 
     let status_cache = RuntimeStatusCache::new();
     let dispatcher = DaemonRequestDispatcher::new_for_test(atm_home, status_cache.clone(), db_path);
     let team: TeamName = "test-team".parse().expect("team");
-    let member: AgentName = "team-lead".parse().expect("member");
+    let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
     dispatcher
         .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
@@ -337,12 +340,12 @@ fn heartbeat_accepts_pid_takeover_when_previous_pid_is_dead() {
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
 
-    install_test_roster(&db_path, &["team-lead"]);
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
 
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home, RuntimeStatusCache::new(), db_path);
     let team: TeamName = "test-team".parse().expect("team");
-    let member: AgentName = "team-lead".parse().expect("member");
+    let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
     dispatcher
         .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
@@ -384,8 +387,8 @@ fn heartbeat_demotes_evicted_member_to_explicit_unknown() {
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
 
-    install_test_roster(&db_path, &["team-lead", "qa-a"]);
-    write_team_config(&atm_home, &["team-lead", "qa-a"]);
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD, "qa-a"]);
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD, "qa-a"]);
 
     let status_cache = RuntimeStatusCache::new();
     let team: TeamName = "test-team".parse().expect("team");
@@ -411,7 +414,7 @@ fn heartbeat_demotes_evicted_member_to_explicit_unknown() {
     let response = dispatcher
         .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
             team: team.clone(),
-            member: "team-lead".parse().expect("member"),
+            member: ROLE_TEAM_LEAD.parse().expect("member"),
             pid: std::process::id(),
             observed_at: IsoTimestamp::now(),
             activity: HeartbeatActivity::ActiveToolUse,
@@ -440,7 +443,7 @@ fn heartbeat_retries_identity_conflict_after_old_pid_dies() {
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
 
-    install_test_roster(&db_path, &["team-lead"]);
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
 
     let mut child = Command::new("sleep")
         .arg("5")
@@ -454,7 +457,7 @@ fn heartbeat_retries_identity_conflict_after_old_pid_dies() {
     let status_cache = RuntimeStatusCache::new();
     let dispatcher = DaemonRequestDispatcher::new_for_test(atm_home, status_cache.clone(), db_path);
     let team: TeamName = "test-team".parse().expect("team");
-    let member: AgentName = "team-lead".parse().expect("member");
+    let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
     dispatcher
         .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
@@ -512,8 +515,8 @@ fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable() {
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
 
-    install_test_roster(&db_path, &["team-lead"]);
-    write_team_config(&atm_home, &["team-lead"]);
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD]);
 
     let status_cache = RuntimeStatusCache::new();
     let dispatcher =
@@ -545,8 +548,8 @@ fn doctor_projects_unavailable_runtime_when_all_members_are_offline() {
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
 
-    install_test_roster(&db_path, &["team-lead"]);
-    write_team_config(&atm_home, &["team-lead"]);
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD]);
 
     let status_cache = RuntimeStatusCache::new();
     let dispatcher =
@@ -555,7 +558,7 @@ fn doctor_projects_unavailable_runtime_when_all_members_are_offline() {
     let doctor = dispatcher
         .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
             team: "test-team".parse().expect("team"),
-            member: "team-lead".parse().expect("member"),
+            member: ROLE_TEAM_LEAD.parse().expect("member"),
             pid: std::process::id(),
             observed_at: IsoTimestamp::now(),
             activity: HeartbeatActivity::SessionEnded,

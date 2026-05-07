@@ -15,6 +15,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use shared_db::{
     SharedDb, SharedDbTarget, deserialize_json, serialize_json, sqlite_error, sqlite_thread_mode,
 };
+use std::net::SocketAddr;
 use std::path::Path;
 #[cfg(test)]
 use std::path::PathBuf;
@@ -30,7 +31,7 @@ pub struct RemoteReplayStateRecord {
     pub team: TeamName,
     pub agent: AgentName,
     pub message_key: boundary::MessageKey,
-    pub peer_addr: String,
+    pub peer_addr: SocketAddr,
     pub request: RequestEnvelope,
     pub recorded_at: IsoTimestamp,
     pub expires_at: IsoTimestamp,
@@ -1482,7 +1483,7 @@ mod tests {
             team: team(),
             agent: agent(),
             message_key: message_key("atm:remote-live"),
-            peer_addr: "127.0.0.1:4310".to_string(),
+            peer_addr: "127.0.0.1:4310".parse().expect("peer addr"),
             request: RequestEnvelope::Doctor(DoctorQuery {
                 home_dir: PathBuf::from("."),
                 current_dir: PathBuf::from("."),
@@ -1500,7 +1501,7 @@ mod tests {
             team: team(),
             agent: agent(),
             message_key: message_key("atm:remote-expired"),
-            peer_addr: "127.0.0.1:4311".to_string(),
+            peer_addr: "127.0.0.1:4311".parse().expect("peer addr"),
             request: RequestEnvelope::Doctor(DoctorQuery {
                 home_dir: PathBuf::from("."),
                 current_dir: PathBuf::from("."),

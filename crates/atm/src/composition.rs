@@ -31,9 +31,9 @@ use fs2::FileExt;
 
 use crate::observability::CliObservability;
 
-#[cfg_attr(not(unix), allow(dead_code))]
+#[cfg(unix)]
 const SAME_HOST_REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(3);
-#[cfg_attr(not(unix), allow(dead_code))]
+#[cfg(unix)]
 const AUTO_START_PUBLISH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 #[cfg(unix)]
 const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
@@ -67,7 +67,7 @@ impl DaemonSocketPath {
         Ok(Self(path))
     }
 
-    #[cfg_attr(not(unix), allow(dead_code))]
+    #[cfg(unix)]
     fn display(&self) -> std::path::Display<'_> {
         self.0.display()
     }
@@ -88,7 +88,7 @@ impl DaemonBinaryPath {
         Ok(Self(path))
     }
 
-    #[cfg_attr(not(unix), allow(dead_code))]
+    #[cfg(unix)]
     fn display(&self) -> std::path::Display<'_> {
         self.0.display()
     }
@@ -130,15 +130,24 @@ fn host_runtime_lock_path_from_home(home_dir: &Path, file_name: &str) -> PathBuf
     home_dir.join(file_name)
 }
 
-#[cfg_attr(not(unix), allow(dead_code))]
 #[derive(Debug)]
 struct LocalSocketClientTransport {
+    #[cfg(unix)]
     socket_path: DaemonSocketPath,
 }
 
 impl LocalSocketClientTransport {
     fn new(socket_path: DaemonSocketPath) -> Self {
-        Self { socket_path }
+        #[cfg(unix)]
+        {
+            Self { socket_path }
+        }
+
+        #[cfg(not(unix))]
+        {
+            let _ = socket_path;
+            Self {}
+        }
     }
 
     #[cfg(unix)]
@@ -150,14 +159,6 @@ impl LocalSocketClientTransport {
             ))
             .with_source(source)
         })
-    }
-
-    #[cfg_attr(not(unix), allow(dead_code))]
-    #[cfg(not(unix))]
-    fn try_connect(&self) -> Result<(), AtmError> {
-        Err(AtmError::daemon_unavailable(
-            "ATM thin-client transport requires a Unix platform",
-        ))
     }
 
     #[cfg(unix)]
@@ -217,18 +218,29 @@ impl ClientTransport for LocalSocketClientTransport {
     }
 }
 
-#[cfg_attr(not(unix), allow(dead_code))]
 #[derive(Debug)]
 struct DaemonSupervisor {
+    #[cfg(unix)]
     socket_path: DaemonSocketPath,
+    #[cfg(unix)]
     daemon_bin: DaemonBinaryPath,
 }
 
 impl DaemonSupervisor {
     fn new(socket_path: DaemonSocketPath, daemon_bin: DaemonBinaryPath) -> Self {
-        Self {
-            socket_path,
-            daemon_bin,
+        #[cfg(unix)]
+        {
+            Self {
+                socket_path,
+                daemon_bin,
+            }
+        }
+
+        #[cfg(not(unix))]
+        {
+            let _ = socket_path;
+            let _ = daemon_bin;
+            Self {}
         }
     }
 

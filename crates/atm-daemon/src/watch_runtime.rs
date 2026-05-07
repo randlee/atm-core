@@ -327,10 +327,11 @@ fn watch_worker_loop(inner: Arc<WatchRuntimeInner>) {
                     break;
                 }
                 if state.subscriptions.is_empty() {
-                    state = match inner.wake.wait(state) {
-                        Ok(state) => state,
+                    let wait = match inner.wake.wait_timeout(state, inner.poll_interval) {
+                        Ok(wait) => wait,
                         Err(_) => return,
                     };
+                    state = wait.0;
                     continue;
                 }
                 let wait = match inner.wake.wait_timeout(state, inner.poll_interval) {
@@ -387,7 +388,7 @@ mod tests {
     use atm_core::boundary::WatchSubscriptionRequest;
     use atm_core::error::AtmError;
     use std::path::PathBuf;
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Condvar, Mutex, mpsc};
     use std::time::Duration;
 
     fn request() -> WatchSubscriptionRequest {
@@ -461,10 +462,20 @@ mod tests {
 
     #[test]
     fn watch_runtime_times_out_when_the_worker_stops_making_progress() {
+        let (started_tx, started_rx) = mpsc::channel();
+        let release: Arc<(Mutex<bool>, Condvar)> = Arc::new((Mutex::new(false), Condvar::new()));
         let runtime = WatchRuntime::new_for_test(
-            Arc::new(|_| {
-                std::thread::sleep(Duration::from_millis(200));
-                Ok(WatchEventBatch { paths: Vec::new() })
+            Arc::new({
+                let release = Arc::clone(&release);
+                move |_| {
+                    let (released, wake) = &*release;
+                    let mut released = released.lock().expect("released");
+                    started_tx.send(()).expect("started");
+                    while !*released {
+                        released = wake.wait(released).expect("released wait");
+                    }
+                    Ok(WatchEventBatch { paths: Vec::new() })
+                }
             }),
             Duration::from_millis(10),
         );
@@ -472,8 +483,12 @@ mod tests {
 
         let error = runtime.poll(request()).expect_err("health timeout");
         assert!(error.message.contains("worker health timeout"));
-
-        std::thread::sleep(Duration::from_millis(220));
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("worker started");
+        let (released, wake) = &*release;
+        *released.lock().expect("released") = true;
+        wake.notify_all();
         runtime.shutdown().expect("shutdown");
     }
 

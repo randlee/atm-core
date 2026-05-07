@@ -569,6 +569,9 @@ impl DaemonRequestDispatcher {
                 .record_identity_conflict(&request, existing_pid)?;
             return Err(AtmError::identity_conflict(
                 "ATM_IDENTITY_CONFLICT: stop and report to user immediately",
+            )
+            .with_recovery(
+                "Stop the conflicting ATM process, confirm the stale PID is gone, then retry the heartbeat from the active runtime owner.",
             ));
         }
         let durable = roster_store.record_heartbeat(
@@ -642,6 +645,9 @@ fn hydrate_runtime_status_cache(
             "failed to enumerate daemon team configs under {}",
             teams_root.display()
         ))
+        .with_recovery(
+            "Restore read access to the daemon team configuration tree under ATM_HOME before retrying atm-daemon startup.",
+        )
         .with_source(error)
     })? {
         let entry = entry.map_err(|error| {
@@ -649,6 +655,9 @@ fn hydrate_runtime_status_cache(
                 "failed to read daemon team-config entry under {}",
                 teams_root.display()
             ))
+            .with_recovery(
+                "Repair the daemon team configuration directory entries under ATM_HOME before retrying atm-daemon startup.",
+            )
             .with_source(error)
         })?;
         let team_name = entry.file_name().to_string_lossy().into_owned();
@@ -668,6 +677,9 @@ fn hydrate_runtime_status_cache(
                 "failed to read daemon team config {}",
                 config_path.display()
             ))
+            .with_recovery(
+                "Restore the daemon team config file or fix its read permissions before retrying atm-daemon startup.",
+            )
             .with_source(error)
         })?;
         let config: TeamConfig = serde_json::from_slice(&raw).map_err(|error| {

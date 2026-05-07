@@ -12,7 +12,6 @@ use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-#[cfg_attr(not(unix), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum RuntimeLifecycleState {
     Starting,
@@ -23,7 +22,6 @@ pub(crate) enum RuntimeLifecycleState {
 }
 
 /// Serializes legal daemon runtime ownership transitions.
-#[cfg_attr(not(unix), allow(dead_code))]
 #[derive(Debug, Default)]
 pub(crate) struct RuntimeLifecycle {
     /// A single mutex is sufficient here because lifecycle transitions are
@@ -105,7 +103,6 @@ impl RuntimeLifecycle {
 }
 
 /// Internal root for Phase R daemon runtime wiring.
-#[cfg_attr(not(unix), allow(dead_code))]
 #[derive(Debug)]
 pub(crate) struct RuntimeComposition {
     lifecycle: Arc<RuntimeLifecycle>,
@@ -121,7 +118,6 @@ pub(crate) struct RuntimeComposition {
     peer_transport_runtime: PeerTransportRuntime,
 }
 
-#[cfg_attr(not(unix), allow(dead_code))]
 impl RuntimeComposition {
     fn new(home_dir: PathBuf) -> Self {
         let status_cache = RuntimeStatusCache::new();

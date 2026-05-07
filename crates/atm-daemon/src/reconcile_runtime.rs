@@ -449,7 +449,14 @@ mod tests {
 
         let runtime_for_thread = runtime.clone();
         let join = std::thread::spawn(move || runtime_for_thread.reconcile(request()));
-        std::thread::sleep(Duration::from_millis(20));
+        let deadline = std::time::Instant::now() + Duration::from_secs(1);
+        while runtime.state_counts_for_test().0 == 0 {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "reconcile request never entered the pending queue"
+            );
+            std::thread::yield_now();
+        }
         runtime.shutdown().expect("shutdown");
 
         let error = join

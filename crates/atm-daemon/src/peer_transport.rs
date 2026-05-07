@@ -171,21 +171,7 @@ impl PeerClientTransport {
         let mut delivered = 0usize;
         let mut retained = 0usize;
         for mut record in records {
-            let peer_addr = match record.peer_addr.parse::<SocketAddr>() {
-                Ok(peer_addr) => peer_addr,
-                Err(error) => {
-                    tracing::warn!(
-                        message_key = %record.message_key,
-                        peer_addr = %record.peer_addr,
-                        %error,
-                        "dropping invalid daemon remote replay entry"
-                    );
-                    replay_store.delete(&record.team, &record.agent, &record.message_key)?;
-                    continue;
-                }
-            };
-
-            match self.send_to_endpoint(peer_addr, record.request.clone()) {
+            match self.send_to_endpoint(record.peer_addr, record.request.clone()) {
                 Ok(_) => {
                     replay_store.delete(&record.team, &record.agent, &record.message_key)?;
                     tracing::info!(
@@ -644,8 +630,8 @@ fn parse_peer_endpoint(raw: &str) -> Option<SocketAddr> {
     }
 }
 
-fn persisted_peer_addr(endpoint: SocketAddr) -> String {
-    endpoint.to_string()
+fn persisted_peer_addr(endpoint: SocketAddr) -> SocketAddr {
+    endpoint
 }
 
 fn read_peer_response(stream: &mut TcpStream) -> Result<Vec<u8>, AtmError> {
@@ -673,7 +659,7 @@ mod tests {
         AttemptFailureKind, PeerTransportConfig, PeerTransportRuntime, classify_io_error,
         classify_shutdown_failure, jittered_backoff,
     };
-    use atm_core::boundary::MessageKey;
+    use atm_core::boundary::{ClientTransport, MessageKey};
     use atm_core::error::AtmErrorCode;
     use atm_core::protocol::{
         HeartbeatActivity, ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope,
@@ -827,12 +813,20 @@ mod tests {
             observed_at: IsoTimestamp::now(),
             activity: HeartbeatActivity::ActiveToolUse,
         });
-        let (ready_tx, ready_rx) = mpsc::channel();
+        let (send_started_tx, send_started_rx) = mpsc::channel();
+        let (response_tx, response_rx) = mpsc::channel();
 
+        let transport_for_thread = transport.clone();
         thread::spawn(move || {
-            thread::sleep(Duration::from_millis(150));
+            send_started_tx.send(()).expect("send started");
+            response_tx
+                .send(transport_for_thread.client.send(request))
+                .expect("response sent");
+        });
+
+        send_started_rx.recv().expect("send started");
+        thread::spawn(move || {
             let listener = TcpListener::bind(endpoint).expect("listener");
-            ready_tx.send(()).expect("ready");
             let (mut stream, _) = listener.accept().expect("accept");
             let mut request_bytes = Vec::new();
             stream.read_to_end(&mut request_bytes).expect("request");
@@ -851,10 +845,9 @@ mod tests {
             stream.flush().expect("flush response");
         });
 
-        ready_rx.recv().expect("listener ready");
-        let response = transport
-            .client_transport()
-            .send(request)
+        let response = response_rx
+            .recv()
+            .expect("response delivered")
             .expect("response");
         assert!(matches!(response, ResponseEnvelope::Heartbeat(_)));
     }
