@@ -81,6 +81,10 @@ Notes:
 - It maintains long-lived watch state behind the boundary and refreshes
   registered subscriptions on a bounded wake interval.
 - This adapter captures events only; it does not own reconcile policy.
+- Runtime lifecycle ownership stays above this boundary:
+  - `start()` and `shutdown()` are composition-root responsibilities
+  - callers outside `RuntimeComposition` must use `WatchEventSource::poll(...)`
+    only and must not bootstrap or tear down the runtime directly
 
 ## DaemonReconcileCoordinatorAdapter
 
@@ -97,6 +101,11 @@ Notes:
 - It triggers watch polling, inbox ingress, and notifier callbacks only through
   their owned boundaries; it does not reach around into store or transport
   internals.
+- Runtime lifecycle ownership stays above this boundary:
+  - `start()` and `shutdown()` are composition-root responsibilities
+  - callers outside `RuntimeComposition` must use
+    `ReconcileCoordinator::reconcile(...)` only and must not manage worker
+    lifetime directly
 
 ## DaemonRequestDispatcherAdapter
 
@@ -176,6 +185,11 @@ Notes:
 - It returns typed unavailable/backpressure failures at the boundary and
   persists delivered events through the runtime-owned notifier path instead of
   degrading to tracing-only behavior.
+- Runtime lifecycle ownership stays above this boundary:
+  - `start()` and `shutdown()` are composition-root responsibilities
+  - callers outside `RuntimeComposition` must use
+    `NotificationSink::deliver(...)` only and must not open plugin/agent
+    delivery paths directly
 
 ## DaemonStatusSourceAdapter
 

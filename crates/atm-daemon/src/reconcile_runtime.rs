@@ -1,11 +1,10 @@
-use crate::boundary_adapters::{DaemonInboxIngress, DaemonNotificationSink, FileWatchEventSource};
 use atm_core::boundary::{
     InboxIngress, NotificationSink, ReconcileRequest, ReconcileResult, WatchEventSource,
     WatchSubscriptionRequest,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::NotificationEvent;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
@@ -35,6 +34,7 @@ struct ReconcileState {
     shutdown: bool,
     next_waiter_id: u64,
     pending: HashMap<ReconcileKey, PendingReconcile>,
+    pending_order: VecDeque<ReconcileKey>,
     completed: HashMap<u64, ReconcileOutcome>,
 }
 
@@ -68,9 +68,9 @@ impl ReconcileKey {
 
 impl ReconcileRuntime {
     pub(crate) fn new(
-        watch_source: FileWatchEventSource,
-        inbox_ingress: DaemonInboxIngress,
-        notification_sink: DaemonNotificationSink,
+        watch_source: Arc<dyn WatchEventSource + Send + Sync>,
+        inbox_ingress: Arc<dyn InboxIngress + Send + Sync>,
+        notification_sink: Arc<dyn NotificationSink + Send + Sync>,
     ) -> Self {
         Self::new_with_executor(
             Arc::new(move |request| {
@@ -183,17 +183,19 @@ impl ReconcileRuntime {
             let waiter_id = state.next_waiter_id;
             state.next_waiter_id += 1;
             let key = ReconcileKey::from_request(&request);
-            state
-                .pending
-                .entry(key)
-                .and_modify(|pending| {
-                    pending.request = request.clone();
-                    pending.waiters.push(waiter_id);
-                })
-                .or_insert(PendingReconcile {
-                    request,
-                    waiters: vec![waiter_id],
-                });
+            if let Some(pending) = state.pending.get_mut(&key) {
+                pending.request = request.clone();
+                pending.waiters.push(waiter_id);
+            } else {
+                state.pending_order.push_back(key.clone());
+                state.pending.insert(
+                    key,
+                    PendingReconcile {
+                        request,
+                        waiters: vec![waiter_id],
+                    },
+                );
+            }
             self.inner.wake.notify_one();
             waiter_id
         };
@@ -250,10 +252,17 @@ fn reconcile_worker_loop(inner: Arc<ReconcileRuntimeInner>) {
                 Ok(state) => state,
                 Err(_) => return,
             };
-            std::mem::take(&mut state.pending)
+            let pending_order = std::mem::take(&mut state.pending_order);
+            let mut drained = Vec::with_capacity(pending_order.len());
+            for key in pending_order {
+                if let Some(pending) = state.pending.remove(&key) {
+                    drained.push(pending);
+                }
+            }
+            drained
         };
 
-        for pending_request in pending.into_values() {
+        for pending_request in pending {
             let outcome = match (inner.executor)(&pending_request.request) {
                 Ok(result) => ReconcileOutcome::Success(result),
                 Err(error) => ReconcileOutcome::Failure(error.message),
@@ -284,6 +293,14 @@ mod tests {
             home_dir: PathBuf::from("/tmp/atm-reconcile-test"),
             team: "test-team".parse().expect("team"),
             agent: "test-agent".parse().expect("agent"),
+        }
+    }
+
+    fn request_for(agent: &str) -> ReconcileRequest {
+        ReconcileRequest {
+            home_dir: PathBuf::from("/tmp/atm-reconcile-test"),
+            team: "test-team".parse().expect("team"),
+            agent: agent.parse().expect("agent"),
         }
     }
 
@@ -330,6 +347,44 @@ mod tests {
         runtime.start().expect("start");
         let error = runtime.reconcile(request()).expect_err("failure");
         assert!(error.message.contains("reconcile failed"));
+        runtime.shutdown().expect("shutdown");
+    }
+
+    #[test]
+    fn reconcile_runtime_preserves_trigger_order_and_signals_completion() {
+        let order = Arc::new(Mutex::new(Vec::new()));
+        let runtime = ReconcileRuntime::new_for_test(
+            Arc::new({
+                let order = Arc::clone(&order);
+                move |request| {
+                    order
+                        .lock()
+                        .expect("order")
+                        .push(request.agent.as_str().to_string());
+                    Ok(ReconcileResult {
+                        observed_paths: 1,
+                        imported_sources: 1,
+                    })
+                }
+            }),
+            Duration::from_millis(10),
+        );
+        runtime.start().expect("start");
+
+        let runtime_a = runtime.clone();
+        let runtime_b = runtime.clone();
+        let first = std::thread::spawn(move || runtime_a.reconcile(request_for("agent-a")));
+        std::thread::sleep(Duration::from_millis(2));
+        let second = std::thread::spawn(move || runtime_b.reconcile(request_for("agent-b")));
+
+        let first_result = first.join().expect("first join").expect("first result");
+        let second_result = second.join().expect("second join").expect("second result");
+        assert_eq!(first_result.observed_paths, 1);
+        assert_eq!(second_result.imported_sources, 1);
+        assert_eq!(
+            order.lock().expect("order").as_slice(),
+            ["agent-a".to_string(), "agent-b".to_string()]
+        );
         runtime.shutdown().expect("shutdown");
     }
 }

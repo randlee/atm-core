@@ -29,7 +29,7 @@ fn init_tracing() {
             "error" => tracing::Level::ERROR,
             _ => tracing::Level::INFO,
         },
-        None => return,
+        None => tracing::Level::WARN,
     };
 
     let _ = tracing_subscriber::fmt()

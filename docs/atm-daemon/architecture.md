@@ -71,7 +71,7 @@ The `atm-daemon` crate is responsible for:
 - remote daemon-to-daemon transport listener/client
 - runtime wiring of `atm-core` service boundaries
 - live agent-status cache
-- optional watch/reconcile runtime loop
+- watch/reconcile runtime loop
 - daemon/runtime observability emission
 - daemon health/status query surface for `atm doctor`
 

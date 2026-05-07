@@ -2781,6 +2781,9 @@ mail correctness.
     daemon-owned and long-lived rather than one-shot helper calls
   - reconcile triggering must support debounce/coalesce so repeated identical
     requests do not fan out into duplicate import work
+  - `R.17` completes this lane as a daemon-owned polling watch registry, an
+    ordered debounce/coalesce reconcile worker, and a queued notifier runtime;
+    those lanes must start and stop only through the daemon composition root
 
 - `REQ-CORE-TRANSPORT-002` Cross-host traffic must be daemon-to-daemon only.
 

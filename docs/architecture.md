@@ -2249,7 +2249,7 @@ Daemon responsibilities:
 - route selection
 - live status cache
 - daemon-facing diagnostics and health queries used by `atm doctor`
-- watch/reconcile runtime if enabled
+- watch/reconcile runtime
 
 Daemon non-responsibility:
 - it must not become the only home of ATM business logic

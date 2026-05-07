@@ -1,7 +1,7 @@
 #[cfg(unix)]
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(unix)]
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 
 #[cfg(unix)]
 use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGTERM};
@@ -28,16 +28,18 @@ struct SharedDaemonShutdownSignals {
 #[cfg(unix)]
 impl DaemonShutdownSignals {
     pub(crate) fn install() -> Result<Self, AtmError> {
-        static SIGNALS: OnceLock<SharedDaemonShutdownSignals> = OnceLock::new();
-        static INSTALL_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        static SIGNALS: Mutex<Option<SharedDaemonShutdownSignals>> = Mutex::new(None);
+        static INSTALL_LOCK: Mutex<()> = Mutex::new(());
         // Signal-hook registration is process-global and cannot be cleanly
-        // unregistered in tests, so OnceLock owns the shared flags for the
-        // lifetime of the process while the mutex serializes re-install checks.
+        // unregistered in tests, so this shared slot owns the registered flags
+        // for the lifetime of the process while the mutex serializes setup.
         let _guard = INSTALL_LOCK
-            .get_or_init(|| Mutex::new(()))
             .lock()
             .map_err(|_| AtmError::daemon_unavailable("daemon signal install lock poisoned"))?;
-        if SIGNALS.get().is_none() {
+        let mut shared = SIGNALS.lock().map_err(|_| {
+            AtmError::daemon_unavailable("daemon shutdown signal state lock poisoned")
+        })?;
+        if shared.is_none() {
             let terminate = Arc::new(AtomicBool::new(false));
             let reload = Arc::new(AtomicBool::new(false));
             for signal in [SIGINT, SIGTERM] {
@@ -50,9 +52,9 @@ impl DaemonShutdownSignals {
                 AtmError::daemon_unavailable("failed to install daemon reload signal handler")
                     .with_source(source)
             })?;
-            let _ = SIGNALS.set(SharedDaemonShutdownSignals { terminate, reload });
+            *shared = Some(SharedDaemonShutdownSignals { terminate, reload });
         }
-        let shared = SIGNALS.get().ok_or_else(|| {
+        let shared = shared.as_ref().ok_or_else(|| {
             AtmError::daemon_unavailable("daemon shutdown signals were not initialized")
         })?;
         Ok(Self {
