@@ -652,7 +652,13 @@ fn hydrate_runtime_status_cache(
             .with_source(error)
         })?;
         let team_name = entry.file_name().to_string_lossy().into_owned();
-        let team: TeamName = team_name.parse()?;
+        let team: TeamName = team_name.parse().map_err(|error| {
+            AtmError::config(format!(
+                "runtime_health: invalid team name from storage under {}: {team_name}",
+                teams_root.display()
+            ))
+            .with_source(error)
+        })?;
         let config_path = entry.path().join("config.json");
         if !config_path.is_file() {
             continue;
