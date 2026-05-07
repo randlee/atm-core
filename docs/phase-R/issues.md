@@ -754,7 +754,7 @@ Prerequisite:
 | Sprint | Scope |
 |-------|-------|
 | `R.13` | Host-wide singleton (B-001, B-002) + runtime lifecycle completion (B-003) + lifecycle-adjacent hardening (I-001, I-002) |
-| `R.14` | Host-scoped SQLite root, successor-chain / ack-thread semantics, ephemeral retention, SQLite error mapping, and remaining SQLite boundary closeout |
+| `R.14` | Host-scoped SQLite root, successor-chain / ack-thread semantics, ephemeral retention, typed SQLite error mapping, and remaining SQLite boundary closeout (`SharedDb` + `SqliteBoundaryAssembly`) |
 | `R.15` | Heartbeat/status-cache (B-004, B-005) + doctor health (B-006) |
 | `R.16` | Peer transport (B-009) + remote retry/recovery (I-013) |
 | `R.17` | Watch (B-007) + reconcile (B-008) + notifier runtime (I-012) |

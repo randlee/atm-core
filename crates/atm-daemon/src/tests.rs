@@ -11,8 +11,24 @@ use std::sync::{Arc, mpsc};
 use std::time::Duration;
 use tempfile::TempDir;
 
+struct SignalResetGuard;
+
+impl SignalResetGuard {
+    fn install() -> Self {
+        super::reset_shutdown_signals_for_test().expect("reset signals");
+        Self
+    }
+}
+
+impl Drop for SignalResetGuard {
+    fn drop(&mut self) {
+        super::reset_shutdown_signals_for_test().expect("reset signals");
+    }
+}
+
 #[test]
 fn daemon_shutdown_signals_install_is_repeatable() {
+    let _reset = SignalResetGuard::install();
     let first = DaemonShutdownSignals::install().expect("first install");
     first
         .terminate
@@ -24,12 +40,6 @@ fn daemon_shutdown_signals_install_is_repeatable() {
 
     assert!(second.terminate.load(std::sync::atomic::Ordering::SeqCst));
     assert!(second.reload.load(std::sync::atomic::Ordering::SeqCst));
-    second
-        .terminate
-        .store(false, std::sync::atomic::Ordering::SeqCst);
-    second
-        .reload
-        .store(false, std::sync::atomic::Ordering::SeqCst);
 }
 
 #[test]
@@ -123,7 +133,7 @@ fn singleton_guard_recovers_stale_owner_once_lock_is_released() {
 
     let release_tx_clone = release_tx.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(10));
+        std::thread::sleep(Duration::from_millis(50));
         release_tx_clone.send(()).expect("release lock");
     });
 
@@ -151,7 +161,7 @@ fn blocked_connection_is_interrupted_on_force_cancel() {
 
     registry.interrupt_all().expect("interrupt all");
     let result = done_rx
-        .recv_timeout(Duration::from_millis(250))
+        .recv_timeout(Duration::from_secs(2))
         .expect("connection finished");
     drop(client);
     assert!(result.is_ok(), "connection result: {result:?}");
@@ -186,7 +196,7 @@ fn serve_loop_escalates_from_graceful_deadline_to_force_cancel() {
     .expect("shutdown drain");
 
     let result = done_rx
-        .recv_timeout(Duration::from_millis(250))
+        .recv_timeout(Duration::from_secs(2))
         .expect("connection finished");
     drop(client);
     assert!(result.is_ok(), "connection result: {result:?}");

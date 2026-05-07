@@ -1,57 +1,32 @@
 #![cfg(unix)]
-use std::ffi::OsString;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::os::unix::net::UnixStream;
-use std::sync::{Mutex, OnceLock};
+use std::sync::mpsc;
+use std::time::Duration;
 
 use atm_core::doctor::DoctorQuery;
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
-use signal_hook::consts::signal::SIGTERM;
-use signal_hook::low_level::raise;
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, read_bounded_stream};
+use atm_core::test_support::EnvGuard;
 use tempfile::TempDir;
 
-fn env_lock() -> &'static Mutex<()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(()))
-}
+struct ShutdownResetGuard;
 
-struct EnvGuard {
-    key: &'static str,
-    original: Option<OsString>,
-}
-
-impl EnvGuard {
-    fn set<V: AsRef<std::ffi::OsStr>>(key: &'static str, value: V) -> Self {
-        let original = std::env::var_os(key);
-        set_env_var(key, value);
-        Self { key, original }
+impl ShutdownResetGuard {
+    fn install() -> Self {
+        atm_daemon::reset_shutdown_signals_for_test().expect("reset shutdown signals");
+        Self
     }
 }
 
-impl Drop for EnvGuard {
+impl Drop for ShutdownResetGuard {
     fn drop(&mut self) {
-        match self.original.take() {
-            Some(value) => set_env_var(self.key, value),
-            None => remove_env_var(self.key),
-        }
+        atm_daemon::reset_shutdown_signals_for_test().expect("reset shutdown signals");
     }
-}
-
-fn set_env_var<K: AsRef<std::ffi::OsStr>, V: AsRef<std::ffi::OsStr>>(key: K, value: V) {
-    // SAFETY: the integration test holds a process-wide mutex before mutating
-    // the environment, so mutation is serialized within this test process.
-    unsafe { std::env::set_var(key, value) }
-}
-
-fn remove_env_var<K: AsRef<std::ffi::OsStr>>(key: K) {
-    // SAFETY: the integration test holds a process-wide mutex before mutating
-    // the environment, so mutation is serialized within this test process.
-    unsafe { std::env::remove_var(key) }
 }
 
 #[test]
 fn run_daemon_uses_production_socket_path_and_serves_requests() {
-    let _guard = env_lock().lock().expect("env lock");
+    let _shutdown_reset = ShutdownResetGuard::install();
     let tempdir = TempDir::new().expect("tempdir");
     let runtime_home = tempdir.path().join("runtime-home");
     let atm_home = tempdir.path().join("workspace");
@@ -61,10 +36,15 @@ fn run_daemon_uses_production_socket_path_and_serves_requests() {
     // R.13 singleton ownership is still OS-home scoped, so keep the host
     // runtime root isolated from the developer machine even though ATM_HOME
     // remains the canonical mailbox/runtime root under test.
-    let _runtime_home = EnvGuard::set("HOME", &runtime_home);
-    let _atm_home = EnvGuard::set("ATM_HOME", &atm_home);
-    let _config_home = EnvGuard::set("ATM_CONFIG_HOME", &atm_home);
-    let _socket = EnvGuard::set("ATM_DAEMON_SOCKET", &socket_path);
+    let home_value = runtime_home.display().to_string();
+    let atm_home_value = atm_home.display().to_string();
+    let socket_value = socket_path.display().to_string();
+    let _env = EnvGuard::set_many([
+        ("HOME", Some(home_value.as_str())),
+        ("ATM_HOME", Some(atm_home_value.as_str())),
+        ("ATM_CONFIG_HOME", Some(atm_home_value.as_str())),
+        ("ATM_DAEMON_SOCKET", Some(socket_value.as_str())),
+    ]);
 
     let helper = std::thread::spawn(move || {
         for _ in 0..200 {
@@ -89,10 +69,12 @@ fn run_daemon_uses_production_socket_path_and_serves_requests() {
         stream
             .shutdown(std::net::Shutdown::Write)
             .expect("shutdown write");
-        let mut response_bytes = Vec::new();
-        stream
-            .read_to_end(&mut response_bytes)
-            .expect("read response");
+        let response_bytes = read_bounded_stream(
+            &mut stream,
+            "read response",
+            "daemon response exceeded frame limit",
+        )
+        .expect("read response");
         let response: ResponseEnvelope =
             serde_json::from_slice(&response_bytes).expect("response json");
         assert!(
@@ -102,10 +84,16 @@ fn run_daemon_uses_production_socket_path_and_serves_requests() {
             ),
             "daemon production path should serve a request before shutdown"
         );
-        raise(SIGTERM).expect("raise SIGTERM");
+        atm_daemon::request_shutdown_for_test().expect("request shutdown");
     });
 
-    let result = atm_daemon::run_daemon();
+    let (result_tx, result_rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = result_tx.send(atm_daemon::run_daemon());
+    });
     helper.join().expect("helper thread");
+    let result = result_rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("run_daemon completed");
     assert!(result.is_ok(), "run_daemon result: {result:?}");
 }

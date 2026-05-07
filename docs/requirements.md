@@ -1149,6 +1149,8 @@ Phase R continuation semantics:
   - `supersede`
 
   Required behavior:
+  - compatibility/export payloads carry successor metadata with
+    `parentMessageId` and `threadMode`
   - `add-details` appends missing context while preserving the prior message as
     valid historical context
   - `supersede` replaces the prior message as the effective current
@@ -1172,6 +1174,7 @@ Phase R continuation semantics:
 - `REQ-P-THREAD-005` Ephemeral messages are standalone, time-bounded records.
 
   Required behavior:
+  - compatibility/export payloads carry ephemeral expiry with `staleAt`
   - ephemeral messages expire by time only, using `stale_at`
   - no product behavior may depend on first-read deletion semantics
   - periodic daemon cleanup deletes expired ephemeral rows
@@ -1592,6 +1595,9 @@ Optional fields:
 - `pendingAckAt`
 - `acknowledgedAt`
 - `acknowledgesMessageId`
+- `parentMessageId`
+- `threadMode`
+- `staleAt`
 - `metadata`
 
 Unknown fields must be preserved.
@@ -1600,6 +1606,8 @@ For ATM-authored messages:
 - ATM machine-readable identity is mandatory
 - current legacy top-level `message_id` values may be UUID
 - forward metadata `messageId` values must be ULID
+- thread/update metadata uses `parentMessageId` plus `threadMode`
+- time-bounded ephemeral retention uses `staleAt`
 - ATM-authored machine identifiers must not be null or blank
 
 Legacy or externally imported records may still omit `message_id`; the rewrite

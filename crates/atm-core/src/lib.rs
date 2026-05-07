@@ -56,6 +56,8 @@ pub mod team_admin;
 pub mod test_support;
 /// Internal text-formatting helpers used by ATM core surfaces.
 pub(crate) mod text;
+/// Internal linear-thread helpers shared by send/read/ack workflow logic.
+pub(crate) mod threading;
 /// Hidden transport test utilities shared by CLI-layer tests.
 #[doc(hidden)]
 #[cfg(feature = "test-utils")]

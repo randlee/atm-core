@@ -94,6 +94,9 @@ Consequences:
 - Thin extensions such as atm-graft expose a smaller public surface.
 - Task-state rules still remain explicit in store and workflow boundaries.
 - The reply emitted by that workflow must hardcode `requires_ack = false`.
+- Send-shaped request data may carry `parentMessageId`, `threadMode`, and
+  `staleAt` when the caller is creating a successor-thread message or a
+  time-bounded ephemeral message.
 - Update/correction threads are modeled as one linear successor chain whose
   terminal node is the effective current instruction.
 - Only the original sender may append chain successors.

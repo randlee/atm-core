@@ -97,12 +97,17 @@ impl AsRef<Path> for DaemonBinaryPath {
 
 fn validate_daemon_path(label: &str, path: &Path) -> Result<(), AtmError> {
     if path.as_os_str().is_empty() {
-        return Err(AtmError::validation(format!("{label} must not be empty")));
+        return Err(AtmError::validation(format!("{label} must not be empty")).with_recovery(
+            "Set ATM_DAEMON_SOCKET to a non-empty UTF-8 path before invoking the daemon transport.",
+        ));
     }
     if path.to_str().is_none() {
         return Err(AtmError::validation(format!(
             "{label} must be valid UTF-8 at the ATM boundary"
-        )));
+        ))
+        .with_recovery(
+            "Set ATM_DAEMON_SOCKET to a non-empty UTF-8 path before invoking the daemon transport.",
+        ));
     }
     Ok(())
 }
@@ -810,6 +815,9 @@ mod tests {
                 pending_ack_at: None,
                 acknowledged_at: None,
                 acknowledges_message_id: None,
+                parent_message_id: None,
+                thread_mode: None,
+                stale_at: None,
                 task_id: None,
                 extra: serde_json::Map::new(),
             }
@@ -1046,6 +1054,7 @@ mod tests {
         assert_eq!(replies.len(), 1);
         assert_eq!(replies[0].text, "received and starting");
         assert_eq!(replies[0].acknowledges_message_id, Some(message_id));
+        assert!(replies[0].pending_ack_at.is_none());
     }
 
     #[test]

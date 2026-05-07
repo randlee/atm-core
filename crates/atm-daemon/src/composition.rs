@@ -3,13 +3,7 @@ use crate::{
     DaemonReconcileCoordinator, DaemonRequestDispatcher, DaemonStatusSource, FileWatchEventSource,
     LocalSocketServerTransport, PeerClientTransport,
 };
-use atm_core::{
-    boundary::{
-        ClientTransport, ConfigIngress, InboxExport, InboxIngress, NotificationSink,
-        ReconcileCoordinator, RequestDispatcher, StatusSource, WatchEventSource,
-    },
-    error::AtmError,
-};
+use atm_core::{boundary::RequestDispatcher, error::AtmError};
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -28,6 +22,8 @@ pub(crate) enum RuntimeLifecycleState {
 #[cfg_attr(not(unix), allow(dead_code))]
 #[derive(Debug, Default)]
 pub(crate) struct RuntimeLifecycle {
+    /// A single mutex is sufficient here because lifecycle transitions are
+    /// serialized control-plane events, not a high-frequency data path.
     state: Mutex<RuntimeLifecycleState>,
 }
 
@@ -80,7 +76,8 @@ impl RuntimeLifecycle {
         ) {
             return Err(AtmError::validation(format!(
                 "illegal daemon runtime lifecycle transition: {current:?} -> {next:?}"
-            )));
+            ))
+            .with_recovery("Enter daemon exclusively through RuntimeComposition::start()."));
         }
         *state = next;
         Ok(next)
@@ -104,74 +101,42 @@ impl RuntimeLifecycle {
 }
 
 /// Internal root for Phase R daemon runtime wiring.
-#[allow(dead_code)]
+#[cfg_attr(not(unix), allow(dead_code))]
 #[derive(Debug)]
 pub(crate) struct RuntimeComposition {
     lifecycle: Arc<RuntimeLifecycle>,
     server_transport: LocalSocketServerTransport,
     request_dispatcher: Arc<DaemonRequestDispatcher>,
-    notification_sink: DaemonNotificationSink,
-    status_source: DaemonStatusSource,
-    watch_event_source: FileWatchEventSource,
-    reconcile_coordinator: DaemonReconcileCoordinator,
-    config_ingress: DaemonConfigIngress,
-    inbox_ingress: DaemonInboxIngress,
-    inbox_export: DaemonInboxExport,
-    peer_client_transport: PeerClientTransport,
+    _notification_sink: DaemonNotificationSink,
+    _status_source: DaemonStatusSource,
+    _watch_event_source: FileWatchEventSource,
+    _reconcile_coordinator: DaemonReconcileCoordinator,
+    _config_ingress: DaemonConfigIngress,
+    _inbox_ingress: DaemonInboxIngress,
+    _inbox_export: DaemonInboxExport,
+    _peer_client_transport: PeerClientTransport,
 }
 
-#[allow(dead_code)]
+#[cfg_attr(not(unix), allow(dead_code))]
 impl RuntimeComposition {
     fn new(home_dir: PathBuf) -> Self {
         Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
             server_transport: LocalSocketServerTransport::new(),
             request_dispatcher: Arc::new(DaemonRequestDispatcher::new(home_dir)),
-            notification_sink: DaemonNotificationSink::new(),
-            status_source: DaemonStatusSource::new(),
-            watch_event_source: FileWatchEventSource::new(),
-            reconcile_coordinator: DaemonReconcileCoordinator::new(),
-            config_ingress: DaemonConfigIngress::new(),
-            inbox_ingress: DaemonInboxIngress::new(),
-            inbox_export: DaemonInboxExport::new(),
-            peer_client_transport: PeerClientTransport::new(),
+            _notification_sink: DaemonNotificationSink::new(),
+            _status_source: DaemonStatusSource::new(),
+            _watch_event_source: FileWatchEventSource::new(),
+            _reconcile_coordinator: DaemonReconcileCoordinator::new(),
+            _config_ingress: DaemonConfigIngress::new(),
+            _inbox_ingress: DaemonInboxIngress::new(),
+            _inbox_export: DaemonInboxExport::new(),
+            _peer_client_transport: PeerClientTransport::new(),
         }
-    }
-
-    fn notification_sink(&self) -> &dyn NotificationSink {
-        &self.notification_sink
     }
 
     fn request_dispatcher(&self) -> Arc<dyn RequestDispatcher + Send + Sync> {
         self.request_dispatcher.clone()
-    }
-
-    fn status_source(&self) -> &dyn StatusSource {
-        &self.status_source
-    }
-
-    fn watch_event_source(&self) -> &dyn WatchEventSource {
-        &self.watch_event_source
-    }
-
-    fn reconcile_coordinator(&self) -> &dyn ReconcileCoordinator {
-        &self.reconcile_coordinator
-    }
-
-    fn config_ingress(&self) -> &dyn ConfigIngress {
-        &self.config_ingress
-    }
-
-    fn inbox_ingress(&self) -> &dyn InboxIngress {
-        &self.inbox_ingress
-    }
-
-    fn inbox_export(&self) -> &dyn InboxExport {
-        &self.inbox_export
-    }
-
-    fn peer_client_transport(&self) -> &dyn ClientTransport {
-        &self.peer_client_transport
     }
 
     pub(crate) fn start(&self) -> Result<(), AtmError> {
@@ -282,10 +247,48 @@ fn validate_runtime_socket_path() -> Result<(), AtmError> {
             .with_source(source)
         })?;
     if let Err(error) = std::fs::remove_file(&probe_path) {
-        tracing::debug!(
+        tracing::warn!(
             path = %probe_path.display(),
             %error,
             "failed to remove daemon socket write probe file"
+        );
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn validate_runtime_home_dir(home_dir: &std::path::Path) -> Result<(), AtmError> {
+    std::fs::create_dir_all(home_dir).map_err(|source| {
+        AtmError::daemon_unavailable(format!(
+            "failed to create atm-daemon home directory at {}",
+            home_dir.display()
+        ))
+        .with_recovery(
+            "Grant write access to ATM_HOME or choose a writable daemon home directory before starting atm-daemon.",
+        )
+        .with_source(source)
+    })?;
+    let probe_path = home_dir.join(format!(".atm-daemon-home-probe-{}", std::process::id()));
+    OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&probe_path)
+        .map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "atm-daemon home directory is not writable at {}",
+                home_dir.display()
+            ))
+            .with_recovery(
+                "Grant write access to ATM_HOME or point ATM_HOME at a writable directory before retrying.",
+            )
+            .with_source(source)
+        })?;
+    if let Err(error) = std::fs::remove_file(&probe_path) {
+        tracing::warn!(
+            path = %probe_path.display(),
+            %error,
+            "failed to remove atm-daemon home write probe file"
         );
     }
     Ok(())
@@ -300,7 +303,9 @@ fn validate_runtime_socket_path() -> Result<(), AtmError> {
 
 pub(crate) fn compose_runtime() -> Result<RuntimeComposition, AtmError> {
     validate_runtime_socket_path()?;
-    Ok(RuntimeComposition::new(atm_core::home::atm_home()?))
+    let home_dir = atm_core::home::atm_home()?;
+    validate_runtime_home_dir(&home_dir)?;
+    Ok(RuntimeComposition::new(home_dir))
 }
 
 #[cfg(test)]
