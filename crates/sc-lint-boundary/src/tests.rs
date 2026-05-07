@@ -12,7 +12,7 @@ fn findings_report_text_is_stable() {
         tool: "sc-lint-boundary",
         version: "0.1.0",
         schema_version: "0.1.0",
-        status: "pass",
+        status: ReportStatus::Pass,
         scanned_crates: 2,
         findings: Vec::new(),
     };
@@ -224,7 +224,7 @@ fn renders_graph_as_turtle() {
         root: fixture.root().to_path_buf(),
     })
     .unwrap();
-    let turtle = render_graph_export(&graph, GraphOutputFormat::Turtle).unwrap();
+    let turtle = render_graph_export_turtle(&graph);
 
     assert!(turtle.contains("@prefix sc: <urn:sc-lint-boundary:predicate:> ."));
     assert!(turtle.contains("rdf:type sc:type ."));
@@ -338,7 +338,7 @@ fn analyze_workspace_counts_crate_targets() {
     .unwrap();
 
     assert_eq!(report.scanned_crates, 1);
-    assert_eq!(report.status, "pass");
+    assert_eq!(report.status, ReportStatus::Pass);
     assert!(report.findings.is_empty());
 }
 
@@ -385,7 +385,7 @@ fn flags_hardcoded_tmp_path_in_test_scope() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "fail");
+    assert_eq!(report.status, ReportStatus::Fail);
     assert_eq!(report.findings.len(), 1);
     assert_eq!(report.findings[0].rule_id, RuleId::Port001);
 }
@@ -422,7 +422,7 @@ fn passes_temp_dir_usage_in_test_scope() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "pass");
+    assert_eq!(report.status, ReportStatus::Pass);
     assert!(report.findings.is_empty());
 }
 
@@ -455,7 +455,7 @@ fn does_not_flag_unix_only_production_code() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "pass");
+    assert_eq!(report.status, ReportStatus::Pass);
     assert!(report.findings.is_empty());
 }
 
@@ -490,7 +490,7 @@ fn flags_dirs_home_dir_without_override_check() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "fail");
+    assert_eq!(report.status, ReportStatus::Fail);
     assert_eq!(report.findings.len(), 1);
     assert_eq!(report.findings[0].rule_id, RuleId::Port002);
     assert!(report.findings[0].message.contains("ATM_CONFIG_HOME"));
@@ -530,7 +530,7 @@ fn passes_dirs_home_dir_after_override_check() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "pass");
+    assert_eq!(report.status, ReportStatus::Pass);
     assert!(report.findings.is_empty());
 }
 
@@ -566,7 +566,7 @@ fn flags_set_var_in_test_scope() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "fail");
+    assert_eq!(report.status, ReportStatus::Fail);
     assert_eq!(report.findings.len(), 1);
     assert!(
         report
@@ -603,7 +603,7 @@ fn reports_type_method_self_loop_as_non_fatal_signal() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "pass");
+    assert_eq!(report.status, ReportStatus::Pass);
     assert_eq!(report.findings.len(), 1);
     assert_eq!(report.findings[0].rule_id, RuleId::ScbCycle002);
     assert_eq!(report.findings[0].kind, "type_method_self_loop");
@@ -639,7 +639,7 @@ fn does_not_flag_constructor_factory_self_loop() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "pass");
+    assert_eq!(report.status, ReportStatus::Pass);
     assert!(report.findings.is_empty());
 }
 
@@ -669,7 +669,7 @@ fn does_not_flag_receiver_only_method_as_self_loop() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "pass");
+    assert_eq!(report.status, ReportStatus::Pass);
     assert!(report.findings.is_empty());
 }
 
@@ -699,7 +699,7 @@ fn does_not_flag_signature_only_self_return_as_self_loop() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "pass");
+    assert_eq!(report.status, ReportStatus::Pass);
     assert!(report.findings.is_empty());
 }
 
@@ -731,7 +731,7 @@ fn suppresses_type_method_self_loop_when_allowed() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "pass");
+    assert_eq!(report.status, ReportStatus::Pass);
     assert!(report.findings.is_empty());
 }
 
@@ -763,7 +763,7 @@ fn suppresses_type_method_self_loop_when_allowed_on_method() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "pass");
+    assert_eq!(report.status, ReportStatus::Pass);
     assert!(report.findings.is_empty());
 }
 
@@ -800,7 +800,7 @@ fn keeps_unsuppressed_method_flagged_when_other_method_is_allowed() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "pass");
+    assert_eq!(report.status, ReportStatus::Pass);
     assert_eq!(report.findings.len(), 1);
     assert_eq!(report.findings[0].rule_id, RuleId::ScbCycle002);
     assert!(
@@ -851,7 +851,7 @@ fn emits_both_inherent_and_trait_self_loop_findings_for_same_owner() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "pass");
+    assert_eq!(report.status, ReportStatus::Pass);
     assert_eq!(report.findings.len(), 2);
     assert!(
         report
@@ -894,7 +894,7 @@ fn downgrades_trait_impl_self_loop() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "pass");
+    assert_eq!(report.status, ReportStatus::Pass);
     assert_eq!(report.findings.len(), 1);
     assert_eq!(report.findings[0].rule_id, RuleId::ScbCycle003);
     assert_eq!(report.findings[0].kind, "trait_impl_self_loop");
@@ -928,7 +928,7 @@ fn does_not_flag_conversion_like_trait_impl_self_loop() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "pass");
+    assert_eq!(report.status, ReportStatus::Pass);
     assert!(report.findings.is_empty());
 }
 
@@ -961,7 +961,7 @@ fn does_not_flag_comparison_like_trait_impl_self_loop() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "pass");
+    assert_eq!(report.status, ReportStatus::Pass);
     assert!(report.findings.is_empty());
 }
 
@@ -1017,7 +1017,7 @@ fn reports_multi_owner_architectural_cycle_as_failure() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "fail");
+    assert_eq!(report.status, ReportStatus::Fail);
     assert_eq!(report.findings.len(), 1);
     assert_eq!(report.findings[0].rule_id, RuleId::ScbCycle001);
     assert_eq!(report.findings[0].kind, "multi_owner_architectural_cycle");
@@ -1058,7 +1058,7 @@ fn suppresses_recursive_value_container_cycle_when_all_owners_allow_it() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "pass");
+    assert_eq!(report.status, ReportStatus::Pass);
     assert!(report.findings.is_empty());
 }
 
@@ -1089,7 +1089,7 @@ fn keeps_recursive_value_container_cycle_when_only_one_owner_allows_it() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "fail");
+    assert_eq!(report.status, ReportStatus::Fail);
     assert_eq!(report.findings.len(), 1);
     assert_eq!(report.findings[0].rule_id, RuleId::ScbCycle001);
 }
@@ -1125,7 +1125,7 @@ fn reports_multi_owner_cycle_across_modules_as_failure() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "fail");
+    assert_eq!(report.status, ReportStatus::Fail);
     assert_eq!(report.findings.len(), 1);
     assert_eq!(report.findings[0].rule_id, RuleId::ScbCycle001);
     assert_eq!(
@@ -1158,7 +1158,7 @@ fn fails_when_internal_only_item_is_public() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "fail");
+    assert_eq!(report.status, ReportStatus::Fail);
     assert_eq!(report.findings.len(), 1);
     assert_eq!(report.findings[0].rule_id, RuleId::ScbBoundary001);
 }
@@ -1192,7 +1192,7 @@ fn fails_when_internal_only_item_is_referenced_from_other_module() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "fail");
+    assert_eq!(report.status, ReportStatus::Fail);
     assert_eq!(report.findings.len(), 1);
     assert_eq!(report.findings[0].rule_id, RuleId::ScbBoundary002);
     assert!(report.findings[0].message.contains("crate::owner::Secret"));
@@ -1221,7 +1221,7 @@ fn allows_internal_only_item_inside_own_module() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "pass");
+    assert_eq!(report.status, ReportStatus::Pass);
     assert!(report.findings.is_empty());
 }
 
@@ -1262,7 +1262,7 @@ fn fails_when_forbid_external_impls_trait_is_implemented_elsewhere() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "fail");
+    assert_eq!(report.status, ReportStatus::Fail);
     assert!(
         report
             .findings
@@ -1302,7 +1302,7 @@ fn allows_forbid_external_impls_trait_impl_in_same_module() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "pass");
+    assert_eq!(report.status, ReportStatus::Pass);
     assert!(report.findings.is_empty());
 }
 
@@ -1327,7 +1327,7 @@ fn does_not_flag_acyclic_chain() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "pass");
+    assert_eq!(report.status, ReportStatus::Pass);
     assert!(report.findings.is_empty());
 }
 
@@ -1362,7 +1362,7 @@ fn does_not_flag_cross_module_acyclic_chain() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "pass");
+    assert_eq!(report.status, ReportStatus::Pass);
     assert!(report.findings.is_empty());
 }
 
@@ -1396,7 +1396,7 @@ fn does_not_flag_newtype_factory_self_loop() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "pass");
+    assert_eq!(report.status, ReportStatus::Pass);
     assert!(report.findings.is_empty());
 }
 
@@ -1484,7 +1484,7 @@ fn does_not_promote_function_owned_references_into_module_cycles() {
     })
     .unwrap();
 
-    assert_eq!(report.status, "pass");
+    assert_eq!(report.status, ReportStatus::Pass);
     assert!(report.findings.is_empty());
 }
 

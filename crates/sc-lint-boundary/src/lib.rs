@@ -11,6 +11,8 @@ use anyhow::Context;
 use anyhow::Result;
 use cargo_metadata::MetadataCommand;
 use quote::ToTokens;
+use sc_lint_directives::AttributeInput;
+use sc_lint_directives::Directive;
 use serde::Deserialize;
 use serde::Serialize;
 use serde::Serializer;
@@ -24,12 +26,6 @@ use syn::Type;
 use syn::visit::Visit;
 
 mod analysis;
-// The attribute parser lives in the proc-macro crate source because proc-macro
-// crates cannot expose normal library APIs. We include the shared parser file
-// directly here so the analyzer and attribute macro validate the same directive
-// syntax. If directives.rs changes, both crates must be kept in sync.
-#[path = "../../sc-lint-attributes/src/directives.rs"]
-mod directive_parser;
 mod graph;
 mod portability;
 mod render;
@@ -210,9 +206,25 @@ pub struct FindingsReport {
     pub tool: &'static str,
     pub version: &'static str,
     pub schema_version: &'static str,
-    pub status: &'static str,
+    pub status: ReportStatus,
     pub scanned_crates: usize,
     pub findings: Vec<Finding>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReportStatus {
+    Pass,
+    Fail,
+}
+
+impl ReportStatus {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Pass => "pass",
+            Self::Fail => "fail",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -515,9 +527,9 @@ pub fn analyze_workspace(options: &AnalyzeOptions) -> Result<FindingsReport> {
                 )
             })?;
         let status = if findings.iter().any(analysis::finding_is_failure) {
-            "fail"
+            ReportStatus::Fail
         } else {
-            "pass"
+            ReportStatus::Pass
         };
         return Ok(FindingsReport {
             tool: "sc-lint-boundary",
@@ -563,9 +575,9 @@ pub fn analyze_workspace(options: &AnalyzeOptions) -> Result<FindingsReport> {
         .filter(|node| node.kind == "crate")
         .count();
     let status = if findings.iter().any(analysis::finding_is_failure) {
-        "fail"
+        ReportStatus::Fail
     } else {
-        "pass"
+        ReportStatus::Pass
     };
 
     Ok(FindingsReport {
@@ -596,4 +608,14 @@ pub fn render_graph_export(
     format: GraphOutputFormat,
 ) -> std::result::Result<String, serde_json::Error> {
     render::render_graph_export(graph, format)
+}
+
+pub fn render_graph_export_json(
+    graph: &GraphExport,
+) -> std::result::Result<String, serde_json::Error> {
+    render::render_graph_export_json(graph)
+}
+
+pub fn render_graph_export_turtle(graph: &GraphExport) -> String {
+    render::render_graph_export_turtle(graph)
 }

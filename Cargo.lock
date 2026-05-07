@@ -751,6 +751,7 @@ version = "0.1.0"
 dependencies = [
  "proc-macro2",
  "quote",
+ "sc-lint-directives",
  "syn",
 ]
 
@@ -763,11 +764,20 @@ dependencies = [
  "clap",
  "proc-macro2",
  "quote",
+ "sc-lint-directives",
  "serde",
  "serde_json",
  "syn",
  "tempfile",
  "toml",
+]
+
+[[package]]
+name = "sc-lint-directives"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn",
 ]
 
 [[package]]

@@ -6,7 +6,7 @@ pub fn render_findings_report(report: &FindingsReport) -> String {
         "{} {} status={} scanned_crates={} findings={}",
         report.tool,
         report.version,
-        report.status,
+        report.status.as_str(),
         report.scanned_crates,
         report.findings.len()
     )
@@ -22,12 +22,16 @@ pub fn render_graph_export(
     format: GraphOutputFormat,
 ) -> Result<String, JsonError> {
     match format {
-        GraphOutputFormat::Json => serde_json::to_string_pretty(graph),
-        GraphOutputFormat::Turtle => Ok(render_graph_turtle(graph)),
+        GraphOutputFormat::Json => render_graph_export_json(graph),
+        GraphOutputFormat::Turtle => Ok(render_graph_export_turtle(graph)),
     }
 }
 
-fn render_graph_turtle(graph: &GraphExport) -> String {
+pub fn render_graph_export_json(graph: &GraphExport) -> Result<String, JsonError> {
+    serde_json::to_string_pretty(graph)
+}
+
+pub fn render_graph_export_turtle(graph: &GraphExport) -> String {
     let mut lines = vec![
         "@prefix sc: <urn:sc-lint-boundary:predicate:> .".to_string(),
         "@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .".to_string(),

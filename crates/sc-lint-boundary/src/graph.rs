@@ -1,6 +1,4 @@
 use super::*;
-use crate::directive_parser::AttributeInput;
-use crate::directive_parser::Directive;
 use crate::render::hex_encode;
 
 mod reference_collector;

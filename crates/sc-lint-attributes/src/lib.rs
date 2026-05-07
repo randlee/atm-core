@@ -1,12 +1,10 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
+use sc_lint_directives::AttributeInput;
 use syn::Result;
-mod directives;
-
-use directives::AttributeInput;
 
 #[cfg(test)]
-use directives::Directive;
+use sc_lint_directives::Directive;
 
 fn expand_sc_lint(args: TokenStream2, item: TokenStream2) -> Result<TokenStream2> {
     let _parsed = syn::parse2::<AttributeInput>(args)?;

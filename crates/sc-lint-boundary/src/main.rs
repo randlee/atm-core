@@ -11,7 +11,8 @@ use sc_lint_boundary::RuleFilter;
 use sc_lint_boundary::analyze_workspace;
 use sc_lint_boundary::export_workspace_graph;
 use sc_lint_boundary::render_findings_report;
-use sc_lint_boundary::render_graph_export;
+use sc_lint_boundary::render_graph_export_json;
+use sc_lint_boundary::render_graph_export_turtle;
 
 #[derive(Debug, Parser)]
 #[command(name = "sc-lint-boundary")]
@@ -112,7 +113,14 @@ fn main() -> Result<()> {
         }
         Command::ExportGraph { root, format } => {
             let graph = export_workspace_graph(&ExportGraphOptions { root })?;
-            println!("{}", render_graph_export(&graph, format.into())?);
+            match GraphOutputFormat::from(format) {
+                GraphOutputFormat::Json => {
+                    println!("{}", render_graph_export_json(&graph)?);
+                }
+                GraphOutputFormat::Turtle => {
+                    println!("{}", render_graph_export_turtle(&graph));
+                }
+            }
         }
     }
 
