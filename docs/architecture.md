@@ -2170,6 +2170,9 @@ Required architectural rules:
 - re-export/replay is keyed by durable `message_key`
 - if daemon-managed retry/re-export state must survive crash, it is stored in
   SQLite with a bounded expiry/deadline rather than remaining RAM-only
+- remote replay rows live in the host-scoped SQLite root and are keyed by
+  mailbox identity plus durable `message_key` so startup resume can replay
+  pending remote handoff without duplicating committed local state
 - WAL checkpoint is part of graceful shutdown, but recovery correctness must
   not depend on graceful shutdown having succeeded
 - persisted retry state must not become a long-lived remote outbox; expired

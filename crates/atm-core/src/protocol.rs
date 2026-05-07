@@ -95,7 +95,8 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::DaemonLaunchGateRejected
         | AtmErrorCode::DaemonServingStateRejected
         | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
-        | AtmErrorCode::DaemonAutoStartFailed => AtmErrorKind::DaemonUnavailable,
+        | AtmErrorCode::DaemonAutoStartFailed
+        | AtmErrorCode::RemoteDeliveryOutcomeUnknown => AtmErrorKind::DaemonUnavailable,
         AtmErrorCode::AddressParseFailed => AtmErrorKind::Address,
         AtmErrorCode::TeamUnavailable | AtmErrorCode::TeamNotFound => AtmErrorKind::TeamNotFound,
         AtmErrorCode::AgentNotFound => AtmErrorKind::AgentNotFound,

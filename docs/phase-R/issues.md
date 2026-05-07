@@ -346,16 +346,17 @@ and explicit triggering/completion semantics.
 
 ---
 
-### B-009 — PeerClientTransport is an explicit stub
+### ~~B-009 — PeerClientTransport is an explicit stub~~ CLOSED IN R.16
 **Source**: arch-ctm TASK-997 gap report item 3
-**Files**: `crates/atm-daemon/src/lib.rs`
+**Closed on**: `feature/pR-s16-peer-replay`
+**Files**: `crates/atm-daemon/src/peer_transport.rs`, `crates/atm-daemon/src/composition.rs`
 
-`PeerClientTransport::send()` returns a stub error. Requirements/architecture still require
-remote daemon-to-daemon transport. No request framing over remote transport, no
-timeout/retry behavior, no integration into runtime routing path.
+`PeerClientTransport::send()` previously returned a stub error. `R.16` replaced
+that path with shared-protocol framing, typed timeout/retry classification,
+`ATM_REMOTE_OUTCOME_UNKNOWN`, and runtime-owned replay resume before serve.
 
-**Fix**: Implement peer client transport. Add request framing, timeout/retry, and
-integration into runtime routing.
+**Resolution**: implemented in `atm_daemon::peer_transport` behind the runtime-owned
+`PeerTransportRuntime` wrapper assembled through `RuntimeComposition`.
 
 **Implementation topology**:
 - `crates/atm-daemon/src/lib.rs:613-631`
@@ -365,18 +366,11 @@ integration into runtime routing.
 - `crates/atm-core/src/protocol.rs:19-50`
   the shared envelopes are the framing contract the peer transport must reuse
 
-**Dependencies / sizing**:
-- blocked on B-003 because peer transport belongs under the runtime root and
-  must participate in startup/shutdown
-- should land with I-013 because durable replay/re-export only makes sense once
-  the outbound peer path exists
-- must also define:
-  - exact retryable socket/network error classes vs non-retryable protocol/TLS
-    failures
-  - one typed `RemoteDeliveryOutcomeUnknown` error for drop-after-send /
-    acceptance-unknown paths
-  - whether listener rebinding survives ordinary local interface churn without
-    reload and when explicit-address binds require degraded status plus reload
+**Closed behavior**:
+- retryable socket/network error classes are explicit
+- one typed `RemoteDeliveryOutcomeUnknown` path exists for drop-after-send /
+  acceptance-unknown failures
+- wildcard bind survival vs explicit-address degraded reload behavior is documented
 
 ---
 
@@ -572,15 +566,17 @@ degradation handling.
 
 ---
 
-### I-013 — Crash recovery / replay durability not wired as runtime subsystem
+### ~~I-013 — Crash recovery / replay durability not wired as runtime subsystem~~ CLOSED IN R.16
 **Source**: arch-ctm TASK-997 gap report item 10
+**Closed on**: `feature/pR-s16-peer-replay`
 
 Requirements say crash recovery must preserve SQLite commit → export/remote handoff
-ordering and support durable replay keyed by `message_key`. `atm-core` has related
-boundary shapes but daemon runtime does not wire a concrete replay/re-export subsystem.
+ordering and support durable replay keyed by `message_key`. `R.16` wired replay
+state into the host-scoped SQLite root and added startup resume before serving.
 
-**Fix**: Implement durable replay/re-export runtime keyed by `message_key`. Add bounded
-persisted retry/re-export state with expiry. Wire startup replay/recovery path after crash.
+**Resolution**: replay/re-export rows are persisted with bounded expiry and resumed
+through the daemon runtime on startup, retaining typed failure state when delivery
+cannot be completed inside the configured retry budget.
 
 ---
 

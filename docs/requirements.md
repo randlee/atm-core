@@ -2816,6 +2816,9 @@ mail correctness.
     replay/re-export path rather than by silently assuming success
   - if the bounded retry window expires without remote acceptance, the send
     fails and must not leave durable delivered-message state behind
+  - pending replay/re-export state must be persisted in the host-scoped SQLite
+    root keyed by mailbox identity plus `message_key`, with bounded expiry and
+    operator-visible retained-failure state
 
 - `REQ-CORE-TRANSPORT-005` The daemon runtime must use concrete timeout and
   capacity limits for transport/store/health operations.

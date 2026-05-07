@@ -112,6 +112,7 @@ version = "1.1.2"
 dependencies = [
  "agent-team-mail-core",
  "atm-rusqlite",
+ "chrono",
  "fs2",
  "serde_json",
  "signal-hook",

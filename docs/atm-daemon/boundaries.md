@@ -61,7 +61,10 @@ Purpose:
 - Owns the daemon-side outbound client transport used for remote peer delivery.
 
 Notes:
-- This closes the design gap between the shared ClientTransport contract and daemon-to-daemon remote delivery.
+- The concrete `PeerClientTransport` implementation stays runtime-private inside
+  `atm_daemon::peer_transport`.
+- Runtime composition owns replay resume and exposes the transport only through
+  the shared `ClientTransport` contract.
 
 ## FileWatchEventSourceAdapter
 

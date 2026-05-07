@@ -4,11 +4,10 @@
 mod boundary_adapters;
 pub(crate) mod composition;
 mod direct_boundaries;
+mod peer_transport;
 mod runtime_health;
 
 use std::collections::HashMap;
-use std::error::Error as StdError;
-use std::fmt;
 #[cfg(unix)]
 use std::fs::{self, File, OpenOptions};
 #[cfg(unix)]
@@ -37,10 +36,11 @@ use signal_hook::flag;
 #[cfg(unix)]
 use atm_core::protocol::RequestEnvelope as ProtocolRequestEnvelope;
 use atm_core::{
-    RequestEnvelope, ResponseEnvelope,
+    ResponseEnvelope,
     boundary::{self, RequestDispatcher},
     error::AtmError,
 };
+pub(crate) use peer_transport::PeerTransportRuntime;
 #[cfg(unix)]
 const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 #[cfg(unix)]
@@ -55,29 +55,6 @@ const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
 const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(10);
 #[cfg(unix)]
 const HOST_RUNTIME_OWNER_LOCK_FILE: &str = "owner.lock";
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum DaemonBoundaryStubError {
-    PeerClientTransport,
-}
-
-impl fmt::Display for DaemonBoundaryStubError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::PeerClientTransport => {
-                f.write_str("daemon peer client transport scaffold is not wired")
-            }
-        }
-    }
-}
-
-impl StdError for DaemonBoundaryStubError {}
-
-fn daemon_boundary_stub_error(message: &'static str, source: DaemonBoundaryStubError) -> AtmError {
-    AtmError::daemon_unavailable(message)
-        .with_recovery("Complete the Phase R daemon boundary wiring before invoking this path.")
-        .with_source(source)
-}
 
 #[cfg(unix)]
 fn host_runtime_lock_path(file_name: &str) -> Result<PathBuf, AtmError> {
@@ -660,27 +637,6 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
     fn serve(&self, _dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
         Err(AtmError::daemon_unavailable(
             "atm-daemon socket transport requires a Unix platform",
-        ))
-    }
-}
-
-/// Placeholder runtime client transport for peer-to-peer daemon delivery.
-#[derive(Debug, Default)]
-struct PeerClientTransport;
-
-impl PeerClientTransport {
-    const fn new() -> Self {
-        Self
-    }
-}
-
-impl boundary::sealed::Sealed for PeerClientTransport {}
-
-impl boundary::ClientTransport for PeerClientTransport {
-    fn send(&self, _request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon peer client transport stub is not implemented yet",
-            DaemonBoundaryStubError::PeerClientTransport,
         ))
     }
 }

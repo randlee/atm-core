@@ -8,7 +8,7 @@ trait = "ClientTransport"
 
 [implementation]
 type = "PeerClientTransport"
-module = "atm_daemon"
+module = "atm_daemon::peer_transport"
 visibility = "private"
 constructor = "private"
 
@@ -42,5 +42,5 @@ lint_rules = ["LINT-BOUNDARY-CLIENT-TRANSPORT-PEER-EDGES", "LINT-BOUNDARY-CLIENT
 review_gates = ["no_public_impl", "no_public_constructor", "no_cli_to_daemon_edge"]
 
 [status]
-state = "stub_landed"
-notes = ["remote daemon-to-daemon delivery uses the same shared client transport family", "stub implementation currently lives at crate root and is assembled through atm_daemon::composition"]
+state = "active"
+notes = ["remote daemon-to-daemon delivery uses the shared AtmProtocol framing with bounded timeout/retry behavior", "the private PeerClientTransport implementation now lives in atm_daemon::peer_transport behind the runtime-owned PeerTransportRuntime wrapper and is assembled through atm_daemon::composition", "durable replay resume is keyed by message_key and backed by the host-scoped SQLite state root"]

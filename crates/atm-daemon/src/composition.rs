@@ -3,7 +3,7 @@ use crate::boundary_adapters::{
     DaemonReconcileCoordinator, FileWatchEventSource,
 };
 use crate::runtime_health::{DaemonRequestDispatcher, DaemonStatusSource, RuntimeStatusCache};
-use crate::{LocalSocketServerTransport, PeerClientTransport};
+use crate::{LocalSocketServerTransport, PeerTransportRuntime};
 use atm_core::{
     boundary::{
         ClientTransport, ConfigIngress, InboxExport, InboxIngress, NotificationSink,
@@ -102,7 +102,7 @@ pub(crate) struct RuntimeComposition {
     config_ingress: DaemonConfigIngress,
     inbox_ingress: DaemonInboxIngress,
     inbox_export: DaemonInboxExport,
-    peer_client_transport: PeerClientTransport,
+    peer_transport_runtime: PeerTransportRuntime,
 }
 
 #[allow(dead_code)]
@@ -123,7 +123,7 @@ impl RuntimeComposition {
             config_ingress: DaemonConfigIngress::new(),
             inbox_ingress: DaemonInboxIngress::new(),
             inbox_export: DaemonInboxExport::new(),
-            peer_client_transport: PeerClientTransport::new(),
+            peer_transport_runtime: PeerTransportRuntime::new(),
         }
     }
 
@@ -160,7 +160,7 @@ impl RuntimeComposition {
     }
 
     fn peer_client_transport(&self) -> &dyn ClientTransport {
-        &self.peer_client_transport
+        self.peer_transport_runtime.client_transport()
     }
 
     pub(crate) fn start(&self) -> Result<(), AtmError> {
@@ -173,6 +173,18 @@ impl RuntimeComposition {
             }
         };
         self.lifecycle.transition(RuntimeLifecycleState::Running)?;
+        let replay_summary = self.peer_transport_runtime.resume_pending_replay()?;
+        if replay_summary.delivered > 0
+            || replay_summary.retained > 0
+            || replay_summary.purged_expired > 0
+        {
+            tracing::info!(
+                replay_delivered = replay_summary.delivered,
+                replay_retained = replay_summary.retained,
+                replay_purged_expired = replay_summary.purged_expired,
+                "daemon startup replay sweep completed"
+            );
+        }
         let result = runtime.serve(self.request_dispatcher());
         self.finish_runtime(result)
     }
@@ -194,6 +206,18 @@ impl RuntimeComposition {
             }
         };
         self.lifecycle.transition(RuntimeLifecycleState::Running)?;
+        let replay_summary = self.peer_transport_runtime.resume_pending_replay()?;
+        if replay_summary.delivered > 0
+            || replay_summary.retained > 0
+            || replay_summary.purged_expired > 0
+        {
+            tracing::info!(
+                replay_delivered = replay_summary.delivered,
+                replay_retained = replay_summary.retained,
+                replay_purged_expired = replay_summary.purged_expired,
+                "daemon startup replay sweep completed"
+            );
+        }
         let result = runtime.serve(self.request_dispatcher());
         self.finish_runtime(result)
     }

@@ -126,6 +126,9 @@ Phase R redesign notes:
 - if the configured listener bind address is an explicit local IP that later
   disappears or changes, the runtime must enter degraded status and require
   bounded reload/rebind via the runtime reload path
+- startup must run one bounded replay-resume sweep from the host-scoped SQLite
+  state root before serving requests so pending remote handoff rows keyed by
+  durable `message_key` are retried or retained with typed degraded status
 - daemon runtime failures must remain typed and must not depend on
   panic/unwrap for routine transport, socket, or store-boundary failure.
 - daemon observability remains structured through `sc-observability`; no ad hoc
