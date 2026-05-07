@@ -30,7 +30,9 @@ use fs2::FileExt;
 
 use crate::observability::CliObservability;
 
+#[cfg_attr(not(unix), allow(dead_code))]
 const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
+#[cfg_attr(not(unix), allow(dead_code))]
 const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
 #[cfg(unix)]
 const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
@@ -64,6 +66,7 @@ impl DaemonSocketPath {
         Ok(Self(path))
     }
 
+    #[cfg_attr(not(unix), allow(dead_code))]
     fn display(&self) -> std::path::Display<'_> {
         self.0.display()
     }
@@ -84,6 +87,7 @@ impl DaemonBinaryPath {
         Ok(Self(path))
     }
 
+    #[cfg_attr(not(unix), allow(dead_code))]
     fn display(&self) -> std::path::Display<'_> {
         self.0.display()
     }
@@ -125,6 +129,7 @@ fn host_runtime_lock_path_from_home(home_dir: &Path, file_name: &str) -> PathBuf
     home_dir.join(file_name)
 }
 
+#[cfg_attr(not(unix), allow(dead_code))]
 #[derive(Debug)]
 struct LocalSocketClientTransport {
     socket_path: DaemonSocketPath,
@@ -146,6 +151,7 @@ impl LocalSocketClientTransport {
         })
     }
 
+    #[cfg_attr(not(unix), allow(dead_code))]
     #[cfg(not(unix))]
     fn try_connect(&self) -> Result<(), AtmError> {
         Err(AtmError::daemon_unavailable(
@@ -210,6 +216,7 @@ impl ClientTransport for LocalSocketClientTransport {
     }
 }
 
+#[cfg_attr(not(unix), allow(dead_code))]
 #[derive(Debug)]
 struct DaemonSupervisor {
     socket_path: DaemonSocketPath,
