@@ -358,37 +358,21 @@ as open on `feature/pR-s10-thin-client` — both resolved in R.10.
 
 ---
 
-### m-002 — FindingsReport::status uses raw &'static str instead of enum
-**Source**: quality-mgr RBP-R11-001 (SC-LINT-QA-11 — pre-existing, deferred)
-**File**: `crates/sc-lint-boundary/src/lib.rs:213`
-
-`FindingsReport::status` field holds `'pass'`/`'fail'` as raw `&'static str`. No `ReportStatus`
-enum exists; compiler cannot prevent invalid values.
-
-**Fix**: Introduce `ReportStatus` enum (`Pass` / `Fail` variants), replace raw str field.
+### ~~m-002 — FindingsReport::status uses raw &'static str instead of enum~~ CLOSED
+**Closed**: SC-LINT-FIX-R11 / SC-LINT-QA-12 PASS at b1cc9c5
+`ReportStatus` enum introduced; `FindingsReport::status` typed as `ReportStatus`.
 
 ---
 
-### m-003 — render_graph_export wraps infallible Turtle branch in Result
-**Source**: quality-mgr RBP-R11-002 (SC-LINT-QA-11 — pre-existing, deferred)
-**File**: `crates/sc-lint-boundary/src/render.rs:20`
-
-`render_graph_export` returns `Result<String, serde_json::Error>` but the `Turtle` branch
-calls an infallible function and can never produce an error. The doc comment added in
-SC-LINT-FIX-R6 notes this but the return type was not changed.
-
-**Fix**: Consider splitting into separate fallible (`Json`) and infallible (`Turtle`) paths,
-or accept the documented asymmetry as-is if splitting creates more churn than value.
+### ~~m-003 — render_graph_export wraps infallible Turtle branch in Result~~ CLOSED
+**Closed**: SC-LINT-FIX-R11 / SC-LINT-QA-12 PASS at b1cc9c5
+`render_graph_export_turtle() -> String` dedicated infallible path; re-exported at lib.rs:619.
 
 ---
 
-### m-004 — Cross-crate #[path] include in lib.rs
-**Source**: quality-mgr ATM-QA-R11-002 (SC-LINT-QA-11 — pre-existing, deferred)
-**File**: `crates/sc-lint-boundary/src/lib.rs:31-32`
-
-Pre-existing cross-crate `#[path = "..."]` include. Not introduced in recent fix rounds.
-
-**Fix**: Evaluate whether this can be replaced with a normal module import.
+### ~~m-004 — Cross-crate #[path] include in lib.rs~~ CLOSED
+**Closed**: SC-LINT-FIX-R11 / SC-LINT-QA-12 PASS at b1cc9c5
+`sc-lint-directives` shared crate introduced; cross-crate `#[path]` removed from lib.rs.
 
 ---
 
