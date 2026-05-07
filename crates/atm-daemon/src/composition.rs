@@ -5,6 +5,7 @@ use crate::boundary_adapters::{
 use crate::runtime_health::{DaemonRequestDispatcher, DaemonStatusSource, RuntimeStatusCache};
 use crate::{LocalSocketServerTransport, PeerClientTransport};
 use atm_core::{boundary::RequestDispatcher, error::AtmError};
+#[cfg(unix)]
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -303,6 +304,13 @@ fn validate_runtime_home_dir(home_dir: &std::path::Path) -> Result<(), AtmError>
 fn validate_runtime_socket_path() -> Result<(), AtmError> {
     Err(AtmError::daemon_unavailable(
         "atm-daemon socket transport requires a Unix platform",
+    ))
+}
+
+#[cfg(not(unix))]
+fn validate_runtime_home_dir(_home_dir: &std::path::Path) -> Result<(), AtmError> {
+    Err(AtmError::daemon_unavailable(
+        "atm-daemon home directory validation requires a Unix platform",
     ))
 }
 
