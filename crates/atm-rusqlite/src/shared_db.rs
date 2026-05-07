@@ -135,6 +135,8 @@ impl SharedDbTarget {
 pub(crate) struct SharedDb {
     target: Arc<SharedDbTarget>,
     #[cfg(test)]
+    // In-memory test fixtures must share one retained connection so each
+    // operation sees the same transient schema and rows across store calls.
     test_connection: Option<Arc<std::sync::Mutex<Connection>>>,
 }
 

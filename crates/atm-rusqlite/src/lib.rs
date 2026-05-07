@@ -176,32 +176,6 @@ impl boundary::MailStore for SqliteMailStore {
                 )
                 .optional()
                 .map_err(|error| self.db.error("failed to probe existing mail-store message", error))?;
-            if let Some(parent_message_id) = parent_message_id.as_deref() {
-                let conflicting: Option<String> = transaction
-                    .query_row(
-                        "SELECT message_key
-                         FROM mail_messages
-                         WHERE team = ?1 AND agent = ?2 AND parent_message_id = ?3 AND message_key != ?4;",
-                        params![
-                            record.team.as_str(),
-                            record.agent.as_str(),
-                            parent_message_id,
-                            record.message_key.as_ref(),
-                        ],
-                        |row| row.get(0),
-                    )
-                    .optional()
-                    .map_err(|error| self.db.error("failed to verify single-successor invariant", error))?;
-                if conflicting.is_some() {
-                    return Err(AtmError::validation(format!(
-                        "message thread parent {} already has a successor in {}@{}",
-                        parent_message_id, record.agent, record.team
-                    ))
-                    .with_recovery(
-                        "Append to the current terminal message instead of branching from an older message thread node.",
-                    ));
-                }
-            }
             transaction
                 .execute(
                     "INSERT INTO mail_messages(team, agent, message_key, envelope_json, from_agent, message_text, summary, message_at, legacy_message_id, parent_message_id, thread_mode, stale_at, imported_from, recorded_at)
