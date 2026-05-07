@@ -1,0 +1,74 @@
+boundary_id = "BOUNDARY-TaskStore-Sqlite"
+owner_package = "atm-rusqlite"
+owner_crate_path = "atm_rusqlite"
+name = "SqliteTaskStoreAdapter"
+
+[public]
+trait = "TaskStore"
+
+[implementation]
+type = "SqliteTaskStore"
+module = "atm_rusqlite"
+visibility = "private"
+constructor = "private"
+
+[composition]
+roots = ["atm_rusqlite::assemble_boundary"]
+
+[ownership]
+io_owns = [
+  "sqlite",
+  "task_state_persistence",
+]
+io_forbidden = [
+  "socket_io",
+  "process_spawn",
+]
+
+[dependencies]
+allowed_dependents = []
+allowed_dependencies = [
+  "atm-core",
+  "rusqlite",
+]
+forbidden_edges = [
+  "atm -> atm-rusqlite",
+  "atm-daemon -> atm-rusqlite",
+  "atm-graft -> atm-rusqlite",
+]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = [
+  "SqliteTaskStore",
+  "SqliteTaskStore::open",
+  "rusqlite::Connection",
+]
+
+[contracts]
+request_types = ["TaskStore method inputs"]
+response_types = ["atm-core task DTOs"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = ["atm_core::test_support::InMemoryTaskStore"]
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = [
+  "LINT-BOUNDARY-TASKSTORE-SQLITE-EDGES",
+  "LINT-BOUNDARY-TASKSTORE-SQLITE-REFERENCES",
+]
+review_gates = [
+  "no_public_impl",
+  "no_public_constructor",
+  "no_public_reexport",
+]
+
+[status]
+state = "active"
+notes = [
+  "ack-related task transitions still resolve through send-shape workflows, not a separate public ack API",
+  "crate-root implementation remains temporary; module split is still deferred",
+  "assembled through atm_rusqlite::SqliteBoundaryAssembly",
+]
