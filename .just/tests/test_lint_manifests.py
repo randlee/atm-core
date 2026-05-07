@@ -110,9 +110,36 @@ atm-core = { path = "../atm-core", version = "9.9.9" }
             violations = collect_manifest_violations(repo_root)
             rendered = [violation.render() for violation in violations]
             self.assertIn(
-                'crates/atm/Cargo.toml [dependencies.atm-core]: path dependency version must match workspace version "1.1.2"',
+                'crates/atm/Cargo.toml [dependencies.atm-core]: path dependency version must match target crate version "1.1.2"',
                 rendered,
             )
+
+    def test_collect_manifest_violations_accepts_explicit_tool_crate_version(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            (repo_root / "Cargo.toml").write_text(
+                ROOT_MANIFEST.replace('"crates/atm"]', '"crates/atm", "crates/sc-lint-attributes"]'),
+                encoding="utf-8",
+            )
+            self.write_repo(repo_root)
+            tool_dir = repo_root / "crates/sc-lint-attributes"
+            tool_dir.mkdir(parents=True)
+            (tool_dir / "Cargo.toml").write_text(
+                """\
+[package]
+name = "sc-lint-attributes"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+""",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(collect_manifest_violations(repo_root), [])
 
 
 if __name__ == "__main__":

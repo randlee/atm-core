@@ -10,6 +10,9 @@ forbidden_literals = [
   "atm-dev",
 ]
 
+[portability]
+config_home_env = "ATM_CONFIG_HOME"
+
 [line_counts]
 max_total_lines = 0
 max_production_lines = 1000

@@ -57,6 +57,20 @@ class CheckLineCountsTests(unittest.TestCase):
         self.assertEqual(production_lines, 1)
         self.assertEqual(test_lines, 5)
 
+    def test_classify_lines_treats_file_level_cfg_test_as_all_test(self) -> None:
+        lines = [
+            "#![cfg(test)]",
+            "",
+            "use super::*;",
+            "",
+            "fn helper() {}",
+        ]
+
+        production_lines, test_lines = classify_lines(lines)
+
+        self.assertEqual(production_lines, 0)
+        self.assertEqual(test_lines, 3)
+
     def test_evaluate_limits_uses_configured_metrics(self) -> None:
         counts = [
             FileCounts(

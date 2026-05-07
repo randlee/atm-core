@@ -63,19 +63,41 @@ def validate_workspace_version(repo_root: Path) -> str:
     return workspace_version
 
 
+def expected_package_version(manifest: dict, workspace_version: str, manifest_label: str) -> str:
+    package = manifest.get("package", {})
+    if not isinstance(package, dict):
+        fail(f"{manifest_label} missing [package] table")
+
+    version_value = package.get("version")
+    if isinstance(version_value, str) and version_value.strip():
+        return version_value
+    if isinstance(version_value, dict) and version_value.get("workspace") is True:
+        return workspace_version
+    fail(
+        f"{manifest_label} must define [package].version either as a non-empty string or version.workspace = true"
+    )
+
+
 def validate_crate_versions(repo_root: Path, workspace_version: str) -> None:
     manifests = workspace_manifest_paths(repo_root)
     if not manifests:
         fail("no workspace member manifests found")
 
     workspace_member_dirs = {manifest_path.parent.resolve() for manifest_path in manifests}
-    manifest_texts = {path: read_text(path) for path in manifests}
-    for path, text in manifest_texts.items():
+    manifest_payloads: dict[Path, tuple[str, dict, str]] = {}
+    expected_versions: dict[Path, str] = {}
+    for path in manifests:
+        text = read_text(path)
         rel_manifest = path.relative_to(repo_root).as_posix()
-        if "version.workspace = true" not in text:
-            fail(f"{rel_manifest} must use version.workspace = true")
-
         manifest = tomllib.loads(text)
+        manifest_payloads[path] = (text, manifest, rel_manifest)
+        expected_versions[path.parent.resolve()] = expected_package_version(
+            manifest,
+            workspace_version,
+            rel_manifest,
+        )
+
+    for path, (_text, manifest, rel_manifest) in manifest_payloads.items():
         for section_name, dependencies in dependency_sections(manifest):
             for dependency_name, dependency in dependencies.items():
                 if not isinstance(dependency, dict):
@@ -86,11 +108,12 @@ def validate_crate_versions(repo_root: Path, workspace_version: str) -> None:
                 resolved_path = (path.parent / dependency_path).resolve()
                 if resolved_path not in workspace_member_dirs:
                     continue
+                dependency_version = expected_versions[resolved_path]
                 pinned_version = dependency.get("version")
-                if pinned_version != workspace_version:
+                if pinned_version != dependency_version:
                     fail(
                         f"{rel_manifest} [{section_name}.{dependency_name}]: "
-                        f'internal path dependency version must match workspace version "{workspace_version}"'
+                        f'internal path dependency version must match target crate version "{dependency_version}"'
                     )
 
 
@@ -98,26 +121,32 @@ def validate_lockfile(repo_root: Path, workspace_version: str) -> None:
     lock = tomllib.loads(read_text(repo_root / "Cargo.lock"))
     packages = lock.get("package", [])
     versions: dict[str, str] = {}
-    workspace_packages: set[str] = set()
+    workspace_packages: dict[str, str] = {}
     for manifest_path in workspace_manifest_paths(repo_root):
         manifest = tomllib.loads(read_text(manifest_path))
+        rel_manifest = manifest_path.relative_to(repo_root).as_posix()
         package_name = manifest.get("package", {}).get("name")
         if isinstance(package_name, str):
-            workspace_packages.add(package_name)
+            workspace_packages[package_name] = expected_package_version(
+                manifest,
+                workspace_version,
+                rel_manifest,
+            )
     for package in packages:
         name = package.get("name")
         version = package.get("version")
-        if name in workspace_packages:
+        if name in workspace_packages and isinstance(version, str):
             versions[name] = version
 
     for package_name in sorted(workspace_packages):
         version = versions.get(package_name)
         if version is None:
             fail(f"{package_name} missing from Cargo.lock")
-        if version != workspace_version:
+        expected_version = workspace_packages[package_name]
+        if version != expected_version:
             fail(
                 f"Cargo.lock version for {package_name} ({version}) "
-                f"does not match workspace version ({workspace_version})"
+                f'does not match expected crate version ({expected_version})'
             )
 
 

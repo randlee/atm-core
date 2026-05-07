@@ -17,7 +17,6 @@ from lint_common import workspace_manifest_paths
 
 LINT_NAME = "manifests"
 REQUIRED_WORKSPACE_FIELDS = (
-    "version",
     "edition",
     "rust-version",
     "authors",
@@ -51,6 +50,21 @@ def workspace_version(repo_root: Path) -> str:
     return version
 
 
+def expected_package_version(manifest: dict, workspace_version_value: str, manifest_label: str) -> str:
+    package = manifest.get("package", {})
+    if not isinstance(package, dict):
+        raise SystemExit(f"{manifest_label} missing [package] table")
+
+    version_value = package.get("version")
+    if isinstance(version_value, str) and version_value.strip():
+        return version_value
+    if isinstance(version_value, dict) and version_value.get("workspace") is True:
+        return workspace_version_value
+    raise SystemExit(
+        f"{manifest_label} must define [package].version either as a non-empty string or version.workspace = true"
+    )
+
+
 def member_manifests(repo_root: Path) -> list[Path]:
     return workspace_manifest_paths(repo_root)
 
@@ -81,8 +95,19 @@ def dependency_sections(manifest: dict) -> list[tuple[str, dict]]:
 def collect_manifest_violations(repo_root: Path) -> list[ManifestViolation]:
     violations: list[ManifestViolation] = []
     version = workspace_version(repo_root)
+    manifests = member_manifests(repo_root)
+    expected_versions: dict[Path, str] = {}
 
-    for manifest_path in member_manifests(repo_root):
+    for manifest_path in manifests:
+        manifest = tomllib_load(manifest_path)
+        rel_manifest = relative_manifest_display(manifest_path, repo_root)
+        expected_versions[manifest_path.parent.resolve()] = expected_package_version(
+            manifest,
+            version,
+            rel_manifest,
+        )
+
+    for manifest_path in manifests:
         manifest = tomllib_load(manifest_path)
         rel_manifest = relative_manifest_display(manifest_path, repo_root)
         package = manifest.get("package", {})
@@ -104,12 +129,17 @@ def collect_manifest_violations(repo_root: Path) -> list[ManifestViolation]:
                 dependency_path = dependency.get("path")
                 if not isinstance(dependency_path, str):
                     continue
+                resolved_path = (manifest_path.parent / dependency_path).resolve()
+                expected_dependency_version = expected_versions.get(resolved_path)
+                if expected_dependency_version is None:
+                    continue
+                dependency_path = dependency.get("path")
                 pinned_version = dependency.get("version")
-                if pinned_version != version:
+                if pinned_version != expected_dependency_version:
                     violations.append(
                         ManifestViolation(
                             f"{rel_manifest} [{section_name}.{dependency_name}]",
-                            f'path dependency version must match workspace version "{version}"',
+                            f'path dependency version must match target crate version "{expected_dependency_version}"',
                         )
                     )
 

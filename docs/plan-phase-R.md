@@ -290,7 +290,7 @@ Current landed subset:
 - explicit composition modules exist in:
   - `crates/atm-daemon/src/composition.rs`
   - `crates/atm/src/composition.rs`
-- `just lint` passes on the current skeleton branch with:
+- `just lint sc-boundary` passes on the current skeleton branch with:
   - no direct CLI-to-daemon edge
   - no direct CLI-to-sqlite edge
   - no direct daemon-to-sqlite edge permitted by the boundary contract

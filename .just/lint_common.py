@@ -398,6 +398,8 @@ def classify_rust_test_scope(
 ) -> list[bool]:
     if treat_all_lines_as_test:
         return [True] * len(lines)
+    if any(line.strip() == "#![cfg(test)]" for line in lines):
+        return [True] * len(lines)
 
     scope: list[bool] = []
     cfg_test_pending = False
