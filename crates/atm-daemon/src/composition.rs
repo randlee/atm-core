@@ -4,13 +4,7 @@ use crate::boundary_adapters::{
 };
 use crate::runtime_health::{DaemonRequestDispatcher, DaemonStatusSource, RuntimeStatusCache};
 use crate::{LocalSocketServerTransport, PeerTransportRuntime};
-use atm_core::{
-    boundary::{
-        ClientTransport, ConfigIngress, InboxExport, InboxIngress, NotificationSink,
-        ReconcileCoordinator, RequestDispatcher, StatusSource, WatchEventSource,
-    },
-    error::AtmError,
-};
+use atm_core::{boundary::RequestDispatcher, error::AtmError};
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -148,34 +142,6 @@ impl RuntimeComposition {
 
     fn request_dispatcher(&self) -> Arc<dyn RequestDispatcher + Send + Sync> {
         self.request_dispatcher.clone()
-    }
-
-    fn status_source(&self) -> &dyn StatusSource {
-        &self._status_source
-    }
-
-    fn watch_event_source(&self) -> &dyn WatchEventSource {
-        &self._watch_event_source
-    }
-
-    fn reconcile_coordinator(&self) -> &dyn ReconcileCoordinator {
-        &self._reconcile_coordinator
-    }
-
-    fn config_ingress(&self) -> &dyn ConfigIngress {
-        &self._config_ingress
-    }
-
-    fn inbox_ingress(&self) -> &dyn InboxIngress {
-        &self._inbox_ingress
-    }
-
-    fn inbox_export(&self) -> &dyn InboxExport {
-        &self._inbox_export
-    }
-
-    fn peer_client_transport(&self) -> &dyn ClientTransport {
-        self.peer_transport_runtime.client_transport()
     }
     pub(crate) fn start(&self) -> Result<(), AtmError> {
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;

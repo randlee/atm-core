@@ -171,64 +171,6 @@ impl ActiveConnectionRegistry {
         self.active_connections.fetch_sub(1, Ordering::SeqCst);
     }
 }
-#[derive(Debug, Clone)]
-struct DaemonObservability {
-    home_dir: PathBuf,
-}
-
-impl DaemonObservability {
-    fn new(home_dir: PathBuf) -> Self {
-        Self { home_dir }
-    }
-}
-
-impl boundary::sealed::Sealed for DaemonObservability {}
-
-impl ObservabilityPort for DaemonObservability {
-    fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {
-        // Retained daemon observability wiring lands in a later sprint; keep
-        // the boundary callable so runtime ownership can converge first.
-        // Stub: always succeeds; real failure paths land in a later sprint.
-        Ok(())
-    }
-
-    fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
-        // Query/follow remain empty until retained log indexing is wired.
-        // Stub: always succeeds; real failure paths land in a later sprint.
-        Ok(AtmLogSnapshot::default())
-    }
-
-    fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, AtmError> {
-        // Stub: always succeeds; real failure paths land in a later sprint.
-        Ok(LogTailSession::empty())
-    }
-
-    fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
-        #[cfg(unix)]
-        let active_log_path = self
-            .home_dir
-            .join(".local")
-            .join("share")
-            .join("logs")
-            .join("atm.log.jsonl");
-        #[cfg(not(unix))]
-        let active_log_path = self.home_dir.join("logs").join("atm.log.jsonl");
-        let fault = std::env::var("ATM_OBSERVABILITY_RETAINED_SINK_FAULT")
-            .ok()
-            .map(|value| value.trim().to_ascii_lowercase());
-        let logging_state = match fault.as_deref() {
-            Some("degraded") => AtmObservabilityHealthState::Degraded,
-            Some("unavailable") => AtmObservabilityHealthState::Unavailable,
-            _ => AtmObservabilityHealthState::Healthy,
-        };
-        Ok(AtmObservabilityHealth {
-            active_log_path: Some(active_log_path),
-            logging_state,
-            query_state: Some(AtmObservabilityHealthState::Healthy),
-            detail: None,
-        })
-    }
-}
 #[cfg(unix)]
 #[derive(Debug)]
 struct SingletonGuard {
@@ -731,7 +673,7 @@ mod tests {
     use super::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
     use super::{
         ActiveConnectionRegistry, DaemonShutdownSignals, HOST_RUNTIME_OWNER_LOCK_FILE,
-        SingletonGuard, host_runtime_lock_path_from_home,
+        SingletonGuard, host_runtime_lock_path_from_home, reset_shutdown_signals_for_test,
     };
     use atm_core::boundary::RequestDispatcher;
     use atm_core::error_codes::AtmErrorCode;
@@ -768,7 +710,7 @@ mod tests {
 
     #[test]
     fn daemon_shutdown_signals_install_is_repeatable() {
-        let reset = SignalResetGuard::install();
+        let _reset = SignalResetGuard::install();
         let first = DaemonShutdownSignals::install().expect("first install");
         first
             .terminate
