@@ -468,6 +468,7 @@ fn render_runtime_readiness(state: RuntimeReadinessState) -> &'static str {
 fn render_runtime_member_state(state: RuntimeMemberState) -> &'static str {
     match state {
         RuntimeMemberState::Unknown => "unknown",
+        RuntimeMemberState::IdentityConflict => "identity-conflict",
         RuntimeMemberState::Offline => "offline",
         RuntimeMemberState::Idle => "idle",
         RuntimeMemberState::Active => "active",

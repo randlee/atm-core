@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -22,10 +22,11 @@ use atm_core::{
         TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
     read::read_mail,
+    schema::TeamConfig,
     send::send_mail,
     types::{AgentName, IsoTimestamp, TeamName},
 };
-use atm_rusqlite::{assemble_boundary, assemble_default_boundary};
+use atm_rusqlite::{SqliteBoundaryAssembly, assemble_default_boundary};
 
 const MAX_STATUS_CACHE_ENTRIES: usize = 4096;
 
@@ -90,7 +91,7 @@ struct RuntimeMemberKey {
 
 #[derive(Debug, Clone)]
 struct RuntimeMemberRecord {
-    pid: u32,
+    pid: Option<u32>,
     state: RuntimeMemberState,
     last_active_at: Option<IsoTimestamp>,
 }
@@ -98,6 +99,7 @@ struct RuntimeMemberRecord {
 #[derive(Debug, Default)]
 struct RuntimeStatusCacheState {
     members: HashMap<RuntimeMemberKey, RuntimeMemberRecord>,
+    unknown_members: HashSet<RuntimeMemberKey>,
     sqlite_ready: bool,
     degraded_ingest: bool,
 }
@@ -112,10 +114,23 @@ impl RuntimeStatusCache {
         Self {
             state: Arc::new(Mutex::new(RuntimeStatusCacheState {
                 members: HashMap::new(),
+                unknown_members: HashSet::new(),
                 sqlite_ready: true,
                 degraded_ingest: false,
             })),
         }
+    }
+
+    fn hydrate_member(&self, team: TeamName, member: AgentName) -> Result<(), AtmError> {
+        let mut cache = self
+            .state
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
+        let key = RuntimeMemberKey { team, member };
+        if !cache.members.contains_key(&key) {
+            cache.unknown_members.insert(key);
+        }
+        Ok(())
     }
 
     fn record_heartbeat(
@@ -138,10 +153,11 @@ impl RuntimeStatusCache {
             .state
             .lock()
             .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
+        cache.unknown_members.remove(&key);
         cache.members.insert(
             key,
             RuntimeMemberRecord {
-                pid: request.pid,
+                pid: Some(request.pid),
                 state,
                 last_active_at,
             },
@@ -155,11 +171,12 @@ impl RuntimeStatusCache {
                 .map(|(key, record)| (key.clone(), record.clone()))
         {
             cache.members.remove(&evicted_key);
+            cache.unknown_members.insert(evicted_key.clone());
             tracing::warn!(
                 team = %evicted_key.team,
                 member = %evicted_key.member,
                 pid = evicted_record.pid,
-                "evicted daemon runtime status-cache entry after reaching the bounded cap"
+                "demoted daemon runtime status-cache entry to unknown after reaching the bounded cap"
             );
         }
         cache.sqlite_ready = true;
@@ -171,6 +188,49 @@ impl RuntimeStatusCache {
             state,
             last_active_at,
         })
+    }
+
+    fn record_identity_conflict(
+        &self,
+        request: &TeamMemberHeartbeatRequest,
+        existing_pid: u32,
+    ) -> Result<(), AtmError> {
+        let key = RuntimeMemberKey {
+            team: request.team.clone(),
+            member: request.member.clone(),
+        };
+        let mut cache = self
+            .state
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
+        let last_active_at = cache
+            .members
+            .get(&key)
+            .and_then(|record| record.last_active_at);
+        cache.unknown_members.remove(&key);
+        cache.members.insert(
+            key,
+            RuntimeMemberRecord {
+                pid: Some(existing_pid),
+                state: RuntimeMemberState::IdentityConflict,
+                last_active_at,
+            },
+        );
+        Ok(())
+    }
+
+    fn cached_pid(&self, team: &TeamName, member: &AgentName) -> Result<Option<u32>, AtmError> {
+        let cache = self
+            .state
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
+        Ok(cache
+            .members
+            .get(&RuntimeMemberKey {
+                team: team.clone(),
+                member: member.clone(),
+            })
+            .and_then(|record| record.pid))
     }
 
     pub(crate) fn mark_sqlite_unavailable(&self) {
@@ -197,6 +257,25 @@ impl RuntimeStatusCache {
             .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
         Ok(build_runtime_snapshot_scoped(&cache, members))
     }
+
+    #[cfg(test)]
+    pub(crate) fn member_state_for_test(
+        &self,
+        team: &TeamName,
+        member: &AgentName,
+    ) -> Result<Option<RuntimeMemberState>, AtmError> {
+        let cache = self
+            .state
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
+        Ok(cache
+            .members
+            .get(&RuntimeMemberKey {
+                team: team.clone(),
+                member: member.clone(),
+            })
+            .map(|record| record.state))
+    }
 }
 
 fn build_runtime_snapshot_all(cache: &RuntimeStatusCacheState) -> RuntimeStatusSnapshot {
@@ -206,9 +285,12 @@ fn build_runtime_snapshot_all(cache: &RuntimeStatusCacheState) -> RuntimeStatusS
             RuntimeMemberState::Active => counts.active_members += 1,
             RuntimeMemberState::Idle => counts.idle_members += 1,
             RuntimeMemberState::Offline => counts.offline_members += 1,
-            RuntimeMemberState::Unknown => counts.unknown_members += 1,
+            RuntimeMemberState::Unknown | RuntimeMemberState::IdentityConflict => {
+                counts.unknown_members += 1
+            }
         }
     }
+    counts.unknown_members += cache.unknown_members.len();
     finish_runtime_snapshot(cache, counts)
 }
 
@@ -223,7 +305,11 @@ fn build_runtime_snapshot_scoped(
             Some(RuntimeMemberState::Active) => counts.active_members += 1,
             Some(RuntimeMemberState::Idle) => counts.idle_members += 1,
             Some(RuntimeMemberState::Offline) => counts.offline_members += 1,
-            Some(RuntimeMemberState::Unknown) | None => counts.unknown_members += 1,
+            Some(RuntimeMemberState::Unknown) | Some(RuntimeMemberState::IdentityConflict) => {
+                counts.unknown_members += 1
+            }
+            None if cache.unknown_members.contains(&key) => counts.unknown_members += 1,
+            None => counts.unknown_members += 1,
         }
     }
     finish_runtime_snapshot(cache, counts)
@@ -233,15 +319,32 @@ fn finish_runtime_snapshot(
     cache: &RuntimeStatusCacheState,
     counts: RuntimeStatusCounts,
 ) -> RuntimeStatusSnapshot {
-    let readiness = if cache.sqlite_ready {
-        RuntimeReadinessState::Ready
-    } else {
+    let conflict_count = cache
+        .members
+        .values()
+        .filter(|record| record.state == RuntimeMemberState::IdentityConflict)
+        .count();
+    let readiness = if !cache.sqlite_ready || cache.degraded_ingest || conflict_count > 0 {
         RuntimeReadinessState::Degraded
+    } else {
+        RuntimeReadinessState::Ready
     };
-    let detail = (!cache.sqlite_ready).then_some(
-        "sqlite-backed durable pid continuity is unavailable; runtime cache updates are degraded"
-            .to_string(),
-    );
+    let mut details = Vec::new();
+    if !cache.sqlite_ready {
+        details.push(
+            "sqlite-backed durable pid continuity is unavailable; runtime cache updates are degraded"
+                .to_string(),
+        );
+    }
+    if cache.degraded_ingest {
+        details.push("runtime heartbeat ingest is degraded".to_string());
+    }
+    if conflict_count > 0 {
+        details.push(format!(
+            "{conflict_count} runtime member identity conflict(s) require admin takeover or dead-pid retry"
+        ));
+    }
+    let detail = (!details.is_empty()).then(|| details.join("; "));
     RuntimeStatusSnapshot {
         liveness: RuntimeLivenessState::Running,
         readiness,
@@ -253,19 +356,35 @@ fn finish_runtime_snapshot(
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct DaemonRequestDispatcher {
     observability: DaemonObservability,
     status_cache: RuntimeStatusCache,
-    roster_db_path: Option<PathBuf>,
+    sqlite_boundary: Option<SqliteBoundaryAssembly>,
 }
 
 impl DaemonRequestDispatcher {
     pub(crate) fn new(home_dir: PathBuf, status_cache: RuntimeStatusCache) -> Self {
+        let sqlite_boundary = match assemble_default_boundary() {
+            Ok(boundary) => {
+                if let Err(error) =
+                    hydrate_runtime_status_cache(&status_cache, &home_dir, boundary.roster_store())
+                {
+                    tracing::warn!(%error, "failed to hydrate runtime status cache from sqlite roster state");
+                    status_cache.mark_sqlite_unavailable();
+                }
+                Some(boundary)
+            }
+            Err(error) => {
+                tracing::warn!(%error, "failed to assemble default sqlite boundary for daemon runtime health");
+                status_cache.mark_sqlite_unavailable();
+                None
+            }
+        };
         Self {
             observability: DaemonObservability::new(home_dir),
             status_cache,
-            roster_db_path: None,
+            sqlite_boundary,
         }
     }
 
@@ -275,10 +394,26 @@ impl DaemonRequestDispatcher {
         status_cache: RuntimeStatusCache,
         roster_db_path: PathBuf,
     ) -> Self {
+        let sqlite_boundary = match atm_rusqlite::assemble_boundary(&roster_db_path) {
+            Ok(boundary) => {
+                if let Err(error) =
+                    hydrate_runtime_status_cache(&status_cache, &home_dir, boundary.roster_store())
+                {
+                    tracing::warn!(%error, "failed to hydrate test runtime status cache from sqlite roster state");
+                    status_cache.mark_sqlite_unavailable();
+                }
+                Some(boundary)
+            }
+            Err(error) => {
+                tracing::warn!(%error, path = %roster_db_path.display(), "failed to assemble sqlite boundary for test daemon runtime health");
+                status_cache.mark_sqlite_unavailable();
+                None
+            }
+        };
         Self {
             observability: DaemonObservability::new(home_dir),
             status_cache,
-            roster_db_path: Some(roster_db_path),
+            sqlite_boundary,
         }
     }
 }
@@ -321,29 +456,35 @@ impl DaemonRequestDispatcher {
         &self,
         request: TeamMemberHeartbeatRequest,
     ) -> Result<TeamMemberHeartbeatResponse, AtmError> {
-        let assembly = match &self.roster_db_path {
-            Some(path) => assemble_boundary(path),
-            None => assemble_default_boundary(),
-        }
-        .inspect_err(|_| {
-            self.status_cache.mark_sqlite_unavailable();
-        })?;
-        let roster_store = assembly.roster_store();
-        let membership = roster_store.query_membership(
-            atm_core::boundary::RosterStoreQueryMembershipRequest {
-                team: request.team.clone(),
-                member: request.member.clone(),
-            },
-        )?;
-        if !membership.is_member {
-            return Err(AtmError::agent_not_found(
-                request.member.as_str(),
-                request.team.as_str(),
-            ));
-        }
-        if let Some(existing_pid) = membership.pid.filter(|pid| *pid != request.pid)
+        let roster_store = self
+            .sqlite_boundary
+            .as_ref()
+            .map(SqliteBoundaryAssembly::roster_store)
+            .ok_or_else(|| {
+                self.status_cache.mark_sqlite_unavailable();
+                AtmError::daemon_unavailable(
+                    "sqlite-backed durable pid continuity is unavailable for daemon heartbeats",
+                )
+            })?;
+        let cached_pid = self
+            .status_cache
+            .cached_pid(&request.team, &request.member)?;
+        let durable_pid = if cached_pid.is_some() {
+            None
+        } else {
+            let membership = roster_store.query_membership(
+                atm_core::boundary::RosterStoreQueryMembershipRequest {
+                    team: request.team.clone(),
+                    member: request.member.clone(),
+                },
+            )?;
+            membership.pid
+        };
+        if let Some(existing_pid) = cached_pid.or(durable_pid).filter(|pid| *pid != request.pid)
             && process_is_alive(existing_pid)
         {
+            self.status_cache
+                .record_identity_conflict(&request, existing_pid)?;
             return Err(AtmError::identity_conflict(
                 "ATM_IDENTITY_CONFLICT: stop and report to user immediately",
             ));
@@ -403,6 +544,63 @@ impl DaemonRequestDispatcher {
         report.runtime_status = Some(runtime_status);
         Ok(report)
     }
+}
+
+fn hydrate_runtime_status_cache(
+    status_cache: &RuntimeStatusCache,
+    home_dir: &std::path::Path,
+    roster_store: &dyn boundary::RosterStore,
+) -> Result<(), AtmError> {
+    let teams_root = home_dir.join(".claude").join("teams");
+    if !teams_root.is_dir() {
+        return Ok(());
+    }
+    for entry in std::fs::read_dir(&teams_root).map_err(|error| {
+        AtmError::file_policy(format!(
+            "failed to enumerate daemon team configs under {}",
+            teams_root.display()
+        ))
+        .with_source(error)
+    })? {
+        let entry = entry.map_err(|error| {
+            AtmError::file_policy(format!(
+                "failed to read daemon team-config entry under {}",
+                teams_root.display()
+            ))
+            .with_source(error)
+        })?;
+        let team_name = entry.file_name().to_string_lossy().into_owned();
+        let team: TeamName = team_name.parse()?;
+        let config_path = entry.path().join("config.json");
+        if !config_path.is_file() {
+            continue;
+        }
+        let raw = std::fs::read(&config_path).map_err(|error| {
+            AtmError::file_policy(format!(
+                "failed to read daemon team config {}",
+                config_path.display()
+            ))
+            .with_source(error)
+        })?;
+        let config: TeamConfig = serde_json::from_slice(&raw).map_err(|error| {
+            AtmError::config(format!(
+                "failed to parse daemon team config {}: {error}",
+                config_path.display()
+            ))
+            .with_source(error)
+        })?;
+        for member in config.members {
+            let member_name = member.name;
+            let _ = roster_store.query_membership(
+                atm_core::boundary::RosterStoreQueryMembershipRequest {
+                    team: team.clone(),
+                    member: member_name.clone(),
+                },
+            )?;
+            status_cache.hydrate_member(team.clone(), member_name)?;
+        }
+    }
+    Ok(())
 }
 
 fn runtime_status_finding(snapshot: &RuntimeStatusSnapshot) -> DoctorFinding {

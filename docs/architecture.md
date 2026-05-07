@@ -2450,6 +2450,13 @@ Minimum method set:
 - trigger owned ingress/reconcile handler
 - shut down watcher cleanly
 
+Current implementation note:
+- `R.17` implements this as a daemon-owned polling subscription runtime plus a
+  separate debounce/coalesce reconcile worker
+- watch refresh owns only source-path discovery and cached batches
+- reconcile triggers inbox ingress and notifier callbacks only through their
+  declared boundaries
+
 Boundary rule:
 - the watcher/reconcile subsystem owns filesystem watch events only
 - it must not perform SQL directly
@@ -2471,6 +2478,11 @@ Minimum method set:
 - notify message/task delivery
 - report live status update
 - return typed backpressure / unavailable results
+
+Current implementation note:
+- `R.17` implements a daemon-owned queued notifier worker with typed
+  unavailable/backpressure failures
+- notification delivery is no longer a tracing-only placeholder
 
 ### 21.6.2 Structured Error And Observability Boundaries
 

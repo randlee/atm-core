@@ -200,12 +200,13 @@ and cap/eviction behavior per daemon architecture.
 **Resolution**:
 - `RuntimeStatusCache` now owns daemon-memory member state keyed by
   `team/member`, including `last_active_at`
-- the cache is rebuilt from `unknown` on daemon startup and refreshed through
-  typed heartbeat events
+- the cache hydrates configured roster members as `unknown` on daemon startup,
+  consults durable SQLite pid continuity as startup fallback, and refreshes
+  thereafter through typed heartbeat events
 - the runtime snapshot now carries liveness, readiness, singleton-owner pid,
   SQLite-ready state, degraded-ingest state, and aggregate member counts
-- cache size is capped at `4096` entries with bounded eviction of the oldest
-  non-current member snapshot
+- cache size is capped at `4096` live entries with bounded eviction of the
+  oldest non-current member snapshot into explicit `unknown`
 
 ---
 
@@ -246,6 +247,8 @@ no admin takeover path for live-old-pid conflicts.
   persists durable pid continuity through `RosterStore::record_heartbeat(...)`
 - live-old-pid conflicts now fail with `ATM_IDENTITY_CONFLICT` and the exact
   stop/report message from `docs/team-member-state.md`
+- live-old-pid conflicts also persist `identity_conflict` runtime state until
+  admin takeover or dead-pid retry clears the member
 - dead-old-pid takeover updates durable pid continuity and returns
   `pid_changed = true`
 
@@ -291,9 +294,10 @@ projection into doctor command. Split liveness from readiness.
 
 ---
 
-### B-007 — Watch runtime is placeholder-level
+### ~~B-007 — Watch runtime is placeholder-level~~ CLOSED IN R.17
 **Source**: arch-ctm TASK-997 gap report item 7
-**Files**: `crates/atm-daemon/src/lib.rs` | `crates/atm-core/src/boundary_support.rs`
+**Closed on**: `feature/pR-s17-watch-reconcile`
+**Files**: `crates/atm-daemon/src/watch_runtime.rs` | `crates/atm-daemon/src/boundary_adapters.rs`
 
 `FileWatchEventSource` delegates to `boundary_support::poll_watch()`, which discovers
 paths once and returns. Not a real long-running watch subsystem. No subscription lifecycle,
@@ -316,11 +320,19 @@ polling/wake behavior, and structured runtime events.
 - should land with B-008 because the reconcile coordinator consumes watch
   events and needs the same ownership semantics
 
+**Resolution**:
+- `FileWatchEventSource` now fronts a daemon-owned polling subscription
+  registry in `atm_daemon::watch_runtime`
+- the watch lane starts and stops with `RuntimeComposition`
+- source-path discovery no longer forwards production behavior through the
+  one-shot `boundary_support::poll_watch(...)` helper
+
 ---
 
-### B-008 — Reconcile runtime is placeholder-level
+### ~~B-008 — Reconcile runtime is placeholder-level~~ CLOSED IN R.17
 **Source**: arch-ctm TASK-997 gap report item 8
-**Files**: `crates/atm-daemon/src/lib.rs` | `crates/atm-core/src/boundary_support.rs`
+**Closed on**: `feature/pR-s17-watch-reconcile`
+**Files**: `crates/atm-daemon/src/reconcile_runtime.rs` | `crates/atm-daemon/src/boundary_adapters.rs`
 
 `DaemonReconcileCoordinator` delegates to `boundary_support::reconcile()`, which does one
 poll + one import pass. No scheduling, no debounce/coalesce, no explicit ownership of
@@ -343,6 +355,13 @@ and explicit triggering/completion semantics.
   than one-shot path discovery
 - larger than it looks because notifier/runtime delivery (I-012) is the next
   downstream consumer of reconcile outcomes
+
+**Resolution**:
+- `DaemonReconcileCoordinator` now fronts a daemon-owned debounce/coalesce
+  worker in `atm_daemon::reconcile_runtime`
+- reconcile requests are coalesced by target and trigger watch polling,
+  inbox ingress, and notifier callbacks only through owned boundaries
+- production reconcile no longer forwards through `boundary_support::reconcile(...)`
 
 ---
 
@@ -552,17 +571,22 @@ lock timeouts.
 
 ---
 
-### I-012 — Daemon notification/plugin runtime delivery is placeholder-only
+### ~~I-012 — Daemon notification/plugin runtime delivery is placeholder-only~~ CLOSED IN R.17
 **Source**: arch-ctm TASK-997 gap report item 9
-**Files**: `crates/atm-daemon/src/lib.rs` | `crates/atm-core/src/boundary_support.rs`
+**Closed on**: `feature/pR-s17-watch-reconcile`
+**Files**: `crates/atm-daemon/src/notification_runtime.rs` | `crates/atm-daemon/src/boundary_adapters.rs`
 
 `DaemonNotificationSink` delegates to `boundary_support::deliver_notification()`, which
 just logs a notification-delivered event. Not a real notifier/plugin runtime. No actual
 daemon-owned notifier/plugin delivery adapter, no runtime boundary for local agent/plugin
 traffic, no failure/degradation handling.
 
-**Fix**: Implement daemon-owned notifier/plugin delivery adapter with failure and
-degradation handling.
+**Resolution**:
+- `DaemonNotificationSink` now fronts a daemon-owned queued worker in
+  `atm_daemon::notification_runtime`
+- delivery returns typed unavailable/backpressure failures at the boundary
+- production notification delivery no longer degrades to the generic
+  `boundary_support::deliver_notification(...)` tracing helper
 
 ---
 
@@ -597,13 +621,18 @@ typed reload failure that does not corrupt serving state.
 **Files**: multiple in `crates/atm-daemon/src/`
 
 `DaemonConfigIngress`, `DaemonInboxIngress`, `DaemonInboxExport`, `DaemonStatusSource`,
-`FileWatchEventSource`, `DaemonReconcileCoordinator` all exist as types but several
-forward straight into generic `boundary_support` helpers instead of daemon-owned runtime
-state/subsystems. Runtime-owned boundaries were declared but not turned into
-runtime-owned implementations.
+`FileWatchEventSource`, `DaemonReconcileCoordinator`, and `DaemonNotificationSink`
+all exist as types but several originally forwarded straight into generic
+helpers instead of daemon-owned runtime state/subsystems.
 
 **Note**: This is the code-level form of the parity gap — the boundary surface looks
 complete structurally but does not own or manage runtime state.
+
+**R.17 update**:
+- the watch, reconcile, and notifier portions of this finding are now closed
+  by `atm_daemon::{watch_runtime,reconcile_runtime,notification_runtime}`
+- the remaining residual scope is limited to config/inbox passthrough adapters
+  and any final boundary/doc closeout work in `R.18`
 
 ---
 
@@ -726,12 +755,9 @@ From arch-ctm TASK-997 gap report:
 - singleton/test/lint/Windows hardening
 - bounded framing, transport seams, test fidelity migration
 
-**What Phase R did NOT deliver** (all B-003 through B-009 above):
-- Full production daemon runtime with owned runtime subsystems
-- Host-wide singleton (B-001, B-002)
-- Runtime lifecycle orchestration (B-003)
-- Status cache, heartbeat, health, watch, reconcile (B-004 through B-008)
-- Peer transport (B-009)
+**What remains after R.17**:
+- config reload / serving-config validation (`I-014`)
+- remaining boundary/doc closeout and residual runtime hardening (`R.18`)
 
 ---
 
@@ -740,7 +766,7 @@ From arch-ctm TASK-997 gap report:
 | Crate | Score | Main blocker |
 |-------|-------|-------------|
 | `atm-core` | 4/5 | Placeholder boundary_support-backed runtime behavior; test-support/env seams close to core |
-| `atm-daemon` | 2/5 | Host-wide singleton not host-wide; `RuntimeComposition::start()` stubbed; peer transport stubbed; status/watch/reconcile placeholders |
+| `atm-daemon` | 4/5 | Remaining blocker is config reload / final closeout, not the main runtime lanes |
 | `atm-rusqlite` | 4/5 | Mostly blocked by daemon/runtime integration incompleteness, not its own shape |
 | `atm` | 3/5 | Transport seams + lint gate improved; extraction still depends on singleton gate semantics + stable daemon contract |
 
@@ -758,7 +784,7 @@ continuation plan now that `R.13` through `R.18` are defined below.
 | 2 | Heartbeat/status-cache (B-004, B-005) + doctor health (B-006) |
 | 3 | Peer transport (B-009) + remote retry/recovery (I-013) |
 | 4 | Watch (B-007) + reconcile (B-008) + notifier runtime (I-012) |
-| 5 | Panic removal (I-001, I-002) + config reload (I-014) + final production-hardening sweep |
+| 5 | Config reload (I-014) + final production-hardening sweep |
 
 ## REVISED CONTINUATION SPRINT SEQUENCE
 

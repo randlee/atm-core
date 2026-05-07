@@ -76,6 +76,10 @@ Purpose:
 - Owns the runtime file-watch implementation behind the WatchEventSource contract.
 
 Notes:
+- The active implementation is a daemon-owned polling subscription registry in
+  `atm_daemon::watch_runtime`.
+- It maintains long-lived watch state behind the boundary and refreshes
+  registered subscriptions on a bounded wake interval.
 - This adapter captures events only; it does not own reconcile policy.
 
 ## DaemonReconcileCoordinatorAdapter
@@ -88,7 +92,11 @@ Purpose:
 - Owns the runtime implementation of reconcile policy behind the ReconcileCoordinator contract.
 
 Notes:
-- This adapter should trigger ingress/service work without bypassing other boundaries.
+- The active implementation is a daemon-owned debounce/coalesce worker in
+  `atm_daemon::reconcile_runtime`.
+- It triggers watch polling, inbox ingress, and notifier callbacks only through
+  their owned boundaries; it does not reach around into store or transport
+  internals.
 
 ## DaemonRequestDispatcherAdapter
 
@@ -163,7 +171,11 @@ Purpose:
 - Owns the daemon runtime adapter behind the NotificationSink contract.
 
 Notes:
-- This keeps process-spawn or plugin-style delivery out of service logic.
+- The active implementation is a daemon-owned queued worker in
+  `atm_daemon::notification_runtime`.
+- It returns typed unavailable/backpressure failures at the boundary and
+  persists delivered events through the runtime-owned notifier path instead of
+  degrading to tracing-only behavior.
 
 ## DaemonStatusSourceAdapter
 

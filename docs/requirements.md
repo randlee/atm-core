@@ -2776,6 +2776,11 @@ mail correctness.
   - the transport boundary must not absorb watcher responsibilities
   - any violation of this watcher isolation rule is a direct QA failure for
     the Phase Q implementation line
+  - the daemon implementation may use a bounded polling watch registry instead
+    of OS-native filesystem subscriptions, but the watch lifecycle must remain
+    daemon-owned and long-lived rather than one-shot helper calls
+  - reconcile triggering must support debounce/coalesce so repeated identical
+    requests do not fan out into duplicate import work
 
 - `REQ-CORE-TRANSPORT-002` Cross-host traffic must be daemon-to-daemon only.
 

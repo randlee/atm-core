@@ -122,6 +122,9 @@ pub(crate) struct RuntimeComposition {
 impl RuntimeComposition {
     fn new(home_dir: PathBuf) -> Self {
         let status_cache = RuntimeStatusCache::new();
+        let notification_sink = DaemonNotificationSink::new();
+        let watch_event_source = FileWatchEventSource::new();
+        let inbox_ingress = DaemonInboxIngress::new();
         Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
             server_transport: LocalSocketServerTransport::new(),
@@ -129,12 +132,16 @@ impl RuntimeComposition {
                 home_dir,
                 status_cache.clone(),
             )),
-            _notification_sink: DaemonNotificationSink::new(),
+            _notification_sink: notification_sink.clone(),
             _status_source: DaemonStatusSource::new(status_cache),
-            _watch_event_source: FileWatchEventSource::new(),
-            _reconcile_coordinator: DaemonReconcileCoordinator::new(),
+            _watch_event_source: watch_event_source.clone(),
+            _reconcile_coordinator: DaemonReconcileCoordinator::new(
+                watch_event_source,
+                inbox_ingress.clone(),
+                notification_sink,
+            ),
             _config_ingress: DaemonConfigIngress::new(),
-            _inbox_ingress: DaemonInboxIngress::new(),
+            _inbox_ingress: inbox_ingress,
             _inbox_export: DaemonInboxExport::new(),
             peer_transport_runtime: PeerTransportRuntime::new(),
         }
@@ -145,9 +152,14 @@ impl RuntimeComposition {
     }
     pub(crate) fn start(&self) -> Result<(), AtmError> {
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
+        if let Err(error) = self.start_background_lanes() {
+            self.lifecycle.force_stopped()?;
+            return Err(error);
+        }
         let runtime = match self.server_transport.prepare_runtime() {
             Ok(runtime) => runtime,
             Err(error) => {
+                let _ = self.shutdown_background_lanes();
                 self.lifecycle.force_stopped()?;
                 return Err(error);
             }
@@ -175,12 +187,17 @@ impl RuntimeComposition {
         socket_path: PathBuf,
     ) -> Result<(), AtmError> {
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
+        if let Err(error) = self.start_background_lanes() {
+            self.lifecycle.force_stopped()?;
+            return Err(error);
+        }
         let runtime = match self
             .server_transport
             .prepare_runtime_at_socket_path(socket_path)
         {
             Ok(runtime) => runtime,
             Err(error) => {
+                let _ = self.shutdown_background_lanes();
                 self.lifecycle.force_stopped()?;
                 return Err(error);
             }
@@ -219,7 +236,22 @@ impl RuntimeComposition {
         if state_result.is_err() {
             self.lifecycle.force_stopped()?;
         }
-        result
+        let shutdown_result = self.shutdown_background_lanes();
+        result.and(shutdown_result)
+    }
+
+    fn start_background_lanes(&self) -> Result<(), AtmError> {
+        self._notification_sink.start()?;
+        self._watch_event_source.start()?;
+        self._reconcile_coordinator.start()?;
+        Ok(())
+    }
+
+    fn shutdown_background_lanes(&self) -> Result<(), AtmError> {
+        self._reconcile_coordinator.shutdown()?;
+        self._watch_event_source.shutdown()?;
+        self._notification_sink.shutdown()?;
+        Ok(())
     }
 }
 
