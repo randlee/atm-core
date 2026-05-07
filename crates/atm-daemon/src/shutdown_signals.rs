@@ -67,3 +67,12 @@ pub fn request_shutdown_for_test() -> Result<(), AtmError> {
     signals.terminate.store(true, Ordering::SeqCst);
     Ok(())
 }
+
+#[cfg(unix)]
+#[doc(hidden)]
+pub fn reset_shutdown_signals_for_test() -> Result<(), AtmError> {
+    let signals = DaemonShutdownSignals::install()?;
+    signals.terminate.store(false, Ordering::SeqCst);
+    signals.reload.store(false, Ordering::SeqCst);
+    Ok(())
+}
