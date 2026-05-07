@@ -24,20 +24,40 @@ pub fn env_lock() -> &'static Mutex<()> {
 
 #[cfg(any(test, feature = "test-utils"))]
 pub struct EnvGuard {
+    restorations: Vec<EnvRestore>,
+    _guard: MutexGuard<'static, ()>,
+}
+
+#[cfg(any(test, feature = "test-utils"))]
+struct EnvRestore {
     key: &'static str,
     original: Option<OsString>,
-    _guard: MutexGuard<'static, ()>,
 }
 
 #[cfg(any(test, feature = "test-utils"))]
 impl EnvGuard {
     pub fn set_raw(key: &'static str, value: &str) -> Self {
+        Self::set_many([(key, Some(value))])
+    }
+
+    pub fn unset_raw(key: &'static str) -> Self {
+        Self::set_many([(key, None)])
+    }
+
+    pub fn set_many<const N: usize>(changes: [(&'static str, Option<&str>); N]) -> Self {
         let guard = env_lock().lock().expect("env lock");
-        let original = std::env::var_os(key);
-        set_env_var(key, value);
         Self {
-            key,
-            original,
+            restorations: changes
+                .into_iter()
+                .map(|(key, value)| {
+                    let original = std::env::var_os(key);
+                    match value {
+                        Some(value) => set_env_var(key, value),
+                        None => remove_env_var(key),
+                    }
+                    EnvRestore { key, original }
+                })
+                .collect(),
             _guard: guard,
         }
     }
@@ -46,9 +66,11 @@ impl EnvGuard {
 #[cfg(any(test, feature = "test-utils"))]
 impl Drop for EnvGuard {
     fn drop(&mut self) {
-        match self.original.take() {
-            Some(value) => set_env_var(self.key, value),
-            None => remove_env_var(self.key),
+        for restore in self.restorations.iter_mut().rev() {
+            match restore.original.take() {
+                Some(value) => set_env_var(restore.key, value),
+                None => remove_env_var(restore.key),
+            }
         }
     }
 }
