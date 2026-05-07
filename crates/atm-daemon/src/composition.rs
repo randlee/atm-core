@@ -29,6 +29,8 @@ pub(crate) enum RuntimeLifecycleState {
 #[cfg_attr(not(unix), allow(dead_code))]
 #[derive(Debug, Default)]
 pub(crate) struct RuntimeLifecycle {
+    /// A single mutex is sufficient here because lifecycle transitions are
+    /// serialized control-plane events, not a high-frequency data path.
     state: Mutex<RuntimeLifecycleState>,
 }
 
@@ -42,6 +44,15 @@ impl RuntimeLifecycle {
         *self.state.lock().expect("runtime lifecycle state lock")
     }
 
+    /// Transition the daemon runtime lifecycle to `next`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] with
+    /// [`atm_core::error_codes::AtmErrorCode::Validation`] when `next` would
+    /// violate the documented state machine, or
+    /// [`atm_core::error_codes::AtmErrorCode::DaemonUnavailable`] when the
+    /// lifecycle lock is poisoned.
     pub(crate) fn transition(
         &self,
         next: RuntimeLifecycleState,
@@ -72,12 +83,20 @@ impl RuntimeLifecycle {
         ) {
             return Err(AtmError::validation(format!(
                 "illegal daemon runtime lifecycle transition: {current:?} -> {next:?}"
-            )));
+            ))
+            .with_recovery("Enter daemon exclusively through RuntimeComposition::start()."));
         }
         *state = next;
         Ok(next)
     }
 
+    /// Force the daemon runtime lifecycle back to `Stopped`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] with
+    /// [`atm_core::error_codes::AtmErrorCode::DaemonUnavailable`] when the
+    /// lifecycle lock is poisoned while resetting the runtime state.
     pub(crate) fn force_stopped(&self) -> Result<(), AtmError> {
         let mut state = self
             .state
@@ -89,23 +108,23 @@ impl RuntimeLifecycle {
 }
 
 /// Internal root for Phase R daemon runtime wiring.
-#[allow(dead_code)]
+#[cfg_attr(not(unix), allow(dead_code))]
 #[derive(Debug)]
 pub(crate) struct RuntimeComposition {
     lifecycle: Arc<RuntimeLifecycle>,
     server_transport: LocalSocketServerTransport,
     request_dispatcher: Arc<DaemonRequestDispatcher>,
-    notification_sink: DaemonNotificationSink,
-    status_source: DaemonStatusSource,
-    watch_event_source: FileWatchEventSource,
-    reconcile_coordinator: DaemonReconcileCoordinator,
-    config_ingress: DaemonConfigIngress,
-    inbox_ingress: DaemonInboxIngress,
-    inbox_export: DaemonInboxExport,
+    _notification_sink: DaemonNotificationSink,
+    _status_source: DaemonStatusSource,
+    _watch_event_source: FileWatchEventSource,
+    _reconcile_coordinator: DaemonReconcileCoordinator,
+    _config_ingress: DaemonConfigIngress,
+    _inbox_ingress: DaemonInboxIngress,
+    _inbox_export: DaemonInboxExport,
     peer_transport_runtime: PeerTransportRuntime,
 }
 
-#[allow(dead_code)]
+#[cfg_attr(not(unix), allow(dead_code))]
 impl RuntimeComposition {
     fn new(home_dir: PathBuf) -> Self {
         let status_cache = RuntimeStatusCache::new();
@@ -116,19 +135,15 @@ impl RuntimeComposition {
                 home_dir,
                 status_cache.clone(),
             )),
-            notification_sink: DaemonNotificationSink::new(),
-            status_source: DaemonStatusSource::new(status_cache),
-            watch_event_source: FileWatchEventSource::new(),
-            reconcile_coordinator: DaemonReconcileCoordinator::new(),
-            config_ingress: DaemonConfigIngress::new(),
-            inbox_ingress: DaemonInboxIngress::new(),
-            inbox_export: DaemonInboxExport::new(),
+            _notification_sink: DaemonNotificationSink::new(),
+            _status_source: DaemonStatusSource::new(status_cache),
+            _watch_event_source: FileWatchEventSource::new(),
+            _reconcile_coordinator: DaemonReconcileCoordinator::new(),
+            _config_ingress: DaemonConfigIngress::new(),
+            _inbox_ingress: DaemonInboxIngress::new(),
+            _inbox_export: DaemonInboxExport::new(),
             peer_transport_runtime: PeerTransportRuntime::new(),
         }
-    }
-
-    fn notification_sink(&self) -> &dyn NotificationSink {
-        &self.notification_sink
     }
 
     fn request_dispatcher(&self) -> Arc<dyn RequestDispatcher + Send + Sync> {
@@ -136,33 +151,32 @@ impl RuntimeComposition {
     }
 
     fn status_source(&self) -> &dyn StatusSource {
-        &self.status_source
+        &self._status_source
     }
 
     fn watch_event_source(&self) -> &dyn WatchEventSource {
-        &self.watch_event_source
+        &self._watch_event_source
     }
 
     fn reconcile_coordinator(&self) -> &dyn ReconcileCoordinator {
-        &self.reconcile_coordinator
+        &self._reconcile_coordinator
     }
 
     fn config_ingress(&self) -> &dyn ConfigIngress {
-        &self.config_ingress
+        &self._config_ingress
     }
 
     fn inbox_ingress(&self) -> &dyn InboxIngress {
-        &self.inbox_ingress
+        &self._inbox_ingress
     }
 
     fn inbox_export(&self) -> &dyn InboxExport {
-        &self.inbox_export
+        &self._inbox_export
     }
 
     fn peer_client_transport(&self) -> &dyn ClientTransport {
         self.peer_transport_runtime.client_transport()
     }
-
     pub(crate) fn start(&self) -> Result<(), AtmError> {
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
         let runtime = match self.server_transport.prepare_runtime() {
@@ -243,6 +257,7 @@ impl RuntimeComposition {
     }
 }
 
+#[cfg(unix)]
 fn validate_runtime_socket_path() -> Result<(), AtmError> {
     let socket_path = atm_core::protocol::daemon_socket_path()?;
     if socket_path.as_os_str().is_empty() {
@@ -294,7 +309,7 @@ fn validate_runtime_socket_path() -> Result<(), AtmError> {
             .with_source(source)
         })?;
     if let Err(error) = std::fs::remove_file(&probe_path) {
-        tracing::debug!(
+        tracing::warn!(
             path = %probe_path.display(),
             %error,
             "failed to remove daemon socket write probe file"
@@ -303,9 +318,56 @@ fn validate_runtime_socket_path() -> Result<(), AtmError> {
     Ok(())
 }
 
+#[cfg(unix)]
+fn validate_runtime_home_dir(home_dir: &std::path::Path) -> Result<(), AtmError> {
+    std::fs::create_dir_all(home_dir).map_err(|source| {
+        AtmError::daemon_unavailable(format!(
+            "failed to create atm-daemon home directory at {}",
+            home_dir.display()
+        ))
+        .with_recovery(
+            "Grant write access to ATM_HOME or choose a writable daemon home directory before starting atm-daemon.",
+        )
+        .with_source(source)
+    })?;
+    let probe_path = home_dir.join(format!(".atm-daemon-home-probe-{}", std::process::id()));
+    OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&probe_path)
+        .map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "atm-daemon home directory is not writable at {}",
+                home_dir.display()
+            ))
+            .with_recovery(
+                "Grant write access to ATM_HOME or point ATM_HOME at a writable directory before retrying.",
+            )
+            .with_source(source)
+        })?;
+    if let Err(error) = std::fs::remove_file(&probe_path) {
+        tracing::warn!(
+            path = %probe_path.display(),
+            %error,
+            "failed to remove atm-daemon home write probe file"
+        );
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn validate_runtime_socket_path() -> Result<(), AtmError> {
+    Err(AtmError::daemon_unavailable(
+        "atm-daemon socket transport requires a Unix platform",
+    ))
+}
+
 pub(crate) fn compose_runtime() -> Result<RuntimeComposition, AtmError> {
     validate_runtime_socket_path()?;
-    Ok(RuntimeComposition::new(atm_core::home::atm_home()?))
+    let home_dir = atm_core::home::atm_home()?;
+    validate_runtime_home_dir(&home_dir)?;
+    Ok(RuntimeComposition::new(home_dir))
 }
 
 #[cfg(test)]
@@ -334,13 +396,55 @@ mod tests {
     }
 
     #[test]
+    fn runtime_lifecycle_happy_path_matches_documented_owner_sequence() {
+        let lifecycle = RuntimeLifecycle::new();
+
+        assert_eq!(
+            lifecycle
+                .transition(RuntimeLifecycleState::Starting)
+                .expect("stopped -> starting"),
+            RuntimeLifecycleState::Starting
+        );
+        assert_eq!(
+            lifecycle
+                .transition(RuntimeLifecycleState::Running)
+                .expect("starting -> running"),
+            RuntimeLifecycleState::Running
+        );
+        assert_eq!(
+            lifecycle
+                .transition(RuntimeLifecycleState::Draining)
+                .expect("running -> draining"),
+            RuntimeLifecycleState::Draining
+        );
+        assert_eq!(
+            lifecycle
+                .transition(RuntimeLifecycleState::Stopped)
+                .expect("draining -> stopped"),
+            RuntimeLifecycleState::Stopped
+        );
+    }
+
+    #[test]
     fn runtime_lifecycle_rejects_illegal_transitions() {
         let lifecycle = RuntimeLifecycle::new();
-        let error = lifecycle
+        let stopped_to_running = lifecycle
             .transition(RuntimeLifecycleState::Running)
-            .expect_err("illegal transition");
+            .expect_err("illegal stopped -> running transition");
         assert!(
-            error
+            stopped_to_running
+                .to_string()
+                .contains("illegal daemon runtime lifecycle transition")
+        );
+
+        lifecycle
+            .transition(RuntimeLifecycleState::Starting)
+            .expect("stopped -> starting");
+        let starting_to_starting = lifecycle
+            .transition(RuntimeLifecycleState::Starting)
+            .expect_err("illegal starting -> starting transition");
+        assert!(
+            starting_to_starting
                 .to_string()
                 .contains("illegal daemon runtime lifecycle transition")
         );
