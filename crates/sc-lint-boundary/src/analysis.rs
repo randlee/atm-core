@@ -68,7 +68,7 @@ pub(crate) fn analyze_cycles(graph: &GraphExport) -> Vec<Finding> {
                 edge.source_kind == "method"
                     && edge.owner_kind == "type"
                     && edge.target_owner_id == edge.source_owner_id
-                    && edge.source_impl_kind != Some("trait")
+                    && edge.source_impl_kind != Some(ImplKind::Trait)
             });
             if is_type_method_self_loop {
                 let has_expr_ref = source_edges
@@ -92,7 +92,7 @@ pub(crate) fn analyze_cycles(graph: &GraphExport) -> Vec<Finding> {
                 edge.source_kind == "method"
                     && edge.owner_kind == "type"
                     && edge.target_owner_id == edge.source_owner_id
-                    && edge.source_impl_kind == Some("trait")
+                    && edge.source_impl_kind == Some(ImplKind::Trait)
             });
             if is_trait_impl_self_loop {
                 let trait_name = node_map
@@ -305,7 +305,7 @@ struct OwnerRefEdge {
     owner_kind: &'static str,
     source_kind: &'static str,
     source_node_id: NodeId,
-    source_impl_kind: Option<&'static str>,
+    source_impl_kind: Option<ImplKind>,
     reference_kind: ReferenceKind,
     node_ids: Vec<NodeId>,
 }

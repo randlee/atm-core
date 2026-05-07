@@ -349,7 +349,7 @@ pub struct GraphNode {
     pub manifest_path: String,
     pub source_path: Option<String>,
     pub module_path: Option<String>,
-    pub impl_kind: Option<&'static str>,
+    pub impl_kind: Option<ImplKind>,
     pub impl_trait: Option<String>,
     pub attributes: Vec<LintAttribute>,
 }
@@ -372,6 +372,22 @@ impl ReferenceKind {
         match self {
             Self::Type => "references_type",
             Self::Expr => "references_expr",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ImplKind {
+    Trait,
+    Inherent,
+}
+
+impl ImplKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Trait => "trait",
+            Self::Inherent => "inherent",
         }
     }
 }

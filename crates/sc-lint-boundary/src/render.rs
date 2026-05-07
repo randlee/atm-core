@@ -84,7 +84,7 @@ fn render_graph_turtle(graph: &GraphExport) -> String {
         if let Some(impl_kind) = node.impl_kind {
             lines.push(format!(
                 "{subject} sc:implKind {} .",
-                turtle_string_literal(impl_kind)
+                turtle_string_literal(impl_kind.as_str())
             ));
         }
         if let Some(impl_trait) = &node.impl_trait {
