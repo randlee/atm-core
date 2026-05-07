@@ -38,7 +38,7 @@ This sprint closes the current runtime-admission gap: host-wide launch/serve own
 
 ## Prerequisites
 
-- `sc-lint` inventory-parity and planning-metadata gates are available for use as the Phase R continuation implementation gate.
+- `sc-lint` inventory-parity and planning-metadata verification support is available as the external prerequisite gate for Phase R continuation work.
 - Process gates `PG-001` through `PG-004` from `docs/phase-R/issues.md` are approved and in effect before coding starts.
 
 ## Hard Dependencies
@@ -119,4 +119,3 @@ Do not split unless the lifecycle state machine lands cleanly but the host-wide 
 - fixing only one of the two lock paths recreates split ownership under alternate config
 - lifecycle code must not reintroduce daemon-internal bypasses around the dispatcher or transport boundaries
 - shutdown tests must not rely on open-ended sleeps or timing luck
-

@@ -56,10 +56,23 @@ This sprint covers the outbound remote-delivery lane: peer framing, typed timeou
    Development work:
    - replace `PeerClientTransport::send()` stub with real outbound request framing
    - implement timeout/retry semantics for remote daemon acceptance
+   - classify retryable vs non-retryable socket/network/TLS/protocol failures
+   - define one typed `RemoteDeliveryOutcomeUnknown` path for drop-after-send /
+     acceptance-unknown cases
+   - keep the default total remote retry budget at `30s`, with one documented
+     config override (`daemon.remote_retry_budget`) for operators who need a
+     longer window
+   - make outbound connect attempts and inbound listener behavior explicit
+     under local interface churn and rebinding
    - keep remote transport on the shared ATM protocol rather than a side API
    Required tests:
    - request/response framing tests
    - retry/timeout tests with deterministic fake peer behavior
+   - retry classification tests covering timeout/refused/reset/unreachable vs
+     TLS/protocol/reject failures
+   - unknown-outcome tests for disconnect-after-write-before-acceptance
+   - listener rebinding tests for wildcard bind survival and explicit-address
+     reload/degraded behavior
    Required doc or boundary updates:
    - update daemon transport architecture if any DTO or timeout names change
 
@@ -82,6 +95,15 @@ Do not split peer transport from replay unless the replay state model is still b
 
 - `PeerClientTransport::send()` no longer returns a stub error
 - remote delivery uses the shared protocol framing and typed retry/timeout behavior
+- retryable and non-retryable peer failures are documented and covered by
+  deterministic tests
+- `RemoteDeliveryOutcomeUnknown` exists as the typed result for
+  drop-after-send / acceptance-unknown paths
+- the default `30s` remote retry budget and its config override are documented
+  and validated
+- listener/interface rebinding behavior is explicit: wildcard binds survive
+  ordinary interface churn without restart; explicit-address binds degrade and
+  require reload/rebind when that address disappears
 - replay state survives crash/restart and resumes pending export/remote work without duplicating committed local state
 - operator-visible degraded/failure paths exist for replay exhaustion or remote unavailability
 
@@ -102,4 +124,3 @@ Do not split peer transport from replay unless the replay state model is still b
 
 - durable replay must preserve local commit ordering; do not invent a best-effort outbox that can drift from SQLite truth
 - peer transport should reuse the shared request/response envelopes rather than forking the protocol family
-

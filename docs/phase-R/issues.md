@@ -311,6 +311,13 @@ integration into runtime routing.
   must participate in startup/shutdown
 - should land with I-013 because durable replay/re-export only makes sense once
   the outbound peer path exists
+- must also define:
+  - exact retryable socket/network error classes vs non-retryable protocol/TLS
+    failures
+  - one typed `RemoteDeliveryOutcomeUnknown` error for drop-after-send /
+    acceptance-unknown paths
+  - whether listener rebinding survives ordinary local interface churn without
+    reload and when explicit-address binds require degraded status plus reload
 
 ---
 
@@ -716,7 +723,7 @@ Prerequisite:
 
 Two items planned for arch-inj's next sprint after feature/pR-s3-boundary-lint merges:
 
-1. **Boundary lint warn/error enforcement model** (arch-ctm proposal):
+1. **Boundary lint warn/error verification model** (arch-ctm proposal):
    - Inventory-parity checks against boundary inventory (implementation.module, implementation.type, public.trait, composition.root)
    - WARN for items planned in future sprint (structured mapping: item key + sprint + task id + expiry)
    - ERROR for unplanned gaps — fails immediately

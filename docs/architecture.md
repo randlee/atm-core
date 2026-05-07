@@ -2498,7 +2498,8 @@ Phase R operational defaults:
 - same-host daemon request deadline: `3s`
 - per-leg TCP/TLS connect deadline: `5s`
 - per-leg TCP/TLS read/write deadline: `5s`
-- total remote retry budget: `30s`
+- total remote retry budget default: `30s` via
+  `daemon.remote_retry_budget`
 - SQLite `busy_timeout`: `5000ms`
   - authoritative since `R.5`; supersedes the pre-`R.5` `1500ms` baseline
 - ingest batch processing slice: `2s`
@@ -2516,6 +2517,31 @@ Required signal behavior:
 - install `SIGINT`/`SIGTERM`/`SIGHUP` handling before listeners accept
 - `SIGINT` and `SIGTERM` enter graceful shutdown
 - `SIGHUP` triggers bounded rescan/reload without dropping singleton ownership
+
+Remote peer transport rules:
+- retryable remote peer failures are limited to transient socket/network
+  failures before remote acceptance:
+  - timeout
+  - connection refused
+  - connection reset / aborted
+  - broken pipe
+  - host unreachable / network unreachable
+- non-retryable failures include:
+  - protocol/frame decode failures
+  - TLS/certificate/authentication mismatch
+  - explicit remote daemon rejection
+- if a connection drops after the request write completes but before the remote
+  daemon confirms acceptance, the send result is one typed
+  `RemoteDeliveryOutcomeUnknown` failure (`ATM_REMOTE_OUTCOME_UNKNOWN`)
+- outbound peer delivery must resolve and open a fresh connection per attempt;
+  ordinary local interface changes must not require daemon restart for new
+  outbound attempts
+- TCP/TLS listeners bound to wildcard/unspecified local addresses must remain
+  the default so cable/unplug or Wi-Fi/ethernet rebinding does not require
+  restart in the normal case
+- if an operator binds the listener to one explicit local address and that
+  address disappears or changes, the daemon must surface degraded status and
+  require bounded reload/rebind rather than silently claiming readiness
 
 Accepted limitations tracked into `R.11`:
 - per-connection inflight cap `32` is documented now, but the current daemon
