@@ -1,3 +1,4 @@
+#![cfg(unix)]
 use std::ffi::OsString;
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
