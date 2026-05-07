@@ -1,5 +1,6 @@
 use std::io::{self, Write};
 use std::net::{Shutdown, SocketAddr, TcpStream};
+#[cfg(test)]
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
@@ -13,7 +14,6 @@ use atm_core::protocol::{
     TeamMemberHeartbeatRequest,
 };
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
-use atm_rusqlite::{RemoteReplayStateRecord, SqliteBoundaryAssembly};
 
 const PEER_CONNECT_DEADLINE: Duration = Duration::from_secs(5);
 const PEER_IO_DEADLINE: Duration = Duration::from_secs(5);
@@ -72,38 +72,32 @@ impl AtmProtocol for JsonAtmProtocolCodec {
 }
 
 #[derive(Debug, Clone)]
-struct SqliteRemoteReplayStore {
-    assembly: Arc<SqliteBoundaryAssembly>,
+pub(crate) struct RemoteReplayStateRecord {
+    pub(crate) team: TeamName,
+    pub(crate) agent: AgentName,
+    pub(crate) message_key: MessageKey,
+    pub(crate) peer_addr: String,
+    pub(crate) request: RequestEnvelope,
+    pub(crate) recorded_at: IsoTimestamp,
+    pub(crate) expires_at: IsoTimestamp,
+    pub(crate) attempt_count: u32,
+    pub(crate) last_attempt_at: Option<IsoTimestamp>,
+    pub(crate) last_error: Option<String>,
 }
 
-impl SqliteRemoteReplayStore {
-    fn from_path(db_path: PathBuf) -> Result<Self, AtmError> {
-        Ok(Self {
-            assembly: Arc::new(SqliteBoundaryAssembly::new(db_path)?),
-        })
-    }
+pub(crate) trait RemoteReplayStore: Send + Sync + std::fmt::Debug {
+    fn enqueue(&self, record: RemoteReplayStateRecord) -> Result<(), AtmError>;
 
-    fn enqueue(&self, record: RemoteReplayStateRecord) -> Result<(), AtmError> {
-        self.assembly.record_remote_replay_state(record)
-    }
-
-    fn load_all(&self) -> Result<Vec<RemoteReplayStateRecord>, AtmError> {
-        self.assembly.load_remote_replay_states()
-    }
+    fn load_all(&self) -> Result<Vec<RemoteReplayStateRecord>, AtmError>;
 
     fn delete(
         &self,
         team: &TeamName,
         agent: &AgentName,
         message_key: &MessageKey,
-    ) -> Result<(), AtmError> {
-        self.assembly
-            .delete_remote_replay_state(team, agent, message_key)
-    }
+    ) -> Result<(), AtmError>;
 
-    fn purge_expired(&self, now: IsoTimestamp) -> Result<usize, AtmError> {
-        self.assembly.purge_expired_remote_replay_states(now)
-    }
+    fn purge_expired(&self, now: IsoTimestamp) -> Result<usize, AtmError>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -130,12 +124,12 @@ pub(crate) struct ReplayResumeSummary {
 struct PeerClientTransport {
     endpoint: Option<SocketAddr>,
     config: PeerTransportConfig,
-    replay_store: Option<SqliteRemoteReplayStore>,
+    replay_store: Option<Arc<dyn RemoteReplayStore>>,
     codec: JsonAtmProtocolCodec,
 }
 
 impl PeerClientTransport {
-    fn new() -> Self {
+    fn new(replay_store: Option<Arc<dyn RemoteReplayStore>>) -> Self {
         let endpoint = std::env::var("ATM_DAEMON_PEER_ADDR")
             .ok()
             .and_then(|value| value.parse::<SocketAddr>().ok());
@@ -148,15 +142,6 @@ impl PeerClientTransport {
             })
             .map(|config| PeerTransportConfig::from_config(Some(&config)))
             .unwrap_or_default();
-        let replay_store = atm_core::home::host_mail_db_path()
-            .ok()
-            .and_then(|db_path| match SqliteRemoteReplayStore::from_path(db_path) {
-                Ok(store) => Some(store),
-                Err(error) => {
-                    tracing::warn!(%error, "remote replay store unavailable; outcome-unknown delivery cannot be persisted");
-                    None
-                }
-            });
         Self {
             endpoint,
             config,
@@ -171,12 +156,12 @@ impl PeerClientTransport {
         config: PeerTransportConfig,
         replay_db_path: PathBuf,
     ) -> Self {
+        let replay_store =
+            crate::sqlite_remote_replay_store_from_path(replay_db_path).expect("replay store");
         Self {
             endpoint: Some(endpoint),
             config,
-            replay_store: Some(
-                SqliteRemoteReplayStore::from_path(replay_db_path).expect("replay store"),
-            ),
+            replay_store: Some(replay_store),
             codec: JsonAtmProtocolCodec,
         }
     }
@@ -213,12 +198,26 @@ impl PeerClientTransport {
             match self.send_to_endpoint(peer_addr, record.request.clone()) {
                 Ok(_) => {
                     replay_store.delete(&record.team, &record.agent, &record.message_key)?;
+                    tracing::info!(
+                        message_key = %record.message_key,
+                        peer_addr = %record.peer_addr,
+                        replay_attempt_count = record.attempt_count,
+                        "daemon remote replay delivered successfully"
+                    );
                     delivered += 1;
                 }
                 Err(error) => {
                     record.attempt_count = record.attempt_count.saturating_add(1);
                     record.last_attempt_at = Some(IsoTimestamp::now());
                     record.last_error = Some(error.code.to_string());
+                    tracing::warn!(
+                        message_key = %record.message_key,
+                        peer_addr = %record.peer_addr,
+                        replay_attempt_count = record.attempt_count,
+                        error_code = %error.code,
+                        error_message = %error.message,
+                        "daemon remote replay delivery attempt failed; retaining record"
+                    );
                     replay_store.enqueue(record)?;
                     retained += 1;
                 }
@@ -295,20 +294,57 @@ impl PeerClientTransport {
 
         loop {
             match self.send_once(endpoint, &frame.bytes) {
-                Ok(response) => return Ok(response),
+                Ok(response) => {
+                    tracing::info!(
+                        peer_addr = %endpoint,
+                        attempt,
+                        "daemon peer delivery succeeded"
+                    );
+                    return Ok(response);
+                }
                 Err(failure) if failure.kind == AttemptFailureKind::Retryable => {
                     let now = Instant::now();
                     if now >= deadline {
+                        tracing::error!(
+                            peer_addr = %endpoint,
+                            attempt,
+                            error_code = %failure.error.code,
+                            error_message = %failure.error.message,
+                            "daemon peer delivery exhausted retry budget"
+                        );
                         return Err(failure.error);
                     }
                     let remaining = deadline.saturating_duration_since(now);
                     let sleep_for =
                         jittered_backoff(backoff, jitter_seed(endpoint, attempt)).min(remaining);
+                    tracing::warn!(
+                        peer_addr = %endpoint,
+                        attempt,
+                        sleep_ms = sleep_for.as_millis(),
+                        error_code = %failure.error.code,
+                        error_message = %failure.error.message,
+                        "daemon peer delivery hit retryable failure"
+                    );
                     thread::sleep(sleep_for);
                     backoff = backoff.saturating_mul(2).min(MAX_RETRY_BACKOFF);
                     attempt = attempt.saturating_add(1);
                 }
-                Err(failure) => return Err(failure.error),
+                Err(failure) => {
+                    let level = if failure.kind == AttemptFailureKind::OutcomeUnknown {
+                        "outcome_unknown"
+                    } else {
+                        "non_retryable"
+                    };
+                    tracing::error!(
+                        peer_addr = %endpoint,
+                        attempt,
+                        failure_kind = level,
+                        error_code = %failure.error.code,
+                        error_message = %failure.error.message,
+                        "daemon peer delivery failed"
+                    );
+                    return Err(failure.error);
+                }
             }
         }
     }
@@ -355,6 +391,15 @@ impl PeerClientTransport {
                 kind: classify_io_error(&source),
                 error: AtmError::daemon_unavailable("failed to write remote peer request frame")
                     .with_source(source),
+            })
+        })?;
+        stream.flush().map_err(|source| {
+            Box::new(AttemptFailure {
+                kind: AttemptFailureKind::OutcomeUnknown,
+                error: AtmError::remote_delivery_outcome_unknown(
+                    "failed to flush the remote peer request frame before waiting for a response",
+                )
+                .with_source(source),
             })
         })?;
         stream
@@ -423,14 +468,14 @@ pub(crate) struct PeerTransportRuntime {
 
 impl Default for PeerTransportRuntime {
     fn default() -> Self {
-        Self::new()
+        Self::new(None)
     }
 }
 
 impl PeerTransportRuntime {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(replay_store: Option<Arc<dyn RemoteReplayStore>>) -> Self {
         Self {
-            client: PeerClientTransport::new(),
+            client: PeerClientTransport::new(replay_store),
         }
     }
 
@@ -466,11 +511,22 @@ impl PeerTransportRuntime {
         self.client
             .persist_replay_request(team, agent, message_key, request)
     }
+
+    #[cfg(test)]
+    pub(crate) fn load_pending_replay_records(
+        &self,
+    ) -> Result<Vec<RemoteReplayStateRecord>, AtmError> {
+        match &self.client.replay_store {
+            Some(replay_store) => replay_store.load_all(),
+            None => Ok(Vec::new()),
+        }
+    }
 }
 
 fn classify_io_error(error: &io::Error) -> AttemptFailureKind {
     match error.kind() {
         io::ErrorKind::TimedOut
+        | io::ErrorKind::Interrupted
         | io::ErrorKind::ConnectionRefused
         | io::ErrorKind::ConnectionReset
         | io::ErrorKind::ConnectionAborted
@@ -568,7 +624,6 @@ mod tests {
         RuntimeMemberState, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     };
     use atm_core::types::{AgentName, IsoTimestamp, TeamName};
-    use atm_rusqlite::assemble_boundary;
     use std::io::{self, Read, Write};
     use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
     use std::sync::mpsc;
@@ -589,10 +644,12 @@ mod tests {
     fn classify_io_error_covers_retryable_and_non_retryable_variants() {
         for kind in [
             io::ErrorKind::TimedOut,
+            io::ErrorKind::Interrupted,
             io::ErrorKind::ConnectionRefused,
             io::ErrorKind::ConnectionReset,
             io::ErrorKind::ConnectionAborted,
             io::ErrorKind::BrokenPipe,
+            io::ErrorKind::HostUnreachable,
         ] {
             assert_eq!(
                 classify_io_error(&io::Error::new(kind, "retryable")),
@@ -870,10 +927,9 @@ mod tests {
         let summary = transport.resume_pending_replay().expect("resume");
         assert_eq!(summary.delivered, 1);
         assert_eq!(summary.retained, 0);
-        let pending = assemble_boundary(&db_path)
-            .expect("assembly")
-            .load_remote_replay_states()
-            .expect("load");
+        let pending = transport
+            .load_pending_replay_records()
+            .expect("load pending");
         assert!(pending.is_empty());
     }
 
@@ -910,10 +966,9 @@ mod tests {
             .expect_err("outcome unknown");
         assert_eq!(error.code, AtmErrorCode::RemoteDeliveryOutcomeUnknown);
 
-        let pending = assemble_boundary(&db_path)
-            .expect("assembly")
-            .load_remote_replay_states()
-            .expect("load");
+        let pending = transport
+            .load_pending_replay_records()
+            .expect("load pending");
         assert_eq!(pending.len(), 1);
         assert_eq!(pending[0].team, team);
         assert_eq!(pending[0].agent, member);
@@ -976,14 +1031,62 @@ mod tests {
         assert_eq!(summary.delivered, 1);
         deliveries_rx.recv().expect("delivery");
 
-        let pending = assemble_boundary(&db_path)
-            .expect("assembly")
-            .load_remote_replay_states()
-            .expect("load");
+        let pending = second.load_pending_replay_records().expect("load pending");
         assert!(pending.is_empty());
 
         let summary = second.resume_pending_replay().expect("second resume");
         assert_eq!(summary.delivered, 0);
         assert_eq!(summary.retained, 0);
+    }
+
+    #[test]
+    fn replay_store_upsert_deduplicates_same_message_key() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
+        let endpoint = listener.local_addr().expect("addr");
+        drop(listener);
+        let transport = PeerTransportRuntime::new_for_test(
+            endpoint,
+            PeerTransportConfig::default(),
+            tempdir.path().join("mail.db"),
+        );
+        let team: TeamName = "test-team".parse().expect("team");
+        let member: AgentName = "test-member".parse().expect("member");
+        let message_key = MessageKey::new("atm:test-remote-replay-dedup").expect("message key");
+        let first_request = RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: member.clone(),
+            pid: 11,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::Idle,
+        });
+        let second_request = RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: member.clone(),
+            pid: 12,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::ActiveToolUse,
+        });
+
+        transport
+            .persist_replay_request(
+                team.clone(),
+                member.clone(),
+                message_key.clone(),
+                first_request,
+            )
+            .expect("persist first");
+        transport
+            .persist_replay_request(team, member, message_key, second_request)
+            .expect("persist second");
+
+        let pending = transport
+            .load_pending_replay_records()
+            .expect("load pending");
+        assert_eq!(pending.len(), 1);
+        let RequestEnvelope::Heartbeat(heartbeat) = &pending[0].request else {
+            panic!("expected heartbeat replay record");
+        };
+        assert_eq!(heartbeat.pid, 12);
     }
 }

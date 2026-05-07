@@ -182,7 +182,7 @@ impl SqliteBoundaryAssembly {
             transaction
                 .execute(
                     "DELETE FROM daemon_remote_replay_states
-                     WHERE json_extract(state_json, '$.expires_at') < ?1;",
+                     WHERE json_extract(state_json, '$.expires_at') <= ?1;",
                     params![now],
                 )
                 .map_err(|error| {
