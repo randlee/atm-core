@@ -1,5 +1,4 @@
 #![forbid(unsafe_code)]
-#![allow(dead_code)]
 
 //! SQLite-backed adapter implementations for the Phase R store boundaries.
 
@@ -702,12 +701,6 @@ impl SqliteTaskStore {
     ) -> Result<Option<boundary::TaskStoreTaskRecord>, AtmError> {
         self.db.with_connection(|connection| {
             Self::load_record_in_connection(connection, self.db.target(), team, task_id)
-        })
-    }
-
-    fn save_record(&self, record: &boundary::TaskStoreTaskRecord) -> Result<(), AtmError> {
-        self.db.with_transaction(|transaction| {
-            Self::save_record_in_connection(transaction, self.db.target(), record)
         })
     }
 }

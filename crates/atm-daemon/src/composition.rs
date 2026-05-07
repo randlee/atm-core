@@ -125,9 +125,8 @@ pub(crate) struct RuntimeComposition {
 impl RuntimeComposition {
     fn new(home_dir: PathBuf) -> Self {
         let status_cache = RuntimeStatusCache::new();
-        let replay_store = atm_core::home::host_mail_db_path()
-            .ok()
-            .and_then(|db_path| match sqlite_remote_replay_store_from_path(db_path) {
+        let replay_store = match atm_core::home::host_mail_db_path() {
+            Ok(db_path) => match sqlite_remote_replay_store_from_path(db_path) {
                 Ok(store) => Some(store),
                 Err(error) => {
                     tracing::warn!(
@@ -136,7 +135,15 @@ impl RuntimeComposition {
                     );
                     None
                 }
-            });
+            },
+            Err(error) => {
+                tracing::warn!(
+                    %error,
+                    "remote replay store path unavailable; crash-safe remote replay persistence is disabled"
+                );
+                None
+            }
+        };
         Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
             server_transport: LocalSocketServerTransport::new(),
@@ -245,8 +252,19 @@ impl RuntimeComposition {
             .transition(RuntimeLifecycleState::Draining)
             .and_then(|_| self.lifecycle.transition(RuntimeLifecycleState::Stopped))
             .map(|_| ());
-        if state_result.is_err() {
-            self.lifecycle.force_stopped()?;
+        if let Err(state_error) = state_result
+            && let Err(force_error) = self.lifecycle.force_stopped()
+        {
+            tracing::error!(
+                state_error = %state_error,
+                force_error = %force_error,
+                serve_error = result.as_ref().err().map(|error| error.to_string()),
+                "daemon runtime failed while forcing lifecycle back to stopped"
+            );
+            return match result {
+                Err(error) => Err(error),
+                Ok(()) => Err(force_error),
+            };
         }
         result
     }
