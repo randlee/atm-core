@@ -3,6 +3,7 @@ use std::net::{Shutdown, SocketAddr, TcpStream};
 #[cfg(test)]
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -16,6 +17,8 @@ use atm_core::protocol::{
 };
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 
+// Architecture authority: docs/architecture.md §21.6.4 daemon operational
+// defaults and remote peer transport rules.
 const PEER_CONNECT_DEADLINE: Duration = Duration::from_secs(5);
 const PEER_IO_DEADLINE: Duration = Duration::from_secs(5);
 const DEFAULT_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(30);
@@ -276,6 +279,7 @@ impl PeerClientTransport {
         let frame = self.codec.request_to_frame(request)?;
         let started = Instant::now();
         let deadline = started + self.config.remote_retry_budget;
+        let terminate = daemon_terminate_flag()?;
         let mut backoff = INITIAL_RETRY_BACKOFF;
         let mut attempt = 0u32;
 
@@ -312,7 +316,16 @@ impl PeerClientTransport {
                         error_message = %failure.error.message,
                         "daemon peer delivery hit retryable failure"
                     );
-                    thread::sleep(sleep_for);
+                    if wait_for_retry_backoff(&terminate, sleep_for) {
+                        return Err(
+                            AtmError::daemon_unavailable(
+                                "daemon shutdown interrupted remote peer retry backoff",
+                            )
+                            .with_recovery(
+                                "Retry the daemon operation after atm-daemon restarts and resumes pending remote replay work.",
+                            ),
+                        );
+                    }
                     backoff = backoff.saturating_mul(2).min(MAX_RETRY_BACKOFF);
                     attempt = attempt.saturating_add(1);
                 }
@@ -421,6 +434,38 @@ impl PeerClientTransport {
             response => Ok(response),
         }
     }
+}
+
+fn wait_for_retry_backoff(terminate: &Option<Arc<AtomicBool>>, sleep_for: Duration) -> bool {
+    const RETRY_POLL_INTERVAL: Duration = Duration::from_millis(25);
+
+    let started = Instant::now();
+    loop {
+        if terminate
+            .as_ref()
+            .is_some_and(|flag| flag.load(Ordering::SeqCst))
+        {
+            return true;
+        }
+        let elapsed = started.elapsed();
+        if elapsed >= sleep_for {
+            return false;
+        }
+        let remaining = sleep_for.saturating_sub(elapsed);
+        thread::sleep(remaining.min(RETRY_POLL_INTERVAL));
+    }
+}
+
+#[cfg(unix)]
+fn daemon_terminate_flag() -> Result<Option<Arc<AtomicBool>>, AtmError> {
+    Ok(Some(
+        crate::shutdown_signals::DaemonShutdownSignals::install()?.terminate,
+    ))
+}
+
+#[cfg(not(unix))]
+fn daemon_terminate_flag() -> Result<Option<Arc<AtomicBool>>, AtmError> {
+    Ok(None)
 }
 
 impl boundary::sealed::Sealed for PeerClientTransport {}
