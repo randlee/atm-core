@@ -42,6 +42,35 @@ fn visibility_label(visibility: &syn::Visibility) -> ItemVisibility {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NodeKind {
+    Module,
+    Type,
+    Trait,
+    Function,
+    Method,
+    Impl,
+    Variant,
+    Field,
+    TraitRef,
+}
+
+impl NodeKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Module => "module",
+            Self::Type => "type",
+            Self::Trait => "trait",
+            Self::Function => "function",
+            Self::Method => "method",
+            Self::Impl => "impl",
+            Self::Variant => "variant",
+            Self::Field => "field",
+            Self::TraitRef => "trait_ref",
+        }
+    }
+}
+
 #[derive(Default)]
 struct ReferenceCollector {
     owner_name: Option<String>,
@@ -161,7 +190,7 @@ pub(crate) fn build_workspace_graph(root: &Path) -> Result<GraphExport> {
             let root_attributes = Vec::new();
             builder.add_node(GraphNode {
                 id: NodeId::new(root_module_id.clone()),
-                kind: "module",
+                kind: NodeKind::Module.as_str(),
                 label: "crate".to_string(),
                 visibility: None,
                 package: context.package_name.clone(),
@@ -182,7 +211,7 @@ pub(crate) fn build_workspace_graph(root: &Path) -> Result<GraphExport> {
             ingest_module_items(
                 &mut builder,
                 &context,
-                &root_module_id,
+                &NodeId::new(root_module_id.clone()),
                 "crate",
                 &root_dir,
                 &source_path,
@@ -197,7 +226,7 @@ pub(crate) fn build_workspace_graph(root: &Path) -> Result<GraphExport> {
 fn ingest_module_items(
     builder: &mut GraphBuilder,
     context: &TargetContext,
-    parent_module_id: &str,
+    parent_module_id: &NodeId,
     module_path: &str,
     module_dir: &Path,
     source_path: &Path,
@@ -211,12 +240,11 @@ fn ingest_module_items(
                 let name = item_mod.ident.to_string();
                 let child_module_path = format!("{module_path}::{name}");
                 let child_module_id = format!("{}::module::{child_module_path}", context.crate_id);
-                let child_module_dir = module_dir.join(&name);
                 let attributes = parse_lint_attributes(&item_mod.attrs)?;
 
                 builder.add_node(GraphNode {
                     id: NodeId::new(child_module_id.clone()),
-                    kind: "module",
+                    kind: NodeKind::Module.as_str(),
                     label: name.clone(),
                     visibility: Some(visibility_label(&item_mod.vis).as_str()),
                     package: context.package_name.clone(),
@@ -230,11 +258,12 @@ fn ingest_module_items(
                 });
                 builder.add_edge(
                     "contains",
-                    parent_module_id.to_string(),
+                    parent_module_id.clone(),
                     child_module_id.clone(),
                 );
 
                 if let Some((_, items)) = item_mod.content {
+                    let child_module_dir = module_dir.join(&name);
                     let inline_file = File {
                         shebang: None,
                         attrs: Vec::new(),
@@ -243,7 +272,7 @@ fn ingest_module_items(
                     ingest_module_items(
                         builder,
                         context,
-                        &child_module_id,
+                        &NodeId::new(child_module_id.clone()),
                         &child_module_path,
                         &child_module_dir,
                         source_path,
@@ -252,12 +281,29 @@ fn ingest_module_items(
                 } else {
                     let child_source_path =
                         resolve_module_source(source_path, module_dir, &name, &item_mod.attrs)
-                        .with_context(|| format!("while resolving module `{child_module_path}`"))?;
+                            .with_context(|| {
+                                format!("while resolving module `{child_module_path}`")
+                            })?;
+                    let child_module_dir = if has_explicit_module_path(&item_mod.attrs) {
+                        child_source_path
+                            .parent()
+                            .map(Path::to_path_buf)
+                            .unwrap_or_else(|| module_dir.join(&name))
+                    } else if child_source_path.file_name().and_then(|name| name.to_str())
+                        == Some("mod.rs")
+                    {
+                        child_source_path
+                            .parent()
+                            .map(Path::to_path_buf)
+                            .unwrap_or_else(|| module_dir.join(&name))
+                    } else {
+                        module_dir.join(&name)
+                    };
                     let child_file = parse_rust_file(&child_source_path)?;
                     ingest_module_items(
                         builder,
                         context,
-                        &child_module_id,
+                        &NodeId::new(child_module_id.clone()),
                         &child_module_path,
                         &child_module_dir,
                         &child_source_path,
@@ -275,7 +321,7 @@ fn ingest_module_items(
                         module_path,
                         source_path,
                         ident: &item_struct.ident,
-                        kind: "type",
+                        kind: NodeKind::Type,
                         visibility: visibility_label(&item_struct.vis),
                         attributes: parse_lint_attributes(&item_struct.attrs)?,
                     },
@@ -311,7 +357,7 @@ fn ingest_module_items(
                         module_path,
                         source_path,
                         ident: &item_enum.ident,
-                        kind: "type",
+                        kind: NodeKind::Type,
                         visibility: visibility_label(&item_enum.vis),
                         attributes: parse_lint_attributes(&item_enum.attrs)?,
                     },
@@ -327,10 +373,10 @@ fn ingest_module_items(
                     }),
                 );
                 for variant in &item_enum.variants {
-                    let variant_id = format!("{node_id}::variant::{}", variant.ident);
+                    let variant_id = NodeId::new(format!("{node_id}::variant::{}", variant.ident));
                     builder.add_node(GraphNode {
-                        id: NodeId::new(variant_id.clone()),
-                        kind: "variant",
+                        id: variant_id.clone(),
+                        kind: NodeKind::Variant.as_str(),
                         label: variant.ident.to_string(),
                         visibility: None,
                         package: context.package_name.clone(),
@@ -367,7 +413,7 @@ fn ingest_module_items(
                         module_path,
                         source_path,
                         ident: &item_union.ident,
-                        kind: "type",
+                        kind: NodeKind::Type,
                         visibility: visibility_label(&item_union.vis),
                         attributes: parse_lint_attributes(&item_union.attrs)?,
                     },
@@ -404,7 +450,7 @@ fn ingest_module_items(
                         module_path,
                         source_path,
                         ident: &item_type.ident,
-                        kind: "type",
+                        kind: NodeKind::Type,
                         visibility: visibility_label(&item_type.vis),
                         attributes: parse_lint_attributes(&item_type.attrs)?,
                     },
@@ -428,7 +474,7 @@ fn ingest_module_items(
                         module_path,
                         source_path,
                         ident: &item_trait.ident,
-                        kind: "trait",
+                        kind: NodeKind::Trait,
                         visibility: visibility_label(&item_trait.vis),
                         attributes: parse_lint_attributes(&item_trait.attrs)?,
                     },
@@ -454,7 +500,7 @@ fn ingest_module_items(
                         module_path,
                         source_path,
                         ident: &function_ident,
-                        kind: "function",
+                        kind: NodeKind::Function,
                         visibility: visibility_label(&item_fn.vis),
                         attributes: parse_lint_attributes(&item_fn.attrs)?,
                     },
@@ -470,18 +516,18 @@ fn ingest_module_items(
             }
             Item::Impl(item_impl) => {
                 let owner_name = impl_owner_name(&item_impl.self_ty)?;
-                let owner_node_id = format!("{parent_module_id}::{owner_name}");
+                let owner_node_id = NodeId::new(format!("{parent_module_id}::{owner_name}"));
                 let trait_path = item_impl
                     .trait_
                     .as_ref()
                     .map(|(_, path, _)| trait_path_key(path));
                 let impl_node_id = if let Some(trait_path) = &trait_path {
-                    format!(
+                    NodeId::new(format!(
                         "{owner_node_id}::impl::{}",
                         hex_encode(trait_path.as_bytes())
-                    )
+                    ))
                 } else {
-                    format!("{owner_node_id}::impl::inherent")
+                    NodeId::new(format!("{owner_node_id}::impl::inherent"))
                 };
 
                 if !builder
@@ -490,8 +536,8 @@ fn ingest_module_items(
                     .any(|node| node.id == owner_node_id.as_str())
                 {
                     builder.add_node(GraphNode {
-                        id: NodeId::new(owner_node_id.clone()),
-                        kind: "type",
+                        id: owner_node_id.clone(),
+                        kind: NodeKind::Type.as_str(),
                         label: owner_name.to_string(),
                         visibility: None,
                         package: context.package_name.clone(),
@@ -503,16 +549,12 @@ fn ingest_module_items(
                         impl_trait: None,
                         attributes: Vec::new(),
                     });
-                    builder.add_edge(
-                        "contains",
-                        parent_module_id.to_string(),
-                        owner_node_id.clone(),
-                    );
+                    builder.add_edge("contains", parent_module_id.clone(), owner_node_id.clone());
                 }
 
                 builder.add_node(GraphNode {
-                    id: NodeId::new(impl_node_id.clone()),
-                    kind: "impl",
+                    id: impl_node_id.clone(),
+                    kind: NodeKind::Impl.as_str(),
                     label: trait_path
                         .as_ref()
                         .map(|path| format!("impl {path} for {owner_name}"))
@@ -531,11 +573,7 @@ fn ingest_module_items(
                     impl_trait: trait_path.clone(),
                     attributes: Vec::new(),
                 });
-                builder.add_edge(
-                    "contains",
-                    parent_module_id.to_string(),
-                    impl_node_id.clone(),
-                );
+                builder.add_edge("contains", parent_module_id.clone(), impl_node_id.clone());
                 builder.add_edge("targets", impl_node_id.clone(), owner_node_id.clone());
 
                 if let Some((_, path, _)) = &item_impl.trait_ {
@@ -555,10 +593,11 @@ fn ingest_module_items(
 
                 for impl_item in item_impl.items {
                     if let ImplItem::Fn(method) = impl_item {
-                        let method_id = format!("{owner_node_id}::{}", method.sig.ident);
+                        let method_id =
+                            NodeId::new(format!("{owner_node_id}::{}", method.sig.ident));
                         builder.add_node(GraphNode {
-                            id: NodeId::new(method_id.clone()),
-                            kind: "method",
+                            id: method_id.clone(),
+                            kind: NodeKind::Method.as_str(),
                             label: method.sig.ident.to_string(),
                             visibility: Some(visibility_label(&method.vis).as_str()),
                             package: context.package_name.clone(),
@@ -606,7 +645,7 @@ fn add_item_node(
     let id = format!("{}::{}", args.parent_module_id, args.ident);
     builder.add_node(GraphNode {
         id: NodeId::new(id.clone()),
-        kind: args.kind,
+        kind: args.kind.as_str(),
         label: args.ident.to_string(),
         visibility: Some(args.visibility.as_str()),
         package: context.package_name.clone(),
@@ -618,7 +657,11 @@ fn add_item_node(
         impl_trait: None,
         attributes: args.attributes,
     });
-    builder.add_edge("contains", args.parent_module_id.to_string(), id.clone());
+    builder.add_edge(
+        "contains",
+        args.parent_module_id.clone(),
+        NodeId::new(id.clone()),
+    );
     NodeId::new(id)
 }
 
@@ -632,9 +675,10 @@ fn add_field_nodes(builder: &mut GraphBuilder, context: &TargetContext, args: Fi
                     .map(ToString::to_string)
                     .unwrap_or_else(|| "field".to_string());
                 let field_id = format!("{}::field::{label}", args.parent_id);
+                let field_id = NodeId::new(field_id);
                 builder.add_node(GraphNode {
-                    id: NodeId::new(field_id.clone()),
-                    kind: "field",
+                    id: field_id.clone(),
+                    kind: NodeKind::Field.as_str(),
                     label: label.clone(),
                     visibility: Some(visibility_label(&field.vis).as_str()),
                     package: context.package_name.clone(),
@@ -646,7 +690,7 @@ fn add_field_nodes(builder: &mut GraphBuilder, context: &TargetContext, args: Fi
                     impl_trait: None,
                     attributes: Vec::new(),
                 });
-                builder.add_edge("contains", args.parent_id.to_string(), field_id.clone());
+                builder.add_edge("contains", args.parent_id.clone(), field_id.clone());
                 add_reference_edges(
                     builder,
                     &field_id,
@@ -661,9 +705,10 @@ fn add_field_nodes(builder: &mut GraphBuilder, context: &TargetContext, args: Fi
             for (index, field) in unnamed.unnamed.iter().enumerate() {
                 let label = index.to_string();
                 let field_id = format!("{}::field::{label}", args.parent_id);
+                let field_id = NodeId::new(field_id);
                 builder.add_node(GraphNode {
-                    id: NodeId::new(field_id.clone()),
-                    kind: "field",
+                    id: field_id.clone(),
+                    kind: NodeKind::Field.as_str(),
                     label: label.clone(),
                     visibility: Some(visibility_label(&field.vis).as_str()),
                     package: context.package_name.clone(),
@@ -675,7 +720,7 @@ fn add_field_nodes(builder: &mut GraphBuilder, context: &TargetContext, args: Fi
                     impl_trait: None,
                     attributes: Vec::new(),
                 });
-                builder.add_edge("contains", args.parent_id.to_string(), field_id.clone());
+                builder.add_edge("contains", args.parent_id.clone(), field_id.clone());
                 add_reference_edges(
                     builder,
                     &field_id,
@@ -695,16 +740,20 @@ fn ensure_trait_reference_node(
     context: &TargetContext,
     source_path: &Path,
     module_path: &str,
-    trait_node_id: &str,
+    trait_node_id: &NodeId,
     trait_label: &str,
 ) {
-    if builder.nodes.iter().any(|node| node.id == trait_node_id) {
+    if builder
+        .nodes
+        .iter()
+        .any(|node| node.id == trait_node_id.as_str())
+    {
         return;
     }
 
     builder.add_node(GraphNode {
-        id: NodeId::new(trait_node_id.to_string()),
-        kind: "trait_ref",
+        id: trait_node_id.clone(),
+        kind: NodeKind::TraitRef.as_str(),
         label: trait_label.to_string(),
         visibility: None,
         package: context.package_name.clone(),
@@ -720,7 +769,7 @@ fn ensure_trait_reference_node(
 
 fn add_reference_edges(
     builder: &mut GraphBuilder,
-    source_node_id: &str,
+    source_node_id: &NodeId,
     module_path: &str,
     referenced_paths: BTreeSet<CollectedReference>,
 ) {
@@ -729,29 +778,29 @@ fn add_reference_edges(
             resolve_reference_target(source_node_id, module_path, &referenced.path);
         builder.add_edge(
             referenced.kind.edge_kind(),
-            source_node_id.to_string(),
+            source_node_id.clone(),
             target_node_id.clone(),
         );
-        builder.add_edge("references", source_node_id.to_string(), target_node_id);
+        builder.add_edge("references", source_node_id.clone(), target_node_id);
     }
 }
 
 fn resolve_reference_target(
-    source_node_id: &str,
+    source_node_id: &NodeId,
     module_path: &str,
     referenced_path: &str,
-) -> String {
+) -> NodeId {
     let crate_prefix = source_node_id
         .split("::module::")
         .next()
         .unwrap_or(source_node_id);
 
     if let Some(rest) = referenced_path.strip_prefix("crate::") {
-        return format!("{crate_prefix}::module::crate::{rest}");
+        return NodeId::new(format!("{crate_prefix}::module::crate::{rest}"));
     }
 
     if let Some(rest) = referenced_path.strip_prefix("self::") {
-        return format!("{crate_prefix}::module::{module_path}::{rest}");
+        return NodeId::new(format!("{crate_prefix}::module::{module_path}::{rest}"));
     }
 
     if referenced_path.starts_with("super::") {
@@ -764,13 +813,15 @@ fn resolve_reference_target(
             }
             rest = stripped;
         }
-        return format!(
+        return NodeId::new(format!(
             "{crate_prefix}::module::{}::{rest}",
             module_segments.join("::")
-        );
+        ));
     }
 
-    format!("{crate_prefix}::module::{module_path}::{referenced_path}")
+    NodeId::new(format!(
+        "{crate_prefix}::module::{module_path}::{referenced_path}"
+    ))
 }
 
 fn parse_lint_attributes(attrs: &[Attribute]) -> Result<Vec<LintAttribute>> {
@@ -857,7 +908,14 @@ fn resolve_module_source(
     }
 }
 
-fn explicit_module_source(declaring_source_path: &Path, attrs: &[Attribute]) -> Result<Option<PathBuf>> {
+fn has_explicit_module_path(attrs: &[Attribute]) -> bool {
+    attrs.iter().any(|attr| attr.path().is_ident("path"))
+}
+
+fn explicit_module_source(
+    declaring_source_path: &Path,
+    attrs: &[Attribute],
+) -> Result<Option<PathBuf>> {
     for attr in attrs {
         if !attr.path().is_ident("path") {
             continue;
@@ -873,6 +931,9 @@ fn explicit_module_source(declaring_source_path: &Path, attrs: &[Attribute]) -> 
                                 declaring_source_path.display()
                             )
                         })?;
+                        // Absolute #[path = "..."] values intentionally bypass the
+                        // declaring source directory because PathBuf::join preserves
+                        // an absolute right-hand operand unchanged.
                         return Ok(Some(declaring_dir.join(lit.value())));
                     }
                     _ => anyhow::bail!(
@@ -904,12 +965,15 @@ fn parse_rust_file(path: &Path) -> Result<File> {
 
 fn impl_owner_name(self_ty: &Type) -> Result<String> {
     match self_ty {
-        Type::Path(type_path) => type_path
-            .path
-            .segments
-            .last()
-            .map(|segment| segment.ident.to_string())
-            .ok_or_else(|| anyhow::anyhow!("impl owner path is missing a terminal segment")),
+        Type::Path(type_path) => {
+            if let Some(segment) = type_path.path.segments.last() {
+                Ok(segment.ident.to_string())
+            } else {
+                Err(anyhow::anyhow!(
+                    "impl owner path is missing a terminal segment"
+                ))
+            }
+        }
         _ => anyhow::bail!(
             "unsupported impl owner type `{}`; only path owners are supported",
             self_ty.to_token_stream()
@@ -959,17 +1023,17 @@ pub(crate) fn load_metadata(root: &Path) -> Result<cargo_metadata::Metadata> {
         .with_context(|| format!("failed to load cargo metadata for {}", root.display()))
 }
 struct ItemNodeArgs<'a> {
-    parent_module_id: &'a str,
+    parent_module_id: &'a NodeId,
     module_path: &'a str,
     source_path: &'a Path,
     ident: &'a Ident,
-    kind: &'static str,
+    kind: NodeKind,
     visibility: ItemVisibility,
     attributes: Vec<LintAttribute>,
 }
 
 struct FieldNodeArgs<'a> {
-    parent_id: &'a str,
+    parent_id: &'a NodeId,
     module_path: &'a str,
     source_path: &'a Path,
     local_owner_names: &'a BTreeSet<String>,
