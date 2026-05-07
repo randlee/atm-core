@@ -1,47 +1,25 @@
 use std::io::{self, Write};
-#[cfg(test)]
-use std::net::IpAddr;
 use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
 use atm_core::AtmConfig;
 use atm_core::boundary::{self, AtmProtocol, ClientTransport, ConfigLoadRequest, MessageKey};
-use atm_core::error::AtmError;
-use atm_core::protocol::{FramePayload, MAX_DAEMON_FRAME_BYTES, RequestEnvelope, ResponseEnvelope};
+use atm_core::error::{AtmError, AtmErrorCode};
+use atm_core::protocol::{
+    FramePayload, MAX_DAEMON_FRAME_BYTES, RequestEnvelope, ResponseEnvelope,
+    TeamMemberHeartbeatRequest,
+};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
-use atm_rusqlite::{RemoteReplayStateRecord, assemble_boundary};
+use atm_rusqlite::{RemoteReplayStateRecord, SqliteBoundaryAssembly};
 
 const PEER_CONNECT_DEADLINE: Duration = Duration::from_secs(5);
 const PEER_IO_DEADLINE: Duration = Duration::from_secs(5);
 const DEFAULT_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(30);
 const INITIAL_RETRY_BACKOFF: Duration = Duration::from_millis(250);
 const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(5);
-
-#[cfg(test)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ListenerBindingMode {
-    Wildcard,
-    Explicit(IpAddr),
-}
-
-#[cfg(test)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ListenerInterfaceBehavior {
-    SurvivesInterfaceChurn,
-    RequiresReloadAndDegrades,
-}
-
-#[cfg(test)]
-impl ListenerBindingMode {
-    const fn interface_behavior(self) -> ListenerInterfaceBehavior {
-        match self {
-            Self::Wildcard => ListenerInterfaceBehavior::SurvivesInterfaceChurn,
-            Self::Explicit(_) => ListenerInterfaceBehavior::RequiresReloadAndDegrades,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct PeerTransportConfig {
@@ -95,20 +73,22 @@ impl AtmProtocol for JsonAtmProtocolCodec {
 
 #[derive(Debug, Clone)]
 struct SqliteRemoteReplayStore {
-    db_path: PathBuf,
+    assembly: Arc<SqliteBoundaryAssembly>,
 }
 
 impl SqliteRemoteReplayStore {
-    fn new(db_path: PathBuf) -> Self {
-        Self { db_path }
+    fn from_path(db_path: PathBuf) -> Result<Self, AtmError> {
+        Ok(Self {
+            assembly: Arc::new(SqliteBoundaryAssembly::new(db_path)?),
+        })
     }
 
     fn enqueue(&self, record: RemoteReplayStateRecord) -> Result<(), AtmError> {
-        assemble_boundary(&self.db_path)?.record_remote_replay_state(record)
+        self.assembly.record_remote_replay_state(record)
     }
 
     fn load_all(&self) -> Result<Vec<RemoteReplayStateRecord>, AtmError> {
-        assemble_boundary(&self.db_path)?.load_remote_replay_states()
+        self.assembly.load_remote_replay_states()
     }
 
     fn delete(
@@ -117,11 +97,12 @@ impl SqliteRemoteReplayStore {
         agent: &AgentName,
         message_key: &MessageKey,
     ) -> Result<(), AtmError> {
-        assemble_boundary(&self.db_path)?.delete_remote_replay_state(team, agent, message_key)
+        self.assembly
+            .delete_remote_replay_state(team, agent, message_key)
     }
 
     fn purge_expired(&self, now: IsoTimestamp) -> Result<usize, AtmError> {
-        assemble_boundary(&self.db_path)?.purge_expired_remote_replay_states(now)
+        self.assembly.purge_expired_remote_replay_states(now)
     }
 }
 
@@ -169,7 +150,13 @@ impl PeerClientTransport {
             .unwrap_or_default();
         let replay_store = atm_core::home::host_mail_db_path()
             .ok()
-            .map(SqliteRemoteReplayStore::new);
+            .and_then(|db_path| match SqliteRemoteReplayStore::from_path(db_path) {
+                Ok(store) => Some(store),
+                Err(error) => {
+                    tracing::warn!(%error, "remote replay store unavailable; outcome-unknown delivery cannot be persisted");
+                    None
+                }
+            });
         Self {
             endpoint,
             config,
@@ -187,7 +174,9 @@ impl PeerClientTransport {
         Self {
             endpoint: Some(endpoint),
             config,
-            replay_store: Some(SqliteRemoteReplayStore::new(replay_db_path)),
+            replay_store: Some(
+                SqliteRemoteReplayStore::from_path(replay_db_path).expect("replay store"),
+            ),
             codec: JsonAtmProtocolCodec,
         }
     }
@@ -207,10 +196,6 @@ impl PeerClientTransport {
         let mut delivered = 0usize;
         let mut retained = 0usize;
         for mut record in records {
-            if record.expires_at.into_inner() <= now.into_inner() {
-                replay_store.delete(&record.team, &record.agent, &record.message_key)?;
-                continue;
-            }
             let peer_addr = match record.peer_addr.parse::<SocketAddr>() {
                 Ok(peer_addr) => peer_addr,
                 Err(error) => {
@@ -247,7 +232,6 @@ impl PeerClientTransport {
         })
     }
 
-    #[cfg(test)]
     fn persist_replay_request(
         &self,
         team: TeamName,
@@ -287,6 +271,17 @@ impl PeerClientTransport {
         })
     }
 
+    fn persist_outcome_unknown_request(&self, request: &RequestEnvelope) -> Result<(), AtmError> {
+        let Some((team, agent, message_key)) = replay_metadata_for_request(request)? else {
+            tracing::warn!(
+                request = ?request,
+                "remote delivery outcome is unknown but this request family does not support durable replay persistence",
+            );
+            return Ok(());
+        };
+        self.persist_replay_request(team, agent, message_key, request.clone())
+    }
+
     fn send_to_endpoint(
         &self,
         endpoint: SocketAddr,
@@ -296,6 +291,7 @@ impl PeerClientTransport {
         let started = Instant::now();
         let deadline = started + self.config.remote_retry_budget;
         let mut backoff = INITIAL_RETRY_BACKOFF;
+        let mut attempt = 0u32;
 
         loop {
             match self.send_once(endpoint, &frame.bytes) {
@@ -306,8 +302,11 @@ impl PeerClientTransport {
                         return Err(failure.error);
                     }
                     let remaining = deadline.saturating_duration_since(now);
-                    thread::sleep(backoff.min(remaining));
+                    let sleep_for =
+                        jittered_backoff(backoff, jitter_seed(endpoint, attempt)).min(remaining);
+                    thread::sleep(sleep_for);
                     backoff = backoff.saturating_mul(2).min(MAX_RETRY_BACKOFF);
+                    attempt = attempt.saturating_add(1);
                 }
                 Err(failure) => return Err(failure.error),
             }
@@ -358,13 +357,9 @@ impl PeerClientTransport {
                     .with_source(source),
             })
         })?;
-        stream.shutdown(Shutdown::Write).map_err(|source| Box::new(AttemptFailure {
-            kind: AttemptFailureKind::OutcomeUnknown,
-            error: AtmError::remote_delivery_outcome_unknown(
-                "remote peer connection dropped after the request was sent and acceptance is unknown",
-            )
-            .with_source(source),
-        }))?;
+        stream
+            .shutdown(Shutdown::Write)
+            .map_err(|source| Box::new(classify_shutdown_failure(source)))?;
 
         let response_bytes = read_peer_response(&mut stream).map_err(|error| {
             Box::new(AttemptFailure {
@@ -404,7 +399,20 @@ impl ClientTransport for PeerClientTransport {
             AtmError::daemon_unavailable("remote peer endpoint is not configured")
                 .with_recovery("Set ATM_DAEMON_PEER_ADDR or configure the daemon peer transport before retrying remote delivery.")
         })?;
-        self.send_to_endpoint(endpoint, request)
+        match self.send_to_endpoint(endpoint, request.clone()) {
+            Ok(response) => Ok(response),
+            Err(error) if error.code == AtmErrorCode::RemoteDeliveryOutcomeUnknown => {
+                self.persist_outcome_unknown_request(&request)
+                    .map_err(|persist_error| {
+                        AtmError::remote_delivery_outcome_unknown(
+                            "remote peer delivery outcome is unknown and replay persistence failed",
+                        )
+                        .with_source(persist_error)
+                    })?;
+                Err(error)
+            }
+            Err(error) => Err(error),
+        }
     }
 }
 
@@ -475,6 +483,59 @@ fn classify_io_error(error: &io::Error) -> AttemptFailureKind {
     }
 }
 
+fn classify_shutdown_failure(source: io::Error) -> AttemptFailure {
+    AttemptFailure {
+        kind: classify_io_error(&source),
+        error: AtmError::daemon_unavailable(
+            "failed to half-close the remote peer connection after writing the request frame",
+        )
+        .with_source(source),
+    }
+}
+
+fn replay_metadata_for_request(
+    request: &RequestEnvelope,
+) -> Result<Option<(TeamName, AgentName, MessageKey)>, AtmError> {
+    match request {
+        RequestEnvelope::Heartbeat(heartbeat) => Ok(Some((
+            heartbeat.team.clone(),
+            heartbeat.member.clone(),
+            heartbeat_message_key(heartbeat)?,
+        ))),
+        _ => Ok(None),
+    }
+}
+
+fn heartbeat_message_key(request: &TeamMemberHeartbeatRequest) -> Result<MessageKey, AtmError> {
+    MessageKey::new(format!(
+        "remote-heartbeat:{}:{}:{}:{}",
+        request.team.as_str(),
+        request.member.as_str(),
+        request.pid,
+        request.observed_at.into_inner().to_rfc3339(),
+    ))
+}
+
+fn jittered_backoff(base: Duration, seed: u64) -> Duration {
+    let base_nanos = base.as_nanos();
+    if base_nanos == 0 {
+        return Duration::ZERO;
+    }
+    let offset_basis_points = (seed % 4001) as i128 - 2000;
+    let scaled = (base_nanos as i128 * (10_000 + offset_basis_points))
+        .div_euclid(10_000)
+        .max(1);
+    Duration::from_nanos(u64::try_from(scaled).unwrap_or(u64::MAX))
+}
+
+fn jitter_seed(endpoint: SocketAddr, attempt: u32) -> u64 {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos() as u64;
+    now ^ u64::from(endpoint.port()) ^ (u64::from(attempt) << 32)
+}
+
 fn read_peer_response(stream: &mut TcpStream) -> Result<Vec<u8>, AtmError> {
     let bytes = atm_core::protocol::read_bounded_stream(
         stream,
@@ -497,7 +558,8 @@ fn read_peer_response(stream: &mut TcpStream) -> Result<Vec<u8>, AtmError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        ListenerBindingMode, ListenerInterfaceBehavior, PeerTransportConfig, PeerTransportRuntime,
+        AttemptFailureKind, PeerTransportConfig, PeerTransportRuntime, classify_io_error,
+        classify_shutdown_failure, jittered_backoff,
     };
     use atm_core::boundary::MessageKey;
     use atm_core::error::AtmErrorCode;
@@ -507,23 +569,75 @@ mod tests {
     };
     use atm_core::types::{AgentName, IsoTimestamp, TeamName};
     use atm_rusqlite::assemble_boundary;
-    use std::io::{Read, Write};
-    use std::net::{IpAddr, Ipv4Addr, TcpListener};
+    use std::io::{self, Read, Write};
+    use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
     use std::sync::mpsc;
     use std::thread;
     use std::time::Duration;
     use tempfile::TempDir;
 
     #[test]
-    fn wildcard_bindings_survive_interface_churn() {
+    fn jittered_backoff_stays_within_twenty_percent_window() {
+        let base = Duration::from_millis(250);
+        let low = jittered_backoff(base, 0);
+        let high = jittered_backoff(base, 4_000);
+        assert_eq!(low, Duration::from_millis(200));
+        assert_eq!(high, Duration::from_millis(300));
+    }
+
+    #[test]
+    fn classify_io_error_covers_retryable_and_non_retryable_variants() {
+        for kind in [
+            io::ErrorKind::TimedOut,
+            io::ErrorKind::ConnectionRefused,
+            io::ErrorKind::ConnectionReset,
+            io::ErrorKind::ConnectionAborted,
+            io::ErrorKind::BrokenPipe,
+        ] {
+            assert_eq!(
+                classify_io_error(&io::Error::new(kind, "retryable")),
+                AttemptFailureKind::Retryable
+            );
+        }
         assert_eq!(
-            ListenerBindingMode::Wildcard.interface_behavior(),
-            ListenerInterfaceBehavior::SurvivesInterfaceChurn
+            classify_io_error(&io::Error::other("non-retryable")),
+            AttemptFailureKind::NonRetryable
         );
-        assert_eq!(
-            ListenerBindingMode::Explicit(IpAddr::V4(Ipv4Addr::LOCALHOST)).interface_behavior(),
-            ListenerInterfaceBehavior::RequiresReloadAndDegrades
-        );
+    }
+
+    #[test]
+    fn shutdown_failures_do_not_report_outcome_unknown() {
+        let failure =
+            classify_shutdown_failure(io::Error::new(io::ErrorKind::BrokenPipe, "shutdown failed"));
+        assert_eq!(failure.kind, AttemptFailureKind::Retryable);
+        assert_eq!(failure.error.code, AtmErrorCode::DaemonUnavailable);
+    }
+
+    #[test]
+    fn wildcard_bindings_survive_connection_churn_and_explicit_binds_require_reload() {
+        let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0)).expect("wildcard listener");
+        let endpoint = SocketAddr::from((
+            Ipv4Addr::LOCALHOST,
+            listener.local_addr().expect("addr").port(),
+        ));
+
+        let server = thread::spawn(move || {
+            for _ in 0..2 {
+                let (mut stream, _) = listener.accept().expect("accept");
+                let mut buffer = [0u8; 1];
+                stream.read_exact(&mut buffer).expect("read");
+            }
+        });
+
+        for _ in 0..2 {
+            let mut stream = TcpStream::connect(endpoint).expect("connect");
+            stream.write_all(&[1]).expect("write");
+        }
+        server.join().expect("server join");
+
+        let bind_error = TcpListener::bind((Ipv4Addr::new(198, 51, 100, 10), 0))
+            .expect_err("explicit bind failure");
+        assert_eq!(bind_error.kind(), io::ErrorKind::AddrNotAvailable);
     }
 
     #[test]
@@ -761,5 +875,115 @@ mod tests {
             .load_remote_replay_states()
             .expect("load");
         assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn outcome_unknown_persists_replay_request_for_restart_resume() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
+        let endpoint = listener.local_addr().expect("addr");
+        let db_path = tempdir.path().join("mail.db");
+        let transport = PeerTransportRuntime::new_for_test(
+            endpoint,
+            PeerTransportConfig::default(),
+            db_path.clone(),
+        );
+        let team: TeamName = "test-team".parse().expect("team");
+        let member: AgentName = "test-member".parse().expect("member");
+        let request = RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: member.clone(),
+            pid: 77,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::Idle,
+        });
+
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut request_bytes = Vec::new();
+            stream.read_to_end(&mut request_bytes).expect("request");
+        });
+
+        let error = transport
+            .client_transport()
+            .send(request)
+            .expect_err("outcome unknown");
+        assert_eq!(error.code, AtmErrorCode::RemoteDeliveryOutcomeUnknown);
+
+        let pending = assemble_boundary(&db_path)
+            .expect("assembly")
+            .load_remote_replay_states()
+            .expect("load");
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].team, team);
+        assert_eq!(pending[0].agent, member);
+    }
+
+    #[test]
+    fn replay_resume_after_restart_delivers_once_and_clears_duplicate_delivery() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
+        let endpoint = listener.local_addr().expect("addr");
+        let db_path = tempdir.path().join("mail.db");
+        let first = PeerTransportRuntime::new_for_test(
+            endpoint,
+            PeerTransportConfig::default(),
+            db_path.clone(),
+        );
+        let second = PeerTransportRuntime::new_for_test(
+            endpoint,
+            PeerTransportConfig::default(),
+            db_path.clone(),
+        );
+        let team: TeamName = "test-team".parse().expect("team");
+        let member: AgentName = "test-member".parse().expect("member");
+        let request = RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: member.clone(),
+            pid: 32,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::Idle,
+        });
+        first
+            .persist_replay_request(
+                team.clone(),
+                member.clone(),
+                MessageKey::new("atm:test-remote-replay-restart").expect("message key"),
+                request,
+            )
+            .expect("persist");
+
+        let (deliveries_tx, deliveries_rx) = mpsc::channel();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut request_bytes = Vec::new();
+            stream.read_to_end(&mut request_bytes).expect("request");
+            deliveries_tx.send(()).expect("delivery sent");
+            let response = ResponseEnvelope::Heartbeat(TeamMemberHeartbeatResponse {
+                team,
+                member,
+                pid: 32,
+                pid_changed: false,
+                state: RuntimeMemberState::Idle,
+                last_active_at: Some(IsoTimestamp::now()),
+            });
+            let bytes = serde_json::to_vec(&response).expect("response");
+            stream.write_all(&bytes).expect("write response");
+            stream.flush().expect("flush response");
+        });
+
+        let summary = second.resume_pending_replay().expect("resume");
+        assert_eq!(summary.delivered, 1);
+        deliveries_rx.recv().expect("delivery");
+
+        let pending = assemble_boundary(&db_path)
+            .expect("assembly")
+            .load_remote_replay_states()
+            .expect("load");
+        assert!(pending.is_empty());
+
+        let summary = second.resume_pending_replay().expect("second resume");
+        assert_eq!(summary.delivered, 0);
+        assert_eq!(summary.retained, 0);
     }
 }

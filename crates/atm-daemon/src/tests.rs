@@ -13,9 +13,11 @@ use atm_core::protocol::{
 use atm_core::schema::{AgentMember, TeamConfig};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_rusqlite::assemble_boundary;
+use serial_test::serial;
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
+use std::process::{Command, Stdio};
 use std::sync::{Arc, mpsc};
 use std::time::Duration;
 use tempfile::TempDir;
@@ -38,6 +40,7 @@ impl Drop for SignalResetGuard {
 }
 
 #[test]
+#[serial]
 fn daemon_shutdown_signals_install_is_repeatable() {
     let _reset = SignalResetGuard::install();
     let first = DaemonShutdownSignals::install().expect("first install");
@@ -142,11 +145,7 @@ fn singleton_guard_recovers_stale_owner_once_lock_is_released() {
         drop(file);
     });
 
-    let release_tx_clone = release_tx.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(50));
-        release_tx_clone.send(()).expect("release lock");
-    });
+    release_tx.send(()).expect("release lock");
 
     let guard = SingletonGuard::acquire_at(&tempdir.path().join("atm.sock"), lock_path)
         .expect("stale owner recovery should succeed");
@@ -397,6 +396,134 @@ fn heartbeat_accepts_pid_takeover_when_previous_pid_is_dead() {
 }
 
 #[test]
+fn heartbeat_demotes_evicted_member_to_explicit_unknown() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    let db_path = tempdir.path().join("mail.db");
+
+    install_test_roster(&db_path, &["team-lead", "qa-a"]);
+    write_team_config(&atm_home, &["team-lead", "qa-a"]);
+
+    let status_cache = RuntimeStatusCache::new();
+    let team: TeamName = "test-team".parse().expect("team");
+    let member: AgentName = "evicted".parse().expect("member");
+    status_cache
+        .hydrate_member_for_test(team.clone(), member.clone(), Some(999_999))
+        .expect("hydrate member");
+
+    for index in 0..=4096 {
+        let member_name: AgentName = format!("member-{index}").parse().expect("member");
+        status_cache
+            .insert_member_for_test(
+                team.clone(),
+                member_name,
+                Some(index as u32 + 1),
+                RuntimeMemberState::Idle,
+                Some(IsoTimestamp::now()),
+            )
+            .expect("insert member");
+    }
+
+    let dispatcher = DaemonRequestDispatcher::new_for_test(atm_home, status_cache.clone(), db_path);
+    let response = dispatcher
+        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: "team-lead".parse().expect("member"),
+            pid: std::process::id(),
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::ActiveToolUse,
+        }))
+        .expect("heartbeat");
+
+    match response {
+        ResponseEnvelope::Heartbeat(response) => {
+            assert_eq!(response.state, RuntimeMemberState::Active);
+        }
+        other => panic!("expected heartbeat response, got {other:?}"),
+    }
+
+    assert_eq!(
+        status_cache
+            .member_state_for_test(&team, &member)
+            .expect("member state"),
+        Some(RuntimeMemberState::Unknown)
+    );
+}
+
+#[test]
+fn heartbeat_retries_identity_conflict_after_old_pid_dies() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    let db_path = tempdir.path().join("mail.db");
+
+    install_test_roster(&db_path, &["team-lead"]);
+
+    let mut child = Command::new("sleep")
+        .arg("5")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn child");
+    let live_pid = child.id();
+
+    let status_cache = RuntimeStatusCache::new();
+    let dispatcher = DaemonRequestDispatcher::new_for_test(atm_home, status_cache.clone(), db_path);
+    let team: TeamName = "test-team".parse().expect("team");
+    let member: AgentName = "team-lead".parse().expect("member");
+
+    dispatcher
+        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: member.clone(),
+            pid: live_pid,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::ActiveToolUse,
+        }))
+        .expect("initial heartbeat");
+
+    let error = dispatcher
+        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: member.clone(),
+            pid: std::process::id(),
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::Idle,
+        }))
+        .expect_err("live pid conflict");
+    assert_eq!(error.code, AtmErrorCode::IdentityConflict);
+    assert_eq!(
+        status_cache
+            .member_state_for_test(&team, &member)
+            .expect("member state"),
+        Some(RuntimeMemberState::IdentityConflict)
+    );
+
+    child.kill().expect("kill child");
+    child.wait().expect("wait child");
+
+    let response = dispatcher
+        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: member.clone(),
+            pid: std::process::id(),
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::ActiveToolUse,
+        }))
+        .expect("retry heartbeat");
+
+    match response {
+        ResponseEnvelope::Heartbeat(response) => {
+            assert!(response.pid_changed);
+            assert_eq!(response.state, RuntimeMemberState::Active);
+        }
+        other => panic!("expected heartbeat response, got {other:?}"),
+    }
+}
+
+#[test]
 fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable() {
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -424,6 +551,49 @@ fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable() {
             assert_eq!(report.summary.status, DoctorStatus::Warning);
             let runtime_status = report.runtime_status.expect("runtime status");
             assert_eq!(runtime_status.readiness, RuntimeReadinessState::Degraded);
+        }
+        other => panic!("expected doctor response, got {other:?}"),
+    }
+}
+
+#[test]
+fn doctor_projects_unavailable_runtime_when_all_members_are_offline() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    let db_path = tempdir.path().join("mail.db");
+
+    install_test_roster(&db_path, &["team-lead"]);
+    write_team_config(&atm_home, &["team-lead"]);
+
+    let status_cache = RuntimeStatusCache::new();
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache.clone(), db_path);
+
+    let doctor = dispatcher
+        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: "test-team".parse().expect("team"),
+            member: "team-lead".parse().expect("member"),
+            pid: std::process::id(),
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::SessionEnded,
+        }))
+        .and_then(|_| {
+            dispatcher.dispatch(RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {
+                home_dir: atm_home.clone(),
+                current_dir: atm_home,
+                team_override: Some("test-team".parse().expect("team")),
+            }))
+        })
+        .expect("doctor response");
+
+    match doctor {
+        ResponseEnvelope::Doctor(report) => {
+            assert_eq!(report.summary.status, DoctorStatus::Error);
+            let runtime_status = report.runtime_status.expect("runtime status");
+            assert_eq!(runtime_status.liveness, RuntimeLivenessState::Running);
+            assert_eq!(runtime_status.readiness, RuntimeReadinessState::Unavailable);
+            assert_eq!(runtime_status.member_counts.offline_members, 1);
         }
         other => panic!("expected doctor response, got {other:?}"),
     }
