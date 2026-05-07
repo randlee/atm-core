@@ -1,0 +1,46 @@
+boundary_id = "BOUNDARY-NotificationSink-Daemon"
+owner_package = "atm-daemon"
+owner_crate_path = "atm_daemon"
+name = "DaemonNotificationSinkAdapter"
+
+[public]
+trait = "NotificationSink"
+
+[implementation]
+type = "DaemonNotificationSink"
+module = "atm_daemon"
+visibility = "pub(crate)"
+constructor = "pub(crate)"
+
+[composition]
+roots = ["atm_daemon::composition::compose_runtime"]
+
+[ownership]
+io_owns = ["outbound_notification_delivery"]
+io_forbidden = ["sqlite", "socket_io"]
+
+[dependencies]
+allowed_dependents = []
+allowed_dependencies = ["atm-core"]
+forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon", "atm-daemon -> atm-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["DaemonNotificationSink", "std::process::Command"]
+
+[contracts]
+request_types = ["notification payload requests"]
+response_types = ["notification delivery results"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["std::process::Command"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-NOTIFICATION-SINK-DAEMON-EDGES", "LINT-BOUNDARY-NOTIFICATION-SINK-DAEMON-REFERENCES"]
+review_gates = ["no_public_impl", "no_process_spawn_outside_notification_boundary"]
+
+[status]
+state = "active"
+notes = ["crate-root daemon adapter delegates through atm_core::boundary_support and is assembled through atm_daemon::composition"]

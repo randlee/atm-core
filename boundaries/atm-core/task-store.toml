@@ -1,0 +1,45 @@
+boundary_id = "BOUNDARY-TaskStore"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "TaskStore"
+
+[public]
+trait = "TaskStore"
+notes = "trait landed in atm_core::boundary; concrete implementation now lives in crates/atm-rusqlite/src/lib.rs as SqliteTaskStore"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["task_state", "task_message_linkage"]
+io_forbidden = ["socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-rusqlite", "atm-daemon"]
+allowed_dependencies = []
+forbidden_edges = []
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["TaskStore method inputs"]
+response_types = ["atm-core task DTOs"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-TASKSTORE-REFERENCES"]
+review_gates = ["no_concrete_store_leakage"]
+
+[status]
+state = "concrete_landed"
+notes = ["trait plus request/response structs landed in atm_core::boundary", "concrete store implementation landed in crates/atm-rusqlite/src/lib.rs as SqliteTaskStore", "ack-specific state changes belong here even when ack is modeled through send"]

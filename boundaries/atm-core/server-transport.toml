@@ -1,0 +1,44 @@
+boundary_id = "BOUNDARY-ServerTransport"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "ServerTransport"
+
+[public]
+trait = "ServerTransport"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["listener_accept_loop", "framed_request_receive", "framed_response_send"]
+io_forbidden = ["sqlite", "inbox_jsonl", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-rusqlite", "atm-daemon"]
+allowed_dependencies = []
+forbidden_edges = []
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["rusqlite::Connection"]
+
+[contracts]
+request_types = ["RequestEnvelope"]
+response_types = ["ResponseEnvelope"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = []
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-SERVER-TRANSPORT-REFERENCES"]
+review_gates = ["no_server_business_logic"]
+
+[status]
+state = "stub_landed"
+notes = ["stub trait plus request/response shells landed in atm_core::boundary", "server transports stay runtime-only and are not exposed to thin client crates"]
