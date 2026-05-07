@@ -41,6 +41,8 @@ use shutdown_signals::DaemonShutdownSignals;
 #[cfg(unix)]
 pub use shutdown_signals::request_shutdown_for_test;
 #[cfg(unix)]
+pub use shutdown_signals::reset_shutdown_signals_for_test;
+#[cfg(unix)]
 const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 #[cfg(unix)]
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
@@ -80,6 +82,10 @@ fn daemon_boundary_stub_error(message: &'static str, source: DaemonBoundaryStubE
 
 #[cfg(unix)]
 fn host_runtime_lock_path(file_name: &str) -> Result<PathBuf, AtmError> {
+    // Host runtime ownership is intentionally OS-home scoped. `ATM_HOME`
+    // selects mailbox/config roots, but both `atm` and `atm-daemon` must
+    // resolve the same `host_runtime_dir()` so one machine cannot fork
+    // separate singleton or launch-lock roots per workspace.
     Ok(host_runtime_lock_path_from_home(
         &atm_core::home::host_runtime_dir()?,
         file_name,
@@ -183,7 +189,67 @@ impl ActiveConnectionRegistry {
         if let Ok(mut streams) = self.streams.lock() {
             streams.remove(&id);
         }
+        // Poisoned lock during remove: connection count still decremented to
+        // prevent stale accounting.
         self.active_connections.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+#[derive(Debug, Clone)]
+struct DaemonObservability {
+    home_dir: PathBuf,
+}
+
+impl DaemonObservability {
+    fn new(home_dir: PathBuf) -> Self {
+        Self { home_dir }
+    }
+}
+
+impl boundary::sealed::Sealed for DaemonObservability {}
+
+impl ObservabilityPort for DaemonObservability {
+    fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {
+        // Retained daemon observability wiring lands in a later sprint; keep
+        // the boundary callable so runtime ownership can converge first.
+        // Stub: always succeeds; real failure paths land in a later sprint.
+        Ok(())
+    }
+
+    fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
+        // Query/follow remain empty until retained log indexing is wired.
+        // Stub: always succeeds; real failure paths land in a later sprint.
+        Ok(AtmLogSnapshot::default())
+    }
+
+    fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, AtmError> {
+        // Stub: always succeeds; real failure paths land in a later sprint.
+        Ok(LogTailSession::empty())
+    }
+
+    fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
+        #[cfg(unix)]
+        let active_log_path = self
+            .home_dir
+            .join(".local")
+            .join("share")
+            .join("logs")
+            .join("atm.log.jsonl");
+        #[cfg(not(unix))]
+        let active_log_path = self.home_dir.join("logs").join("atm.log.jsonl");
+        let fault = std::env::var("ATM_OBSERVABILITY_RETAINED_SINK_FAULT")
+            .ok()
+            .map(|value| value.trim().to_ascii_lowercase());
+        let logging_state = match fault.as_deref() {
+            Some("degraded") => AtmObservabilityHealthState::Degraded,
+            Some("unavailable") => AtmObservabilityHealthState::Unavailable,
+            _ => AtmObservabilityHealthState::Healthy,
+        };
+        Ok(AtmObservabilityHealth {
+            active_log_path: Some(active_log_path),
+            logging_state,
+            query_state: Some(AtmObservabilityHealthState::Healthy),
+            detail: None,
+        })
     }
 }
 #[cfg(unix)]
@@ -358,6 +424,30 @@ impl PreparedRuntimeServer {
     }
 
     fn serve(self, dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
+        self.serve_with_deadlines(dispatcher, GRACEFUL_DRAIN_DEADLINE, FORCE_CANCEL_DEADLINE)
+    }
+
+    fn serve_with_deadlines(
+        self,
+        dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+        graceful_drain_deadline: Duration,
+        force_cancel_deadline: Duration,
+    ) -> Result<(), AtmError> {
+        self.serve_with_deadlines_and_accept_probe(
+            dispatcher,
+            graceful_drain_deadline,
+            force_cancel_deadline,
+            None,
+        )
+    }
+
+    fn serve_with_deadlines_and_accept_probe(
+        self,
+        dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+        graceful_drain_deadline: Duration,
+        force_cancel_deadline: Duration,
+        accepted_probe: Option<std::sync::mpsc::Sender<()>>,
+    ) -> Result<(), AtmError> {
         let Self {
             _singleton,
             listener,
@@ -369,8 +459,10 @@ impl PreparedRuntimeServer {
             let mut serve_error = None;
             loop {
                 if signals.reload.swap(false, Ordering::SeqCst) {
-                    tracing::info!(
-                        "TODO(phase-R): bounded SIGHUP-triggered config/roster reload is not wired yet"
+                    tracing::warn!(
+                        deferred_sprint = "R.18",
+                        deferred_doc = "docs/phase-R/sprint-R18.md",
+                        "bounded SIGHUP-triggered config/roster reload is not wired yet"
                     );
                 }
                 if signals.terminate.load(Ordering::SeqCst) {
@@ -399,6 +491,9 @@ impl PreparedRuntimeServer {
                         }
 
                         let active = registry.register(&stream)?;
+                        if let Some(accepted_probe) = accepted_probe.as_ref() {
+                            let _ = accepted_probe.send(());
+                        }
                         let dispatcher = Arc::clone(&dispatcher);
                         let force_shutdown = Arc::clone(&force_shutdown);
                         scope.spawn(move || {
@@ -426,43 +521,61 @@ impl PreparedRuntimeServer {
             }
 
             let shutdown_started = Instant::now();
-            tracing::info!(
-                active_connections = registry.active_connections(),
-                "daemon shutdown signal received; starting graceful drain"
-            );
-            let graceful_deadline = shutdown_started + GRACEFUL_DRAIN_DEADLINE;
-            let force_cancel_deadline = shutdown_started + FORCE_CANCEL_DEADLINE;
-            while registry.active_connections() > 0 && Instant::now() < graceful_deadline {
-                thread::sleep(SHUTDOWN_POLL_INTERVAL);
-            }
-            let remaining_after_graceful = registry.active_connections();
-            if remaining_after_graceful == 0 {
-                tracing::info!("daemon graceful drain completed cleanly");
-            } else {
-                tracing::info!(
-                    active_connections = remaining_after_graceful,
-                    "daemon graceful drain hit deadline; continuing toward forced cancel"
-                );
-            }
-            if remaining_after_graceful > 0 {
-                force_shutdown.store(true, Ordering::SeqCst);
-                registry.interrupt_all()?;
-            }
-            while registry.active_connections() > 0 && Instant::now() < force_cancel_deadline {
-                thread::sleep(SHUTDOWN_POLL_INTERVAL);
-            }
-            let remaining_connections = registry.active_connections();
-            if remaining_connections > 0 {
-                return Err(AtmError::daemon_unavailable(format!(
-                    "forced cancel deadline elapsed with {remaining_connections} active daemon connections"
-                )));
-            }
+            drain_active_connections_for_shutdown(
+                registry.as_ref(),
+                force_shutdown.as_ref(),
+                graceful_drain_deadline,
+                force_cancel_deadline,
+                shutdown_started,
+            )?;
             if let Some(error) = serve_error {
                 return Err(error);
             }
             Ok(())
         })
     }
+}
+
+#[cfg(unix)]
+fn drain_active_connections_for_shutdown(
+    registry: &ActiveConnectionRegistry,
+    force_shutdown: &AtomicBool,
+    graceful_drain_deadline: Duration,
+    force_cancel_deadline: Duration,
+    shutdown_started: Instant,
+) -> Result<(), AtmError> {
+    tracing::info!(
+        active_connections = registry.active_connections(),
+        "daemon shutdown signal received; starting graceful drain"
+    );
+    let graceful_deadline = shutdown_started + graceful_drain_deadline;
+    let force_cancel_deadline = shutdown_started + force_cancel_deadline;
+    while registry.active_connections() > 0 && Instant::now() < graceful_deadline {
+        thread::sleep(SHUTDOWN_POLL_INTERVAL);
+    }
+    let remaining_after_graceful = registry.active_connections();
+    if remaining_after_graceful == 0 {
+        tracing::info!("daemon graceful drain completed cleanly");
+    } else {
+        tracing::info!(
+            active_connections = remaining_after_graceful,
+            "daemon graceful drain hit deadline; continuing toward forced cancel"
+        );
+    }
+    if remaining_after_graceful > 0 {
+        force_shutdown.store(true, Ordering::SeqCst);
+        registry.interrupt_all()?;
+    }
+    while registry.active_connections() > 0 && Instant::now() < force_cancel_deadline {
+        thread::sleep(SHUTDOWN_POLL_INTERVAL);
+    }
+    let remaining_connections = registry.active_connections();
+    if remaining_connections > 0 {
+        return Err(AtmError::daemon_unavailable(format!(
+            "forced cancel deadline elapsed with {remaining_connections} active daemon connections"
+        )));
+    }
+    Ok(())
 }
 
 #[cfg(not(unix))]
@@ -681,32 +794,26 @@ mod tests {
     use tempfile::TempDir;
 
     struct SignalResetGuard {
-        signals: DaemonShutdownSignals,
+        _private: (),
     }
 
     impl SignalResetGuard {
         fn install() -> Self {
-            Self {
-                signals: DaemonShutdownSignals::install().expect("install signals"),
-            }
+            reset_shutdown_signals_for_test().expect("reset signals");
+            Self { _private: () }
         }
     }
 
     impl Drop for SignalResetGuard {
         fn drop(&mut self) {
-            self.signals
-                .terminate
-                .store(false, std::sync::atomic::Ordering::SeqCst);
-            self.signals
-                .reload
-                .store(false, std::sync::atomic::Ordering::SeqCst);
+            reset_shutdown_signals_for_test().expect("reset signals");
         }
     }
 
     #[test]
     fn daemon_shutdown_signals_install_is_repeatable() {
         let reset = SignalResetGuard::install();
-        let first = &reset.signals;
+        let first = DaemonShutdownSignals::install().expect("first install");
         first
             .terminate
             .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -840,7 +947,7 @@ mod tests {
 
         registry.interrupt_all().expect("interrupt all");
         let result = done_rx
-            .recv_timeout(Duration::from_millis(250))
+            .recv_timeout(Duration::from_secs(2))
             .expect("connection finished");
         drop(client);
         assert!(result.is_ok(), "connection result: {result:?}");

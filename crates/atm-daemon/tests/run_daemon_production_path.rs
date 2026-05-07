@@ -1,27 +1,48 @@
 #![cfg(unix)]
-
-use std::io::{Read, Write};
+use std::io::Write;
 use std::os::unix::net::UnixStream;
+use std::sync::mpsc;
+use std::time::Duration;
 
 use atm_core::doctor::DoctorQuery;
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, read_bounded_stream};
 use atm_core::test_support::EnvGuard;
 use tempfile::TempDir;
 
+struct ShutdownResetGuard;
+
+impl ShutdownResetGuard {
+    fn install() -> Self {
+        atm_daemon::reset_shutdown_signals_for_test().expect("reset shutdown signals");
+        Self
+    }
+}
+
+impl Drop for ShutdownResetGuard {
+    fn drop(&mut self) {
+        atm_daemon::reset_shutdown_signals_for_test().expect("reset shutdown signals");
+    }
+}
+
 #[test]
 fn run_daemon_uses_production_socket_path_and_serves_requests() {
+    let _shutdown_reset = ShutdownResetGuard::install();
     let tempdir = TempDir::new().expect("tempdir");
-    let user_home = tempdir.path().join("user-home");
+    let runtime_home = tempdir.path().join("runtime-home");
     let atm_home = tempdir.path().join("workspace");
     let socket_path = tempdir.path().join("runtime").join("daemon.sock");
-    std::fs::create_dir_all(&user_home).expect("user home");
+    std::fs::create_dir_all(&runtime_home).expect("runtime home");
     std::fs::create_dir_all(&atm_home).expect("atm home");
-    let home_value = user_home.display().to_string();
+    // R.13 singleton ownership is still OS-home scoped, so keep the host
+    // runtime root isolated from the developer machine even though ATM_HOME
+    // remains the canonical mailbox/runtime root under test.
+    let home_value = runtime_home.display().to_string();
     let atm_home_value = atm_home.display().to_string();
     let socket_value = socket_path.display().to_string();
     let _env = EnvGuard::set_many([
         ("HOME", Some(home_value.as_str())),
         ("ATM_HOME", Some(atm_home_value.as_str())),
+        ("ATM_CONFIG_HOME", Some(atm_home_value.as_str())),
         ("ATM_DAEMON_SOCKET", Some(socket_value.as_str())),
     ]);
 
@@ -48,10 +69,12 @@ fn run_daemon_uses_production_socket_path_and_serves_requests() {
         stream
             .shutdown(std::net::Shutdown::Write)
             .expect("shutdown write");
-        let mut response_bytes = Vec::new();
-        stream
-            .read_to_end(&mut response_bytes)
-            .expect("read response");
+        let response_bytes = read_bounded_stream(
+            &mut stream,
+            "read response",
+            "daemon response exceeded frame limit",
+        )
+        .expect("read response");
         let response: ResponseEnvelope =
             serde_json::from_slice(&response_bytes).expect("response json");
         assert!(
@@ -64,7 +87,13 @@ fn run_daemon_uses_production_socket_path_and_serves_requests() {
         atm_daemon::request_shutdown_for_test().expect("request shutdown");
     });
 
-    let result = atm_daemon::run_daemon();
+    let (result_tx, result_rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = result_tx.send(atm_daemon::run_daemon());
+    });
     helper.join().expect("helper thread");
+    let result = result_rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("run_daemon completed");
     assert!(result.is_ok(), "run_daemon result: {result:?}");
 }
