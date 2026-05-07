@@ -144,7 +144,7 @@ Current implementation status:
 The intended rollout is:
 
 1. internal workspace crates now
-2. prove the model on ATM
+2. prove the model on the first consumer repository
 3. stabilize:
    - CLI contract
    - JSON findings shape
@@ -185,3 +185,32 @@ It currently carries the built-in `trait_self_loop` policy through:
 
 This is the default-install extension point for common non-architectural trait
 families such as comparison, hashing, conversion, and serde traits.
+
+## Next Planning Items
+
+The next planned boundary-enforcement work after the current implementation
+branch merges is:
+
+1. boundary definition migration from Markdown parsing to TOML
+2. inventory-parity warn/error enforcement on top of the TOML-backed boundary
+   model
+
+These are documented in:
+
+- [`boundary-enforcement-model.md`](./boundary-enforcement-model.md)
+- [`boundary-toml-migration.md`](./boundary-toml-migration.md)
+
+Current direction for both items:
+
+- TOML dual-loader support and canonical schema should land before
+  inventory-parity warn/error enforcement
+- inventory-parity checks should compare structured boundary data against the
+  code graph
+- planned future-sprint gaps may warn temporarily, but must auto-escalate when
+  overdue
+- TOML should become the canonical source for new boundary features as soon as
+  TOML loading exists
+
+Related ADR:
+
+- [`./adr/ADR-004-structured-boundary-definitions.md`](./adr/ADR-004-structured-boundary-definitions.md)
