@@ -184,8 +184,9 @@ Until a dedicated closeout writer exists, use:
 
 ## Phase-End Post-Mortem
 
-At the end of a phase, after QA findings are closed, run the post-mortem review
-described in `references/post-mortem.md`.
+At the end of a phase, after all sprint branches are integrated into
+`integrate/phase-X` and before the final merge to `develop`, run the
+post-mortem review described in `references/post-mortem.md`.
 
 Participants:
 - `team-lead`
@@ -194,6 +195,7 @@ Participants:
 
 Purpose:
 - review the phase finding set as a whole
+- run one final `integrate/phase-X` quality gate
 - classify recurring patterns
 - produce systemic follow-up recommendations such as:
   - new ADRs
@@ -201,6 +203,16 @@ Purpose:
   - boundary updates
   - planning-process improvements
   - QA-process improvements
+
+Required gate:
+- `quality-mgr` must run a full review on `integrate/phase-X`
+- `quality-mgr` should deploy a background review team by role for that final
+  pass, using the appropriate reviewer mix for the phase artifacts
+- that review must verify 100% of phase findings are fixed or intentionally
+  deferred on the integration branch
+- that review team must verify no integrated fix was missed outside the original
+  changed-file scopes
+- do not merge `integrate/phase-X` to `develop` until that review passes
 
 ## Reporting to Dev
 
