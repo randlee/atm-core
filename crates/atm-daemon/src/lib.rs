@@ -30,6 +30,7 @@ use std::thread;
 #[cfg(unix)]
 use std::time::{Duration, Instant};
 
+use atm_rusqlite::SqliteBoundaryAssembly;
 #[cfg(unix)]
 use fs2::FileExt;
 
@@ -40,7 +41,7 @@ use atm_core::{
     boundary::{self, RequestDispatcher},
     error::AtmError,
 };
-pub(crate) use peer_transport::PeerTransportRuntime;
+pub(crate) use peer_transport::{PeerTransportRuntime, RemoteReplayStateRecord, RemoteReplayStore};
 #[cfg(unix)]
 use shutdown_signals::DaemonShutdownSignals;
 #[cfg(unix)]
@@ -61,6 +62,77 @@ const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
 const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(10);
 #[cfg(unix)]
 const HOST_RUNTIME_OWNER_LOCK_FILE: &str = "owner.lock";
+
+#[derive(Debug, Clone)]
+struct SqliteRemoteReplayStore {
+    assembly: Arc<SqliteBoundaryAssembly>,
+}
+
+impl SqliteRemoteReplayStore {
+    fn from_path(db_path: PathBuf) -> Result<Self, AtmError> {
+        Ok(Self {
+            assembly: Arc::new(SqliteBoundaryAssembly::new(db_path)?),
+        })
+    }
+}
+
+impl RemoteReplayStore for SqliteRemoteReplayStore {
+    fn enqueue(&self, record: RemoteReplayStateRecord) -> Result<(), AtmError> {
+        self.assembly
+            .record_remote_replay_state(atm_rusqlite::RemoteReplayStateRecord {
+                team: record.team,
+                agent: record.agent,
+                message_key: record.message_key,
+                peer_addr: record.peer_addr,
+                request: record.request,
+                recorded_at: record.recorded_at,
+                expires_at: record.expires_at,
+                attempt_count: record.attempt_count,
+                last_attempt_at: record.last_attempt_at,
+                last_error: record.last_error,
+            })
+    }
+
+    fn load_all(&self) -> Result<Vec<RemoteReplayStateRecord>, AtmError> {
+        Ok(self
+            .assembly
+            .load_remote_replay_states()?
+            .into_iter()
+            .map(|record| RemoteReplayStateRecord {
+                team: record.team,
+                agent: record.agent,
+                message_key: record.message_key,
+                peer_addr: record.peer_addr,
+                request: record.request,
+                recorded_at: record.recorded_at,
+                expires_at: record.expires_at,
+                attempt_count: record.attempt_count,
+                last_attempt_at: record.last_attempt_at,
+                last_error: record.last_error,
+            })
+            .collect())
+    }
+
+    fn delete(
+        &self,
+        team: &atm_core::types::TeamName,
+        agent: &atm_core::types::AgentName,
+        message_key: &atm_core::boundary::MessageKey,
+    ) -> Result<(), AtmError> {
+        self.assembly
+            .delete_remote_replay_state(team, agent, message_key)
+    }
+
+    fn purge_expired(&self, now: atm_core::types::IsoTimestamp) -> Result<usize, AtmError> {
+        self.assembly.purge_expired_remote_replay_states(now)
+    }
+}
+
+pub(crate) fn sqlite_remote_replay_store_from_path(
+    db_path: PathBuf,
+) -> Result<Arc<dyn RemoteReplayStore>, AtmError> {
+    Ok(Arc::new(SqliteRemoteReplayStore::from_path(db_path)?))
+}
 
 #[cfg(unix)]
 fn host_runtime_lock_path(file_name: &str) -> Result<PathBuf, AtmError> {

@@ -3,7 +3,9 @@ use crate::boundary_adapters::{
     DaemonReconcileCoordinator, FileWatchEventSource,
 };
 use crate::runtime_health::{DaemonRequestDispatcher, DaemonStatusSource, RuntimeStatusCache};
-use crate::{LocalSocketServerTransport, PeerTransportRuntime};
+use crate::{
+    LocalSocketServerTransport, PeerTransportRuntime, sqlite_remote_replay_store_from_path,
+};
 use atm_core::{boundary::RequestDispatcher, error::AtmError};
 #[cfg(unix)]
 use std::fs::OpenOptions;
@@ -126,6 +128,18 @@ impl RuntimeComposition {
         let notification_sink = DaemonNotificationSink::new();
         let watch_event_source = FileWatchEventSource::new();
         let inbox_ingress = DaemonInboxIngress::new();
+        let replay_store = atm_core::home::host_mail_db_path()
+            .ok()
+            .and_then(|db_path| match sqlite_remote_replay_store_from_path(db_path) {
+                Ok(store) => Some(store),
+                Err(error) => {
+                    tracing::warn!(
+                        %error,
+                        "remote replay store unavailable; outcome-unknown delivery cannot be persisted"
+                    );
+                    None
+                }
+            });
         Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
             server_transport: LocalSocketServerTransport::new(),
@@ -144,7 +158,7 @@ impl RuntimeComposition {
             _config_ingress: DaemonConfigIngress::new(),
             _inbox_ingress: inbox_ingress,
             _inbox_export: DaemonInboxExport::new(),
-            peer_transport_runtime: PeerTransportRuntime::new(),
+            peer_transport_runtime: PeerTransportRuntime::new(replay_store),
         }
     }
 
@@ -166,7 +180,10 @@ impl RuntimeComposition {
             }
         };
         self.lifecycle.transition(RuntimeLifecycleState::Running)?;
-        let replay_summary = self.peer_transport_runtime.resume_pending_replay()?;
+        let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
+            Ok(summary) => summary,
+            Err(error) => return self.finish_runtime(Err(error)),
+        };
         if replay_summary.delivered > 0
             || replay_summary.retained > 0
             || replay_summary.purged_expired > 0
@@ -204,7 +221,10 @@ impl RuntimeComposition {
             }
         };
         self.lifecycle.transition(RuntimeLifecycleState::Running)?;
-        let replay_summary = self.peer_transport_runtime.resume_pending_replay()?;
+        let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
+            Ok(summary) => summary,
+            Err(error) => return self.finish_runtime(Err(error)),
+        };
         if replay_summary.delivered > 0
             || replay_summary.retained > 0
             || replay_summary.purged_expired > 0

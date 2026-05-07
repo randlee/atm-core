@@ -18,8 +18,7 @@ use crate::home;
 use crate::mailbox;
 use crate::mailbox::source::SourceFile;
 use crate::protocol::{
-    NotificationEvent, ReconcileRequest, ReconcileResult, RuntimeStatusSnapshot, WatchEventBatch,
-    WatchSubscriptionRequest,
+    NotificationEvent, ReconcileRequest, ReconcileResult, WatchEventBatch, WatchSubscriptionRequest,
 };
 
 fn to_boundary_source_file(source: SourceFile) -> InboxSourceFileRecord {
@@ -130,20 +129,10 @@ pub fn reexport_messages(
 }
 
 pub fn deliver_notification(event: NotificationEvent) -> Result<(), AtmError> {
+    // The current daemon notification adapter is intentionally a retained-log
+    // no-op until the R.17 notifier runtime replaces it with a real sink.
     info!(kind = %event.kind, detail = %event.detail, "daemon notification delivered");
     Ok(())
-}
-
-pub fn snapshot_status() -> Result<RuntimeStatusSnapshot, AtmError> {
-    Ok(RuntimeStatusSnapshot {
-        liveness: crate::protocol::RuntimeLivenessState::Running,
-        readiness: crate::protocol::RuntimeReadinessState::Ready,
-        detail: Some("daemon runtime adapters are active".to_string()),
-        singleton_owner_pid: Some(std::process::id()),
-        sqlite_ready: true,
-        degraded_ingest: false,
-        member_counts: crate::protocol::RuntimeStatusCounts::default(),
-    })
 }
 
 pub fn poll_watch(request: WatchSubscriptionRequest) -> Result<WatchEventBatch, AtmError> {
