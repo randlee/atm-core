@@ -2088,15 +2088,30 @@ not the live truth.
 
 ### 21.1.1 SQLite Schema Contract
 
-The Phase Q target architecture uses one authoritative schema contract.
+The Phase R first implementation uses one authoritative schema contract with
+concrete SQLite table names:
 
-Minimum tables:
-- `messages`
+- `mail_messages`
+  - logical durable message store
+  - stores the full `MessageEnvelope` in `envelope_json`
+  - also stores queryable message columns:
+    - `from_agent`
+    - `message_text`
+    - `summary`
+    - `message_at`
+    - `legacy_message_id`
 - `ack_state`
-- `message_visibility`
+- `mail_visibility_states`
+  - logical `message_visibility` projection
 - `tasks`
 - `team_roster`
-- `inbox_ingest`
+  - per-member durable projection keyed by `(team_name, agent_name)`
+- `mail_ingest_replay_states`
+  - logical `inbox_ingest` replay/high-water projection
+- `rosters`
+  - crate-private compatibility snapshot table used to round-trip `TeamConfig`
+    while `team_roster` carries the per-member durable projection needed by
+    runtime health and later heartbeat work
 
 Minimum key rules:
 - `message_key` is the canonical ATM durable message identity
@@ -2109,6 +2124,8 @@ Minimum key rules:
 Minimum index/constraint rules:
 - unique identity enforcement on `message_key`
 - dedupe index for imported external/legacy identities
+- one-successor enforcement on `(team, agent, parent_message_id)` for threaded
+  update chains
 - lookup indexes for:
   - recipient/team mailbox projection
   - task lookup
@@ -2118,6 +2135,8 @@ Minimum index/constraint rules:
 Minimum `team_roster` durable fields:
 - `team_name`
 - `agent_name`
+- `member_json`
+  - durable serialized `AgentMember` payload for round-trip roster loading
 - `recipient_pane_id TEXT NULL`
   - authoritative post-send-hook pane mapping when known
   - updated through the roster/registration path rather than rediscovered from
@@ -2134,6 +2153,10 @@ detail.
 Required invariants:
 - `journal_mode = WAL`
 - `foreign_keys = ON`
+- schema bootstrap is deterministic, idempotent, and runs once per database
+  root before normal command operations use the durable store
+- per-operation connection acquisition may reapply runtime pragmas, but must
+  not rerun full schema bootstrap on every connection use
 - mutating ATM flows use explicit transactions
 - no normal command path relies on implicit autocommit as its correctness
   model

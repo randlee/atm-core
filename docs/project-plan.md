@@ -2600,6 +2600,8 @@ Acceptance:
 - SQLite opens under one host-scoped ATM durable root at
   `~/.atm/db/mail.db`, with team and agent partitioned as logical keys inside
   the shared database
+- this host-scoped root supersedes the earlier per-team
+  `.claude/teams/<team>/.atm-state/mail.db` planning assumption
 - `atm-rusqlite` is the only crate that owns direct SQLite calls in the first
   implementation line
 - message update/correction threads are strict one-successor chains whose

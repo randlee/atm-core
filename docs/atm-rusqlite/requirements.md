@@ -96,9 +96,18 @@ Required rules:
 - the current runtime composition owner may depend on this crate in order to
   assemble production adapters, but thin callers and extension crates must not
 - schema bootstrap must be deterministic and idempotent
+- schema bootstrap must run once per database root before normal store
+  operations, not on every connection acquisition
 - WAL / foreign-key / explicit-transaction policy must be enforced here
 - `MailStore`, `TaskStore`, and `RosterStore` may share one internal SQLite
   root object, but they must not collapse into one public god-interface
+- the durable schema must expose:
+  - one concrete message table with queryable identity/timestamp columns plus
+    full-envelope JSON
+  - one per-member `team_roster` durable projection for runtime-facing roster
+    lookup
+  - one crate-private roster snapshot path sufficient to round-trip
+    `TeamConfig` through the current boundary DTOs
 - routine SQLite failures must return typed errors, not panic/unwrap
 - constraint failures must map to validation-class ATM errors rather than
   generic store write failures

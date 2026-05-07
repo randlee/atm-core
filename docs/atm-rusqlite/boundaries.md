@@ -57,6 +57,10 @@ Notes:
   internals.
 - The owned production path resolves to `~/.atm/db/mail.db` and must not be
   derived from `ATM_HOME` or test-only compatibility state roots.
+- The owned state-root policy includes:
+  - one-time deterministic schema bootstrap per database root
+  - per-connection runtime pragma enforcement
+  - no full migration/bootstrap rerun on every connection acquisition
 
 ## SqliteMailStoreAdapter
 
@@ -81,3 +85,6 @@ Purpose:
 
 Notes:
 - Thin extensions such as atm-graft must not depend on this crate directly.
+- The concrete implementation currently maintains both:
+  - a crate-private `rosters` snapshot table for `TeamConfig` round-tripping
+  - a per-member `team_roster` durable projection for runtime-facing lookup

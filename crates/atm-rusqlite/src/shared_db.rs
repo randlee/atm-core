@@ -1,4 +1,3 @@
-use atm_core::boundary;
 use atm_core::error::AtmError;
 use atm_core::home;
 #[cfg(test)]
@@ -8,14 +7,16 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 pub(crate) const DB_MIGRATIONS: &str = r#"
-PRAGMA journal_mode=WAL;
-PRAGMA foreign_keys = ON;
-
 CREATE TABLE IF NOT EXISTS mail_messages (
     team TEXT NOT NULL,
     agent TEXT NOT NULL,
     message_key TEXT NOT NULL,
     envelope_json TEXT NOT NULL,
+    from_agent TEXT NOT NULL,
+    message_text TEXT NOT NULL,
+    summary TEXT NULL,
+    message_at TEXT NOT NULL,
+    legacy_message_id TEXT NULL,
     parent_message_id TEXT NULL,
     thread_mode TEXT NULL CHECK(thread_mode IS NULL OR thread_mode IN ('add-details', 'supersede')),
     stale_at TEXT NULL,
@@ -54,7 +55,7 @@ CREATE TABLE IF NOT EXISTS mail_ingest_replay_states (
     PRIMARY KEY (team, agent, source)
 );
 
-CREATE TABLE IF NOT EXISTS task_records (
+CREATE TABLE IF NOT EXISTS tasks (
     team TEXT NOT NULL,
     task_id TEXT NOT NULL,
     record_json TEXT NOT NULL,
@@ -78,9 +79,39 @@ CREATE TABLE IF NOT EXISTS rosters (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS team_roster (
+    team_name TEXT NOT NULL,
+    agent_name TEXT NOT NULL,
+    member_json TEXT NOT NULL,
+    source TEXT,
+    recipient_pane_id TEXT NULL,
+    pid INTEGER NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (team_name, agent_name)
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_single_successor
     ON mail_messages(team, agent, parent_message_id)
     WHERE parent_message_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_legacy_identity
+    ON mail_messages(team, agent, legacy_message_id)
+    WHERE legacy_message_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_mail_messages_mailbox
+    ON mail_messages(team, agent);
+
+CREATE INDEX IF NOT EXISTS idx_mail_visibility_mailbox
+    ON mail_visibility_states(team, agent);
+
+CREATE INDEX IF NOT EXISTS idx_mail_ingest_mailbox
+    ON mail_ingest_replay_states(team, agent);
+
+CREATE INDEX IF NOT EXISTS idx_task_records_lookup
+    ON tasks(team, task_id);
+
+CREATE INDEX IF NOT EXISTS idx_team_roster_team_name
+    ON team_roster(team_name);
 "#;
 
 #[derive(Debug, Clone)]
@@ -121,7 +152,8 @@ impl SharedDb {
     pub(crate) fn open_in_memory() -> Result<Self, AtmError> {
         let mut connection = Connection::open_in_memory()
             .map_err(|error| sqlite_open_error(&SharedDbTarget::InMemory, error))?;
-        initialize_connection(&mut connection, &SharedDbTarget::InMemory)?;
+        configure_connection(&mut connection, &SharedDbTarget::InMemory)?;
+        ensure_schema(&mut connection, &SharedDbTarget::InMemory)?;
         Ok(Self {
             target: Arc::new(SharedDbTarget::InMemory),
             test_connection: Some(Arc::new(std::sync::Mutex::new(connection))),
@@ -148,7 +180,8 @@ impl SharedDb {
             #[cfg(test)]
             test_connection: None,
         };
-        db.with_connection(|_| Ok(()))?;
+        let mut connection = db.open_connection()?;
+        ensure_schema(&mut connection, db.target.as_ref())?;
         Ok(db)
     }
 
@@ -161,21 +194,10 @@ impl SharedDb {
             let mut connection = connection.lock().map_err(|_| {
                 AtmError::daemon_unavailable("sqlite test connection lock poisoned")
             })?;
-            initialize_connection(&mut connection, self.target.as_ref())?;
             return operation(&mut connection);
         }
 
-        let mut connection = match self.target.as_ref() {
-            SharedDbTarget::Path(path) => Connection::open(path)
-                .map_err(|error| sqlite_open_error(self.target.as_ref(), error))?,
-            #[cfg(test)]
-            SharedDbTarget::InMemory => Connection::open_with_flags(
-                "file:atm-rusqlite?mode=memory&cache=shared",
-                OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
-            )
-            .map_err(|error| sqlite_open_error(self.target.as_ref(), error))?,
-        };
-        initialize_connection(&mut connection, self.target.as_ref())?;
+        let mut connection = self.open_connection()?;
         operation(&mut connection)
     }
 
@@ -210,6 +232,21 @@ impl SharedDb {
     pub(crate) fn target(&self) -> &SharedDbTarget {
         self.target.as_ref()
     }
+
+    fn open_connection(&self) -> Result<Connection, AtmError> {
+        let mut connection = match self.target.as_ref() {
+            SharedDbTarget::Path(path) => Connection::open(path)
+                .map_err(|error| sqlite_open_error(self.target.as_ref(), error))?,
+            #[cfg(test)]
+            SharedDbTarget::InMemory => Connection::open_with_flags(
+                "file:atm-rusqlite?mode=memory&cache=shared",
+                OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
+            )
+            .map_err(|error| sqlite_open_error(self.target.as_ref(), error))?,
+        };
+        configure_connection(&mut connection, self.target.as_ref())?;
+        Ok(connection)
+    }
 }
 
 impl std::fmt::Debug for SharedDb {
@@ -220,7 +257,7 @@ impl std::fmt::Debug for SharedDb {
     }
 }
 
-pub(crate) fn initialize_connection(
+pub(crate) fn configure_connection(
     connection: &mut Connection,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
@@ -231,8 +268,53 @@ pub(crate) fn initialize_connection(
         .pragma_update(None, "foreign_keys", "ON")
         .map_err(|error| sqlite_error(target, "failed to enable sqlite foreign keys", error))?;
     connection
+        .pragma_update(None, "journal_mode", "WAL")
+        .map_err(|error| sqlite_error(target, "failed to enable sqlite wal journal mode", error))?;
+    Ok(())
+}
+
+pub(crate) fn ensure_schema(
+    connection: &mut Connection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    connection
         .execute_batch(DB_MIGRATIONS)
         .map_err(|error| sqlite_error(target, "failed to initialize sqlite schema", error))?;
+    ensure_column(
+        connection,
+        target,
+        "mail_messages",
+        "from_agent",
+        "ALTER TABLE mail_messages ADD COLUMN from_agent TEXT NULL;",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "mail_messages",
+        "message_text",
+        "ALTER TABLE mail_messages ADD COLUMN message_text TEXT NULL;",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "mail_messages",
+        "summary",
+        "ALTER TABLE mail_messages ADD COLUMN summary TEXT NULL;",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "mail_messages",
+        "message_at",
+        "ALTER TABLE mail_messages ADD COLUMN message_at TEXT NULL;",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "mail_messages",
+        "legacy_message_id",
+        "ALTER TABLE mail_messages ADD COLUMN legacy_message_id TEXT NULL;",
+    )?;
     ensure_column(
         connection,
         target,
@@ -296,22 +378,6 @@ fn ensure_column(
     })
 }
 
-pub(crate) fn validate_message_key_contract(
-    message_key: &boundary::MessageKey,
-) -> Result<(), AtmError> {
-    let value = message_key.as_ref();
-    if value.starts_with("atm:") || value.starts_with("ext:") {
-        return Ok(());
-    }
-
-    Err(AtmError::validation(format!(
-        "message key `{value}` must use an `atm:` or `ext:` prefix"
-    ))
-    .with_recovery(
-        "Generate a canonical ATM message key with the required source-family prefix before writing it to SQLite.",
-    ))
-}
-
 fn sqlite_open_error(target: &SharedDbTarget, source: RusqliteError) -> AtmError {
     sqlite_error(
         target,
@@ -341,11 +407,24 @@ pub(crate) fn sqlite_error(
                     target.display()
                 )),
             },
-            rusqlite::ffi::ErrorCode::CannotOpen | rusqlite::ffi::ErrorCode::ReadOnly => {
-                AtmError::mailbox_write(message).with_recovery(
-                    "Check the SQLite durable-state path, filesystem permissions, and available disk space before retrying.",
-                )
-            }
+            rusqlite::ffi::ErrorCode::CannotOpen => AtmError::mailbox_write(message)
+                .with_recovery(
+                    "Check the SQLite durable-state path, parent directory creation, and filesystem permissions before retrying.",
+                ),
+            rusqlite::ffi::ErrorCode::ReadOnly => AtmError::mailbox_write(message)
+                .with_recovery(
+                    "Remount the SQLite durable-state root as writable or choose a writable ATM durable-state path before retrying.",
+                ),
+            rusqlite::ffi::ErrorCode::DatabaseCorrupt
+            | rusqlite::ffi::ErrorCode::NotADatabase => AtmError::mailbox_read(message)
+                .with_recovery(
+                    "Inspect or rebuild the SQLite durable-state store because the current file is corrupt or not a valid database.",
+                ),
+            rusqlite::ffi::ErrorCode::SystemIoFailure
+            | rusqlite::ffi::ErrorCode::DiskFull => AtmError::mailbox_write(message)
+                .with_recovery(
+                    "Check the host filesystem health, available disk space, and SQLite durable-state path before retrying.",
+                ),
             _ => AtmError::mailbox_write(message).with_recovery(
                 "Inspect the SQLite durable-state store for corruption or permission faults before retrying.",
             ),

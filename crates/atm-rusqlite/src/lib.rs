@@ -13,8 +13,7 @@ use atm_core::types::{IsoTimestamp, TeamName};
 use rusqlite::Error as RusqliteError;
 use rusqlite::{Connection, OptionalExtension, params};
 use shared_db::{
-    DB_MIGRATIONS, SharedDb, SharedDbTarget, deserialize_json, serialize_json, sqlite_error,
-    sqlite_thread_mode, validate_message_key_contract,
+    SharedDb, SharedDbTarget, deserialize_json, serialize_json, sqlite_error, sqlite_thread_mode,
 };
 use std::path::Path;
 #[cfg(test)]
@@ -105,16 +104,11 @@ impl boundary::MailStore for SqliteMailStore {
         &self,
         request: boundary::MailStoreBootstrapRequest,
     ) -> Result<boundary::MailStoreBootstrapResponse, AtmError> {
-        self.db.with_connection(|connection| {
-            connection.execute_batch(DB_MIGRATIONS).map_err(|error| {
-                self.db
-                    .error("failed to bootstrap mail-store schema", error)
-            })?;
-            Ok(boundary::MailStoreBootstrapResponse {
-                team: request.team,
-                bootstrapped: true,
-                opened: true,
-            })
+        self.db.with_connection(|_| Ok(()))?;
+        Ok(boundary::MailStoreBootstrapResponse {
+            team: request.team,
+            bootstrapped: true,
+            opened: true,
         })
     }
 
@@ -122,11 +116,20 @@ impl boundary::MailStore for SqliteMailStore {
         &self,
         request: boundary::MailStoreTransactionRequest,
     ) -> Result<boundary::MailStoreTransactionResponse, AtmError> {
+        if !request.requested_operations.is_empty() {
+            return Err(AtmError::config(
+                "sqlite mail-store ad-hoc requested_operations are not implemented",
+            )
+            .with_recovery(
+                "Use the typed MailStore methods instead of run_transaction(requested_operations) until the generic transaction payload is specified.",
+            ));
+        }
+
         self.db.with_transaction(|_transaction| {
             Ok(boundary::MailStoreTransactionResponse {
                 team: request.team,
                 committed: true,
-                operations_executed: request.requested_operations.len(),
+                operations_executed: 0,
             })
         })
     }
@@ -136,12 +139,12 @@ impl boundary::MailStore for SqliteMailStore {
         request: boundary::MailStoreUpsertMessageRequest,
     ) -> Result<boundary::MailStoreUpsertMessageResponse, AtmError> {
         let record = request.record;
-        validate_message_key_contract(&record.message_key)?;
         let envelope_json = serialize_json(&record.envelope, "mail-store envelope")?;
         let parent_message_id = record
             .envelope
             .parent_message_id
-            .map(|value| value.to_string());
+            .as_ref()
+            .map(ToString::to_string);
         let thread_mode = sqlite_thread_mode(record.envelope.thread_mode);
         let stale_at = record
             .envelope
@@ -155,6 +158,11 @@ impl boundary::MailStore for SqliteMailStore {
             .envelope
             .acknowledged_at
             .map(|value| value.into_inner().to_rfc3339());
+        let from_agent = record.envelope.from.to_string();
+        let message_text = record.envelope.text.clone();
+        let summary = record.envelope.summary.clone();
+        let message_at = record.envelope.timestamp.into_inner().to_rfc3339();
+        let legacy_message_id = record.envelope.message_id.as_ref().map(ToString::to_string);
         let inserted = self.db.with_transaction(|transaction| {
             let existing: Option<i64> = transaction
                 .query_row(
@@ -196,10 +204,15 @@ impl boundary::MailStore for SqliteMailStore {
             }
             transaction
                 .execute(
-                    "INSERT INTO mail_messages(team, agent, message_key, envelope_json, parent_message_id, thread_mode, stale_at, imported_from, recorded_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                    "INSERT INTO mail_messages(team, agent, message_key, envelope_json, from_agent, message_text, summary, message_at, legacy_message_id, parent_message_id, thread_mode, stale_at, imported_from, recorded_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
                      ON CONFLICT(team, agent, message_key) DO UPDATE SET
                        envelope_json = excluded.envelope_json,
+                       from_agent = excluded.from_agent,
+                       message_text = excluded.message_text,
+                       summary = excluded.summary,
+                       message_at = excluded.message_at,
+                       legacy_message_id = excluded.legacy_message_id,
                        parent_message_id = excluded.parent_message_id,
                        thread_mode = excluded.thread_mode,
                        stale_at = excluded.stale_at,
@@ -210,6 +223,11 @@ impl boundary::MailStore for SqliteMailStore {
                         record.agent.as_str(),
                         record.message_key.as_ref(),
                         envelope_json,
+                        from_agent,
+                        message_text,
+                        summary,
+                        message_at,
+                        legacy_message_id,
                         parent_message_id,
                         thread_mode,
                         stale_at,
@@ -570,7 +588,7 @@ impl SqliteTaskStore {
     ) -> Result<Option<boundary::TaskStoreTaskRecord>, AtmError> {
         let record_json = connection
             .query_row(
-                "SELECT record_json FROM task_records WHERE team = ?1 AND task_id = ?2;",
+                "SELECT record_json FROM tasks WHERE team = ?1 AND task_id = ?2;",
                 params![team.as_str(), task_id.as_str()],
                 |row| row.get::<_, String>(0),
             )
@@ -590,7 +608,7 @@ impl SqliteTaskStore {
         let record_json = serialize_json(record, "task-store record")?;
         connection
             .execute(
-                "INSERT INTO task_records(team, task_id, record_json)
+                "INSERT INTO tasks(team, task_id, record_json)
                  VALUES (?1, ?2, ?3)
                  ON CONFLICT(team, task_id) DO UPDATE SET
                    record_json = excluded.record_json;",
@@ -819,7 +837,7 @@ impl boundary::TaskStore for SqliteTaskStore {
     ) -> Result<boundary::TaskStoreQueryTaskMetadataResponse, AtmError> {
         let rows = self.db.with_connection(|connection| {
             let mut statement = connection
-                .prepare("SELECT record_json FROM task_records WHERE team = ?1 ORDER BY task_id;")
+                .prepare("SELECT record_json FROM tasks WHERE team = ?1 ORDER BY task_id;")
                 .map_err(|error| {
                     self.db
                         .error("failed to prepare task-store metadata query", error)
@@ -948,7 +966,7 @@ mod tests {
     fn sqlite_error_maps_constraint_busy_and_open_failures() {
         use atm_core::error_codes::AtmErrorCode;
         use rusqlite::ffi::{Error, ErrorCode};
-        let target = SharedDbTarget::Path(PathBuf::from("/tmp/phase-r.sqlite3"));
+        let target = SharedDbTarget::Path(std::env::temp_dir().join("phase-r.sqlite3"));
 
         let constraint = sqlite_error(
             &target,
@@ -988,6 +1006,45 @@ mod tests {
             ),
         );
         assert_eq!(open.code, AtmErrorCode::MailboxWriteFailed);
+
+        let corrupt = sqlite_error(
+            &target,
+            "corrupt failed",
+            RusqliteError::SqliteFailure(
+                Error {
+                    code: ErrorCode::DatabaseCorrupt,
+                    extended_code: 0,
+                },
+                None,
+            ),
+        );
+        assert_eq!(corrupt.code, AtmErrorCode::MailboxReadFailed);
+
+        let read_only = sqlite_error(
+            &target,
+            "read only failed",
+            RusqliteError::SqliteFailure(
+                Error {
+                    code: ErrorCode::ReadOnly,
+                    extended_code: 0,
+                },
+                None,
+            ),
+        );
+        assert_eq!(read_only.code, AtmErrorCode::MailboxWriteFailed);
+
+        let in_memory_busy = sqlite_error(
+            &SharedDbTarget::InMemory,
+            "database busy",
+            RusqliteError::SqliteFailure(
+                Error {
+                    code: ErrorCode::DatabaseBusy,
+                    extended_code: 0,
+                },
+                None,
+            ),
+        );
+        assert_eq!(in_memory_busy.code, AtmErrorCode::MailboxLockFailed);
     }
 
     #[test]
@@ -1038,7 +1095,7 @@ mod tests {
 
         store
             .bootstrap(boundary::MailStoreBootstrapRequest {
-                team_dir: PathBuf::from("/tmp"),
+                team_dir: std::env::temp_dir(),
                 team: team(),
                 team_config: None,
             })
@@ -1125,7 +1182,7 @@ mod tests {
                 assert_eq!(ack_table_exists, 1);
 
                 let mut roster_columns = connection
-                    .prepare("PRAGMA table_info(rosters);")
+                    .prepare("PRAGMA table_info(team_roster);")
                     .map_err(|error| assembly.mail_store.db.error("failed to inspect roster schema", error))?;
                 let roster_columns = roster_columns
                     .query_map([], |row| row.get::<_, String>(1))
@@ -1135,6 +1192,20 @@ mod tests {
                     .map_err(|error| assembly.mail_store.db.error("failed to read roster column metadata", error))?;
                 assert!(collected.iter().any(|column| column == "recipient_pane_id"));
                 assert!(collected.iter().any(|column| column == "pid"));
+
+                let mut message_columns = connection
+                    .prepare("PRAGMA table_info(mail_messages);")
+                    .map_err(|error| assembly.mail_store.db.error("failed to inspect mail schema", error))?;
+                let message_columns = message_columns
+                    .query_map([], |row| row.get::<_, String>(1))
+                    .map_err(|error| assembly.mail_store.db.error("failed to enumerate mail columns", error))?;
+                let collected = message_columns
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|error| assembly.mail_store.db.error("failed to read mail column metadata", error))?;
+                assert!(collected.iter().any(|column| column == "from_agent"));
+                assert!(collected.iter().any(|column| column == "message_text"));
+                assert!(collected.iter().any(|column| column == "message_at"));
+                assert!(collected.iter().any(|column| column == "legacy_message_id"));
                 Ok(())
             })
             .expect("schema inspection");
@@ -1214,6 +1285,23 @@ mod tests {
             })
             .expect_err("duplicate successor");
         assert!(duplicate_successor.is_validation());
+
+        let duplicate_legacy_identity = store
+            .upsert_message(boundary::MailStoreUpsertMessageRequest {
+                record: boundary::MailStoreMessageRecord {
+                    team: team(),
+                    agent: agent(),
+                    message_key: message_key("atm:dup-legacy"),
+                    envelope: MessageEnvelope {
+                        message_id: Some(root_id),
+                        ..envelope()
+                    },
+                    imported_from: None,
+                    recorded_at: Some(IsoTimestamp::now()),
+                },
+            })
+            .expect_err("duplicate legacy identity");
+        assert!(duplicate_legacy_identity.is_validation());
     }
 
     #[test]
@@ -1355,7 +1443,7 @@ mod tests {
         let result: Result<(), AtmError> = db.with_transaction(|transaction| {
             transaction
                 .execute(
-                    "INSERT INTO task_records(team, task_id, record_json) VALUES (?1, ?2, ?3);",
+                    "INSERT INTO tasks(team, task_id, record_json) VALUES (?1, ?2, ?3);",
                     params![
                         team().as_str(),
                         task_id().as_str(),
@@ -1378,7 +1466,7 @@ mod tests {
             .with_connection(|connection| {
                 connection
                     .query_row(
-                        "SELECT record_json FROM task_records WHERE team = ?1 AND task_id = ?2;",
+                        "SELECT record_json FROM tasks WHERE team = ?1 AND task_id = ?2;",
                         params![team().as_str(), task_id().as_str()],
                         |row| row.get::<_, String>(0),
                     )
