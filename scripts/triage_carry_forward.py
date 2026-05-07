@@ -14,13 +14,14 @@ from pathlib import Path
 QUERY = """
 PREFIX triage: <urn:atm:triage:>
 
-SELECT ?finding_id ?severity ?summary ?file ?line
+SELECT ?finding_id ?category ?severity ?summary ?file ?line
 WHERE {
   ?finding a triage:Finding ;
            triage:findingId ?finding_id ;
-           triage:severity ?severity ;
            triage:title ?summary ;
            triage:hasOccurrence ?occ .
+  OPTIONAL { ?finding triage:category ?category . }
+  OPTIONAL { ?finding triage:severity ?severity . }
   ?occ a triage:Occurrence ;
        triage:file ?file ;
        triage:status ?occ_status ;
@@ -122,7 +123,8 @@ def query_records(store_dir: Path, branch: str) -> list[dict[str, object]]:
         rows.append(
             {
                 "id": binding["finding_id"]["value"],
-                "severity": binding["severity"]["value"],
+                "category": binding.get("category", {}).get("value"),
+                "severity": binding.get("severity", {}).get("value"),
                 "file": binding["file"]["value"],
                 "line": int(line_term["value"]) if line_term else None,
                 "summary": binding["summary"]["value"],

@@ -67,8 +67,8 @@ with free-form input.
 Input rules:
 - `triage_mode` is required. Allowed values: `initial_pass`, `followup_pass`.
 - `phase_id` is required.
-- `finding_id`, `title`, `description`, `pattern`, `worktrees`, and
-  `triage_root` are required.
+- `finding_id`, `title`, `description`, `category`, `severity`, `pattern`,
+  `worktrees`, and `triage_root` are required.
 - `worktrees` must already be listed in the desired promotion order. Do not
   invent or infer branch priority from branch names.
 - `repeatable` is required.
