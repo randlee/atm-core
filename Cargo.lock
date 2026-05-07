@@ -115,6 +115,7 @@ dependencies = [
  "chrono",
  "fs2",
  "serde_json",
+ "serial_test",
  "signal-hook",
  "tempfile",
  "tracing",
