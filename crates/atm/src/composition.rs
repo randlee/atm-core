@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 #[cfg(unix)]
 use std::process::{Command, Stdio};
 use std::sync::Arc;
+#[cfg(unix)]
 use std::time::Duration;
 #[cfg(unix)]
 use std::{
@@ -31,9 +32,9 @@ use fs2::FileExt;
 use crate::observability::CliObservability;
 
 #[cfg_attr(not(unix), allow(dead_code))]
-const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
+const SAME_HOST_REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(3);
 #[cfg_attr(not(unix), allow(dead_code))]
-const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
+const AUTO_START_PUBLISH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 #[cfg(unix)]
 const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
 
@@ -604,6 +605,7 @@ fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError {
 mod tests {
     use std::fs;
     use std::sync::Arc;
+    #[cfg(unix)]
     use std::time::Duration;
 
     use atm_core::ack::AckRequest;
@@ -631,10 +633,9 @@ mod tests {
     use serde_json::Value;
     use tempfile::TempDir;
 
-    use super::{
-        CliComposition, DaemonBinaryPath, DaemonSocketPath, DaemonSupervisor,
-        LocalSocketClientTransport,
-    };
+    use super::{CliComposition, DaemonBinaryPath, DaemonSocketPath};
+    #[cfg(unix)]
+    use super::{DaemonSupervisor, LocalSocketClientTransport};
     #[cfg(unix)]
     use super::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, host_runtime_lock_path_from_home};
     use crate::observability::CliObservability;
