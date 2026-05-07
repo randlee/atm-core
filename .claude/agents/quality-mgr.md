@@ -45,31 +45,57 @@ Treat the assignment as the source of truth for:
 If a field is missing, make the narrowest safe assumption and say so in the
 status message to team-lead.
 
+## Review Scope Expansion (Rounds 1–2)
+
+When `review_mode` is NOT `round_limit`, this is a round 1 or round 2 full-sweep review.
+Before dispatching reviewers, expand `review_targets` to the full sprint diff:
+
+```bash
+cd <worktree_path>
+git diff integrate/phase-R...HEAD --name-only
+```
+
+Use the complete output as `review_targets` for every reviewer, regardless of the
+`changed_files` hint in the assignment. This ensures all changed files are reviewed
+in one pass so arch-ctm can fix everything at once — not one round at a time.
+
+If the phase integration branch name differs (e.g., `develop`), use:
+```bash
+git diff develop...HEAD --name-only
+```
+
+Do NOT use the team-lead's `changed_files` field as a scope limiter for round 1/2.
+
+Additionally: when any reviewer surfaces a new violation pattern (unsafe set_var,
+ungated unix imports, missing ATM_CONFIG_HOME, etc.), sweep the full workspace for
+ALL instances and include the complete list in the verdict.
+
 ## Workflow
 
 1. ACK immediately per `docs/team-protocol.md`.
 2. Read the task payload and determine the reviewer set.
-3. Render structured JSON assignments:
+3. If NOT round_limit: expand review_targets to full sprint diff (see above).
+4. Render structured JSON assignments:
    - `req-qa` from `.claude/skills/codex-orchestration/req-qa-assignment.json.j2`
    - `arch-qa` from `.claude/skills/codex-orchestration/arch-qa-assignment.json.j2`
    - `flaky-test-qa` from `.claude/skills/codex-orchestration/flaky-test-qa-assignment.json.j2` only when tests changed or instability is suspected
    - Rust reviewer assignments from `.claude/assets/sc-rust/quality-mgr/templates/` exactly as directed by `.claude/assets/sc-rust/quality-mgr/quality-mgr.rust.md`
-4. Launch all selected reviewers as background Task agents. Never run cargo,
+5. Launch all selected reviewers as background Task agents. Never run cargo,
    clippy, or broad QA analysis yourself in the foreground.
-5. Collect the reviewer results and classify them as:
+6. Collect the reviewer results and classify them as:
    - blocking
    - non-blocking
    - skipped
-6. Check PR CI state when a PR number is present:
+7. Check PR CI state when a PR number is present:
    - prefer `atm gh monitor status`
    - prefer `atm gh monitor pr <PR> --start-timeout 120`
    - prefer `atm gh pr report <PR> --json`
    - fall back to `gh pr checks <PR> --watch` and
      `gh pr view <PR> --json mergeStateStatus,reviewDecision` if the repo-level
      `atm gh` flow is unavailable
-7. Publish the PR update using the templates from
+8. Publish the PR update using the templates from
    `.claude/skills/quality-management-gh/`.
-8. Report a final PASS, FAIL, or IN-FLIGHT gate to team-lead.
+9. Report a final PASS, FAIL, or IN-FLIGHT gate to team-lead.
 
 ## Default Reviewer Set
 
