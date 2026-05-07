@@ -306,7 +306,8 @@ Required saturation behavior:
   reporting; no silent drop
 - retry queue full: fail remote send attempt rather than enqueueing unbounded
 - status-cache cap exceeded: evict least-recently-updated noncritical entries
-  to `unknown` with structured warning emission
+  from the live-member map and demote them to explicit `unknown` with
+  structured warning emission
 
 ## 3.3 Status Ownership
 
@@ -321,8 +322,12 @@ Architectural rules:
   socket handler in `docs/team-member-state.md`
 - SQLite does not own live status or `last_active_at`; it owns durable roster
   state and the current per-member `pid`
-- status cache rebuild after restart begins from `unknown` and refreshes through
-  runtime events
+- status cache rebuild after restart hydrates configured roster members as
+  `unknown`, consults durable SQLite pid continuity only as startup fallback,
+  and refreshes thereafter through runtime events
+- live pid conflict detection is cache-first after startup hydration; a
+  live-old-pid/new-pid collision persists `identity_conflict` state in daemon
+  memory until admin takeover or dead-pid retry clears it
 - read-time overlays such as `active 3 seconds ago` or `idle for 30 minutes`
   are derived from daemon-memory `last_active_at`, not from durable roster
   rows

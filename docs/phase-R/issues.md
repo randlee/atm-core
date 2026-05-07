@@ -200,12 +200,13 @@ and cap/eviction behavior per daemon architecture.
 **Resolution**:
 - `RuntimeStatusCache` now owns daemon-memory member state keyed by
   `team/member`, including `last_active_at`
-- the cache is rebuilt from `unknown` on daemon startup and refreshed through
-  typed heartbeat events
+- the cache hydrates configured roster members as `unknown` on daemon startup,
+  consults durable SQLite pid continuity as startup fallback, and refreshes
+  thereafter through typed heartbeat events
 - the runtime snapshot now carries liveness, readiness, singleton-owner pid,
   SQLite-ready state, degraded-ingest state, and aggregate member counts
-- cache size is capped at `4096` entries with bounded eviction of the oldest
-  non-current member snapshot
+- cache size is capped at `4096` live entries with bounded eviction of the
+  oldest non-current member snapshot into explicit `unknown`
 
 ---
 
@@ -246,6 +247,8 @@ no admin takeover path for live-old-pid conflicts.
   persists durable pid continuity through `RosterStore::record_heartbeat(...)`
 - live-old-pid conflicts now fail with `ATM_IDENTITY_CONFLICT` and the exact
   stop/report message from `docs/team-member-state.md`
+- live-old-pid conflicts also persist `identity_conflict` runtime state until
+  admin takeover or dead-pid retry clears the member
 - dead-old-pid takeover updates durable pid continuity and returns
   `pid_changed = true`
 
