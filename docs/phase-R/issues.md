@@ -447,18 +447,19 @@ From arch-ctm TASK-997 gap report:
 
 ---
 
-## ARCH-CTM RECOMMENDED COMPLETION BUCKETS
+## ARCH-CTM RECOMMENDED WORK GROUPINGS
 
-arch-ctm proposed these groupings for remaining Phase R work. Sprint breakdown pending
-team-lead/arch-ctm planning discussion.
+arch-ctm proposed these groupings for remaining Phase R work. Actual sprint numbers (R.11, R.12, …)
+will be assigned during team-lead/arch-ctm planning discussion — these letter labels are
+organizational only, not sprint identifiers.
 
-| Bucket | Scope |
-|--------|-------|
-| A | Host-wide singleton (B-001, B-002) + runtime lifecycle completion (B-003) |
-| B | Heartbeat/status-cache (B-004, B-005) + doctor health (B-006) |
-| C | Peer transport (B-009) + remote retry/recovery (I-013) |
-| D | Watch (B-007) + reconcile (B-008) + notifier runtime (I-012) |
-| E | Panic removal (I-001, I-002) + config reload (I-014) + final production-hardening sweep |
+| Group | Scope |
+|-------|-------|
+| 1 | Host-wide singleton (B-001, B-002) + runtime lifecycle completion (B-003) |
+| 2 | Heartbeat/status-cache (B-004, B-005) + doctor health (B-006) |
+| 3 | Peer transport (B-009) + remote retry/recovery (I-013) |
+| 4 | Watch (B-007) + reconcile (B-008) + notifier runtime (I-012) |
+| 5 | Panic removal (I-001, I-002) + config reload (I-014) + final production-hardening sweep |
 
 ---
 
