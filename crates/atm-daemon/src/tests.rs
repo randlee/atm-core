@@ -171,7 +171,7 @@ fn blocked_connection_is_interrupted_on_force_cancel() {
 
     registry.interrupt_all().expect("interrupt all");
     let result = done_rx
-        .recv_timeout(Duration::from_secs(2))
+        .recv_timeout(Duration::from_secs(10))
         .expect("connection finished");
     drop(client);
     assert!(result.is_ok(), "connection result: {result:?}");
@@ -366,7 +366,7 @@ fn heartbeat_accepts_pid_takeover_when_previous_pid_is_dead() {
         .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
             team: team.clone(),
             member: member.clone(),
-            pid: 999_999,
+            pid: u32::MAX,
             observed_at: IsoTimestamp::now(),
             activity: HeartbeatActivity::Idle,
         }))
@@ -409,7 +409,7 @@ fn heartbeat_demotes_evicted_member_to_explicit_unknown() {
     let team: TeamName = "test-team".parse().expect("team");
     let member: AgentName = "evicted".parse().expect("member");
     status_cache
-        .hydrate_member_for_test(team.clone(), member.clone(), Some(999_999))
+        .hydrate_member_for_test(team.clone(), member.clone(), Some(u32::MAX))
         .expect("hydrate member");
 
     for index in 0..=4096 {

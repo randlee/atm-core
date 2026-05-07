@@ -266,8 +266,13 @@ impl RuntimeStatusCache {
     }
 
     pub(crate) fn mark_sqlite_unavailable(&self) {
-        if let Ok(mut cache) = self.state.lock() {
-            cache.sqlite_ready = false;
+        match self.state.lock() {
+            Ok(mut cache) => cache.sqlite_ready = false,
+            Err(_) => {
+                tracing::error!(
+                    "runtime status cache lock poisoned while marking sqlite unavailable"
+                );
+            }
         }
     }
 
