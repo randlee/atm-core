@@ -26,7 +26,7 @@ impl Drop for ShutdownResetGuard {
 }
 
 #[test]
-#[serial]
+#[serial(env)]
 fn run_daemon_uses_production_socket_path_and_serves_requests() {
     let _shutdown_reset = ShutdownResetGuard::install();
     let tempdir = TempDir::new().expect("tempdir");

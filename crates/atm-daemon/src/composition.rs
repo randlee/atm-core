@@ -160,17 +160,14 @@ impl RuntimeComposition {
     }
     pub(crate) fn start(&self) -> Result<(), AtmError> {
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
-        let runtime = match self.server_transport.prepare_runtime() {
-            Ok(runtime) => runtime,
+        // Startup replay must finish before the daemon binds its socket so
+        // crash-recovered work cannot race newly accepted requests.
+        let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
+            Ok(summary) => summary,
             Err(error) => {
                 self.lifecycle.force_stopped()?;
                 return Err(error);
             }
-        };
-        self.lifecycle.transition(RuntimeLifecycleState::Running)?;
-        let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
-            Ok(summary) => summary,
-            Err(error) => return self.finish_runtime(Err(error)),
         };
         if replay_summary.delivered > 0
             || replay_summary.retained > 0
@@ -183,6 +180,14 @@ impl RuntimeComposition {
                 "daemon startup replay sweep completed"
             );
         }
+        let runtime = match self.server_transport.prepare_runtime() {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                self.lifecycle.force_stopped()?;
+                return Err(error);
+            }
+        };
+        self.lifecycle.transition(RuntimeLifecycleState::Running)?;
         let result = runtime.serve(self.request_dispatcher());
         self.finish_runtime(result)
     }
@@ -193,6 +198,24 @@ impl RuntimeComposition {
         socket_path: PathBuf,
     ) -> Result<(), AtmError> {
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
+        let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
+            Ok(summary) => summary,
+            Err(error) => {
+                self.lifecycle.force_stopped()?;
+                return Err(error);
+            }
+        };
+        if replay_summary.delivered > 0
+            || replay_summary.retained > 0
+            || replay_summary.purged_expired > 0
+        {
+            tracing::info!(
+                replay_delivered = replay_summary.delivered,
+                replay_retained = replay_summary.retained,
+                replay_purged_expired = replay_summary.purged_expired,
+                "daemon startup replay sweep completed"
+            );
+        }
         let runtime = match self
             .server_transport
             .prepare_runtime_at_socket_path(socket_path)
@@ -204,21 +227,6 @@ impl RuntimeComposition {
             }
         };
         self.lifecycle.transition(RuntimeLifecycleState::Running)?;
-        let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
-            Ok(summary) => summary,
-            Err(error) => return self.finish_runtime(Err(error)),
-        };
-        if replay_summary.delivered > 0
-            || replay_summary.retained > 0
-            || replay_summary.purged_expired > 0
-        {
-            tracing::info!(
-                replay_delivered = replay_summary.delivered,
-                replay_retained = replay_summary.retained,
-                replay_purged_expired = replay_summary.purged_expired,
-                "daemon startup replay sweep completed"
-            );
-        }
         let result = runtime.serve(self.request_dispatcher());
         self.finish_runtime(result)
     }

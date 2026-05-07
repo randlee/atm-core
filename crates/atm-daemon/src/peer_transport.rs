@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::RemoteReplayStateRecord;
 use atm_core::AtmConfig;
 use atm_core::boundary::{self, AtmProtocol, ClientTransport, ConfigLoadRequest, MessageKey};
 use atm_core::error::{AtmError, AtmErrorCode};
@@ -69,20 +70,6 @@ impl AtmProtocol for JsonAtmProtocolCodec {
     fn response_from_frame(&self, frame: FramePayload) -> Result<ResponseEnvelope, AtmError> {
         serde_json::from_slice(&frame.bytes).map_err(AtmError::from)
     }
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct RemoteReplayStateRecord {
-    pub(crate) team: TeamName,
-    pub(crate) agent: AgentName,
-    pub(crate) message_key: MessageKey,
-    pub(crate) peer_addr: String,
-    pub(crate) request: RequestEnvelope,
-    pub(crate) recorded_at: IsoTimestamp,
-    pub(crate) expires_at: IsoTimestamp,
-    pub(crate) attempt_count: u32,
-    pub(crate) last_attempt_at: Option<IsoTimestamp>,
-    pub(crate) last_error: Option<String>,
 }
 
 pub(crate) trait RemoteReplayStore: Send + Sync + std::fmt::Debug {

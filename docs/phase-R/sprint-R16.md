@@ -6,7 +6,7 @@ phase: R
 sprint: "R.16"
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s16-peer-replay
 branch: feature/pR-s16-peer-replay
-status: planned
+status: complete
 estimated_scope: M
 ```
 

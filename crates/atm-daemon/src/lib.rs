@@ -32,13 +32,15 @@ use atm_rusqlite::SqliteBoundaryAssembly;
 use fs2::FileExt;
 
 #[cfg(unix)]
+use atm_core::ResponseEnvelope;
+#[cfg(unix)]
 use atm_core::protocol::RequestEnvelope as ProtocolRequestEnvelope;
 use atm_core::{
-    ResponseEnvelope,
     boundary::{self, RequestDispatcher},
     error::AtmError,
 };
-pub(crate) use peer_transport::{PeerTransportRuntime, RemoteReplayStateRecord, RemoteReplayStore};
+pub(crate) use atm_rusqlite::RemoteReplayStateRecord;
+pub(crate) use peer_transport::{PeerTransportRuntime, RemoteReplayStore};
 #[cfg(unix)]
 use shutdown_signals::DaemonShutdownSignals;
 #[cfg(unix)]
@@ -75,39 +77,11 @@ impl SqliteRemoteReplayStore {
 
 impl RemoteReplayStore for SqliteRemoteReplayStore {
     fn enqueue(&self, record: RemoteReplayStateRecord) -> Result<(), AtmError> {
-        self.assembly
-            .record_remote_replay_state(atm_rusqlite::RemoteReplayStateRecord {
-                team: record.team,
-                agent: record.agent,
-                message_key: record.message_key,
-                peer_addr: record.peer_addr,
-                request: record.request,
-                recorded_at: record.recorded_at,
-                expires_at: record.expires_at,
-                attempt_count: record.attempt_count,
-                last_attempt_at: record.last_attempt_at,
-                last_error: record.last_error,
-            })
+        self.assembly.record_remote_replay_state(record)
     }
 
     fn load_all(&self) -> Result<Vec<RemoteReplayStateRecord>, AtmError> {
-        Ok(self
-            .assembly
-            .load_remote_replay_states()?
-            .into_iter()
-            .map(|record| RemoteReplayStateRecord {
-                team: record.team,
-                agent: record.agent,
-                message_key: record.message_key,
-                peer_addr: record.peer_addr,
-                request: record.request,
-                recorded_at: record.recorded_at,
-                expires_at: record.expires_at,
-                attempt_count: record.attempt_count,
-                last_attempt_at: record.last_attempt_at,
-                last_error: record.last_error,
-            })
-            .collect())
+        self.assembly.load_remote_replay_states()
     }
 
     fn delete(
