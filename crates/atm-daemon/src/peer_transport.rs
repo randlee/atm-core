@@ -426,6 +426,8 @@ impl PeerTransportRuntime {
         }
     }
 
+    #[cfg(test)]
+    #[allow(dead_code)]
     pub(crate) fn client_transport(&self) -> &dyn ClientTransport {
         &self.client
     }
