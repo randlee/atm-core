@@ -430,6 +430,7 @@ pub(crate) fn compose_runtime() -> Result<RuntimeComposition, AtmError> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
     use atm_core::boundary::ServerTransport;
     use tempfile::TempDir;
 
