@@ -37,10 +37,18 @@ resolver = "2"
         self.assertIn("spell", names)
         self.assertIn("daemon-singleton", names)
         self.assertIn("pytests", names)
+        self.assertNotIn("sc-boundary", names)
+        self.assertNotIn("sc-portability", names)
 
     def test_resolve_task_names_rejects_unknown_target(self) -> None:
         with self.assertRaises(ValueError):
             resolve_task_names("unknown")
+
+    def test_resolve_task_names_accepts_sc_boundary_manual_target(self) -> None:
+        self.assertEqual(resolve_task_names("sc-boundary"), ["sc-boundary"])
+
+    def test_resolve_task_names_accepts_sc_portability_manual_target(self) -> None:
+        self.assertEqual(resolve_task_names("sc-portability"), ["sc-portability"])
 
     def test_extract_count_understands_total_violations(self) -> None:
         self.assertEqual(extract_count(["total violations: 58"]), 58)
@@ -82,6 +90,8 @@ resolver = "2"
             tasks = build_tasks(repo_root)
             self.assertEqual(tasks["modules"].command[-1], str(repo_root / ".just/lint_cargo_modules.py"))
             self.assertEqual(tasks["boundaries"].command[-1], str(repo_root / ".just/lint_boundaries.py"))
+            self.assertEqual(tasks["sc-boundary"].command[-1], str(repo_root / ".just/lint_sc_boundary.py"))
+            self.assertEqual(tasks["sc-portability"].command[-1], str(repo_root / ".just/lint_sc_portability.py"))
             self.assertEqual(tasks["manifests"].command[-1], str(repo_root / ".just/lint_manifests.py"))
             self.assertEqual(tasks["deny"].command[-1], str(repo_root / ".just/lint_cargo_deny.py"))
             self.assertEqual(tasks["shear"].command[-1], str(repo_root / ".just/lint_cargo_shear.py"))
@@ -117,7 +127,7 @@ version = "1.1.2"
 """,
                 encoding="utf-8",
             )
-            for lint_name in ("fmt", "clippy", "boundaries", "manifests"):
+            for lint_name in ("fmt", "clippy", "boundaries", "sc-boundary", "manifests"):
                 result = LintResult(
                     task=LintTask(lint_name, ["just", f"_lint-{lint_name}"]),
                     returncode=0,
@@ -151,6 +161,19 @@ version = "1.1.2"
                 "RULE-008/RULE-009 violation: raw production literals found in test/cfg(test) Rust code.",
                 "crates/atm/tests/ack.rs:28: let fixture = Fixture::new(&[\"arch-ctm\", \"team-lead\"]);",
             ],
+        )
+
+    def test_preview_lines_for_sc_boundary_skips_wrapper_banner(self) -> None:
+        self.assertEqual(
+            preview_lines_for_task(
+                "sc-boundary",
+                [
+                    "sc-boundary failed",
+                    "architectural cycle across owners: A, B",
+                    "full log: .just/logs/example.log",
+                ],
+            ),
+            ["architectural cycle across owners: A, B"],
         )
 
     def test_build_transcript_adds_boundary_doc_inventory_for_boundaries(self) -> None:

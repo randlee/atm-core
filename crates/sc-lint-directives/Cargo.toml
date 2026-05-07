@@ -1,0 +1,20 @@
+[package]
+name = "sc-lint-directives"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Shared directive parsing for sc-lint proc-macro and analyzer crates."
+repository.workspace = true
+homepage.workspace = true
+
+[lib]
+name = "sc_lint_directives"
+path = "src/lib.rs"
+
+[dependencies]
+syn = { version = "2", features = ["full", "parsing"] }
+
+[dev-dependencies]
+quote = "1"

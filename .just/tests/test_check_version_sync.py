@@ -72,7 +72,10 @@ class CheckVersionSyncTests(unittest.TestCase):
                 validate_crate_versions(repo_root, "1.1.2")
 
             message = str(error.exception).replace("\\", "/")
-            self.assertIn("crates/atm-rusqlite/Cargo.toml must use version.workspace = true", message)
+            self.assertIn(
+                "crates/atm-rusqlite/Cargo.toml must define [package].version either as a non-empty string or version.workspace = true",
+                message,
+            )
 
     def test_validate_lockfile_checks_all_workspace_packages(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -116,9 +119,51 @@ version = "1.1.2"
                 validate_crate_versions(repo_root, "1.1.2")
 
             self.assertIn(
-                'crates/atm/Cargo.toml [dependencies.atm-core]: internal path dependency version must match workspace version "1.1.2"',
+                'crates/atm/Cargo.toml [dependencies.atm-core]: internal path dependency version must match target crate version "1.1.2"',
                 str(error.exception),
             )
+
+    def test_validate_crate_versions_accepts_explicit_tool_crate_versions(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            (repo_root / "Cargo.toml").write_text(
+                """\
+[workspace]
+members = ["crates/atm-core", "crates/sc-lint-attributes"]
+resolver = "2"
+
+[workspace.package]
+version = "1.1.2"
+""",
+                encoding="utf-8",
+            )
+            atm_core_dir = repo_root / "crates/atm-core"
+            atm_core_dir.mkdir(parents=True)
+            (atm_core_dir / "Cargo.toml").write_text(
+                crate_manifest(
+                    "agent-team-mail-core",
+                    extra='\n[dependencies]\nsc-lint-attributes = { path = "../sc-lint-attributes", version = "0.1.0" }\n',
+                ),
+                encoding="utf-8",
+            )
+            tool_dir = repo_root / "crates/sc-lint-attributes"
+            tool_dir.mkdir(parents=True)
+            (tool_dir / "Cargo.toml").write_text(
+                """\
+[package]
+name = "sc-lint-attributes"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+""",
+                encoding="utf-8",
+            )
+
+            validate_crate_versions(repo_root, "1.1.2")
 
     def test_success_message_includes_workspace_version(self) -> None:
         self.assertEqual(
