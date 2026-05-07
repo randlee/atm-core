@@ -12,6 +12,8 @@ Canonical machine-readable boundary sources:
 - [`boundaries/atm-rusqlite/mail-store-sqlite.toml`](../../boundaries/atm-rusqlite/mail-store-sqlite.toml)
 - [`boundaries/atm-rusqlite/task-store-sqlite.toml`](../../boundaries/atm-rusqlite/task-store-sqlite.toml)
 - [`boundaries/atm-rusqlite/roster-store-sqlite.toml`](../../boundaries/atm-rusqlite/roster-store-sqlite.toml)
+- [`boundaries/atm-rusqlite/sqlite-boundary-assembly.toml`](../../boundaries/atm-rusqlite/sqlite-boundary-assembly.toml)
+- [`boundaries/atm-rusqlite/shared-db.toml`](../../boundaries/atm-rusqlite/shared-db.toml)
 
 Important crate-private assembly/state-root structs that must stay visible in
 review:
@@ -23,6 +25,33 @@ review:
 
 These are not public boundary traits, but they are important private
 implementation surfaces for `R.14` and later closeout review.
+
+## SqliteBoundaryAssembly
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-rusqlite/sqlite-boundary-assembly.toml](../../boundaries/atm-rusqlite/sqlite-boundary-assembly.toml)
+
+Purpose:
+- Own the crate-private assembly seam that composes the three SQLite-backed
+  boundary adapters over one shared host-scoped database root.
+
+Notes:
+- This record exists so the assembly seam remains review-visible even though it
+  is not a public cross-crate trait.
+
+## SharedDbStateRoot
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-rusqlite/shared-db.toml](../../boundaries/atm-rusqlite/shared-db.toml)
+
+Purpose:
+- Own the crate-private SQLite bootstrap, connection-open, and transaction
+  policy for the shared host-scoped database root.
+
+Notes:
+- This record exists so the host-scoped durable-state root and transaction
+  policy are enforced as a private boundary surface rather than informal crate
+  internals.
 
 ## SqliteMailStoreAdapter
 
