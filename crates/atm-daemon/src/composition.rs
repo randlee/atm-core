@@ -6,13 +6,14 @@ use crate::{
 use atm_core::{
     boundary::{
         ClientTransport, ConfigIngress, InboxExport, InboxIngress, NotificationSink,
-        ReconcileCoordinator, RequestDispatcher, ServerTransport, StatusSource, WatchEventSource,
+        ReconcileCoordinator, RequestDispatcher, StatusSource, WatchEventSource,
     },
     error::AtmError,
 };
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+#[cfg_attr(not(unix), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum RuntimeLifecycleState {
     Starting,
@@ -22,6 +23,7 @@ pub(crate) enum RuntimeLifecycleState {
     Stopped,
 }
 
+#[cfg_attr(not(unix), allow(dead_code))]
 #[derive(Debug, Default)]
 pub(crate) struct RuntimeLifecycle {
     state: Mutex<RuntimeLifecycleState>,
@@ -118,10 +120,6 @@ impl RuntimeComposition {
         }
     }
 
-    fn server_transport(&self) -> &dyn ServerTransport {
-        &self.server_transport
-    }
-
     fn notification_sink(&self) -> &dyn NotificationSink {
         &self.notification_sink
     }
@@ -195,10 +193,6 @@ impl RuntimeComposition {
     pub(crate) fn lifecycle_state(&self) -> RuntimeLifecycleState {
         self.lifecycle.state()
     }
-
-    pub(crate) fn serve(&self) -> Result<(), AtmError> {
-        self.server_transport().serve(self.request_dispatcher())
-    }
 }
 
 fn validate_runtime_socket_path() -> Result<(), AtmError> {
@@ -235,6 +229,7 @@ pub(crate) fn compose_runtime() -> Result<RuntimeComposition, AtmError> {
 
 #[cfg(test)]
 mod tests {
+    use atm_core::boundary::ServerTransport;
     use tempfile::TempDir;
 
     use super::{RuntimeComposition, RuntimeLifecycle, RuntimeLifecycleState};
@@ -293,6 +288,23 @@ mod tests {
             .expect_err("startup should fail");
 
         assert!(error.is_daemon_unavailable());
+        assert_eq!(runtime.lifecycle_state(), RuntimeLifecycleState::Stopped);
+    }
+
+    #[test]
+    fn server_transport_cannot_bootstrap_outside_runtime_composition_start() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let runtime = RuntimeComposition::new(tempdir.path().to_path_buf());
+
+        let error = ServerTransport::serve(&runtime.server_transport, runtime.request_dispatcher())
+            .expect_err("direct transport bootstrap should be rejected");
+
+        assert!(error.is_daemon_unavailable());
+        assert!(
+            error
+                .to_string()
+                .contains("cannot bootstrap the daemon directly")
+        );
         assert_eq!(runtime.lifecycle_state(), RuntimeLifecycleState::Stopped);
     }
 }

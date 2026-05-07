@@ -33,7 +33,6 @@ use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGTERM};
 #[cfg(unix)]
 use signal_hook::flag;
 
-use crate::composition::{RuntimeLifecycle, RuntimeLifecycleState};
 #[cfg(unix)]
 use atm_core::protocol::RequestEnvelope as ProtocolRequestEnvelope;
 use atm_core::{
@@ -66,6 +65,8 @@ const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 #[cfg(unix)]
 const SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_millis(25);
+#[cfg(unix)]
+const STALE_OWNER_RECOVERY_RETRY_ATTEMPTS: usize = 3;
 #[cfg(unix)]
 const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
 #[cfg(unix)]
@@ -336,8 +337,6 @@ impl DaemonShutdownSignals {
         let shared = SIGNALS.get().ok_or_else(|| {
             AtmError::daemon_unavailable("daemon shutdown signals were not initialized")
         })?;
-        shared.terminate.store(false, Ordering::SeqCst);
-        shared.reload.store(false, Ordering::SeqCst);
         Ok(Self {
             terminate: Arc::clone(&shared.terminate),
             reload: Arc::clone(&shared.reload),
@@ -361,46 +360,25 @@ impl SingletonGuard {
     }
 
     fn acquire_at(socket_path: &std::path::Path, lock_path: PathBuf) -> Result<Self, AtmError> {
-        if let Some(parent) = lock_path.parent() {
-            fs::create_dir_all(parent).map_err(|source| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to create daemon lock directory at {}",
-                    parent.display()
-                ))
-                .with_source(source)
-            })?;
-        }
-
-        let mut lock_file = OpenOptions::new()
-            .create(true)
-            .read(true)
-            .write(true)
-            .truncate(false)
-            .open(&lock_path)
-            .map_err(|source| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to open daemon singleton lock at {}",
-                    lock_path.display()
-                ))
-                .with_source(source)
-            })?;
+        let mut lock_file = open_singleton_lock(&lock_path)?;
         match lock_file.try_lock_exclusive() {
             Ok(()) => {}
             Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
+                let mut recovered = false;
                 if let Some(pid) = recorded_owner_pid(&lock_file)?
                     && !atm_core::process::process_is_alive(pid)
                 {
-                    return Err(AtmError::daemon_stale_owner_recovery_failed(format!(
-                        "daemon owner record at {} points to non-live pid {}",
-                        lock_path.display(),
-                        pid
-                    )));
+                    drop(lock_file);
+                    lock_file = recover_stale_owner_lock(&lock_path, pid)?;
+                    recovered = true;
                 }
-                return Err(AtmError::daemon_serving_state_rejected(format!(
-                    "a live ATM daemon already owns {}",
-                    lock_path.display()
-                ))
-                .with_source(source));
+                if !recovered {
+                    return Err(AtmError::daemon_serving_state_rejected(format!(
+                        "a live ATM daemon already owns {}",
+                        lock_path.display()
+                    ))
+                    .with_source(source));
+                }
             }
             Err(source) => {
                 return Err(AtmError::daemon_unavailable(format!(
@@ -418,6 +396,58 @@ impl SingletonGuard {
             lock_file,
         })
     }
+}
+
+#[cfg(unix)]
+fn open_singleton_lock(lock_path: &std::path::Path) -> Result<File, AtmError> {
+    if let Some(parent) = lock_path.parent() {
+        fs::create_dir_all(parent).map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to create daemon lock directory at {}",
+                parent.display()
+            ))
+            .with_source(source)
+        })?;
+    }
+
+    OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .truncate(false)
+        .open(lock_path)
+        .map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to open daemon singleton lock at {}",
+                lock_path.display()
+            ))
+            .with_source(source)
+        })
+}
+
+#[cfg(unix)]
+fn recover_stale_owner_lock(lock_path: &std::path::Path, stale_pid: u32) -> Result<File, AtmError> {
+    for _ in 0..STALE_OWNER_RECOVERY_RETRY_ATTEMPTS {
+        thread::sleep(SHUTDOWN_POLL_INTERVAL);
+        let retry_file = open_singleton_lock(lock_path)?;
+        match retry_file.try_lock_exclusive() {
+            Ok(()) => return Ok(retry_file),
+            Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => continue,
+            Err(source) => {
+                return Err(AtmError::daemon_unavailable(format!(
+                    "failed to retry daemon singleton recovery at {}",
+                    lock_path.display()
+                ))
+                .with_source(source));
+            }
+        }
+    }
+
+    Err(AtmError::daemon_stale_owner_recovery_failed(format!(
+        "daemon owner record at {} points to non-live pid {} and the singleton lock could not be safely recovered",
+        lock_path.display(),
+        stale_pid
+    )))
 }
 
 #[cfg(unix)]
@@ -527,10 +557,21 @@ impl LocalSocketServerTransport {
     pub(crate) fn start_runtime(
         &self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-        lifecycle: Arc<RuntimeLifecycle>,
+        lifecycle: Arc<crate::composition::RuntimeLifecycle>,
     ) -> Result<(), AtmError> {
         let socket_path = atm_core::protocol::daemon_socket_path()?;
         self.start_runtime_at_socket_path(socket_path, dispatcher, lifecycle)
+    }
+
+    #[cfg(not(unix))]
+    pub(crate) fn start_runtime(
+        &self,
+        _dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+        _lifecycle: Arc<crate::composition::RuntimeLifecycle>,
+    ) -> Result<(), AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "atm-daemon socket transport requires a Unix platform",
+        ))
     }
 
     #[cfg(unix)]
@@ -538,7 +579,7 @@ impl LocalSocketServerTransport {
         &self,
         socket_path: PathBuf,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-        lifecycle: Arc<RuntimeLifecycle>,
+        lifecycle: Arc<crate::composition::RuntimeLifecycle>,
     ) -> Result<(), AtmError> {
         let signals = DaemonShutdownSignals::install()?;
         let _singleton = SingletonGuard::acquire(&socket_path)?;
@@ -562,10 +603,11 @@ impl LocalSocketServerTransport {
             AtmError::daemon_unavailable("failed to configure daemon socket listener")
                 .with_source(source)
         })?;
-        lifecycle.transition(RuntimeLifecycleState::Running)?;
+        lifecycle.transition(crate::composition::RuntimeLifecycleState::Running)?;
         let registry = Arc::new(ActiveConnectionRegistry::default());
         let force_shutdown = Arc::new(AtomicBool::new(false));
         let result = thread::scope(|scope| -> Result<(), AtmError> {
+            let mut serve_error = None;
             loop {
                 if signals.reload.swap(false, Ordering::SeqCst) {
                     tracing::info!(
@@ -615,15 +657,18 @@ impl LocalSocketServerTransport {
                         thread::sleep(SHUTDOWN_POLL_INTERVAL);
                     }
                     Err(source) => {
-                        return Err(AtmError::daemon_unavailable(
-                            "failed while accepting daemon connection",
-                        )
-                        .with_source(source));
+                        serve_error = Some(
+                            AtmError::daemon_unavailable(
+                                "failed while accepting daemon connection",
+                            )
+                            .with_source(source),
+                        );
+                        break;
                     }
                 }
             }
 
-            lifecycle.transition(RuntimeLifecycleState::Draining)?;
+            lifecycle.transition(crate::composition::RuntimeLifecycleState::Draining)?;
             let shutdown_started = Instant::now();
             tracing::info!(
                 active_connections = registry.active_connections(),
@@ -656,7 +701,10 @@ impl LocalSocketServerTransport {
                     "forced cancel deadline elapsed with {remaining_connections} active daemon connections"
                 )));
             }
-            lifecycle.transition(RuntimeLifecycleState::Stopped)?;
+            lifecycle.transition(crate::composition::RuntimeLifecycleState::Stopped)?;
+            if let Some(error) = serve_error {
+                return Err(error);
+            }
             Ok(())
         });
         if result.is_err() {
@@ -664,16 +712,32 @@ impl LocalSocketServerTransport {
         }
         result
     }
+
+    #[cfg(not(unix))]
+    #[allow(dead_code)]
+    pub(crate) fn start_runtime_at_socket_path(
+        &self,
+        _socket_path: PathBuf,
+        _dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+        _lifecycle: Arc<crate::composition::RuntimeLifecycle>,
+    ) -> Result<(), AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "atm-daemon socket transport requires a Unix platform",
+        ))
+    }
 }
 
 impl boundary::sealed::Sealed for LocalSocketServerTransport {}
 
 impl boundary::ServerTransport for LocalSocketServerTransport {
     #[cfg(unix)]
-    fn serve(&self, dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
-        let lifecycle = Arc::new(RuntimeLifecycle::new());
-        lifecycle.transition(RuntimeLifecycleState::Starting)?;
-        self.start_runtime(dispatcher, lifecycle)
+    fn serve(&self, _dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "LocalSocketServerTransport::serve cannot bootstrap the daemon directly; use RuntimeComposition::start()",
+        )
+        .with_recovery(
+            "Enter the daemon through RuntimeComposition::start() so lifecycle state, singleton ownership, and shutdown handling stay consistent.",
+        ))
     }
 
     #[cfg(not(unix))]
@@ -936,10 +1000,16 @@ mod tests {
     #[test]
     fn daemon_shutdown_signals_install_is_repeatable() {
         let first = DaemonShutdownSignals::install().expect("first install");
+        first
+            .terminate
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        first
+            .reload
+            .store(true, std::sync::atomic::Ordering::SeqCst);
         let second = DaemonShutdownSignals::install().expect("second install");
 
-        assert!(!first.terminate.load(std::sync::atomic::Ordering::SeqCst));
-        assert!(!second.reload.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(second.terminate.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(second.reload.load(std::sync::atomic::Ordering::SeqCst));
     }
 
     #[test]
@@ -987,6 +1057,43 @@ mod tests {
         let error = SingletonGuard::acquire_at(&tempdir.path().join("atm.sock"), lock_path)
             .expect_err("stale");
         assert_eq!(error.code, AtmErrorCode::DaemonStaleOwnerRecoveryFailed);
+    }
+
+    #[test]
+    fn singleton_guard_recovers_stale_owner_once_lock_is_released() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
+        let lock_path =
+            host_runtime_lock_path_from_home(&runtime_dir, HOST_RUNTIME_OWNER_LOCK_FILE);
+        if let Some(parent) = lock_path.parent() {
+            std::fs::create_dir_all(parent).expect("create parent");
+        }
+        let mut file = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .open(&lock_path)
+            .expect("open lock file");
+        fs2::FileExt::try_lock_exclusive(&file).expect("lock file");
+        writeln!(&mut file, "999999").expect("write owner");
+        file.sync_all().expect("sync owner");
+
+        let (release_tx, release_rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            release_rx.recv().expect("release signal");
+            drop(file);
+        });
+
+        let release_tx_clone = release_tx.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(10));
+            release_tx_clone.send(()).expect("release lock");
+        });
+
+        let guard = SingletonGuard::acquire_at(&tempdir.path().join("atm.sock"), lock_path)
+            .expect("stale owner recovery should succeed");
+        drop(guard);
     }
 
     #[test]

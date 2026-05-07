@@ -292,8 +292,8 @@ impl DaemonSupervisor {
             }
             thread::sleep(poll_interval);
         }
-        Err(AtmError::daemon_launch_gate_rejected(format!(
-            "daemon launch gate remained owned while connecting to {}",
+        Err(AtmError::daemon_auto_start_failed(format!(
+            "failed to connect to daemon socket at {} before the auto-start publish timeout elapsed",
             self.socket_path.display()
         )))
     }
@@ -591,6 +591,7 @@ fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError {
 mod tests {
     use std::fs;
     use std::sync::Arc;
+    use std::time::Duration;
 
     use atm_core::ack::AckRequest;
     use atm_core::boundary::ClientTransport;
@@ -618,8 +619,9 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{
-        CliComposition, DaemonBinaryPath, DaemonSocketPath, HOST_RUNTIME_LAUNCH_LOCK_FILE,
-        LaunchGateGuard, host_runtime_lock_path_from_home,
+        CliComposition, DaemonBinaryPath, DaemonSocketPath, DaemonSupervisor,
+        HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, LocalSocketClientTransport,
+        host_runtime_lock_path_from_home,
     };
     use crate::observability::CliObservability;
 
@@ -1083,6 +1085,32 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    fn launch_gate_is_host_wide_across_different_atm_home_roots() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let user_home = tempdir.path().join("user-home");
+        let runtime_dir = atm_core::home::host_runtime_dir_from_home(&user_home);
+        let first_atm_home = user_home.join("workspace-a");
+        let second_atm_home = user_home.join("workspace-b");
+        let first_socket = first_atm_home.join(".atm").join("daemon.sock");
+        let second_socket = second_atm_home.join(".atm").join("daemon.sock");
+
+        let first =
+            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
+                .expect("first acquire");
+        assert!(first.is_some());
+        let second =
+            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
+                .expect("second acquire");
+        assert!(
+            second.is_none(),
+            "different ATM_HOME roots must share one launch gate"
+        );
+        assert_ne!(first_socket, second_socket);
+        drop(first);
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn host_runtime_lock_path_ignores_atm_home() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = host_runtime_lock_path_from_home(
@@ -1120,6 +1148,36 @@ mod tests {
         assert_eq!(
             error.code,
             atm_core::error_codes::AtmErrorCode::DaemonLaunchGateRejected
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn auto_start_timeout_maps_to_auto_start_failed() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
+        let launch_lock_path = runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE);
+        let _gate = LaunchGateGuard::try_acquire_at(launch_lock_path.clone())
+            .expect("acquire")
+            .expect("gate");
+        let socket_path =
+            DaemonSocketPath::new(tempdir.path().join("missing.sock")).expect("socket");
+        let daemon_bin = DaemonBinaryPath::new(tempdir.path().join("atm-daemon")).expect("daemon");
+        let supervisor = DaemonSupervisor::new(socket_path.clone(), daemon_bin);
+        let transport = LocalSocketClientTransport::new(socket_path);
+
+        let error = supervisor
+            .ensure_daemon_available_with_lock_path(
+                &transport,
+                Duration::from_millis(0),
+                Duration::from_millis(0),
+                launch_lock_path,
+            )
+            .expect_err("timeout should fail");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::DaemonAutoStartFailed
         );
     }
 
