@@ -1,0 +1,44 @@
+boundary_id = "BOUNDARY-ReconcileCoordinator"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "ReconcileCoordinator"
+
+[public]
+trait = "ReconcileCoordinator"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["watch_event_coalescing", "ingress_reconcile_triggering"]
+io_forbidden = ["sqlite", "socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["mailbox::store::observe_source_files", "mailbox::store::with_locked_source_files"]
+
+[contracts]
+request_types = ["reconcile requests"]
+response_types = ["reconcile outcomes"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["mailbox::store::observe_source_files"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-RECONCILE-COORDINATOR-REFERENCES"]
+review_gates = ["no_store_or_transport_bypass_in_reconcile"]
+
+[status]
+state = "stub_landed"
+notes = ["callable reconcile trait and named reconcile request/result DTOs landed in atm_core::boundary", "reconcile owns coalescing and trigger policy, not raw watch APIs"]

@@ -1,0 +1,44 @@
+boundary_id = "BOUNDARY-ClientTransport"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "ClientTransport"
+
+[public]
+trait = "ClientTransport"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["outbound_protocol_requests", "request_deadlines", "response_decoding"]
+io_forbidden = ["sqlite", "inbox_jsonl", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm", "atm-daemon", "atm-rusqlite"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["atm_daemon::client"]
+
+[contracts]
+request_types = ["RequestEnvelope"]
+response_types = ["ResponseEnvelope"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["atm_daemon::client"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-CLIENT-TRANSPORT-REFERENCES"]
+review_gates = ["no_cli_to_daemon_internal_edge"]
+
+[status]
+state = "stub_landed"
+notes = ["stub trait plus request/response shells landed in atm_core::boundary", "designed for thin callers such as atm-graft", "daemon-to-daemon remote delivery also depends on this outbound client boundary"]

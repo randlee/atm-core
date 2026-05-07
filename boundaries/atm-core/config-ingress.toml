@@ -1,0 +1,45 @@
+boundary_id = "BOUNDARY-ConfigIngress"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "ConfigIngress"
+
+[public]
+trait = "ConfigIngress"
+notes = "trait and typed workspace/team config DTOs landed in atm_core::boundary"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["persisted_config_loading", "config_document_validation"]
+io_forbidden = ["sqlite", "socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm", "atm-daemon", "atm-rusqlite"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["config load requests"]
+response_types = ["typed ATM config models"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["std::fs::read_to_string"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-CONFIG-INGRESS-REFERENCES"]
+review_gates = ["no_direct_config_parser_calls"]
+
+[status]
+state = "stub_landed"
+notes = ["typed workspace and team config request/response contracts landed in atm_core::boundary", "retained command/service cutover to this boundary is formally deferred to R.7 in docs/plan-phase-R.md"]
