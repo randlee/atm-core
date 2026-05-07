@@ -280,9 +280,17 @@ pub(crate) fn configure_connection(
     connection
         .pragma_update(None, "foreign_keys", "ON")
         .map_err(|error| sqlite_error(target, "failed to enable sqlite foreign keys", error))?;
-    connection
-        .pragma_update(None, "journal_mode", "WAL")
-        .map_err(|error| sqlite_error(target, "failed to enable sqlite wal journal mode", error))?;
+    #[cfg(test)]
+    let enable_wal = !matches!(target, SharedDbTarget::InMemory);
+    #[cfg(not(test))]
+    let enable_wal = true;
+    if enable_wal {
+        connection
+            .pragma_update(None, "journal_mode", "WAL")
+            .map_err(|error| {
+                sqlite_error(target, "failed to enable sqlite wal journal mode", error)
+            })?;
+    }
     Ok(())
 }
 

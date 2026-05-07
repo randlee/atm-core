@@ -662,8 +662,7 @@ pub(crate) fn new_adapter_port(
 
 #[cfg(test)]
 mod adapter_tests {
-    use std::sync::{Mutex, OnceLock};
-
+    use atm_core::test_support::EnvGuard;
     use sc_observability_types::LevelFilter as SharedLevelFilter;
     use serial_test::serial;
     use tracing_subscriber::filter::LevelFilter as TracingLevelFilter;
@@ -672,36 +671,17 @@ mod adapter_tests {
         ATM_LOG_LEVEL_ENV, level_for_outcome, logger_level_override, tracing_level_filter,
     };
 
-    fn env_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-    }
-
-    fn with_env_var<R>(key: &str, value: Option<&str>, f: impl FnOnce() -> R) -> R {
-        let _guard = env_lock().lock().expect("env lock");
-        let previous = std::env::var_os(key);
+    fn with_env_var<R>(key: &'static str, value: Option<&str>, f: impl FnOnce() -> R) -> R {
         match value {
             Some(value) => {
-                // SAFETY: this test helper serializes process environment access.
-                unsafe { std::env::set_var(key, value) }
+                let _guard = EnvGuard::set_raw(key, value);
+                f()
             }
             None => {
-                // SAFETY: this test helper serializes process environment access.
-                unsafe { std::env::remove_var(key) }
+                let _guard = EnvGuard::unset_raw(key);
+                f()
             }
         }
-        let result = f();
-        match previous {
-            Some(value) => {
-                // SAFETY: this test helper serializes process environment access.
-                unsafe { std::env::set_var(key, value) }
-            }
-            None => {
-                // SAFETY: this test helper serializes process environment access.
-                unsafe { std::env::remove_var(key) }
-            }
-        }
-        result
     }
 
     #[test]
