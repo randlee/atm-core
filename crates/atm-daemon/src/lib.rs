@@ -2,6 +2,7 @@
 //! Skeleton crate for Phase R daemon runtime work.
 
 pub(crate) mod composition;
+mod direct_boundaries;
 
 #[cfg(unix)]
 use std::collections::HashMap;
@@ -203,48 +204,6 @@ impl ActiveConnectionRegistry {
         self.active_connections.fetch_sub(1, Ordering::SeqCst);
     }
 }
-fn load_workspace_config_direct(
-    request: ConfigLoadRequest,
-) -> Result<ConfigLoadResponse, AtmError> {
-    atm_core::boundary_support::load_workspace_config(request)
-}
-
-fn load_team_config_direct(
-    request: ConfigTeamLoadRequest,
-) -> Result<ConfigTeamLoadResponse, AtmError> {
-    atm_core::boundary_support::load_team_config(request)
-}
-
-fn import_inbox_source_direct(
-    request: InboxIngressImportRequest,
-) -> Result<InboxIngressImportResponse, AtmError> {
-    atm_core::boundary_support::import_inbox_source(request)
-}
-
-fn compute_identity_fingerprint_direct(
-    request: InboxIngressIdentityFingerprintRequest,
-) -> Result<InboxIngressIdentityFingerprintResponse, AtmError> {
-    atm_core::boundary_support::compute_identity_fingerprint(request)
-}
-
-fn report_inbox_diagnostics_direct(
-    request: InboxIngressDiagnosticsRequest,
-) -> Result<InboxIngressDiagnosticsResponse, AtmError> {
-    atm_core::boundary_support::report_inbox_diagnostics(request)
-}
-
-fn export_source_files_direct(
-    request: InboxExportRecordRequest,
-) -> Result<InboxExportRecordResponse, AtmError> {
-    atm_core::boundary_support::export_source_files(request)
-}
-
-fn reexport_messages_direct(
-    request: InboxExportReexportMessageRequest,
-) -> Result<InboxExportReexportMessageResponse, AtmError> {
-    atm_core::boundary_support::reexport_messages(request)
-}
-
 #[derive(Debug, Clone)]
 struct DaemonObservability {
     home_dir: PathBuf,
@@ -272,12 +231,15 @@ impl ObservabilityPort for DaemonObservability {
     }
 
     fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
+        #[cfg(unix)]
         let active_log_path = self
             .home_dir
             .join(".local")
             .join("share")
             .join("logs")
             .join("atm.log.jsonl");
+        #[cfg(not(unix))]
+        let active_log_path = self.home_dir.join("logs").join("atm.log.jsonl");
         let fault = std::env::var("ATM_OBSERVABILITY_RETAINED_SINK_FAULT")
             .ok()
             .map(|value| value.trim().to_ascii_lowercase());
@@ -473,6 +435,171 @@ impl Drop for ActiveConnectionGuard {
 }
 
 #[cfg(unix)]
+struct PreparedRuntimeServer {
+    _singleton: SingletonGuard,
+    listener: UnixListener,
+    signals: DaemonShutdownSignals,
+    registry: Arc<ActiveConnectionRegistry>,
+    force_shutdown: Arc<AtomicBool>,
+}
+
+#[cfg(unix)]
+impl PreparedRuntimeServer {
+    fn bind(socket_path: PathBuf) -> Result<Self, AtmError> {
+        let signals = DaemonShutdownSignals::install()?;
+        let singleton = SingletonGuard::acquire(&socket_path)?;
+        if let Some(parent) = socket_path.parent() {
+            fs::create_dir_all(parent).map_err(|source| {
+                AtmError::daemon_unavailable(format!(
+                    "failed to create daemon socket directory at {}",
+                    parent.display()
+                ))
+                .with_source(source)
+            })?;
+        }
+        let listener = UnixListener::bind(&socket_path).map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to bind daemon socket at {}",
+                socket_path.display()
+            ))
+            .with_source(source)
+        })?;
+        listener.set_nonblocking(true).map_err(|source| {
+            AtmError::daemon_unavailable("failed to configure daemon socket listener")
+                .with_source(source)
+        })?;
+        Ok(Self {
+            _singleton: singleton,
+            listener,
+            signals,
+            registry: Arc::new(ActiveConnectionRegistry::default()),
+            force_shutdown: Arc::new(AtomicBool::new(false)),
+        })
+    }
+
+    fn serve(self, dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
+        let Self {
+            _singleton,
+            listener,
+            signals,
+            registry,
+            force_shutdown,
+        } = self;
+        thread::scope(|scope| -> Result<(), AtmError> {
+            let mut serve_error = None;
+            loop {
+                if signals.reload.swap(false, Ordering::SeqCst) {
+                    tracing::info!(
+                        "TODO(phase-R): bounded SIGHUP-triggered config/roster reload is not wired yet"
+                    );
+                }
+                if signals.terminate.load(Ordering::SeqCst) {
+                    break;
+                }
+
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        if registry.active_connections() >= MAX_CONCURRENT_CONNECTIONS {
+                            let response = ResponseEnvelope::Error(
+                                atm_core::protocol::ProtocolErrorEnvelope::from_error(
+                                    &AtmError::daemon_unavailable(
+                                        "daemon connection cap exceeded (max 64 concurrent accepts)",
+                                    )
+                                    .with_recovery(
+                                        "Wait for in-flight ATM commands to complete before retrying, or reduce concurrent atm invocations.",
+                                    ),
+                                ),
+                            );
+                            let encoded = serde_json::to_vec(&response).map_err(AtmError::from)?;
+                            let _ = stream.set_read_timeout(Some(REQUEST_DEADLINE));
+                            let _ = stream.set_write_timeout(Some(REQUEST_DEADLINE));
+                            let _ = stream.write_all(&encoded);
+                            let _ = stream.flush();
+                            continue;
+                        }
+
+                        let active = registry.register(&stream)?;
+                        let dispatcher = Arc::clone(&dispatcher);
+                        let force_shutdown = Arc::clone(&force_shutdown);
+                        scope.spawn(move || {
+                            let _active = active;
+                            if let Err(error) = handle_connection(
+                                &mut stream,
+                                dispatcher.as_ref(),
+                                force_shutdown.as_ref(),
+                            ) {
+                                tracing::warn!(%error, "daemon connection handling failed");
+                            }
+                        });
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(SHUTDOWN_POLL_INTERVAL);
+                    }
+                    Err(source) => {
+                        serve_error = Some(
+                            AtmError::daemon_unavailable(
+                                "failed while accepting daemon connection",
+                            )
+                            .with_source(source),
+                        );
+                        break;
+                    }
+                }
+            }
+
+            let shutdown_started = Instant::now();
+            tracing::info!(
+                active_connections = registry.active_connections(),
+                "daemon shutdown signal received; starting graceful drain"
+            );
+            let graceful_deadline = shutdown_started + GRACEFUL_DRAIN_DEADLINE;
+            let force_cancel_deadline = shutdown_started + FORCE_CANCEL_DEADLINE;
+            while registry.active_connections() > 0 && Instant::now() < graceful_deadline {
+                thread::sleep(SHUTDOWN_POLL_INTERVAL);
+            }
+            let remaining_after_graceful = registry.active_connections();
+            if remaining_after_graceful == 0 {
+                tracing::info!("daemon graceful drain completed cleanly");
+            } else {
+                tracing::info!(
+                    active_connections = remaining_after_graceful,
+                    "daemon graceful drain hit deadline; continuing toward forced cancel"
+                );
+            }
+            if remaining_after_graceful > 0 {
+                force_shutdown.store(true, Ordering::SeqCst);
+                registry.interrupt_all()?;
+            }
+            while registry.active_connections() > 0 && Instant::now() < force_cancel_deadline {
+                thread::sleep(SHUTDOWN_POLL_INTERVAL);
+            }
+            let remaining_connections = registry.active_connections();
+            if remaining_connections > 0 {
+                return Err(AtmError::daemon_unavailable(format!(
+                    "forced cancel deadline elapsed with {remaining_connections} active daemon connections"
+                )));
+            }
+            if let Some(error) = serve_error {
+                return Err(error);
+            }
+            Ok(())
+        })
+    }
+}
+
+#[cfg(not(unix))]
+struct PreparedRuntimeServer;
+
+#[cfg(not(unix))]
+impl PreparedRuntimeServer {
+    fn serve(self, _dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "atm-daemon socket transport requires a Unix platform",
+        ))
+    }
+}
+
+#[cfg(unix)]
 fn remove_stale_socket(socket_path: &std::path::Path) -> Result<(), AtmError> {
     if !socket_path.exists() {
         return Ok(());
@@ -554,173 +681,32 @@ impl LocalSocketServerTransport {
     }
 
     #[cfg(unix)]
-    pub(crate) fn start_runtime(
-        &self,
-        dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-        lifecycle: Arc<crate::composition::RuntimeLifecycle>,
-    ) -> Result<(), AtmError> {
+    pub(crate) fn prepare_runtime(&self) -> Result<PreparedRuntimeServer, AtmError> {
         let socket_path = atm_core::protocol::daemon_socket_path()?;
-        self.start_runtime_at_socket_path(socket_path, dispatcher, lifecycle)
+        self.prepare_runtime_at_socket_path(socket_path)
     }
 
     #[cfg(not(unix))]
-    pub(crate) fn start_runtime(
-        &self,
-        _dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-        _lifecycle: Arc<crate::composition::RuntimeLifecycle>,
-    ) -> Result<(), AtmError> {
+    pub(crate) fn prepare_runtime(&self) -> Result<PreparedRuntimeServer, AtmError> {
         Err(AtmError::daemon_unavailable(
             "atm-daemon socket transport requires a Unix platform",
         ))
     }
 
     #[cfg(unix)]
-    pub(crate) fn start_runtime_at_socket_path(
+    pub(crate) fn prepare_runtime_at_socket_path(
         &self,
         socket_path: PathBuf,
-        dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-        lifecycle: Arc<crate::composition::RuntimeLifecycle>,
-    ) -> Result<(), AtmError> {
-        let signals = DaemonShutdownSignals::install()?;
-        let _singleton = SingletonGuard::acquire(&socket_path)?;
-        if let Some(parent) = socket_path.parent() {
-            fs::create_dir_all(parent).map_err(|source| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to create daemon socket directory at {}",
-                    parent.display()
-                ))
-                .with_source(source)
-            })?;
-        }
-        let listener = UnixListener::bind(&socket_path).map_err(|source| {
-            AtmError::daemon_unavailable(format!(
-                "failed to bind daemon socket at {}",
-                socket_path.display()
-            ))
-            .with_source(source)
-        })?;
-        listener.set_nonblocking(true).map_err(|source| {
-            AtmError::daemon_unavailable("failed to configure daemon socket listener")
-                .with_source(source)
-        })?;
-        lifecycle.transition(crate::composition::RuntimeLifecycleState::Running)?;
-        let registry = Arc::new(ActiveConnectionRegistry::default());
-        let force_shutdown = Arc::new(AtomicBool::new(false));
-        let result = thread::scope(|scope| -> Result<(), AtmError> {
-            let mut serve_error = None;
-            loop {
-                if signals.reload.swap(false, Ordering::SeqCst) {
-                    tracing::info!(
-                        "TODO(phase-R): bounded SIGHUP-triggered config/roster reload is not wired yet"
-                    );
-                }
-                if signals.terminate.load(Ordering::SeqCst) {
-                    break;
-                }
-
-                match listener.accept() {
-                    Ok((mut stream, _)) => {
-                        if registry.active_connections() >= MAX_CONCURRENT_CONNECTIONS {
-                            let response = ResponseEnvelope::Error(
-                                atm_core::protocol::ProtocolErrorEnvelope::from_error(
-                                    &AtmError::daemon_unavailable(
-                                        "daemon connection cap exceeded (max 64 concurrent accepts)",
-                                    )
-                                    .with_recovery(
-                                        "Wait for in-flight ATM commands to complete before retrying, or reduce concurrent atm invocations.",
-                                    ),
-                                ),
-                            );
-                            let encoded = serde_json::to_vec(&response).map_err(AtmError::from)?;
-                            let _ = stream.set_read_timeout(Some(REQUEST_DEADLINE));
-                            let _ = stream.set_write_timeout(Some(REQUEST_DEADLINE));
-                            let _ = stream.write_all(&encoded);
-                            let _ = stream.flush();
-                            continue;
-                        }
-
-                        let _active = registry.register(&stream)?;
-                        let dispatcher = Arc::clone(&dispatcher);
-                        let force_shutdown = Arc::clone(&force_shutdown);
-                        scope.spawn(move || {
-                            let _active = _active;
-                            if let Err(error) = handle_connection(
-                                &mut stream,
-                                dispatcher.as_ref(),
-                                force_shutdown.as_ref(),
-                            ) {
-                                tracing::warn!(%error, "daemon connection handling failed");
-                            }
-                        });
-                    }
-                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                        thread::sleep(SHUTDOWN_POLL_INTERVAL);
-                    }
-                    Err(source) => {
-                        serve_error = Some(
-                            AtmError::daemon_unavailable(
-                                "failed while accepting daemon connection",
-                            )
-                            .with_source(source),
-                        );
-                        break;
-                    }
-                }
-            }
-
-            lifecycle.transition(crate::composition::RuntimeLifecycleState::Draining)?;
-            let shutdown_started = Instant::now();
-            tracing::info!(
-                active_connections = registry.active_connections(),
-                "daemon shutdown signal received; starting graceful drain"
-            );
-            let graceful_deadline = shutdown_started + GRACEFUL_DRAIN_DEADLINE;
-            let force_cancel_deadline = shutdown_started + FORCE_CANCEL_DEADLINE;
-            while registry.active_connections() > 0 && Instant::now() < graceful_deadline {
-                thread::sleep(SHUTDOWN_POLL_INTERVAL);
-            }
-            let remaining_after_graceful = registry.active_connections();
-            if remaining_after_graceful == 0 {
-                tracing::info!("daemon graceful drain completed cleanly");
-            } else {
-                tracing::info!(
-                    active_connections = remaining_after_graceful,
-                    "daemon graceful drain hit deadline; continuing toward forced cancel"
-                );
-            }
-            if remaining_after_graceful > 0 {
-                force_shutdown.store(true, Ordering::SeqCst);
-                registry.interrupt_all()?;
-            }
-            while registry.active_connections() > 0 && Instant::now() < force_cancel_deadline {
-                thread::sleep(SHUTDOWN_POLL_INTERVAL);
-            }
-            let remaining_connections = registry.active_connections();
-            if remaining_connections > 0 {
-                return Err(AtmError::daemon_unavailable(format!(
-                    "forced cancel deadline elapsed with {remaining_connections} active daemon connections"
-                )));
-            }
-            lifecycle.transition(crate::composition::RuntimeLifecycleState::Stopped)?;
-            if let Some(error) = serve_error {
-                return Err(error);
-            }
-            Ok(())
-        });
-        if result.is_err() {
-            let _ = lifecycle.force_stopped();
-        }
-        result
+    ) -> Result<PreparedRuntimeServer, AtmError> {
+        PreparedRuntimeServer::bind(socket_path)
     }
 
     #[cfg(not(unix))]
     #[allow(dead_code)]
-    pub(crate) fn start_runtime_at_socket_path(
+    pub(crate) fn prepare_runtime_at_socket_path(
         &self,
         _socket_path: PathBuf,
-        _dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-        _lifecycle: Arc<crate::composition::RuntimeLifecycle>,
-    ) -> Result<(), AtmError> {
+    ) -> Result<PreparedRuntimeServer, AtmError> {
         Err(AtmError::daemon_unavailable(
             "atm-daemon socket transport requires a Unix platform",
         ))
@@ -900,14 +886,14 @@ impl boundary::sealed::Sealed for DaemonConfigIngress {}
 
 impl ConfigIngress for DaemonConfigIngress {
     fn load_config(&self, request: ConfigLoadRequest) -> Result<ConfigLoadResponse, AtmError> {
-        load_workspace_config_direct(request)
+        direct_boundaries::load_workspace_config(request)
     }
 
     fn load_team_config(
         &self,
         request: ConfigTeamLoadRequest,
     ) -> Result<ConfigTeamLoadResponse, AtmError> {
-        load_team_config_direct(request)
+        direct_boundaries::load_team_config(request)
     }
 }
 
@@ -928,21 +914,21 @@ impl InboxIngress for DaemonInboxIngress {
         &self,
         request: InboxIngressImportRequest,
     ) -> Result<InboxIngressImportResponse, AtmError> {
-        import_inbox_source_direct(request)
+        direct_boundaries::import_inbox_source(request)
     }
 
     fn compute_identity_fingerprint(
         &self,
         request: InboxIngressIdentityFingerprintRequest,
     ) -> Result<InboxIngressIdentityFingerprintResponse, AtmError> {
-        compute_identity_fingerprint_direct(request)
+        direct_boundaries::compute_identity_fingerprint(request)
     }
 
     fn report_diagnostics(
         &self,
         request: InboxIngressDiagnosticsRequest,
     ) -> Result<InboxIngressDiagnosticsResponse, AtmError> {
-        report_inbox_diagnostics_direct(request)
+        direct_boundaries::report_inbox_diagnostics(request)
     }
 }
 
@@ -963,14 +949,14 @@ impl InboxExport for DaemonInboxExport {
         &self,
         request: InboxExportRecordRequest,
     ) -> Result<InboxExportRecordResponse, AtmError> {
-        export_source_files_direct(request)
+        direct_boundaries::export_source_files(request)
     }
 
     fn reexport_message(
         &self,
         request: InboxExportReexportMessageRequest,
     ) -> Result<InboxExportReexportMessageResponse, AtmError> {
-        reexport_messages_direct(request)
+        direct_boundaries::reexport_messages(request)
     }
 }
 
@@ -983,7 +969,7 @@ pub fn run_daemon() -> Result<(), AtmError> {
     composition::compose_runtime()?.start()
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::{
         ActiveConnectionRegistry, DaemonShutdownSignals, HOST_RUNTIME_OWNER_LOCK_FILE,

@@ -10,6 +10,7 @@ use atm_core::{
     },
     error::AtmError,
 };
+use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -158,16 +159,16 @@ impl RuntimeComposition {
 
     pub(crate) fn start(&self) -> Result<(), AtmError> {
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
-        match self
-            .server_transport
-            .start_runtime(self.request_dispatcher(), Arc::clone(&self.lifecycle))
-        {
-            Ok(()) => Ok(()),
+        let runtime = match self.server_transport.prepare_runtime() {
+            Ok(runtime) => runtime,
             Err(error) => {
                 self.lifecycle.force_stopped()?;
-                Err(error)
+                return Err(error);
             }
-        }
+        };
+        self.lifecycle.transition(RuntimeLifecycleState::Running)?;
+        let result = runtime.serve(self.request_dispatcher());
+        self.finish_runtime(result)
     }
 
     #[cfg(test)]
@@ -176,22 +177,36 @@ impl RuntimeComposition {
         socket_path: PathBuf,
     ) -> Result<(), AtmError> {
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
-        match self.server_transport.start_runtime_at_socket_path(
-            socket_path,
-            self.request_dispatcher(),
-            Arc::clone(&self.lifecycle),
-        ) {
-            Ok(()) => Ok(()),
+        let runtime = match self
+            .server_transport
+            .prepare_runtime_at_socket_path(socket_path)
+        {
+            Ok(runtime) => runtime,
             Err(error) => {
                 self.lifecycle.force_stopped()?;
-                Err(error)
+                return Err(error);
             }
-        }
+        };
+        self.lifecycle.transition(RuntimeLifecycleState::Running)?;
+        let result = runtime.serve(self.request_dispatcher());
+        self.finish_runtime(result)
     }
 
     #[cfg(test)]
     pub(crate) fn lifecycle_state(&self) -> RuntimeLifecycleState {
         self.lifecycle.state()
+    }
+
+    fn finish_runtime(&self, result: Result<(), AtmError>) -> Result<(), AtmError> {
+        let state_result = self
+            .lifecycle
+            .transition(RuntimeLifecycleState::Draining)
+            .and_then(|_| self.lifecycle.transition(RuntimeLifecycleState::Stopped))
+            .map(|_| ());
+        if state_result.is_err() {
+            self.lifecycle.force_stopped()?;
+        }
+        result
     }
 }
 
@@ -211,14 +226,41 @@ fn validate_runtime_socket_path() -> Result<(), AtmError> {
             "Set ATM_DAEMON_SOCKET to a full socket path or ensure ATM_HOME resolves to a writable daemon socket location.",
         ));
     }
-    if socket_path.parent().is_none() {
+    let Some(parent_dir) = socket_path.parent() else {
         return Err(AtmError::daemon_unavailable(
             "daemon socket path must include a parent directory",
         )
         .with_recovery(
             "Set ATM_DAEMON_SOCKET or ATM_HOME so atm-daemon resolves a socket path inside a real directory.",
         ));
-    }
+    };
+    std::fs::create_dir_all(parent_dir).map_err(|source| {
+        AtmError::daemon_unavailable(format!(
+            "failed to create daemon socket parent directory at {}",
+            parent_dir.display()
+        ))
+        .with_recovery(
+            "Choose a writable ATM_DAEMON_SOCKET parent directory or adjust ATM_HOME before starting atm-daemon.",
+        )
+        .with_source(source)
+    })?;
+    let probe_path = parent_dir.join(format!(".atm-daemon-write-probe-{}", std::process::id()));
+    OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&probe_path)
+        .map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "daemon socket parent directory is not writable at {}",
+                parent_dir.display()
+            ))
+            .with_recovery(
+                "Grant write access to the daemon socket parent directory or point ATM_DAEMON_SOCKET at a writable location before retrying.",
+            )
+            .with_source(source)
+        })?;
+    let _ = std::fs::remove_file(probe_path);
     Ok(())
 }
 
