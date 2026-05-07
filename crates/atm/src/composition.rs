@@ -288,14 +288,10 @@ impl DaemonSupervisor {
                 )));
             }
             if Instant::now() >= deadline {
-                break;
+                return Err(LaunchGateGuard::rejected_error(&self.socket_path));
             }
             thread::sleep(poll_interval);
         }
-        Err(AtmError::daemon_auto_start_failed(format!(
-            "failed to connect to daemon socket at {} before the auto-start publish timeout elapsed",
-            self.socket_path.display()
-        )))
     }
 
     #[cfg(unix)]
@@ -620,9 +616,10 @@ mod tests {
 
     use super::{
         CliComposition, DaemonBinaryPath, DaemonSocketPath, DaemonSupervisor,
-        HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, LocalSocketClientTransport,
-        host_runtime_lock_path_from_home,
+        LocalSocketClientTransport,
     };
+    #[cfg(unix)]
+    use super::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, host_runtime_lock_path_from_home};
     use crate::observability::CliObservability;
 
     struct LoopbackFixture {
@@ -1154,7 +1151,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn auto_start_timeout_maps_to_auto_start_failed() {
+    fn gate_timeout_maps_to_launch_gate_rejected() {
         let tempdir = TempDir::new().expect("tempdir");
         let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
         let launch_lock_path = runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE);
@@ -1175,6 +1172,35 @@ mod tests {
                 launch_lock_path,
             )
             .expect_err("timeout should fail");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::DaemonLaunchGateRejected
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn spawn_failure_maps_to_auto_start_failed() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
+        let launch_lock_path = runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE);
+        let socket_path =
+            DaemonSocketPath::new(tempdir.path().join("missing.sock")).expect("socket");
+        let daemon_path = tempdir.path().join("atm-daemon");
+        std::fs::write(&daemon_path, "#!/bin/false\n").expect("stub daemon");
+        let daemon_bin = DaemonBinaryPath::new(daemon_path).expect("daemon");
+        let supervisor = DaemonSupervisor::new(socket_path.clone(), daemon_bin);
+        let transport = LocalSocketClientTransport::new(socket_path);
+
+        let error = supervisor
+            .ensure_daemon_available_with_lock_path(
+                &transport,
+                Duration::from_millis(10),
+                Duration::from_millis(0),
+                launch_lock_path,
+            )
+            .expect_err("spawn should fail");
 
         assert_eq!(
             error.code,
