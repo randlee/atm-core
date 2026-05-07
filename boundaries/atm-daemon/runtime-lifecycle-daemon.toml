@@ -9,8 +9,8 @@ facade = "RuntimeLifecycleController"
 [implementation]
 type = "RuntimeComposition"
 module = "atm_daemon::composition"
-visibility = "private"
-constructor = "private"
+visibility = "pub(crate)"
+constructor = "pub(crate)"
 
 [composition]
 roots = [
@@ -68,8 +68,10 @@ review_gates = [
 ]
 
 [status]
-state = "planned"
+state = "active"
 notes = [
   "lifecycle controller is a daemon-private control-plane facade rather than a shared cross-crate trait",
-  "production-readiness review must cover this struct explicitly because B-003 originates here",
+  "production-readiness review must cover this struct explicitly because B-003 originated here",
+  "R.13 wired host-wide admission, lifecycle transitions, and startup/shutdown ownership through this control-plane facade",
+  "crate-private helper methods are intentional so run_daemon and lifecycle tests can enter the single owned runtime path without exposing it cross-crate",
 ]

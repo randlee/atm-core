@@ -196,6 +196,61 @@ impl AtmError {
         )
     }
 
+    pub fn daemon_launch_gate_rejected(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::DaemonLaunchGateRejected,
+            AtmErrorKind::DaemonUnavailable,
+            message,
+        )
+        .with_recovery(
+            "Connect to the existing daemon if it is healthy, or resolve stale ownership before retrying another daemon launch.",
+        )
+    }
+
+    pub fn daemon_serving_state_rejected(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::DaemonServingStateRejected,
+            AtmErrorKind::DaemonUnavailable,
+            message,
+        )
+        .with_recovery(
+            "Stop launching duplicate daemons and inspect the existing runtime owner before retrying startup.",
+        )
+    }
+
+    pub fn daemon_stale_owner_recovery_failed(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::DaemonStaleOwnerRecoveryFailed,
+            AtmErrorKind::DaemonUnavailable,
+            message,
+        )
+        .with_recovery(
+            "Inspect the recorded owner, confirm no live daemon remains, repair ownership metadata, then retry startup.",
+        )
+    }
+
+    pub fn daemon_auto_start_failed(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::DaemonAutoStartFailed,
+            AtmErrorKind::DaemonUnavailable,
+            message,
+        )
+        .with_recovery(
+            "Inspect daemon stderr/logs, fix the startup fault, and retry only after the daemon can reach serving state.",
+        )
+    }
+
+    pub fn test_fake_transport_injection_failed(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::TestFakeTransportInjectionFailed,
+            AtmErrorKind::Validation,
+            message,
+        )
+        .with_recovery(
+            "Fix the test seam configuration so it uses a valid FakeClientTransport or LoopbackClientTransport instance.",
+        )
+    }
+
     pub fn team_unavailable() -> Self {
         Self::new_with_code(
             AtmErrorCode::TeamUnavailable,

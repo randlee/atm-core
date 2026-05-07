@@ -31,8 +31,9 @@ pub(crate) mod model_registry;
 pub mod observability;
 /// Internal atomic persistence helpers for shared mutable state files.
 pub(crate) mod persistence;
-/// Internal process-liveness helpers shared across lock implementations.
-pub(crate) mod process;
+/// Hidden process-liveness helpers shared across lock implementations.
+#[doc(hidden)]
+pub mod process;
 /// Shared protocol DTOs used by boundary transport and adapter contracts.
 pub mod protocol;
 /// Mailbox read/query workflows and output models.

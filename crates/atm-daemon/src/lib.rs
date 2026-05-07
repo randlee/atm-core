@@ -3,6 +3,8 @@
 
 pub(crate) mod composition;
 
+#[cfg(unix)]
+use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::fmt;
 #[cfg(unix)]
@@ -31,6 +33,7 @@ use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGTERM};
 #[cfg(unix)]
 use signal_hook::flag;
 
+use crate::composition::{RuntimeLifecycle, RuntimeLifecycleState};
 #[cfg(unix)]
 use atm_core::protocol::RequestEnvelope as ProtocolRequestEnvelope;
 use atm_core::{
@@ -67,6 +70,8 @@ const SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_millis(25);
 const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
 #[cfg(unix)]
 const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(10);
+#[cfg(unix)]
+const HOST_RUNTIME_OWNER_LOCK_FILE: &str = "owner.lock";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DaemonBoundaryStubError {
@@ -89,6 +94,113 @@ fn daemon_boundary_stub_error(message: &'static str, source: DaemonBoundaryStubE
     AtmError::config(message)
         .with_recovery("Complete the Phase R daemon boundary wiring before invoking this path.")
         .with_source(source)
+}
+
+#[cfg(unix)]
+fn host_runtime_lock_path(file_name: &str) -> Result<PathBuf, AtmError> {
+    Ok(host_runtime_lock_path_from_home(
+        &atm_core::home::host_runtime_dir()?,
+        file_name,
+    ))
+}
+
+#[cfg(unix)]
+fn host_runtime_lock_path_from_home(home_dir: &std::path::Path, file_name: &str) -> PathBuf {
+    home_dir.join(file_name)
+}
+
+#[cfg(unix)]
+fn write_owner_record(lock_file: &mut File) -> Result<(), AtmError> {
+    lock_file.set_len(0).map_err(|source| {
+        AtmError::daemon_unavailable("failed to reset daemon singleton lock metadata")
+            .with_source(source)
+    })?;
+    writeln!(lock_file, "{}", std::process::id()).map_err(|source| {
+        AtmError::daemon_unavailable("failed to write daemon singleton lock metadata")
+            .with_source(source)
+    })?;
+    lock_file.sync_all().map_err(|source| {
+        AtmError::daemon_unavailable("failed to sync daemon singleton lock metadata")
+            .with_source(source)
+    })?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn recorded_owner_pid(lock_file: &File) -> Result<Option<u32>, AtmError> {
+    use std::io::{Read, Seek, SeekFrom};
+
+    let mut clone = lock_file.try_clone().map_err(|source| {
+        AtmError::daemon_unavailable("failed to clone daemon ownership record handle")
+            .with_source(source)
+    })?;
+    clone.seek(SeekFrom::Start(0)).map_err(|source| {
+        AtmError::daemon_unavailable("failed to seek daemon ownership record").with_source(source)
+    })?;
+    let mut record = String::new();
+    clone.read_to_string(&mut record).map_err(|source| {
+        AtmError::daemon_unavailable("failed to read daemon ownership record").with_source(source)
+    })?;
+    let trimmed = record.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    let pid = trimmed
+        .split_once(':')
+        .map(|(pid, _)| pid)
+        .unwrap_or(trimmed)
+        .parse::<u32>()
+        .ok();
+    Ok(pid)
+}
+
+#[cfg(unix)]
+#[derive(Debug, Default)]
+struct ActiveConnectionRegistry {
+    next_id: AtomicUsize,
+    active_connections: AtomicUsize,
+    streams: Mutex<HashMap<usize, UnixStream>>,
+}
+
+#[cfg(unix)]
+impl ActiveConnectionRegistry {
+    fn register(self: &Arc<Self>, stream: &UnixStream) -> Result<ActiveConnectionGuard, AtmError> {
+        let id = self.next_id.fetch_add(1, Ordering::SeqCst);
+        let cloned = stream.try_clone().map_err(|source| {
+            AtmError::daemon_unavailable("failed to clone active daemon connection handle")
+                .with_source(source)
+        })?;
+        self.streams
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("active connection registry lock poisoned"))?
+            .insert(id, cloned);
+        self.active_connections.fetch_add(1, Ordering::SeqCst);
+        Ok(ActiveConnectionGuard {
+            id,
+            registry: Arc::clone(self),
+        })
+    }
+
+    fn active_connections(&self) -> usize {
+        self.active_connections.load(Ordering::SeqCst)
+    }
+
+    fn interrupt_all(&self) -> Result<(), AtmError> {
+        let mut streams = self.streams.lock().map_err(|_| {
+            AtmError::daemon_unavailable("active connection registry lock poisoned")
+        })?;
+        for stream in streams.values_mut() {
+            let _ = stream.shutdown(std::net::Shutdown::Both);
+        }
+        Ok(())
+    }
+
+    fn remove(&self, id: usize) {
+        if let Ok(mut streams) = self.streams.lock() {
+            streams.remove(&id);
+        }
+        self.active_connections.fetch_sub(1, Ordering::SeqCst);
+    }
 }
 fn load_workspace_config_direct(
     request: ConfigLoadRequest,
@@ -205,7 +317,7 @@ impl DaemonShutdownSignals {
         let _guard = INSTALL_LOCK
             .get_or_init(|| Mutex::new(()))
             .lock()
-            .expect("daemon signal install lock");
+            .map_err(|_| AtmError::daemon_unavailable("daemon signal install lock poisoned"))?;
         if SIGNALS.get().is_none() {
             let terminate = Arc::new(AtomicBool::new(false));
             let reload = Arc::new(AtomicBool::new(false));
@@ -221,9 +333,9 @@ impl DaemonShutdownSignals {
             })?;
             let _ = SIGNALS.set(SharedDaemonShutdownSignals { terminate, reload });
         }
-        let shared = SIGNALS
-            .get()
-            .expect("daemon shutdown signals should be initialized");
+        let shared = SIGNALS.get().ok_or_else(|| {
+            AtmError::daemon_unavailable("daemon shutdown signals were not initialized")
+        })?;
         shared.terminate.store(false, Ordering::SeqCst);
         shared.reload.store(false, Ordering::SeqCst);
         Ok(Self {
@@ -244,7 +356,11 @@ struct SingletonGuard {
 #[cfg(unix)]
 impl SingletonGuard {
     fn acquire(socket_path: &std::path::Path) -> Result<Self, AtmError> {
-        let lock_path = socket_path.with_extension("lock");
+        let lock_path = host_runtime_lock_path(HOST_RUNTIME_OWNER_LOCK_FILE)?;
+        Self::acquire_at(socket_path, lock_path)
+    }
+
+    fn acquire_at(socket_path: &std::path::Path, lock_path: PathBuf) -> Result<Self, AtmError> {
         if let Some(parent) = lock_path.parent() {
             fs::create_dir_all(parent).map_err(|source| {
                 AtmError::daemon_unavailable(format!(
@@ -268,28 +384,33 @@ impl SingletonGuard {
                 ))
                 .with_source(source)
             })?;
-        lock_file.try_lock_exclusive().map_err(|source| {
-            AtmError::daemon_unavailable(format!(
-                "a live ATM daemon already owns {}",
-                socket_path.display()
-            ))
-            .with_recovery(
-                "Stop the existing daemon or wait for it to exit before starting another instance.",
-            )
-            .with_source(source)
-        })?;
-        lock_file.set_len(0).map_err(|source| {
-            AtmError::daemon_unavailable("failed to reset daemon singleton lock metadata")
-                .with_source(source)
-        })?;
-        writeln!(&mut lock_file, "{}", std::process::id()).map_err(|source| {
-            AtmError::daemon_unavailable("failed to write daemon singleton lock metadata")
-                .with_source(source)
-        })?;
-        lock_file.sync_all().map_err(|source| {
-            AtmError::daemon_unavailable("failed to sync daemon singleton lock metadata")
-                .with_source(source)
-        })?;
+        match lock_file.try_lock_exclusive() {
+            Ok(()) => {}
+            Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
+                if let Some(pid) = recorded_owner_pid(&lock_file)?
+                    && !atm_core::process::process_is_alive(pid)
+                {
+                    return Err(AtmError::daemon_stale_owner_recovery_failed(format!(
+                        "daemon owner record at {} points to non-live pid {}",
+                        lock_path.display(),
+                        pid
+                    )));
+                }
+                return Err(AtmError::daemon_serving_state_rejected(format!(
+                    "a live ATM daemon already owns {}",
+                    lock_path.display()
+                ))
+                .with_source(source));
+            }
+            Err(source) => {
+                return Err(AtmError::daemon_unavailable(format!(
+                    "failed to acquire daemon singleton lock at {}",
+                    lock_path.display()
+                ))
+                .with_source(source));
+            }
+        }
+        write_owner_record(&mut lock_file)?;
         remove_stale_socket(socket_path)?;
         Ok(Self {
             socket_path: socket_path.to_path_buf(),
@@ -310,20 +431,14 @@ impl Drop for SingletonGuard {
 
 #[cfg(unix)]
 struct ActiveConnectionGuard {
-    active_connections: Arc<AtomicUsize>,
-}
-
-#[cfg(unix)]
-impl ActiveConnectionGuard {
-    fn new(active_connections: Arc<AtomicUsize>) -> Self {
-        Self { active_connections }
-    }
+    id: usize,
+    registry: Arc<ActiveConnectionRegistry>,
 }
 
 #[cfg(unix)]
 impl Drop for ActiveConnectionGuard {
     fn drop(&mut self) {
-        self.active_connections.fetch_sub(1, Ordering::SeqCst);
+        self.registry.remove(self.id);
     }
 }
 
@@ -407,14 +522,24 @@ impl LocalSocketServerTransport {
     pub(crate) const fn new() -> Self {
         Self
     }
-}
 
-impl boundary::sealed::Sealed for LocalSocketServerTransport {}
-
-impl boundary::ServerTransport for LocalSocketServerTransport {
     #[cfg(unix)]
-    fn serve(&self, dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
+    pub(crate) fn start_runtime(
+        &self,
+        dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+        lifecycle: Arc<RuntimeLifecycle>,
+    ) -> Result<(), AtmError> {
         let socket_path = atm_core::protocol::daemon_socket_path()?;
+        self.start_runtime_at_socket_path(socket_path, dispatcher, lifecycle)
+    }
+
+    #[cfg(unix)]
+    pub(crate) fn start_runtime_at_socket_path(
+        &self,
+        socket_path: PathBuf,
+        dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+        lifecycle: Arc<RuntimeLifecycle>,
+    ) -> Result<(), AtmError> {
         let signals = DaemonShutdownSignals::install()?;
         let _singleton = SingletonGuard::acquire(&socket_path)?;
         if let Some(parent) = socket_path.parent() {
@@ -437,10 +562,10 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
             AtmError::daemon_unavailable("failed to configure daemon socket listener")
                 .with_source(source)
         })?;
-
-        let active_connections = Arc::new(AtomicUsize::new(0));
+        lifecycle.transition(RuntimeLifecycleState::Running)?;
+        let registry = Arc::new(ActiveConnectionRegistry::default());
         let force_shutdown = Arc::new(AtomicBool::new(false));
-        thread::scope(|scope| -> Result<(), AtmError> {
+        let result = thread::scope(|scope| -> Result<(), AtmError> {
             loop {
                 if signals.reload.swap(false, Ordering::SeqCst) {
                     tracing::info!(
@@ -453,7 +578,7 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
 
                 match listener.accept() {
                     Ok((mut stream, _)) => {
-                        if active_connections.load(Ordering::SeqCst) >= MAX_CONCURRENT_CONNECTIONS {
+                        if registry.active_connections() >= MAX_CONCURRENT_CONNECTIONS {
                             let response = ResponseEnvelope::Error(
                                 atm_core::protocol::ProtocolErrorEnvelope::from_error(
                                     &AtmError::daemon_unavailable(
@@ -472,12 +597,11 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
                             continue;
                         }
 
+                        let _active = registry.register(&stream)?;
                         let dispatcher = Arc::clone(&dispatcher);
-                        let active_connections = Arc::clone(&active_connections);
                         let force_shutdown = Arc::clone(&force_shutdown);
-                        active_connections.fetch_add(1, Ordering::SeqCst);
                         scope.spawn(move || {
-                            let _active = ActiveConnectionGuard::new(active_connections);
+                            let _active = _active;
                             if let Err(error) = handle_connection(
                                 &mut stream,
                                 dispatcher.as_ref(),
@@ -499,44 +623,57 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
                 }
             }
 
+            lifecycle.transition(RuntimeLifecycleState::Draining)?;
             let shutdown_started = Instant::now();
             tracing::info!(
-                active_connections = active_connections.load(Ordering::SeqCst),
+                active_connections = registry.active_connections(),
                 "daemon shutdown signal received; starting graceful drain"
             );
             let graceful_deadline = shutdown_started + GRACEFUL_DRAIN_DEADLINE;
             let force_cancel_deadline = shutdown_started + FORCE_CANCEL_DEADLINE;
-            while active_connections.load(Ordering::SeqCst) > 0
-                && Instant::now() < graceful_deadline
-            {
+            while registry.active_connections() > 0 && Instant::now() < graceful_deadline {
                 thread::sleep(SHUTDOWN_POLL_INTERVAL);
             }
-            let remaining_after_graceful = active_connections.load(Ordering::SeqCst);
+            let remaining_after_graceful = registry.active_connections();
             if remaining_after_graceful == 0 {
                 tracing::info!("daemon graceful drain completed cleanly");
             } else {
                 tracing::info!(
                     active_connections = remaining_after_graceful,
-                    "daemon graceful drain hit deadline; continuing toward forced exit"
+                    "daemon graceful drain hit deadline; continuing toward forced cancel"
                 );
             }
-            while active_connections.load(Ordering::SeqCst) > 0
-                && Instant::now() < force_cancel_deadline
-            {
+            if remaining_after_graceful > 0 {
+                force_shutdown.store(true, Ordering::SeqCst);
+                registry.interrupt_all()?;
+            }
+            while registry.active_connections() > 0 && Instant::now() < force_cancel_deadline {
                 thread::sleep(SHUTDOWN_POLL_INTERVAL);
             }
-            let remaining_connections = active_connections.load(Ordering::SeqCst);
+            let remaining_connections = registry.active_connections();
             if remaining_connections > 0 {
-                force_shutdown.store(true, Ordering::SeqCst);
-                tracing::error!(
-                    remaining_connections,
-                    "forced exit: {} connections still active after FORCE_CANCEL_DEADLINE",
-                    remaining_connections
-                );
-                std::process::exit(1);
+                return Err(AtmError::daemon_unavailable(format!(
+                    "forced cancel deadline elapsed with {remaining_connections} active daemon connections"
+                )));
             }
+            lifecycle.transition(RuntimeLifecycleState::Stopped)?;
             Ok(())
-        })
+        });
+        if result.is_err() {
+            let _ = lifecycle.force_stopped();
+        }
+        result
+    }
+}
+
+impl boundary::sealed::Sealed for LocalSocketServerTransport {}
+
+impl boundary::ServerTransport for LocalSocketServerTransport {
+    #[cfg(unix)]
+    fn serve(&self, dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
+        let lifecycle = Arc::new(RuntimeLifecycle::new());
+        lifecycle.transition(RuntimeLifecycleState::Starting)?;
+        self.start_runtime(dispatcher, lifecycle)
     }
 
     #[cfg(not(unix))]
@@ -779,5 +916,101 @@ impl InboxExport for DaemonInboxExport {
 ///
 /// Returns [`AtmError`] when the daemon transport cannot start or serve.
 pub fn run_daemon() -> Result<(), AtmError> {
-    composition::compose_runtime()?.serve()
+    composition::compose_runtime()?.start()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        ActiveConnectionRegistry, DaemonShutdownSignals, HOST_RUNTIME_OWNER_LOCK_FILE,
+        SingletonGuard, host_runtime_lock_path_from_home,
+    };
+    use atm_core::error_codes::AtmErrorCode;
+    use std::fs::OpenOptions;
+    use std::io::{Read, Write};
+    use std::os::unix::net::{UnixListener, UnixStream};
+    use std::sync::{Arc, mpsc};
+    use std::time::Duration;
+    use tempfile::TempDir;
+
+    #[test]
+    fn daemon_shutdown_signals_install_is_repeatable() {
+        let first = DaemonShutdownSignals::install().expect("first install");
+        let second = DaemonShutdownSignals::install().expect("second install");
+
+        assert!(!first.terminate.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(!second.reload.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[test]
+    fn singleton_guard_is_host_wide_across_different_socket_paths() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
+
+        let first_socket = tempdir.path().join("one.sock");
+        let second_socket = tempdir.path().join("other").join("two.sock");
+        let first = SingletonGuard::acquire_at(
+            &first_socket,
+            host_runtime_lock_path_from_home(&runtime_dir, HOST_RUNTIME_OWNER_LOCK_FILE),
+        )
+        .expect("first singleton");
+        let error = SingletonGuard::acquire_at(
+            &second_socket,
+            host_runtime_lock_path_from_home(&runtime_dir, HOST_RUNTIME_OWNER_LOCK_FILE),
+        )
+        .expect_err("second singleton");
+
+        assert_eq!(error.code, AtmErrorCode::DaemonServingStateRejected);
+        drop(first);
+    }
+
+    #[test]
+    fn singleton_guard_reports_stale_owner_record_failure() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
+        let lock_path =
+            host_runtime_lock_path_from_home(&runtime_dir, HOST_RUNTIME_OWNER_LOCK_FILE);
+        if let Some(parent) = lock_path.parent() {
+            std::fs::create_dir_all(parent).expect("create parent");
+        }
+        let mut file = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .open(&lock_path)
+            .expect("open lock file");
+        fs2::FileExt::try_lock_exclusive(&file).expect("lock file");
+        writeln!(&mut file, "999999").expect("write owner");
+        file.sync_all().expect("sync owner");
+
+        let error = SingletonGuard::acquire_at(&tempdir.path().join("atm.sock"), lock_path)
+            .expect_err("stale");
+        assert_eq!(error.code, AtmErrorCode::DaemonStaleOwnerRecoveryFailed);
+    }
+
+    #[test]
+    fn blocked_connection_is_interrupted_on_force_cancel() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let registry = Arc::new(ActiveConnectionRegistry::default());
+        let socket_path = tempdir.path().join("daemon-test.sock");
+        let listener = UnixListener::bind(&socket_path).expect("bind listener");
+        let client = UnixStream::connect(&socket_path).expect("connect client");
+        let (mut server, _) = listener.accept().expect("accept server");
+        let _guard = registry.register(&server).expect("register");
+        let (done_tx, done_rx) = mpsc::channel();
+
+        std::thread::spawn(move || {
+            let mut byte = [0u8; 1];
+            let result = server.read(&mut byte).map(|_| ());
+            done_tx.send(result).expect("send result");
+        });
+
+        registry.interrupt_all().expect("interrupt all");
+        let result = done_rx
+            .recv_timeout(Duration::from_millis(250))
+            .expect("connection finished");
+        drop(client);
+        assert!(result.is_ok(), "connection result: {result:?}");
+    }
 }

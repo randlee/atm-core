@@ -34,6 +34,8 @@ use crate::observability::CliObservability;
 
 const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
+#[cfg(unix)]
+const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
 
 #[derive(Debug, Default)]
 pub(crate) struct SendCommandEntryPoint;
@@ -60,11 +62,6 @@ impl DaemonSocketPath {
     fn new(path: PathBuf) -> Result<Self, AtmError> {
         validate_daemon_path("daemon socket path", &path)?;
         Ok(Self(path))
-    }
-
-    #[cfg(unix)]
-    fn launch_gate_path(&self) -> PathBuf {
-        self.0.with_extension("launch.lock")
     }
 
     fn display(&self) -> std::path::Display<'_> {
@@ -108,6 +105,19 @@ fn validate_daemon_path(label: &str, path: &Path) -> Result<(), AtmError> {
         )));
     }
     Ok(())
+}
+
+#[cfg(unix)]
+fn host_runtime_lock_path(file_name: &str) -> Result<PathBuf, AtmError> {
+    Ok(host_runtime_lock_path_from_home(
+        &atm_core::home::host_runtime_dir()?,
+        file_name,
+    ))
+}
+
+#[cfg(unix)]
+fn host_runtime_lock_path_from_home(home_dir: &Path, file_name: &str) -> PathBuf {
+    home_dir.join(file_name)
 }
 
 #[derive(Debug)]
@@ -213,49 +223,79 @@ impl DaemonSupervisor {
         &self,
         _transport: &LocalSocketClientTransport,
     ) -> Result<(), AtmError> {
+        #[cfg(unix)]
+        {
+            self.ensure_daemon_available_with_timeout(
+                _transport,
+                AUTO_START_PUBLISH_TIMEOUT,
+                Duration::from_millis(25),
+            )
+        }
+
         #[cfg(not(unix))]
         {
             Err(AtmError::daemon_unavailable(
                 "ATM thin-client transport requires a Unix platform",
             ))
         }
+    }
 
-        #[cfg(unix)]
-        {
-            if _transport.try_connect().is_ok() {
+    #[cfg(unix)]
+    fn ensure_daemon_available_with_timeout(
+        &self,
+        transport: &LocalSocketClientTransport,
+        publish_timeout: Duration,
+        poll_interval: Duration,
+    ) -> Result<(), AtmError> {
+        self.ensure_daemon_available_with_lock_path(
+            transport,
+            publish_timeout,
+            poll_interval,
+            host_runtime_lock_path(HOST_RUNTIME_LAUNCH_LOCK_FILE)?,
+        )
+    }
+
+    #[cfg(unix)]
+    fn ensure_daemon_available_with_lock_path(
+        &self,
+        transport: &LocalSocketClientTransport,
+        publish_timeout: Duration,
+        poll_interval: Duration,
+        launch_lock_path: PathBuf,
+    ) -> Result<(), AtmError> {
+        if transport.try_connect().is_ok() {
+            return Ok(());
+        }
+        let deadline = Instant::now() + publish_timeout;
+        loop {
+            if transport.try_connect().is_ok() {
                 return Ok(());
             }
-            let deadline = Instant::now() + AUTO_START_PUBLISH_TIMEOUT;
-            loop {
-                if _transport.try_connect().is_ok() {
+            if let Some(_guard) = LaunchGateGuard::try_acquire_at(launch_lock_path.clone())? {
+                if transport.try_connect().is_ok() {
                     return Ok(());
                 }
-                // LaunchGateGuard uses a single non-blocking open/create plus
-                // try_lock_exclusive; the wall-clock budget remains approximate
-                // only for those filesystem syscalls, not for any sleep/retry loop.
-                if let Some(_guard) = LaunchGateGuard::try_acquire(&self.socket_path)? {
-                    if _transport.try_connect().is_ok() {
+                self.spawn_daemon()?;
+                while Instant::now() < deadline {
+                    if transport.try_connect().is_ok() {
                         return Ok(());
                     }
-                    self.spawn_daemon()?;
-                    while Instant::now() < deadline {
-                        if _transport.try_connect().is_ok() {
-                            return Ok(());
-                        }
-                        thread::sleep(Duration::from_millis(25));
-                    }
-                    break;
+                    thread::sleep(poll_interval);
                 }
-                if Instant::now() >= deadline {
-                    break;
-                }
-                thread::sleep(Duration::from_millis(25));
+                return Err(AtmError::daemon_auto_start_failed(format!(
+                    "failed to connect to daemon socket at {} after auto-start",
+                    self.socket_path.display()
+                )));
             }
-            Err(AtmError::daemon_unavailable(format!(
-                "failed to connect to daemon socket at {} after auto-start",
-                self.socket_path.display()
-            )))
+            if Instant::now() >= deadline {
+                break;
+            }
+            thread::sleep(poll_interval);
         }
+        Err(AtmError::daemon_launch_gate_rejected(format!(
+            "daemon launch gate remained owned while connecting to {}",
+            self.socket_path.display()
+        )))
     }
 
     #[cfg(unix)]
@@ -279,7 +319,7 @@ impl DaemonSupervisor {
             .stderr(Stdio::inherit())
             .env("ATM_DAEMON_SOCKET", self.socket_path.as_ref());
         command.spawn().map_err(|source| {
-            AtmError::daemon_unavailable(format!(
+            AtmError::daemon_auto_start_failed(format!(
                 "failed to spawn daemon binary at {}",
                 self.daemon_bin.display()
             ))
@@ -298,8 +338,19 @@ struct LaunchGateGuard {
 
 #[cfg(unix)]
 impl LaunchGateGuard {
-    fn try_acquire(socket_path: &DaemonSocketPath) -> Result<Option<Self>, AtmError> {
-        let lock_path = socket_path.launch_gate_path();
+    fn try_acquire() -> Result<Option<Self>, AtmError> {
+        let lock_path = host_runtime_lock_path(HOST_RUNTIME_LAUNCH_LOCK_FILE)?;
+        Self::try_acquire_at(lock_path)
+    }
+
+    fn rejected_error(socket_path: &DaemonSocketPath) -> AtmError {
+        AtmError::daemon_launch_gate_rejected(format!(
+            "daemon launch gate remained owned while connecting to {}",
+            socket_path.display()
+        ))
+    }
+
+    fn try_acquire_at(lock_path: PathBuf) -> Result<Option<Self>, AtmError> {
         if let Some(parent) = lock_path.parent() {
             fs::create_dir_all(parent).map_err(|source| {
                 AtmError::daemon_unavailable(format!(
@@ -328,7 +379,7 @@ impl LaunchGateGuard {
                 file,
             })),
             Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
-            Err(source) => Err(AtmError::daemon_unavailable(format!(
+            Err(source) => Err(AtmError::daemon_launch_gate_rejected(format!(
                 "failed to acquire daemon launch gate at {}",
                 lock_path.display()
             ))
@@ -566,7 +617,10 @@ mod tests {
     use serde_json::Value;
     use tempfile::TempDir;
 
-    use super::{CliComposition, DaemonBinaryPath, DaemonSocketPath};
+    use super::{
+        CliComposition, DaemonBinaryPath, DaemonSocketPath, HOST_RUNTIME_LAUNCH_LOCK_FILE,
+        LaunchGateGuard, host_runtime_lock_path_from_home,
+    };
     use crate::observability::CliObservability;
 
     struct LoopbackFixture {
@@ -1006,6 +1060,64 @@ mod tests {
 
         let daemon_error = DaemonBinaryPath::new(std::path::PathBuf::new()).expect_err("empty");
         assert!(daemon_error.to_string().contains("daemon binary path"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn launch_gate_is_host_wide_across_different_socket_paths() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
+        let first =
+            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
+                .expect("first acquire");
+        assert!(first.is_some());
+        let second =
+            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
+                .expect("second acquire");
+        assert!(second.is_none());
+        drop(first);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn host_runtime_lock_path_ignores_atm_home() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = host_runtime_lock_path_from_home(
+            &atm_core::home::host_runtime_dir_from_home(tempdir.path()),
+            HOST_RUNTIME_LAUNCH_LOCK_FILE,
+        );
+
+        assert_eq!(
+            path,
+            tempdir
+                .path()
+                .join(".atm")
+                .join("daemon")
+                .join("launch.lock")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn launch_gate_busy_maps_to_typed_rejection() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
+        let _gate =
+            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
+                .expect("acquire")
+                .expect("gate");
+        let socket_path = DaemonSocketPath::new(tempdir.path().join("one.sock")).expect("socket");
+        let second =
+            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
+                .expect("second acquire");
+
+        assert!(second.is_none());
+        let error = LaunchGateGuard::rejected_error(&socket_path);
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::DaemonLaunchGateRejected
+        );
     }
 
     #[cfg(unix)]

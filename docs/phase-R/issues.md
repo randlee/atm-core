@@ -9,9 +9,10 @@
 
 ## BLOCKING FINDINGS
 
-### B-001 — Singleton lock paths are socket-scoped, not host-wide
+### ~~B-001 — Singleton lock paths are socket-scoped, not host-wide~~ CLOSED IN R.13
 **Source**: arch-ctm TASK-995 Finding #1 + quality-mgr REQ-R-001
-**Files**: `crates/atm/src/composition.rs:65-68,301-303` | `crates/atm-daemon/src/lib.rs:246-247`
+**Closed on**: `feature/pR-s13-runtime-admission`
+**Files**: `crates/atm/src/composition.rs` | `crates/atm-daemon/src/lib.rs` | `crates/atm-core/src/home.rs`
 **ADR**: ADR-002 §3.2 explicitly rejects socket-scoped enforcement
 
 Both guard layers derive their lock path from the socket path:
@@ -47,11 +48,20 @@ config. Keep socket path as serving endpoint only.
 - tests must cover different `ATM_HOME` / `ATM_DAEMON_SOCKET` values on the
   same host resolving to one host-wide ownership path
 
+**Resolution**:
+- both lock paths now resolve under the host runtime root `~/.atm/daemon/`
+  independent of `ATM_HOME` and the serving socket path
+- client pre-spawn admission uses `launch.lock`
+- daemon-side serving admission uses `owner.lock`
+- new tests prove different `ATM_HOME` / socket values still contend on one
+  host-wide gate
+
 ---
 
-### B-002 — Five ADR-002 error codes absent from error_codes.rs
+### ~~B-002 — Five ADR-002 error codes absent from error_codes.rs~~ CLOSED IN R.13
 **Source**: quality-mgr REQ-R-002
-**Files**: `crates/atm-core/src/error_codes.rs` | `docs/atm-error-codes.md §5.10.4`
+**Closed on**: `feature/pR-s13-runtime-admission`
+**Files**: `crates/atm-core/src/error_codes.rs` | `crates/atm-core/src/error.rs` | `crates/atm-core/src/protocol.rs`
 
 Documented but not implemented:
 - `ATM_DAEMON_LAUNCH_GATE_REJECTED`
@@ -88,11 +98,19 @@ path once B-001 is resolved.
 - the fake-transport code belongs to the Tier 1/Tier 2 test seams and should
   be wired at the same time the lint/planning docs say the code exists
 
+**Resolution**:
+- all five codes now exist in `AtmErrorCode`, string mappings, and parse
+  mappings
+- daemon runtime codes are classified through `error_kind_for_code(...)`
+- client launch-gate, auto-start, and daemon serving-gate paths now emit the
+  real typed errors rather than falling back to generic daemon-unavailable
+
 ---
 
-### B-003 — RuntimeComposition startup/lifecycle is scaffold-only
+### ~~B-003 — RuntimeComposition startup/lifecycle is scaffold-only~~ CLOSED IN R.13
 **Source**: arch-ctm TASK-995 Finding #2 + TASK-997 gap report item 2
-**Files**: `crates/atm-daemon/src/composition.rs:39-49,109-118` | `crates/atm-daemon/src/lib.rs:625-684,781-782`
+**Closed on**: `feature/pR-s13-runtime-admission`
+**Files**: `crates/atm-daemon/src/composition.rs` | `crates/atm-daemon/src/lib.rs`
 
 `RuntimeComposition::start()` returns `"daemon runtime start scaffold is not implemented yet"`.
 `run_daemon()` bypasses `start()` entirely and calls `serve()` directly. No lifecycle
@@ -133,6 +151,15 @@ Route all startup/shutdown through one runtime root rather than bypassing it.
   plane, not just replacing the string literal in `start()`
 - any sprint taking B-003 should also absorb the lifecycle-facing parts of
   I-001 and I-002 so shutdown/startup ownership stays coherent
+
+**Resolution**:
+- `RuntimeComposition::start()` now owns daemon bootstrap
+- `run_daemon()` enters the runtime only through `compose_runtime()?.start()`
+- runtime lifecycle now models `Starting`, `Running`, `Draining`, and
+  `Stopped` with explicit transition validation
+- failed startup transitions roll back to `Stopped`
+- listener start, drain, force-cancel, and shutdown state transitions now run
+  under the lifecycle root instead of bypassing it
 
 ---
 
@@ -323,9 +350,10 @@ integration into runtime routing.
 
 ## IMPORTANT FINDINGS
 
-### I-001 — Bare expect() panics in signal installation
+### ~~I-001 — Bare expect() panics in signal installation~~ CLOSED IN R.13
 **Source**: arch-ctm TASK-995 Finding #3
-**Files**: `crates/atm-daemon/src/lib.rs:205-208,224-226`
+**Closed on**: `feature/pR-s13-runtime-admission`
+**Files**: `crates/atm-daemon/src/lib.rs`
 
 `DaemonShutdownSignals::install()` uses:
 - `.expect("daemon signal install lock")`
@@ -344,9 +372,14 @@ non-panicking construction.
   lifecycle state, and shutdown ownership are expressed through one runtime
   root
 
+**Resolution**:
+- repeated signal installation now returns typed `AtmError` failures instead of
+  panicking on poisoned/init paths
+- a repeatable signal-install regression test now covers the non-panicking path
+
 ---
 
-### I-002 — Force-cancel cannot interrupt socket-blocked threads
+### ~~I-002 — Force-cancel cannot interrupt socket-blocked threads~~ CLOSED IN R.13
 **Source**: quality-mgr RSH-R-001/RSH-R-002
 **Files**: `crates/atm-daemon/src/lib.rs` shutdown path
 
@@ -364,6 +397,11 @@ return immediately.
   graceful/forced shutdown path owns the force-cancel deadline
 - should be implemented together with B-003 lifecycle work rather than as an
   isolated socket tweak
+
+**Resolution**:
+- force-cancel now tracks active connections and interrupts them via
+  `Shutdown::Both` rather than falling through to `process::exit(1)`
+- blocked connection threads are covered by a deterministic interruption test
 
 ---
 

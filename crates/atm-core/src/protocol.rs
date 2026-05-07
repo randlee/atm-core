@@ -88,7 +88,11 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         AtmErrorCode::IdentityUnavailable | AtmErrorCode::WarningIdentityDrift => {
             AtmErrorKind::Identity
         }
-        AtmErrorCode::DaemonUnavailable => AtmErrorKind::DaemonUnavailable,
+        AtmErrorCode::DaemonUnavailable
+        | AtmErrorCode::DaemonLaunchGateRejected
+        | AtmErrorCode::DaemonServingStateRejected
+        | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
+        | AtmErrorCode::DaemonAutoStartFailed => AtmErrorKind::DaemonUnavailable,
         AtmErrorCode::AddressParseFailed => AtmErrorKind::Address,
         AtmErrorCode::TeamUnavailable | AtmErrorCode::TeamNotFound => AtmErrorKind::TeamNotFound,
         AtmErrorCode::AgentNotFound => AtmErrorKind::AgentNotFound,
@@ -123,7 +127,8 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::WarningBaselineMemberMissing
         | AtmErrorCode::WarningRestoreInProgress
         | AtmErrorCode::WarningHookSkipped
-        | AtmErrorCode::WarningHookExecutionFailed => AtmErrorKind::Validation,
+        | AtmErrorCode::WarningHookExecutionFailed
+        | AtmErrorCode::TestFakeTransportInjectionFailed => AtmErrorKind::Validation,
     }
 }
 

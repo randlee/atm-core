@@ -114,6 +114,7 @@ dependencies = [
  "fs2",
  "serde_json",
  "signal-hook",
+ "tempfile",
  "tracing",
  "tracing-subscriber",
 ]

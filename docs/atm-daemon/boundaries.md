@@ -33,6 +33,11 @@ Purpose:
 Notes:
 - This record exists so the control-plane struct is treated as an architectural
   boundary surface even though it is not a public shared trait today.
+- The active implementation is `RuntimeComposition` plus the crate-private
+  `RuntimeLifecycle` state machine and the runtime-owned
+  `DaemonShutdownSignals` / `SingletonGuard` helpers.
+- `run_daemon()` must enter the daemon only through this lifecycle boundary;
+  direct listener bootstrap is a boundary violation.
 
 ## SocketServerTransportAdapter
 

@@ -10,33 +10,84 @@ use atm_core::{
     },
     error::AtmError,
 };
-use std::error::Error as StdError;
-use std::fmt;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RuntimeStartStubError {
-    RuntimeStartNotWired,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum RuntimeLifecycleState {
+    Starting,
+    Running,
+    Draining,
+    #[default]
+    Stopped,
 }
 
-impl fmt::Display for RuntimeStartStubError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::RuntimeStartNotWired => {
-                f.write_str("daemon runtime composition start scaffold is not wired")
-            }
+#[derive(Debug, Default)]
+pub(crate) struct RuntimeLifecycle {
+    state: Mutex<RuntimeLifecycleState>,
+}
+
+impl RuntimeLifecycle {
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn state(&self) -> RuntimeLifecycleState {
+        *self.state.lock().expect("runtime lifecycle state lock")
+    }
+
+    pub(crate) fn transition(
+        &self,
+        next: RuntimeLifecycleState,
+    ) -> Result<RuntimeLifecycleState, AtmError> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("runtime lifecycle state lock poisoned"))?;
+        let current = *state;
+        if !matches!(
+            (current, next),
+            (
+                RuntimeLifecycleState::Stopped,
+                RuntimeLifecycleState::Starting
+            ) | (
+                RuntimeLifecycleState::Starting,
+                RuntimeLifecycleState::Running
+            ) | (
+                RuntimeLifecycleState::Starting,
+                RuntimeLifecycleState::Stopped
+            ) | (
+                RuntimeLifecycleState::Running,
+                RuntimeLifecycleState::Draining
+            ) | (
+                RuntimeLifecycleState::Draining,
+                RuntimeLifecycleState::Stopped
+            )
+        ) {
+            return Err(AtmError::validation(format!(
+                "illegal daemon runtime lifecycle transition: {current:?} -> {next:?}"
+            )));
         }
+        *state = next;
+        Ok(next)
+    }
+
+    pub(crate) fn force_stopped(&self) -> Result<(), AtmError> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("runtime lifecycle state lock poisoned"))?;
+        *state = RuntimeLifecycleState::Stopped;
+        Ok(())
     }
 }
-
-impl StdError for RuntimeStartStubError {}
 
 /// Internal root for Phase R daemon runtime wiring.
 #[allow(dead_code)]
 #[derive(Debug)]
 pub(crate) struct RuntimeComposition {
+    lifecycle: Arc<RuntimeLifecycle>,
     server_transport: LocalSocketServerTransport,
     request_dispatcher: Arc<DaemonRequestDispatcher>,
     notification_sink: DaemonNotificationSink,
@@ -51,8 +102,9 @@ pub(crate) struct RuntimeComposition {
 
 #[allow(dead_code)]
 impl RuntimeComposition {
-    pub(crate) fn new(home_dir: PathBuf) -> Self {
+    fn new(home_dir: PathBuf) -> Self {
         Self {
+            lifecycle: Arc::new(RuntimeLifecycle::new()),
             server_transport: LocalSocketServerTransport::new(),
             request_dispatcher: Arc::new(DaemonRequestDispatcher::new(home_dir)),
             notification_sink: DaemonNotificationSink::new(),
@@ -66,52 +118,82 @@ impl RuntimeComposition {
         }
     }
 
-    pub(crate) fn server_transport(&self) -> &dyn ServerTransport {
+    fn server_transport(&self) -> &dyn ServerTransport {
         &self.server_transport
     }
 
-    pub(crate) fn notification_sink(&self) -> &dyn NotificationSink {
+    fn notification_sink(&self) -> &dyn NotificationSink {
         &self.notification_sink
     }
 
-    pub(crate) fn request_dispatcher(&self) -> Arc<dyn RequestDispatcher + Send + Sync> {
+    fn request_dispatcher(&self) -> Arc<dyn RequestDispatcher + Send + Sync> {
         self.request_dispatcher.clone()
     }
 
-    pub(crate) fn status_source(&self) -> &dyn StatusSource {
+    fn status_source(&self) -> &dyn StatusSource {
         &self.status_source
     }
 
-    pub(crate) fn watch_event_source(&self) -> &dyn WatchEventSource {
+    fn watch_event_source(&self) -> &dyn WatchEventSource {
         &self.watch_event_source
     }
 
-    pub(crate) fn reconcile_coordinator(&self) -> &dyn ReconcileCoordinator {
+    fn reconcile_coordinator(&self) -> &dyn ReconcileCoordinator {
         &self.reconcile_coordinator
     }
 
-    pub(crate) fn config_ingress(&self) -> &dyn ConfigIngress {
+    fn config_ingress(&self) -> &dyn ConfigIngress {
         &self.config_ingress
     }
 
-    pub(crate) fn inbox_ingress(&self) -> &dyn InboxIngress {
+    fn inbox_ingress(&self) -> &dyn InboxIngress {
         &self.inbox_ingress
     }
 
-    pub(crate) fn inbox_export(&self) -> &dyn InboxExport {
+    fn inbox_export(&self) -> &dyn InboxExport {
         &self.inbox_export
     }
 
-    pub(crate) fn peer_client_transport(&self) -> &dyn ClientTransport {
+    fn peer_client_transport(&self) -> &dyn ClientTransport {
         &self.peer_client_transport
     }
 
     pub(crate) fn start(&self) -> Result<(), AtmError> {
-        Err(AtmError::daemon_unavailable("daemon runtime start scaffold is not implemented yet")
-            .with_recovery(
-                "Finish RuntimeComposition startup wiring before invoking the daemon entrypoint.",
-            )
-            .with_source(RuntimeStartStubError::RuntimeStartNotWired))
+        self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
+        match self
+            .server_transport
+            .start_runtime(self.request_dispatcher(), Arc::clone(&self.lifecycle))
+        {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                self.lifecycle.force_stopped()?;
+                Err(error)
+            }
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn start_with_socket_path_for_test(
+        &self,
+        socket_path: PathBuf,
+    ) -> Result<(), AtmError> {
+        self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
+        match self.server_transport.start_runtime_at_socket_path(
+            socket_path,
+            self.request_dispatcher(),
+            Arc::clone(&self.lifecycle),
+        ) {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                self.lifecycle.force_stopped()?;
+                Err(error)
+            }
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn lifecycle_state(&self) -> RuntimeLifecycleState {
+        self.lifecycle.state()
     }
 
     pub(crate) fn serve(&self) -> Result<(), AtmError> {
@@ -149,4 +231,68 @@ fn validate_runtime_socket_path() -> Result<(), AtmError> {
 pub(crate) fn compose_runtime() -> Result<RuntimeComposition, AtmError> {
     validate_runtime_socket_path()?;
     Ok(RuntimeComposition::new(atm_core::home::atm_home()?))
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::TempDir;
+
+    use super::{RuntimeComposition, RuntimeLifecycle, RuntimeLifecycleState};
+
+    #[test]
+    fn runtime_lifecycle_allows_only_documented_transitions() {
+        let lifecycle = RuntimeLifecycle::new();
+        assert_eq!(lifecycle.state(), RuntimeLifecycleState::Stopped);
+        lifecycle
+            .transition(RuntimeLifecycleState::Starting)
+            .expect("start");
+        lifecycle
+            .transition(RuntimeLifecycleState::Running)
+            .expect("running");
+        lifecycle
+            .transition(RuntimeLifecycleState::Draining)
+            .expect("draining");
+        lifecycle
+            .transition(RuntimeLifecycleState::Stopped)
+            .expect("stopped");
+    }
+
+    #[test]
+    fn runtime_lifecycle_rejects_illegal_transitions() {
+        let lifecycle = RuntimeLifecycle::new();
+        let error = lifecycle
+            .transition(RuntimeLifecycleState::Running)
+            .expect_err("illegal transition");
+        assert!(
+            error
+                .to_string()
+                .contains("illegal daemon runtime lifecycle transition")
+        );
+    }
+
+    #[test]
+    fn startup_failure_path_can_transition_back_to_stopped() {
+        let lifecycle = RuntimeLifecycle::new();
+        lifecycle
+            .transition(RuntimeLifecycleState::Starting)
+            .expect("starting");
+        lifecycle.force_stopped().expect("force stopped");
+        assert_eq!(lifecycle.state(), RuntimeLifecycleState::Stopped);
+    }
+
+    #[test]
+    fn runtime_composition_failed_startup_returns_to_stopped() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let parent_file = tempdir.path().join("not-a-dir");
+        std::fs::write(&parent_file, "x").expect("parent file");
+        let socket_path = parent_file.join("atm.sock");
+        let runtime = RuntimeComposition::new(tempdir.path().to_path_buf());
+
+        let error = runtime
+            .start_with_socket_path_for_test(socket_path)
+            .expect_err("startup should fail");
+
+        assert!(error.is_daemon_unavailable());
+        assert_eq!(runtime.lifecycle_state(), RuntimeLifecycleState::Stopped);
+    }
 }

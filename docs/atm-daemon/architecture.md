@@ -159,6 +159,10 @@ Architectural rule:
     around the runtime invariant
 - no alternate socket path, alternate `ATM_HOME`, or test-only helper is an
   exception to the singleton rule
+- the host-wide ownership root is `~/.atm/daemon/` derived from the OS user
+  home, not from `ATM_HOME` or the serving socket path
+- client-side launch admission uses `~/.atm/daemon/launch.lock`
+- daemon-side serving admission uses `~/.atm/daemon/owner.lock`
 
 Lifecycle state model:
 - the daemon runtime must explicitly model:
@@ -176,6 +180,9 @@ Lifecycle state model:
   - `Draining -> Stopped`
 - illegal transitions such as `Running -> Starting` or `Stopped -> Running`
   without reinitialization must be prevented by the runtime boundary
+- `RuntimeComposition::start()` is the only legal daemon bootstrap entrypoint;
+  `run_daemon()` must not bypass the lifecycle root and call the listener
+  directly
 
 Privacy boundary:
 - the lifecycle state type and transport/runtime adapter internals remain
@@ -237,6 +244,12 @@ Required shutdown sequence:
 5. checkpoint SQLite WAL
 6. flush observability sinks on a best-effort basis
 7. release singleton socket/ownership artifacts
+
+Force-cancel rule:
+- the forced-shutdown path must interrupt blocked socket reads and writes via
+  connection shutdown rather than falling through to `process::exit(1)`
+- failure to drain within the force deadline is reported as a typed runtime
+  failure after interrupting active connections
 
 Required deadlines:
 - normal drain deadline: `5s`
