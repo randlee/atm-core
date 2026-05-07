@@ -2597,11 +2597,14 @@ Parallelization rule:
   against the shared boundary set
 
 Acceptance:
-- SQLite opens under `.claude/teams/<team>/.atm-state/mail.db`
+- SQLite opens under one host-scoped ATM durable root at
+  `~/.atm/db/mail.db`, with team and agent partitioned as logical keys inside
+  the shared database
 - `atm-rusqlite` is the only crate that owns direct SQLite calls in the first
   implementation line
 - core logic is reachable without daemon process spawning
-- no direct SQLite or filesystem bypasses outside the owning boundaries
+- no ATM-owned writes or hidden CLI/runtime fallbacks may bypass the owning
+  daemon/store boundaries; direct read-only SQLite consumers remain allowed
 - watcher/reconcile logic exists behind its own boundary and does not bypass
   ingress/store/notifier ownership rules
 - transport-boundary tests can replace Unix/TCP with the in-process
@@ -2776,6 +2779,9 @@ Authoritative design references:
 Execution shape:
 - `R.9` is the planning, requirements, ADR, and lint-design sprint
 - `R.10` is the implementation and test-migration sprint
+- `R.13` through `R.18` are the remaining continuation sprints required to
+  turn the thin daemon line into the full production runtime still described by
+  the accepted Phase R requirements and architecture
 
 R.9 deliverables:
 - explicit requirement language that bans the current daemon-spawn test pattern
@@ -2810,6 +2816,10 @@ Lint gate decision:
 Acceptance:
 - requirements, architecture, ADRs, and testing guidelines agree on the
   singleton rule and approved test tiers
+- continuation sprint execution after `R.10` must follow the tracked sequence
+  in `docs/phase-R/sprint-R13.md` through `docs/phase-R/sprint-R18.md`
+- `sc-lint` inventory-parity / planning-metadata gates are treated as an
+  external prerequisite that must be ready before `R.13` implementation starts
 - there is no approved ordinary test-daemon launch path
 - the implementation plan explicitly prevents new daemon-spawn helpers from
   proliferating

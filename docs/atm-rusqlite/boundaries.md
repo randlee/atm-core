@@ -7,6 +7,17 @@ Current design assumption:
 - no external crate should depend on `atm-rusqlite` directly
 - any future runtime composition must go through boundary traits/facades rather than a direct daemon-to-sqlite crate edge
 
+Important crate-private assembly/state-root structs that must stay visible in
+review:
+- `SqliteBoundaryAssembly`
+  - owns composition of the three store adapters over one shared SQLite root
+- `SharedDb`
+  - owns connection/bootstrap/transaction policy for the shared host-scoped
+    database
+
+These are not public boundary traits, but they are important private
+implementation surfaces for `R.14` and later closeout review.
+
 ## SqliteMailStoreAdapter
 
 ```yaml

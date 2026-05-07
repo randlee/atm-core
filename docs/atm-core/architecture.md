@@ -93,6 +93,12 @@ Decision:
 Consequences:
 - Thin extensions such as atm-graft expose a smaller public surface.
 - Task-state rules still remain explicit in store and workflow boundaries.
+- The reply emitted by that workflow must hardcode `requires_ack = false`.
+- Update/correction threads are modeled as one linear successor chain whose
+  terminal node is the effective current instruction.
+- Only the original sender may append chain successors.
+- Ack is evaluated at the chain level rather than per-node toggle churn, with
+  the root message establishing whether the thread is ack-required.
 
 Alternatives considered:
 - Preserve a first-class top-level `ack` protocol method family.
@@ -100,6 +106,8 @@ Alternatives considered:
 Follow-up work:
 - Keep task-state ownership explicit in `TaskStore`.
 - Align thin-client docs with the `send` / `receive` shape.
+- Align successor-chain and ephemeral-retention rules with the retained
+  product requirements before the SQLite sprint closes.
 
 ## 2. Architectural Rules
 

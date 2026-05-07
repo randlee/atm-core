@@ -24,6 +24,29 @@ multiple daemon processes to coexist on the same host.
 **Fix**: Move both lock files to a single fixed host-wide path not derived from socket or home
 config. Keep socket path as serving endpoint only.
 
+**Implementation topology**:
+- `crates/atm/src/composition.rs:57-68` `DaemonSocketPath::launch_gate_path()`
+  derives the launch lock from the socket path
+- `crates/atm/src/composition.rs:198-253`
+  `DaemonSupervisor::ensure_daemon_available()` loops on
+  `LaunchGateGuard::try_acquire(...)`
+- `crates/atm/src/composition.rs:292-345`
+  `LaunchGateGuard::{try_acquire,drop}` owns the client-side gate lifecycle
+- `crates/atm-daemon/src/lib.rs:237-308`
+  `SingletonGuard::{acquire,drop}` owns the daemon-side serving gate lifecycle
+- `crates/atm-core/src/protocol.rs:168-178` `daemon_socket_path()` still
+  resolves the serving endpoint and must stay independent from the new
+  host-wide lock path
+
+**Dependencies / sizing**:
+- B-001 must land before B-002 because the missing error codes describe the new
+  typed rejection paths
+- this is larger than it first appears because both the client launch gate and
+  the daemon serving gate must move together; fixing only one preserves split
+  ownership
+- tests must cover different `ATM_HOME` / `ATM_DAEMON_SOCKET` values on the
+  same host resolving to one host-wide ownership path
+
 ---
 
 ### B-002 — Five ADR-002 error codes absent from error_codes.rs
@@ -44,6 +67,27 @@ was never fully implemented. B-001 and B-002 are the same underlying gap.
 **Fix**: Implement all five in `error_codes.rs` and wire each to its corresponding rejection
 path once B-001 is resolved.
 
+**Implementation topology**:
+- `crates/atm-core/src/error_codes.rs:13-100`
+  `AtmErrorCode` enum lacks all five singleton/test-fidelity continuation codes
+- `crates/atm-core/src/error_codes.rs:102-149`
+  `AtmErrorCode::as_str()` lacks string mappings
+- `crates/atm-core/src/error_codes.rs:152-205`
+  `FromStr for AtmErrorCode` lacks parse mappings
+- `crates/atm-core/src/protocol.rs:80-127`
+  `error_kind_for_code(...)` must classify the new daemon codes correctly
+- `crates/atm/src/composition.rs:212-288`
+  `DaemonSupervisor::{ensure_daemon_available,spawn_daemon}` is where
+  launch-gate and auto-start rejections surface
+- `crates/atm-daemon/src/lib.rs:246-299`
+  `SingletonGuard::acquire(...)` is where serving-state rejection surfaces
+
+**Dependencies / sizing**:
+- B-002 is blocked on the actual B-001 host-wide gate shape because the codes
+  should be emitted by real typed paths, not dead enum entries
+- the fake-transport code belongs to the Tier 1/Tier 2 test seams and should
+  be wired at the same time the lint/planning docs say the code exists
+
 ---
 
 ### B-003 — RuntimeComposition startup/lifecycle is scaffold-only
@@ -57,6 +101,38 @@ path routing through a single runtime root.
 
 **Fix**: Implement actual runtime bootstrap path. Wire explicit lifecycle state machine.
 Route all startup/shutdown through one runtime root rather than bypassing it.
+
+**Surface inventory**:
+- explicit scaffold return:
+  - `crates/atm-daemon/src/composition.rs:109-115`
+    `RuntimeComposition::start()`
+- bypass that skips the scaffold:
+  - `crates/atm-daemon/src/lib.rs:781-782` `run_daemon()`
+- code exists but delegates to the wrong place / placeholder adapters:
+  - `crates/atm-daemon/src/lib.rs:607-610` `DaemonNotificationSink::deliver`
+  - `crates/atm-daemon/src/lib.rs:647-649` `DaemonStatusSource::snapshot`
+  - `crates/atm-daemon/src/lib.rs:665-667` `FileWatchEventSource::poll`
+  - `crates/atm-daemon/src/lib.rs:683-684`
+    `DaemonReconcileCoordinator::reconcile`
+  - `crates/atm-daemon/src/lib.rs:700-710` `DaemonConfigIngress`
+  - `crates/atm-daemon/src/lib.rs:725-745` `DaemonInboxIngress`
+  - `crates/atm-daemon/src/lib.rs:760-772` `DaemonInboxExport`
+- code exists as explicit stub:
+  - `crates/atm-daemon/src/lib.rs:625-631`
+    `PeerClientTransport::send()`
+- code completely absent today:
+  - no lifecycle state type for `Starting/Running/Draining/Stopped`
+  - no runtime-owned startup orchestration method that assembles, validates,
+    and transitions through startup before entering serve
+  - no runtime-owned shutdown controller that coordinates listener stop,
+    drain, forced cancel, and post-drain cleanup through one root object
+
+**Dependencies / sizing**:
+- B-003 is the root dependency for B-004 through B-009
+- this is larger than one function because it requires a real runtime control
+  plane, not just replacing the string literal in `start()`
+- any sprint taking B-003 should also absorb the lifecycle-facing parts of
+  I-001 and I-002 so shutdown/startup ownership stays coherent
 
 ---
 
@@ -73,6 +149,26 @@ cache-rebuild-from-unknown on restart. No cap/eviction behavior.
 primary liveness field. Implement `last_active_at` in daemon memory. Add restart recovery
 and cap/eviction behavior per daemon architecture.
 
+**Implementation topology**:
+- `crates/atm-daemon/src/lib.rs:634-649`
+  `DaemonStatusSource::{new,snapshot}` is the current boundary adapter
+- `crates/atm-core/src/boundary_support.rs:140-145`
+  `snapshot_status()` is the placeholder helper that must stop being the
+  production status source
+- `crates/atm-core/src/protocol.rs:189-194`
+  `RuntimeStatusSnapshot` is too small for the documented daemon-health view
+- `docs/team-member-state.md` and the daemon architecture require live member
+  state, durable PID continuity, and `last_active_at`, none of which has a
+  runtime-owned type yet
+
+**Dependencies / sizing**:
+- blocked on B-003 runtime lifecycle because the cache must be owned by the
+  running runtime root and rebuilt on startup
+- blocked on B-005 heartbeat because the cache cannot become truthful until the
+  daemon receives periodic member activity
+- larger than it looks because doctor health, routing, and takeover logic all
+  consume the same status cache
+
 ---
 
 ### B-005 — Heartbeat/member runtime-state path completely absent
@@ -88,6 +184,22 @@ no admin takeover path for live-old-pid conflicts.
 **Fix**: Add heartbeat protocol request/response family. Implement daemon handler for
 `TeamMateHeartbeat`. Wire runtime state machine and PID ownership conflict detection.
 
+**Implementation topology**:
+- `crates/atm-core/src/protocol.rs:19-50`
+  `RequestEnvelope` / `ResponseEnvelope` have no heartbeat family at all
+- `crates/atm-daemon/src/lib.rs:566-591`
+  `DaemonRequestDispatcher::dispatch(...)` has no heartbeat arm
+- `crates/atm-core/src/boundary/mod.rs` currently exposes request/transport
+  boundaries, but no typed heartbeat request/response DTOs
+- `docs/team-member-state.md` defines the desired state model; there is no code
+  counterpart for Active/Idle/Offline or PID conflict handling yet
+
+**Dependencies / sizing**:
+- blocked on B-003 because heartbeat state must live under the runtime root
+- blocked on B-004 because heartbeat events feed the live status cache
+- this is not just a protocol-addition sprint; it also introduces member
+  runtime-state ownership, conflict detection, and takeover semantics
+
 ---
 
 ### B-006 — Doctor daemon health interface unimplemented
@@ -102,6 +214,22 @@ readiness distinction.
 **Fix**: Implement explicit daemon health query surface. Wire daemon-backed health
 projection into doctor command. Split liveness from readiness.
 
+**Implementation topology**:
+- `crates/atm-daemon/src/lib.rs:587-590`
+  dispatcher routes `Doctor` straight into `atm_core::doctor::run_doctor(...)`
+- `crates/atm-core/src/protocol.rs:35-49`
+  `Doctor` reuses the generic request/response envelope but has no daemon-owned
+  health DTO for runtime state, backlog, or readiness
+- `crates/atm-daemon/src/lib.rs:634-649`
+  `DaemonStatusSource` is the natural producer for doctor health input once
+  B-004 exists
+
+**Dependencies / sizing**:
+- blocked on B-004/B-005 because doctor needs truthful runtime status, not a
+  generic placeholder
+- should land in the same sprint as status/heartbeat so health semantics do not
+  drift from the underlying cache
+
 ---
 
 ### B-007 — Watch runtime is placeholder-level
@@ -114,6 +242,20 @@ no bounded polling/wake behavior, no structured runtime events or degradation ha
 
 **Fix**: Implement runtime-owned watch loop. Add subscription lifecycle, bounded
 polling/wake behavior, and structured runtime events.
+
+**Implementation topology**:
+- `crates/atm-daemon/src/lib.rs:652-667`
+  `FileWatchEventSource::{new,poll}` is the existing adapter surface
+- `crates/atm-core/src/boundary_support.rs:147-154`
+  `poll_watch(...)` is a one-shot helper, not a loop
+- `crates/atm-core/src/protocol.rs:196-208`
+  watch request/result DTOs exist but carry only the minimal one-shot shape
+
+**Dependencies / sizing**:
+- blocked on B-003 because the watch loop must be started and stopped by the
+  runtime lifecycle
+- should land with B-008 because the reconcile coordinator consumes watch
+  events and needs the same ownership semantics
 
 ---
 
@@ -128,6 +270,21 @@ reconcile triggering or completion semantics.
 **Fix**: Implement runtime-owned reconcile scheduling/orchestration with debounce/coalesce
 and explicit triggering/completion semantics.
 
+**Implementation topology**:
+- `crates/atm-daemon/src/lib.rs:670-684`
+  `DaemonReconcileCoordinator::{new,reconcile}` is the current adapter
+- `crates/atm-core/src/boundary_support.rs:156-170`
+  `reconcile(...)` does a one-shot watch + import pass
+- `crates/atm-core/src/protocol.rs:210-223`
+  `ReconcileRequest` / `ReconcileResult` are one-shot DTOs and do not yet
+  describe scheduling or debounce state
+
+**Dependencies / sizing**:
+- blocked on B-007 because reconcile needs real runtime watch events rather
+  than one-shot path discovery
+- larger than it looks because notifier/runtime delivery (I-012) is the next
+  downstream consumer of reconcile outcomes
+
 ---
 
 ### B-009 — PeerClientTransport is an explicit stub
@@ -140,6 +297,20 @@ timeout/retry behavior, no integration into runtime routing path.
 
 **Fix**: Implement peer client transport. Add request framing, timeout/retry, and
 integration into runtime routing.
+
+**Implementation topology**:
+- `crates/atm-daemon/src/lib.rs:613-631`
+  `PeerClientTransport::{new,send}` is the current stub surface
+- `crates/atm-daemon/src/composition.rs:49,105-107`
+  `RuntimeComposition` already carries the peer client transport boundary
+- `crates/atm-core/src/protocol.rs:19-50`
+  the shared envelopes are the framing contract the peer transport must reuse
+
+**Dependencies / sizing**:
+- blocked on B-003 because peer transport belongs under the runtime root and
+  must participate in startup/shutdown
+- should land with I-013 because durable replay/re-export only makes sense once
+  the outbound peer path exists
 
 ---
 
@@ -159,6 +330,13 @@ failures must remain typed.
 **Fix**: Convert both paths to typed `AtmError` failures or prove invariants via
 non-panicking construction.
 
+**Implementation topology**:
+- `crates/atm-daemon/src/lib.rs:200-233`
+  `DaemonShutdownSignals::install()` owns the panicking paths
+- this issue should be solved in the same pass as B-003 so signal install,
+  lifecycle state, and shutdown ownership are expressed through one runtime
+  root
+
 ---
 
 ### I-002 — Force-cancel cannot interrupt socket-blocked threads
@@ -172,6 +350,14 @@ non-panicking construction.
 **Fix**: Wire `stream.shutdown(Shutdown::Both)` to the force-cancel path so blocked reads
 return immediately.
 
+**Implementation topology**:
+- `crates/atm-daemon/src/lib.rs:345-399` `handle_connection(...)`
+  owns the blocking stream reads/writes
+- `crates/atm-daemon/src/lib.rs:502-537`
+  graceful/forced shutdown path owns the force-cancel deadline
+- should be implemented together with B-003 lifecycle work rather than as an
+  isolated socket tweak
+
 ---
 
 ### I-003 — Daemon completely silent in default deployments
@@ -184,6 +370,11 @@ by default. Production deployments have no visibility into daemon lifecycle or e
 **Fix**: Set a default log level (e.g. `warn` or `info`) when `ATM_LOG` is unset so daemon
 lifecycle events are always emitted.
 
+**Implementation topology**:
+- `crates/atm-daemon/src/lib.rs` tracing/bootstrap entrypoint
+- pair this with B-003/B-006 so startup, shutdown, and health projection emit
+  useful default lifecycle logs
+
 ---
 
 ### I-004 — No request-ID in protocol envelopes
@@ -193,6 +384,18 @@ lifecycle events are always emitted.
 span is possible. Request correlation across daemon logs is impossible.
 
 **Fix**: Add `request_id: Uuid` to both envelope types and emit a tracing span per request.
+
+**Implementation topology**:
+- `crates/atm-core/src/protocol.rs:33-50`
+  `RequestEnvelope` / `ResponseEnvelope`
+- `crates/atm-daemon/src/lib.rs:374-392`
+  request decode and response encode path
+- `crates/atm/src/composition.rs:142-180`
+  local-socket client exchange path
+
+**Dependencies / sizing**:
+- best paired with B-006 doctor/health and later hardening because request IDs
+  matter most once the runtime owns real long-lived subsystems
 
 ---
 
@@ -465,11 +668,11 @@ From arch-ctm TASK-997 gap report:
 
 ---
 
-## ARCH-CTM RECOMMENDED WORK GROUPINGS
+## ARCH-CTM HISTORICAL WORK GROUPINGS (SUPERSEDED)
 
-arch-ctm proposed these groupings for remaining Phase R work. Actual sprint numbers (R.11, R.12, …)
-will be assigned during team-lead/arch-ctm planning discussion — these letter labels are
-organizational only, not sprint identifiers.
+These A-E buckets were the first post-review grouping pass. They remain useful
+as historical scoping notes, but they are no longer the authoritative
+continuation plan now that `R.13` through `R.18` are defined below.
 
 | Group | Scope |
 |-------|-------|
@@ -478,6 +681,34 @@ organizational only, not sprint identifiers.
 | 3 | Peer transport (B-009) + remote retry/recovery (I-013) |
 | 4 | Watch (B-007) + reconcile (B-008) + notifier runtime (I-012) |
 | 5 | Panic removal (I-001, I-002) + config reload (I-014) + final production-hardening sweep |
+
+## REVISED CONTINUATION SPRINT SEQUENCE
+
+The original A-E grouping is no longer sufficient by itself.
+
+Why it changed:
+- it omitted a dedicated SQLite/message-thread closeout sprint even though the
+  host-scoped database move, successor-chain semantics, and direct-read/write
+  invariants materially change implementation order
+- the panic/shutdown items I-001 and I-002 fit the runtime-lifecycle sprint
+  better than a late cleanup bucket
+- final closeout still needs one separate hardening sprint for remaining
+  importants/minors and doc/boundary reconciliation
+
+Revised sequence starting at `R.13`:
+
+Prerequisite:
+- `sc-lint` inventory-parity / planning-metadata gates and the process gates
+  PG-001 through PG-004 must be ready before `R.13` begins
+
+| Sprint | Scope |
+|-------|-------|
+| `R.13` | Host-wide singleton (B-001, B-002) + runtime lifecycle completion (B-003) + lifecycle-adjacent hardening (I-001, I-002) |
+| `R.14` | Host-scoped SQLite root, successor-chain / ack-thread semantics, ephemeral retention, SQLite error mapping, and remaining SQLite boundary closeout |
+| `R.15` | Heartbeat/status-cache (B-004, B-005) + doctor health (B-006) |
+| `R.16` | Peer transport (B-009) + remote retry/recovery (I-013) |
+| `R.17` | Watch (B-007) + reconcile (B-008) + notifier runtime (I-012) |
+| `R.18` | Config reload (I-014) + remaining production-hardening sweep, type-safety fixes, test portability fixes, and final doc/boundary closeout |
 
 ---
 
@@ -501,6 +732,6 @@ Two items planned for arch-inj's next sprint after feature/pR-s3-boundary-lint m
 ## NEXT STEPS
 
 1. team-lead / arch-ctm planning discussion on scope, sequencing, and sprint definitions
-2. Implement process gates PG-001 through PG-004 — required before any R.11 sprint begins
-3. Define acceptance criteria per bucket before dispatching implementation
-4. QA after each bucket with full no-round-limit sweep (PG-001 enforced)
+2. Keep `docs/phase-R/sprint-R13.md` through `docs/phase-R/sprint-R18.md` as the authoritative continuation sprint set
+3. Implement process gates PG-001 through PG-004 — required before any `R.13` sprint begins
+4. QA after each implementation sprint with full no-round-limit sweep (PG-001 enforced)

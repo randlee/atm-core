@@ -5,159 +5,66 @@
 | ID | ADR-004 |
 | Status | **Accepted** |
 | Date | 2026-05-07 |
-| Deciders | Rand Lee |
-| Relates to | REQ-SCB-001, REQ-SCB-007, REQ-SCB-012 |
-| Supersedes | — |
+| Deciders | arch-inj, team-lead, arch-ctm |
+| Relates to | REQ-SCB-001 through REQ-SCB-014 |
 
 ---
 
 ## Context
 
-The current boundary source format is Markdown with embedded structured
-records. That was good enough to get schema checks, dependency-edge checks, and
-reference checks moving quickly, but it is not the best long-term format for
-general-purpose `sc-lint` tooling.
+`sc-lint-boundary` now has enough AST and graph machinery to enforce concrete
+structural rules, but the current Markdown-embedded boundary-record model is a
+poor long-term source for:
 
-Two new enforcement needs now exist:
+- inventory-parity checks such as "documented item exists in code"
+- planning-aware warn/error escalation for future-sprint gaps
+- extraction of `sc-lint` into its own repository
 
-1. canonical machine-readable boundary definitions suitable for future
-   extraction into the `sc-lint` tool family
-2. inventory-parity checks that compare documented boundary requirements
-   against the code graph and distinguish:
-   - planned future work
-   - overdue planned work
-   - unplanned architectural drift
+The tool needs one machine-authoritative source for:
 
-The current Markdown-embedded format makes both goals harder because it mixes:
-
-- human explanation
-- machine policy
-- future planning context
-
-in one document source.
-
-## Decision Drivers
-
-- canonical machine-readable boundary data should be simple to parse and
-  validate
-- future boundary-enforcement features should be data-driven, not prose-driven
-- planned future work must stay visible without becoming an indefinite warning
-  loophole
-- new architectural drift must fail immediately
-- the migration should avoid a flag day
-
-## Options Considered
-
-### Keep Markdown as the long-term authoritative source
-
-Rejected.
-
-This keeps the current mixed human/machine format and makes future structured
-planning-aware enforcement harder than necessary.
-
-### Switch to TOML in one flag-day change
-
-Rejected.
-
-The migration risk is higher than necessary. A dual-loader phase is safer.
-
-### Use freeform prose or comments for planned future exceptions
-
-Rejected.
-
-That would turn warnings into a weak suppression system and break deterministic
-lint behavior.
+- boundary definitions
+- planning metadata for missing documented items
+- deterministic warning-to-error escalation rules
 
 ## Decision
 
-### 1. TOML becomes the canonical machine-readable boundary source
+`sc-lint` adopts the following model:
 
-Boundary definitions will migrate from Markdown-embedded records to standalone
-TOML records.
-
-Markdown may remain as:
-
-- human explanation
-- generated or hand-maintained summary
-
-but it will no longer be the long-term authoritative lint input.
-
-### 2. Migration uses a dual-loader transition
-
-The transition proceeds in phases:
-
-1. support both Markdown-embedded records and TOML records
-2. migrate existing records into TOML
-3. remove Markdown record loading after the migration is complete
-
-### 3. New boundary-enforcement features are TOML-first
-
-Once TOML loading exists, any new boundary-lint feature that depends on
-boundary metadata must be implemented against TOML-backed data first.
-
-Markdown compatibility may remain during transition, but it is compatibility
-only.
-
-### 4. Inventory parity uses planning-aware warn/error enforcement
-
-Boundary lint will compare documented required items against the code graph and
-classify missing items using structured planning metadata:
-
-- future-scheduled item: warning
-- overdue scheduled item: error
-- unscheduled item: error
-
-The warning model is not freeform suppression. It is structured, traceable, and
-auto-escalating.
-
-### 5. Planning metadata uses a concrete default location
-
-The default planning metadata source for inventory-parity evaluation is:
-
-- `boundaries/planning.toml`
-
-The first-rollout planning metadata shape uses:
-
-- `[planning].current_sprint`
-- `[planned_items."<item-key>"]`
-
-### 6. Duplicate authoritative records across formats are errors
-
-During the dual-loader phase, the same boundary record must not be defined
-authoritatively in both Markdown and TOML at once unless the tooling has an
-explicit migration mode proving equivalence.
-
-Default rule:
-
-- duplicate `boundary_id` across sources is an error
-- conflicting definitions across sources are an error
-
-This prevents silent drift between two sources of truth.
+- canonical machine-readable boundary definitions live in standalone TOML files
+  under `boundaries/`
+- planning metadata for inventory-parity enforcement lives in
+  `boundaries/planning.toml`
+- inventory-parity checks compare structured boundary items against the code
+  graph at item-key granularity
+- missing documented items may warn only when they have a valid structured
+  future-sprint mapping
+- unplanned or overdue missing documented items fail as errors
 
 ## Consequences
 
 ### Positive
 
-- simpler long-term parser and validator design
-- better fit for future `sc-lint` extraction
-- clearer separation between architecture docs and machine policy
-- planned future work remains visible and enforceable
-- new drift fails immediately
+- boundary inventories become directly parseable without Markdown fenced-block
+  extraction
+- warn/error behavior becomes deterministic rather than prose-driven
+- the tool can fail new architectural drift immediately while still surfacing
+  planned future work
+- future `sc-lint` extraction becomes simpler because the canonical data model
+  is already repo-neutral
 
 ### Negative
 
-- one more migration step before the boundary toolchain is fully settled
-- temporary dual-source complexity
-- additional planning metadata will need structure and validation
+- the dual-loader migration must exist for one transition period
+- consumer repositories must maintain a structured `boundaries/planning.toml`
+  file once inventory-parity enforcement begins
 
-## Follow-Up Work
+## Required Follow-Up
 
-| Action | Owner | Gate |
-|---|---|---|
-| Implement the TOML dual-loader | `sc-lint-boundary` maintainers | Before new boundary metadata features land |
-| Define the canonical TOML schema shape | `sc-lint-boundary` maintainers | Before broad record migration begins |
-| Define structured planning metadata for inventory parity | `sc-lint-boundary` maintainers | Before `SCB-INVENTORY-*` implementation |
-| Add warning/error escalation behavior to boundary lint | `sc-lint-boundary` maintainers | After TOML loading is in place |
-| Remove Markdown record loading after migration completes | `sc-lint-boundary` maintainers | After a full stable cycle with TOML-authoritative records |
+- keep duplicate-source equivalence mode test-only and disabled in normal lint
+  runs and CI
+- implement `SCB-INVENTORY-001`, `SCB-INVENTORY-002`, and
+  `SCB-INVENTORY-003` against TOML-backed boundary data
+- make `[planning].current_sprint` in `boundaries/planning.toml` the
+  authoritative current-sprint source for warn/error escalation
 
 *ADR-004 | sc-lint | 2026-05-07*

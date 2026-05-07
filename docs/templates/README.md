@@ -1,7 +1,7 @@
 # Templates
 
-This folder contains `sc-compose` templates for crate architecture ADRs and
-boundary inventories.
+This folder contains `sc-compose` templates for crate architecture ADRs,
+boundary inventories, and sprint-plan documents.
 
 Recommended document layout per crate:
 - `docs/<crate>/architecture.md`
@@ -20,6 +20,34 @@ The intended default workflow is:
 
 This keeps the docs readable while giving the parser and lint tooling a stable,
 machine-authoritative schema.
+
+## Sprint Plan Template
+
+Use `sprint-plan.md.j2` for one sprint-scoped execution plan when a phase has
+multiple remaining implementation sprints.
+
+This template is for:
+- one worktree
+- one phase
+- one sprint id expressed as a string
+- one concrete list of sub-tasks
+
+The sprint id must stay a string so values like `R.13`, `R.10.3-FIX-R6`, or
+`PR-PLANNING-MF-R1` remain exact.
+
+Each sprint plan should include:
+- governing requirements
+- governing ADRs
+- governing boundaries
+- prerequisites
+- hard dependencies
+- non-goals
+- concrete sub-tasks
+- split recommendation
+- acceptance criteria
+- validation commands
+- required document updates
+- risks and watchouts
 
 ## Boundary Record Template
 
