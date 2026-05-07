@@ -375,7 +375,10 @@ non-panicking construction.
 **Resolution**:
 - repeated signal installation now returns typed `AtmError` failures instead of
   panicking on poisoned/init paths
+- repeat installs now preserve an already-raised terminate/reload flag instead
+  of clearing pending shutdown state between installs
 - a repeatable signal-install regression test now covers the non-panicking path
+  and the no-flag-reset behavior
 
 ---
 
@@ -402,6 +405,8 @@ return immediately.
 - force-cancel now tracks active connections and interrupts them via
   `Shutdown::Both` rather than falling through to `process::exit(1)`
 - blocked connection threads are covered by a deterministic interruption test
+- listener/accept failures after `Running` now reuse the same drain/stop path
+  instead of skipping lifecycle shutdown sequencing
 
 ---
 

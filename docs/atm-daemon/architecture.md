@@ -163,6 +163,10 @@ Architectural rule:
   home, not from `ATM_HOME` or the serving socket path
 - client-side launch admission uses `~/.atm/daemon/launch.lock`
 - daemon-side serving admission uses `~/.atm/daemon/owner.lock`
+- if the serving owner record points to a non-live pid, startup may perform a
+  bounded retry to recover the same singleton lock; if recovery cannot safely
+  claim the existing ownership path, startup must fail with
+  `ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED`
 
 Lifecycle state model:
 - the daemon runtime must explicitly model:
@@ -183,6 +187,11 @@ Lifecycle state model:
 - `RuntimeComposition::start()` is the only legal daemon bootstrap entrypoint;
   `run_daemon()` must not bypass the lifecycle root and call the listener
   directly
+- any post-`Running` exit path, including listener/accept failures, must pass
+  through `Running -> Draining -> Stopped` rather than silently forcing
+  `Running -> Stopped`
+- repeated signal-install calls must reuse the same process-wide signal flags
+  without clearing a pending terminate/reload bit between installs
 
 Privacy boundary:
 - the lifecycle state type and transport/runtime adapter internals remain
