@@ -144,7 +144,7 @@ Current implementation status:
 The intended rollout is:
 
 1. internal workspace crates now
-2. prove the model on ATM
+2. prove the model on the first consumer repository
 3. stabilize:
    - CLI contract
    - JSON findings shape
@@ -213,4 +213,4 @@ Current direction for both items:
 
 Related ADR:
 
-- [`../adr/ADR-004-structured-boundary-definitions.md`](../adr/ADR-004-structured-boundary-definitions.md)
+- [`./adr/ADR-004-structured-boundary-definitions.md`](./adr/ADR-004-structured-boundary-definitions.md)

@@ -1,5 +1,11 @@
 # Boundary Enforcement Model
 
+Related ADR:
+- [`./adr/ADR-004-structured-boundary-definitions.md`](./adr/ADR-004-structured-boundary-definitions.md)
+
+Related requirements:
+- [`./requirements.md`](./requirements.md)
+
 ## Purpose
 
 This document records the planned warn/error enforcement model for
@@ -62,7 +68,7 @@ Each planned item must include:
 - stable item key
 - owning boundary id
 - scheduled sprint
-- task or issue id
+- tracking id
 - escalation condition
 
 If any of those are missing or malformed, the linter should treat the item as
@@ -118,7 +124,7 @@ Each planned-but-missing item should map to:
 
 - item key
 - scheduled sprint
-- task or issue id
+- tracking id
 - escalation condition
 
 The mapping must be machine-readable so the linter can:
@@ -140,14 +146,19 @@ Not acceptable as the long-term source:
 ## Recommended Data Shape
 
 The enforcement model should assume TOML-backed boundary records and TOML-backed
-planning metadata.
+planning metadata in:
+
+- `boundaries/planning.toml`
 
 Example direction:
 
 ```toml
+[planning]
+current_sprint = "S.14"
+
 [planned_items."BOUNDARY-MailStore.implementation.type"]
-scheduled_sprint = "R.14"
-task_id = "TASK-1234"
+scheduled_sprint = "S.14"
+tracking_id = "SCB-CHANGE-1234"
 expires_when = "sprint_current_or_past"
 ```
 
@@ -166,8 +177,8 @@ evaluates overdue warnings.
 
 Recommended source:
 
-- repo-owned planning metadata
-- or a repo-owned current-sprint setting consumed by the linter
+- `boundaries/planning.toml`
+- specifically `[planning].current_sprint`
 
 The source must be explicit and testable. It must not rely on a human manually
 interpreting the current sprint at review time.
@@ -176,7 +187,7 @@ If the current-sprint source is missing, malformed, or cannot be parsed, the
 linter must classify planned-but-missing items as errors rather than warnings.
 
 Sprint comparison must use parsed sprint ordering, not lexical string
-comparison. For example, `R.10` must compare greater than `R.9`.
+comparison. For example, `S.10` must compare greater than `S.9`.
 
 ## Finding Content
 
@@ -186,12 +197,12 @@ Both warnings and errors should include:
 - exact missing item
 - owning document / boundary record
 - scheduled sprint, when present
-- task or issue id, when present
+- tracking id, when present
 
 This makes the output useful to:
 
 - QA
-- team-lead planning
+- planning reviewers
 - future implementation sprints
 
 Recommended rule families:
@@ -227,6 +238,8 @@ should still be TOML-first.
 Default behavior should be:
 
 - TOML planning metadata is authoritative
+- `boundaries/planning.toml` is the default authoritative planning-metadata
+  file
 - duplicate boundary definitions across sources are errors unless explicitly in
   an equivalence-test migration mode
 - duplicate item keys in the planning metadata are errors
@@ -244,12 +257,12 @@ At minimum, the implementation should ship with:
 - error test: documented item missing with no planning mapping
 - malformed-planning test:
   - missing sprint
-  - missing task/issue id
+  - missing tracking id
   - invalid item key
   - item key that points at no known boundary path
 - malformed-current-sprint-source test
 - sprint-ordering test:
-  - `R.9` vs `R.10`
+  - `S.9` vs `S.10`
   - current sprint vs future sprint
 - duplicate-planning-entry test
 - mixed-boundary test where one record contains pass/warn/error items together

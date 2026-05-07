@@ -1,5 +1,11 @@
 # Boundary TOML Migration Plan
 
+Related ADR:
+- [`./adr/ADR-004-structured-boundary-definitions.md`](./adr/ADR-004-structured-boundary-definitions.md)
+
+Related requirements:
+- [`./requirements.md`](./requirements.md)
+
 ## Goal
 
 Move canonical boundary data from Markdown-embedded records to standalone TOML
@@ -36,11 +42,11 @@ subdirectories, for example:
 
 ```text
 boundaries/
-  atm-core/
+  consumer-core/
     mail-store.toml
     identity-registry.toml
-  atm-daemon/
-    daemon-api.toml
+  runtime-service/
+    server-transport.toml
 ```
 
 This is the preferred first-rollout layout and matches the recommended
@@ -71,6 +77,8 @@ Default dual-loader rule:
 - the same `boundary_id` must not be authoritatively defined in both formats at
   once
 - conflicting definitions across formats are errors
+- if the same `boundary_id` appears in Markdown and TOML and the normalized
+  records differ, that conflicting-definition case is a hard error
 - any explicit equivalence mode that permits duplicate-source fixtures is
   test-only and must not be enabled in default lint runs or CI
 
@@ -176,12 +184,13 @@ implementation review proves that one of them is unworkable:
   - `boundaries/`
 - file organization:
   - one file per boundary under owner-package subdirectories, for example:
-    - `boundaries/atm-core/mail-store.toml`
-    - `boundaries/atm-daemon/server-transport.toml`
+    - `boundaries/consumer-core/mail-store.toml`
+    - `boundaries/runtime-service/server-transport.toml`
 - unknown-field policy:
   - strict rejection enabled from day one
 - planning metadata location:
   - central registry at `boundaries/planning.toml`, keyed by stable item key
+  - current sprint field at `[planning].current_sprint`
 
 These choices optimize for:
 

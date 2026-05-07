@@ -209,17 +209,9 @@ Deferred until after design freeze:
 - composition-root enforcement (carry into `R.4`)
 - cargo-modules cycle gating beyond false-positive review (carry into `R.4`)
 - unsafe view hardening beyond cargo-geiger package-resolution failures (carry into `R.6`)
-- TOML boundary-source migration and planning-aware inventory-parity
-  enforcement (carry into next post-R.10 planning sprint)
 
 Acceptance:
 - `just lint` can fail on the first hard architectural violations
-
-Planned next-stage references:
-
-- [`docs/sc-lint/boundary-enforcement-model.md`](./sc-lint/boundary-enforcement-model.md)
-- [`docs/sc-lint/boundary-toml-migration.md`](./sc-lint/boundary-toml-migration.md)
-- [`docs/adr/ADR-004-structured-boundary-definitions.md`](./adr/ADR-004-structured-boundary-definitions.md)
 
 ### R.3 Implementation
 

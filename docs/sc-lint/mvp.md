@@ -24,8 +24,8 @@ The intended long-term shape is:
 - separate repository later
 - crates.io publication later
 
-The crate should be designed from day one as a generic tool, not an ATM-only
-tool.
+The crate should be designed from day one as a generic tool, not a
+consumer-specific tool.
 
 ## Name
 
@@ -40,7 +40,7 @@ Implemented paired attribute crate:
 - library crate: `sc_lint_attributes`
 - initial crate version: `0.1.0`
 
-These crates should **not** inherit the ATM workspace package version. They are
+These crates should **not** inherit the host workspace package version. They are
 new tool crates with their own version line starting at `0.1.0`.
 
 ## Non-Goals

@@ -6,15 +6,14 @@
 | Status | **Accepted** |
 | Date | 2026-05-07 |
 | Deciders | Rand Lee |
-| Relates to | PG-002, PG-003 |
+| Relates to | REQ-SCB-001, REQ-SCB-007, REQ-SCB-012 |
 | Supersedes | — |
 
 ---
 
 ## Context
 
-Phase R established crate-local boundary records and an initial boundary lint
-suite. The current boundary source format is Markdown with embedded structured
+The current boundary source format is Markdown with embedded structured
 records. That was good enough to get schema checks, dependency-edge checks, and
 reference checks moving quickly, but it is not the best long-term format for
 general-purpose `sc-lint` tooling.
@@ -46,6 +45,28 @@ in one document source.
   loophole
 - new architectural drift must fail immediately
 - the migration should avoid a flag day
+
+## Options Considered
+
+### Keep Markdown as the long-term authoritative source
+
+Rejected.
+
+This keeps the current mixed human/machine format and makes future structured
+planning-aware enforcement harder than necessary.
+
+### Switch to TOML in one flag-day change
+
+Rejected.
+
+The migration risk is higher than necessary. A dual-loader phase is safer.
+
+### Use freeform prose or comments for planned future exceptions
+
+Rejected.
+
+That would turn warnings into a weak suppression system and break deterministic
+lint behavior.
 
 ## Decision
 
@@ -89,7 +110,18 @@ classify missing items using structured planning metadata:
 The warning model is not freeform suppression. It is structured, traceable, and
 auto-escalating.
 
-### 5. Duplicate authoritative records across formats are errors
+### 5. Planning metadata uses a concrete default location
+
+The default planning metadata source for inventory-parity evaluation is:
+
+- `boundaries/planning.toml`
+
+The first-rollout planning metadata shape uses:
+
+- `[planning].current_sprint`
+- `[planned_items."<item-key>"]`
+
+### 6. Duplicate authoritative records across formats are errors
 
 During the dual-loader phase, the same boundary record must not be defined
 authoritatively in both Markdown and TOML at once unless the tooling has an
@@ -118,32 +150,14 @@ This prevents silent drift between two sources of truth.
 - temporary dual-source complexity
 - additional planning metadata will need structure and validation
 
-## Alternatives Considered
-
-### Keep Markdown as the long-term authoritative source
-
-Rejected.
-
-This keeps the current mixed human/machine format and makes future structured
-planning-aware enforcement harder than necessary.
-
-### Switch to TOML in one flag-day change
-
-Rejected.
-
-The migration risk is higher than necessary. A dual-loader phase is safer.
-
-### Use freeform prose or comments for planned future exceptions
-
-Rejected.
-
-That would turn warnings into a weak suppression system and break deterministic
-lint behavior.
-
 ## Follow-Up Work
 
-- implement the TOML dual-loader
-- define the canonical TOML schema shape
-- define structured planning metadata for inventory-parity checks
-- add warning/error escalation behavior to boundary lint
-- remove Markdown record loading after the migration completes
+| Action | Owner | Gate |
+|---|---|---|
+| Implement the TOML dual-loader | `sc-lint-boundary` maintainers | Before new boundary metadata features land |
+| Define the canonical TOML schema shape | `sc-lint-boundary` maintainers | Before broad record migration begins |
+| Define structured planning metadata for inventory parity | `sc-lint-boundary` maintainers | Before `SCB-INVENTORY-*` implementation |
+| Add warning/error escalation behavior to boundary lint | `sc-lint-boundary` maintainers | After TOML loading is in place |
+| Remove Markdown record loading after migration completes | `sc-lint-boundary` maintainers | After a full stable cycle with TOML-authoritative records |
+
+*ADR-004 | sc-lint | 2026-05-07*
