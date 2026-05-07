@@ -20,7 +20,7 @@ This sprint turns the current placeholder health/status layer into a real runtim
 
 ## Governing Requirements
 
-- `REQ-P-RUNTIME-002`
+- `REQ-CORE-RUNTIME-002`
 - `REQ-CORE-RUNTIME-001`
 - daemon-health requirements in `docs/requirements.md`
 - `docs/team-member-state.md`

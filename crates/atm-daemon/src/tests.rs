@@ -139,14 +139,7 @@ fn singleton_guard_recovers_stale_owner_once_lock_is_released() {
     fs2::FileExt::try_lock_exclusive(&file).expect("lock file");
     writeln!(&mut file, "999999").expect("write owner");
     file.sync_all().expect("sync owner");
-
-    let (release_tx, release_rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        release_rx.recv().expect("release signal");
-        drop(file);
-    });
-
-    release_tx.send(()).expect("release lock");
+    drop(file);
 
     let guard = SingletonGuard::acquire_at(&tempdir.path().join("atm.sock"), lock_path)
         .expect("stale owner recovery should succeed");

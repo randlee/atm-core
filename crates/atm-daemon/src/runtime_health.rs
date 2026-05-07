@@ -548,6 +548,9 @@ impl DaemonRequestDispatcher {
                 AtmError::daemon_unavailable(
                     "sqlite-backed durable pid continuity is unavailable for daemon heartbeats",
                 )
+                .with_recovery(
+                    "Restore the host-scoped ATM SQLite database and restart atm-daemon before retrying heartbeat traffic.",
+                )
             })?;
         let cached_pid = self
             .status_cache

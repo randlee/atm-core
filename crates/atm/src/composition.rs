@@ -599,6 +599,9 @@ fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError {
     AtmError::validation(format!(
         "transport returned an unexpected response for `{command}`: {response:?}"
     ))
+    .with_recovery(
+        "Retry the ATM command once. If the mismatch persists, inspect daemon/client version alignment and retained daemon logs before retrying again.",
+    )
 }
 
 #[cfg(test)]
