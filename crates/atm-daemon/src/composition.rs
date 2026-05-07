@@ -41,6 +41,15 @@ impl RuntimeLifecycle {
         *self.state.lock().expect("runtime lifecycle state lock")
     }
 
+    /// Transition the daemon runtime lifecycle to `next`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] with
+    /// [`atm_core::error_codes::AtmErrorCode::Validation`] when `next` would
+    /// violate the documented state machine, or
+    /// [`atm_core::error_codes::AtmErrorCode::DaemonUnavailable`] when the
+    /// lifecycle lock is poisoned.
     pub(crate) fn transition(
         &self,
         next: RuntimeLifecycleState,
@@ -77,6 +86,13 @@ impl RuntimeLifecycle {
         Ok(next)
     }
 
+    /// Force the daemon runtime lifecycle back to `Stopped`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] with
+    /// [`atm_core::error_codes::AtmErrorCode::DaemonUnavailable`] when the
+    /// lifecycle lock is poisoned while resetting the runtime state.
     pub(crate) fn force_stopped(&self) -> Result<(), AtmError> {
         let mut state = self
             .state
@@ -214,6 +230,7 @@ impl RuntimeComposition {
     }
 }
 
+#[cfg(unix)]
 fn validate_runtime_socket_path() -> Result<(), AtmError> {
     let socket_path = atm_core::protocol::daemon_socket_path()?;
     if socket_path.as_os_str().is_empty() {
@@ -274,6 +291,13 @@ fn validate_runtime_socket_path() -> Result<(), AtmError> {
     Ok(())
 }
 
+#[cfg(not(unix))]
+fn validate_runtime_socket_path() -> Result<(), AtmError> {
+    Err(AtmError::daemon_unavailable(
+        "atm-daemon socket transport requires a Unix platform",
+    ))
+}
+
 pub(crate) fn compose_runtime() -> Result<RuntimeComposition, AtmError> {
     validate_runtime_socket_path()?;
     Ok(RuntimeComposition::new(atm_core::home::atm_home()?))
@@ -305,13 +329,55 @@ mod tests {
     }
 
     #[test]
+    fn runtime_lifecycle_happy_path_matches_documented_owner_sequence() {
+        let lifecycle = RuntimeLifecycle::new();
+
+        assert_eq!(
+            lifecycle
+                .transition(RuntimeLifecycleState::Starting)
+                .expect("stopped -> starting"),
+            RuntimeLifecycleState::Starting
+        );
+        assert_eq!(
+            lifecycle
+                .transition(RuntimeLifecycleState::Running)
+                .expect("starting -> running"),
+            RuntimeLifecycleState::Running
+        );
+        assert_eq!(
+            lifecycle
+                .transition(RuntimeLifecycleState::Draining)
+                .expect("running -> draining"),
+            RuntimeLifecycleState::Draining
+        );
+        assert_eq!(
+            lifecycle
+                .transition(RuntimeLifecycleState::Stopped)
+                .expect("draining -> stopped"),
+            RuntimeLifecycleState::Stopped
+        );
+    }
+
+    #[test]
     fn runtime_lifecycle_rejects_illegal_transitions() {
         let lifecycle = RuntimeLifecycle::new();
-        let error = lifecycle
+        let stopped_to_running = lifecycle
             .transition(RuntimeLifecycleState::Running)
-            .expect_err("illegal transition");
+            .expect_err("illegal stopped -> running transition");
         assert!(
-            error
+            stopped_to_running
+                .to_string()
+                .contains("illegal daemon runtime lifecycle transition")
+        );
+
+        lifecycle
+            .transition(RuntimeLifecycleState::Starting)
+            .expect("stopped -> starting");
+        let starting_to_starting = lifecycle
+            .transition(RuntimeLifecycleState::Starting)
+            .expect_err("illegal starting -> starting transition");
+        assert!(
+            starting_to_starting
                 .to_string()
                 .contains("illegal daemon runtime lifecycle transition")
         );

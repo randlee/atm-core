@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::fmt;
 use std::path::{Path, PathBuf};
 #[cfg(unix)]
@@ -37,6 +35,7 @@ const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
 #[cfg(unix)]
 const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
 
+#[allow(dead_code)]
 #[derive(Debug, Default)]
 pub(crate) struct SendCommandEntryPoint;
 
@@ -46,6 +45,7 @@ impl SendCommandEntryPoint {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Default)]
 pub(crate) struct ReceiveCommandEntryPoint;
 
@@ -334,6 +334,7 @@ struct LaunchGateGuard {
 
 #[cfg(unix)]
 impl LaunchGateGuard {
+    #[allow(dead_code)]
     fn try_acquire() -> Result<Option<Self>, AtmError> {
         let lock_path = host_runtime_lock_path(HOST_RUNTIME_LAUNCH_LOCK_FILE)?;
         Self::try_acquire_at(lock_path)
@@ -423,6 +424,7 @@ impl<'a> CliComposition<'a> {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn transport(&self) -> &(dyn ClientTransport + Send + Sync + 'a) {
         self.transport.as_ref()
     }
@@ -437,14 +439,17 @@ impl<'a> CliComposition<'a> {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn observability_port(&self) -> &(dyn ObservabilityPort + Send + Sync) {
         self.observability_port
     }
 
+    #[allow(dead_code)]
     pub(crate) fn send_command(&self) -> &SendCommandEntryPoint {
         &self.send_command
     }
 
+    #[allow(dead_code)]
     pub(crate) fn receive_command(&self) -> &ReceiveCommandEntryPoint {
         &self.receive_command
     }
@@ -623,7 +628,7 @@ mod tests {
     use crate::observability::CliObservability;
 
     struct LoopbackFixture {
-        tempdir: TempDir,
+        _tempdir: TempDir,
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     }
@@ -635,7 +640,7 @@ mod tests {
             let current_dir = tempdir.path().join("cwd");
             fs::create_dir_all(&current_dir).expect("cwd");
             let fixture = Self {
-                tempdir,
+                _tempdir: tempdir,
                 home_dir,
                 current_dir,
             };

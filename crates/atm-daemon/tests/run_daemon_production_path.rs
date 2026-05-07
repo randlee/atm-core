@@ -53,17 +53,21 @@ fn remove_env_var<K: AsRef<std::ffi::OsStr>>(key: K) {
 fn run_daemon_uses_production_socket_path_and_serves_requests() {
     let _guard = env_lock().lock().expect("env lock");
     let tempdir = TempDir::new().expect("tempdir");
-    let user_home = tempdir.path().join("user-home");
+    let runtime_home = tempdir.path().join("runtime-home");
     let atm_home = tempdir.path().join("workspace");
     let socket_path = tempdir.path().join("runtime").join("daemon.sock");
-    std::fs::create_dir_all(&user_home).expect("user home");
+    std::fs::create_dir_all(&runtime_home).expect("runtime home");
     std::fs::create_dir_all(&atm_home).expect("atm home");
-    let _home = EnvGuard::set("HOME", &user_home);
+    // R.13 singleton ownership is still OS-home scoped, so keep the host
+    // runtime root isolated from the developer machine even though ATM_HOME
+    // remains the canonical mailbox/runtime root under test.
+    let _runtime_home = EnvGuard::set("HOME", &runtime_home);
     let _atm_home = EnvGuard::set("ATM_HOME", &atm_home);
+    let _config_home = EnvGuard::set("ATM_CONFIG_HOME", &atm_home);
     let _socket = EnvGuard::set("ATM_DAEMON_SOCKET", &socket_path);
 
     let helper = std::thread::spawn(move || {
-        for _ in 0..100 {
+        for _ in 0..200 {
             if socket_path.exists() {
                 break;
             }

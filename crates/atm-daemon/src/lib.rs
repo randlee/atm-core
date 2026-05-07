@@ -100,6 +100,10 @@ fn daemon_boundary_stub_error(message: &'static str, source: DaemonBoundaryStubE
 
 #[cfg(unix)]
 fn host_runtime_lock_path(file_name: &str) -> Result<PathBuf, AtmError> {
+    // Host runtime ownership is intentionally OS-home scoped. `ATM_HOME`
+    // selects mailbox/config roots, but both `atm` and `atm-daemon` must
+    // resolve the same `host_runtime_dir()` so one machine cannot fork
+    // separate singleton or launch-lock roots per workspace.
     Ok(host_runtime_lock_path_from_home(
         &atm_core::home::host_runtime_dir()?,
         file_name,
@@ -203,6 +207,8 @@ impl ActiveConnectionRegistry {
         if let Ok(mut streams) = self.streams.lock() {
             streams.remove(&id);
         }
+        // Poisoned lock during remove: connection count still decremented to
+        // prevent stale accounting.
         self.active_connections.fetch_sub(1, Ordering::SeqCst);
     }
 }
@@ -223,15 +229,18 @@ impl ObservabilityPort for DaemonObservability {
     fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {
         // Retained daemon observability wiring lands in a later sprint; keep
         // the boundary callable so runtime ownership can converge first.
+        // Stub: always succeeds; real failure paths land in a later sprint.
         Ok(())
     }
 
     fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
         // Query/follow remain empty until retained log indexing is wired.
+        // Stub: always succeeds; real failure paths land in a later sprint.
         Ok(AtmLogSnapshot::default())
     }
 
     fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, AtmError> {
+        // Stub: always succeeds; real failure paths land in a later sprint.
         Ok(LogTailSession::empty())
     }
 
@@ -483,6 +492,30 @@ impl PreparedRuntimeServer {
     }
 
     fn serve(self, dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
+        self.serve_with_deadlines(dispatcher, GRACEFUL_DRAIN_DEADLINE, FORCE_CANCEL_DEADLINE)
+    }
+
+    fn serve_with_deadlines(
+        self,
+        dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+        graceful_drain_deadline: Duration,
+        force_cancel_deadline: Duration,
+    ) -> Result<(), AtmError> {
+        self.serve_with_deadlines_and_accept_probe(
+            dispatcher,
+            graceful_drain_deadline,
+            force_cancel_deadline,
+            None,
+        )
+    }
+
+    fn serve_with_deadlines_and_accept_probe(
+        self,
+        dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+        graceful_drain_deadline: Duration,
+        force_cancel_deadline: Duration,
+        accepted_probe: Option<std::sync::mpsc::Sender<()>>,
+    ) -> Result<(), AtmError> {
         let Self {
             _singleton,
             listener,
@@ -495,7 +528,7 @@ impl PreparedRuntimeServer {
             loop {
                 if signals.reload.swap(false, Ordering::SeqCst) {
                     tracing::info!(
-                        "TODO(phase-R): bounded SIGHUP-triggered config/roster reload is not wired yet"
+                        "TODO(phase-R/R.18): bounded SIGHUP-triggered config/roster reload is not wired yet"
                     );
                 }
                 if signals.terminate.load(Ordering::SeqCst) {
@@ -524,6 +557,9 @@ impl PreparedRuntimeServer {
                         }
 
                         let active = registry.register(&stream)?;
+                        if let Some(accepted_probe) = accepted_probe.as_ref() {
+                            let _ = accepted_probe.send(());
+                        }
                         let dispatcher = Arc::clone(&dispatcher);
                         let force_shutdown = Arc::clone(&force_shutdown);
                         scope.spawn(move || {
@@ -553,43 +589,61 @@ impl PreparedRuntimeServer {
             }
 
             let shutdown_started = Instant::now();
-            tracing::info!(
-                active_connections = registry.active_connections(),
-                "daemon shutdown signal received; starting graceful drain"
-            );
-            let graceful_deadline = shutdown_started + GRACEFUL_DRAIN_DEADLINE;
-            let force_cancel_deadline = shutdown_started + FORCE_CANCEL_DEADLINE;
-            while registry.active_connections() > 0 && Instant::now() < graceful_deadline {
-                thread::sleep(SHUTDOWN_POLL_INTERVAL);
-            }
-            let remaining_after_graceful = registry.active_connections();
-            if remaining_after_graceful == 0 {
-                tracing::info!("daemon graceful drain completed cleanly");
-            } else {
-                tracing::info!(
-                    active_connections = remaining_after_graceful,
-                    "daemon graceful drain hit deadline; continuing toward forced cancel"
-                );
-            }
-            if remaining_after_graceful > 0 {
-                force_shutdown.store(true, Ordering::SeqCst);
-                registry.interrupt_all()?;
-            }
-            while registry.active_connections() > 0 && Instant::now() < force_cancel_deadline {
-                thread::sleep(SHUTDOWN_POLL_INTERVAL);
-            }
-            let remaining_connections = registry.active_connections();
-            if remaining_connections > 0 {
-                return Err(AtmError::daemon_unavailable(format!(
-                    "forced cancel deadline elapsed with {remaining_connections} active daemon connections"
-                )));
-            }
+            drain_active_connections_for_shutdown(
+                registry.as_ref(),
+                force_shutdown.as_ref(),
+                graceful_drain_deadline,
+                force_cancel_deadline,
+                shutdown_started,
+            )?;
             if let Some(error) = serve_error {
                 return Err(error);
             }
             Ok(())
         })
     }
+}
+
+#[cfg(unix)]
+fn drain_active_connections_for_shutdown(
+    registry: &ActiveConnectionRegistry,
+    force_shutdown: &AtomicBool,
+    graceful_drain_deadline: Duration,
+    force_cancel_deadline: Duration,
+    shutdown_started: Instant,
+) -> Result<(), AtmError> {
+    tracing::info!(
+        active_connections = registry.active_connections(),
+        "daemon shutdown signal received; starting graceful drain"
+    );
+    let graceful_deadline = shutdown_started + graceful_drain_deadline;
+    let force_cancel_deadline = shutdown_started + force_cancel_deadline;
+    while registry.active_connections() > 0 && Instant::now() < graceful_deadline {
+        thread::sleep(SHUTDOWN_POLL_INTERVAL);
+    }
+    let remaining_after_graceful = registry.active_connections();
+    if remaining_after_graceful == 0 {
+        tracing::info!("daemon graceful drain completed cleanly");
+    } else {
+        tracing::info!(
+            active_connections = remaining_after_graceful,
+            "daemon graceful drain hit deadline; continuing toward forced cancel"
+        );
+    }
+    if remaining_after_graceful > 0 {
+        force_shutdown.store(true, Ordering::SeqCst);
+        registry.interrupt_all()?;
+    }
+    while registry.active_connections() > 0 && Instant::now() < force_cancel_deadline {
+        thread::sleep(SHUTDOWN_POLL_INTERVAL);
+    }
+    let remaining_connections = registry.active_connections();
+    if remaining_connections > 0 {
+        return Err(AtmError::daemon_unavailable(format!(
+            "forced cancel deadline elapsed with {remaining_connections} active daemon connections"
+        )));
+    }
+    Ok(())
 }
 
 #[cfg(not(unix))]
@@ -975,164 +1029,4 @@ pub fn run_daemon() -> Result<(), AtmError> {
 }
 
 #[cfg(all(test, unix))]
-mod tests {
-    use super::{
-        ActiveConnectionRegistry, DaemonShutdownSignals, HOST_RUNTIME_OWNER_LOCK_FILE,
-        SingletonGuard, host_runtime_lock_path_from_home,
-    };
-    use atm_core::error_codes::AtmErrorCode;
-    use std::fs::OpenOptions;
-    use std::io::{Read, Write};
-    use std::os::unix::net::{UnixListener, UnixStream};
-    use std::sync::{Arc, mpsc};
-    use std::time::Duration;
-    use tempfile::TempDir;
-
-    #[test]
-    fn daemon_shutdown_signals_install_is_repeatable() {
-        let first = DaemonShutdownSignals::install().expect("first install");
-        first
-            .terminate
-            .store(true, std::sync::atomic::Ordering::SeqCst);
-        first
-            .reload
-            .store(true, std::sync::atomic::Ordering::SeqCst);
-        let second = DaemonShutdownSignals::install().expect("second install");
-
-        assert!(second.terminate.load(std::sync::atomic::Ordering::SeqCst));
-        assert!(second.reload.load(std::sync::atomic::Ordering::SeqCst));
-        second
-            .terminate
-            .store(false, std::sync::atomic::Ordering::SeqCst);
-        second
-            .reload
-            .store(false, std::sync::atomic::Ordering::SeqCst);
-    }
-
-    #[test]
-    fn daemon_host_runtime_lock_path_ignores_atm_home() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let user_home = tempdir.path().join("user-home");
-        let atm_home = tempdir.path().join("workspace").join(".atm-home");
-        let runtime_dir = atm_core::home::host_runtime_dir_from_home(&user_home);
-        let path = host_runtime_lock_path_from_home(&runtime_dir, HOST_RUNTIME_OWNER_LOCK_FILE);
-
-        assert_eq!(
-            path,
-            user_home.join(".atm").join("daemon").join("owner.lock")
-        );
-        assert!(
-            !path.starts_with(&atm_home),
-            "daemon singleton lock must remain OS-home scoped"
-        );
-    }
-
-    #[test]
-    fn singleton_guard_is_host_wide_across_different_socket_paths() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
-
-        let first_socket = tempdir.path().join("one.sock");
-        let second_socket = tempdir.path().join("other").join("two.sock");
-        let first = SingletonGuard::acquire_at(
-            &first_socket,
-            host_runtime_lock_path_from_home(&runtime_dir, HOST_RUNTIME_OWNER_LOCK_FILE),
-        )
-        .expect("first singleton");
-        let error = SingletonGuard::acquire_at(
-            &second_socket,
-            host_runtime_lock_path_from_home(&runtime_dir, HOST_RUNTIME_OWNER_LOCK_FILE),
-        )
-        .expect_err("second singleton");
-
-        assert_eq!(error.code, AtmErrorCode::DaemonServingStateRejected);
-        drop(first);
-    }
-
-    #[test]
-    fn singleton_guard_reports_stale_owner_record_failure() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
-        let lock_path =
-            host_runtime_lock_path_from_home(&runtime_dir, HOST_RUNTIME_OWNER_LOCK_FILE);
-        if let Some(parent) = lock_path.parent() {
-            std::fs::create_dir_all(parent).expect("create parent");
-        }
-        let mut file = OpenOptions::new()
-            .create(true)
-            .read(true)
-            .write(true)
-            .truncate(false)
-            .open(&lock_path)
-            .expect("open lock file");
-        fs2::FileExt::try_lock_exclusive(&file).expect("lock file");
-        writeln!(&mut file, "999999").expect("write owner");
-        file.sync_all().expect("sync owner");
-
-        let error = SingletonGuard::acquire_at(&tempdir.path().join("atm.sock"), lock_path)
-            .expect_err("stale");
-        assert_eq!(error.code, AtmErrorCode::DaemonStaleOwnerRecoveryFailed);
-    }
-
-    #[test]
-    fn singleton_guard_recovers_stale_owner_once_lock_is_released() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
-        let lock_path =
-            host_runtime_lock_path_from_home(&runtime_dir, HOST_RUNTIME_OWNER_LOCK_FILE);
-        if let Some(parent) = lock_path.parent() {
-            std::fs::create_dir_all(parent).expect("create parent");
-        }
-        let mut file = OpenOptions::new()
-            .create(true)
-            .read(true)
-            .write(true)
-            .truncate(false)
-            .open(&lock_path)
-            .expect("open lock file");
-        fs2::FileExt::try_lock_exclusive(&file).expect("lock file");
-        writeln!(&mut file, "999999").expect("write owner");
-        file.sync_all().expect("sync owner");
-
-        let (release_tx, release_rx) = mpsc::channel();
-        std::thread::spawn(move || {
-            release_rx.recv().expect("release signal");
-            drop(file);
-        });
-
-        let release_tx_clone = release_tx.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(10));
-            release_tx_clone.send(()).expect("release lock");
-        });
-
-        let guard = SingletonGuard::acquire_at(&tempdir.path().join("atm.sock"), lock_path)
-            .expect("stale owner recovery should succeed");
-        drop(guard);
-    }
-
-    #[test]
-    fn blocked_connection_is_interrupted_on_force_cancel() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let registry = Arc::new(ActiveConnectionRegistry::default());
-        let socket_path = tempdir.path().join("daemon-test.sock");
-        let listener = UnixListener::bind(&socket_path).expect("bind listener");
-        let client = UnixStream::connect(&socket_path).expect("connect client");
-        let (mut server, _) = listener.accept().expect("accept server");
-        let _guard = registry.register(&server).expect("register");
-        let (done_tx, done_rx) = mpsc::channel();
-
-        std::thread::spawn(move || {
-            let mut byte = [0u8; 1];
-            let result = server.read(&mut byte).map(|_| ());
-            done_tx.send(result).expect("send result");
-        });
-
-        registry.interrupt_all().expect("interrupt all");
-        let result = done_rx
-            .recv_timeout(Duration::from_millis(250))
-            .expect("connection finished");
-        drop(client);
-        assert!(result.is_ok(), "connection result: {result:?}");
-    }
-}
+mod tests;
