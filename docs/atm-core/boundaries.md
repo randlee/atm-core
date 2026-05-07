@@ -30,6 +30,8 @@ Notes:
   - send-shaped `Send` envelopes for compose and acknowledge
   - typed `Heartbeat` request/response envelopes for daemon runtime-state
     ownership
+  - `HeartbeatActivity` / `TeamMemberHeartbeat{Request,Response}` as the
+    canonical daemon-owned member-liveness DTO family added in `R.15`
   - `RuntimeStatusSnapshot` as the daemon-health/status DTO consumed by
     `atm doctor`
 

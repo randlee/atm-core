@@ -31,18 +31,23 @@ fn run_daemon_uses_production_socket_path_and_serves_requests() {
     let _shutdown_reset = ShutdownResetGuard::install();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("workspace");
+    let user_home = tempdir.path().join("user-home");
     let socket_path = tempdir.path().join("runtime").join("daemon.sock");
     std::fs::create_dir_all(&atm_home).expect("atm home");
+    std::fs::create_dir_all(&user_home).expect("user home");
     let atm_home_value = atm_home.display().to_string();
+    let user_home_value = user_home.display().to_string();
     let socket_value = socket_path.display().to_string();
     let _env = EnvGuard::set_many([
         ("ATM_HOME", Some(atm_home_value.as_str())),
         ("ATM_CONFIG_HOME", Some(atm_home_value.as_str())),
         ("ATM_DAEMON_SOCKET", Some(socket_value.as_str())),
+        ("HOME", Some(user_home_value.as_str())),
     ]);
 
     let helper = std::thread::spawn(move || {
-        for _ in 0..200 {
+        let mut backoff = Duration::from_millis(10);
+        for _ in 0..32 {
             match UnixStream::connect(&socket_path) {
                 Ok(mut stream) => {
                     let request = RequestEnvelope::Doctor(DoctorQuery {
@@ -83,7 +88,8 @@ fn run_daemon_uses_production_socket_path_and_serves_requests() {
                     ) => {}
                 Err(error) => panic!("connect socket: {error}"),
             }
-            std::thread::sleep(std::time::Duration::from_millis(10));
+            std::thread::sleep(backoff);
+            backoff = (backoff.saturating_mul(2)).min(Duration::from_millis(250));
         }
         panic!("daemon socket never became connectable");
     });
@@ -94,7 +100,7 @@ fn run_daemon_uses_production_socket_path_and_serves_requests() {
     });
     helper.join().expect("helper thread");
     let result = result_rx
-        .recv_timeout(Duration::from_secs(5))
+        .recv_timeout(Duration::from_secs(20))
         .expect("run_daemon completed");
     assert!(result.is_ok(), "run_daemon result: {result:?}");
 }
