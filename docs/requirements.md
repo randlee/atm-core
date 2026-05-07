@@ -87,7 +87,7 @@ Phase-R redesign note:
   of the enforceable contract before new implementation work proceeds
 - Phase R planning and CI may depend on `sc-lint` as an external tool
   dependency; `sc-lint` is not part of the ATM product surface even when its
-  enforcement model constrains Phase R gates
+  verification model constrains Phase R gates
 - durable ATM state is one host-scoped SQLite database at
   `~/.atm/db/mail.db`; the daemon is the only writer, while direct read-only
   SQLite consumers remain an allowed system integration path

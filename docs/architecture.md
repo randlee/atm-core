@@ -87,7 +87,7 @@ Product-level boundary rules:
 - `ack` may remain a retained CLI/user workflow, but thin-client protocol
   surfaces should carry it through send-shaped request data rather than a
   separate top-level method family
-- Phase R may depend on `sc-lint` for boundary/parser gate enforcement, but
+- Phase R may depend on `sc-lint` for boundary/parser gate verification, but
   `sc-lint` is an external tool dependency rather than an ATM-owned product
   subsystem
 - durable ATM state is one host-scoped SQLite database at `~/.atm/db/mail.db`

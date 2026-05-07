@@ -169,6 +169,8 @@ Required ADRs:
 - split `ClientTransport` / `ServerTransport`
 - concrete implementations remain private
 - legal composition owner
+- ADR-004: structured boundary definitions (lives on
+  `feature/pR-s3-boundary-lint`)
 
 Acceptance:
 - each major Phase R design decision has one crate-local ADR record
