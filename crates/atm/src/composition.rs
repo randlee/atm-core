@@ -616,9 +616,10 @@ mod tests {
 
     use super::{
         CliComposition, DaemonBinaryPath, DaemonSocketPath, DaemonSupervisor,
-        HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, LocalSocketClientTransport,
-        host_runtime_lock_path_from_home,
+        LocalSocketClientTransport,
     };
+    #[cfg(unix)]
+    use super::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, host_runtime_lock_path_from_home};
     use crate::observability::CliObservability;
 
     struct LoopbackFixture {

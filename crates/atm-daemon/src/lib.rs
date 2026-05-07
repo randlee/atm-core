@@ -93,7 +93,7 @@ impl fmt::Display for DaemonBoundaryStubError {
 impl StdError for DaemonBoundaryStubError {}
 
 fn daemon_boundary_stub_error(message: &'static str, source: DaemonBoundaryStubError) -> AtmError {
-    AtmError::config(message)
+    AtmError::daemon_unavailable(message)
         .with_recovery("Complete the Phase R daemon boundary wiring before invoking this path.")
         .with_source(source)
 }
@@ -161,6 +161,8 @@ fn recorded_owner_pid(lock_file: &File) -> Result<Option<u32>, AtmError> {
 struct ActiveConnectionRegistry {
     next_id: AtomicUsize,
     active_connections: AtomicUsize,
+    // Keep interruptible stream clones so graceful-drain escalation can break
+    // blocked reads instead of waiting forever for peer cooperation.
     streams: Mutex<HashMap<usize, UnixStream>>,
 }
 
@@ -219,10 +221,13 @@ impl boundary::sealed::Sealed for DaemonObservability {}
 
 impl ObservabilityPort for DaemonObservability {
     fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {
+        // Retained daemon observability wiring lands in a later sprint; keep
+        // the boundary callable so runtime ownership can converge first.
         Ok(())
     }
 
     fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
+        // Query/follow remain empty until retained log indexing is wired.
         Ok(AtmLogSnapshot::default())
     }
 
@@ -996,6 +1001,30 @@ mod tests {
 
         assert!(second.terminate.load(std::sync::atomic::Ordering::SeqCst));
         assert!(second.reload.load(std::sync::atomic::Ordering::SeqCst));
+        second
+            .terminate
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        second
+            .reload
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    #[test]
+    fn daemon_host_runtime_lock_path_ignores_atm_home() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let user_home = tempdir.path().join("user-home");
+        let atm_home = tempdir.path().join("workspace").join(".atm-home");
+        let runtime_dir = atm_core::home::host_runtime_dir_from_home(&user_home);
+        let path = host_runtime_lock_path_from_home(&runtime_dir, HOST_RUNTIME_OWNER_LOCK_FILE);
+
+        assert_eq!(
+            path,
+            user_home.join(".atm").join("daemon").join("owner.lock")
+        );
+        assert!(
+            !path.starts_with(&atm_home),
+            "daemon singleton lock must remain OS-home scoped"
+        );
     }
 
     #[test]

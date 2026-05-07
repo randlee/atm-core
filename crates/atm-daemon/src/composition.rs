@@ -24,6 +24,7 @@ pub(crate) enum RuntimeLifecycleState {
     Stopped,
 }
 
+/// Serializes legal daemon runtime ownership transitions.
 #[cfg_attr(not(unix), allow(dead_code))]
 #[derive(Debug, Default)]
 pub(crate) struct RuntimeLifecycle {
@@ -198,6 +199,9 @@ impl RuntimeComposition {
     }
 
     fn finish_runtime(&self, result: Result<(), AtmError>) -> Result<(), AtmError> {
+        // `Draining` is a lifecycle closure marker for the composed runtime
+        // owner, not an extra timed phase inside this type. The actual grace
+        // period lives down in the prepared server shutdown loop.
         let state_result = self
             .lifecycle
             .transition(RuntimeLifecycleState::Draining)
@@ -260,7 +264,13 @@ fn validate_runtime_socket_path() -> Result<(), AtmError> {
             )
             .with_source(source)
         })?;
-    let _ = std::fs::remove_file(probe_path);
+    if let Err(error) = std::fs::remove_file(&probe_path) {
+        tracing::debug!(
+            path = %probe_path.display(),
+            %error,
+            "failed to remove daemon socket write probe file"
+        );
+    }
     Ok(())
 }
 
