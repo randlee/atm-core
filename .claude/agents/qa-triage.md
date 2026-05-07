@@ -25,6 +25,7 @@ with free-form input.
 ```json
 {
   "triage_mode": "initial_pass",
+  "phase_id": "phase-R",
   "finding_id": "FTQ-001",
   "title": "Process-global shutdown state in tests",
   "description": "Global OnceLock / static shutdown state leaks across test cases.",
@@ -65,6 +66,7 @@ with free-form input.
 
 Input rules:
 - `triage_mode` is required. Allowed values: `initial_pass`, `followup_pass`.
+- `phase_id` is required.
 - `finding_id`, `title`, `description`, `pattern`, `worktrees`, and
   `triage_root` are required.
 - `worktrees` must already be listed in the desired promotion order. Do not
@@ -97,7 +99,7 @@ Mode rules:
    - run `command -v oxigraph && oxigraph --version`
    - if `oxigraph` is unavailable, return a structured failure
 3. Read the existing canonical record, if present:
-   - `<triage_root>/findings/<finding_id>.ttl`
+   - `<triage_root>/<phase_id>/findings/<finding_id>.ttl`
 4. Sweep each supplied worktree in the given order:
    - prefer `rg -n --glob '*.rs' -e "<pattern>" <path>/crates`
    - if `file_filter` is provided, apply it to the matched file paths
@@ -139,7 +141,7 @@ Mode rules:
    - `merge_forward_needed`: fixed on some higher branch but still open below it
    - `regressed`: fixed before, open again now
 11. Write the canonical Turtle record:
-   - `<triage_root>/findings/<finding_id>.ttl`
+   - `<triage_root>/<phase_id>/findings/<finding_id>.ttl`
 12. Validate the Turtle output:
    - use a temporary Oxigraph store and `oxigraph load` against the TTL file
    - fail if the Turtle cannot be parsed
@@ -169,6 +171,7 @@ Minimum Finding properties:
 - `triage:description`
 - `triage:triageMode`
 - `triage:category`
+- `triage:phaseId`
 - `triage:severity`
 - `triage:repeatable`
 - `triage:sweepScope`
@@ -208,6 +211,7 @@ triage:finding/FTQ-001
   a triage:Finding ;
   triage:findingId "FTQ-001" ;
   triage:title "Process-global shutdown state in tests" ;
+  triage:phaseId "phase-R" ;
   triage:triageMode "followup_pass" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
@@ -244,6 +248,7 @@ Return fenced JSON only.
   "success": true,
   "data": {
     "triage_mode": "followup_pass",
+    "phase_id": "phase-R",
     "finding_id": "FTQ-001",
     "status": "open | fixed | fixed_partial | regressed",
     "repeatable": true,
@@ -252,7 +257,7 @@ Return fenced JSON only.
     "highest_fixed_branch": "R.16",
     "promote_to_branch": "R.17",
     "dispatch_ready": true,
-    "ttl_path": "/abs/.triage/findings/FTQ-001.ttl",
+    "ttl_path": "/abs/.triage/phase-R/findings/FTQ-001.ttl",
     "occurrences": [
       {
         "branch": "R.17",
@@ -339,7 +344,7 @@ On failure, return fenced JSON:
 
 - Never modify source code.
 - Write only per-finding canonical records under:
-  - `<triage_root>/findings/<finding_id>.ttl`
+  - `<triage_root>/<phase_id>/findings/<finding_id>.ttl`
 - Do not update shared aggregate files from this agent.
 - Do not hardcode branch names like `R.17`.
 - Do not infer promotion order from branch naming.
