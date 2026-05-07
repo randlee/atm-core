@@ -20,6 +20,10 @@ required_variables:
   - merge_readiness
   - merge_reason
   - recommendation
+optional_variables:
+  - blocking_ids_json
+defaults:
+  blocking_ids_json: "[]"
 ---
 # Final Quality Report
 
@@ -38,18 +42,18 @@ Final Verdict: **{{ verdict }}**
   "task": "{{ task_id }}",
   "branch": "{{ branch }}",
   "commit": "{{ commit }}",
-  "pr": "{{ pr_number }}",
+  "pr": {{ pr_number }},
   "verdict": "{{ verdict }}",
   "findings": {
-    "blocking": "{{ findings_blocking }}",
-    "important": "{{ findings_important }}",
-    "minor": "{{ findings_minor }}"
+    "blocking": {{ findings_blocking }},
+    "important": {{ findings_important }},
+    "minor": {{ findings_minor }}
   },
-  "blocking_ids": "",
+  "blocking_ids": {{ blocking_ids_json }},
   "merge_readiness": "{{ merge_readiness }}",
   "merge_reason": "{{ merge_reason }}",
   "next_action": "none",
-  "action_owner": "none",
+  "owner": "none",
   "recommendation": "{{ recommendation }}"
 }
 ```

@@ -40,6 +40,7 @@ Treat the assignment as the source of truth for:
 - worktree path
 - review targets
 - changed files
+- triage records
 - reference docs
 
 If a field is missing, make the narrowest safe assumption and say so in the
@@ -80,6 +81,11 @@ ALL instances and include the complete list in the verdict.
    - `arch-qa` from `.claude/skills/codex-orchestration/arch-qa-assignment.json.j2`
    - `flaky-test-qa` from `.claude/skills/codex-orchestration/flaky-test-qa-assignment.json.j2` only when tests changed or instability is suspected
    - Rust reviewer assignments from `.claude/assets/sc-rust/quality-mgr/templates/` exactly as directed by `.claude/assets/sc-rust/quality-mgr/quality-mgr.rust.md`
+   - when rechecking prior findings, pass `triage_records`, `round_limit`,
+     `changed_files`, and `carry_forward_findings_json` through the rendered
+     reviewer templates instead of wrapper prose
+   - build `carry_forward_findings_json` with:
+     `python3 scripts/triage_carry_forward.py --branch <branch> --ttl <record>...`
 5. Launch all selected reviewers as background Task agents. Never run cargo,
    clippy, or broad QA analysis yourself in the foreground.
 6. Collect the reviewer results and classify them as:

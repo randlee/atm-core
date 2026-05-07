@@ -13,11 +13,19 @@ optional_variables:
   - commit
   - phase
   - sprint
+  - round_limit
+  - changed_files
+  - carry_forward_findings_json
+  - triage_records
   - notes
 defaults:
   commit: ""
   phase: ""
   sprint: ""
+  round_limit: false
+  changed_files: []
+  carry_forward_findings_json: "[]"
+  triage_records: []
   notes: ""
 ---
 {
@@ -31,5 +39,9 @@ defaults:
   },
   "review_targets": [{% for target in review_targets %}"{{ target }}"{% if not loop.last %}, {% endif %}{% endfor %}],
   "reference_docs": [{% for doc in reference_docs %}"{{ doc }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "round_limit": {% if round_limit %}true{% else %}false{% endif %},
+  "changed_files": [{% for file in changed_files %}"{{ file }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "triage_records": [{% for record in triage_records %}"{{ record }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "carry_forward_findings": {{ carry_forward_findings_json }},
   "notes": "{{ notes }}"
 }

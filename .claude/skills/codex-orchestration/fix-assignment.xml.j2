@@ -1,0 +1,63 @@
+---
+name: fix-task
+version: 1.0.0
+description: team-lead post-triage fix assignment template for codex-orchestration QA findings.
+format: xml
+required_variables:
+  - task_id
+  - phase
+  - branch
+  - worktree_path
+  - pr_target
+  - description
+  - finding_ids
+  - triage_records
+  - required_fixes
+  - acceptance_criteria
+  - references
+optional_variables:
+  - validation_requirements
+defaults:
+  validation_requirements: ""
+---
+<atm-task id="{{ task_id }}" phase="{{ phase }}" assignee="arch-ctm" mode="fix">
+  <description>{{ description }}</description>
+
+  <branch>{{ branch }}</branch>
+  <worktree>{{ worktree_path }}</worktree>
+  <pr-target>{{ pr_target }}</pr-target>
+
+  <finding-ids>
+{{ finding_ids }}
+  </finding-ids>
+
+  <triage-records>
+{{ triage_records }}
+  </triage-records>
+
+  <required-fixes>
+{{ required_fixes }}
+  </required-fixes>
+
+  <acceptance-criteria>
+{{ acceptance_criteria }}
+  </acceptance-criteria>
+
+  <validation-requirements>
+{{ validation_requirements }}
+  </validation-requirements>
+
+  <references>
+{{ references }}
+  </references>
+
+  <workflow>
+    <step id="a">ACK this message immediately. Begin work in the same session unless blocked.</step>
+    <step id="b">Update the assigned worktree from the target branch before editing. Include all earlier-sprint fixes already merged forward to that branch.</step>
+    <step id="c">Read the referenced triage records first. Treat the listed occurrences as the minimum required scope on this branch.</step>
+    <step id="d">Fix every promoted-branch occurrence in scope. Do not stop at the first location when the triage record marks the finding as repeatable.</step>
+    <step id="e">As soon as the branch is pushable, commit and push immediately. Send branch name and commit hash right away so follow-up QA can start in parallel.</step>
+    <step id="f">Run the required validation after the push report and send a second report with PASS or FAIL plus concrete failure details.</step>
+    <step id="g">After the validation report, read ATM again for follow-up work.</step>
+  </workflow>
+</atm-task>

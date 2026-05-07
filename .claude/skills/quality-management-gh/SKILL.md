@@ -97,6 +97,11 @@ Fallback when render fails:
 - post plain markdown preserving the same machine-status fields
 
 `<vars.json>` must be a flat JSON map of strings for `sc-compose`.
+Use raw JSON strings for array-valued machine-status fields, for example:
+- `blocking_ids_json: "[\"QA-001\"]"`
+
+Use numeric strings for count fields so the templates can render them as JSON
+numbers without quotes.
 
 ## Final Quality Report to PR (Closeout)
 

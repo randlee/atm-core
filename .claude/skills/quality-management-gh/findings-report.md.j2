@@ -17,7 +17,7 @@ required_variables:
   - findings_blocking
   - findings_important
   - findings_minor
-  - blocking_ids
+  - blocking_ids_json
   - blocking_findings_md
   - detailed_findings_md
   - next_action
@@ -40,14 +40,14 @@ Verdict: **{{ verdict }}**
   "task": "{{ task_id }}",
   "branch": "{{ branch }}",
   "commit": "{{ commit }}",
-  "pr": "{{ pr_number }}",
+  "pr": {{ pr_number }},
   "verdict": "{{ verdict }}",
   "findings": {
-    "blocking": "{{ findings_blocking }}",
-    "important": "{{ findings_important }}",
-    "minor": "{{ findings_minor }}"
+    "blocking": {{ findings_blocking }},
+    "important": {{ findings_important }},
+    "minor": {{ findings_minor }}
   },
-  "blocking_ids": "{{ blocking_ids }}",
+  "blocking_ids": {{ blocking_ids_json }},
   "merge_readiness": "{{ merge_readiness }}",
   "merge_reason": "{{ merge_reason }}",
   "next_action": "{{ next_action }}",
