@@ -56,11 +56,8 @@ pub fn load_team_config(
 pub fn import_inbox_source(
     request: InboxIngressImportRequest,
 ) -> Result<InboxIngressImportResponse, AtmError> {
-    let source_files = mailbox::store::observe_source_files(
-        &request.home_dir,
-        request.team.as_str(),
-        request.agent.as_str(),
-    )?;
+    let source_files =
+        mailbox::store::observe_source_files(&request.home_dir, &request.team, &request.agent)?;
     Ok(InboxIngressImportResponse {
         source_files: source_files
             .into_iter()
@@ -152,8 +149,8 @@ pub fn snapshot_status() -> Result<RuntimeStatusSnapshot, AtmError> {
 pub fn poll_watch(request: WatchSubscriptionRequest) -> Result<WatchEventBatch, AtmError> {
     let paths = crate::mailbox::source::discover_source_paths(
         &request.home_dir,
-        request.team.as_str(),
-        request.agent.as_str(),
+        &request.team,
+        &request.agent,
     )?;
     Ok(WatchEventBatch { paths })
 }

@@ -325,6 +325,9 @@ Architectural rules:
 - status cache rebuild after restart hydrates configured roster members as
   `unknown`, consults durable SQLite pid continuity only as startup fallback,
   and refreshes thereafter through runtime events
+- startup hydration records explicit `unknown` entries in the daemon cache so
+  bounded eviction can demote live members back to `unknown` without silently
+  deleting the member from runtime state
 - live pid conflict detection is cache-first after startup hydration; a
   live-old-pid/new-pid collision persists `identity_conflict` state in daemon
   memory until admin takeover or dead-pid retry clears it
@@ -375,6 +378,13 @@ Doctor health contract distinction:
   them through the documented request boundary
 - `atm doctor` must report both dimensions explicitly rather than treating
   process existence as equivalent to request-serving readiness
+- readiness states are:
+  - `ready` when the daemon owns the runtime, SQLite-backed continuity is
+    available, ingest is healthy, and no active identity-conflict path exists
+  - `degraded` when the daemon is still running but SQLite continuity, ingest,
+    or identity-conflict handling is impaired
+  - `unavailable` when the daemon still owns the runtime but every tracked
+    member has transitioned fully offline
 - the runtime health snapshot projected into `atm doctor` must also carry:
   - singleton-owner pid when known
   - SQLite-ready state

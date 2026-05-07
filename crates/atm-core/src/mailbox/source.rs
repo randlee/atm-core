@@ -122,10 +122,10 @@ pub(crate) fn discover_origin_inboxes(
 
 pub(crate) fn discover_source_paths(
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
 ) -> Result<Vec<PathBuf>, AtmError> {
-    let inbox_path = home::inbox_path_from_home(home_dir, team, agent)?;
+    let inbox_path = home::inbox_path_from_home(home_dir, team.as_str(), agent.as_str())?;
     let inboxes_dir = inbox_path
         .parent()
         .ok_or_else(|| AtmError::mailbox_read("inbox path has no parent directory"))?;
@@ -135,7 +135,7 @@ pub(crate) fn discover_source_paths(
     if inbox_path.exists() {
         paths.push(inbox_path);
     }
-    paths.extend(discover_origin_inboxes(&inboxes_dir, agent)?);
+    paths.extend(discover_origin_inboxes(&inboxes_dir, agent.as_str())?);
     paths.sort_by_key(|path| path.to_string_lossy().into_owned());
     paths.dedup();
     Ok(paths)
@@ -144,8 +144,8 @@ pub(crate) fn discover_source_paths(
 pub(crate) fn rediscover_and_validate_source_paths(
     locked_paths: &[PathBuf],
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
 ) -> Result<Vec<PathBuf>, AtmError> {
     let rediscovered = discover_source_paths(home_dir, team, agent)?;
     if rediscovered != locked_paths {
@@ -216,6 +216,7 @@ mod tests {
     use crate::config::AtmConfig;
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::test_support::{TEST_ORIGIN, TEST_SENDER, TEST_TEAM};
+    use crate::types::{AgentName, TeamName};
 
     #[test]
     fn discover_origin_inboxes_ignores_primary_and_sorts_matches() {
@@ -307,30 +308,35 @@ mod tests {
         let added = inboxes.join(format!("{TEST_SENDER}.{}.json", TEST_ORIGIN));
         std::fs::write(&locked, "").expect("primary");
 
-        let discovered =
-            super::discover_source_paths(home, TEST_TEAM, TEST_SENDER).expect("discover");
+        let discovered = super::discover_source_paths(
+            home,
+            &TEST_TEAM.parse().expect("team"),
+            &TEST_SENDER.parse().expect("sender"),
+        )
+        .expect("discover");
         std::fs::write(&added, "").expect("origin");
 
-        let error = rediscover_and_validate_source_paths(&discovered, home, TEST_TEAM, TEST_SENDER)
-            .expect_err("drift error");
+        let error = rediscover_and_validate_source_paths(
+            &discovered,
+            home,
+            &TEST_TEAM.parse().expect("team"),
+            &TEST_SENDER.parse().expect("sender"),
+        )
+        .expect_err("drift error");
         assert!(error.is_mailbox_lock());
         assert!(error.message.contains("source path set changed"));
     }
 
     #[test]
     fn discover_source_paths_rejects_invalid_team_segment() {
-        let tempdir = tempdir().expect("tempdir");
-        let error =
-            super::discover_source_paths(tempdir.path(), "../evil", TEST_SENDER).expect_err("team");
+        let error = "../evil".parse::<TeamName>().expect_err("team");
 
         assert!(error.is_address());
     }
 
     #[test]
     fn discover_source_paths_rejects_invalid_agent_segment() {
-        let tempdir = tempdir().expect("tempdir");
-        let error =
-            super::discover_source_paths(tempdir.path(), TEST_TEAM, "../evil").expect_err("agent");
+        let error = "../evil".parse::<AgentName>().expect_err("agent");
 
         assert!(error.is_address());
     }

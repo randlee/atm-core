@@ -289,6 +289,9 @@ projection into doctor command. Split liveness from readiness.
 - doctor output now carries a structured runtime snapshot with separate
   liveness/readiness plus singleton-owner, SQLite-ready, degraded-ingest, and
   aggregate member-count fields
+- doctor readiness now distinguishes `ready`, `degraded`, and `unavailable`
+  based on daemon runtime truth instead of collapsing all non-ready conditions
+  into one generic warning state
 - roster-scoped doctor projections use runtime member-state truth when a team
   roster is present
 

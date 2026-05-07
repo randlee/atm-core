@@ -74,7 +74,7 @@ pub(crate) fn observe_source_files(
     team: &TeamName,
     agent: &AgentName,
 ) -> Result<Vec<SourceFile>, AtmError> {
-    mailbox::store::observe_source_files(home_dir, team.as_ref(), agent.as_ref())
+    mailbox::store::observe_source_files(home_dir, team, agent)
 }
 
 pub(crate) fn commit_source_files(source_files: &[SourceFile]) -> Result<(), AtmError> {
@@ -102,8 +102,8 @@ where
 {
     mailbox::store::with_locked_source_files(
         home_dir,
-        team.as_ref(),
-        agent.as_ref(),
+        team,
+        agent,
         extra_write_paths,
         timeout,
         body,

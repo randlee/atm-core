@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -33,11 +33,31 @@ const MAX_STATUS_CACHE_ENTRIES: usize = 4096;
 #[derive(Debug, Clone)]
 struct DaemonObservability {
     home_dir: PathBuf,
+    retained_sink_fault: RetainedSinkFault,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RetainedSinkFault {
+    Healthy,
+    Degraded,
+    Unavailable,
 }
 
 impl DaemonObservability {
     fn new(home_dir: PathBuf) -> Self {
-        Self { home_dir }
+        let retained_sink_fault = match std::env::var("ATM_OBSERVABILITY_RETAINED_SINK_FAULT")
+            .ok()
+            .map(|value| value.trim().to_ascii_lowercase())
+            .as_deref()
+        {
+            Some("degraded") => RetainedSinkFault::Degraded,
+            Some("unavailable") => RetainedSinkFault::Unavailable,
+            _ => RetainedSinkFault::Healthy,
+        };
+        Self {
+            home_dir,
+            retained_sink_fault,
+        }
     }
 }
 
@@ -45,14 +65,20 @@ impl boundary::sealed::Sealed for DaemonObservability {}
 
 impl ObservabilityPort for DaemonObservability {
     fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {
+        // R.15 keeps retained-log emission owned by the shared observability
+        // stack, so the daemon-side health adapter is intentionally a no-op.
         Ok(())
     }
 
     fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
+        // Runtime health only needs the shared observability surface to be
+        // queryable; command-log projection still lives in atm-core.
         Ok(AtmLogSnapshot::default())
     }
 
     fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, AtmError> {
+        // Doctor health does not tail logs directly in R.15, so the daemon
+        // adapter exposes an empty tail session instead of a second log owner.
         Ok(LogTailSession::empty())
     }
 
@@ -66,13 +92,10 @@ impl ObservabilityPort for DaemonObservability {
             .join("atm.log.jsonl");
         #[cfg(not(unix))]
         let active_log_path = self.home_dir.join("logs").join("atm.log.jsonl");
-        let fault = std::env::var("ATM_OBSERVABILITY_RETAINED_SINK_FAULT")
-            .ok()
-            .map(|value| value.trim().to_ascii_lowercase());
-        let logging_state = match fault.as_deref() {
-            Some("degraded") => AtmObservabilityHealthState::Degraded,
-            Some("unavailable") => AtmObservabilityHealthState::Unavailable,
-            _ => AtmObservabilityHealthState::Healthy,
+        let logging_state = match self.retained_sink_fault {
+            RetainedSinkFault::Healthy => AtmObservabilityHealthState::Healthy,
+            RetainedSinkFault::Degraded => AtmObservabilityHealthState::Degraded,
+            RetainedSinkFault::Unavailable => AtmObservabilityHealthState::Unavailable,
         };
         Ok(AtmObservabilityHealth {
             active_log_path: Some(active_log_path),
@@ -98,8 +121,9 @@ struct RuntimeMemberRecord {
 
 #[derive(Debug, Default)]
 struct RuntimeStatusCacheState {
+    // Request handlers and doctor/status readers update and snapshot the cache
+    // concurrently, so one mutex protects the whole live-status projection.
     members: HashMap<RuntimeMemberKey, RuntimeMemberRecord>,
-    unknown_members: HashSet<RuntimeMemberKey>,
     sqlite_ready: bool,
     degraded_ingest: bool,
 }
@@ -114,22 +138,28 @@ impl RuntimeStatusCache {
         Self {
             state: Arc::new(Mutex::new(RuntimeStatusCacheState {
                 members: HashMap::new(),
-                unknown_members: HashSet::new(),
                 sqlite_ready: true,
                 degraded_ingest: false,
             })),
         }
     }
 
-    fn hydrate_member(&self, team: TeamName, member: AgentName) -> Result<(), AtmError> {
+    fn hydrate_member(
+        &self,
+        team: TeamName,
+        member: AgentName,
+        pid: Option<u32>,
+    ) -> Result<(), AtmError> {
         let mut cache = self
             .state
             .lock()
             .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
         let key = RuntimeMemberKey { team, member };
-        if !cache.members.contains_key(&key) {
-            cache.unknown_members.insert(key);
-        }
+        cache.members.entry(key).or_insert(RuntimeMemberRecord {
+            pid,
+            state: RuntimeMemberState::Unknown,
+            last_active_at: None,
+        });
         Ok(())
     }
 
@@ -153,7 +183,6 @@ impl RuntimeStatusCache {
             .state
             .lock()
             .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
-        cache.unknown_members.remove(&key);
         cache.members.insert(
             key,
             RuntimeMemberRecord {
@@ -166,17 +195,21 @@ impl RuntimeStatusCache {
             && let Some((evicted_key, evicted_record)) = cache
                 .members
                 .iter()
-                .filter(|(candidate, _)| **candidate != current_key)
+                .filter(|(candidate, record)| {
+                    **candidate != current_key
+                        && record.state != RuntimeMemberState::IdentityConflict
+                        && record.state != RuntimeMemberState::Unknown
+                })
                 .min_by_key(|(_, record)| record.last_active_at)
                 .map(|(key, record)| (key.clone(), record.clone()))
+            && let Some(record) = cache.members.get_mut(&evicted_key)
         {
-            cache.members.remove(&evicted_key);
-            cache.unknown_members.insert(evicted_key.clone());
+            record.state = RuntimeMemberState::Unknown;
             tracing::warn!(
                 team = %evicted_key.team,
                 member = %evicted_key.member,
                 pid = evicted_record.pid,
-                "demoted daemon runtime status-cache entry to unknown after reaching the bounded cap"
+                "demoted daemon runtime status-cache entry to explicit unknown after reaching the bounded cap"
             );
         }
         cache.sqlite_ready = true;
@@ -207,7 +240,6 @@ impl RuntimeStatusCache {
             .members
             .get(&key)
             .and_then(|record| record.last_active_at);
-        cache.unknown_members.remove(&key);
         cache.members.insert(
             key,
             RuntimeMemberRecord {
@@ -276,6 +308,40 @@ impl RuntimeStatusCache {
             })
             .map(|record| record.state))
     }
+
+    #[cfg(test)]
+    pub(crate) fn hydrate_member_for_test(
+        &self,
+        team: TeamName,
+        member: AgentName,
+        pid: Option<u32>,
+    ) -> Result<(), AtmError> {
+        self.hydrate_member(team, member, pid)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn insert_member_for_test(
+        &self,
+        team: TeamName,
+        member: AgentName,
+        pid: Option<u32>,
+        state: RuntimeMemberState,
+        last_active_at: Option<IsoTimestamp>,
+    ) -> Result<(), AtmError> {
+        let mut cache = self
+            .state
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
+        cache.members.insert(
+            RuntimeMemberKey { team, member },
+            RuntimeMemberRecord {
+                pid,
+                state,
+                last_active_at,
+            },
+        );
+        Ok(())
+    }
 }
 
 fn build_runtime_snapshot_all(cache: &RuntimeStatusCacheState) -> RuntimeStatusSnapshot {
@@ -290,7 +356,6 @@ fn build_runtime_snapshot_all(cache: &RuntimeStatusCacheState) -> RuntimeStatusS
             }
         }
     }
-    counts.unknown_members += cache.unknown_members.len();
     finish_runtime_snapshot(cache, counts)
 }
 
@@ -308,7 +373,6 @@ fn build_runtime_snapshot_scoped(
             Some(RuntimeMemberState::Unknown) | Some(RuntimeMemberState::IdentityConflict) => {
                 counts.unknown_members += 1
             }
-            None if cache.unknown_members.contains(&key) => counts.unknown_members += 1,
             None => counts.unknown_members += 1,
         }
     }
@@ -324,7 +388,18 @@ fn finish_runtime_snapshot(
         .values()
         .filter(|record| record.state == RuntimeMemberState::IdentityConflict)
         .count();
-    let readiness = if !cache.sqlite_ready || cache.degraded_ingest || conflict_count > 0 {
+    let tracked_members = counts.active_members
+        + counts.idle_members
+        + counts.offline_members
+        + counts.unknown_members;
+    let all_tracked_members_offline = tracked_members > 0
+        && counts.active_members == 0
+        && counts.idle_members == 0
+        && counts.unknown_members == 0
+        && counts.offline_members > 0;
+    let readiness = if all_tracked_members_offline {
+        RuntimeReadinessState::Unavailable
+    } else if !cache.sqlite_ready || cache.degraded_ingest || conflict_count > 0 {
         RuntimeReadinessState::Degraded
     } else {
         RuntimeReadinessState::Ready
@@ -343,6 +418,9 @@ fn finish_runtime_snapshot(
         details.push(format!(
             "{conflict_count} runtime member identity conflict(s) require admin takeover or dead-pid retry"
         ));
+    }
+    if all_tracked_members_offline {
+        details.push("all tracked daemon members are offline".to_string());
     }
     let detail = (!details.is_empty()).then(|| details.join("; "));
     RuntimeStatusSnapshot {
@@ -472,13 +550,12 @@ impl DaemonRequestDispatcher {
         let durable_pid = if cached_pid.is_some() {
             None
         } else {
-            let membership = roster_store.query_membership(
-                atm_core::boundary::RosterStoreQueryMembershipRequest {
+            roster_store
+                .query_membership(atm_core::boundary::RosterStoreQueryMembershipRequest {
                     team: request.team.clone(),
                     member: request.member.clone(),
-                },
-            )?;
-            membership.pid
+                })?
+                .pid
         };
         if let Some(existing_pid) = cached_pid.or(durable_pid).filter(|pid| *pid != request.pid)
             && process_is_alive(existing_pid)
@@ -591,13 +668,13 @@ fn hydrate_runtime_status_cache(
         })?;
         for member in config.members {
             let member_name = member.name;
-            let _ = roster_store.query_membership(
+            let membership = roster_store.query_membership(
                 atm_core::boundary::RosterStoreQueryMembershipRequest {
                     team: team.clone(),
                     member: member_name.clone(),
                 },
             )?;
-            status_cache.hydrate_member(team.clone(), member_name)?;
+            status_cache.hydrate_member(team.clone(), member_name, membership.pid)?;
         }
     }
     Ok(())
