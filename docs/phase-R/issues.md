@@ -345,28 +345,6 @@ mutation with `temp_env::with_var(...)` for scoped, safe environment overrides.
 
 ---
 
-### I-017 — sc-lint-boundary: raw kind strings instead of NodeKind enum
-**Source**: quality-mgr RBP-SC9-001 (SC-LINT-QA-9 — pre-existing, deferred)
-**File**: `crates/sc-lint-boundary/src/graph.rs` (9 sites)
-
-Graph node kind is represented as raw `&str` / `String` at 9 call sites. No NodeKind enum exists.
-Compiler cannot distinguish kind values; typos and invalid values are invisible until runtime.
-
-**Fix**: Introduce `NodeKind` enum. Replace all 9 raw-string kind sites.
-
----
-
-### I-018 — sc-lint-boundary: NodeId not threaded through internal function boundaries
-**Source**: quality-mgr RBP-SC9-002 (SC-LINT-QA-9 — pre-existing, deferred)
-**File**: `crates/sc-lint-boundary/src/graph.rs`
-
-`NodeId` newtype exists but is not passed across internal graph-building function boundaries.
-Functions accept/return raw `String` instead, losing type safety at call sites.
-
-**Fix**: Thread `NodeId` through all internal graph function signatures.
-
----
-
 ## MINOR FINDINGS
 
 ### m-001 — Plan doc R.10 status stale
@@ -481,6 +459,23 @@ team-lead/arch-ctm planning discussion.
 | C | Peer transport (B-009) + remote retry/recovery (I-013) |
 | D | Watch (B-007) + reconcile (B-008) + notifier runtime (I-012) |
 | E | Panic removal (I-001, I-002) + config reload (I-014) + final production-hardening sweep |
+
+---
+
+## ARCH-INJ NEXT SPRINT (queued, pending planning discussion)
+
+Two items planned for arch-inj's next sprint after feature/pR-s3-boundary-lint merges:
+
+1. **Boundary lint warn/error enforcement model** (arch-ctm proposal):
+   - Inventory-parity checks against boundary inventory (implementation.module, implementation.type, public.trait, composition.root)
+   - WARN for items planned in future sprint (structured mapping: item key + sprint + task id + expiry)
+   - ERROR for unplanned gaps — fails immediately
+   - Auto-escalate WARN → ERROR once scheduled sprint is current/past
+   - Addresses PG-002 and PG-003
+
+2. **Boundary definition migration: parsed markdown → TOML**
+   - Replace markdown-parse path for boundary definitions with structured TOML
+   - Schema to be coordinated with team-lead before implementation
 
 ---
 
