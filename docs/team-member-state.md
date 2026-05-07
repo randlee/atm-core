@@ -71,12 +71,13 @@ Rule:
 
 ```rust
 pub struct TeamMateRuntime {
-    pub last_active_at: Option<DateTime<Utc>>,
+    pub last_active_at: Option<IsoTimestamp>,
     pub state: AgentState,
 }
 
 pub enum AgentState {
     Unknown,
+    IdentityConflict,
     Offline,
     Idle,
     Active,
@@ -92,7 +93,7 @@ pub struct TeamMateView {
     pub tmux: Option<TmuxLocator>,
     pub recipient_pane_id: Option<PaneId>,
     pub pid: Option<u32>,
-    pub last_active_at: Option<DateTime<Utc>>,
+    pub last_active_at: Option<IsoTimestamp>,
     pub state: AgentState,
 }
 ```
@@ -107,7 +108,7 @@ pub struct TeamMemberHeartbeatRequest {
     pub team: TeamName,
     pub member: AgentName,
     pub pid: u32,
-    pub observed_at: DateTime<Utc>,
+    pub observed_at: IsoTimestamp,
     pub activity: HeartbeatActivity,
 }
 
@@ -137,7 +138,7 @@ pub struct TeamMemberHeartbeatResponse {
     pub pid: u32,
     pub pid_changed: bool,
     pub state: RuntimeMemberState,
-    pub last_active_at: Option<DateTime<Utc>>,
+    pub last_active_at: Option<IsoTimestamp>,
 }
 ```
 
@@ -275,6 +276,9 @@ Rules:
   unless the explicit admin takeover path below is active
 - a live-old-pid plus new-pid conflict is a security event, not a normal
   respawn path
+- daemon startup hydrates configured roster members as `Unknown` and consults
+  durable SQLite pid continuity only as startup fallback; after the first live
+  heartbeat, cache-first pid checks become the primary conflict detector
 
 ### `last_active_at`
 
@@ -304,11 +308,15 @@ Authoritative update paths:
 1. `Unknown`
    - daemon startup before the member has emitted any authoritative runtime
      event in the current daemon lifetime
-2. `Active`
+   - bounded status-cache eviction demotes the member back to `Unknown`
+2. `IdentityConflict`
+   - daemon records a live-old-pid/new-pid collision without rewriting the
+     durable pid until an admin takeover or dead-pid retry clears the conflict
+3. `Active`
    - `TeamMateHeartbeat { activity: ActiveToolUse }`
-3. `Idle`
+4. `Idle`
    - `TeamMateHeartbeat { activity: Idle }`
-4. `Offline`
+5. `Offline`
    - liveness check proves tracked `pid` is dead
    - `TeamMateHeartbeat { activity: SessionEnded }`
 
@@ -318,7 +326,7 @@ Forbidden update paths:
 - inferred from stale `last_active_at` without the documented idle/offline rule
 
 Rules:
-- `state` changes only from one of the four update classes above
+- `state` changes only from one of the five update classes above
 - no undocumented fallback chain may map missing data directly to `Offline`
 - missing runtime data yields `Unknown`, not `Offline`
 

@@ -232,6 +232,7 @@ pub struct TeamMemberHeartbeatResponse {
 #[serde(rename_all = "snake_case")]
 pub enum RuntimeMemberState {
     Unknown,
+    IdentityConflict,
     Offline,
     Idle,
     Active,
