@@ -2771,6 +2771,10 @@ Summary:
   - public boundary traits/facades
   - major shared data structures
 - Wave 2 implements behavior only against those enforced boundaries.
+- The next planning increment after the current boundary-lint implementation
+  branch merges adds:
+  - planning-aware inventory-parity warn/error enforcement
+  - TOML as the canonical machine-readable boundary source
 
 Cross-reference:
 - The authoritative sprint-by-sprint Phase R plan lives in

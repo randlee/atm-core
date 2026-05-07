@@ -85,6 +85,10 @@ Phase-Q supersession note:
 Phase-R redesign note:
 - Phase R hardens the architecture by making crate-local boundary records part
   of the enforceable contract before new implementation work proceeds
+- Phase R follow-on lint work moves canonical machine-readable boundary data to
+  structured TOML and adds planning-aware inventory-parity enforcement so
+  documented future work can warn temporarily while unscheduled or overdue gaps
+  fail
 - the thin-client extension surface should center on `send` and `receive`
   over the shared ATM protocol, while the retained CLI may continue to expose
   `ack` as a user-facing workflow

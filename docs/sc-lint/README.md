@@ -10,6 +10,11 @@ Current contents:
   Python vs what moves to Rust
 - [`graph-schema.md`](./graph-schema.md) — current graph/export contract and
   rule-id inventory
+- [`boundary-enforcement-model.md`](./boundary-enforcement-model.md) — planned
+  warn/error escalation model for inventory-parity boundary enforcement
+- [`boundary-toml-migration.md`](./boundary-toml-migration.md) — migration plan
+  for moving canonical boundary data from Markdown-embedded records to
+  standalone TOML
 
 Current intended crate split:
 
@@ -82,3 +87,9 @@ Future documents that should also live here:
 - crate layout
 - rule inventory
 - deeper RDF/Oxygraph integration notes
+
+Related architecture decision:
+
+- [`../adr/ADR-004-structured-boundary-definitions.md`](../adr/ADR-004-structured-boundary-definitions.md)
+  — canonical TOML boundary source plus planning-aware inventory-parity
+  enforcement
