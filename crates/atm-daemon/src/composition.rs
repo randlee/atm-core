@@ -1,8 +1,9 @@
-use crate::{
+use crate::boundary_adapters::{
     DaemonConfigIngress, DaemonInboxExport, DaemonInboxIngress, DaemonNotificationSink,
-    DaemonReconcileCoordinator, DaemonRequestDispatcher, DaemonStatusSource, FileWatchEventSource,
-    LocalSocketServerTransport, PeerClientTransport,
+    DaemonReconcileCoordinator, FileWatchEventSource,
 };
+use crate::runtime_health::{DaemonRequestDispatcher, DaemonStatusSource, RuntimeStatusCache};
+use crate::{LocalSocketServerTransport, PeerClientTransport};
 use atm_core::{
     boundary::{
         ClientTransport, ConfigIngress, InboxExport, InboxIngress, NotificationSink,
@@ -107,12 +108,16 @@ pub(crate) struct RuntimeComposition {
 #[allow(dead_code)]
 impl RuntimeComposition {
     fn new(home_dir: PathBuf) -> Self {
+        let status_cache = RuntimeStatusCache::new();
         Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
             server_transport: LocalSocketServerTransport::new(),
-            request_dispatcher: Arc::new(DaemonRequestDispatcher::new(home_dir)),
+            request_dispatcher: Arc::new(DaemonRequestDispatcher::new(
+                home_dir,
+                status_cache.clone(),
+            )),
             notification_sink: DaemonNotificationSink::new(),
-            status_source: DaemonStatusSource::new(),
+            status_source: DaemonStatusSource::new(status_cache),
             watch_event_source: FileWatchEventSource::new(),
             reconcile_coordinator: DaemonReconcileCoordinator::new(),
             config_ingress: DaemonConfigIngress::new(),

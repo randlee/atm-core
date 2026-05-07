@@ -2614,6 +2614,8 @@ mail correctness.
     and daemon memory caches it as the primary liveness field
   - daemon runtime state must include `last_active_at` for each known active
     agent/member entry
+  - the shared protocol must expose typed heartbeat request/response DTOs for
+    runtime state updates and PID continuity handling
   - SQLite must not own live `last_active_at`; it remains daemon-memory-only
     runtime state
   - roster truth and live-status truth must remain distinct
@@ -2931,6 +2933,7 @@ mail correctness.
     state
   - the health interface must be able to report at least:
     - daemon reachability
+    - daemon liveness and readiness as separate dimensions
     - singleton ownership status
     - live status-cache summary
     - ingest backlog / degraded-ingest state when present

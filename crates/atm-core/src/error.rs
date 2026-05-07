@@ -185,6 +185,15 @@ impl AtmError {
         .with_recovery("Set ATM_IDENTITY or provide an explicit command identity override when the command supports one.")
     }
 
+    pub fn identity_conflict(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::IdentityConflict,
+            AtmErrorKind::Identity,
+            message,
+        )
+        .with_recovery("Stop and report to the user immediately. Resolve the live pid conflict before retrying ATM activity.")
+    }
+
     pub fn daemon_unavailable(message: impl Into<String>) -> Self {
         Self::new_with_code(
             AtmErrorCode::DaemonUnavailable,

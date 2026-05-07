@@ -163,8 +163,9 @@ Route all startup/shutdown through one runtime root rather than bypassing it.
 
 ---
 
-### B-004 — Live daemon status cache not implemented
+### ~~B-004 — Live daemon status cache not implemented~~ CLOSED IN R.15
 **Source**: arch-ctm TASK-997 gap report item 4
+**Closed on**: `feature/pR-s15-status-heartbeat`
 **Files**: `crates/atm-daemon/src/lib.rs` | `crates/atm-core/src/boundary_support.rs`
 
 `DaemonStatusSource` delegates to `boundary_support::snapshot_status()`, which returns a
@@ -196,10 +197,21 @@ and cap/eviction behavior per daemon architecture.
 - larger than it looks because doctor health, routing, and takeover logic all
   consume the same status cache
 
+**Resolution**:
+- `RuntimeStatusCache` now owns daemon-memory member state keyed by
+  `team/member`, including `last_active_at`
+- the cache is rebuilt from `unknown` on daemon startup and refreshed through
+  typed heartbeat events
+- the runtime snapshot now carries liveness, readiness, singleton-owner pid,
+  SQLite-ready state, degraded-ingest state, and aggregate member counts
+- cache size is capped at `4096` entries with bounded eviction of the oldest
+  non-current member snapshot
+
 ---
 
-### B-005 — Heartbeat/member runtime-state path completely absent
+### ~~B-005 — Heartbeat/member runtime-state path completely absent~~ CLOSED IN R.15
 **Source**: arch-ctm TASK-997 gap report item 5
+**Closed on**: `feature/pR-s15-status-heartbeat`
 **Files**: `crates/atm-core/src/protocol.rs`
 **Docs**: `docs/team-member-state.md`
 
@@ -227,10 +239,21 @@ no admin takeover path for live-old-pid conflicts.
 - this is not just a protocol-addition sprint; it also introduces member
   runtime-state ownership, conflict detection, and takeover semantics
 
+**Resolution**:
+- `RequestEnvelope` / `ResponseEnvelope` now carry typed `Heartbeat` request
+  and response families
+- the daemon dispatcher applies heartbeat events to runtime member state and
+  persists durable pid continuity through `RosterStore::record_heartbeat(...)`
+- live-old-pid conflicts now fail with `ATM_IDENTITY_CONFLICT` and the exact
+  stop/report message from `docs/team-member-state.md`
+- dead-old-pid takeover updates durable pid continuity and returns
+  `pid_changed = true`
+
 ---
 
-### B-006 — Doctor daemon health interface unimplemented
+### ~~B-006 — Doctor daemon health interface unimplemented~~ CLOSED IN R.15
 **Source**: arch-ctm TASK-997 gap report item 6
+**Closed on**: `feature/pR-s15-status-heartbeat`
 **Files**: `crates/atm-daemon/src/lib.rs` daemon dispatcher
 
 Dispatcher calls `atm_core::doctor::run_doctor()` directly — no daemon-backed health
@@ -256,6 +279,15 @@ projection into doctor command. Split liveness from readiness.
   generic placeholder
 - should land in the same sprint as status/heartbeat so health semantics do not
   drift from the underlying cache
+
+**Resolution**:
+- daemon `Doctor` requests now project runtime-owned health over the shared
+  doctor report instead of calling `run_doctor(...)` directly
+- doctor output now carries a structured runtime snapshot with separate
+  liveness/readiness plus singleton-owner, SQLite-ready, degraded-ingest, and
+  aggregate member-count fields
+- roster-scoped doctor projections use runtime member-state truth when a team
+  roster is present
 
 ---
 

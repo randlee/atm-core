@@ -2506,10 +2506,18 @@ Architectural rules:
 - CLI doctor code queries daemon/runtime state through one explicit request /
   response boundary
 - the daemon owns collection of runtime-only health such as:
+  - heartbeat-driven runtime member state
   - singleton ownership state
   - live status-cache health
   - ingest backlog / degraded-ingest state
   - SQLite readiness/openability as observed by the runtime
+- the runtime-health DTO returned across that boundary must carry:
+  - liveness
+  - readiness
+  - singleton-owner pid when known
+  - SQLite-ready state
+  - degraded-ingest state
+  - aggregate active/idle/offline/unknown member counts
 - CLI code must not inspect private daemon state directly to synthesize health
   answers
 

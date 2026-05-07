@@ -59,8 +59,8 @@ message = "atm-core must not depend on atm-daemon"
 [[boundaries.manifest_section_rules]]
 owner_manifest_path = "crates/atm-daemon/Cargo.toml"
 dependency_package = "atm-rusqlite"
-allowed_sections = []
-message = "atm-daemon must not depend on atm-rusqlite"
+allowed_sections = ["dependencies"]
+message = "atm-daemon may depend on atm-rusqlite only through the documented runtime-owned SQLite boundaries"
 
 [version_sync.winget]
 enabled = true

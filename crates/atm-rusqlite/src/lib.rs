@@ -33,14 +33,14 @@ impl SqliteRosterStore {
 
 /// Internal assembly root for Phase R SQLite-backed boundary implementations.
 #[derive(Debug)]
-pub(crate) struct SqliteBoundaryAssembly {
+pub struct SqliteBoundaryAssembly {
     mail_store: Arc<SqliteMailStore>,
     task_store: Arc<SqliteTaskStore>,
     roster_store: Arc<SqliteRosterStore>,
 }
 
 impl SqliteBoundaryAssembly {
-    pub(crate) fn new(path: impl AsRef<Path>) -> Result<Self, AtmError> {
+    pub fn new(path: impl AsRef<Path>) -> Result<Self, AtmError> {
         let db = Arc::new(SharedDb::open(path)?);
         Ok(Self {
             mail_store: Arc::new(SqliteMailStore::new(db.clone())),
@@ -49,7 +49,7 @@ impl SqliteBoundaryAssembly {
         })
     }
 
-    pub(crate) fn default_production() -> Result<Self, AtmError> {
+    pub fn default_production() -> Result<Self, AtmError> {
         Self::new(SharedDb::production_path()?)
     }
 
@@ -63,26 +63,24 @@ impl SqliteBoundaryAssembly {
         })
     }
 
-    pub(crate) fn mail_store(&self) -> &dyn boundary::MailStore {
+    pub fn mail_store(&self) -> &dyn boundary::MailStore {
         self.mail_store.as_ref()
     }
 
-    pub(crate) fn task_store(&self) -> &dyn boundary::TaskStore {
+    pub fn task_store(&self) -> &dyn boundary::TaskStore {
         self.task_store.as_ref()
     }
 
-    pub(crate) fn roster_store(&self) -> &dyn boundary::RosterStore {
+    pub fn roster_store(&self) -> &dyn boundary::RosterStore {
         self.roster_store.as_ref()
     }
 }
 
-pub(crate) fn assemble_boundary(
-    path: impl AsRef<Path>,
-) -> Result<SqliteBoundaryAssembly, AtmError> {
+pub fn assemble_boundary(path: impl AsRef<Path>) -> Result<SqliteBoundaryAssembly, AtmError> {
     SqliteBoundaryAssembly::new(path)
 }
 
-pub(crate) fn assemble_default_boundary() -> Result<SqliteBoundaryAssembly, AtmError> {
+pub fn assemble_default_boundary() -> Result<SqliteBoundaryAssembly, AtmError> {
     SqliteBoundaryAssembly::default_production()
 }
 

@@ -139,8 +139,13 @@ pub fn deliver_notification(event: NotificationEvent) -> Result<(), AtmError> {
 
 pub fn snapshot_status() -> Result<RuntimeStatusSnapshot, AtmError> {
     Ok(RuntimeStatusSnapshot {
-        status: "ready".to_string(),
+        liveness: crate::protocol::RuntimeLivenessState::Running,
+        readiness: crate::protocol::RuntimeReadinessState::Ready,
         detail: Some("daemon runtime adapters are active".to_string()),
+        singleton_owner_pid: Some(std::process::id()),
+        sqlite_ready: true,
+        degraded_ingest: false,
+        member_counts: crate::protocol::RuntimeStatusCounts::default(),
     })
 }
 

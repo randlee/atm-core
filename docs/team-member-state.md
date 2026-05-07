@@ -103,9 +103,9 @@ All daemon-managed team-member fields must update through one daemon socket
 handler:
 
 ```rust
-pub struct TeamMateHeartbeat {
+pub struct TeamMemberHeartbeatRequest {
     pub team: TeamName,
-    pub name: AgentName,
+    pub member: AgentName,
     pub pid: u32,
     pub observed_at: DateTime<Utc>,
     pub activity: HeartbeatActivity,
@@ -127,6 +127,19 @@ Forbidden producers:
 - ad hoc liveness polling that bypasses the socket handler
 - transport adapters performing inline state mutation outside the heartbeat
   handler
+
+The documented response DTO is:
+
+```rust
+pub struct TeamMemberHeartbeatResponse {
+    pub team: TeamName,
+    pub member: AgentName,
+    pub pid: u32,
+    pub pid_changed: bool,
+    pub state: RuntimeMemberState,
+    pub last_active_at: Option<DateTime<Utc>>,
+}
+```
 
 ## Required State Machines
 
@@ -241,6 +254,7 @@ Owner:
 
 Authoritative update path:
 1. `TeamMateHeartbeat` accepted by `atm-daemon`.
+   (`TeamMemberHeartbeatRequest` in the shared protocol)
    - Claude-compatible hook producer supplies the stable parent session pid
    - Codex/native producer supplies the agent process pid itself
 
@@ -315,7 +329,7 @@ Rules:
 - the hook/runtime layer must capture the stable parent session pid
 - the hook subprocess pid is never valid as the member `pid`
 - the hook/runtime layer must send that pid to the daemon through the
-  `TeamMateHeartbeat` socket path
+  `TeamMemberHeartbeatRequest` socket path
 
 Current interim source:
 - the already-installed Python hooks from `../agent-team-mail`
@@ -327,7 +341,7 @@ Future source:
 
 - Codex does not rely on Claude hook semantics
 - the ATM CLI/runtime must send the Codex process pid to the daemon through the
-  same `TeamMateHeartbeat` socket path
+  same `TeamMemberHeartbeatRequest` socket path
 - that pid is the authoritative runtime pid until superseded by a new explicit
   heartbeat/session event
 

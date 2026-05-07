@@ -332,7 +332,7 @@ atm-daemon = { path = "../atm-daemon", version = "1.1.2" }
                 rendered,
             )
 
-    def test_collect_boundary_violations_flags_daemon_rusqlite_edge(self) -> None:
+    def test_collect_boundary_violations_allows_daemon_rusqlite_edge(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
@@ -343,8 +343,8 @@ atm-daemon = { path = "../atm-daemon", version = "1.1.2" }
             self.write_doc(repo_root, "atm-rusqlite")
 
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
-            self.assertIn(
-                "crates/atm-daemon/Cargo.toml [dependencies]: atm-daemon must not depend on atm-rusqlite",
+            self.assertNotIn(
+                "crates/atm-daemon/Cargo.toml [dependencies]: atm-daemon may depend on atm-rusqlite only through the documented runtime-owned SQLite boundaries",
                 rendered,
             )
 

@@ -1,10 +1,11 @@
 #![forbid(unsafe_code)]
 //! Skeleton crate for Phase R daemon runtime work.
 
+mod boundary_adapters;
 pub(crate) mod composition;
 mod direct_boundaries;
+mod runtime_health;
 
-#[cfg(unix)]
 use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::fmt;
@@ -16,7 +17,6 @@ use std::io::Write;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
 use std::sync::Arc;
-#[cfg(unix)]
 use std::sync::Mutex;
 #[cfg(unix)]
 use std::sync::OnceLock;
@@ -38,27 +38,8 @@ use signal_hook::flag;
 use atm_core::protocol::RequestEnvelope as ProtocolRequestEnvelope;
 use atm_core::{
     RequestEnvelope, ResponseEnvelope,
-    ack::ack_mail,
-    boundary::{
-        self, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, ConfigTeamLoadRequest,
-        ConfigTeamLoadResponse, InboxExport, InboxExportRecordRequest, InboxExportRecordResponse,
-        InboxExportReexportMessageRequest, InboxExportReexportMessageResponse, InboxIngress,
-        InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
-        InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
-        InboxIngressImportRequest, InboxIngressImportResponse, NotificationEvent, ReconcileRequest,
-        ReconcileResult, RequestDispatcher, RuntimeStatusSnapshot, WatchEventBatch,
-        WatchSubscriptionRequest,
-    },
-    clear::clear_mail,
-    doctor::run_doctor,
+    boundary::{self, RequestDispatcher},
     error::AtmError,
-    observability::{
-        AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
-        CommandEvent, LogTailSession, ObservabilityPort,
-    },
-    protocol::{SendRequestEnvelope, SendResponseEnvelope},
-    read::read_mail,
-    send::send_mail,
 };
 #[cfg(unix)]
 const MAX_CONCURRENT_CONNECTIONS: usize = 64;
@@ -206,62 +187,6 @@ impl ActiveConnectionRegistry {
         self.active_connections.fetch_sub(1, Ordering::SeqCst);
     }
 }
-#[derive(Debug, Clone)]
-struct DaemonObservability {
-    home_dir: PathBuf,
-}
-
-impl DaemonObservability {
-    fn new(home_dir: PathBuf) -> Self {
-        Self { home_dir }
-    }
-}
-
-impl boundary::sealed::Sealed for DaemonObservability {}
-
-impl ObservabilityPort for DaemonObservability {
-    fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {
-        // Retained daemon observability wiring lands in a later sprint; keep
-        // the boundary callable so runtime ownership can converge first.
-        Ok(())
-    }
-
-    fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
-        // Query/follow remain empty until retained log indexing is wired.
-        Ok(AtmLogSnapshot::default())
-    }
-
-    fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, AtmError> {
-        Ok(LogTailSession::empty())
-    }
-
-    fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
-        #[cfg(unix)]
-        let active_log_path = self
-            .home_dir
-            .join(".local")
-            .join("share")
-            .join("logs")
-            .join("atm.log.jsonl");
-        #[cfg(not(unix))]
-        let active_log_path = self.home_dir.join("logs").join("atm.log.jsonl");
-        let fault = std::env::var("ATM_OBSERVABILITY_RETAINED_SINK_FAULT")
-            .ok()
-            .map(|value| value.trim().to_ascii_lowercase());
-        let logging_state = match fault.as_deref() {
-            Some("degraded") => AtmObservabilityHealthState::Degraded,
-            Some("unavailable") => AtmObservabilityHealthState::Unavailable,
-            _ => AtmObservabilityHealthState::Healthy,
-        };
-        Ok(AtmObservabilityHealth {
-            active_log_path: Some(active_log_path),
-            logging_state,
-            query_state: Some(AtmObservabilityHealthState::Healthy),
-            detail: None,
-        })
-    }
-}
-
 #[cfg(unix)]
 #[derive(Debug)]
 struct DaemonShutdownSignals {
@@ -739,69 +664,6 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
     }
 }
 
-/// Placeholder runtime dispatcher for daemon-owned protocol routing.
-#[derive(Debug, Clone)]
-struct DaemonRequestDispatcher {
-    observability: DaemonObservability,
-}
-
-impl DaemonRequestDispatcher {
-    fn new(home_dir: PathBuf) -> Self {
-        Self {
-            observability: DaemonObservability::new(home_dir),
-        }
-    }
-}
-
-impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
-
-impl boundary::RequestDispatcher for DaemonRequestDispatcher {
-    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        match request {
-            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(
-                    send_mail(request, &self.observability)?,
-                )))
-            }
-            RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
-                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
-                    ack_mail(request, &self.observability)?,
-                )))
-            }
-            RequestEnvelope::Receive(query) => Ok(ResponseEnvelope::Receive(read_mail(
-                query,
-                &self.observability,
-            )?)),
-            RequestEnvelope::Clear(query) => Ok(ResponseEnvelope::Clear(clear_mail(
-                query,
-                &self.observability,
-            )?)),
-            RequestEnvelope::Doctor(query) => Ok(ResponseEnvelope::Doctor(run_doctor(
-                query,
-                &self.observability,
-            )?)),
-        }
-    }
-}
-
-/// Placeholder runtime sink for daemon-emitted notifications.
-#[derive(Debug, Default)]
-pub(crate) struct DaemonNotificationSink;
-
-impl DaemonNotificationSink {
-    pub(crate) const fn new() -> Self {
-        Self
-    }
-}
-
-impl boundary::sealed::Sealed for DaemonNotificationSink {}
-
-impl boundary::NotificationSink for DaemonNotificationSink {
-    fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError> {
-        atm_core::boundary_support::deliver_notification(event)
-    }
-}
-
 /// Placeholder runtime client transport for peer-to-peer daemon delivery.
 #[derive(Debug, Default)]
 struct PeerClientTransport;
@@ -823,148 +685,6 @@ impl boundary::ClientTransport for PeerClientTransport {
     }
 }
 
-/// Placeholder runtime source for daemon status snapshots.
-#[derive(Debug, Default)]
-pub(crate) struct DaemonStatusSource;
-
-impl DaemonStatusSource {
-    pub(crate) const fn new() -> Self {
-        Self
-    }
-}
-
-impl boundary::sealed::Sealed for DaemonStatusSource {}
-
-impl boundary::StatusSource for DaemonStatusSource {
-    fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError> {
-        atm_core::boundary_support::snapshot_status()
-    }
-}
-
-/// Placeholder runtime source for daemon watch events.
-#[derive(Debug, Default)]
-pub(crate) struct FileWatchEventSource;
-
-impl FileWatchEventSource {
-    pub(crate) const fn new() -> Self {
-        Self
-    }
-}
-
-impl boundary::sealed::Sealed for FileWatchEventSource {}
-
-impl boundary::WatchEventSource for FileWatchEventSource {
-    fn poll(&self, request: WatchSubscriptionRequest) -> Result<WatchEventBatch, AtmError> {
-        atm_core::boundary_support::poll_watch(request)
-    }
-}
-
-/// Placeholder runtime coordinator for daemon reconcile work.
-#[derive(Debug, Default)]
-pub(crate) struct DaemonReconcileCoordinator;
-
-impl DaemonReconcileCoordinator {
-    pub(crate) const fn new() -> Self {
-        Self
-    }
-}
-
-impl boundary::sealed::Sealed for DaemonReconcileCoordinator {}
-
-impl boundary::ReconcileCoordinator for DaemonReconcileCoordinator {
-    fn reconcile(&self, request: ReconcileRequest) -> Result<ReconcileResult, AtmError> {
-        atm_core::boundary_support::reconcile(request)
-    }
-}
-
-/// Placeholder runtime config ingress for daemon-owned config loading.
-#[derive(Debug, Default)]
-pub(crate) struct DaemonConfigIngress;
-
-impl DaemonConfigIngress {
-    pub(crate) const fn new() -> Self {
-        Self
-    }
-}
-
-impl boundary::sealed::Sealed for DaemonConfigIngress {}
-
-impl ConfigIngress for DaemonConfigIngress {
-    fn load_config(&self, request: ConfigLoadRequest) -> Result<ConfigLoadResponse, AtmError> {
-        direct_boundaries::load_workspace_config(request)
-    }
-
-    fn load_team_config(
-        &self,
-        request: ConfigTeamLoadRequest,
-    ) -> Result<ConfigTeamLoadResponse, AtmError> {
-        direct_boundaries::load_team_config(request)
-    }
-}
-
-/// Placeholder runtime inbox ingress for daemon-owned import workflows.
-#[derive(Debug, Default)]
-pub(crate) struct DaemonInboxIngress;
-
-impl DaemonInboxIngress {
-    pub(crate) const fn new() -> Self {
-        Self
-    }
-}
-
-impl boundary::sealed::Sealed for DaemonInboxIngress {}
-
-impl InboxIngress for DaemonInboxIngress {
-    fn import_inbox_source(
-        &self,
-        request: InboxIngressImportRequest,
-    ) -> Result<InboxIngressImportResponse, AtmError> {
-        direct_boundaries::import_inbox_source(request)
-    }
-
-    fn compute_identity_fingerprint(
-        &self,
-        request: InboxIngressIdentityFingerprintRequest,
-    ) -> Result<InboxIngressIdentityFingerprintResponse, AtmError> {
-        direct_boundaries::compute_identity_fingerprint(request)
-    }
-
-    fn report_diagnostics(
-        &self,
-        request: InboxIngressDiagnosticsRequest,
-    ) -> Result<InboxIngressDiagnosticsResponse, AtmError> {
-        direct_boundaries::report_inbox_diagnostics(request)
-    }
-}
-
-/// Placeholder runtime inbox export for daemon-owned export workflows.
-#[derive(Debug, Default)]
-pub(crate) struct DaemonInboxExport;
-
-impl DaemonInboxExport {
-    pub(crate) const fn new() -> Self {
-        Self
-    }
-}
-
-impl boundary::sealed::Sealed for DaemonInboxExport {}
-
-impl InboxExport for DaemonInboxExport {
-    fn export_record(
-        &self,
-        request: InboxExportRecordRequest,
-    ) -> Result<InboxExportRecordResponse, AtmError> {
-        direct_boundaries::export_source_files(request)
-    }
-
-    fn reexport_message(
-        &self,
-        request: InboxExportReexportMessageRequest,
-    ) -> Result<InboxExportReexportMessageResponse, AtmError> {
-        direct_boundaries::reexport_messages(request)
-    }
-}
-
 /// Run the daemon entrypoint with the currently assembled runtime composition.
 ///
 /// # Errors
@@ -976,11 +696,20 @@ pub fn run_daemon() -> Result<(), AtmError> {
 
 #[cfg(all(test, unix))]
 mod tests {
+    use super::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
     use super::{
         ActiveConnectionRegistry, DaemonShutdownSignals, HOST_RUNTIME_OWNER_LOCK_FILE,
         SingletonGuard, host_runtime_lock_path_from_home,
     };
+    use atm_core::boundary::RequestDispatcher;
     use atm_core::error_codes::AtmErrorCode;
+    use atm_core::protocol::{
+        HeartbeatActivity, RequestEnvelope, ResponseEnvelope, RuntimeLivenessState,
+        RuntimeReadinessState, TeamMemberHeartbeatRequest,
+    };
+    use atm_core::schema::{AgentMember, TeamConfig};
+    use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+    use atm_rusqlite::assemble_boundary;
     use std::fs::OpenOptions;
     use std::io::{Read, Write};
     use std::os::unix::net::{UnixListener, UnixStream};
@@ -1134,5 +863,187 @@ mod tests {
             .expect("connection finished");
         drop(client);
         assert!(result.is_ok(), "connection result: {result:?}");
+    }
+
+    fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
+        let assembly = assemble_boundary(db_path).expect("sqlite boundary");
+        assembly
+            .roster_store()
+            .replace_roster(atm_core::boundary::RosterStoreReplaceRosterRequest {
+                team: "test-team".parse().expect("team"),
+                roster: TeamConfig {
+                    members: members
+                        .iter()
+                        .map(|name| AgentMember::with_name((*name).parse().expect("member")))
+                        .collect(),
+                    ..Default::default()
+                },
+                source: Some("daemon-heartbeat-test".to_string()),
+            })
+            .expect("replace roster");
+    }
+
+    fn write_team_config(home_dir: &std::path::Path, members: &[&str]) {
+        let team_dir = home_dir.join(".claude").join("teams").join("test-team");
+        std::fs::create_dir_all(team_dir.join("inboxes")).expect("inboxes dir");
+        let config = TeamConfig {
+            members: members
+                .iter()
+                .map(|name| AgentMember::with_name((*name).parse().expect("member")))
+                .collect(),
+            ..Default::default()
+        };
+        std::fs::write(
+            team_dir.join("config.json"),
+            serde_json::to_vec(&config).expect("team config"),
+        )
+        .expect("write team config");
+    }
+
+    #[test]
+    fn heartbeat_updates_status_cache_and_doctor_projection() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let atm_home = tempdir.path().join("atm-home");
+        std::fs::create_dir_all(&atm_home).expect("atm home dir");
+        let db_path = tempdir.path().join("mail.db");
+
+        install_test_roster(&db_path, &["team-lead", "qa-a"]);
+        write_team_config(&atm_home, &["team-lead", "qa-a"]);
+
+        let status_cache = RuntimeStatusCache::new();
+        let dispatcher =
+            DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache.clone(), db_path);
+        let team: TeamName = "test-team".parse().expect("team");
+        let member: AgentName = "team-lead".parse().expect("member");
+
+        let response = dispatcher
+            .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                team: team.clone(),
+                member: member.clone(),
+                pid: std::process::id(),
+                observed_at: IsoTimestamp::now(),
+                activity: HeartbeatActivity::ActiveToolUse,
+            }))
+            .expect("heartbeat response");
+        match response {
+            ResponseEnvelope::Heartbeat(response) => {
+                assert_eq!(response.team, team);
+                assert_eq!(response.member, member);
+                assert_eq!(
+                    response.state,
+                    atm_core::protocol::RuntimeMemberState::Active
+                );
+            }
+            other => panic!("expected heartbeat response, got {other:?}"),
+        }
+
+        let snapshot = status_cache.snapshot().expect("snapshot");
+        assert_eq!(snapshot.liveness, RuntimeLivenessState::Running);
+        assert_eq!(snapshot.readiness, RuntimeReadinessState::Ready);
+        assert_eq!(snapshot.member_counts.active_members, 1);
+
+        let doctor = dispatcher
+            .dispatch(RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {
+                home_dir: atm_home.clone(),
+                current_dir: atm_home.clone(),
+                team_override: Some(team.clone()),
+            }))
+            .expect("doctor response");
+        match doctor {
+            ResponseEnvelope::Doctor(report) => {
+                let runtime_status = report.runtime_status.expect("runtime status");
+                assert_eq!(runtime_status.member_counts.active_members, 1);
+                assert_eq!(runtime_status.member_counts.unknown_members, 1);
+            }
+            other => panic!("expected doctor response, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn heartbeat_rejects_live_pid_conflict() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let atm_home = tempdir.path().join("atm-home");
+        std::fs::create_dir_all(&atm_home).expect("atm home dir");
+        let db_path = tempdir.path().join("mail.db");
+
+        install_test_roster(&db_path, &["team-lead"]);
+
+        let dispatcher =
+            DaemonRequestDispatcher::new_for_test(atm_home, RuntimeStatusCache::new(), db_path);
+        let team: TeamName = "test-team".parse().expect("team");
+        let member: AgentName = "team-lead".parse().expect("member");
+
+        dispatcher
+            .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                team: team.clone(),
+                member: member.clone(),
+                pid: std::process::id(),
+                observed_at: IsoTimestamp::now(),
+                activity: HeartbeatActivity::ActiveToolUse,
+            }))
+            .expect("initial heartbeat");
+
+        let error = dispatcher
+            .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                team,
+                member,
+                pid: std::process::id().saturating_add(1),
+                observed_at: IsoTimestamp::now(),
+                activity: HeartbeatActivity::Idle,
+            }))
+            .expect_err("live pid conflict");
+
+        assert_eq!(error.code, AtmErrorCode::IdentityConflict);
+        assert_eq!(
+            error.message,
+            "ATM_IDENTITY_CONFLICT: stop and report to user immediately"
+        );
+    }
+
+    #[test]
+    fn heartbeat_accepts_pid_takeover_when_previous_pid_is_dead() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let atm_home = tempdir.path().join("atm-home");
+        std::fs::create_dir_all(&atm_home).expect("atm home dir");
+        let db_path = tempdir.path().join("mail.db");
+
+        install_test_roster(&db_path, &["team-lead"]);
+
+        let dispatcher =
+            DaemonRequestDispatcher::new_for_test(atm_home, RuntimeStatusCache::new(), db_path);
+        let team: TeamName = "test-team".parse().expect("team");
+        let member: AgentName = "team-lead".parse().expect("member");
+
+        dispatcher
+            .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                team: team.clone(),
+                member: member.clone(),
+                pid: 999_999,
+                observed_at: IsoTimestamp::now(),
+                activity: HeartbeatActivity::Idle,
+            }))
+            .expect("initial dead-pid heartbeat");
+
+        let response = dispatcher
+            .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                team,
+                member,
+                pid: std::process::id(),
+                observed_at: IsoTimestamp::now(),
+                activity: HeartbeatActivity::ActiveToolUse,
+            }))
+            .expect("takeover heartbeat");
+
+        match response {
+            ResponseEnvelope::Heartbeat(response) => {
+                assert!(response.pid_changed);
+                assert_eq!(response.pid, std::process::id());
+                assert_eq!(
+                    response.state,
+                    atm_core::protocol::RuntimeMemberState::Active
+                );
+            }
+            other => panic!("expected heartbeat response, got {other:?}"),
+        }
     }
 }

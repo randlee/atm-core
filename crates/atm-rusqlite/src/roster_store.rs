@@ -114,14 +114,14 @@ impl boundary::RosterStore for SqliteRosterStore {
         &self,
         request: boundary::RosterStoreQueryMembershipRequest,
     ) -> Result<boundary::RosterStoreQueryMembershipResponse, AtmError> {
-        let member_json = self.db.with_connection(|connection| {
+        let membership = self.db.with_connection(|connection| {
             connection
                 .query_row(
-                    "SELECT member_json
+                    "SELECT member_json, pid
                      FROM team_roster
                      WHERE team_name = ?1 AND agent_name = ?2;",
                     params![request.team.as_str(), request.member.as_str()],
-                    |row| row.get::<_, String>(0),
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<u32>>(1)?)),
                 )
                 .optional()
                 .map_err(|error| {
@@ -129,6 +129,9 @@ impl boundary::RosterStore for SqliteRosterStore {
                         .error("failed to query team-roster membership", error)
                 })
         })?;
+        let (member_json, pid) = membership
+            .map(|(member_json, pid)| (Some(member_json), pid))
+            .unwrap_or((None, None));
         let member = member_json
             .as_deref()
             .map(|value| deserialize_json(value, "team-roster member"))
@@ -139,6 +142,52 @@ impl boundary::RosterStore for SqliteRosterStore {
             team: request.team,
             member,
             is_member,
+            pid,
+        })
+    }
+
+    fn record_heartbeat(
+        &self,
+        request: boundary::RosterStoreRecordHeartbeatRequest,
+    ) -> Result<boundary::RosterStoreRecordHeartbeatResponse, AtmError> {
+        let updated_at = request.observed_at.into_inner().to_rfc3339();
+        self.db.with_transaction(|transaction| {
+            let previous_pid_row = transaction
+                .query_row(
+                    "SELECT pid
+                     FROM team_roster
+                     WHERE team_name = ?1 AND agent_name = ?2;",
+                    params![request.team.as_str(), request.member.as_str()],
+                    |row| row.get::<_, Option<u32>>(0),
+                )
+                .optional()
+                .map_err(|error| self.db.error("failed to query durable roster pid", error))?;
+            let Some(previous_pid) = previous_pid_row else {
+                return Err(AtmError::agent_not_found(
+                    request.member.as_str(),
+                    request.team.as_str(),
+                ));
+            };
+            transaction
+                .execute(
+                    "UPDATE team_roster
+                     SET pid = ?3, updated_at = ?4
+                     WHERE team_name = ?1 AND agent_name = ?2;",
+                    params![
+                        request.team.as_str(),
+                        request.member.as_str(),
+                        request.pid,
+                        updated_at,
+                    ],
+                )
+                .map_err(|error| self.db.error("failed to persist durable roster pid", error))?;
+            Ok(boundary::RosterStoreRecordHeartbeatResponse {
+                team: request.team.clone(),
+                member: request.member.clone(),
+                previous_pid,
+                current_pid: request.pid,
+                pid_changed: previous_pid != Some(request.pid),
+            })
         })
     }
 

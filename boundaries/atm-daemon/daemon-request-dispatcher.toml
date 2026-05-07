@@ -9,8 +9,8 @@ trait = "RequestDispatcher"
 [implementation]
 type = "DaemonRequestDispatcher"
 module = "atm_daemon"
-visibility = "private"
-constructor = "private"
+visibility = "pub(crate)"
+constructor = "pub(crate)"
 
 [composition]
 roots = ["atm_daemon::composition::compose_runtime"]
@@ -21,8 +21,8 @@ io_forbidden = ["sqlite", "process_spawn"]
 
 [dependencies]
 allowed_dependents = []
-allowed_dependencies = ["atm-core"]
-forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon", "atm-daemon -> atm-rusqlite"]
+allowed_dependencies = ["atm-core", "atm-rusqlite"]
+forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon"]
 
 [references]
 scope = "outside_owner_crate"
@@ -39,8 +39,8 @@ forbidden_test_bypasses = []
 
 [enforcement]
 lint_rules = ["LINT-BOUNDARY-REQUEST-DISPATCHER-DAEMON-EDGES", "LINT-BOUNDARY-REQUEST-DISPATCHER-DAEMON-REFERENCES"]
-review_gates = ["no_public_impl", "no_public_constructor", "no_socket_specific_business_logic"]
+review_gates = ["no_socket_specific_business_logic"]
 
 [status]
-state = "stub_landed"
-notes = ["dispatcher remains thin and runtime-owned", "runtime composition will land through atm_daemon::composition when this adapter is introduced"]
+state = "active"
+notes = ["dispatcher remains thin and runtime-owned", "runtime composition lands through atm_daemon::composition", "dispatcher now routes heartbeat requests and projects daemon-backed doctor health", "direct atm-rusqlite access is limited to runtime-owned boundary assembly for durable pid continuity and SQLite readiness checks"]

@@ -40,5 +40,5 @@ lint_rules = ["LINT-BOUNDARY-STATUS-SOURCE-REFERENCES"]
 review_gates = ["no_status_leakage_into_roster_store"]
 
 [status]
-state = "stub_landed"
-notes = ["callable status trait and named snapshot DTOs landed in atm_core::boundary", "live status remains separate from durable roster truth"]
+state = "active"
+notes = ["callable status trait and named snapshot DTOs landed in atm_core::boundary", "live status remains separate from durable roster truth", "runtime status snapshots now carry liveness, readiness, singleton-owner, SQLite-ready, degraded-ingest, and member-count fields"]

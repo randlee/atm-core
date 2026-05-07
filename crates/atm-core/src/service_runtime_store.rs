@@ -351,7 +351,15 @@ impl boundary::RosterStore for LegacyRosterStoreAdapter {
             team: request.team,
             member: None,
             is_member: false,
+            pid: None,
         })
+    }
+
+    fn record_heartbeat(
+        &self,
+        _request: boundary::RosterStoreRecordHeartbeatRequest,
+    ) -> Result<boundary::RosterStoreRecordHeartbeatResponse, AtmError> {
+        Err(unsupported("RosterStore::record_heartbeat"))
     }
 
     fn health_snapshot(

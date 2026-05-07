@@ -33,11 +33,10 @@ io_forbidden = [
 
 [dependencies]
 allowed_dependents = []
-allowed_dependencies = ["atm-core"]
+allowed_dependencies = ["atm-core", "atm-rusqlite"]
 forbidden_edges = [
   "atm -> atm-daemon",
   "atm-graft -> atm-daemon",
-  "atm-daemon -> atm-rusqlite",
 ]
 
 [references]

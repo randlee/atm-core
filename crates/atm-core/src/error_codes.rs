@@ -25,6 +25,8 @@ pub enum AtmErrorCode {
     ConfigTeamMissing,
     /// Sender identity could not be resolved.
     IdentityUnavailable,
+    /// A live process already owns the reported agent identity.
+    IdentityConflict,
     /// The daemon transport could not be reached or started.
     DaemonUnavailable,
     /// The client-side daemon launch gate rejected a duplicate spawn.
@@ -119,6 +121,7 @@ impl AtmErrorCode {
             Self::ConfigTeamParseFailed => "ATM_CONFIG_TEAM_PARSE_FAILED",
             Self::ConfigTeamMissing => "ATM_CONFIG_TEAM_MISSING",
             Self::IdentityUnavailable => "ATM_IDENTITY_UNAVAILABLE",
+            Self::IdentityConflict => "ATM_IDENTITY_CONFLICT",
             Self::DaemonUnavailable => "ATM_DAEMON_UNAVAILABLE",
             Self::DaemonLaunchGateRejected => "ATM_DAEMON_LAUNCH_GATE_REJECTED",
             Self::DaemonServingStateRejected => "ATM_DAEMON_SERVING_STATE_REJECTED",
@@ -176,6 +179,7 @@ impl FromStr for AtmErrorCode {
             "ATM_CONFIG_TEAM_PARSE_FAILED" => Ok(Self::ConfigTeamParseFailed),
             "ATM_CONFIG_TEAM_MISSING" => Ok(Self::ConfigTeamMissing),
             "ATM_IDENTITY_UNAVAILABLE" => Ok(Self::IdentityUnavailable),
+            "ATM_IDENTITY_CONFLICT" => Ok(Self::IdentityConflict),
             "ATM_DAEMON_UNAVAILABLE" => Ok(Self::DaemonUnavailable),
             "ATM_DAEMON_LAUNCH_GATE_REJECTED" => Ok(Self::DaemonLaunchGateRejected),
             "ATM_DAEMON_SERVING_STATE_REJECTED" => Ok(Self::DaemonServingStateRejected),

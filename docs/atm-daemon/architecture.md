@@ -370,6 +370,11 @@ Doctor health contract distinction:
   them through the documented request boundary
 - `atm doctor` must report both dimensions explicitly rather than treating
   process existence as equivalent to request-serving readiness
+- the runtime health snapshot projected into `atm doctor` must also carry:
+  - singleton-owner pid when known
+  - SQLite-ready state
+  - degraded-ingest state
+  - aggregate active/idle/offline/unknown member counts
 
 ## 3.6 Crash Recovery
 

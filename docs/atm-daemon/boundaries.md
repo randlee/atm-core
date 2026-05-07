@@ -98,6 +98,10 @@ Purpose:
 
 Notes:
 - This adapter exists to keep transport loops and service logic separate.
+- The active dispatcher now owns:
+  - typed heartbeat request routing
+  - durable pid continuity checks through the SQLite boundary assembly
+  - daemon-backed doctor health projection over runtime status
 
 ## DaemonConfigIngressAdapter
 
@@ -169,3 +173,5 @@ Purpose:
 
 Notes:
 - Durable roster truth remains separate from runtime status sourcing.
+- The active implementation is a daemon-memory status cache shared with the
+  dispatcher and projected into `atm doctor`.
