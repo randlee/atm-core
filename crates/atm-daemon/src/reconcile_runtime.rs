@@ -11,6 +11,7 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 const DEFAULT_RECONCILE_DEBOUNCE: Duration = Duration::from_millis(25);
+const DEFAULT_RECONCILE_COMPLETION_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Clone)]
 pub(crate) struct ReconcileRuntime {
@@ -33,6 +34,7 @@ struct ReconcileState {
     started: bool,
     shutdown: bool,
     next_waiter_id: u64,
+    pending_epoch: u64,
     pending: HashMap<ReconcileKey, PendingReconcile>,
     pending_order: VecDeque<ReconcileKey>,
     completed: HashMap<u64, ReconcileOutcome>,
@@ -41,14 +43,14 @@ struct ReconcileState {
 #[derive(Clone)]
 enum ReconcileOutcome {
     Success(ReconcileResult),
-    Failure(String),
+    Failure(ReconcileFailureSnapshot),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct ReconcileKey {
     home_dir: PathBuf,
-    team: String,
-    agent: String,
+    team: atm_core::types::TeamName,
+    agent: atm_core::types::AgentName,
 }
 
 struct PendingReconcile {
@@ -56,12 +58,37 @@ struct PendingReconcile {
     waiters: Vec<u64>,
 }
 
+#[derive(Clone)]
+struct ReconcileFailureSnapshot {
+    message: String,
+    recovery: Option<String>,
+}
+
+impl From<AtmError> for ReconcileFailureSnapshot {
+    fn from(error: AtmError) -> Self {
+        Self {
+            message: error.message,
+            recovery: error.recovery,
+        }
+    }
+}
+
+impl ReconcileFailureSnapshot {
+    fn to_error(&self) -> AtmError {
+        let error = AtmError::daemon_unavailable(self.message.clone());
+        match &self.recovery {
+            Some(recovery) => error.with_recovery(recovery.clone()),
+            None => error,
+        }
+    }
+}
+
 impl ReconcileKey {
     fn from_request(request: &ReconcileRequest) -> Self {
         Self {
             home_dir: request.home_dir.clone(),
-            team: request.team.to_string(),
-            agent: request.agent.to_string(),
+            team: request.team.clone(),
+            agent: request.agent.clone(),
         }
     }
 }
@@ -182,6 +209,7 @@ impl ReconcileRuntime {
             }
             let waiter_id = state.next_waiter_id;
             state.next_waiter_id += 1;
+            state.pending_epoch = state.pending_epoch.saturating_add(1);
             let key = ReconcileKey::from_request(&request);
             if let Some(pending) = state.pending.get_mut(&key) {
                 pending.request = request.clone();
@@ -208,9 +236,7 @@ impl ReconcileRuntime {
             if let Some(outcome) = state.completed.remove(&waiter_id) {
                 return match outcome {
                     ReconcileOutcome::Success(result) => Ok(result),
-                    ReconcileOutcome::Failure(message) => {
-                        Err(AtmError::daemon_unavailable(message))
-                    }
+                    ReconcileOutcome::Failure(failure) => Err(failure.to_error()),
                 };
             }
             if state.shutdown {
@@ -218,9 +244,19 @@ impl ReconcileRuntime {
                     "reconcile runtime shut down before completion",
                 ));
             }
-            state = self.inner.wake.wait(state).map_err(|_| {
-                AtmError::daemon_unavailable("reconcile runtime state lock poisoned")
-            })?;
+            let wait = self
+                .inner
+                .wake
+                .wait_timeout(state, DEFAULT_RECONCILE_COMPLETION_TIMEOUT)
+                .map_err(|_| {
+                    AtmError::daemon_unavailable("reconcile runtime state lock poisoned")
+                })?;
+            state = wait.0;
+            if wait.1.timed_out() {
+                return Err(AtmError::daemon_unavailable(
+                    "reconcile runtime timed out waiting for background completion",
+                ));
+            }
         }
     }
 
@@ -246,12 +282,24 @@ fn reconcile_worker_loop(inner: Arc<ReconcileRuntimeInner>) {
             if state.shutdown {
                 return;
             }
-            drop(state);
-            thread::sleep(inner.debounce);
-            let mut state = match inner.state.lock() {
-                Ok(state) => state,
-                Err(_) => return,
-            };
+            let mut debounce_epoch = state.pending_epoch;
+            loop {
+                let wait = match inner.wake.wait_timeout(state, inner.debounce) {
+                    Ok(wait) => wait,
+                    Err(_) => return,
+                };
+                state = wait.0;
+                if state.shutdown {
+                    return;
+                }
+                if state.pending_epoch != debounce_epoch {
+                    debounce_epoch = state.pending_epoch;
+                    continue;
+                }
+                if wait.1.timed_out() {
+                    break;
+                }
+            }
             let pending_order = std::mem::take(&mut state.pending_order);
             let mut drained = Vec::with_capacity(pending_order.len());
             for key in pending_order {
@@ -265,7 +313,7 @@ fn reconcile_worker_loop(inner: Arc<ReconcileRuntimeInner>) {
         for pending_request in pending {
             let outcome = match (inner.executor)(&pending_request.request) {
                 Ok(result) => ReconcileOutcome::Success(result),
-                Err(error) => ReconcileOutcome::Failure(error.message),
+                Err(error) => ReconcileOutcome::Failure(error.into()),
             };
             if let Ok(mut state) = inner.state.lock() {
                 for waiter in pending_request.waiters {
@@ -282,15 +330,19 @@ fn reconcile_worker_loop(inner: Arc<ReconcileRuntimeInner>) {
 #[cfg(test)]
 mod tests {
     use super::ReconcileRuntime;
-    use atm_core::boundary::ReconcileRequest;
+    use atm_core::boundary::{
+        self, InboxIngress, InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
+        InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
+        InboxIngressImportRequest, InboxIngressImportResponse, NotificationEvent, NotificationSink,
+        ReconcileRequest, WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
+    };
     use atm_core::protocol::ReconcileResult;
-    use std::path::PathBuf;
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Condvar, Mutex, mpsc};
     use std::time::Duration;
 
     fn request() -> ReconcileRequest {
         ReconcileRequest {
-            home_dir: PathBuf::from("/tmp/atm-reconcile-test"),
+            home_dir: std::env::temp_dir().join("atm-reconcile-test"),
             team: "test-team".parse().expect("team"),
             agent: "test-agent".parse().expect("agent"),
         }
@@ -298,7 +350,7 @@ mod tests {
 
     fn request_for(agent: &str) -> ReconcileRequest {
         ReconcileRequest {
-            home_dir: PathBuf::from("/tmp/atm-reconcile-test"),
+            home_dir: std::env::temp_dir().join("atm-reconcile-test"),
             team: "test-team".parse().expect("team"),
             agent: agent.parse().expect("agent"),
         }
@@ -353,14 +405,28 @@ mod tests {
     #[test]
     fn reconcile_runtime_preserves_trigger_order_and_signals_completion() {
         let order = Arc::new(Mutex::new(Vec::new()));
+        let (started_tx, started_rx) = mpsc::channel();
+        let release = Arc::new((Mutex::new(false), Condvar::new()));
         let runtime = ReconcileRuntime::new_for_test(
             Arc::new({
                 let order = Arc::clone(&order);
+                let started_tx = started_tx.clone();
+                let release = Arc::clone(&release);
                 move |request| {
                     order
                         .lock()
                         .expect("order")
                         .push(request.agent.as_str().to_string());
+                    started_tx
+                        .send(request.agent.as_str().to_string())
+                        .expect("started");
+                    if request.agent.as_str() == "agent-a" {
+                        let (released, wake) = &*release;
+                        let mut released = released.lock().expect("released");
+                        while !*released {
+                            released = wake.wait(released).expect("wait release");
+                        }
+                    }
                     Ok(ReconcileResult {
                         observed_paths: 1,
                         imported_sources: 1,
@@ -374,8 +440,11 @@ mod tests {
         let runtime_a = runtime.clone();
         let runtime_b = runtime.clone();
         let first = std::thread::spawn(move || runtime_a.reconcile(request_for("agent-a")));
-        std::thread::sleep(Duration::from_millis(2));
+        assert_eq!(started_rx.recv().expect("first started"), "agent-a");
         let second = std::thread::spawn(move || runtime_b.reconcile(request_for("agent-b")));
+        let (released, wake) = &*release;
+        *released.lock().expect("released") = true;
+        wake.notify_all();
 
         let first_result = first.join().expect("first join").expect("first result");
         let second_result = second.join().expect("second join").expect("second result");
@@ -385,6 +454,92 @@ mod tests {
             order.lock().expect("order").as_slice(),
             ["agent-a".to_string(), "agent-b".to_string()]
         );
+        runtime.shutdown().expect("shutdown");
+    }
+
+    #[derive(Clone)]
+    struct FakeWatchSource;
+
+    impl boundary::sealed::Sealed for FakeWatchSource {}
+
+    impl WatchEventSource for FakeWatchSource {
+        fn poll(
+            &self,
+            _request: WatchSubscriptionRequest,
+        ) -> Result<WatchEventBatch, atm_core::error::AtmError> {
+            Ok(WatchEventBatch {
+                paths: vec![std::env::temp_dir().join("watch.json")],
+            })
+        }
+    }
+
+    #[derive(Clone)]
+    struct FakeInboxIngress;
+
+    impl boundary::sealed::Sealed for FakeInboxIngress {}
+
+    impl InboxIngress for FakeInboxIngress {
+        fn import_inbox_source(
+            &self,
+            _request: InboxIngressImportRequest,
+        ) -> Result<InboxIngressImportResponse, atm_core::error::AtmError> {
+            Ok(InboxIngressImportResponse {
+                source_files: Vec::new(),
+            })
+        }
+
+        fn compute_identity_fingerprint(
+            &self,
+            _request: InboxIngressIdentityFingerprintRequest,
+        ) -> Result<InboxIngressIdentityFingerprintResponse, atm_core::error::AtmError> {
+            Ok(InboxIngressIdentityFingerprintResponse { fingerprint: None })
+        }
+
+        fn report_diagnostics(
+            &self,
+            _request: InboxIngressDiagnosticsRequest,
+        ) -> Result<InboxIngressDiagnosticsResponse, atm_core::error::AtmError> {
+            Ok(InboxIngressDiagnosticsResponse {
+                duplicate_legacy_message_ids: 0,
+                messages_without_ids: 0,
+            })
+        }
+    }
+
+    #[derive(Clone)]
+    struct FakeNotificationSink {
+        delivered: Arc<Mutex<Vec<NotificationEvent>>>,
+    }
+
+    impl boundary::sealed::Sealed for FakeNotificationSink {}
+
+    impl NotificationSink for FakeNotificationSink {
+        fn deliver(&self, event: NotificationEvent) -> Result<(), atm_core::error::AtmError> {
+            self.delivered.lock().expect("delivered").push(event);
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn reconcile_runtime_routes_notifications_through_notification_sink_boundary() {
+        let delivered = Arc::new(Mutex::new(Vec::new()));
+        let runtime = ReconcileRuntime::new(
+            Arc::new(FakeWatchSource),
+            Arc::new(FakeInboxIngress),
+            Arc::new(FakeNotificationSink {
+                delivered: Arc::clone(&delivered),
+            }),
+        );
+        runtime.start().expect("start");
+
+        let result = runtime.reconcile(request()).expect("reconcile result");
+        assert_eq!(result.observed_paths, 1);
+        assert_eq!(result.imported_sources, 0);
+
+        let delivered = delivered.lock().expect("delivered");
+        assert_eq!(delivered.len(), 1);
+        assert_eq!(delivered[0].kind, "reconcile_complete");
+
         runtime.shutdown().expect("shutdown");
     }
 }

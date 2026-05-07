@@ -1,7 +1,7 @@
 use super::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
 use super::{
     ActiveConnectionRegistry, DaemonShutdownSignals, HOST_RUNTIME_OWNER_LOCK_FILE, SingletonGuard,
-    host_runtime_lock_path_from_home, reset_shutdown_signals_for_test,
+    host_runtime_lock_path_from_home,
 };
 use atm_core::boundary::RequestDispatcher;
 use atm_core::doctor::DoctorStatus;
@@ -22,38 +22,19 @@ use std::sync::{Arc, mpsc};
 use std::time::Duration;
 use tempfile::TempDir;
 
-struct SignalResetGuard {
-    _private: (),
-}
-
-impl SignalResetGuard {
-    fn install() -> Self {
-        reset_shutdown_signals_for_test().expect("reset signals");
-        Self { _private: () }
-    }
-}
-
-impl Drop for SignalResetGuard {
-    fn drop(&mut self) {
-        reset_shutdown_signals_for_test().expect("reset signals");
-    }
-}
-
 #[test]
-#[serial]
-fn daemon_shutdown_signals_install_is_repeatable() {
-    let _reset = SignalResetGuard::install();
-    let first = DaemonShutdownSignals::install().expect("first install");
+fn daemon_shutdown_signals_for_test_are_isolated() {
+    let first = DaemonShutdownSignals::new_for_test();
     first
         .terminate
         .store(true, std::sync::atomic::Ordering::SeqCst);
     first
         .reload
         .store(true, std::sync::atomic::Ordering::SeqCst);
-    let second = DaemonShutdownSignals::install().expect("second install");
+    let second = DaemonShutdownSignals::new_for_test();
 
-    assert!(second.terminate.load(std::sync::atomic::Ordering::SeqCst));
-    assert!(second.reload.load(std::sync::atomic::Ordering::SeqCst));
+    assert!(!second.terminate.load(std::sync::atomic::Ordering::SeqCst));
+    assert!(!second.reload.load(std::sync::atomic::Ordering::SeqCst));
 }
 
 #[test]

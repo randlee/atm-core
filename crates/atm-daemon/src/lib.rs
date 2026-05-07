@@ -47,10 +47,6 @@ pub(crate) use peer_transport::{PeerTransportRuntime, RemoteReplayStore};
 #[cfg(unix)]
 use shutdown_signals::DaemonShutdownSignals;
 #[cfg(unix)]
-pub use shutdown_signals::request_shutdown_for_test;
-#[cfg(unix)]
-pub use shutdown_signals::reset_shutdown_signals_for_test;
-#[cfg(unix)]
 const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 #[cfg(unix)]
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
@@ -384,6 +380,7 @@ impl PreparedRuntimeServer {
             AtmError::daemon_unavailable("failed to configure daemon socket listener")
                 .with_source(source)
         })?;
+        emit_ready_signal_if_requested()?;
         Ok(Self {
             _singleton: singleton,
             listener,
@@ -504,6 +501,21 @@ impl PreparedRuntimeServer {
             Ok(())
         })
     }
+}
+
+#[cfg(unix)]
+fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
+    if std::env::var_os("ATM_DAEMON_READY_STDOUT").is_none() {
+        return Ok(());
+    }
+    let mut stdout = std::io::stdout().lock();
+    writeln!(stdout, "ATM_DAEMON_READY").map_err(|source| {
+        AtmError::daemon_unavailable("failed to emit daemon ready signal").with_source(source)
+    })?;
+    stdout.flush().map_err(|source| {
+        AtmError::daemon_unavailable("failed to flush daemon ready signal").with_source(source)
+    })?;
+    Ok(())
 }
 
 #[cfg(unix)]

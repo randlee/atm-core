@@ -2784,6 +2784,9 @@ mail correctness.
   - `R.17` completes this lane as a daemon-owned polling watch registry, an
     ordered debounce/coalesce reconcile worker, and a queued notifier runtime;
     those lanes must start and stop only through the daemon composition root
+  - the notifier lane uses a bounded queue of `64` events and must fail closed
+    with typed backpressure instead of silently buffering unbounded plugin
+    traffic
 
 - `REQ-CORE-TRANSPORT-002` Cross-host traffic must be daemon-to-daemon only.
 

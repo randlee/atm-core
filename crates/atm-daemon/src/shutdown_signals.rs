@@ -1,5 +1,5 @@
 #[cfg(unix)]
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 #[cfg(unix)]
 use std::sync::{Arc, Mutex};
 
@@ -62,21 +62,12 @@ impl DaemonShutdownSignals {
             reload: Arc::clone(&shared.reload),
         })
     }
-}
 
-#[cfg(unix)]
-#[doc(hidden)]
-pub fn request_shutdown_for_test() -> Result<(), AtmError> {
-    let signals = DaemonShutdownSignals::install()?;
-    signals.terminate.store(true, Ordering::SeqCst);
-    Ok(())
-}
-
-#[cfg(unix)]
-#[doc(hidden)]
-pub fn reset_shutdown_signals_for_test() -> Result<(), AtmError> {
-    let signals = DaemonShutdownSignals::install()?;
-    signals.terminate.store(false, Ordering::SeqCst);
-    signals.reload.store(false, Ordering::SeqCst);
-    Ok(())
+    #[cfg(test)]
+    pub(crate) fn new_for_test() -> Self {
+        Self {
+            terminate: Arc::new(AtomicBool::new(false)),
+            reload: Arc::new(AtomicBool::new(false)),
+        }
+    }
 }

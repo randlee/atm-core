@@ -6,7 +6,7 @@ phase: R
 sprint: "R.17"
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s17-watch-reconcile
 branch: feature/pR-s17-watch-reconcile
-status: planned
+status: complete
 estimated_scope: L
 ```
 
@@ -17,6 +17,11 @@ Replace the one-shot watch/reconcile/notifier placeholders with runtime-owned lo
 ## Scope Summary
 
 This sprint closes the current background-runtime gap for filesystem intake, reconcile scheduling, and notifier/plugin delivery. The daemon should own real loops and degradation handling instead of forwarding to generic helpers.
+
+Implementation closeout:
+- watch polling is now runtime-owned and long-lived behind `WatchRuntime`
+- reconcile scheduling is now runtime-owned with ordered debounce/coalesce completion
+- notifier delivery is now a daemon-owned queued runtime with typed unavailable/backpressure behavior
 
 ## Governing Requirements
 
@@ -111,4 +116,3 @@ If the notifier runtime is blocked on separate plugin work, split it late. The w
 - watch/reconcile loops must not become hidden side-effect threads outside the lifecycle root
 - notifier delivery must not silently degrade into log-only behavior again
 - background tests need explicit ready signals, not polling races
-

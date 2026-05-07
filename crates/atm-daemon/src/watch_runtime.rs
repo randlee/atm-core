@@ -35,23 +35,57 @@ struct WatchState {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct WatchKey {
     home_dir: PathBuf,
-    team: String,
-    agent: String,
+    team: atm_core::types::TeamName,
+    agent: atm_core::types::AgentName,
 }
 
 #[derive(Clone)]
 struct WatchSnapshot {
     request: WatchSubscriptionRequest,
+    requested_revision: u64,
+    observed_revision: u64,
     batch: WatchEventBatch,
-    error_message: Option<String>,
+    error: Option<WatchFailureSnapshot>,
+}
+
+#[derive(Clone)]
+struct WatchRefreshTarget {
+    key: WatchKey,
+    request: WatchSubscriptionRequest,
+    revision: u64,
+}
+
+#[derive(Clone)]
+struct WatchFailureSnapshot {
+    message: String,
+    recovery: Option<String>,
+}
+
+impl From<AtmError> for WatchFailureSnapshot {
+    fn from(error: AtmError) -> Self {
+        Self {
+            message: error.message,
+            recovery: error.recovery,
+        }
+    }
+}
+
+impl WatchFailureSnapshot {
+    fn to_error(&self) -> AtmError {
+        let error = AtmError::daemon_unavailable(self.message.clone());
+        match &self.recovery {
+            Some(recovery) => error.with_recovery(recovery.clone()),
+            None => error,
+        }
+    }
 }
 
 impl WatchKey {
     fn from_request(request: &WatchSubscriptionRequest) -> Self {
         Self {
             home_dir: request.home_dir.clone(),
-            team: request.team.to_string(),
-            agent: request.agent.to_string(),
+            team: request.team.clone(),
+            agent: request.agent.clone(),
         }
     }
 }
@@ -182,23 +216,62 @@ impl WatchRuntime {
         &self,
         request: WatchSubscriptionRequest,
     ) -> Result<WatchEventBatch, AtmError> {
-        let batch = (self.inner.poller)(&request)?;
         let key = WatchKey::from_request(&request);
         let mut state = self
             .inner
             .state
             .lock()
             .map_err(|_| AtmError::daemon_unavailable("watch runtime state lock poisoned"))?;
-        state.subscriptions.insert(
-            key,
-            WatchSnapshot {
-                request,
-                batch: batch.clone(),
-                error_message: None,
-            },
-        );
+        if !state.started {
+            return Err(AtmError::daemon_unavailable(
+                "watch runtime is unavailable before daemon startup",
+            ));
+        }
+        if state.shutdown {
+            return Err(AtmError::daemon_unavailable(
+                "watch runtime is unavailable during daemon shutdown",
+            ));
+        }
+        let requested_revision = match state.subscriptions.get_mut(&key) {
+            Some(entry) => {
+                entry.request = request;
+                entry.requested_revision = entry.requested_revision.saturating_add(1);
+                entry.requested_revision
+            }
+            None => {
+                state.subscriptions.insert(
+                    key.clone(),
+                    WatchSnapshot {
+                        request,
+                        requested_revision: 1,
+                        observed_revision: 0,
+                        batch: WatchEventBatch { paths: Vec::new() },
+                        error: None,
+                    },
+                );
+                1
+            }
+        };
         self.inner.wake.notify_one();
-        Ok(batch)
+        loop {
+            if let Some(entry) = state.subscriptions.get(&key)
+                && entry.observed_revision >= requested_revision
+            {
+                return match &entry.error {
+                    Some(error) => Err(error.to_error()),
+                    None => Ok(entry.batch.clone()),
+                };
+            }
+            if state.shutdown {
+                return Err(AtmError::daemon_unavailable(
+                    "watch runtime shut down before delivering an updated batch",
+                ));
+            }
+            state =
+                self.inner.wake.wait(state).map_err(|_| {
+                    AtmError::daemon_unavailable("watch runtime state lock poisoned")
+                })?;
+        }
     }
 
     #[cfg(test)]
@@ -209,68 +282,89 @@ impl WatchRuntime {
 
 fn watch_worker_loop(inner: Arc<WatchRuntimeInner>) {
     loop {
-        let subscriptions = {
+        let refresh_targets = {
             let mut state = match inner.state.lock() {
                 Ok(state) => state,
                 Err(_) => return,
             };
-            while state.subscriptions.is_empty() && !state.shutdown {
-                state = match inner.wake.wait(state) {
-                    Ok(state) => state,
+            loop {
+                if state.shutdown {
+                    return;
+                }
+                if state
+                    .subscriptions
+                    .values()
+                    .any(|entry| entry.observed_revision < entry.requested_revision)
+                {
+                    break;
+                }
+                if state.subscriptions.is_empty() {
+                    state = match inner.wake.wait(state) {
+                        Ok(state) => state,
+                        Err(_) => return,
+                    };
+                    continue;
+                }
+                let wait = match inner.wake.wait_timeout(state, inner.poll_interval) {
+                    Ok(wait) => wait,
                     Err(_) => return,
                 };
-            }
-            if state.shutdown {
-                return;
+                state = wait.0;
+                if wait.1.timed_out() {
+                    for entry in state.subscriptions.values_mut() {
+                        entry.requested_revision = entry.requested_revision.saturating_add(1);
+                    }
+                    break;
+                }
             }
             state
                 .subscriptions
-                .values()
-                .map(|entry| entry.request.clone())
+                .iter()
+                .filter(|(_, entry)| entry.observed_revision < entry.requested_revision)
+                .map(|(key, entry)| WatchRefreshTarget {
+                    key: key.clone(),
+                    request: entry.request.clone(),
+                    revision: entry.requested_revision,
+                })
                 .collect::<Vec<_>>()
         };
 
-        for request in subscriptions {
-            let key = WatchKey::from_request(&request);
-            let result = (inner.poller)(&request);
+        for target in refresh_targets {
+            let result = (inner.poller)(&target.request);
             if let Ok(mut state) = inner.state.lock() {
-                if let Some(entry) = state.subscriptions.get_mut(&key) {
+                if let Some(entry) = state.subscriptions.get_mut(&target.key) {
                     match result {
                         Ok(batch) => {
                             entry.batch = batch;
-                            entry.error_message = None;
+                            entry.error = None;
                         }
                         Err(error) => {
-                            entry.error_message = Some(error.message);
+                            entry.error = Some(error.into());
                         }
                     }
+                    entry.observed_revision = target.revision;
+                    inner.wake.notify_all();
                 }
             } else {
                 return;
             }
         }
-
-        let state = match inner.state.lock() {
-            Ok(state) => state,
-            Err(_) => return,
-        };
-        let _ = inner.wake.wait_timeout(state, inner.poll_interval);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::WatchRuntime;
+    use atm_core::boundary::WatchEventBatch;
     use atm_core::boundary::WatchSubscriptionRequest;
     use atm_core::error::AtmError;
-    use atm_core::protocol::WatchEventBatch;
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
     fn request() -> WatchSubscriptionRequest {
         WatchSubscriptionRequest {
-            home_dir: PathBuf::from("/tmp/atm-watch-test"),
+            home_dir: std::env::temp_dir().join("atm-watch-test"),
             team: "test-team".parse().expect("team"),
             agent: "test-agent".parse().expect("agent"),
         }
@@ -304,9 +398,6 @@ mod tests {
 
         let first = runtime.poll(request()).expect("first poll");
         assert_eq!(first.paths, vec![PathBuf::from("one.jsonl")]);
-
-        std::thread::sleep(Duration::from_millis(30));
-
         let second = runtime.poll(request()).expect("second poll");
         assert_eq!(second.paths, vec![PathBuf::from("two.jsonl")]);
         runtime.shutdown().expect("shutdown");
@@ -331,7 +422,6 @@ mod tests {
         runtime.start().expect("start");
         runtime.poll(request()).expect("initial poll");
         *fail.lock().expect("flag") = true;
-        std::thread::sleep(Duration::from_millis(30));
         let error = runtime.poll(request()).expect_err("degraded");
         assert!(error.message.contains("watch poll failed"));
         runtime.shutdown().expect("shutdown");

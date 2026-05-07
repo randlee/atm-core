@@ -2483,6 +2483,8 @@ Current implementation note:
 - `R.17` implements a daemon-owned queued notifier worker with typed
   unavailable/backpressure failures
 - notification delivery is no longer a tracing-only placeholder
+- the notifier queue is bounded to `64` events so plugin-local traffic fails
+  closed with backpressure rather than growing an unbounded daemon-side buffer
 
 ### 21.6.2 Structured Error And Observability Boundaries
 
