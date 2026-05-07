@@ -14,6 +14,9 @@ Audience: `team-lead` only.
 Use this skill when QA has produced findings and you need to correlate them
 across worktrees before any fix work is sent to `arch-ctm`.
 
+For phase-end learning and process hardening, also read:
+- `references/post-mortem.md`
+
 ## Preconditions
 
 Before using this workflow:
@@ -166,6 +169,26 @@ Practical rule:
 Until a dedicated closeout writer exists, use:
 - triage `.ttl` status for correlation and routing
 - `quality-mgr` PASS / follow-up QA report as the closure authority
+
+## Phase-End Post-Mortem
+
+At the end of a phase, after QA findings are closed, run the post-mortem review
+described in `references/post-mortem.md`.
+
+Participants:
+- `team-lead`
+- `arch-ctm`
+- `quality-mgr`
+
+Purpose:
+- review the phase finding set as a whole
+- classify recurring patterns
+- produce systemic follow-up recommendations such as:
+  - new ADRs
+  - new lints
+  - boundary updates
+  - planning-process improvements
+  - QA-process improvements
 
 ## Reporting to Dev
 
