@@ -58,7 +58,10 @@ Before starting a sprint:
    - `rust-service-hardening-agent` when service-runtime review is in scope
    - `flaky-test-qa` when test instability risk is present
 6. If QA passes and CI is green, merge may proceed.
-7. If QA fails, `team-lead` routes concrete fixes back to `arch-ctm`.
+7. If QA fails, `team-lead` first runs `/triaging-findings` to correlate the
+   findings across worktrees and determine the promoted fix branch.
+8. After triage completes, `team-lead` routes concrete fixes back to
+   `arch-ctm` using `fix-assignment.xml.j2`.
 
 ## Phase-End Review
 
@@ -77,6 +80,7 @@ Do not assume ATM-specific PR monitoring commands exist.
 
 Use the templates in this skill directory:
 - `dev-template.xml.j2`
+- `fix-assignment.xml.j2`
 - `qa-template.xml.j2`
 - `review-template.xml.j2`
 - `req-qa-assignment.json.j2`

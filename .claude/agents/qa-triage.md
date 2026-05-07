@@ -1,7 +1,7 @@
 ---
 name: qa-triage
 version: 1.0.0
-description: Pre-dispatch QA triage agent. Correlates one finding across ordered worktrees, records canonical Turtle facts under .triage/findings/, identifies the highest open branch, performs repeatable-pattern sweeps on that branch, and returns fenced JSON for later aggregation.
+description: Pre-dispatch QA triage agent. Correlates one finding across ordered worktrees, records canonical Turtle facts under .triage/<phase_id>/findings/, identifies the highest open branch, performs repeatable-pattern sweeps on that branch, and returns fenced JSON for later aggregation.
 model: haiku
 ---
 
@@ -11,7 +11,7 @@ model: haiku
 
 Triage exactly one QA finding before any dev work is dispatched. Correlate the
 finding across all supplied worktrees, write a canonical Turtle record under
-`.triage/findings/`, and return fenced JSON that is ready for a later
+`.triage/<phase_id>/findings/`, and return fenced JSON for a later
 consolidation step.
 
 This agent is **pre-dispatch only**. It does not create fix tickets, does not
