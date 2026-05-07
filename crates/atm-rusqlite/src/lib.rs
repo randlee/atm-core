@@ -426,34 +426,37 @@ impl boundary::MailStore for SqliteMailStore {
         &self,
         request: boundary::MailStoreHealthSnapshotRequest,
     ) -> Result<boundary::MailStoreHealthSnapshotResponse, AtmError> {
-        let rows = self.db.with_connection(|connection| {
-            let mut statement = connection
-                .prepare(
-                    "SELECT envelope_json, recorded_at
-                     FROM mail_messages
-                     WHERE team = ?1 AND agent = ?2;",
-                )
-                .map_err(|error| {
-                    self.db
-                        .error("failed to prepare mail-store health query", error)
-                })?;
-            let mapped = statement
-                .query_map(
-                    params![request.team.as_str(), request.agent.as_str()],
-                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?)),
-                )
-                .map_err(|error| {
-                    self.db
-                        .error("failed to execute mail-store health query", error)
-                })?;
-            let mut rows = Vec::new();
-            for row in mapped {
-                rows.push(row.map_err(|error| {
-                    self.db.error("failed to read mail-store health row", error)
-                })?);
-            }
-            Ok(rows)
-        })?;
+        let (total_messages, pending_ack_messages, latest_message_timestamp) =
+            self.db.with_connection(|connection| {
+                connection
+                    .query_row(
+                        "SELECT
+                             COUNT(*),
+                             (
+                                 SELECT COUNT(*)
+                                 FROM ack_state
+                                 WHERE team = ?1
+                                   AND agent = ?2
+                                   AND pending_ack_at IS NOT NULL
+                                   AND acknowledged_at IS NULL
+                             ),
+                             MAX(COALESCE(recorded_at, message_at))
+                         FROM mail_messages
+                         WHERE team = ?1 AND agent = ?2;",
+                        params![request.team.as_str(), request.agent.as_str()],
+                        |row| {
+                            Ok((
+                                row.get::<_, i64>(0)? as u64,
+                                row.get::<_, i64>(1)? as u64,
+                                row.get::<_, Option<String>>(2)?,
+                            ))
+                        },
+                    )
+                    .map_err(|error| {
+                        self.db
+                            .error("failed to query mail-store health summary", error)
+                    })
+            })?;
 
         let states = self.db.with_connection(|connection| {
             let mut statement = connection
@@ -489,36 +492,20 @@ impl boundary::MailStore for SqliteMailStore {
             Ok(rows)
         })?;
 
-        let total_messages = rows.len() as u64;
-        let mut pending_ack_messages = 0_u64;
-        let mut latest_message_timestamp = None;
-        for (envelope_json, recorded_at) in rows {
-            let envelope: atm_core::schema::MessageEnvelope =
-                deserialize_json(&envelope_json, "mail-store envelope")?;
-            if envelope.pending_ack_at.is_some() {
-                pending_ack_messages += 1;
-            }
-            let candidate = recorded_at
-                .as_deref()
-                .map(str::parse::<chrono::DateTime<chrono::Utc>>)
-                .transpose()
-                .map_err(|error| {
-                    AtmError::validation(format!(
-                        "failed to parse mail-store health recorded_at timestamp: {error}"
-                    ))
-                    .with_recovery("Repair the sqlite-backed mail-store row or rewrite it through the owning boundary.")
-                    .with_source(error)
-                })?
-                .map(IsoTimestamp::from_datetime)
-                .or(Some(envelope.timestamp));
-            if let Some(candidate) = candidate
-                && latest_message_timestamp
-                    .map(|current| candidate > current)
-                    .unwrap_or(true)
-            {
-                latest_message_timestamp = Some(candidate);
-            }
-        }
+        let latest_message_timestamp = latest_message_timestamp
+            .as_deref()
+            .map(str::parse::<chrono::DateTime<chrono::Utc>>)
+            .transpose()
+            .map_err(|error| {
+                AtmError::validation(format!(
+                    "failed to parse mail-store health latest_message timestamp: {error}"
+                ))
+                .with_recovery(
+                    "Repair the sqlite-backed mail-store row or rewrite it through the owning boundary.",
+                )
+                .with_source(error)
+            })?
+            .map(IsoTimestamp::from_datetime);
 
         let mut read_messages = 0_u64;
         for state_json in states {

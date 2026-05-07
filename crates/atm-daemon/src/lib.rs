@@ -5,6 +5,7 @@ mod boundary_adapters;
 pub(crate) mod composition;
 mod direct_boundaries;
 mod runtime_health;
+mod shutdown_signals;
 
 use std::collections::HashMap;
 use std::error::Error as StdError;
@@ -19,8 +20,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 #[cfg(unix)]
-use std::sync::OnceLock;
-#[cfg(unix)]
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 #[cfg(unix)]
 use std::thread;
@@ -29,10 +28,6 @@ use std::time::{Duration, Instant};
 
 #[cfg(unix)]
 use fs2::FileExt;
-#[cfg(unix)]
-use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGTERM};
-#[cfg(unix)]
-use signal_hook::flag;
 
 #[cfg(unix)]
 use atm_core::protocol::RequestEnvelope as ProtocolRequestEnvelope;
@@ -41,6 +36,10 @@ use atm_core::{
     boundary::{self, RequestDispatcher},
     error::AtmError,
 };
+#[cfg(unix)]
+use shutdown_signals::DaemonShutdownSignals;
+#[cfg(unix)]
+pub use shutdown_signals::request_shutdown_for_test;
 #[cfg(unix)]
 const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 #[cfg(unix)]
@@ -187,55 +186,6 @@ impl ActiveConnectionRegistry {
         self.active_connections.fetch_sub(1, Ordering::SeqCst);
     }
 }
-#[cfg(unix)]
-#[derive(Debug)]
-struct DaemonShutdownSignals {
-    terminate: Arc<AtomicBool>,
-    reload: Arc<AtomicBool>,
-}
-
-#[cfg(unix)]
-#[derive(Debug)]
-struct SharedDaemonShutdownSignals {
-    terminate: Arc<AtomicBool>,
-    reload: Arc<AtomicBool>,
-}
-
-#[cfg(unix)]
-impl DaemonShutdownSignals {
-    fn install() -> Result<Self, AtmError> {
-        static SIGNALS: OnceLock<SharedDaemonShutdownSignals> = OnceLock::new();
-        static INSTALL_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        // OnceLock owns global registration; Mutex serializes the read-check-write window.
-        let _guard = INSTALL_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("daemon signal install lock poisoned"))?;
-        if SIGNALS.get().is_none() {
-            let terminate = Arc::new(AtomicBool::new(false));
-            let reload = Arc::new(AtomicBool::new(false));
-            for signal in [SIGINT, SIGTERM] {
-                flag::register(signal, Arc::clone(&terminate)).map_err(|source| {
-                    AtmError::daemon_unavailable("failed to install daemon shutdown signal handler")
-                        .with_source(source)
-                })?;
-            }
-            flag::register(SIGHUP, Arc::clone(&reload)).map_err(|source| {
-                AtmError::daemon_unavailable("failed to install daemon reload signal handler")
-                    .with_source(source)
-            })?;
-            let _ = SIGNALS.set(SharedDaemonShutdownSignals { terminate, reload });
-        }
-        let shared = SIGNALS.get().ok_or_else(|| {
-            AtmError::daemon_unavailable("daemon shutdown signals were not initialized")
-        })?;
-        Ok(Self {
-            terminate: Arc::clone(&shared.terminate),
-            reload: Arc::clone(&shared.reload),
-        })
-    }
-}
-
 #[cfg(unix)]
 #[derive(Debug)]
 struct SingletonGuard {
@@ -453,11 +403,9 @@ impl PreparedRuntimeServer {
                         let force_shutdown = Arc::clone(&force_shutdown);
                         scope.spawn(move || {
                             let _active = active;
-                            if let Err(error) = handle_connection(
-                                &mut stream,
-                                dispatcher.as_ref(),
-                                force_shutdown.as_ref(),
-                            ) {
+                            if let Err(error) =
+                                handle_connection(&mut stream, dispatcher, force_shutdown.as_ref())
+                            {
                                 tracing::warn!(%error, "daemon connection handling failed");
                             }
                         });
@@ -546,7 +494,7 @@ fn remove_stale_socket(socket_path: &std::path::Path) -> Result<(), AtmError> {
 #[cfg(unix)]
 fn handle_connection(
     stream: &mut UnixStream,
-    dispatcher: &dyn RequestDispatcher,
+    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     force_shutdown: &AtomicBool,
 ) -> Result<(), AtmError> {
     if force_shutdown.load(Ordering::SeqCst) {
@@ -575,21 +523,36 @@ fn handle_connection(
     }
     let request: ProtocolRequestEnvelope =
         serde_json::from_slice(&bytes).map_err(AtmError::from)?;
-    let started = Instant::now();
     // TODO(phase-R): enforce a max 32 inflight requests per connection once framed multiplexing lands.
-    let response = match dispatcher.dispatch(request) {
-        Ok(response) if started.elapsed() <= REQUEST_DEADLINE => response,
-        Ok(_) => ResponseEnvelope::Error(atm_core::protocol::ProtocolErrorEnvelope::from_error(
+    let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
+    std::thread::spawn(move || {
+        let _ = result_tx.send(dispatcher.dispatch(request));
+    });
+    let response = match result_rx.recv_timeout(REQUEST_DEADLINE) {
+        Ok(Ok(response)) => response,
+        Ok(Err(error)) => {
+            ResponseEnvelope::Error(atm_core::protocol::ProtocolErrorEnvelope::from_error(&error))
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            ResponseEnvelope::Error(atm_core::protocol::ProtocolErrorEnvelope::from_error(
             &AtmError::daemon_unavailable(
-                "daemon request exceeded the 3s runtime deadline after the handler completed; the operation may have succeeded",
+                "daemon request exceeded the 3s runtime deadline; the operation may still complete in the background",
             )
             .with_recovery(
                 "Check the destination mailbox or service-side effects before retrying this ATM command.",
             ),
-        )),
-        Err(error) => ResponseEnvelope::Error(
-            atm_core::protocol::ProtocolErrorEnvelope::from_error(&error),
-        ),
+        ))
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            ResponseEnvelope::Error(atm_core::protocol::ProtocolErrorEnvelope::from_error(
+                &AtmError::daemon_unavailable(
+                    "daemon request dispatcher stopped before returning a response",
+                )
+                .with_recovery(
+                    "Retry the ATM command after the daemon finishes recovering the request runtime.",
+                ),
+            ))
+        }
     };
     let encoded = serde_json::to_vec(&response).map_err(AtmError::from)?;
     stream.write_all(&encoded).map_err(|source| {
@@ -717,9 +680,33 @@ mod tests {
     use std::time::Duration;
     use tempfile::TempDir;
 
+    struct SignalResetGuard {
+        signals: DaemonShutdownSignals,
+    }
+
+    impl SignalResetGuard {
+        fn install() -> Self {
+            Self {
+                signals: DaemonShutdownSignals::install().expect("install signals"),
+            }
+        }
+    }
+
+    impl Drop for SignalResetGuard {
+        fn drop(&mut self) {
+            self.signals
+                .terminate
+                .store(false, std::sync::atomic::Ordering::SeqCst);
+            self.signals
+                .reload
+                .store(false, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
     #[test]
     fn daemon_shutdown_signals_install_is_repeatable() {
-        let first = DaemonShutdownSignals::install().expect("first install");
+        let reset = SignalResetGuard::install();
+        let first = &reset.signals;
         first
             .terminate
             .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -730,12 +717,6 @@ mod tests {
 
         assert!(second.terminate.load(std::sync::atomic::Ordering::SeqCst));
         assert!(second.reload.load(std::sync::atomic::Ordering::SeqCst));
-        second
-            .terminate
-            .store(false, std::sync::atomic::Ordering::SeqCst);
-        second
-            .reload
-            .store(false, std::sync::atomic::Ordering::SeqCst);
     }
 
     #[test]
@@ -831,7 +812,7 @@ mod tests {
 
         let release_tx_clone = release_tx.clone();
         std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(10));
+            std::thread::sleep(Duration::from_millis(50));
             release_tx_clone.send(()).expect("release lock");
         });
 
