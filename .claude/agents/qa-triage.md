@@ -207,7 +207,7 @@ Record shape example:
 @prefix triage: <urn:atm:triage:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-triage:finding/FTQ-001
+<urn:atm:triage:finding/FTQ-001>
   a triage:Finding ;
   triage:findingId "FTQ-001" ;
   triage:title "Process-global shutdown state in tests" ;
@@ -217,21 +217,22 @@ triage:finding/FTQ-001
   triage:sweepScope "crate" ;
   triage:status "fixed_partial" ;
   triage:dispatchReady true ;
-  triage:hasOccurrence triage:occurrence/FTQ-001/R17/1 ;
-  triage:openOn triage:worktree/R17/9421e9f ;
-  triage:fixedOn triage:worktree/R16/c7b4455 ;
-  triage:promoteTo triage:worktree/R17/9421e9f .
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/R17/1> ;
+  triage:openOn <urn:atm:triage:worktree/R17/9421e9f> ;
+  triage:fixedOn <urn:atm:triage:worktree/R16/c7b4455> ;
+  triage:promoteTo <urn:atm:triage:worktree/R17/9421e9f> .
 
-triage:occurrence/FTQ-001/R17/1
+<urn:atm:triage:occurrence/FTQ-001/R17/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
   triage:line 28 ;
   triage:snippet "static DISPATCHER: OnceLock<...>" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:occursIn triage:worktree/R17/9421e9f .
+  triage:branch "R.17" ;
+  triage:occursIn <urn:atm:triage:worktree/R17/9421e9f> .
 
-triage:worktree/R17/9421e9f
+<urn:atm:triage:worktree/R17/9421e9f>
   a triage:WorktreeSnapshot ;
   triage:branch "R.17" ;
   triage:path "/abs/worktree-r17" ;

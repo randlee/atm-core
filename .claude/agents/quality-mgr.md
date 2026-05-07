@@ -84,6 +84,8 @@ ALL instances and include the complete list in the verdict.
    - when rechecking prior findings, pass `triage_records`, `round_limit`,
      `changed_files`, and `carry_forward_findings_json` through the rendered
      reviewer templates instead of wrapper prose
+   - build `carry_forward_findings_json` with:
+     `python3 scripts/triage_carry_forward.py --branch <branch> --ttl <record>...`
 5. Launch all selected reviewers as background Task agents. Never run cargo,
    clippy, or broad QA analysis yourself in the foreground.
 6. Collect the reviewer results and classify them as:

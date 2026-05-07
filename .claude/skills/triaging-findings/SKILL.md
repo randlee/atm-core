@@ -139,6 +139,18 @@ sc-compose render \
   --var-file /tmp/fix-vars.json
 ```
 
+For follow-up QA or reviewer rechecks, build the carry-forward payload from the
+same `.ttl` records instead of handcrafting it:
+
+```bash
+python3 scripts/triage_carry_forward.py \
+  --branch <branch> \
+  --ttl <triage_record_1.ttl> \
+  --ttl <triage_record_2.ttl>
+```
+
+Use the script output as the `carry_forward_findings_json` template input.
+
 ## Dispatch Rules
 
 - `highest_open_branch` owns the fix.
