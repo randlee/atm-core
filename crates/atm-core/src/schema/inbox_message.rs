@@ -125,6 +125,13 @@ impl fmt::Display for AtmMessageId {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ThreadMode {
+    AddDetails,
+    Supersede,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// ATM-owned semantic discriminator for alert-class metadata.
 pub enum AlertKind {
@@ -200,6 +207,15 @@ pub struct AtmMetadataFields {
         skip_serializing_if = "Option::is_none"
     )]
     pub acknowledges_message_id: Option<AtmMessageId>,
+
+    #[serde(rename = "parentMessageId", skip_serializing_if = "Option::is_none")]
+    pub parent_message_id: Option<AtmMessageId>,
+
+    #[serde(rename = "threadMode", skip_serializing_if = "Option::is_none")]
+    pub thread_mode: Option<ThreadMode>,
+
+    #[serde(rename = "staleAt", skip_serializing_if = "Option::is_none")]
+    pub stale_at: Option<IsoTimestamp>,
 
     #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
@@ -277,6 +293,15 @@ pub struct MessageEnvelope {
     )]
     pub acknowledges_message_id: Option<LegacyMessageId>,
 
+    #[serde(rename = "parentMessageId", skip_serializing_if = "Option::is_none")]
+    pub parent_message_id: Option<LegacyMessageId>,
+
+    #[serde(rename = "threadMode", skip_serializing_if = "Option::is_none")]
+    pub thread_mode: Option<ThreadMode>,
+
+    #[serde(rename = "staleAt", skip_serializing_if = "Option::is_none")]
+    pub stale_at: Option<IsoTimestamp>,
+
     #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
 
@@ -343,6 +368,17 @@ pub(crate) fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, 
                     .map(|message_id| Value::String(message_id.to_string())),
                 _ => None,
             });
+    let parent_message_id = object
+        .remove("parentMessageId")
+        .and_then(|value| match value {
+            Value::String(_) => message
+                .parent_message_id
+                .map(LegacyMessageId::into_atm_message_id)
+                .map(|message_id| Value::String(message_id.to_string())),
+            _ => None,
+        });
+    let thread_mode = object.remove("threadMode");
+    let stale_at = object.remove("staleAt");
     let task_id = object.remove("taskId");
 
     let metadata = ensure_object(object, "metadata");
@@ -360,6 +396,15 @@ pub(crate) fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, 
     if let Some(value) = acknowledges_message_id {
         atm.entry("acknowledgesMessageId".to_string())
             .or_insert(value);
+    }
+    if let Some(value) = parent_message_id {
+        atm.entry("parentMessageId".to_string()).or_insert(value);
+    }
+    if let Some(value) = thread_mode {
+        atm.entry("threadMode".to_string()).or_insert(value);
+    }
+    if let Some(value) = stale_at {
+        atm.entry("staleAt".to_string()).or_insert(value);
     }
     if let Some(value) = task_id {
         atm.entry("taskId".to_string()).or_insert(value);
@@ -437,6 +482,27 @@ pub fn hydrate_legacy_fields_from_metadata(value: &mut Value) {
     } else {
         None
     };
+    let parent_message_id = if object.contains_key("parentMessageId") {
+        None
+    } else if let Some(raw) = atm.get("parentMessageId").and_then(Value::as_str) {
+        match raw.parse::<AtmMessageId>() {
+            Ok(message_id) => Some(Value::String(
+                LegacyMessageId::from_atm_message_id(message_id).to_string(),
+            )),
+            Err(error) => {
+                warn!(%error, raw, "ignoring malformed metadata.atm.parentMessageId");
+                None
+            }
+        }
+    } else {
+        None
+    };
+    let thread_mode = (!object.contains_key("threadMode"))
+        .then(|| atm.get("threadMode").cloned())
+        .flatten();
+    let stale_at = (!object.contains_key("staleAt"))
+        .then(|| atm.get("staleAt").cloned())
+        .flatten();
     let task_id = (!object.contains_key("taskId"))
         .then(|| atm.get("taskId").cloned())
         .flatten();
@@ -455,6 +521,15 @@ pub fn hydrate_legacy_fields_from_metadata(value: &mut Value) {
     }
     if let Some(value) = acknowledges_message_id {
         object.insert("acknowledgesMessageId".to_string(), value);
+    }
+    if let Some(value) = parent_message_id {
+        object.insert("parentMessageId".to_string(), value);
+    }
+    if let Some(value) = thread_mode {
+        object.insert("threadMode".to_string(), value);
+    }
+    if let Some(value) = stale_at {
+        object.insert("staleAt".to_string(), value);
     }
     if let Some(value) = task_id {
         object.insert("taskId".to_string(), value);
@@ -519,6 +594,9 @@ mod tests {
             )),
             acknowledged_at: None,
             acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            stale_at: None,
             task_id: Some("TASK-123".parse().expect("task id")),
             extra: Map::new(),
         };
@@ -610,6 +688,9 @@ mod tests {
                     pending_ack_at: None,
                     acknowledged_at: None,
                     acknowledges_message_id: None,
+                    parent_message_id: None,
+                    thread_mode: None,
+                    stale_at: None,
                     task_id: None,
                     alert_kind: None,
                     missing_config_path: None,
@@ -683,6 +764,9 @@ mod tests {
             )),
             acknowledged_at: None,
             acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            stale_at: None,
             task_id: Some("TASK-123".parse().expect("task id")),
             extra: Map::new(),
         };
@@ -727,6 +811,9 @@ mod tests {
             pending_ack_at: None,
             acknowledged_at: Some(acknowledged_at),
             acknowledges_message_id: Some(LegacyMessageId::new()),
+            parent_message_id: None,
+            thread_mode: None,
+            stale_at: None,
             task_id: None,
             extra: Map::new(),
         };

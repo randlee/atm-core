@@ -20,6 +20,7 @@ use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::MessageEnvelope;
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
+use crate::threading::{ThreadIndex, is_ephemeral, is_expired_ephemeral};
 use crate::types::{
     AckActivationMode, AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
     SourceIndex, TeamName,
@@ -495,11 +496,18 @@ fn classify_all(
     messages: Vec<SourcedMessage>,
     workflow_state: &workflow::WorkflowStateFile,
 ) -> Vec<ClassifiedMessage> {
+    let projected = messages
+        .iter()
+        .map(|message| workflow::project_envelope(&message.envelope, workflow_state))
+        .collect::<Vec<_>>();
+    let thread_index = ThreadIndex::new(&projected);
+
     messages
         .into_iter()
-        .map(|message| {
-            let projected = workflow::project_envelope(&message.envelope, workflow_state);
-            let class = state::classify_message(&projected);
+        .zip(projected.iter().cloned())
+        .map(|(message, projected)| {
+            let effective = effective_display_envelope(&projected, &thread_index);
+            let class = state::classify_message(&effective);
             let bucket = state::display_bucket_for_class(class);
 
             ClassifiedMessage {
@@ -507,7 +515,7 @@ fn classify_all(
                 source_path: message.source_path,
                 bucket,
                 class,
-                envelope: projected,
+                envelope: effective,
             }
         })
         .collect()
@@ -532,6 +540,9 @@ fn bucket_counts_for(messages: &[ClassifiedMessage]) -> BucketCounts {
             history: 0,
         },
         |mut counts, message| {
+            if hidden_from_normal_views(&message.envelope) {
+                return counts;
+            }
             match message.bucket {
                 DisplayBucket::Unread => counts.unread += 1,
                 DisplayBucket::PendingAck => counts.pending_ack += 1,
@@ -553,7 +564,13 @@ fn select_messages(
         seen_watermark
     };
 
-    filters::apply_selection_mode(messages.to_vec(), selection_mode, watermark)
+    let visible = messages
+        .iter()
+        .filter(|message| !hidden_for_selection(&message.envelope, selection_mode))
+        .cloned()
+        .collect::<Vec<_>>();
+
+    filters::apply_selection_mode(visible, selection_mode, watermark)
 }
 
 fn selected_after_filters(
@@ -591,6 +608,17 @@ fn output_messages_from_selection(
     source_files: &[SourceFile],
     workflow_state: &workflow::WorkflowStateFile,
 ) -> Vec<ClassifiedMessage> {
+    let projected = source_files
+        .iter()
+        .flat_map(|source| {
+            source
+                .messages
+                .iter()
+                .map(|message| workflow::project_envelope(message, workflow_state))
+        })
+        .collect::<Vec<_>>();
+    let thread_index = ThreadIndex::new(&projected);
+
     selected
         .iter()
         .cloned()
@@ -604,9 +632,40 @@ fn output_messages_from_selection(
                 .find(|source| source.path == selected_message.source_path)
                 .and_then(|source| source.messages.get(selected_message.source_index.get()))
                 .map(|message| workflow::project_envelope(message, workflow_state))
+                .map(|message| effective_display_envelope(&message, &thread_index))
                 .unwrap_or(selected_message.envelope),
         })
         .collect()
+}
+
+fn effective_display_envelope(
+    envelope: &MessageEnvelope,
+    thread_index: &ThreadIndex<'_>,
+) -> MessageEnvelope {
+    let Some(message_id) = envelope.message_id else {
+        return envelope.clone();
+    };
+    if thread_index.is_terminal(message_id) {
+        return envelope.clone();
+    }
+
+    let mut historical = envelope.clone();
+    historical.read = true;
+    historical.pending_ack_at = None;
+    historical
+}
+
+fn hidden_from_normal_views(envelope: &MessageEnvelope) -> bool {
+    let now = IsoTimestamp::now();
+    is_expired_ephemeral(envelope, now) || (is_ephemeral(envelope) && envelope.read)
+}
+
+fn hidden_for_selection(envelope: &MessageEnvelope, selection_mode: ReadSelection) -> bool {
+    let now = IsoTimestamp::now();
+    if is_expired_ephemeral(envelope, now) {
+        return true;
+    }
+    selection_mode != ReadSelection::All && is_ephemeral(envelope) && envelope.read
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -713,10 +772,14 @@ mod tests {
     use serde_json::Map;
     use tempfile::tempdir;
 
-    use super::{ReadQuery, idle_notification_sender, selected_after_filters};
+    use super::{
+        ReadQuery, idle_notification_sender, selected_after_filters,
+        selection_state_for_source_files,
+    };
+    use crate::mailbox::source::SourceFile;
     use crate::mailbox::source::SourcedMessage;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::schema::{LegacyMessageId, MessageEnvelope};
+    use crate::schema::{LegacyMessageId, MessageEnvelope, ThreadMode};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{
         AckActivationMode, AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
@@ -726,22 +789,35 @@ mod tests {
 
     fn sourced_message(index: usize, text: &str) -> SourcedMessage {
         SourcedMessage {
-            envelope: MessageEnvelope {
-                from: ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent"),
-                text: text.to_string(),
-                timestamp: IsoTimestamp::now(),
-                read: false,
-                source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
-                summary: None,
-                message_id: Some(LegacyMessageId::new()),
-                pending_ack_at: None,
-                acknowledged_at: None,
-                acknowledges_message_id: None,
-                task_id: None,
-                extra: Map::new(),
-            },
+            envelope: message(text, LegacyMessageId::new(), None, None, false),
             source_path: PathBuf::from(format!("{TEST_SENDER}.json")),
             source_index: index.into(),
+        }
+    }
+
+    fn message(
+        text: &str,
+        message_id: LegacyMessageId,
+        parent_message_id: Option<LegacyMessageId>,
+        thread_mode: Option<ThreadMode>,
+        read: bool,
+    ) -> MessageEnvelope {
+        MessageEnvelope {
+            from: ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent"),
+            text: text.to_string(),
+            timestamp: IsoTimestamp::now(),
+            read,
+            source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+            summary: None,
+            message_id: Some(message_id),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id,
+            thread_mode,
+            stale_at: None,
+            task_id: None,
+            extra: Map::new(),
         }
     }
 
@@ -848,5 +924,90 @@ mod tests {
         .expect_err("invalid actor");
 
         assert!(error.message.contains("agent name"));
+    }
+
+    #[test]
+    fn actionable_selection_prefers_terminal_thread_message() {
+        let root_id = LegacyMessageId::new();
+        let terminal_id = LegacyMessageId::new();
+        let source_files = vec![SourceFile {
+            path: PathBuf::from("recipient.json"),
+            messages: vec![
+                message("root", root_id, None, None, false),
+                message(
+                    "detail",
+                    terminal_id,
+                    Some(root_id),
+                    Some(ThreadMode::AddDetails),
+                    false,
+                ),
+            ],
+        }];
+        let query = ReadQuery {
+            home_dir: PathBuf::new(),
+            current_dir: PathBuf::new(),
+            actor_override: None,
+            target_address: None,
+            team_override: None,
+            selection_mode: ReadSelection::Actionable,
+            seen_state_filter: false,
+            seen_state_update: false,
+            ack_activation_mode: AckActivationMode::ReadOnly,
+            limit: None,
+            sender_filter: None,
+            timestamp_filter: None,
+            timeout_secs: None,
+        };
+
+        let (_counts, selected) = selection_state_for_source_files(
+            &source_files,
+            &workflow::WorkflowStateFile::default(),
+            &query,
+            None,
+        );
+
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].envelope.message_id, Some(terminal_id));
+    }
+
+    #[test]
+    fn read_ephemeral_message_is_hidden_outside_view_all() {
+        let message_id = LegacyMessageId::new();
+        let stale_at =
+            IsoTimestamp::from_datetime(chrono::Utc::now() + chrono::Duration::minutes(30));
+        let messages = vec![SourcedMessage {
+            envelope: MessageEnvelope {
+                stale_at: Some(stale_at),
+                ..message("ephemeral", message_id, None, None, true)
+            },
+            source_path: PathBuf::from("recipient.json"),
+            source_index: 0.into(),
+        }];
+        let workflow_state = workflow::WorkflowStateFile::default();
+        let actionable = ReadQuery {
+            home_dir: PathBuf::new(),
+            current_dir: PathBuf::new(),
+            actor_override: None,
+            target_address: None,
+            team_override: None,
+            selection_mode: ReadSelection::Actionable,
+            seen_state_filter: false,
+            seen_state_update: false,
+            ack_activation_mode: AckActivationMode::ReadOnly,
+            limit: None,
+            sender_filter: None,
+            timestamp_filter: None,
+            timeout_secs: None,
+        };
+        let all = ReadQuery {
+            selection_mode: ReadSelection::All,
+            ..actionable.clone()
+        };
+
+        assert!(selected_after_filters(&messages, &workflow_state, &actionable, None).is_empty());
+        assert_eq!(
+            selected_after_filters(&messages, &workflow_state, &all, None).len(),
+            1
+        );
     }
 }

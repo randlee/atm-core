@@ -2602,6 +2602,13 @@ Acceptance:
   the shared database
 - `atm-rusqlite` is the only crate that owns direct SQLite calls in the first
   implementation line
+- message update/correction threads are strict one-successor chains whose
+  terminal node is the effective current message
+- thread acknowledgement is chain-level: one ack clears the current terminal
+  chain, and a later successor on an ack-required chain reopens that pending
+  state
+- ephemeral retention is time-based only through `staleAt`; read state affects
+  visibility but not deletion timing
 - core logic is reachable without daemon process spawning
 - no ATM-owned writes or hidden CLI/runtime fallbacks may bypass the owning
   daemon/store boundaries; direct read-only SQLite consumers remain allowed

@@ -16,6 +16,7 @@ use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
 use crate::send::{PostSendHookContext, ResolvedRecipient, input, summary};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
+use crate::threading::ThreadIndex;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use crate::workflow;
 
@@ -153,6 +154,7 @@ fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         &actor,
         &team,
     )?;
+    reject_non_terminal_ack(&source_files, &source_workflow_state, request.message_id)?;
 
     match (
         state::derive_read_state(&source_message.envelope),
@@ -211,6 +213,9 @@ fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         pending_ack_at: None,
         acknowledged_at: None,
         acknowledges_message_id: Some(request.message_id),
+        parent_message_id: None,
+        thread_mode: None,
+        stale_at: None,
         task_id: None,
         extra: reply_extra,
     };
@@ -247,6 +252,7 @@ fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
                 &actor,
                 &team,
             )?;
+            reject_non_terminal_ack(source_files, &source_workflow_state, request.message_id)?;
             match (
                 state::derive_read_state(&source_message.envelope),
                 state::derive_ack_state(&source_message.envelope),
@@ -384,15 +390,32 @@ fn resolve_reply_target(
 }
 
 fn canonical_sender_identity(message: &MessageEnvelope) -> Option<AgentName> {
-    message
-        .extra
-        .get("metadata")
-        .and_then(serde_json::Value::as_object)
-        .and_then(|metadata| metadata.get("atm"))
-        .and_then(serde_json::Value::as_object)
-        .and_then(|atm| atm.get("fromIdentity"))
-        .cloned()
-        .and_then(|value| serde_json::from_value(value).ok())
+    Some(crate::threading::canonical_sender_identity(message))
+}
+
+fn reject_non_terminal_ack(
+    source_files: &[SourceFile],
+    workflow_state: &workflow::WorkflowStateFile,
+    message_id: LegacyMessageId,
+) -> Result<(), AtmError> {
+    let envelopes = merged_surface(source_files, workflow_state)
+        .into_iter()
+        .map(|message| message.envelope)
+        .collect::<Vec<_>>();
+    let index = ThreadIndex::new(&envelopes);
+    let Some(terminal_id) = index.terminal_id(message_id) else {
+        return Ok(());
+    };
+    if terminal_id == message_id {
+        return Ok(());
+    }
+    Err(AtmError::validation(format!(
+        "message {} has been updated; acknowledge the current terminal message {} instead",
+        message_id, terminal_id
+    ))
+    .with_recovery(
+        "Refresh the mailbox with `atm read` and acknowledge the latest message in the thread instead of an older parent message.",
+    ))
 }
 
 fn merged_surface(
@@ -521,13 +544,17 @@ fn append_reply_message(
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use serde_json::json;
 
-    use super::{canonical_sender_identity, resolve_reply_target};
+    use super::{canonical_sender_identity, reject_non_terminal_ack, resolve_reply_target};
+    use crate::mailbox::source::SourceFile;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::schema::MessageEnvelope;
+    use crate::schema::{LegacyMessageId, MessageEnvelope, ThreadMode};
     use crate::test_support::TEST_TEAM;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
+    use crate::workflow;
 
     fn message_with_from(from: &str) -> MessageEnvelope {
         MessageEnvelope {
@@ -541,6 +568,33 @@ mod tests {
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            stale_at: None,
+            task_id: None,
+            extra: serde_json::Map::new(),
+        }
+    }
+
+    fn thread_message(
+        message_id: LegacyMessageId,
+        parent_message_id: Option<LegacyMessageId>,
+        thread_mode: Option<ThreadMode>,
+    ) -> MessageEnvelope {
+        MessageEnvelope {
+            from: ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent"),
+            text: "hello".to_string(),
+            timestamp: IsoTimestamp::now(),
+            read: true,
+            source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+            summary: None,
+            message_id: Some(message_id),
+            pending_ack_at: Some(IsoTimestamp::now()),
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id,
+            thread_mode,
+            stale_at: None,
             task_id: None,
             extra: serde_json::Map::new(),
         }
@@ -578,5 +632,30 @@ mod tests {
                 TEST_TEAM.parse().expect("team"),
             )
         );
+    }
+
+    #[test]
+    fn reject_non_terminal_ack_requires_latest_thread_message() {
+        let root_id = LegacyMessageId::new();
+        let source_files = vec![SourceFile {
+            path: PathBuf::from("recipient.json"),
+            messages: vec![
+                thread_message(root_id, None, None),
+                thread_message(
+                    LegacyMessageId::new(),
+                    Some(root_id),
+                    Some(ThreadMode::Supersede),
+                ),
+            ],
+        }];
+
+        let error = reject_non_terminal_ack(
+            &source_files,
+            &workflow::WorkflowStateFile::default(),
+            root_id,
+        )
+        .expect_err("stale parent ack");
+
+        assert!(error.message.contains("current terminal message"));
     }
 }

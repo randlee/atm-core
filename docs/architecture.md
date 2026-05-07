@@ -596,10 +596,24 @@ Current persisted inbox superset may contain:
   - `pendingAckAt`
   - `acknowledgedAt`
   - `acknowledgesMessageId`
+  - `parentMessageId`
+  - `threadMode`
+  - `staleAt`
 - shared/de facto interpreted fields such as:
   - `taskId`
 - forward metadata container:
   - `metadata`
+- ATM-owned forward metadata keys under `metadata.atm` such as:
+  - `messageId`
+  - `sourceTeam`
+  - `fromIdentity`
+  - `pendingAckAt`
+  - `acknowledgedAt`
+  - `acknowledgesMessageId`
+  - `parentMessageId`
+  - `threadMode`
+  - `staleAt`
+  - `taskId`
 - unknown fields
 
 Schema ownership split:
@@ -914,6 +928,8 @@ Phase R continuation rules:
 - `atm ack` emits exactly one visible reply and that reply must hardcode
   `requires_ack = false`
 - acknowledgement replies must never request acknowledgement themselves
+- compatibility/export surfaces encode successor metadata with
+  `parentMessageId` and `threadMode`, and ephemeral expiry with `staleAt`
 - message update chains are linear and terminal-node driven:
   - `add-details` appends context
   - `supersede` replaces the prior message as the effective current one

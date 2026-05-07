@@ -38,6 +38,9 @@ Purpose:
 Notes:
 - This record exists so the assembly seam remains review-visible even though it
   is not a public cross-crate trait.
+- The production assembly path must resolve the host-scoped durable root via
+  one crate-owned default entry point rather than by leaking path ownership to
+  callers.
 
 ## SharedDbStateRoot
 
@@ -52,6 +55,8 @@ Notes:
 - This record exists so the host-scoped durable-state root and transaction
   policy are enforced as a private boundary surface rather than informal crate
   internals.
+- The owned production path resolves to `~/.atm/db/mail.db` and must not be
+  derived from `ATM_HOME` or test-only compatibility state roots.
 
 ## SqliteMailStoreAdapter
 

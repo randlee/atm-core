@@ -100,9 +100,16 @@ Required rules:
 - `MailStore`, `TaskStore`, and `RosterStore` may share one internal SQLite
   root object, but they must not collapse into one public god-interface
 - routine SQLite failures must return typed errors, not panic/unwrap
+- constraint failures must map to validation-class ATM errors rather than
+  generic store write failures
+- busy/locked failures must map to lock-timeout/busy-class ATM errors
+- open/create/read-only failures must map to mailbox-write/store-write-class
+  ATM errors rather than validation
 - conformance tests should validate behavior through the `atm-core` store
   traits rather than by depending on internal SQLite details
 - most SQLite tests should use dedicated in-memory fixtures with explicit
   setup/cleanup
 - only a small deliberate suite may use on-disk temporary databases for
   reopen, migration, and filesystem-behavior verification
+- tests must never use or mutate the production durable root under
+  `~/.atm/db/mail.db`

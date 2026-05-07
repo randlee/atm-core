@@ -7,6 +7,7 @@ mod roster_store;
 
 use atm_core::boundary;
 use atm_core::error::AtmError;
+use atm_core::home;
 use atm_core::types::{IsoTimestamp, TeamName};
 use rusqlite::{Connection, Error as RusqliteError, OptionalExtension, params};
 use std::path::{Path, PathBuf};
@@ -71,16 +72,25 @@ struct SharedDb {
 }
 
 impl SharedDb {
+    fn production_path() -> Result<PathBuf, AtmError> {
+        home::host_mail_db_path()
+    }
+
+    #[cfg(test)]
+    fn production_path_from_home(home_dir: &Path) -> PathBuf {
+        home::host_mail_db_path_from_home(home_dir)
+    }
+
     fn open(path: impl AsRef<Path>) -> Result<Self, AtmError> {
         let path = path.as_ref().to_path_buf();
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|error| {
-                AtmError::validation(format!(
+                AtmError::mailbox_write(format!(
                     "failed to create sqlite parent directory {}: {error}",
                     parent.display()
                 ))
                 .with_recovery(
-                    "Check the sqlite database directory permissions or choose a different Phase R state path.",
+                    "Check the sqlite database directory permissions or choose a different ATM durable-state root before retrying.",
                 )
                 .with_source(error)
             })?;
@@ -134,9 +144,31 @@ impl SharedDb {
 }
 
 fn sqlite_error(message: impl Into<String>, source: RusqliteError) -> AtmError {
-    AtmError::validation(message)
-        .with_recovery("Retry the SQLite-backed boundary operation after the lock is released.")
-        .with_source(source)
+    let message = message.into();
+    let error = match &source {
+        RusqliteError::SqliteFailure(error, _) => match error.code {
+            rusqlite::ffi::ErrorCode::ConstraintViolation => AtmError::validation(message)
+                .with_recovery(
+                    "Correct the conflicting ATM message/thread/store input so it satisfies the SQLite-backed durability constraints, then retry.",
+                ),
+            rusqlite::ffi::ErrorCode::DatabaseBusy
+            | rusqlite::ffi::ErrorCode::DatabaseLocked => {
+                AtmError::mailbox_lock_timeout(Path::new("sqlite busy database"))
+            }
+            rusqlite::ffi::ErrorCode::CannotOpen | rusqlite::ffi::ErrorCode::ReadOnly => {
+                AtmError::mailbox_write(message).with_recovery(
+                    "Check the SQLite durable-state path, filesystem permissions, and available disk space before retrying.",
+                )
+            }
+            _ => AtmError::mailbox_write(message).with_recovery(
+                "Inspect the SQLite durable-state store for corruption or permission faults before retrying.",
+            ),
+        },
+        _ => AtmError::mailbox_write(message).with_recovery(
+            "Inspect the SQLite durable-state store for corruption or permission faults before retrying.",
+        ),
+    };
+    error.with_source(source)
 }
 
 fn json_error(message: impl Into<String>, source: serde_json::Error) -> AtmError {
@@ -187,6 +219,10 @@ impl SqliteBoundaryAssembly {
         })
     }
 
+    pub(crate) fn default_production() -> Result<Self, AtmError> {
+        Self::new(SharedDb::production_path()?)
+    }
+
     pub(crate) fn mail_store(&self) -> &dyn boundary::MailStore {
         self.mail_store.as_ref()
     }
@@ -204,6 +240,10 @@ pub(crate) fn assemble_boundary(
     path: impl AsRef<Path>,
 ) -> Result<SqliteBoundaryAssembly, AtmError> {
     SqliteBoundaryAssembly::new(path)
+}
+
+pub(crate) fn assemble_default_boundary() -> Result<SqliteBoundaryAssembly, AtmError> {
+    SqliteBoundaryAssembly::default_production()
 }
 
 #[derive(Debug)]
@@ -926,9 +966,63 @@ mod tests {
             pending_ack_at: Some(IsoTimestamp::now()),
             acknowledged_at: None,
             acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            stale_at: None,
             task_id: Some(task_id()),
             extra: serde_json::Map::new(),
         }
+    }
+
+    #[test]
+    fn default_production_path_is_host_scoped_mail_db() {
+        let tempdir = TempDir::new().expect("tempdir");
+        assert_eq!(
+            SharedDb::production_path_from_home(tempdir.path()),
+            tempdir.path().join(".atm").join("db").join("mail.db")
+        );
+    }
+
+    #[test]
+    fn sqlite_error_maps_constraint_busy_and_open_failures() {
+        use atm_core::error_codes::AtmErrorCode;
+        use rusqlite::ffi::{Error, ErrorCode};
+
+        let constraint = sqlite_error(
+            "constraint failed",
+            RusqliteError::SqliteFailure(
+                Error {
+                    code: ErrorCode::ConstraintViolation,
+                    extended_code: 0,
+                },
+                None,
+            ),
+        );
+        assert_eq!(constraint.code, AtmErrorCode::MessageValidationFailed);
+
+        let busy = sqlite_error(
+            "database busy",
+            RusqliteError::SqliteFailure(
+                Error {
+                    code: ErrorCode::DatabaseBusy,
+                    extended_code: 0,
+                },
+                None,
+            ),
+        );
+        assert_eq!(busy.code, AtmErrorCode::MailboxLockTimeout);
+
+        let open = sqlite_error(
+            "open failed",
+            RusqliteError::SqliteFailure(
+                Error {
+                    code: ErrorCode::CannotOpen,
+                    extended_code: 0,
+                },
+                None,
+            ),
+        );
+        assert_eq!(open.code, AtmErrorCode::MailboxWriteFailed);
     }
 
     #[test]
