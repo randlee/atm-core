@@ -21,6 +21,9 @@ Cargo.toml.ci
 .sc/sessions/
 .sc-compose/logs/
 
+# QA triage tracking (local only — not committed)
+.triage/
+
 # RustRover
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
