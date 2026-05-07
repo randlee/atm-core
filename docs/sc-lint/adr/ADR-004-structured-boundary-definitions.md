@@ -26,6 +26,21 @@ The tool needs one machine-authoritative source for:
 - planning metadata for missing documented items
 - deterministic warning-to-error escalation rules
 
+## Decision Drivers
+
+- boundary definitions must be machine-authoritative and easy to validate
+- inventory-parity enforcement must produce deterministic warn/error outcomes
+- planned future-sprint gaps must stay visible without turning into indefinite
+  suppressions
+- the format must remain neutral enough for future `sc-lint` extraction into a
+  standalone repository
+
+## Options Considered
+
+1. Keep Markdown-embedded records as the canonical source.
+2. Move canonical boundary definitions to standalone TOML and keep Markdown as
+   the human-facing explanation layer.
+
 ## Decision
 
 `sc-lint` adopts the following model:
@@ -58,13 +73,12 @@ The tool needs one machine-authoritative source for:
 - consumer repositories must maintain a structured `boundaries/planning.toml`
   file once inventory-parity enforcement begins
 
-## Required Follow-Up
+## Follow-Up
 
-- keep duplicate-source equivalence mode test-only and disabled in normal lint
-  runs and CI
-- implement `SCB-INVENTORY-001`, `SCB-INVENTORY-002`, and
-  `SCB-INVENTORY-003` against TOML-backed boundary data
-- make `[planning].current_sprint` in `boundaries/planning.toml` the
-  authoritative current-sprint source for warn/error escalation
+| Action | Owner | Gate |
+|---|---|---|
+| Keep duplicate-source equivalence mode test-only and disabled in normal lint runs and CI. | sc-lint implementation owner | Before enabling dual-loader support in normal developer lint runs |
+| Implement `SCB-INVENTORY-001`, `SCB-INVENTORY-002`, and `SCB-INVENTORY-003` against TOML-backed boundary data. | sc-lint implementation owner | Before inventory-parity enforcement enters CI |
+| Make `[planning].current_sprint` in `boundaries/planning.toml` the authoritative current-sprint source for warn/error escalation. | consumer repository owner | Before planned-gap warnings are permitted in normal lint runs |
 
 *ADR-004 | sc-lint | 2026-05-07*

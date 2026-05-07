@@ -35,6 +35,7 @@ homepage = "https://example.invalid/repo"
 LINT_CONFIG = """\
 [boundaries]
 doc_glob = "docs/*/boundaries.md"
+toml_glob = "boundaries/*/*.toml"
 
 [[boundaries.global_dependency_ownership]]
 dependency = "rusqlite"
@@ -140,6 +141,55 @@ status:
   state: planned
   notes: []
 ```
+"""
+
+BASE_BOUNDARY_TOML = """\
+boundary_id = "BOUNDARY-MailStore-Sqlite"
+owner_package = "atm-rusqlite"
+owner_crate_path = "atm_rusqlite"
+name = "SqliteMailStoreAdapter"
+
+[public]
+trait = "MailStore"
+
+[implementation]
+type = "SqliteMailStore"
+module = "atm_rusqlite::mail_store"
+visibility = "private"
+constructor = "private"
+
+[composition]
+roots = ["atm_daemon::bootstrap"]
+
+[ownership]
+io_owns = ["sqlite"]
+io_forbidden = ["socket_io"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon"]
+allowed_dependencies = ["atm-core", "rusqlite"]
+forbidden_edges = ["atm -> atm-rusqlite", "atm-graft -> atm-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["SqliteMailStore", "SqliteMailStore::open", "rusqlite::Connection"]
+
+[contracts]
+request_types = ["MailStore inputs"]
+response_types = ["MailStore outputs"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = ["atm_core::test_support::InMemoryMailStore"]
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-MAILSTORE-SQLITE-EDGES"]
+review_gates = ["no_public_impl"]
+
+[status]
+state = "planned"
+notes = []
 """
 
 
@@ -301,6 +351,11 @@ atm-daemon = { path = "../atm-daemon", version = "1.1.2" }
     def write_doc(self, repo_root: Path, crate_name: str, text: str = BASE_BOUNDARY_DOC) -> None:
         (repo_root / "docs" / crate_name / "boundaries.md").write_text(text, encoding="utf-8")
 
+    def write_toml_record(self, repo_root: Path, owner_package: str, file_name: str = "mail-store.toml", text: str = BASE_BOUNDARY_TOML) -> None:
+        target = repo_root / "boundaries" / owner_package
+        target.mkdir(parents=True, exist_ok=True)
+        (target / file_name).write_text(text, encoding="utf-8")
+
     def test_parse_simple_yaml_document_reads_nested_lists(self) -> None:
         document = textwrap.dedent(
             """\
@@ -330,6 +385,58 @@ atm-daemon = { path = "../atm-daemon", version = "1.1.2" }
             self.assertEqual(records[0].boundary_id, "BOUNDARY-MailStore-Sqlite")
             self.assertFalse(records[0].is_active)
 
+    def test_parse_boundary_records_accepts_toml_schema(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_toml_record(repo_root, "atm-rusqlite")
+
+            records, violations = parse_boundary_records(repo_root)
+            self.assertEqual(violations, [])
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0].boundary_id, "BOUNDARY-MailStore-Sqlite")
+            self.assertEqual(records[0].source_path.as_posix(), "boundaries/atm-rusqlite/mail-store.toml")
+            self.assertFalse(records[0].is_active)
+
+    def test_parse_boundary_records_markdown_and_toml_have_parity(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_doc(repo_root, "atm-rusqlite")
+
+            markdown_records, markdown_violations = parse_boundary_records(repo_root)
+            self.assertEqual(markdown_violations, [])
+
+            (repo_root / "docs" / "atm-rusqlite" / "boundaries.md").unlink()
+            self.write_toml_record(repo_root, "atm-rusqlite")
+
+            toml_records, toml_violations = parse_boundary_records(repo_root)
+            self.assertEqual(toml_violations, [])
+
+            self.assertEqual(len(markdown_records), 1)
+            self.assertEqual(len(toml_records), 1)
+            markdown_record = markdown_records[0]
+            toml_record = toml_records[0]
+            self.assertEqual(markdown_record.boundary_id, toml_record.boundary_id)
+            self.assertEqual(markdown_record.owner_package, toml_record.owner_package)
+            self.assertEqual(markdown_record.owner_crate_path, toml_record.owner_crate_path)
+            self.assertEqual(markdown_record.name, toml_record.name)
+            self.assertEqual(markdown_record.public_trait, toml_record.public_trait)
+            self.assertEqual(markdown_record.implementation_type, toml_record.implementation_type)
+            self.assertEqual(markdown_record.implementation_module, toml_record.implementation_module)
+            self.assertEqual(markdown_record.composition_roots, toml_record.composition_roots)
+            self.assertEqual(markdown_record.allowed_dependents, toml_record.allowed_dependents)
+            self.assertEqual(markdown_record.allowed_dependencies, toml_record.allowed_dependencies)
+            self.assertEqual(markdown_record.forbidden_edges, toml_record.forbidden_edges)
+            self.assertEqual(markdown_record.forbidden_references, toml_record.forbidden_references)
+            self.assertEqual(markdown_record.allowed_test_double_paths, toml_record.allowed_test_double_paths)
+            self.assertEqual(markdown_record.forbidden_test_bypasses, toml_record.forbidden_test_bypasses)
+            self.assertEqual(markdown_record.lint_rules, toml_record.lint_rules)
+            self.assertEqual(markdown_record.review_gates, toml_record.review_gates)
+            self.assertEqual(markdown_record.status_state, toml_record.status_state)
+
     def test_boundary_doc_section_lines_reports_per_doc_counts(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
@@ -352,6 +459,30 @@ atm-daemon = { path = "../atm-daemon", version = "1.1.2" }
             self.assertIn("boundary docs analyzed:", joined)
             self.assertIn("docs/atm-core/boundaries.md", joined)
             self.assertIn("docs/atm-rusqlite/boundaries.md", joined)
+            self.assertIn("boundary doc count: 2", joined)
+            self.assertIn("boundary records validated: 2", joined)
+
+    def test_boundary_doc_section_lines_reports_toml_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_doc(repo_root, "atm-core", BASE_BOUNDARY_DOC.replace("owner_package: atm-rusqlite", "owner_package: atm-core").replace(
+                "owner_crate_path: atm_rusqlite", "owner_crate_path: atm_core"
+            ))
+            self.write_toml_record(
+                repo_root,
+                "atm-rusqlite",
+                text=BASE_BOUNDARY_TOML,
+            )
+
+            records, violations = parse_boundary_records(repo_root)
+            self.assertEqual(violations, [])
+
+            lines = boundary_doc_section_lines(repo_root, records)
+            joined = "\n".join(lines)
+            self.assertIn("docs/atm-core/boundaries.md", joined)
+            self.assertIn("boundaries/atm-rusqlite/mail-store.toml", joined)
             self.assertIn("boundary doc count: 2", joined)
             self.assertIn("boundary records validated: 2", joined)
 
@@ -396,6 +527,17 @@ atm-daemon = { path = "../atm-daemon", version = "1.1.2" }
             rendered = [violation.render() for violation in violations]
             self.assertTrue(any("document path owner mismatch" in item for item in rendered), rendered)
 
+    def test_parse_boundary_records_flags_toml_owner_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_toml_record(repo_root, "atm", text=BASE_BOUNDARY_TOML)
+
+            _records, violations = parse_boundary_records(repo_root)
+            rendered = [violation.render() for violation in violations]
+            self.assertTrue(any("document path owner mismatch: boundaries/atm/mail-store.toml" in item for item in rendered), rendered)
+
     def test_collect_boundary_violations_accepts_allowed_layout(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
@@ -413,6 +555,17 @@ atm-daemon = { path = "../atm-daemon", version = "1.1.2" }
             self.write_manifests(repo_root)
             self.write_doc(repo_root, "atm-rusqlite")
             self.write_doc(repo_root, "atm-daemon", BASE_BOUNDARY_DOC.replace("owner_package: atm-rusqlite", "owner_package: atm-daemon").replace("owner_crate_path: atm_rusqlite", "owner_crate_path: atm_daemon"))
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertTrue(any("duplicate boundary_id" in item for item in rendered), rendered)
+
+    def test_collect_boundary_violations_flags_duplicate_boundary_ids_across_markdown_and_toml(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_toml_record(repo_root, "atm-rusqlite")
 
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
             self.assertTrue(any("duplicate boundary_id" in item for item in rendered), rendered)

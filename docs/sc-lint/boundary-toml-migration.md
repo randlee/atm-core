@@ -85,7 +85,7 @@ Default dual-loader rule:
 ### For new work
 
 Once TOML loading exists, all new boundary-lint features should be implemented
-against TOML-backed data only.
+against TOML-backed data first.
 
 That includes:
 
@@ -167,6 +167,9 @@ Recommended approach:
 - keep the existing internal boundary record struct/model
 - deserialize TOML into that existing model
 - only add schema changes where TOML materially improves the representation
+- for contract-owner records with `implementation.visibility = "trait_only"`,
+  absent `implementation.type` and `implementation.module` must be interpreted
+  as null rather than represented as empty-string sentinels
 
 Additional recommendation:
 
@@ -255,26 +258,3 @@ completes:
   later moves closer to per-boundary files
 - whether later schema evolution needs a dedicated schema-version field inside
   each boundary TOML record
-
-## Relation To Enforcement Planning
-
-The next planned boundary-enforcement feature set depends on this migration:
-
-- inventory-parity warn/error enforcement
-- structured future-sprint mappings for planned-but-missing items
-- TOML-first boundary additions for future scan checks
-
-That means the migration is not just a format cleanup. It creates the correct
-data model for the next enforcement stage.
-
-## Recommendation
-
-Proceed with a dual-loader migration, but treat TOML as the future canonical
-format immediately once support lands.
-
-That gives:
-
-- low migration risk
-- no forced flag day
-- a clean place to add future boundary features
-- a better format for eventual `sc-lint` repo extraction

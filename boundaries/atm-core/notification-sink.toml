@@ -1,0 +1,44 @@
+boundary_id = "BOUNDARY-NotificationSink"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "NotificationSink"
+
+[public]
+trait = "NotificationSink"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["outbound_notification_delivery"]
+io_forbidden = ["sqlite", "socket_io"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["std::process::Command", "maybe_run_post_send_hook"]
+
+[contracts]
+request_types = ["notification payload requests"]
+response_types = ["notification delivery results"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["std::process::Command"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-NOTIFICATION-SINK-REFERENCES"]
+review_gates = ["no_direct_process_spawn"]
+
+[status]
+state = "stub_landed"
+notes = ["callable notification trait and named event DTOs landed in atm_core::boundary", "a thin extension crate should never need to reach into process-spawn internals"]

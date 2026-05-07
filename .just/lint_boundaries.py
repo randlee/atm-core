@@ -215,6 +215,16 @@ def boundary_docs(repo_root: Path) -> list[Path]:
     return sorted(repo_root.glob(doc_glob))
 
 
+def boundary_toml_files(repo_root: Path) -> list[Path]:
+    config = boundary_config(repo_root)
+    toml_glob = config.get("toml_glob")
+    if toml_glob is None:
+        return []
+    if not isinstance(toml_glob, str) or not toml_glob.strip():
+        raise SystemExit("[boundaries].toml_glob must be a non-empty string when provided")
+    return sorted(repo_root.glob(toml_glob))
+
+
 def dependency_ownership_rules(repo_root: Path) -> list[DependencyOwnershipRule]:
     config = boundary_config(repo_root)
     raw_rules = config.get("global_dependency_ownership", [])
@@ -693,10 +703,20 @@ def build_boundary_record(
             if left_alias == right_alias:
                 errors.append(f"invalid dependencies.forbidden_edges self-edge: {edge!r}")
 
-    if owner_package and source_path.parent.name != owner_package:
-        errors.append(
-            f"document path owner mismatch: docs/{source_path.parent.name}/boundaries.md declares owner_package {owner_package!r}"
-        )
+    if owner_package:
+        source_parts = source_path.parts
+        if len(source_parts) >= 3 and source_parts[0] == "docs" and source_parts[-1] == "boundaries.md":
+            doc_owner = source_path.parent.name
+            if doc_owner != owner_package:
+                errors.append(
+                    f"document path owner mismatch: docs/{doc_owner}/boundaries.md declares owner_package {owner_package!r}"
+                )
+        elif len(source_parts) >= 3 and source_parts[0] == "boundaries" and source_path.suffix == ".toml":
+            file_owner = source_parts[1]
+            if file_owner != owner_package:
+                errors.append(
+                    f"document path owner mismatch: boundaries/{file_owner}/{source_path.name} declares owner_package {owner_package!r}"
+                )
 
     if owner_package and composition_roots:
         owner_crate_prefix = owner_crate_path or ""
@@ -771,6 +791,28 @@ def parse_boundary_records(repo_root: Path) -> tuple[list[BoundaryRecord], list[
             violations.extend(record_errors)
             if record is not None:
                 records.append(record)
+    for toml_path in boundary_toml_files(repo_root):
+        rel_toml = toml_path.relative_to(repo_root)
+        try:
+            data = tomllib_load(toml_path)
+        except Exception as error:
+            violations.append(
+                BoundaryViolation(rel_toml.as_posix(), f"invalid boundary TOML: {error}")
+            )
+            continue
+        if not isinstance(data, dict):
+            violations.append(
+                BoundaryViolation(rel_toml.as_posix(), "invalid boundary TOML: top-level document must be a table")
+            )
+            continue
+        record, record_errors = build_boundary_record(
+            data=data,
+            source_path=rel_toml,
+            start_line=1,
+        )
+        violations.extend(record_errors)
+        if record is not None:
+            records.append(record)
     return records, violations
 
 
@@ -1175,6 +1217,14 @@ def boundary_doc_section_lines(repo_root: Path, records: list[BoundaryRecord]) -
     record_counts_by_doc: dict[str, dict[str, int]] = {}
     for doc_path in boundary_docs(repo_root):
         record_counts_by_doc[doc_path.relative_to(repo_root).as_posix()] = {
+            "records": 0,
+            "active": 0,
+            "planned": 0,
+            "deferred": 0,
+            "retired": 0,
+        }
+    for toml_path in boundary_toml_files(repo_root):
+        record_counts_by_doc[toml_path.relative_to(repo_root).as_posix()] = {
             "records": 0,
             "active": 0,
             "planned": 0,

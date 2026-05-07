@@ -29,6 +29,7 @@ max_scoped_code_lines = 0
 
 [boundaries]
 doc_glob = "docs/*/boundaries.md"
+toml_glob = "boundaries/*/*.toml"
 
 [[boundaries.global_dependency_ownership]]
 dependency = "rusqlite"

@@ -162,7 +162,9 @@ tracking_id = "SCB-CHANGE-1234"
 expires_when = "sprint_current_or_past"
 ```
 
-This shape is illustrative, not final.
+This shape is illustrative, not final. The `S.N` notation is only an example;
+quarter-based labels such as `Q.3` or release-phase labels such as `R.7` are
+equally valid if the repository defines a machine-parsable sprint ordering.
 
 The important point is that:
 
@@ -205,7 +207,7 @@ This makes the output useful to:
 - planning reviewers
 - future implementation sprints
 
-Recommended rule families:
+Required rule families:
 
 - `SCB-INVENTORY-001`
   - missing documented item with no valid planning mapping
@@ -258,36 +260,3 @@ At minimum, the implementation should ship with:
 - malformed-planning test:
   - missing sprint
   - missing tracking id
-  - invalid item key
-  - item key that points at no known boundary path
-- malformed-current-sprint-source test
-- sprint-ordering test:
-  - `S.9` vs `S.10`
-  - current sprint vs future sprint
-- duplicate-planning-entry test
-- mixed-boundary test where one record contains pass/warn/error items together
-- dual-loader test where TOML and Markdown coexist without duplicate authority
-- duplicate-source test where the same boundary id appears in both sources and
-  fails
-- equivalence-test-mode test showing duplicate-source migration checks are only
-  legal in explicit migration fixtures, not normal lint mode
-
-## Relationship To TOML Migration
-
-This model should be implemented against TOML-backed boundary data.
-
-The model is possible with Markdown compatibility during transition, but it
-should not be designed around Markdown parsing as the long-term source.
-
-New boundary-enforcement features in this area should be TOML-first.
-
-## Recommendation
-
-Implement the warn/error model as the next boundary-enforcement planning item,
-with these constraints:
-
-- structured mapping only
-- no freeform warning exceptions
-- overdue warnings must escalate automatically
-- implementation should land on TOML-backed boundary data rather than extending
-  Markdown-only parsing further
