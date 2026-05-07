@@ -295,7 +295,7 @@ impl RuntimeStatusCache {
         Ok(build_runtime_snapshot_scoped(&cache, members))
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(crate) fn member_state_for_test(
         &self,
         team: &TeamName,
@@ -314,7 +314,7 @@ impl RuntimeStatusCache {
             .map(|record| record.state))
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(crate) fn hydrate_member_for_test(
         &self,
         team: TeamName,
@@ -324,7 +324,7 @@ impl RuntimeStatusCache {
         self.hydrate_member(team, member, pid)
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(crate) fn insert_member_for_test(
         &self,
         team: TeamName,
@@ -471,7 +471,7 @@ impl DaemonRequestDispatcher {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(crate) fn new_for_test(
         home_dir: PathBuf,
         status_cache: RuntimeStatusCache,

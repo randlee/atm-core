@@ -534,6 +534,7 @@ mod tests {
         assert_eq!(runtime.lifecycle_state(), RuntimeLifecycleState::Stopped);
     }
 
+    #[cfg(unix)]
     #[test]
     fn server_transport_cannot_bootstrap_outside_runtime_composition_start() {
         let tempdir = TempDir::new().expect("tempdir");

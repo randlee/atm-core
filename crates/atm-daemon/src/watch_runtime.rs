@@ -308,6 +308,14 @@ impl WatchRuntime {
     }
 }
 
+impl Drop for WatchRuntime {
+    fn drop(&mut self) {
+        if Arc::strong_count(&self.inner) == 1 {
+            let _ = self.shutdown();
+        }
+    }
+}
+
 fn watch_worker_loop(inner: Arc<WatchRuntimeInner>) {
     loop {
         let refresh_targets = {
