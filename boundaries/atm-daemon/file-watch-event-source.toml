@@ -42,5 +42,5 @@ lint_rules = ["LINT-BOUNDARY-WATCH-EVENT-SOURCE-FILE-EDGES", "LINT-BOUNDARY-WATC
 review_gates = ["no_public_impl", "no_public_constructor", "no_watch_io_outside_boundary"]
 
 [status]
-state = "active"
+state = "stub_landed"
 notes = ["raw watch event capture stays runtime-private", "crate-root daemon adapter delegates through atm_core::boundary_support and is assembled through atm_daemon::composition"]

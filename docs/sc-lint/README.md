@@ -59,6 +59,7 @@ Current scaffold status:
       `boundary.internal_only`
     - owner-graph cycle classification with:
       - `SCB-CYCLE-001` multi-owner architectural cycle
+      - `SCB-CYCLE-002` type/method self-loop
       - `SCB-CYCLE-003` trait-impl self-loop
     - built-in default trait-self-loop policy from:
       - `crates/sc-lint-boundary/config/defaults.toml`

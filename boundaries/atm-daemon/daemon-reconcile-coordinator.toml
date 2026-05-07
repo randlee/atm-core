@@ -42,5 +42,5 @@ lint_rules = ["LINT-BOUNDARY-RECONCILE-COORDINATOR-DAEMON-EDGES", "LINT-BOUNDARY
 review_gates = ["no_public_impl", "no_public_constructor", "no_store_or_transport_bypass_in_reconcile"]
 
 [status]
-state = "active"
+state = "stub_landed"
 notes = ["runtime reconcile remains separate from raw watch source implementation", "crate-root daemon adapter delegates through atm_core::boundary_support and is assembled through atm_daemon::composition"]

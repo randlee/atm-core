@@ -162,7 +162,9 @@ tracking_id = "SCB-CHANGE-1234"
 expires_when = "sprint_current_or_past"
 ```
 
-This shape is illustrative, not final.
+This shape is illustrative, not final. The `S.N` notation is only an example;
+quarter-based labels such as `Q.3` or release-phase labels such as `R.7` are
+equally valid if the repository defines a machine-parsable sprint ordering.
 
 The important point is that:
 
@@ -205,7 +207,7 @@ This makes the output useful to:
 - planning reviewers
 - future implementation sprints
 
-Recommended rule families:
+Required rule families:
 
 - `SCB-INVENTORY-001`
   - missing documented item with no valid planning mapping

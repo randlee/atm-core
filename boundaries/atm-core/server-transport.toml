@@ -18,9 +18,9 @@ io_owns = ["listener_accept_loop", "framed_request_receive", "framed_response_se
 io_forbidden = ["sqlite", "inbox_jsonl", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm-rusqlite", "atm-daemon"]
+allowed_dependents = ["atm-daemon"]
 allowed_dependencies = []
-forbidden_edges = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-rusqlite"]
 
 [references]
 scope = "outside_owner_crate"

@@ -85,7 +85,7 @@ Default dual-loader rule:
 ### For new work
 
 Once TOML loading exists, all new boundary-lint features should be implemented
-against TOML-backed data only.
+against TOML-backed data first.
 
 That includes:
 
@@ -167,6 +167,9 @@ Recommended approach:
 - keep the existing internal boundary record struct/model
 - deserialize TOML into that existing model
 - only add schema changes where TOML materially improves the representation
+- for contract-owner records with `implementation.visibility = "trait_only"`,
+  absent `implementation.type` and `implementation.module` must be interpreted
+  as null rather than represented as empty-string sentinels
 
 Additional recommendation:
 

@@ -18,9 +18,9 @@ io_owns = ["outbound_notification_delivery"]
 io_forbidden = ["sqlite", "socket_io"]
 
 [dependencies]
-allowed_dependents = ["atm-rusqlite", "atm-daemon"]
+allowed_dependents = ["atm-daemon"]
 allowed_dependencies = []
-forbidden_edges = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-rusqlite"]
 
 [references]
 scope = "outside_owner_crate"
