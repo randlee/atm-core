@@ -18,6 +18,8 @@ even though they are not public cross-crate traits:
     it is not itself a public trait boundary
 - `DaemonShutdownSignals` / `SingletonGuard` in `atm_daemon`
   - own process-lifecycle admission and shutdown mechanics
+  - `DaemonShutdownSignals` installs OS signal hooks only on Unix; non-Unix
+    builds use the no-op terminate-flag fallback in `peer_transport`
   - must remain runtime-private and must not be bypassed by transport or
     business-logic code
 
@@ -80,8 +82,12 @@ Notes:
   `atm_daemon::watch_runtime`.
 - It maintains long-lived watch state behind the boundary and refreshes
   registered subscriptions on a bounded wake interval.
+- The subscription registry is explicitly bounded to 256 keys per daemon
+  process; callers must not assume unbounded watch-state retention.
 - `WatchEventSource::poll(...)` now returns the worker-owned snapshot/error
   state instead of running direct synchronous discovery in the caller.
+- Shutdown is observed between polling iterations; one in-flight synchronous
+  filesystem scan may complete before the watch worker exits.
 - This adapter captures events only; it does not own reconcile policy.
 - Runtime lifecycle ownership stays above this boundary:
   - `start()` and `shutdown()` are composition-root responsibilities

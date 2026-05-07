@@ -12,6 +12,7 @@ use std::time::Duration;
 
 const DEFAULT_RECONCILE_DEBOUNCE: Duration = Duration::from_millis(25);
 const DEFAULT_RECONCILE_COMPLETION_TIMEOUT: Duration = Duration::from_secs(5);
+const MAX_RECONCILE_DEBOUNCE_EXTENSIONS: u32 = 8;
 
 #[derive(Clone)]
 pub(crate) struct ReconcileRuntime {
@@ -38,6 +39,28 @@ struct ReconcileState {
     pending: HashMap<ReconcileKey, PendingReconcile>,
     pending_order: VecDeque<ReconcileKey>,
     completed: HashMap<u64, ReconcileOutcome>,
+}
+
+impl ReconcileState {
+    fn release_waiter(&mut self, waiter_id: u64) {
+        self.completed.remove(&waiter_id);
+        for pending in self.pending.values_mut() {
+            pending.waiters.retain(|candidate| *candidate != waiter_id);
+        }
+        self.pending
+            .retain(|_, pending| !pending.waiters.is_empty());
+        self.pending_order
+            .retain(|key| self.pending.contains_key(key));
+    }
+
+    #[cfg(test)]
+    fn counts(&self) -> (usize, usize, usize) {
+        (
+            self.pending.len(),
+            self.pending_order.len(),
+            self.completed.len(),
+        )
+    }
 }
 
 #[derive(Clone)]
@@ -240,6 +263,7 @@ impl ReconcileRuntime {
                 };
             }
             if state.shutdown {
+                state.release_waiter(waiter_id);
                 return Err(AtmError::daemon_unavailable(
                     "reconcile runtime shut down before completion",
                 ));
@@ -253,6 +277,7 @@ impl ReconcileRuntime {
                 })?;
             state = wait.0;
             if wait.1.timed_out() {
+                state.release_waiter(waiter_id);
                 return Err(AtmError::daemon_unavailable(
                     "reconcile runtime timed out waiting for background completion",
                 ));
@@ -263,6 +288,11 @@ impl ReconcileRuntime {
     #[cfg(test)]
     pub(crate) fn new_for_test(executor: ReconcileExecutor, debounce: Duration) -> Self {
         Self::new_with_executor(executor, debounce)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn state_counts_for_test(&self) -> (usize, usize, usize) {
+        self.inner.state.lock().expect("state lock").counts()
     }
 }
 
@@ -283,6 +313,7 @@ fn reconcile_worker_loop(inner: Arc<ReconcileRuntimeInner>) {
                 return;
             }
             let mut debounce_epoch = state.pending_epoch;
+            let mut debounce_extensions = 0u32;
             loop {
                 let wait = match inner.wake.wait_timeout(state, inner.debounce) {
                     Ok(wait) => wait,
@@ -294,6 +325,10 @@ fn reconcile_worker_loop(inner: Arc<ReconcileRuntimeInner>) {
                 }
                 if state.pending_epoch != debounce_epoch {
                     debounce_epoch = state.pending_epoch;
+                    debounce_extensions = debounce_extensions.saturating_add(1);
+                    if debounce_extensions >= MAX_RECONCILE_DEBOUNCE_EXTENSIONS {
+                        break;
+                    }
                     continue;
                 }
                 if wait.1.timed_out() {
@@ -337,7 +372,7 @@ mod tests {
         ReconcileRequest, WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
     };
     use atm_core::protocol::ReconcileResult;
-    use std::sync::{Arc, Condvar, Mutex, mpsc};
+    use std::sync::{Arc, Barrier, Condvar, Mutex, mpsc};
     use std::time::Duration;
 
     fn request() -> ReconcileRequest {
@@ -359,6 +394,7 @@ mod tests {
     #[test]
     fn reconcile_runtime_coalesces_duplicate_requests() {
         let calls = Arc::new(Mutex::new(0usize));
+        let barrier = Arc::new(Barrier::new(2));
         let runtime = ReconcileRuntime::new_for_test(
             Arc::new({
                 let calls = Arc::clone(&calls);
@@ -378,12 +414,50 @@ mod tests {
         let runtime_b = runtime.clone();
         let request_a = request();
         let request_b = request();
-        let first = std::thread::spawn(move || runtime_a.reconcile(request_a).expect("first"));
-        let second = std::thread::spawn(move || runtime_b.reconcile(request_b).expect("second"));
+        let first = std::thread::spawn({
+            let barrier = Arc::clone(&barrier);
+            move || {
+                barrier.wait();
+                runtime_a.reconcile(request_a).expect("first")
+            }
+        });
+        let second = std::thread::spawn({
+            let barrier = Arc::clone(&barrier);
+            move || {
+                barrier.wait();
+                runtime_b.reconcile(request_b).expect("second")
+            }
+        });
         assert_eq!(first.join().expect("join").observed_paths, 2);
         assert_eq!(second.join().expect("join").imported_sources, 1);
         assert_eq!(*calls.lock().expect("calls"), 1);
         runtime.shutdown().expect("shutdown");
+    }
+
+    #[test]
+    fn reconcile_runtime_cleans_up_pending_waiters_during_shutdown() {
+        let runtime = ReconcileRuntime::new_for_test(
+            Arc::new(|_| {
+                Ok(ReconcileResult {
+                    observed_paths: 1,
+                    imported_sources: 1,
+                })
+            }),
+            Duration::from_millis(250),
+        );
+        runtime.start().expect("start");
+
+        let runtime_for_thread = runtime.clone();
+        let join = std::thread::spawn(move || runtime_for_thread.reconcile(request()));
+        std::thread::sleep(Duration::from_millis(20));
+        runtime.shutdown().expect("shutdown");
+
+        let error = join
+            .join()
+            .expect("join")
+            .expect_err("shutdown interruption");
+        assert!(error.message.contains("shut down before completion"));
+        assert_eq!(runtime.state_counts_for_test(), (0, 0, 0));
     }
 
     #[test]

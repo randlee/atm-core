@@ -122,7 +122,7 @@ impl PeerClientTransport {
     fn new(replay_store: Option<Arc<dyn RemoteReplayStore>>) -> Self {
         let endpoint = std::env::var("ATM_DAEMON_PEER_ADDR")
             .ok()
-            .and_then(|value| value.parse::<SocketAddr>().ok());
+            .and_then(|raw| parse_peer_endpoint(&raw));
         let config = std::env::current_dir()
             .ok()
             .and_then(|current_dir| {
@@ -250,7 +250,7 @@ impl PeerClientTransport {
             team,
             agent,
             message_key,
-            peer_addr: endpoint.to_string(),
+            peer_addr: persisted_peer_addr(endpoint),
             request,
             recorded_at,
             expires_at,
@@ -617,11 +617,35 @@ fn jittered_backoff(base: Duration, seed: u64) -> Duration {
 }
 
 fn jitter_seed(endpoint: SocketAddr, attempt: u32) -> u64 {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos() as u64;
+    let now = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+        Ok(duration) => duration.as_nanos() as u64,
+        Err(error) => {
+            tracing::warn!(
+                %error,
+                "system clock is before the unix epoch; using deterministic jitter fallback"
+            );
+            0
+        }
+    };
     now ^ u64::from(endpoint.port()) ^ (u64::from(attempt) << 32)
+}
+
+fn parse_peer_endpoint(raw: &str) -> Option<SocketAddr> {
+    match raw.parse::<SocketAddr>() {
+        Ok(endpoint) => Some(endpoint),
+        Err(error) => {
+            tracing::warn!(
+                %raw,
+                %error,
+                "ignoring malformed ATM_DAEMON_PEER_ADDR value"
+            );
+            None
+        }
+    }
+}
+
+fn persisted_peer_addr(endpoint: SocketAddr) -> String {
+    endpoint.to_string()
 }
 
 fn read_peer_response(stream: &mut TcpStream) -> Result<Vec<u8>, AtmError> {

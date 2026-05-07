@@ -8,6 +8,8 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 const DEFAULT_WATCH_POLL_INTERVAL: Duration = Duration::from_millis(50);
+const MAX_WATCH_SUBSCRIPTIONS: usize = 256;
+const WATCH_POLL_HEALTH_TIMEOUT_MULTIPLIER: u32 = 5;
 
 #[derive(Clone)]
 pub(crate) struct WatchRuntime {
@@ -239,6 +241,16 @@ impl WatchRuntime {
                 entry.requested_revision
             }
             None => {
+                if state.subscriptions.len() >= MAX_WATCH_SUBSCRIPTIONS {
+                    return Err(
+                        AtmError::daemon_unavailable(format!(
+                            "watch runtime refused a new subscription because the bounded registry capacity of {MAX_WATCH_SUBSCRIPTIONS} entries was reached"
+                        ))
+                        .with_recovery(
+                            "Reduce concurrent watch targets or restart atm-daemon so the bounded watch registry can be rebuilt from active callers.",
+                        ),
+                    );
+                }
                 state.subscriptions.insert(
                     key.clone(),
                     WatchSnapshot {
@@ -267,10 +279,26 @@ impl WatchRuntime {
                     "watch runtime shut down before delivering an updated batch",
                 ));
             }
-            state =
-                self.inner.wake.wait(state).map_err(|_| {
-                    AtmError::daemon_unavailable("watch runtime state lock poisoned")
-                })?;
+            let wait_timeout = self
+                .inner
+                .poll_interval
+                .saturating_mul(WATCH_POLL_HEALTH_TIMEOUT_MULTIPLIER);
+            let wait = self
+                .inner
+                .wake
+                .wait_timeout(state, wait_timeout)
+                .map_err(|_| AtmError::daemon_unavailable("watch runtime state lock poisoned"))?;
+            state = wait.0;
+            if wait.1.timed_out() {
+                return Err(
+                    AtmError::daemon_unavailable(
+                        "watch runtime did not deliver an updated batch before the worker health timeout elapsed",
+                    )
+                    .with_recovery(
+                        "Restart atm-daemon if the watch worker is no longer making progress.",
+                    ),
+                );
+            }
         }
     }
 
@@ -354,7 +382,7 @@ fn watch_worker_loop(inner: Arc<WatchRuntimeInner>) {
 
 #[cfg(test)]
 mod tests {
-    use super::WatchRuntime;
+    use super::{MAX_WATCH_SUBSCRIPTIONS, WatchRuntime};
     use atm_core::boundary::WatchEventBatch;
     use atm_core::boundary::WatchSubscriptionRequest;
     use atm_core::error::AtmError;
@@ -363,10 +391,14 @@ mod tests {
     use std::time::Duration;
 
     fn request() -> WatchSubscriptionRequest {
+        request_for("test-agent")
+    }
+
+    fn request_for(agent: &str) -> WatchSubscriptionRequest {
         WatchSubscriptionRequest {
             home_dir: std::env::temp_dir().join("atm-watch-test"),
             team: "test-team".parse().expect("team"),
-            agent: "test-agent".parse().expect("agent"),
+            agent: agent.parse().expect("agent"),
         }
     }
 
@@ -424,6 +456,46 @@ mod tests {
         *fail.lock().expect("flag") = true;
         let error = runtime.poll(request()).expect_err("degraded");
         assert!(error.message.contains("watch poll failed"));
+        runtime.shutdown().expect("shutdown");
+    }
+
+    #[test]
+    fn watch_runtime_times_out_when_the_worker_stops_making_progress() {
+        let runtime = WatchRuntime::new_for_test(
+            Arc::new(|_| {
+                std::thread::sleep(Duration::from_millis(200));
+                Ok(WatchEventBatch { paths: Vec::new() })
+            }),
+            Duration::from_millis(10),
+        );
+        runtime.start().expect("start");
+
+        let error = runtime.poll(request()).expect_err("health timeout");
+        assert!(error.message.contains("worker health timeout"));
+
+        std::thread::sleep(Duration::from_millis(220));
+        runtime.shutdown().expect("shutdown");
+    }
+
+    #[test]
+    fn watch_runtime_rejects_subscriptions_beyond_the_bounded_capacity() {
+        let runtime = WatchRuntime::new_for_test(
+            Arc::new(|_| Ok(WatchEventBatch { paths: Vec::new() })),
+            Duration::from_millis(10),
+        );
+        runtime.start().expect("start");
+
+        for index in 0..MAX_WATCH_SUBSCRIPTIONS {
+            runtime
+                .poll(request_for(&format!("test-agent-{index}")))
+                .expect("bounded subscription");
+        }
+
+        let error = runtime
+            .poll(request_for("overflow-agent"))
+            .expect_err("capacity overflow");
+        assert!(error.message.contains("bounded registry capacity"));
+
         runtime.shutdown().expect("shutdown");
     }
 }

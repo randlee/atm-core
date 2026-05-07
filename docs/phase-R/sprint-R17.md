@@ -26,7 +26,8 @@ Implementation closeout:
 ## Governing Requirements
 
 - watch/reconcile/notifier requirements in `docs/requirements.md`
-- `REQ-CORE-RUNTIME-001`
+- `REQ-CORE-BOUNDARY-001`
+- `REQ-CORE-RUNTIME-001` in `docs/atm-core/requirements.md`
 
 ## Governing ADRs
 

@@ -201,7 +201,12 @@ impl RuntimeComposition {
         let runtime = match self.server_transport.prepare_runtime() {
             Ok(runtime) => runtime,
             Err(error) => {
-                let _ = self.shutdown_background_lanes();
+                if let Err(shutdown_error) = self.shutdown_background_lanes() {
+                    tracing::warn!(
+                        %shutdown_error,
+                        "daemon background lane shutdown failed during runtime preparation rollback"
+                    );
+                }
                 self.lifecycle.force_stopped()?;
                 return Err(error);
             }
@@ -245,7 +250,12 @@ impl RuntimeComposition {
         {
             Ok(runtime) => runtime,
             Err(error) => {
-                let _ = self.shutdown_background_lanes();
+                if let Err(shutdown_error) = self.shutdown_background_lanes() {
+                    tracing::warn!(
+                        %shutdown_error,
+                        "daemon background lane shutdown failed during test runtime preparation rollback"
+                    );
+                }
                 self.lifecycle.force_stopped()?;
                 return Err(error);
             }
