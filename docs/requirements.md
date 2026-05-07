@@ -85,6 +85,12 @@ Phase-Q supersession note:
 Phase-R redesign note:
 - Phase R hardens the architecture by making crate-local boundary records part
   of the enforceable contract before new implementation work proceeds
+- Phase R planning and CI may depend on `sc-lint` as an external tool
+  dependency; `sc-lint` is not part of the ATM product surface even when its
+  verification model constrains Phase R gates
+- durable ATM state is one host-scoped SQLite database at
+  `~/.atm/db/mail.db`; the daemon is the only writer, while direct read-only
+  SQLite consumers remain an allowed system integration path
 - the thin-client extension surface should center on `send` and `receive`
   over the shared ATM protocol, while the retained CLI may continue to expose
   `ack` as a user-facing workflow
@@ -1108,10 +1114,73 @@ Acknowledge a pending-ack message in the caller's own inbox and send a visible r
   - set `acknowledgedAt`
   - append a reply message to the original sender's inbox
 - preserve `acknowledgesMessageId` on the emitted reply
+- hardcode `requires_ack = false` on the emitted reply
+- do not allow an acknowledgement reply to request acknowledgement itself
 - reject duplicate acknowledgement of an already acknowledged message
 - run matching `[[atm.post_send_hooks]]` rules after a successful ack, using the reply message as the hook subject
 
-### 8.4 Output Contract
+Phase R continuation semantics:
+- one successful acknowledgement clears the chain-level acknowledgement
+  obligation for the current terminal message and all of its ancestors
+- if a later update arrives on an already acknowledged ack-required chain, the
+  chain becomes pending again until the new terminal message is acknowledged
+
+### 8.4 Successor Chains And Ephemeral Retention
+
+- `REQ-P-THREAD-001` ATM message update chains must be strictly linear.
+
+  Required behavior:
+  - each message may have at most one direct successor
+  - each successor references exactly one predecessor
+  - no branching successor graph is permitted
+  - the terminal node in the chain is the effective current instruction or
+    state for normal reads
+
+- `REQ-P-THREAD-002` Only the original sender may update a message chain.
+
+  Required behavior:
+  - only the root/original sender may append successors
+  - recipients and third parties must not add `add-details` or `supersede`
+    updates to another sender's chain
+
+- `REQ-P-THREAD-003` ATM supports exactly two successor modes for non-ephemeral
+  chains:
+  - `add-details`
+  - `supersede`
+
+  Required behavior:
+  - `add-details` appends missing context while preserving the prior message as
+    valid historical context
+  - `supersede` replaces the prior message as the effective current
+    instruction
+  - if a successor arrives after the predecessor was already read, the
+    successor still produces a new nudge so the current effective instruction
+    is visible
+
+- `REQ-P-THREAD-004` Ack is a chain-level importance property.
+
+  Required behavior:
+  - a chain is either ack-required or not ack-required
+  - the root/original message establishes that ack class
+  - successors inherit the existing chain ack class and must not flip it
+  - one acknowledgement clears the chain up to the then-current terminal node
+  - if a later successor arrives on an ack-required chain after that
+    acknowledgement, the chain becomes pending again
+  - parent messages must not remain separately actionable for acknowledgement
+    once a successor exists
+
+- `REQ-P-THREAD-005` Ephemeral messages are standalone, time-bounded records.
+
+  Required behavior:
+  - ephemeral messages expire by time only, using `stale_at`
+  - no product behavior may depend on first-read deletion semantics
+  - periodic daemon cleanup deletes expired ephemeral rows
+  - ephemeral messages are not updatable
+  - ephemeral messages may not be parents or children in successor chains
+  - once read, an ephemeral message becomes hidden from normal reads but
+    remains visible through `--view-all` until `stale_at`
+
+### 8.5 Output Contract
 
 JSON output must include:
 - `action = "ack"`
@@ -1390,8 +1459,10 @@ Bare `atm teams` must:
 `atm teams backup` must:
 - create a timestamped snapshot under the ATM team backup area
 - capture the current `config.json`
-- capture the ATM-owned `.atm-state` tree, including SQLite durable state
-  (`mail.db`) and workflow compatibility state when present
+- capture the ATM-owned `.atm-state` tree for workflow compatibility state when
+  present
+- capture the selected team's durable state from the host-scoped SQLite
+  database at `~/.atm/db/mail.db`
 - capture team inbox files, excluding transient `*.lock` sentinels, dotfiles,
   and restore markers
 - capture the ATM team task bucket
@@ -1406,7 +1477,10 @@ Bare `atm teams` must:
 - add only missing non-lead members from the snapshot
 - clear runtime-only restored-member fields such as session, activity, and
   pane state before persisting them
-- restore the ATM-owned `.atm-state` tree from the chosen snapshot when present
+- restore the ATM-owned `.atm-state` workflow compatibility state from the
+  chosen snapshot when present
+- restore the selected team's durable state back into the host-scoped SQLite
+  database from the chosen snapshot
 - restore non-lead inbox files from the chosen snapshot deterministically
 - treat stale inbox `*.lock` sentinels as transitional compatibility
   diagnostics rather than a restore correctness gate
@@ -2706,6 +2780,12 @@ mail correctness.
 
   Required behavior:
   - bounded transient retry is allowed for short intermittent failures
+  - retryable failures are limited to transient connect/read/write/socket-path
+    failures before remote acceptance, including timeout, connection refused,
+    connection reset, broken pipe, network unreachable, and host unreachable
+  - non-retryable failures include protocol decode/encode violations,
+    certificate validation failure, TLS/authentication mismatch, and explicit
+    remote daemon rejection
   - after the bounded retry window expires, the send fails
   - ATM must not keep a durable remote outbox that can leave stale messages
     queued for days
@@ -2718,6 +2798,12 @@ mail correctness.
     while attempting remote delivery
   - a remote send must not be reported as successfully delivered until the
     remote daemon accepts it
+  - if the connection drops after the sender finishes writing the request but
+    before remote acceptance is confirmed, the daemon must return one typed
+    `RemoteDeliveryOutcomeUnknown` failure (`ATM_REMOTE_OUTCOME_UNKNOWN`) and
+    must not report success
+  - `RemoteDeliveryOutcomeUnknown` must be recoverable through the bounded
+    replay/re-export path rather than by silently assuming success
   - if the bounded retry window expires without remote acceptance, the send
     fails and must not leave durable delivered-message state behind
 
@@ -2728,7 +2814,10 @@ mail correctness.
   - same-host daemon request deadline: `3s`
   - per-leg TCP/TLS connect deadline: `5s`
   - per-leg TCP/TLS read/write deadline: `5s`
-  - total remote retry budget: `30s`
+  - total remote retry budget default: `30s`
+  - the remote retry budget must be configurable through one daemon transport
+    setting (`daemon.remote_retry_budget`) so operators can lengthen it on
+    unstable networks without changing code
   - SQLite `busy_timeout`: `5000ms`
   - ingest batch processing slice: `2s`
   - doctor health query deadline: `3s`
@@ -2740,6 +2829,13 @@ mail correctness.
   - live status-cache cap: `4096`
   - saturation behavior must fail with typed errors or structured degradation,
     never silent drop
+  - outbound peer connections must resolve/bind per attempt so ordinary local
+    interface up/down changes do not require daemon restart
+  - inbound TCP/TLS listeners bound to wildcard/unspecified local addresses
+    must survive ordinary interface rebinding without daemon restart
+  - if the configured listener bind address itself changes or disappears, the
+    daemon must require bounded reload/rebind through the documented reload
+    path and must surface degraded status until rebind succeeds
 
 ### 21.5 Claude Compatibility And Native Agent Path
 

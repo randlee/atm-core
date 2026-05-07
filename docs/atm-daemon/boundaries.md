@@ -10,6 +10,30 @@ Current design assumption:
   `allowed_test_double_paths` remains empty for the daemon-owned adapter
   records below.
 
+Important daemon-private control-plane structs that must stay visible in review,
+even though they are not public cross-crate traits:
+- `RuntimeComposition` in `atm_daemon::composition`
+  - owns startup/shutdown sequencing and lifecycle state transitions
+  - must not be skipped in boundary or production-readiness review just because
+    it is not itself a public trait boundary
+- `DaemonShutdownSignals` / `SingletonGuard` in `atm_daemon`
+  - own process-lifecycle admission and shutdown mechanics
+  - must remain runtime-private and must not be bypassed by transport or
+    business-logic code
+
+## RuntimeLifecycleController
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-daemon/runtime-lifecycle-daemon.toml](../../boundaries/atm-daemon/runtime-lifecycle-daemon.toml)
+
+Purpose:
+- Own the daemon-private runtime lifecycle/admission controller that coordinates
+  startup, shutdown, and singleton ownership.
+
+Notes:
+- This record exists so the control-plane struct is treated as an architectural
+  boundary surface even though it is not a public shared trait today.
+
 ## SocketServerTransportAdapter
 
 Canonical machine-readable boundary source:

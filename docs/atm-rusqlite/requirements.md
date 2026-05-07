@@ -86,6 +86,13 @@ Required rules:
   implementation line
 - concrete SQLite details remain private to this crate
 - callers depend on `atm-core` store traits, not on `rusqlite` types
+- the default production durable database path is `~/.atm/db/mail.db`
+- the host-scoped SQLite database is one shared durable store keyed by team
+  and agent, not one database per team
+- the daemon is the only ATM-owned writer to the production database
+- read-only consumers may query SQLite directly as a supported integration
+  surface, but ATM-owned writes must still go through the documented runtime
+  and store boundaries
 - the current runtime composition owner may depend on this crate in order to
   assemble production adapters, but thin callers and extension crates must not
 - schema bootstrap must be deterministic and idempotent
@@ -95,3 +102,7 @@ Required rules:
 - routine SQLite failures must return typed errors, not panic/unwrap
 - conformance tests should validate behavior through the `atm-core` store
   traits rather than by depending on internal SQLite details
+- most SQLite tests should use dedicated in-memory fixtures with explicit
+  setup/cleanup
+- only a small deliberate suite may use on-disk temporary databases for
+  reopen, migration, and filesystem-behavior verification

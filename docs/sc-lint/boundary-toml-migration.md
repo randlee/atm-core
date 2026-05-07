@@ -258,26 +258,3 @@ completes:
   later moves closer to per-boundary files
 - whether later schema evolution needs a dedicated schema-version field inside
   each boundary TOML record
-
-## Relation To Enforcement Planning
-
-The next planned boundary-enforcement feature set depends on this migration:
-
-- inventory-parity warn/error enforcement
-- structured future-sprint mappings for planned-but-missing items
-- TOML-first boundary additions for future scan checks
-
-That means the migration is not just a format cleanup. It creates the correct
-data model for the next enforcement stage.
-
-## Recommendation
-
-Proceed with a dual-loader migration, but treat TOML as the future canonical
-format immediately once support lands.
-
-That gives:
-
-- low migration risk
-- no forced flag day
-- a clean place to add future boundary features
-- a better format for eventual `sc-lint` repo extraction

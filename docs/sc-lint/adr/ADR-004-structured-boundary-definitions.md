@@ -4,7 +4,7 @@
 |---|---|
 | ID | ADR-004 |
 | Status | **Accepted** |
-| Date | 2026-05-06 |
+| Date | 2026-05-07 |
 | Deciders | arch-inj, team-lead, arch-ctm |
 | Relates to | REQ-SCB-001 through REQ-SCB-014 |
 
@@ -81,4 +81,4 @@ The tool needs one machine-authoritative source for:
 | Implement `SCB-INVENTORY-001`, `SCB-INVENTORY-002`, and `SCB-INVENTORY-003` against TOML-backed boundary data. | sc-lint implementation owner | Before inventory-parity enforcement enters CI |
 | Make `[planning].current_sprint` in `boundaries/planning.toml` the authoritative current-sprint source for warn/error escalation. | consumer repository owner | Before planned-gap warnings are permitted in normal lint runs |
 
-*ADR-004 | sc-lint | 2026-05-06*
+*ADR-004 | sc-lint | 2026-05-07*

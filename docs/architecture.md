@@ -87,6 +87,14 @@ Product-level boundary rules:
 - `ack` may remain a retained CLI/user workflow, but thin-client protocol
   surfaces should carry it through send-shaped request data rather than a
   separate top-level method family
+- Phase R may depend on `sc-lint` for boundary/parser gate verification, but
+  `sc-lint` is an external tool dependency rather than an ATM-owned product
+  subsystem
+- durable ATM state is one host-scoped SQLite database at `~/.atm/db/mail.db`
+- the daemon is the only ATM writer for that database
+- direct read-only SQLite consumers are an allowed integration surface, but
+  ATM-owned command/runtime writes must not bypass the documented daemon/store
+  boundaries
 
 Crate-local boundary detail is owned by:
 
@@ -902,6 +910,28 @@ Public entrypoint:
 
 The ack service is responsible for the legal transition from `(Read, PendingAck)` to `(Read, Acknowledged)` plus the reply append.
 
+Phase R continuation rules:
+- `atm ack` emits exactly one visible reply and that reply must hardcode
+  `requires_ack = false`
+- acknowledgement replies must never request acknowledgement themselves
+- message update chains are linear and terminal-node driven:
+  - `add-details` appends context
+  - `supersede` replaces the prior message as the effective current one
+- only the original sender may append successors to the chain
+- one acknowledgement clears the chain through the current terminal node
+- the root message establishes whether the chain is ack-required and
+  successors inherit that ack class
+- if a later successor arrives on an already acknowledged ack-required chain,
+  the chain becomes pending again until the new terminal node is acknowledged
+- ephemeral messages are standalone, time-bounded rows only:
+  - they use `stale_at`
+  - they are not updatable
+  - they may not participate in successor chains
+  - they are cleaned up by periodic stale-time sweep rather than first-read
+    deletion
+  - once read, they hide from normal reads but remain visible through
+    `--view-all` until expiry
+
 Phase Q supersedes the legacy source-file writeback rule: SQLite is the
 authoritative durable store for ack state, while inbox/file-surface projection
 is deferred to the Q.4 export/runtime path.
@@ -1043,17 +1073,20 @@ Architectural rules:
   ATM home directory
 - `add-member` is the retained local roster-repair path and must reject
   duplicates before mutating config
-- `backup` snapshots current team config, the ATM-owned `.atm-state` tree
-  (including SQLite durable state and workflow compatibility state), inboxes,
-  and the ATM team task bucket into a timestamped snapshot directory
+- `backup` snapshots current team config, the ATM-owned `.atm-state` workflow
+  compatibility state, a team-scoped export from the host-scoped SQLite
+  database at `~/.atm/db/mail.db`, inboxes, and the ATM team task bucket into
+  a timestamped snapshot directory
 - inbox backup excludes transient mailbox `*.lock` sentinels, dotfiles, and
   restore markers
 - `restore` is a local recovery path and must:
   - preserve the current team-lead entry and `leadSessionId`
   - restore only missing non-lead members
   - clear runtime-only restored-member state before persistence
-  - restore the ATM-owned `.atm-state` tree from the chosen snapshot when
-    present
+  - restore the ATM-owned `.atm-state` workflow compatibility state from the
+    chosen snapshot when present
+  - restore the selected team's durable records into the host-scoped SQLite
+    database from the chosen snapshot
   - restore non-lead inboxes from the chosen snapshot
   - treat stale mailbox `*.lock` sentinels as compatibility-only diagnostics;
     restore must not require sweeping them in order to restore durable ATM
@@ -2465,7 +2498,8 @@ Phase R operational defaults:
 - same-host daemon request deadline: `3s`
 - per-leg TCP/TLS connect deadline: `5s`
 - per-leg TCP/TLS read/write deadline: `5s`
-- total remote retry budget: `30s`
+- total remote retry budget default: `30s` via
+  `daemon.remote_retry_budget`
 - SQLite `busy_timeout`: `5000ms`
   - authoritative since `R.5`; supersedes the pre-`R.5` `1500ms` baseline
 - ingest batch processing slice: `2s`
@@ -2483,6 +2517,31 @@ Required signal behavior:
 - install `SIGINT`/`SIGTERM`/`SIGHUP` handling before listeners accept
 - `SIGINT` and `SIGTERM` enter graceful shutdown
 - `SIGHUP` triggers bounded rescan/reload without dropping singleton ownership
+
+Remote peer transport rules:
+- retryable remote peer failures are limited to transient socket/network
+  failures before remote acceptance:
+  - timeout
+  - connection refused
+  - connection reset / aborted
+  - broken pipe
+  - host unreachable / network unreachable
+- non-retryable failures include:
+  - protocol/frame decode failures
+  - TLS/certificate/authentication mismatch
+  - explicit remote daemon rejection
+- if a connection drops after the request write completes but before the remote
+  daemon confirms acceptance, the send result is one typed
+  `RemoteDeliveryOutcomeUnknown` failure (`ATM_REMOTE_OUTCOME_UNKNOWN`)
+- outbound peer delivery must resolve and open a fresh connection per attempt;
+  ordinary local interface changes must not require daemon restart for new
+  outbound attempts
+- TCP/TLS listeners bound to wildcard/unspecified local addresses must remain
+  the default so cable/unplug or Wi-Fi/ethernet rebinding does not require
+  restart in the normal case
+- if an operator binds the listener to one explicit local address and that
+  address disappears or changes, the daemon must surface degraded status and
+  require bounded reload/rebind rather than silently claiming readiness
 
 Accepted limitations tracked into `R.11`:
 - per-connection inflight cap `32` is documented now, but the current daemon

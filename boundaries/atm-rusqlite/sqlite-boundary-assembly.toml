@@ -1,0 +1,74 @@
+boundary_id = "BOUNDARY-SqliteBoundaryAssembly"
+owner_package = "atm-rusqlite"
+owner_crate_path = "atm_rusqlite"
+name = "SqliteBoundaryAssembly"
+
+[public]
+facade = "SqliteBoundaryAssembly"
+
+[implementation]
+type = "SqliteBoundaryAssembly"
+module = "atm_rusqlite"
+visibility = "pub(crate)"
+constructor = "pub(crate)"
+
+[composition]
+roots = [
+  "atm_rusqlite::assemble_boundary",
+  "atm_rusqlite::SqliteBoundaryAssembly::new",
+]
+
+[ownership]
+io_owns = [
+  "sqlite_boundary_assembly",
+  "shared_store_adapter_composition",
+]
+io_forbidden = [
+  "socket_io",
+  "process_spawn",
+]
+
+[dependencies]
+allowed_dependents = []
+allowed_dependencies = [
+  "atm-core",
+  "rusqlite",
+]
+forbidden_edges = [
+  "atm -> atm-rusqlite",
+  "atm-daemon -> atm-rusqlite",
+  "atm-graft -> atm-rusqlite",
+]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = [
+  "SqliteBoundaryAssembly",
+  "assemble_boundary",
+]
+
+[contracts]
+request_types = ["sqlite boundary assembly inputs"]
+response_types = ["crate-private store adapter assembly"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["assemble_boundary"]
+
+[enforcement]
+lint_rules = [
+  "LINT-BOUNDARY-SQLITE-ASSEMBLY-EDGES",
+  "LINT-BOUNDARY-SQLITE-ASSEMBLY-REFERENCES",
+]
+review_gates = [
+  "no_public_reexport",
+  "no_cross_crate_sqlite_assembly_dependency",
+]
+
+[status]
+state = "planned"
+notes = [
+  "assembly root stays crate-private and must remain visible in boundary review",
+  "hosts the shared assembly seam for mail, task, and roster adapters over one sqlite root",
+]

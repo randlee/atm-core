@@ -104,6 +104,28 @@ Phase R redesign notes:
   delay of 250ms, a per-attempt maximum of 5s, jitter of +/-20%, and a hard
   total retry ceiling within the documented timeout budget; it must not
   collapse into fixed sleeps or unbounded churn
+- retryable peer failures are limited to transient pre-acceptance socket
+  failures:
+  - timeout
+  - connection refused
+  - connection reset / aborted
+  - broken pipe
+  - host unreachable / network unreachable
+- non-retryable peer failures include protocol/frame corruption, TLS or
+  certificate mismatch, authentication mismatch, and explicit remote daemon
+  rejection
+- if the request body has been fully written but remote acceptance has not been
+  confirmed when the connection drops, the runtime returns one typed
+  `RemoteDeliveryOutcomeUnknown` failure (`ATM_REMOTE_OUTCOME_UNKNOWN`) and
+  hands recovery to bounded replay/re-export rather than guessing success
+- outbound peer attempts resolve and dial per attempt so ordinary interface
+  changes on the sender host do not require daemon restart
+- inbound TCP/TLS listeners should bind wildcard/unspecified addresses by
+  default; ordinary cable unplug / replug or Wi-Fi to ethernet rebinding must
+  not require restart in that default mode
+- if the configured listener bind address is an explicit local IP that later
+  disappears or changes, the runtime must enter degraded status and require
+  bounded reload/rebind via the runtime reload path
 - daemon runtime failures must remain typed and must not depend on
   panic/unwrap for routine transport, socket, or store-boundary failure.
 - daemon observability remains structured through `sc-observability`; no ad hoc
@@ -293,7 +315,8 @@ Required timeout defaults:
 - same-host daemon request deadline: `3s`
 - per-leg TCP/TLS connect deadline: `5s`
 - per-leg TCP/TLS read/write deadline: `5s`
-- total remote retry budget: `30s`
+- total remote retry budget default: `30s` via
+  `daemon.remote_retry_budget`
 - SQLite `busy_timeout`: `5000ms`
 - ingest batch processing slice: `2s` max before yielding
 - daemon health query used by `atm doctor`: `3s`

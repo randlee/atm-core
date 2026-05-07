@@ -169,6 +169,8 @@ Required ADRs:
 - split `ClientTransport` / `ServerTransport`
 - concrete implementations remain private
 - legal composition owner
+- ADR-004: structured boundary definitions (lives on
+  `feature/pR-s3-boundary-lint`)
 
 Acceptance:
 - each major Phase R design decision has one crate-local ADR record
@@ -821,6 +823,69 @@ Acceptance:
 
 1. `feature/pR-s10-thin-client` → `integrate/phase-R` (after R.5 #179 already merged)
 2. `integrate/phase-R` → `develop` (user authorization required)
+
+## 5.3 Phase R Continuation Sprints
+
+Status:
+- planned
+
+Notes:
+- `R.11` is already referenced by accepted limitations and remains reserved
+- `R.12` is already taken in the team sprint ledger
+- the next new implementation sprint identifier is `R.13`
+- `sc-lint` inventory-parity / planning-metadata support is treated as an
+  external prerequisite that must be ready before `R.13` begins
+
+Execution sequence:
+
+### R.13 Runtime Admission And Lifecycle
+
+- close B-001, B-002, and B-003
+- move both daemon lock paths to one host-wide ownership root
+- implement a real `RuntimeComposition::start()` lifecycle path
+- absorb lifecycle-adjacent shutdown hardening from I-001 and I-002
+- sprint plan: `docs/phase-R/sprint-R13.md`
+
+### R.14 SQLite Root And Message-Thread Semantics
+
+- close the host-scoped SQLite root change under `~/.atm/db/mail.db`
+- implement the linear successor-chain model (`add-details` / `supersede`)
+- keep `atm ack` as one visible reply with `requires_ack = false`
+- implement ephemeral stale-time retention without read-triggered deletion
+- finish SQLite error-mapping and test-fixture policy updates
+- sprint plan: `docs/phase-R/sprint-R14.md`
+
+### R.15 Heartbeat, Status Cache, And Doctor Health
+
+- close B-004, B-005, and B-006
+- implement runtime-owned heartbeat/member state
+- implement daemon-owned live status cache
+- wire doctor to daemon-backed liveness/readiness projection
+- sprint plan: `docs/phase-R/sprint-R15.md`
+
+### R.16 Peer Delivery And Replay
+
+- close B-009 and I-013
+- replace `PeerClientTransport` stub with real outbound daemon-to-daemon
+  transport
+- wire durable replay/re-export around the outbound peer path
+- sprint plan: `docs/phase-R/sprint-R16.md`
+
+### R.17 Watch, Reconcile, And Notifier Runtime
+
+- close B-007, B-008, and I-012
+- replace one-shot boundary-support helpers with runtime-owned watch and
+  reconcile loops
+- add daemon-owned notifier/plugin runtime delivery
+- sprint plan: `docs/phase-R/sprint-R17.md`
+
+### R.18 Production Hardening And Closeout
+
+- close I-003 through I-016 that remain after the runtime-lane sprints
+- finish config reload, request-id, type-safety, env/test portability, and
+  remaining runtime-boundary hardening
+- update plan/requirements/architecture/boundaries to the final landed state
+- sprint plan: `docs/phase-R/sprint-R18.md`
 
 ## 6. Working Rule
 

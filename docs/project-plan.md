@@ -49,28 +49,6 @@ Phase R execution entry:
 - `R.3` is a dedicated review/re-planning stage after the Wave 1 skeleton lands
 - Wave 2 executes implementations only against the enforced boundary skeleton
 
-Current Phase R status:
-- `R.0` lint foundation is complete enough to enforce the boundary documents
-- `R.1` lint debt burn-down is complete on the active redesign line
-- `R.2` / `R.3.1` landed the Phase R skeleton context now carried by:
-  - `crates/atm-core/src/boundary/mod.rs`
-  - `crates/atm-daemon`
-  - `crates/atm-rusqlite`
-  - `crates/atm/src/composition.rs`
-- `R.2A` tooling hardening remains in progress for view/module/unsafe follow-up
-- `R.3.1` skeleton-first work is complete on the active planning line pending
-  merge through the normal integration path
-- `R.3.2` is the active sprint and is reviewing / drilling the proposed
-  `R.4` through `R.8` Wave 2 sprints into concrete, reviewable assignments
-
-Phase R acceptance:
-- lint/parser gates exist before substantive implementation resumes
-- the current lint baseline is cleaned enough that new architectural failures
-  are actionable
-- the crate/trait/data-structure skeleton exists before Wave 2 starts
-- implementation sprint planning is rewritten against that skeleton before
-  implementation resumes
-
 Status:
 - Phases 0 through P have executed on the retained rewrite line.
 - Phases G and H are complete retained-command phases, closed through the
@@ -2619,11 +2597,14 @@ Parallelization rule:
   against the shared boundary set
 
 Acceptance:
-- SQLite opens under `.claude/teams/<team>/.atm-state/mail.db`
+- SQLite opens under one host-scoped ATM durable root at
+  `~/.atm/db/mail.db`, with team and agent partitioned as logical keys inside
+  the shared database
 - `atm-rusqlite` is the only crate that owns direct SQLite calls in the first
   implementation line
 - core logic is reachable without daemon process spawning
-- no direct SQLite or filesystem bypasses outside the owning boundaries
+- no ATM-owned writes or hidden CLI/runtime fallbacks may bypass the owning
+  daemon/store boundaries; direct read-only SQLite consumers remain allowed
 - watcher/reconcile logic exists behind its own boundary and does not bypass
   ingress/store/notifier ownership rules
 - transport-boundary tests can replace Unix/TCP with the in-process
@@ -2771,6 +2752,10 @@ Summary:
   - public boundary traits/facades
   - major shared data structures
 - Wave 2 implements behavior only against those enforced boundaries.
+- The next planning increment after the current boundary-lint implementation
+  branch merges adds:
+  - planning-aware inventory-parity warn/error enforcement
+  - TOML as the canonical machine-readable boundary source
 
 Cross-reference:
 - The authoritative sprint-by-sprint Phase R plan lives in
@@ -2794,6 +2779,9 @@ Authoritative design references:
 Execution shape:
 - `R.9` is the planning, requirements, ADR, and lint-design sprint
 - `R.10` is the implementation and test-migration sprint
+- `R.13` through `R.18` are the remaining continuation sprints required to
+  turn the thin daemon line into the full production runtime still described by
+  the accepted Phase R requirements and architecture
 
 R.9 deliverables:
 - explicit requirement language that bans the current daemon-spawn test pattern
@@ -2828,6 +2816,10 @@ Lint gate decision:
 Acceptance:
 - requirements, architecture, ADRs, and testing guidelines agree on the
   singleton rule and approved test tiers
+- continuation sprint execution after `R.10` must follow the tracked sequence
+  in `docs/phase-R/sprint-R13.md` through `docs/phase-R/sprint-R18.md`
+- `sc-lint` inventory-parity / planning-metadata gates are treated as an
+  external prerequisite that must be ready before `R.13` implementation starts
 - there is no approved ordinary test-daemon launch path
 - the implementation plan explicitly prevents new daemon-spawn helpers from
   proliferating
