@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+#[cfg_attr(not(unix), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum RuntimeLifecycleState {
     Starting,
@@ -23,6 +24,7 @@ pub(crate) enum RuntimeLifecycleState {
 }
 
 /// Serializes legal daemon runtime ownership transitions.
+#[cfg_attr(not(unix), allow(dead_code))]
 #[derive(Debug, Default)]
 pub(crate) struct RuntimeLifecycle {
     /// A single mutex is sufficient here because lifecycle transitions are
