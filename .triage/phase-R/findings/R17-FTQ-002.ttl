@@ -11,7 +11,7 @@
   triage:phaseId "phase-R" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "fixed" ;
+  triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-05-07T00:00:00Z"^^xsd:dateTime ;
   triage:highestOpenBranch "R.17" ;

@@ -218,10 +218,13 @@ impl ActiveConnectionRegistry {
             .drain_state
             .lock()
             .map_err(|_| AtmError::daemon_unavailable("active connection drain lock poisoned"))?;
-        let _ = self
+        let (_state, wait_result) = self
             .drain_wake
             .wait_timeout(state, timeout)
             .map_err(|_| AtmError::daemon_unavailable("active connection drain lock poisoned"))?;
+        if wait_result.timed_out() {
+            return Ok(());
+        }
         Ok(())
     }
 

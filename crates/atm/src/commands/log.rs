@@ -1,5 +1,4 @@
 use std::thread;
-use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use atm_core::observability::{
@@ -150,7 +149,7 @@ impl TailArgs {
         loop {
             let snapshot = session.poll()?;
             output::print_log_records(snapshot.records, self.query.json)?;
-            thread::sleep(Duration::from_millis(self.poll_interval_ms));
+            thread::sleep(std::time::Duration::from_millis(self.poll_interval_ms));
         }
     }
 
@@ -169,7 +168,7 @@ impl TailArgs {
             }
 
             if self.max_polls.is_none() {
-                thread::sleep(Duration::from_millis(self.poll_interval_ms));
+                thread::yield_now();
             }
         }
     }

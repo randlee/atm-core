@@ -54,6 +54,14 @@ _lint-sc-portability:
     {{python_cmd}} .just/lint_sc_portability.py
 
 [private]
+_lint-unix-gating:
+    {{python_cmd}} .just/lint_unix_gating.py
+
+[private]
+_lint-runtime-waits:
+    {{python_cmd}} .just/lint_runtime_waits.py
+
+[private]
 _lint-manifests:
     {{python_cmd}} .just/lint_manifests.py
 
@@ -70,6 +78,14 @@ version mode='current':
 [private]
 _lint-identities:
     {{python_cmd}} .just/check_test_identity_literals.py
+
+[private]
+_lint-fixed-sleep:
+    {{python_cmd}} .just/check_fixed_sleep_hygiene.py
+
+[private]
+_lint-ttl-triage:
+    {{python_cmd}} .just/lint_ttl_triage_consistency.py
 
 # Enforce RULE-003 source file size limits.
 [private]

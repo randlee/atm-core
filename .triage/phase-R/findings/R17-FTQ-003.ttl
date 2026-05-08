@@ -14,11 +14,11 @@ triage:R17-FTQ-003
   triage:fileFilter "reconcile_runtime\\.rs" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "fixed" ;
+  triage:status "open" ;
   triage:highestOpenBranch "R.17" ;
   triage:promoteToBranch "R.17" ;
   triage:dispatchReady true ;
-  triage:findingAggregate "fixed" ;
+  triage:findingAggregate "open" ;
   triage:triagedAt "2026-05-07T00:00:00Z"^^xsd:dateTime ;
   triage:sweepResults (
     [

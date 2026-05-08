@@ -10,6 +10,12 @@ forbidden_literals = [
   "atm-dev",
 ]
 
+[identities.production_canonical_literals]
+"team-lead" = ["crates/atm-core/src/roles.rs"]
+
+[fixed_sleep]
+allowed_paths = []
+
 [portability]
 config_home_env = "ATM_CONFIG_HOME"
 

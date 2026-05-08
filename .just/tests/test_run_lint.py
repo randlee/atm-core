@@ -31,9 +31,13 @@ resolver = "2"
     def test_resolve_task_names_all_includes_new_targets(self) -> None:
         names = resolve_task_names("all")
         self.assertIn("boundaries", names)
+        self.assertIn("unix-gating", names)
+        self.assertIn("runtime-waits", names)
         self.assertIn("manifests", names)
         self.assertIn("deny", names)
         self.assertIn("shear", names)
+        self.assertIn("fixed-sleep", names)
+        self.assertIn("ttl-triage", names)
         self.assertIn("spell", names)
         self.assertIn("daemon-singleton", names)
         self.assertIn("pytests", names)
@@ -90,11 +94,21 @@ resolver = "2"
             tasks = build_tasks(repo_root)
             self.assertEqual(tasks["modules"].command[-1], str(repo_root / ".just/lint_cargo_modules.py"))
             self.assertEqual(tasks["boundaries"].command[-1], str(repo_root / ".just/lint_boundaries.py"))
+            self.assertEqual(tasks["unix-gating"].command[-1], str(repo_root / ".just/lint_unix_gating.py"))
+            self.assertEqual(tasks["runtime-waits"].command[-1], str(repo_root / ".just/lint_runtime_waits.py"))
             self.assertEqual(tasks["sc-boundary"].command[-1], str(repo_root / ".just/lint_sc_boundary.py"))
             self.assertEqual(tasks["sc-portability"].command[-1], str(repo_root / ".just/lint_sc_portability.py"))
             self.assertEqual(tasks["manifests"].command[-1], str(repo_root / ".just/lint_manifests.py"))
             self.assertEqual(tasks["deny"].command[-1], str(repo_root / ".just/lint_cargo_deny.py"))
             self.assertEqual(tasks["shear"].command[-1], str(repo_root / ".just/lint_cargo_shear.py"))
+            self.assertEqual(
+                tasks["fixed-sleep"].command[-1],
+                str(repo_root / ".just/check_fixed_sleep_hygiene.py"),
+            )
+            self.assertEqual(
+                tasks["ttl-triage"].command[-1],
+                str(repo_root / ".just/lint_ttl_triage_consistency.py"),
+            )
             self.assertEqual(tasks["spell"].command[-1], str(repo_root / ".just/lint_codespell.py"))
             self.assertEqual(
                 tasks["daemon-singleton"].command[-1],
@@ -150,7 +164,7 @@ version = "1.1.2"
             "crate     package               crate_path  manifest",
             "atm       agent-team-mail       atm         crates/atm/Cargo.toml",
             "atm-core  agent-team-mail-core  atm_core    crates/atm-core/Cargo.toml",
-            "RULE-008/RULE-009 violation: raw production literals found in test/cfg(test) Rust code.",
+            "RULE-008/RULE-009 violation: raw production literals found in Rust code.",
             "crates/atm/tests/ack.rs:28: let fixture = Fixture::new(&[\"arch-ctm\", \"team-lead\"]);",
             "total violations: 880",
         ]
@@ -158,7 +172,7 @@ version = "1.1.2"
         self.assertEqual(
             preview_lines_for_task("identities", lines),
             [
-                "RULE-008/RULE-009 violation: raw production literals found in test/cfg(test) Rust code.",
+                "RULE-008/RULE-009 violation: raw production literals found in Rust code.",
                 "crates/atm/tests/ack.rs:28: let fixture = Fixture::new(&[\"arch-ctm\", \"team-lead\"]);",
             ],
         )

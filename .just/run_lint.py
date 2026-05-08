@@ -22,8 +22,12 @@ from lint_common import write_log
 PYTHON_LINT_ORDER = (
     "version",
     "boundaries",
+    "unix-gating",
+    "runtime-waits",
     "manifests",
     "identities",
+    "fixed-sleep",
+    "ttl-triage",
     "lines",
     "spell",
     "daemon-singleton",
@@ -73,6 +77,12 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         ),
         "lines": LintTask("lines", [python_executable, str(repo_root / ".just/check_line_counts.py")]),
         "boundaries": LintTask("boundaries", [python_executable, str(repo_root / ".just/lint_boundaries.py")]),
+        "unix-gating": LintTask(
+            "unix-gating", [python_executable, str(repo_root / ".just/lint_unix_gating.py")]
+        ),
+        "runtime-waits": LintTask(
+            "runtime-waits", [python_executable, str(repo_root / ".just/lint_runtime_waits.py")]
+        ),
         "sc-boundary": LintTask(
             "sc-boundary", [python_executable, str(repo_root / ".just/lint_sc_boundary.py")]
         ),
@@ -81,6 +91,12 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         ),
         "manifests": LintTask("manifests", [python_executable, str(repo_root / ".just/lint_manifests.py")]),
         "spell": LintTask("spell", [python_executable, str(repo_root / ".just/lint_codespell.py")]),
+        "fixed-sleep": LintTask(
+            "fixed-sleep", [python_executable, str(repo_root / ".just/check_fixed_sleep_hygiene.py")]
+        ),
+        "ttl-triage": LintTask(
+            "ttl-triage", [python_executable, str(repo_root / ".just/lint_ttl_triage_consistency.py")]
+        ),
         "daemon-singleton": LintTask(
             "daemon-singleton",
             [python_executable, str(repo_root / "scripts/lint_daemon_singleton.py")],
