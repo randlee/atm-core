@@ -10,10 +10,12 @@ use atm_core::{boundary::RequestDispatcher, error::AtmError};
 #[cfg(unix)]
 use std::fs::OpenOptions;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+#[cfg(unix)]
+use std::sync::Mutex;
 use std::time::Duration;
 
-#[cfg_attr(not(unix), allow(dead_code))]
+#[cfg(unix)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum RuntimeLifecycleState {
     Starting,
@@ -24,7 +26,7 @@ pub(crate) enum RuntimeLifecycleState {
 }
 
 /// Serializes legal daemon runtime ownership transitions.
-#[cfg_attr(not(unix), allow(dead_code))]
+#[cfg(unix)]
 #[derive(Debug, Default)]
 pub(crate) struct RuntimeLifecycle {
     /// A single mutex is sufficient here because lifecycle transitions are
@@ -108,6 +110,7 @@ impl RuntimeLifecycle {
 /// Internal root for Phase R daemon runtime wiring.
 #[derive(Debug)]
 pub(crate) struct RuntimeComposition {
+    #[cfg(unix)]
     lifecycle: Arc<RuntimeLifecycle>,
     server_transport: LocalSocketServerTransport,
     request_dispatcher: Arc<DaemonRequestDispatcher>,
@@ -138,8 +141,18 @@ impl RuntimeComposition {
         let notification_sink = DaemonNotificationSink::new();
         let watch_event_source = FileWatchEventSource::new();
         let inbox_ingress = DaemonInboxIngress::new();
-        let replay_store = Some(sqlite_remote_replay_store_from_path(replay_store_path)?);
+        let replay_store = match sqlite_remote_replay_store_from_path(replay_store_path) {
+            Ok(store) => Some(store),
+            Err(error) => {
+                tracing::warn!(
+                    %error,
+                    "remote replay store unavailable; outcome-unknown delivery cannot be persisted"
+                );
+                None
+            }
+        };
         Ok(Self {
+            #[cfg(unix)]
             lifecycle: Arc::new(RuntimeLifecycle::new()),
             server_transport: LocalSocketServerTransport::new(),
             request_dispatcher: Arc::new(DaemonRequestDispatcher::new(
@@ -307,11 +320,12 @@ impl RuntimeComposition {
         ))
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(crate) fn lifecycle_state(&self) -> RuntimeLifecycleState {
         self.lifecycle.state()
     }
 
+    #[cfg(unix)]
     fn finish_runtime(&self, result: Result<(), AtmError>) -> Result<(), AtmError> {
         let state_result = self
             .lifecycle
@@ -518,8 +532,11 @@ mod tests {
     use atm_core::boundary::ServerTransport;
     use tempfile::TempDir;
 
-    use super::{RuntimeComposition, RuntimeLifecycle, RuntimeLifecycleState};
+    use super::RuntimeComposition;
+    #[cfg(unix)]
+    use super::{RuntimeLifecycle, RuntimeLifecycleState};
 
+    #[cfg(unix)]
     #[test]
     fn runtime_lifecycle_allows_only_documented_transitions() {
         let lifecycle = RuntimeLifecycle::new();
@@ -538,6 +555,7 @@ mod tests {
             .expect("stopped");
     }
 
+    #[cfg(unix)]
     #[test]
     fn runtime_lifecycle_happy_path_matches_documented_owner_sequence() {
         let lifecycle = RuntimeLifecycle::new();
@@ -568,6 +586,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn runtime_lifecycle_rejects_illegal_transitions() {
         let lifecycle = RuntimeLifecycle::new();
@@ -593,6 +612,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn startup_failure_path_can_transition_back_to_stopped() {
         let lifecycle = RuntimeLifecycle::new();
