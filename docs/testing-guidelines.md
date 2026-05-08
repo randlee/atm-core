@@ -117,6 +117,19 @@ Restrictions:
 - they must not leak processes
 - they must not validate unrelated CLI or business-logic behavior
 
+### 4.4 Cross-Platform Same-Host Functional Coverage
+
+Phase S adds one mandatory coverage layer for daemon hosting:
+
+- same-host functional tests must exercise the real local-IPC boundary on Unix
+  and Windows through shared dispatcher/handler infrastructure
+- the harness shape must stay shared across supported operating systems; only
+  the owned local-IPC adapter code may vary by platform
+- Windows coverage must prove real daemon hosting behavior, not just
+  compilation or unsupported-path errors
+- Unix-only functional transport tests are insufficient once the parity line is
+  active
+
 ## 5. Environment And Timing Rules
 
 - Prefer explicit constructor parameters and injected test seams over shared
@@ -127,6 +140,9 @@ Restrictions:
 - Bounded retry/sleep may appear only inside the dedicated daemon-runtime suite
   when required to observe a documented runtime invariant, and the reason must
   be explicit in the test.
+- Fixed sleeps are prohibited in cross-platform same-host functional tests even
+  inside daemon-host coverage; readiness and shutdown must use explicit
+  synchronization, bounded protocol deadlines, or observable runtime state
 
 ## 6. Lint And CI Enforcement
 

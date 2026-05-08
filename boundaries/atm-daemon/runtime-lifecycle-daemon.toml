@@ -64,6 +64,7 @@ lint_rules = [
 review_gates = [
   "no_cli_to_daemon_edge",
   "no_lifecycle_bypass",
+  "no_os_branching_above_portability_adapters",
 ]
 
 [status]
@@ -73,5 +74,6 @@ notes = [
   "production-readiness review must cover this struct explicitly because B-003 originated here",
   "R.13 wired host-wide admission, lifecycle transitions, and startup/shutdown ownership through this control-plane facade",
   "Phase S separates host ownership and lifecycle-control sourcing into review-visible portability boundaries under this controller",
+  "Phase S also requires runtime composition above those boundaries to stay platform-neutral across supported operating systems",
   "crate-private helper methods are intentional so run_daemon and lifecycle tests can enter the single owned runtime path without exposing it cross-crate",
 ]

@@ -41,6 +41,9 @@ Phase-S planning note:
   full daemon feature set must work on Windows as well as Unix-like hosts
 - the active planning line for that correction is Phase S, tracked in
   [`docs/plan-phase-S.md`](./plan-phase-S.md)
+- Phase S is not satisfied by Windows compilation or temporary unsupported-path
+  stubs; it closes only when daemon functionality is production-ready on every
+  supported operating system behind the documented portability boundaries
 - the planning baseline is `integrate/phase-R` at `6a072c1`
 
 Phase R execution entry:

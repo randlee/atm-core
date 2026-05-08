@@ -35,6 +35,7 @@ implementation sprints will follow.
 - `docs/adr/ADR-002-host-wide-daemon-singleton.md`
 - `docs/adr/ADR-003-test-fidelity-and-daemon-isolation.md`
 - `docs/adr/ADR-005-host-scoped-sqlite-state-root.md`
+- `docs/adr/ADR-007-supported-platform-parity.md`
 
 ## Governing Boundaries
 
@@ -100,6 +101,8 @@ implementation sprints will follow.
 4. Phase sequencing and crate-candidate decision
    Development work:
    - define the implementation sprint sequence for Phase S
+   - name the exact current daemon files and methods each implementation sprint
+     must change
    - document the preferred crate candidates for local IPC, file locking, and
      lifecycle control
    Required tests:
@@ -120,6 +123,12 @@ daemon docs, and Phase S sequence are all updated together.
 - host ownership and lifecycle control are explicit daemon review surfaces
 - the Phase S sprint sequence is concrete enough to execute without reopening
   the architectural direction
+- Phase S docs explicitly require feature parity on all supported operating
+  systems rather than compile-only support
+- Phase S docs enumerate the exact current daemon methods/files that S.1-S.4
+  must change
+- Phase S docs define shared Windows/Unix same-host functional coverage and
+  explicit anti-flake rules
 
 ## Required Validation
 
@@ -129,6 +138,10 @@ daemon docs, and Phase S sequence are all updated together.
 
 - `docs/plan-phase-S.md`
 - `docs/phase-S/sprint-S0.md`
+- `docs/phase-S/sprint-S1.md`
+- `docs/phase-S/sprint-S2.md`
+- `docs/phase-S/sprint-S3.md`
+- `docs/phase-S/sprint-S4.md`
 - `docs/phase-S/issues.md`
 - `docs/project-plan.md`
 - `docs/requirements.md`
@@ -136,6 +149,9 @@ daemon docs, and Phase S sequence are all updated together.
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
+- `docs/testing-guidelines.md`
+- `docs/cross-platform-guidelines.md`
+- `docs/adr/ADR-007-supported-platform-parity.md`
 
 ## Risks And Watchouts
 

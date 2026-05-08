@@ -2,6 +2,23 @@
 
 Rules and patterns for ensuring atm works correctly on Ubuntu, macOS, and Windows CI.
 
+## Phase S Daemon Portability Guard
+
+For same-host daemon functionality, operating-system-specific implementation
+differences are allowed only in these daemon-owned areas:
+- local IPC transport adapter
+- lifecycle-control source adapter
+- host-ownership adapter
+
+Do not solve Windows support by scattering `#[cfg(unix)]` / `#[cfg(windows)]`
+branches through runtime composition, dispatcher, replay, status-cache,
+watch/reconcile, or notifier code.
+
+Review rule:
+- if a new same-host daemon feature cannot be implemented on every supported
+  operating system through the documented portability boundaries, the docs and
+  architecture must be updated before implementation continues
+
 ## Home Directory Resolution
 
 **Problem**: `dirs::home_dir()` on Windows uses the Windows API (`SHGetKnownFolderPath`), which ignores both `HOME` and `USERPROFILE` environment variables. Tests that only redirect `HOME` do not relocate the canonical `~/.claude` config root on Windows.

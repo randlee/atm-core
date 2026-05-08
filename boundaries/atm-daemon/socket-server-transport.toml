@@ -47,7 +47,13 @@ forbidden_test_bypasses = [
 
 [enforcement]
 lint_rules = ["LINT-BOUNDARY-SERVER-TRANSPORT-SOCKET-EDGES", "LINT-BOUNDARY-SERVER-TRANSPORT-SOCKET-REFERENCES"]
-review_gates = ["no_public_impl", "no_public_constructor", "no_cli_to_daemon_edge"]
+review_gates = [
+  "no_public_impl",
+  "no_public_constructor",
+  "no_cli_to_daemon_edge",
+  "platform_parity_required",
+  "no_nonunix_stub_release",
+]
 
 [status]
 state = "stub_landed"
@@ -55,4 +61,5 @@ notes = [
   "thin clients must stop at ClientTransport and AtmProtocol",
   "the stable boundary id retains its historical socket name, but the target same-host surface is one cross-platform local IPC contract",
   "stub implementation currently lives at crate root and is assembled through atm_daemon::composition",
+  "Phase S is not complete until both Unix and Windows implementations ship behind this boundary",
 ]

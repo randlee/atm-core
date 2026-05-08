@@ -50,6 +50,7 @@ Initial allocation:
 - `REQ-DAEMON-OBS-*`
 - `REQ-DAEMON-HEALTH-*`
 - `REQ-DAEMON-SIGNAL-*`
+- `REQ-DAEMON-PLATFORM-*`
 
 Initial crate requirement IDs:
 
@@ -136,6 +137,24 @@ Initial crate requirement IDs:
   signals; Windows may satisfy it through console or service-control events.
   Satisfies:
   `REQ-CORE-DAEMON-001`, `REQ-CORE-DOCTOR-002`.
+- `REQ-DAEMON-PLATFORM-001` `atm-daemon` must deliver full same-host daemon
+  functionality on every supported operating system rather than clean
+  compilation plus unsupported-path stubs. Satisfies:
+  `REQ-P-PLATFORM-001`, `REQ-P-PLATFORM-002`.
+- `REQ-DAEMON-PLATFORM-002` OS-specific implementation differences are allowed
+  only inside the documented daemon portability boundaries for local IPC,
+  lifecycle control, and host ownership. Satisfies:
+  `REQ-P-PLATFORM-002`, `REQ-CORE-BOUNDARY-001`.
+- `REQ-DAEMON-TEST-003` `atm-daemon` same-host functional tests must use one
+  shared transport/dispatcher test harness on Unix and Windows, with
+  platform-specific test code limited to the owned portability adapters.
+  Satisfies:
+  `REQ-P-PLATFORM-002`, `REQ-CORE-TEST-RUNTIME-001`.
+- `REQ-DAEMON-TEST-004` `atm-daemon` must not use fixed sleeps or timing-only
+  stabilization in same-host functional tests; readiness, shutdown, and retry
+  behavior must be proven through explicit synchronization or bounded runtime
+  contracts. Satisfies:
+  `REQ-P-TEST-001`, `REQ-P-PLATFORM-002`.
 
 ## 4. Required References
 
@@ -174,9 +193,13 @@ Requirement IDs:
 - `REQ-DAEMON-CONFIG-001`
 - `REQ-DAEMON-TEST-001`
 - `REQ-DAEMON-TEST-002`
+- `REQ-DAEMON-TEST-003`
+- `REQ-DAEMON-TEST-004`
 - `REQ-DAEMON-OBS-001`
 - `REQ-DAEMON-HEALTH-001`
 - `REQ-DAEMON-SIGNAL-001`
+- `REQ-DAEMON-PLATFORM-001`
+- `REQ-DAEMON-PLATFORM-002`
 
 Required runtime rules:
 - exactly one daemon process may be active on a host at a time
@@ -217,6 +240,9 @@ Required runtime rules:
 - `SIGHUP`-driven config or roster rescan must either apply a fully valid
   configuration or fail with a typed reload error while retaining the prior
   serving configuration
+- same-host daemon functionality must remain feature-complete on every
+  supported operating system; compile-only support or typed unsupported-path
+  stubs are not a releasable end state
 - the same-host transport boundary must remain platform-neutral above the
   adapter layer:
   - Unix may use Unix domain sockets
@@ -226,9 +252,23 @@ Required runtime rules:
 - platform cfg is allowed only inside owned daemon adapter modules; composition,
   dispatcher, health, replay, and runtime-lane code must not embed transport-
   or control-source-specific OS branching
+- supported operating system differences are limited to these daemon-owned
+  portability boundaries:
+  - local IPC transport adapter
+  - lifecycle-control source adapter
+  - host-ownership adapter
+- unsupported-path stubs are allowed only as short-lived implementation
+  scaffolding while the owning Phase S sprint is in flight; they are a direct
+  release blocker once the parity line is declared complete
 - remote delivery must be daemon-to-daemon only
 - the same transport protocol must be exercisable through an in-process
   `test-socket` without changing handler/business logic
+- same-host functional tests must use shared infrastructure on Unix and Windows
+  so one handler/dispatcher contract is proven through both platform
+  implementations
+- fixed sleeps, warmup polling, and timing-only daemon stabilization are
+  prohibited in same-host functional tests; tests must use explicit
+  synchronization or bounded runtime contracts
 - transport/store/health operations must obey one documented timeout budget
   - authoritative timeout budget references:
     [`../architecture.md §21.6.4`](../architecture.md) and

@@ -91,6 +91,9 @@ Notes:
   surface is one cross-platform local IPC contract:
   - Unix implementation: Unix domain socket
   - Windows implementation: named-pipe-backed local IPC
+- release closeout requires both Unix and Windows implementations to exist
+  behind this boundary; non-Unix unsupported-path stubs are an intermediate
+  implementation state only
 
 ## LifecycleControlSourceAdapter
 
@@ -107,6 +110,8 @@ Notes:
   events.
 - Callers above this boundary must not branch on `SIG*` constants or Windows
   control-event types directly.
+- if one supported operating system lacks a production implementation for this
+  boundary, Phase S is not complete
 
 ## HostOwnershipAdapter
 
@@ -122,6 +127,22 @@ Notes:
   rules can be reviewed and linted separately from the transport boundary.
 - The target implementation is cross-platform even when individual OS locking
   calls differ.
+- singleton, stale-owner recovery, and release ordering semantics must be the
+  same on every supported operating system even when the adapter internals
+  differ
+
+## Phase S Boundary Guardrails
+
+Phase S adds these review rules for the three daemon portability boundaries:
+
+- only the owned adapter modules may contain operating-system-specific
+  `cfg(...)` branching for same-host daemon hosting
+- composition, dispatcher, replay, health, watch/reconcile, notifier, and
+  request-family code must stay platform-neutral
+- shared same-host functional tests must prove the same handler/dispatcher
+  contract on Unix and Windows
+- a boundary with only one supported-operating-system implementation is
+  incomplete and must not be documented as production-ready
 
 ## PeerClientTransportAdapter
 

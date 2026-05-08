@@ -63,6 +63,7 @@ lint_rules = [
 review_gates = [
   "no_transport_to_os_control_leak",
   "no_dispatcher_signal_branching",
+  "platform_parity_required",
 ]
 
 [status]
@@ -70,4 +71,5 @@ state = "planned"
 notes = [
   "Phase R currently implements this boundary only through Unix signals",
   "Phase S requires a platform-neutral lifecycle control source with Unix and Windows implementations behind one daemon-private contract",
+  "same-host daemon hosting is incomplete until Windows lifecycle control exists behind this boundary",
 ]

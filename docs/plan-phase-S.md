@@ -53,6 +53,12 @@ Phase S hardens the daemon around four portability boundaries:
    - functional transport tests must use the real local-IPC boundary on both
      Unix and Windows rather than only Unix-only harnesses
 
+Governing parity rule:
+- Phase S is complete only when the same-host daemon feature set is
+  production-ready on macOS, Linux, and Windows
+- Windows compilation, stubbed `daemon_unavailable(...)` paths, or Unix-only
+  functional test coverage do not satisfy the goal
+
 ## 4. Documentation Hardening Loop
 
 Status:
@@ -88,6 +94,30 @@ Required outcomes:
 - platform cfg is isolated to owned adapter modules
 - any required `atm-core` boundary trait changes are documented and landed
 
+Required code targets:
+- `crates/atm-daemon/src/composition.rs`
+  - `RuntimeComposition::start`
+  - `RuntimeComposition::start_with_socket_path_for_test`
+  - `validate_runtime_socket_path`
+  - `validate_runtime_home_dir`
+  - `compose_runtime`
+- `crates/atm-daemon/src/lib.rs`
+  - `PreparedRuntimeServer::bind`
+  - `PreparedRuntimeServer::serve_with_runtime_hooks`
+  - `PreparedRuntimeServer::serve_with_deadlines_and_accept_probe`
+  - `drain_active_connections_for_shutdown`
+  - `handle_connection`
+  - `ActiveConnectionRegistry::{register, interrupt_all, wait_for_connection_change}`
+- `crates/atm-daemon/src/shutdown_signals.rs`
+  - `DaemonShutdownSignals::install`
+
+Required refactor direction:
+- remove direct `UnixListener` / `UnixStream` / signal constant dependencies
+  from runtime orchestration
+- replace broad `#[cfg(unix)]` gating on composition/runtime entrypoints with
+  adapter-owned platform selection
+- document every remaining allowed OS-specific seam before S.1 closes
+
 ### S.2 Windows Local IPC Implementation
 
 Goal:
@@ -100,6 +130,25 @@ Required outcomes:
 - request/response framing, deadlines, and typed error behavior match the Unix
   path
 - same-host functional tests pass on Windows through the real transport
+
+Required code targets:
+- `crates/atm-daemon/src/lib.rs`
+  - imports and concrete fields that currently depend on `UnixListener` and
+    `UnixStream`
+  - `PreparedRuntimeServer`
+  - `RuntimeServerTransport::prepare_runtime`
+  - `RuntimeServerTransport::prepare_runtime_at_socket_path`
+  - `remove_stale_socket`
+  - `handle_connection`
+- `crates/atm-daemon/src/tests.rs`
+  - replace Unix-only same-host transport tests with shared harness coverage
+
+Required refactor direction:
+- move Unix socket path validation and connection interruption mechanics behind
+  the local-IPC adapter
+- replace Unix-only same-host runtime stubs with a real Windows transport
+  implementation
+- keep one shared handler/dispatcher test harness across Unix and Windows
 
 ### S.3 Windows Runtime Control And Host Ownership
 
@@ -114,6 +163,30 @@ Required outcomes:
 - teardown and stale-owner recovery semantics are documented and tested on both
   host families
 
+Required code targets:
+- `crates/atm-daemon/src/shutdown_signals.rs`
+  - `DaemonShutdownSignals::install`
+  - `DaemonShutdownSignals::new_for_test`
+- `crates/atm-daemon/src/lib.rs`
+  - `host_runtime_lock_path`
+  - `host_runtime_lock_path_from_home`
+  - `write_owner_record`
+  - `recorded_owner_pid`
+  - `SingletonGuard::{acquire, acquire_at, drop}`
+  - `open_singleton_lock`
+  - `recover_stale_owner_lock`
+- `crates/atm-daemon/src/composition.rs`
+  - `RuntimeComposition::begin_shutdown`
+  - `RuntimeComposition::finalize_shutdown`
+  - `RuntimeComposition::start`
+
+Required refactor direction:
+- replace Unix-specific signal ownership with a platform-neutral lifecycle
+  control source that has Unix and Windows implementations
+- replace Unix-shaped host-ownership mechanics with one cross-platform
+  ownership contract that preserves identical singleton and teardown rules
+- prove ordered release semantics and stale-owner recovery on Unix and Windows
+
 ### S.4 Cross-Platform Hardening And Release Closeout
 
 Goal:
@@ -125,6 +198,18 @@ Required outcomes:
 - docs, boundary inventories, and product plan match the landed host design
 - no remaining production path depends on Unix-only host APIs outside owned
   adapter modules
+
+Required closeout work:
+- remove any remaining non-Unix `daemon_unavailable(...)` stubs in same-host
+  runtime paths
+- add review-visible coverage proving Windows same-host daemon hosting through
+  shared infrastructure
+- add or tighten lint/review guards that reject:
+  - fixed-sleep daemon stabilization
+  - new broad `#[cfg(unix)]` gating outside adapter modules
+  - Unix-only same-host functionality in production paths
+- reconcile docs, ADRs, and machine-readable boundaries so the production
+  design names every allowed OS-specific implementation difference
 
 ## 6. Crate Candidates
 

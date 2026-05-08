@@ -62,6 +62,9 @@ Phase-S portability note:
   coded Unix-only assumptions into the same-host host/runtime shell
 - Phase S is the active planning line for making the daemon feature-complete on
   Windows as well as Unix-like hosts
+- feature parity across supported operating systems is mandatory; platform-
+  specific implementation differences are allowed only behind documented ATM-
+  owned portability boundaries
 - Phase S planning is tracked in [`docs/plan-phase-S.md`](./plan-phase-S.md)
 
 ## 2. Crate Boundaries
@@ -2276,6 +2279,18 @@ test transport:
 - tests: in-process `test-socket`
 
 This is one protocol with multiple implementations, not multiple systems.
+
+Supported-platform parity rule:
+- same-host daemon functionality is not complete until the Unix and Windows
+  implementations both satisfy the same retained product behavior
+- platform-specific implementation differences are allowed only in:
+  - same-host local IPC adapter internals
+  - lifecycle-control source adapter internals
+  - host-ownership adapter internals
+- business logic, dispatcher routing, replay/state handling, health
+  projection, and runtime-lane behavior must not diverge by operating system
+- compile-only support or typed unsupported-path stubs are acceptable only as
+  temporary implementation states and must not be documented as final support
 
 Test-transport rule:
 - `test-socket` implements the same dispatcher/handler contract without real

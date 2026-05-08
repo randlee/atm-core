@@ -59,6 +59,7 @@ lint_rules = [
 review_gates = [
   "no_transport_owned_locking",
   "no_cli_owned_singleton_logic",
+  "platform_parity_required",
 ]
 
 [status]
@@ -66,4 +67,5 @@ state = "planned"
 notes = [
   "Phase R embeds host ownership inside the runtime lifecycle controller",
   "Phase S pulls host ownership into an explicit portability boundary so file-locking and teardown semantics can be reviewed independently on Unix and Windows",
+  "singleton, stale-owner recovery, and release ordering semantics must match across supported operating systems",
 ]

@@ -167,6 +167,24 @@ Satisfied by:
   - partial lane failure must not leave the runtime in ambiguous ownership
     state
 
+- `REQ-P-PLATFORM-001` ATM `1.0` supports macOS, Linux, and Windows as
+  first-class operating systems for the retained product surface.
+
+- `REQ-P-PLATFORM-002` Feature parity across supported operating systems is a
+  release requirement, not a best-effort goal.
+
+  Required behavior:
+  - every retained ATM feature required for `1.0` must work on every supported
+    operating system
+  - daemon functionality must not be considered "supported" on an operating
+    system when the result is compile-only support, `daemon_unavailable`
+    stubs, or documentation that instructs users to switch operating systems
+  - implementation differences by operating system are allowed only behind
+    documented product and crate-local boundaries and must preserve the same
+    observable product behavior, error semantics, and test obligations
+  - a feature that lacks one supported-operating-system implementation is
+    incomplete and must not be documented as production-ready
+
 ### 2.1 In Scope
 
 - one binary: `atm`
@@ -2788,6 +2806,15 @@ mail correctness.
     the Phase Q implementation line
   - subsystem and runtime tests must be able to replace local-IPC/TCP transport
     adapters with the `test-socket` transport without changing business logic
+  - same-host daemon functionality must be production-complete on every
+    supported operating system; transport-specific non-Unix stubs are allowed
+    only as temporary intermediate implementation states and must not survive
+    the Phase S closeout line
+  - platform `cfg(...)` for same-host transport may appear only inside the
+    owned local-IPC adapter modules and their platform-specific tests
+  - shared test infrastructure must exercise the same handler/dispatcher
+    contract on Unix and Windows rather than maintaining separate product-level
+    transport semantics per platform
 
 - `REQ-CORE-TRANSPORT-001B` Request routing must live behind one explicit
   dispatcher boundary with injectable typed handlers.

@@ -95,6 +95,9 @@ Phase R redesign notes:
   - cross-platform local IPC for same-host daemon access
   - TCP/TLS
   - in-process `LoopbackClientTransport` (`test-socket`)
+- same-host daemon functionality must ship with feature parity on every
+  supported operating system; Windows is not a compile-only or degraded-host
+  target
 - same-host transport and lifecycle control must remain platform-neutral above
   the adapter line:
   - platform-specific listener/stream/control types are allowed only inside
@@ -154,6 +157,33 @@ Phase R redesign notes:
   internals directly
 - the watcher/reconcile boundary minimum method set is defined in product
   [architecture.md §21.6.1](../architecture.md)
+
+## 3.0.1 Allowed Operating-System Difference Inventory
+
+The Phase S production target allows OS-specific implementation differences
+only in these daemon-owned areas:
+
+1. Same-host local IPC transport
+   - Unix: Unix domain socket
+   - Windows: named-pipe-backed local IPC
+2. Runtime lifecycle-control source
+   - Unix: signal-based control source
+   - Windows: console or service-control source
+3. Host ownership
+   - Unix and Windows may differ in file-locking and owner-record mechanics,
+     but must preserve the same singleton, stale-owner, and teardown behavior
+
+Everything else must remain platform-neutral:
+- request parsing and dispatch
+- handler behavior
+- daemon status cache and doctor projection
+- replay, retry, and timeout semantics
+- watch/reconcile and notification runtime coordination
+- shutdown ordering and typed error surfaces
+
+If a code path needs additional platform branching outside the three areas
+above, the architecture docs and boundary inventory must be updated before the
+implementation is accepted.
 
 ## 3.1 Singleton Runtime
 
@@ -244,6 +274,9 @@ Transport dispatcher rule:
 - the same dispatcher/handler contract must back the in-process `test-socket`
   transport so handler behavior is testable without Unix-specific or TCP/TLS
   host code
+- same-host functional coverage must also exercise the real local-IPC adapter
+  on Unix and Windows through one shared harness shape; a Unix-only host test
+  suite is not sufficient for Phase S closeout
 
 Dispatcher/handler rule:
 - request-kind routing belongs to the dispatcher boundary, not to the socket
