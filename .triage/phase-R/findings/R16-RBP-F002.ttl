@@ -14,7 +14,7 @@ triage:R16-RBP-F002
   triage:sweepScope "file_only" ;
   triage:pattern "peer_addr.*to_string|peer_addr.*parse.*SocketAddr" ;
   triage:fileFilter "peer_transport\\.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:highestOpenBranch triage:R16-peer-replay ;
   triage:promoteToVersion "R.16" ;
@@ -36,7 +36,7 @@ triage:R16-RBP-F002
       triage:branchPath "/Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s16-peer-replay" ;
       triage:headSha "c7b4455" ;
       triage:orderIndex 16 ;
-      triage:status "open" ;
+      triage:status "fixed" ;
       triage:matchCount 2 ;
       triage:matches (
         [
@@ -62,7 +62,7 @@ triage:R16-RBP-F002
       triage:branchPath "/Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s17-watch-reconcile" ;
       triage:headSha "5de80ad" ;
       triage:orderIndex 17 ;
-      triage:status "open" ;
+      triage:status "fixed" ;
       triage:matchCount 1 ;
       triage:matches (
         [

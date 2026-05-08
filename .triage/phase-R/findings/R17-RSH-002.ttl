@@ -11,7 +11,7 @@ triage:R17-RSH-002 a triage:Finding ;
   triage:severity triage:minor ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-05-07T00:00:00Z"^^xsd:dateTime ;
   triage:highestOpenBranch "R.17" ;
@@ -29,6 +29,6 @@ triage:R16-RSH-002 a triage:BranchClassification ;
 
 triage:R17-RSH-002-branch a triage:BranchClassification ;
   triage:branch "R.17" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:matchCount 3 ;
   triage:matches "Line 7: use std::thread::{self, JoinHandle};" , "Line 25: worker: Mutex<Option<JoinHandle<()>>>," , "Line 210: handle.join().map_err(|_| {" .

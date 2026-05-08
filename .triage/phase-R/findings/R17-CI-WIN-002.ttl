@@ -13,7 +13,7 @@ triage:R17-CI-WIN-002 a triage:Finding ;
   triage:severity triage:blocking ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:highestOpenBranch "R.17" ;
   triage:promoteToBranch "R.17" ;
@@ -24,7 +24,7 @@ triage:R17-CI-WIN-002-R15 a triage:BranchFinding ;
   triage:branch "R.15" ;
   triage:branchPath "/Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s15-status-heartbeat" ;
   triage:headSha "d2d76a0" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
   triage:occurrences (
     [ triage:lineNumber 19 ; triage:content "use std::os::unix::net::{UnixListener, UnixStream};" ; triage:type "import" ]
@@ -36,7 +36,7 @@ triage:R17-CI-WIN-002-R16 a triage:BranchFinding ;
   triage:branch "R.16" ;
   triage:branchPath "/Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s16-peer-replay" ;
   triage:headSha "c7b4455" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
   triage:occurrences (
     [ triage:lineNumber 19 ; triage:content "use std::os::unix::net::{UnixListener, UnixStream};" ; triage:type "import" ]
@@ -48,7 +48,7 @@ triage:R17-CI-WIN-002-R17 a triage:BranchFinding ;
   triage:branch "R.17" ;
   triage:branchPath "/Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s17-watch-reconcile" ;
   triage:headSha "5de80ad" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
   triage:occurrences (
     [ triage:lineNumber 19 ; triage:content "use std::os::unix::net::{UnixListener, UnixStream};" ; triage:type "import" ]

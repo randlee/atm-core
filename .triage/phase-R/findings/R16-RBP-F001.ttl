@@ -16,7 +16,7 @@
   triage:phaseId "phase-R" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:highestOpenBranch "R.17" ;
   triage:promoteToBranch "R.17" ;

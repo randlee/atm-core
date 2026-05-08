@@ -15,7 +15,7 @@ triage:R15-RBP-F004
   triage:triageMode "initial_pass" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-05-07T00:00:00Z"^^xsd:dateTime ;
   triage:highestOpenBranch triage:R17-occurrence ;
@@ -28,10 +28,10 @@ triage:R15-occurrence
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 573 ;
   triage:snippet "return Err(AtmError::identity_conflict(\"ATM_IDENTITY_CONFLICT: stop and report to user immediately\"));" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:branch "R.15" ;
   triage:headSha "d2d76a0" ;
-  triage:closed false .
+  triage:closed true .
 
 # Occurrence in R.16 branch
 triage:R16-occurrence
@@ -39,10 +39,10 @@ triage:R16-occurrence
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 570 ;
   triage:snippet "return Err(AtmError::identity_conflict(\"ATM_IDENTITY_CONFLICT: stop and report to user immediately\"));" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:branch "R.16" ;
   triage:headSha "c7b4455" ;
-  triage:closed false .
+  triage:closed true .
 
 # Occurrence in R.17 branch
 triage:R17-occurrence
@@ -50,10 +50,10 @@ triage:R17-occurrence
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 570 ;
   triage:snippet "return Err(AtmError::identity_conflict(\"ATM_IDENTITY_CONFLICT: stop and report to user immediately\"));" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:branch "R.17" ;
   triage:headSha "5de80ad" ;
-  triage:closed false .
+  triage:closed true .
 
 # Worktree snapshots
 triage:R15-snapshot

@@ -11,26 +11,26 @@
     triage:severity "important" ;
     triage:repeatable false ;
     triage:sweepScope "file_only" ;
-    triage:status "open" ;
+    triage:status "fixed" ;
     triage:dispatchReady true ;
     triage:triagedAt "2026-05-07T00:00:00Z"^^xsd:dateTime ;
     triage:branchStatus [
         triage:branch "R.15" ;
-        triage:status "open" ;
+        triage:status "fixed" ;
         triage:sha "d2d76a0" ;
         triage:matchCount 3 ;
         triage:matchLines "644, 651, 670"
     ] ;
     triage:branchStatus [
         triage:branch "R.16" ;
-        triage:status "open" ;
+        triage:status "fixed" ;
         triage:sha "c7b4455" ;
         triage:matchCount 3 ;
         triage:matchLines "641, 648, 667"
     ] ;
     triage:branchStatus [
         triage:branch "R.17" ;
-        triage:status "open" ;
+        triage:status "fixed" ;
         triage:sha "5de80ad" ;
         triage:matchCount 3 ;
         triage:matchLines "641, 648, 667"

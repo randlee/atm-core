@@ -14,7 +14,7 @@ triage:R17-FTQ-003
   triage:fileFilter "reconcile_runtime\\.rs" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:highestOpenBranch "R.17" ;
   triage:promoteToBranch "R.17" ;
   triage:dispatchReady true ;

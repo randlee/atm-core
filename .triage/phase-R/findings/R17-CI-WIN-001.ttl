@@ -13,7 +13,7 @@ triage:R17-CI-WIN-001
   triage:phaseId "phase-R" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:highestOpenBranch "R.17" ;
   triage:promoteToBranch "R.17" ;
@@ -25,20 +25,20 @@ triage:R17-CI-WIN-001
 triage:R15-CI-WIN-001
   rdf:type triage:BranchFinding ;
   triage:branch "R.15" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:matchCount 1 ;
   triage:matches "crates/atm-daemon/src/tests.rs:19" .
 
 triage:R16-CI-WIN-001
   rdf:type triage:BranchFinding ;
   triage:branch "R.16" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:matchCount 1 ;
   triage:matches "crates/atm-daemon/src/tests.rs:19" .
 
 triage:R17-CI-WIN-001
   rdf:type triage:BranchFinding ;
   triage:branch "R.17" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:matchCount 1 ;
   triage:matches "crates/atm-daemon/src/tests.rs:19" .
