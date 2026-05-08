@@ -176,6 +176,7 @@ impl RuntimeComposition {
         self.request_dispatcher.finalize_shutdown();
     }
 
+    #[cfg(unix)]
     pub(crate) fn start(&self) -> Result<(), AtmError> {
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
         // Startup replay must finish before the daemon binds its socket so
@@ -228,7 +229,14 @@ impl RuntimeComposition {
         self.finish_runtime(result)
     }
 
-    #[cfg(test)]
+    #[cfg(not(unix))]
+    pub(crate) fn start(&self) -> Result<(), AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "atm-daemon runtime composition requires a Unix platform",
+        ))
+    }
+
+    #[cfg(all(unix, test))]
     pub(crate) fn start_with_socket_path_for_test(
         &self,
         socket_path: PathBuf,
@@ -283,6 +291,16 @@ impl RuntimeComposition {
             || self.finalize_shutdown(),
         );
         self.finish_runtime(result)
+    }
+
+    #[cfg(all(not(unix), test))]
+    pub(crate) fn start_with_socket_path_for_test(
+        &self,
+        _socket_path: PathBuf,
+    ) -> Result<(), AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "atm-daemon test socket runtime requires a Unix platform",
+        ))
     }
 
     #[cfg(test)]
