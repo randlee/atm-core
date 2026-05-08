@@ -29,7 +29,11 @@ use crate::NodeId;
 use crate::OwnerId;
 use crate::RuleId;
 use crate::source_scan::FileContext;
+use crate::source_scan::ScopeKind;
+use crate::source_scan::classify_scope;
 use crate::source_scan::discover_source_files;
+use crate::source_scan::item_attrs;
+use crate::source_scan::item_name_hint_is_tests;
 use crate::source_scan::span_start_line;
 
 #[derive(Debug, Clone, Deserialize, Default, PartialEq, Eq)]
@@ -58,12 +62,6 @@ struct PortabilityFinding {
     package: String,
     target: String,
     node_label: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ScopeKind {
-    Test,
-    NonTest,
 }
 
 pub(crate) fn analyze_portability(root: &Path) -> Result<Vec<Finding>> {
@@ -397,16 +395,18 @@ impl<'a> PortabilityCollector<'a> {
             Item::Mod(item_mod) => self.visit_item_mod(item_mod, inherited_scope),
             Item::Impl(item_impl) => self.visit_item_impl(item_impl, inherited_scope),
             Item::Const(item_const) => {
-                if self.item_is_test_scope(&item_const.attrs, inherited_scope, None)
-                    == ScopeKind::Test
-                {
+                if classify_scope(&item_const.attrs, inherited_scope, None) == ScopeKind::Test {
+                    // PORT-001/002/003 intentionally target test-scope code
+                    // only. Production portability uses the separate
+                    // `collect_unix_portability_findings` path.
                     self.visit_expr_for_portability(&item_const.expr, "const");
                 }
             }
             Item::Static(item_static) => {
-                if self.item_is_test_scope(&item_static.attrs, inherited_scope, None)
-                    == ScopeKind::Test
-                {
+                if classify_scope(&item_static.attrs, inherited_scope, None) == ScopeKind::Test {
+                    // PORT-001/002/003 intentionally target test-scope code
+                    // only. Production portability uses the separate
+                    // `collect_unix_portability_findings` path.
                     self.visit_expr_for_portability(&item_static.expr, "static");
                 }
             }
@@ -415,7 +415,7 @@ impl<'a> PortabilityCollector<'a> {
     }
 
     fn visit_item_fn(&mut self, item_fn: &ItemFn, inherited_scope: ScopeKind) {
-        let scope = self.item_is_test_scope(
+        let scope = classify_scope(
             &item_fn.attrs,
             inherited_scope,
             Some(item_fn.sig.ident == "tests"),
@@ -427,7 +427,7 @@ impl<'a> PortabilityCollector<'a> {
     }
 
     fn visit_item_mod(&mut self, item_mod: &ItemMod, inherited_scope: ScopeKind) {
-        let scope = self.item_is_test_scope(
+        let scope = classify_scope(
             &item_mod.attrs,
             inherited_scope,
             Some(item_mod.ident == "tests"),
@@ -438,13 +438,13 @@ impl<'a> PortabilityCollector<'a> {
     }
 
     fn visit_item_impl(&mut self, item_impl: &ItemImpl, inherited_scope: ScopeKind) {
-        let scope = self.item_is_test_scope(&item_impl.attrs, inherited_scope, None);
+        let scope = classify_scope(&item_impl.attrs, inherited_scope, None);
         if scope != ScopeKind::Test {
             return;
         }
         for item in &item_impl.items {
             if let ImplItem::Fn(item_fn) = item {
-                let fn_scope = self.item_is_test_scope(&item_fn.attrs, scope, None);
+                let fn_scope = classify_scope(&item_fn.attrs, scope, None);
                 if fn_scope == ScopeKind::Test {
                     self.check_home_dir_rule_in_function(
                         &item_fn.block,
@@ -457,24 +457,6 @@ impl<'a> PortabilityCollector<'a> {
                 }
             }
         }
-    }
-
-    fn item_is_test_scope(
-        &self,
-        attrs: &[Attribute],
-        inherited_scope: ScopeKind,
-        name_hint_is_tests: Option<bool>,
-    ) -> ScopeKind {
-        if inherited_scope == ScopeKind::Test {
-            return ScopeKind::Test;
-        }
-        if attrs.iter().any(attr_is_cfg_test) || attrs.iter().any(attr_is_test) {
-            return ScopeKind::Test;
-        }
-        if name_hint_is_tests.unwrap_or(false) {
-            return ScopeKind::Test;
-        }
-        ScopeKind::NonTest
     }
 
     fn check_home_dir_rule_in_function(&mut self, block: &Block, fn_name: String) {
@@ -714,66 +696,6 @@ fn load_portability_config(root: &Path) -> Result<PortabilityConfig> {
         config_home_env: repo_config.portability.and_then(|cfg| cfg.config_home_env),
         unix_path_prefixes: defaults.unix_path_prefixes.clone(),
     })
-}
-
-fn attr_is_cfg_test(attr: &Attribute) -> bool {
-    let path = attr.path();
-    if !path.is_ident("cfg") {
-        return false;
-    }
-    attr.parse_args::<syn::Ident>()
-        .map(|ident| ident == "test")
-        .unwrap_or(false)
-}
-
-fn attr_is_test(attr: &Attribute) -> bool {
-    attr.path().is_ident("test")
-}
-
-fn item_attrs(item: &Item) -> &[Attribute] {
-    match item {
-        Item::Const(item_const) => &item_const.attrs,
-        Item::Enum(item_enum) => &item_enum.attrs,
-        Item::ExternCrate(item_extern_crate) => &item_extern_crate.attrs,
-        Item::Fn(item_fn) => &item_fn.attrs,
-        Item::ForeignMod(item_foreign_mod) => &item_foreign_mod.attrs,
-        Item::Impl(item_impl) => &item_impl.attrs,
-        Item::Macro(item_macro) => &item_macro.attrs,
-        Item::Mod(item_mod) => &item_mod.attrs,
-        Item::Static(item_static) => &item_static.attrs,
-        Item::Struct(item_struct) => &item_struct.attrs,
-        Item::Trait(item_trait) => &item_trait.attrs,
-        Item::TraitAlias(item_trait_alias) => &item_trait_alias.attrs,
-        Item::Type(item_type) => &item_type.attrs,
-        Item::Union(item_union) => &item_union.attrs,
-        Item::Use(item_use) => &item_use.attrs,
-        _ => &[],
-    }
-}
-
-fn item_name_hint_is_tests(item: &Item) -> Option<bool> {
-    match item {
-        Item::Fn(item_fn) => Some(item_fn.sig.ident == "tests"),
-        Item::Mod(item_mod) => Some(item_mod.ident == "tests"),
-        _ => None,
-    }
-}
-
-fn classify_scope(
-    attrs: &[Attribute],
-    inherited_scope: ScopeKind,
-    name_hint_is_tests: Option<bool>,
-) -> ScopeKind {
-    if inherited_scope == ScopeKind::Test {
-        return ScopeKind::Test;
-    }
-    if attrs.iter().any(attr_is_cfg_test) || attrs.iter().any(attr_is_test) {
-        return ScopeKind::Test;
-    }
-    if name_hint_is_tests.unwrap_or(false) {
-        return ScopeKind::Test;
-    }
-    ScopeKind::NonTest
 }
 
 fn attr_is_cfg_unix(attr: &Attribute) -> bool {

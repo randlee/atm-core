@@ -153,6 +153,11 @@ Current Phase R lint partition direction:
 
 Active postmortem rule families:
 - reusable analyzer rules:
+  - test-scope portability helpers:
+    - `PORT-001` hardcoded Unix-only absolute paths in test code
+    - `PORT-002` direct `dirs::home_dir()` without configured override checks
+    - `PORT-003` `std::env::set_var()` in test code
+  - production portability rules:
   - `PORT-004` ungated `std::os::unix` imports in production code
   - `PORT-005` `cfg_attr(not(unix), allow(dead_code))` portability suppressors
   - `SCB-RUNTIME-001` bare production `Condvar::wait(...)`
@@ -2647,12 +2652,12 @@ Remote peer transport rules:
   address disappears or changes, the daemon must surface degraded status and
   require bounded reload/rebind rather than silently claiming readiness
 
-Accepted limitations tracked into `R.11`:
+Phase R daemon implementation notes:
 - per-connection inflight cap `32` is documented now, but the current daemon
-  still processes one request per accepted connection until framed
-  multiplexing lands in `R.11`
-- `SIGHUP` handler registration is live now, but the bounded config/roster
-  reload implementation itself is deferred to `R.11`
+  still processes one request per accepted connection, so the inflight count
+  is structurally `1` until framed multiplexing is introduced
+- bounded `SIGHUP` config/roster reload now lands in `R.18`, including
+  last-known-good preservation on invalid reload input
 
 ### 21.7 Test Strategy
 

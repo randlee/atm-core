@@ -92,6 +92,25 @@ class LintTtlTriageConsistencyTests(unittest.TestCase):
 
             self.assertEqual(collect_ttl_triage_violations(repo_root), [])
 
+    def test_flags_flat_branch_status_predicate_form(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            write_ttl(
+                repo_root / ".triage/phase-R/findings/F004.ttl",
+                """
+                triage:F004
+                  a triage:Finding ;
+                  triage:status "fixed" ;
+                  triage:findingAggregate "fixed" ;
+                  triage:branchR17Status "open" .
+                """,
+            )
+
+            violations = collect_ttl_triage_violations(repo_root)
+
+            self.assertEqual(len(violations), 1)
+            self.assertIn("aggregate=fixed but branch status remains open", violations[0].message)
+
 
 if __name__ == "__main__":
     unittest.main()

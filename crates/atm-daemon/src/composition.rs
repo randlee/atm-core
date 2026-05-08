@@ -162,6 +162,20 @@ impl RuntimeComposition {
     fn request_dispatcher(&self) -> Arc<dyn RequestDispatcher + Send + Sync> {
         self.request_dispatcher.clone()
     }
+
+    fn begin_shutdown(&self) -> Result<(), AtmError> {
+        self.lifecycle.transition(RuntimeLifecycleState::Draining)?;
+        // Attempt every lane shutdown even if one lane fails so the runtime
+        // still reaches checkpoint/flush finalization with the fullest cleanup
+        // state possible.
+        self.shutdown_background_lanes()?;
+        Ok(())
+    }
+
+    fn finalize_shutdown(&self) {
+        self.request_dispatcher.finalize_shutdown();
+    }
+
     pub(crate) fn start(&self) -> Result<(), AtmError> {
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
         // Startup replay must finish before the daemon binds its socket so
@@ -202,7 +216,15 @@ impl RuntimeComposition {
             }
         };
         self.lifecycle.transition(RuntimeLifecycleState::Running)?;
-        let result = runtime.serve(self.request_dispatcher());
+        let request_dispatcher = Arc::clone(&self.request_dispatcher);
+        let result = runtime.serve_with_runtime_hooks(
+            self.request_dispatcher(),
+            super::GRACEFUL_DRAIN_DEADLINE,
+            super::FORCE_CANCEL_DEADLINE,
+            || self.begin_shutdown(),
+            move || request_dispatcher.reload_runtime_view(),
+            || self.finalize_shutdown(),
+        );
         self.finish_runtime(result)
     }
 
@@ -251,7 +273,15 @@ impl RuntimeComposition {
             }
         };
         self.lifecycle.transition(RuntimeLifecycleState::Running)?;
-        let result = runtime.serve(self.request_dispatcher());
+        let request_dispatcher = Arc::clone(&self.request_dispatcher);
+        let result = runtime.serve_with_runtime_hooks(
+            self.request_dispatcher(),
+            super::GRACEFUL_DRAIN_DEADLINE,
+            super::FORCE_CANCEL_DEADLINE,
+            || self.begin_shutdown(),
+            move || request_dispatcher.reload_runtime_view(),
+            || self.finalize_shutdown(),
+        );
         self.finish_runtime(result)
     }
 
@@ -261,13 +291,9 @@ impl RuntimeComposition {
     }
 
     fn finish_runtime(&self, result: Result<(), AtmError>) -> Result<(), AtmError> {
-        // `Draining` is a lifecycle closure marker for the composed runtime
-        // owner, not an extra timed phase inside this type. The actual grace
-        // period lives down in the prepared server shutdown loop.
         let state_result = self
             .lifecycle
-            .transition(RuntimeLifecycleState::Draining)
-            .and_then(|_| self.lifecycle.transition(RuntimeLifecycleState::Stopped))
+            .transition(RuntimeLifecycleState::Stopped)
             .map(|_| ());
         if let Err(state_error) = state_result
             && let Err(force_error) = self.lifecycle.force_stopped()
@@ -283,8 +309,7 @@ impl RuntimeComposition {
                 Ok(()) => Err(force_error),
             };
         }
-        let shutdown_result = self.shutdown_background_lanes();
-        result.and(shutdown_result)
+        result
     }
 
     fn start_background_lanes(&self) -> Result<(), AtmError> {

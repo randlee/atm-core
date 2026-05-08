@@ -4,7 +4,6 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use anyhow::Result;
-use syn::Attribute;
 use syn::Block;
 use syn::Expr;
 use syn::ExprMethodCall;
@@ -23,6 +22,8 @@ use crate::NodeId;
 use crate::OwnerId;
 use crate::RuleId;
 use crate::source_scan::FileContext;
+use crate::source_scan::ScopeKind;
+use crate::source_scan::classify_scope;
 use crate::source_scan::discover_source_files;
 use crate::source_scan::span_start_line;
 
@@ -36,12 +37,6 @@ struct RuntimeFinding {
     package: String,
     target: String,
     node_label: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ScopeKind {
-    Test,
-    NonTest,
 }
 
 pub(crate) fn analyze_runtime_liveness(root: &Path) -> Result<Vec<Finding>> {
@@ -136,7 +131,7 @@ impl<'a> RuntimeCollector<'a> {
     }
 
     fn visit_item_fn(&mut self, item_fn: &ItemFn, inherited_scope: ScopeKind) {
-        let scope = item_is_test_scope(
+        let scope = classify_scope(
             &item_fn.attrs,
             inherited_scope,
             Some(item_fn.sig.ident == "tests"),
@@ -147,7 +142,7 @@ impl<'a> RuntimeCollector<'a> {
     }
 
     fn visit_item_mod(&mut self, item_mod: &ItemMod, inherited_scope: ScopeKind) {
-        let scope = item_is_test_scope(
+        let scope = classify_scope(
             &item_mod.attrs,
             inherited_scope,
             Some(item_mod.ident == "tests"),
@@ -158,13 +153,13 @@ impl<'a> RuntimeCollector<'a> {
     }
 
     fn visit_item_impl(&mut self, item_impl: &ItemImpl, inherited_scope: ScopeKind) {
-        let scope = item_is_test_scope(&item_impl.attrs, inherited_scope, None);
+        let scope = classify_scope(&item_impl.attrs, inherited_scope, None);
         if scope != ScopeKind::NonTest {
             return;
         }
         for item in &item_impl.items {
             if let ImplItem::Fn(item_fn) = item {
-                let fn_scope = item_is_test_scope(&item_fn.attrs, scope, None);
+                let fn_scope = classify_scope(&item_fn.attrs, scope, None);
                 if fn_scope == ScopeKind::NonTest {
                     self.visit_block(&item_fn.block, &item_fn.sig.ident.to_string());
                 }
@@ -277,37 +272,6 @@ impl<'a> RuntimeCollector<'a> {
             ),
         });
     }
-}
-
-fn item_is_test_scope(
-    attrs: &[Attribute],
-    inherited_scope: ScopeKind,
-    name_hint_is_tests: Option<bool>,
-) -> ScopeKind {
-    if inherited_scope == ScopeKind::Test {
-        return ScopeKind::Test;
-    }
-    if attrs.iter().any(attr_is_cfg_test) || attrs.iter().any(attr_is_test) {
-        return ScopeKind::Test;
-    }
-    if name_hint_is_tests.unwrap_or(false) {
-        return ScopeKind::Test;
-    }
-    ScopeKind::NonTest
-}
-
-fn attr_is_cfg_test(attr: &Attribute) -> bool {
-    let path = attr.path();
-    if !path.is_ident("cfg") {
-        return false;
-    }
-    attr.parse_args::<syn::Ident>()
-        .map(|ident| ident == "test")
-        .unwrap_or(false)
-}
-
-fn attr_is_test(attr: &Attribute) -> bool {
-    attr.path().is_ident("test")
 }
 
 fn contains_timeout_wait_call(expr: &Expr) -> bool {

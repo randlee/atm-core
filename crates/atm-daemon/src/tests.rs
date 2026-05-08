@@ -19,7 +19,6 @@ use std::fs::OpenOptions;
 use std::io::{Read, Write};
 #[cfg(unix)]
 use std::os::unix::net::{UnixListener, UnixStream};
-use std::process::{Command, Stdio};
 use std::sync::{Arc, mpsc};
 use std::time::Duration;
 use tempfile::TempDir;
@@ -37,6 +36,37 @@ fn daemon_shutdown_signals_for_test_are_isolated() {
 
     assert!(!second.terminate.load(std::sync::atomic::Ordering::SeqCst));
     assert!(!second.reload.load(std::sync::atomic::Ordering::SeqCst));
+}
+
+#[cfg(unix)]
+#[test]
+#[serial]
+fn daemon_shutdown_signal_install_reuses_shared_flags() {
+    let first = DaemonShutdownSignals::install().expect("install first");
+    first
+        .terminate
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+    first
+        .reload
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+
+    let second = DaemonShutdownSignals::install().expect("install second");
+    first
+        .reload
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    second
+        .terminate
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+
+    assert!(second.reload.load(std::sync::atomic::Ordering::SeqCst));
+    assert!(first.terminate.load(std::sync::atomic::Ordering::SeqCst));
+
+    first
+        .terminate
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+    first
+        .reload
+        .store(false, std::sync::atomic::Ordering::SeqCst);
 }
 
 #[test]
@@ -104,7 +134,7 @@ fn singleton_guard_reports_stale_owner_record_failure() {
 }
 
 #[test]
-#[serial(env)]
+#[serial]
 fn singleton_guard_recovers_stale_owner_once_lock_is_released() {
     let tempdir = TempDir::new().expect("tempdir");
     let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
@@ -272,6 +302,103 @@ fn dispatcher_hydrates_unknown_members_from_team_roster_on_startup() {
 }
 
 #[test]
+fn reload_runtime_view_applies_updated_team_config_and_preserves_live_state() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    let db_path = tempdir.path().join("mail.db");
+
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD]);
+
+    let status_cache = RuntimeStatusCache::new();
+    let dispatcher = DaemonRequestDispatcher::new_for_test(
+        atm_home.clone(),
+        status_cache.clone(),
+        db_path.clone(),
+    );
+    let team: TeamName = "test-team".parse().expect("team");
+    let leader: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+    let qa: AgentName = "qa-a".parse().expect("member");
+
+    dispatcher
+        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: leader.clone(),
+            pid: std::process::id(),
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::ActiveToolUse,
+        }))
+        .expect("initial heartbeat");
+
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD, "qa-a"]);
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD, "qa-a"]);
+
+    dispatcher
+        .reload_runtime_view()
+        .expect("runtime view reload should succeed");
+
+    assert_eq!(
+        status_cache
+            .member_state_for_test(&team, &leader)
+            .expect("leader state"),
+        Some(RuntimeMemberState::Active)
+    );
+    assert_eq!(
+        status_cache
+            .member_state_for_test(&team, &qa)
+            .expect("qa state"),
+        Some(RuntimeMemberState::Unknown)
+    );
+}
+
+#[test]
+fn reload_runtime_view_rejects_invalid_config_and_preserves_last_known_good_state() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    let db_path = tempdir.path().join("mail.db");
+
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD]);
+
+    let status_cache = RuntimeStatusCache::new();
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache.clone(), db_path);
+    let team: TeamName = "test-team".parse().expect("team");
+    let leader: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+
+    dispatcher
+        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: leader.clone(),
+            pid: std::process::id(),
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::ActiveToolUse,
+        }))
+        .expect("initial heartbeat");
+
+    let config_path = atm_home
+        .join(".claude")
+        .join("teams")
+        .join("test-team")
+        .join("config.json");
+    std::fs::write(&config_path, br#"{"members":["team-lead",}"#).expect("invalid config");
+
+    let error = dispatcher
+        .reload_runtime_view()
+        .expect_err("invalid config should be rejected");
+
+    assert!(error.is_config(), "expected config error, got {error:?}");
+    assert_eq!(
+        status_cache
+            .member_state_for_test(&team, &leader)
+            .expect("leader state"),
+        Some(RuntimeMemberState::Active)
+    );
+}
+
+#[test]
 fn heartbeat_rejects_live_pid_conflict() {
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -385,6 +512,7 @@ fn heartbeat_demotes_evicted_member_to_explicit_unknown() {
 
     let status_cache = RuntimeStatusCache::new();
     let team: TeamName = "test-team".parse().expect("team");
+    let dispatcher = DaemonRequestDispatcher::new_for_test(atm_home, status_cache.clone(), db_path);
     let member: AgentName = "evicted".parse().expect("member");
     status_cache
         .hydrate_member_for_test(team.clone(), member.clone(), Some(u32::MAX))
@@ -403,7 +531,6 @@ fn heartbeat_demotes_evicted_member_to_explicit_unknown() {
             .expect("insert member");
     }
 
-    let dispatcher = DaemonRequestDispatcher::new_for_test(atm_home, status_cache.clone(), db_path);
     let response = dispatcher
         .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
             team: team.clone(),
@@ -438,49 +565,20 @@ fn heartbeat_retries_identity_conflict_after_old_pid_dies() {
 
     install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
 
-    let mut child = Command::new("sleep")
-        .arg("5")
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .expect("spawn child");
-    let live_pid = child.id();
-
     let status_cache = RuntimeStatusCache::new();
     let dispatcher = DaemonRequestDispatcher::new_for_test(atm_home, status_cache.clone(), db_path);
     let team: TeamName = "test-team".parse().expect("team");
     let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
-    dispatcher
-        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
-            team: team.clone(),
-            member: member.clone(),
-            pid: live_pid,
-            observed_at: IsoTimestamp::now(),
-            activity: HeartbeatActivity::ActiveToolUse,
-        }))
-        .expect("initial heartbeat");
-
-    let error = dispatcher
-        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
-            team: team.clone(),
-            member: member.clone(),
-            pid: std::process::id(),
-            observed_at: IsoTimestamp::now(),
-            activity: HeartbeatActivity::Idle,
-        }))
-        .expect_err("live pid conflict");
-    assert_eq!(error.code, AtmErrorCode::IdentityConflict);
-    assert_eq!(
-        status_cache
-            .member_state_for_test(&team, &member)
-            .expect("member state"),
-        Some(RuntimeMemberState::IdentityConflict)
-    );
-
-    child.kill().expect("kill child");
-    child.wait().expect("wait child");
+    status_cache
+        .insert_member_for_test(
+            team.clone(),
+            member.clone(),
+            Some(u32::MAX),
+            RuntimeMemberState::IdentityConflict,
+            None,
+        )
+        .expect("seed stale conflict");
 
     let response = dispatcher
         .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {

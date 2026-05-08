@@ -56,6 +56,10 @@ const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 #[cfg(unix)]
 const SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_millis(25);
 #[cfg(unix)]
+const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
+#[cfg(unix)]
+const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(10);
+#[cfg(unix)]
 const STALE_OWNER_RECOVERY_RETRY_ATTEMPTS: usize = 3;
 #[cfg(unix)]
 const HOST_RUNTIME_OWNER_LOCK_FILE: &str = "owner.lock";
@@ -170,7 +174,7 @@ fn recorded_owner_pid(lock_file: &File) -> Result<Option<u32>, AtmError> {
 struct ActiveConnectionRegistry {
     next_id: AtomicUsize,
     active_connections: AtomicUsize,
-    active_dispatchers: AtomicUsize,
+    active_dispatches: AtomicUsize,
     // Keep interruptible stream clones so graceful-drain escalation can break
     // blocked reads instead of waiting forever for peer cooperation.
     streams: Mutex<HashMap<usize, UnixStream>>,
@@ -200,16 +204,20 @@ impl ActiveConnectionRegistry {
         })
     }
 
+    fn register_dispatch_work(self: &Arc<Self>) -> ActiveDispatchGuard {
+        self.active_dispatches.fetch_add(1, Ordering::SeqCst);
+        ActiveDispatchGuard {
+            registry: Arc::clone(self),
+        }
+    }
+
     fn active_connections(&self) -> usize {
         self.active_connections.load(Ordering::SeqCst)
     }
 
-    fn active_dispatchers(&self) -> usize {
-        self.active_dispatchers.load(Ordering::SeqCst)
-    }
-
-    fn total_inflight_units(&self) -> usize {
-        self.active_connections() + self.active_dispatchers()
+    fn active_work_items(&self) -> usize {
+        self.active_connections.load(Ordering::SeqCst)
+            + self.active_dispatches.load(Ordering::SeqCst)
     }
 
     fn interrupt_all(&self) -> Result<(), AtmError> {
@@ -235,15 +243,6 @@ impl ActiveConnectionRegistry {
             return Ok(());
         }
         Ok(())
-    }
-
-    fn dispatcher_started(&self) {
-        self.active_dispatchers.fetch_add(1, Ordering::SeqCst);
-    }
-
-    fn dispatcher_finished(&self) {
-        self.active_dispatchers.fetch_sub(1, Ordering::SeqCst);
-        self.drain_wake.notify_all();
     }
 
     fn remove(&self, id: usize) {
@@ -378,9 +377,24 @@ struct ActiveConnectionGuard {
 }
 
 #[cfg(unix)]
+struct ActiveDispatchGuard {
+    registry: Arc<ActiveConnectionRegistry>,
+}
+
+#[cfg(unix)]
 impl Drop for ActiveConnectionGuard {
     fn drop(&mut self) {
         self.registry.remove(self.id);
+    }
+}
+
+#[cfg(unix)]
+impl Drop for ActiveDispatchGuard {
+    fn drop(&mut self) {
+        self.registry
+            .active_dispatches
+            .fetch_sub(1, Ordering::SeqCst);
+        self.registry.drain_wake.notify_all();
     }
 }
 
@@ -434,31 +448,44 @@ impl PreparedRuntimeServer {
         })
     }
 
-    fn serve(self, dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
-        self.serve_with_deadlines(dispatcher, Duration::from_secs(5), Duration::from_secs(10))
-    }
-
-    fn serve_with_deadlines(
+    fn serve_with_runtime_hooks<BeginShutdown, ReloadRuntimeView, FinalizeShutdown>(
         self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
         graceful_drain_deadline: Duration,
         force_cancel_deadline: Duration,
-    ) -> Result<(), AtmError> {
+        begin_shutdown: BeginShutdown,
+        reload_runtime_view: ReloadRuntimeView,
+        finalize_shutdown: FinalizeShutdown,
+    ) -> Result<(), AtmError>
+    where
+        BeginShutdown: Fn() -> Result<(), AtmError>,
+        ReloadRuntimeView: Fn() -> Result<(), AtmError>,
+        FinalizeShutdown: Fn(),
+    {
         self.serve_with_deadlines_and_accept_probe(
             dispatcher,
             graceful_drain_deadline,
             force_cancel_deadline,
-            None,
+            begin_shutdown,
+            reload_runtime_view,
+            finalize_shutdown,
         )
     }
 
-    fn serve_with_deadlines_and_accept_probe(
+    fn serve_with_deadlines_and_accept_probe<BeginShutdown, ReloadRuntimeView, FinalizeShutdown>(
         self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
         graceful_drain_deadline: Duration,
         force_cancel_deadline: Duration,
-        accepted_probe: Option<std::sync::mpsc::Sender<()>>,
-    ) -> Result<(), AtmError> {
+        begin_shutdown: BeginShutdown,
+        reload_runtime_view: ReloadRuntimeView,
+        finalize_shutdown: FinalizeShutdown,
+    ) -> Result<(), AtmError>
+    where
+        BeginShutdown: Fn() -> Result<(), AtmError>,
+        ReloadRuntimeView: Fn() -> Result<(), AtmError>,
+        FinalizeShutdown: Fn(),
+    {
         let Self {
             _singleton,
             listener,
@@ -470,14 +497,18 @@ impl PreparedRuntimeServer {
             let mut serve_error = None;
             loop {
                 if signals.reload.swap(false, Ordering::SeqCst) {
-                    // Deferred to R.18: bounded SIGHUP config/roster reload.
-                    // See ADR-006 and docs/phase-R/sprint-R18.md.
-                    tracing::warn!(
-                        deferred_sprint = "R.18",
-                        deferred_adr = "ADR-006",
-                        deferred_doc = "docs/phase-R/sprint-R18.md",
-                        "bounded SIGHUP-triggered config/roster reload is not wired yet"
-                    );
+                    match reload_runtime_view() {
+                        Ok(()) => {
+                            tracing::info!("bounded SIGHUP-triggered config/roster reload applied");
+                        }
+                        Err(error) => {
+                            tracing::warn!(
+                                error_code = %error.code,
+                                error_message = %error.message,
+                                "bounded SIGHUP-triggered config/roster reload rejected; last-known-good serving config retained"
+                            );
+                        }
+                    }
                 }
                 if signals.terminate.load(Ordering::SeqCst) {
                     break;
@@ -501,13 +532,11 @@ impl PreparedRuntimeServer {
                             let _ = stream.set_write_timeout(Some(REQUEST_DEADLINE));
                             let _ = stream.write_all(&encoded);
                             let _ = stream.flush();
+                            let _ = stream.shutdown(std::net::Shutdown::Both);
                             continue;
                         }
 
                         let active = registry.register(&stream)?;
-                        if let Some(accepted_probe) = accepted_probe.as_ref() {
-                            let _ = accepted_probe.send(());
-                        }
                         let dispatcher = Arc::clone(&dispatcher);
                         let force_shutdown = Arc::clone(&force_shutdown);
                         let registry = Arc::clone(&registry);
@@ -538,18 +567,37 @@ impl PreparedRuntimeServer {
                 }
             }
 
+            let mut shutdown_error = begin_shutdown().err();
             let shutdown_started = Instant::now();
-            drain_active_connections_for_shutdown(
+            if let Err(error) = drain_active_connections_for_shutdown(
                 registry.as_ref(),
                 force_shutdown.as_ref(),
                 graceful_drain_deadline,
                 force_cancel_deadline,
                 shutdown_started,
-            )?;
-            if let Some(error) = serve_error {
-                return Err(error);
+            ) {
+                if let Some(existing) = shutdown_error.as_ref() {
+                    tracing::warn!(
+                        begin_shutdown_error = %existing,
+                        drain_error = %error,
+                        "daemon shutdown drain failed after an earlier shutdown-start error"
+                    );
+                } else {
+                    shutdown_error = Some(error);
+                }
             }
-            Ok(())
+            finalize_shutdown();
+            if let Some(serve_error) = serve_error {
+                if let Some(shutdown_error) = shutdown_error {
+                    tracing::warn!(
+                        %shutdown_error,
+                        %serve_error,
+                        "daemon shutdown encountered an additional error after a serve error"
+                    );
+                }
+                return Err(serve_error);
+            }
+            shutdown_error.map_or(Ok(()), Err)
         })
     }
 }
@@ -579,41 +627,38 @@ fn drain_active_connections_for_shutdown(
 ) -> Result<(), AtmError> {
     tracing::info!(
         active_connections = registry.active_connections(),
-        active_dispatchers = registry.active_dispatchers(),
+        active_work_items = registry.active_work_items(),
         "daemon shutdown signal received; starting graceful drain"
     );
     let graceful_deadline = shutdown_started + graceful_drain_deadline;
     let force_cancel_deadline = shutdown_started + force_cancel_deadline;
-    while registry.total_inflight_units() > 0 && Instant::now() < graceful_deadline {
+    while registry.active_work_items() > 0 && Instant::now() < graceful_deadline {
         registry.wait_for_connection_change(
             graceful_deadline.saturating_duration_since(Instant::now()),
         )?;
     }
-    let remaining_after_graceful = registry.active_connections();
-    let remaining_dispatchers_after_graceful = registry.active_dispatchers();
-    if remaining_after_graceful == 0 && remaining_dispatchers_after_graceful == 0 {
+    let remaining_after_graceful = registry.active_work_items();
+    if remaining_after_graceful == 0 {
         tracing::info!("daemon graceful drain completed cleanly");
     } else {
         tracing::info!(
-            active_connections = remaining_after_graceful,
-            active_dispatchers = remaining_dispatchers_after_graceful,
+            active_work_items = remaining_after_graceful,
             "daemon graceful drain hit deadline; continuing toward forced cancel"
         );
     }
-    if remaining_after_graceful > 0 || remaining_dispatchers_after_graceful > 0 {
+    if remaining_after_graceful > 0 {
         force_shutdown.store(true, Ordering::SeqCst);
         registry.interrupt_all()?;
     }
-    while registry.total_inflight_units() > 0 && Instant::now() < force_cancel_deadline {
+    while registry.active_work_items() > 0 && Instant::now() < force_cancel_deadline {
         registry.wait_for_connection_change(
             force_cancel_deadline.saturating_duration_since(Instant::now()),
         )?;
     }
-    let remaining_connections = registry.active_connections();
-    let remaining_dispatchers = registry.active_dispatchers();
-    if remaining_connections > 0 || remaining_dispatchers > 0 {
+    let remaining_work_items = registry.active_work_items();
+    if remaining_work_items > 0 {
         return Err(AtmError::daemon_unavailable(format!(
-            "forced cancel deadline elapsed with {remaining_connections} active daemon connections and {remaining_dispatchers} in-flight request dispatchers"
+            "forced cancel deadline elapsed with {remaining_work_items} active daemon work item(s)"
         )));
     }
     Ok(())
@@ -682,8 +727,10 @@ fn handle_connection(
     );
     let request: ProtocolRequestEnvelope =
         serde_json::from_slice(&bytes).map_err(AtmError::from)?;
-    // TODO(phase-R): enforce a max 32 inflight requests per connection once framed multiplexing lands.
-    // Deferred to R.18: per-connection 32 in-flight request cap.
+    // The current daemon transport reads exactly one request frame and returns
+    // one response per accepted connection, so the per-connection in-flight
+    // count is structurally one in Phase R. That remains inside the
+    // documented max-32 cap until framed multiplexing is introduced.
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
     // One detached request-dispatch thread is allowed per active connection.
     // Because accepted connections are capped at `MAX_CONCURRENT_CONNECTIONS`,
@@ -691,22 +738,8 @@ fn handle_connection(
     // the client-facing `REQUEST_DEADLINE`, the registry still tracks that
     // worker so daemon shutdown waits for completion or fails at the forced
     // cancel deadline instead of silently losing in-flight runtime work.
-    registry.dispatcher_started();
-    let dispatch_registry = Arc::clone(&registry);
     std::thread::spawn(move || {
-        struct DispatchTracker {
-            registry: Arc<ActiveConnectionRegistry>,
-        }
-
-        impl Drop for DispatchTracker {
-            fn drop(&mut self) {
-                self.registry.dispatcher_finished();
-            }
-        }
-
-        let _tracker = DispatchTracker {
-            registry: dispatch_registry,
-        };
+        let _dispatch_work = registry.register_dispatch_work();
         let _ = result_tx.send(dispatcher.dispatch(request));
     });
     let response = match result_rx.recv_timeout(REQUEST_DEADLINE) {

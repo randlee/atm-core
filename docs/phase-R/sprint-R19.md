@@ -233,14 +233,14 @@ Validation run for this sprint:
 
 ## Post-Sprint Migration Review
 
-- Family A — migrate to standalone `sc-lint`
+- Family A — approved for future migration to standalone `sc-lint`
   - reusable `PORT-004` / `PORT-005` analyzer rules proved out on `atm-core`
 - Family B — keep local
   - ATM role-name literal policy is repo-specific even though the lint shape is
     generic in theory
 - Family C — keep local
   - fixed-sleep enforcement depends on ATM test-tier allow-list semantics
-- Family D — migrate to standalone `sc-lint`
+- Family D — approved for future migration to standalone `sc-lint`
   - reusable `SCB-RUNTIME-001` / `SCB-RUNTIME-002` analyzer rules proved out on
     production daemon code
 - Family I — keep local

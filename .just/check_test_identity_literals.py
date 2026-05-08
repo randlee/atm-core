@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 import sys
 
+from lint_common import build_report
 from lint_common import LintDirectivePolicy
 from lint_common import discover_repo_root
 from lint_common import iter_string_literal_contents
@@ -13,6 +15,8 @@ from lint_common import iter_workspace_rust_files
 from lint_common import is_code_line
 from lint_common import line_is_suppressed
 from lint_common import load_lint_config
+from lint_common import monotonic_now
+from lint_common import print_report
 from lint_common import rust_file_test_scope
 from lint_common import workspace_crate_section_lines
 
@@ -125,6 +129,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
     repo_root = discover_repo_root(args.root)
+    started_at = datetime.now(timezone.utc)
+    start_time = monotonic_now()
     forbidden_literals = load_forbidden_literals(repo_root)
     production_canonical_literals = load_production_canonical_literals(repo_root)
     violations = collect_identity_violations(
@@ -132,23 +138,44 @@ def main(argv: list[str]) -> int:
         forbidden_literals=forbidden_literals,
         production_canonical_literals=production_canonical_literals,
     )
+    duration_seconds = monotonic_now() - start_time
+
+    findings = [violation.render() for violation in violations]
+    transcript_lines = [
+        *workspace_crate_section_lines(repo_root),
+        "findings:",
+        *(findings or ["none"]),
+    ]
+    report = build_report(
+        lint_name=LINT_NAME,
+        repo_root=repo_root,
+        passed=not violations,
+        summary=(
+            "raw production literals found in Rust code"
+            if violations
+            else "no disallowed raw production literals found in Rust code"
+        ),
+        findings=findings,
+        transcript_lines=transcript_lines,
+        started_at=started_at,
+        duration_seconds=duration_seconds,
+    )
 
     for line in workspace_crate_section_lines(repo_root):
         print(line)
 
-    if violations:
+    if not report.passed:
         print("RULE-008/RULE-009 violation: raw production literals found in Rust code.")
         print(
             "Use centralized reserved-role constants, canonical production definition sites, or explicit lint suppressions."
         )
-        for violation in violations:
-            print(violation.render())
-        print(f"total violations: {len(violations)}")
+        for finding in report.findings:
+            print(finding)
+        print(f"total violations: {len(report.findings)}")
+        print_report(report, repo_root=repo_root, preview_limit=0, direct_threshold=0)
         return 1
 
-    print(
-        "RULE-008/RULE-009 check passed: no disallowed raw production literals found in Rust code."
-    )
+    print_report(report, repo_root=repo_root, preview_limit=0, direct_threshold=0)
     return 0
 
 

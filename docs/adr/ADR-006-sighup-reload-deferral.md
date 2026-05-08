@@ -1,4 +1,4 @@
-# ADR-006 — Bounded SIGHUP Reload Deferred To R.18
+# ADR-006 — Bounded SIGHUP Reload Delivery In R.18
 
 | Field | Value |
 |---|---|
@@ -16,79 +16,77 @@
 Phase R delivers the daemon runtime shape, singleton ownership, host-scoped
 SQLite state, peer replay, runtime health, and the watch/reconcile lanes.
 
-The documented daemon runtime also calls for bounded `SIGHUP` handling so the
-daemon can reload config and roster state without dropping singleton ownership.
-That reload path was planned but not completed within the Phase R closeout
-scope.
+The final runtime contract also requires bounded `SIGHUP` handling so the
+daemon can reload config and roster state without dropping singleton
+ownership, while preserving a last-known-good serving view on reload failure.
 
-The runtime currently has a safe fallback:
-
-- continue serving with the last-known-good runtime view
-- ignore `SIGHUP` rather than attempting a partial or unsafe reload
-
-The question is whether Phase R should ship an incomplete reload path or defer
-the feature until it can be implemented as one coherent bounded operation.
+Phase-end review identified that this reload contract must be delivered as one
+bounded operation rather than as a partial late-phase patch. `R.18` is the
+delivery sprint for that implementation.
 
 ## Decision Drivers
 
 - singleton/runtime safety is more important than partial reload support
 - config reload must preserve a last-known-good serving view
-- partial reload logic would be hard to validate late in the phase
-- the daemon already has a safe operational fallback: ignore `SIGHUP`
+- reload validation and swap semantics must be explicit and testable
+- operators need a bounded reload path instead of restart-only operations
 
 ## Options Considered
 
-### Option 1 — Implement Partial Reload In Phase R
+### Option 1 — Keep Ignoring `SIGHUP` Until A Later Phase
 
-Add a limited reload path before the phase-end merge.
+Continue serving the current runtime view and leave reload unimplemented.
 
-**Rejected.** This creates late-phase risk in singleton ownership, runtime
-continuity, and config consistency.
+**Rejected.** The architecture already requires bounded reload, and `R.18` is
+the committed delivery sprint for closing that gap.
 
-### Option 2 — Defer Bounded Reload To R.18 And Ignore SIGHUP Until Then
+### Option 2 — Deliver Bounded Reload In `R.18`
 
-Keep the daemon on its current last-known-good serving view and make the
-deferral explicit.
+Implement one bounded reload path with validation, last-known-good
+preservation, and typed failure behavior.
 
 **Accepted.**
 
 ## Decision
 
-Bounded `SIGHUP` config/roster reload is deferred from the Phase R merge line
-to `R.18`.
+`R.18` delivers bounded `SIGHUP` config/roster reload.
 
-Phase R daemon behavior:
+Required runtime behavior:
 
-- `SIGHUP` is observed
-- the daemon does not reload config or roster state
-- the daemon continues serving the current last-known-good runtime view
-- the deferral is logged and documented rather than silently ignored
-
-`R.18` owns the implementation of:
-
-- bounded reload execution
-- candidate validation before swap
-- last-known-good preservation on reload failure
-- regression tests for reload during steady-state serving
+- `SIGHUP` triggers a bounded reload attempt
+- candidate config and roster input validate before replacing the active
+  serving view
+- invalid reload input yields a typed reload failure and preserves the
+  last-known-good serving configuration
+- singleton ownership remains held throughout reload attempt and rollback
+- reload success and failure paths are covered by dedicated regression tests
 
 ## Consequences
 
 ### Positive
 
-- no unsafe partial reload path ships in Phase R
-- singleton/runtime continuity remains simple and testable
-- the runtime keeps serving from a known-good configuration
+- the runtime matches the documented bounded reload contract
+- singleton/runtime continuity remains explicit and testable
+- operators gain a reload path that preserves last-known-good serving state
 
 ### Negative
 
-- operators cannot refresh config or roster state with `SIGHUP` during Phase R
-- config changes still require the documented restart path until `R.18` lands
+- `R.18` must carry reload implementation, validation, and test coverage as a
+  single sprint deliverable
+- late changes to reload shape after `R.18` implementation would risk
+  divergence from the architecture contract
+
+## Implementation Status
+
+`R.18` delivered this ADR on `feature/pR-s18-runtime-ops`:
+
+- `SIGHUP` now triggers bounded config/roster reload
+- reload validates candidate team config before swap
+- invalid reload input preserves the last-known-good runtime view
+- regression tests cover shared signal-flag reuse plus reload success/failure
 
 ## Follow-Up Work
 
 | Action | Owner | Gate |
 |---|---|---|
-| Implement bounded config/roster reload | `arch-ctm` | `R.18` acceptance |
-| Add reload regression tests | `arch-ctm` | `R.18` validation |
-| Enforce the per-connection `32` in-flight request cap (`crates/atm-daemon/src/lib.rs:648`) | `arch-ctm` | `R.18` acceptance |
-| Replace the deferral log-only path with the real reload path | `arch-ctm` | `R.18` merge |
+| If framed multiplexing lands later, replace the Phase R single-request-per-connection rule with explicit per-connection inflight rejection | `arch-ctm` | future protocol extension |

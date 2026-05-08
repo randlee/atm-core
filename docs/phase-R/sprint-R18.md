@@ -4,11 +4,17 @@
 plan_type: sprint_plan
 phase: R
 sprint: "R.18"
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s18-closeout
-branch: feature/pR-s18-closeout
-status: planned
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s18-runtime-ops
+branch: feature/pR-s18-runtime-ops
+status: accepted
 estimated_scope: L
 ```
+
+## Acceptance Record
+
+- `status: accepted`
+- `accepted_on: 2026-05-07`
+- `completion_note: bounded SIGHUP reload now preserves the last-known-good runtime view, graceful shutdown performs singleton-held background-lane shutdown plus SQLite WAL checkpoint / observability flush finalization, and the final daemon runtime closeout validations pass on this branch apart from the known host-side Windows sqlite cross-toolchain limitation.`
 
 ## Goal
 
@@ -21,6 +27,8 @@ This sprint is the explicit closeout gate after the major runtime lanes land. It
 ## Governing Requirements
 
 - `REQ-P-RUNTIME-002`
+  - defined in [docs/requirements.md](../requirements.md) under Product
+    requirement `REQ-P-RUNTIME-002`
 - `REQ-CORE-BOUNDARY-002`
 - `REQ-CORE-TEST-RUNTIME-001`
 - portability/test-fidelity requirements in `docs/requirements.md`
@@ -133,4 +141,3 @@ Only split if earlier sprints finish with a small residual list that can be carv
 - do not let the final sprint become a grab bag; every residual item should trace back to an issue, requirement, or boundary gap
 - boundary inventories should capture meaningful facades and traits, not every helper type
 - the phase is not done if the docs still describe placeholders as finished subsystems
-

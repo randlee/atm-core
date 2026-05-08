@@ -50,7 +50,7 @@ impl SqliteRosterStore {
 }
 
 /// Internal assembly root for Phase R SQLite-backed boundary implementations.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SqliteBoundaryAssembly {
     mail_store: Arc<SqliteMailStore>,
     task_store: Arc<SqliteTaskStore>,
@@ -91,6 +91,10 @@ impl SqliteBoundaryAssembly {
 
     pub fn roster_store(&self) -> &dyn boundary::RosterStore {
         self.roster_store.as_ref()
+    }
+
+    pub fn checkpoint_wal(&self) -> Result<(), AtmError> {
+        self.mail_store.db.checkpoint_wal()
     }
 
     pub fn record_remote_replay_state(

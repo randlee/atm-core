@@ -41,6 +41,10 @@ def iter_ttl_files(repo_root: Path) -> list[Path]:
 
 
 def extract_finding_block(text: str) -> tuple[list[str], int] | None:
+    # This validator intentionally assumes one `triage:Finding` block per TTL
+    # file because `.triage/phase-R/findings/*.ttl` is a one-finding-per-file
+    # repository convention. If that convention changes, this extractor needs
+    # to become multi-block aware instead of silently scanning only the first.
     lines = text.splitlines()
     for index, line in enumerate(lines):
         if "a triage:Finding" not in line:

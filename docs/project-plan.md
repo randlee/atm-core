@@ -2796,6 +2796,9 @@ Execution shape:
 - `R.13` through `R.18` are the remaining continuation sprints required to
   turn the thin daemon line into the full production runtime still described by
   the accepted Phase R requirements and architecture
+- `R.18` is the accepted closeout sprint for bounded `SIGHUP` reload,
+  singleton-held shutdown finalization, portability cleanup, and final
+  phase-doc reconciliation on the daemon line
 
 R.9 deliverables:
 - explicit requirement language that bans the current daemon-spawn test pattern

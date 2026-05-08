@@ -2676,6 +2676,9 @@ mail correctness.
   - signal handlers install before listeners begin accepting
   - graceful shutdown must stop accepts, drain inflight work, checkpoint WAL,
     and release singleton ownership in order
+  - Phase R transport remains one request per accepted connection, so the
+    documented `32` per-connection inflight ceiling is satisfied by structure
+    until framed multiplexing is introduced
 
 ### 21.3 Strict I/O Ownership Boundaries
 
