@@ -149,14 +149,12 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{
-        atm_home, inbox_path, inbox_path_from_home, team_dir, team_dir_from_home,
+        atm_home, host_db_dir_from_home, host_mail_db_path_from_home, host_runtime_dir_from_home,
+        inbox_path, inbox_path_from_home, team_dir, team_dir_from_home,
         workflow_state_path_from_home,
     };
     #[cfg(unix)]
-    use super::{
-        host_db_dir, host_db_dir_from_home, host_mail_db_path, host_mail_db_path_from_home,
-        host_runtime_dir, host_runtime_dir_from_home,
-    };
+    use super::{host_db_dir, host_mail_db_path, host_runtime_dir};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
 
     // Serializes process-environment mutation inside this test module. This is
