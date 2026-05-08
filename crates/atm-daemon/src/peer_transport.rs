@@ -670,8 +670,26 @@ mod tests {
     use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
     use std::sync::mpsc;
     use std::thread;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
     use tempfile::TempDir;
+
+    fn bind_with_retry(endpoint: SocketAddr) -> TcpListener {
+        let deadline = Instant::now() + Duration::from_secs(1);
+        let mut backoff = Duration::from_millis(10);
+        loop {
+            match TcpListener::bind(endpoint) {
+                Ok(listener) => return listener,
+                Err(error) if Instant::now() < deadline => {
+                    thread::sleep(backoff);
+                    backoff = (backoff * 2).min(Duration::from_millis(100));
+                    tracing::debug!(%endpoint, %error, "retrying peer transport test listener bind");
+                }
+                Err(error) => {
+                    panic!("failed to rebind peer transport test listener at {endpoint}: {error}")
+                }
+            }
+        }
+    }
 
     #[test]
     fn jittered_backoff_stays_within_twenty_percent_window() {
@@ -826,7 +844,7 @@ mod tests {
 
         send_started_rx.recv().expect("send started");
         thread::spawn(move || {
-            let listener = TcpListener::bind(endpoint).expect("listener");
+            let listener = bind_with_retry(endpoint);
             let (mut stream, _) = listener.accept().expect("accept");
             let mut request_bytes = Vec::new();
             stream.read_to_end(&mut request_bytes).expect("request");

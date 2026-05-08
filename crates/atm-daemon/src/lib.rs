@@ -22,6 +22,8 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
 use std::sync::Arc;
 #[cfg(unix)]
+use std::sync::Condvar;
+#[cfg(unix)]
 use std::sync::Mutex;
 #[cfg(unix)]
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -174,6 +176,8 @@ struct ActiveConnectionRegistry {
     // Keep interruptible stream clones so graceful-drain escalation can break
     // blocked reads instead of waiting forever for peer cooperation.
     streams: Mutex<HashMap<usize, UnixStream>>,
+    drain_state: Mutex<()>,
+    drain_wake: Condvar,
 }
 
 #[cfg(unix)]
@@ -209,6 +213,18 @@ impl ActiveConnectionRegistry {
         Ok(())
     }
 
+    fn wait_for_connection_change(&self, timeout: Duration) -> Result<(), AtmError> {
+        let state = self
+            .drain_state
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("active connection drain lock poisoned"))?;
+        let _ = self
+            .drain_wake
+            .wait_timeout(state, timeout)
+            .map_err(|_| AtmError::daemon_unavailable("active connection drain lock poisoned"))?;
+        Ok(())
+    }
+
     fn remove(&self, id: usize) {
         if let Ok(mut streams) = self.streams.lock() {
             streams.remove(&id);
@@ -216,6 +232,10 @@ impl ActiveConnectionRegistry {
         // Poisoned lock during remove: connection count still decremented to
         // prevent stale accounting.
         self.active_connections.fetch_sub(1, Ordering::SeqCst);
+        if let Ok(state) = self.drain_state.lock() {
+            self.drain_wake.notify_all();
+            drop(state);
+        }
     }
 }
 #[cfg(unix)]
@@ -426,6 +446,8 @@ impl PreparedRuntimeServer {
             let mut serve_error = None;
             loop {
                 if signals.reload.swap(false, Ordering::SeqCst) {
+                    // Deferred to R.18: bounded SIGHUP config/roster reload.
+                    // See docs/phase-R/sprint-R18.md for the owning sprint plan.
                     tracing::warn!(
                         deferred_sprint = "R.18",
                         deferred_doc = "docs/phase-R/sprint-R18.md",
@@ -533,7 +555,9 @@ fn drain_active_connections_for_shutdown(
     let graceful_deadline = shutdown_started + graceful_drain_deadline;
     let force_cancel_deadline = shutdown_started + force_cancel_deadline;
     while registry.active_connections() > 0 && Instant::now() < graceful_deadline {
-        thread::sleep(SHUTDOWN_POLL_INTERVAL);
+        registry.wait_for_connection_change(
+            graceful_deadline.saturating_duration_since(Instant::now()),
+        )?;
     }
     let remaining_after_graceful = registry.active_connections();
     if remaining_after_graceful == 0 {
@@ -549,7 +573,9 @@ fn drain_active_connections_for_shutdown(
         registry.interrupt_all()?;
     }
     while registry.active_connections() > 0 && Instant::now() < force_cancel_deadline {
-        thread::sleep(SHUTDOWN_POLL_INTERVAL);
+        registry.wait_for_connection_change(
+            force_cancel_deadline.saturating_duration_since(Instant::now()),
+        )?;
     }
     let remaining_connections = registry.active_connections();
     if remaining_connections > 0 {
@@ -619,6 +645,7 @@ fn handle_connection(
     let request: ProtocolRequestEnvelope =
         serde_json::from_slice(&bytes).map_err(AtmError::from)?;
     // TODO(phase-R): enforce a max 32 inflight requests per connection once framed multiplexing lands.
+    // Deferred to R.18: per-connection 32 in-flight request cap.
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
     std::thread::spawn(move || {
         let _ = result_tx.send(dispatcher.dispatch(request));

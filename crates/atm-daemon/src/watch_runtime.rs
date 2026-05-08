@@ -480,7 +480,11 @@ mod tests {
                     let mut released = released.lock().expect("released");
                     started_tx.send(()).expect("started");
                     while !*released {
-                        released = wake.wait(released).expect("released wait");
+                        let wait = wake
+                            .wait_timeout(released, Duration::from_secs(1))
+                            .expect("released wait");
+                        released = wait.0;
+                        assert!(!wait.1.timed_out(), "watch test release timed out");
                     }
                     Ok(WatchEventBatch { paths: Vec::new() })
                 }

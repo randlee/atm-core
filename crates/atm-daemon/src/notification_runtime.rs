@@ -6,8 +6,10 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
+use std::time::Duration;
 
 const DEFAULT_NOTIFICATION_QUEUE_CAPACITY: usize = 64;
+const DEFAULT_NOTIFICATION_IDLE_INTERVAL: Duration = Duration::from_millis(50);
 
 #[derive(Clone)]
 pub(crate) struct NotificationRuntime {
@@ -140,10 +142,14 @@ fn notification_worker_loop(inner: Arc<NotificationRuntimeInner>) {
                 Err(_) => return,
             };
             while state.queue.is_empty() && !state.shutdown {
-                state = match inner.wake.wait(state) {
-                    Ok(state) => state,
+                let wait = match inner
+                    .wake
+                    .wait_timeout(state, DEFAULT_NOTIFICATION_IDLE_INTERVAL)
+                {
+                    Ok(wait) => wait,
                     Err(_) => return,
                 };
+                state = wait.0;
             }
             if state.shutdown && state.queue.is_empty() {
                 return;

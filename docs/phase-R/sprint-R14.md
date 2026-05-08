@@ -6,9 +6,15 @@ phase: R
 sprint: "R.14"
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s14-sqlite-threading
 branch: feature/pR-s14-sqlite-threading
-status: planned
+status: accepted
 estimated_scope: L
 ```
+
+## Acceptance Record
+
+- `status: accepted`
+- `accepted_on: 2026-05-07`
+- `completion_note: host-scoped SQLite state, final SQLite boundary semantics, and the dependent startup replay / peer recovery paths are integrated on phase-R.`
 
 ## Goal
 
@@ -133,4 +139,3 @@ Prefer one sprint because the host-scoped DB root, message-thread rules, and ack
 - leaving the database filename or root ambiguous will leak into every later sprint
 - allowing branching successors will make ack and correction behavior much harder to reason about
 - ephemeral cleanup must stay decoupled from read-path mutation to preserve direct-read compatibility
-

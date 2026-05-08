@@ -12,6 +12,7 @@ use std::time::Duration;
 
 const DEFAULT_RECONCILE_DEBOUNCE: Duration = Duration::from_millis(25);
 const DEFAULT_RECONCILE_COMPLETION_TIMEOUT: Duration = Duration::from_secs(5);
+const DEFAULT_RECONCILE_IDLE_INTERVAL: Duration = Duration::from_millis(50);
 const MAX_RECONCILE_DEBOUNCE_EXTENSIONS: u32 = 8;
 
 #[derive(Clone)]
@@ -25,6 +26,8 @@ type ReconcileExecutor =
 struct ReconcileRuntimeInner {
     state: Mutex<ReconcileState>,
     wake: Condvar,
+    #[cfg(test)]
+    pending_changed: Condvar,
     worker: Mutex<Option<JoinHandle<()>>>,
     debounce: Duration,
     executor: ReconcileExecutor,
@@ -160,6 +163,8 @@ impl ReconcileRuntime {
             inner: Arc::new(ReconcileRuntimeInner {
                 state: Mutex::new(ReconcileState::default()),
                 wake: Condvar::new(),
+                #[cfg(test)]
+                pending_changed: Condvar::new(),
                 worker: Mutex::new(None),
                 debounce,
                 executor,
@@ -248,6 +253,8 @@ impl ReconcileRuntime {
                 );
             }
             self.inner.wake.notify_one();
+            #[cfg(test)]
+            self.inner.pending_changed.notify_all();
             waiter_id
         };
 
@@ -294,6 +301,61 @@ impl ReconcileRuntime {
     pub(crate) fn state_counts_for_test(&self) -> (usize, usize, usize) {
         self.inner.state.lock().expect("state lock").counts()
     }
+
+    #[cfg(test)]
+    pub(crate) fn wait_for_pending_count_for_test(
+        &self,
+        minimum_pending: usize,
+        timeout: Duration,
+    ) -> bool {
+        let deadline = std::time::Instant::now() + timeout;
+        let mut state = self.inner.state.lock().expect("state lock");
+        while state.pending.len() < minimum_pending {
+            let now = std::time::Instant::now();
+            if now >= deadline {
+                return false;
+            }
+            let wait = self
+                .inner
+                .pending_changed
+                .wait_timeout(state, deadline.saturating_duration_since(now))
+                .expect("pending change wait");
+            state = wait.0;
+            if wait.1.timed_out() {
+                return state.pending.len() >= minimum_pending;
+            }
+        }
+        true
+    }
+
+    #[cfg(test)]
+    pub(crate) fn wait_for_pending_agent_for_test(&self, agent: &str, timeout: Duration) -> bool {
+        let deadline = std::time::Instant::now() + timeout;
+        let mut state = self.inner.state.lock().expect("state lock");
+        while !state
+            .pending
+            .values()
+            .any(|pending| pending.request.agent.as_str() == agent)
+        {
+            let now = std::time::Instant::now();
+            if now >= deadline {
+                return false;
+            }
+            let wait = self
+                .inner
+                .pending_changed
+                .wait_timeout(state, deadline.saturating_duration_since(now))
+                .expect("pending change wait");
+            state = wait.0;
+            if wait.1.timed_out() {
+                return state
+                    .pending
+                    .values()
+                    .any(|pending| pending.request.agent.as_str() == agent);
+            }
+        }
+        true
+    }
 }
 
 fn reconcile_worker_loop(inner: Arc<ReconcileRuntimeInner>) {
@@ -304,10 +366,14 @@ fn reconcile_worker_loop(inner: Arc<ReconcileRuntimeInner>) {
                 Err(_) => return,
             };
             while state.pending.is_empty() && !state.shutdown {
-                state = match inner.wake.wait(state) {
-                    Ok(state) => state,
+                let wait = match inner
+                    .wake
+                    .wait_timeout(state, DEFAULT_RECONCILE_IDLE_INTERVAL)
+                {
+                    Ok(wait) => wait,
                     Err(_) => return,
                 };
+                state = wait.0;
             }
             if state.shutdown {
                 return;
@@ -342,6 +408,8 @@ fn reconcile_worker_loop(inner: Arc<ReconcileRuntimeInner>) {
                     drained.push(pending);
                 }
             }
+            #[cfg(test)]
+            inner.pending_changed.notify_all();
             drained
         };
 
@@ -449,14 +517,10 @@ mod tests {
 
         let runtime_for_thread = runtime.clone();
         let join = std::thread::spawn(move || runtime_for_thread.reconcile(request()));
-        let deadline = std::time::Instant::now() + Duration::from_secs(1);
-        while runtime.state_counts_for_test().0 == 0 {
-            assert!(
-                std::time::Instant::now() < deadline,
-                "reconcile request never entered the pending queue"
-            );
-            std::thread::yield_now();
-        }
+        assert!(
+            runtime.wait_for_pending_count_for_test(1, Duration::from_secs(1)),
+            "reconcile request never entered the pending queue"
+        );
         runtime.shutdown().expect("shutdown");
 
         let error = join
@@ -505,7 +569,11 @@ mod tests {
                         let (released, wake) = &*release;
                         let mut released = released.lock().expect("released");
                         while !*released {
-                            released = wake.wait(released).expect("wait release");
+                            let wait = wake
+                                .wait_timeout(released, Duration::from_secs(1))
+                                .expect("wait release");
+                            released = wait.0;
+                            assert!(!wait.1.timed_out(), "agent-a release timed out");
                         }
                     }
                     Ok(ReconcileResult {
@@ -523,6 +591,10 @@ mod tests {
         let first = std::thread::spawn(move || runtime_a.reconcile(request_for("agent-a")));
         assert_eq!(started_rx.recv().expect("first started"), "agent-a");
         let second = std::thread::spawn(move || runtime_b.reconcile(request_for("agent-b")));
+        assert!(
+            runtime.wait_for_pending_agent_for_test("agent-b", Duration::from_secs(1)),
+            "agent-b never entered the pending queue before agent-a was released"
+        );
         let (released, wake) = &*release;
         *released.lock().expect("released") = true;
         wake.notify_all();
