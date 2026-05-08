@@ -18,7 +18,7 @@ triage:R17-FTQ-003
   triage:highestOpenBranch "R.17" ;
   triage:promoteToBranch "R.17" ;
   triage:dispatchReady true ;
-  triage:findingAggregate "open" ;
+  triage:findingAggregate "fixed" ;
   triage:triagedAt "2026-05-07T00:00:00Z"^^xsd:dateTime ;
   triage:sweepResults (
     [
