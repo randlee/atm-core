@@ -900,6 +900,25 @@ Status:
 - update plan/requirements/architecture/boundaries to the final landed state
 - sprint plan: `docs/phase-R/sprint-R18.md`
 
+### R.20 Daemon Partitioning And Enforcement Hardening
+
+Status:
+- planned on `feature/pR-s20-daemon-partitioning`
+
+- review the post-`PR #200` integrated daemon state on `integrate/phase-R`
+- define the daemon-private partition plan for:
+  - singleton / ownership admission
+  - server runtime / connection registry / drain
+  - request execution ownership
+  - runtime status cache / reload hydration / doctor projection
+  - peer transport and the existing watch/reconcile/notifier lanes
+- tighten daemon architecture, requirements, and boundaries so the partitioned
+  design is explicit and enforceable
+- run a repeated plan-hardening loop over code and docs until the daemon
+  planning set is internally consistent and specific enough for a production
+  cleanup sprint
+- sprint plan: `docs/phase-R/sprint-R20.md`
+
 ## 6. Working Rule
 
 Phase R does not advance by ad hoc implementation.

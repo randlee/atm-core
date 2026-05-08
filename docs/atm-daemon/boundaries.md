@@ -22,6 +22,35 @@ even though they are not public cross-crate traits:
     builds use the no-op terminate-flag fallback in `peer_transport`
   - must remain runtime-private and must not be bypassed by transport or
     business-logic code
+- `PreparedRuntimeServer` / `ActiveConnectionRegistry` in `atm_daemon`
+  - own listener accept, active connection tracking, drain sequencing, and
+    force-cancel escalation
+  - must remain runtime-private and must not absorb dispatcher or store logic
+- `RuntimeStatusCache` in `atm_daemon::runtime_health`
+  - owns live daemon-memory member state and cache-cap semantics
+  - must remain separate from socket serving and peer transport code
+
+## Planned R.20 partition map
+
+The current daemon implementation remains one crate, but the review-visible
+daemon-private ownership map is:
+- `ownership`
+  - `SingletonGuard`, lock-path helpers, stale-owner recovery
+- `server_runtime`
+  - `PreparedRuntimeServer`, `ActiveConnectionRegistry`, drain/cancel logic
+- `request_runtime`
+  - per-connection request execution and request-work accounting
+- `runtime_status`
+  - `RuntimeStatusCache`, roster hydration, reload assembly
+- `doctor_projection`
+  - runtime-health projection for `atm doctor`
+- `peer_transport`
+- `watch_runtime`
+- `reconcile_runtime`
+- `notification_runtime`
+
+`R.20` exists to turn that ownership map into the follow-on cleanup sprint plan
+and to make those seams explicit enough for later QA and lint review.
 
 ## RuntimeLifecycleController
 
@@ -132,6 +161,10 @@ Notes:
   - typed heartbeat request routing
   - durable pid continuity checks through the SQLite boundary assembly
   - daemon-backed doctor health projection over runtime status
+- `R.20` planning treats this as an overgrown adapter surface. The follow-on
+  cleanup sprint must split dispatcher shell concerns from runtime-status,
+  heartbeat-continuity, and doctor-projection helpers without changing the
+  external boundary contract.
 
 ## DaemonConfigIngressAdapter
 
@@ -216,3 +249,5 @@ Notes:
 - Durable roster truth remains separate from runtime status sourcing.
 - The active implementation is a daemon-memory status cache shared with the
   dispatcher and projected into `atm doctor`.
+- The cache-cap rule must bound actual retained entries, not only member-state
+  labels.

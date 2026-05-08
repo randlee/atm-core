@@ -71,6 +71,14 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-RUNTIME-005` `atm-daemon` owns crash-recovery and replay policy
   around daemon-managed delivery/export work. Satisfies:
   `REQ-CORE-TRANSPORT-004`, `REQ-CORE-LOCK-RETIRE-001`.
+- `REQ-DAEMON-RUNTIME-006` `atm-daemon` daemon-private control-plane code must
+  be partitioned into explicit ownership modules rather than one mixed
+  crate-root implementation surface. Satisfies:
+  `REQ-CORE-BOUNDARY-002`.
+- `REQ-DAEMON-RUNTIME-007` singleton cleanup must remain ownership-safe and
+  must not create a relock/unlink race for the host-wide ownership path.
+  Satisfies:
+  `REQ-P-RUNTIME-002`, `REQ-CORE-DAEMON-001`.
 - `REQ-DAEMON-TRANSPORT-001` `atm-daemon` owns one protocol with two
   production transport implementations plus one test transport:
   - Unix domain socket for same-host
@@ -87,9 +95,16 @@ Initial crate requirement IDs:
   policy for transport, store busy timeout, ingest batch, retry, and doctor
   query operations. Satisfies:
   `REQ-CORE-TRANSPORT-003`, `REQ-CORE-DOCTOR-002`.
+- `REQ-DAEMON-TRANSPORT-004` request work launched from the daemon server path
+  must remain tracked by runtime drain ownership until it finishes or is
+  cancelled; detached untracked request execution is forbidden. Satisfies:
+  `REQ-DAEMON-RUNTIME-003`, `REQ-CORE-DAEMON-001`.
 - `REQ-DAEMON-STATUS-001` `atm-daemon` owns the live agent-status cache and
   must keep it separate from SQLite roster/mail truth. Satisfies:
   `REQ-CORE-RUNTIME-002`.
+- `REQ-DAEMON-STATUS-002` bounded daemon status-cache policy must bound actual
+  retained entries rather than only downgrading entry state labels. Satisfies:
+  `REQ-DAEMON-RUNTIME-004`.
 - `REQ-DAEMON-CONFIG-001` `atm-daemon` owns daemon config validation at startup
   and on `SIGHUP` rescan. Invalid config must produce a typed failure or
   bounded reload rejection rather than a silent degraded state. Satisfies:
@@ -137,10 +152,14 @@ Requirement IDs:
 - `REQ-DAEMON-RUNTIME-003`
 - `REQ-DAEMON-RUNTIME-004`
 - `REQ-DAEMON-RUNTIME-005`
+- `REQ-DAEMON-RUNTIME-006`
+- `REQ-DAEMON-RUNTIME-007`
 - `REQ-DAEMON-TRANSPORT-001`
 - `REQ-DAEMON-TRANSPORT-002`
 - `REQ-DAEMON-TRANSPORT-003`
+- `REQ-DAEMON-TRANSPORT-004`
 - `REQ-DAEMON-STATUS-001`
+- `REQ-DAEMON-STATUS-002`
 - `REQ-DAEMON-CONFIG-001`
 - `REQ-DAEMON-TEST-001`
 - `REQ-DAEMON-TEST-002`
@@ -164,8 +183,20 @@ Required runtime rules:
 - stale ownership cleanup must never allow two live daemons
 - stale ownership cleanup must preserve the same singleton guarantee as normal
   startup; cleanup is recovery, not an alternate launch path
+- singleton cleanup must not unlink a shared ownership path after releasing the
+  live lock in a way that can race a succeeding daemon process
 - graceful shutdown must stop accepts, drain or cancel inflight work within one
   bounded deadline, checkpoint WAL, and release singleton ownership
+- daemon-private runtime control must be partitioned into explicit ownership
+  modules for:
+  - singleton ownership
+  - server runtime / drain
+  - request execution ownership
+  - runtime status / reload / doctor projection
+  - peer transport and the existing watch/reconcile/notifier lanes
+- background-lane startup rollback and shutdown must attempt every lane needed
+  for cleanup and must not leave partial runtime ownership after the first lane
+  failure
 - signal handlers must be installed before listeners are opened
 - daemon config must validate once at startup before listeners are opened
 - `SIGHUP`-driven config or roster rescan must either apply a fully valid
@@ -179,6 +210,8 @@ Required runtime rules:
     [`../architecture.md §21.6.4`](../architecture.md) and
     [`architecture.md §3.4`](./architecture.md)
 - runtime queues and handles must obey one documented concrete cap policy
+- request work launched from the server path must remain tracked by runtime
+  shutdown accounting until it completes or is cancelled
 - daemon memory is the live truth for agent status
 - daemon memory must also retain `last_active_at` for each known active agent
 - daemon memory must retain the current agent `pid` as a first-class liveness
@@ -191,6 +224,9 @@ Required runtime rules:
 - the daemon-managed member fields (`pid`, `last_active_at`, `state`) must
   update only through one documented heartbeat socket handler shared by ATM CLI
   and hook/runtime producers; see `docs/team-member-state.md`
+- status-cache saturation behavior must keep the retained live-member map
+  actually bounded in cardinality; demotion to `unknown` alone is not
+  sufficient
 - until `schooks 1.0` is released, pid/activity updates may arrive through the
   interim Python hooks installed from `../agent-team-mail`
 - after `schooks 1.0` is released, `schooks` becomes the controlled hook

@@ -247,11 +247,50 @@ Dispatcher/handler rule:
 - the dispatcher itself stays thin and must not absorb request-family business
   logic
 
-## 3.1.1 Graceful Shutdown
+## 3.1.1 Internal Partitioning
+
+The daemon runtime is one crate but it is not one architectural blob.
+
+Required daemon-private partitions:
+- `ownership`
+  - owns host-wide lock paths, owner-record reads/writes, stale-owner recovery,
+    and singleton cleanup rules
+- `server_runtime`
+  - owns listener bootstrap, accept loop, connection registry, drain
+    sequencing, and forced-cancel escalation
+- `request_runtime`
+  - owns per-connection request execution, request-work tracking, request
+    deadlines, and response emission
+- `runtime_status`
+  - owns the live status cache, cache-cap semantics, roster hydration, and
+    reload-time runtime-view assembly
+- `doctor_projection`
+  - owns runtime-health projection into `atm doctor`
+- `peer_transport`
+  - owns remote delivery, replay, retry, and remote transport-specific failure
+    handling
+- `watch_runtime`, `reconcile_runtime`, and `notification_runtime`
+  - remain separate runtime-owned background lanes with their own worker state
+
+Required ownership rules:
+- `lib.rs` is the crate entrypoint and daemon-private integration seam only; it
+  must not remain the long-term home for singleton ownership, server runtime,
+  request execution, and shutdown policy simultaneously
+- singleton cleanup must remain ownership-safe:
+  - the runtime must not release the ownership lock and then unlink a shared
+    lock path in a way that can race a succeeding daemon process
+- request work launched from the server runtime must remain owned by runtime
+  drain accounting until it finishes or is cancelled
+- background-lane startup and shutdown must remain rollback-safe and must not
+  stop after the first lane error if more cleanup is still possible
+- bounded caches must be bounded in actual retained cardinality, not only by
+  state demotion labels
+
+## 3.1.2 Graceful Shutdown
 
 Shutdown is part of the daemon contract, not an implementation detail.
-`R.18` closes the remaining runtime-ops work by implementing this shutdown,
-reload, and resource-cap contract as written.
+`R.18` landed the runtime-ops behavior set, and `R.20` hardens the internal
+partitioning and enforcement rules needed to keep that behavior maintainable.
 
 Required shutdown sequence:
 1. stop accepting new local and remote connections
@@ -276,7 +315,7 @@ Ordering rule:
 - singleton ownership is released only after listener shutdown and checkpoint
   sequencing completes or the runtime has failed closed
 
-## 3.1.2 Signal Handling
+## 3.1.3 Signal Handling
 
 Required signals:
 - `SIGINT`: begin graceful shutdown
@@ -318,8 +357,8 @@ Required saturation behavior:
   reporting; no silent drop
 - retry queue full: fail remote send attempt rather than enqueueing unbounded
 - status-cache cap exceeded: evict least-recently-updated noncritical entries
-  from the live-member map and demote them to explicit `unknown` with
-  structured warning emission
+  from the live-member map so the retained map cardinality remains bounded, and
+  reflect the eviction as explicit `unknown` plus structured warning emission
 
 ## 3.3 Status Ownership
 
