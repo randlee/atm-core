@@ -146,7 +146,7 @@ Use explicit test-only names for team and agent fixtures:
 - `TEST_RECIPIENT = "test-recipient"`
 - `TEST_LEAD = "test-lead"`
 
-Reserved production names may still matter in a few tests:
+Production role semantics may still matter in a few tests:
 - `ATM_TEAM` and `ATM_IDENTITY` may be set explicitly when the test is proving
   production env-read behavior
 - `team-lead` may be used when the role itself is semantically significant,
