@@ -6,9 +6,9 @@ Current design assumption:
 - `atm-daemon` is the production runtime composition root
 - `allowed_dependents: []` means no external crate should depend on these
   daemon-private concrete adapters
-- Test doubles planned; not yet landed. Until they exist,
-  `allowed_test_double_paths` remains empty for the daemon-owned adapter
-  records below.
+- Runtime test doubles now exist for the watch/reconcile/notifier lanes so
+  boundary tests can exercise the daemon-owned runtimes without bypassing the
+  declared contracts.
 
 Important daemon-private control-plane structs that must stay visible in review,
 even though they are not public cross-crate traits:
@@ -18,6 +18,8 @@ even though they are not public cross-crate traits:
     it is not itself a public trait boundary
 - `DaemonShutdownSignals` / `SingletonGuard` in `atm_daemon`
   - own process-lifecycle admission and shutdown mechanics
+  - `DaemonShutdownSignals` installs OS signal hooks only on Unix; non-Unix
+    builds use the no-op terminate-flag fallback in `peer_transport`
   - must remain runtime-private and must not be bypassed by transport or
     business-logic code
 
@@ -61,7 +63,10 @@ Purpose:
 - Owns the daemon-side outbound client transport used for remote peer delivery.
 
 Notes:
-- This closes the design gap between the shared ClientTransport contract and daemon-to-daemon remote delivery.
+- The concrete `PeerClientTransport` implementation stays runtime-private inside
+  `atm_daemon::peer_transport`.
+- Runtime composition owns replay resume and exposes the transport only through
+  the shared `ClientTransport` contract.
 
 ## FileWatchEventSourceAdapter
 
@@ -73,7 +78,21 @@ Purpose:
 - Owns the runtime file-watch implementation behind the WatchEventSource contract.
 
 Notes:
+- The active implementation is a daemon-owned polling subscription registry in
+  `atm_daemon::watch_runtime`.
+- It maintains long-lived watch state behind the boundary and refreshes
+  registered subscriptions on a bounded wake interval.
+- The subscription registry is explicitly bounded to 256 keys per daemon
+  process; callers must not assume unbounded watch-state retention.
+- `WatchEventSource::poll(...)` now returns the worker-owned snapshot/error
+  state instead of running direct synchronous discovery in the caller.
+- Shutdown is observed between polling iterations; one in-flight synchronous
+  filesystem scan may complete before the watch worker exits.
 - This adapter captures events only; it does not own reconcile policy.
+- Runtime lifecycle ownership stays above this boundary:
+  - `start()` and `shutdown()` are composition-root responsibilities
+  - callers outside `RuntimeComposition` must use `WatchEventSource::poll(...)`
+    only and must not bootstrap or tear down the runtime directly
 
 ## DaemonReconcileCoordinatorAdapter
 
@@ -85,7 +104,18 @@ Purpose:
 - Owns the runtime implementation of reconcile policy behind the ReconcileCoordinator contract.
 
 Notes:
-- This adapter should trigger ingress/service work without bypassing other boundaries.
+- The active implementation is a daemon-owned debounce/coalesce worker in
+  `atm_daemon::reconcile_runtime`.
+- It triggers watch polling, inbox ingress, and notifier callbacks only through
+  their owned boundaries; it does not reach around into store or transport
+  internals.
+- Notification delivery in the reconcile path is boundary-only; tests exercise
+  fake `NotificationSink` implementations rather than plugin/runtime internals.
+- Runtime lifecycle ownership stays above this boundary:
+  - `start()` and `shutdown()` are composition-root responsibilities
+  - callers outside `RuntimeComposition` must use
+    `ReconcileCoordinator::reconcile(...)` only and must not manage worker
+    lifetime directly
 
 ## DaemonRequestDispatcherAdapter
 
@@ -160,7 +190,18 @@ Purpose:
 - Owns the daemon runtime adapter behind the NotificationSink contract.
 
 Notes:
-- This keeps process-spawn or plugin-style delivery out of service logic.
+- The active implementation is a daemon-owned queued worker in
+  `atm_daemon::notification_runtime`.
+- It returns typed unavailable/backpressure failures at the boundary and
+  persists delivered events through the runtime-owned notifier path instead of
+  degrading to tracing-only behavior.
+- The queue is intentionally bounded at `64` events; overflow fails closed with
+  typed backpressure instead of silently buffering unbounded plugin traffic.
+- Runtime lifecycle ownership stays above this boundary:
+  - `start()` and `shutdown()` are composition-root responsibilities
+  - callers outside `RuntimeComposition` must use
+    `NotificationSink::deliver(...)` only and must not open plugin/agent
+    delivery paths directly
 
 ## DaemonStatusSourceAdapter
 

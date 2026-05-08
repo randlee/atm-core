@@ -55,6 +55,14 @@ CREATE TABLE IF NOT EXISTS mail_ingest_replay_states (
     PRIMARY KEY (team, agent, source)
 );
 
+CREATE TABLE IF NOT EXISTS daemon_remote_replay_states (
+    team TEXT NOT NULL,
+    agent TEXT NOT NULL,
+    message_key TEXT NOT NULL,
+    state_json TEXT NOT NULL,
+    PRIMARY KEY (team, agent, message_key)
+);
+
 CREATE TABLE IF NOT EXISTS tasks (
     team TEXT NOT NULL,
     task_id TEXT NOT NULL,
@@ -106,6 +114,9 @@ CREATE INDEX IF NOT EXISTS idx_mail_visibility_mailbox
 
 CREATE INDEX IF NOT EXISTS idx_mail_ingest_mailbox
     ON mail_ingest_replay_states(team, agent);
+
+CREATE INDEX IF NOT EXISTS idx_daemon_remote_replay_mailbox
+    ON daemon_remote_replay_states(team, agent);
 
 CREATE INDEX IF NOT EXISTS idx_task_records_lookup
     ON tasks(team, task_id);

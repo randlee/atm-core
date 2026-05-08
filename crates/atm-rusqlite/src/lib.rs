@@ -1,5 +1,4 @@
 #![forbid(unsafe_code)]
-#![allow(dead_code)]
 
 //! SQLite-backed adapter implementations for the Phase R store boundaries.
 
@@ -8,13 +7,15 @@ mod shared_db;
 
 use atm_core::boundary;
 use atm_core::error::AtmError;
-use atm_core::types::{IsoTimestamp, TeamName};
+use atm_core::protocol::RequestEnvelope;
+use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 #[cfg(test)]
 use rusqlite::Error as RusqliteError;
 use rusqlite::{Connection, OptionalExtension, params};
 use shared_db::{
     SharedDb, SharedDbTarget, deserialize_json, serialize_json, sqlite_error, sqlite_thread_mode,
 };
+use std::net::SocketAddr;
 use std::path::Path;
 #[cfg(test)]
 use std::path::PathBuf;
@@ -23,6 +24,23 @@ use std::sync::Arc;
 #[derive(Debug)]
 struct SqliteRosterStore {
     db: Arc<SharedDb>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RemoteReplayStateRecord {
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub message_key: boundary::MessageKey,
+    pub peer_addr: SocketAddr,
+    pub request: RequestEnvelope,
+    pub recorded_at: IsoTimestamp,
+    pub expires_at: IsoTimestamp,
+    #[serde(default)]
+    pub attempt_count: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_attempt_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error: Option<String>,
 }
 
 impl SqliteRosterStore {
@@ -73,6 +91,106 @@ impl SqliteBoundaryAssembly {
 
     pub fn roster_store(&self) -> &dyn boundary::RosterStore {
         self.roster_store.as_ref()
+    }
+
+    pub fn record_remote_replay_state(
+        &self,
+        record: RemoteReplayStateRecord,
+    ) -> Result<(), AtmError> {
+        let state_json = serialize_json(&record, "daemon remote replay state")?;
+        self.mail_store.db.with_transaction(|transaction| {
+            transaction
+                .execute(
+                    "INSERT INTO daemon_remote_replay_states(team, agent, message_key, state_json)
+                     VALUES (?1, ?2, ?3, ?4)
+                     ON CONFLICT(team, agent, message_key) DO UPDATE SET
+                       state_json = excluded.state_json;",
+                    params![
+                        record.team.as_str(),
+                        record.agent.as_str(),
+                        record.message_key.as_ref(),
+                        state_json,
+                    ],
+                )
+                .map_err(|error| {
+                    self.mail_store
+                        .db
+                        .error("failed to record daemon remote replay state", error)
+                })?;
+            Ok(())
+        })
+    }
+
+    pub fn load_remote_replay_states(&self) -> Result<Vec<RemoteReplayStateRecord>, AtmError> {
+        self.mail_store.db.with_connection(|connection| {
+            let mut statement = connection
+                .prepare(
+                    "SELECT state_json
+                     FROM daemon_remote_replay_states
+                     ORDER BY team, agent, message_key;",
+                )
+                .map_err(|error| {
+                    self.mail_store
+                        .db
+                        .error("failed to prepare daemon remote replay query", error)
+                })?;
+            let rows = statement
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|error| {
+                    self.mail_store
+                        .db
+                        .error("failed to read daemon remote replay rows", error)
+                })?;
+            let mut records = Vec::new();
+            for row in rows {
+                let state_json = row.map_err(|error| {
+                    self.mail_store
+                        .db
+                        .error("failed to decode daemon remote replay row", error)
+                })?;
+                records.push(deserialize_json(&state_json, "daemon remote replay state")?);
+            }
+            Ok(records)
+        })
+    }
+
+    pub fn delete_remote_replay_state(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        message_key: &boundary::MessageKey,
+    ) -> Result<(), AtmError> {
+        self.mail_store.db.with_transaction(|transaction| {
+            transaction
+                .execute(
+                    "DELETE FROM daemon_remote_replay_states
+                     WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
+                    params![team.as_str(), agent.as_str(), message_key.as_ref(),],
+                )
+                .map_err(|error| {
+                    self.mail_store
+                        .db
+                        .error("failed to delete daemon remote replay state", error)
+                })?;
+            Ok(())
+        })
+    }
+
+    pub fn purge_expired_remote_replay_states(&self, now: IsoTimestamp) -> Result<usize, AtmError> {
+        let now = now.into_inner().to_rfc3339();
+        self.mail_store.db.with_transaction(|transaction| {
+            transaction
+                .execute(
+                    "DELETE FROM daemon_remote_replay_states
+                     WHERE json_extract(state_json, '$.expires_at') <= ?1;",
+                    params![now],
+                )
+                .map_err(|error| {
+                    self.mail_store
+                        .db
+                        .error("failed to purge expired daemon remote replay state", error)
+                })
+        })
     }
 }
 
@@ -586,12 +704,6 @@ impl SqliteTaskStore {
             Self::load_record_in_connection(connection, self.db.target(), team, task_id)
         })
     }
-
-    fn save_record(&self, record: &boundary::TaskStoreTaskRecord) -> Result<(), AtmError> {
-        self.db.with_transaction(|transaction| {
-            Self::save_record_in_connection(transaction, self.db.target(), record)
-        })
-    }
 }
 
 impl boundary::sealed::Sealed for SqliteTaskStore {}
@@ -857,6 +969,8 @@ impl boundary::TaskStore for SqliteTaskStore {
 mod tests {
     use super::*;
     use atm_core::MessageKey;
+    use atm_core::doctor::DoctorQuery;
+    use atm_core::protocol::RequestEnvelope;
     use atm_core::schema::TeamConfig;
     use atm_core::schema::{AgentMember, MessageEnvelope};
     use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
@@ -1359,6 +1473,81 @@ mod tests {
             .health_snapshot(boundary::RosterStoreHealthSnapshotRequest { team: team() })
             .expect("health");
         assert_eq!(health.snapshot.member_count, 1);
+    }
+
+    #[test]
+    fn remote_replay_state_round_trips_and_purges_expired_rows() {
+        let assembly = in_memory_assembly();
+        let now = IsoTimestamp::now();
+        let live_record = RemoteReplayStateRecord {
+            team: team(),
+            agent: agent(),
+            message_key: message_key("atm:remote-live"),
+            peer_addr: "127.0.0.1:4310".parse().expect("peer addr"),
+            request: RequestEnvelope::Doctor(DoctorQuery {
+                home_dir: PathBuf::from("."),
+                current_dir: PathBuf::from("."),
+                team_override: None,
+            }),
+            recorded_at: now,
+            expires_at: IsoTimestamp::from_datetime(
+                now.into_inner() + chrono::Duration::minutes(1),
+            ),
+            attempt_count: 0,
+            last_attempt_at: None,
+            last_error: None,
+        };
+        let expired_record = RemoteReplayStateRecord {
+            team: team(),
+            agent: agent(),
+            message_key: message_key("atm:remote-expired"),
+            peer_addr: "127.0.0.1:4311".parse().expect("peer addr"),
+            request: RequestEnvelope::Doctor(DoctorQuery {
+                home_dir: PathBuf::from("."),
+                current_dir: PathBuf::from("."),
+                team_override: None,
+            }),
+            recorded_at: now,
+            expires_at: IsoTimestamp::from_datetime(
+                now.into_inner() - chrono::Duration::minutes(1),
+            ),
+            attempt_count: 1,
+            last_attempt_at: Some(now),
+            last_error: Some("ATM_DAEMON_UNAVAILABLE".to_string()),
+        };
+
+        assembly
+            .record_remote_replay_state(live_record.clone())
+            .expect("record live");
+        assembly
+            .record_remote_replay_state(expired_record)
+            .expect("record expired");
+
+        let loaded = assembly
+            .load_remote_replay_states()
+            .expect("load replay states");
+        assert_eq!(loaded.len(), 2);
+
+        let purged = assembly
+            .purge_expired_remote_replay_states(now)
+            .expect("purge expired");
+        assert_eq!(purged, 1);
+
+        let loaded = assembly
+            .load_remote_replay_states()
+            .expect("load replay states");
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].message_key.as_ref(), "atm:remote-live");
+
+        assembly
+            .delete_remote_replay_state(&team(), &agent(), &live_record.message_key)
+            .expect("delete live");
+        assert!(
+            assembly
+                .load_remote_replay_states()
+                .expect("load replay states")
+                .is_empty()
+        );
     }
 
     #[test]

@@ -295,7 +295,7 @@ impl RuntimeStatusCache {
         Ok(build_runtime_snapshot_scoped(&cache, members))
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(crate) fn member_state_for_test(
         &self,
         team: &TeamName,
@@ -314,7 +314,7 @@ impl RuntimeStatusCache {
             .map(|record| record.state))
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(crate) fn hydrate_member_for_test(
         &self,
         team: TeamName,
@@ -324,7 +324,7 @@ impl RuntimeStatusCache {
         self.hydrate_member(team, member, pid)
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(crate) fn insert_member_for_test(
         &self,
         team: TeamName,
@@ -471,7 +471,7 @@ impl DaemonRequestDispatcher {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(crate) fn new_for_test(
         home_dir: PathBuf,
         status_cache: RuntimeStatusCache,
@@ -572,6 +572,9 @@ impl DaemonRequestDispatcher {
                 .record_identity_conflict(&request, existing_pid)?;
             return Err(AtmError::identity_conflict(
                 "ATM_IDENTITY_CONFLICT: stop and report to user immediately",
+            )
+            .with_recovery(
+                "Stop the conflicting ATM process, confirm the stale PID is gone, then retry the heartbeat from the active runtime owner.",
             ));
         }
         let durable = roster_store.record_heartbeat(
@@ -645,6 +648,9 @@ fn hydrate_runtime_status_cache(
             "failed to enumerate daemon team configs under {}",
             teams_root.display()
         ))
+        .with_recovery(
+            "Restore read access to the daemon team configuration tree under ATM_HOME before retrying atm-daemon startup.",
+        )
         .with_source(error)
     })? {
         let entry = entry.map_err(|error| {
@@ -652,6 +658,9 @@ fn hydrate_runtime_status_cache(
                 "failed to read daemon team-config entry under {}",
                 teams_root.display()
             ))
+            .with_recovery(
+                "Repair the daemon team configuration directory entries under ATM_HOME before retrying atm-daemon startup.",
+            )
             .with_source(error)
         })?;
         let team_name = entry.file_name().to_string_lossy().into_owned();
@@ -671,6 +680,9 @@ fn hydrate_runtime_status_cache(
                 "failed to read daemon team config {}",
                 config_path.display()
             ))
+            .with_recovery(
+                "Restore the daemon team config file or fix its read permissions before retrying atm-daemon startup.",
+            )
             .with_source(error)
         })?;
         let config: TeamConfig = serde_json::from_slice(&raw).map_err(|error| {

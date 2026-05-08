@@ -249,6 +249,17 @@ impl AtmError {
         )
     }
 
+    pub fn remote_delivery_outcome_unknown(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::RemoteDeliveryOutcomeUnknown,
+            AtmErrorKind::DaemonUnavailable,
+            message,
+        )
+        .with_recovery(
+            "Check the destination daemon or mailbox before retrying. If local durable replay is enabled, let the daemon resume the pending handoff rather than guessing success.",
+        )
+    }
+
     pub fn test_fake_transport_injection_failed(message: impl Into<String>) -> Self {
         Self::new_with_code(
             AtmErrorCode::TestFakeTransportInjectionFailed,

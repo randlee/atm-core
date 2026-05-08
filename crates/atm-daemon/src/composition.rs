@@ -3,14 +3,15 @@ use crate::boundary_adapters::{
     DaemonReconcileCoordinator, FileWatchEventSource,
 };
 use crate::runtime_health::{DaemonRequestDispatcher, DaemonStatusSource, RuntimeStatusCache};
-use crate::{LocalSocketServerTransport, PeerClientTransport};
+use crate::{
+    LocalSocketServerTransport, PeerTransportRuntime, sqlite_remote_replay_store_from_path,
+};
 use atm_core::{boundary::RequestDispatcher, error::AtmError};
 #[cfg(unix)]
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-#[cfg_attr(not(unix), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum RuntimeLifecycleState {
     Starting,
@@ -21,7 +22,6 @@ pub(crate) enum RuntimeLifecycleState {
 }
 
 /// Serializes legal daemon runtime ownership transitions.
-#[cfg_attr(not(unix), allow(dead_code))]
 #[derive(Debug, Default)]
 pub(crate) struct RuntimeLifecycle {
     /// A single mutex is sufficient here because lifecycle transitions are
@@ -103,7 +103,6 @@ impl RuntimeLifecycle {
 }
 
 /// Internal root for Phase R daemon runtime wiring.
-#[cfg_attr(not(unix), allow(dead_code))]
 #[derive(Debug)]
 pub(crate) struct RuntimeComposition {
     lifecycle: Arc<RuntimeLifecycle>,
@@ -116,13 +115,34 @@ pub(crate) struct RuntimeComposition {
     _config_ingress: DaemonConfigIngress,
     _inbox_ingress: DaemonInboxIngress,
     _inbox_export: DaemonInboxExport,
-    _peer_client_transport: PeerClientTransport,
+    peer_transport_runtime: PeerTransportRuntime,
 }
 
-#[cfg_attr(not(unix), allow(dead_code))]
 impl RuntimeComposition {
     fn new(home_dir: PathBuf) -> Self {
         let status_cache = RuntimeStatusCache::new();
+        let notification_sink = DaemonNotificationSink::new();
+        let watch_event_source = FileWatchEventSource::new();
+        let inbox_ingress = DaemonInboxIngress::new();
+        let replay_store = match atm_core::home::host_mail_db_path() {
+            Ok(db_path) => match sqlite_remote_replay_store_from_path(db_path) {
+                Ok(store) => Some(store),
+                Err(error) => {
+                    tracing::warn!(
+                        %error,
+                        "remote replay store unavailable; outcome-unknown delivery cannot be persisted"
+                    );
+                    None
+                }
+            },
+            Err(error) => {
+                tracing::warn!(
+                    %error,
+                    "remote replay store path unavailable; crash-safe remote replay persistence is disabled"
+                );
+                None
+            }
+        };
         Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
             server_transport: LocalSocketServerTransport::new(),
@@ -130,26 +150,59 @@ impl RuntimeComposition {
                 home_dir,
                 status_cache.clone(),
             )),
-            _notification_sink: DaemonNotificationSink::new(),
+            _notification_sink: notification_sink.clone(),
             _status_source: DaemonStatusSource::new(status_cache),
-            _watch_event_source: FileWatchEventSource::new(),
-            _reconcile_coordinator: DaemonReconcileCoordinator::new(),
+            _watch_event_source: watch_event_source.clone(),
+            _reconcile_coordinator: DaemonReconcileCoordinator::new(
+                watch_event_source,
+                inbox_ingress.clone(),
+                notification_sink,
+            ),
             _config_ingress: DaemonConfigIngress::new(),
-            _inbox_ingress: DaemonInboxIngress::new(),
+            _inbox_ingress: inbox_ingress,
             _inbox_export: DaemonInboxExport::new(),
-            _peer_client_transport: PeerClientTransport::new(),
+            peer_transport_runtime: PeerTransportRuntime::new(replay_store),
         }
     }
 
     fn request_dispatcher(&self) -> Arc<dyn RequestDispatcher + Send + Sync> {
         self.request_dispatcher.clone()
     }
-
     pub(crate) fn start(&self) -> Result<(), AtmError> {
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
+        // Startup replay must finish before the daemon binds its socket so
+        // crash-recovered work cannot race newly accepted requests.
+        let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
+            Ok(summary) => summary,
+            Err(error) => {
+                self.lifecycle.force_stopped()?;
+                return Err(error);
+            }
+        };
+        if replay_summary.delivered > 0
+            || replay_summary.retained > 0
+            || replay_summary.purged_expired > 0
+        {
+            tracing::info!(
+                replay_delivered = replay_summary.delivered,
+                replay_retained = replay_summary.retained,
+                replay_purged_expired = replay_summary.purged_expired,
+                "daemon startup replay sweep completed"
+            );
+        }
+        if let Err(error) = self.start_background_lanes() {
+            self.lifecycle.force_stopped()?;
+            return Err(error);
+        }
         let runtime = match self.server_transport.prepare_runtime() {
             Ok(runtime) => runtime,
             Err(error) => {
+                if let Err(shutdown_error) = self.shutdown_background_lanes() {
+                    tracing::warn!(
+                        %shutdown_error,
+                        "daemon background lane shutdown failed during runtime preparation rollback"
+                    );
+                }
                 self.lifecycle.force_stopped()?;
                 return Err(error);
             }
@@ -165,12 +218,40 @@ impl RuntimeComposition {
         socket_path: PathBuf,
     ) -> Result<(), AtmError> {
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
+        let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
+            Ok(summary) => summary,
+            Err(error) => {
+                self.lifecycle.force_stopped()?;
+                return Err(error);
+            }
+        };
+        if replay_summary.delivered > 0
+            || replay_summary.retained > 0
+            || replay_summary.purged_expired > 0
+        {
+            tracing::info!(
+                replay_delivered = replay_summary.delivered,
+                replay_retained = replay_summary.retained,
+                replay_purged_expired = replay_summary.purged_expired,
+                "daemon startup replay sweep completed"
+            );
+        }
+        if let Err(error) = self.start_background_lanes() {
+            self.lifecycle.force_stopped()?;
+            return Err(error);
+        }
         let runtime = match self
             .server_transport
             .prepare_runtime_at_socket_path(socket_path)
         {
             Ok(runtime) => runtime,
             Err(error) => {
+                if let Err(shutdown_error) = self.shutdown_background_lanes() {
+                    tracing::warn!(
+                        %shutdown_error,
+                        "daemon background lane shutdown failed during test runtime preparation rollback"
+                    );
+                }
                 self.lifecycle.force_stopped()?;
                 return Err(error);
             }
@@ -194,10 +275,36 @@ impl RuntimeComposition {
             .transition(RuntimeLifecycleState::Draining)
             .and_then(|_| self.lifecycle.transition(RuntimeLifecycleState::Stopped))
             .map(|_| ());
-        if state_result.is_err() {
-            self.lifecycle.force_stopped()?;
+        if let Err(state_error) = state_result
+            && let Err(force_error) = self.lifecycle.force_stopped()
+        {
+            tracing::error!(
+                state_error = %state_error,
+                force_error = %force_error,
+                serve_error = result.as_ref().err().map(|error| error.to_string()),
+                "daemon runtime failed while forcing lifecycle back to stopped"
+            );
+            return match result {
+                Err(error) => Err(error),
+                Ok(()) => Err(force_error),
+            };
         }
-        result
+        let shutdown_result = self.shutdown_background_lanes();
+        result.and(shutdown_result)
+    }
+
+    fn start_background_lanes(&self) -> Result<(), AtmError> {
+        self._notification_sink.start()?;
+        self._watch_event_source.start()?;
+        self._reconcile_coordinator.start()?;
+        Ok(())
+    }
+
+    fn shutdown_background_lanes(&self) -> Result<(), AtmError> {
+        self._reconcile_coordinator.shutdown()?;
+        self._watch_event_source.shutdown()?;
+        self._notification_sink.shutdown()?;
+        Ok(())
     }
 }
 
@@ -323,6 +430,7 @@ pub(crate) fn compose_runtime() -> Result<RuntimeComposition, AtmError> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
     use atm_core::boundary::ServerTransport;
     use tempfile::TempDir;
 
@@ -427,6 +535,7 @@ mod tests {
         assert_eq!(runtime.lifecycle_state(), RuntimeLifecycleState::Stopped);
     }
 
+    #[cfg(unix)]
     #[test]
     fn server_transport_cannot_bootstrap_outside_runtime_composition_start() {
         let tempdir = TempDir::new().expect("tempdir");

@@ -2776,6 +2776,17 @@ mail correctness.
   - the transport boundary must not absorb watcher responsibilities
   - any violation of this watcher isolation rule is a direct QA failure for
     the Phase Q implementation line
+  - the daemon implementation may use a bounded polling watch registry instead
+    of OS-native filesystem subscriptions, but the watch lifecycle must remain
+    daemon-owned and long-lived rather than one-shot helper calls
+  - reconcile triggering must support debounce/coalesce so repeated identical
+    requests do not fan out into duplicate import work
+  - `R.17` completes this lane as a daemon-owned polling watch registry, an
+    ordered debounce/coalesce reconcile worker, and a queued notifier runtime;
+    those lanes must start and stop only through the daemon composition root
+  - the notifier lane uses a bounded queue of `64` events and must fail closed
+    with typed backpressure instead of silently buffering unbounded plugin
+    traffic
 
 - `REQ-CORE-TRANSPORT-002` Cross-host traffic must be daemon-to-daemon only.
 
@@ -2816,6 +2827,9 @@ mail correctness.
     replay/re-export path rather than by silently assuming success
   - if the bounded retry window expires without remote acceptance, the send
     fails and must not leave durable delivered-message state behind
+  - pending replay/re-export state must be persisted in the host-scoped SQLite
+    root keyed by mailbox identity plus `message_key`, with bounded expiry and
+    operator-visible retained-failure state
 
 - `REQ-CORE-TRANSPORT-005` The daemon runtime must use concrete timeout and
   capacity limits for transport/store/health operations.

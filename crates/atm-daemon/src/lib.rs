@@ -4,13 +4,15 @@
 mod boundary_adapters;
 pub(crate) mod composition;
 mod direct_boundaries;
+mod notification_runtime;
+mod peer_transport;
+mod reconcile_runtime;
 mod runtime_health;
 mod shutdown_signals;
+mod watch_runtime;
 
 #[cfg(unix)]
 use std::collections::HashMap;
-use std::error::Error as StdError;
-use std::fmt;
 #[cfg(unix)]
 use std::fs::{self, File, OpenOptions};
 #[cfg(unix)]
@@ -28,22 +30,22 @@ use std::thread;
 #[cfg(unix)]
 use std::time::{Duration, Instant};
 
+use atm_rusqlite::SqliteBoundaryAssembly;
 #[cfg(unix)]
 use fs2::FileExt;
 
 #[cfg(unix)]
+use atm_core::ResponseEnvelope;
+#[cfg(unix)]
 use atm_core::protocol::RequestEnvelope as ProtocolRequestEnvelope;
 use atm_core::{
-    RequestEnvelope, ResponseEnvelope,
     boundary::{self, RequestDispatcher},
     error::AtmError,
 };
+pub(crate) use atm_rusqlite::RemoteReplayStateRecord;
+pub(crate) use peer_transport::{PeerTransportRuntime, RemoteReplayStore};
 #[cfg(unix)]
 use shutdown_signals::DaemonShutdownSignals;
-#[cfg(unix)]
-pub use shutdown_signals::request_shutdown_for_test;
-#[cfg(unix)]
-pub use shutdown_signals::reset_shutdown_signals_for_test;
 #[cfg(unix)]
 const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 #[cfg(unix)]
@@ -59,27 +61,47 @@ const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(10);
 #[cfg(unix)]
 const HOST_RUNTIME_OWNER_LOCK_FILE: &str = "owner.lock";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum DaemonBoundaryStubError {
-    PeerClientTransport,
+#[derive(Debug, Clone)]
+struct SqliteRemoteReplayStore {
+    assembly: Arc<SqliteBoundaryAssembly>,
 }
 
-impl fmt::Display for DaemonBoundaryStubError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::PeerClientTransport => {
-                f.write_str("daemon peer client transport scaffold is not wired")
-            }
-        }
+impl SqliteRemoteReplayStore {
+    fn from_path(db_path: PathBuf) -> Result<Self, AtmError> {
+        Ok(Self {
+            assembly: Arc::new(SqliteBoundaryAssembly::new(db_path)?),
+        })
     }
 }
 
-impl StdError for DaemonBoundaryStubError {}
+impl RemoteReplayStore for SqliteRemoteReplayStore {
+    fn enqueue(&self, record: RemoteReplayStateRecord) -> Result<(), AtmError> {
+        self.assembly.record_remote_replay_state(record)
+    }
 
-fn daemon_boundary_stub_error(message: &'static str, source: DaemonBoundaryStubError) -> AtmError {
-    AtmError::daemon_unavailable(message)
-        .with_recovery("Complete the Phase R daemon boundary wiring before invoking this path.")
-        .with_source(source)
+    fn load_all(&self) -> Result<Vec<RemoteReplayStateRecord>, AtmError> {
+        self.assembly.load_remote_replay_states()
+    }
+
+    fn delete(
+        &self,
+        team: &atm_core::types::TeamName,
+        agent: &atm_core::types::AgentName,
+        message_key: &atm_core::boundary::MessageKey,
+    ) -> Result<(), AtmError> {
+        self.assembly
+            .delete_remote_replay_state(team, agent, message_key)
+    }
+
+    fn purge_expired(&self, now: atm_core::types::IsoTimestamp) -> Result<usize, AtmError> {
+        self.assembly.purge_expired_remote_replay_states(now)
+    }
+}
+
+pub(crate) fn sqlite_remote_replay_store_from_path(
+    db_path: PathBuf,
+) -> Result<Arc<dyn RemoteReplayStore>, AtmError> {
+    Ok(Arc::new(SqliteRemoteReplayStore::from_path(db_path)?))
 }
 
 #[cfg(unix)]
@@ -358,6 +380,7 @@ impl PreparedRuntimeServer {
             AtmError::daemon_unavailable("failed to configure daemon socket listener")
                 .with_source(source)
         })?;
+        emit_ready_signal_if_requested()?;
         Ok(Self {
             _singleton: singleton,
             listener,
@@ -478,6 +501,21 @@ impl PreparedRuntimeServer {
             Ok(())
         })
     }
+}
+
+#[cfg(unix)]
+fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
+    if std::env::var_os("ATM_DAEMON_READY_STDOUT").is_none() {
+        return Ok(());
+    }
+    let mut stdout = std::io::stdout().lock();
+    writeln!(stdout, "ATM_DAEMON_READY").map_err(|source| {
+        AtmError::daemon_unavailable("failed to emit daemon ready signal").with_source(source)
+    })?;
+    stdout.flush().map_err(|source| {
+        AtmError::daemon_unavailable("failed to flush daemon ready signal").with_source(source)
+    })?;
+    Ok(())
 }
 
 #[cfg(unix)]
@@ -680,27 +718,6 @@ impl boundary::ServerTransport for LocalSocketServerTransport {
     fn serve(&self, _dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
         Err(AtmError::daemon_unavailable(
             "atm-daemon socket transport requires a Unix platform",
-        ))
-    }
-}
-
-/// Placeholder runtime client transport for peer-to-peer daemon delivery.
-#[derive(Debug, Default)]
-struct PeerClientTransport;
-
-impl PeerClientTransport {
-    const fn new() -> Self {
-        Self
-    }
-}
-
-impl boundary::sealed::Sealed for PeerClientTransport {}
-
-impl boundary::ClientTransport for PeerClientTransport {
-    fn send(&self, _request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        Err(daemon_boundary_stub_error(
-            "daemon peer client transport stub is not implemented yet",
-            DaemonBoundaryStubError::PeerClientTransport,
         ))
     }
 }

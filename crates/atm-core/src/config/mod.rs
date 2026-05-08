@@ -16,6 +16,7 @@ pub mod types;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -97,6 +98,14 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
         team_members: normalize_team_members(parsed.atm.team_members, &path)?,
         aliases: normalize_aliases(parsed.atm.aliases),
         post_send_hooks: normalize_post_send_hooks(parsed.atm.post_send_hooks, &config_root)?,
+        daemon: parsed
+            .daemon
+            .remote_retry_budget
+            .as_deref()
+            .map(|value| parse_duration_literal(value, &path, "daemon.remote_retry_budget"))
+            .transpose()?
+            .map(|remote_retry_budget| types::DaemonConfig { remote_retry_budget })
+            .unwrap_or_default(),
         config_root,
         obsolete_identity_present,
     }))
@@ -186,6 +195,8 @@ struct RawConfigFile {
     #[serde(default)]
     atm: RawAtmSection,
     #[serde(default)]
+    daemon: RawDaemonSection,
+    #[serde(default)]
     identity: Option<String>,
     #[serde(default)]
     default_team: Option<String>,
@@ -203,6 +214,12 @@ struct RawAtmSection {
     aliases: std::collections::BTreeMap<String, String>,
     #[serde(default)]
     post_send_hooks: Vec<RawPostSendHookRule>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct RawDaemonSection {
+    #[serde(default)]
+    remote_retry_budget: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -249,6 +266,87 @@ fn reject_legacy_post_send_hook_keys(path: &Path, raw_toml: &TomlValue) -> Resul
         ));
     }
     Ok(())
+}
+
+fn parse_duration_literal(
+    value: &str,
+    path: &Path,
+    field_name: &str,
+) -> Result<Duration, AtmError> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(AtmError::new_with_code(
+            AtmErrorCode::ConfigParseFailed,
+            AtmErrorKind::Config,
+            format!(
+                "invalid duration for {} in {}: value must not be blank",
+                field_name,
+                path.display()
+            ),
+        )
+        .with_recovery(
+            "Use one positive duration literal such as 30s, 500ms, or 2m for daemon timeout settings.",
+        ));
+    }
+
+    let (number, unit) = if let Some(value) = trimmed.strip_suffix("ms") {
+        (value, "ms")
+    } else if let Some(value) = trimmed.strip_suffix('s') {
+        (value, "s")
+    } else if let Some(value) = trimmed.strip_suffix('m') {
+        (value, "m")
+    } else {
+        return Err(AtmError::new_with_code(
+            AtmErrorCode::ConfigParseFailed,
+            AtmErrorKind::Config,
+            format!(
+                "invalid duration for {} in {}: unsupported unit '{}'",
+                field_name,
+                path.display(),
+                trimmed
+            ),
+        )
+        .with_recovery(
+            "Use one positive duration literal ending in ms, s, or m for daemon timeout settings.",
+        ));
+    };
+
+    let amount = number.parse::<u64>().map_err(|error| {
+        AtmError::new_with_code(
+            AtmErrorCode::ConfigParseFailed,
+            AtmErrorKind::Config,
+            format!(
+                "invalid duration for {} in {}: {error}",
+                field_name,
+                path.display()
+            ),
+        )
+        .with_recovery(
+            "Use one positive integer duration literal such as 30s, 500ms, or 2m for daemon timeout settings.",
+        )
+        .with_source(error)
+    })?;
+    if amount == 0 {
+        return Err(AtmError::new_with_code(
+            AtmErrorCode::ConfigParseFailed,
+            AtmErrorKind::Config,
+            format!(
+                "invalid duration for {} in {}: zero is not allowed",
+                field_name,
+                path.display()
+            ),
+        )
+        .with_recovery(
+            "Use one positive duration literal such as 30s, 500ms, or 2m for daemon timeout settings.",
+        ));
+    }
+
+    Ok(match unit {
+        "ms" => Duration::from_millis(amount),
+        "s" => Duration::from_secs(amount),
+        "m" => Duration::from_secs(amount.saturating_mul(60)),
+        _ => unreachable!("duration unit filtered above"),
+    })
 }
 
 fn normalize_team_members(values: Vec<String>, path: &Path) -> Result<Vec<TeamName>, AtmError> {
@@ -440,6 +538,9 @@ command = ["scripts/atm-nudge.sh", "{ROLE_TEAM_LEAD}"]
 recipient = "*"
 command = ["bash", "-lc", "echo hi"]
 
+[daemon]
+remote_retry_budget = "45s"
+
 [atm.aliases]
 tl = "{ROLE_TEAM_LEAD}"
 qa = "{TEST_QA}"
@@ -484,6 +585,25 @@ blank = ""
         );
         assert_eq!(config.aliases.get("qa").map(String::as_str), Some(TEST_QA));
         assert!(!config.aliases.contains_key("blank"));
+        assert_eq!(
+            config.daemon.remote_retry_budget,
+            std::time::Duration::from_secs(45)
+        );
+    }
+
+    #[test]
+    fn load_config_rejects_invalid_remote_retry_budget() {
+        let root = unique_temp_dir("atm-config-invalid-remote-retry-budget");
+        fs::write(
+            root.path().join(".atm.toml"),
+            "[daemon]\nremote_retry_budget = \"soon\"\n",
+        )
+        .expect("config");
+
+        let error = load_config(root.path()).expect_err("invalid duration");
+
+        assert_eq!(error.code, AtmErrorCode::ConfigParseFailed);
+        assert!(error.message.contains("daemon.remote_retry_budget"));
     }
 
     #[test]

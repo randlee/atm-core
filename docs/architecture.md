@@ -2170,6 +2170,9 @@ Required architectural rules:
 - re-export/replay is keyed by durable `message_key`
 - if daemon-managed retry/re-export state must survive crash, it is stored in
   SQLite with a bounded expiry/deadline rather than remaining RAM-only
+- remote replay rows live in the host-scoped SQLite root and are keyed by
+  mailbox identity plus durable `message_key` so startup resume can replay
+  pending remote handoff without duplicating committed local state
 - WAL checkpoint is part of graceful shutdown, but recovery correctness must
   not depend on graceful shutdown having succeeded
 - persisted retry state must not become a long-lived remote outbox; expired
@@ -2246,7 +2249,7 @@ Daemon responsibilities:
 - route selection
 - live status cache
 - daemon-facing diagnostics and health queries used by `atm doctor`
-- watch/reconcile runtime if enabled
+- watch/reconcile runtime
 
 Daemon non-responsibility:
 - it must not become the only home of ATM business logic
@@ -2447,6 +2450,13 @@ Minimum method set:
 - trigger owned ingress/reconcile handler
 - shut down watcher cleanly
 
+Current implementation note:
+- `R.17` implements this as a daemon-owned polling subscription runtime plus a
+  separate debounce/coalesce reconcile worker
+- watch refresh owns only source-path discovery and cached batches
+- reconcile triggers inbox ingress and notifier callbacks only through their
+  declared boundaries
+
 Boundary rule:
 - the watcher/reconcile subsystem owns filesystem watch events only
 - it must not perform SQL directly
@@ -2468,6 +2478,13 @@ Minimum method set:
 - notify message/task delivery
 - report live status update
 - return typed backpressure / unavailable results
+
+Current implementation note:
+- `R.17` implements a daemon-owned queued notifier worker with typed
+  unavailable/backpressure failures
+- notification delivery is no longer a tracing-only placeholder
+- the notifier queue is bounded to `64` events so plugin-local traffic fails
+  closed with backpressure rather than growing an unbounded daemon-side buffer
 
 ### 21.6.2 Structured Error And Observability Boundaries
 
