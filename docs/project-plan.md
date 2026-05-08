@@ -2826,9 +2826,77 @@ Acceptance:
 - requirements, architecture, ADRs, and testing guidelines agree on the
   singleton rule and approved test tiers
 - continuation sprint execution after `R.10` must follow the tracked sequence
-  in `docs/phase-R/sprint-R13.md` through `docs/phase-R/sprint-R18.md`
+  in `docs/phase-R/sprint-R13.md` through `docs/phase-R/sprint-R18.md` for the
+  runtime/product closeout line, with `docs/phase-R/sprint-R19.md` reserved for
+  postmortem lint backfill after the closeout implementation settles
 - `sc-lint` inventory-parity / planning-metadata gates are treated as an
   external prerequisite that must be ready before `R.13` implementation starts
 - there is no approved ordinary test-daemon launch path
 - the implementation plan explicitly prevents new daemon-spawn helpers from
   proliferating
+
+## 24. Phase R Postmortem Linter Backfill
+
+Goal:
+- convert the recurring mechanically-detectable Phase R defect families into
+  normal repository lint or CI gates
+- prove the rules on `atm-core` first, then migrate only the reusable subset
+  into the standalone `sc-lint` repository
+
+Execution rule:
+- implementation happens on `atm-core` first even when the eventual home is
+  `sc-lint`
+- migration to standalone `sc-lint` is a follow-up extraction step after
+  local rule shape, allow-list policy, and false-positive behavior are proven
+
+Partition:
+- reusable/static-analysis rules that should graduate to `sc-lint` after
+  proving out:
+  - Unix platform-gating enforcement
+  - production `Condvar::wait(...)` liveness enforcement
+- ATM-local rules that should remain `atm-core`-owned unless later generalized:
+  - role-name literal enforcement
+  - fixed-sleep test-hygiene enforcement
+  - triage Turtle consistency enforcement
+
+Planned sequence:
+1. extend `sc-portability` on `atm-core` for:
+   - ungated `std::os::unix` imports
+   - `cfg_attr(not(unix), allow(dead_code))` portability suppressors
+2. extend the repository-local role literal gate for raw `"team-lead"` test
+   literals
+3. add a repository-local fixed-sleep test-hygiene lint and wire it into
+   `just lint`
+4. extend `sc-boundary` on `atm-core` for bare production
+   `Condvar::wait(...)`
+5. add a repository-local triage-record consistency validator and wire it into
+   `just lint` or the equivalent default CI lint surface
+6. after all five families are stable on `atm-core`, migrate the reusable
+   analyzers and any generic helper framework into standalone `sc-lint`
+
+Scope note:
+- the broader design guidance against duplicated raw strings and magic numbers
+  already exists; this sprint is about selecting the first hard-gated subset,
+  not restating that policy
+- the role-literal family is intentionally targeted to canonical semantic
+  literals such as ATM role names because that subset is low-noise and directly
+  tied to the postmortem recurrence
+- a generic duplicate-string or magic-number gate is a separate enforcement
+  follow-up and should not be silently folded into this sprint without an
+  explicit scope and allow-list decision
+- if the team later enables broader duplicate-string or magic-number linting,
+  it should be an explicit hard gate for the chosen scope rather than an
+  advisory-only report
+
+Required deliverables for this planning/implementation line:
+- one Phase R sprint plan covering the five families and their partitioning
+- updates to requirements and architecture that explain why some rules stay
+  repo-local while others graduate to `sc-lint`
+- a clear `just lint` integration decision for every family before coding
+
+Acceptance:
+- every postmortem family is assigned to one concrete implementation home
+- the sequencing explains what lands in Rust analyzer code versus repository
+  Python/CI glue
+- the migration boundary between `atm-core` and `sc-lint` is explicit rather
+  than implied

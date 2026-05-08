@@ -259,6 +259,41 @@ no admin takeover path for live-old-pid conflicts.
 **Closed on**: `feature/pR-s15-status-heartbeat`
 **Files**: `crates/atm-daemon/src/lib.rs` daemon dispatcher
 
+---
+
+## POSTMORTEM LINT FOLLOW-UPS
+
+### PML-001 — Mechanically-detectable postmortem findings still rely on QA rediscovery
+**Source**: `R.PHASE-POSTMORTEM` follow-up (`phase_r_postmortem.txt`)
+**Status**: OPEN — planning on `feature/pR-postmortem-linters`
+
+Phase R postmortem identified five recurring finding families that should move
+into normal lint or CI gates:
+- Unix platform gating (`std::os::unix`, `cfg_attr(not(unix), allow(dead_code))`)
+- role-name literals in test code (`"team-lead"`)
+- fixed `thread::sleep(...)` in ordinary test code
+- bare production `Condvar::wait(...)`
+- contradictory TTL triage-record state
+
+Required resolution shape:
+- implement and tune each rule on `atm-core` first
+- classify each family as either:
+  - reusable and later migrated to standalone `sc-lint`, or
+  - ATM-local and retained in repository-local lint/process glue
+- wire every cheap deterministic rule into `just lint`
+
+Planned partition:
+- reusable Rust/static rules:
+  - Unix platform gating
+  - bare production `Condvar::wait(...)`
+- ATM-local rules:
+  - role-name literals
+  - fixed-sleep test hygiene
+  - TTL triage-record consistency
+
+Tracking doc:
+- `docs/phase-R/sprint-R19.md`
+
 Dispatcher calls `atm_core::doctor::run_doctor()` directly — no daemon-backed health
 projection. Missing: daemon reachability, singleton ownership status, live status-cache
 summary, ingest backlog/degraded-ingest state, SQLite open/readiness state, liveness vs
