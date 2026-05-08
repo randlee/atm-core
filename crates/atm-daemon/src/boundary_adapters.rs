@@ -228,7 +228,7 @@ impl InboxExport for DaemonInboxExport {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::DaemonNotificationSink;
     use atm_core::boundary::NotificationSink;
