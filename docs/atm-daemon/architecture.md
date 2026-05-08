@@ -503,4 +503,4 @@ Initial use cases:
 - remote daemon-to-daemon protocol structure
 - runtime watch/reconcile orchestration
 - queued notifier/runtime delivery structure
-  - bounded at `64` in-memory events with typed backpressure on overflow
+  - bounded at `256` in-memory events with typed backpressure on overflow

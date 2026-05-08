@@ -4,6 +4,8 @@
 **Follow-on note**: daemon partitioning planning in `R.20` reviews the
 post-`PR #200` integrated daemon state separately from this original phase-end
 snapshot.
+**Baseline note**: `d5e49df` is the post-`PR #200` `origin/integrate/phase-R`
+head used for the R.20 planning review baseline.
 **Review sources**: TASK-995 (arch-ctm gap analysis) + TASK-996 (quality-mgr Phase R final QA-1)
 **Created**: 2026-05-06
 **Status**: OPEN — Phase R not merge-ready
