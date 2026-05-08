@@ -14,6 +14,8 @@ forbidden_literals = [
 "team-lead" = ["crates/atm-core/src/roles.rs"]
 
 [fixed_sleep]
+# Empty by default: no test file is exempt until a narrow daemon-runtime suite
+# is explicitly approved and listed here.
 allowed_paths = []
 
 [portability]

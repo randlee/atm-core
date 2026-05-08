@@ -3013,6 +3013,14 @@ mail correctness.
   - fixed `thread::sleep(...)` in ordinary Rust test code must fail a
     test-hygiene gate unless the file or callsite is explicitly part of the
     narrow daemon-runtime suite
+  - `PORT-004` must reject production `std::os::unix` imports that are not
+    protected by an approved Unix-only boundary
+  - `PORT-005` must reject
+    `#[cfg_attr(not(unix), allow(dead_code))]` when used as a portability
+    suppressor in production code
+  - `SCB-RUNTIME-001` must reject bare production `Condvar::wait(...)`
+  - `SCB-RUNTIME-002` must reject production `wait_timeout*` calls whose
+    `WaitTimeoutResult` is discarded or stored only in underscore bindings
   - bare `Condvar::wait(...)` in non-test production code must fail a runtime
     liveness gate; `wait_timeout(...)` and `wait_timeout_while(...)` remain the
     required production shapes

@@ -116,7 +116,7 @@ def collect_identity_violations(
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Check test and cfg(test) Rust code for forbidden production identity literals."
+        description="Reject forbidden test literals and duplicated canonical production literals in Rust code."
     )
     parser.add_argument("--root", help="Repo root to inspect.")
     return parser.parse_args(argv[1:])
@@ -147,7 +147,7 @@ def main(argv: list[str]) -> int:
         return 1
 
     print(
-        "RULE-008/RULE-009 check passed: no disallowed raw production literals found in test or non-test Rust code."
+        "RULE-008/RULE-009 check passed: no disallowed raw production literals found in Rust code."
     )
     return 0
 

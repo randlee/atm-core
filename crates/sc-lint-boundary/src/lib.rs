@@ -30,6 +30,7 @@ mod graph;
 mod portability;
 mod render;
 mod runtime;
+mod source_scan;
 #[cfg(test)]
 mod tests;
 
@@ -86,7 +87,12 @@ pub struct NodeId(String);
 
 impl NodeId {
     pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
+        let value = value.into();
+        assert!(
+            !value.is_empty(),
+            "NodeId::new requires a non-empty identifier"
+        );
+        Self(value)
     }
 
     pub fn as_str(&self) -> &str {
@@ -144,7 +150,12 @@ pub struct OwnerId(String);
 
 impl OwnerId {
     pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
+        let value = value.into();
+        assert!(
+            !value.is_empty(),
+            "OwnerId::new requires a non-empty identifier"
+        );
+        Self(value)
     }
 
     pub fn as_str(&self) -> &str {
@@ -622,16 +633,11 @@ pub fn render_findings_report(report: &FindingsReport) -> String {
     render::render_findings_report(report)
 }
 
-pub fn render_graph_export(
-    graph: &GraphExport,
-    format: GraphOutputFormat,
-) -> std::result::Result<String, serde_json::Error> {
+pub fn render_graph_export(graph: &GraphExport, format: GraphOutputFormat) -> String {
     render::render_graph_export(graph, format)
 }
 
-pub fn render_graph_export_json(
-    graph: &GraphExport,
-) -> std::result::Result<String, serde_json::Error> {
+pub fn render_graph_export_json(graph: &GraphExport) -> String {
     render::render_graph_export_json(graph)
 }
 

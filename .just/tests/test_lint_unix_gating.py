@@ -73,7 +73,8 @@ class LintUnixGatingTests(unittest.TestCase):
             )
 
             self.assertEqual(run(repo_root), 1)
-            self.assertEqual(build_report_mock.call_args.kwargs["findings"], ["relevant"])
+            _, kwargs = build_report_mock.call_args
+            self.assertEqual(kwargs["findings"], ["relevant"])
             print_report_mock.assert_called_once()
 
 

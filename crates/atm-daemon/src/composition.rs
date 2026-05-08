@@ -11,6 +11,7 @@ use atm_core::{boundary::RequestDispatcher, error::AtmError};
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum RuntimeLifecycleState {
@@ -119,31 +120,24 @@ pub(crate) struct RuntimeComposition {
 }
 
 impl RuntimeComposition {
-    fn new(home_dir: PathBuf) -> Self {
+    #[cfg(test)]
+    fn new(home_dir: PathBuf) -> Result<Self, AtmError> {
+        Self::new_with_replay_store_path(
+            home_dir.clone(),
+            atm_core::home::host_mail_db_path_from_home(&home_dir),
+        )
+    }
+
+    fn new_with_replay_store_path(
+        home_dir: PathBuf,
+        replay_store_path: PathBuf,
+    ) -> Result<Self, AtmError> {
         let status_cache = RuntimeStatusCache::new();
         let notification_sink = DaemonNotificationSink::new();
         let watch_event_source = FileWatchEventSource::new();
         let inbox_ingress = DaemonInboxIngress::new();
-        let replay_store = match atm_core::home::host_mail_db_path() {
-            Ok(db_path) => match sqlite_remote_replay_store_from_path(db_path) {
-                Ok(store) => Some(store),
-                Err(error) => {
-                    tracing::warn!(
-                        %error,
-                        "remote replay store unavailable; outcome-unknown delivery cannot be persisted"
-                    );
-                    None
-                }
-            },
-            Err(error) => {
-                tracing::warn!(
-                    %error,
-                    "remote replay store path unavailable; crash-safe remote replay persistence is disabled"
-                );
-                None
-            }
-        };
-        Self {
+        let replay_store = Some(sqlite_remote_replay_store_from_path(replay_store_path)?);
+        Ok(Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
             server_transport: LocalSocketServerTransport::new(),
             request_dispatcher: Arc::new(DaemonRequestDispatcher::new(
@@ -162,7 +156,7 @@ impl RuntimeComposition {
             _inbox_ingress: inbox_ingress,
             _inbox_export: DaemonInboxExport::new(),
             peer_transport_runtime: PeerTransportRuntime::new(replay_store),
-        }
+        })
     }
 
     fn request_dispatcher(&self) -> Arc<dyn RequestDispatcher + Send + Sync> {
@@ -301,10 +295,51 @@ impl RuntimeComposition {
     }
 
     fn shutdown_background_lanes(&self) -> Result<(), AtmError> {
-        self._reconcile_coordinator.shutdown()?;
-        self._watch_event_source.shutdown()?;
-        self._notification_sink.shutdown()?;
+        const BACKGROUND_LANE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(3);
+        shutdown_lane_with_deadline(
+            "reconcile coordinator",
+            BACKGROUND_LANE_SHUTDOWN_DEADLINE,
+            self._reconcile_coordinator.clone(),
+            |lane| lane.shutdown(),
+        )?;
+        shutdown_lane_with_deadline(
+            "watch event source",
+            BACKGROUND_LANE_SHUTDOWN_DEADLINE,
+            self._watch_event_source.clone(),
+            |lane| lane.shutdown(),
+        )?;
+        shutdown_lane_with_deadline(
+            "notification sink",
+            BACKGROUND_LANE_SHUTDOWN_DEADLINE,
+            self._notification_sink.clone(),
+            |lane| lane.shutdown(),
+        )?;
         Ok(())
+    }
+}
+
+fn shutdown_lane_with_deadline<T, F>(
+    lane_name: &'static str,
+    deadline: Duration,
+    lane: T,
+    shutdown: F,
+) -> Result<(), AtmError>
+where
+    T: Send + 'static,
+    F: FnOnce(T) -> Result<(), AtmError> + Send + 'static,
+{
+    let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
+    std::thread::spawn(move || {
+        let _ = result_tx.send(shutdown(lane));
+    });
+    match result_rx.recv_timeout(deadline) {
+        Ok(result) => result,
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(AtmError::daemon_unavailable(
+            format!("daemon {lane_name} shutdown exceeded the {deadline:?} per-lane deadline"),
+        )),
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(AtmError::daemon_unavailable(
+            format!("daemon {lane_name} shutdown worker disconnected unexpectedly"),
+        )),
     }
 }
 
@@ -425,7 +460,7 @@ pub(crate) fn compose_runtime() -> Result<RuntimeComposition, AtmError> {
     validate_runtime_socket_path()?;
     let home_dir = atm_core::home::atm_home()?;
     validate_runtime_home_dir(&home_dir)?;
-    Ok(RuntimeComposition::new(home_dir))
+    RuntimeComposition::new_with_replay_store_path(home_dir, atm_core::home::host_mail_db_path()?)
 }
 
 #[cfg(test)]
@@ -525,7 +560,7 @@ mod tests {
         let parent_file = tempdir.path().join("not-a-dir");
         std::fs::write(&parent_file, "x").expect("parent file");
         let socket_path = parent_file.join("atm.sock");
-        let runtime = RuntimeComposition::new(tempdir.path().to_path_buf());
+        let runtime = RuntimeComposition::new(tempdir.path().to_path_buf()).expect("runtime");
 
         let error = runtime
             .start_with_socket_path_for_test(socket_path)
@@ -539,7 +574,7 @@ mod tests {
     #[test]
     fn server_transport_cannot_bootstrap_outside_runtime_composition_start() {
         let tempdir = TempDir::new().expect("tempdir");
-        let runtime = RuntimeComposition::new(tempdir.path().to_path_buf());
+        let runtime = RuntimeComposition::new(tempdir.path().to_path_buf()).expect("runtime");
 
         let error = ServerTransport::serve(&runtime.server_transport, runtime.request_dispatcher())
             .expect_err("direct transport bootstrap should be rejected");

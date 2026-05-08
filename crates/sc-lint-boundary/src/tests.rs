@@ -38,6 +38,18 @@ fn graph_export_serializes_tool_metadata() {
 }
 
 #[test]
+#[should_panic(expected = "NodeId::new requires a non-empty identifier")]
+fn node_id_rejects_empty_identifier() {
+    let _ = NodeId::new("");
+}
+
+#[test]
+#[should_panic(expected = "OwnerId::new requires a non-empty identifier")]
+fn owner_id_rejects_empty_identifier() {
+    let _ = OwnerId::new("");
+}
+
+#[test]
 fn exports_graph_for_inline_and_file_modules_and_attributes() {
     let fixture = WorkspaceFixture::new();
     fixture.write_workspace_root();

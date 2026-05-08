@@ -903,7 +903,7 @@ Status:
 ### R.19 Postmortem Linter Backfill
 
 Status:
-- planned on `feature/pR-postmortem-linters`
+- completed on `feature/pR-postmortem-linters`
 
 Goal:
 - convert the recurring mechanically-detectable Phase R finding families into

@@ -29,8 +29,9 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 #[cfg(unix)]
 use std::thread;
+use std::time::Duration;
 #[cfg(unix)]
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use atm_rusqlite::SqliteBoundaryAssembly;
 #[cfg(unix)]
@@ -56,10 +57,6 @@ const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 const SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_millis(25);
 #[cfg(unix)]
 const STALE_OWNER_RECOVERY_RETRY_ATTEMPTS: usize = 3;
-#[cfg(unix)]
-const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
-#[cfg(unix)]
-const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(10);
 #[cfg(unix)]
 const HOST_RUNTIME_OWNER_LOCK_FILE: &str = "owner.lock";
 
@@ -173,9 +170,13 @@ fn recorded_owner_pid(lock_file: &File) -> Result<Option<u32>, AtmError> {
 struct ActiveConnectionRegistry {
     next_id: AtomicUsize,
     active_connections: AtomicUsize,
+    active_dispatchers: AtomicUsize,
     // Keep interruptible stream clones so graceful-drain escalation can break
     // blocked reads instead of waiting forever for peer cooperation.
     streams: Mutex<HashMap<usize, UnixStream>>,
+    // Shared state for shutdown-drain waiters. Connection teardown and
+    // detached request-dispatch completion both notify this condvar so daemon
+    // shutdown can observe in-flight work shrinking without spin loops.
     drain_state: Mutex<()>,
     drain_wake: Condvar,
 }
@@ -203,6 +204,14 @@ impl ActiveConnectionRegistry {
         self.active_connections.load(Ordering::SeqCst)
     }
 
+    fn active_dispatchers(&self) -> usize {
+        self.active_dispatchers.load(Ordering::SeqCst)
+    }
+
+    fn total_inflight_units(&self) -> usize {
+        self.active_connections() + self.active_dispatchers()
+    }
+
     fn interrupt_all(&self) -> Result<(), AtmError> {
         let mut streams = self.streams.lock().map_err(|_| {
             AtmError::daemon_unavailable("active connection registry lock poisoned")
@@ -228,6 +237,15 @@ impl ActiveConnectionRegistry {
         Ok(())
     }
 
+    fn dispatcher_started(&self) {
+        self.active_dispatchers.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn dispatcher_finished(&self) {
+        self.active_dispatchers.fetch_sub(1, Ordering::SeqCst);
+        self.drain_wake.notify_all();
+    }
+
     fn remove(&self, id: usize) {
         if let Ok(mut streams) = self.streams.lock() {
             streams.remove(&id);
@@ -235,10 +253,7 @@ impl ActiveConnectionRegistry {
         // Poisoned lock during remove: connection count still decremented to
         // prevent stale accounting.
         self.active_connections.fetch_sub(1, Ordering::SeqCst);
-        if let Ok(state) = self.drain_state.lock() {
-            self.drain_wake.notify_all();
-            drop(state);
-        }
+        self.drain_wake.notify_all();
     }
 }
 #[cfg(unix)]
@@ -403,6 +418,12 @@ impl PreparedRuntimeServer {
             AtmError::daemon_unavailable("failed to configure daemon socket listener")
                 .with_source(source)
         })?;
+        tracing::info!(
+            max_concurrent_connections = MAX_CONCURRENT_CONNECTIONS,
+            max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
+            request_deadline_ms = REQUEST_DEADLINE.as_millis() as u64,
+            "daemon runtime transport limits configured"
+        );
         emit_ready_signal_if_requested()?;
         Ok(Self {
             _singleton: singleton,
@@ -414,7 +435,7 @@ impl PreparedRuntimeServer {
     }
 
     fn serve(self, dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
-        self.serve_with_deadlines(dispatcher, GRACEFUL_DRAIN_DEADLINE, FORCE_CANCEL_DEADLINE)
+        self.serve_with_deadlines(dispatcher, Duration::from_secs(5), Duration::from_secs(10))
     }
 
     fn serve_with_deadlines(
@@ -489,11 +510,15 @@ impl PreparedRuntimeServer {
                         }
                         let dispatcher = Arc::clone(&dispatcher);
                         let force_shutdown = Arc::clone(&force_shutdown);
+                        let registry = Arc::clone(&registry);
                         scope.spawn(move || {
                             let _active = active;
-                            if let Err(error) =
-                                handle_connection(&mut stream, dispatcher, force_shutdown.as_ref())
-                            {
+                            if let Err(error) = handle_connection(
+                                &mut stream,
+                                dispatcher,
+                                force_shutdown.as_ref(),
+                                registry,
+                            ) {
                                 tracing::warn!(%error, "daemon connection handling failed");
                             }
                         });
@@ -554,37 +579,41 @@ fn drain_active_connections_for_shutdown(
 ) -> Result<(), AtmError> {
     tracing::info!(
         active_connections = registry.active_connections(),
+        active_dispatchers = registry.active_dispatchers(),
         "daemon shutdown signal received; starting graceful drain"
     );
     let graceful_deadline = shutdown_started + graceful_drain_deadline;
     let force_cancel_deadline = shutdown_started + force_cancel_deadline;
-    while registry.active_connections() > 0 && Instant::now() < graceful_deadline {
+    while registry.total_inflight_units() > 0 && Instant::now() < graceful_deadline {
         registry.wait_for_connection_change(
             graceful_deadline.saturating_duration_since(Instant::now()),
         )?;
     }
     let remaining_after_graceful = registry.active_connections();
-    if remaining_after_graceful == 0 {
+    let remaining_dispatchers_after_graceful = registry.active_dispatchers();
+    if remaining_after_graceful == 0 && remaining_dispatchers_after_graceful == 0 {
         tracing::info!("daemon graceful drain completed cleanly");
     } else {
         tracing::info!(
             active_connections = remaining_after_graceful,
+            active_dispatchers = remaining_dispatchers_after_graceful,
             "daemon graceful drain hit deadline; continuing toward forced cancel"
         );
     }
-    if remaining_after_graceful > 0 {
+    if remaining_after_graceful > 0 || remaining_dispatchers_after_graceful > 0 {
         force_shutdown.store(true, Ordering::SeqCst);
         registry.interrupt_all()?;
     }
-    while registry.active_connections() > 0 && Instant::now() < force_cancel_deadline {
+    while registry.total_inflight_units() > 0 && Instant::now() < force_cancel_deadline {
         registry.wait_for_connection_change(
             force_cancel_deadline.saturating_duration_since(Instant::now()),
         )?;
     }
     let remaining_connections = registry.active_connections();
-    if remaining_connections > 0 {
+    let remaining_dispatchers = registry.active_dispatchers();
+    if remaining_connections > 0 || remaining_dispatchers > 0 {
         return Err(AtmError::daemon_unavailable(format!(
-            "forced cancel deadline elapsed with {remaining_connections} active daemon connections"
+            "forced cancel deadline elapsed with {remaining_connections} active daemon connections and {remaining_dispatchers} in-flight request dispatchers"
         )));
     }
     Ok(())
@@ -621,6 +650,7 @@ fn handle_connection(
     stream: &mut UnixStream,
     dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     force_shutdown: &AtomicBool,
+    registry: Arc<ActiveConnectionRegistry>,
 ) -> Result<(), AtmError> {
     if force_shutdown.load(Ordering::SeqCst) {
         return Ok(());
@@ -646,12 +676,37 @@ fn handle_connection(
     if bytes.is_empty() {
         return Ok(());
     }
+    tracing::debug!(
+        max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
+        "daemon request frame accepted under configured size cap"
+    );
     let request: ProtocolRequestEnvelope =
         serde_json::from_slice(&bytes).map_err(AtmError::from)?;
     // TODO(phase-R): enforce a max 32 inflight requests per connection once framed multiplexing lands.
     // Deferred to R.18: per-connection 32 in-flight request cap.
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
+    // One detached request-dispatch thread is allowed per active connection.
+    // Because accepted connections are capped at `MAX_CONCURRENT_CONNECTIONS`,
+    // dispatcher fan-out is bounded by the same ceiling. If a request outlives
+    // the client-facing `REQUEST_DEADLINE`, the registry still tracks that
+    // worker so daemon shutdown waits for completion or fails at the forced
+    // cancel deadline instead of silently losing in-flight runtime work.
+    registry.dispatcher_started();
+    let dispatch_registry = Arc::clone(&registry);
     std::thread::spawn(move || {
+        struct DispatchTracker {
+            registry: Arc<ActiveConnectionRegistry>,
+        }
+
+        impl Drop for DispatchTracker {
+            fn drop(&mut self) {
+                self.registry.dispatcher_finished();
+            }
+        }
+
+        let _tracker = DispatchTracker {
+            registry: dispatch_registry,
+        };
         let _ = result_tx.send(dispatcher.dispatch(request));
     });
     let response = match result_rx.recv_timeout(REQUEST_DEADLINE) {

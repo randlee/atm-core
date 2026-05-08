@@ -32,6 +32,8 @@ class TriageConsistencyViolation:
 
 
 def iter_ttl_files(repo_root: Path) -> list[Path]:
+    # This validator is intentionally scoped to repo-owned triage records. It
+    # does not walk arbitrary Turtle assets outside `.triage/`.
     triage_root = repo_root / ".triage"
     if not triage_root.exists():
         return []

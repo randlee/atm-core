@@ -115,7 +115,7 @@ fn main() -> Result<()> {
             let graph = export_workspace_graph(&ExportGraphOptions { root })?;
             match GraphOutputFormat::from(format) {
                 GraphOutputFormat::Json => {
-                    println!("{}", render_graph_export_json(&graph)?);
+                    println!("{}", render_graph_export_json(&graph));
                 }
                 GraphOutputFormat::Turtle => {
                     println!("{}", render_graph_export_turtle(&graph));

@@ -41,6 +41,8 @@ def load_allowed_paths(repo_root: Path) -> tuple[str, ...]:
     if not isinstance(config, dict):
         raise SystemExit("[fixed_sleep] must be a TOML table")
     allowed_paths = config.get("allowed_paths", [])
+    # Empty is intentional: ordinary test code has no blanket exemptions. Only
+    # narrow daemon-runtime suites may be added here after explicit review.
     if not isinstance(allowed_paths, list) or not all(isinstance(item, str) for item in allowed_paths):
         raise SystemExit("[fixed_sleep].allowed_paths must be an array of path strings")
     return tuple(allowed_paths)

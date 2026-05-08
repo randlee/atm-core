@@ -95,7 +95,7 @@ fn singleton_guard_reports_stale_owner_record_failure() {
         .open(&lock_path)
         .expect("open lock file");
     fs2::FileExt::try_lock_exclusive(&file).expect("lock file");
-    writeln!(&mut file, "999999").expect("write owner");
+    writeln!(&mut file, "{}", u32::MAX).expect("write owner");
     file.sync_all().expect("sync owner");
 
     let error =
@@ -120,7 +120,7 @@ fn singleton_guard_recovers_stale_owner_once_lock_is_released() {
         .open(&lock_path)
         .expect("open lock file");
     fs2::FileExt::try_lock_exclusive(&file).expect("lock file");
-    writeln!(&mut file, "999999").expect("write owner");
+    writeln!(&mut file, "{}", u32::MAX).expect("write owner");
     file.sync_all().expect("sync owner");
     drop(file);
 
@@ -396,7 +396,7 @@ fn heartbeat_demotes_evicted_member_to_explicit_unknown() {
             .insert_member_for_test(
                 team.clone(),
                 member_name,
-                Some(index as u32 + 1),
+                Some(index as u32 + 2),
                 RuntimeMemberState::Idle,
                 Some(IsoTimestamp::now()),
             )

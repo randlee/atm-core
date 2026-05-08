@@ -6,7 +6,7 @@ phase: R
 sprint: "R.19"
 worktree: feature/pR-postmortem-linters
 branch: feature/pR-postmortem-linters
-status: planned
+status: completed
 estimated_scope: M
 ```
 
@@ -208,7 +208,7 @@ Rationale:
 
 ## Required Validation
 
-Planning-only validation for this sprint:
+Validation run for this sprint:
 - `just lint`
 - any doc-consistency or requirements/architecture review needed to keep the
   sprint plan aligned with the product docs
@@ -230,3 +230,19 @@ Planning-only validation for this sprint:
 - Family D must distinguish bare `wait(...)` from timeout-backed wait forms
 - Family I must validate real triage structure rather than depend on fragile
   string ordering
+
+## Post-Sprint Migration Review
+
+- Family A — migrate to standalone `sc-lint`
+  - reusable `PORT-004` / `PORT-005` analyzer rules proved out on `atm-core`
+- Family B — keep local
+  - ATM role-name literal policy is repo-specific even though the lint shape is
+    generic in theory
+- Family C — keep local
+  - fixed-sleep enforcement depends on ATM test-tier allow-list semantics
+- Family D — migrate to standalone `sc-lint`
+  - reusable `SCB-RUNTIME-001` / `SCB-RUNTIME-002` analyzer rules proved out on
+    production daemon code
+- Family I — keep local
+  - triage Turtle consistency is ATM process-state validation, not generic Rust
+    static analysis

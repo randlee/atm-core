@@ -1,11 +1,9 @@
-use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
 use anyhow::Context;
 use anyhow::Result;
-use proc_macro2::Span;
 use syn::Attribute;
 use syn::Block;
 use syn::Expr;
@@ -24,14 +22,9 @@ use crate::Finding;
 use crate::NodeId;
 use crate::OwnerId;
 use crate::RuleId;
-
-#[derive(Debug, Clone)]
-struct FileContext {
-    source_path: PathBuf,
-    package: String,
-    target: String,
-    is_test_file: bool,
-}
+use crate::source_scan::FileContext;
+use crate::source_scan::discover_source_files;
+use crate::source_scan::span_start_line;
 
 #[derive(Debug, Clone)]
 struct RuntimeFinding {
@@ -189,7 +182,7 @@ impl<'a> RuntimeCollector<'a> {
         match stmt {
             Stmt::Local(local) => {
                 if let Some(init) = &local.init {
-                    if matches!(&local.pat, Pat::Wild(_)) {
+                    if discarded_timeout_wait_pattern(&local.pat) {
                         self.check_discarded_timeout_wait(&init.expr, label);
                     }
                     self.visit_expr(&init.expr, label);
@@ -286,86 +279,6 @@ impl<'a> RuntimeCollector<'a> {
     }
 }
 
-fn discover_source_files(root: &Path) -> Result<Vec<FileContext>> {
-    let metadata = crate::graph::load_metadata(root)?;
-    let workspace_members = metadata.workspace_members.clone();
-    let mut files = Vec::new();
-    let mut seen_paths = BTreeSet::new();
-
-    for package in &metadata.packages {
-        if !workspace_members.iter().any(|id| id == &package.id) {
-            continue;
-        }
-        for target in &package.targets {
-            if !crate::graph::is_supported_target(target) {
-                continue;
-            }
-            let manifest_dir = package
-                .manifest_path
-                .as_std_path()
-                .parent()
-                .context("package manifest missing parent")?;
-            let src_dir = manifest_dir.join("src");
-            let tests_dir = manifest_dir.join("tests");
-            collect_rust_files(
-                &src_dir,
-                false,
-                &package.name,
-                &target.name,
-                &mut seen_paths,
-                &mut files,
-            )?;
-            collect_rust_files(
-                &tests_dir,
-                true,
-                &package.name,
-                &target.name,
-                &mut seen_paths,
-                &mut files,
-            )?;
-        }
-    }
-
-    Ok(files)
-}
-
-fn collect_rust_files(
-    dir: &Path,
-    is_test_file: bool,
-    package: &str,
-    target: &str,
-    seen_paths: &mut BTreeSet<PathBuf>,
-    files: &mut Vec<FileContext>,
-) -> Result<()> {
-    if !dir.exists() {
-        return Ok(());
-    }
-    for entry in
-        fs::read_dir(dir).with_context(|| format!("failed to read directory {}", dir.display()))?
-    {
-        let entry = entry?;
-        let path = entry.path();
-        let file_type = entry.file_type()?;
-        if file_type.is_dir() {
-            collect_rust_files(&path, is_test_file, package, target, seen_paths, files)?;
-            continue;
-        }
-        if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
-            continue;
-        }
-        if !seen_paths.insert(path.clone()) {
-            continue;
-        }
-        files.push(FileContext {
-            source_path: path,
-            package: package.to_string(),
-            target: target.to_string(),
-            is_test_file,
-        });
-    }
-    Ok(())
-}
-
 fn item_is_test_scope(
     attrs: &[Attribute],
     inherited_scope: ScopeKind,
@@ -397,10 +310,6 @@ fn attr_is_test(attr: &Attribute) -> bool {
     attr.path().is_ident("test")
 }
 
-fn span_start_line(span: Span) -> usize {
-    span.start().line
-}
-
 fn contains_timeout_wait_call(expr: &Expr) -> bool {
     match expr {
         Expr::MethodCall(method_call) => {
@@ -418,6 +327,19 @@ fn contains_timeout_wait_call(expr: &Expr) -> bool {
             contains_timeout_wait_call(&expr_call.func)
                 || expr_call.args.iter().any(contains_timeout_wait_call)
         }
+        _ => false,
+    }
+}
+
+fn discarded_timeout_wait_pattern(pat: &Pat) -> bool {
+    match pat {
+        Pat::Wild(_) => true,
+        Pat::Ident(pat_ident) => pat_ident.ident.to_string().starts_with('_'),
+        Pat::Tuple(pat_tuple) => pat_tuple
+            .elems
+            .iter()
+            .nth(1)
+            .is_some_and(discarded_timeout_wait_pattern),
         _ => false,
     }
 }

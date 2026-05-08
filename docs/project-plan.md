@@ -73,7 +73,7 @@ Status:
   `crates/atm` only; additional crate introduction remains active Phase R
   skeleton work and is now tracked explicitly by `R.3.1`.
 - `R.13` through `R.18` are the runtime/product continuation sprints.
-- `R.19` is the planned post-closeout lint-backfill sprint that converts the
+- `R.19` is the completed post-closeout lint-backfill sprint that converts the
   recurring mechanically-detectable Phase R defect families into normal lint
   or CI gates on `atm-core` before any reusable subset is migrated to
   standalone `sc-lint`.

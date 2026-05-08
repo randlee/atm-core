@@ -29,6 +29,8 @@ def command(repo_root: Path) -> list[str]:
         "analyze",
         "--root",
         str(repo_root),
+        "--rule",
+        "boundaries",
         "--format",
         "json",
     ]

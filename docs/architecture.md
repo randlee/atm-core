@@ -151,6 +151,17 @@ Current Phase R lint partition direction:
   steps first, then reevaluate extraction only after the false-positive and
   allow-list shape is proven on `atm-core`
 
+Active postmortem rule families:
+- reusable analyzer rules:
+  - `PORT-004` ungated `std::os::unix` imports in production code
+  - `PORT-005` `cfg_attr(not(unix), allow(dead_code))` portability suppressors
+  - `SCB-RUNTIME-001` bare production `Condvar::wait(...)`
+  - `SCB-RUNTIME-002` discarded `wait_timeout*` results in production code
+- ATM-local repository rules:
+  - duplicate semantic role-name literals in non-test Rust code
+  - fixed-sleep test-hygiene checks
+  - triage Turtle aggregate/branch consistency checks
+
 ### 2.3 Release Publication Boundary
 
 The `1.0` retained-surface release is a source-repo replacement of the old
