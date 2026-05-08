@@ -903,15 +903,18 @@ Status:
 ### R.20 Daemon Partitioning And Enforcement Hardening
 
 Status:
-- planned on `feature/pR-s20-daemon-partitioning`
+- in review on `feature/pR-s20-daemon-partitioning`
 
 - review the post-`PR #200` integrated daemon state on `integrate/phase-R`
-- define the daemon-private partition plan for:
-  - singleton / ownership admission
-  - server runtime / connection registry / drain
-  - request execution ownership
-  - runtime status cache / reload hydration / doctor projection
-  - peer transport and the existing watch/reconcile/notifier lanes
+- define the daemon-private partition plan for exactly these eight partitions:
+  - `ownership`
+  - `server_runtime`
+  - `request_runtime`
+  - `runtime_status`
+  - `peer_transport`
+  - `watch_runtime`
+  - `reconcile_runtime`
+  - `notification_runtime`
 - tighten daemon architecture, requirements, and boundaries so the partitioned
   design is explicit and enforceable
 - run a repeated plan-hardening loop over code and docs until the daemon

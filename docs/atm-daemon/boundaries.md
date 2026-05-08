@@ -41,9 +41,8 @@ daemon-private ownership map is:
 - `request_runtime`
   - per-connection request execution and request-work accounting
 - `runtime_status`
-  - `RuntimeStatusCache`, roster hydration, reload assembly
-- `doctor_projection`
-  - runtime-health projection for `atm doctor`
+  - `RuntimeStatusCache`, roster hydration, reload assembly, and
+    `atm doctor` runtime-health projection
 - `peer_transport`
 - `watch_runtime`
 - `reconcile_runtime`
@@ -51,6 +50,10 @@ daemon-private ownership map is:
 
 `R.20` exists to turn that ownership map into the follow-on cleanup sprint plan
 and to make those seams explicit enough for later QA and lint review.
+
+Observability note:
+- daemon-owned `sc-observability` sinks are cross-cutting runtime support, not
+  a separate daemon-private partition
 
 ## RuntimeLifecycleController
 

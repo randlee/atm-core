@@ -6,7 +6,7 @@ phase: R
 sprint: "R.20"
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s20-daemon-partitioning
 branch: feature/pR-s20-daemon-partitioning
-status: planned
+status: in_review
 estimated_scope: L
 ```
 
@@ -29,10 +29,19 @@ the production-ready daemon target.
 ## Governing Requirements
 
 - `REQ-P-RUNTIME-002`
+- `REQ-P-DAEMON-PARTITION-001`
+- `REQ-P-DAEMON-LIFECYCLE-001`
+- `REQ-P-DAEMON-DISPATCHER-001`
+- `REQ-P-DAEMON-LANES-001`
 - `REQ-DAEMON-RUNTIME-001`
 - `REQ-DAEMON-RUNTIME-002`
 - `REQ-DAEMON-RUNTIME-003`
 - `REQ-DAEMON-RUNTIME-004`
+- `REQ-DAEMON-RUNTIME-006`
+- `REQ-DAEMON-RUNTIME-007`
+- `REQ-DAEMON-TRANSPORT-004`
+- `REQ-DAEMON-STATUS-002`
+- `REQ-DAEMON-STATUS-003`
 - `REQ-DAEMON-CONFIG-001`
 - `REQ-DAEMON-HEALTH-001`
 
@@ -84,6 +93,19 @@ Known review themes that the plan must address:
 - status-cache cap semantics
 - overgrown daemon-private modules and mixed responsibilities
 
+Discrete motivating defects for this sprint:
+- singleton teardown race:
+  - current daemon code releases the advisory lock before removing the
+    owner-visible path
+- detached request execution:
+  - accepted request work still relies on detached spawned worker threads
+- background-lane non-transactional lifecycle:
+  - partial lane-start failure and shutdown cleanup rules are not one explicit
+    rollback-safe contract
+- status-cache cardinality defect:
+  - cache overflow may demote to `unknown` without proving retained-cardinality
+    eviction
+
 ## Sub-Tasks
 
 1. Integrated-state daemon review
@@ -106,15 +128,15 @@ Known review themes that the plan must address:
    - assign owned responsibilities for each partition
    - state which current files/types move into each target module
    Required outputs:
-   - target partitions must include at least:
-     - singleton / ownership admission
-     - server runtime / connection registry / drain
-     - request execution ownership
-     - runtime status cache / reload hydration / doctor projection
-     - peer transport
-     - watch runtime
-     - reconcile runtime
-     - notification runtime
+   - target partitions must be exactly:
+     - `ownership`
+     - `server_runtime`
+     - `request_runtime`
+     - `runtime_status`
+     - `peer_transport`
+     - `watch_runtime`
+     - `reconcile_runtime`
+     - `notification_runtime`
 
 3. Enforcement hardening
    Development work:
@@ -171,6 +193,8 @@ Known review themes that the plan must address:
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
 - `docs/atm-daemon/requirements.md`
+- `docs/requirements.md`
+- `docs/phase-R/issues.md`
 
 ## Risks And Watchouts
 
