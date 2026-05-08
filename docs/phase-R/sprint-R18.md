@@ -27,6 +27,8 @@ This sprint is the explicit closeout gate after the major runtime lanes land. It
 ## Governing Requirements
 
 - `REQ-P-RUNTIME-002`
+  - defined in [docs/requirements.md](../requirements.md) under Product
+    requirement `REQ-P-RUNTIME-002`
 - `REQ-CORE-BOUNDARY-002`
 - `REQ-CORE-TEST-RUNTIME-001`
 - portability/test-fidelity requirements in `docs/requirements.md`

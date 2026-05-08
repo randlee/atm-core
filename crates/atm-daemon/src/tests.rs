@@ -134,7 +134,7 @@ fn singleton_guard_reports_stale_owner_record_failure() {
 }
 
 #[test]
-#[serial(env)]
+#[serial]
 fn singleton_guard_recovers_stale_owner_once_lock_is_released() {
     let tempdir = TempDir::new().expect("tempdir");
     let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());

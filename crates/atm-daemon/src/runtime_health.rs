@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::path::PathBuf;
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use atm_core::{
     RequestEnvelope, ResponseEnvelope,
@@ -30,6 +32,9 @@ use atm_core::{
 use atm_rusqlite::{SqliteBoundaryAssembly, assemble_default_boundary};
 
 const MAX_STATUS_CACHE_ENTRIES: usize = 4096;
+const MAX_RELOAD_TEAMS: usize = 256;
+const SHUTDOWN_WAL_CHECKPOINT_DEADLINE: Duration = Duration::from_secs(2);
+const SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone)]
 struct DaemonObservability {
@@ -55,6 +60,10 @@ impl DaemonObservability {
             Some("unavailable") => RetainedSinkFault::Unavailable,
             _ => RetainedSinkFault::Healthy,
         };
+        Self::new_with_sink_fault(home_dir, retained_sink_fault)
+    }
+
+    fn new_with_sink_fault(home_dir: PathBuf, retained_sink_fault: RetainedSinkFault) -> Self {
         Self {
             home_dir,
             retained_sink_fault,
@@ -487,6 +496,36 @@ pub(crate) struct DaemonRequestDispatcher {
 }
 
 impl DaemonRequestDispatcher {
+    fn run_bounded_shutdown_step(
+        label: &'static str,
+        deadline: Duration,
+        step: impl FnOnce() -> Result<(), AtmError> + Send + 'static,
+    ) {
+        let (result_tx, result_rx) = mpsc::sync_channel(1);
+        std::thread::spawn(move || {
+            let _ = result_tx.send(step());
+        });
+        match result_rx.recv_timeout(deadline) {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
+                tracing::warn!(%error, step = label, "daemon shutdown finalizer step failed");
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                tracing::warn!(
+                    step = label,
+                    timeout_ms = deadline.as_millis(),
+                    "daemon shutdown finalizer step exceeded its deadline"
+                );
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                tracing::warn!(
+                    step = label,
+                    "daemon shutdown finalizer step exited before reporting a result"
+                );
+            }
+        }
+    }
+
     pub(crate) fn new(home_dir: PathBuf, status_cache: RuntimeStatusCache) -> Self {
         let sqlite_boundary = match assemble_default_boundary() {
             Ok(boundary) => {
@@ -536,7 +575,10 @@ impl DaemonRequestDispatcher {
             }
         };
         Self {
-            observability: DaemonObservability::new(home_dir),
+            observability: DaemonObservability::new_with_sink_fault(
+                home_dir,
+                RetainedSinkFault::Healthy,
+            ),
             status_cache,
             sqlite_boundary,
         }
@@ -607,20 +649,19 @@ impl DaemonRequestDispatcher {
     }
 
     pub(crate) fn finalize_shutdown(&self) {
-        if let Some(boundary) = &self.sqlite_boundary
-            && let Err(error) = boundary.checkpoint_wal()
-        {
-            tracing::warn!(
-                %error,
-                "sqlite wal checkpoint failed during daemon shutdown finalization"
+        if let Some(boundary) = self.sqlite_boundary.clone() {
+            Self::run_bounded_shutdown_step(
+                "sqlite_wal_checkpoint",
+                SHUTDOWN_WAL_CHECKPOINT_DEADLINE,
+                move || boundary.checkpoint_wal(),
             );
         }
-        if let Err(error) = self.observability.best_effort_flush() {
-            tracing::warn!(
-                %error,
-                "retained observability sink flush failed during daemon shutdown finalization"
-            );
-        }
+        let observability = self.observability.clone();
+        Self::run_bounded_shutdown_step(
+            "observability_flush",
+            SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE,
+            move || observability.best_effort_flush(),
+        );
     }
 
     fn record_heartbeat(
@@ -736,7 +777,7 @@ fn build_runtime_status_cache_state(
     if !teams_root.is_dir() {
         return Ok(next_state);
     }
-    for entry in std::fs::read_dir(&teams_root).map_err(|error| {
+    let entries = std::fs::read_dir(&teams_root).map_err(|error| {
         AtmError::file_policy(format!(
             "failed to enumerate daemon team configs under {}",
             teams_root.display()
@@ -745,7 +786,17 @@ fn build_runtime_status_cache_state(
             "Restore read access to the daemon team configuration tree under ATM_HOME before retrying atm-daemon startup.",
         )
         .with_source(error)
-    })? {
+    })?;
+    for (index, entry) in entries.enumerate() {
+        if index >= MAX_RELOAD_TEAMS {
+            return Err(AtmError::config(format!(
+                "daemon runtime reload rejected because {} contains more than {MAX_RELOAD_TEAMS} team configs",
+                teams_root.display()
+            ))
+            .with_recovery(
+                "Reduce the number of configured ATM teams or raise the documented reload cap before retrying SIGHUP.",
+            ));
+        }
         let entry = entry.map_err(|error| {
             AtmError::file_policy(format!(
                 "failed to read daemon team-config entry under {}",
@@ -786,6 +837,15 @@ fn build_runtime_status_cache_state(
             .with_source(error)
         })?;
         for member in config.members {
+            if next_state.members.len() >= MAX_STATUS_CACHE_ENTRIES {
+                return Err(AtmError::config(format!(
+                    "daemon runtime reload rejected because status-cache capacity {MAX_STATUS_CACHE_ENTRIES} would be exceeded while reading {}",
+                    config_path.display()
+                ))
+                .with_recovery(
+                    "Reduce configured roster size or increase the documented status-cache budget before retrying SIGHUP.",
+                ));
+            }
             let member_name = member.name;
             let membership = roster_store.query_membership(
                 atm_core::boundary::RosterStoreQueryMembershipRequest {

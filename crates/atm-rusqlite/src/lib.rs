@@ -50,7 +50,7 @@ impl SqliteRosterStore {
 }
 
 /// Internal assembly root for Phase R SQLite-backed boundary implementations.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SqliteBoundaryAssembly {
     mail_store: Arc<SqliteMailStore>,
     task_store: Arc<SqliteTaskStore>,

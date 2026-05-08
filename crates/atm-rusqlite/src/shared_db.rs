@@ -4,7 +4,9 @@ use atm_core::home;
 use rusqlite::OpenFlags;
 use rusqlite::{Connection, Error as RusqliteError};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+
+const MAX_SQLITE_CONNECTIONS: usize = 4;
 
 pub(crate) const DB_MIGRATIONS: &str = r#"
 CREATE TABLE IF NOT EXISTS mail_messages (
@@ -124,6 +126,8 @@ CREATE INDEX IF NOT EXISTS idx_task_records_lookup
 CREATE INDEX IF NOT EXISTS idx_team_roster_team_name
     ON team_roster(team_name);
 "#;
+// `rosters` remains the canonical per-team `TeamConfig` snapshot, while
+// `team_roster` is the per-member durable projection that runtime lookup uses.
 
 #[derive(Debug, Clone)]
 pub(crate) enum SharedDbTarget {
@@ -145,10 +149,23 @@ impl SharedDbTarget {
 #[derive(Clone)]
 pub(crate) struct SharedDb {
     target: Arc<SharedDbTarget>,
+    connection_count: Arc<Mutex<usize>>,
     #[cfg(test)]
     // In-memory test fixtures must share one retained connection so each
     // operation sees the same transient schema and rows across store calls.
-    test_connection: Option<Arc<std::sync::Mutex<Connection>>>,
+    test_connection: Option<Arc<Mutex<Connection>>>,
+}
+
+struct SharedDbConnectionGuard {
+    connection_count: Arc<Mutex<usize>>,
+}
+
+impl Drop for SharedDbConnectionGuard {
+    fn drop(&mut self) {
+        if let Ok(mut connection_count) = self.connection_count.lock() {
+            *connection_count = connection_count.saturating_sub(1);
+        }
+    }
 }
 
 impl SharedDb {
@@ -169,7 +186,8 @@ impl SharedDb {
         ensure_schema(&mut connection, &SharedDbTarget::InMemory)?;
         Ok(Self {
             target: Arc::new(SharedDbTarget::InMemory),
-            test_connection: Some(Arc::new(std::sync::Mutex::new(connection))),
+            connection_count: Arc::new(Mutex::new(0)),
+            test_connection: Some(Arc::new(Mutex::new(connection))),
         })
     }
 
@@ -190,6 +208,7 @@ impl SharedDb {
 
         let db = Self {
             target: Arc::new(SharedDbTarget::Path(path)),
+            connection_count: Arc::new(Mutex::new(0)),
             #[cfg(test)]
             test_connection: None,
         };
@@ -210,6 +229,7 @@ impl SharedDb {
             return operation(&mut connection);
         }
 
+        let _connection_guard = self.acquire_connection_guard()?;
         let mut connection = self.open_connection()?;
         operation(&mut connection)
     }
@@ -254,7 +274,7 @@ impl SharedDb {
 
         self.with_connection(|connection| {
             connection
-                .query_row("PRAGMA wal_checkpoint(TRUNCATE);", [], |_row| Ok(()))
+                .query_row("PRAGMA wal_checkpoint(PASSIVE);", [], |_row| Ok(()))
                 .map_err(|error| {
                     sqlite_error(
                         self.target.as_ref(),
@@ -262,6 +282,24 @@ impl SharedDb {
                         error,
                     )
                 })
+        })
+    }
+
+    fn acquire_connection_guard(&self) -> Result<SharedDbConnectionGuard, AtmError> {
+        let mut connection_count = self.connection_count.lock().map_err(|_| {
+            AtmError::daemon_unavailable("sqlite connection budget state lock poisoned")
+        })?;
+        if *connection_count >= MAX_SQLITE_CONNECTIONS {
+            return Err(AtmError::daemon_unavailable(format!(
+                "sqlite connection budget exceeded (max {MAX_SQLITE_CONNECTIONS} concurrent handles)"
+            ))
+            .with_recovery(
+                "Reduce concurrent daemon SQLite work or raise the documented SQLite handle budget before retrying.",
+            ));
+        }
+        *connection_count += 1;
+        Ok(SharedDbConnectionGuard {
+            connection_count: Arc::clone(&self.connection_count),
         })
     }
 

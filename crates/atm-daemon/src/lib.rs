@@ -525,6 +525,7 @@ impl PreparedRuntimeServer {
                             let _ = stream.set_write_timeout(Some(REQUEST_DEADLINE));
                             let _ = stream.write_all(&encoded);
                             let _ = stream.flush();
+                            let _ = stream.shutdown(std::net::Shutdown::Both);
                             continue;
                         }
 
