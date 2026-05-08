@@ -19,6 +19,48 @@ pub fn atm_home() -> Result<PathBuf, AtmError> {
     resolve_user_home()
 }
 
+/// Resolve the host-scoped ATM runtime directory independent of `ATM_HOME`.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the OS user-home directory cannot be resolved.
+pub fn host_runtime_dir() -> Result<PathBuf, AtmError> {
+    Ok(host_runtime_dir_from_home(&resolve_user_home()?))
+}
+
+/// Resolve the host-scoped ATM runtime directory from an explicit user-home root.
+pub fn host_runtime_dir_from_home(home_dir: &Path) -> PathBuf {
+    home_dir.join(".atm").join("daemon")
+}
+
+/// Resolve the host-scoped ATM durable-state directory independent of `ATM_HOME`.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the OS user-home directory cannot be resolved.
+pub fn host_db_dir() -> Result<PathBuf, AtmError> {
+    Ok(host_db_dir_from_home(&resolve_user_home()?))
+}
+
+/// Resolve the host-scoped ATM durable-state directory from an explicit user-home root.
+pub fn host_db_dir_from_home(home_dir: &Path) -> PathBuf {
+    home_dir.join(".atm").join("db")
+}
+
+/// Resolve the host-scoped ATM durable mailbox database path independent of `ATM_HOME`.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the OS user-home directory cannot be resolved.
+pub fn host_mail_db_path() -> Result<PathBuf, AtmError> {
+    Ok(host_mail_db_path_from_home(&resolve_user_home()?))
+}
+
+/// Resolve the host-scoped ATM durable mailbox database path from an explicit user-home root.
+pub fn host_mail_db_path_from_home(home_dir: &Path) -> PathBuf {
+    host_db_dir_from_home(home_dir).join("mail.db")
+}
+
 /// Resolve the team directory for `team` under the current ATM home.
 ///
 /// # Errors
@@ -107,9 +149,12 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{
-        atm_home, inbox_path, inbox_path_from_home, team_dir, team_dir_from_home,
+        atm_home, host_db_dir_from_home, host_mail_db_path_from_home, host_runtime_dir_from_home,
+        inbox_path, inbox_path_from_home, team_dir, team_dir_from_home,
         workflow_state_path_from_home,
     };
+    #[cfg(unix)]
+    use super::{host_db_dir, host_mail_db_path, host_runtime_dir};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
 
     // Serializes process-environment mutation inside this test module. This is
@@ -211,6 +256,78 @@ mod tests {
                 .join(TEST_TEAM)
                 .join("inboxes")
                 .join(format!("{TEST_SENDER}.json"))
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial_test::serial]
+    fn host_runtime_dir_uses_os_home_not_atm_home() {
+        let _guard = env_lock().lock().expect("env lock");
+        let tempdir = TempDir::new().expect("tempdir");
+        let atm_home_dir = TempDir::new().expect("atm home tempdir");
+        let _atm_home = EnvGuard::set("ATM_HOME", atm_home_dir.path());
+        let _home = EnvGuard::set_raw("HOME", tempdir.path().to_str().expect("utf8 path"));
+
+        let resolved = host_runtime_dir().expect("host runtime dir");
+        assert_eq!(resolved, tempdir.path().join(".atm").join("daemon"));
+    }
+
+    #[test]
+    fn host_runtime_dir_from_home_uses_fixed_atm_daemon_subtree() {
+        let tempdir = TempDir::new().expect("tempdir");
+        assert_eq!(
+            host_runtime_dir_from_home(tempdir.path()),
+            tempdir.path().join(".atm").join("daemon")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial_test::serial]
+    fn host_db_dir_uses_os_home_not_atm_home() {
+        let _guard = env_lock().lock().expect("env lock");
+        let atm_home_dir = TempDir::new().expect("atm home");
+        let os_home_dir = TempDir::new().expect("os home");
+        let _atm_home = EnvGuard::set("ATM_HOME", atm_home_dir.path());
+        let _home = EnvGuard::set_raw("HOME", os_home_dir.path().to_str().expect("utf8 path"));
+
+        let resolved = host_db_dir().expect("host db dir");
+        assert_eq!(resolved, os_home_dir.path().join(".atm").join("db"));
+    }
+
+    #[test]
+    fn host_db_dir_from_home_uses_fixed_atm_db_subtree() {
+        let tempdir = TempDir::new().expect("tempdir");
+        assert_eq!(
+            host_db_dir_from_home(tempdir.path()),
+            tempdir.path().join(".atm").join("db")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial_test::serial]
+    fn host_mail_db_path_uses_os_home_not_atm_home() {
+        let _guard = env_lock().lock().expect("env lock");
+        let atm_home_dir = TempDir::new().expect("atm home");
+        let os_home_dir = TempDir::new().expect("os home");
+        let _atm_home = EnvGuard::set("ATM_HOME", atm_home_dir.path());
+        let _home = EnvGuard::set_raw("HOME", os_home_dir.path().to_str().expect("utf8 path"));
+
+        let resolved = host_mail_db_path().expect("host mail db path");
+        assert_eq!(
+            resolved,
+            os_home_dir.path().join(".atm").join("db").join("mail.db")
+        );
+    }
+
+    #[test]
+    fn host_mail_db_path_from_home_uses_mail_db_filename() {
+        let tempdir = TempDir::new().expect("tempdir");
+        assert_eq!(
+            host_mail_db_path_from_home(tempdir.path()),
+            tempdir.path().join(".atm").join("db").join("mail.db")
         );
     }
 

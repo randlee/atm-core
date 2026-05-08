@@ -42,4 +42,4 @@ review_gates = ["no_concrete_store_leakage"]
 
 [status]
 state = "concrete_landed"
-notes = ["trait plus request/response structs landed in atm_core::boundary", "concrete store implementation landed in crates/atm-rusqlite/src/roster_store.rs as SqliteRosterStore", "live status belongs elsewhere; this boundary owns durable roster truth only"]
+notes = ["trait plus request/response structs landed in atm_core::boundary", "concrete store implementation landed in crates/atm-rusqlite/src/roster_store.rs as SqliteRosterStore", "live status belongs elsewhere; this boundary owns durable roster truth only", "documented heartbeat handling may persist durable pid continuity through record_heartbeat(...)"]

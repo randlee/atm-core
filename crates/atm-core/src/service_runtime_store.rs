@@ -74,7 +74,7 @@ pub(crate) fn observe_source_files(
     team: &TeamName,
     agent: &AgentName,
 ) -> Result<Vec<SourceFile>, AtmError> {
-    mailbox::store::observe_source_files(home_dir, team.as_ref(), agent.as_ref())
+    mailbox::store::observe_source_files(home_dir, team, agent)
 }
 
 pub(crate) fn commit_source_files(source_files: &[SourceFile]) -> Result<(), AtmError> {
@@ -102,8 +102,8 @@ where
 {
     mailbox::store::with_locked_source_files(
         home_dir,
-        team.as_ref(),
-        agent.as_ref(),
+        team,
+        agent,
         extra_write_paths,
         timeout,
         body,
@@ -117,17 +117,20 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
         team: &TeamName,
         agent: &AgentName,
     ) -> Result<Vec<SourceFile>, AtmError> {
-        let _mail_store = self.mail_store.as_ref();
+        // The retained runtime still fronts the legacy file-backed mailbox
+        // path; keep the declared boundary adapter attached until the mailbox
+        // persistence path is fully lifted behind the store boundary.
+        let _ = self.mail_store.as_ref();
         observe_source_files(home_dir, team, agent)
     }
 
     fn commit_source_files(&self, source_files: &[SourceFile]) -> Result<(), AtmError> {
-        let _mail_store = self.mail_store.as_ref();
+        let _ = self.mail_store.as_ref();
         commit_source_files(source_files)
     }
 
     fn read_messages(&self, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
-        let _mail_store = self.mail_store.as_ref();
+        let _ = self.mail_store.as_ref();
         crate::mailbox::read_messages(path)
     }
 
@@ -136,7 +139,7 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
         path: &Path,
         messages: &[MessageEnvelope],
     ) -> Result<(), AtmError> {
-        let _mail_store = self.mail_store.as_ref();
+        let _ = self.mail_store.as_ref();
         commit_mailbox_state(path, messages)
     }
 
@@ -153,7 +156,7 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
         I: IntoIterator<Item = PathBuf>,
         F: FnOnce(&[PathBuf], &mut Vec<SourceFile>) -> Result<T, AtmError>,
     {
-        let _mail_store = self.mail_store.as_ref();
+        let _ = self.mail_store.as_ref();
         with_locked_source_files(home_dir, team, agent, extra_write_paths, timeout, body)
     }
 }
@@ -351,7 +354,15 @@ impl boundary::RosterStore for LegacyRosterStoreAdapter {
             team: request.team,
             member: None,
             is_member: false,
+            pid: None,
         })
+    }
+
+    fn record_heartbeat(
+        &self,
+        _request: boundary::RosterStoreRecordHeartbeatRequest,
+    ) -> Result<boundary::RosterStoreRecordHeartbeatResponse, AtmError> {
+        Err(unsupported("RosterStore::record_heartbeat"))
     }
 
     fn health_snapshot(

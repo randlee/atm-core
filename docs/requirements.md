@@ -1149,6 +1149,8 @@ Phase R continuation semantics:
   - `supersede`
 
   Required behavior:
+  - compatibility/export payloads carry successor metadata with
+    `parentMessageId` and `threadMode`
   - `add-details` appends missing context while preserving the prior message as
     valid historical context
   - `supersede` replaces the prior message as the effective current
@@ -1172,6 +1174,7 @@ Phase R continuation semantics:
 - `REQ-P-THREAD-005` Ephemeral messages are standalone, time-bounded records.
 
   Required behavior:
+  - compatibility/export payloads carry ephemeral expiry with `staleAt`
   - ephemeral messages expire by time only, using `stale_at`
   - no product behavior may depend on first-read deletion semantics
   - periodic daemon cleanup deletes expired ephemeral rows
@@ -1592,6 +1595,9 @@ Optional fields:
 - `pendingAckAt`
 - `acknowledgedAt`
 - `acknowledgesMessageId`
+- `parentMessageId`
+- `threadMode`
+- `staleAt`
 - `metadata`
 
 Unknown fields must be preserved.
@@ -1600,6 +1606,8 @@ For ATM-authored messages:
 - ATM machine-readable identity is mandatory
 - current legacy top-level `message_id` values may be UUID
 - forward metadata `messageId` values must be ULID
+- thread/update metadata uses `parentMessageId` plus `threadMode`
+- time-bounded ephemeral retention uses `staleAt`
 - ATM-authored machine identifiers must not be null or blank
 
 Legacy or externally imported records may still omit `message_id`; the rewrite
@@ -2606,6 +2614,8 @@ mail correctness.
     and daemon memory caches it as the primary liveness field
   - daemon runtime state must include `last_active_at` for each known active
     agent/member entry
+  - the shared protocol must expose typed heartbeat request/response DTOs for
+    runtime state updates and PID continuity handling
   - SQLite must not own live `last_active_at`; it remains daemon-memory-only
     runtime state
   - roster truth and live-status truth must remain distinct
@@ -2766,6 +2776,17 @@ mail correctness.
   - the transport boundary must not absorb watcher responsibilities
   - any violation of this watcher isolation rule is a direct QA failure for
     the Phase Q implementation line
+  - the daemon implementation may use a bounded polling watch registry instead
+    of OS-native filesystem subscriptions, but the watch lifecycle must remain
+    daemon-owned and long-lived rather than one-shot helper calls
+  - reconcile triggering must support debounce/coalesce so repeated identical
+    requests do not fan out into duplicate import work
+  - `R.17` completes this lane as a daemon-owned polling watch registry, an
+    ordered debounce/coalesce reconcile worker, and a queued notifier runtime;
+    those lanes must start and stop only through the daemon composition root
+  - the notifier lane uses a bounded queue of `64` events and must fail closed
+    with typed backpressure instead of silently buffering unbounded plugin
+    traffic
 
 - `REQ-CORE-TRANSPORT-002` Cross-host traffic must be daemon-to-daemon only.
 
@@ -2806,6 +2827,9 @@ mail correctness.
     replay/re-export path rather than by silently assuming success
   - if the bounded retry window expires without remote acceptance, the send
     fails and must not leave durable delivered-message state behind
+  - pending replay/re-export state must be persisted in the host-scoped SQLite
+    root keyed by mailbox identity plus `message_key`, with bounded expiry and
+    operator-visible retained-failure state
 
 - `REQ-CORE-TRANSPORT-005` The daemon runtime must use concrete timeout and
   capacity limits for transport/store/health operations.
@@ -2923,6 +2947,7 @@ mail correctness.
     state
   - the health interface must be able to report at least:
     - daemon reachability
+    - daemon liveness and readiness as separate dimensions
     - singleton ownership status
     - live status-cache summary
     - ingest backlog / degraded-ingest state when present

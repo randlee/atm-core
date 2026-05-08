@@ -185,6 +185,15 @@ impl AtmError {
         .with_recovery("Set ATM_IDENTITY or provide an explicit command identity override when the command supports one.")
     }
 
+    pub fn identity_conflict(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::IdentityConflict,
+            AtmErrorKind::Identity,
+            message,
+        )
+        .with_recovery("Stop and report to the user immediately. Resolve the live pid conflict before retrying ATM activity.")
+    }
+
     pub fn daemon_unavailable(message: impl Into<String>) -> Self {
         Self::new_with_code(
             AtmErrorCode::DaemonUnavailable,
@@ -193,6 +202,72 @@ impl AtmError {
         )
         .with_recovery(
             "Ensure the atm-daemon binary is installed, the daemon socket path is reachable, and ATM_DAEMON_BIN/ATM_HOME are set correctly before retrying.",
+        )
+    }
+
+    pub fn daemon_launch_gate_rejected(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::DaemonLaunchGateRejected,
+            AtmErrorKind::DaemonUnavailable,
+            message,
+        )
+        .with_recovery(
+            "Connect to the existing daemon if it is healthy, or resolve stale ownership before retrying another daemon launch.",
+        )
+    }
+
+    pub fn daemon_serving_state_rejected(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::DaemonServingStateRejected,
+            AtmErrorKind::DaemonUnavailable,
+            message,
+        )
+        .with_recovery(
+            "Stop launching duplicate daemons and inspect the existing runtime owner before retrying startup.",
+        )
+    }
+
+    pub fn daemon_stale_owner_recovery_failed(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::DaemonStaleOwnerRecoveryFailed,
+            AtmErrorKind::DaemonUnavailable,
+            message,
+        )
+        .with_recovery(
+            "Inspect the recorded owner, confirm no live daemon remains, repair ownership metadata, then retry startup.",
+        )
+    }
+
+    pub fn daemon_auto_start_failed(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::DaemonAutoStartFailed,
+            AtmErrorKind::DaemonUnavailable,
+            message,
+        )
+        .with_recovery(
+            "Inspect daemon stderr/logs, fix the startup fault, and retry only after the daemon can reach serving state.",
+        )
+    }
+
+    pub fn remote_delivery_outcome_unknown(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::RemoteDeliveryOutcomeUnknown,
+            AtmErrorKind::DaemonUnavailable,
+            message,
+        )
+        .with_recovery(
+            "Check the destination daemon or mailbox before retrying. If local durable replay is enabled, let the daemon resume the pending handoff rather than guessing success.",
+        )
+    }
+
+    pub fn test_fake_transport_injection_failed(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::TestFakeTransportInjectionFailed,
+            AtmErrorKind::Validation,
+            message,
+        )
+        .with_recovery(
+            "Fix the test seam configuration so it uses a valid FakeClientTransport or LoopbackClientTransport instance.",
         )
     }
 

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error_codes::AtmErrorCode;
 use crate::observability::AtmObservabilityHealth;
+use crate::protocol::RuntimeStatusSnapshot;
 use crate::team_admin::MembersList;
 use crate::types::{AgentName, TeamName};
 
@@ -57,6 +58,8 @@ pub struct DoctorReport {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub member_roster: Option<MembersList>,
     pub observability: AtmObservabilityHealth,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_status: Option<RuntimeStatusSnapshot>,
 }
 
 impl DoctorReport {

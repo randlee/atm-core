@@ -31,8 +31,9 @@ pub(crate) mod model_registry;
 pub mod observability;
 /// Internal atomic persistence helpers for shared mutable state files.
 pub(crate) mod persistence;
-/// Internal process-liveness helpers shared across lock implementations.
-pub(crate) mod process;
+/// Hidden process-liveness helpers shared across lock implementations.
+#[doc(hidden)]
+pub mod process;
 /// Shared protocol DTOs used by boundary transport and adapter contracts.
 pub mod protocol;
 /// Mailbox read/query workflows and output models.
@@ -55,6 +56,8 @@ pub mod team_admin;
 pub mod test_support;
 /// Internal text-formatting helpers used by ATM core surfaces.
 pub(crate) mod text;
+/// Internal linear-thread helpers shared by send/read/ack workflow logic.
+pub(crate) mod threading;
 /// Hidden transport test utilities shared by CLI-layer tests.
 #[doc(hidden)]
 #[cfg(feature = "test-utils")]
@@ -85,7 +88,8 @@ pub use boundary::{
     ReconcileCoordinator, ReconcileRequest, ReconcileResult, RequestDispatcher, RosterStore,
     RosterStoreHealthSnapshot, RosterStoreHealthSnapshotRequest, RosterStoreHealthSnapshotResponse,
     RosterStoreLoadRosterRequest, RosterStoreLoadRosterResponse, RosterStoreQueryMembershipRequest,
-    RosterStoreQueryMembershipResponse, RosterStoreReplaceRosterRequest,
+    RosterStoreQueryMembershipResponse, RosterStoreRecordHeartbeatRequest,
+    RosterStoreRecordHeartbeatResponse, RosterStoreReplaceRosterRequest,
     RosterStoreReplaceRosterResponse, RosterStoreRequest, RosterStoreResponse,
     RuntimeStatusSnapshot, ServerTransport, StatusSource, TaskState, TaskStore,
     TaskStoreAttachMessageLinkRequest, TaskStoreAttachMessageLinkResponse,

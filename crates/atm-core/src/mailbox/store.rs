@@ -10,6 +10,7 @@ use crate::mailbox::source::{
     SourceFile, discover_source_paths, load_source_files, rediscover_and_validate_source_paths,
 };
 use crate::schema::MessageEnvelope;
+use crate::types::{AgentName, TeamName};
 
 /// Commit one mailbox file through the mailbox-layer write boundary.
 ///
@@ -34,8 +35,8 @@ pub(crate) fn commit_source_files(source_files: &[SourceFile]) -> Result<(), Atm
 /// Load the current mailbox source set without taking any mailbox locks.
 pub(crate) fn observe_source_files(
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
 ) -> Result<Vec<SourceFile>, AtmError> {
     let source_paths = discover_source_paths(home_dir, team, agent)?;
     load_source_files(&source_paths)
@@ -45,8 +46,8 @@ pub(crate) fn observe_source_files(
 /// without forcing the caller into an inbox rewrite.
 pub(crate) fn with_locked_source_files<T, I, F>(
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
     extra_write_paths: I,
     timeout: Duration,
     body: F,
@@ -68,8 +69,8 @@ where
 
 fn with_locked_source_files_hook<T, I, H, F>(
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
     extra_write_paths: I,
     timeout: Duration,
     before_load: H,
@@ -203,8 +204,8 @@ mod tests {
 
         let error = with_locked_source_files_hook(
             tempdir.path(),
-            TEST_TEAM,
-            TEST_SENDER,
+            &TEST_TEAM.parse().expect("team"),
+            &TEST_SENDER.parse().expect("sender"),
             std::iter::empty::<std::path::PathBuf>(),
             std::time::Duration::from_secs(1),
             |paths| {
@@ -253,6 +254,9 @@ mod tests {
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            stale_at: None,
             task_id: None,
             extra,
         }

@@ -840,10 +840,23 @@ Execution sequence:
 
 ### R.13 Runtime Admission And Lifecycle
 
+Status:
+- implemented on `feature/pR-s13-runtime-admission`
+
 - close B-001, B-002, and B-003
 - move both daemon lock paths to one host-wide ownership root
 - implement a real `RuntimeComposition::start()` lifecycle path
 - absorb lifecycle-adjacent shutdown hardening from I-001 and I-002
+- delivered host runtime ownership under `~/.atm/daemon/{launch.lock,owner.lock}`
+- route `run_daemon()` only through `RuntimeComposition::start()`
+- add typed lifecycle states and rollback on failed startup
+- reject direct `LocalSocketServerTransport::serve()` bootstrap outside
+  `RuntimeComposition::start()`
+- preserve pending terminate/reload bits across repeated signal installs
+- perform bounded stale-owner recovery retries before emitting
+  `ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED`
+- route listener/accept failures through the same `Running -> Draining ->
+  Stopped` shutdown path as signal-driven termination
 - sprint plan: `docs/phase-R/sprint-R13.md`
 
 ### R.14 SQLite Root And Message-Thread Semantics

@@ -124,6 +124,7 @@ fn run_doctor_with_runtime<R: RetainedServiceRuntime>(
         environment,
         member_roster,
         observability: observability_health,
+        runtime_status: None,
     })
 }
 

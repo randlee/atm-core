@@ -3,6 +3,9 @@ use atm_core::ack::AckOutcome;
 use atm_core::clear::ClearOutcome;
 use atm_core::doctor::{DoctorReport, DoctorSeverity, DoctorStatus};
 use atm_core::observability::{AtmLogRecord, AtmLogSnapshot};
+use atm_core::protocol::{
+    RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState, RuntimeStatusSnapshot,
+};
 use atm_core::read::ReadOutcome;
 use atm_core::send::SendOutcome;
 use atm_core::team_admin::{
@@ -174,6 +177,9 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
             .map(render_doctor_state)
             .unwrap_or("unknown")
     );
+    if let Some(runtime_status) = &report.runtime_status {
+        print_runtime_status(runtime_status);
+    }
 
     if report.environment.atm_home.is_some()
         || report.environment.atm_team.is_some()
@@ -413,4 +419,62 @@ fn render_finding_severity(severity: DoctorSeverity) -> &'static str {
         DoctorSeverity::Warning => "warning",
         DoctorSeverity::Error => "error",
     }
+}
+
+fn print_runtime_status(runtime_status: &RuntimeStatusSnapshot) {
+    println!();
+    println!("Runtime status:");
+    println!(
+        "  Liveness: {} | Readiness: {}",
+        render_runtime_liveness(runtime_status.liveness),
+        render_runtime_readiness(runtime_status.readiness)
+    );
+    println!(
+        "  SQLite ready: {} | Degraded ingest: {}",
+        render_bool(runtime_status.sqlite_ready),
+        render_bool(runtime_status.degraded_ingest)
+    );
+    println!(
+        "  Members: active={} idle={} offline={} unknown={}",
+        runtime_status.member_counts.active_members,
+        runtime_status.member_counts.idle_members,
+        runtime_status.member_counts.offline_members,
+        runtime_status.member_counts.unknown_members
+    );
+    if let Some(owner_pid) = runtime_status.singleton_owner_pid {
+        println!("  Singleton owner pid: {owner_pid}");
+    }
+    if let Some(detail) = &runtime_status.detail {
+        println!("  Detail: {detail}");
+    }
+}
+
+fn render_runtime_liveness(state: RuntimeLivenessState) -> &'static str {
+    match state {
+        RuntimeLivenessState::Running => "running",
+        RuntimeLivenessState::Unavailable => "unavailable",
+    }
+}
+
+fn render_runtime_readiness(state: RuntimeReadinessState) -> &'static str {
+    match state {
+        RuntimeReadinessState::Ready => "ready",
+        RuntimeReadinessState::Degraded => "degraded",
+        RuntimeReadinessState::Unavailable => "unavailable",
+    }
+}
+
+#[allow(dead_code)]
+fn render_runtime_member_state(state: RuntimeMemberState) -> &'static str {
+    match state {
+        RuntimeMemberState::Unknown => "unknown",
+        RuntimeMemberState::IdentityConflict => "identity-conflict",
+        RuntimeMemberState::Offline => "offline",
+        RuntimeMemberState::Idle => "idle",
+        RuntimeMemberState::Active => "active",
+    }
+}
+
+fn render_bool(value: bool) -> &'static str {
+    if value { "yes" } else { "no" }
 }

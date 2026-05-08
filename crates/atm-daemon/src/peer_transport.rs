@@ -1,0 +1,1141 @@
+use std::io::{self, Write};
+use std::net::{Shutdown, SocketAddr, TcpStream};
+#[cfg(test)]
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+use std::time::{Duration, Instant};
+
+use crate::RemoteReplayStateRecord;
+use atm_core::AtmConfig;
+use atm_core::boundary::{self, AtmProtocol, ClientTransport, ConfigLoadRequest, MessageKey};
+use atm_core::error::{AtmError, AtmErrorCode};
+use atm_core::protocol::{
+    FramePayload, MAX_DAEMON_FRAME_BYTES, RequestEnvelope, ResponseEnvelope,
+    TeamMemberHeartbeatRequest,
+};
+use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+
+// Architecture authority: docs/architecture.md §21.6.4 daemon operational
+// defaults and remote peer transport rules.
+const PEER_CONNECT_DEADLINE: Duration = Duration::from_secs(5);
+const PEER_IO_DEADLINE: Duration = Duration::from_secs(5);
+const DEFAULT_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(30);
+const INITIAL_RETRY_BACKOFF: Duration = Duration::from_millis(250);
+const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(5);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct PeerTransportConfig {
+    pub(crate) remote_retry_budget: Duration,
+}
+
+impl Default for PeerTransportConfig {
+    fn default() -> Self {
+        Self {
+            remote_retry_budget: DEFAULT_REMOTE_RETRY_BUDGET,
+        }
+    }
+}
+
+impl PeerTransportConfig {
+    pub(crate) fn from_config(config: Option<&AtmConfig>) -> Self {
+        config
+            .map(|config| Self {
+                remote_retry_budget: config.daemon.remote_retry_budget,
+            })
+            .unwrap_or_default()
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct JsonAtmProtocolCodec;
+
+impl boundary::sealed::Sealed for JsonAtmProtocolCodec {}
+
+impl AtmProtocol for JsonAtmProtocolCodec {
+    fn request_to_frame(&self, request: RequestEnvelope) -> Result<FramePayload, AtmError> {
+        Ok(FramePayload {
+            bytes: serde_json::to_vec(&request).map_err(AtmError::from)?,
+        })
+    }
+
+    fn request_from_frame(&self, frame: FramePayload) -> Result<RequestEnvelope, AtmError> {
+        serde_json::from_slice(&frame.bytes).map_err(AtmError::from)
+    }
+
+    fn response_to_frame(&self, response: ResponseEnvelope) -> Result<FramePayload, AtmError> {
+        Ok(FramePayload {
+            bytes: serde_json::to_vec(&response).map_err(AtmError::from)?,
+        })
+    }
+
+    fn response_from_frame(&self, frame: FramePayload) -> Result<ResponseEnvelope, AtmError> {
+        serde_json::from_slice(&frame.bytes).map_err(AtmError::from)
+    }
+}
+
+pub(crate) trait RemoteReplayStore: Send + Sync + std::fmt::Debug {
+    fn enqueue(&self, record: RemoteReplayStateRecord) -> Result<(), AtmError>;
+
+    fn load_all(&self) -> Result<Vec<RemoteReplayStateRecord>, AtmError>;
+
+    fn delete(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        message_key: &MessageKey,
+    ) -> Result<(), AtmError>;
+
+    fn purge_expired(&self, now: IsoTimestamp) -> Result<usize, AtmError>;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AttemptFailureKind {
+    Retryable,
+    NonRetryable,
+    OutcomeUnknown,
+}
+
+#[derive(Debug)]
+struct AttemptFailure {
+    kind: AttemptFailureKind,
+    error: AtmError,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ReplayResumeSummary {
+    pub(crate) delivered: usize,
+    pub(crate) retained: usize,
+    pub(crate) purged_expired: usize,
+}
+
+#[derive(Debug, Clone)]
+struct PeerClientTransport {
+    endpoint: Option<SocketAddr>,
+    config: PeerTransportConfig,
+    replay_store: Option<Arc<dyn RemoteReplayStore>>,
+    codec: JsonAtmProtocolCodec,
+}
+
+impl PeerClientTransport {
+    fn new(replay_store: Option<Arc<dyn RemoteReplayStore>>) -> Self {
+        let endpoint = std::env::var("ATM_DAEMON_PEER_ADDR")
+            .ok()
+            .and_then(|raw| parse_peer_endpoint(&raw));
+        let config = std::env::current_dir()
+            .ok()
+            .and_then(|current_dir| {
+                atm_core::boundary_support::load_workspace_config(ConfigLoadRequest { current_dir })
+                    .ok()
+                    .and_then(|response| response.config)
+            })
+            .map(|config| PeerTransportConfig::from_config(Some(&config)))
+            .unwrap_or_default();
+        Self {
+            endpoint,
+            config,
+            replay_store,
+            codec: JsonAtmProtocolCodec,
+        }
+    }
+
+    #[cfg(test)]
+    fn new_for_test(
+        endpoint: SocketAddr,
+        config: PeerTransportConfig,
+        replay_db_path: PathBuf,
+    ) -> Self {
+        let replay_store =
+            crate::sqlite_remote_replay_store_from_path(replay_db_path).expect("replay store");
+        Self {
+            endpoint: Some(endpoint),
+            config,
+            replay_store: Some(replay_store),
+            codec: JsonAtmProtocolCodec,
+        }
+    }
+
+    fn resume_pending_replay(&self) -> Result<ReplayResumeSummary, AtmError> {
+        let Some(replay_store) = &self.replay_store else {
+            return Ok(ReplayResumeSummary {
+                delivered: 0,
+                retained: 0,
+                purged_expired: 0,
+            });
+        };
+
+        let now = IsoTimestamp::now();
+        let purged_expired = replay_store.purge_expired(now)?;
+        let records = replay_store.load_all()?;
+        let mut delivered = 0usize;
+        let mut retained = 0usize;
+        for mut record in records {
+            match self.send_to_endpoint(record.peer_addr, record.request.clone()) {
+                Ok(_) => {
+                    replay_store.delete(&record.team, &record.agent, &record.message_key)?;
+                    tracing::info!(
+                        message_key = %record.message_key,
+                        peer_addr = %record.peer_addr,
+                        replay_attempt_count = record.attempt_count,
+                        "daemon remote replay delivered successfully"
+                    );
+                    delivered += 1;
+                }
+                Err(error) => {
+                    record.attempt_count = record.attempt_count.saturating_add(1);
+                    record.last_attempt_at = Some(IsoTimestamp::now());
+                    record.last_error = Some(error.code.to_string());
+                    tracing::warn!(
+                        message_key = %record.message_key,
+                        peer_addr = %record.peer_addr,
+                        replay_attempt_count = record.attempt_count,
+                        error_code = %error.code,
+                        error_message = %error.message,
+                        "daemon remote replay delivery attempt failed; retaining record"
+                    );
+                    replay_store.enqueue(record)?;
+                    retained += 1;
+                }
+            }
+        }
+
+        Ok(ReplayResumeSummary {
+            delivered,
+            retained,
+            purged_expired,
+        })
+    }
+
+    fn persist_replay_request(
+        &self,
+        team: TeamName,
+        agent: AgentName,
+        message_key: MessageKey,
+        request: RequestEnvelope,
+    ) -> Result<(), AtmError> {
+        let Some(replay_store) = &self.replay_store else {
+            return Err(AtmError::daemon_unavailable(
+                "remote replay store is not configured",
+            ));
+        };
+        let endpoint = self.endpoint.ok_or_else(|| {
+            AtmError::daemon_unavailable("remote peer endpoint is not configured")
+        })?;
+        let recorded_at = IsoTimestamp::now();
+        let expires_at = IsoTimestamp::from_datetime(
+            recorded_at.into_inner()
+                + chrono::Duration::from_std(self.config.remote_retry_budget).map_err(|error| {
+                    AtmError::daemon_unavailable(
+                        "failed to convert remote retry budget into a replay expiry",
+                    )
+                    .with_source(error)
+                })?,
+        );
+        replay_store.enqueue(RemoteReplayStateRecord {
+            team,
+            agent,
+            message_key,
+            peer_addr: persisted_peer_addr(endpoint),
+            request,
+            recorded_at,
+            expires_at,
+            attempt_count: 0,
+            last_attempt_at: None,
+            last_error: None,
+        })
+    }
+
+    fn persist_outcome_unknown_request(&self, request: &RequestEnvelope) -> Result<(), AtmError> {
+        let Some((team, agent, message_key)) = replay_metadata_for_request(request)? else {
+            tracing::warn!(
+                request = ?request,
+                "remote delivery outcome is unknown but this request family does not support durable replay persistence",
+            );
+            return Ok(());
+        };
+        self.persist_replay_request(team, agent, message_key, request.clone())
+    }
+
+    fn send_to_endpoint(
+        &self,
+        endpoint: SocketAddr,
+        request: RequestEnvelope,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        let frame = self.codec.request_to_frame(request)?;
+        let started = Instant::now();
+        let deadline = started + self.config.remote_retry_budget;
+        let terminate = daemon_terminate_flag()?;
+        let mut backoff = INITIAL_RETRY_BACKOFF;
+        let mut attempt = 0u32;
+
+        loop {
+            match self.send_once(endpoint, &frame.bytes) {
+                Ok(response) => {
+                    tracing::info!(
+                        peer_addr = %endpoint,
+                        attempt,
+                        "daemon peer delivery succeeded"
+                    );
+                    return Ok(response);
+                }
+                Err(failure) if failure.kind == AttemptFailureKind::Retryable => {
+                    let now = Instant::now();
+                    if now >= deadline {
+                        tracing::error!(
+                            peer_addr = %endpoint,
+                            attempt,
+                            error_code = %failure.error.code,
+                            error_message = %failure.error.message,
+                            "daemon peer delivery exhausted retry budget"
+                        );
+                        return Err(failure.error);
+                    }
+                    let remaining = deadline.saturating_duration_since(now);
+                    let sleep_for =
+                        jittered_backoff(backoff, jitter_seed(endpoint, attempt)).min(remaining);
+                    tracing::warn!(
+                        peer_addr = %endpoint,
+                        attempt,
+                        sleep_ms = sleep_for.as_millis(),
+                        error_code = %failure.error.code,
+                        error_message = %failure.error.message,
+                        "daemon peer delivery hit retryable failure"
+                    );
+                    if wait_for_retry_backoff(&terminate, sleep_for) {
+                        return Err(
+                            AtmError::daemon_unavailable(
+                                "daemon shutdown interrupted remote peer retry backoff",
+                            )
+                            .with_recovery(
+                                "Retry the daemon operation after atm-daemon restarts and resumes pending remote replay work.",
+                            ),
+                        );
+                    }
+                    backoff = backoff.saturating_mul(2).min(MAX_RETRY_BACKOFF);
+                    attempt = attempt.saturating_add(1);
+                }
+                Err(failure) => {
+                    let level = if failure.kind == AttemptFailureKind::OutcomeUnknown {
+                        "outcome_unknown"
+                    } else {
+                        "non_retryable"
+                    };
+                    tracing::error!(
+                        peer_addr = %endpoint,
+                        attempt,
+                        failure_kind = level,
+                        error_code = %failure.error.code,
+                        error_message = %failure.error.message,
+                        "daemon peer delivery failed"
+                    );
+                    return Err(failure.error);
+                }
+            }
+        }
+    }
+
+    fn send_once(
+        &self,
+        endpoint: SocketAddr,
+        request_bytes: &[u8],
+    ) -> Result<ResponseEnvelope, Box<AttemptFailure>> {
+        let mut stream =
+            TcpStream::connect_timeout(&endpoint, PEER_CONNECT_DEADLINE).map_err(|source| {
+                Box::new(AttemptFailure {
+                    kind: classify_io_error(&source),
+                    error: AtmError::daemon_unavailable(format!(
+                        "failed to connect to remote daemon peer at {endpoint}"
+                    ))
+                    .with_source(source),
+                })
+            })?;
+        stream
+            .set_read_timeout(Some(PEER_IO_DEADLINE))
+            .map_err(|source| {
+                Box::new(AttemptFailure {
+                    kind: AttemptFailureKind::Retryable,
+                    error: AtmError::daemon_unavailable(
+                        "failed to apply remote peer read deadline",
+                    )
+                    .with_source(source),
+                })
+            })?;
+        stream
+            .set_write_timeout(Some(PEER_IO_DEADLINE))
+            .map_err(|source| {
+                Box::new(AttemptFailure {
+                    kind: AttemptFailureKind::Retryable,
+                    error: AtmError::daemon_unavailable(
+                        "failed to apply remote peer write deadline",
+                    )
+                    .with_source(source),
+                })
+            })?;
+        stream.write_all(request_bytes).map_err(|source| {
+            Box::new(AttemptFailure {
+                kind: classify_io_error(&source),
+                error: AtmError::daemon_unavailable("failed to write remote peer request frame")
+                    .with_source(source),
+            })
+        })?;
+        stream.flush().map_err(|source| {
+            Box::new(AttemptFailure {
+                kind: AttemptFailureKind::OutcomeUnknown,
+                error: AtmError::remote_delivery_outcome_unknown(
+                    "failed to flush the remote peer request frame before waiting for a response",
+                )
+                .with_source(source),
+            })
+        })?;
+        stream
+            .shutdown(Shutdown::Write)
+            .map_err(|source| Box::new(classify_shutdown_failure(source)))?;
+
+        let response_bytes = read_peer_response(&mut stream).map_err(|error| {
+            Box::new(AttemptFailure {
+                kind: AttemptFailureKind::OutcomeUnknown,
+                error,
+            })
+        })?;
+        let response = self
+            .codec
+            .response_from_frame(FramePayload {
+                bytes: response_bytes,
+            })
+            .map_err(|error| {
+                Box::new(AttemptFailure {
+                    kind: AttemptFailureKind::NonRetryable,
+                    error: AtmError::daemon_unavailable(
+                        "failed to decode remote peer response frame",
+                    )
+                    .with_source(error),
+                })
+            })?;
+        match response {
+            ResponseEnvelope::Error(error) => Err(Box::new(AttemptFailure {
+                kind: AttemptFailureKind::NonRetryable,
+                error: error.into_atm_error(),
+            })),
+            response => Ok(response),
+        }
+    }
+}
+
+fn wait_for_retry_backoff(terminate: &Option<Arc<AtomicBool>>, sleep_for: Duration) -> bool {
+    const RETRY_POLL_INTERVAL: Duration = Duration::from_millis(25);
+
+    let started = Instant::now();
+    loop {
+        if terminate
+            .as_ref()
+            .is_some_and(|flag| flag.load(Ordering::SeqCst))
+        {
+            return true;
+        }
+        let elapsed = started.elapsed();
+        if elapsed >= sleep_for {
+            return false;
+        }
+        let remaining = sleep_for.saturating_sub(elapsed);
+        thread::sleep(remaining.min(RETRY_POLL_INTERVAL));
+    }
+}
+
+#[cfg(unix)]
+fn daemon_terminate_flag() -> Result<Option<Arc<AtomicBool>>, AtmError> {
+    Ok(Some(
+        crate::shutdown_signals::DaemonShutdownSignals::install()?.terminate,
+    ))
+}
+
+#[cfg(not(unix))]
+fn daemon_terminate_flag() -> Result<Option<Arc<AtomicBool>>, AtmError> {
+    Ok(None)
+}
+
+impl boundary::sealed::Sealed for PeerClientTransport {}
+
+impl ClientTransport for PeerClientTransport {
+    fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+        let endpoint = self.endpoint.ok_or_else(|| {
+            AtmError::daemon_unavailable("remote peer endpoint is not configured")
+                .with_recovery("Set ATM_DAEMON_PEER_ADDR or configure the daemon peer transport before retrying remote delivery.")
+        })?;
+        match self.send_to_endpoint(endpoint, request.clone()) {
+            Ok(response) => Ok(response),
+            Err(error) if error.code == AtmErrorCode::RemoteDeliveryOutcomeUnknown => {
+                self.persist_outcome_unknown_request(&request)
+                    .map_err(|persist_error| {
+                        AtmError::remote_delivery_outcome_unknown(
+                            "remote peer delivery outcome is unknown and replay persistence failed",
+                        )
+                        .with_source(persist_error)
+                    })?;
+                Err(error)
+            }
+            Err(error) => Err(error),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct PeerTransportRuntime {
+    client: PeerClientTransport,
+}
+
+impl Default for PeerTransportRuntime {
+    fn default() -> Self {
+        Self::new(None)
+    }
+}
+
+impl PeerTransportRuntime {
+    pub(crate) fn new(replay_store: Option<Arc<dyn RemoteReplayStore>>) -> Self {
+        Self {
+            client: PeerClientTransport::new(replay_store),
+        }
+    }
+
+    #[cfg(test)]
+    #[allow(dead_code)]
+    pub(crate) fn client_transport(&self) -> &dyn ClientTransport {
+        &self.client
+    }
+
+    pub(crate) fn resume_pending_replay(&self) -> Result<ReplayResumeSummary, AtmError> {
+        self.client.resume_pending_replay()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_for_test(
+        endpoint: SocketAddr,
+        config: PeerTransportConfig,
+        replay_db_path: PathBuf,
+    ) -> Self {
+        Self {
+            client: PeerClientTransport::new_for_test(endpoint, config, replay_db_path),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn persist_replay_request(
+        &self,
+        team: TeamName,
+        agent: AgentName,
+        message_key: MessageKey,
+        request: RequestEnvelope,
+    ) -> Result<(), AtmError> {
+        self.client
+            .persist_replay_request(team, agent, message_key, request)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn load_pending_replay_records(
+        &self,
+    ) -> Result<Vec<RemoteReplayStateRecord>, AtmError> {
+        match &self.client.replay_store {
+            Some(replay_store) => replay_store.load_all(),
+            None => Ok(Vec::new()),
+        }
+    }
+}
+
+fn classify_io_error(error: &io::Error) -> AttemptFailureKind {
+    match error.kind() {
+        io::ErrorKind::TimedOut
+        | io::ErrorKind::Interrupted
+        | io::ErrorKind::ConnectionRefused
+        | io::ErrorKind::ConnectionReset
+        | io::ErrorKind::ConnectionAborted
+        | io::ErrorKind::BrokenPipe
+        | io::ErrorKind::AddrNotAvailable
+        | io::ErrorKind::NotConnected
+        | io::ErrorKind::HostUnreachable
+        | io::ErrorKind::NetworkUnreachable => AttemptFailureKind::Retryable,
+        _ => AttemptFailureKind::NonRetryable,
+    }
+}
+
+fn classify_shutdown_failure(source: io::Error) -> AttemptFailure {
+    AttemptFailure {
+        kind: classify_io_error(&source),
+        error: AtmError::daemon_unavailable(
+            "failed to half-close the remote peer connection after writing the request frame",
+        )
+        .with_source(source),
+    }
+}
+
+fn replay_metadata_for_request(
+    request: &RequestEnvelope,
+) -> Result<Option<(TeamName, AgentName, MessageKey)>, AtmError> {
+    match request {
+        RequestEnvelope::Heartbeat(heartbeat) => Ok(Some((
+            heartbeat.team.clone(),
+            heartbeat.member.clone(),
+            heartbeat_message_key(heartbeat)?,
+        ))),
+        _ => Ok(None),
+    }
+}
+
+fn heartbeat_message_key(request: &TeamMemberHeartbeatRequest) -> Result<MessageKey, AtmError> {
+    MessageKey::new(format!(
+        "remote-heartbeat:{}:{}:{}:{}",
+        request.team.as_str(),
+        request.member.as_str(),
+        request.pid,
+        request.observed_at.into_inner().to_rfc3339(),
+    ))
+}
+
+fn jittered_backoff(base: Duration, seed: u64) -> Duration {
+    let base_nanos = base.as_nanos();
+    if base_nanos == 0 {
+        return Duration::ZERO;
+    }
+    let offset_basis_points = (seed % 4001) as i128 - 2000;
+    let scaled = (base_nanos as i128 * (10_000 + offset_basis_points))
+        .div_euclid(10_000)
+        .max(1);
+    Duration::from_nanos(u64::try_from(scaled).unwrap_or(u64::MAX))
+}
+
+fn jitter_seed(endpoint: SocketAddr, attempt: u32) -> u64 {
+    let now = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+        Ok(duration) => duration.as_nanos() as u64,
+        Err(error) => {
+            tracing::warn!(
+                %error,
+                "system clock is before the unix epoch; using deterministic jitter fallback"
+            );
+            0
+        }
+    };
+    now ^ u64::from(endpoint.port()) ^ (u64::from(attempt) << 32)
+}
+
+fn parse_peer_endpoint(raw: &str) -> Option<SocketAddr> {
+    match raw.parse::<SocketAddr>() {
+        Ok(endpoint) => Some(endpoint),
+        Err(error) => {
+            tracing::warn!(
+                %raw,
+                %error,
+                "ignoring malformed ATM_DAEMON_PEER_ADDR value"
+            );
+            None
+        }
+    }
+}
+
+fn persisted_peer_addr(endpoint: SocketAddr) -> SocketAddr {
+    endpoint
+}
+
+fn read_peer_response(stream: &mut TcpStream) -> Result<Vec<u8>, AtmError> {
+    let bytes = atm_core::protocol::read_bounded_stream(
+        stream,
+        "failed to read remote peer response frame",
+        "remote peer response frame exceeded the maximum supported size",
+    )?;
+    if bytes.is_empty() {
+        return Err(AtmError::remote_delivery_outcome_unknown(
+            "remote peer connection closed after the request was sent and before one response frame was received",
+        ));
+    }
+    if bytes.len() > MAX_DAEMON_FRAME_BYTES {
+        return Err(AtmError::daemon_unavailable(
+            "remote peer response frame exceeded the maximum supported size",
+        ));
+    }
+    Ok(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        AttemptFailureKind, PeerTransportConfig, PeerTransportRuntime, classify_io_error,
+        classify_shutdown_failure, jittered_backoff,
+    };
+    use atm_core::boundary::{ClientTransport, MessageKey};
+    use atm_core::error::AtmErrorCode;
+    use atm_core::protocol::{
+        HeartbeatActivity, ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope,
+        RuntimeMemberState, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
+    };
+    use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+    use std::io::{self, Read, Write};
+    use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+    use tempfile::TempDir;
+
+    #[test]
+    fn jittered_backoff_stays_within_twenty_percent_window() {
+        let base = Duration::from_millis(250);
+        let low = jittered_backoff(base, 0);
+        let high = jittered_backoff(base, 4_000);
+        assert_eq!(low, Duration::from_millis(200));
+        assert_eq!(high, Duration::from_millis(300));
+    }
+
+    #[test]
+    fn classify_io_error_covers_retryable_and_non_retryable_variants() {
+        for kind in [
+            io::ErrorKind::TimedOut,
+            io::ErrorKind::Interrupted,
+            io::ErrorKind::ConnectionRefused,
+            io::ErrorKind::ConnectionReset,
+            io::ErrorKind::ConnectionAborted,
+            io::ErrorKind::BrokenPipe,
+            io::ErrorKind::HostUnreachable,
+        ] {
+            assert_eq!(
+                classify_io_error(&io::Error::new(kind, "retryable")),
+                AttemptFailureKind::Retryable
+            );
+        }
+        assert_eq!(
+            classify_io_error(&io::Error::other("non-retryable")),
+            AttemptFailureKind::NonRetryable
+        );
+    }
+
+    #[test]
+    fn shutdown_failures_do_not_report_outcome_unknown() {
+        let failure =
+            classify_shutdown_failure(io::Error::new(io::ErrorKind::BrokenPipe, "shutdown failed"));
+        assert_eq!(failure.kind, AttemptFailureKind::Retryable);
+        assert_eq!(failure.error.code, AtmErrorCode::DaemonUnavailable);
+    }
+
+    #[test]
+    fn wildcard_bindings_survive_connection_churn_and_explicit_binds_require_reload() {
+        let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0)).expect("wildcard listener");
+        let endpoint = SocketAddr::from((
+            Ipv4Addr::LOCALHOST,
+            listener.local_addr().expect("addr").port(),
+        ));
+
+        let server = thread::spawn(move || {
+            for _ in 0..2 {
+                let (mut stream, _) = listener.accept().expect("accept");
+                let mut buffer = [0u8; 1];
+                stream.read_exact(&mut buffer).expect("read");
+            }
+        });
+
+        for _ in 0..2 {
+            let mut stream = TcpStream::connect(endpoint).expect("connect");
+            stream.write_all(&[1]).expect("write");
+        }
+        server.join().expect("server join");
+
+        let bind_error = TcpListener::bind((Ipv4Addr::new(198, 51, 100, 10), 0))
+            .expect_err("explicit bind failure");
+        assert_eq!(bind_error.kind(), io::ErrorKind::AddrNotAvailable);
+    }
+
+    #[test]
+    fn peer_transport_round_trips_one_heartbeat_request() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
+        let endpoint = listener.local_addr().expect("addr");
+        let transport = PeerTransportRuntime::new_for_test(
+            endpoint,
+            PeerTransportConfig::default(),
+            tempdir.path().join("mail.db"),
+        );
+        let team: TeamName = "test-team".parse().expect("team");
+        let member: AgentName = "test-member".parse().expect("member");
+        let request = RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: member.clone(),
+            pid: 42,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::Idle,
+        });
+        let expected = ResponseEnvelope::Heartbeat(TeamMemberHeartbeatResponse {
+            team,
+            member,
+            pid: 42,
+            pid_changed: false,
+            state: RuntimeMemberState::Idle,
+            last_active_at: Some(IsoTimestamp::now()),
+        });
+
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut request_bytes = Vec::new();
+            stream.read_to_end(&mut request_bytes).expect("request");
+            let _: RequestEnvelope =
+                serde_json::from_slice(&request_bytes).expect("decode request");
+            let response_bytes = serde_json::to_vec(&expected).expect("encode response");
+            stream.write_all(&response_bytes).expect("write response");
+            stream.flush().expect("flush response");
+        });
+
+        let response = transport
+            .client_transport()
+            .send(request)
+            .expect("response");
+        match response {
+            ResponseEnvelope::Heartbeat(response) => {
+                assert_eq!(response.state, RuntimeMemberState::Idle)
+            }
+            other => panic!("unexpected response: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn peer_transport_retries_transient_connect_failures_within_budget() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let probe = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("probe");
+        let endpoint = probe.local_addr().expect("addr");
+        drop(probe);
+
+        let transport = PeerTransportRuntime::new_for_test(
+            endpoint,
+            PeerTransportConfig {
+                remote_retry_budget: Duration::from_millis(600),
+            },
+            tempdir.path().join("mail.db"),
+        );
+        let team: TeamName = "test-team".parse().expect("team");
+        let member: AgentName = "test-member".parse().expect("member");
+        let request = RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: member.clone(),
+            pid: 7,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::ActiveToolUse,
+        });
+        let (send_started_tx, send_started_rx) = mpsc::channel();
+        let (response_tx, response_rx) = mpsc::channel();
+
+        let transport_for_thread = transport.clone();
+        thread::spawn(move || {
+            send_started_tx.send(()).expect("send started");
+            response_tx
+                .send(transport_for_thread.client.send(request))
+                .expect("response sent");
+        });
+
+        send_started_rx.recv().expect("send started");
+        thread::spawn(move || {
+            let listener = TcpListener::bind(endpoint).expect("listener");
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut request_bytes = Vec::new();
+            stream.read_to_end(&mut request_bytes).expect("request");
+            let _: RequestEnvelope =
+                serde_json::from_slice(&request_bytes).expect("decode request");
+            let response = ResponseEnvelope::Heartbeat(TeamMemberHeartbeatResponse {
+                team,
+                member,
+                pid: 7,
+                pid_changed: false,
+                state: RuntimeMemberState::Active,
+                last_active_at: Some(IsoTimestamp::now()),
+            });
+            let bytes = serde_json::to_vec(&response).expect("response");
+            stream.write_all(&bytes).expect("write response");
+            stream.flush().expect("flush response");
+        });
+
+        let response = response_rx
+            .recv()
+            .expect("response delivered")
+            .expect("response");
+        assert!(matches!(response, ResponseEnvelope::Heartbeat(_)));
+    }
+
+    #[test]
+    fn peer_transport_reports_outcome_unknown_after_send_without_response() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
+        let endpoint = listener.local_addr().expect("addr");
+        let transport = PeerTransportRuntime::new_for_test(
+            endpoint,
+            PeerTransportConfig::default(),
+            tempdir.path().join("mail.db"),
+        );
+        let team: TeamName = "test-team".parse().expect("team");
+        let member: AgentName = "test-member".parse().expect("member");
+        let request = RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team,
+            member,
+            pid: 11,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::Idle,
+        });
+
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut request_bytes = Vec::new();
+            stream.read_to_end(&mut request_bytes).expect("request");
+        });
+
+        let error = transport
+            .client_transport()
+            .send(request)
+            .expect_err("outcome unknown");
+        assert_eq!(error.code, AtmErrorCode::RemoteDeliveryOutcomeUnknown);
+    }
+
+    #[test]
+    fn peer_transport_treats_remote_error_envelope_as_non_retryable() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
+        let endpoint = listener.local_addr().expect("addr");
+        let transport = PeerTransportRuntime::new_for_test(
+            endpoint,
+            PeerTransportConfig::default(),
+            tempdir.path().join("mail.db"),
+        );
+        let team: TeamName = "test-team".parse().expect("team");
+        let member: AgentName = "test-member".parse().expect("member");
+        let request = RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team,
+            member,
+            pid: 12,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::Idle,
+        });
+
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut request_bytes = Vec::new();
+            stream.read_to_end(&mut request_bytes).expect("request");
+            let response = ResponseEnvelope::Error(ProtocolErrorEnvelope {
+                code: AtmErrorCode::DaemonUnavailable,
+                message: "remote rejected request".to_string(),
+                recovery: None,
+            });
+            let bytes = serde_json::to_vec(&response).expect("response");
+            stream.write_all(&bytes).expect("write response");
+            stream.flush().expect("flush response");
+        });
+
+        let error = transport
+            .client_transport()
+            .send(request)
+            .expect_err("remote reject");
+        assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
+        assert!(error.message.contains("remote rejected request"));
+    }
+
+    #[test]
+    fn replay_resume_replays_and_deletes_delivered_rows() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
+        let endpoint = listener.local_addr().expect("addr");
+        let db_path = tempdir.path().join("mail.db");
+        let transport = PeerTransportRuntime::new_for_test(
+            endpoint,
+            PeerTransportConfig::default(),
+            db_path.clone(),
+        );
+        let team: TeamName = "test-team".parse().expect("team");
+        let member: AgentName = "test-member".parse().expect("member");
+        let request = RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: member.clone(),
+            pid: 21,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::Idle,
+        });
+        transport
+            .persist_replay_request(
+                team.clone(),
+                member.clone(),
+                MessageKey::new("atm:test-remote-replay").expect("message key"),
+                request,
+            )
+            .expect("persist");
+
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut request_bytes = Vec::new();
+            stream.read_to_end(&mut request_bytes).expect("request");
+            let response = ResponseEnvelope::Heartbeat(TeamMemberHeartbeatResponse {
+                team,
+                member,
+                pid: 21,
+                pid_changed: false,
+                state: RuntimeMemberState::Idle,
+                last_active_at: Some(IsoTimestamp::now()),
+            });
+            let bytes = serde_json::to_vec(&response).expect("response");
+            stream.write_all(&bytes).expect("write response");
+            stream.flush().expect("flush response");
+        });
+
+        let summary = transport.resume_pending_replay().expect("resume");
+        assert_eq!(summary.delivered, 1);
+        assert_eq!(summary.retained, 0);
+        let pending = transport
+            .load_pending_replay_records()
+            .expect("load pending");
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn outcome_unknown_persists_replay_request_for_restart_resume() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
+        let endpoint = listener.local_addr().expect("addr");
+        let db_path = tempdir.path().join("mail.db");
+        let transport = PeerTransportRuntime::new_for_test(
+            endpoint,
+            PeerTransportConfig::default(),
+            db_path.clone(),
+        );
+        let team: TeamName = "test-team".parse().expect("team");
+        let member: AgentName = "test-member".parse().expect("member");
+        let request = RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: member.clone(),
+            pid: 77,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::Idle,
+        });
+
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut request_bytes = Vec::new();
+            stream.read_to_end(&mut request_bytes).expect("request");
+        });
+
+        let error = transport
+            .client_transport()
+            .send(request)
+            .expect_err("outcome unknown");
+        assert_eq!(error.code, AtmErrorCode::RemoteDeliveryOutcomeUnknown);
+
+        let pending = transport
+            .load_pending_replay_records()
+            .expect("load pending");
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].team, team);
+        assert_eq!(pending[0].agent, member);
+    }
+
+    #[test]
+    fn replay_resume_after_restart_delivers_once_and_clears_duplicate_delivery() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
+        let endpoint = listener.local_addr().expect("addr");
+        let db_path = tempdir.path().join("mail.db");
+        let first = PeerTransportRuntime::new_for_test(
+            endpoint,
+            PeerTransportConfig::default(),
+            db_path.clone(),
+        );
+        let second = PeerTransportRuntime::new_for_test(
+            endpoint,
+            PeerTransportConfig::default(),
+            db_path.clone(),
+        );
+        let team: TeamName = "test-team".parse().expect("team");
+        let member: AgentName = "test-member".parse().expect("member");
+        let request = RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: member.clone(),
+            pid: 32,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::Idle,
+        });
+        first
+            .persist_replay_request(
+                team.clone(),
+                member.clone(),
+                MessageKey::new("atm:test-remote-replay-restart").expect("message key"),
+                request,
+            )
+            .expect("persist");
+
+        let (deliveries_tx, deliveries_rx) = mpsc::channel();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut request_bytes = Vec::new();
+            stream.read_to_end(&mut request_bytes).expect("request");
+            deliveries_tx.send(()).expect("delivery sent");
+            let response = ResponseEnvelope::Heartbeat(TeamMemberHeartbeatResponse {
+                team,
+                member,
+                pid: 32,
+                pid_changed: false,
+                state: RuntimeMemberState::Idle,
+                last_active_at: Some(IsoTimestamp::now()),
+            });
+            let bytes = serde_json::to_vec(&response).expect("response");
+            stream.write_all(&bytes).expect("write response");
+            stream.flush().expect("flush response");
+        });
+
+        let summary = second.resume_pending_replay().expect("resume");
+        assert_eq!(summary.delivered, 1);
+        deliveries_rx.recv().expect("delivery");
+
+        let pending = second.load_pending_replay_records().expect("load pending");
+        assert!(pending.is_empty());
+
+        let summary = second.resume_pending_replay().expect("second resume");
+        assert_eq!(summary.delivered, 0);
+        assert_eq!(summary.retained, 0);
+    }
+
+    #[test]
+    fn replay_store_upsert_deduplicates_same_message_key() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
+        let endpoint = listener.local_addr().expect("addr");
+        drop(listener);
+        let transport = PeerTransportRuntime::new_for_test(
+            endpoint,
+            PeerTransportConfig::default(),
+            tempdir.path().join("mail.db"),
+        );
+        let team: TeamName = "test-team".parse().expect("team");
+        let member: AgentName = "test-member".parse().expect("member");
+        let message_key = MessageKey::new("atm:test-remote-replay-dedup").expect("message key");
+        let first_request = RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: member.clone(),
+            pid: 11,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::Idle,
+        });
+        let second_request = RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: member.clone(),
+            pid: 12,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::ActiveToolUse,
+        });
+
+        transport
+            .persist_replay_request(
+                team.clone(),
+                member.clone(),
+                message_key.clone(),
+                first_request,
+            )
+            .expect("persist first");
+        transport
+            .persist_replay_request(team, member, message_key, second_request)
+            .expect("persist second");
+
+        let pending = transport
+            .load_pending_replay_records()
+            .expect("load pending");
+        assert_eq!(pending.len(), 1);
+        let RequestEnvelope::Heartbeat(heartbeat) = &pending[0].request else {
+            panic!("expected heartbeat replay record");
+        };
+        assert_eq!(heartbeat.pid, 12);
+    }
+}

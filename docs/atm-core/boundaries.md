@@ -26,6 +26,14 @@ Purpose:
 
 Notes:
 - This is the first boundary updated explicitly for `atm-graft`.
+- The canonical request/response family now includes:
+  - send-shaped `Send` envelopes for compose and acknowledge
+  - typed `Heartbeat` request/response envelopes for daemon runtime-state
+    ownership
+  - `HeartbeatActivity` / `TeamMemberHeartbeat{Request,Response}` as the
+    canonical daemon-owned member-liveness DTO family added in `R.15`
+  - `RuntimeStatusSnapshot` as the daemon-health/status DTO consumed by
+    `atm doctor`
 
 ## ClientTransport
 
@@ -183,3 +191,6 @@ Purpose:
 
 Notes:
 - This stays distinct from `RosterStore` to avoid durable/live-state collapse.
+- The live snapshot contract now carries liveness, readiness, singleton-owner,
+  SQLite-ready, degraded-ingest, and member-count fields rather than a generic
+  placeholder string.

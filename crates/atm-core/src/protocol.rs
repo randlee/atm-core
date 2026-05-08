@@ -14,7 +14,7 @@ use crate::error_codes::AtmErrorCode;
 use crate::home;
 use crate::read::{ReadOutcome, ReadQuery};
 use crate::send::{SendOutcome, SendRequest};
-use crate::types::{AgentName, TeamName};
+use crate::types::{AgentName, IsoTimestamp, TeamName};
 
 /// Shared protocol send-shaped request envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,6 +34,7 @@ pub enum SendResponseEnvelope {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RequestEnvelope {
     Send(SendRequestEnvelope),
+    Heartbeat(TeamMemberHeartbeatRequest),
     Receive(ReadQuery),
     Clear(ClearQuery),
     Doctor(DoctorQuery),
@@ -43,6 +44,7 @@ pub enum RequestEnvelope {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ResponseEnvelope {
     Send(SendResponseEnvelope),
+    Heartbeat(TeamMemberHeartbeatResponse),
     Receive(ReadOutcome),
     Clear(ClearOutcome),
     Doctor(DoctorReport),
@@ -88,7 +90,13 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         AtmErrorCode::IdentityUnavailable | AtmErrorCode::WarningIdentityDrift => {
             AtmErrorKind::Identity
         }
-        AtmErrorCode::DaemonUnavailable => AtmErrorKind::DaemonUnavailable,
+        AtmErrorCode::IdentityConflict => AtmErrorKind::Identity,
+        AtmErrorCode::DaemonUnavailable
+        | AtmErrorCode::DaemonLaunchGateRejected
+        | AtmErrorCode::DaemonServingStateRejected
+        | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
+        | AtmErrorCode::DaemonAutoStartFailed
+        | AtmErrorCode::RemoteDeliveryOutcomeUnknown => AtmErrorKind::DaemonUnavailable,
         AtmErrorCode::AddressParseFailed => AtmErrorKind::Address,
         AtmErrorCode::TeamUnavailable | AtmErrorCode::TeamNotFound => AtmErrorKind::TeamNotFound,
         AtmErrorCode::AgentNotFound => AtmErrorKind::AgentNotFound,
@@ -123,7 +131,8 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::WarningBaselineMemberMissing
         | AtmErrorCode::WarningRestoreInProgress
         | AtmErrorCode::WarningHookSkipped
-        | AtmErrorCode::WarningHookExecutionFailed => AtmErrorKind::Validation,
+        | AtmErrorCode::WarningHookExecutionFailed
+        | AtmErrorCode::TestFakeTransportInjectionFailed => AtmErrorKind::Validation,
     }
 }
 
@@ -186,11 +195,90 @@ pub struct NotificationEvent {
     pub agent: Option<AgentName>,
 }
 
+/// Runtime heartbeat activity transported into the daemon status cache.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum HeartbeatActivity {
+    ActiveToolUse,
+    Idle,
+    SessionEnded,
+}
+
+/// One daemon heartbeat request for one team member identity.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TeamMemberHeartbeatRequest {
+    pub team: TeamName,
+    pub member: AgentName,
+    pub pid: u32,
+    pub observed_at: IsoTimestamp,
+    pub activity: HeartbeatActivity,
+}
+
+/// One daemon heartbeat response after runtime-state application.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TeamMemberHeartbeatResponse {
+    pub team: TeamName,
+    pub member: AgentName,
+    pub pid: u32,
+    #[serde(default)]
+    pub pid_changed: bool,
+    pub state: RuntimeMemberState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_active_at: Option<IsoTimestamp>,
+}
+
+/// Runtime-owned live-state projection for one known team member.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeMemberState {
+    Unknown,
+    IdentityConflict,
+    Offline,
+    Idle,
+    Active,
+}
+
+/// Process-level daemon liveness state used by doctor and status queries.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeLivenessState {
+    Running,
+    Unavailable,
+}
+
+/// Request-serving readiness state used by doctor and status queries.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeReadinessState {
+    Ready,
+    Degraded,
+    Unavailable,
+}
+
+/// Aggregate live-member counts carried in daemon runtime snapshots.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RuntimeStatusCounts {
+    pub active_members: usize,
+    pub idle_members: usize,
+    pub offline_members: usize,
+    pub unknown_members: usize,
+}
+
 /// Runtime status snapshot transport payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RuntimeStatusSnapshot {
-    pub status: String,
+    pub liveness: RuntimeLivenessState,
+    pub readiness: RuntimeReadinessState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub singleton_owner_pid: Option<u32>,
+    #[serde(default)]
+    pub sqlite_ready: bool,
+    #[serde(default)]
+    pub degraded_ingest: bool,
+    #[serde(default)]
+    pub member_counts: RuntimeStatusCounts,
 }
 
 /// Watch subscription request payload.
@@ -220,4 +308,94 @@ pub struct ReconcileRequest {
 pub struct ReconcileResult {
     pub observed_paths: usize,
     pub imported_sources: usize,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        HeartbeatActivity, RequestEnvelope, ResponseEnvelope, RuntimeLivenessState,
+        RuntimeMemberState, RuntimeReadinessState, RuntimeStatusCounts, RuntimeStatusSnapshot,
+        TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
+    };
+    use crate::types::{AgentName, IsoTimestamp, TeamName};
+
+    #[test]
+    fn heartbeat_request_envelope_round_trips() {
+        let observed_at = IsoTimestamp::now();
+        let request = RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: TeamName::from_validated("test-team"),
+            member: AgentName::from_validated("test-agent"),
+            pid: 4242,
+            observed_at,
+            activity: HeartbeatActivity::ActiveToolUse,
+        });
+
+        let encoded = serde_json::to_vec(&request).expect("encode heartbeat request");
+        let decoded: RequestEnvelope =
+            serde_json::from_slice(&encoded).expect("decode heartbeat request");
+
+        match decoded {
+            RequestEnvelope::Heartbeat(decoded) => {
+                assert_eq!(decoded.team, TeamName::from_validated("test-team"));
+                assert_eq!(decoded.member, AgentName::from_validated("test-agent"));
+                assert_eq!(decoded.pid, 4242);
+                assert_eq!(decoded.observed_at, observed_at);
+                assert_eq!(decoded.activity, HeartbeatActivity::ActiveToolUse);
+            }
+            other => panic!("expected heartbeat request, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn heartbeat_response_envelope_round_trips() {
+        let last_active_at = IsoTimestamp::now();
+        let response = ResponseEnvelope::Heartbeat(TeamMemberHeartbeatResponse {
+            team: TeamName::from_validated("test-team"),
+            member: AgentName::from_validated("test-agent"),
+            pid: 4242,
+            pid_changed: true,
+            state: RuntimeMemberState::Active,
+            last_active_at: Some(last_active_at),
+        });
+
+        let encoded = serde_json::to_vec(&response).expect("encode heartbeat response");
+        let decoded: ResponseEnvelope =
+            serde_json::from_slice(&encoded).expect("decode heartbeat response");
+
+        match decoded {
+            ResponseEnvelope::Heartbeat(decoded) => {
+                assert_eq!(decoded.team, TeamName::from_validated("test-team"));
+                assert_eq!(decoded.member, AgentName::from_validated("test-agent"));
+                assert_eq!(decoded.pid, 4242);
+                assert!(decoded.pid_changed);
+                assert_eq!(decoded.state, RuntimeMemberState::Active);
+                assert_eq!(decoded.last_active_at, Some(last_active_at));
+            }
+            other => panic!("expected heartbeat response, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn runtime_status_snapshot_round_trips() {
+        let snapshot = RuntimeStatusSnapshot {
+            liveness: RuntimeLivenessState::Running,
+            readiness: RuntimeReadinessState::Ready,
+            detail: Some("runtime cache ready".to_string()),
+            singleton_owner_pid: Some(777),
+            sqlite_ready: true,
+            degraded_ingest: false,
+            member_counts: RuntimeStatusCounts {
+                active_members: 2,
+                idle_members: 1,
+                offline_members: 1,
+                unknown_members: 3,
+            },
+        };
+
+        let encoded = serde_json::to_vec(&snapshot).expect("encode runtime snapshot");
+        let decoded: RuntimeStatusSnapshot =
+            serde_json::from_slice(&encoded).expect("decode runtime snapshot");
+
+        assert_eq!(decoded, snapshot);
+    }
 }

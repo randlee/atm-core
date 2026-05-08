@@ -1209,6 +1209,9 @@ fn pending_ack_message(
         pending_ack_at: Some(IsoTimestamp::from_datetime(Utc::now())),
         acknowledged_at: None,
         acknowledges_message_id: None,
+        parent_message_id: None,
+        thread_mode: None,
+        stale_at: None,
         task_id: None,
         extra,
     }
@@ -1246,6 +1249,9 @@ fn read_message(from: &str, text: &str, message_id: LegacyMessageId) -> MessageE
         pending_ack_at: None,
         acknowledged_at: None,
         acknowledges_message_id: None,
+        parent_message_id: None,
+        thread_mode: None,
+        stale_at: None,
         task_id: None,
         extra,
     }
@@ -1283,6 +1289,9 @@ fn unread_message(from: &str, text: &str, message_id: LegacyMessageId) -> Messag
         pending_ack_at: None,
         acknowledged_at: None,
         acknowledges_message_id: None,
+        parent_message_id: None,
+        thread_mode: None,
+        stale_at: None,
         task_id: None,
         extra,
     }

@@ -1,10 +1,9 @@
-#![allow(dead_code)]
-
 use std::fmt;
 use std::path::{Path, PathBuf};
 #[cfg(unix)]
 use std::process::{Command, Stdio};
 use std::sync::Arc;
+#[cfg(unix)]
 use std::time::Duration;
 #[cfg(unix)]
 use std::{
@@ -32,9 +31,14 @@ use fs2::FileExt;
 
 use crate::observability::CliObservability;
 
-const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
-const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
+#[cfg(unix)]
+const SAME_HOST_REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(3);
+#[cfg(unix)]
+const AUTO_START_PUBLISH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+#[cfg(unix)]
+const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
 
+#[allow(dead_code)]
 #[derive(Debug, Default)]
 pub(crate) struct SendCommandEntryPoint;
 
@@ -44,6 +48,7 @@ impl SendCommandEntryPoint {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Default)]
 pub(crate) struct ReceiveCommandEntryPoint;
 
@@ -63,10 +68,6 @@ impl DaemonSocketPath {
     }
 
     #[cfg(unix)]
-    fn launch_gate_path(&self) -> PathBuf {
-        self.0.with_extension("launch.lock")
-    }
-
     fn display(&self) -> std::path::Display<'_> {
         self.0.display()
     }
@@ -87,6 +88,7 @@ impl DaemonBinaryPath {
         Ok(Self(path))
     }
 
+    #[cfg(unix)]
     fn display(&self) -> std::path::Display<'_> {
         self.0.display()
     }
@@ -100,24 +102,52 @@ impl AsRef<Path> for DaemonBinaryPath {
 
 fn validate_daemon_path(label: &str, path: &Path) -> Result<(), AtmError> {
     if path.as_os_str().is_empty() {
-        return Err(AtmError::validation(format!("{label} must not be empty")));
+        return Err(AtmError::validation(format!("{label} must not be empty")).with_recovery(
+            "Set ATM_DAEMON_SOCKET to a non-empty UTF-8 path before invoking the daemon transport.",
+        ));
     }
     if path.to_str().is_none() {
         return Err(AtmError::validation(format!(
             "{label} must be valid UTF-8 at the ATM boundary"
-        )));
+        ))
+        .with_recovery(
+            "Set ATM_DAEMON_SOCKET to a non-empty UTF-8 path before invoking the daemon transport.",
+        ));
     }
     Ok(())
 }
 
+#[cfg(unix)]
+fn host_runtime_lock_path(file_name: &str) -> Result<PathBuf, AtmError> {
+    Ok(host_runtime_lock_path_from_home(
+        &atm_core::home::host_runtime_dir()?,
+        file_name,
+    ))
+}
+
+#[cfg(unix)]
+fn host_runtime_lock_path_from_home(home_dir: &Path, file_name: &str) -> PathBuf {
+    home_dir.join(file_name)
+}
+
 #[derive(Debug)]
 struct LocalSocketClientTransport {
+    #[cfg(unix)]
     socket_path: DaemonSocketPath,
 }
 
 impl LocalSocketClientTransport {
     fn new(socket_path: DaemonSocketPath) -> Self {
-        Self { socket_path }
+        #[cfg(unix)]
+        {
+            Self { socket_path }
+        }
+
+        #[cfg(not(unix))]
+        {
+            let _ = socket_path;
+            Self {}
+        }
     }
 
     #[cfg(unix)]
@@ -129,13 +159,6 @@ impl LocalSocketClientTransport {
             ))
             .with_source(source)
         })
-    }
-
-    #[cfg(not(unix))]
-    fn try_connect(&self) -> Result<(), AtmError> {
-        Err(AtmError::daemon_unavailable(
-            "ATM thin-client transport requires a Unix platform",
-        ))
     }
 
     #[cfg(unix)]
@@ -197,15 +220,27 @@ impl ClientTransport for LocalSocketClientTransport {
 
 #[derive(Debug)]
 struct DaemonSupervisor {
+    #[cfg(unix)]
     socket_path: DaemonSocketPath,
+    #[cfg(unix)]
     daemon_bin: DaemonBinaryPath,
 }
 
 impl DaemonSupervisor {
     fn new(socket_path: DaemonSocketPath, daemon_bin: DaemonBinaryPath) -> Self {
-        Self {
-            socket_path,
-            daemon_bin,
+        #[cfg(unix)]
+        {
+            Self {
+                socket_path,
+                daemon_bin,
+            }
+        }
+
+        #[cfg(not(unix))]
+        {
+            let _ = socket_path;
+            let _ = daemon_bin;
+            Self {}
         }
     }
 
@@ -213,48 +248,74 @@ impl DaemonSupervisor {
         &self,
         _transport: &LocalSocketClientTransport,
     ) -> Result<(), AtmError> {
+        #[cfg(unix)]
+        {
+            self.ensure_daemon_available_with_timeout(
+                _transport,
+                AUTO_START_PUBLISH_TIMEOUT,
+                Duration::from_millis(25),
+            )
+        }
+
         #[cfg(not(unix))]
         {
             Err(AtmError::daemon_unavailable(
                 "ATM thin-client transport requires a Unix platform",
             ))
         }
+    }
 
-        #[cfg(unix)]
-        {
-            if _transport.try_connect().is_ok() {
+    #[cfg(unix)]
+    fn ensure_daemon_available_with_timeout(
+        &self,
+        transport: &LocalSocketClientTransport,
+        publish_timeout: Duration,
+        poll_interval: Duration,
+    ) -> Result<(), AtmError> {
+        self.ensure_daemon_available_with_lock_path(
+            transport,
+            publish_timeout,
+            poll_interval,
+            host_runtime_lock_path(HOST_RUNTIME_LAUNCH_LOCK_FILE)?,
+        )
+    }
+
+    #[cfg(unix)]
+    fn ensure_daemon_available_with_lock_path(
+        &self,
+        transport: &LocalSocketClientTransport,
+        publish_timeout: Duration,
+        poll_interval: Duration,
+        launch_lock_path: PathBuf,
+    ) -> Result<(), AtmError> {
+        if transport.try_connect().is_ok() {
+            return Ok(());
+        }
+        let deadline = Instant::now() + publish_timeout;
+        loop {
+            if transport.try_connect().is_ok() {
                 return Ok(());
             }
-            let deadline = Instant::now() + AUTO_START_PUBLISH_TIMEOUT;
-            loop {
-                if _transport.try_connect().is_ok() {
+            if let Some(_guard) = LaunchGateGuard::try_acquire_at(launch_lock_path.clone())? {
+                if transport.try_connect().is_ok() {
                     return Ok(());
                 }
-                // LaunchGateGuard uses a single non-blocking open/create plus
-                // try_lock_exclusive; the wall-clock budget remains approximate
-                // only for those filesystem syscalls, not for any sleep/retry loop.
-                if let Some(_guard) = LaunchGateGuard::try_acquire(&self.socket_path)? {
-                    if _transport.try_connect().is_ok() {
+                self.spawn_daemon()?;
+                while Instant::now() < deadline {
+                    if transport.try_connect().is_ok() {
                         return Ok(());
                     }
-                    self.spawn_daemon()?;
-                    while Instant::now() < deadline {
-                        if _transport.try_connect().is_ok() {
-                            return Ok(());
-                        }
-                        thread::sleep(Duration::from_millis(25));
-                    }
-                    break;
+                    thread::sleep(poll_interval);
                 }
-                if Instant::now() >= deadline {
-                    break;
-                }
-                thread::sleep(Duration::from_millis(25));
+                return Err(AtmError::daemon_auto_start_failed(format!(
+                    "failed to connect to daemon socket at {} after auto-start",
+                    self.socket_path.display()
+                )));
             }
-            Err(AtmError::daemon_unavailable(format!(
-                "failed to connect to daemon socket at {} after auto-start",
-                self.socket_path.display()
-            )))
+            if Instant::now() >= deadline {
+                return Err(LaunchGateGuard::rejected_error(&self.socket_path));
+            }
+            thread::sleep(poll_interval);
         }
     }
 
@@ -279,7 +340,7 @@ impl DaemonSupervisor {
             .stderr(Stdio::inherit())
             .env("ATM_DAEMON_SOCKET", self.socket_path.as_ref());
         command.spawn().map_err(|source| {
-            AtmError::daemon_unavailable(format!(
+            AtmError::daemon_auto_start_failed(format!(
                 "failed to spawn daemon binary at {}",
                 self.daemon_bin.display()
             ))
@@ -298,8 +359,20 @@ struct LaunchGateGuard {
 
 #[cfg(unix)]
 impl LaunchGateGuard {
-    fn try_acquire(socket_path: &DaemonSocketPath) -> Result<Option<Self>, AtmError> {
-        let lock_path = socket_path.launch_gate_path();
+    #[allow(dead_code)]
+    fn try_acquire() -> Result<Option<Self>, AtmError> {
+        let lock_path = host_runtime_lock_path(HOST_RUNTIME_LAUNCH_LOCK_FILE)?;
+        Self::try_acquire_at(lock_path)
+    }
+
+    fn rejected_error(socket_path: &DaemonSocketPath) -> AtmError {
+        AtmError::daemon_launch_gate_rejected(format!(
+            "daemon launch gate remained owned while connecting to {}",
+            socket_path.display()
+        ))
+    }
+
+    fn try_acquire_at(lock_path: PathBuf) -> Result<Option<Self>, AtmError> {
         if let Some(parent) = lock_path.parent() {
             fs::create_dir_all(parent).map_err(|source| {
                 AtmError::daemon_unavailable(format!(
@@ -328,7 +401,7 @@ impl LaunchGateGuard {
                 file,
             })),
             Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
-            Err(source) => Err(AtmError::daemon_unavailable(format!(
+            Err(source) => Err(AtmError::daemon_launch_gate_rejected(format!(
                 "failed to acquire daemon launch gate at {}",
                 lock_path.display()
             ))
@@ -376,6 +449,7 @@ impl<'a> CliComposition<'a> {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn transport(&self) -> &(dyn ClientTransport + Send + Sync + 'a) {
         self.transport.as_ref()
     }
@@ -390,14 +464,17 @@ impl<'a> CliComposition<'a> {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn observability_port(&self) -> &(dyn ObservabilityPort + Send + Sync) {
         self.observability_port
     }
 
+    #[allow(dead_code)]
     pub(crate) fn send_command(&self) -> &SendCommandEntryPoint {
         &self.send_command
     }
 
+    #[allow(dead_code)]
     pub(crate) fn receive_command(&self) -> &ReceiveCommandEntryPoint {
         &self.receive_command
     }
@@ -534,12 +611,17 @@ fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError {
     AtmError::validation(format!(
         "transport returned an unexpected response for `{command}`: {response:?}"
     ))
+    .with_recovery(
+        "Retry the ATM command once. If the mismatch persists, inspect daemon/client version alignment and retained daemon logs before retrying again.",
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use std::fs;
     use std::sync::Arc;
+    #[cfg(unix)]
+    use std::time::Duration;
 
     use atm_core::ack::AckRequest;
     use atm_core::boundary::ClientTransport;
@@ -567,10 +649,14 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{CliComposition, DaemonBinaryPath, DaemonSocketPath};
+    #[cfg(unix)]
+    use super::{DaemonSupervisor, LocalSocketClientTransport};
+    #[cfg(unix)]
+    use super::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, host_runtime_lock_path_from_home};
     use crate::observability::CliObservability;
 
     struct LoopbackFixture {
-        tempdir: TempDir,
+        _tempdir: TempDir,
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     }
@@ -582,7 +668,7 @@ mod tests {
             let current_dir = tempdir.path().join("cwd");
             fs::create_dir_all(&current_dir).expect("cwd");
             let fixture = Self {
-                tempdir,
+                _tempdir: tempdir,
                 home_dir,
                 current_dir,
             };
@@ -752,6 +838,9 @@ mod tests {
                 pending_ack_at: None,
                 acknowledged_at: None,
                 acknowledges_message_id: None,
+                parent_message_id: None,
+                thread_mode: None,
+                stale_at: None,
                 task_id: None,
                 extra: serde_json::Map::new(),
             }
@@ -988,6 +1077,7 @@ mod tests {
         assert_eq!(replies.len(), 1);
         assert_eq!(replies[0].text, "received and starting");
         assert_eq!(replies[0].acknowledges_message_id, Some(message_id));
+        assert!(replies[0].pending_ack_at.is_none());
     }
 
     #[test]
@@ -1006,6 +1096,149 @@ mod tests {
 
         let daemon_error = DaemonBinaryPath::new(std::path::PathBuf::new()).expect_err("empty");
         assert!(daemon_error.to_string().contains("daemon binary path"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn launch_gate_is_host_wide_across_different_socket_paths() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
+        let first =
+            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
+                .expect("first acquire");
+        assert!(first.is_some());
+        let second =
+            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
+                .expect("second acquire");
+        assert!(second.is_none());
+        drop(first);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn launch_gate_is_host_wide_across_different_atm_home_roots() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let user_home = tempdir.path().join("user-home");
+        let runtime_dir = atm_core::home::host_runtime_dir_from_home(&user_home);
+        let first_atm_home = user_home.join("workspace-a");
+        let second_atm_home = user_home.join("workspace-b");
+        let first_socket = first_atm_home.join(".atm").join("daemon.sock");
+        let second_socket = second_atm_home.join(".atm").join("daemon.sock");
+
+        let first =
+            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
+                .expect("first acquire");
+        assert!(first.is_some());
+        let second =
+            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
+                .expect("second acquire");
+        assert!(
+            second.is_none(),
+            "different ATM_HOME roots must share one launch gate"
+        );
+        assert_ne!(first_socket, second_socket);
+        drop(first);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn host_runtime_lock_path_ignores_atm_home() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = host_runtime_lock_path_from_home(
+            &atm_core::home::host_runtime_dir_from_home(tempdir.path()),
+            HOST_RUNTIME_LAUNCH_LOCK_FILE,
+        );
+
+        assert_eq!(
+            path,
+            tempdir
+                .path()
+                .join(".atm")
+                .join("daemon")
+                .join("launch.lock")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn launch_gate_busy_maps_to_typed_rejection() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
+        let _gate =
+            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
+                .expect("acquire")
+                .expect("gate");
+        let socket_path = DaemonSocketPath::new(tempdir.path().join("one.sock")).expect("socket");
+        let second =
+            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
+                .expect("second acquire");
+
+        assert!(second.is_none());
+        let error = LaunchGateGuard::rejected_error(&socket_path);
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::DaemonLaunchGateRejected
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn gate_timeout_maps_to_launch_gate_rejected() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
+        let launch_lock_path = runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE);
+        let _gate = LaunchGateGuard::try_acquire_at(launch_lock_path.clone())
+            .expect("acquire")
+            .expect("gate");
+        let socket_path =
+            DaemonSocketPath::new(tempdir.path().join("missing.sock")).expect("socket");
+        let daemon_bin = DaemonBinaryPath::new(tempdir.path().join("atm-daemon")).expect("daemon");
+        let supervisor = DaemonSupervisor::new(socket_path.clone(), daemon_bin);
+        let transport = LocalSocketClientTransport::new(socket_path);
+
+        let error = supervisor
+            .ensure_daemon_available_with_lock_path(
+                &transport,
+                Duration::from_millis(0),
+                Duration::from_millis(0),
+                launch_lock_path,
+            )
+            .expect_err("timeout should fail");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::DaemonLaunchGateRejected
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn spawn_failure_maps_to_auto_start_failed() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
+        let launch_lock_path = runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE);
+        let socket_path =
+            DaemonSocketPath::new(tempdir.path().join("missing.sock")).expect("socket");
+        let daemon_path = tempdir.path().join("atm-daemon");
+        std::fs::write(&daemon_path, "#!/bin/false\n").expect("stub daemon");
+        let daemon_bin = DaemonBinaryPath::new(daemon_path).expect("daemon");
+        let supervisor = DaemonSupervisor::new(socket_path.clone(), daemon_bin);
+        let transport = LocalSocketClientTransport::new(socket_path);
+
+        let error = supervisor
+            .ensure_daemon_available_with_lock_path(
+                &transport,
+                Duration::from_millis(10),
+                Duration::from_millis(0),
+                launch_lock_path,
+            )
+            .expect_err("spawn should fail");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::DaemonAutoStartFailed
+        );
     }
 
     #[cfg(unix)]

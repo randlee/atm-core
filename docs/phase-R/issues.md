@@ -9,9 +9,10 @@
 
 ## BLOCKING FINDINGS
 
-### B-001 — Singleton lock paths are socket-scoped, not host-wide
+### ~~B-001 — Singleton lock paths are socket-scoped, not host-wide~~ CLOSED IN R.13
 **Source**: arch-ctm TASK-995 Finding #1 + quality-mgr REQ-R-001
-**Files**: `crates/atm/src/composition.rs:65-68,301-303` | `crates/atm-daemon/src/lib.rs:246-247`
+**Closed on**: `feature/pR-s13-runtime-admission`
+**Files**: `crates/atm/src/composition.rs` | `crates/atm-daemon/src/lib.rs` | `crates/atm-core/src/home.rs`
 **ADR**: ADR-002 §3.2 explicitly rejects socket-scoped enforcement
 
 Both guard layers derive their lock path from the socket path:
@@ -47,11 +48,20 @@ config. Keep socket path as serving endpoint only.
 - tests must cover different `ATM_HOME` / `ATM_DAEMON_SOCKET` values on the
   same host resolving to one host-wide ownership path
 
+**Resolution**:
+- both lock paths now resolve under the host runtime root `~/.atm/daemon/`
+  independent of `ATM_HOME` and the serving socket path
+- client pre-spawn admission uses `launch.lock`
+- daemon-side serving admission uses `owner.lock`
+- new tests prove different `ATM_HOME` / socket values still contend on one
+  host-wide gate
+
 ---
 
-### B-002 — Five ADR-002 error codes absent from error_codes.rs
+### ~~B-002 — Five ADR-002 error codes absent from error_codes.rs~~ CLOSED IN R.13
 **Source**: quality-mgr REQ-R-002
-**Files**: `crates/atm-core/src/error_codes.rs` | `docs/atm-error-codes.md §5.10.4`
+**Closed on**: `feature/pR-s13-runtime-admission`
+**Files**: `crates/atm-core/src/error_codes.rs` | `crates/atm-core/src/error.rs` | `crates/atm-core/src/protocol.rs`
 
 Documented but not implemented:
 - `ATM_DAEMON_LAUNCH_GATE_REJECTED`
@@ -88,11 +98,19 @@ path once B-001 is resolved.
 - the fake-transport code belongs to the Tier 1/Tier 2 test seams and should
   be wired at the same time the lint/planning docs say the code exists
 
+**Resolution**:
+- all five codes now exist in `AtmErrorCode`, string mappings, and parse
+  mappings
+- daemon runtime codes are classified through `error_kind_for_code(...)`
+- client launch-gate, auto-start, and daemon serving-gate paths now emit the
+  real typed errors rather than falling back to generic daemon-unavailable
+
 ---
 
-### B-003 — RuntimeComposition startup/lifecycle is scaffold-only
+### ~~B-003 — RuntimeComposition startup/lifecycle is scaffold-only~~ CLOSED IN R.13
 **Source**: arch-ctm TASK-995 Finding #2 + TASK-997 gap report item 2
-**Files**: `crates/atm-daemon/src/composition.rs:39-49,109-118` | `crates/atm-daemon/src/lib.rs:625-684,781-782`
+**Closed on**: `feature/pR-s13-runtime-admission`
+**Files**: `crates/atm-daemon/src/composition.rs` | `crates/atm-daemon/src/lib.rs`
 
 `RuntimeComposition::start()` returns `"daemon runtime start scaffold is not implemented yet"`.
 `run_daemon()` bypasses `start()` entirely and calls `serve()` directly. No lifecycle
@@ -134,10 +152,20 @@ Route all startup/shutdown through one runtime root rather than bypassing it.
 - any sprint taking B-003 should also absorb the lifecycle-facing parts of
   I-001 and I-002 so shutdown/startup ownership stays coherent
 
+**Resolution**:
+- `RuntimeComposition::start()` now owns daemon bootstrap
+- `run_daemon()` enters the runtime only through `compose_runtime()?.start()`
+- runtime lifecycle now models `Starting`, `Running`, `Draining`, and
+  `Stopped` with explicit transition validation
+- failed startup transitions roll back to `Stopped`
+- listener start, drain, force-cancel, and shutdown state transitions now run
+  under the lifecycle root instead of bypassing it
+
 ---
 
-### B-004 — Live daemon status cache not implemented
+### ~~B-004 — Live daemon status cache not implemented~~ CLOSED IN R.15
 **Source**: arch-ctm TASK-997 gap report item 4
+**Closed on**: `feature/pR-s15-status-heartbeat`
 **Files**: `crates/atm-daemon/src/lib.rs` | `crates/atm-core/src/boundary_support.rs`
 
 `DaemonStatusSource` delegates to `boundary_support::snapshot_status()`, which returns a
@@ -169,10 +197,22 @@ and cap/eviction behavior per daemon architecture.
 - larger than it looks because doctor health, routing, and takeover logic all
   consume the same status cache
 
+**Resolution**:
+- `RuntimeStatusCache` now owns daemon-memory member state keyed by
+  `team/member`, including `last_active_at`
+- the cache hydrates configured roster members as `unknown` on daemon startup,
+  consults durable SQLite pid continuity as startup fallback, and refreshes
+  thereafter through typed heartbeat events
+- the runtime snapshot now carries liveness, readiness, singleton-owner pid,
+  SQLite-ready state, degraded-ingest state, and aggregate member counts
+- cache size is capped at `4096` live entries with bounded eviction of the
+  oldest non-current member snapshot into explicit `unknown`
+
 ---
 
-### B-005 — Heartbeat/member runtime-state path completely absent
+### ~~B-005 — Heartbeat/member runtime-state path completely absent~~ CLOSED IN R.15
 **Source**: arch-ctm TASK-997 gap report item 5
+**Closed on**: `feature/pR-s15-status-heartbeat`
 **Files**: `crates/atm-core/src/protocol.rs`
 **Docs**: `docs/team-member-state.md`
 
@@ -200,10 +240,23 @@ no admin takeover path for live-old-pid conflicts.
 - this is not just a protocol-addition sprint; it also introduces member
   runtime-state ownership, conflict detection, and takeover semantics
 
+**Resolution**:
+- `RequestEnvelope` / `ResponseEnvelope` now carry typed `Heartbeat` request
+  and response families
+- the daemon dispatcher applies heartbeat events to runtime member state and
+  persists durable pid continuity through `RosterStore::record_heartbeat(...)`
+- live-old-pid conflicts now fail with `ATM_IDENTITY_CONFLICT` and the exact
+  stop/report message from `docs/team-member-state.md`
+- live-old-pid conflicts also persist `identity_conflict` runtime state until
+  admin takeover or dead-pid retry clears the member
+- dead-old-pid takeover updates durable pid continuity and returns
+  `pid_changed = true`
+
 ---
 
-### B-006 — Doctor daemon health interface unimplemented
+### ~~B-006 — Doctor daemon health interface unimplemented~~ CLOSED IN R.15
 **Source**: arch-ctm TASK-997 gap report item 6
+**Closed on**: `feature/pR-s15-status-heartbeat`
 **Files**: `crates/atm-daemon/src/lib.rs` daemon dispatcher
 
 Dispatcher calls `atm_core::doctor::run_doctor()` directly — no daemon-backed health
@@ -230,11 +283,24 @@ projection into doctor command. Split liveness from readiness.
 - should land in the same sprint as status/heartbeat so health semantics do not
   drift from the underlying cache
 
+**Resolution**:
+- daemon `Doctor` requests now project runtime-owned health over the shared
+  doctor report instead of calling `run_doctor(...)` directly
+- doctor output now carries a structured runtime snapshot with separate
+  liveness/readiness plus singleton-owner, SQLite-ready, degraded-ingest, and
+  aggregate member-count fields
+- doctor readiness now distinguishes `ready`, `degraded`, and `unavailable`
+  based on daemon runtime truth instead of collapsing all non-ready conditions
+  into one generic warning state
+- roster-scoped doctor projections use runtime member-state truth when a team
+  roster is present
+
 ---
 
-### B-007 — Watch runtime is placeholder-level
+### ~~B-007 — Watch runtime is placeholder-level~~ CLOSED IN R.17
 **Source**: arch-ctm TASK-997 gap report item 7
-**Files**: `crates/atm-daemon/src/lib.rs` | `crates/atm-core/src/boundary_support.rs`
+**Closed on**: `feature/pR-s17-watch-reconcile`
+**Files**: `crates/atm-daemon/src/watch_runtime.rs` | `crates/atm-daemon/src/boundary_adapters.rs`
 
 `FileWatchEventSource` delegates to `boundary_support::poll_watch()`, which discovers
 paths once and returns. Not a real long-running watch subsystem. No subscription lifecycle,
@@ -257,11 +323,19 @@ polling/wake behavior, and structured runtime events.
 - should land with B-008 because the reconcile coordinator consumes watch
   events and needs the same ownership semantics
 
+**Resolution**:
+- `FileWatchEventSource` now fronts a daemon-owned polling subscription
+  registry in `atm_daemon::watch_runtime`
+- the watch lane starts and stops with `RuntimeComposition`
+- source-path discovery no longer forwards production behavior through the
+  one-shot `boundary_support::poll_watch(...)` helper
+
 ---
 
-### B-008 — Reconcile runtime is placeholder-level
+### ~~B-008 — Reconcile runtime is placeholder-level~~ CLOSED IN R.17
 **Source**: arch-ctm TASK-997 gap report item 8
-**Files**: `crates/atm-daemon/src/lib.rs` | `crates/atm-core/src/boundary_support.rs`
+**Closed on**: `feature/pR-s17-watch-reconcile`
+**Files**: `crates/atm-daemon/src/reconcile_runtime.rs` | `crates/atm-daemon/src/boundary_adapters.rs`
 
 `DaemonReconcileCoordinator` delegates to `boundary_support::reconcile()`, which does one
 poll + one import pass. No scheduling, no debounce/coalesce, no explicit ownership of
@@ -285,18 +359,26 @@ and explicit triggering/completion semantics.
 - larger than it looks because notifier/runtime delivery (I-012) is the next
   downstream consumer of reconcile outcomes
 
+**Resolution**:
+- `DaemonReconcileCoordinator` now fronts a daemon-owned debounce/coalesce
+  worker in `atm_daemon::reconcile_runtime`
+- reconcile requests are coalesced by target and trigger watch polling,
+  inbox ingress, and notifier callbacks only through owned boundaries
+- production reconcile no longer forwards through `boundary_support::reconcile(...)`
+
 ---
 
-### B-009 — PeerClientTransport is an explicit stub
+### ~~B-009 — PeerClientTransport is an explicit stub~~ CLOSED IN R.16
 **Source**: arch-ctm TASK-997 gap report item 3
-**Files**: `crates/atm-daemon/src/lib.rs`
+**Closed on**: `feature/pR-s16-peer-replay`
+**Files**: `crates/atm-daemon/src/peer_transport.rs`, `crates/atm-daemon/src/composition.rs`
 
-`PeerClientTransport::send()` returns a stub error. Requirements/architecture still require
-remote daemon-to-daemon transport. No request framing over remote transport, no
-timeout/retry behavior, no integration into runtime routing path.
+`PeerClientTransport::send()` previously returned a stub error. `R.16` replaced
+that path with shared-protocol framing, typed timeout/retry classification,
+`ATM_REMOTE_OUTCOME_UNKNOWN`, and runtime-owned replay resume before serve.
 
-**Fix**: Implement peer client transport. Add request framing, timeout/retry, and
-integration into runtime routing.
+**Resolution**: implemented in `atm_daemon::peer_transport` behind the runtime-owned
+`PeerTransportRuntime` wrapper assembled through `RuntimeComposition`.
 
 **Implementation topology**:
 - `crates/atm-daemon/src/lib.rs:613-631`
@@ -306,26 +388,20 @@ integration into runtime routing.
 - `crates/atm-core/src/protocol.rs:19-50`
   the shared envelopes are the framing contract the peer transport must reuse
 
-**Dependencies / sizing**:
-- blocked on B-003 because peer transport belongs under the runtime root and
-  must participate in startup/shutdown
-- should land with I-013 because durable replay/re-export only makes sense once
-  the outbound peer path exists
-- must also define:
-  - exact retryable socket/network error classes vs non-retryable protocol/TLS
-    failures
-  - one typed `RemoteDeliveryOutcomeUnknown` error for drop-after-send /
-    acceptance-unknown paths
-  - whether listener rebinding survives ordinary local interface churn without
-    reload and when explicit-address binds require degraded status plus reload
+**Closed behavior**:
+- retryable socket/network error classes are explicit
+- one typed `RemoteDeliveryOutcomeUnknown` path exists for drop-after-send /
+  acceptance-unknown failures
+- wildcard bind survival vs explicit-address degraded reload behavior is documented
 
 ---
 
 ## IMPORTANT FINDINGS
 
-### I-001 — Bare expect() panics in signal installation
+### ~~I-001 — Bare expect() panics in signal installation~~ CLOSED IN R.13
 **Source**: arch-ctm TASK-995 Finding #3
-**Files**: `crates/atm-daemon/src/lib.rs:205-208,224-226`
+**Closed on**: `feature/pR-s13-runtime-admission`
+**Files**: `crates/atm-daemon/src/lib.rs`
 
 `DaemonShutdownSignals::install()` uses:
 - `.expect("daemon signal install lock")`
@@ -344,9 +420,17 @@ non-panicking construction.
   lifecycle state, and shutdown ownership are expressed through one runtime
   root
 
+**Resolution**:
+- repeated signal installation now returns typed `AtmError` failures instead of
+  panicking on poisoned/init paths
+- repeat installs now preserve an already-raised terminate/reload flag instead
+  of clearing pending shutdown state between installs
+- a repeatable signal-install regression test now covers the non-panicking path
+  and the no-flag-reset behavior
+
 ---
 
-### I-002 — Force-cancel cannot interrupt socket-blocked threads
+### ~~I-002 — Force-cancel cannot interrupt socket-blocked threads~~ CLOSED IN R.13
 **Source**: quality-mgr RSH-R-001/RSH-R-002
 **Files**: `crates/atm-daemon/src/lib.rs` shutdown path
 
@@ -364,6 +448,13 @@ return immediately.
   graceful/forced shutdown path owns the force-cancel deadline
 - should be implemented together with B-003 lifecycle work rather than as an
   isolated socket tweak
+
+**Resolution**:
+- force-cancel now tracks active connections and interrupts them via
+  `Shutdown::Both` rather than falling through to `process::exit(1)`
+- blocked connection threads are covered by a deterministic interruption test
+- listener/accept failures after `Running` now reuse the same drain/stop path
+  instead of skipping lifecycle shutdown sequencing
 
 ---
 
@@ -483,29 +574,36 @@ lock timeouts.
 
 ---
 
-### I-012 — Daemon notification/plugin runtime delivery is placeholder-only
+### ~~I-012 — Daemon notification/plugin runtime delivery is placeholder-only~~ CLOSED IN R.17
 **Source**: arch-ctm TASK-997 gap report item 9
-**Files**: `crates/atm-daemon/src/lib.rs` | `crates/atm-core/src/boundary_support.rs`
+**Closed on**: `feature/pR-s17-watch-reconcile`
+**Files**: `crates/atm-daemon/src/notification_runtime.rs` | `crates/atm-daemon/src/boundary_adapters.rs`
 
 `DaemonNotificationSink` delegates to `boundary_support::deliver_notification()`, which
 just logs a notification-delivered event. Not a real notifier/plugin runtime. No actual
 daemon-owned notifier/plugin delivery adapter, no runtime boundary for local agent/plugin
 traffic, no failure/degradation handling.
 
-**Fix**: Implement daemon-owned notifier/plugin delivery adapter with failure and
-degradation handling.
+**Resolution**:
+- `DaemonNotificationSink` now fronts a daemon-owned queued worker in
+  `atm_daemon::notification_runtime`
+- delivery returns typed unavailable/backpressure failures at the boundary
+- production notification delivery no longer degrades to the generic
+  `boundary_support::deliver_notification(...)` tracing helper
 
 ---
 
-### I-013 — Crash recovery / replay durability not wired as runtime subsystem
+### ~~I-013 — Crash recovery / replay durability not wired as runtime subsystem~~ CLOSED IN R.16
 **Source**: arch-ctm TASK-997 gap report item 10
+**Closed on**: `feature/pR-s16-peer-replay`
 
 Requirements say crash recovery must preserve SQLite commit → export/remote handoff
-ordering and support durable replay keyed by `message_key`. `atm-core` has related
-boundary shapes but daemon runtime does not wire a concrete replay/re-export subsystem.
+ordering and support durable replay keyed by `message_key`. `R.16` wired replay
+state into the host-scoped SQLite root and added startup resume before serving.
 
-**Fix**: Implement durable replay/re-export runtime keyed by `message_key`. Add bounded
-persisted retry/re-export state with expiry. Wire startup replay/recovery path after crash.
+**Resolution**: replay/re-export rows are persisted with bounded expiry and resumed
+through the daemon runtime on startup, retaining typed failure state when delivery
+cannot be completed inside the configured retry budget.
 
 ---
 
@@ -526,13 +624,18 @@ typed reload failure that does not corrupt serving state.
 **Files**: multiple in `crates/atm-daemon/src/`
 
 `DaemonConfigIngress`, `DaemonInboxIngress`, `DaemonInboxExport`, `DaemonStatusSource`,
-`FileWatchEventSource`, `DaemonReconcileCoordinator` all exist as types but several
-forward straight into generic `boundary_support` helpers instead of daemon-owned runtime
-state/subsystems. Runtime-owned boundaries were declared but not turned into
-runtime-owned implementations.
+`FileWatchEventSource`, `DaemonReconcileCoordinator`, and `DaemonNotificationSink`
+all exist as types but several originally forwarded straight into generic
+helpers instead of daemon-owned runtime state/subsystems.
 
 **Note**: This is the code-level form of the parity gap — the boundary surface looks
 complete structurally but does not own or manage runtime state.
+
+**R.17 update**:
+- the watch, reconcile, and notifier portions of this finding are now closed
+  by `atm_daemon::{watch_runtime,reconcile_runtime,notification_runtime}`
+- the remaining residual scope is limited to config/inbox passthrough adapters
+  and any final boundary/doc closeout work in `R.18`
 
 ---
 
@@ -655,12 +758,9 @@ From arch-ctm TASK-997 gap report:
 - singleton/test/lint/Windows hardening
 - bounded framing, transport seams, test fidelity migration
 
-**What Phase R did NOT deliver** (all B-003 through B-009 above):
-- Full production daemon runtime with owned runtime subsystems
-- Host-wide singleton (B-001, B-002)
-- Runtime lifecycle orchestration (B-003)
-- Status cache, heartbeat, health, watch, reconcile (B-004 through B-008)
-- Peer transport (B-009)
+**What remains after R.17**:
+- config reload / serving-config validation (`I-014`)
+- remaining boundary/doc closeout and residual runtime hardening (`R.18`)
 
 ---
 
@@ -669,7 +769,7 @@ From arch-ctm TASK-997 gap report:
 | Crate | Score | Main blocker |
 |-------|-------|-------------|
 | `atm-core` | 4/5 | Placeholder boundary_support-backed runtime behavior; test-support/env seams close to core |
-| `atm-daemon` | 2/5 | Host-wide singleton not host-wide; `RuntimeComposition::start()` stubbed; peer transport stubbed; status/watch/reconcile placeholders |
+| `atm-daemon` | 4/5 | Remaining blocker is config reload / final closeout, not the main runtime lanes |
 | `atm-rusqlite` | 4/5 | Mostly blocked by daemon/runtime integration incompleteness, not its own shape |
 | `atm` | 3/5 | Transport seams + lint gate improved; extraction still depends on singleton gate semantics + stable daemon contract |
 
@@ -687,7 +787,7 @@ continuation plan now that `R.13` through `R.18` are defined below.
 | 2 | Heartbeat/status-cache (B-004, B-005) + doctor health (B-006) |
 | 3 | Peer transport (B-009) + remote retry/recovery (I-013) |
 | 4 | Watch (B-007) + reconcile (B-008) + notifier runtime (I-012) |
-| 5 | Panic removal (I-001, I-002) + config reload (I-014) + final production-hardening sweep |
+| 5 | Config reload (I-014) + final production-hardening sweep |
 
 ## REVISED CONTINUATION SPRINT SEQUENCE
 
@@ -711,7 +811,7 @@ Prerequisite:
 | Sprint | Scope |
 |-------|-------|
 | `R.13` | Host-wide singleton (B-001, B-002) + runtime lifecycle completion (B-003) + lifecycle-adjacent hardening (I-001, I-002) |
-| `R.14` | Host-scoped SQLite root, successor-chain / ack-thread semantics, ephemeral retention, SQLite error mapping, and remaining SQLite boundary closeout |
+| `R.14` | Host-scoped SQLite root, successor-chain / ack-thread semantics, ephemeral retention, typed SQLite error mapping, and remaining SQLite boundary closeout (`SharedDb` + `SqliteBoundaryAssembly`) |
 | `R.15` | Heartbeat/status-cache (B-004, B-005) + doctor health (B-006) |
 | `R.16` | Peer transport (B-009) + remote retry/recovery (I-013) |
 | `R.17` | Watch (B-007) + reconcile (B-008) + notifier runtime (I-012) |

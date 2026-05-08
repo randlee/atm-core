@@ -71,7 +71,7 @@ The `atm-daemon` crate is responsible for:
 - remote daemon-to-daemon transport listener/client
 - runtime wiring of `atm-core` service boundaries
 - live agent-status cache
-- optional watch/reconcile runtime loop
+- watch/reconcile runtime loop
 - daemon/runtime observability emission
 - daemon health/status query surface for `atm doctor`
 
@@ -126,6 +126,9 @@ Phase R redesign notes:
 - if the configured listener bind address is an explicit local IP that later
   disappears or changes, the runtime must enter degraded status and require
   bounded reload/rebind via the runtime reload path
+- startup must run one bounded replay-resume sweep from the host-scoped SQLite
+  state root before serving requests so pending remote handoff rows keyed by
+  durable `message_key` are retried or retained with typed degraded status
 - daemon runtime failures must remain typed and must not depend on
   panic/unwrap for routine transport, socket, or store-boundary failure.
 - daemon observability remains structured through `sc-observability`; no ad hoc
@@ -159,6 +162,14 @@ Architectural rule:
     around the runtime invariant
 - no alternate socket path, alternate `ATM_HOME`, or test-only helper is an
   exception to the singleton rule
+- the host-wide ownership root is `~/.atm/daemon/` derived from the OS user
+  home, not from `ATM_HOME` or the serving socket path
+- client-side launch admission uses `~/.atm/daemon/launch.lock`
+- daemon-side serving admission uses `~/.atm/daemon/owner.lock`
+- if the serving owner record points to a non-live pid, startup may perform a
+  bounded retry to recover the same singleton lock; if recovery cannot safely
+  claim the existing ownership path, startup must fail with
+  `ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED`
 
 Lifecycle state model:
 - the daemon runtime must explicitly model:
@@ -176,6 +187,14 @@ Lifecycle state model:
   - `Draining -> Stopped`
 - illegal transitions such as `Running -> Starting` or `Stopped -> Running`
   without reinitialization must be prevented by the runtime boundary
+- `RuntimeComposition::start()` is the only legal daemon bootstrap entrypoint;
+  `run_daemon()` must not bypass the lifecycle root and call the listener
+  directly
+- any post-`Running` exit path, including listener/accept failures, must pass
+  through `Running -> Draining -> Stopped` rather than silently forcing
+  `Running -> Stopped`
+- repeated signal-install calls must reuse the same process-wide signal flags
+  without clearing a pending terminate/reload bit between installs
 
 Privacy boundary:
 - the lifecycle state type and transport/runtime adapter internals remain
@@ -238,6 +257,12 @@ Required shutdown sequence:
 6. flush observability sinks on a best-effort basis
 7. release singleton socket/ownership artifacts
 
+Force-cancel rule:
+- the forced-shutdown path must interrupt blocked socket reads and writes via
+  connection shutdown rather than falling through to `process::exit(1)`
+- failure to drain within the force deadline is reported as a typed runtime
+  failure after interrupting active connections
+
 Required deadlines:
 - normal drain deadline: `5s`
 - force-cancel deadline after drain starts: `10s` total
@@ -284,7 +309,8 @@ Required saturation behavior:
   reporting; no silent drop
 - retry queue full: fail remote send attempt rather than enqueueing unbounded
 - status-cache cap exceeded: evict least-recently-updated noncritical entries
-  to `unknown` with structured warning emission
+  from the live-member map and demote them to explicit `unknown` with
+  structured warning emission
 
 ## 3.3 Status Ownership
 
@@ -299,8 +325,15 @@ Architectural rules:
   socket handler in `docs/team-member-state.md`
 - SQLite does not own live status or `last_active_at`; it owns durable roster
   state and the current per-member `pid`
-- status cache rebuild after restart begins from `unknown` and refreshes through
-  runtime events
+- status cache rebuild after restart hydrates configured roster members as
+  `unknown`, consults durable SQLite pid continuity only as startup fallback,
+  and refreshes thereafter through runtime events
+- startup hydration records explicit `unknown` entries in the daemon cache so
+  bounded eviction can demote live members back to `unknown` without silently
+  deleting the member from runtime state
+- live pid conflict detection is cache-first after startup hydration; a
+  live-old-pid/new-pid collision persists `identity_conflict` state in daemon
+  memory until admin takeover or dead-pid retry clears it
 - read-time overlays such as `active 3 seconds ago` or `idle for 30 minutes`
   are derived from daemon-memory `last_active_at`, not from durable roster
   rows
@@ -348,6 +381,18 @@ Doctor health contract distinction:
   them through the documented request boundary
 - `atm doctor` must report both dimensions explicitly rather than treating
   process existence as equivalent to request-serving readiness
+- readiness states are:
+  - `ready` when the daemon owns the runtime, SQLite-backed continuity is
+    available, ingest is healthy, and no active identity-conflict path exists
+  - `degraded` when the daemon is still running but SQLite continuity, ingest,
+    or identity-conflict handling is impaired
+  - `unavailable` when the daemon still owns the runtime but every tracked
+    member has transitioned fully offline
+- the runtime health snapshot projected into `atm doctor` must also carry:
+  - singleton-owner pid when known
+  - SQLite-ready state
+  - degraded-ingest state
+  - aggregate active/idle/offline/unknown member counts
 
 ## 3.6 Crash Recovery
 
@@ -375,3 +420,5 @@ Initial use cases:
 - local transport adapter structure
 - remote daemon-to-daemon protocol structure
 - runtime watch/reconcile orchestration
+- queued notifier/runtime delivery structure
+  - bounded at `64` in-memory events with typed backpressure on overflow

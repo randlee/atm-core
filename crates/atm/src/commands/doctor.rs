@@ -110,6 +110,7 @@ mod tests {
                 query_state: Some(AtmObservabilityHealthState::Healthy),
                 detail: None,
             },
+            runtime_status: None,
         }
     }
 

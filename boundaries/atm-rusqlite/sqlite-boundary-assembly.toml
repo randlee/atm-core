@@ -9,8 +9,8 @@ facade = "SqliteBoundaryAssembly"
 [implementation]
 type = "SqliteBoundaryAssembly"
 module = "atm_rusqlite"
-visibility = "pub(crate)"
-constructor = "pub(crate)"
+visibility = "public"
+constructor = "public"
 
 [composition]
 roots = [
@@ -29,23 +29,19 @@ io_forbidden = [
 ]
 
 [dependencies]
-allowed_dependents = []
+allowed_dependents = ["atm-daemon"]
 allowed_dependencies = [
   "atm-core",
   "rusqlite",
 ]
 forbidden_edges = [
   "atm -> atm-rusqlite",
-  "atm-daemon -> atm-rusqlite",
   "atm-graft -> atm-rusqlite",
 ]
 
 [references]
 scope = "outside_owner_crate"
-forbidden = [
-  "SqliteBoundaryAssembly",
-  "assemble_boundary",
-]
+forbidden = []
 
 [contracts]
 request_types = ["sqlite boundary assembly inputs"]
@@ -54,7 +50,7 @@ error_types = ["AtmError"]
 
 [testing]
 allowed_test_double_paths = []
-forbidden_test_bypasses = ["assemble_boundary"]
+forbidden_test_bypasses = []
 
 [enforcement]
 lint_rules = [
@@ -67,8 +63,8 @@ review_gates = [
 ]
 
 [status]
-state = "planned"
+state = "active"
 notes = [
-  "assembly root stays crate-private and must remain visible in boundary review",
   "hosts the shared assembly seam for mail, task, and roster adapters over one sqlite root",
+  "daemon runtime may use the public assembly seam for durable pid continuity and SQLite readiness checks",
 ]

@@ -18,8 +18,7 @@ use crate::home;
 use crate::mailbox;
 use crate::mailbox::source::SourceFile;
 use crate::protocol::{
-    NotificationEvent, ReconcileRequest, ReconcileResult, RuntimeStatusSnapshot, WatchEventBatch,
-    WatchSubscriptionRequest,
+    NotificationEvent, ReconcileRequest, ReconcileResult, WatchEventBatch, WatchSubscriptionRequest,
 };
 
 fn to_boundary_source_file(source: SourceFile) -> InboxSourceFileRecord {
@@ -56,11 +55,8 @@ pub fn load_team_config(
 pub fn import_inbox_source(
     request: InboxIngressImportRequest,
 ) -> Result<InboxIngressImportResponse, AtmError> {
-    let source_files = mailbox::store::observe_source_files(
-        &request.home_dir,
-        request.team.as_str(),
-        request.agent.as_str(),
-    )?;
+    let source_files =
+        mailbox::store::observe_source_files(&request.home_dir, &request.team, &request.agent)?;
     Ok(InboxIngressImportResponse {
         source_files: source_files
             .into_iter()
@@ -133,22 +129,17 @@ pub fn reexport_messages(
 }
 
 pub fn deliver_notification(event: NotificationEvent) -> Result<(), AtmError> {
+    // The current daemon notification adapter is intentionally a retained-log
+    // no-op until the R.17 notifier runtime replaces it with a real sink.
     info!(kind = %event.kind, detail = %event.detail, "daemon notification delivered");
     Ok(())
-}
-
-pub fn snapshot_status() -> Result<RuntimeStatusSnapshot, AtmError> {
-    Ok(RuntimeStatusSnapshot {
-        status: "ready".to_string(),
-        detail: Some("daemon runtime adapters are active".to_string()),
-    })
 }
 
 pub fn poll_watch(request: WatchSubscriptionRequest) -> Result<WatchEventBatch, AtmError> {
     let paths = crate::mailbox::source::discover_source_paths(
         &request.home_dir,
-        request.team.as_str(),
-        request.agent.as_str(),
+        &request.team,
+        &request.agent,
     )?;
     Ok(WatchEventBatch { paths })
 }

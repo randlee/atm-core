@@ -213,6 +213,29 @@ pub struct RosterStoreQueryMembershipResponse {
     pub member: Option<AgentMember>,
     #[serde(default)]
     pub is_member: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pid: Option<u32>,
+}
+
+/// Typed roster-store heartbeat write request for durable pid continuity.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RosterStoreRecordHeartbeatRequest {
+    pub team: TeamName,
+    pub member: AgentName,
+    pub pid: u32,
+    pub observed_at: IsoTimestamp,
+}
+
+/// Typed roster-store heartbeat write response for durable pid continuity.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RosterStoreRecordHeartbeatResponse {
+    pub team: TeamName,
+    pub member: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_pid: Option<u32>,
+    pub current_pid: u32,
+    #[serde(default)]
+    pub pid_changed: bool,
 }
 
 /// Stub roster-store health-snapshot request for the Phase R skeleton.
@@ -435,6 +458,14 @@ pub trait RosterStore: sealed::Sealed {
         &self,
         request: RosterStoreQueryMembershipRequest,
     ) -> Result<RosterStoreQueryMembershipResponse, AtmError>;
+    /// # Errors
+    ///
+    /// Returns `AtmError` when durable pid continuity cannot be updated
+    /// through the roster-store boundary.
+    fn record_heartbeat(
+        &self,
+        request: RosterStoreRecordHeartbeatRequest,
+    ) -> Result<RosterStoreRecordHeartbeatResponse, AtmError>;
     /// # Errors
     ///
     /// Returns `AtmError` when roster health cannot be collected.

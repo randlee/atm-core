@@ -12,9 +12,10 @@ use crate::error::{AtmError, AtmErrorCode};
 use crate::identity;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::roles::ROLE_TEAM_LEAD;
-use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
+use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
+use crate::threading::{ThreadIndex, canonical_sender_identity, is_ephemeral};
 use crate::types::{AgentName, TaskId, TeamName};
 use crate::workflow;
 
@@ -45,6 +46,9 @@ pub struct SendRequest {
     pub summary_override: Option<String>,
     pub requires_ack: bool,
     pub task_id: Option<TaskId>,
+    pub parent_message_id: Option<LegacyMessageId>,
+    pub thread_mode: Option<ThreadMode>,
+    pub stale_at: Option<crate::types::IsoTimestamp>,
     pub dry_run: bool,
 }
 
@@ -72,6 +76,9 @@ impl SendRequest {
             summary_override,
             requires_ack,
             task_id,
+            parent_message_id: None,
+            thread_mode: None,
+            stale_at: None,
             dry_run,
         })
     }
@@ -237,6 +244,9 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
             pending_ack_at: requires_ack.then_some(timestamp),
             acknowledged_at: None,
             acknowledges_message_id: None,
+            parent_message_id: request.parent_message_id,
+            thread_mode: request.thread_mode,
+            stale_at: request.stale_at,
             task_id: task_id.clone(),
             extra,
         };
@@ -419,6 +429,9 @@ fn notify_team_lead_missing_config(
         pending_ack_at: None,
         acknowledged_at: None,
         acknowledges_message_id: None,
+        parent_message_id: None,
+        thread_mode: None,
+        stale_at: None,
         task_id: None,
         extra,
     };
@@ -462,14 +475,111 @@ fn append_mailbox_message_and_seed_workflow(
                 return Ok(((), false));
             }
             let mut inbox_messages = runtime.read_messages(inbox_path)?;
-            inbox_messages.push(envelope.clone());
+            let mut prepared = envelope.clone();
+            prepare_threaded_message(&mut prepared, &inbox_messages)?;
+            inbox_messages.push(prepared.clone());
             runtime.commit_mailbox_state(inbox_path, &inbox_messages)?;
             Ok((
                 (),
-                workflow::remember_initial_state(workflow_state, envelope),
+                workflow::remember_initial_state(workflow_state, &prepared),
             ))
         },
     )
+}
+
+fn prepare_threaded_message(
+    envelope: &mut MessageEnvelope,
+    inbox_messages: &[MessageEnvelope],
+) -> Result<(), AtmError> {
+    match (
+        envelope.parent_message_id,
+        envelope.thread_mode,
+        envelope.stale_at,
+    ) {
+        (None, None, _) => Ok(()),
+        (Some(_), Some(_), Some(_)) => Err(AtmError::validation(
+            "ephemeral messages may not participate in a message thread",
+        )
+        .with_recovery(
+            "Send the message either as a standalone ephemeral note or as a non-ephemeral thread update.",
+        )),
+        (Some(parent_id), Some(_), None) => validate_thread_append(envelope, inbox_messages, parent_id),
+        (Some(_), None, _) | (None, Some(_), _) => Err(AtmError::validation(
+            "thread updates must set both parent_message_id and thread_mode",
+        )
+        .with_recovery(
+            "Provide both the parent message id and either add-details or supersede when appending to an existing thread.",
+        )),
+    }
+}
+
+fn validate_thread_append(
+    envelope: &mut MessageEnvelope,
+    inbox_messages: &[MessageEnvelope],
+    parent_id: LegacyMessageId,
+) -> Result<(), AtmError> {
+    let index = ThreadIndex::new(inbox_messages);
+    let parent = index.message(parent_id).ok_or_else(|| {
+        AtmError::validation(format!(
+            "thread parent message {} was not found in the recipient inbox",
+            parent_id
+        ))
+        .with_recovery(
+            "Refresh the recipient inbox state and retry the update against a message id that still exists in that thread.",
+        )
+    })?;
+
+    if is_ephemeral(parent) {
+        return Err(AtmError::validation(
+            "ephemeral messages may not be updated or superseded",
+        )
+        .with_recovery(
+            "Send a fresh standalone message instead of trying to append to an ephemeral message.",
+        ));
+    }
+
+    let Some(root_id) = index.root_id(parent_id) else {
+        return Err(AtmError::validation(format!(
+            "thread root could not be resolved for parent message {}",
+            parent_id
+        ))
+        .with_recovery(
+            "Repair the malformed message thread or resend the correction as a fresh standalone message.",
+        ));
+    };
+    let root = index.message(root_id).ok_or_else(|| {
+        AtmError::validation(format!(
+            "thread root message {} was not found in the recipient inbox",
+            root_id
+        ))
+        .with_recovery(
+            "Repair the malformed message thread or resend the correction as a fresh standalone message.",
+        )
+    })?;
+
+    if canonical_sender_identity(root) != canonical_sender_identity(envelope) {
+        return Err(AtmError::validation(
+            "only the original sender may append details or supersede a message thread",
+        )
+        .with_recovery(
+            "Send a new message instead of appending to a thread you did not originate.",
+        ));
+    }
+
+    if index.has_successor(parent_id) {
+        return Err(AtmError::validation(format!(
+            "message {} already has a successor; ATM threads are strictly linear",
+            parent_id
+        ))
+        .with_recovery(
+            "Append to the current terminal message in the thread instead of branching from an older message.",
+        ));
+    }
+
+    let thread_requires_ack = index.thread_requires_ack(parent_id);
+    envelope.pending_ack_at = thread_requires_ack.then_some(envelope.timestamp);
+    envelope.acknowledged_at = None;
+    Ok(())
 }
 
 fn display_sender_identity(
@@ -542,14 +652,42 @@ pub(crate) fn maybe_run_post_send_hook(
 
 #[cfg(test)]
 mod tests {
+    use serde_json::Map;
     use std::fs;
     use tempfile::tempdir;
 
-    use super::alert_state;
+    use super::{alert_state, prepare_threaded_message};
     use crate::process::process_is_alive;
     use crate::roles::ROLE_TEAM_LEAD;
+    use crate::schema::{LegacyMessageId, MessageEnvelope, ThreadMode};
     use crate::send::{SendMessageSource, SendRequest};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
+    use crate::types::{AgentName, IsoTimestamp, TeamName};
+
+    fn message(
+        from: &str,
+        message_id: LegacyMessageId,
+        parent_message_id: Option<LegacyMessageId>,
+        thread_mode: Option<ThreadMode>,
+    ) -> MessageEnvelope {
+        MessageEnvelope {
+            from: from.parse::<AgentName>().expect("agent"),
+            text: "hello".to_string(),
+            timestamp: IsoTimestamp::now(),
+            read: false,
+            source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+            summary: None,
+            message_id: Some(message_id),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id,
+            thread_mode,
+            stale_at: None,
+            task_id: None,
+            extra: Map::new(),
+        }
+    }
 
     #[test]
     fn load_send_alert_state_parse_errors_are_config_errors() {
@@ -640,5 +778,39 @@ mod tests {
         .expect_err("invalid team");
 
         assert!(error.message.contains("team name"));
+    }
+
+    #[test]
+    fn prepare_threaded_message_reopens_ack_for_ack_required_thread() {
+        let root_id = LegacyMessageId::new();
+        let mut root = message(TEST_SENDER, root_id, None, None);
+        root.acknowledged_at = Some(IsoTimestamp::now());
+        let mut update = message(
+            TEST_SENDER,
+            LegacyMessageId::new(),
+            Some(root_id),
+            Some(ThreadMode::AddDetails),
+        );
+
+        prepare_threaded_message(&mut update, &[root]).expect("prepare update");
+
+        assert!(update.pending_ack_at.is_some());
+        assert!(update.acknowledged_at.is_none());
+    }
+
+    #[test]
+    fn prepare_threaded_message_rejects_non_originating_sender() {
+        let root_id = LegacyMessageId::new();
+        let root = message(TEST_SENDER, root_id, None, None);
+        let mut update = message(
+            ROLE_TEAM_LEAD,
+            LegacyMessageId::new(),
+            Some(root_id),
+            Some(ThreadMode::Supersede),
+        );
+
+        let error = prepare_threaded_message(&mut update, &[root]).expect_err("different sender");
+
+        assert!(error.message.contains("original sender"));
     }
 }

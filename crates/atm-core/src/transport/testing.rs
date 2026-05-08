@@ -77,6 +77,9 @@ impl ClientTransport for LoopbackClientTransport {
                     ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
                 })
             }
+            RequestEnvelope::Heartbeat(_) => Err(AtmError::daemon_unavailable(
+                "loopback heartbeat transport is not wired outside the daemon runtime",
+            )),
             RequestEnvelope::Receive(query) => {
                 read::read_mail(query, self.observability.as_ref()).map(ResponseEnvelope::Receive)
             }

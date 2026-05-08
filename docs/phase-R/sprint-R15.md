@@ -6,7 +6,7 @@ phase: R
 sprint: "R.15"
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s15-status-heartbeat
 branch: feature/pR-s15-status-heartbeat
-status: planned
+status: complete
 estimated_scope: L
 ```
 
@@ -20,7 +20,7 @@ This sprint turns the current placeholder health/status layer into a real runtim
 
 ## Governing Requirements
 
-- `REQ-P-RUNTIME-002`
+- `REQ-CORE-RUNTIME-002`
 - `REQ-CORE-RUNTIME-001`
 - daemon-health requirements in `docs/requirements.md`
 - `docs/team-member-state.md`
@@ -68,7 +68,9 @@ This sprint turns the current placeholder health/status layer into a real runtim
    Development work:
    - replace placeholder `snapshot_status()` with a daemon-memory status cache
    - carry durable PID continuity and runtime-owned `last_active_at`
-   - define restart rebuild / eviction behavior
+   - define restart rebuild / eviction behavior, including startup hydration of
+     configured members as explicit `unknown` and bounded demotion of evicted
+     live entries back to `unknown`
    Required tests:
    - cache rebuild test on startup from durable state
    - bounded cache behavior / eviction tests
@@ -78,7 +80,11 @@ This sprint turns the current placeholder health/status layer into a real runtim
 3. Doctor health projection
    Development work:
    - replace direct `run_doctor()` passthrough with daemon-backed health projection
-   - report singleton ownership, runtime liveness/readiness, status-cache summary, and degraded-ingest/backlog state
+   - report singleton ownership, runtime liveness/readiness, status-cache summary,
+     and degraded-ingest/backlog state
+   - distinguish `ready`, `degraded`, and `unavailable` readiness outcomes from
+     daemon-member runtime truth instead of collapsing them into one generic
+     health status
    Required tests:
    - doctor integration tests for ready, degraded, and unavailable states
    - liveness/readiness split tests
@@ -117,4 +123,3 @@ Keep heartbeat, status cache, and doctor together. Splitting them risks inventin
 - a status cache without heartbeat truth will just recreate the current placeholder problem
 - doctor must not invent its own health state separate from the runtime cache
 - PID ownership and takeover rules need exact typed results, not ad hoc strings
-

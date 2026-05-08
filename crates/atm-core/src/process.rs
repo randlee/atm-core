@@ -1,5 +1,5 @@
 #[cfg(unix)]
-pub(crate) fn process_is_alive(pid: u32) -> bool {
+pub fn process_is_alive(pid: u32) -> bool {
     let pid: libc::pid_t = match pid.try_into() {
         Ok(pid) => pid,
         Err(_) => return false,
@@ -15,7 +15,7 @@ pub(crate) fn process_is_alive(pid: u32) -> bool {
 }
 
 #[cfg(windows)]
-pub(crate) fn process_is_alive(pid: u32) -> bool {
+pub fn process_is_alive(pid: u32) -> bool {
     use windows_sys::Win32::Foundation::{CloseHandle, STILL_ACTIVE};
     use windows_sys::Win32::System::Threading::{
         GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,

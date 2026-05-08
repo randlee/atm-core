@@ -40,5 +40,5 @@ lint_rules = ["LINT-BOUNDARY-ATM-PROTOCOL-NAMING"]
 review_gates = ["no_daemon_shaped_protocol_types"]
 
 [status]
-state = "stub_landed"
-notes = ["trait plus protocol request/response/frame DTOs landed in atm_core::protocol", "ack is represented inside send-shape request data, not as a top-level protocol family"]
+state = "active"
+notes = ["trait plus protocol request/response/frame DTOs landed in atm_core::protocol", "ack is represented inside send-shape request data, not as a top-level protocol family", "heartbeat request/response DTOs and runtime-health snapshot payloads are part of the canonical protocol surface"]

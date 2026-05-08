@@ -25,8 +25,20 @@ pub enum AtmErrorCode {
     ConfigTeamMissing,
     /// Sender identity could not be resolved.
     IdentityUnavailable,
+    /// A live process already owns the reported agent identity.
+    IdentityConflict,
     /// The daemon transport could not be reached or started.
     DaemonUnavailable,
+    /// The client-side daemon launch gate rejected a duplicate spawn.
+    DaemonLaunchGateRejected,
+    /// The daemon-side serving gate rejected duplicate ownership.
+    DaemonServingStateRejected,
+    /// Stale singleton ownership could not be recovered safely.
+    DaemonStaleOwnerRecoveryFailed,
+    /// Daemon auto-start exhausted the publish/startup budget.
+    DaemonAutoStartFailed,
+    /// The remote daemon connection dropped after send and acceptance is unknown.
+    RemoteDeliveryOutcomeUnknown,
     /// Address parsing failed.
     AddressParseFailed,
     /// Team could not be resolved from config or input.
@@ -97,6 +109,8 @@ pub enum AtmErrorCode {
     WarningHookSkipped,
     /// A configured post-send hook failed during best-effort execution.
     WarningHookExecutionFailed,
+    /// A test requested an invalid fake transport seam.
+    TestFakeTransportInjectionFailed,
 }
 
 impl AtmErrorCode {
@@ -109,7 +123,13 @@ impl AtmErrorCode {
             Self::ConfigTeamParseFailed => "ATM_CONFIG_TEAM_PARSE_FAILED",
             Self::ConfigTeamMissing => "ATM_CONFIG_TEAM_MISSING",
             Self::IdentityUnavailable => "ATM_IDENTITY_UNAVAILABLE",
+            Self::IdentityConflict => "ATM_IDENTITY_CONFLICT",
             Self::DaemonUnavailable => "ATM_DAEMON_UNAVAILABLE",
+            Self::DaemonLaunchGateRejected => "ATM_DAEMON_LAUNCH_GATE_REJECTED",
+            Self::DaemonServingStateRejected => "ATM_DAEMON_SERVING_STATE_REJECTED",
+            Self::DaemonStaleOwnerRecoveryFailed => "ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED",
+            Self::DaemonAutoStartFailed => "ATM_DAEMON_AUTO_START_FAILED",
+            Self::RemoteDeliveryOutcomeUnknown => "ATM_REMOTE_OUTCOME_UNKNOWN",
             Self::AddressParseFailed => "ATM_ADDRESS_PARSE_FAILED",
             Self::TeamUnavailable => "ATM_TEAM_UNAVAILABLE",
             Self::TeamNotFound => "ATM_TEAM_NOT_FOUND",
@@ -145,6 +165,7 @@ impl AtmErrorCode {
             Self::WarningStaleMailboxLock => "ATM_WARNING_STALE_MAILBOX_LOCK",
             Self::WarningHookSkipped => "ATM_WARNING_HOOK_SKIPPED",
             Self::WarningHookExecutionFailed => "ATM_WARNING_HOOK_EXECUTION_FAILED",
+            Self::TestFakeTransportInjectionFailed => "ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED",
         }
     }
 }
@@ -161,7 +182,13 @@ impl FromStr for AtmErrorCode {
             "ATM_CONFIG_TEAM_PARSE_FAILED" => Ok(Self::ConfigTeamParseFailed),
             "ATM_CONFIG_TEAM_MISSING" => Ok(Self::ConfigTeamMissing),
             "ATM_IDENTITY_UNAVAILABLE" => Ok(Self::IdentityUnavailable),
+            "ATM_IDENTITY_CONFLICT" => Ok(Self::IdentityConflict),
             "ATM_DAEMON_UNAVAILABLE" => Ok(Self::DaemonUnavailable),
+            "ATM_DAEMON_LAUNCH_GATE_REJECTED" => Ok(Self::DaemonLaunchGateRejected),
+            "ATM_DAEMON_SERVING_STATE_REJECTED" => Ok(Self::DaemonServingStateRejected),
+            "ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED" => Ok(Self::DaemonStaleOwnerRecoveryFailed),
+            "ATM_DAEMON_AUTO_START_FAILED" => Ok(Self::DaemonAutoStartFailed),
+            "ATM_REMOTE_OUTCOME_UNKNOWN" => Ok(Self::RemoteDeliveryOutcomeUnknown),
             "ATM_ADDRESS_PARSE_FAILED" => Ok(Self::AddressParseFailed),
             "ATM_TEAM_UNAVAILABLE" => Ok(Self::TeamUnavailable),
             "ATM_TEAM_NOT_FOUND" => Ok(Self::TeamNotFound),
@@ -201,6 +228,9 @@ impl FromStr for AtmErrorCode {
             "ATM_WARNING_STALE_MAILBOX_LOCK" => Ok(Self::WarningStaleMailboxLock),
             "ATM_WARNING_HOOK_SKIPPED" => Ok(Self::WarningHookSkipped),
             "ATM_WARNING_HOOK_EXECUTION_FAILED" => Ok(Self::WarningHookExecutionFailed),
+            "ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED" => {
+                Ok(Self::TestFakeTransportInjectionFailed)
+            }
             _ => Err("unknown ATM error code"),
         }
     }

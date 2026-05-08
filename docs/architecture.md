@@ -596,10 +596,24 @@ Current persisted inbox superset may contain:
   - `pendingAckAt`
   - `acknowledgedAt`
   - `acknowledgesMessageId`
+  - `parentMessageId`
+  - `threadMode`
+  - `staleAt`
 - shared/de facto interpreted fields such as:
   - `taskId`
 - forward metadata container:
   - `metadata`
+- ATM-owned forward metadata keys under `metadata.atm` such as:
+  - `messageId`
+  - `sourceTeam`
+  - `fromIdentity`
+  - `pendingAckAt`
+  - `acknowledgedAt`
+  - `acknowledgesMessageId`
+  - `parentMessageId`
+  - `threadMode`
+  - `staleAt`
+  - `taskId`
 - unknown fields
 
 Schema ownership split:
@@ -914,6 +928,8 @@ Phase R continuation rules:
 - `atm ack` emits exactly one visible reply and that reply must hardcode
   `requires_ack = false`
 - acknowledgement replies must never request acknowledgement themselves
+- compatibility/export surfaces encode successor metadata with
+  `parentMessageId` and `threadMode`, and ephemeral expiry with `staleAt`
 - message update chains are linear and terminal-node driven:
   - `add-details` appends context
   - `supersede` replaces the prior message as the effective current one
@@ -2072,15 +2088,30 @@ not the live truth.
 
 ### 21.1.1 SQLite Schema Contract
 
-The Phase Q target architecture uses one authoritative schema contract.
+The Phase R first implementation uses one authoritative schema contract with
+concrete SQLite table names:
 
-Minimum tables:
-- `messages`
+- `mail_messages`
+  - logical durable message store
+  - stores the full `MessageEnvelope` in `envelope_json`
+  - also stores queryable message columns:
+    - `from_agent`
+    - `message_text`
+    - `summary`
+    - `message_at`
+    - `legacy_message_id`
 - `ack_state`
-- `message_visibility`
+- `mail_visibility_states`
+  - logical `message_visibility` projection
 - `tasks`
 - `team_roster`
-- `inbox_ingest`
+  - per-member durable projection keyed by `(team_name, agent_name)`
+- `mail_ingest_replay_states`
+  - logical `inbox_ingest` replay/high-water projection
+- `rosters`
+  - crate-private compatibility snapshot table used to round-trip `TeamConfig`
+    while `team_roster` carries the per-member durable projection needed by
+    runtime health and later heartbeat work
 
 Minimum key rules:
 - `message_key` is the canonical ATM durable message identity
@@ -2093,6 +2124,8 @@ Minimum key rules:
 Minimum index/constraint rules:
 - unique identity enforcement on `message_key`
 - dedupe index for imported external/legacy identities
+- one-successor enforcement on `(team, agent, parent_message_id)` for threaded
+  update chains
 - lookup indexes for:
   - recipient/team mailbox projection
   - task lookup
@@ -2102,6 +2135,8 @@ Minimum index/constraint rules:
 Minimum `team_roster` durable fields:
 - `team_name`
 - `agent_name`
+- `member_json`
+  - durable serialized `AgentMember` payload for round-trip roster loading
 - `recipient_pane_id TEXT NULL`
   - authoritative post-send-hook pane mapping when known
   - updated through the roster/registration path rather than rediscovered from
@@ -2118,6 +2153,10 @@ detail.
 Required invariants:
 - `journal_mode = WAL`
 - `foreign_keys = ON`
+- schema bootstrap is deterministic, idempotent, and runs once per database
+  root before normal command operations use the durable store
+- per-operation connection acquisition may reapply runtime pragmas, but must
+  not rerun full schema bootstrap on every connection use
 - mutating ATM flows use explicit transactions
 - no normal command path relies on implicit autocommit as its correctness
   model
@@ -2131,6 +2170,9 @@ Required architectural rules:
 - re-export/replay is keyed by durable `message_key`
 - if daemon-managed retry/re-export state must survive crash, it is stored in
   SQLite with a bounded expiry/deadline rather than remaining RAM-only
+- remote replay rows live in the host-scoped SQLite root and are keyed by
+  mailbox identity plus durable `message_key` so startup resume can replay
+  pending remote handoff without duplicating committed local state
 - WAL checkpoint is part of graceful shutdown, but recovery correctness must
   not depend on graceful shutdown having succeeded
 - persisted retry state must not become a long-lived remote outbox; expired
@@ -2207,7 +2249,7 @@ Daemon responsibilities:
 - route selection
 - live status cache
 - daemon-facing diagnostics and health queries used by `atm doctor`
-- watch/reconcile runtime if enabled
+- watch/reconcile runtime
 
 Daemon non-responsibility:
 - it must not become the only home of ATM business logic
@@ -2408,6 +2450,13 @@ Minimum method set:
 - trigger owned ingress/reconcile handler
 - shut down watcher cleanly
 
+Current implementation note:
+- `R.17` implements this as a daemon-owned polling subscription runtime plus a
+  separate debounce/coalesce reconcile worker
+- watch refresh owns only source-path discovery and cached batches
+- reconcile triggers inbox ingress and notifier callbacks only through their
+  declared boundaries
+
 Boundary rule:
 - the watcher/reconcile subsystem owns filesystem watch events only
 - it must not perform SQL directly
@@ -2429,6 +2478,13 @@ Minimum method set:
 - notify message/task delivery
 - report live status update
 - return typed backpressure / unavailable results
+
+Current implementation note:
+- `R.17` implements a daemon-owned queued notifier worker with typed
+  unavailable/backpressure failures
+- notification delivery is no longer a tracing-only placeholder
+- the notifier queue is bounded to `64` events so plugin-local traffic fails
+  closed with backpressure rather than growing an unbounded daemon-side buffer
 
 ### 21.6.2 Structured Error And Observability Boundaries
 
@@ -2467,10 +2523,18 @@ Architectural rules:
 - CLI doctor code queries daemon/runtime state through one explicit request /
   response boundary
 - the daemon owns collection of runtime-only health such as:
+  - heartbeat-driven runtime member state
   - singleton ownership state
   - live status-cache health
   - ingest backlog / degraded-ingest state
   - SQLite readiness/openability as observed by the runtime
+- the runtime-health DTO returned across that boundary must carry:
+  - liveness
+  - readiness
+  - singleton-owner pid when known
+  - SQLite-ready state
+  - degraded-ingest state
+  - aggregate active/idle/offline/unknown member counts
 - CLI code must not inspect private daemon state directly to synthesize health
   answers
 

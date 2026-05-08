@@ -1,10 +1,24 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::types::{AgentName, TeamName};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DaemonConfig {
+    pub remote_retry_budget: Duration,
+}
+
+impl Default for DaemonConfig {
+    fn default() -> Self {
+        Self {
+            remote_retry_budget: Duration::from_secs(30),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AtmConfig {
@@ -25,6 +39,7 @@ pub struct AtmConfig {
     pub team_members: Vec<TeamName>,
     pub aliases: BTreeMap<String, String>,
     pub post_send_hooks: Vec<PostSendHookRule>,
+    pub daemon: DaemonConfig,
     pub config_root: PathBuf,
     pub(crate) obsolete_identity_present: bool,
 }
