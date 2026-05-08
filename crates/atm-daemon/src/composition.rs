@@ -169,6 +169,7 @@ impl RuntimeComposition {
         self.request_dispatcher.clone()
     }
 
+    #[cfg(unix)]
     fn begin_shutdown(&self) -> Result<(), AtmError> {
         self.lifecycle.transition(RuntimeLifecycleState::Draining)?;
         // Attempt every lane shutdown even if one lane fails so the runtime
@@ -178,6 +179,7 @@ impl RuntimeComposition {
         Ok(())
     }
 
+    #[cfg(unix)]
     fn finalize_shutdown(&self) {
         self.request_dispatcher.finalize_shutdown();
     }
@@ -336,6 +338,7 @@ impl RuntimeComposition {
         result
     }
 
+    #[cfg(unix)]
     fn start_background_lanes(&self) -> Result<(), AtmError> {
         self._notification_sink.start()?;
         self._watch_event_source.start()?;
@@ -343,6 +346,7 @@ impl RuntimeComposition {
         Ok(())
     }
 
+    #[cfg(unix)]
     fn shutdown_background_lanes(&self) -> Result<(), AtmError> {
         let mut first_error = None;
         for (lane, result) in [
