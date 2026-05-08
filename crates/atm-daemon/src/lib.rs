@@ -658,10 +658,12 @@ fn drain_active_connections_for_shutdown(
 }
 
 #[cfg(not(unix))]
+#[allow(dead_code)]
 struct PreparedRuntimeServer;
 
 #[cfg(not(unix))]
 impl PreparedRuntimeServer {
+    #[allow(dead_code)]
     fn serve(self, _dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
         Err(AtmError::daemon_unavailable(
             "atm-daemon socket transport requires a Unix platform",
@@ -778,6 +780,7 @@ impl LocalSocketServerTransport {
     }
 
     #[cfg(not(unix))]
+    #[allow(dead_code)]
     pub(crate) fn prepare_runtime(&self) -> Result<PreparedRuntimeServer, AtmError> {
         Err(AtmError::daemon_unavailable(
             "atm-daemon socket transport requires a Unix platform",

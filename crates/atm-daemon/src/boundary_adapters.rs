@@ -42,10 +42,12 @@ impl DaemonNotificationSink {
         }
     }
 
+    #[cfg(unix)]
     pub(crate) fn start(&self) -> Result<(), AtmError> {
         self.runtime.start()
     }
 
+    #[cfg(unix)]
     pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
         self.runtime.shutdown()
     }
@@ -77,10 +79,12 @@ impl FileWatchEventSource {
         }
     }
 
+    #[cfg(unix)]
     pub(crate) fn start(&self) -> Result<(), AtmError> {
         self.runtime.start()
     }
 
+    #[cfg(unix)]
     pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
         self.runtime.shutdown()
     }
@@ -120,10 +124,12 @@ impl DaemonReconcileCoordinator {
         }
     }
 
+    #[cfg(unix)]
     pub(crate) fn start(&self) -> Result<(), AtmError> {
         self.runtime.start()
     }
 
+    #[cfg(unix)]
     pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
         self.runtime.shutdown()
     }
