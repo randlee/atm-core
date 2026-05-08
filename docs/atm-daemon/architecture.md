@@ -126,6 +126,9 @@ Phase R redesign notes:
 - if the configured listener bind address is an explicit local IP that later
   disappears or changes, the runtime must enter degraded status and require
   bounded reload/rebind via the runtime reload path
+- graceful shutdown finalization must remain bounded; best-effort SQLite WAL
+  checkpoint and observability flush steps must time out rather than block
+  daemon exit indefinitely
 - startup must run one bounded replay-resume sweep from the host-scoped SQLite
   state root before serving requests so pending remote handoff rows keyed by
   durable `message_key` are retried or retained with typed degraded status
@@ -247,6 +250,8 @@ Dispatcher/handler rule:
 ## 3.1.1 Graceful Shutdown
 
 Shutdown is part of the daemon contract, not an implementation detail.
+`R.18` closes the remaining runtime-ops work by implementing this shutdown,
+reload, and resource-cap contract as written.
 
 Required shutdown sequence:
 1. stop accepting new local and remote connections
@@ -286,6 +291,8 @@ Architectural rules:
 - `SIGHUP` rescan validates candidate configuration before it replaces the
   active runtime view; invalid configuration yields a typed reload error and
   preserves the last known-good serving configuration
+- ADR-006 records the bounded reload delivery decision and the required
+  last-known-good preservation semantics
 - singleton ownership artifacts must be released on normal signal-driven exit
   and retained only on crash/fail-stop paths where the process cannot run
   cleanup code
@@ -304,7 +311,9 @@ Required caps:
 
 Required saturation behavior:
 - connection cap exceeded: reject new accepts with a typed over-capacity error
-- per-connection inflight exceeded: reject excess requests on that connection
+- per-connection inflight exceeded: reject excess requests on that connection;
+  in Phase R the transport remains single-request-per-connection, so the
+  in-flight count is structurally `1` until framed multiplexing exists
 - ingest queue full: fail the enqueue with structured degradation/health
   reporting; no silent drop
 - retry queue full: fail remote send attempt rather than enqueueing unbounded

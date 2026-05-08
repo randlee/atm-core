@@ -2607,12 +2607,12 @@ Remote peer transport rules:
   address disappears or changes, the daemon must surface degraded status and
   require bounded reload/rebind rather than silently claiming readiness
 
-Accepted limitations tracked into `R.11`:
+Phase R daemon implementation notes:
 - per-connection inflight cap `32` is documented now, but the current daemon
-  still processes one request per accepted connection until framed
-  multiplexing lands in `R.11`
-- `SIGHUP` handler registration is live now, but the bounded config/roster
-  reload implementation itself is deferred to `R.11`
+  still processes one request per accepted connection, so the inflight count
+  is structurally `1` until framed multiplexing is introduced
+- bounded `SIGHUP` config/roster reload now lands in `R.18`, including
+  last-known-good preservation on invalid reload input
 
 ### 21.7 Test Strategy
 

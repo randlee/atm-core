@@ -617,6 +617,10 @@ validates and applies/rejects serving config on SIGHUP is not implemented.
 **Fix**: Implement validated serving-config model. Add bounded SIGHUP reload path with
 typed reload failure that does not corrupt serving state.
 
+**Resolution**: closed in `R.18`. `feature/pR-s18-runtime-ops` now applies a
+bounded config/roster reload on `SIGHUP`, preserves the last-known-good
+runtime view on invalid config, and carries dedicated reload regression tests.
+
 ---
 
 ### I-015 — Runtime composition boundaries forward to generic helpers instead of runtime-owned state

@@ -173,6 +173,7 @@ fn recorded_owner_pid(lock_file: &File) -> Result<Option<u32>, AtmError> {
 struct ActiveConnectionRegistry {
     next_id: AtomicUsize,
     active_connections: AtomicUsize,
+    active_dispatches: AtomicUsize,
     // Keep interruptible stream clones so graceful-drain escalation can break
     // blocked reads instead of waiting forever for peer cooperation.
     streams: Mutex<HashMap<usize, UnixStream>>,
@@ -201,6 +202,18 @@ impl ActiveConnectionRegistry {
 
     fn active_connections(&self) -> usize {
         self.active_connections.load(Ordering::SeqCst)
+    }
+
+    fn register_dispatch_work(self: &Arc<Self>) -> ActiveDispatchGuard {
+        self.active_dispatches.fetch_add(1, Ordering::SeqCst);
+        ActiveDispatchGuard {
+            registry: Arc::clone(self),
+        }
+    }
+
+    fn active_work_items(&self) -> usize {
+        self.active_connections.load(Ordering::SeqCst)
+            + self.active_dispatches.load(Ordering::SeqCst)
     }
 
     fn interrupt_all(&self) -> Result<(), AtmError> {
@@ -360,9 +373,27 @@ struct ActiveConnectionGuard {
 }
 
 #[cfg(unix)]
+struct ActiveDispatchGuard {
+    registry: Arc<ActiveConnectionRegistry>,
+}
+
+#[cfg(unix)]
 impl Drop for ActiveConnectionGuard {
     fn drop(&mut self) {
         self.registry.remove(self.id);
+    }
+}
+
+#[cfg(unix)]
+impl Drop for ActiveDispatchGuard {
+    fn drop(&mut self) {
+        self.registry
+            .active_dispatches
+            .fetch_sub(1, Ordering::SeqCst);
+        if let Ok(state) = self.registry.drain_state.lock() {
+            self.registry.drain_wake.notify_all();
+            drop(state);
+        }
     }
 }
 
@@ -410,31 +441,44 @@ impl PreparedRuntimeServer {
         })
     }
 
-    fn serve(self, dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
-        self.serve_with_deadlines(dispatcher, GRACEFUL_DRAIN_DEADLINE, FORCE_CANCEL_DEADLINE)
-    }
-
-    fn serve_with_deadlines(
+    fn serve_with_runtime_hooks<BeginShutdown, ReloadRuntimeView, FinalizeShutdown>(
         self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
         graceful_drain_deadline: Duration,
         force_cancel_deadline: Duration,
-    ) -> Result<(), AtmError> {
+        begin_shutdown: BeginShutdown,
+        reload_runtime_view: ReloadRuntimeView,
+        finalize_shutdown: FinalizeShutdown,
+    ) -> Result<(), AtmError>
+    where
+        BeginShutdown: Fn() -> Result<(), AtmError>,
+        ReloadRuntimeView: Fn() -> Result<(), AtmError>,
+        FinalizeShutdown: Fn(),
+    {
         self.serve_with_deadlines_and_accept_probe(
             dispatcher,
             graceful_drain_deadline,
             force_cancel_deadline,
-            None,
+            begin_shutdown,
+            reload_runtime_view,
+            finalize_shutdown,
         )
     }
 
-    fn serve_with_deadlines_and_accept_probe(
+    fn serve_with_deadlines_and_accept_probe<BeginShutdown, ReloadRuntimeView, FinalizeShutdown>(
         self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
         graceful_drain_deadline: Duration,
         force_cancel_deadline: Duration,
-        accepted_probe: Option<std::sync::mpsc::Sender<()>>,
-    ) -> Result<(), AtmError> {
+        begin_shutdown: BeginShutdown,
+        reload_runtime_view: ReloadRuntimeView,
+        finalize_shutdown: FinalizeShutdown,
+    ) -> Result<(), AtmError>
+    where
+        BeginShutdown: Fn() -> Result<(), AtmError>,
+        ReloadRuntimeView: Fn() -> Result<(), AtmError>,
+        FinalizeShutdown: Fn(),
+    {
         let Self {
             _singleton,
             listener,
@@ -446,14 +490,18 @@ impl PreparedRuntimeServer {
             let mut serve_error = None;
             loop {
                 if signals.reload.swap(false, Ordering::SeqCst) {
-                    // Deferred to R.18: bounded SIGHUP config/roster reload.
-                    // See ADR-006 and docs/phase-R/sprint-R18.md.
-                    tracing::warn!(
-                        deferred_sprint = "R.18",
-                        deferred_adr = "ADR-006",
-                        deferred_doc = "docs/phase-R/sprint-R18.md",
-                        "bounded SIGHUP-triggered config/roster reload is not wired yet"
-                    );
+                    match reload_runtime_view() {
+                        Ok(()) => {
+                            tracing::info!("bounded SIGHUP-triggered config/roster reload applied");
+                        }
+                        Err(error) => {
+                            tracing::warn!(
+                                error_code = %error.code,
+                                error_message = %error.message,
+                                "bounded SIGHUP-triggered config/roster reload rejected; last-known-good serving config retained"
+                            );
+                        }
+                    }
                 }
                 if signals.terminate.load(Ordering::SeqCst) {
                     break;
@@ -477,20 +525,22 @@ impl PreparedRuntimeServer {
                             let _ = stream.set_write_timeout(Some(REQUEST_DEADLINE));
                             let _ = stream.write_all(&encoded);
                             let _ = stream.flush();
+                            let _ = stream.shutdown(std::net::Shutdown::Both);
                             continue;
                         }
 
                         let active = registry.register(&stream)?;
-                        if let Some(accepted_probe) = accepted_probe.as_ref() {
-                            let _ = accepted_probe.send(());
-                        }
                         let dispatcher = Arc::clone(&dispatcher);
                         let force_shutdown = Arc::clone(&force_shutdown);
+                        let registry = Arc::clone(&registry);
                         scope.spawn(move || {
                             let _active = active;
-                            if let Err(error) =
-                                handle_connection(&mut stream, dispatcher, force_shutdown.as_ref())
-                            {
+                            if let Err(error) = handle_connection(
+                                &mut stream,
+                                dispatcher,
+                                force_shutdown.as_ref(),
+                                registry,
+                            ) {
                                 tracing::warn!(%error, "daemon connection handling failed");
                             }
                         });
@@ -510,18 +560,37 @@ impl PreparedRuntimeServer {
                 }
             }
 
+            let mut shutdown_error = begin_shutdown().err();
             let shutdown_started = Instant::now();
-            drain_active_connections_for_shutdown(
+            if let Err(error) = drain_active_connections_for_shutdown(
                 registry.as_ref(),
                 force_shutdown.as_ref(),
                 graceful_drain_deadline,
                 force_cancel_deadline,
                 shutdown_started,
-            )?;
-            if let Some(error) = serve_error {
-                return Err(error);
+            ) {
+                if let Some(existing) = shutdown_error.as_ref() {
+                    tracing::warn!(
+                        begin_shutdown_error = %existing,
+                        drain_error = %error,
+                        "daemon shutdown drain failed after an earlier shutdown-start error"
+                    );
+                } else {
+                    shutdown_error = Some(error);
+                }
             }
-            Ok(())
+            finalize_shutdown();
+            if let Some(serve_error) = serve_error {
+                if let Some(shutdown_error) = shutdown_error {
+                    tracing::warn!(
+                        %shutdown_error,
+                        %serve_error,
+                        "daemon shutdown encountered an additional error after a serve error"
+                    );
+                }
+                return Err(serve_error);
+            }
+            shutdown_error.map_or(Ok(()), Err)
         })
     }
 }
@@ -551,21 +620,22 @@ fn drain_active_connections_for_shutdown(
 ) -> Result<(), AtmError> {
     tracing::info!(
         active_connections = registry.active_connections(),
+        active_work_items = registry.active_work_items(),
         "daemon shutdown signal received; starting graceful drain"
     );
     let graceful_deadline = shutdown_started + graceful_drain_deadline;
     let force_cancel_deadline = shutdown_started + force_cancel_deadline;
-    while registry.active_connections() > 0 && Instant::now() < graceful_deadline {
+    while registry.active_work_items() > 0 && Instant::now() < graceful_deadline {
         registry.wait_for_connection_change(
             graceful_deadline.saturating_duration_since(Instant::now()),
         )?;
     }
-    let remaining_after_graceful = registry.active_connections();
+    let remaining_after_graceful = registry.active_work_items();
     if remaining_after_graceful == 0 {
         tracing::info!("daemon graceful drain completed cleanly");
     } else {
         tracing::info!(
-            active_connections = remaining_after_graceful,
+            active_work_items = remaining_after_graceful,
             "daemon graceful drain hit deadline; continuing toward forced cancel"
         );
     }
@@ -573,15 +643,15 @@ fn drain_active_connections_for_shutdown(
         force_shutdown.store(true, Ordering::SeqCst);
         registry.interrupt_all()?;
     }
-    while registry.active_connections() > 0 && Instant::now() < force_cancel_deadline {
+    while registry.active_work_items() > 0 && Instant::now() < force_cancel_deadline {
         registry.wait_for_connection_change(
             force_cancel_deadline.saturating_duration_since(Instant::now()),
         )?;
     }
-    let remaining_connections = registry.active_connections();
-    if remaining_connections > 0 {
+    let remaining_work_items = registry.active_work_items();
+    if remaining_work_items > 0 {
         return Err(AtmError::daemon_unavailable(format!(
-            "forced cancel deadline elapsed with {remaining_connections} active daemon connections"
+            "forced cancel deadline elapsed with {remaining_work_items} active daemon work item(s)"
         )));
     }
     Ok(())
@@ -618,6 +688,7 @@ fn handle_connection(
     stream: &mut UnixStream,
     dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     force_shutdown: &AtomicBool,
+    registry: Arc<ActiveConnectionRegistry>,
 ) -> Result<(), AtmError> {
     if force_shutdown.load(Ordering::SeqCst) {
         return Ok(());
@@ -645,10 +716,14 @@ fn handle_connection(
     }
     let request: ProtocolRequestEnvelope =
         serde_json::from_slice(&bytes).map_err(AtmError::from)?;
-    // TODO(phase-R): enforce a max 32 inflight requests per connection once framed multiplexing lands.
-    // Deferred to R.18: per-connection 32 in-flight request cap.
+    // The current daemon transport reads exactly one request frame and returns
+    // one response per accepted connection, so the per-connection in-flight
+    // count is structurally one in Phase R. That remains inside the
+    // documented max-32 cap until framed multiplexing is introduced.
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
+    let dispatch_work = registry.register_dispatch_work();
     std::thread::spawn(move || {
+        let _dispatch_work = dispatch_work;
         let _ = result_tx.send(dispatcher.dispatch(request));
     });
     let response = match result_rx.recv_timeout(REQUEST_DEADLINE) {

@@ -1,6 +1,9 @@
 use std::collections::HashMap;
+use std::fs::OpenOptions;
 use std::path::PathBuf;
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use atm_core::{
     RequestEnvelope, ResponseEnvelope,
@@ -29,6 +32,9 @@ use atm_core::{
 use atm_rusqlite::{SqliteBoundaryAssembly, assemble_default_boundary};
 
 const MAX_STATUS_CACHE_ENTRIES: usize = 4096;
+const MAX_RELOAD_TEAMS: usize = 256;
+const SHUTDOWN_WAL_CHECKPOINT_DEADLINE: Duration = Duration::from_secs(2);
+const SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone)]
 struct DaemonObservability {
@@ -54,10 +60,46 @@ impl DaemonObservability {
             Some("unavailable") => RetainedSinkFault::Unavailable,
             _ => RetainedSinkFault::Healthy,
         };
+        Self::new_with_sink_fault(home_dir, retained_sink_fault)
+    }
+
+    fn new_with_sink_fault(home_dir: PathBuf, retained_sink_fault: RetainedSinkFault) -> Self {
         Self {
             home_dir,
             retained_sink_fault,
         }
+    }
+
+    fn best_effort_flush(&self) -> Result<(), AtmError> {
+        #[cfg(unix)]
+        let active_log_path = self
+            .home_dir
+            .join(".local")
+            .join("share")
+            .join("logs")
+            .join("atm.log.jsonl");
+        #[cfg(not(unix))]
+        let active_log_path = self.home_dir.join("logs").join("atm.log.jsonl");
+        if !active_log_path.exists() {
+            return Ok(());
+        }
+        let file = OpenOptions::new()
+            .append(true)
+            .open(&active_log_path)
+            .map_err(|source| {
+                AtmError::observability_health(format!(
+                    "failed to open retained observability sink at {} for best-effort flush",
+                    active_log_path.display()
+                ))
+                .with_source(source)
+            })?;
+        file.sync_all().map_err(|source| {
+            AtmError::observability_health(format!(
+                "failed to sync retained observability sink at {}",
+                active_log_path.display()
+            ))
+            .with_source(source)
+        })
     }
 }
 
@@ -119,7 +161,7 @@ struct RuntimeMemberRecord {
     last_active_at: Option<IsoTimestamp>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 struct RuntimeStatusCacheState {
     // Request handlers and doctor/status readers update and snapshot the cache
     // concurrently, so one mutex protects the whole live-status projection.
@@ -144,22 +186,19 @@ impl RuntimeStatusCache {
         }
     }
 
-    fn hydrate_member(
-        &self,
-        team: TeamName,
-        member: AgentName,
-        pid: Option<u32>,
-    ) -> Result<(), AtmError> {
+    fn clone_state(&self) -> Result<RuntimeStatusCacheState, AtmError> {
+        self.state
+            .lock()
+            .map(|cache| cache.clone())
+            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))
+    }
+
+    fn replace_state(&self, next: RuntimeStatusCacheState) -> Result<(), AtmError> {
         let mut cache = self
             .state
             .lock()
             .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
-        let key = RuntimeMemberKey { team, member };
-        cache.members.entry(key).or_insert(RuntimeMemberRecord {
-            pid,
-            state: RuntimeMemberState::Unknown,
-            last_active_at: None,
-        });
+        *cache = next;
         Ok(())
     }
 
@@ -321,7 +360,17 @@ impl RuntimeStatusCache {
         member: AgentName,
         pid: Option<u32>,
     ) -> Result<(), AtmError> {
-        self.hydrate_member(team, member, pid)
+        let mut cache = self
+            .state
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
+        let key = RuntimeMemberKey { team, member };
+        cache.members.entry(key).or_insert(RuntimeMemberRecord {
+            pid,
+            state: RuntimeMemberState::Unknown,
+            last_active_at: None,
+        });
+        Ok(())
     }
 
     #[cfg(all(test, unix))]
@@ -447,11 +496,42 @@ pub(crate) struct DaemonRequestDispatcher {
 }
 
 impl DaemonRequestDispatcher {
+    fn run_bounded_shutdown_step(
+        label: &'static str,
+        deadline: Duration,
+        step: impl FnOnce() -> Result<(), AtmError> + Send + 'static,
+    ) {
+        let (result_tx, result_rx) = mpsc::sync_channel(1);
+        std::thread::spawn(move || {
+            let _ = result_tx.send(step());
+        });
+        match result_rx.recv_timeout(deadline) {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
+                tracing::warn!(%error, step = label, "daemon shutdown finalizer step failed");
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                tracing::warn!(
+                    step = label,
+                    timeout_ms = deadline.as_millis(),
+                    "daemon shutdown finalizer step exceeded its deadline"
+                );
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                tracing::warn!(
+                    step = label,
+                    "daemon shutdown finalizer step exited before reporting a result"
+                );
+            }
+        }
+    }
+
     pub(crate) fn new(home_dir: PathBuf, status_cache: RuntimeStatusCache) -> Self {
         let sqlite_boundary = match assemble_default_boundary() {
             Ok(boundary) => {
                 if let Err(error) =
-                    hydrate_runtime_status_cache(&status_cache, &home_dir, boundary.roster_store())
+                    build_runtime_status_cache_state(None, &home_dir, boundary.roster_store())
+                        .and_then(|state| status_cache.replace_state(state))
                 {
                     tracing::warn!(%error, "failed to hydrate runtime status cache from sqlite roster state");
                     status_cache.mark_sqlite_unavailable();
@@ -480,7 +560,8 @@ impl DaemonRequestDispatcher {
         let sqlite_boundary = match atm_rusqlite::assemble_boundary(&roster_db_path) {
             Ok(boundary) => {
                 if let Err(error) =
-                    hydrate_runtime_status_cache(&status_cache, &home_dir, boundary.roster_store())
+                    build_runtime_status_cache_state(None, &home_dir, boundary.roster_store())
+                        .and_then(|state| status_cache.replace_state(state))
                 {
                     tracing::warn!(%error, "failed to hydrate test runtime status cache from sqlite roster state");
                     status_cache.mark_sqlite_unavailable();
@@ -494,7 +575,10 @@ impl DaemonRequestDispatcher {
             }
         };
         Self {
-            observability: DaemonObservability::new(home_dir),
+            observability: DaemonObservability::new_with_sink_fault(
+                home_dir,
+                RetainedSinkFault::Healthy,
+            ),
             status_cache,
             sqlite_boundary,
         }
@@ -535,6 +619,51 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
 }
 
 impl DaemonRequestDispatcher {
+    pub(crate) fn reload_runtime_view(&self) -> Result<(), AtmError> {
+        let roster_store = self
+            .sqlite_boundary
+            .as_ref()
+            .map(SqliteBoundaryAssembly::roster_store)
+            .ok_or_else(|| {
+                self.status_cache.mark_sqlite_unavailable();
+                AtmError::daemon_unavailable(
+                    "sqlite-backed daemon runtime reload is unavailable because the sqlite boundary is not assembled",
+                )
+                .with_recovery(
+                    "Restore the host-scoped ATM SQLite durable-state database and restart atm-daemon before retrying SIGHUP reload.",
+                )
+            })?;
+        let current_state = self.status_cache.clone_state()?;
+        let next_state = build_runtime_status_cache_state(
+            Some(&current_state),
+            &self.observability.home_dir,
+            roster_store,
+        )?;
+        let reloaded_members = next_state.members.len();
+        self.status_cache.replace_state(next_state)?;
+        tracing::info!(
+            reloaded_members,
+            "bounded daemon config/roster reload applied successfully"
+        );
+        Ok(())
+    }
+
+    pub(crate) fn finalize_shutdown(&self) {
+        if let Some(boundary) = self.sqlite_boundary.clone() {
+            Self::run_bounded_shutdown_step(
+                "sqlite_wal_checkpoint",
+                SHUTDOWN_WAL_CHECKPOINT_DEADLINE,
+                move || boundary.checkpoint_wal(),
+            );
+        }
+        let observability = self.observability.clone();
+        Self::run_bounded_shutdown_step(
+            "observability_flush",
+            SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE,
+            move || observability.best_effort_flush(),
+        );
+    }
+
     fn record_heartbeat(
         &self,
         request: TeamMemberHeartbeatRequest,
@@ -634,16 +763,21 @@ impl DaemonRequestDispatcher {
     }
 }
 
-fn hydrate_runtime_status_cache(
-    status_cache: &RuntimeStatusCache,
+fn build_runtime_status_cache_state(
+    current_state: Option<&RuntimeStatusCacheState>,
     home_dir: &std::path::Path,
     roster_store: &dyn boundary::RosterStore,
-) -> Result<(), AtmError> {
+) -> Result<RuntimeStatusCacheState, AtmError> {
+    let mut next_state = RuntimeStatusCacheState {
+        members: HashMap::new(),
+        sqlite_ready: true,
+        degraded_ingest: current_state.is_some_and(|state| state.degraded_ingest),
+    };
     let teams_root = home_dir.join(".claude").join("teams");
     if !teams_root.is_dir() {
-        return Ok(());
+        return Ok(next_state);
     }
-    for entry in std::fs::read_dir(&teams_root).map_err(|error| {
+    let entries = std::fs::read_dir(&teams_root).map_err(|error| {
         AtmError::file_policy(format!(
             "failed to enumerate daemon team configs under {}",
             teams_root.display()
@@ -652,7 +786,17 @@ fn hydrate_runtime_status_cache(
             "Restore read access to the daemon team configuration tree under ATM_HOME before retrying atm-daemon startup.",
         )
         .with_source(error)
-    })? {
+    })?;
+    for (index, entry) in entries.enumerate() {
+        if index >= MAX_RELOAD_TEAMS {
+            return Err(AtmError::config(format!(
+                "daemon runtime reload rejected because {} contains more than {MAX_RELOAD_TEAMS} team configs",
+                teams_root.display()
+            ))
+            .with_recovery(
+                "Reduce the number of configured ATM teams or raise the documented reload cap before retrying SIGHUP.",
+            ));
+        }
         let entry = entry.map_err(|error| {
             AtmError::file_policy(format!(
                 "failed to read daemon team-config entry under {}",
@@ -693,6 +837,15 @@ fn hydrate_runtime_status_cache(
             .with_source(error)
         })?;
         for member in config.members {
+            if next_state.members.len() >= MAX_STATUS_CACHE_ENTRIES {
+                return Err(AtmError::config(format!(
+                    "daemon runtime reload rejected because status-cache capacity {MAX_STATUS_CACHE_ENTRIES} would be exceeded while reading {}",
+                    config_path.display()
+                ))
+                .with_recovery(
+                    "Reduce configured roster size or increase the documented status-cache budget before retrying SIGHUP.",
+                ));
+            }
             let member_name = member.name;
             let membership = roster_store.query_membership(
                 atm_core::boundary::RosterStoreQueryMembershipRequest {
@@ -700,10 +853,24 @@ fn hydrate_runtime_status_cache(
                     member: member_name.clone(),
                 },
             )?;
-            status_cache.hydrate_member(team.clone(), member_name, membership.pid)?;
+            let key = RuntimeMemberKey {
+                team: team.clone(),
+                member: member_name,
+            };
+            let existing = current_state.and_then(|state| state.members.get(&key));
+            next_state.members.insert(
+                key,
+                RuntimeMemberRecord {
+                    pid: membership.pid,
+                    state: existing
+                        .map(|record| record.state)
+                        .unwrap_or(RuntimeMemberState::Unknown),
+                    last_active_at: existing.and_then(|record| record.last_active_at),
+                },
+            );
         }
     }
-    Ok(())
+    Ok(next_state)
 }
 
 fn runtime_status_finding(snapshot: &RuntimeStatusSnapshot) -> DoctorFinding {
