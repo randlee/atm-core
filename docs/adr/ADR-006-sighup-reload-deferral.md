@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | ID | ADR-006 |
-| Status | **Accepted For Implementation** |
+| Status | **Accepted** |
 | Date | 2026-05-08 |
 | Deciders | Rand Lee |
 | Relates to | REQ-P-RUNTIME-001, REQ-P-RUNTIME-002, ADR-002 |
@@ -76,10 +76,17 @@ Required runtime behavior:
 - late changes to reload shape after `R.18` implementation would risk
   divergence from the architecture contract
 
+## Implementation Status
+
+`R.18` delivered this ADR on `feature/pR-s18-runtime-ops`:
+
+- `SIGHUP` now triggers bounded config/roster reload
+- reload validates candidate team config before swap
+- invalid reload input preserves the last-known-good runtime view
+- regression tests cover shared signal-flag reuse plus reload success/failure
+
 ## Follow-Up Work
 
 | Action | Owner | Gate |
 |---|---|---|
-| Implement bounded config/roster reload | `arch-ctm` | `R.18` acceptance |
-| Add reload regression tests | `arch-ctm` | `R.18` validation |
-| Replace the temporary log-only `SIGHUP` path with the bounded reload path | `arch-ctm` | `R.18` merge |
+| If framed multiplexing lands later, replace the Phase R single-request-per-connection rule with explicit per-connection inflight rejection | `arch-ctm` | future protocol extension |

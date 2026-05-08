@@ -308,7 +308,9 @@ Required caps:
 
 Required saturation behavior:
 - connection cap exceeded: reject new accepts with a typed over-capacity error
-- per-connection inflight exceeded: reject excess requests on that connection
+- per-connection inflight exceeded: reject excess requests on that connection;
+  in Phase R the transport remains single-request-per-connection, so the
+  in-flight count is structurally `1` until framed multiplexing exists
 - ingest queue full: fail the enqueue with structured degradation/health
   reporting; no silent drop
 - retry queue full: fail remote send attempt rather than enqueueing unbounded

@@ -606,7 +606,7 @@ impl DaemonRequestDispatcher {
         Ok(())
     }
 
-    pub(crate) fn finalize_shutdown(&self) -> Result<(), AtmError> {
+    pub(crate) fn finalize_shutdown(&self) {
         if let Some(boundary) = &self.sqlite_boundary
             && let Err(error) = boundary.checkpoint_wal()
         {
@@ -621,7 +621,6 @@ impl DaemonRequestDispatcher {
                 "retained observability sink flush failed during daemon shutdown finalization"
             );
         }
-        Ok(())
     }
 
     fn record_heartbeat(

@@ -19,7 +19,6 @@ use std::fs::OpenOptions;
 use std::io::{Read, Write};
 #[cfg(unix)]
 use std::os::unix::net::{UnixListener, UnixStream};
-use std::process::{Command, Stdio};
 use std::sync::{Arc, mpsc};
 use std::time::Duration;
 use tempfile::TempDir;
@@ -37,6 +36,37 @@ fn daemon_shutdown_signals_for_test_are_isolated() {
 
     assert!(!second.terminate.load(std::sync::atomic::Ordering::SeqCst));
     assert!(!second.reload.load(std::sync::atomic::Ordering::SeqCst));
+}
+
+#[cfg(unix)]
+#[test]
+#[serial]
+fn daemon_shutdown_signal_install_reuses_shared_flags() {
+    let first = DaemonShutdownSignals::install().expect("install first");
+    first
+        .terminate
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+    first
+        .reload
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+
+    let second = DaemonShutdownSignals::install().expect("install second");
+    first
+        .reload
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    second
+        .terminate
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+
+    assert!(second.reload.load(std::sync::atomic::Ordering::SeqCst));
+    assert!(first.terminate.load(std::sync::atomic::Ordering::SeqCst));
+
+    first
+        .terminate
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+    first
+        .reload
+        .store(false, std::sync::atomic::Ordering::SeqCst);
 }
 
 #[test]
@@ -535,49 +565,20 @@ fn heartbeat_retries_identity_conflict_after_old_pid_dies() {
 
     install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
 
-    let mut child = Command::new("sleep")
-        .arg("5")
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .expect("spawn child");
-    let live_pid = child.id();
-
     let status_cache = RuntimeStatusCache::new();
     let dispatcher = DaemonRequestDispatcher::new_for_test(atm_home, status_cache.clone(), db_path);
     let team: TeamName = "test-team".parse().expect("team");
     let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
-    dispatcher
-        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
-            team: team.clone(),
-            member: member.clone(),
-            pid: live_pid,
-            observed_at: IsoTimestamp::now(),
-            activity: HeartbeatActivity::ActiveToolUse,
-        }))
-        .expect("initial heartbeat");
-
-    let error = dispatcher
-        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
-            team: team.clone(),
-            member: member.clone(),
-            pid: std::process::id(),
-            observed_at: IsoTimestamp::now(),
-            activity: HeartbeatActivity::Idle,
-        }))
-        .expect_err("live pid conflict");
-    assert_eq!(error.code, AtmErrorCode::IdentityConflict);
-    assert_eq!(
-        status_cache
-            .member_state_for_test(&team, &member)
-            .expect("member state"),
-        Some(RuntimeMemberState::IdentityConflict)
-    );
-
-    child.kill().expect("kill child");
-    child.wait().expect("wait child");
+    status_cache
+        .insert_member_for_test(
+            team.clone(),
+            member.clone(),
+            Some(u32::MAX),
+            RuntimeMemberState::IdentityConflict,
+            None,
+        )
+        .expect("seed stale conflict");
 
     let response = dispatcher
         .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {

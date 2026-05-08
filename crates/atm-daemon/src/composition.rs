@@ -171,8 +171,15 @@ impl RuntimeComposition {
 
     fn begin_shutdown(&self) -> Result<(), AtmError> {
         self.lifecycle.transition(RuntimeLifecycleState::Draining)?;
+        // Attempt every lane shutdown even if one lane fails so the runtime
+        // still reaches checkpoint/flush finalization with the fullest cleanup
+        // state possible.
         self.shutdown_background_lanes()?;
-        self.request_dispatcher.finalize_shutdown()
+        Ok(())
+    }
+
+    fn finalize_shutdown(&self) {
+        self.request_dispatcher.finalize_shutdown();
     }
 
     pub(crate) fn start(&self) -> Result<(), AtmError> {
@@ -220,8 +227,9 @@ impl RuntimeComposition {
             self.request_dispatcher(),
             super::GRACEFUL_DRAIN_DEADLINE,
             super::FORCE_CANCEL_DEADLINE,
-            move || request_dispatcher.reload_runtime_view(),
             || self.begin_shutdown(),
+            move || request_dispatcher.reload_runtime_view(),
+            || self.finalize_shutdown(),
         );
         self.finish_runtime(result)
     }
@@ -276,8 +284,9 @@ impl RuntimeComposition {
             self.request_dispatcher(),
             super::GRACEFUL_DRAIN_DEADLINE,
             super::FORCE_CANCEL_DEADLINE,
-            move || request_dispatcher.reload_runtime_view(),
             || self.begin_shutdown(),
+            move || request_dispatcher.reload_runtime_view(),
+            || self.finalize_shutdown(),
         );
         self.finish_runtime(result)
     }
@@ -317,10 +326,25 @@ impl RuntimeComposition {
     }
 
     fn shutdown_background_lanes(&self) -> Result<(), AtmError> {
-        self._reconcile_coordinator.shutdown()?;
-        self._watch_event_source.shutdown()?;
-        self._notification_sink.shutdown()?;
-        Ok(())
+        let mut first_error = None;
+        for (lane, result) in [
+            ("reconcile", self._reconcile_coordinator.shutdown()),
+            ("watch", self._watch_event_source.shutdown()),
+            ("notification", self._notification_sink.shutdown()),
+        ] {
+            if let Err(error) = result {
+                if first_error.is_none() {
+                    first_error = Some(error);
+                } else {
+                    tracing::warn!(
+                        lane,
+                        %error,
+                        "daemon background lane shutdown failed after an earlier lane error"
+                    );
+                }
+            }
+        }
+        first_error.map_or(Ok(()), Err)
     }
 }
 
