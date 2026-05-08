@@ -2,17 +2,24 @@ use crate::boundary_adapters::{
     DaemonConfigIngress, DaemonInboxExport, DaemonInboxIngress, DaemonNotificationSink,
     DaemonReconcileCoordinator, FileWatchEventSource,
 };
-use crate::runtime_health::{DaemonRequestDispatcher, DaemonStatusSource, RuntimeStatusCache};
+#[cfg(unix)]
+use crate::runtime_health::DaemonRequestDispatcher;
+use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
+#[cfg(unix)]
 use crate::{
     LocalSocketServerTransport, PeerTransportRuntime, sqlite_remote_replay_store_from_path,
 };
-use atm_core::{boundary::RequestDispatcher, error::AtmError};
+#[cfg(unix)]
+use atm_core::boundary::RequestDispatcher;
+use atm_core::error::AtmError;
 #[cfg(unix)]
 use std::fs::OpenOptions;
 use std::path::PathBuf;
+#[cfg(unix)]
 use std::sync::Arc;
 #[cfg(unix)]
 use std::sync::Mutex;
+#[cfg(unix)]
 use std::time::Duration;
 
 #[cfg(unix)]
@@ -113,7 +120,9 @@ impl RuntimeLifecycle {
 pub(crate) struct RuntimeComposition {
     #[cfg(unix)]
     lifecycle: Arc<RuntimeLifecycle>,
+    #[cfg(unix)]
     server_transport: LocalSocketServerTransport,
+    #[cfg(unix)]
     request_dispatcher: Arc<DaemonRequestDispatcher>,
     _notification_sink: DaemonNotificationSink,
     _status_source: DaemonStatusSource,
@@ -122,11 +131,12 @@ pub(crate) struct RuntimeComposition {
     _config_ingress: DaemonConfigIngress,
     _inbox_ingress: DaemonInboxIngress,
     _inbox_export: DaemonInboxExport,
+    #[cfg(unix)]
     peer_transport_runtime: PeerTransportRuntime,
 }
 
 impl RuntimeComposition {
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     fn new(home_dir: PathBuf) -> Result<Self, AtmError> {
         Self::new_with_replay_store_path(
             home_dir.clone(),
@@ -134,6 +144,7 @@ impl RuntimeComposition {
         )
     }
 
+    #[cfg(unix)]
     fn new_with_replay_store_path(
         home_dir: PathBuf,
         replay_store_path: PathBuf,
@@ -153,7 +164,6 @@ impl RuntimeComposition {
             }
         };
         Ok(Self {
-            #[cfg(unix)]
             lifecycle: Arc::new(RuntimeLifecycle::new()),
             server_transport: LocalSocketServerTransport::new(),
             request_dispatcher: Arc::new(DaemonRequestDispatcher::new(
@@ -175,6 +185,31 @@ impl RuntimeComposition {
         })
     }
 
+    #[cfg(not(unix))]
+    fn new_with_replay_store_path(
+        _home_dir: PathBuf,
+        _replay_store_path: PathBuf,
+    ) -> Result<Self, AtmError> {
+        let status_cache = RuntimeStatusCache::new();
+        let notification_sink = DaemonNotificationSink::new();
+        let watch_event_source = FileWatchEventSource::new();
+        let inbox_ingress = DaemonInboxIngress::new();
+        Ok(Self {
+            _notification_sink: notification_sink.clone(),
+            _status_source: DaemonStatusSource::new(status_cache),
+            _watch_event_source: watch_event_source.clone(),
+            _reconcile_coordinator: DaemonReconcileCoordinator::new(
+                watch_event_source,
+                inbox_ingress.clone(),
+                notification_sink,
+            ),
+            _config_ingress: DaemonConfigIngress::new(),
+            _inbox_ingress: inbox_ingress,
+            _inbox_export: DaemonInboxExport::new(),
+        })
+    }
+
+    #[cfg(unix)]
     fn request_dispatcher(&self) -> Arc<dyn RequestDispatcher + Send + Sync> {
         self.request_dispatcher.clone()
     }
@@ -382,6 +417,7 @@ impl RuntimeComposition {
     }
 }
 
+#[cfg(unix)]
 fn shutdown_lane_with_deadline<T, F>(
     lane_name: &'static str,
     deadline: Duration,
