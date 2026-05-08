@@ -11,7 +11,9 @@ triage:R17-RSH-001 a triage:Finding ;
   triage:phaseId "phase-R" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status triage:open ;
+  triage:status triage:fixed ;
+  triage:closedAt "2026-05-07T12:00:00Z"^^xsd:dateTime ;
+  triage:closureEvidence "watch_runtime.rs:289,338,345 -- wait_timeout used throughout; bare wake.wait at :483 is test-local condvar pair, not WatchRuntime's" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-05-07T00:00:00Z"^^xsd:dateTime ;
   triage:branchStatuses (
@@ -36,7 +38,7 @@ triage:R17-RSH-001 a triage:Finding ;
       triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s17-watch-reconcile" ;
       triage:headSha "5de80ad" ;
       triage:orderIndex 17 ;
-      triage:classifiedAs triage:open ;
+      triage:classifiedAs triage:fixed ;
       triage:matchLocation "crates/atm-daemon/src/watch_runtime.rs:330" ;
       triage:matchText "state = match inner.wake.wait(state)" ;
       triage:rationale "Condvar::wait with no timeout at line 330; also correct pattern (wait_timeout) found at line 336"
