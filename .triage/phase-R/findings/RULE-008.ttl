@@ -1,0 +1,247 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:RULE-008 a triage:Finding ;
+  triage:findingId "RULE-008" ;
+  triage:title "Raw 'team-lead' role name literals in test code" ;
+  triage:description "Test code uses raw string literal \"team-lead\" where it should use ROLE_TEAM_LEAD constant from atm_core::roles. Found 19 instances in crates/atm-daemon/src/tests.rs on R.15. Production role names must use the constant to avoid silent mismatches if the role string changes." ;
+  triage:category "RULE" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-R" ;
+  triage:status "open" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-07T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence triage:RULE-008-OCC-1 ;
+  triage:hasOccurrence triage:RULE-008-OCC-2 ;
+  triage:hasOccurrence triage:RULE-008-OCC-3 ;
+  triage:hasOccurrence triage:RULE-008-OCC-4 ;
+  triage:hasOccurrence triage:RULE-008-OCC-5 ;
+  triage:hasOccurrence triage:RULE-008-OCC-6 ;
+  triage:hasOccurrence triage:RULE-008-OCC-7 ;
+  triage:hasOccurrence triage:RULE-008-OCC-8 ;
+  triage:hasOccurrence triage:RULE-008-OCC-9 ;
+  triage:hasOccurrence triage:RULE-008-OCC-10 ;
+  triage:hasOccurrence triage:RULE-008-OCC-11 ;
+  triage:hasOccurrence triage:RULE-008-OCC-12 ;
+  triage:hasOccurrence triage:RULE-008-OCC-13 ;
+  triage:hasOccurrence triage:RULE-008-OCC-14 ;
+  triage:hasOccurrence triage:RULE-008-OCC-15 ;
+  triage:hasOccurrence triage:RULE-008-OCC-16 ;
+  triage:hasOccurrence triage:RULE-008-OCC-17 ;
+  triage:hasOccurrence triage:RULE-008-OCC-18 ;
+  triage:hasOccurrence triage:RULE-008-OCC-19 ;
+  triage:openOn triage:WORKSPACE-R-15 ;
+  triage:openOn triage:WORKSPACE-R-16 ;
+  triage:openOn triage:WORKSPACE-R-17 ;
+  triage:promoteTo triage:WORKSPACE-R-17 .
+
+triage:RULE-008-OCC-1 a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 216 ;
+  triage:snippet "install_test_roster(&db_path, &[\"team-lead\", \"qa-a\"]);" ;
+  triage:status "open" ;
+  triage:headSha "d2d76a0d25b441ede680f783e7b6ac0f7afff977" ;
+  triage:branch "R.15" ;
+  triage:closed false ;
+  triage:occursIn triage:WORKSPACE-R-15 .
+
+triage:RULE-008-OCC-2 a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 217 ;
+  triage:snippet "write_team_config(&atm_home, &[\"team-lead\", \"qa-a\"]);" ;
+  triage:status "open" ;
+  triage:headSha "d2d76a0d25b441ede680f783e7b6ac0f7afff977" ;
+  triage:branch "R.15" ;
+  triage:closed false ;
+  triage:occursIn triage:WORKSPACE-R-15 .
+
+triage:RULE-008-OCC-3 a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 223 ;
+  triage:snippet "let member: AgentName = \"team-lead\".parse().expect(\"member\");" ;
+  triage:status "open" ;
+  triage:headSha "d2d76a0d25b441ede680f783e7b6ac0f7afff977" ;
+  triage:branch "R.15" ;
+  triage:closed false ;
+  triage:occursIn triage:WORKSPACE-R-15 .
+
+triage:RULE-008-OCC-4 a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 275 ;
+  triage:snippet "install_test_roster(&db_path, &[\"team-lead\", \"qa-a\"]);" ;
+  triage:status "open" ;
+  triage:headSha "d2d76a0d25b441ede680f783e7b6ac0f7afff977" ;
+  triage:branch "R.15" ;
+  triage:closed false ;
+  triage:occursIn triage:WORKSPACE-R-15 .
+
+triage:RULE-008-OCC-5 a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 276 ;
+  triage:snippet "write_team_config(&atm_home, &[\"team-lead\", \"qa-a\"]);" ;
+  triage:status "open" ;
+  triage:headSha "d2d76a0d25b441ede680f783e7b6ac0f7afff977" ;
+  triage:branch "R.15" ;
+  triage:closed false ;
+  triage:occursIn triage:WORKSPACE-R-15 .
+
+triage:RULE-008-OCC-6 a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 297 ;
+  triage:snippet "install_test_roster(&db_path, &[\"team-lead\"]);" ;
+  triage:status "open" ;
+  triage:headSha "d2d76a0d25b441ede680f783e7b6ac0f7afff977" ;
+  triage:branch "R.15" ;
+  triage:closed false ;
+  triage:occursIn triage:WORKSPACE-R-15 .
+
+triage:RULE-008-OCC-7 a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 302 ;
+  triage:snippet "let member: AgentName = \"team-lead\".parse().expect(\"member\");" ;
+  triage:status "open" ;
+  triage:headSha "d2d76a0d25b441ede680f783e7b6ac0f7afff977" ;
+  triage:branch "R.15" ;
+  triage:closed false ;
+  triage:occursIn triage:WORKSPACE-R-15 .
+
+triage:RULE-008-OCC-8 a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 352 ;
+  triage:snippet "install_test_roster(&db_path, &[\"team-lead\"]);" ;
+  triage:status "open" ;
+  triage:headSha "d2d76a0d25b441ede680f783e7b6ac0f7afff977" ;
+  triage:branch "R.15" ;
+  triage:closed false ;
+  triage:occursIn triage:WORKSPACE-R-15 .
+
+triage:RULE-008-OCC-9 a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 357 ;
+  triage:snippet "let member: AgentName = \"team-lead\".parse().expect(\"member\");" ;
+  triage:status "open" ;
+  triage:headSha "d2d76a0d25b441ede680f783e7b6ac0f7afff977" ;
+  triage:branch "R.15" ;
+  triage:closed false ;
+  triage:occursIn triage:WORKSPACE-R-15 .
+
+triage:RULE-008-OCC-10 a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 399 ;
+  triage:snippet "install_test_roster(&db_path, &[\"team-lead\", \"qa-a\"]);" ;
+  triage:status "open" ;
+  triage:headSha "d2d76a0d25b441ede680f783e7b6ac0f7afff977" ;
+  triage:branch "R.15" ;
+  triage:closed false ;
+  triage:occursIn triage:WORKSPACE-R-15 .
+
+triage:RULE-008-OCC-11 a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 400 ;
+  triage:snippet "write_team_config(&atm_home, &[\"team-lead\", \"qa-a\"]);" ;
+  triage:status "open" ;
+  triage:headSha "d2d76a0d25b441ede680f783e7b6ac0f7afff977" ;
+  triage:branch "R.15" ;
+  triage:closed false ;
+  triage:occursIn triage:WORKSPACE-R-15 .
+
+triage:RULE-008-OCC-12 a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 426 ;
+  triage:snippet "member: \"team-lead\".parse().expect(\"member\")," ;
+  triage:status "open" ;
+  triage:headSha "d2d76a0d25b441ede680f783e7b6ac0f7afff977" ;
+  triage:branch "R.15" ;
+  triage:closed false ;
+  triage:occursIn triage:WORKSPACE-R-15 .
+
+triage:RULE-008-OCC-13 a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 455 ;
+  triage:snippet "install_test_roster(&db_path, &[\"team-lead\"]);" ;
+  triage:status "open" ;
+  triage:headSha "d2d76a0d25b441ede680f783e7b6ac0f7afff977" ;
+  triage:branch "R.15" ;
+  triage:closed false ;
+  triage:occursIn triage:WORKSPACE-R-15 .
+
+triage:RULE-008-OCC-14 a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 469 ;
+  triage:snippet "let member: AgentName = \"team-lead\".parse().expect(\"member\");" ;
+  triage:status "open" ;
+  triage:headSha "d2d76a0d25b441ede680f783e7b6ac0f7afff977" ;
+  triage:branch "R.15" ;
+  triage:closed false ;
+  triage:occursIn triage:WORKSPACE-R-15 .
+
+triage:RULE-008-OCC-15 a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 527 ;
+  triage:snippet "install_test_roster(&db_path, &[\"team-lead\"]);" ;
+  triage:status "open" ;
+  triage:headSha "d2d76a0d25b441ede680f783e7b6ac0f7afff977" ;
+  triage:branch "R.15" ;
+  triage:closed false ;
+  triage:occursIn triage:WORKSPACE-R-15 .
+
+triage:RULE-008-OCC-16 a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 528 ;
+  triage:snippet "write_team_config(&atm_home, &[\"team-lead\"]);" ;
+  triage:status "open" ;
+  triage:headSha "d2d76a0d25b441ede680f783e7b6ac0f7afff977" ;
+  triage:branch "R.15" ;
+  triage:closed false ;
+  triage:occursIn triage:WORKSPACE-R-15 .
+
+triage:RULE-008-OCC-17 a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 560 ;
+  triage:snippet "install_test_roster(&db_path, &[\"team-lead\"]);" ;
+  triage:status "open" ;
+  triage:headSha "d2d76a0d25b441ede680f783e7b6ac0f7afff977" ;
+  triage:branch "R.15" ;
+  triage:closed false ;
+  triage:occursIn triage:WORKSPACE-R-15 .
+
+triage:RULE-008-OCC-18 a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 561 ;
+  triage:snippet "write_team_config(&atm_home, &[\"team-lead\"]);" ;
+  triage:status "open" ;
+  triage:headSha "d2d76a0d25b441ede680f783e7b6ac0f7afff977" ;
+  triage:branch "R.15" ;
+  triage:closed false ;
+  triage:occursIn triage:WORKSPACE-R-15 .
+
+triage:RULE-008-OCC-19 a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 570 ;
+  triage:snippet "member: \"team-lead\".parse().expect(\"member\")," ;
+  triage:status "open" ;
+  triage:headSha "d2d76a0d25b441ede680f783e7b6ac0f7afff977" ;
+  triage:branch "R.15" ;
+  triage:closed false ;
+  triage:occursIn triage:WORKSPACE-R-15 .
+
+triage:WORKSPACE-R-15 a triage:WorktreeSnapshot ;
+  triage:branch "R.15" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s15-status-heartbeat" ;
+  triage:headSha "d2d76a0d25b441ede680f783e7b6ac0f7afff977" ;
+  triage:orderIndex 15 .
+
+triage:WORKSPACE-R-16 a triage:WorktreeSnapshot ;
+  triage:branch "R.16" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s16-peer-replay" ;
+  triage:headSha "c7b445585a3d763340c08e858454283c9d470d6a" ;
+  triage:orderIndex 16 .
+
+triage:WORKSPACE-R-17 a triage:WorktreeSnapshot ;
+  triage:branch "R.17" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s17-watch-reconcile" ;
+  triage:headSha "5de80ad4cbe50908954856e93264f712cd4983ab" ;
+  triage:orderIndex 17 .

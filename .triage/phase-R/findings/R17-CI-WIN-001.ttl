@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+triage:R17-CI-WIN-001
+  rdf:type triage:Finding ;
+  triage:findingId "R17-CI-WIN-001" ;
+  triage:title "Ungated std::os::unix import in tests.rs causes Windows compile failure" ;
+  triage:description "In crates/atm-daemon/src/tests.rs line 19, 'use std::os::unix::net::{UnixListener, UnixStream}' is not gated with #[cfg(unix)]. This causes a compile error on Windows. The tests.rs module has no top-level #![cfg(unix)] attribute. The cross-platform guidelines require all std::os::unix imports to be behind cfg(unix) gates." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "CI-WIN" ;
+  triage:severity "blocking" ;
+  triage:phaseId "phase-R" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:highestOpenBranch "R.17" ;
+  triage:promoteToBranch "R.17" ;
+  triage:triagedAt "2026-05-07T00:00:00Z"^^xsd:dateTime ;
+  triage:branchFindings triage:R15-CI-WIN-001 ;
+  triage:branchFindings triage:R16-CI-WIN-001 ;
+  triage:branchFindings triage:R17-CI-WIN-001 .
+
+triage:R15-CI-WIN-001
+  rdf:type triage:BranchFinding ;
+  triage:branch "R.15" ;
+  triage:status "open" ;
+  triage:matchCount 1 ;
+  triage:matches "crates/atm-daemon/src/tests.rs:19" .
+
+triage:R16-CI-WIN-001
+  rdf:type triage:BranchFinding ;
+  triage:branch "R.16" ;
+  triage:status "open" ;
+  triage:matchCount 1 ;
+  triage:matches "crates/atm-daemon/src/tests.rs:19" .
+
+triage:R17-CI-WIN-001
+  rdf:type triage:BranchFinding ;
+  triage:branch "R.17" ;
+  triage:status "open" ;
+  triage:matchCount 1 ;
+  triage:matches "crates/atm-daemon/src/tests.rs:19" .

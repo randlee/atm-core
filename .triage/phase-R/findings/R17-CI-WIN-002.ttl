@@ -1,0 +1,57 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:R17-CI-WIN-002 a triage:Finding ;
+  triage:findingId "R17-CI-WIN-002" ;
+  triage:title "UnixListener/UnixStream usage sites without cfg(unix) gating" ;
+  triage:description "Companion to R17-CI-WIN-001. After gating the import, usage sites of UnixListener and UnixStream in tests.rs must also be gated with #[cfg(unix)] or the entire test module must be gated. Sweep identifies all usage sites that require conditional compilation to fix the Windows CI blocker." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "CI-WIN" ;
+  triage:category triage:CI-WIN ;
+  triage:phaseId "phase-R" ;
+  triage:severity "blocking" ;
+  triage:severity triage:blocking ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:highestOpenBranch "R.17" ;
+  triage:promoteToBranch "R.17" ;
+  triage:triagedAt "2026-05-07T00:00:00Z"^^xsd:dateTime ;
+  triage:branchSummary """R.15: open, R.16: open, R.17: open""" .
+
+triage:R17-CI-WIN-002-R15 a triage:BranchFinding ;
+  triage:branch "R.15" ;
+  triage:branchPath "/Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s15-status-heartbeat" ;
+  triage:headSha "d2d76a0" ;
+  triage:status "open" ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:occurrences (
+    [ triage:lineNumber 19 ; triage:content "use std::os::unix::net::{UnixListener, UnixStream};" ; triage:type "import" ]
+    [ triage:lineNumber 154 ; triage:content "let listener = UnixListener::bind(&socket_path).expect(\"bind listener\");" ; triage:type "usage" ]
+    [ triage:lineNumber 155 ; triage:content "let client = UnixStream::connect(&socket_path).expect(\"connect client\");" ; triage:type "usage" ]
+  ) .
+
+triage:R17-CI-WIN-002-R16 a triage:BranchFinding ;
+  triage:branch "R.16" ;
+  triage:branchPath "/Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s16-peer-replay" ;
+  triage:headSha "c7b4455" ;
+  triage:status "open" ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:occurrences (
+    [ triage:lineNumber 19 ; triage:content "use std::os::unix::net::{UnixListener, UnixStream};" ; triage:type "import" ]
+    [ triage:lineNumber 161 ; triage:content "let listener = UnixListener::bind(&socket_path).expect(\"bind listener\");" ; triage:type "usage" ]
+    [ triage:lineNumber 162 ; triage:content "let client = UnixStream::connect(&socket_path).expect(\"connect client\");" ; triage:type "usage" ]
+  ) .
+
+triage:R17-CI-WIN-002-R17 a triage:BranchFinding ;
+  triage:branch "R.17" ;
+  triage:branchPath "/Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s17-watch-reconcile" ;
+  triage:headSha "5de80ad" ;
+  triage:status "open" ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:occurrences (
+    [ triage:lineNumber 19 ; triage:content "use std::os::unix::net::{UnixListener, UnixStream};" ; triage:type "import" ]
+    [ triage:lineNumber 142 ; triage:content "let listener = UnixListener::bind(&socket_path).expect(\"bind listener\");" ; triage:type "usage" ]
+    [ triage:lineNumber 143 ; triage:content "let client = UnixStream::connect(&socket_path).expect(\"connect client\");" ; triage:type "usage" ]
+  ) .

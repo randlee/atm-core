@@ -1,0 +1,40 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:R15-RBP-F005> a triage:Finding ;
+    triage:findingId "R15-RBP-F005" ;
+    triage:title "AtmError::file_policy missing .with_recovery()" ;
+    triage:description "In crates/atm-daemon/src/runtime_health.rs, AtmError::file_policy returns an error without chaining .with_recovery(). Line 644 constructs the error via AtmError::file_policy(format!(...)) without a recovery hint. Same pattern violation as R15-RBP-F004." ;
+    triage:triageMode "initial_pass" ;
+    triage:category "RBP" ;
+    triage:phaseId "phase-R" ;
+    triage:severity "important" ;
+    triage:repeatable false ;
+    triage:sweepScope "file_only" ;
+    triage:status "open" ;
+    triage:dispatchReady true ;
+    triage:triagedAt "2026-05-07T00:00:00Z"^^xsd:dateTime ;
+    triage:branchStatus [
+        triage:branch "R.15" ;
+        triage:status "open" ;
+        triage:sha "d2d76a0" ;
+        triage:matchCount 3 ;
+        triage:matchLines "644, 651, 670"
+    ] ;
+    triage:branchStatus [
+        triage:branch "R.16" ;
+        triage:status "open" ;
+        triage:sha "c7b4455" ;
+        triage:matchCount 3 ;
+        triage:matchLines "641, 648, 667"
+    ] ;
+    triage:branchStatus [
+        triage:branch "R.17" ;
+        triage:status "open" ;
+        triage:sha "5de80ad" ;
+        triage:matchCount 3 ;
+        triage:matchLines "641, 648, 667"
+    ] ;
+    triage:highestOpenBranch "R.17" ;
+    triage:promoteToBranch "R.17" ;
+    triage:aggregateStatus "open" .

@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:R17-RSH-001 a triage:Finding ;
+  triage:findingId "R17-RSH-001" ;
+  triage:title "Condvar::wait called without timeout in watch_runtime.rs" ;
+  triage:description "In crates/atm-daemon/src/watch_runtime.rs line 330, Condvar::wait() is called with no timeout: 'state = match inner.wake.wait(state)'. An unbounded wait is a liveness hazard. Should use wait_timeout or wait_timeout_while with a bounded duration." ;
+  triage:category triage:RSH ;
+  triage:severity triage:important ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-R" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status triage:open ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-07T00:00:00Z"^^xsd:dateTime ;
+  triage:branchStatuses (
+    [
+      triage:branch "R.15" ;
+      triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s15-status-heartbeat" ;
+      triage:headSha "d2d76a0" ;
+      triage:orderIndex 15 ;
+      triage:classifiedAs triage:absent ;
+      triage:rationale "watch_runtime.rs does not exist in R.15"
+    ]
+    [
+      triage:branch "R.16" ;
+      triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s16-peer-replay" ;
+      triage:headSha "c7b4455" ;
+      triage:orderIndex 16 ;
+      triage:classifiedAs triage:absent ;
+      triage:rationale "watch_runtime.rs does not exist in R.16"
+    ]
+    [
+      triage:branch "R.17" ;
+      triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s17-watch-reconcile" ;
+      triage:headSha "5de80ad" ;
+      triage:orderIndex 17 ;
+      triage:classifiedAs triage:open ;
+      triage:matchLocation "crates/atm-daemon/src/watch_runtime.rs:330" ;
+      triage:matchText "state = match inner.wake.wait(state)" ;
+      triage:rationale "Condvar::wait with no timeout at line 330; also correct pattern (wait_timeout) found at line 336"
+    ]
+  ) ;
+  triage:highestOpenBranch "R.17" ;
+  triage:promoteToBranch "R.17" .
