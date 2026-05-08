@@ -82,10 +82,17 @@ The sprint prompt should include:
 ### 3. Post-sprint: CI gate and merge
 
 After each scrum-master reports completion:
-1. verify QA passed
-2. wait for CI green
-3. merge PR to `integrate/phase-{N}` in dependency order
-4. update the integration branch
+1. before QA-1, require `arch-ctm` to run a self-directed Rust best-practices
+   sweep on the integration branch using the planned QA-1 review targets and
+   fix all findings found there
+2. verify QA passed
+   - QA-1 includes the Rust best-practices review
+   - QA-2 and later rounds must omit Rust best-practices review entirely
+   - unresolved QA-1 RBP findings not fixed in the first fix round carry to
+     the next phase backlog instead of being re-raised in later rounds
+3. wait for CI green
+4. merge PR to `integrate/phase-{N}` in dependency order
+5. update the integration branch
 
 ### 4. Post-sprint: arch-ctm design review
 

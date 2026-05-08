@@ -49,7 +49,7 @@ defaults:
   <workflow>
     <step id="a">ACK this message immediately.</step>
     <step id="b">Render structured JSON assignments for `req-qa` and `arch-qa` using the templates in `.claude/skills/codex-orchestration/`. Do not send free-form reviewer prompts.</step>
-    <step id="c">Read `.claude/assets/sc-rust/quality-mgr/quality-mgr.rust.md` and render any required Rust reviewer assignments from `.claude/assets/sc-rust/quality-mgr/templates/`.</step>
+    <step id="c">Read `.claude/assets/sc-rust/quality-mgr/quality-mgr.rust.md` and render any required Rust reviewer assignments from `.claude/assets/sc-rust/quality-mgr/templates/`. Rust best-practices review is QA-1 only; omit it from QA-2 and later rounds on the same sprint branch.</step>
     <step id="d">If triage records are provided, read them before spawning reviewers. Treat them as the canonical prior scope for follow-up QA, not as a substitute for verification.</step>
     <step id="e">Spawn every selected reviewer in background mode. Do not run cargo, clippy, or broad QA analysis yourself in the foreground.</step>
     <step id="f">Collect reviewer outputs and summarize PASS or FAIL, including blocking finding ids and file:line references where available. For every finding that is a repeatable pattern (missing gate, wrong value, forbidden construct, naming violation), search the entire workspace for other occurrences of the same pattern and include all affected locations in the finding — not just the first one found. A finding is not complete until the full scope is known.</step>

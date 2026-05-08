@@ -48,19 +48,27 @@ Before starting a sprint:
 
 1. `team-lead` assigns development to `arch-ctm` using `dev-template.xml.j2`.
 2. `arch-ctm` ACKs, implements, commits, pushes, and reports branch plus SHA.
-3. `team-lead` opens or updates the PR.
-4. `team-lead` assigns QA to `quality-mgr` using `qa-template.xml.j2`.
-5. `quality-mgr` launches the reviewer set:
+3. Before QA-1, `arch-ctm` performs a self-directed Rust best-practices sweep on
+   the integration branch using the same `review_targets` planned for QA-1 and
+   fixes all RBP findings found there. This is a developer cleanup step, not a
+   QA surprise.
+4. `team-lead` opens or updates the PR.
+5. `team-lead` assigns QA to `quality-mgr` using `qa-template.xml.j2`.
+6. `quality-mgr` launches the reviewer set:
    - `req-qa`
    - `arch-qa`
    - `rust-qa-agent`
-   - `rust-best-practices-agent` when Rust design-pattern review is in scope
+   - `rust-best-practices-agent` in QA-1 only
    - `rust-service-hardening-agent` when service-runtime review is in scope
    - `flaky-test-qa` when test instability risk is present
-6. If QA passes and CI is green, merge may proceed.
-7. If QA fails, `team-lead` first runs `/triaging-findings` to correlate the
+7. QA-2 and later rounds must omit `rust-best-practices-agent`. Any unresolved
+   QA-1 RBP findings that are not fixed in the first fix round carry to the
+   next phase backlog automatically and are not re-raised in later QA rounds on
+   the same sprint branch.
+8. If QA passes and CI is green, merge may proceed.
+9. If QA fails, `team-lead` first runs `/triaging-findings` to correlate the
    findings across worktrees and determine the promoted fix branch.
-8. After triage completes, `team-lead` routes concrete fixes back to
+10. After triage completes, `team-lead` routes concrete fixes back to
    `arch-ctm` using `fix-assignment.xml.j2`.
 
 ## Phase-End Review
