@@ -246,6 +246,25 @@ impl SharedDb {
         self.target.as_ref()
     }
 
+    pub(crate) fn checkpoint_wal(&self) -> Result<(), AtmError> {
+        #[cfg(test)]
+        if matches!(self.target.as_ref(), SharedDbTarget::InMemory) {
+            return Ok(());
+        }
+
+        self.with_connection(|connection| {
+            connection
+                .query_row("PRAGMA wal_checkpoint(TRUNCATE);", [], |_row| Ok(()))
+                .map_err(|error| {
+                    sqlite_error(
+                        self.target.as_ref(),
+                        "failed to checkpoint sqlite wal during daemon shutdown",
+                        error,
+                    )
+                })
+        })
+    }
+
     fn open_connection(&self) -> Result<Connection, AtmError> {
         let mut connection = match self.target.as_ref() {
             SharedDbTarget::Path(path) => Connection::open(path)

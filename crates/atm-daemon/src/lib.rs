@@ -410,31 +410,41 @@ impl PreparedRuntimeServer {
         })
     }
 
-    fn serve(self, dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
-        self.serve_with_deadlines(dispatcher, GRACEFUL_DRAIN_DEADLINE, FORCE_CANCEL_DEADLINE)
-    }
-
-    fn serve_with_deadlines(
+    fn serve_with_runtime_hooks<ReloadRuntimeView, FinalizeShutdown>(
         self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
         graceful_drain_deadline: Duration,
         force_cancel_deadline: Duration,
-    ) -> Result<(), AtmError> {
+        reload_runtime_view: ReloadRuntimeView,
+        finalize_shutdown: FinalizeShutdown,
+    ) -> Result<(), AtmError>
+    where
+        ReloadRuntimeView: Fn() -> Result<(), AtmError>,
+        FinalizeShutdown: Fn() -> Result<(), AtmError>,
+    {
         self.serve_with_deadlines_and_accept_probe(
             dispatcher,
             graceful_drain_deadline,
             force_cancel_deadline,
             None,
+            reload_runtime_view,
+            finalize_shutdown,
         )
     }
 
-    fn serve_with_deadlines_and_accept_probe(
+    fn serve_with_deadlines_and_accept_probe<ReloadRuntimeView, FinalizeShutdown>(
         self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
         graceful_drain_deadline: Duration,
         force_cancel_deadline: Duration,
         accepted_probe: Option<std::sync::mpsc::Sender<()>>,
-    ) -> Result<(), AtmError> {
+        reload_runtime_view: ReloadRuntimeView,
+        finalize_shutdown: FinalizeShutdown,
+    ) -> Result<(), AtmError>
+    where
+        ReloadRuntimeView: Fn() -> Result<(), AtmError>,
+        FinalizeShutdown: Fn() -> Result<(), AtmError>,
+    {
         let Self {
             _singleton,
             listener,
@@ -446,13 +456,18 @@ impl PreparedRuntimeServer {
             let mut serve_error = None;
             loop {
                 if signals.reload.swap(false, Ordering::SeqCst) {
-                    // Deferred to R.18: bounded SIGHUP config/roster reload.
-                    // See docs/phase-R/sprint-R18.md for the owning sprint plan.
-                    tracing::warn!(
-                        deferred_sprint = "R.18",
-                        deferred_doc = "docs/phase-R/sprint-R18.md",
-                        "bounded SIGHUP-triggered config/roster reload is not wired yet"
-                    );
+                    match reload_runtime_view() {
+                        Ok(()) => {
+                            tracing::info!("bounded SIGHUP-triggered config/roster reload applied");
+                        }
+                        Err(error) => {
+                            tracing::warn!(
+                                error_code = %error.code,
+                                error_message = %error.message,
+                                "bounded SIGHUP-triggered config/roster reload rejected; last-known-good serving config retained"
+                            );
+                        }
+                    }
                 }
                 if signals.terminate.load(Ordering::SeqCst) {
                     break;
@@ -517,6 +532,17 @@ impl PreparedRuntimeServer {
                 force_cancel_deadline,
                 shutdown_started,
             )?;
+            if let Err(finalize_error) = finalize_shutdown() {
+                if let Some(serve_error) = serve_error {
+                    tracing::warn!(
+                        %finalize_error,
+                        %serve_error,
+                        "daemon shutdown finalization failed after serve error"
+                    );
+                    return Err(serve_error);
+                }
+                return Err(finalize_error);
+            }
             if let Some(error) = serve_error {
                 return Err(error);
             }
@@ -644,8 +670,10 @@ fn handle_connection(
     }
     let request: ProtocolRequestEnvelope =
         serde_json::from_slice(&bytes).map_err(AtmError::from)?;
-    // TODO(phase-R): enforce a max 32 inflight requests per connection once framed multiplexing lands.
-    // Deferred to R.18: per-connection 32 in-flight request cap.
+    // The current daemon transport reads exactly one request frame and returns
+    // one response per accepted connection. That keeps the per-connection
+    // in-flight count bounded to one, which is inside the documented max-32
+    // cap until framed multiplexing is introduced.
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
     std::thread::spawn(move || {
         let _ = result_tx.send(dispatcher.dispatch(request));

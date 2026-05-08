@@ -93,6 +93,10 @@ impl SqliteBoundaryAssembly {
         self.roster_store.as_ref()
     }
 
+    pub fn checkpoint_wal(&self) -> Result<(), AtmError> {
+        self.mail_store.db.checkpoint_wal()
+    }
+
     pub fn record_remote_replay_state(
         &self,
         record: RemoteReplayStateRecord,

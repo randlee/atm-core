@@ -272,6 +272,103 @@ fn dispatcher_hydrates_unknown_members_from_team_roster_on_startup() {
 }
 
 #[test]
+fn reload_runtime_view_applies_updated_team_config_and_preserves_live_state() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    let db_path = tempdir.path().join("mail.db");
+
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD]);
+
+    let status_cache = RuntimeStatusCache::new();
+    let dispatcher = DaemonRequestDispatcher::new_for_test(
+        atm_home.clone(),
+        status_cache.clone(),
+        db_path.clone(),
+    );
+    let team: TeamName = "test-team".parse().expect("team");
+    let leader: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+    let qa: AgentName = "qa-a".parse().expect("member");
+
+    dispatcher
+        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: leader.clone(),
+            pid: std::process::id(),
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::ActiveToolUse,
+        }))
+        .expect("initial heartbeat");
+
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD, "qa-a"]);
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD, "qa-a"]);
+
+    dispatcher
+        .reload_runtime_view()
+        .expect("runtime view reload should succeed");
+
+    assert_eq!(
+        status_cache
+            .member_state_for_test(&team, &leader)
+            .expect("leader state"),
+        Some(RuntimeMemberState::Active)
+    );
+    assert_eq!(
+        status_cache
+            .member_state_for_test(&team, &qa)
+            .expect("qa state"),
+        Some(RuntimeMemberState::Unknown)
+    );
+}
+
+#[test]
+fn reload_runtime_view_rejects_invalid_config_and_preserves_last_known_good_state() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    let db_path = tempdir.path().join("mail.db");
+
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD]);
+
+    let status_cache = RuntimeStatusCache::new();
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache.clone(), db_path);
+    let team: TeamName = "test-team".parse().expect("team");
+    let leader: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+
+    dispatcher
+        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: leader.clone(),
+            pid: std::process::id(),
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::ActiveToolUse,
+        }))
+        .expect("initial heartbeat");
+
+    let config_path = atm_home
+        .join(".claude")
+        .join("teams")
+        .join("test-team")
+        .join("config.json");
+    std::fs::write(&config_path, br#"{"members":["team-lead",}"#).expect("invalid config");
+
+    let error = dispatcher
+        .reload_runtime_view()
+        .expect_err("invalid config should be rejected");
+
+    assert!(error.is_config(), "expected config error, got {error:?}");
+    assert_eq!(
+        status_cache
+            .member_state_for_test(&team, &leader)
+            .expect("leader state"),
+        Some(RuntimeMemberState::Active)
+    );
+}
+
+#[test]
 fn heartbeat_rejects_live_pid_conflict() {
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -385,6 +482,7 @@ fn heartbeat_demotes_evicted_member_to_explicit_unknown() {
 
     let status_cache = RuntimeStatusCache::new();
     let team: TeamName = "test-team".parse().expect("team");
+    let dispatcher = DaemonRequestDispatcher::new_for_test(atm_home, status_cache.clone(), db_path);
     let member: AgentName = "evicted".parse().expect("member");
     status_cache
         .hydrate_member_for_test(team.clone(), member.clone(), Some(u32::MAX))
@@ -403,7 +501,6 @@ fn heartbeat_demotes_evicted_member_to_explicit_unknown() {
             .expect("insert member");
     }
 
-    let dispatcher = DaemonRequestDispatcher::new_for_test(atm_home, status_cache.clone(), db_path);
     let response = dispatcher
         .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
             team: team.clone(),
