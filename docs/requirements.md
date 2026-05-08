@@ -6,7 +6,7 @@ Product requirement ID:
 - `REQ-P-PRODUCT-001` The retained ATM product surface consists of
   `send`, `read`, `ack`, `clear`, `log`, `doctor`, `teams`, and `members`,
   backed by a singleton daemon runtime and SQLite source-of-truth for mail and
-  roster state in the Phase Q architecture.
+  roster state in the current daemon architecture.
 
 Satisfied by:
 - intentionally undecomposed product requirement; this governs overall retained
@@ -88,6 +88,13 @@ Phase-R redesign note:
 - Phase R planning and CI may depend on `sc-lint` as an external tool
   dependency; `sc-lint` is not part of the ATM product surface even when its
   verification model constrains Phase R gates
+
+Phase-S portability note:
+- Phase S closes the missed requirement that ATM daemon functionality must be
+  first-class on Windows as well as Unix-like hosts
+- the current authoritative target for same-host daemon access is one
+  cross-platform local IPC contract rather than a Unix-only local transport
+- Phase S planning is tracked in [`plan-phase-S.md`](./plan-phase-S.md)
 - durable ATM state is one host-scoped SQLite database at
   `~/.atm/db/mail.db`; the daemon is the only writer, while direct read-only
   SQLite consumers remain an allowed system integration path
@@ -167,7 +174,7 @@ Satisfied by:
 - SQLite-backed ATM mail source of truth
 - SQLite-backed team roster source of truth
 - singleton daemon runtime
-- same-host daemon API over Unix domain socket
+- same-host daemon API over cross-platform local IPC
 - cross-host daemon API over TCP/TLS
 - Claude-compatible JSONL inbox ingress and export
 - configuration resolution
@@ -2690,13 +2697,15 @@ mail correctness.
   - `REQ-P-RUNTIME-001`
 
 - `REQ-CORE-DAEMON-004` The daemon must implement one documented graceful
-  shutdown and signal-handling contract.
+  shutdown and runtime-control contract.
 
   Required behavior:
-  - `SIGINT` and `SIGTERM` begin graceful shutdown
-  - `SIGHUP` triggers bounded runtime rescan/reload without releasing singleton
-    ownership
-  - signal handlers install before listeners begin accepting
+  - each supported host platform must expose one typed graceful-shutdown
+    control path before listeners begin accepting
+  - each supported host platform must expose one typed bounded reload/rescan
+    control path without releasing singleton ownership
+  - Unix may satisfy this through `SIGINT` / `SIGTERM` / `SIGHUP`
+  - Windows may satisfy this through console or service-control equivalents
   - graceful shutdown must stop accepts, drain inflight work, checkpoint WAL,
     and release singleton ownership in order
   - Phase R transport remains one request per accepted connection, so the
@@ -2755,13 +2764,16 @@ mail correctness.
   production transport implementations and one test transport.
 
   Required behavior:
-  - same-host transport: Unix domain socket
+  - same-host transport: one cross-platform local IPC contract
+    - Unix implementation: Unix domain socket
+    - Windows implementation: named-pipe-backed local IPC
   - cross-host transport: TCP/TLS
   - test transport: in-process `test-socket` implementation of the same
     protocol/interface for subsystem and daemon-boundary tests; this is the
     Tier 2 `LoopbackClientTransport` shape in the testing guidelines
   - these are implementations of one protocol/interface, not separate systems
-  - socket receive logic must remain a small framed-message loop that:
+  - local-IPC and TCP/TLS receive logic must remain a small framed-message
+    loop that:
     - reads one request frame
     - parses it into a qualified request enum/value
     - dispatches immediately to the owning handler boundary
@@ -2769,12 +2781,12 @@ mail correctness.
   - request-kind routing must live behind one dispatcher boundary with
     injectable typed handlers for request families
   - adding a new request family must not require embedding business logic into
-    Unix-domain or TCP/TLS transport adapters
-  - socket receive logic must not perform SQL, watcher, or notification
+    same-host local-IPC or TCP/TLS transport adapters
+  - transport receive logic must not perform SQL, watcher, or notification
     business logic inline
   - any violation of this transport isolation rule is a direct QA failure for
     the Phase Q implementation line
-  - subsystem and runtime tests must be able to replace Unix/TCP transport
+  - subsystem and runtime tests must be able to replace local-IPC/TCP transport
     adapters with the `test-socket` transport without changing business logic
 
 - `REQ-CORE-TRANSPORT-001B` Request routing must live behind one explicit

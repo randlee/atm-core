@@ -1,7 +1,7 @@
 boundary_id = "BOUNDARY-ServerTransport-Socket"
 owner_package = "atm-daemon"
 owner_crate_path = "atm_daemon"
-name = "SocketServerTransportAdapter"
+name = "LocalIpcServerTransportAdapter"
 
 [public]
 trait = "ServerTransport"
@@ -26,7 +26,12 @@ forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon"]
 
 [references]
 scope = "outside_owner_crate"
-forbidden = ["LocalSocketServerTransport", "tokio::net::UnixListener"]
+forbidden = [
+  "LocalSocketServerTransport",
+  "tokio::net::UnixListener",
+  "std::os::unix::net::UnixListener",
+  "interprocess::local_socket::Listener",
+]
 
 [contracts]
 request_types = ["AtmProtocol requests"]
@@ -35,7 +40,10 @@ error_types = ["AtmError"]
 
 [testing]
 allowed_test_double_paths = []
-forbidden_test_bypasses = ["tokio::net::UnixListener"]
+forbidden_test_bypasses = [
+  "tokio::net::UnixListener",
+  "std::os::unix::net::UnixListener",
+]
 
 [enforcement]
 lint_rules = ["LINT-BOUNDARY-SERVER-TRANSPORT-SOCKET-EDGES", "LINT-BOUNDARY-SERVER-TRANSPORT-SOCKET-REFERENCES"]
@@ -43,4 +51,8 @@ review_gates = ["no_public_impl", "no_public_constructor", "no_cli_to_daemon_edg
 
 [status]
 state = "stub_landed"
-notes = ["thin clients must stop at ClientTransport and AtmProtocol", "stub implementation currently lives at crate root and is assembled through atm_daemon::composition"]
+notes = [
+  "thin clients must stop at ClientTransport and AtmProtocol",
+  "the stable boundary id retains its historical socket name, but the target same-host surface is one cross-platform local IPC contract",
+  "stub implementation currently lives at crate root and is assembled through atm_daemon::composition",
+]

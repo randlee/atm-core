@@ -7,11 +7,11 @@ mail and roster ownership to SQLite and reintroduces one tightly-bounded
 singleton daemon runtime for routing, notification, transport, and runtime
 health/state queries.
 
-The current workspace contains:
+The current merged workspace contains:
 - `atm-core`: reusable service library
 - `atm`: CLI binary
 
-The Phase Q target workspace remains intentionally small and adds:
+The daemon/runtime expansion adds:
 - `atm-daemon`: daemon runtime binary / transport host
 - `atm-rusqlite`: first concrete SQLite store implementation
 
@@ -56,6 +56,13 @@ Phase-R redesign note:
 - for the boundary / adapter model, Phase R supersedes any earlier
   pre-Phase-R architecture statements in this document that conflict with the
   crate-local boundary inventories, ADRs, or `docs/plan-phase-R.md`
+
+Phase-S portability note:
+- the Phase R integrated daemon proved the runtime split, but it still hard-
+  coded Unix-only assumptions into the same-host host/runtime shell
+- Phase S is the active planning line for making the daemon feature-complete on
+  Windows as well as Unix-like hosts
+- Phase S planning is tracked in [`docs/plan-phase-S.md`](./plan-phase-S.md)
 
 ## 2. Crate Boundaries
 
@@ -2259,10 +2266,12 @@ There are three distinct paths:
 
 ### 21.4 One Interface, Two Transport Implementations
 
-Phase Q uses one daemon API with two production transport adapters plus one
+ATM uses one daemon API with two production transport adapters plus one
 test transport:
 
-- same-host: Unix domain socket
+- same-host: one cross-platform local IPC contract
+  - Unix implementation: Unix domain socket
+  - Windows implementation: named-pipe-backed local IPC
 - cross-host: TCP/TLS
 - tests: in-process `test-socket`
 
@@ -2622,10 +2631,14 @@ Required caps:
 - SQLite handle budget: `1..=4`
 - status-cache cap: `4096`
 
-Required signal behavior:
-- install `SIGINT`/`SIGTERM`/`SIGHUP` handling before listeners accept
-- `SIGINT` and `SIGTERM` enter graceful shutdown
-- `SIGHUP` triggers bounded rescan/reload without dropping singleton ownership
+Required runtime-control behavior:
+- install the host runtime-control source before listeners accept
+- Unix may use `SIGINT` / `SIGTERM` / `SIGHUP`
+- Windows may use console-control or service-control equivalents
+- the graceful-shutdown control path enters the same bounded drain/checkpoint
+  sequence on every platform
+- the reload control path triggers bounded rescan/reload without dropping
+  singleton ownership
 
 Remote peer transport rules:
 - retryable remote peer failures are limited to transient socket/network

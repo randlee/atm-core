@@ -72,5 +72,6 @@ notes = [
   "lifecycle controller is a daemon-private control-plane facade rather than a shared cross-crate trait",
   "production-readiness review must cover this struct explicitly because B-003 originated here",
   "R.13 wired host-wide admission, lifecycle transitions, and startup/shutdown ownership through this control-plane facade",
+  "Phase S separates host ownership and lifecycle-control sourcing into review-visible portability boundaries under this controller",
   "crate-private helper methods are intentional so run_daemon and lifecycle tests can enter the single owned runtime path without exposing it cross-crate",
 ]

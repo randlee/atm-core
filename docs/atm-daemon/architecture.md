@@ -92,9 +92,15 @@ Phase R redesign notes:
   `atm-core` ingress/export boundaries.
 - `atm-daemon` owns runtime implementations of one shared ATM protocol with
   multiple transport implementations:
-  - Unix domain socket
+  - cross-platform local IPC for same-host daemon access
   - TCP/TLS
   - in-process `LoopbackClientTransport` (`test-socket`)
+- same-host transport and lifecycle control must remain platform-neutral above
+  the adapter line:
+  - platform-specific listener/stream/control types are allowed only inside
+    owned adapter modules
+  - runtime composition, dispatcher, replay, status cache, and runtime lanes
+    must not depend directly on Unix-only host APIs
 - cross-host delivery is daemon-to-daemon only.
 - remote delivery may use bounded transient retry for short intermittent
   failures, but not a durable long-lived remote outbox.
@@ -142,7 +148,7 @@ Phase R redesign notes:
   - SQL/store calls belong only to the store boundary
   - file-watch/reconcile logic belongs only to the watcher/reconcile boundary
   - notification delivery belongs only to the notifier/plugin boundary
-  - socket I/O belongs only to the transport boundary
+  - local-IPC and network I/O belong only to the transport boundary
 - watcher/reconcile adapters remain crate-private and dispatch through owned
   ingress/service handlers rather than touching store/transport/notifier
   internals directly
@@ -196,8 +202,9 @@ Lifecycle state model:
 - any post-`Running` exit path, including listener/accept failures, must pass
   through `Running -> Draining -> Stopped` rather than silently forcing
   `Running -> Stopped`
-- repeated signal-install calls must reuse the same process-wide signal flags
-  without clearing a pending terminate/reload bit between installs
+- repeated lifecycle-control installs for one platform implementation must
+  reuse the same process-wide control flags without clearing a pending
+  terminate/reload bit between installs
 
 Privacy boundary:
 - the lifecycle state type and transport/runtime adapter internals remain
@@ -205,8 +212,8 @@ Privacy boundary:
 - public callers interact through daemon request/response surfaces and health
   queries, not through direct state mutation
 - transport submodules expose only the listener/client boundary types required
-  for runtime composition; frame codecs, connection state, and socket helpers
-  remain crate-private
+  for runtime composition; frame codecs, connection state, and transport
+  helpers remain crate-private
 - dispatcher submodules expose only the dispatcher trait/boundary and typed
   request/response contracts; routing tables and handler wiring remain
   crate-private
@@ -222,8 +229,8 @@ Privacy boundary:
   by runtime composition; sink plumbing and field-shaping helpers remain
   crate-private
 
-Socket dispatcher rule:
-- listener/connection receive loops are deliberately tiny
+Transport dispatcher rule:
+- local-IPC and TCP/TLS listener/connection receive loops are deliberately tiny
 - they may:
   - read a framed request
   - parse a qualified request type
@@ -235,14 +242,15 @@ Socket dispatcher rule:
   - emit notifications directly
   - embed workflow/business-state transitions
 - the same dispatcher/handler contract must back the in-process `test-socket`
-  transport so handler behavior is testable without Unix/TCP socket code
+  transport so handler behavior is testable without Unix-specific or TCP/TLS
+  host code
 
 Dispatcher/handler rule:
 - request-kind routing belongs to the dispatcher boundary, not to the socket
   adapter
 - concrete request-family behavior belongs to injectable handlers behind that
   dispatcher
-- Unix domain socket and TCP/TLS adapters share the same dispatcher/handler
+- same-host local-IPC and TCP/TLS adapters share the same dispatcher/handler
   contract
 - the dispatcher itself stays thin and must not absorb request-family business
   logic
@@ -345,18 +353,21 @@ Ordering rule:
 
 ## 3.1.3 Signal Handling
 
-Required signals:
-- `SIGINT`: begin graceful shutdown
-- `SIGTERM`: begin graceful shutdown
-- `SIGHUP`: trigger bounded configuration / roster rescan without dropping
-  singleton ownership
+Required runtime-control mappings:
+- Unix may use:
+  - `SIGINT`: begin graceful shutdown
+  - `SIGTERM`: begin graceful shutdown
+  - `SIGHUP`: trigger bounded configuration / roster rescan without dropping
+    singleton ownership
+- Windows may map the same logical control events through console or service
+  control equivalents
 
 Architectural rules:
-- signal handlers install before any listener begins accepting
-- signal-triggered shutdown uses the same drain/checkpoint/release path as an
-  explicit runtime stop
-- `SIGHUP` rescan validates candidate configuration before it replaces the
-  active runtime view; invalid configuration yields a typed reload error and
+- the lifecycle-control source installs before any listener begins accepting
+- control-triggered shutdown uses the same drain/checkpoint/release path as an
+  explicit runtime stop on every supported host platform
+- reload/rescan validates candidate configuration before it replaces the active
+  runtime view; invalid configuration yields a typed reload error and
   preserves the last known-good serving configuration
 - ADR-006 records the bounded reload delivery decision and the required
   last-known-good preservation semantics

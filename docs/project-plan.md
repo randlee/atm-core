@@ -36,6 +36,13 @@ Phase-R redesign note:
   before new implementation work
 - the active integration branch for this redesign line is `integrate/phase-R`
 
+Phase-S planning note:
+- Phase R is the merged daemon baseline, but it missed the requirement that the
+  full daemon feature set must work on Windows as well as Unix-like hosts
+- the active planning line for that correction is Phase S, tracked in
+  [`docs/plan-phase-S.md`](./plan-phase-S.md)
+- the planning baseline is `integrate/phase-R` at `6a072c1`
+
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton
   - new crates
@@ -68,15 +75,14 @@ Status:
   remains deferred to a later version.
 - Phase Q is retained only as an abandoned historical attempt at the SQLite
   source-of-truth and daemon-boundary redesign.
-- Phase R is the only active redesign and implementation line.
-- The current merged Wave 1 baseline still contains `crates/atm-core` and
-  `crates/atm` only; additional crate introduction remains active Phase R
-  skeleton work and is now tracked explicitly by `R.3.1`.
-- `R.13` through `R.18` are the runtime/product continuation sprints.
-- `R.19` is the completed post-closeout lint-backfill sprint that converts the
-  recurring mechanically-detectable Phase R defect families into normal lint
-  or CI gates on `atm-core` before any reusable subset is migrated to
-  standalone `sc-lint`.
+- Phase R is the merged daemon baseline.
+- Phase S is the active planning line for Windows-complete daemon parity.
+- the current merged workspace contains:
+  - `crates/atm-core`
+  - `crates/atm`
+  - `crates/atm-daemon`
+  - `crates/atm-rusqlite`
+  - `crates/sc-lint-*` support crates
 
 ## 2. Deliverables
 
@@ -2521,7 +2527,7 @@ Core design decisions:
 - Claude inbox JSONL remains compatibility ingress/egress only
 - native agent/plugin traffic does not use JSONL
 - one daemon API, two production transport implementations:
-  - Unix domain socket for same-host
+  - cross-platform local IPC for same-host
   - TCP/TLS for cross-host daemon-to-daemon traffic
 - one in-process `test-socket` transport for transport-boundary tests
 - remote address model expands to `agent@team.host`

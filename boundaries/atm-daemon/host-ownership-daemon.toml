@@ -1,0 +1,69 @@
+boundary_id = "BOUNDARY-HostOwnership-Daemon"
+owner_package = "atm-daemon"
+owner_crate_path = "atm_daemon"
+name = "HostOwnershipAdapter"
+
+[public]
+facade = "HostOwnership"
+
+[implementation]
+type = "SingletonGuard"
+module = "atm_daemon"
+visibility = "pub(crate)"
+constructor = "pub(crate)"
+
+[composition]
+roots = [
+  "atm_daemon::composition::RuntimeComposition::start",
+]
+
+[ownership]
+io_owns = [
+  "host_wide_lock_acquire",
+  "owner_record_write",
+  "stale_owner_recovery",
+  "ownership_release",
+]
+io_forbidden = [
+  "transport_dispatch",
+  "sqlite",
+  "business_logic_dispatch",
+]
+
+[dependencies]
+allowed_dependents = []
+allowed_dependencies = ["atm-core"]
+forbidden_edges = [
+  "atm -> atm-daemon",
+  "atm-graft -> atm-daemon",
+]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["SingletonGuard"]
+
+[contracts]
+request_types = ["host ownership acquisition inputs"]
+response_types = ["typed ownership admission outcomes"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["fs2::FileExt::try_lock_exclusive"]
+
+[enforcement]
+lint_rules = [
+  "LINT-BOUNDARY-HOST-OWNERSHIP-DAEMON-EDGES",
+  "LINT-BOUNDARY-HOST-OWNERSHIP-DAEMON-REFERENCES",
+]
+review_gates = [
+  "no_transport_owned_locking",
+  "no_cli_owned_singleton_logic",
+]
+
+[status]
+state = "planned"
+notes = [
+  "Phase R embeds host ownership inside the runtime lifecycle controller",
+  "Phase S pulls host ownership into an explicit portability boundary so file-locking and teardown semantics can be reviewed independently on Unix and Windows",
+]

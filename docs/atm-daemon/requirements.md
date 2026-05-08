@@ -81,7 +81,9 @@ Initial crate requirement IDs:
   `REQ-P-RUNTIME-002`, `REQ-P-DAEMON-LIFECYCLE-001`, `REQ-CORE-DAEMON-001`.
 - `REQ-DAEMON-TRANSPORT-001` `atm-daemon` owns one protocol with two
   production transport implementations plus one test transport:
-  - Unix domain socket for same-host
+  - one cross-platform local IPC contract for same-host
+    - Unix implementation: Unix domain socket
+    - Windows implementation: named-pipe-backed local IPC
   - TCP/TLS for cross-host daemon-to-daemon traffic
   - `test-socket` — implemented as `LoopbackClientTransport`; see ADR-003
     §Tier 2 — for in-process transport-boundary tests
@@ -129,8 +131,10 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-HEALTH-001` `atm-daemon` owns the daemon health interface
   consumed by `atm doctor`. Satisfies:
   `REQ-CORE-DOCTOR-002`.
-- `REQ-DAEMON-SIGNAL-001` `atm-daemon` owns signal installation and handling
-  for daemon lifecycle transitions. Satisfies:
+- `REQ-DAEMON-SIGNAL-001` `atm-daemon` owns runtime-control installation and
+  handling for daemon lifecycle transitions. Unix may satisfy this through
+  signals; Windows may satisfy it through console or service-control events.
+  Satisfies:
   `REQ-CORE-DAEMON-001`, `REQ-CORE-DOCTOR-002`.
 
 ## 4. Required References
@@ -142,6 +146,7 @@ The `atm-daemon` crate docs must remain aligned with:
 - [`../project-plan.md`](../project-plan.md)
 - [`../plan-phase-Q.md`](../plan-phase-Q.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)
+- [`../plan-phase-S.md`](../plan-phase-S.md)
 - [`../testing-guidelines.md`](../testing-guidelines.md)
 - [`../team-member-state.md`](../team-member-state.md)
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
@@ -207,10 +212,20 @@ Required runtime rules:
   for cleanup and must not leave partial runtime ownership after the first lane
   failure
 - signal handlers must be installed before listeners are opened
+- the host runtime-control source must be installed before listeners are opened
 - daemon config must validate once at startup before listeners are opened
 - `SIGHUP`-driven config or roster rescan must either apply a fully valid
   configuration or fail with a typed reload error while retaining the prior
   serving configuration
+- the same-host transport boundary must remain platform-neutral above the
+  adapter layer:
+  - Unix may use Unix domain sockets
+  - Windows may use named-pipe-backed local IPC
+  - caller-visible runtime code above the transport adapter must not depend on
+    Unix-only stream or listener types
+- platform cfg is allowed only inside owned daemon adapter modules; composition,
+  dispatcher, health, replay, and runtime-lane code must not embed transport-
+  or control-source-specific OS branching
 - remote delivery must be daemon-to-daemon only
 - the same transport protocol must be exercisable through an in-process
   `test-socket` without changing handler/business logic
@@ -289,7 +304,7 @@ Required runtime rules:
   - dispatch through the owning dispatcher/handler boundary
   - return typed response
 - request-kind routing must stay in the dispatcher boundary, not in concrete
-  Unix-domain or TCP/TLS adapter code
+  local-IPC or TCP/TLS adapter code
 - handler implementations for request families must be injectable behind that
   dispatcher
 - the dispatcher boundary itself must remain thin and must not absorb request
