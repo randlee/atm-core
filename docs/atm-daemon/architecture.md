@@ -247,6 +247,8 @@ Dispatcher/handler rule:
 ## 3.1.1 Graceful Shutdown
 
 Shutdown is part of the daemon contract, not an implementation detail.
+`R.18` closes the remaining runtime-ops work by implementing this shutdown,
+reload, and resource-cap contract as written.
 
 Required shutdown sequence:
 1. stop accepting new local and remote connections
@@ -286,6 +288,8 @@ Architectural rules:
 - `SIGHUP` rescan validates candidate configuration before it replaces the
   active runtime view; invalid configuration yields a typed reload error and
   preserves the last known-good serving configuration
+- ADR-006 records the bounded reload delivery decision and the required
+  last-known-good preservation semantics
 - singleton ownership artifacts must be released on normal signal-driven exit
   and retained only on crash/fail-stop paths where the process cannot run
   cleanup code
