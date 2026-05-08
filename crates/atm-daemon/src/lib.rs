@@ -447,9 +447,10 @@ impl PreparedRuntimeServer {
             loop {
                 if signals.reload.swap(false, Ordering::SeqCst) {
                     // Deferred to R.18: bounded SIGHUP config/roster reload.
-                    // See docs/phase-R/sprint-R18.md for the owning sprint plan.
+                    // See ADR-006 and docs/phase-R/sprint-R18.md.
                     tracing::warn!(
                         deferred_sprint = "R.18",
+                        deferred_adr = "ADR-006",
                         deferred_doc = "docs/phase-R/sprint-R18.md",
                         "bounded SIGHUP-triggered config/roster reload is not wired yet"
                     );

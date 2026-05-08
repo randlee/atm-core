@@ -670,26 +670,8 @@ mod tests {
     use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
     use std::sync::mpsc;
     use std::thread;
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
     use tempfile::TempDir;
-
-    fn bind_with_retry(endpoint: SocketAddr) -> TcpListener {
-        let deadline = Instant::now() + Duration::from_secs(1);
-        let mut backoff = Duration::from_millis(10);
-        loop {
-            match TcpListener::bind(endpoint) {
-                Ok(listener) => return listener,
-                Err(error) if Instant::now() < deadline => {
-                    thread::sleep(backoff);
-                    backoff = (backoff * 2).min(Duration::from_millis(100));
-                    tracing::debug!(%endpoint, %error, "retrying peer transport test listener bind");
-                }
-                Err(error) => {
-                    panic!("failed to rebind peer transport test listener at {endpoint}: {error}")
-                }
-            }
-        }
-    }
 
     #[test]
     fn jittered_backoff_stays_within_twenty_percent_window() {
@@ -809,11 +791,38 @@ mod tests {
     }
 
     #[test]
-    fn peer_transport_retries_transient_connect_failures_within_budget() {
+    fn peer_transport_uses_port_zero_listener_handoff_without_rebind_race() {
         let tempdir = TempDir::new().expect("tempdir");
-        let probe = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("probe");
-        let endpoint = probe.local_addr().expect("addr");
-        drop(probe);
+        let (endpoint_tx, endpoint_rx) = mpsc::channel();
+        let team: TeamName = "test-team".parse().expect("team");
+        let member: AgentName = "test-member".parse().expect("member");
+        let server_team = team.clone();
+        let server_member = member.clone();
+
+        thread::spawn(move || {
+            let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
+            endpoint_tx
+                .send(listener.local_addr().expect("addr"))
+                .expect("endpoint");
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut request_bytes = Vec::new();
+            stream.read_to_end(&mut request_bytes).expect("request");
+            let _: RequestEnvelope =
+                serde_json::from_slice(&request_bytes).expect("decode request");
+            let response = ResponseEnvelope::Heartbeat(TeamMemberHeartbeatResponse {
+                team: server_team,
+                member: server_member,
+                pid: 7,
+                pid_changed: false,
+                state: RuntimeMemberState::Active,
+                last_active_at: Some(IsoTimestamp::now()),
+            });
+            let bytes = serde_json::to_vec(&response).expect("response");
+            stream.write_all(&bytes).expect("write response");
+            stream.flush().expect("flush response");
+        });
+
+        let endpoint = endpoint_rx.recv().expect("endpoint");
 
         let transport = PeerTransportRuntime::new_for_test(
             endpoint,
@@ -822,8 +831,6 @@ mod tests {
             },
             tempdir.path().join("mail.db"),
         );
-        let team: TeamName = "test-team".parse().expect("team");
-        let member: AgentName = "test-member".parse().expect("member");
         let request = RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
             team: team.clone(),
             member: member.clone(),
@@ -843,26 +850,6 @@ mod tests {
         });
 
         send_started_rx.recv().expect("send started");
-        thread::spawn(move || {
-            let listener = bind_with_retry(endpoint);
-            let (mut stream, _) = listener.accept().expect("accept");
-            let mut request_bytes = Vec::new();
-            stream.read_to_end(&mut request_bytes).expect("request");
-            let _: RequestEnvelope =
-                serde_json::from_slice(&request_bytes).expect("decode request");
-            let response = ResponseEnvelope::Heartbeat(TeamMemberHeartbeatResponse {
-                team,
-                member,
-                pid: 7,
-                pid_changed: false,
-                state: RuntimeMemberState::Active,
-                last_active_at: Some(IsoTimestamp::now()),
-            });
-            let bytes = serde_json::to_vec(&response).expect("response");
-            stream.write_all(&bytes).expect("write response");
-            stream.flush().expect("flush response");
-        });
-
         let response = response_rx
             .recv()
             .expect("response delivered")
