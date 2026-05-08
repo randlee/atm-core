@@ -20,6 +20,7 @@ use std::io::{Read, Write};
 #[cfg(unix)]
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::sync::{Arc, mpsc};
+#[cfg(unix)]
 use std::time::Duration;
 use tempfile::TempDir;
 

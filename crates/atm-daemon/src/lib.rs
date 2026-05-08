@@ -29,6 +29,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 #[cfg(unix)]
 use std::thread;
+#[cfg(unix)]
 use std::time::Duration;
 #[cfg(unix)]
 use std::time::Instant;
