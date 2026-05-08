@@ -24,11 +24,17 @@ implementation sprints will follow.
 
 ## Governing Requirements
 
+- `REQ-P-PLATFORM-001`
+- `REQ-P-PLATFORM-002`
 - `REQ-P-PRODUCT-001`
 - `REQ-P-RUNTIME-002`
 - `REQ-CORE-DAEMON-004`
 - `REQ-CORE-TRANSPORT-001`
 - `REQ-CORE-BOUNDARY-001`
+- `REQ-DAEMON-PLATFORM-001`
+- `REQ-DAEMON-PLATFORM-002`
+- `REQ-DAEMON-TEST-003`
+- `REQ-DAEMON-TEST-004`
 
 ## Governing ADRs
 
@@ -46,7 +52,7 @@ implementation sprints will follow.
 
 ## Prerequisites
 
-- `integrate/phase-R` baseline at `6a072c1`
+- post-`PR #200` `origin/integrate/phase-R` review baseline at `d5e49df`
 
 ## Hard Dependencies
 
@@ -105,10 +111,26 @@ implementation sprints will follow.
      must change
    - document the preferred crate candidates for local IPC, file locking, and
      lifecycle control
+   - record that final crate adoption is deferred until S.1 validates the
+     adapter surface
+   - record that PID liveness semantics are carried forward unchanged during
+     Phase S unless a later ADR reopens that design
    Required tests:
    - none
    Required doc or boundary updates:
    - add `docs/plan-phase-S.md`
+
+5. Shared test and CI contract
+   Development work:
+   - document the anti-flake synchronization contract for same-host daemon
+     tests
+   - document the temporary Windows CI lint narrowing and the S.4 requirement
+     to remove it
+   Required tests:
+   - none
+   Required doc or boundary updates:
+   - update `docs/testing-guidelines.md`
+   - update `docs/cross-platform-guidelines.md`
 
 ## Split Recommendation
 
@@ -129,6 +151,23 @@ daemon docs, and Phase S sequence are all updated together.
   must change
 - Phase S docs define shared Windows/Unix same-host functional coverage and
   explicit anti-flake rules
+- Phase S docs include one consolidated allowed OS-difference inventory
+- Phase S docs state the Windows hosting model decision explicitly
+- Phase S docs define the temporary Windows CI lint narrowing and the S.4
+  requirement to remove it
+
+## Anti-Flake Synchronization Contract
+
+Phase S same-host daemon tests must use positive synchronization primitives:
+- channel-based ready handshakes
+- `Barrier`, `Condvar`, or latch/predicate synchronization
+- documented listener-ready or worker-ready probes with bounded deadlines
+
+They must not use:
+- fixed sleeps
+- warm-up delays
+- retry loops with no observable readiness predicate
+- OS-specific timing fudge added only to appease Windows CI
 
 ## Required Validation
 
@@ -149,6 +188,10 @@ daemon docs, and Phase S sequence are all updated together.
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
+- `boundaries/atm-daemon/socket-server-transport.toml`
+- `boundaries/atm-daemon/runtime-lifecycle-daemon.toml`
+- `boundaries/atm-daemon/lifecycle-control-source.toml`
+- `boundaries/atm-daemon/host-ownership-daemon.toml`
 - `docs/testing-guidelines.md`
 - `docs/cross-platform-guidelines.md`
 - `docs/adr/ADR-007-supported-platform-parity.md`

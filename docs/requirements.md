@@ -2730,6 +2730,20 @@ mail correctness.
     documented `32` per-connection inflight ceiling is satisfied by structure
     until framed multiplexing is introduced
 
+### 21.2.1 Phase S Daemon Parity Traceability
+
+- `REQ-DAEMON-PLATFORM-001` is the `atm-daemon` crate traceability record for
+  the same-host daemon parity requirement carried by:
+  - `REQ-P-PLATFORM-001`
+  - `REQ-P-PLATFORM-002`
+  - the same-host daemon portions of `REQ-CORE-DAEMON-003`
+  - the same-host daemon portions of `REQ-CORE-DAEMON-004`
+- `REQ-DAEMON-PLATFORM-002` is the `atm-daemon` crate traceability record for
+  constraining operating-system differences behind daemon-owned portability
+  boundaries for:
+  - `REQ-P-PLATFORM-002`
+  - `REQ-CORE-BOUNDARY-001`
+
 ### 21.3 Strict I/O Ownership Boundaries
 
 - `REQ-CORE-BOUNDARY-001` Every subsystem must be behind a strict trait

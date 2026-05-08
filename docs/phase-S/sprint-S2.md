@@ -19,8 +19,21 @@ boundary while preserving one shared protocol, dispatcher, and test harness.
 - `REQ-P-PLATFORM-002`
 - `REQ-DAEMON-TRANSPORT-001`
 - `REQ-DAEMON-PLATFORM-001`
+- `REQ-DAEMON-PLATFORM-002`
 - `REQ-DAEMON-TEST-003`
 - `REQ-DAEMON-TEST-004`
+
+## Governing ADRs
+
+- `docs/adr/ADR-003-test-fidelity-and-daemon-isolation.md`
+- `docs/adr/ADR-007-supported-platform-parity.md`
+
+## Hard Dependencies
+
+- S.1 boundary extraction is complete
+- the Windows hosting model decision remains the user-scoped same-host daemon
+  model recorded in S.0
+- the temporary Windows CI lint narrowing remains in place until S.4 removes it
 
 ## Exact Code Targets
 
@@ -47,6 +60,8 @@ boundary while preserving one shared protocol, dispatcher, and test harness.
    Unix and Windows.
 5. Add shared same-host functional coverage that runs the real local-IPC path
    on both platform families.
+6. Use the S.0 anti-flake synchronization contract for Windows and Unix
+   transport tests.
 
 ## Acceptance Criteria
 
@@ -55,7 +70,9 @@ boundary while preserving one shared protocol, dispatcher, and test harness.
   Windows
 - same-host functional tests prove the real transport on Windows through the
   shared harness
-- no fixed sleeps are used to stabilize the transport tests
+- no fixed sleeps are used to stabilize the transport tests; readiness and
+  shutdown are proven through explicit synchronization or bounded observable
+  state transitions
 
 ## Required Validation
 

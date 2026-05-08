@@ -3,7 +3,9 @@
 Planning baseline:
 - branch: `phase-S-planning`
 - base: `integrate/phase-R`
-- baseline SHA: `6a072c1`
+- post-`PR #200` review baseline SHA: `d5e49df`
+- follow-on CI-only compatibility fixes do not change the architectural issue
+  set tracked here
 
 ## Open Issues
 
@@ -41,3 +43,12 @@ Planning baseline:
 
 10. The original Phase S docs did not explicitly prohibit broad `#[cfg(unix)]`
     runtime gating or unsupported-path stubs as a final Windows support model.
+
+11. Windows full-workspace clippy currently overreports dead-code churn in the
+    non-Unix daemon path; CI temporarily narrows Windows lint scope by
+    excluding `atm-daemon` until S.4 removes that guardrail after parity work
+    lands.
+
+12. PID liveness semantics remain a carried-forward seam from Phase R; Phase S
+    preserves the current PID continuity model and does not redesign it unless
+    a later ADR reopens that work explicitly.

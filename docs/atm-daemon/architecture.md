@@ -98,6 +98,10 @@ Phase R redesign notes:
 - same-host daemon functionality must ship with feature parity on every
   supported operating system; Windows is not a compile-only or degraded-host
   target
+- same-host daemon hosting uses one user-scoped background daemon model on
+  macOS, Linux, and Windows; service-control integration may exist inside the
+  Windows lifecycle adapter, but Phase S parity does not depend on a separate
+  SCM-only host model
 - same-host transport and lifecycle control must remain platform-neutral above
   the adapter line:
   - platform-specific listener/stream/control types are allowed only inside
@@ -184,6 +188,11 @@ Everything else must remain platform-neutral:
 If a code path needs additional platform branching outside the three areas
 above, the architecture docs and boundary inventory must be updated before the
 implementation is accepted.
+
+Phase S carries forward the current PID continuity model unchanged. Windows
+parity work may reimplement how liveness is enforced inside the host-ownership
+or lifecycle adapters, but it must not silently redesign PID semantics without
+an explicit follow-up ADR.
 
 ## 3.1 Singleton Runtime
 

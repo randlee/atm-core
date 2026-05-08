@@ -24,6 +24,21 @@ shutdown semantics on every supported operating system.
 - `REQ-DAEMON-SIGNAL-001`
 - `REQ-DAEMON-PLATFORM-001`
 - `REQ-DAEMON-PLATFORM-002`
+- `REQ-DAEMON-TEST-003`
+- `REQ-DAEMON-TEST-004`
+- `REQ-CORE-BOUNDARY-001`
+
+## Governing ADRs
+
+- `docs/adr/ADR-002-host-wide-daemon-singleton.md`
+- `docs/adr/ADR-007-supported-platform-parity.md`
+
+## Hard Dependencies
+
+- S.1 boundary extraction is complete
+- S.2 Windows local IPC implementation is complete
+- PID liveness semantics remain unchanged in Phase S unless a later ADR
+  explicitly reopens that seam
 
 ## Exact Code Targets
 
@@ -53,6 +68,9 @@ shutdown semantics on every supported operating system.
 3. Prove ordered release semantics on Windows as well as Unix.
 4. Preserve one bounded graceful-shutdown and reload model across supported
    operating systems.
+5. Keep lifecycle-control and host-ownership tests aligned with the shared
+   parity contract from ADR-007; platform-specific tests may cover adapter
+   internals only.
 
 ## Acceptance Criteria
 
@@ -62,9 +80,13 @@ shutdown semantics on every supported operating system.
   both platform families
 - no same-host daemon code above the adapter line branches directly on Unix
   signal or file-locking APIs
+- Windows and Unix lifecycle-control / host-ownership tests prove the same
+  externally visible contract, with platform-specific assertions limited to the
+  adapter internals
 
 ## Required Validation
 
 - `just lint`
 - workspace tests
 - targeted host-ownership and lifecycle-control tests on Unix and Windows
+- shared-harness parity review against ADR-007 before sprint closeout

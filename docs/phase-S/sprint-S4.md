@@ -23,6 +23,17 @@ Unix-only behavior.
 - `REQ-DAEMON-PLATFORM-001`
 - `REQ-DAEMON-PLATFORM-002`
 
+## Governing ADRs
+
+- `docs/adr/ADR-007-supported-platform-parity.md`
+
+## Hard Dependencies
+
+- S.2 Windows local IPC implementation is complete
+- S.3 lifecycle-control and host-ownership parity work is complete
+- no remaining unsupported-path same-host daemon stubs are treated as
+  acceptable release state
+
 ## Required Work
 
 1. Remove any remaining non-Unix same-host `daemon_unavailable(...)` stubs.
@@ -30,9 +41,12 @@ Unix-only behavior.
    - fixed-sleep daemon stabilization
    - new broad `#[cfg(unix)]` gating outside portability adapters
    - Unix-only same-host functionality in production paths
-3. Reconcile all docs, ADRs, and machine-readable boundary records with the
+3. Re-enable full Windows `cargo clippy --workspace --all-targets -- -D warnings`
+   in both GitHub CI and `just lint` by removing the temporary
+   `ATM_WINDOWS_CLIPPY_SCOPE=cross-platform-only` guardrail.
+4. Reconcile all docs, ADRs, and machine-readable boundary records with the
    landed cross-platform daemon design.
-4. Run a final coverage audit proving the same shared same-host infrastructure
+5. Run a final coverage audit proving the same shared same-host infrastructure
    is used on Unix and Windows.
 
 ## Acceptance Criteria
@@ -45,9 +59,12 @@ Unix-only behavior.
   owned portability adapters
 - the test suite forbids flaky timing-based stabilization for same-host daemon
   coverage
+- Windows CI and local `just lint` both run full workspace clippy without the
+  temporary daemon exclusion
 
 ## Required Validation
 
 - `just lint`
+- `cargo clippy --workspace --all-targets --target x86_64-pc-windows-msvc -- -D warnings`
 - workspace tests
 - cross-platform CI coverage for same-host daemon functionality

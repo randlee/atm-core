@@ -29,6 +29,12 @@ depends directly on Unix APIs.
 - `docs/adr/ADR-003-test-fidelity-and-daemon-isolation.md`
 - `docs/adr/ADR-007-supported-platform-parity.md`
 
+## Hard Dependencies
+
+- S.0 documentation hardening is accepted
+- the allowed OS-difference inventory is frozen before S.1 code extraction
+- the temporary Windows CI lint narrowing remains in place until S.4 removes it
+
 ## Exact Code Targets
 
 - `crates/atm-daemon/src/composition.rs`
@@ -56,6 +62,10 @@ depends directly on Unix APIs.
    from composition/runtime orchestration.
 5. Replace broad `#[cfg(unix)]` entrypoint gating with adapter-owned platform
    selection.
+6. Limit new OS-sensitive surface area to these daemon-owned facades only:
+   - `LocalIpcServerTransportAdapter`
+   - `LifecycleControlSourceAdapter`
+   - `HostOwnershipAdapter`
 
 ## Required Document Updates
 
@@ -70,6 +80,8 @@ depends directly on Unix APIs.
   Unix listener/stream or signal types
 - the only allowed OS-specific seams are the documented portability
   boundaries
+- S.1 does not introduce new public cross-crate OS-specific traits or helper
+  types outside the three documented daemon-owned portability facades
 - any remaining unsupported-path stub is temporary, explicitly documented, and
   limited to the still-unimplemented adapter
 
