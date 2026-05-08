@@ -33,6 +33,7 @@ pub(crate) struct RuntimeLifecycle {
     state: Mutex<RuntimeLifecycleState>,
 }
 
+#[cfg(unix)]
 impl RuntimeLifecycle {
     pub(crate) fn new() -> Self {
         Self::default()
@@ -594,6 +595,7 @@ mod tests {
         assert_eq!(lifecycle.state(), RuntimeLifecycleState::Stopped);
     }
 
+    #[cfg(unix)]
     #[test]
     fn runtime_composition_failed_startup_returns_to_stopped() {
         let tempdir = TempDir::new().expect("tempdir");
