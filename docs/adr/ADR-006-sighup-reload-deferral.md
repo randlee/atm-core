@@ -90,4 +90,5 @@ Phase R daemon behavior:
 |---|---|---|
 | Implement bounded config/roster reload | `arch-ctm` | `R.18` acceptance |
 | Add reload regression tests | `arch-ctm` | `R.18` validation |
+| Enforce the per-connection `32` in-flight request cap (`crates/atm-daemon/src/lib.rs:648`) | `arch-ctm` | `R.18` acceptance |
 | Replace the deferral log-only path with the real reload path | `arch-ctm` | `R.18` merge |
