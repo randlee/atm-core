@@ -918,7 +918,7 @@ Partition:
   - bare production `Condvar::wait(...)` enforcement
 - ATM-local rules that should begin and remain on `atm-core` unless they later
   stabilize into generic frameworks:
-  - role-name literal enforcement
+  - duplicate semantic string-literal enforcement in non-test Rust code
   - fixed-sleep test-hygiene enforcement
   - triage Turtle consistency enforcement
 
@@ -926,11 +926,14 @@ Execution sequence:
 1. extend `sc-portability` for:
    - ungated `std::os::unix` imports
    - `cfg_attr(not(unix), allow(dead_code))` portability suppressors
-2. extend the existing identity-literal lint for raw `"team-lead"` test
-   literals
+2. extend the existing identity-literal lint into a duplicate semantic
+   string-literal gate for non-test Rust code, with raw `"team-lead"` as the
+   first mandatory case
 3. add a new repository-local fixed-sleep test-hygiene lint and wire it into
    `just lint`
 4. extend `sc-boundary` for bare production `Condvar::wait(...)`
+   - replacement code must inspect the returned `WaitTimeoutResult`; swapping
+     to `wait_timeout(...)` while discarding timeout state is still a bug
 5. add a repository-local triage-record consistency lint/CI check and wire it
    into the default developer gate
 6. after all families are green and low-noise on `atm-core`, extract the

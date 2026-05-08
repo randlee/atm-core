@@ -270,7 +270,8 @@ no admin takeover path for live-old-pid conflicts.
 Phase R postmortem identified five recurring finding families that should move
 into normal lint or CI gates:
 - Unix platform gating (`std::os::unix`, `cfg_attr(not(unix), allow(dead_code))`)
-- role-name literals in test code (`"team-lead"`)
+- duplicate semantic string literals in non-test Rust code (first mandatory
+  case: `"team-lead"`)
 - fixed `thread::sleep(...)` in ordinary test code
 - bare production `Condvar::wait(...)`
 - contradictory TTL triage-record state
@@ -287,9 +288,13 @@ Planned partition:
   - Unix platform gating
   - bare production `Condvar::wait(...)`
 - ATM-local rules:
-  - role-name literals
+  - duplicate semantic string literals in non-test Rust code
   - fixed-sleep test hygiene
   - TTL triage-record consistency
+
+Current note:
+- the first mandatory semantic-literal case is raw `"team-lead"` outside the
+  canonical `crates/atm-core/src/roles.rs` `ROLE_TEAM_LEAD` definition
 
 Tracking doc:
 - `docs/phase-R/sprint-R19.md`

@@ -3005,9 +3005,11 @@ mail correctness.
     boundary
   - `#[cfg_attr(not(unix), allow(dead_code))]` must not be used as a
     portability suppressor in production code
-  - raw `"team-lead"` role-name literals in Rust test code must fail the ATM
-    identity-literal gate everywhere except the canonical role-definition
-    source
+  - duplicated raw semantic literals in non-test Rust code must fail the ATM
+    identity-literal gate unless they come from a canonical constant or an
+    explicit allow-list
+  - raw `"team-lead"` role-name literals are the first mandatory case and must
+    fail everywhere except the canonical role-definition source
   - fixed `thread::sleep(...)` in ordinary Rust test code must fail a
     test-hygiene gate unless the file or callsite is explicitly part of the
     narrow daemon-runtime suite
@@ -3016,3 +3018,5 @@ mail correctness.
     required production shapes
   - triage Turtle records must not report contradictory aggregate and terminal
     state fields in the same record
+  - any scoped exclusions for the semantic-literal gate must stay narrow and
+    explicit; they must not exempt ordinary production code wholesale

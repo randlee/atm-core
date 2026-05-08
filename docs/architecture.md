@@ -110,7 +110,7 @@ Lint and tooling boundary rules:
     - Unix platform-gating checks
     - bare production `Condvar::wait(...)` checks
   - ATM-local rules:
-    - role-literal checks
+    - duplicate semantic string-literal checks in non-test Rust code
     - fixed-sleep test-hygiene checks
     - triage Turtle consistency checks
 
@@ -145,7 +145,8 @@ Current Phase R lint partition direction:
   rules
 - extend the existing `sc-boundary` analyzer for reusable production-liveness
   rules that need Rust-aware analysis
-- keep ATM role-literal policy in the existing repository-local identity lint
+- keep ATM duplicate semantic literal policy in the existing repository-local
+  identity lint
 - add any fixed-sleep and triage-record validation as repository-local lint/CI
   steps first, then reevaluate extraction only after the false-positive and
   allow-list shape is proven on `atm-core`

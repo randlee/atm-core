@@ -4,7 +4,7 @@
 plan_type: sprint_plan
 phase: R
 sprint: "R.19"
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pR-postmortem-linters
+worktree: feature/pR-postmortem-linters
 branch: feature/pR-postmortem-linters
 status: planned
 estimated_scope: M
@@ -24,7 +24,7 @@ subset into standalone `sc-lint`.
 The Phase R postmortem identified five lint-worthy finding families:
 
 1. Unix platform gating
-2. role-name literals in test code
+2. duplicate semantic string literals in non-test Rust code
 3. fixed `thread::sleep(...)` in ordinary test code
 4. bare production `Condvar::wait(...)`
 5. TTL triage-record consistency
@@ -48,7 +48,6 @@ correct partition:
 
 ## Governing Boundaries
 
-- `BOUNDARY-ScLintBoundaryAnalyzer`
 - `BOUNDARY-ClientTransport`
 - `BOUNDARY-AtmProtocol`
 
@@ -80,7 +79,7 @@ Reusable rules intended for later `sc-lint` migration:
 
 ATM-local rules that remain on `atm-core` unless a later extraction is
 explicitly approved:
-- Family B — role-name literals in test code
+- Family B — duplicate semantic string literals in non-test Rust code
 - Family C — fixed-sleep test hygiene
 - Family I — TTL triage-record consistency
 
@@ -99,28 +98,34 @@ explicitly approved:
    - later migrate upstream to standalone `sc-lint` once the rule shape is
      stable on `atm-core`
 
-2. Family B — role-name literals
+2. Family B — duplicate semantic string literals
    Development work:
-   - extend `.just/check_test_identity_literals.py` to reject raw
-     `"team-lead"` literals in Rust test code outside the canonical role
-     definition source
+   - extend `.just/check_test_identity_literals.py` into a duplicate semantic
+     string-literal gate for non-test Rust code
+   - reject raw `"team-lead"` literals outside the canonical role definition
+     source as the first mandatory case
    Design note:
    - the broader guideline against duplicated raw strings and magic numbers is
      already accepted; this sprint chooses the first low-noise hard-gated
      subset rather than redefining that guideline
-   - keep this family targeted to canonical semantic literals rather than
-     expanding immediately into a generic duplicate-string-literal or
-     magic-number gate
-   - broader duplicate-string or magic-number enforcement is a separate
-     follow-up decision and should not be folded into this sprint without an
-     explicit scope and allow-list call
-   - if that broader lint is later enabled, it should enforce the chosen rule
-     for the chosen scope rather than ship as a non-enforcing report
+   - `"team-lead"` is the first enforced slice because it is already duplicated
+     widely enough in the repo to justify a dedicated hard gate now
+   - the rule should cover duplicated semantic string literals in non-test Rust
+     code, not just this single literal
+   - the canonical Rust definition source for the `"team-lead"` literal is
+     `crates/atm-core/src/roles.rs` via `ROLE_TEAM_LEAD`
+   - exclusions must stay narrow and explicit; the rule must not exempt
+     ordinary production code wholesale
+   - `TeamName` / `AgentName` newtype hardening remains the longer-term
+     structural direction, but this grep-backed gate is still warranted now
+     because the postmortem problem is duplicated handwritten literals already
+     spread through non-test production code and the full newtype migration is
+     larger than this sprint
    Integration:
    - keep this in the existing `identities` lint lane
    Migration posture:
-   - ATM-local for now; revisit only if a generic configurable literal-policy
-     framework proves worthwhile
+   - ATM-local for now; revisit only if a generic configurable semantic
+     literal-policy framework proves worthwhile
 
 3. Family C — fixed-sleep test hygiene
    Development work:
@@ -139,6 +144,9 @@ explicitly approved:
    - extend `sc-boundary` to flag bare production `Condvar::wait(...)`
    - treat `wait_timeout(...)` and `wait_timeout_while(...)` as the approved
      production forms
+   - require the replacement pattern to inspect the returned
+     `WaitTimeoutResult`; merely swapping `wait(...)` for `wait_timeout(...)`
+     and discarding the timeout state is not sufficient
    Integration:
    - keep this on the existing `sc-boundary` path so `just lint` runs it
      automatically
@@ -170,15 +178,16 @@ explicitly approved:
 ## Sequencing
 
 Recommended build order:
-1. Family B in the existing identity-literal lane
-2. Family A in `sc-portability`
+1. Family A in `sc-portability`
+2. Family B in the existing identity-literal lane
 3. Family C as a new repository-local test-hygiene lint
 4. Family D in `sc-boundary`
 5. Family I as a repository-local triage validator
 6. migration review after all five pass locally
 
 Rationale:
-- B and A are the narrowest, least-ambiguous wins
+- A and B are the narrowest, least-ambiguous wins
+- A lands first because it extends an already-running reusable analyzer lane
 - C needs the most allow-list and test-scope tuning
 - D benefits from the existing Rust analyzer graph and should land after the
   portability/test-scope patterns are settled
