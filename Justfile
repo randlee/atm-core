@@ -1,6 +1,8 @@
 set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 
 python_cmd := if os_family() == "windows" { "python" } else { "python3" }
+windows_clippy_scope := env_var_or_default("ATM_WINDOWS_CLIPPY_SCOPE", "cross-platform-only")
+clippy_cmd := if os_family() == "windows" { if windows_clippy_scope == "cross-platform-only" { "cargo clippy --workspace --all-targets --exclude atm-daemon --target x86_64-pc-windows-msvc -- -D warnings" } else { "cargo clippy --workspace --all-targets -- -D warnings" } } else { "cargo clippy --workspace --all-targets -- -D warnings" }
 
 # Show the curated repo task help.
 default: help
@@ -27,7 +29,7 @@ _lint-fmt:
 
 [private]
 _lint-clippy:
-    cargo clippy --workspace --all-targets -- -D warnings
+    {{clippy_cmd}}
 
 [private]
 _lint-modules:
