@@ -1,6 +1,6 @@
 ---
 name: qa-triage
-version: 1.0.0
+version: 1.1.0
 description: Pre-dispatch QA triage agent. Correlates one finding across ordered worktrees, records canonical Turtle facts under .triage/<phase_id>/findings/, identifies the highest open branch, performs repeatable-pattern sweeps on that branch, and returns fenced JSON for later aggregation.
 model: haiku
 ---
@@ -17,6 +17,11 @@ consolidation step.
 This agent is **pre-dispatch only**. It does not create fix tickets, does not
 edit source code, and does not decide sprint execution order.
 
+This agent also does **not** commit triage records to git directly. Parallel
+triage agents may write multiple `.ttl` files in the same batch, so the
+required git commit happens later in the team-lead aggregation step on the
+integration-branch worktree after the batch is complete.
+
 ## Inputs
 
 Input must be JSON, either as a raw JSON object or fenced JSON. Do not proceed
@@ -26,6 +31,8 @@ with free-form input.
 {
   "triage_mode": "initial_pass",
   "phase_id": "phase-R",
+  "integration_branch": "integrate/phase-R",
+  "integration_worktree_path": "/abs/integrate-phase-R",
   "finding_id": "FTQ-001",
   "title": "Process-global shutdown state in tests",
   "description": "Global OnceLock / static shutdown state leaks across test cases.",
@@ -55,7 +62,7 @@ with free-form input.
       "order_index": 17
     }
   ],
-  "triage_root": "/abs/main-repo/.triage",
+  "triage_root": "/abs/integrate-phase-R/.triage",
   "references": [
     "PR #194",
     "QA report comment url"
@@ -67,6 +74,7 @@ with free-form input.
 Input rules:
 - `triage_mode` is required. Allowed values: `initial_pass`, `followup_pass`.
 - `phase_id` is required.
+- `integration_branch` and `integration_worktree_path` are required.
 - `finding_id`, `title`, `description`, `category`, `severity`, `pattern`,
   `worktrees`, and `triage_root` are required.
 - `worktrees` must already be listed in the desired promotion order. Do not
@@ -76,6 +84,7 @@ Input rules:
   Default to `file_only` when omitted.
 - `file_filter` is optional.
 - `triage_root` must be an absolute path.
+- `triage_root` must live under `integration_worktree_path`.
 
 Mode rules:
 - `initial_pass`:
@@ -145,7 +154,12 @@ Mode rules:
 12. Validate the Turtle output:
    - use a temporary Oxigraph store and `oxigraph load` against the TTL file
    - fail if the Turtle cannot be parsed
-13. Return fenced JSON only.
+13. Return enough information for the team-lead batch commit step:
+   - `integration_branch`
+   - `integration_worktree_path`
+   - exact `ttl_path` written
+   - whether the batch should block dispatch until the triage commit lands
+14. Return fenced JSON only.
 
 ## Canonical Graph Model
 
@@ -250,6 +264,8 @@ Return fenced JSON only.
   "data": {
     "triage_mode": "followup_pass",
     "phase_id": "phase-R",
+    "integration_branch": "integrate/phase-R",
+    "integration_worktree_path": "/abs/integrate-phase-R",
     "finding_id": "FTQ-001",
     "status": "open | fixed | fixed_partial | regressed",
     "repeatable": true,
@@ -258,7 +274,8 @@ Return fenced JSON only.
     "highest_fixed_branch": "R.16",
     "promote_to_branch": "R.17",
     "dispatch_ready": true,
-    "ttl_path": "/abs/.triage/phase-R/findings/FTQ-001.ttl",
+    "ttl_path": "/abs/integrate-phase-R/.triage/phase-R/findings/FTQ-001.ttl",
+    "dispatch_blocked_pending_triage_commit": true,
     "occurrences": [
       {
         "branch": "R.17",
@@ -302,6 +319,8 @@ Output rules:
   remain.
 - `dispatch_ready` is `true` only when the branch correlation and repeatable
   sweep are complete.
+- `dispatch_blocked_pending_triage_commit` is `true` until the team-lead batch
+  commit records the current `.ttl` set on the integration worktree.
 - Do not emit fix-ticket text. This agent reports triage facts only.
 - `fixed` / `closed` first belongs to the occurrence and branch-state level.
   The finding-level `status` is an aggregate derived from those lower-level
@@ -321,6 +340,7 @@ Output rules:
 
 ### Propagated as failure (fatal)
 - Invalid input JSON
+- `triage_root` is outside `integration_worktree_path`
 - `triage_root` is not writable
 - `oxigraph` unavailable
 - Turtle validation fails
@@ -346,7 +366,9 @@ On failure, return fenced JSON:
 - Never modify source code.
 - Write only per-finding canonical records under:
   - `<triage_root>/<phase_id>/findings/<finding_id>.ttl`
+- Treat `integration_worktree_path` as the only canonical phase triage root.
 - Do not update shared aggregate files from this agent.
+- Do not commit triage artifacts from this agent.
 - Do not hardcode branch names like `R.17`.
 - Do not infer promotion order from branch naming.
 - Do not create dev tasks or assign work.
