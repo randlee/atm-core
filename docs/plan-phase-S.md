@@ -196,6 +196,18 @@ The following are not acceptable for same-host daemon parity coverage:
 - retry loops with no explicit state predicate
 - platform-specific timing fudge intended only to “make Windows pass”
 
+Accepted production exceptions:
+- `crates/atm-daemon/src/lifecycle_control.rs`
+  - Windows lifecycle-control wake propagation uses a bounded `25ms` polling loop after
+    `signal_hook::flag` registration because the retained cross-platform signal surface does not
+    provide a blocking Windows wake primitive that matches the shared install contract.
+- `crates/atm/src/composition.rs`
+  - daemon auto-start waits on an external child process publishing the local IPC endpoint, so the
+    client uses bounded `poll_interval` sleeps while no push-style readiness surface exists
+- `crates/atm-daemon/src/runtime_health.rs`
+  - retained-observability flush during shutdown remains best-effort and bounded to `2s` so daemon
+    teardown cannot stall indefinitely behind sink I/O
+
 ## 5. Planned Sprint Sequence
 
 ### S.0 Planning And Documentation Hardening

@@ -34,6 +34,8 @@ use atm_rusqlite::{SqliteBoundaryAssembly, assemble_default_boundary};
 const MAX_STATUS_CACHE_ENTRIES: usize = 4096;
 const MAX_RELOAD_TEAMS: usize = 256;
 const SHUTDOWN_WAL_CHECKPOINT_DEADLINE: Duration = Duration::from_secs(2);
+// The retained observability flush is best-effort during shutdown; Phase S records this bounded
+// 2-second deadline as an accepted production exception in the anti-flake contract docs.
 const SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE: Duration = Duration::from_secs(2);
 
 #[cfg(test)]

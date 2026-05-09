@@ -29,6 +29,7 @@ ADAPTER_FILES = (
 UNIX_GATING_RE = re.compile(r"#\[\s*cfg\s*\((?:all|any)?\s*\(?\s*unix\b")
 NON_UNIX_STUB_RE = re.compile(r"#\[\s*cfg\s*\(\s*not\s*\(\s*unix\s*\)\s*\)\s*\]")
 DAEMON_UNAVAILABLE_RE = re.compile(r"\bdaemon_unavailable\s*\(")
+LEGACY_PORTABILITY_TODO_RE = re.compile(r"TODO\(S\.2/ADR-007\)")
 
 
 @dataclass(frozen=True)
@@ -98,6 +99,29 @@ def collect_non_unix_same_host_stubs(repo_root: Path) -> list[Violation]:
     return violations
 
 
+def collect_forbidden_todo_markers(repo_root: Path) -> list[Violation]:
+    violations: list[Violation] = []
+    for rel_path in ADAPTER_FILES:
+        abs_path = repo_root / rel_path
+        lines = iter_lines(abs_path)
+        test_scope = rust_file_test_scope(Path(rel_path), lines)
+        for line_number, line in enumerate(lines, start=1):
+            if test_scope[line_number - 1]:
+                continue
+            if LEGACY_PORTABILITY_TODO_RE.search(line):
+                violations.append(
+                    Violation(
+                        path=rel_path,
+                        line_number=line_number,
+                        message=(
+                            "Phase S closeout must not leave TODO(S.2/ADR-007) portability "
+                            "markers in production same-host adapter code"
+                        ),
+                    )
+                )
+    return violations
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -117,6 +141,7 @@ def main(argv: list[str]) -> int:
     violations = [
         *collect_shared_host_shell_gating(repo_root),
         *collect_non_unix_same_host_stubs(repo_root),
+        *collect_forbidden_todo_markers(repo_root),
     ]
     duration_seconds = monotonic_now() - start_time
 

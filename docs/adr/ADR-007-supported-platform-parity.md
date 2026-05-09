@@ -97,4 +97,7 @@ The closeout also added:
 - a dedicated `same-host-portability` lint that rejects broad Unix-only
   same-host gating above the adapter layer
 - a real local-IPC same-host request/response smoke test that runs through the
-  shared frame helpers and daemon server transport on supported hosts
+  shared frame helpers and daemon server transport on supported hosts with a
+  bounded `5ms` readiness backoff and bounded serve-thread completion wait
+- explicit accepted-exception documentation for the remaining bounded production
+  polling and flush-deadline paths in `docs/plan-phase-S.md §4.1`

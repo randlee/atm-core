@@ -26,23 +26,26 @@ use interprocess::local_socket::traits::Stream as _;
 use serial_test::serial;
 use std::fs::OpenOptions;
 use std::io::{Seek, SeekFrom, Write};
+use std::sync::mpsc;
 use std::sync::{Arc, Barrier};
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
-struct LifecycleFlagResetGuard<'a> {
-    lifecycle: &'a LifecycleControlSourceAdapter,
+const TEST_TEAM: &str = "test-team";
+
+struct LifecycleFlagResetGuard {
+    lifecycle: LifecycleControlSourceAdapter,
 }
 
-impl<'a> LifecycleFlagResetGuard<'a> {
-    fn install(lifecycle: &'a LifecycleControlSourceAdapter) -> Self {
+impl LifecycleFlagResetGuard {
+    fn install(lifecycle: LifecycleControlSourceAdapter) -> Self {
         lifecycle.set_terminate_for_test(false);
         lifecycle.set_reload_for_test(false);
         Self { lifecycle }
     }
 }
 
-impl Drop for LifecycleFlagResetGuard<'_> {
+impl Drop for LifecycleFlagResetGuard {
     fn drop(&mut self) {
         self.lifecycle.set_terminate_for_test(false);
         self.lifecycle.set_reload_for_test(false);
@@ -99,7 +102,9 @@ fn connect_daemon_local_ipc_until_ready(endpoint_path: &std::path::Path) -> Loca
             Ok(stream) => return stream,
             Err(error) if Instant::now() < deadline => {
                 let _ = error;
-                std::thread::yield_now();
+                // The listener becomes connectable only after the serve thread enters accept;
+                // use a tiny bounded sleep instead of a CPU-spin retry loop while waiting.
+                std::thread::sleep(Duration::from_millis(5));
             }
             Err(error) => panic!("connect daemon local ipc: {error}"),
         }
@@ -121,7 +126,7 @@ fn daemon_shutdown_signals_for_test_are_isolated() {
 #[serial]
 fn daemon_shutdown_signal_install_reuses_shared_flags() {
     let first = LifecycleControlSourceAdapter::install().expect("install first");
-    let _reset = LifecycleFlagResetGuard::install(&first);
+    let _reset = LifecycleFlagResetGuard::install(first.clone());
 
     let second = LifecycleControlSourceAdapter::install().expect("install second");
     first.set_reload_for_test(true);
@@ -134,33 +139,40 @@ fn daemon_shutdown_signal_install_reuses_shared_flags() {
 #[test]
 #[serial]
 fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
+    // TempDir uniqueness is process-local; #[serial] keeps this same-host transport smoke test
+    // from racing other lifecycle-control and singleton-sensitive daemon tests.
     let tempdir = TempDir::new().expect("tempdir");
     let socket_path = tempdir.path().join("daemon.sock");
     let server_transport = LocalIpcServerTransportAdapter::new();
     let runtime = server_transport
         .prepare_runtime_at_socket_path(socket_path.clone())
         .expect("prepare runtime");
-    let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
-    let _reset = LifecycleFlagResetGuard::install(&lifecycle);
+    let (lifecycle, _reset) = {
+        let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
+        let reset = LifecycleFlagResetGuard::install(lifecycle.clone());
+        (lifecycle, reset)
+    };
     let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
+    let (serve_result_tx, serve_result_rx) = mpsc::channel();
 
     let join = std::thread::spawn(move || {
-        runtime.serve_with_runtime_hooks(
+        let result = runtime.serve_with_runtime_hooks(
             dispatcher,
-            Duration::from_secs(1),
-            Duration::from_secs(1),
+            Duration::from_millis(500),
+            Duration::from_secs(2),
             || Ok(()),
             || Ok(()),
             || {},
-        )
+        );
+        serve_result_tx.send(result).expect("send serve result");
     });
 
     let mut stream = connect_daemon_local_ipc_until_ready(&socket_path);
     stream
-        .set_send_timeout(Some(Duration::from_secs(1)))
+        .set_send_timeout(Some(Duration::from_secs(5)))
         .expect("set send timeout");
     stream
-        .set_recv_timeout(Some(Duration::from_secs(1)))
+        .set_recv_timeout(Some(Duration::from_secs(5)))
         .expect("set recv timeout");
     let request = RequestEnvelope::Doctor(DoctorQuery {
         home_dir: tempdir.path().join("home"),
@@ -186,9 +198,11 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     }
 
     lifecycle.set_terminate_for_test(true);
-    join.join()
-        .expect("join serve thread")
+    serve_result_rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("recv serve result")
         .expect("serve runtime result");
+    join.join().expect("join serve thread");
 }
 
 #[test]
@@ -353,7 +367,7 @@ fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
     assembly
         .roster_store()
         .replace_roster(atm_core::boundary::RosterStoreReplaceRosterRequest {
-            team: "test-team".parse().expect("team"),
+            team: TEST_TEAM.parse().expect("team"),
             roster: TeamConfig {
                 members: members
                     .iter()
@@ -367,7 +381,7 @@ fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
 }
 
 fn write_team_config(home_dir: &std::path::Path, members: &[&str]) {
-    let team_dir = home_dir.join(".claude").join("teams").join("test-team");
+    let team_dir = home_dir.join(".claude").join("teams").join(TEST_TEAM);
     std::fs::create_dir_all(team_dir.join("inboxes")).expect("inboxes dir");
     let config = TeamConfig {
         members: members
@@ -396,7 +410,7 @@ fn heartbeat_updates_status_cache_and_doctor_projection() {
     let status_cache = RuntimeStatusCache::new();
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache.clone(), db_path);
-    let team: TeamName = "test-team".parse().expect("team");
+    let team: TeamName = TEST_TEAM.parse().expect("team");
     let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
     let response = dispatcher
@@ -480,7 +494,7 @@ fn reload_runtime_view_applies_updated_team_config_and_preserves_live_state() {
         status_cache.clone(),
         db_path.clone(),
     );
-    let team: TeamName = "test-team".parse().expect("team");
+    let team: TeamName = TEST_TEAM.parse().expect("team");
     let leader: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
     let qa: AgentName = "qa-a".parse().expect("member");
 
@@ -528,7 +542,7 @@ fn reload_runtime_view_rejects_invalid_config_and_preserves_last_known_good_stat
     let status_cache = RuntimeStatusCache::new();
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache.clone(), db_path);
-    let team: TeamName = "test-team".parse().expect("team");
+    let team: TeamName = TEST_TEAM.parse().expect("team");
     let leader: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
     dispatcher
@@ -544,7 +558,7 @@ fn reload_runtime_view_rejects_invalid_config_and_preserves_last_known_good_stat
     let config_path = atm_home
         .join(".claude")
         .join("teams")
-        .join("test-team")
+        .join(TEST_TEAM)
         .join("config.json");
     std::fs::write(&config_path, br#"{"members":["team-lead",}"#).expect("invalid config");
 
@@ -587,7 +601,7 @@ fn heartbeat_rejects_live_pid_conflict() {
 
     let status_cache = RuntimeStatusCache::new();
     let dispatcher = DaemonRequestDispatcher::new_for_test(atm_home, status_cache.clone(), db_path);
-    let team: TeamName = "test-team".parse().expect("team");
+    let team: TeamName = TEST_TEAM.parse().expect("team");
     let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
     dispatcher
@@ -642,7 +656,7 @@ fn heartbeat_accepts_pid_takeover_when_previous_pid_is_dead() {
 
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home, RuntimeStatusCache::new(), db_path);
-    let team: TeamName = "test-team".parse().expect("team");
+    let team: TeamName = TEST_TEAM.parse().expect("team");
     let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
     dispatcher
@@ -691,7 +705,7 @@ fn heartbeat_demotes_evicted_member_to_explicit_unknown() {
     write_team_config(&atm_home, &[ROLE_TEAM_LEAD, "qa-a"]);
 
     let status_cache = RuntimeStatusCache::new();
-    let team: TeamName = "test-team".parse().expect("team");
+    let team: TeamName = TEST_TEAM.parse().expect("team");
     let dispatcher = DaemonRequestDispatcher::new_for_test(atm_home, status_cache.clone(), db_path);
     let member: AgentName = "evicted".parse().expect("member");
     let base = Utc::now();
@@ -750,7 +764,7 @@ fn heartbeat_retries_identity_conflict_after_old_pid_dies() {
 
     let status_cache = RuntimeStatusCache::new();
     let dispatcher = DaemonRequestDispatcher::new_for_test(atm_home, status_cache.clone(), db_path);
-    let team: TeamName = "test-team".parse().expect("team");
+    let team: TeamName = TEST_TEAM.parse().expect("team");
     let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
     status_cache
@@ -801,7 +815,7 @@ fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable() {
         .dispatch(RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {
             home_dir: atm_home.clone(),
             current_dir: atm_home,
-            team_override: Some("test-team".parse().expect("team")),
+            team_override: Some(TEST_TEAM.parse().expect("team")),
         }))
         .expect("doctor response");
 
@@ -831,7 +845,7 @@ fn doctor_projects_unavailable_runtime_when_all_members_are_offline() {
 
     let doctor = dispatcher
         .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
-            team: "test-team".parse().expect("team"),
+            team: TEST_TEAM.parse().expect("team"),
             member: ROLE_TEAM_LEAD.parse().expect("member"),
             pid: std::process::id(),
             observed_at: IsoTimestamp::now(),
@@ -841,7 +855,7 @@ fn doctor_projects_unavailable_runtime_when_all_members_are_offline() {
             dispatcher.dispatch(RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {
                 home_dir: atm_home.clone(),
                 current_dir: atm_home,
-                team_override: Some("test-team".parse().expect("team")),
+                team_override: Some(TEST_TEAM.parse().expect("team")),
             }))
         })
         .expect("doctor response");

@@ -270,6 +270,9 @@ fn install_platform_hooks(
                     observed_reload = reload_now;
                     let _ = state_change.notify();
                 }
+                // `signal_hook::flag` does not expose a blocking cross-platform wake primitive on
+                // Windows, so the lifecycle worker uses one bounded polling exception that Phase S
+                // documents explicitly in plan-phase-S.md §4.1.
                 std::thread::sleep(std::time::Duration::from_millis(25));
             }
         })

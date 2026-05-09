@@ -255,6 +255,9 @@ impl DaemonSupervisor {
                     if transport.try_connect().is_ok() {
                         return Ok(());
                     }
+                    // External daemon launch has no push-based readiness signal here, so the
+                    // client side keeps one bounded polling exception that Phase S documents in
+                    // plan-phase-S.md §4.1.
                     thread::sleep(poll_interval);
                 }
                 return Err(AtmError::daemon_auto_start_failed(format!(
@@ -265,6 +268,8 @@ impl DaemonSupervisor {
             if Instant::now() >= deadline {
                 return Err(LaunchGateGuard::rejected_error(&self.endpoint));
             }
+            // Waiting for another process to publish the same-host endpoint is the second bounded
+            // auto-start polling exception recorded in plan-phase-S.md §4.1.
             thread::sleep(poll_interval);
         }
     }

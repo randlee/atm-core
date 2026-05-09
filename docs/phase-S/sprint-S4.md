@@ -91,3 +91,14 @@ Unix-only behavior.
 - `cargo clippy --workspace --all-targets --target x86_64-pc-windows-msvc -- -D warnings`
 - workspace tests
 - cross-platform CI coverage for same-host daemon functionality
+
+## QA-1 Closeout Notes
+
+- Windows named-pipe endpoint preparation is intentionally a no-op in
+  `crates/atm-daemon/src/local_ipc_transport.rs` because no filesystem socket path exists to
+  create or unlink.
+- Phase S records the remaining accepted production polling exceptions in
+  `docs/plan-phase-S.md §4.1`:
+  - Windows lifecycle-control wake propagation
+  - CLI daemon auto-start endpoint publication wait
+  - retained-observability shutdown flush deadline
