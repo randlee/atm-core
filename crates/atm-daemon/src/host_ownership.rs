@@ -11,6 +11,11 @@ const STALE_OWNER_RECOVERY_RETRY_ATTEMPTS: usize = 3;
 pub(crate) const HOST_RUNTIME_OWNER_LOCK_FILE: &str = "owner.lock";
 const OWNER_RECOVERY_RETRY_INTERVAL: Duration = Duration::from_millis(25);
 
+#[cfg(test)]
+static STALE_RECOVERY_OBSERVED_BARRIER: std::sync::Mutex<
+    Option<std::sync::Arc<std::sync::Barrier>>,
+> = std::sync::Mutex::new(None);
+
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct HostOwnershipAdapter;
 
@@ -43,6 +48,8 @@ impl HostOwnershipAdapter {
                 if let Some((pid, token)) = recorded_owner_identity(&lock_file)?
                     && !atm_core::process::process_is_alive(pid)
                 {
+                    #[cfg(test)]
+                    wait_at_stale_recovery_barrier_for_test();
                     drop(lock_file);
                     lock_file = recover_stale_owner_lock(&lock_path, pid, &token)?;
                     recovered = true;
@@ -216,4 +223,29 @@ fn clear_owner_record(lock_file: &mut File) -> Result<(), AtmError> {
             .with_source(source)
     })?;
     Ok(())
+}
+
+#[cfg(test)]
+pub(crate) fn install_stale_recovery_barrier_for_test(barrier: std::sync::Arc<std::sync::Barrier>) {
+    *STALE_RECOVERY_OBSERVED_BARRIER
+        .lock()
+        .expect("stale recovery barrier lock") = Some(barrier);
+}
+
+#[cfg(test)]
+pub(crate) fn clear_stale_recovery_barrier_for_test() {
+    *STALE_RECOVERY_OBSERVED_BARRIER
+        .lock()
+        .expect("stale recovery barrier lock") = None;
+}
+
+#[cfg(test)]
+fn wait_at_stale_recovery_barrier_for_test() {
+    let barrier = STALE_RECOVERY_OBSERVED_BARRIER
+        .lock()
+        .expect("stale recovery barrier lock")
+        .clone();
+    if let Some(barrier) = barrier {
+        barrier.wait();
+    }
 }
