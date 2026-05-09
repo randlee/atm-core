@@ -79,5 +79,5 @@ pub fn run_daemon() -> Result<(), AtmError> {
     composition::compose_runtime()?.start()
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests;

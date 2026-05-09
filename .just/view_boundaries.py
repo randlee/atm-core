@@ -21,7 +21,10 @@ def boundary_doc_rows(repo_root: Path, records) -> list[dict[str, str]]:
     for record in records:
         doc = record.source_path.as_posix()
         counts[doc]["records"] += 1
-        counts[doc][record.status_state] += 1
+        if record.status_state == "unix_implemented_windows_pending":
+            counts[doc]["active"] += 1
+        else:
+            counts[doc][record.status_state] += 1
 
     rows: list[dict[str, str]] = []
     for doc in sorted(counts):

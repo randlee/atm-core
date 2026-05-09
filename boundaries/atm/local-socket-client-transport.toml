@@ -1,13 +1,13 @@
 boundary_id = "BOUNDARY-ClientTransport-CLI"
 owner_package = "atm"
 owner_crate_path = "atm"
-name = "LocalSocketClientTransportAdapter"
+name = "LocalIpcClientTransportAdapter"
 
 [public]
 trait = "ClientTransport"
 
 [implementation]
-type = "LocalSocketClientTransport"
+type = "LocalIpcClientTransportAdapter"
 module = "atm::composition"
 visibility = "private"
 constructor = "private"
@@ -37,7 +37,7 @@ forbidden_edges = [
 [references]
 scope = "outside_owner_crate"
 forbidden = [
-  "LocalSocketClientTransport",
+  "LocalIpcClientTransportAdapter",
   "atm_daemon::client",
   "rusqlite::Connection",
 ]

@@ -50,6 +50,7 @@ STATE_VALUES = {
     "retired",
     "stub_landed",
     "concrete_landed",
+    "unix_implemented_windows_pending",
 }
 PACKAGE_NAME_RE = re.compile(r"^[a-z0-9]+(?:[.-][a-z0-9]+)*$")
 CRATE_PATH_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -101,7 +102,12 @@ class BoundaryRecord:
 
     @property
     def is_active(self) -> bool:
-        return self.status_state in {"active", "stub_landed", "concrete_landed"}
+        return self.status_state in {
+            "active",
+            "stub_landed",
+            "concrete_landed",
+            "unix_implemented_windows_pending",
+        }
 
     @property
     def location(self) -> str:
@@ -1242,7 +1248,9 @@ def boundary_doc_section_lines(repo_root: Path, records: list[BoundaryRecord]) -
             {"records": 0, "active": 0, "planned": 0, "deferred": 0, "retired": 0},
         )
         counts["records"] += 1
-        if record.status_state in counts:
+        if record.status_state == "unix_implemented_windows_pending":
+            counts["active"] += 1
+        elif record.status_state in counts:
             counts[record.status_state] += 1
 
     rows: list[dict[str, str]] = []

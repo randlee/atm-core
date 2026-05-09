@@ -68,7 +68,7 @@ review_gates = [
 ]
 
 [status]
-state = "planned"
+state = "unix_implemented_windows_pending"
 notes = [
   "the extracted boundary now lives under atm_daemon::lifecycle_control with Unix hook installation hidden inside the adapter",
   "Phase S requires a platform-neutral lifecycle control source with Unix and Windows implementations behind one daemon-private contract",

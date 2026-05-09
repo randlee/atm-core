@@ -33,6 +33,23 @@ pub fn host_runtime_dir_from_home(home_dir: &Path) -> PathBuf {
     home_dir.join(".atm").join("daemon")
 }
 
+/// Resolve the host-scoped ATM runtime lock-file path independent of `ATM_HOME`.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the OS user-home directory cannot be resolved.
+pub fn host_runtime_lock_path(file_name: &str) -> Result<PathBuf, AtmError> {
+    Ok(host_runtime_lock_path_from_home(
+        &resolve_user_home()?,
+        file_name,
+    ))
+}
+
+/// Resolve the host-scoped ATM runtime lock-file path from an explicit user-home root.
+pub fn host_runtime_lock_path_from_home(home_dir: &Path, file_name: &str) -> PathBuf {
+    host_runtime_dir_from_home(home_dir).join(file_name)
+}
+
 /// Resolve the host-scoped ATM durable-state directory independent of `ATM_HOME`.
 ///
 /// # Errors
@@ -150,8 +167,8 @@ mod tests {
 
     use super::{
         atm_home, host_db_dir_from_home, host_mail_db_path_from_home, host_runtime_dir_from_home,
-        inbox_path, inbox_path_from_home, team_dir, team_dir_from_home,
-        workflow_state_path_from_home,
+        host_runtime_lock_path_from_home, inbox_path, inbox_path_from_home, team_dir,
+        team_dir_from_home, workflow_state_path_from_home,
     };
     #[cfg(unix)]
     use super::{host_db_dir, host_mail_db_path, host_runtime_dir};
@@ -256,6 +273,21 @@ mod tests {
                 .join(TEST_TEAM)
                 .join("inboxes")
                 .join(format!("{TEST_SENDER}.json"))
+        );
+    }
+
+    #[test]
+    fn host_runtime_lock_path_uses_host_runtime_root() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = host_runtime_lock_path_from_home(tempdir.path(), "launch.lock");
+
+        assert_eq!(
+            path,
+            tempdir
+                .path()
+                .join(".atm")
+                .join("daemon")
+                .join("launch.lock")
         );
     }
 
