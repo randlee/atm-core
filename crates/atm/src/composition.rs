@@ -110,24 +110,13 @@ fn validate_daemon_path(label: &str, path: &Path) -> Result<(), AtmError> {
     Ok(())
 }
 
-fn host_runtime_lock_path(file_name: &str) -> Result<PathBuf, AtmError> {
-    Ok(host_runtime_lock_path_from_home(
-        &atm_core::home::host_runtime_dir()?,
-        file_name,
-    ))
-}
-
-fn host_runtime_lock_path_from_home(home_dir: &Path, file_name: &str) -> PathBuf {
-    home_dir.join(file_name)
-}
-
 #[derive(Debug)]
-struct LocalSocketClientTransport {
+struct LocalIpcClientTransportAdapter {
     endpoint: DaemonLocalIpcEndpoint,
     codec: JsonAtmProtocolCodec,
 }
 
-impl LocalSocketClientTransport {
+impl LocalIpcClientTransportAdapter {
     fn new(endpoint: DaemonLocalIpcEndpoint) -> Self {
         Self {
             endpoint,
@@ -199,9 +188,9 @@ impl LocalSocketClientTransport {
     }
 }
 
-impl boundary::sealed::Sealed for LocalSocketClientTransport {}
+impl boundary::sealed::Sealed for LocalIpcClientTransportAdapter {}
 
-impl ClientTransport for LocalSocketClientTransport {
+impl ClientTransport for LocalIpcClientTransportAdapter {
     fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         self.exchange(request)
     }
@@ -223,7 +212,7 @@ impl DaemonSupervisor {
 
     fn ensure_daemon_available(
         &self,
-        transport: &LocalSocketClientTransport,
+        transport: &LocalIpcClientTransportAdapter,
     ) -> Result<(), AtmError> {
         self.ensure_daemon_available_with_timeout(
             transport,
@@ -234,7 +223,7 @@ impl DaemonSupervisor {
 
     fn ensure_daemon_available_with_timeout(
         &self,
-        transport: &LocalSocketClientTransport,
+        transport: &LocalIpcClientTransportAdapter,
         publish_timeout: Duration,
         poll_interval: Duration,
     ) -> Result<(), AtmError> {
@@ -242,13 +231,13 @@ impl DaemonSupervisor {
             transport,
             publish_timeout,
             poll_interval,
-            host_runtime_lock_path(HOST_RUNTIME_LAUNCH_LOCK_FILE)?,
+            atm_core::home::host_runtime_lock_path(HOST_RUNTIME_LAUNCH_LOCK_FILE)?,
         )
     }
 
     fn ensure_daemon_available_with_lock_path(
         &self,
-        transport: &LocalSocketClientTransport,
+        transport: &LocalIpcClientTransportAdapter,
         publish_timeout: Duration,
         poll_interval: Duration,
         launch_lock_path: PathBuf,
@@ -322,7 +311,7 @@ struct LaunchGateGuard {
 impl LaunchGateGuard {
     #[allow(dead_code)]
     fn try_acquire() -> Result<Option<Self>, AtmError> {
-        let lock_path = host_runtime_lock_path(HOST_RUNTIME_LAUNCH_LOCK_FILE)?;
+        let lock_path = atm_core::home::host_runtime_lock_path(HOST_RUNTIME_LAUNCH_LOCK_FILE)?;
         Self::try_acquire_at(lock_path)
     }
 
@@ -539,7 +528,7 @@ impl<'a> CliComposition<'a> {
     pub(crate) fn bootstrap(observability: &'a CliObservability) -> Result<Self, AtmError> {
         let endpoint = resolve_daemon_local_ipc_endpoint()?;
         let daemon_bin = resolve_daemon_bin()?;
-        let transport = Arc::new(LocalSocketClientTransport::new(endpoint.clone()));
+        let transport = Arc::new(LocalIpcClientTransportAdapter::new(endpoint.clone()));
         let supervisor = DaemonSupervisor::new(endpoint, daemon_bin);
         supervisor.ensure_daemon_available(transport.as_ref())?;
         Ok(Self::from_transport(transport, observability))
@@ -606,9 +595,9 @@ mod tests {
 
     use super::{CliComposition, DaemonBinaryPath, DaemonLocalIpcEndpoint};
     #[cfg(unix)]
-    use super::{DaemonSupervisor, LocalSocketClientTransport};
+    use super::{DaemonSupervisor, LocalIpcClientTransportAdapter};
     #[cfg(unix)]
-    use super::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, host_runtime_lock_path_from_home};
+    use super::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard};
     use crate::observability::CliObservability;
 
     struct LoopbackFixture {
@@ -1105,8 +1094,8 @@ mod tests {
     #[test]
     fn host_runtime_lock_path_ignores_atm_home() {
         let tempdir = TempDir::new().expect("tempdir");
-        let path = host_runtime_lock_path_from_home(
-            &atm_core::home::host_runtime_dir_from_home(tempdir.path()),
+        let path = atm_core::home::host_runtime_lock_path_from_home(
+            tempdir.path(),
             HOST_RUNTIME_LAUNCH_LOCK_FILE,
         );
 
@@ -1157,7 +1146,7 @@ mod tests {
             DaemonLocalIpcEndpoint::new(tempdir.path().join("missing.sock")).expect("socket");
         let daemon_bin = DaemonBinaryPath::new(tempdir.path().join("atm-daemon")).expect("daemon");
         let supervisor = DaemonSupervisor::new(socket_path.clone(), daemon_bin);
-        let transport = LocalSocketClientTransport::new(socket_path);
+        let transport = LocalIpcClientTransportAdapter::new(socket_path);
 
         let error = supervisor
             .ensure_daemon_available_with_lock_path(
@@ -1186,7 +1175,7 @@ mod tests {
         std::fs::write(&daemon_path, "#!/bin/false\n").expect("stub daemon");
         let daemon_bin = DaemonBinaryPath::new(daemon_path).expect("daemon");
         let supervisor = DaemonSupervisor::new(socket_path.clone(), daemon_bin);
-        let transport = LocalSocketClientTransport::new(socket_path);
+        let transport = LocalIpcClientTransportAdapter::new(socket_path);
 
         let error = supervisor
             .ensure_daemon_available_with_lock_path(

@@ -1,8 +1,8 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use atm_core::error::AtmError;
 use fs2::FileExt;
@@ -25,10 +25,14 @@ impl HostOwnershipAdapter {
     }
 
     pub(crate) fn acquire(&self) -> Result<HostOwnershipGuard, AtmError> {
-        Self::acquire_at(host_runtime_lock_path(HOST_RUNTIME_OWNER_LOCK_FILE)?)
+        Self::acquire_at(atm_core::home::host_runtime_lock_path(
+            HOST_RUNTIME_OWNER_LOCK_FILE,
+        )?)
     }
 
-    pub(crate) fn acquire_at(lock_path: PathBuf) -> Result<HostOwnershipGuard, AtmError> {
+    pub(crate) fn acquire_at(
+        lock_path: std::path::PathBuf,
+    ) -> Result<HostOwnershipGuard, AtmError> {
         let mut lock_file = open_lock_file(&lock_path)?;
         match lock_file.try_lock_exclusive() {
             Ok(()) => {}
@@ -70,17 +74,6 @@ impl Drop for HostOwnershipGuard {
         let _ = clear_owner_record(&mut self.lock_file);
         let _ = self.lock_file.unlock();
     }
-}
-
-pub(crate) fn host_runtime_lock_path(file_name: &str) -> Result<PathBuf, AtmError> {
-    Ok(host_runtime_lock_path_from_home(
-        &atm_core::home::host_runtime_dir()?,
-        file_name,
-    ))
-}
-
-pub(crate) fn host_runtime_lock_path_from_home(home_dir: &Path, file_name: &str) -> PathBuf {
-    home_dir.join(file_name)
 }
 
 fn open_lock_file(lock_path: &Path) -> Result<File, AtmError> {
@@ -158,11 +151,18 @@ fn recorded_owner_pid(lock_file: &File) -> Result<Option<u32>, AtmError> {
 }
 
 fn write_owner_record(lock_file: &mut File) -> Result<(), AtmError> {
+    let token = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to timestamp daemon ownership metadata")
+                .with_source(source)
+        })?
+        .as_nanos();
     lock_file.set_len(0).map_err(|source| {
         AtmError::daemon_unavailable("failed to reset daemon ownership metadata")
             .with_source(source)
     })?;
-    writeln!(lock_file, "{}", std::process::id()).map_err(|source| {
+    writeln!(lock_file, "{}:{token:x}", std::process::id()).map_err(|source| {
         AtmError::daemon_unavailable("failed to write daemon ownership metadata")
             .with_source(source)
     })?;

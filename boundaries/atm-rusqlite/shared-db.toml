@@ -9,8 +9,8 @@ facade = "SharedDbStateRoot"
 [implementation]
 type = "SharedDb"
 module = "atm_rusqlite"
-visibility = "private"
-constructor = "private"
+visibility = "pub(crate)"
+constructor = "pub(crate)"
 
 [composition]
 roots = ["atm_rusqlite::SqliteBoundaryAssembly::new"]
@@ -65,8 +65,8 @@ review_gates = [
 ]
 
 [status]
-state = "planned"
+state = "unix_implemented_windows_pending"
 notes = [
-  "private state-root surface must remain review-visible because it owns sqlite bootstrap and transaction policy",
+  "crate-private state-root surface must remain review-visible because it owns sqlite bootstrap and transaction policy",
   "shared database root is host-scoped under the ADR-005 durable-state model",
 ]

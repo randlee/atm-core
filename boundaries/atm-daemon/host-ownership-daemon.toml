@@ -66,7 +66,7 @@ review_gates = [
 ]
 
 [status]
-state = "planned"
+state = "unix_implemented_windows_pending"
 notes = [
   "Phase R embeds host ownership inside the runtime lifecycle controller",
   "Phase S pulls host ownership into an explicit portability boundary so file-locking and teardown semantics can be reviewed independently on Unix and Windows",
