@@ -156,10 +156,52 @@ fn install_platform_hooks(
     reload: &Arc<AtomicBool>,
     state_change: &Arc<LifecycleStateChange>,
 ) -> Result<(), AtmError> {
-    use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGTERM};
-    use signal_hook::iterator::Signals;
+    use std::io::Read;
+    use std::os::unix::net::UnixStream;
 
-    let mut signals = Signals::new([SIGINT, SIGTERM, SIGHUP]).map_err(|source| {
+    use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGTERM};
+    use signal_hook::flag as signal_flag;
+    use signal_hook::low_level::pipe as signal_pipe;
+
+    let (mut wake_read, wake_write) = UnixStream::pair().map_err(|source| {
+        AtmError::daemon_unavailable("failed to create daemon lifecycle wake pipe")
+            .with_source(source)
+    })?;
+    signal_flag::register(SIGINT, Arc::clone(terminate)).map_err(|source| {
+        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_source(source)
+    })?;
+    signal_flag::register(SIGTERM, Arc::clone(terminate)).map_err(|source| {
+        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_source(source)
+    })?;
+    signal_flag::register(SIGHUP, Arc::clone(reload)).map_err(|source| {
+        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_source(source)
+    })?;
+    signal_pipe::register(
+        SIGINT,
+        wake_write.try_clone().map_err(|source| {
+            AtmError::daemon_unavailable("failed to clone daemon lifecycle wake pipe")
+                .with_source(source)
+        })?,
+    )
+    .map_err(|source| {
+        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_source(source)
+    })?;
+    signal_pipe::register(
+        SIGTERM,
+        wake_write.try_clone().map_err(|source| {
+            AtmError::daemon_unavailable("failed to clone daemon lifecycle wake pipe")
+                .with_source(source)
+        })?,
+    )
+    .map_err(|source| {
+        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_source(source)
+    })?;
+    signal_pipe::register(SIGHUP, wake_write).map_err(|source| {
         AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
             .with_source(source)
     })?;
@@ -169,13 +211,18 @@ fn install_platform_hooks(
     std::thread::Builder::new()
         .name("atm-daemon-lifecycle-unix".to_string())
         .spawn(move || {
-            for signal in signals.forever() {
-                match signal {
-                    SIGINT | SIGTERM => terminate.store(true, Ordering::SeqCst),
-                    SIGHUP => reload.store(true, Ordering::SeqCst),
-                    _ => continue,
+            let mut wake_buffer = [0_u8; 32];
+            loop {
+                match wake_read.read(&mut wake_buffer) {
+                    Ok(0) => return,
+                    Ok(_) => {
+                        if terminate.load(Ordering::SeqCst) || reload.load(Ordering::SeqCst) {
+                            let _ = state_change.notify();
+                        }
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                    Err(_) => return,
                 }
-                let _ = state_change.notify();
             }
         })
         .map_err(|source| {
@@ -188,37 +235,48 @@ fn install_platform_hooks(
 #[cfg(windows)]
 fn install_platform_hooks(
     terminate: &Arc<AtomicBool>,
-    _reload: &Arc<AtomicBool>,
-    _state_change: &Arc<LifecycleStateChange>,
+    reload: &Arc<AtomicBool>,
+    state_change: &Arc<LifecycleStateChange>,
 ) -> Result<(), AtmError> {
-    use std::sync::OnceLock;
-    use windows_sys::Win32::Foundation::{BOOL, FALSE, TRUE};
-    use windows_sys::Win32::System::Console::{
-        CTRL_BREAK_EVENT, CTRL_C_EVENT, CTRL_CLOSE_EVENT, SetConsoleCtrlHandler,
-    };
+    use signal_hook::consts::{SIGBREAK, SIGINT, SIGTERM};
+    use signal_hook::flag as signal_flag;
 
-    static TERMINATE: OnceLock<Arc<AtomicBool>> = OnceLock::new();
+    signal_flag::register(SIGINT, Arc::clone(terminate)).map_err(|source| {
+        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_source(source)
+    })?;
+    signal_flag::register(SIGTERM, Arc::clone(terminate)).map_err(|source| {
+        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_source(source)
+    })?;
+    signal_flag::register(SIGBREAK, Arc::clone(reload)).map_err(|source| {
+        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_source(source)
+    })?;
 
-    unsafe extern "system" fn handle_console_ctrl(ctrl_type: u32) -> BOOL {
-        match ctrl_type {
-            CTRL_C_EVENT | CTRL_BREAK_EVENT | CTRL_CLOSE_EVENT => {
-                if let Some(flag) = TERMINATE.get() {
-                    flag.store(true, Ordering::SeqCst);
+    let terminate = Arc::clone(terminate);
+    let reload = Arc::clone(reload);
+    let state_change = Arc::clone(state_change);
+    std::thread::Builder::new()
+        .name("atm-daemon-lifecycle-windows".to_string())
+        .spawn(move || {
+            let mut observed_terminate = terminate.load(Ordering::SeqCst);
+            let mut observed_reload = reload.load(Ordering::SeqCst);
+            loop {
+                let terminate_now = terminate.load(Ordering::SeqCst);
+                let reload_now = reload.load(Ordering::SeqCst);
+                if terminate_now != observed_terminate || reload_now != observed_reload {
+                    observed_terminate = terminate_now;
+                    observed_reload = reload_now;
+                    let _ = state_change.notify();
                 }
-                TRUE
+                std::thread::sleep(std::time::Duration::from_millis(25));
             }
-            _ => FALSE,
-        }
-    }
-
-    let _ = TERMINATE.set(Arc::clone(terminate));
-    let installed = unsafe { SetConsoleCtrlHandler(Some(handle_console_ctrl), TRUE) };
-    if installed == 0 {
-        return Err(AtmError::daemon_unavailable(
-            "failed to install daemon lifecycle signal handlers",
-        )
-        .with_source(std::io::Error::last_os_error()));
-    }
+        })
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to spawn daemon lifecycle signal worker")
+                .with_source(source)
+        })?;
     Ok(())
 }
 

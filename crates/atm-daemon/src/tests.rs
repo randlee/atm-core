@@ -17,6 +17,8 @@ use atm_rusqlite::assemble_boundary;
 use serial_test::serial;
 use std::fs::OpenOptions;
 use std::io::{Seek, SeekFrom, Write};
+use std::sync::mpsc;
+use std::time::Duration;
 use tempfile::TempDir;
 
 struct LifecycleFlagResetGuard<'a> {
@@ -35,6 +37,21 @@ impl Drop for LifecycleFlagResetGuard<'_> {
     fn drop(&mut self) {
         self.lifecycle.set_terminate_for_test(false);
         self.lifecycle.set_reload_for_test(false);
+    }
+}
+
+struct StaleRecoveryHookGuard;
+
+impl StaleRecoveryHookGuard {
+    fn install(signal: mpsc::SyncSender<()>) -> Self {
+        HostOwnershipAdapter::install_stale_recovery_hook_for_test(signal);
+        Self
+    }
+}
+
+impl Drop for StaleRecoveryHookGuard {
+    fn drop(&mut self) {
+        HostOwnershipAdapter::clear_stale_recovery_hook_for_test();
     }
 }
 
@@ -128,6 +145,20 @@ fn singleton_guard_reports_stale_owner_record_failure() {
     assert_eq!(error.code, AtmErrorCode::DaemonStaleOwnerRecoveryFailed);
 }
 
+#[cfg(windows)]
+#[test]
+fn owner_lock_treats_windows_lock_and_sharing_violations_as_contention() {
+    let lock_violation = std::io::Error::from_raw_os_error(33);
+    let sharing_violation = std::io::Error::from_raw_os_error(32);
+
+    assert!(HostOwnershipAdapter::classify_contention_error_for_test(
+        &lock_violation
+    ));
+    assert!(HostOwnershipAdapter::classify_contention_error_for_test(
+        &sharing_violation
+    ));
+}
+
 #[test]
 #[serial]
 fn singleton_guard_recovers_stale_owner_once_lock_is_released() {
@@ -178,9 +209,13 @@ fn singleton_guard_rejects_stale_recovery_when_owner_token_changes() {
     writeln!(&mut file, "{}:token-a", u32::MAX).expect("write owner");
     file.sync_all().expect("sync owner");
 
+    let (ready_tx, ready_rx) = mpsc::sync_channel(1);
+    let _hook_guard = StaleRecoveryHookGuard::install(ready_tx);
     let lock_path_for_thread = lock_path.clone();
     let join = std::thread::spawn(move || HostOwnershipAdapter::acquire_at(lock_path_for_thread));
-    std::thread::sleep(std::time::Duration::from_millis(35));
+    ready_rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("stale recovery hook did not fire within 5s");
     file.set_len(0).expect("clear record");
     file.seek(SeekFrom::Start(0)).expect("rewind");
     writeln!(&mut file, "{}:token-b", u32::MAX).expect("rewrite owner");
