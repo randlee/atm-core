@@ -223,7 +223,10 @@ fn install_platform_hooks(
             let mut wake_buffer = [0_u8; 32];
             loop {
                 match wake_read.read(&mut wake_buffer) {
-                    Ok(0) => return,
+                    Ok(0) => {
+                        let _ = state_change.notify();
+                        return;
+                    }
                     Ok(_) => {
                         if terminate.load(Ordering::SeqCst) || reload.load(Ordering::SeqCst) {
                             let _ = state_change.notify();
@@ -272,6 +275,10 @@ fn install_platform_hooks(
             let mut observed_terminate = terminate.load(Ordering::SeqCst);
             let mut observed_reload = reload.load(Ordering::SeqCst);
             loop {
+                if terminate.load(Ordering::SeqCst) {
+                    let _ = state_change.notify();
+                    return;
+                }
                 let terminate_now = terminate.load(Ordering::SeqCst);
                 let reload_now = reload.load(Ordering::SeqCst);
                 if terminate_now != observed_terminate || reload_now != observed_reload {
@@ -279,6 +286,9 @@ fn install_platform_hooks(
                     observed_reload = reload_now;
                     let _ = state_change.notify();
                 }
+                // `signal_hook::flag` does not expose a blocking cross-platform wake primitive on
+                // Windows, so the lifecycle worker uses one bounded polling exception that Phase S
+                // documents explicitly in plan-phase-S.md §4.1.
                 std::thread::sleep(std::time::Duration::from_millis(25));
             }
         })

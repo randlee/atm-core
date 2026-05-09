@@ -47,13 +47,18 @@ forbidden_test_bypasses = [
 ]
 
 [enforcement]
-lint_rules = ["LINT-BOUNDARY-SERVER-TRANSPORT-SOCKET-EDGES", "LINT-BOUNDARY-SERVER-TRANSPORT-SOCKET-REFERENCES"]
+lint_rules = [
+  "LINT-BOUNDARY-SERVER-TRANSPORT-SOCKET-EDGES",
+  "LINT-BOUNDARY-SERVER-TRANSPORT-SOCKET-REFERENCES",
+  "LINT-SAME-HOST-PORTABILITY",
+]
 review_gates = [
   "no_public_impl",
   "no_public_constructor",
   "no_cli_to_daemon_edge",
   "platform_parity_required",
   "no_nonunix_stub_release",
+  "full_windows_workspace_clippy_required",
 ]
 
 [status]
@@ -65,4 +70,5 @@ notes = [
   "the adapter owns logical endpoint naming and same-user access-control semantics across Unix and Windows",
   "the daemon and CLI now share one endpoint-to-local-socket-name mapping while the adapter keeps Unix socket and Windows named-pipe details private",
   "the Unix and Windows implementations now both live behind atm_daemon::local_ipc_transport and are assembled through atm_daemon::composition",
+  "S.4 restored full Windows workspace clippy and added a dedicated same-host-portability lint guard for the shared host shell",
 ]

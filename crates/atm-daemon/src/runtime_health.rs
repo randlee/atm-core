@@ -34,6 +34,8 @@ use atm_rusqlite::{SqliteBoundaryAssembly, assemble_default_boundary};
 const MAX_STATUS_CACHE_ENTRIES: usize = 4096;
 const MAX_RELOAD_TEAMS: usize = 256;
 const SHUTDOWN_WAL_CHECKPOINT_DEADLINE: Duration = Duration::from_secs(2);
+// The retained observability flush is best-effort during shutdown; Phase S records this bounded
+// 2-second deadline as an accepted production exception in the anti-flake contract docs.
 const SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE: Duration = Duration::from_secs(2);
 
 #[cfg(test)]
@@ -446,7 +448,19 @@ impl DaemonRequestDispatcher {
             std::mem::take(&mut *handles)
         };
         for handle in handles {
-            let _ = handle.join();
+            let (result_tx, result_rx) = mpsc::sync_channel(1);
+            std::thread::spawn(move || {
+                let _ = result_tx.send(handle.join());
+            });
+            match result_rx.recv_timeout(Duration::from_secs(5)) {
+                Ok(_) => {}
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    panic!("shutdown finalizer thread failed to join within 5s")
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    panic!("shutdown finalizer join helper exited before reporting completion")
+                }
+            }
         }
     }
 

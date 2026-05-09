@@ -348,6 +348,8 @@ impl PreparedRuntimeServer {
                             }
                         });
                     }
+                    // Reload work stays serialized inside the serve loop so the accept path
+                    // never races a partially-applied runtime view update.
                     ServeEvent::Reload => match reload_runtime_view() {
                         Ok(()) => tracing::info!(
                             "bounded lifecycle-control-triggered config/roster reload applied"
@@ -394,6 +396,11 @@ impl PreparedRuntimeServer {
                         %shutdown_error,
                         %serve_error,
                         "daemon shutdown encountered an additional error after a serve error"
+                    );
+                } else {
+                    tracing::warn!(
+                        %serve_error,
+                        "daemon serve loop exited with an error after shutdown finalization"
                     );
                 }
                 return Err(serve_error);
@@ -453,8 +460,8 @@ fn prepare_local_ipc_endpoint(endpoint_path: &Path) -> Result<(), AtmError> {
 
 #[cfg(not(unix))]
 fn prepare_local_ipc_endpoint(_endpoint_path: &Path) -> Result<(), AtmError> {
-    // TODO(S.2/ADR-007): Windows local IPC endpoint preparation belongs here once
-    // the adapter owns the named-pipe endpoint lifecycle on non-Unix hosts.
+    // Windows named-pipe-backed local IPC does not allocate a filesystem socket path, so
+    // there is no parent directory to create or stale endpoint file to unlink here.
     Ok(())
 }
 
