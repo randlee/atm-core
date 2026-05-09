@@ -9,7 +9,10 @@ mod direct_boundaries;
 // local IPC endpoint; see tests::host_ownership_record_uses_pid_and_token_while_held_and_clears_on_release.
 mod host_ownership;
 mod lifecycle_control;
+#[cfg(unix)]
 mod local_ipc_transport;
+#[cfg(windows)]
+mod local_ipc_transport_windows;
 mod notification_runtime;
 mod peer_transport;
 mod reconcile_runtime;
@@ -24,7 +27,10 @@ use atm_core::error::AtmError;
 use atm_rusqlite::SqliteBoundaryAssembly;
 
 pub(crate) use atm_rusqlite::RemoteReplayStateRecord;
+#[cfg(unix)]
 pub(crate) use local_ipc_transport::LocalIpcServerTransportAdapter;
+#[cfg(windows)]
+pub(crate) use local_ipc_transport_windows::LocalIpcServerTransportAdapter;
 pub(crate) use peer_transport::{PeerTransportRuntime, RemoteReplayStore};
 
 pub(crate) const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
