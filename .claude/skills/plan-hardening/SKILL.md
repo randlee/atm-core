@@ -4,9 +4,9 @@ version: 1.0.0
 description: >
   Orchestrate a full documentation hardening pass for a multi-sprint development
   phase before implementation starts or resumes. Use when team-lead needs
-  arch-ctm to capture all known plan decisions, create any missing sprint docs,
-  and loop on audit/fix until the phase docs are complete, consistent, and
-  execution-ready.
+  arch-ctm to capture already-decided plan work, create any missing sprint
+  docs, and loop on audit/fix until the phase docs are complete, consistent,
+  and execution-ready.
 depends_on:
   codex-orchestration: 0.x
 ---
@@ -42,17 +42,19 @@ Do not use this skill for ordinary implementation or QA fix rounds. Use it only
 for the planning/documentation hardening step that `team-lead` delegates to
 `arch-ctm`.
 
-Use it only after the user discussion is complete enough that `team-lead`
-understands what the hardening task must accomplish and can delegate one stable
-task scope to `arch-ctm`.
+Use it only after the user discussion is complete enough that the plan
+decisions have already been communicated to `arch-ctm`. `team-lead` uses this
+skill to route work and provide a worktree, not to reinterpret or restate the
+plan.
 
 ## Prerequisites
 
 Before dispatching a hardening task:
 
 1. The target phase worktree exists and is on the correct branch.
-2. The user or team already knows the substantive plan decisions.
-3. `team-lead` can provide a concise `plan_context` summary in the assignment.
+2. `team-lead` created or obtained that worktree before assignment.
+3. The user or team already knows the substantive plan decisions, and those
+   decisions have already been communicated to `arch-ctm`.
 4. `sc-compose` is available for rendering the XML assignment template.
 
 If the plan is still being invented, finish the design discussion first. This
@@ -91,12 +93,22 @@ Prepare:
 - `worktree_path`
 - `branch`
 - `pr_target`
-- `plan_context`
+- `source_of_truth`
+- `questions_or_concerns`
 - `references`
 
-`plan_context` must summarize the known plan decisions that are already agreed
-but may not yet be fully documented. Keep it concise but concrete. The
-assignment tells `arch-ctm` not to rediscover the plan from scratch.
+`team-lead` is not the authority for re-summarizing the plan. The assignment
+must point at the already-approved source of truth that `arch-ctm` should use,
+for example:
+
+- the already-reviewed planning documents in the repo
+- a verbatim user-approved plan capsule previously authored by `arch-ctm`
+- explicit references to the prior planning discussion already completed with
+  `arch-ctm`
+
+`questions_or_concerns` is optional but recommended. Use it to append any
+specific team-lead concerns, ambiguities, or review points that `arch-ctm`
+should address immediately in the ACK before starting work.
 
 ### 2. Render the assignment template for `arch-ctm`
 
@@ -122,7 +134,8 @@ Suggested vars file shape:
   "worktree_path": "/abs/worktree",
   "branch": "feature/pS-plan-hardening",
   "pr_target": "integrate/phase-S",
-  "plan_context": "- Remaining work requires S.6-S.8 ...\n- atm list / atm read split is already decided ...",
+  "source_of_truth": "- User-approved planning discussion already completed with arch-ctm\n- docs/project-plan.md\n- docs/plan-phase-S.md\n- docs/requirements.md\n- docs/architecture.md",
+  "questions_or_concerns": "- Confirm whether missing follow-on sprints must be created on this branch if the current phase plan stops too early.",
   "references": "- docs/project-plan.md\n- docs/plan-phase-S.md\n- docs/requirements.md\n- docs/architecture.md"
 }
 ```
@@ -154,6 +167,10 @@ After the hardening push and validation report:
 The assignment template bakes in these hard requirements:
 
 - the plan is already known and must be captured before hardening begins
+- `team-lead` is responsible for worktree creation before assignment
+- `worktree_path` and `branch` are mandatory routing fields
+- `team-lead` provides routing metadata and any concerns, but does not rewrite
+  the source-of-truth plan content
 - all required document classes are audited
 - missing sprint docs are `GAP` findings
 - all unassigned remaining implementation work is `GAP`
@@ -164,7 +181,11 @@ The assignment template bakes in these hard requirements:
 
 ## Anti-Patterns
 
-- Do not send a hardening task without `plan_context`.
+- Do not send a hardening task before the worktree exists.
+- Do not send a hardening task with a rewritten freeform summary when
+  `arch-ctm` already has the user-approved plan in context or in source docs.
+- Do not omit `questions_or_concerns` if `team-lead` already knows there are
+  specific concerns that should be addressed immediately in the ACK.
 - Do not allow the agent to stop after "requirements and architecture are good"
   while remaining work still lacks sprint ownership.
 - Do not accept a phase plan that ends before the remaining work ends.
