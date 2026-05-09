@@ -212,7 +212,9 @@ fn singleton_guard_rejects_stale_recovery_when_owner_token_changes() {
     let _hook_guard = StaleRecoveryHookGuard::install(ready_tx);
     let lock_path_for_thread = lock_path.clone();
     let join = std::thread::spawn(move || HostOwnershipAdapter::acquire_at(lock_path_for_thread));
-    ready_rx.recv().expect("stale recovery ready");
+    ready_rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("stale recovery hook did not fire within 5s");
     file.set_len(0).expect("clear record");
     file.seek(SeekFrom::Start(0)).expect("rewind");
     writeln!(&mut file, "{}:token-b", u32::MAX).expect("rewrite owner");
