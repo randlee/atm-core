@@ -81,12 +81,29 @@ Required guard layers:
 - client-side auto-start and any other launch initiator must acquire a
   host-wide launch gate before fork/exec
 - concurrent CLI processes must not be able to race into parallel daemon spawn
+- the launch gate is the stable `~/.atm/daemon/launch.lock` file acquired with
+  `fs4::FileExt::try_lock_exclusive`
+- failed launch-gate acquisition returns one typed `already_owned` admission
+  outcome rather than a blocking wait loop
 
 2. Daemon-side startup gate
 - daemon startup must refuse to enter serving state when ownership is already
   held
 - the daemon must not publish its serving socket before singleton ownership is
   confirmed
+- the startup gate is the stable `~/.atm/daemon/owner.lock` file acquired with
+  `fs4::FileExt::try_lock_exclusive`
+- launch-to-owner handoff is:
+  1. launcher acquires and holds `launch.lock` before fork/exec
+  2. daemon acquires `owner.lock` before publishing a local endpoint or
+     entering serving state
+  3. launcher releases `launch.lock` only after the daemon confirms serving
+     state
+  4. if the daemon cannot acquire `owner.lock`, startup fails closed and the
+     launcher releases `launch.lock`
+- Windows follows the same typed handoff contract even though the underlying
+  lock implementation uses Windows file-lock primitives instead of Unix
+  advisory locks
 
 3. Static lint / CI gate
 - the repository must reject daemon-spawn patterns in ordinary tests and ad hoc
@@ -107,8 +124,21 @@ Required lock-shape rule:
   on those stable file paths
 - owner-visible metadata is the documented `pid[:token]` record stored in the
   held lock-file contents
+- the metadata token is:
+  - a daemon-generated opaque ASCII identifier
+  - unique per daemon start attempt
+  - persisted alongside the pid so stale-owner recovery can distinguish a new
+    daemon from a recycled pid
+  - generated before serving state publication and rewritten only by the
+    current lock holder
+- stale-owner recovery must validate both pid liveness and token continuity
+  before replacing owner metadata under a held `owner.lock`
 - release clears or invalidates the owner metadata before the exclusive lock is
   released
+- supported singleton deployment assumes `~/.atm/daemon/` is on a local
+  filesystem with working host-local advisory lock semantics; NFS or other
+  network-mounted roots are an accepted limitation and are not a supported
+  production singleton configuration
 
 Required failure rule:
 - if a daemon already exists, callers must connect to it or fail with a typed

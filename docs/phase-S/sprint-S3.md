@@ -98,6 +98,9 @@ shutdown semantics on every supported operating system.
   ownership model
 - teardown ordering matches the documented singleton and runtime contract on
   both platform families
+- crash-recovery remains non-regressive: stale-owner recovery and replay-facing
+  runtime admission still preserve `REQ-DAEMON-RUNTIME-005` semantics on Unix
+  and Windows after the host-ownership refactor
 - no same-host daemon code above the adapter line branches directly on Unix
   signal or file-locking APIs
 - Windows and Unix lifecycle-control / host-ownership tests prove the same

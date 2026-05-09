@@ -258,13 +258,31 @@ Architectural rule:
 - Phase S host ownership uses one cross-platform whole-file exclusive-lock
   contract on those stable file paths rather than lock-file creation/deletion
   as the ownership signal
+- lock acquisition must use `fs4::FileExt::try_lock_exclusive` for both
+  `launch.lock` and `owner.lock`; blocking `lock_exclusive` is not the
+  accepted serving-admission contract
+- failed non-blocking acquisition of either lock file must surface one typed
+  `already_owned` admission outcome rather than silently spinning or blocking
 - the preferred Phase S implementation foundation is `fs4`
 - owner-visible metadata is the lock-file contents in documented
   `pid[:token]` form while the exclusive lock is held
+- lock files must live on a local filesystem with working host-local advisory
+  lock semantics; network-mounted or NFS-backed `~/.atm/daemon/` roots are not
+  a supported singleton deployment configuration
 - if an exclusive lock on `owner.lock` can be acquired, startup may inspect
   and replace stale owner metadata under that held lock; if recovery cannot
   safely claim the same lock path, startup must fail with
   `ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED`
+- launch-to-owner handoff sequence is:
+  1. the client acquires and holds `launch.lock` before fork/exec
+  2. the daemon process acquires `owner.lock` with `try_lock_exclusive`
+     before publishing any same-host endpoint or entering serving state
+  3. once the daemon confirms serving state, the launcher releases
+     `launch.lock`
+  4. if the daemon cannot acquire `owner.lock`, startup fails closed and the
+     launcher must release `launch.lock` without retrying a second daemon
+- Windows uses the same logical handoff and typed `already_owned` admission
+  outcome even though the underlying file-locking calls and error codes differ
 
 Lifecycle state model:
 - the daemon runtime must explicitly model:

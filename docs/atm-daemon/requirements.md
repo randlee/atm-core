@@ -255,13 +255,26 @@ Required runtime rules:
 - the cross-platform locking foundation is one whole-file exclusive-lock
   contract on those paths; Phase S currently plans to satisfy that contract
   with `fs4`
+- lock acquisition for `launch.lock` and `owner.lock` must use
+  `fs4::FileExt::try_lock_exclusive`; blocking `lock_exclusive` is not the
+  serving-admission contract
+- failed acquisition must surface one typed `already_owned` admission outcome
+  rather than a blocking wait loop
 - owner-visible metadata is the lock-file contents while the exclusive lock is
   held, not the mere existence of the lock file path
 - owner-record contents use the documented `pid[:token]` format
+- supported singleton deployment assumes `~/.atm/daemon/` is on a local
+  filesystem with working host-local advisory lock semantics; NFS or other
+  network-mounted roots are not supported singleton configurations
 - daemon startup is blocked by at least two runtime guard layers:
   - a pre-spawn launch gate that serializes daemon creation attempts
   - a daemon-side startup gate that refuses serving state when ownership is
     already held
+- launch-to-owner handoff must be:
+  1. launcher holds `launch.lock` through fork/exec
+  2. daemon acquires `owner.lock` before publishing a local endpoint or
+     entering serving state
+  3. launcher releases `launch.lock` only after daemon serving confirmation
 - daemon startup must fail deterministically if a live daemon already owns the
   runtime
 - daemon startup must not publish a serving socket or accept requests before
@@ -269,10 +282,10 @@ Required runtime rules:
 - stale ownership cleanup must never allow two live daemons
 - stale ownership cleanup must preserve the same singleton guarantee as normal
   startup; cleanup is recovery, not an alternate launch path
-- if an exclusive lock can be acquired on `owner.lock`, the acquiring process
-  owns the authority to inspect and replace stale owner-record contents under
-  that held lock
-- if an exclusive lock cannot be acquired on `owner.lock`, the caller must
+- if `try_lock_exclusive` succeeds on `owner.lock`, the acquiring process owns
+  the authority to inspect and replace stale owner-record contents under that
+  held lock
+- if `try_lock_exclusive` does not succeed on `owner.lock`, the caller must
   treat ownership as live and must not attempt sidecar deletion or path-based
   recovery
 - singleton cleanup must not depend on deleting a lock-file path to express

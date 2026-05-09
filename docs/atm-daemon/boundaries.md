@@ -145,6 +145,10 @@ Notes:
   - `owner.lock`
 - owner-visible metadata is the documented `pid[:token]` record stored in the
   held lock file contents.
+- supported deployment assumes `~/.atm/daemon/` is on a local filesystem with
+  working host-local advisory lock semantics; NFS or other network-mounted
+  roots are an accepted limitation and are not a supported singleton
+  deployment configuration
 - singleton, stale-owner recovery, and release ordering semantics must be the
   same on every supported operating system even when the adapter internals
   differ

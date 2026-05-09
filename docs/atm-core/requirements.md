@@ -155,6 +155,11 @@ Initial crate requirement IDs:
 - `REQ-CORE-DAEMON-002` `atm-core` owns the contract that daemon runtime
   orchestration stays outside mail business semantics. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
+- `REQ-CORE-DAEMON-003` `atm-core` owns the production runtime-entry contract
+  that callers connect to an already-running daemon first, auto-start it once
+  when absent, and fail with a typed daemon-unavailable error rather than
+  silently falling back to direct SQLite or inbox-file access. Satisfies:
+  `REQ-P-RUNTIME-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-TRANSPORT-001` `atm-core` owns the shared `AtmProtocol` contract
   used by client transport, server transport, and in-process test transport. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
