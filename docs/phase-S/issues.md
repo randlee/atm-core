@@ -1,7 +1,7 @@
 # Phase S Issues
 
 Planning baseline:
-- branch: `phase-S-planning`
+- branch: `feature/pS-s0-planning`
 - base: `integrate/phase-R`
 - post-`PR #200` review baseline SHA: `d5e49df`
 - follow-on CI-only compatibility fixes do not change the architectural issue
@@ -52,3 +52,8 @@ Planning baseline:
 12. PID liveness semantics remain a carried-forward seam from Phase R; Phase S
     preserves the current PID continuity model and does not redesign it unless
     a later ADR reopens that work explicitly.
+
+13. The original Phase S host-ownership notes did not freeze a
+    cross-platform-compatible lock-file shape; they left room for Unix-shaped
+    deletion signaling instead of one stable `launch.lock` / `owner.lock`
+    model with held-lock owner metadata.

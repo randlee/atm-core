@@ -18,6 +18,7 @@ boundary while preserving one shared protocol, dispatcher, and test harness.
 - `REQ-P-PLATFORM-001`
 - `REQ-P-PLATFORM-002`
 - `REQ-DAEMON-TRANSPORT-001`
+- `REQ-DAEMON-TRANSPORT-008`
 - `REQ-DAEMON-PLATFORM-001`
 - `REQ-DAEMON-PLATFORM-002`
 - `REQ-DAEMON-TEST-003`
@@ -27,6 +28,14 @@ boundary while preserving one shared protocol, dispatcher, and test harness.
 
 - `docs/adr/ADR-003-test-fidelity-and-daemon-isolation.md`
 - `docs/adr/ADR-007-supported-platform-parity.md`
+
+## Governing ICD Sections
+
+- `docs/atm-daemon/protocol-icd.md §5` shared ATM frame
+- `docs/atm-daemon/protocol-icd.md §6.5` packet-kind to workflow mapping
+- `docs/atm-daemon/protocol-icd.md §8.2` same-host local IPC
+- `docs/atm-daemon/protocol-icd.md §10` timeout and failure semantics
+- `docs/atm-daemon/protocol-icd.md §14` test and reuse rules
 
 ## Hard Dependencies
 
@@ -47,6 +56,12 @@ boundary while preserving one shared protocol, dispatcher, and test harness.
   - `handle_connection`
 - `crates/atm-daemon/src/tests.rs`
   - replace Unix-only same-host transport tests with shared harness coverage
+- `crates/atm/src/composition.rs`
+  - `LocalSocketClientTransport`
+  - `DaemonSocketPath`
+- `crates/atm-daemon/tests/run_daemon_production_path.rs`
+  - replace Unix-only production path assumptions with shared same-host
+    harness coverage
 
 ## Required Work
 
@@ -58,6 +73,12 @@ boundary while preserving one shared protocol, dispatcher, and test harness.
    behavior.
 4. Keep request framing, deadlines, and typed error mapping identical across
    Unix and Windows.
+4.1 Preserve the ICD packet family exactly:
+   - no local-only packet kinds
+   - no local-only header variant
+   - no local-only error response shape
+4.2 Preserve one logical endpoint contract and same-user access-control policy
+   across Unix and Windows even though the adapter internals differ.
 5. Add shared same-host functional coverage that runs the real local-IPC path
    on both platform families.
 6. Use the S.0 anti-flake synchronization contract for Windows and Unix

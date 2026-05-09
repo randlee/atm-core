@@ -20,6 +20,7 @@ depends directly on Unix APIs.
 - `REQ-P-PLATFORM-002`
 - `REQ-DAEMON-PLATFORM-001`
 - `REQ-DAEMON-PLATFORM-002`
+- `REQ-DAEMON-TRANSPORT-008`
 - `REQ-CORE-BOUNDARY-001`
 - `REQ-CORE-TRANSPORT-001`
 
@@ -29,6 +30,13 @@ depends directly on Unix APIs.
 - `docs/adr/ADR-003-test-fidelity-and-daemon-isolation.md`
 - `docs/adr/ADR-007-supported-platform-parity.md`
 
+## Governing ICD Sections
+
+- `docs/atm-daemon/protocol-icd.md §5` shared ATM frame
+- `docs/atm-daemon/protocol-icd.md §6` packet kind registry
+- `docs/atm-daemon/protocol-icd.md §8` exchange rules
+- `docs/atm-daemon/protocol-icd.md §10` timeout and failure semantics
+
 ## Hard Dependencies
 
 - S.0 documentation hardening is accepted
@@ -37,6 +45,14 @@ depends directly on Unix APIs.
 
 ## Exact Code Targets
 
+- `crates/atm-core/src/protocol.rs`
+  - `FramePayload`
+  - `read_bounded_stream`
+  - daemon frame/path helpers that currently encode Unix socket assumptions
+- `crates/atm-core/src/boundary/mod.rs`
+  - `AtmProtocol`
+  - `ClientTransport`
+  - `ServerTransport`
 - `crates/atm-daemon/src/composition.rs`
   - `RuntimeComposition::start`
   - `RuntimeComposition::start_with_socket_path_for_test`
@@ -52,6 +68,9 @@ depends directly on Unix APIs.
   - `ActiveConnectionRegistry::{register, interrupt_all, wait_for_connection_change}`
 - `crates/atm-daemon/src/shutdown_signals.rs`
   - `DaemonShutdownSignals::install`
+- `crates/atm/src/composition.rs`
+  - `LocalSocketClientTransport::{try_connect, exchange}`
+  - `resolve_daemon_socket_path`
 
 ## Required Work
 
@@ -60,12 +79,18 @@ depends directly on Unix APIs.
 3. Extract a platform-neutral host-ownership contract.
 4. Remove direct `UnixListener`, `UnixStream`, and signal constant references
    from composition/runtime orchestration.
+4.1 Replace EOF-delimited framing with the ICD-framed transport contract from:
+   - `protocol-icd.md §5`
+   - `protocol-icd.md §10`
 5. Replace broad `#[cfg(unix)]` entrypoint gating with adapter-owned platform
    selection.
 6. Limit new OS-sensitive surface area to these daemon-owned facades only:
    - `LocalIpcServerTransportAdapter`
    - `LifecycleControlSourceAdapter`
    - `HostOwnershipAdapter`
+7. Move logical endpoint naming and same-user access-control policy behind the
+   local-IPC adapter instead of leaving socket-path or named-pipe details in
+   callers.
 
 ## Required Document Updates
 

@@ -12,6 +12,9 @@ business logic or `atm-daemon` runtime behavior.
 The crate-local machine-readable boundary inventory lives in:
 - [`./boundaries.md`](./boundaries.md)
 
+The canonical daemon packet contract lives in:
+- [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
+
 ## 2. Ownership
 
 `atm` owns:
@@ -129,10 +132,11 @@ The `atm` crate docs must remain aligned with:
 - [`../requirements.md`](../requirements.md)
 - [`../architecture.md`](../architecture.md)
 - [`../atm-error-codes.md`](../atm-error-codes.md)
+- [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
 - [`../project-plan.md`](../project-plan.md)
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
-- [`../plan-phase-Q.md`](../plan-phase-Q.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)
+- [`../plan-phase-S.md`](../plan-phase-S.md)
 - [`../testing-guidelines.md`](../testing-guidelines.md)
 - [`./boundaries.md`](./boundaries.md)
 
@@ -146,6 +150,14 @@ Required Phase R rules:
   talking to SQLite or inbox JSONL directly
 - in production, `atm` depends on the shared `AtmProtocol` and the
   `ClientTransport` contract rather than daemon internals
+- the daemon request/response packet surface currently covers:
+  - `send`
+  - `ack` through the send-shaped acknowledge request
+  - `read`
+  - `clear`
+  - `doctor`
+- the retained CLI surfaces `log`, `teams`, and `members` are not daemon
+  request/response packets in the current Phase S line
 - `atm` must not contain business logic that duplicates `atm-core`
 - `atm` test coverage must be able to use in-process harnesses rather than
   depending on daemon process spawning

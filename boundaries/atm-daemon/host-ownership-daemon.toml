@@ -4,7 +4,7 @@ owner_crate_path = "atm_daemon"
 name = "HostOwnershipAdapter"
 
 [public]
-facade = "HostOwnership"
+facade = "SingletonGuard"
 
 [implementation]
 type = "SingletonGuard"
@@ -49,7 +49,10 @@ error_types = ["AtmError"]
 
 [testing]
 allowed_test_double_paths = []
-forbidden_test_bypasses = ["fs2::FileExt::try_lock_exclusive"]
+forbidden_test_bypasses = [
+  "fs4::FileExt::try_lock_exclusive",
+  "fs4::FileExt::lock_exclusive",
+]
 
 [enforcement]
 lint_rules = [
@@ -67,5 +70,8 @@ state = "planned"
 notes = [
   "Phase R embeds host ownership inside the runtime lifecycle controller",
   "Phase S pulls host ownership into an explicit portability boundary so file-locking and teardown semantics can be reviewed independently on Unix and Windows",
+  "the boundary uses stable permanent lock-file paths under ~/.atm/daemon/ rather than lock-path deletion as the ownership signal",
+  "the preferred implementation foundation is one whole-file exclusive-lock contract on launch.lock and owner.lock",
+  "owner-visible metadata is the documented pid[:token] record stored in the held lock-file contents",
   "singleton, stale-owner recovery, and release ordering semantics must match across supported operating systems",
 ]

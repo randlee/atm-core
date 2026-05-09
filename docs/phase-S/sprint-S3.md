@@ -26,6 +26,7 @@ shutdown semantics on every supported operating system.
 - `REQ-DAEMON-SIGNAL-001`
 - `REQ-DAEMON-PLATFORM-001`
 - `REQ-DAEMON-PLATFORM-002`
+- `REQ-DAEMON-TRANSPORT-008`
 - `REQ-DAEMON-TEST-003`
 - `REQ-DAEMON-TEST-004`
 - `REQ-CORE-BOUNDARY-001`
@@ -34,6 +35,12 @@ shutdown semantics on every supported operating system.
 
 - `docs/adr/ADR-002-host-wide-daemon-singleton.md`
 - `docs/adr/ADR-007-supported-platform-parity.md`
+
+## Governing ICD Sections
+
+- `docs/atm-daemon/protocol-icd.md §8` exchange rules
+- `docs/atm-daemon/protocol-icd.md §10` timeout and failure semantics
+- `docs/atm-daemon/protocol-icd.md §12` delivery and outcome semantics
 
 ## Hard Dependencies
 
@@ -67,9 +74,18 @@ shutdown semantics on every supported operating system.
 2. Replace Unix-shaped host-ownership mechanics with one cross-platform
    contract that preserves identical admission, stale-owner recovery, and
    teardown semantics.
+2.1 Use stable permanent host-wide lock-file paths under `~/.atm/daemon/`:
+   - `launch.lock`
+   - `owner.lock`
+2.2 Use one whole-file exclusive-lock contract on those paths rather than
+   lock-file creation/deletion as the ownership signal.
+2.3 Store current owner metadata in documented `pid[:token]` form in the held
+   lock-file contents.
 3. Prove ordered release semantics on Windows as well as Unix.
 4. Preserve one bounded graceful-shutdown and reload model across supported
    operating systems.
+4.1 Preserve the same externally visible protocol behavior while lifecycle
+   control and host ownership internals differ by OS.
 5. Keep lifecycle-control and host-ownership tests aligned with the shared
    parity contract from ADR-007; platform-specific tests may cover adapter
    internals only.
@@ -78,8 +94,13 @@ shutdown semantics on every supported operating system.
 
 - Windows provides real lifecycle-control behavior for shutdown and reload
 - Windows singleton ownership is real and bounded
+- Windows and Unix both use the same stable `launch.lock` / `owner.lock`
+  ownership model
 - teardown ordering matches the documented singleton and runtime contract on
   both platform families
+- crash-recovery remains non-regressive: stale-owner recovery and replay-facing
+  runtime admission still preserve `REQ-DAEMON-RUNTIME-005` semantics on Unix
+  and Windows after the host-ownership refactor
 - no same-host daemon code above the adapter line branches directly on Unix
   signal or file-locking APIs
 - Windows and Unix lifecycle-control / host-ownership tests prove the same

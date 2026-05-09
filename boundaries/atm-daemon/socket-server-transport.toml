@@ -13,15 +13,15 @@ visibility = "pub(crate)"
 constructor = "pub(crate)"
 
 [composition]
-roots = ["atm_daemon::composition::compose_runtime"]
+roots = ["atm_daemon::composition::RuntimeComposition::start"]
 
 [ownership]
-io_owns = ["listener_accept_loop", "framed_request_receive", "framed_response_send"]
+io_owns = ["listener_accept_loop", "framed_request_receive", "framed_response_send", "stale_endpoint_artifact_cleanup"]
 io_forbidden = ["sqlite", "process_spawn"]
 
 [dependencies]
 allowed_dependents = []
-allowed_dependencies = ["atm-core", "atm-rusqlite", "tokio"]
+allowed_dependencies = ["atm-core", "tokio"]
 forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon"]
 
 [references]
@@ -60,6 +60,8 @@ state = "stub_landed"
 notes = [
   "thin clients must stop at ClientTransport and AtmProtocol",
   "the stable boundary id retains its historical socket name, but the target same-host surface is one cross-platform local IPC contract",
+  "the adapter must use the shared ATM frame header and request/response packet family rather than EOF-delimited JSON streams",
+  "the adapter owns logical endpoint naming and same-user access-control semantics across Unix and Windows",
   "stub implementation currently lives at crate root and is assembled through atm_daemon::composition",
   "Phase S is not complete until both Unix and Windows implementations ship behind this boundary",
 ]
