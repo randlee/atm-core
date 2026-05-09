@@ -124,8 +124,8 @@ impl LifecycleControlSourceAdapter {
         self.state_change.wait_for_change(observed_generation)
     }
 
-    pub(crate) fn terminate_flag(&self) -> Option<Arc<AtomicBool>> {
-        Some(Arc::clone(&self.terminate))
+    pub(crate) fn terminate_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.terminate)
     }
 
     #[cfg(test)]
@@ -188,26 +188,24 @@ fn install_platform_hooks(
 #[cfg(windows)]
 fn install_platform_hooks(
     terminate: &Arc<AtomicBool>,
-    reload: &Arc<AtomicBool>,
+    _reload: &Arc<AtomicBool>,
     state_change: &Arc<LifecycleStateChange>,
 ) -> Result<(), AtmError> {
-    use signal_hook::consts::signal::{SIGBREAK, SIGINT, SIGTERM};
+    use signal_hook::consts::signal::SIGINT;
     use signal_hook::iterator::Signals;
 
-    let mut signals = Signals::new([SIGINT, SIGTERM, SIGBREAK]).map_err(|source| {
+    let mut signals = Signals::new([SIGINT]).map_err(|source| {
         AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
             .with_source(source)
     })?;
     let terminate = Arc::clone(terminate);
-    let reload = Arc::clone(reload);
     let state_change = Arc::clone(state_change);
     std::thread::Builder::new()
         .name("atm-daemon-lifecycle-windows".to_string())
         .spawn(move || {
             for signal in signals.forever() {
                 match signal {
-                    SIGINT | SIGTERM => terminate.store(true, Ordering::SeqCst),
-                    SIGBREAK => reload.store(true, Ordering::SeqCst),
+                    SIGINT => terminate.store(true, Ordering::SeqCst),
                     _ => continue,
                 }
                 let _ = state_change.notify();
