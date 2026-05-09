@@ -16,13 +16,14 @@ use std::{
 
 use atm_core::ack::{AckOutcome, AckRequest};
 use atm_core::boundary;
-use atm_core::boundary::ClientTransport;
+use atm_core::boundary::{AtmProtocol, ClientTransport};
 use atm_core::clear::{ClearOutcome, ClearQuery};
 use atm_core::doctor::{DoctorQuery, DoctorReport};
 use atm_core::error::AtmError;
 use atm_core::observability::{CommandEvent, ObservabilityPort};
 use atm_core::protocol::{
-    RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
+    JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
+    SendResponseEnvelope,
 };
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
@@ -134,19 +135,25 @@ fn host_runtime_lock_path_from_home(home_dir: &Path, file_name: &str) -> PathBuf
 struct LocalSocketClientTransport {
     #[cfg(unix)]
     socket_path: DaemonSocketPath,
+    codec: JsonAtmProtocolCodec,
 }
 
 impl LocalSocketClientTransport {
     fn new(socket_path: DaemonSocketPath) -> Self {
         #[cfg(unix)]
         {
-            Self { socket_path }
+            Self {
+                socket_path,
+                codec: JsonAtmProtocolCodec,
+            }
         }
 
         #[cfg(not(unix))]
         {
             let _ = socket_path;
-            Self {}
+            Self {
+                codec: JsonAtmProtocolCodec,
+            }
         }
     }
 
@@ -176,30 +183,40 @@ impl LocalSocketClientTransport {
                 AtmError::daemon_unavailable("failed to configure daemon socket read timeout")
                     .with_source(source)
             })?;
-        let encoded = serde_json::to_vec(&request).map_err(AtmError::from)?;
-        if encoded.len() > atm_core::protocol::MAX_DAEMON_FRAME_BYTES {
-            return Err(AtmError::daemon_unavailable(
-                "daemon request frame exceeded the maximum supported size",
-            )
-            .with_recovery(
-                "Reduce the daemon request payload size before retrying the ATM command.",
-            ));
-        }
-        stream.write_all(&encoded).map_err(|source| {
-            AtmError::daemon_unavailable("failed to write daemon request frame").with_source(source)
+        let request_id = atm_core::protocol::next_request_id();
+        let frame = self.codec.request_to_frame(request_id, request)?;
+        atm_core::protocol::write_frame(
+            &mut stream,
+            &frame,
+            "failed to write daemon request frame",
+        )?;
+        stream.flush().map_err(|source| {
+            AtmError::daemon_unavailable("failed to flush daemon request frame").with_source(source)
         })?;
-        stream
-            .shutdown(std::net::Shutdown::Write)
-            .map_err(|source| {
-                AtmError::daemon_unavailable("failed to finalize daemon request frame")
-                    .with_source(source)
-            })?;
-        let bytes = atm_core::protocol::read_bounded_stream(
+        let response_frame = atm_core::protocol::read_frame(
             &mut stream,
             "failed to read daemon response frame",
             "daemon response frame exceeded the maximum supported size",
-        )?;
-        serde_json::from_slice(&bytes).map_err(AtmError::from)
+        )?
+        .ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "daemon closed the local IPC connection before returning a response frame",
+            )
+            .with_recovery(
+                "Retry the ATM command after the daemon reaches serving state and verify the daemon logs if the problem persists.",
+            )
+        })?;
+        let (response_id, response) = self.codec.response_from_frame(response_frame)?;
+        if response_id != request_id {
+            return Err(AtmError::daemon_unavailable(format!(
+                "daemon response request_id {} did not match request_id {}",
+                response_id, request_id
+            ))
+            .with_recovery(
+                "Align the CLI and daemon builds so both sides use the same ATM daemon protocol contract before retrying.",
+            ));
+        }
+        Ok(response)
     }
 
     #[cfg(not(unix))]

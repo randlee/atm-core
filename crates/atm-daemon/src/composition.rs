@@ -2,27 +2,19 @@ use crate::boundary_adapters::{
     DaemonConfigIngress, DaemonInboxExport, DaemonInboxIngress, DaemonNotificationSink,
     DaemonReconcileCoordinator, FileWatchEventSource,
 };
-#[cfg(unix)]
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
-#[cfg(unix)]
 use crate::{
-    LocalSocketServerTransport, PeerTransportRuntime, sqlite_remote_replay_store_from_path,
+    LocalIpcServerTransportAdapter, PeerTransportRuntime, sqlite_remote_replay_store_from_path,
 };
-#[cfg(unix)]
 use atm_core::boundary::RequestDispatcher;
 use atm_core::error::AtmError;
-#[cfg(unix)]
 use std::fs::OpenOptions;
 use std::path::PathBuf;
-#[cfg(unix)]
 use std::sync::Arc;
-#[cfg(unix)]
 use std::sync::Mutex;
-#[cfg(unix)]
 use std::time::Duration;
 
-#[cfg(unix)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum RuntimeLifecycleState {
     Starting,
@@ -33,7 +25,6 @@ pub(crate) enum RuntimeLifecycleState {
 }
 
 /// Serializes legal daemon runtime ownership transitions.
-#[cfg(unix)]
 #[derive(Debug, Default)]
 pub(crate) struct RuntimeLifecycle {
     /// A single mutex is sufficient here because lifecycle transitions are
@@ -41,7 +32,6 @@ pub(crate) struct RuntimeLifecycle {
     state: Mutex<RuntimeLifecycleState>,
 }
 
-#[cfg(unix)]
 impl RuntimeLifecycle {
     pub(crate) fn new() -> Self {
         Self::default()
@@ -118,11 +108,8 @@ impl RuntimeLifecycle {
 /// Internal root for Phase R daemon runtime wiring.
 #[derive(Debug)]
 pub(crate) struct RuntimeComposition {
-    #[cfg(unix)]
     lifecycle: Arc<RuntimeLifecycle>,
-    #[cfg(unix)]
-    server_transport: LocalSocketServerTransport,
-    #[cfg(unix)]
+    server_transport: LocalIpcServerTransportAdapter,
     request_dispatcher: Arc<DaemonRequestDispatcher>,
     _notification_sink: DaemonNotificationSink,
     _status_source: DaemonStatusSource,
@@ -131,12 +118,11 @@ pub(crate) struct RuntimeComposition {
     _config_ingress: DaemonConfigIngress,
     _inbox_ingress: DaemonInboxIngress,
     _inbox_export: DaemonInboxExport,
-    #[cfg(unix)]
     peer_transport_runtime: PeerTransportRuntime,
 }
 
 impl RuntimeComposition {
-    #[cfg(all(test, unix))]
+    #[cfg(test)]
     fn new(home_dir: PathBuf) -> Result<Self, AtmError> {
         Self::new_with_replay_store_path(
             home_dir.clone(),
@@ -144,7 +130,6 @@ impl RuntimeComposition {
         )
     }
 
-    #[cfg(unix)]
     fn new_with_replay_store_path(
         home_dir: PathBuf,
         replay_store_path: PathBuf,
@@ -165,7 +150,7 @@ impl RuntimeComposition {
         };
         Ok(Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
-            server_transport: LocalSocketServerTransport::new(),
+            server_transport: LocalIpcServerTransportAdapter::new(),
             request_dispatcher: Arc::new(DaemonRequestDispatcher::new(
                 home_dir,
                 status_cache.clone(),
@@ -185,36 +170,10 @@ impl RuntimeComposition {
         })
     }
 
-    #[cfg(not(unix))]
-    fn new_with_replay_store_path(
-        _home_dir: PathBuf,
-        _replay_store_path: PathBuf,
-    ) -> Result<Self, AtmError> {
-        let status_cache = RuntimeStatusCache::new();
-        let notification_sink = DaemonNotificationSink::new();
-        let watch_event_source = FileWatchEventSource::new();
-        let inbox_ingress = DaemonInboxIngress::new();
-        Ok(Self {
-            _notification_sink: notification_sink.clone(),
-            _status_source: DaemonStatusSource::new(status_cache),
-            _watch_event_source: watch_event_source.clone(),
-            _reconcile_coordinator: DaemonReconcileCoordinator::new(
-                watch_event_source,
-                inbox_ingress.clone(),
-                notification_sink,
-            ),
-            _config_ingress: DaemonConfigIngress::new(),
-            _inbox_ingress: inbox_ingress,
-            _inbox_export: DaemonInboxExport::new(),
-        })
-    }
-
-    #[cfg(unix)]
     fn request_dispatcher(&self) -> Arc<dyn RequestDispatcher + Send + Sync> {
         self.request_dispatcher.clone()
     }
 
-    #[cfg(unix)]
     fn begin_shutdown(&self) -> Result<(), AtmError> {
         self.lifecycle.transition(RuntimeLifecycleState::Draining)?;
         // Attempt every lane shutdown even if one lane fails so the runtime
@@ -224,12 +183,10 @@ impl RuntimeComposition {
         Ok(())
     }
 
-    #[cfg(unix)]
     fn finalize_shutdown(&self) {
         self.request_dispatcher.finalize_shutdown();
     }
 
-    #[cfg(unix)]
     pub(crate) fn start(&self) -> Result<(), AtmError> {
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
         // Startup replay must finish before the daemon binds its socket so
@@ -282,14 +239,7 @@ impl RuntimeComposition {
         self.finish_runtime(result)
     }
 
-    #[cfg(not(unix))]
-    pub(crate) fn start(&self) -> Result<(), AtmError> {
-        Err(AtmError::daemon_unavailable(
-            "atm-daemon runtime composition requires a Unix platform",
-        ))
-    }
-
-    #[cfg(all(unix, test))]
+    #[cfg(test)]
     pub(crate) fn start_with_socket_path_for_test(
         &self,
         socket_path: PathBuf,
@@ -346,22 +296,11 @@ impl RuntimeComposition {
         self.finish_runtime(result)
     }
 
-    #[cfg(all(not(unix), test))]
-    pub(crate) fn start_with_socket_path_for_test(
-        &self,
-        _socket_path: PathBuf,
-    ) -> Result<(), AtmError> {
-        Err(AtmError::daemon_unavailable(
-            "atm-daemon test socket runtime requires a Unix platform",
-        ))
-    }
-
-    #[cfg(all(test, unix))]
+    #[cfg(test)]
     pub(crate) fn lifecycle_state(&self) -> RuntimeLifecycleState {
         self.lifecycle.state()
     }
 
-    #[cfg(unix)]
     fn finish_runtime(&self, result: Result<(), AtmError>) -> Result<(), AtmError> {
         let state_result = self
             .lifecycle
@@ -384,7 +323,6 @@ impl RuntimeComposition {
         result
     }
 
-    #[cfg(unix)]
     fn start_background_lanes(&self) -> Result<(), AtmError> {
         self._notification_sink.start()?;
         self._watch_event_source.start()?;
@@ -392,7 +330,6 @@ impl RuntimeComposition {
         Ok(())
     }
 
-    #[cfg(unix)]
     fn shutdown_background_lanes(&self) -> Result<(), AtmError> {
         const BACKGROUND_LANE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(3);
         shutdown_lane_with_deadline(
@@ -417,7 +354,6 @@ impl RuntimeComposition {
     }
 }
 
-#[cfg(unix)]
 fn shutdown_lane_with_deadline<T, F>(
     lane_name: &'static str,
     deadline: Duration,
@@ -443,68 +379,6 @@ where
     }
 }
 
-#[cfg(unix)]
-fn validate_runtime_socket_path() -> Result<(), AtmError> {
-    let socket_path = atm_core::protocol::daemon_socket_path()?;
-    if socket_path.as_os_str().is_empty() {
-        return Err(AtmError::daemon_unavailable("daemon socket path must not be empty")
-            .with_recovery(
-                "Set ATM_DAEMON_SOCKET or ATM_HOME so atm-daemon resolves a concrete socket path before startup.",
-            ));
-    }
-    if socket_path.file_name().is_none() {
-        return Err(AtmError::daemon_unavailable(
-            "daemon socket path must include a socket file name",
-        )
-        .with_recovery(
-            "Set ATM_DAEMON_SOCKET to a full socket path or ensure ATM_HOME resolves to a writable daemon socket location.",
-        ));
-    }
-    let Some(parent_dir) = socket_path.parent() else {
-        return Err(AtmError::daemon_unavailable(
-            "daemon socket path must include a parent directory",
-        )
-        .with_recovery(
-            "Set ATM_DAEMON_SOCKET or ATM_HOME so atm-daemon resolves a socket path inside a real directory.",
-        ));
-    };
-    std::fs::create_dir_all(parent_dir).map_err(|source| {
-        AtmError::daemon_unavailable(format!(
-            "failed to create daemon socket parent directory at {}",
-            parent_dir.display()
-        ))
-        .with_recovery(
-            "Choose a writable ATM_DAEMON_SOCKET parent directory or adjust ATM_HOME before starting atm-daemon.",
-        )
-        .with_source(source)
-    })?;
-    let probe_path = parent_dir.join(format!(".atm-daemon-write-probe-{}", std::process::id()));
-    OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(&probe_path)
-        .map_err(|source| {
-            AtmError::daemon_unavailable(format!(
-                "daemon socket parent directory is not writable at {}",
-                parent_dir.display()
-            ))
-            .with_recovery(
-                "Grant write access to the daemon socket parent directory or point ATM_DAEMON_SOCKET at a writable location before retrying.",
-            )
-            .with_source(source)
-        })?;
-    if let Err(error) = std::fs::remove_file(&probe_path) {
-        tracing::warn!(
-            path = %probe_path.display(),
-            %error,
-            "failed to remove daemon socket write probe file"
-        );
-    }
-    Ok(())
-}
-
-#[cfg(unix)]
 fn validate_runtime_home_dir(home_dir: &std::path::Path) -> Result<(), AtmError> {
     std::fs::create_dir_all(home_dir).map_err(|source| {
         AtmError::daemon_unavailable(format!(
@@ -542,22 +416,7 @@ fn validate_runtime_home_dir(home_dir: &std::path::Path) -> Result<(), AtmError>
     Ok(())
 }
 
-#[cfg(not(unix))]
-fn validate_runtime_socket_path() -> Result<(), AtmError> {
-    Err(AtmError::daemon_unavailable(
-        "atm-daemon socket transport requires a Unix platform",
-    ))
-}
-
-#[cfg(not(unix))]
-fn validate_runtime_home_dir(_home_dir: &std::path::Path) -> Result<(), AtmError> {
-    Err(AtmError::daemon_unavailable(
-        "atm-daemon home directory validation requires a Unix platform",
-    ))
-}
-
 pub(crate) fn compose_runtime() -> Result<RuntimeComposition, AtmError> {
-    validate_runtime_socket_path()?;
     let home_dir = atm_core::home::atm_home()?;
     validate_runtime_home_dir(&home_dir)?;
     RuntimeComposition::new_with_replay_store_path(home_dir, atm_core::home::host_mail_db_path()?)
@@ -565,17 +424,12 @@ pub(crate) fn compose_runtime() -> Result<RuntimeComposition, AtmError> {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(unix)]
     use atm_core::boundary::ServerTransport;
-    #[cfg(unix)]
     use tempfile::TempDir;
 
-    #[cfg(unix)]
     use super::RuntimeComposition;
-    #[cfg(unix)]
     use super::{RuntimeLifecycle, RuntimeLifecycleState};
 
-    #[cfg(unix)]
     #[test]
     fn runtime_lifecycle_allows_only_documented_transitions() {
         let lifecycle = RuntimeLifecycle::new();
@@ -594,7 +448,6 @@ mod tests {
             .expect("stopped");
     }
 
-    #[cfg(unix)]
     #[test]
     fn runtime_lifecycle_happy_path_matches_documented_owner_sequence() {
         let lifecycle = RuntimeLifecycle::new();
@@ -625,7 +478,6 @@ mod tests {
         );
     }
 
-    #[cfg(unix)]
     #[test]
     fn runtime_lifecycle_rejects_illegal_transitions() {
         let lifecycle = RuntimeLifecycle::new();
@@ -651,7 +503,6 @@ mod tests {
         );
     }
 
-    #[cfg(unix)]
     #[test]
     fn startup_failure_path_can_transition_back_to_stopped() {
         let lifecycle = RuntimeLifecycle::new();
@@ -662,7 +513,6 @@ mod tests {
         assert_eq!(lifecycle.state(), RuntimeLifecycleState::Stopped);
     }
 
-    #[cfg(unix)]
     #[test]
     fn runtime_composition_failed_startup_returns_to_stopped() {
         let tempdir = TempDir::new().expect("tempdir");
@@ -679,7 +529,6 @@ mod tests {
         assert_eq!(runtime.lifecycle_state(), RuntimeLifecycleState::Stopped);
     }
 
-    #[cfg(unix)]
     #[test]
     fn server_transport_cannot_bootstrap_outside_runtime_composition_start() {
         let tempdir = TempDir::new().expect("tempdir");

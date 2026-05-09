@@ -60,14 +60,19 @@ depends directly on Unix APIs.
   - `validate_runtime_home_dir`
   - `compose_runtime`
 - `crates/atm-daemon/src/lib.rs`
+  - runtime crate-root ownership and adapter re-exports only
+- `crates/atm-daemon/src/local_ipc_transport.rs`
   - `PreparedRuntimeServer::bind`
   - `PreparedRuntimeServer::serve_with_runtime_hooks`
   - `PreparedRuntimeServer::serve_with_deadlines_and_accept_probe`
   - `drain_active_connections_for_shutdown`
   - `handle_connection`
   - `ActiveConnectionRegistry::{register, interrupt_all, wait_for_connection_change}`
-- `crates/atm-daemon/src/shutdown_signals.rs`
-  - `DaemonShutdownSignals::install`
+- `crates/atm-daemon/src/lifecycle_control.rs`
+  - `LifecycleControlSourceAdapter::install`
+- `crates/atm-daemon/src/host_ownership.rs`
+  - `HostOwnershipAdapter::{acquire, acquire_at}`
+  - `host_runtime_lock_path`
 - `crates/atm/src/composition.rs`
   - `LocalSocketClientTransport::{try_connect, exchange}`
   - `resolve_daemon_socket_path`

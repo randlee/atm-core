@@ -3,8 +3,9 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::process::{Command, Stdio};
 
+use atm_core::boundary::AtmProtocol;
 use atm_core::doctor::DoctorQuery;
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, read_bounded_stream};
+use atm_core::protocol::{JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope};
 use atm_core::test_support::EnvGuard;
 use serial_test::serial;
 use tempfile::TempDir;
@@ -48,24 +49,29 @@ fn run_daemon_uses_production_socket_path_and_serves_requests() {
     );
 
     let mut stream = UnixStream::connect(&socket_path).expect("connect socket");
+    let codec = JsonAtmProtocolCodec;
     let request = RequestEnvelope::Doctor(DoctorQuery {
         home_dir: atm_home.clone(),
         current_dir: atm_home,
         team_override: None,
     });
-    let bytes = serde_json::to_vec(&request).expect("request json");
-    stream.write_all(&bytes).expect("write request");
-    stream
-        .shutdown(std::net::Shutdown::Write)
-        .expect("shutdown write");
-    let response_bytes = read_bounded_stream(
+    let request_id = atm_core::protocol::next_request_id();
+    let frame = codec
+        .request_to_frame(request_id, request)
+        .expect("request frame");
+    atm_core::protocol::write_frame(&mut stream, &frame, "write request").expect("write frame");
+    stream.flush().expect("flush request");
+    let response_frame = atm_core::protocol::read_frame(
         &mut stream,
         "read response",
         "daemon response exceeded frame limit",
     )
-    .expect("read response");
-    let response: ResponseEnvelope =
-        serde_json::from_slice(&response_bytes).expect("response json");
+    .expect("read response")
+    .expect("response frame");
+    let (response_id, response): (u64, ResponseEnvelope) = codec
+        .response_from_frame(response_frame)
+        .expect("response decode");
+    assert_eq!(response_id, request_id);
     assert!(
         matches!(
             response,

@@ -51,16 +51,17 @@ shutdown semantics on every supported operating system.
 
 ## Exact Code Targets
 
-- `crates/atm-daemon/src/shutdown_signals.rs`
-  - `DaemonShutdownSignals::install`
-  - `DaemonShutdownSignals::new_for_test`
-- `crates/atm-daemon/src/lib.rs`
+- `crates/atm-daemon/src/lifecycle_control.rs`
+  - `LifecycleControlSourceAdapter::install`
+  - `LifecycleControlSourceAdapter::new_for_test`
+- `crates/atm-daemon/src/host_ownership.rs`
   - `host_runtime_lock_path`
   - `host_runtime_lock_path_from_home`
   - `write_owner_record`
   - `recorded_owner_pid`
-  - `SingletonGuard::{acquire, acquire_at, drop}`
-  - `open_singleton_lock`
+  - `HostOwnershipAdapter::{acquire, acquire_at}`
+  - `HostOwnershipGuard::drop`
+  - `open_lock_file`
   - `recover_stale_owner_lock`
 - `crates/atm-daemon/src/composition.rs`
   - `RuntimeComposition::begin_shutdown`

@@ -258,12 +258,13 @@ Architectural rule:
 - Phase S host ownership uses one cross-platform whole-file exclusive-lock
   contract on those stable file paths rather than lock-file creation/deletion
   as the ownership signal
-- lock acquisition must use `fs4::FileExt::try_lock_exclusive` for both
-  `launch.lock` and `owner.lock`; blocking `lock_exclusive` is not the
+- lock acquisition must use non-blocking `FileExt::try_lock_exclusive` for
+  both `launch.lock` and `owner.lock`; blocking `lock_exclusive` is not the
   accepted serving-admission contract
 - failed non-blocking acquisition of either lock file must surface one typed
   `already_owned` admission outcome rather than silently spinning or blocking
-- the preferred Phase S implementation foundation is `fs4`
+- the current S.1 extraction uses the existing `fs2` file-locking crate while
+  preserving the required non-blocking whole-file lock semantics
 - owner-visible metadata is the lock-file contents in documented
   `pid[:token]` form while the exclusive lock is held
 - lock files must live on a local filesystem with working host-local advisory

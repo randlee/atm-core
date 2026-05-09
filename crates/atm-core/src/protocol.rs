@@ -2,7 +2,9 @@
 
 use std::env;
 use std::io::Read;
+use std::io::Write;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
 
@@ -136,14 +138,346 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
     }
 }
 
-/// Raw protocol frame payload.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+/// Raw protocol frame payload plus the shared ATM frame header fields.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FramePayload {
+    pub request_id: u64,
+    pub message_kind: MessageKind,
+    pub flags: u16,
     pub bytes: Vec<u8>,
 }
 
 /// Maximum encoded daemon request/response frame size.
 pub const MAX_DAEMON_FRAME_BYTES: usize = 1024 * 1024;
+pub const ATM_FRAME_MAGIC: u32 = u32::from_be_bytes(*b"ATMD");
+pub const ATM_FRAME_VERSION_V1: u16 = 1;
+pub const ATM_FRAME_FLAGS_V1: u16 = 0;
+pub const ATM_FRAME_HEADER_BYTES: usize = 22;
+
+static NEXT_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u16)]
+pub enum MessageKind {
+    SendComposeRequest = 0x0001,
+    SendAcknowledgeRequest = 0x0002,
+    HeartbeatRequest = 0x0003,
+    ReceiveRequest = 0x0004,
+    ClearRequest = 0x0005,
+    DoctorRequest = 0x0006,
+    SendSentResponse = 0x1001,
+    SendAcknowledgedResponse = 0x1002,
+    HeartbeatResponse = 0x1003,
+    ReceiveResponse = 0x1004,
+    ClearResponse = 0x1005,
+    DoctorResponse = 0x1006,
+    ErrorResponse = 0x1fff,
+}
+
+impl MessageKind {
+    pub const fn code(self) -> u16 {
+        self as u16
+    }
+
+    pub const fn is_request(self) -> bool {
+        matches!(
+            self,
+            Self::SendComposeRequest
+                | Self::SendAcknowledgeRequest
+                | Self::HeartbeatRequest
+                | Self::ReceiveRequest
+                | Self::ClearRequest
+                | Self::DoctorRequest
+        )
+    }
+
+    pub const fn is_response(self) -> bool {
+        !self.is_request()
+    }
+}
+
+impl TryFrom<u16> for MessageKind {
+    type Error = AtmError;
+
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
+        let kind = match value {
+            0x0001 => Self::SendComposeRequest,
+            0x0002 => Self::SendAcknowledgeRequest,
+            0x0003 => Self::HeartbeatRequest,
+            0x0004 => Self::ReceiveRequest,
+            0x0005 => Self::ClearRequest,
+            0x0006 => Self::DoctorRequest,
+            0x1001 => Self::SendSentResponse,
+            0x1002 => Self::SendAcknowledgedResponse,
+            0x1003 => Self::HeartbeatResponse,
+            0x1004 => Self::ReceiveResponse,
+            0x1005 => Self::ClearResponse,
+            0x1006 => Self::DoctorResponse,
+            0x1fff => Self::ErrorResponse,
+            _ => {
+                return Err(AtmError::validation(format!(
+                    "unsupported ATM daemon frame message kind 0x{value:04x}"
+                ))
+                .with_recovery(
+                    "Align the CLI and daemon builds so both sides speak the same ATM daemon protocol version before retrying.",
+                ));
+            }
+        };
+        Ok(kind)
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct JsonAtmProtocolCodec;
+
+impl crate::boundary::sealed::Sealed for JsonAtmProtocolCodec {}
+
+impl crate::boundary::AtmProtocol for JsonAtmProtocolCodec {
+    fn request_to_frame(
+        &self,
+        request_id: u64,
+        request: RequestEnvelope,
+    ) -> Result<FramePayload, AtmError> {
+        request_to_frame_payload(request_id, request)
+    }
+
+    fn request_from_frame(&self, frame: FramePayload) -> Result<(u64, RequestEnvelope), AtmError> {
+        request_from_frame_payload(frame)
+    }
+
+    fn response_to_frame(
+        &self,
+        request_id: u64,
+        response: ResponseEnvelope,
+    ) -> Result<FramePayload, AtmError> {
+        response_to_frame_payload(request_id, response)
+    }
+
+    fn response_from_frame(
+        &self,
+        frame: FramePayload,
+    ) -> Result<(u64, ResponseEnvelope), AtmError> {
+        response_from_frame_payload(frame)
+    }
+}
+
+pub fn next_request_id() -> u64 {
+    loop {
+        let request_id = NEXT_REQUEST_ID.fetch_add(1, Ordering::Relaxed);
+        if request_id != 0 {
+            return request_id;
+        }
+    }
+}
+
+pub fn request_to_frame_payload(
+    request_id: u64,
+    request: RequestEnvelope,
+) -> Result<FramePayload, AtmError> {
+    Ok(FramePayload {
+        request_id: nonzero_request_id(request_id)?,
+        message_kind: request_message_kind(&request),
+        flags: ATM_FRAME_FLAGS_V1,
+        bytes: serde_json::to_vec(&request).map_err(AtmError::from)?,
+    })
+}
+
+pub fn request_from_frame_payload(frame: FramePayload) -> Result<(u64, RequestEnvelope), AtmError> {
+    if !frame.message_kind.is_request() {
+        return Err(AtmError::validation(format!(
+            "ATM daemon request decoder received non-request message kind 0x{:04x}",
+            frame.message_kind.code()
+        ))
+        .with_recovery(
+            "Align the CLI and daemon builds so both sides agree on request and response packet roles before retrying.",
+        ));
+    }
+    let request_id = nonzero_request_id(frame.request_id)?;
+    let request = serde_json::from_slice(&frame.bytes).map_err(AtmError::from)?;
+    Ok((request_id, request))
+}
+
+pub fn response_to_frame_payload(
+    request_id: u64,
+    response: ResponseEnvelope,
+) -> Result<FramePayload, AtmError> {
+    Ok(FramePayload {
+        request_id: nonzero_request_id(request_id)?,
+        message_kind: response_message_kind(&response),
+        flags: ATM_FRAME_FLAGS_V1,
+        bytes: serde_json::to_vec(&response).map_err(AtmError::from)?,
+    })
+}
+
+pub fn response_from_frame_payload(
+    frame: FramePayload,
+) -> Result<(u64, ResponseEnvelope), AtmError> {
+    if !frame.message_kind.is_response() {
+        return Err(AtmError::validation(format!(
+            "ATM daemon response decoder received non-response message kind 0x{:04x}",
+            frame.message_kind.code()
+        ))
+        .with_recovery(
+            "Align the CLI and daemon builds so both sides agree on request and response packet roles before retrying.",
+        ));
+    }
+    let request_id = nonzero_request_id(frame.request_id)?;
+    let response = serde_json::from_slice(&frame.bytes).map_err(AtmError::from)?;
+    Ok((request_id, response))
+}
+
+pub fn write_frame(
+    writer: &mut impl Write,
+    frame: &FramePayload,
+    write_error: &'static str,
+) -> Result<(), AtmError> {
+    if frame.flags != ATM_FRAME_FLAGS_V1 {
+        return Err(AtmError::validation(format!(
+            "unsupported ATM daemon frame flags 0x{:04x} for version {}",
+            frame.flags, ATM_FRAME_VERSION_V1
+        ))
+        .with_recovery(
+            "Retry with a supported ATM daemon client/server build that uses protocol version 1 flags.",
+        ));
+    }
+    if frame.bytes.len() > MAX_DAEMON_FRAME_BYTES {
+        return Err(AtmError::daemon_unavailable(
+            "daemon frame exceeded the maximum supported size",
+        )
+        .with_recovery(
+            "Reduce the daemon request/response payload size before retrying the ATM command.",
+        ));
+    }
+    let mut header = [0u8; ATM_FRAME_HEADER_BYTES];
+    header[0..4].copy_from_slice(&ATM_FRAME_MAGIC.to_be_bytes());
+    header[4..6].copy_from_slice(&ATM_FRAME_VERSION_V1.to_be_bytes());
+    header[6..8].copy_from_slice(&frame.message_kind.code().to_be_bytes());
+    header[8..10].copy_from_slice(&frame.flags.to_be_bytes());
+    header[10..18].copy_from_slice(&frame.request_id.to_be_bytes());
+    header[18..22].copy_from_slice(&(frame.bytes.len() as u32).to_be_bytes());
+    writer
+        .write_all(&header)
+        .and_then(|_| writer.write_all(&frame.bytes))
+        .map_err(|source| AtmError::daemon_unavailable(write_error).with_source(source))
+}
+
+pub fn read_frame(
+    reader: &mut impl Read,
+    read_error: &'static str,
+    oversize_error: &'static str,
+) -> Result<Option<FramePayload>, AtmError> {
+    let Some(header) = read_frame_header(reader, read_error)? else {
+        return Ok(None);
+    };
+
+    let magic = u32::from_be_bytes(header[0..4].try_into().expect("magic"));
+    if magic != ATM_FRAME_MAGIC {
+        return Err(AtmError::validation(format!(
+            "unsupported ATM daemon frame magic 0x{magic:08x}"
+        ))
+        .with_recovery(
+            "Retry with an ATM client and daemon build that both speak the documented ATM daemon protocol.",
+        ));
+    }
+
+    let version = u16::from_be_bytes(header[4..6].try_into().expect("version"));
+    if version != ATM_FRAME_VERSION_V1 {
+        return Err(AtmError::validation(format!(
+            "unsupported ATM daemon frame version {version}"
+        ))
+        .with_recovery(
+            "Align the CLI and daemon builds so both sides use the same ATM daemon protocol version before retrying.",
+        ));
+    }
+
+    let message_kind =
+        MessageKind::try_from(u16::from_be_bytes(header[6..8].try_into().expect("kind")))?;
+    let flags = u16::from_be_bytes(header[8..10].try_into().expect("flags"));
+    if flags != ATM_FRAME_FLAGS_V1 {
+        return Err(AtmError::validation(format!(
+            "unsupported ATM daemon frame flags 0x{flags:04x} for version {version}"
+        ))
+        .with_recovery(
+            "Retry with a supported ATM daemon client/server build that uses the version-1 flag contract.",
+        ));
+    }
+    let request_id = nonzero_request_id(u64::from_be_bytes(
+        header[10..18].try_into().expect("request id"),
+    ))?;
+    let payload_length = u32::from_be_bytes(header[18..22].try_into().expect("payload")) as usize;
+    if payload_length > MAX_DAEMON_FRAME_BYTES {
+        return Err(AtmError::daemon_unavailable(oversize_error).with_recovery(
+            "Reduce the daemon request/response payload size before retrying the ATM command.",
+        ));
+    }
+
+    let mut bytes = vec![0u8; payload_length];
+    reader
+        .read_exact(&mut bytes)
+        .map_err(|source| AtmError::daemon_unavailable(read_error).with_source(source))?;
+    Ok(Some(FramePayload {
+        request_id,
+        message_kind,
+        flags,
+        bytes,
+    }))
+}
+
+fn read_frame_header(
+    reader: &mut impl Read,
+    read_error: &'static str,
+) -> Result<Option<[u8; ATM_FRAME_HEADER_BYTES]>, AtmError> {
+    let mut header = [0u8; ATM_FRAME_HEADER_BYTES];
+    let read = reader
+        .read(&mut header[..1])
+        .map_err(|source| AtmError::daemon_unavailable(read_error).with_source(source))?;
+    if read == 0 {
+        return Ok(None);
+    }
+    reader
+        .read_exact(&mut header[1..])
+        .map_err(|source| AtmError::daemon_unavailable(read_error).with_source(source))?;
+    Ok(Some(header))
+}
+
+fn nonzero_request_id(request_id: u64) -> Result<u64, AtmError> {
+    if request_id == 0 {
+        return Err(AtmError::validation(
+            "ATM daemon protocol request_id must be non-zero",
+        )
+        .with_recovery(
+            "Retry with a client and daemon build that populate non-zero ATM daemon request ids.",
+        ));
+    }
+    Ok(request_id)
+}
+
+fn request_message_kind(request: &RequestEnvelope) -> MessageKind {
+    match request {
+        RequestEnvelope::Send(SendRequestEnvelope::Compose(_)) => MessageKind::SendComposeRequest,
+        RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(_)) => {
+            MessageKind::SendAcknowledgeRequest
+        }
+        RequestEnvelope::Heartbeat(_) => MessageKind::HeartbeatRequest,
+        RequestEnvelope::Receive(_) => MessageKind::ReceiveRequest,
+        RequestEnvelope::Clear(_) => MessageKind::ClearRequest,
+        RequestEnvelope::Doctor(_) => MessageKind::DoctorRequest,
+    }
+}
+
+fn response_message_kind(response: &ResponseEnvelope) -> MessageKind {
+    match response {
+        ResponseEnvelope::Send(SendResponseEnvelope::Sent(_)) => MessageKind::SendSentResponse,
+        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(_)) => {
+            MessageKind::SendAcknowledgedResponse
+        }
+        ResponseEnvelope::Heartbeat(_) => MessageKind::HeartbeatResponse,
+        ResponseEnvelope::Receive(_) => MessageKind::ReceiveResponse,
+        ResponseEnvelope::Clear(_) => MessageKind::ClearResponse,
+        ResponseEnvelope::Doctor(_) => MessageKind::DoctorResponse,
+        ResponseEnvelope::Error(_) => MessageKind::ErrorResponse,
+    }
+}
 
 /// Read one daemon frame into memory while enforcing the shared size cap.
 ///

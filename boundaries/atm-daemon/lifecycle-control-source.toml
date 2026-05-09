@@ -7,8 +7,8 @@ name = "LifecycleControlSourceAdapter"
 facade = "LifecycleControlSource"
 
 [implementation]
-type = "DaemonShutdownSignals"
-module = "atm_daemon::shutdown_signals"
+type = "LifecycleControlSourceAdapter"
+module = "atm_daemon::lifecycle_control"
 visibility = "pub(crate)"
 constructor = "pub(crate)"
 
@@ -40,6 +40,7 @@ forbidden_edges = [
 scope = "outside_owner_crate"
 forbidden = [
   "DaemonShutdownSignals",
+  "LifecycleControlSourceAdapter",
   "signal_hook::consts::signal::SIGINT",
   "signal_hook::consts::signal::SIGTERM",
   "signal_hook::consts::signal::SIGHUP",
@@ -69,7 +70,7 @@ review_gates = [
 [status]
 state = "planned"
 notes = [
-  "Phase R currently implements this boundary only through Unix signals",
+  "the extracted boundary now lives under atm_daemon::lifecycle_control with Unix hook installation hidden inside the adapter",
   "Phase S requires a platform-neutral lifecycle control source with Unix and Windows implementations behind one daemon-private contract",
   "same-host daemon hosting is incomplete until Windows lifecycle control exists behind this boundary",
 ]

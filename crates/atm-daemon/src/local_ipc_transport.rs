@@ -1,0 +1,582 @@
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::time::{Duration, Instant};
+
+use atm_core::boundary::{self, AtmProtocol, RequestDispatcher};
+use atm_core::error::AtmError;
+use atm_core::protocol::{JsonAtmProtocolCodec, ProtocolErrorEnvelope, ResponseEnvelope};
+
+use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
+use crate::lifecycle_control::LifecycleControlSourceAdapter;
+
+#[cfg(unix)]
+use std::collections::HashMap;
+#[cfg(unix)]
+use std::fs;
+#[cfg(unix)]
+use std::io::Write;
+#[cfg(unix)]
+use std::os::unix::net::{UnixListener, UnixStream};
+#[cfg(unix)]
+use std::sync::{Condvar, Mutex};
+#[cfg(unix)]
+use std::thread;
+
+const MAX_CONCURRENT_CONNECTIONS: usize = 64;
+const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
+const SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_millis(25);
+
+#[cfg(unix)]
+#[derive(Debug)]
+struct LocalIpcRuntimeEndpointGuard {
+    endpoint_path: PathBuf,
+}
+
+#[cfg(unix)]
+impl Drop for LocalIpcRuntimeEndpointGuard {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.endpoint_path);
+    }
+}
+
+#[cfg(unix)]
+#[derive(Debug, Default)]
+pub(crate) struct ActiveConnectionRegistry {
+    next_id: AtomicUsize,
+    active_connections: AtomicUsize,
+    active_dispatches: AtomicUsize,
+    streams: Mutex<HashMap<usize, UnixStream>>,
+    drain_state: Mutex<()>,
+    drain_wake: Condvar,
+}
+
+#[cfg(unix)]
+impl ActiveConnectionRegistry {
+    pub(crate) fn register(
+        self: &Arc<Self>,
+        stream: &UnixStream,
+    ) -> Result<ActiveConnectionGuard, AtmError> {
+        let id = self.next_id.fetch_add(1, Ordering::SeqCst);
+        let cloned = stream.try_clone().map_err(|source| {
+            AtmError::daemon_unavailable("failed to clone active daemon connection handle")
+                .with_source(source)
+        })?;
+        self.streams
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("active connection registry lock poisoned"))?
+            .insert(id, cloned);
+        self.active_connections.fetch_add(1, Ordering::SeqCst);
+        Ok(ActiveConnectionGuard {
+            id,
+            registry: Arc::clone(self),
+        })
+    }
+
+    fn register_dispatch_work(self: &Arc<Self>) -> ActiveDispatchGuard {
+        self.active_dispatches.fetch_add(1, Ordering::SeqCst);
+        ActiveDispatchGuard {
+            registry: Arc::clone(self),
+        }
+    }
+
+    pub(crate) fn active_connections(&self) -> usize {
+        self.active_connections.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn active_work_items(&self) -> usize {
+        self.active_connections.load(Ordering::SeqCst)
+            + self.active_dispatches.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn interrupt_all(&self) -> Result<(), AtmError> {
+        let mut streams = self.streams.lock().map_err(|_| {
+            AtmError::daemon_unavailable("active connection registry lock poisoned")
+        })?;
+        for stream in streams.values_mut() {
+            let _ = stream.shutdown(std::net::Shutdown::Both);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn wait_for_connection_change(&self, timeout: Duration) -> Result<(), AtmError> {
+        let state = self
+            .drain_state
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("active connection drain lock poisoned"))?;
+        let (_state, wait_result) = self
+            .drain_wake
+            .wait_timeout(state, timeout)
+            .map_err(|_| AtmError::daemon_unavailable("active connection drain lock poisoned"))?;
+        if wait_result.timed_out() {
+            return Ok(());
+        }
+        Ok(())
+    }
+
+    fn remove(&self, id: usize) {
+        if let Ok(mut streams) = self.streams.lock() {
+            streams.remove(&id);
+        }
+        self.active_connections.fetch_sub(1, Ordering::SeqCst);
+        self.drain_wake.notify_all();
+    }
+}
+
+#[cfg(unix)]
+pub(crate) struct ActiveConnectionGuard {
+    id: usize,
+    registry: Arc<ActiveConnectionRegistry>,
+}
+
+#[cfg(unix)]
+struct ActiveDispatchGuard {
+    registry: Arc<ActiveConnectionRegistry>,
+}
+
+#[cfg(unix)]
+impl Drop for ActiveConnectionGuard {
+    fn drop(&mut self) {
+        self.registry.remove(self.id);
+    }
+}
+
+#[cfg(unix)]
+impl Drop for ActiveDispatchGuard {
+    fn drop(&mut self) {
+        self.registry
+            .active_dispatches
+            .fetch_sub(1, Ordering::SeqCst);
+        self.registry.drain_wake.notify_all();
+    }
+}
+
+#[cfg(unix)]
+pub(crate) struct PreparedRuntimeServer {
+    _endpoint_guard: LocalIpcRuntimeEndpointGuard,
+    _ownership: HostOwnershipGuard,
+    listener: UnixListener,
+    lifecycle_control: LifecycleControlSourceAdapter,
+    registry: Arc<ActiveConnectionRegistry>,
+    force_shutdown: Arc<AtomicBool>,
+    codec: JsonAtmProtocolCodec,
+}
+
+#[cfg(unix)]
+impl std::fmt::Debug for PreparedRuntimeServer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PreparedRuntimeServer")
+            .field("registry", &self.registry)
+            .finish_non_exhaustive()
+    }
+}
+
+#[cfg(unix)]
+impl PreparedRuntimeServer {
+    fn bind(socket_path: PathBuf) -> Result<Self, AtmError> {
+        let lifecycle_control = LifecycleControlSourceAdapter::install()?;
+        let ownership = HostOwnershipAdapter::new().acquire()?;
+        if let Some(parent) = socket_path.parent() {
+            fs::create_dir_all(parent).map_err(|source| {
+                AtmError::daemon_unavailable(format!(
+                    "failed to create daemon local IPC directory at {}",
+                    parent.display()
+                ))
+                .with_source(source)
+            })?;
+        }
+        remove_stale_endpoint(&socket_path)?;
+        let listener = UnixListener::bind(&socket_path).map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to bind daemon local IPC endpoint at {}",
+                socket_path.display()
+            ))
+            .with_source(source)
+        })?;
+        listener.set_nonblocking(true).map_err(|source| {
+            AtmError::daemon_unavailable("failed to configure daemon local IPC listener")
+                .with_source(source)
+        })?;
+        tracing::info!(
+            max_concurrent_connections = MAX_CONCURRENT_CONNECTIONS,
+            max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
+            request_deadline_ms = REQUEST_DEADLINE.as_millis() as u64,
+            "daemon local IPC transport limits configured"
+        );
+        emit_ready_signal_if_requested()?;
+        Ok(Self {
+            _endpoint_guard: LocalIpcRuntimeEndpointGuard {
+                endpoint_path: socket_path,
+            },
+            _ownership: ownership,
+            listener,
+            lifecycle_control,
+            registry: Arc::new(ActiveConnectionRegistry::default()),
+            force_shutdown: Arc::new(AtomicBool::new(false)),
+            codec: JsonAtmProtocolCodec,
+        })
+    }
+
+    pub(crate) fn serve_with_runtime_hooks<BeginShutdown, ReloadRuntimeView, FinalizeShutdown>(
+        self,
+        dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+        graceful_drain_deadline: Duration,
+        force_cancel_deadline: Duration,
+        begin_shutdown: BeginShutdown,
+        reload_runtime_view: ReloadRuntimeView,
+        finalize_shutdown: FinalizeShutdown,
+    ) -> Result<(), AtmError>
+    where
+        BeginShutdown: Fn() -> Result<(), AtmError>,
+        ReloadRuntimeView: Fn() -> Result<(), AtmError>,
+        FinalizeShutdown: Fn(),
+    {
+        self.serve_with_deadlines_and_accept_probe(
+            dispatcher,
+            graceful_drain_deadline,
+            force_cancel_deadline,
+            begin_shutdown,
+            reload_runtime_view,
+            finalize_shutdown,
+        )
+    }
+
+    fn serve_with_deadlines_and_accept_probe<BeginShutdown, ReloadRuntimeView, FinalizeShutdown>(
+        self,
+        dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+        graceful_drain_deadline: Duration,
+        force_cancel_deadline: Duration,
+        begin_shutdown: BeginShutdown,
+        reload_runtime_view: ReloadRuntimeView,
+        finalize_shutdown: FinalizeShutdown,
+    ) -> Result<(), AtmError>
+    where
+        BeginShutdown: Fn() -> Result<(), AtmError>,
+        ReloadRuntimeView: Fn() -> Result<(), AtmError>,
+        FinalizeShutdown: Fn(),
+    {
+        let Self {
+            _endpoint_guard,
+            _ownership,
+            listener,
+            lifecycle_control,
+            registry,
+            force_shutdown,
+            codec,
+        } = self;
+        thread::scope(|scope| -> Result<(), AtmError> {
+            let mut serve_error = None;
+            loop {
+                if lifecycle_control.take_reload_requested() {
+                    match reload_runtime_view() {
+                        Ok(()) => tracing::info!(
+                            "bounded lifecycle-control-triggered config/roster reload applied"
+                        ),
+                        Err(error) => tracing::warn!(
+                            error_code = %error.code,
+                            error_message = %error.message,
+                            "bounded lifecycle-control-triggered config/roster reload rejected; last-known-good serving config retained"
+                        ),
+                    }
+                }
+                if lifecycle_control.terminate_requested() {
+                    break;
+                }
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        if registry.active_connections() >= MAX_CONCURRENT_CONNECTIONS {
+                            let response = ResponseEnvelope::Error(
+                                ProtocolErrorEnvelope::from_error(
+                                    &AtmError::daemon_unavailable(
+                                        "daemon connection cap exceeded (max 64 concurrent accepts)",
+                                    )
+                                    .with_recovery(
+                                        "Wait for in-flight ATM commands to complete before retrying, or reduce concurrent atm invocations.",
+                                    ),
+                                ),
+                            );
+                            let frame = codec.response_to_frame(1, response)?;
+                            let _ = stream.set_read_timeout(Some(REQUEST_DEADLINE));
+                            let _ = stream.set_write_timeout(Some(REQUEST_DEADLINE));
+                            let _ = atm_core::protocol::write_frame(
+                                &mut stream,
+                                &frame,
+                                "failed to write daemon rejection response frame",
+                            );
+                            let _ = stream.flush();
+                            let _ = stream.shutdown(std::net::Shutdown::Both);
+                            continue;
+                        }
+
+                        let active = registry.register(&stream)?;
+                        let dispatcher = Arc::clone(&dispatcher);
+                        let force_shutdown = Arc::clone(&force_shutdown);
+                        let registry = Arc::clone(&registry);
+                        let codec = codec.clone();
+                        scope.spawn(move || {
+                            let _active = active;
+                            if let Err(error) = handle_connection(
+                                &mut stream,
+                                dispatcher,
+                                force_shutdown.as_ref(),
+                                registry,
+                                codec,
+                            ) {
+                                tracing::warn!(%error, "daemon local IPC connection handling failed");
+                            }
+                        });
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(SHUTDOWN_POLL_INTERVAL);
+                    }
+                    Err(source) => {
+                        serve_error = Some(
+                            AtmError::daemon_unavailable(
+                                "failed while accepting daemon local IPC connection",
+                            )
+                            .with_source(source),
+                        );
+                        break;
+                    }
+                }
+            }
+
+            let mut shutdown_error = begin_shutdown().err();
+            let shutdown_started = Instant::now();
+            if let Err(error) = drain_active_connections_for_shutdown(
+                registry.as_ref(),
+                force_shutdown.as_ref(),
+                graceful_drain_deadline,
+                force_cancel_deadline,
+                shutdown_started,
+            ) {
+                if let Some(existing) = shutdown_error.as_ref() {
+                    tracing::warn!(
+                        begin_shutdown_error = %existing,
+                        drain_error = %error,
+                        "daemon shutdown drain failed after an earlier shutdown-start error"
+                    );
+                } else {
+                    shutdown_error = Some(error);
+                }
+            }
+            finalize_shutdown();
+            if let Some(serve_error) = serve_error {
+                if let Some(shutdown_error) = shutdown_error {
+                    tracing::warn!(
+                        %shutdown_error,
+                        %serve_error,
+                        "daemon shutdown encountered an additional error after a serve error"
+                    );
+                }
+                return Err(serve_error);
+            }
+            shutdown_error.map_or(Ok(()), Err)
+        })
+    }
+}
+
+#[cfg(not(unix))]
+#[derive(Debug)]
+pub(crate) struct PreparedRuntimeServer;
+
+#[derive(Debug, Default)]
+pub(crate) struct LocalIpcServerTransportAdapter;
+
+impl LocalIpcServerTransportAdapter {
+    pub(crate) const fn new() -> Self {
+        Self
+    }
+
+    #[cfg(unix)]
+    pub(crate) fn prepare_runtime(&self) -> Result<PreparedRuntimeServer, AtmError> {
+        let socket_path = atm_core::protocol::daemon_socket_path()?;
+        self.prepare_runtime_at_socket_path(socket_path)
+    }
+
+    #[cfg(not(unix))]
+    pub(crate) fn prepare_runtime(&self) -> Result<PreparedRuntimeServer, AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "same-host daemon local IPC transport is not implemented on this platform yet",
+        ))
+    }
+
+    #[cfg(unix)]
+    pub(crate) fn prepare_runtime_at_socket_path(
+        &self,
+        socket_path: PathBuf,
+    ) -> Result<PreparedRuntimeServer, AtmError> {
+        PreparedRuntimeServer::bind(socket_path)
+    }
+
+    #[cfg(not(unix))]
+    pub(crate) fn prepare_runtime_at_socket_path(
+        &self,
+        _socket_path: PathBuf,
+    ) -> Result<PreparedRuntimeServer, AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "same-host daemon local IPC transport is not implemented on this platform yet",
+        ))
+    }
+}
+
+impl boundary::sealed::Sealed for LocalIpcServerTransportAdapter {}
+
+impl boundary::ServerTransport for LocalIpcServerTransportAdapter {
+    fn serve(&self, _dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "LocalIpcServerTransportAdapter::serve cannot bootstrap the daemon directly; use RuntimeComposition::start()",
+        )
+        .with_recovery(
+            "Enter the daemon through RuntimeComposition::start() so lifecycle state, host ownership, and shutdown handling stay consistent.",
+        ))
+    }
+}
+
+#[cfg(unix)]
+fn remove_stale_endpoint(endpoint_path: &Path) -> Result<(), AtmError> {
+    if !endpoint_path.exists() {
+        return Ok(());
+    }
+    fs::remove_file(endpoint_path).map_err(|source| {
+        AtmError::daemon_unavailable(format!(
+            "failed to remove stale daemon local IPC endpoint at {}",
+            endpoint_path.display()
+        ))
+        .with_source(source)
+    })
+}
+
+#[cfg(unix)]
+fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
+    if std::env::var_os("ATM_DAEMON_READY_STDOUT").is_none() {
+        return Ok(());
+    }
+    let mut stdout = std::io::stdout().lock();
+    writeln!(stdout, "ATM_DAEMON_READY").map_err(|source| {
+        AtmError::daemon_unavailable("failed to emit daemon ready signal").with_source(source)
+    })?;
+    stdout.flush().map_err(|source| {
+        AtmError::daemon_unavailable("failed to flush daemon ready signal").with_source(source)
+    })?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn drain_active_connections_for_shutdown(
+    registry: &ActiveConnectionRegistry,
+    force_shutdown: &AtomicBool,
+    graceful_drain_deadline: Duration,
+    force_cancel_deadline: Duration,
+    shutdown_started: Instant,
+) -> Result<(), AtmError> {
+    tracing::info!(
+        active_connections = registry.active_connections(),
+        active_work_items = registry.active_work_items(),
+        "daemon shutdown signal received; starting graceful drain"
+    );
+    let graceful_deadline = shutdown_started + graceful_drain_deadline;
+    let force_cancel_deadline = shutdown_started + force_cancel_deadline;
+    while registry.active_work_items() > 0 && Instant::now() < graceful_deadline {
+        registry.wait_for_connection_change(
+            graceful_deadline.saturating_duration_since(Instant::now()),
+        )?;
+    }
+    if registry.active_work_items() > 0 {
+        tracing::info!(
+            active_work_items = registry.active_work_items(),
+            "daemon graceful drain hit deadline; continuing toward forced cancel"
+        );
+        force_shutdown.store(true, Ordering::SeqCst);
+        registry.interrupt_all()?;
+    } else {
+        tracing::info!("daemon graceful drain completed cleanly");
+    }
+    while registry.active_work_items() > 0 && Instant::now() < force_cancel_deadline {
+        registry.wait_for_connection_change(
+            force_cancel_deadline.saturating_duration_since(Instant::now()),
+        )?;
+    }
+    let remaining_work_items = registry.active_work_items();
+    if remaining_work_items > 0 {
+        return Err(AtmError::daemon_unavailable(format!(
+            "forced cancel deadline elapsed with {remaining_work_items} active daemon work item(s)"
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn handle_connection(
+    stream: &mut UnixStream,
+    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    force_shutdown: &AtomicBool,
+    registry: Arc<ActiveConnectionRegistry>,
+    codec: JsonAtmProtocolCodec,
+) -> Result<(), AtmError> {
+    if force_shutdown.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+    stream
+        .set_read_timeout(Some(REQUEST_DEADLINE))
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to apply daemon request read deadline")
+                .with_source(source)
+        })?;
+    stream
+        .set_write_timeout(Some(REQUEST_DEADLINE))
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to apply daemon response write deadline")
+                .with_source(source)
+        })?;
+
+    let Some(frame) = atm_core::protocol::read_frame(
+        stream,
+        "failed to read daemon request frame",
+        "daemon request frame exceeded the maximum supported size",
+    )?
+    else {
+        return Ok(());
+    };
+    tracing::debug!(
+        max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
+        "daemon request frame accepted under configured size cap"
+    );
+    let (request_id, request) = codec.request_from_frame(frame)?;
+
+    let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
+    std::thread::spawn(move || {
+        let _dispatch_work = registry.register_dispatch_work();
+        let _ = result_tx.send(dispatcher.dispatch(request));
+    });
+    let response = match result_rx.recv_timeout(REQUEST_DEADLINE) {
+        Ok(Ok(response)) => response,
+        Ok(Err(error)) => ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(&error)),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
+                &AtmError::daemon_unavailable(
+                    "daemon request exceeded the 3s runtime deadline; the operation may still complete in the background",
+                )
+                .with_recovery(
+                    "Check the destination mailbox or service-side effects before retrying this ATM command.",
+                ),
+            ))
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
+                &AtmError::daemon_unavailable(
+                    "daemon request dispatcher stopped before returning a response",
+                )
+                .with_recovery(
+                    "Retry the ATM command after the daemon finishes recovering the request runtime.",
+                ),
+            ))
+        }
+    };
+    let frame = codec.response_to_frame(request_id, response)?;
+    atm_core::protocol::write_frame(stream, &frame, "failed to write daemon response frame")?;
+    stream.flush().map_err(|source| {
+        AtmError::daemon_unavailable("failed to flush daemon response frame").with_source(source)
+    })?;
+    Ok(())
+}

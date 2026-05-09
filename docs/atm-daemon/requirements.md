@@ -253,10 +253,10 @@ Required runtime rules:
   - `launch.lock`
   - `owner.lock`
 - the cross-platform locking foundation is one whole-file exclusive-lock
-  contract on those paths; Phase S currently plans to satisfy that contract
-  with `fs4`
+  contract on those paths; the current S.1 extraction preserves that contract
+  through the existing `fs2` crate
 - lock acquisition for `launch.lock` and `owner.lock` must use
-  `fs4::FileExt::try_lock_exclusive`; blocking `lock_exclusive` is not the
+  `FileExt::try_lock_exclusive`; blocking `lock_exclusive` is not the
   serving-admission contract
 - failed acquisition must surface one typed `already_owned` admission outcome
   rather than a blocking wait loop

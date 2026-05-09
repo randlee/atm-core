@@ -7,8 +7,8 @@ name = "LocalIpcServerTransportAdapter"
 trait = "ServerTransport"
 
 [implementation]
-type = "LocalSocketServerTransport"
-module = "atm_daemon"
+type = "LocalIpcServerTransportAdapter"
+module = "atm_daemon::local_ipc_transport"
 visibility = "pub(crate)"
 constructor = "pub(crate)"
 
@@ -28,6 +28,7 @@ forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon"]
 scope = "outside_owner_crate"
 forbidden = [
   "LocalSocketServerTransport",
+  "LocalIpcServerTransportAdapter",
   "tokio::net::UnixListener",
   "std::os::unix::net::UnixListener",
   "interprocess::local_socket::Listener",
@@ -62,6 +63,6 @@ notes = [
   "the stable boundary id retains its historical socket name, but the target same-host surface is one cross-platform local IPC contract",
   "the adapter must use the shared ATM frame header and request/response packet family rather than EOF-delimited JSON streams",
   "the adapter owns logical endpoint naming and same-user access-control semantics across Unix and Windows",
-  "stub implementation currently lives at crate root and is assembled through atm_daemon::composition",
+  "the Unix implementation now lives under atm_daemon::local_ipc_transport and is assembled through atm_daemon::composition",
   "Phase S is not complete until both Unix and Windows implementations ship behind this boundary",
 ]

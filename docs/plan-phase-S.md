@@ -79,9 +79,9 @@ Phase S parity does not depend on introducing a separate SCM-only daemon model.
 
 | Area | Boundary | Unix implementation | Windows implementation | Shared contract | Key Files/Types | Responsible Sprint |
 |---|---|---|---|---|---|---|
-| Same-host local IPC | `BOUNDARY-ServerTransport-Socket` | Unix domain socket | named-pipe-backed local IPC | same request/response framing, deadlines, and typed error surface | `crates/atm-daemon/src/lib.rs`, `crates/atm-daemon/src/composition.rs`, `PreparedRuntimeServer`, `RuntimeServerTransport`, `LocalSocketServerTransport` | `S.1` |
-| Lifecycle control | `BOUNDARY-LifecycleControlSource-Daemon` | signal-backed control source | console or service-control event source | same bounded shutdown and reload semantics | `crates/atm-daemon/src/shutdown_signals.rs`, `crates/atm-daemon/src/composition.rs`, `DaemonShutdownSignals`, `RuntimeComposition` | `S.1` |
-| Host ownership | `BOUNDARY-HostOwnership-Daemon` | Unix file-lock and owner-record mechanics | Windows file-lock and owner-record mechanics | same singleton admission, stable `launch.lock` / `owner.lock` paths, stale-owner recovery, and ordered release semantics | `crates/atm-daemon/src/lib.rs`, `crates/atm-daemon/src/composition.rs`, `SingletonGuard`, `host_runtime_lock_path*`, `write_owner_record`, `recover_stale_owner_lock` | `S.1` |
+| Same-host local IPC | `BOUNDARY-ServerTransport-Socket` | Unix domain socket | named-pipe-backed local IPC | same request/response framing, deadlines, and typed error surface | `crates/atm-daemon/src/local_ipc_transport.rs`, `crates/atm-daemon/src/composition.rs`, `PreparedRuntimeServer`, `LocalIpcServerTransportAdapter` | `S.1` |
+| Lifecycle control | `BOUNDARY-LifecycleControlSource-Daemon` | signal-backed control source | console or service-control event source | same bounded shutdown and reload semantics | `crates/atm-daemon/src/lifecycle_control.rs`, `crates/atm-daemon/src/composition.rs`, `LifecycleControlSourceAdapter`, `RuntimeComposition` | `S.1` |
+| Host ownership | `BOUNDARY-HostOwnership-Daemon` | Unix file-lock and owner-record mechanics | Windows file-lock and owner-record mechanics | same singleton admission, stable `launch.lock` / `owner.lock` paths, stale-owner recovery, and ordered release semantics | `crates/atm-daemon/src/host_ownership.rs`, `crates/atm-daemon/src/composition.rs`, `HostOwnershipAdapter`, `host_runtime_lock_path*`, `write_owner_record`, `recover_stale_owner_lock` | `S.1` |
 
 No other production same-host daemon surface may branch on operating system
 until the architecture and machine-readable boundary inventory are updated
@@ -96,8 +96,9 @@ Phase S standardizes one framed ATM packet for both:
 Canonical source:
 - [`docs/atm-daemon/protocol-icd.md`](./atm-daemon/protocol-icd.md)
 
-The current EOF-delimited JSON-on-stream behavior is a portability debt and is
-not the target design.
+The historical EOF-delimited JSON-on-stream behavior is a portability debt.
+S.1 replaces it with the shared ATM frame helpers and keeps that framed
+contract authoritative for later Windows parity work.
 
 The ICD is the source of truth for:
 - exact frame constants
@@ -257,14 +258,19 @@ Required code targets:
   - `validate_runtime_home_dir`
   - `compose_runtime`
 - `crates/atm-daemon/src/lib.rs`
+  - runtime crate-root ownership and adapter re-exports only
+- `crates/atm-daemon/src/local_ipc_transport.rs`
   - `PreparedRuntimeServer::bind`
   - `PreparedRuntimeServer::serve_with_runtime_hooks`
   - `PreparedRuntimeServer::serve_with_deadlines_and_accept_probe`
   - `drain_active_connections_for_shutdown`
   - `handle_connection`
   - `ActiveConnectionRegistry::{register, interrupt_all, wait_for_connection_change}`
-- `crates/atm-daemon/src/shutdown_signals.rs`
-  - `DaemonShutdownSignals::install`
+- `crates/atm-daemon/src/lifecycle_control.rs`
+  - `LifecycleControlSourceAdapter::install`
+- `crates/atm-daemon/src/host_ownership.rs`
+  - `HostOwnershipAdapter::{acquire, acquire_at}`
+  - `host_runtime_lock_path`
 - `crates/atm/src/composition.rs`
   - `LocalSocketClientTransport::{try_connect, exchange}`
   - `resolve_daemon_socket_path`
@@ -332,16 +338,16 @@ Required outcomes:
   order are identical across supported operating systems
 
 Required code targets:
-- `crates/atm-daemon/src/shutdown_signals.rs`
-  - `DaemonShutdownSignals::install`
-  - `DaemonShutdownSignals::new_for_test`
-- `crates/atm-daemon/src/lib.rs`
+- `crates/atm-daemon/src/lifecycle_control.rs`
+  - `LifecycleControlSourceAdapter::install`
+  - `LifecycleControlSourceAdapter::new_for_test`
+- `crates/atm-daemon/src/host_ownership.rs`
   - `host_runtime_lock_path`
   - `host_runtime_lock_path_from_home`
   - `write_owner_record`
   - `recorded_owner_pid`
-  - `SingletonGuard::{acquire, acquire_at, drop}`
-  - `open_singleton_lock`
+  - `HostOwnershipAdapter::{acquire, acquire_at}`
+  - `open_lock_file`
   - `recover_stale_owner_lock`
 - `crates/atm-daemon/src/composition.rs`
   - `RuntimeComposition::begin_shutdown`
@@ -412,7 +418,8 @@ Removal condition:
 Phase S planning assumes these crate directions unless implementation review
 finds a blocking issue:
 - local IPC: `interprocess::local_socket`
-- cross-platform file locking / host ownership foundation: `fs4`
+- cross-platform file locking / host ownership foundation: current extraction
+  uses `fs2::FileExt::try_lock_exclusive` with one whole-file lock contract
 - console termination control: `ctrlc`
 
 These are preferred implementation candidates, not accepted architecture by

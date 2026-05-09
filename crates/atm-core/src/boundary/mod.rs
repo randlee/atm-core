@@ -160,25 +160,34 @@ pub trait AtmProtocol: sealed::Sealed {
     ///
     /// Returns `AtmError` when a protocol request envelope cannot be converted
     /// into a frame payload.
-    fn request_to_frame(&self, request: RequestEnvelope) -> Result<FramePayload, AtmError>;
+    fn request_to_frame(
+        &self,
+        request_id: u64,
+        request: RequestEnvelope,
+    ) -> Result<FramePayload, AtmError>;
 
     /// # Errors
     ///
     /// Returns `AtmError` when a frame payload cannot be decoded into a
     /// protocol request envelope.
-    fn request_from_frame(&self, frame: FramePayload) -> Result<RequestEnvelope, AtmError>;
+    fn request_from_frame(&self, frame: FramePayload) -> Result<(u64, RequestEnvelope), AtmError>;
 
     /// # Errors
     ///
     /// Returns `AtmError` when a protocol response envelope cannot be
     /// converted into a frame payload.
-    fn response_to_frame(&self, response: ResponseEnvelope) -> Result<FramePayload, AtmError>;
+    fn response_to_frame(
+        &self,
+        request_id: u64,
+        response: ResponseEnvelope,
+    ) -> Result<FramePayload, AtmError>;
 
     /// # Errors
     ///
     /// Returns `AtmError` when a frame payload cannot be decoded into a
     /// protocol response envelope.
-    fn response_from_frame(&self, frame: FramePayload) -> Result<ResponseEnvelope, AtmError>;
+    fn response_from_frame(&self, frame: FramePayload)
+    -> Result<(u64, ResponseEnvelope), AtmError>;
 }
 
 /// BOUNDARY-ClientTransport — see docs/atm-core/boundaries.md.

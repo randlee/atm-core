@@ -17,11 +17,11 @@ even though they are not public cross-crate traits:
   - owns startup/shutdown sequencing and lifecycle state transitions
   - must not be skipped in boundary or production-readiness review just because
     it is not itself a public trait boundary
-- `DaemonShutdownSignals` / `SingletonGuard` in `atm_daemon`
+- `LifecycleControlSourceAdapter` / `HostOwnershipAdapter` in `atm_daemon`
   - own process-lifecycle admission and shutdown mechanics
-  - `DaemonShutdownSignals` is the current Unix control-source implementation,
-    but the Phase S target boundary is a platform-neutral lifecycle-control
-    source rather than a Unix-only signal assumption
+  - the Unix signal-hook implementation is now hidden inside the extracted
+    lifecycle-control adapter rather than referenced directly from runtime
+    orchestration
   - must remain runtime-private and must not be bypassed by transport or
     business-logic code
 - `PreparedRuntimeServer` / `ActiveConnectionRegistry` in `atm_daemon`
@@ -37,7 +37,7 @@ even though they are not public cross-crate traits:
 The current daemon implementation remains one crate, but the review-visible
 daemon-private ownership map is:
 - `ownership`
-  - `SingletonGuard`, lock-path helpers, stale-owner recovery
+  - `HostOwnershipAdapter`, lock-path helpers, stale-owner recovery
 - `server_runtime`
   - `PreparedRuntimeServer`, `ActiveConnectionRegistry`, drain/cancel logic
 - `request_runtime`
@@ -70,8 +70,8 @@ Notes:
 - This record exists so the control-plane struct is treated as an architectural
   boundary surface even though it is not a public shared trait today.
 - The active implementation is `RuntimeComposition` plus the crate-private
-  `RuntimeLifecycle` state machine and the runtime-owned
-  `DaemonShutdownSignals` / `SingletonGuard` helpers.
+  `RuntimeLifecycle` state machine plus the runtime-owned
+  `LifecycleControlSourceAdapter` and `HostOwnershipAdapter`.
 - `run_daemon()` must enter the daemon only through this lifecycle boundary;
   direct listener bootstrap is a boundary violation.
 

@@ -4,11 +4,11 @@ owner_crate_path = "atm_daemon"
 name = "HostOwnershipAdapter"
 
 [public]
-facade = "SingletonGuard"
+facade = "HostOwnershipAdapter"
 
 [implementation]
-type = "SingletonGuard"
-module = "atm_daemon"
+type = "HostOwnershipAdapter"
+module = "atm_daemon::host_ownership"
 visibility = "pub(crate)"
 constructor = "pub(crate)"
 
@@ -40,7 +40,7 @@ forbidden_edges = [
 
 [references]
 scope = "outside_owner_crate"
-forbidden = ["SingletonGuard"]
+forbidden = ["HostOwnershipAdapter", "HostOwnershipGuard"]
 
 [contracts]
 request_types = ["host ownership acquisition inputs"]
@@ -50,8 +50,8 @@ error_types = ["AtmError"]
 [testing]
 allowed_test_double_paths = []
 forbidden_test_bypasses = [
-  "fs4::FileExt::try_lock_exclusive",
-  "fs4::FileExt::lock_exclusive",
+  "fs2::FileExt::try_lock_exclusive",
+  "fs2::FileExt::lock_exclusive",
 ]
 
 [enforcement]
@@ -73,5 +73,6 @@ notes = [
   "the boundary uses stable permanent lock-file paths under ~/.atm/daemon/ rather than lock-path deletion as the ownership signal",
   "the preferred implementation foundation is one whole-file exclusive-lock contract on launch.lock and owner.lock",
   "owner-visible metadata is the documented pid[:token] record stored in the held lock-file contents",
+  "the current extraction clears owner metadata before unlock and keeps stable lock files in place across releases",
   "singleton, stale-owner recovery, and release ordering semantics must match across supported operating systems",
 ]

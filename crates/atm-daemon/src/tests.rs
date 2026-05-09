@@ -1,7 +1,10 @@
 use super::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
 use super::{
-    ActiveConnectionRegistry, DaemonShutdownSignals, HOST_RUNTIME_OWNER_LOCK_FILE, SingletonGuard,
-    host_runtime_lock_path_from_home,
+    host_ownership::{
+        HOST_RUNTIME_OWNER_LOCK_FILE, HostOwnershipAdapter, host_runtime_lock_path_from_home,
+    },
+    lifecycle_control::LifecycleControlSourceAdapter,
+    local_ipc_transport::ActiveConnectionRegistry,
 };
 use atm_core::boundary::RequestDispatcher;
 use atm_core::doctor::DoctorStatus;
@@ -26,14 +29,14 @@ use tempfile::TempDir;
 
 #[test]
 fn daemon_shutdown_signals_for_test_are_isolated() {
-    let first = DaemonShutdownSignals::new_for_test();
+    let first = LifecycleControlSourceAdapter::new_for_test();
     first
         .terminate
         .store(true, std::sync::atomic::Ordering::SeqCst);
     first
         .reload
         .store(true, std::sync::atomic::Ordering::SeqCst);
-    let second = DaemonShutdownSignals::new_for_test();
+    let second = LifecycleControlSourceAdapter::new_for_test();
 
     assert!(!second.terminate.load(std::sync::atomic::Ordering::SeqCst));
     assert!(!second.reload.load(std::sync::atomic::Ordering::SeqCst));
@@ -43,7 +46,7 @@ fn daemon_shutdown_signals_for_test_are_isolated() {
 #[test]
 #[serial]
 fn daemon_shutdown_signal_install_reuses_shared_flags() {
-    let first = DaemonShutdownSignals::install().expect("install first");
+    let first = LifecycleControlSourceAdapter::install().expect("install first");
     first
         .terminate
         .store(false, std::sync::atomic::Ordering::SeqCst);
@@ -51,7 +54,7 @@ fn daemon_shutdown_signal_install_reuses_shared_flags() {
         .reload
         .store(false, std::sync::atomic::Ordering::SeqCst);
 
-    let second = DaemonShutdownSignals::install().expect("install second");
+    let second = LifecycleControlSourceAdapter::install().expect("install second");
     first
         .reload
         .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -95,15 +98,17 @@ fn singleton_guard_is_host_wide_across_different_socket_paths() {
 
     let first_socket = tempdir.path().join("one.sock");
     let second_socket = tempdir.path().join("other").join("two.sock");
-    let first = SingletonGuard::acquire_at(
-        &first_socket,
-        host_runtime_lock_path_from_home(&runtime_dir, HOST_RUNTIME_OWNER_LOCK_FILE),
-    )
+    let first = HostOwnershipAdapter::acquire_at(host_runtime_lock_path_from_home(
+        &runtime_dir,
+        HOST_RUNTIME_OWNER_LOCK_FILE,
+    ))
     .expect("first singleton");
-    let error = SingletonGuard::acquire_at(
-        &second_socket,
-        host_runtime_lock_path_from_home(&runtime_dir, HOST_RUNTIME_OWNER_LOCK_FILE),
-    )
+    let _ = first_socket;
+    let _ = second_socket;
+    let error = HostOwnershipAdapter::acquire_at(host_runtime_lock_path_from_home(
+        &runtime_dir,
+        HOST_RUNTIME_OWNER_LOCK_FILE,
+    ))
     .expect_err("second singleton");
 
     assert_eq!(error.code, AtmErrorCode::DaemonServingStateRejected);
@@ -129,8 +134,7 @@ fn singleton_guard_reports_stale_owner_record_failure() {
     writeln!(&mut file, "{}", u32::MAX).expect("write owner");
     file.sync_all().expect("sync owner");
 
-    let error =
-        SingletonGuard::acquire_at(&tempdir.path().join("atm.sock"), lock_path).expect_err("stale");
+    let error = HostOwnershipAdapter::acquire_at(lock_path).expect_err("stale");
     assert_eq!(error.code, AtmErrorCode::DaemonStaleOwnerRecoveryFailed);
 }
 
@@ -155,8 +159,8 @@ fn singleton_guard_recovers_stale_owner_once_lock_is_released() {
     file.sync_all().expect("sync owner");
     drop(file);
 
-    let guard = SingletonGuard::acquire_at(&tempdir.path().join("atm.sock"), lock_path)
-        .expect("stale owner recovery should succeed");
+    let guard =
+        HostOwnershipAdapter::acquire_at(lock_path).expect("stale owner recovery should succeed");
     drop(guard);
 }
 
