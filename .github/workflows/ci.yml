@@ -138,7 +138,13 @@ jobs:
       - name: Build workspace
         run: cargo build --verbose
 
-      - name: Run tests
+      - name: Run workspace tests excluding atm-daemon on Windows
         env:
           ATM_TEST_RECV_TIMEOUT_SECS: "60"
-        run: cargo test --verbose
+        run: cargo test --workspace --exclude atm-daemon --verbose
+
+      - name: Run atm-daemon tests
+        if: runner.os != 'Windows'
+        env:
+          ATM_TEST_RECV_TIMEOUT_SECS: "60"
+        run: cargo test -p atm-daemon --verbose

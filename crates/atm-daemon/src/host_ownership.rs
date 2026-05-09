@@ -1,6 +1,10 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
+#[cfg(test)]
+use std::sync::mpsc::SyncSender;
+#[cfg(test)]
+use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -10,6 +14,8 @@ use fs2::FileExt;
 const STALE_OWNER_RECOVERY_RETRY_ATTEMPTS: usize = 3;
 pub(crate) const HOST_RUNTIME_OWNER_LOCK_FILE: &str = "owner.lock";
 const OWNER_RECOVERY_RETRY_INTERVAL: Duration = Duration::from_millis(25);
+#[cfg(test)]
+static STALE_RECOVERY_HOOK: OnceLock<Mutex<Option<SyncSender<()>>>> = OnceLock::new();
 
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct HostOwnershipAdapter;
@@ -74,6 +80,19 @@ impl HostOwnershipAdapter {
     pub(crate) fn classify_contention_error_for_test(error: &std::io::Error) -> bool {
         is_owner_lock_contention_error(error)
     }
+
+    #[cfg(test)]
+    pub(crate) fn install_stale_recovery_hook_for_test(signal: SyncSender<()>) {
+        let slot = STALE_RECOVERY_HOOK.get_or_init(|| Mutex::new(None));
+        *slot.lock().expect("stale recovery hook lock") = Some(signal);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn clear_stale_recovery_hook_for_test() {
+        if let Some(slot) = STALE_RECOVERY_HOOK.get() {
+            *slot.lock().expect("stale recovery hook lock") = None;
+        }
+    }
 }
 
 fn is_owner_lock_contention_error(error: &std::io::Error) -> bool {
@@ -132,6 +151,9 @@ fn recover_stale_owner_lock(
     stale_pid: u32,
     stale_token: &str,
 ) -> Result<File, AtmError> {
+    #[cfg(test)]
+    notify_stale_recovery_hook_for_test();
+
     for _ in 0..STALE_OWNER_RECOVERY_RETRY_ATTEMPTS {
         thread::sleep(OWNER_RECOVERY_RETRY_INTERVAL);
         let retry_file = open_lock_file(lock_path)?;
@@ -163,6 +185,19 @@ fn recover_stale_owner_lock(
         lock_path.display(),
         stale_pid
     )))
+}
+
+#[cfg(test)]
+fn notify_stale_recovery_hook_for_test() {
+    if let Some(slot) = STALE_RECOVERY_HOOK.get()
+        && let Some(sender) = slot
+            .lock()
+            .expect("stale recovery hook lock")
+            .as_ref()
+            .cloned()
+    {
+        let _ = sender.send(());
+    }
 }
 
 fn recorded_owner_identity(lock_file: &File) -> Result<Option<(u32, String)>, AtmError> {
