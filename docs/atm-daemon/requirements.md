@@ -50,6 +50,7 @@ Initial allocation:
 - `REQ-DAEMON-OBS-*`
 - `REQ-DAEMON-HEALTH-*`
 - `REQ-DAEMON-SIGNAL-*`
+- `REQ-DAEMON-PLATFORM-*`
 
 Initial crate requirement IDs:
 
@@ -81,7 +82,9 @@ Initial crate requirement IDs:
   `REQ-P-RUNTIME-002`, `REQ-P-DAEMON-LIFECYCLE-001`, `REQ-CORE-DAEMON-001`.
 - `REQ-DAEMON-TRANSPORT-001` `atm-daemon` owns one protocol with two
   production transport implementations plus one test transport:
-  - Unix domain socket for same-host
+  - one cross-platform local IPC contract for same-host
+    - Unix implementation: Unix domain socket
+    - Windows implementation: named-pipe-backed local IPC
   - TCP/TLS for cross-host daemon-to-daemon traffic
   - `test-socket` — implemented as `LoopbackClientTransport`; see ADR-003
     §Tier 2 — for in-process transport-boundary tests
@@ -129,9 +132,29 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-HEALTH-001` `atm-daemon` owns the daemon health interface
   consumed by `atm doctor`. Satisfies:
   `REQ-CORE-DOCTOR-002`.
-- `REQ-DAEMON-SIGNAL-001` `atm-daemon` owns signal installation and handling
-  for daemon lifecycle transitions. Satisfies:
+- `REQ-DAEMON-SIGNAL-001` `atm-daemon` owns runtime-control installation and
+  handling for daemon lifecycle transitions. Unix may satisfy this through
+  signals; Windows may satisfy it through console or service-control events.
+  Satisfies:
   `REQ-CORE-DAEMON-001`, `REQ-CORE-DOCTOR-002`.
+- `REQ-DAEMON-PLATFORM-001` `atm-daemon` must deliver full same-host daemon
+  functionality on every supported operating system rather than clean
+  compilation plus unsupported-path stubs. Satisfies:
+  `REQ-P-PLATFORM-001`, `REQ-P-PLATFORM-002`.
+- `REQ-DAEMON-PLATFORM-002` OS-specific implementation differences are allowed
+  only inside the documented daemon portability boundaries for local IPC,
+  lifecycle control, and host ownership. Satisfies:
+  `REQ-P-PLATFORM-002`, `REQ-CORE-BOUNDARY-001`.
+- `REQ-DAEMON-TEST-003` `atm-daemon` same-host functional tests must use one
+  shared transport/dispatcher test harness on Unix and Windows, with
+  platform-specific test code limited to the owned portability adapters.
+  Satisfies:
+  `REQ-P-PLATFORM-002`, `REQ-CORE-TEST-RUNTIME-001`.
+- `REQ-DAEMON-TEST-004` `atm-daemon` must not use fixed sleeps or timing-only
+  stabilization in same-host functional tests; readiness, shutdown, and retry
+  behavior must be proven through explicit synchronization or bounded runtime
+  contracts. Satisfies:
+  `REQ-P-TEST-001`, `REQ-P-PLATFORM-002`.
 
 ## 4. Required References
 
@@ -142,6 +165,7 @@ The `atm-daemon` crate docs must remain aligned with:
 - [`../project-plan.md`](../project-plan.md)
 - [`../plan-phase-Q.md`](../plan-phase-Q.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)
+- [`../plan-phase-S.md`](../plan-phase-S.md)
 - [`../testing-guidelines.md`](../testing-guidelines.md)
 - [`../team-member-state.md`](../team-member-state.md)
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
@@ -169,9 +193,13 @@ Requirement IDs:
 - `REQ-DAEMON-CONFIG-001`
 - `REQ-DAEMON-TEST-001`
 - `REQ-DAEMON-TEST-002`
+- `REQ-DAEMON-TEST-003`
+- `REQ-DAEMON-TEST-004`
 - `REQ-DAEMON-OBS-001`
 - `REQ-DAEMON-HEALTH-001`
 - `REQ-DAEMON-SIGNAL-001`
+- `REQ-DAEMON-PLATFORM-001`
+- `REQ-DAEMON-PLATFORM-002`
 
 Required runtime rules:
 - exactly one daemon process may be active on a host at a time
@@ -207,13 +235,40 @@ Required runtime rules:
   for cleanup and must not leave partial runtime ownership after the first lane
   failure
 - signal handlers must be installed before listeners are opened
+- the host runtime-control source must be installed before listeners are opened
 - daemon config must validate once at startup before listeners are opened
 - `SIGHUP`-driven config or roster rescan must either apply a fully valid
   configuration or fail with a typed reload error while retaining the prior
   serving configuration
+- same-host daemon functionality must remain feature-complete on every
+  supported operating system; compile-only support or typed unsupported-path
+  stubs are not a releasable end state
+- the same-host transport boundary must remain platform-neutral above the
+  adapter layer:
+  - Unix may use Unix domain sockets
+  - Windows may use named-pipe-backed local IPC
+  - caller-visible runtime code above the transport adapter must not depend on
+    Unix-only stream or listener types
+- platform cfg is allowed only inside owned daemon adapter modules; composition,
+  dispatcher, health, replay, and runtime-lane code must not embed transport-
+  or control-source-specific OS branching
+- supported operating system differences are limited to these daemon-owned
+  portability boundaries:
+  - local IPC transport adapter
+  - lifecycle-control source adapter
+  - host-ownership adapter
+- unsupported-path stubs are allowed only as short-lived implementation
+  scaffolding while the owning Phase S sprint is in flight; they are a direct
+  release blocker once the parity line is declared complete
 - remote delivery must be daemon-to-daemon only
 - the same transport protocol must be exercisable through an in-process
   `test-socket` without changing handler/business logic
+- same-host functional tests must use shared infrastructure on Unix and Windows
+  so one handler/dispatcher contract is proven through both platform
+  implementations
+- fixed sleeps, warmup polling, and timing-only daemon stabilization are
+  prohibited in same-host functional tests; tests must use explicit
+  synchronization or bounded runtime contracts
 - transport/store/health operations must obey one documented timeout budget
   - authoritative timeout budget references:
     [`../architecture.md §21.6.4`](../architecture.md) and
@@ -289,7 +344,7 @@ Required runtime rules:
   - dispatch through the owning dispatcher/handler boundary
   - return typed response
 - request-kind routing must stay in the dispatcher boundary, not in concrete
-  Unix-domain or TCP/TLS adapter code
+  local-IPC or TCP/TLS adapter code
 - handler implementations for request families must be injectable behind that
   dispatcher
 - the dispatcher boundary itself must remain thin and must not absorb request

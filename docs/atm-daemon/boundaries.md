@@ -18,8 +18,9 @@ even though they are not public cross-crate traits:
     it is not itself a public trait boundary
 - `DaemonShutdownSignals` / `SingletonGuard` in `atm_daemon`
   - own process-lifecycle admission and shutdown mechanics
-  - `DaemonShutdownSignals` installs OS signal hooks only on Unix; non-Unix
-    builds use the no-op terminate-flag fallback in `peer_transport`
+  - `DaemonShutdownSignals` is the current Unix control-source implementation,
+    but the Phase S target boundary is a platform-neutral lifecycle-control
+    source rather than a Unix-only signal assumption
   - must remain runtime-private and must not be bypassed by transport or
     business-logic code
 - `PreparedRuntimeServer` / `ActiveConnectionRegistry` in `atm_daemon`
@@ -73,17 +74,75 @@ Notes:
 - `run_daemon()` must enter the daemon only through this lifecycle boundary;
   direct listener bootstrap is a boundary violation.
 
-## SocketServerTransportAdapter
+## LocalIpcServerTransportAdapter
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/socket-server-transport.toml](../../boundaries/atm-daemon/socket-server-transport.toml)
 
 
 Purpose:
-- Owns the runtime listener implementation for the ServerTransport contract.
+- Owns the same-host runtime listener implementation for the ServerTransport
+  contract.
 
 Notes:
 - Runtime composition stays in daemon-owned code, but business logic does not.
+- The historical machine-readable boundary id remains
+  `BOUNDARY-ServerTransport-Socket` for continuity, but the target boundary
+  surface is one cross-platform local IPC contract:
+  - Unix implementation: Unix domain socket
+  - Windows implementation: named-pipe-backed local IPC
+- release closeout requires both Unix and Windows implementations to exist
+  behind this boundary; non-Unix unsupported-path stubs are an intermediate
+  implementation state only
+
+## LifecycleControlSourceAdapter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-daemon/lifecycle-control-source.toml](../../boundaries/atm-daemon/lifecycle-control-source.toml)
+
+Purpose:
+- Owns the host lifecycle-control source that translates OS-specific shutdown
+  and reload events into daemon-private typed control signals.
+
+Notes:
+- Unix may implement this boundary through process signals.
+- Windows may implement this boundary through console or service-control
+  events.
+- Callers above this boundary must not branch on `SIG*` constants or Windows
+  control-event types directly.
+- if one supported operating system lacks a production implementation for this
+  boundary, Phase S is not complete
+
+## HostOwnershipAdapter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-daemon/host-ownership-daemon.toml](../../boundaries/atm-daemon/host-ownership-daemon.toml)
+
+Purpose:
+- Owns host-wide singleton admission, stale-owner recovery, and lock metadata
+  handling behind one daemon-private portability boundary.
+
+Notes:
+- This boundary exists so file locking, owner-record maintenance, and teardown
+  rules can be reviewed and linted separately from the transport boundary.
+- The target implementation is cross-platform even when individual OS locking
+  calls differ.
+- singleton, stale-owner recovery, and release ordering semantics must be the
+  same on every supported operating system even when the adapter internals
+  differ
+
+## Phase S Boundary Guardrails
+
+Phase S adds these review rules for the three daemon portability boundaries:
+
+- only the owned adapter modules may contain operating-system-specific
+  `cfg(...)` branching for same-host daemon hosting
+- composition, dispatcher, replay, health, watch/reconcile, notifier, and
+  request-family code must stay platform-neutral
+- shared same-host functional tests must prove the same handler/dispatcher
+  contract on Unix and Windows
+- a boundary with only one supported-operating-system implementation is
+  incomplete and must not be documented as production-ready
 
 ## PeerClientTransportAdapter
 
