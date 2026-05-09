@@ -52,6 +52,21 @@ impl Drop for LifecycleFlagResetGuard {
     }
 }
 
+struct StaleRecoveryBarrierGuard;
+
+impl StaleRecoveryBarrierGuard {
+    fn install(barrier: Arc<Barrier>) -> Self {
+        install_stale_recovery_barrier_for_test(barrier);
+        Self
+    }
+}
+
+impl Drop for StaleRecoveryBarrierGuard {
+    fn drop(&mut self) {
+        clear_stale_recovery_barrier_for_test();
+    }
+}
+
 #[derive(Debug, Default)]
 struct DoctorOnlyDispatcher;
 
@@ -321,7 +336,7 @@ fn singleton_guard_rejects_stale_recovery_when_owner_token_changes() {
     file.sync_all().expect("sync owner");
 
     let barrier = Arc::new(Barrier::new(2));
-    install_stale_recovery_barrier_for_test(Arc::clone(&barrier));
+    let _barrier_guard = StaleRecoveryBarrierGuard::install(Arc::clone(&barrier));
     let lock_path_for_thread = lock_path.clone();
     let join = std::thread::spawn(move || HostOwnershipAdapter::acquire_at(lock_path_for_thread));
     barrier.wait();
@@ -330,7 +345,6 @@ fn singleton_guard_rejects_stale_recovery_when_owner_token_changes() {
     writeln!(&mut file, "{}:token-b", u32::MAX).expect("rewrite owner");
     file.sync_all().expect("resync owner");
     drop(file);
-    clear_stale_recovery_barrier_for_test();
 
     let error = join.join().expect("join").expect_err("token mismatch");
     assert_eq!(error.code, AtmErrorCode::DaemonStaleOwnerRecoveryFailed);

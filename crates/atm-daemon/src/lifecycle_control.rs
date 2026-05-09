@@ -264,6 +264,7 @@ fn install_platform_hooks(
             let mut observed_reload = reload.load(Ordering::SeqCst);
             loop {
                 if terminate.load(Ordering::SeqCst) {
+                    let _ = state_change.notify();
                     return;
                 }
                 let terminate_now = terminate.load(Ordering::SeqCst);

@@ -448,7 +448,19 @@ impl DaemonRequestDispatcher {
             std::mem::take(&mut *handles)
         };
         for handle in handles {
-            let _ = handle.join();
+            let (result_tx, result_rx) = mpsc::sync_channel(1);
+            std::thread::spawn(move || {
+                let _ = result_tx.send(handle.join());
+            });
+            match result_rx.recv_timeout(Duration::from_secs(5)) {
+                Ok(_) => {}
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    panic!("shutdown finalizer thread failed to join within 5s")
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    panic!("shutdown finalizer join helper exited before reporting completion")
+                }
+            }
         }
     }
 
