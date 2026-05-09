@@ -55,13 +55,13 @@ Initial crate requirement IDs:
 - `REQ-ATM-CMD-001` `atm` owns clap parsing, flag validation, and command
   dispatch for the retained command surface. Satisfies the CLI
   entry/parse/dispatch aspects of:
-  `REQ-P-SEND-001`, `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-CLEAR-001`,
-  `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-TEAMS-001`,
+  `REQ-P-SEND-001`, `REQ-P-LIST-001`, `REQ-P-READ-001`, `REQ-P-ACK-001`,
+  `REQ-P-CLEAR-001`, `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-TEAMS-001`,
   `REQ-P-MEMBERS-001`.
 - `REQ-ATM-OUT-001` `atm` owns human-readable and JSON rendering for retained
   commands. Satisfies the output-shaping and rendering aspects of:
-  `REQ-P-SEND-001`, `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-CLEAR-001`,
-  `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-TEAMS-001`,
+  `REQ-P-SEND-001`, `REQ-P-LIST-001`, `REQ-P-READ-001`, `REQ-P-ACK-001`,
+  `REQ-P-CLEAR-001`, `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-TEAMS-001`,
   `REQ-P-MEMBERS-001`.
 - `REQ-ATM-OBS-001` `atm` owns concrete observability bootstrap and injection
   into `atm-core`. Satisfies the CLI bootstrap/injection aspects of:
@@ -110,6 +110,7 @@ Initial crate requirement IDs:
 Per-command documentation lives under:
 
 - [`commands/send.md`](./commands/send.md)
+- [`commands/list.md`](./commands/list.md)
 - [`commands/read.md`](./commands/read.md)
 - [`commands/ack.md`](./commands/ack.md)
 - [`commands/clear.md`](./commands/clear.md)
@@ -153,6 +154,7 @@ Required Phase R rules:
 - the daemon request/response packet surface currently covers:
   - `send`
   - `ack` through the send-shaped acknowledge request
+  - `list` (packet mapping pending refinement per ADR-009 Follow-Up Work)
   - `read`
   - `clear`
   - `doctor`
@@ -161,6 +163,9 @@ Required Phase R rules:
 - `atm` must not contain business logic that duplicates `atm-core`
 - `atm` test coverage must be able to use in-process harnesses rather than
   depending on daemon process spawning
+- `atm` owns legacy queue-flag deprecation warnings and the exact
+  `atm read --message-id <id>` retrieval guidance shown for ATM-authored JSONL
+  body stubs
 - daemon auto-start is a supervised runtime entry concern, not a side effect of
   transport object construction
 - the CLI-side auto-start path must acquire the documented pre-spawn launch

@@ -43,6 +43,7 @@ implementation sprints will follow.
 - `docs/adr/ADR-003-test-fidelity-and-daemon-isolation.md`
 - `docs/adr/ADR-005-host-scoped-sqlite-state-root.md`
 - `docs/adr/ADR-007-supported-platform-parity.md`
+- `docs/adr/ADR-008-no-flaky-test-policy-and-mechanical-enforcement.md`
 
 ## Governing ICD Sections
 
@@ -184,7 +185,7 @@ daemon docs, and Phase S sequence are all updated together.
   permanent `launch.lock` / `owner.lock` paths plus held-lock owner metadata
 - the Phase S sprint sequence is concrete enough to execute without reopening
   the architectural direction
-- the S.1-S.4 sprint documents exist and each names the exact code targets,
+- the S.1-S.5 sprint documents exist and each names the exact code targets,
   governing references, and acceptance criteria required for implementation
   review
 - Phase S docs explicitly require feature parity on all supported operating
@@ -198,18 +199,23 @@ daemon docs, and Phase S sequence are all updated together.
 - Phase S docs define the temporary Windows CI lint narrowing and the S.4
   requirement to remove it
 
-## Anti-Flake Synchronization Contract
+## No-Flaky-Test And Bounded-Wait Contract
 
 Phase S same-host daemon tests must use positive synchronization primitives:
 - channel-based ready handshakes
 - `Barrier`, `Condvar`, or latch/predicate synchronization
 - documented listener-ready or worker-ready probes with bounded deadlines
+- panic-safe cleanup of shared/global test hooks
+- bounded drain/join of helper threads and finalizer threads
 
 They must not use:
 - fixed sleeps
 - warm-up delays
 - retry loops with no observable readiness predicate
 - OS-specific timing fudge added only to appease Windows CI
+- unbounded `recv()`, `wait()`, or equivalent blocking operations in risky
+  same-host daemon test paths
+- bare `join()` when no prior bounded handshake proves completion
 
 ## Required Validation
 
@@ -224,6 +230,7 @@ They must not use:
 - `docs/phase-S/sprint-S2.md`
 - `docs/phase-S/sprint-S3.md`
 - `docs/phase-S/sprint-S4.md`
+- `docs/phase-S/sprint-S5.md`
 - `docs/phase-S/issues.md`
 - `docs/project-plan.md`
 - `docs/requirements.md`
@@ -242,6 +249,7 @@ They must not use:
 - `docs/testing-guidelines.md`
 - `docs/cross-platform-guidelines.md`
 - `docs/adr/ADR-007-supported-platform-parity.md`
+- `docs/adr/ADR-008-no-flaky-test-policy-and-mechanical-enforcement.md`
 
 ## Risks And Watchouts
 

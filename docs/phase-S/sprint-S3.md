@@ -20,6 +20,7 @@ shutdown semantics on every supported operating system.
 - `REQ-P-PLATFORM-002`
 - `REQ-P-RUNTIME-002`
 - `REQ-P-RUNTIME-003`
+- `REQ-P-TEST-001`
 - `REQ-DAEMON-RUNTIME-001`
 - `REQ-DAEMON-RUNTIME-003`
 - `REQ-DAEMON-RUNTIME-005`
@@ -35,6 +36,7 @@ shutdown semantics on every supported operating system.
 
 - `docs/adr/ADR-002-host-wide-daemon-singleton.md`
 - `docs/adr/ADR-007-supported-platform-parity.md`
+- `docs/adr/ADR-008-no-flaky-test-policy-and-mechanical-enforcement.md`
 
 ## Governing ICD Sections
 
@@ -110,6 +112,9 @@ shutdown semantics on every supported operating system.
 - Windows and Unix lifecycle-control / host-ownership tests prove the same
   externally visible contract, with platform-specific assertions limited to the
   adapter internals
+- shutdown, stale-owner recovery, and lifecycle-control tests use bounded
+  synchronization and panic-safe cleanup rather than unbounded waits or
+  timing-luck stabilization
 
 ## Required Validation
 

@@ -76,7 +76,8 @@ Input rules:
 - `phase_id` is required.
 - `integration_branch` and `integration_worktree_path` are required.
 - `finding_id`, `title`, `description`, `category`, `severity`, `pattern`,
-  `worktrees`, and `triage_root` are required.
+  `worktrees`, `integration_branch`, `integration_worktree_path`, and
+  `triage_root` are required.
 - `worktrees` must already be listed in the desired promotion order. Do not
   invent or infer branch priority from branch names.
 - `repeatable` is required.
@@ -84,7 +85,10 @@ Input rules:
   Default to `file_only` when omitted.
 - `file_filter` is optional.
 - `triage_root` must be an absolute path.
+- `integration_worktree_path` must be an absolute path.
 - `triage_root` must live under `integration_worktree_path`.
+- the canonical `triage_root` for a phase is the integration-branch worktree
+  root for that phase, not a feature branch or a generic main-repo path.
 
 Mode rules:
 - `initial_pass`:

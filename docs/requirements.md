@@ -4,9 +4,9 @@
 
 Product requirement ID:
 - `REQ-P-PRODUCT-001` The retained ATM product surface consists of
-  `send`, `read`, `ack`, `clear`, `log`, `doctor`, `teams`, and `members`,
-  backed by a singleton daemon runtime and SQLite source-of-truth for mail and
-  roster state in the current daemon architecture.
+  `send`, `list`, `read`, `ack`, `clear`, `log`, `doctor`, `teams`, and
+  `members`, backed by a singleton daemon runtime and SQLite source-of-truth
+  for mail and roster state in the current daemon architecture.
 
 Satisfied by:
 - intentionally undecomposed product requirement; this governs overall retained
@@ -22,6 +22,7 @@ surface.
 
 The retained product surface is:
 - `atm send`
+- `atm list`
 - `atm read`
 - `atm ack`
 - `atm clear`
@@ -106,6 +107,10 @@ Phase-S portability note:
   - `clear`
   - `doctor`
   - daemon heartbeat/runtime liveness exchange
+- S.5 planning adds `atm list` as a distinct CLI surface; S.7 owns the
+  implementation line that refines the current queue-query packet mapping
+  instead of assuming the old multi-message `read` response shape is still the
+  final product contract
 - retained `log`, `teams`, and `members` remain outside the daemon
   request/response packet family in the current Phase S line
 - Phase S planning is tracked in [`plan-phase-S.md`](./plan-phase-S.md)
@@ -510,6 +515,7 @@ Required config fields:
 Supported optional config fields:
 - `[atm].team_members`
 - `[atm].aliases`
+- `[atm].claude_jsonl_body_export_max_bytes`
 - `[[atm.post_send_hooks]]`
 
 Runtime identity rules:
@@ -526,6 +532,9 @@ Runtime identity rules:
   should always be present in `config.json`
 - `.atm.toml` may define `[atm].aliases` for ATM-owned shorthand addressing of
   canonical member identities
+- `.atm.toml` may define `[atm].claude_jsonl_body_export_max_bytes` as the
+  ATM-authored Claude JSONL body export cap; `0` means stub-only ATM-authored
+  export
 - `.atm.toml` may define one or more `[[atm.post_send_hooks]]` rules for
   best-effort recipient-scoped post-send automation
 - retired `[atm].post_send_hook`, `[atm].post_send_hook_senders`,
@@ -936,65 +945,149 @@ Dry-run JSON output must include:
 - `requires_ack`
 - `task_id`
 
-## 7. `atm read`
+## 7. Queue Inspection Surfaces (`atm list` and `atm read`)
 
-Product requirement ID:
-- `REQ-P-READ-001` `atm read` must satisfy the documented read/selection/wait
-  contract.
+Product requirement IDs:
+- `REQ-P-LIST-001` `atm list` must satisfy the bounded queue/search contract.
+- `REQ-P-READ-001` `atm read` must satisfy the documented single-message
+  selection, mutation, and wait contract.
 
 Satisfied by:
 - `REQ-ATM-CMD-001` for CLI entry, parsing, and dispatch aspects
 - `REQ-ATM-OUT-001` for human-readable and JSON output aspects
 - `REQ-CORE-CONFIG-002` for target-validation aspects
+- `REQ-CORE-LIST-001` for bounded metadata search, row shaping, and shared
+  filter semantics
 - `REQ-CORE-MAILBOX-001` for merged inbox load/persist aspects
 - `REQ-CORE-WORKFLOW-001` for classification, queue selection, and legal
   transition aspects
 
-### 7.1 Purpose
+### 7.1 Shared Purpose
 
-Read messages from one inbox.
+Queue inspection is split into two commands:
 
-### 7.2 Supported Flags
+- `atm list` finds messages without returning full message bodies
+- `atm read` opens one full message
 
+The split exists so ATM can keep default queue inspection bounded even when
+SQLite-backed mailbox history grows without a practical fixed upper bound.
+
+### 7.2 Shared Selection And Filter Contract
+
+Shared queue filters:
 - optional target: `agent` or `agent@team`
 - `--team <name>`
+- `--from <name>`
+- `--since <iso8601>`
+- `--task <task-id>`
+- `--contains <text>`
+- `--unread`
+- `--pending-ack`
 - `--all`
-- `--unread-only`
-- `--pending-ack-only`
-- `--history`
+
+Shared command options:
+- `--json`
+- `--as <name>`
+
+Shared rules:
+- both commands must default to the caller's own inbox when no target agent is
+  provided
+- both commands must resolve identity and target address using the defined
+  precedence
+- `--as <name>` changes caller identity resolution, not message matching
+- `--json` changes output format only and is not a message-selection filter
+- both commands must verify target team exists
+- both commands must verify explicit target agent exists in team config
+- both commands must support the same semantic message filters even when their
+  output shapes differ
+- `--contains` must search both summary text and full message body text
+- both commands must preserve origin-inbox visibility when bridge remotes are
+  configured
+
+Legacy `atm read` flag migration:
+- `--unread-only` is a deprecated alias for `--unread`
+- `--pending-ack-only` is a deprecated alias for `--pending-ack`
+- `--history` is a deprecated alias for `--all`
+- `--since-last-seen` remains accepted as an explicit restatement of the
+  default seen-state filter
+- deprecation warnings must direct operators to the new flag names
+
+### 7.3 `atm list`
+
+Additional supported flags:
+- `--limit <n>`
+
+Required behavior:
+- load the mailbox/query surface through a bounded metadata-first query path
+- query logical current messages rather than superseded predecessors
+- return compact rows only, not full message bodies
+- support the canonical row fields:
+  - `message_id`
+  - `summary`
+  - `from`
+  - `timestamp`
+  - `read`
+  - `pending_ack`
+  - `task_id`, with `null` in JSON output when the logical message is not
+    task-linked
+- sort newest-first before limiting
+- compute bucket/count summaries through bounded summary queries rather than by
+  materializing every full message body for operator-facing response shaping
+- perform no read-state or ack-state mutation
+- keep default output bounded to actionable/head results rather than
+  materializing full history by default
+
+### 7.4 `atm read`
+
+Additional supported flags:
+- `--message-id <id>`
+- `--timeout <seconds>`
 - `--since-last-seen`
 - `--no-since-last-seen`
 - `--no-mark`
 - `--no-update-seen`
-- `--limit <n>`
-- `--since <iso8601>`
-- `--from <name>`
-- `--json`
-- `--timeout <seconds>`
-- `--as <name>`
 
-### 7.3 Required Behavior
-
-- default to the caller’s own inbox when no target agent is provided
-- resolve identity and target address using the defined precedence
-- verify target team exists
-- verify explicit target agent exists in team config
-- load messages from the merged inbox surface
-- deduplicate entries by `message_id` before bucket selection and output rendering
-- classify each message into the read axis, the ack axis, and a derived message class
-- map the derived message class into display buckets
-- support filtering by sender and timestamp
-- support selection by queue mode
-- preserve origin-inbox visibility when bridge remotes are configured
-- sort newest-first before limiting
-- write displayed messages back through the read-axis mutation rules
-- persist read-triggered state changes back to the physical inbox file that owns each displayed message when origin inbox files are present in the merged surface
+Required behavior:
+- return exactly one full message
+- when `--message-id <id>` is present, resolve that exact message when present
+- collapse successor/update chains to their terminal node before selector-based
+  matching so superseded predecessors do not appear as separate current
+  messages
+- when `--task <task-id>` is present, find task-linked messages, collapse each
+  successor chain to its terminal node, then select the most recent logical
+  current message
+- when selectors such as `--task`, `--from`, `--since`, `--contains`,
+  `--unread`, or `--pending-ack` match multiple messages, return the most
+  recent match
+- when multiple matches exist, include:
+  - `selected_message_id`
+  - `match_count`
+  - `additional_match_count`
+- `match_count` is the total number of logical current-message matches after
+  all filters and successor-chain collapse are applied
+- `additional_match_count` is `match_count - 1` for a successful read
+- when no selector is provided, return the most recent unread actionable
+  message
+- when no selector is provided, prioritize pending-ack messages ahead of
+  unread messages that do not require acknowledgement
 - support optional wait mode with timeout
-- support optional seen-state filtering and updates
+- write the selected message back through the read-axis mutation rules
+- persist read-triggered state changes back to the physical inbox file that
+  owns the selected displayed message when origin inbox files are present in
+  the merged surface
 
-When multiple inbox entries share the same non-null `message_id`, `atm read`
-must display only the most recent entry. Earlier duplicates are silently
-suppressed.
+### 7.5 Shared Message Classification And Deduplication
+
+- load messages from the merged inbox surface
+- deduplicate entries by `message_id` before bucket selection and output
+  rendering
+- classify each message into the read axis, the ack axis, and a derived
+  message class
+- map the derived message class into display buckets
+
+When multiple inbox entries share the same non-null `message_id`, queue
+inspection must display only the most recent entry. Earlier duplicates are
+silently suppressed.
 
 Deduplication order:
 - compare entries by `message_id`
@@ -1002,11 +1095,9 @@ Deduplication order:
 - when timestamps are equal, keep the later record encountered in inbox order
 - do not emit suppressed duplicates in either human or JSON output
 
-`--timeout` preserves the current queue-first behavior: if the requested read selection already contains unread or pending-ack messages at command start, the command returns immediately with those messages. It blocks only when the requested selection is empty at command start.
+### 7.6 Display Buckets
 
-### 7.4 Display Buckets
-
-The CLI exposes three display buckets:
+The shared queue model exposes three display buckets:
 - `unread`
 - `pending_ack`
 - `history`
@@ -1017,32 +1108,23 @@ Bucket mapping from the derived message class:
 - `Read` -> `history`
 - `Acknowledged` -> `history`
 
-The display buckets are a presentation contract. They are not the canonical two-axis model.
+The display buckets are a presentation contract. They are not the canonical
+two-axis model.
 
-### 7.5 Selection Modes
+### 7.7 Default Selection And Historical Expansion
 
-Default selection is the actionable queue:
-- unread
-- pending-ack
+Default queue inspection behavior:
+- `atm list` returns a bounded actionable/head view
+- bare `atm read` returns one selected actionable message
+- `--all` is the explicit full-surface override and may be slower
 
-Explicit selection modes:
-- default => actionable queue only
-- `--unread-only` => unread bucket only
-- `--pending-ack-only` => pending-ack bucket only
-- `--history` => actionable queue plus history bucket
-- `--all` => all buckets and bypass seen-state filtering
-
-Mutual exclusion:
-- `--all`
-- `--unread-only`
-- `--pending-ack-only`
-- `--history`
-
-### 7.6 Seen-State Rules
+### 7.8 Seen-State Rules
 
 Seen-state is enabled by default unless `--no-since-last-seen` is set.
 
-`--since-last-seen` explicitly enables the default watermark filter. When set explicitly, it behaves the same as the default. If both `--since-last-seen` and `--no-since-last-seen` appear, `--no-since-last-seen` wins.
+`--since-last-seen` explicitly enables the default watermark filter. When set
+explicitly, it behaves the same as the default. If both `--since-last-seen`
+and `--no-since-last-seen` appear, `--no-since-last-seen` wins.
 
 When seen-state is enabled and a watermark exists:
 - unread messages remain eligible even when older than the watermark
@@ -1050,8 +1132,8 @@ When seen-state is enabled and a watermark exists:
 - history messages are filtered by the watermark
 
 On a true first run with no stored watermark:
-- the default read view still shows only actionable messages
-- historical messages remain hidden unless `--history` or `--all` is used
+- the default queue view still shows only actionable messages
+- historical messages remain hidden unless `--all` is used
 
 `--all` bypasses seen-state filtering entirely.
 
@@ -1059,31 +1141,45 @@ If seen-state updates are enabled:
 - update the watermark using the latest displayed message timestamp
 - do not use non-displayed messages when computing the watermark
 
-`--no-update-seen`: when this flag is set, messages are read and displayed normally but the seen-state watermark is not updated after the operation. The watermark is left unchanged regardless of which messages were displayed.
+`--no-update-seen`: when this flag is set, messages are read and displayed
+normally but the seen-state watermark is not updated after the operation. The
+watermark is left unchanged regardless of which messages were displayed.
 
-`--since <iso8601>`: filters to messages whose `timestamp` field is greater than or equal to the given ISO 8601 datetime. It filters by message timestamp, not by the seen-state watermark. It may be combined with seen-state filtering; both constraints apply independently.
+`--since <iso8601>` filters to messages whose `timestamp` field is greater
+than or equal to the given ISO 8601 datetime. It filters by message timestamp,
+not by the seen-state watermark. It may be combined with seen-state filtering;
+both constraints apply independently.
 
-`--from <name>` in read context is a sender filter: it restricts displayed messages to those sent by the named agent. It does not override the caller's identity.
+`--from <name>` is a sender filter: it restricts matched messages to those
+sent by the named agent. It does not override the caller's identity.
 
-### 7.7 Wait Mode Rules
+### 7.9 Wait Mode Rules
 
-When `--timeout <seconds>` is set:
-- establish the read selection baseline after actor resolution, inbox loading, workflow classification, and filter application
-- if the requested selection already contains eligible messages at wait start, return immediately without blocking
-- otherwise block until a newly arrived message becomes eligible for the requested read selection, or until the timeout expires
-- re-run the normal read selection over the updated merged inbox surface once a new eligible message arrives
-- preserve the same sender, timestamp, seen-state, and selection filters during the wait
+When `--timeout <seconds>` is set on `atm read`:
+- establish the read selection baseline after actor resolution, inbox loading,
+  workflow classification, and filter application
+- if the requested selection already contains an eligible message at wait
+  start, return immediately without blocking
+- otherwise block until a newly arrived message becomes eligible for the
+  requested read selection, or until the timeout expires
+- re-run the normal selection over the updated merged inbox surface once a new
+  eligible message arrives
+- preserve the same sender, timestamp, seen-state, and selection filters
+  during the wait
 
 Timeout success condition:
-- either the initial selection is already non-empty, or at least one message that was not eligible at wait start becomes eligible before the timeout expires
+- either the initial selection is already non-empty, or at least one message
+  that was not eligible at wait start becomes eligible before the timeout
+  expires
 
 Timeout failure condition:
-- the initial selection is empty and no newly eligible message arrives before the timeout expires
+- the initial selection is empty and no newly eligible message arrives before
+  the timeout expires
 
-### 7.8 Mutation Rules
+### 7.10 Mutation Rules
 
 Base display mutation:
-- any displayed message is written back with `read = true`
+- any selected message is written back with `read = true`
 
 Ack-axis activation on display happens only when:
 - the caller is reading their own inbox
@@ -1106,43 +1202,41 @@ No additional ack-axis mutation happens when:
 - the message is already `Acknowledged`
 - the message is already `Read`
 
-### 7.9 Processing Order
+### 7.11 Output Contract
 
-1. resolve actor and target inbox
-2. build the hostname registry for configured origin inboxes
-3. load messages from the merged inbox surface
-4. classify canonical state
-5. apply sender and timestamp filters (`--from`, `--since`)
-6. apply seen-state filter when enabled and selection is not `--all`
-7. map canonical state to display buckets and apply selection mode
-8. if `--timeout` is set and the current selection is empty, block until a newly eligible message arrives or the timeout expires
-9. sort newest-first and apply limit
-10. apply read-axis and ack-axis transitions to displayed messages
-11. persist read-triggered state changes atomically
-12. update seen-state when enabled
-13. render output
+`atm list` human-readable output must remain metadata-only.
 
-### 7.10 Output Contract
-
-Human output must preserve the current queue-oriented shape:
-- queue heading
-- bucket counts line
-- bucketed message output
-- hidden-history summary when history is collapsed
-
-JSON output must include:
-- `action = "read"`
+`atm list` JSON output must include:
+- `action = "list"`
 - `team`
 - `agent`
 - `messages`
 - `count`
 - `bucket_counts`
-- `history_collapsed`
 
-`bucket_counts` fields:
-- `unread`
+Every list row must include:
+- `message_id`
+- `summary`
+- `from`
+- `timestamp`
+- `read`
 - `pending_ack`
-- `history`
+- `task_id` (`null` when the logical message is not task-linked)
+
+`atm read` JSON output must include:
+- `action = "read"`
+- `team`
+- `agent`
+- `message`
+- `selected_message_id`
+- `match_count`
+- `additional_match_count`
+- `bucket_counts`
+
+Human-readable `atm read` output must render one message body only. When
+additional matches exist, it must state that more matches were found and direct
+the operator to `atm list` for metadata inspection instead of emitting
+additional full bodies.
 
 ## 8. `atm ack`
 
@@ -1979,8 +2073,16 @@ Required testing architecture:
   - retry sleeps
   - environment mutation races
   - auto-start side effects
+  - unbounded waits
+  - panic-unsafe shared/global test hooks
 - these patterns are treated as sources of flake and false confidence rather
   than as acceptable test infrastructure
+- a test that might hang is invalid even if it does not use
+  `thread::sleep(...)`
+- tests must use bounded waits tied to observable predicates or handshakes
+- bare `join()`, `recv()`, `wait()`, or equivalent waits are prohibited in
+  risky runtime/daemon test paths unless completion has already been proven by
+  a bounded synchronization step
 - test code must not use or reintroduce the current daemon-spawn pattern by
   name:
   - `spawn_test_daemon`
@@ -2972,9 +3074,24 @@ mail correctness.
   - once team roster and pane mapping truth move to SQLite, ATM-owned
     post-send-hook payloads must carry the authoritative `recipient_pane_id`
     from roster truth when known
-  - post-send hooks must be able to rely on that payload field instead of
-    rediscovering pane mappings from local files once the Phase Q migration is
-    complete
+- post-send hooks must be able to rely on that payload field instead of
+  rediscovering pane mappings from local files once the Phase Q migration is
+  complete
+  - ATM-authored JSONL exports must remain valid JSONL records with ATM machine
+    fields under `metadata.atm`
+  - the default ATM-authored JSONL body export cap is `128 KiB`
+  - ATM must expose config `[atm].claude_jsonl_body_export_max_bytes`; `0`
+    means stub-only ATM-authored export
+  - when an ATM-authored body exceeds the configured export cap, the exported
+    JSONL `text` field must be exactly `atm read --message-id <id>`
+  - summary text must remain populated when ATM exports that retrieval stub
+  - the full ATM-authored body must remain durable in SQLite even when JSONL
+    export is stubbed
+  - Claude-native inbound messages must not be rewritten into ATM retrieval
+    stubs
+  - watcher/reconcile logic must treat re-observed ATM-authored compatibility
+    projections for the same logical message as idempotent state, not as new
+    logical mail
 
 - `REQ-CORE-COMPAT-002` Native agent/plugin traffic must not use JSONL.
 
@@ -3111,6 +3228,9 @@ mail correctness.
   - fixed `thread::sleep(...)` in ordinary Rust test code must fail a
     test-hygiene gate unless the file or callsite is explicitly part of the
     narrow daemon-runtime suite
+  - mechanically-detectable unbounded wait patterns in the narrow same-host
+    daemon/runtime suites must move into repository lint or analyzer gates once
+    the rule shape is proven deterministic enough for default local use
   - `PORT-004` must reject production `std::os::unix` imports that are not
     protected by an approved Unix-only boundary
   - `PORT-005` must reject

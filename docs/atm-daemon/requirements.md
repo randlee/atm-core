@@ -9,8 +9,8 @@ Product behavior remains defined in [`../requirements.md`](../requirements.md).
 `atm-daemon` must satisfy those product requirements without re-owning
 `atm-core` business logic.
 
-This crate is introduced by the Phase Q implementation line. It is not present
-in the pre-Phase-Q workspace yet.
+This crate was introduced on the Phase Q implementation line and remains part
+of the current workspace.
 
 The crate-local machine-readable boundary inventory lives in:
 - [`./boundaries.md`](./boundaries.md)
@@ -30,6 +30,8 @@ The canonical daemon transport wire contract lives in:
 - live agent status cache
 - runtime watch/reconcile loop if enabled
 - daemon-side `sc-observability` emission
+- daemon-side compatibility projection behavior that must keep ATM-authored
+  JSONL re-export idempotent under watcher/reconcile observation
 
 `atm-daemon` does not own:
 
@@ -195,11 +197,15 @@ Initial crate requirement IDs:
   tests, the Windows lifecycle tests, and the CLI same-host client tests.
   Satisfies:
   `REQ-P-PLATFORM-002`, `REQ-CORE-TEST-RUNTIME-001`.
-- `REQ-DAEMON-TEST-004` `atm-daemon` must not use fixed sleeps or timing-only
-  stabilization in same-host functional tests; readiness, shutdown, and retry
-  behavior must be proven through explicit synchronization or bounded runtime
-  contracts. Satisfies:
+- `REQ-DAEMON-TEST-004` `atm-daemon` must not use fixed sleeps, timing-only
+  stabilization, or unbounded wait paths in same-host functional tests;
+  readiness, shutdown, retry, and helper-thread drain behavior must be proven
+  through explicit synchronization or bounded runtime contracts. Satisfies:
   `REQ-P-TEST-001`, `REQ-P-PLATFORM-002`.
+- `REQ-DAEMON-RUNTIME-008` watcher/reconcile handling of ATM-authored
+  compatibility projection updates must remain idempotent for the same
+  logical message and must not create self-induced churn loops. Satisfies:
+  `REQ-CORE-COMPAT-001`, `REQ-P-RELIABILITY-001`.
 
 ## 4. Required References
 
@@ -360,9 +366,9 @@ Required runtime rules:
 - same-host functional tests must use shared infrastructure on Unix and Windows
   so one handler/dispatcher contract is proven through both platform
   implementations
-- fixed sleeps, warmup polling, and timing-only daemon stabilization are
-  prohibited in same-host functional tests; tests must use explicit
-  synchronization or bounded runtime contracts
+- fixed sleeps, warmup polling, timing-only daemon stabilization, and
+  unbounded wait paths are prohibited in same-host functional tests; tests
+  must use explicit synchronization or bounded runtime contracts
 - transport/store/health operations must obey one documented timeout budget
   - authoritative timeout budget references:
     [`../architecture.md §21.6.4`](../architecture.md) and

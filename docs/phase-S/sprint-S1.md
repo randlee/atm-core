@@ -18,6 +18,7 @@ depends directly on Unix APIs.
 
 - `REQ-P-PLATFORM-001`
 - `REQ-P-PLATFORM-002`
+- `REQ-P-TEST-001`
 - `REQ-DAEMON-PLATFORM-001`
 - `REQ-DAEMON-PLATFORM-002`
 - `REQ-DAEMON-TRANSPORT-008`
@@ -29,6 +30,7 @@ depends directly on Unix APIs.
 - `docs/adr/ADR-002-host-wide-daemon-singleton.md`
 - `docs/adr/ADR-003-test-fidelity-and-daemon-isolation.md`
 - `docs/adr/ADR-007-supported-platform-parity.md`
+- `docs/adr/ADR-008-no-flaky-test-policy-and-mechanical-enforcement.md`
 
 ## Governing ICD Sections
 
@@ -116,6 +118,9 @@ depends directly on Unix APIs.
   types outside the three documented daemon-owned portability facades
 - any remaining unsupported-path stub is temporary, explicitly documented, and
   limited to the still-unimplemented adapter
+- any new same-host daemon tests added by S.1 are bounded, explicit about
+  readiness predicates, and do not introduce unbounded wait or panic-stranded
+  shared-hook behavior
 
 ## Required Validation
 

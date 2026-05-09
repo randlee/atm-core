@@ -8,6 +8,8 @@ Also owns persisted config/team loading policy:
 - classification of missing-document, record-level, and document-level failures
 - recovery guidance and parser-context preservation for config errors
 - refusal to guess identity or routing data during recovery
+- parsing and validation of `[atm].claude_jsonl_body_export_max_bytes` for the
+  ATM-authored Claude JSONL compatibility-envelope rule
 
 References:
 

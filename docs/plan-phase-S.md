@@ -181,20 +181,28 @@ Acceptance:
   daemon host design instead of a Unix-only host shell plus Windows compile
   stubs
 
-## 4.1 Anti-Flake Synchronization Contract
+## 4.1 No-Flaky-Test And Bounded-Wait Contract
 
-The same-host daemon plan must forbid timing-only stabilization and must name
-the positive replacements that implementation sprints use instead:
+The same-host daemon plan must forbid timing-only stabilization and any test
+shape that can block indefinitely, and must name the positive replacements
+that implementation sprints use instead:
 - explicit ready handshakes over channels
 - `Barrier`, `Condvar`, or latch-style predicate synchronization
 - listener-ready or worker-ready state probes on documented bounded deadlines
 - bounded retry only when tied to an explicit observable state transition
+- panic-safe cleanup of shared/global test hooks
+- bounded finalizer and helper-thread drain paths
 
 The following are not acceptable for same-host daemon parity coverage:
 - fixed sleeps
 - warm-up delays
 - retry loops with no explicit state predicate
 - platform-specific timing fudge intended only to “make Windows pass”
+- unbounded `recv()`, `wait()`, or equivalent blocking operations in flaky-risk
+  test paths
+- bare `join()` when the test has no prior bounded proof that the worker
+  already completed
+- shared/global test hooks that can remain installed after panic or timeout
 
 Accepted production exceptions:
 - `crates/atm-daemon/src/lifecycle_control.rs`
@@ -411,6 +419,107 @@ Required closeout work:
 - reconcile docs, ADRs, and machine-readable boundaries so the production
   design names every allowed OS-specific implementation difference
 
+### S.5 Guardrails And Bounded Queue Queries
+
+Goal:
+- tighten Phase S and top-level ATM language so the anti-flake contract is
+  phase-wide rather than fixed-sleep-only
+- define which anti-flake guardrails are feasible now in `just lint` versus
+  deferred analyzer work
+- document the mailbox-query redesign where `atm list` becomes the bounded
+  metadata-search surface and `atm read` becomes the single-message detail
+  surface
+
+Required outcomes:
+- top-level requirements, architecture, and test guidelines explicitly state
+  that a test which might hang is invalid
+- Phase S sprint docs state that same-host daemon coverage must avoid both
+  timing-only stabilization and unbounded wait paths
+- the repo has one review-visible inventory of feasible-now versus deferred
+  mechanical anti-flake lint families
+- the active docs state that default queue inspection must remain bounded even
+  as SQLite-backed mailbox history grows without a practical fixed upper bound
+- the active docs define the accepted `atm list` / `atm read` split and the
+  shared filter contract between them
+- the active docs define the legacy `atm read` flag migration, logical
+  task/thread selection rule, and the ATM-authored Claude JSONL compatibility
+  envelope
+
+Required closeout work:
+- add the S.5 sprint plan under `docs/phase-S/sprint-S5.md`
+- add an ADR for the repository-wide no-flaky-test policy and enforcement
+  partition if the existing ADRs are not sufficient
+- add an ADR for the bounded queue-query surface (`atm list` / single-message
+  `atm read`)
+- add an ADR for the ATM-authored Claude JSONL compatibility envelope and
+  oversized-body projection rule
+- update Phase S issue inventory with the remaining policy and lint gaps
+- reconcile testing and cross-platform guidelines with the stronger no-hang
+  contract
+- reconcile the product and crate-local CLI docs with the new queue-inspection
+  command split
+- create the follow-on implementation sprint docs required to finish the phase
+
+### S.6 Daemon Post-Mortem Runtime Remediation
+
+Goal:
+- close the remaining daemon/runtime remediation items left open after the
+  S.4 parity line
+
+Required outcomes:
+- `RSH-001`, `RSH-014`, `WIN-001`, and `ATM-QA-S4-001` are assigned to one
+  explicit execution sprint with concrete code targets
+- shutdown ordering, lifecycle wake propagation, Windows graceful shutdown,
+  and local-IPC endpoint-preparation behavior are all covered by one bounded
+  remediation line
+
+Required closeout work:
+- fix `crates/atm-daemon/src/composition.rs::shutdown_background_lanes`
+- fix the Unix lifecycle-control EOF wake propagation gap
+- restore the Windows graceful-shutdown path and its coverage
+- remove the silent non-Unix success path from
+  `prepare_local_ipc_endpoint`
+
+### S.7 Bounded Queue Query Implementation
+
+Goal:
+- implement the queue-query split defined by ADR-009
+
+Required outcomes:
+- `atm list` exists as a bounded metadata-query CLI surface
+- `atm read` is a single-message logical-current selection path
+- shared list/read filters stay aligned
+- the durable query path is bounded by query behavior rather than full
+  history materialization
+
+Required closeout work:
+- add `crates/atm/src/commands/list.rs`
+- update `crates/atm/src/commands/read.rs` and output handling for
+  single-message selection and match metadata
+- add the bounded metadata-query service path in `atm-core`
+- add the SQLite-backed bounded query implementation support in
+  `atm-rusqlite`
+
+### S.8 Claude JSONL Compatibility Envelope
+
+Goal:
+- implement the ADR-010 compatibility-envelope contract for ATM-authored
+  Claude JSONL export and watcher/reconcile no-churn behavior
+
+Required outcomes:
+- `[atm].claude_jsonl_body_export_max_bytes` is implemented
+- oversized ATM-authored messages export retrieval stubs instead of full
+  bodies
+- watcher/reconcile logic treats ATM-authored projection updates as
+  idempotent
+
+Required closeout work:
+- add the config-backed ATM-authored export cap
+- export `atm read --message-id <id>` stubs for oversized ATM-authored bodies
+- preserve summary text while keeping full ATM-authored bodies durable in
+  SQLite
+- prevent self-induced churn loops in watcher/reconcile paths
+
 ## 6. Removed Windows CI Guardrail
 
 The temporary Windows clippy narrowing used during S.0-S.3 is retired.
@@ -466,3 +575,5 @@ Explicit deferral:
   they need separate review and enforcement surfaces
 - do not treat the temporary Windows clippy scope narrowing as a durable fix;
   S.4 must remove it
+- do not let S.5 end the documented sprint line while remaining post-mortem or
+  queue-query implementation work is still unassigned

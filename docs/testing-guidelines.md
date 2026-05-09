@@ -28,6 +28,8 @@ Most tests must not depend on:
 - retry sleeps
 - environment mutation races
 - auto-start side effects
+- unbounded waits
+- panic-unsafe shared/global test hooks
 
 These patterns are treated as sources of flake and false confidence rather
 than as acceptable test infrastructure.
@@ -49,6 +51,10 @@ singleton lint gate:
   to justify fixed warmup sleeps in ordinary tests
 - ad hoc daemon auto-start retries used as test stabilization
 - fixed sleeps that attempt to wait for daemon socket publication
+- unbounded `recv()`, `wait()`, or equivalent blocking operations used as the
+  correctness mechanism in risky daemon/runtime tests
+- bare `join()` when the test has no prior bounded proof that the worker is
+  already complete
 - parent-process environment mutation when command-local `Command::env(...)`
   or explicit in-process injection can be used instead
 
@@ -137,12 +143,15 @@ Phase S adds one mandatory coverage layer for daemon hosting:
 - When environment variables are necessary, prefer `Command::env(...)` over
   mutating the parent process.
 - Retry loops and sleeps are not correctness mechanisms.
+- Tests must not contain a path that can block indefinitely.
 - Bounded retry/sleep may appear only inside the dedicated daemon-runtime suite
   when required to observe a documented runtime invariant, and the reason must
   be explicit in the test.
 - Fixed sleeps are prohibited in cross-platform same-host functional tests even
   inside daemon-host coverage; readiness and shutdown must use explicit
   synchronization, bounded protocol deadlines, or observable runtime state
+- Shared/global test hooks must use panic-safe cleanup so failure paths cannot
+  strand state into later tests
 
 ## 6. Lint And CI Enforcement
 
@@ -160,6 +169,9 @@ Required behavior:
 - fail on new ad hoc daemon launch helpers
 - fail on timing-based daemon stabilization patterns that bypass the approved
   test tiers
+- fail on newly-added cheap-to-detect unbounded wait patterns in the narrow
+  same-host daemon/runtime suites once the rule family is promoted from S.5
+  planning into the default lint path
 - document an explicit allow-list for Tier 3 daemon-runtime suite patterns so
   the narrow exceptions remain auditable
 - treat an empty allow-list as explicit "no approved exceptions"
