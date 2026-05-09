@@ -58,11 +58,13 @@ forbidden_test_bypasses = [
 lint_rules = [
   "LINT-BOUNDARY-HOST-OWNERSHIP-DAEMON-EDGES",
   "LINT-BOUNDARY-HOST-OWNERSHIP-DAEMON-REFERENCES",
+  "LINT-SAME-HOST-PORTABILITY",
 ]
 review_gates = [
   "no_transport_owned_locking",
   "no_cli_owned_singleton_logic",
   "platform_parity_required",
+  "full_windows_workspace_clippy_required",
 ]
 
 [status]
@@ -75,4 +77,5 @@ notes = [
   "owner-visible metadata is the documented pid[:token] record stored in the held lock-file contents",
   "the current extraction clears owner metadata before unlock and keeps stable lock files in place across releases on Unix and Windows",
   "singleton, stale-owner recovery, and release ordering semantics must match across supported operating systems",
+  "S.4 restored full Windows workspace clippy and added a dedicated same-host-portability lint guard for the shared host shell",
 ]

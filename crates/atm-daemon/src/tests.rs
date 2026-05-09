@@ -5,10 +5,14 @@ use super::{
         install_stale_recovery_barrier_for_test,
     },
     lifecycle_control::LifecycleControlSourceAdapter,
+    local_ipc_transport::LocalIpcServerTransportAdapter,
 };
 use atm_core::boundary::RequestDispatcher;
-use atm_core::doctor::DoctorStatus;
+use atm_core::doctor::{
+    DoctorEnvironmentVisibility, DoctorQuery, DoctorReport, DoctorStatus, DoctorSummary,
+};
 use atm_core::error_codes::AtmErrorCode;
+use atm_core::observability::{AtmObservabilityHealth, AtmObservabilityHealthState};
 use atm_core::protocol::{
     HeartbeatActivity, RequestEnvelope, ResponseEnvelope, RuntimeLivenessState, RuntimeMemberState,
     RuntimeReadinessState, TeamMemberHeartbeatRequest,
@@ -17,10 +21,13 @@ use atm_core::schema::{AgentMember, TeamConfig};
 use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_rusqlite::assemble_boundary;
+use interprocess::local_socket::Stream as LocalSocketStream;
+use interprocess::local_socket::traits::Stream as _;
 use serial_test::serial;
 use std::fs::OpenOptions;
 use std::io::{Seek, SeekFrom, Write};
 use std::sync::{Arc, Barrier};
+use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
 struct LifecycleFlagResetGuard<'a> {
@@ -39,6 +46,63 @@ impl Drop for LifecycleFlagResetGuard<'_> {
     fn drop(&mut self) {
         self.lifecycle.set_terminate_for_test(false);
         self.lifecycle.set_reload_for_test(false);
+    }
+}
+
+#[derive(Debug, Default)]
+struct DoctorOnlyDispatcher;
+
+impl atm_core::boundary::sealed::Sealed for DoctorOnlyDispatcher {}
+
+impl RequestDispatcher for DoctorOnlyDispatcher {
+    fn dispatch(
+        &self,
+        request: RequestEnvelope,
+    ) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
+        match request {
+            RequestEnvelope::Doctor(_) => Ok(ResponseEnvelope::Doctor(DoctorReport {
+                summary: DoctorSummary {
+                    status: DoctorStatus::Healthy,
+                    message: "ok".to_string(),
+                    info_count: 0,
+                    warning_count: 0,
+                    error_count: 0,
+                },
+                findings: Vec::new(),
+                recommendations: Vec::new(),
+                environment: DoctorEnvironmentVisibility {
+                    atm_home: None,
+                    atm_team: None,
+                    atm_identity: None,
+                    team_override: None,
+                },
+                member_roster: None,
+                observability: AtmObservabilityHealth {
+                    active_log_path: None,
+                    logging_state: AtmObservabilityHealthState::Healthy,
+                    query_state: Some(AtmObservabilityHealthState::Healthy),
+                    detail: None,
+                },
+                runtime_status: None,
+            })),
+            other => panic!("unexpected request in DoctorOnlyDispatcher: {other:?}"),
+        }
+    }
+}
+
+fn connect_daemon_local_ipc_until_ready(endpoint_path: &std::path::Path) -> LocalSocketStream {
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        match LocalSocketStream::connect(
+            atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path).expect("ipc name"),
+        ) {
+            Ok(stream) => return stream,
+            Err(error) if Instant::now() < deadline => {
+                let _ = error;
+                std::thread::yield_now();
+            }
+            Err(error) => panic!("connect daemon local ipc: {error}"),
+        }
     }
 }
 
@@ -65,6 +129,66 @@ fn daemon_shutdown_signal_install_reuses_shared_flags() {
 
     assert!(second.reload_requested_for_test());
     assert!(first.terminate_requested());
+}
+
+#[test]
+#[serial]
+fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let socket_path = tempdir.path().join("daemon.sock");
+    let server_transport = LocalIpcServerTransportAdapter::new();
+    let runtime = server_transport
+        .prepare_runtime_at_socket_path(socket_path.clone())
+        .expect("prepare runtime");
+    let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
+    let _reset = LifecycleFlagResetGuard::install(&lifecycle);
+    let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
+
+    let join = std::thread::spawn(move || {
+        runtime.serve_with_runtime_hooks(
+            dispatcher,
+            Duration::from_secs(1),
+            Duration::from_secs(1),
+            || Ok(()),
+            || Ok(()),
+            || {},
+        )
+    });
+
+    let mut stream = connect_daemon_local_ipc_until_ready(&socket_path);
+    stream
+        .set_send_timeout(Some(Duration::from_secs(1)))
+        .expect("set send timeout");
+    stream
+        .set_recv_timeout(Some(Duration::from_secs(1)))
+        .expect("set recv timeout");
+    let request = RequestEnvelope::Doctor(DoctorQuery {
+        home_dir: tempdir.path().join("home"),
+        current_dir: tempdir.path().join("cwd"),
+        team_override: None,
+    });
+    let request_id = atm_core::protocol::next_request_id();
+    let frame = atm_core::protocol::request_to_frame_payload(request_id, request).expect("frame");
+    atm_core::protocol::write_frame(&mut stream, &frame, "write doctor frame").expect("write");
+    stream.flush().expect("flush");
+    let response_frame =
+        atm_core::protocol::read_frame(&mut stream, "read doctor frame", "doctor frame too large")
+            .expect("read frame")
+            .expect("response frame");
+    let (response_id, response) =
+        atm_core::protocol::response_from_frame_payload(response_frame).expect("decode response");
+    assert_eq!(response_id, request_id);
+    match response {
+        ResponseEnvelope::Doctor(report) => {
+            assert_eq!(report.summary.status, DoctorStatus::Healthy);
+        }
+        other => panic!("unexpected response: {other:?}"),
+    }
+
+    lifecycle.set_terminate_for_test(true);
+    join.join()
+        .expect("join serve thread")
+        .expect("serve runtime result");
 }
 
 #[test]

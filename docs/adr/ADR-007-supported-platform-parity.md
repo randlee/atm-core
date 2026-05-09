@@ -86,3 +86,15 @@ Test rule:
 - enumerate the allowed OS-specific implementation seams in architecture docs
 - add boundary guardrails that reject unsupported-path stubs as a final state
 - land shared Unix/Windows same-host functional coverage
+
+## S.4 Closeout
+
+Phase S.4 closed the temporary Windows lint narrowing and restored the full
+workspace Windows `clippy -D warnings` gate in both local `just lint` and CI.
+
+The closeout also added:
+
+- a dedicated `same-host-portability` lint that rejects broad Unix-only
+  same-host gating above the adapter layer
+- a real local-IPC same-host request/response smoke test that runs through the
+  shared frame helpers and daemon server transport on supported hosts

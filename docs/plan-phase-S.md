@@ -389,8 +389,9 @@ Required closeout work:
   layer used by local IPC and remote daemon transport
 - remove the temporary Windows lint guardrail by restoring full
   `cargo clippy --workspace --all-targets -- -D warnings` coverage for Windows
-  in both `just lint` and GitHub CI once `atm-daemon` is no longer a
-  stub-backed non-Unix runtime
+  in both `just lint` and GitHub CI. S.4 completed this closeout by deleting
+  the `ATM_WINDOWS_CLIPPY_SCOPE=cross-platform-only` narrowing from the
+  `Justfile` and `.github/workflows/ci.yml`.
 - add or tighten lint/review guards that reject:
   - fixed-sleep daemon stabilization
   - new broad `#[cfg(unix)]` gating outside adapter modules
@@ -398,25 +399,22 @@ Required closeout work:
 - reconcile docs, ADRs, and machine-readable boundaries so the production
   design names every allowed OS-specific implementation difference
 
-## 6. Temporary Windows CI Guardrail
+## 6. Removed Windows CI Guardrail
 
-The current daemon code compiles on Windows, but `atm-daemon` is not yet
-Windows-live enough for full workspace `clippy -D warnings` without triggering
-dead-code and unused-item churn from the non-Unix unsupported path.
+The temporary Windows clippy narrowing used during S.0-S.3 is retired.
 
-Temporary rule:
-- Windows `just lint` and the Windows CI lint lane may scope clippy to the
-  cross-platform workspace crates by excluding `atm-daemon`
-- the CI workflow may set `ATM_WINDOWS_CLIPPY_SCOPE=cross-platform-only` on
-  every matrix lane, but the narrowing takes effect only on Windows because
-  the `Justfile` gates it through `os_family() == "windows"`
+Closed-out rule:
+- Windows `just lint` and the Windows CI lint lane now run full workspace
+  `cargo clippy --workspace --all-targets --target x86_64-pc-windows-msvc -- -D warnings`
+- no `ATM_WINDOWS_CLIPPY_SCOPE` narrowing remains in the `Justfile` or CI
 - Windows workspace build and test coverage remain mandatory
-- Linux and macOS keep full workspace clippy
+- Linux and macOS continue to run full workspace clippy
 
-Removal condition:
-- S.4 must delete this temporary guardrail and re-enable full Windows
-  `cargo clippy --workspace --all-targets -- -D warnings` in both local and CI
-  lint paths
+S.4 enforcement now relies on:
+- the restored full Windows clippy lane
+- `fixed-sleep`
+- `unix-gating`
+- `same-host-portability`
 
 ## 7. Crate Candidates
 

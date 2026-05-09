@@ -4,7 +4,7 @@
 plan_type: sprint_plan
 phase: S
 sprint: "S.4"
-status: planned
+status: complete
 estimated_scope: M
 ```
 
@@ -54,13 +54,18 @@ Unix-only behavior.
    - Unix-only same-host functionality in production paths
 3. Re-enable full Windows `cargo clippy --workspace --all-targets -- -D warnings`
    in both GitHub CI and `just lint` by removing the temporary
-   `ATM_WINDOWS_CLIPPY_SCOPE=cross-platform-only` guardrail.
+   `ATM_WINDOWS_CLIPPY_SCOPE=cross-platform-only` guardrail. This is now
+   enforced directly in `Justfile` and `.github/workflows/ci.yml`.
 4. Reconcile all docs, ADRs, and machine-readable boundary records with the
    landed cross-platform daemon design.
 4.1 Verify the shipped implementation still matches the packet inventory and
    failure contract documented in the protocol ICD.
 5. Run a final coverage audit proving the same shared same-host infrastructure
-   is used on Unix and Windows.
+   is used on Unix and Windows. The landed audit points to:
+   - `crates/atm-daemon/src/tests.rs::local_ipc_runtime_round_trips_doctor_requests_on_shared_transport`
+   - `crates/atm-daemon/src/tests.rs` host-ownership tests
+   - `crates/atm-daemon/src/lifecycle_control.rs` Windows lifecycle tests
+   - `crates/atm/src/composition.rs` CLI launch-gate and same-host client tests
 
 ## Acceptance Criteria
 
@@ -76,6 +81,9 @@ Unix-only behavior.
   ordered and bounded after S.4 hardening
 - Windows CI and local `just lint` both run full workspace clippy without the
   temporary daemon exclusion
+- `just lint` includes the dedicated `same-host-portability` guard that rejects
+  broad Unix-only host-shell gating and non-Unix same-host `daemon_unavailable`
+  stubs in production adapter code
 
 ## Required Validation
 
