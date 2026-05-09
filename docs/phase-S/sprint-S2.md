@@ -71,8 +71,9 @@ boundary while preserving one shared protocol, dispatcher, and test harness.
 - same-host functional tests prove the real transport on Windows through the
   shared harness
 - no fixed sleeps are used to stabilize the transport tests; readiness and
-  shutdown are proven through explicit synchronization or bounded observable
-  state transitions
+  shutdown are proven through explicit synchronization such as channel
+  handshakes, `Barrier`, or `Condvar` predicates, following the contract in
+  `docs/testing-guidelines.md §5`
 
 ## Required Validation
 

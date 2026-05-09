@@ -18,6 +18,9 @@ Unix-only behavior.
 
 - `REQ-P-PLATFORM-001`
 - `REQ-P-PLATFORM-002`
+- `REQ-DAEMON-RUNTIME-001`
+- `REQ-DAEMON-RUNTIME-002`
+- `REQ-DAEMON-RUNTIME-003`
 - `REQ-DAEMON-TEST-003`
 - `REQ-DAEMON-TEST-004`
 - `REQ-DAEMON-PLATFORM-001`
@@ -25,6 +28,7 @@ Unix-only behavior.
 
 ## Governing ADRs
 
+- `docs/adr/ADR-003-test-fidelity-and-daemon-isolation.md`
 - `docs/adr/ADR-007-supported-platform-parity.md`
 
 ## Hard Dependencies
@@ -59,6 +63,8 @@ Unix-only behavior.
   owned portability adapters
 - the test suite forbids flaky timing-based stabilization for same-host daemon
   coverage
+- the shutdown drain, WAL checkpoint, and singleton release sequence remains
+  ordered and bounded after S.4 hardening
 - Windows CI and local `just lint` both run full workspace clippy without the
   temporary daemon exclusion
 

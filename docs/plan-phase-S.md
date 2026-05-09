@@ -74,11 +74,11 @@ Phase S parity does not depend on introducing a separate SCM-only daemon model.
 
 ## 3.2 Allowed Operating-System Difference Inventory
 
-| Area | Boundary | Unix implementation | Windows implementation | Shared contract |
-|---|---|---|---|---|
-| Same-host local IPC | `BOUNDARY-ServerTransport-Socket` | Unix domain socket | named-pipe-backed local IPC | same request/response framing, deadlines, and typed error surface |
-| Lifecycle control | `BOUNDARY-LifecycleControlSource-Daemon` | signal-backed control source | console or service-control event source | same bounded shutdown and reload semantics |
-| Host ownership | `BOUNDARY-HostOwnership-Daemon` | Unix file-lock and owner-record mechanics | Windows file-lock and owner-record mechanics | same singleton admission, stale-owner recovery, and ordered release semantics |
+| Area | Boundary | Unix implementation | Windows implementation | Shared contract | Key Files/Types | Responsible Sprint |
+|---|---|---|---|---|---|---|
+| Same-host local IPC | `BOUNDARY-ServerTransport-Socket` | Unix domain socket | named-pipe-backed local IPC | same request/response framing, deadlines, and typed error surface | `crates/atm-daemon/src/lib.rs`, `crates/atm-daemon/src/composition.rs`, `PreparedRuntimeServer`, `RuntimeServerTransport`, `LocalSocketServerTransport` | `S.1` |
+| Lifecycle control | `BOUNDARY-LifecycleControlSource-Daemon` | signal-backed control source | console or service-control event source | same bounded shutdown and reload semantics | `crates/atm-daemon/src/shutdown_signals.rs`, `crates/atm-daemon/src/composition.rs`, `DaemonShutdownSignals`, `RuntimeComposition` | `S.1` |
+| Host ownership | `BOUNDARY-HostOwnership-Daemon` | Unix file-lock and owner-record mechanics | Windows file-lock and owner-record mechanics | same singleton admission, stale-owner recovery, and ordered release semantics | `crates/atm-daemon/src/lib.rs`, `crates/atm-daemon/src/composition.rs`, `SingletonGuard`, `host_runtime_lock_path*`, `write_owner_record`, `recover_stale_owner_lock` | `S.1` |
 
 No other production same-host daemon surface may branch on operating system
 until the architecture and machine-readable boundary inventory are updated
@@ -285,6 +285,9 @@ dead-code and unused-item churn from the non-Unix unsupported path.
 Temporary rule:
 - Windows `just lint` and the Windows CI lint lane may scope clippy to the
   cross-platform workspace crates by excluding `atm-daemon`
+- the CI workflow may set `ATM_WINDOWS_CLIPPY_SCOPE=cross-platform-only` on
+  every matrix lane, but the narrowing takes effect only on Windows because
+  the `Justfile` gates it through `os_family() == "windows"`
 - Windows workspace build and test coverage remain mandatory
 - Linux and macOS keep full workspace clippy
 
