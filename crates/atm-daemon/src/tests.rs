@@ -4,7 +4,6 @@ use super::{
         HOST_RUNTIME_OWNER_LOCK_FILE, HostOwnershipAdapter, host_runtime_lock_path_from_home,
     },
     lifecycle_control::LifecycleControlSourceAdapter,
-    local_ipc_transport::ActiveConnectionRegistry,
 };
 use atm_core::boundary::RequestDispatcher;
 use atm_core::doctor::DoctorStatus;
@@ -19,12 +18,7 @@ use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_rusqlite::assemble_boundary;
 use serial_test::serial;
 use std::fs::OpenOptions;
-use std::io::{Read, Write};
-#[cfg(unix)]
-use std::os::unix::net::{UnixListener, UnixStream};
-use std::sync::{Arc, mpsc};
-#[cfg(unix)]
-use std::time::Duration;
+use std::io::Write;
 use tempfile::TempDir;
 
 #[test]
@@ -162,32 +156,6 @@ fn singleton_guard_recovers_stale_owner_once_lock_is_released() {
     let guard =
         HostOwnershipAdapter::acquire_at(lock_path).expect("stale owner recovery should succeed");
     drop(guard);
-}
-
-#[cfg(unix)]
-#[test]
-fn blocked_connection_is_interrupted_on_force_cancel() {
-    let tempdir = TempDir::new().expect("tempdir");
-    let registry = Arc::new(ActiveConnectionRegistry::default());
-    let socket_path = tempdir.path().join("daemon-test.sock");
-    let listener = UnixListener::bind(&socket_path).expect("bind listener");
-    let client = UnixStream::connect(&socket_path).expect("connect client");
-    let (mut server, _) = listener.accept().expect("accept server");
-    let _guard = registry.register(&server).expect("register");
-    let (done_tx, done_rx) = mpsc::channel();
-
-    std::thread::spawn(move || {
-        let mut byte = [0u8; 1];
-        let result = server.read(&mut byte).map(|_| ());
-        done_tx.send(result).expect("send result");
-    });
-
-    registry.interrupt_all().expect("interrupt all");
-    let result = done_rx
-        .recv_timeout(Duration::from_secs(10))
-        .expect("connection finished");
-    drop(client);
-    assert!(result.is_ok(), "connection result: {result:?}");
 }
 
 fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {

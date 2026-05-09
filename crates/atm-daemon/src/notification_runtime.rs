@@ -5,14 +5,11 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};
-#[cfg(unix)]
 use std::thread;
 use std::thread::JoinHandle;
-#[cfg(unix)]
 use std::time::Duration;
 
 const DEFAULT_NOTIFICATION_QUEUE_CAPACITY: usize = 64;
-#[cfg(unix)]
 const DEFAULT_NOTIFICATION_IDLE_INTERVAL: Duration = Duration::from_millis(50);
 
 #[derive(Clone)]
@@ -58,7 +55,6 @@ impl NotificationRuntime {
         }
     }
 
-    #[cfg(unix)]
     pub(crate) fn start(&self) -> Result<(), AtmError> {
         let mut state = self.inner.state.lock().map_err(|_| {
             AtmError::daemon_unavailable("notification runtime state lock poisoned")
@@ -84,7 +80,6 @@ impl NotificationRuntime {
         Ok(())
     }
 
-    #[cfg(unix)]
     pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
         {
             let mut state = self.inner.state.lock().map_err(|_| {
@@ -140,7 +135,6 @@ impl NotificationRuntime {
     }
 }
 
-#[cfg(unix)]
 fn notification_worker_loop(inner: Arc<NotificationRuntimeInner>) {
     loop {
         let event = {

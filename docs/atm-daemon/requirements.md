@@ -137,6 +137,9 @@ Initial crate requirement IDs:
   endpoint contract and one same-user access-control policy across Unix and
   Windows. Callers above the local-IPC adapter must not construct Unix socket
   paths, Windows pipe names, or platform-specific ACL semantics directly.
+  Adapter-internal mapping from the logical endpoint contract to the concrete
+  Windows named-pipe name is allowed, but the mapping must be deterministic
+  and shared by the daemon and CLI.
   Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-PLATFORM-002`.
 - `REQ-DAEMON-STATUS-001` `atm-daemon` owns the live agent-status cache and

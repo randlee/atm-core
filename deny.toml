@@ -23,6 +23,7 @@ unlicensed = "deny"
 allow = [
   "Apache-2.0",
   "MIT",
+  "0BSD",
   "Unicode-3.0",
   "Zlib",
 ]

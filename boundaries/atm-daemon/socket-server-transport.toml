@@ -57,12 +57,12 @@ review_gates = [
 ]
 
 [status]
-state = "stub_landed"
+state = "concrete_landed"
 notes = [
   "thin clients must stop at ClientTransport and AtmProtocol",
   "the stable boundary id retains its historical socket name, but the target same-host surface is one cross-platform local IPC contract",
   "the adapter must use the shared ATM frame header and request/response packet family rather than EOF-delimited JSON streams",
   "the adapter owns logical endpoint naming and same-user access-control semantics across Unix and Windows",
-  "the Unix implementation now lives under atm_daemon::local_ipc_transport and is assembled through atm_daemon::composition",
-  "Phase S is not complete until both Unix and Windows implementations ship behind this boundary",
+  "the daemon and CLI now share one endpoint-to-local-socket-name mapping while the adapter keeps Unix socket and Windows named-pipe details private",
+  "the Unix and Windows implementations now both live behind atm_daemon::local_ipc_transport and are assembled through atm_daemon::composition",
 ]

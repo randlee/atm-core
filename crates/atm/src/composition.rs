@@ -1,15 +1,11 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
-#[cfg(unix)]
 use std::process::{Command, Stdio};
 use std::sync::Arc;
-#[cfg(unix)]
 use std::time::Duration;
-#[cfg(unix)]
 use std::{
     fs::{self, File, OpenOptions},
     io::Write,
-    os::unix::net::UnixStream,
     thread,
     time::Instant,
 };
@@ -27,16 +23,14 @@ use atm_core::protocol::{
 };
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
-#[cfg(unix)]
 use fs2::FileExt;
+use interprocess::local_socket::Stream as LocalSocketStream;
+use interprocess::local_socket::traits::Stream as _;
 
 use crate::observability::CliObservability;
 
-#[cfg(unix)]
 const SAME_HOST_REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(3);
-#[cfg(unix)]
 const AUTO_START_PUBLISH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
-#[cfg(unix)]
 const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
 
 #[allow(dead_code)]
@@ -60,21 +54,20 @@ impl ReceiveCommandEntryPoint {
 }
 
 #[derive(Debug, Clone)]
-struct DaemonSocketPath(PathBuf);
+struct DaemonLocalIpcEndpoint(PathBuf);
 
-impl DaemonSocketPath {
+impl DaemonLocalIpcEndpoint {
     fn new(path: PathBuf) -> Result<Self, AtmError> {
-        validate_daemon_path("daemon socket path", &path)?;
+        validate_daemon_path("daemon local IPC endpoint", &path)?;
         Ok(Self(path))
     }
 
-    #[cfg(unix)]
     fn display(&self) -> std::path::Display<'_> {
         self.0.display()
     }
 }
 
-impl AsRef<Path> for DaemonSocketPath {
+impl AsRef<Path> for DaemonLocalIpcEndpoint {
     fn as_ref(&self) -> &Path {
         &self.0
     }
@@ -89,7 +82,6 @@ impl DaemonBinaryPath {
         Ok(Self(path))
     }
 
-    #[cfg(unix)]
     fn display(&self) -> std::path::Display<'_> {
         self.0.display()
     }
@@ -104,7 +96,7 @@ impl AsRef<Path> for DaemonBinaryPath {
 fn validate_daemon_path(label: &str, path: &Path) -> Result<(), AtmError> {
     if path.as_os_str().is_empty() {
         return Err(AtmError::validation(format!("{label} must not be empty")).with_recovery(
-            "Set ATM_DAEMON_SOCKET to a non-empty UTF-8 path before invoking the daemon transport.",
+            "Set ATM_DAEMON_SOCKET to a non-empty UTF-8 daemon local IPC endpoint before invoking the daemon transport.",
         ));
     }
     if path.to_str().is_none() {
@@ -112,13 +104,12 @@ fn validate_daemon_path(label: &str, path: &Path) -> Result<(), AtmError> {
             "{label} must be valid UTF-8 at the ATM boundary"
         ))
         .with_recovery(
-            "Set ATM_DAEMON_SOCKET to a non-empty UTF-8 path before invoking the daemon transport.",
+            "Set ATM_DAEMON_SOCKET to a non-empty UTF-8 daemon local IPC endpoint before invoking the daemon transport.",
         ));
     }
     Ok(())
 }
 
-#[cfg(unix)]
 fn host_runtime_lock_path(file_name: &str) -> Result<PathBuf, AtmError> {
     Ok(host_runtime_lock_path_from_home(
         &atm_core::home::host_runtime_dir()?,
@@ -126,61 +117,49 @@ fn host_runtime_lock_path(file_name: &str) -> Result<PathBuf, AtmError> {
     ))
 }
 
-#[cfg(unix)]
 fn host_runtime_lock_path_from_home(home_dir: &Path, file_name: &str) -> PathBuf {
     home_dir.join(file_name)
 }
 
 #[derive(Debug)]
 struct LocalSocketClientTransport {
-    #[cfg(unix)]
-    socket_path: DaemonSocketPath,
+    endpoint: DaemonLocalIpcEndpoint,
     codec: JsonAtmProtocolCodec,
 }
 
 impl LocalSocketClientTransport {
-    fn new(socket_path: DaemonSocketPath) -> Self {
-        #[cfg(unix)]
-        {
-            Self {
-                socket_path,
-                codec: JsonAtmProtocolCodec,
-            }
-        }
-
-        #[cfg(not(unix))]
-        {
-            let _ = socket_path;
-            Self {
-                codec: JsonAtmProtocolCodec,
-            }
+    fn new(endpoint: DaemonLocalIpcEndpoint) -> Self {
+        Self {
+            endpoint,
+            codec: JsonAtmProtocolCodec,
         }
     }
 
-    #[cfg(unix)]
-    fn try_connect(&self) -> Result<UnixStream, AtmError> {
-        UnixStream::connect(self.socket_path.as_ref()).map_err(|source| {
+    fn try_connect(&self) -> Result<LocalSocketStream, AtmError> {
+        LocalSocketStream::connect(atm_core::protocol::daemon_local_ipc_name_from_path(
+            self.endpoint.as_ref(),
+        )?)
+        .map_err(|source| {
             AtmError::daemon_unavailable(format!(
-                "failed to connect to daemon socket at {}",
-                self.socket_path.display()
+                "failed to connect to daemon local IPC endpoint at {}",
+                self.endpoint.display()
             ))
             .with_source(source)
         })
     }
 
-    #[cfg(unix)]
     fn exchange(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         let mut stream = self.try_connect()?;
         stream
-            .set_write_timeout(Some(SAME_HOST_REQUEST_DEADLINE))
+            .set_send_timeout(Some(SAME_HOST_REQUEST_DEADLINE))
             .map_err(|source| {
-                AtmError::daemon_unavailable("failed to configure daemon socket write timeout")
+                AtmError::daemon_unavailable("failed to configure daemon local IPC write timeout")
                     .with_source(source)
             })?;
         stream
-            .set_read_timeout(Some(SAME_HOST_REQUEST_DEADLINE))
+            .set_recv_timeout(Some(SAME_HOST_REQUEST_DEADLINE))
             .map_err(|source| {
-                AtmError::daemon_unavailable("failed to configure daemon socket read timeout")
+                AtmError::daemon_unavailable("failed to configure daemon local IPC read timeout")
                     .with_source(source)
             })?;
         let request_id = atm_core::protocol::next_request_id();
@@ -218,13 +197,6 @@ impl LocalSocketClientTransport {
         }
         Ok(response)
     }
-
-    #[cfg(not(unix))]
-    fn exchange(&self, _request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        Err(AtmError::daemon_unavailable(
-            "ATM thin-client transport requires a Unix platform",
-        ))
-    }
 }
 
 impl boundary::sealed::Sealed for LocalSocketClientTransport {}
@@ -237,52 +209,29 @@ impl ClientTransport for LocalSocketClientTransport {
 
 #[derive(Debug)]
 struct DaemonSupervisor {
-    #[cfg(unix)]
-    socket_path: DaemonSocketPath,
-    #[cfg(unix)]
+    endpoint: DaemonLocalIpcEndpoint,
     daemon_bin: DaemonBinaryPath,
 }
 
 impl DaemonSupervisor {
-    fn new(socket_path: DaemonSocketPath, daemon_bin: DaemonBinaryPath) -> Self {
-        #[cfg(unix)]
-        {
-            Self {
-                socket_path,
-                daemon_bin,
-            }
-        }
-
-        #[cfg(not(unix))]
-        {
-            let _ = socket_path;
-            let _ = daemon_bin;
-            Self {}
+    fn new(endpoint: DaemonLocalIpcEndpoint, daemon_bin: DaemonBinaryPath) -> Self {
+        Self {
+            endpoint,
+            daemon_bin,
         }
     }
 
     fn ensure_daemon_available(
         &self,
-        _transport: &LocalSocketClientTransport,
+        transport: &LocalSocketClientTransport,
     ) -> Result<(), AtmError> {
-        #[cfg(unix)]
-        {
-            self.ensure_daemon_available_with_timeout(
-                _transport,
-                AUTO_START_PUBLISH_TIMEOUT,
-                Duration::from_millis(25),
-            )
-        }
-
-        #[cfg(not(unix))]
-        {
-            Err(AtmError::daemon_unavailable(
-                "ATM thin-client transport requires a Unix platform",
-            ))
-        }
+        self.ensure_daemon_available_with_timeout(
+            transport,
+            AUTO_START_PUBLISH_TIMEOUT,
+            Duration::from_millis(25),
+        )
     }
 
-    #[cfg(unix)]
     fn ensure_daemon_available_with_timeout(
         &self,
         transport: &LocalSocketClientTransport,
@@ -297,7 +246,6 @@ impl DaemonSupervisor {
         )
     }
 
-    #[cfg(unix)]
     fn ensure_daemon_available_with_lock_path(
         &self,
         transport: &LocalSocketClientTransport,
@@ -325,18 +273,17 @@ impl DaemonSupervisor {
                     thread::sleep(poll_interval);
                 }
                 return Err(AtmError::daemon_auto_start_failed(format!(
-                    "failed to connect to daemon socket at {} after auto-start",
-                    self.socket_path.display()
+                    "failed to connect to daemon local IPC endpoint at {} after auto-start",
+                    self.endpoint.display()
                 )));
             }
             if Instant::now() >= deadline {
-                return Err(LaunchGateGuard::rejected_error(&self.socket_path));
+                return Err(LaunchGateGuard::rejected_error(&self.endpoint));
             }
             thread::sleep(poll_interval);
         }
     }
 
-    #[cfg(unix)]
     fn spawn_daemon(&self) -> Result<(), AtmError> {
         if !self.daemon_bin.as_ref().is_file() {
             return Err(
@@ -355,7 +302,7 @@ impl DaemonSupervisor {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::inherit())
-            .env("ATM_DAEMON_SOCKET", self.socket_path.as_ref());
+            .env("ATM_DAEMON_SOCKET", self.endpoint.as_ref());
         command.spawn().map_err(|source| {
             AtmError::daemon_auto_start_failed(format!(
                 "failed to spawn daemon binary at {}",
@@ -367,14 +314,11 @@ impl DaemonSupervisor {
     }
 }
 
-#[cfg(unix)]
 #[derive(Debug)]
 struct LaunchGateGuard {
-    path: PathBuf,
     file: File,
 }
 
-#[cfg(unix)]
 impl LaunchGateGuard {
     #[allow(dead_code)]
     fn try_acquire() -> Result<Option<Self>, AtmError> {
@@ -382,10 +326,10 @@ impl LaunchGateGuard {
         Self::try_acquire_at(lock_path)
     }
 
-    fn rejected_error(socket_path: &DaemonSocketPath) -> AtmError {
+    fn rejected_error(endpoint: &DaemonLocalIpcEndpoint) -> AtmError {
         AtmError::daemon_launch_gate_rejected(format!(
             "daemon launch gate remained owned while connecting to {}",
-            socket_path.display()
+            endpoint.display()
         ))
     }
 
@@ -413,10 +357,7 @@ impl LaunchGateGuard {
                 .with_source(source)
             })?;
         match file.try_lock_exclusive() {
-            Ok(()) => Ok(Some(Self {
-                path: lock_path,
-                file,
-            })),
+            Ok(()) => Ok(Some(Self { file })),
             Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
             Err(source) => Err(AtmError::daemon_launch_gate_rejected(format!(
                 "failed to acquire daemon launch gate at {}",
@@ -427,11 +368,9 @@ impl LaunchGateGuard {
     }
 }
 
-#[cfg(unix)]
 impl Drop for LaunchGateGuard {
     fn drop(&mut self) {
         let _ = self.file.unlock();
-        let _ = fs::remove_file(&self.path);
     }
 }
 
@@ -598,17 +537,17 @@ impl<'a> CliComposition<'a> {
     }
 
     pub(crate) fn bootstrap(observability: &'a CliObservability) -> Result<Self, AtmError> {
-        let socket_path = resolve_daemon_socket_path()?;
+        let endpoint = resolve_daemon_local_ipc_endpoint()?;
         let daemon_bin = resolve_daemon_bin()?;
-        let transport = Arc::new(LocalSocketClientTransport::new(socket_path.clone()));
-        let supervisor = DaemonSupervisor::new(socket_path, daemon_bin);
+        let transport = Arc::new(LocalSocketClientTransport::new(endpoint.clone()));
+        let supervisor = DaemonSupervisor::new(endpoint, daemon_bin);
         supervisor.ensure_daemon_available(transport.as_ref())?;
         Ok(Self::from_transport(transport, observability))
     }
 }
 
-fn resolve_daemon_socket_path() -> Result<DaemonSocketPath, AtmError> {
-    DaemonSocketPath::new(atm_core::protocol::daemon_socket_path()?)
+fn resolve_daemon_local_ipc_endpoint() -> Result<DaemonLocalIpcEndpoint, AtmError> {
+    DaemonLocalIpcEndpoint::new(atm_core::protocol::daemon_socket_path()?)
 }
 
 fn resolve_daemon_bin() -> Result<DaemonBinaryPath, AtmError> {
@@ -665,7 +604,7 @@ mod tests {
     use serde_json::Value;
     use tempfile::TempDir;
 
-    use super::{CliComposition, DaemonBinaryPath, DaemonSocketPath};
+    use super::{CliComposition, DaemonBinaryPath, DaemonLocalIpcEndpoint};
     #[cfg(unix)]
     use super::{DaemonSupervisor, LocalSocketClientTransport};
     #[cfg(unix)]
@@ -1102,14 +1041,19 @@ mod tests {
         let tempdir = TempDir::new().expect("tempdir");
         let socket_path = tempdir.path().join("atm.sock");
         let daemon_path = tempdir.path().join("atm-daemon");
-        let socket = DaemonSocketPath::new(socket_path.clone()).expect("socket path");
+        let socket = DaemonLocalIpcEndpoint::new(socket_path.clone()).expect("socket path");
         let daemon = DaemonBinaryPath::new(daemon_path.clone()).expect("daemon path");
 
         assert_eq!(socket.as_ref(), socket_path.as_path());
         assert_eq!(daemon.as_ref(), daemon_path.as_path());
 
-        let socket_error = DaemonSocketPath::new(std::path::PathBuf::new()).expect_err("empty");
-        assert!(socket_error.to_string().contains("daemon socket path"));
+        let socket_error =
+            DaemonLocalIpcEndpoint::new(std::path::PathBuf::new()).expect_err("empty");
+        assert!(
+            socket_error
+                .to_string()
+                .contains("daemon local IPC endpoint")
+        );
 
         let daemon_error = DaemonBinaryPath::new(std::path::PathBuf::new()).expect_err("empty");
         assert!(daemon_error.to_string().contains("daemon binary path"));
@@ -1185,7 +1129,8 @@ mod tests {
             LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
                 .expect("acquire")
                 .expect("gate");
-        let socket_path = DaemonSocketPath::new(tempdir.path().join("one.sock")).expect("socket");
+        let socket_path =
+            DaemonLocalIpcEndpoint::new(tempdir.path().join("one.sock")).expect("socket");
         let second =
             LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
                 .expect("second acquire");
@@ -1209,7 +1154,7 @@ mod tests {
             .expect("acquire")
             .expect("gate");
         let socket_path =
-            DaemonSocketPath::new(tempdir.path().join("missing.sock")).expect("socket");
+            DaemonLocalIpcEndpoint::new(tempdir.path().join("missing.sock")).expect("socket");
         let daemon_bin = DaemonBinaryPath::new(tempdir.path().join("atm-daemon")).expect("daemon");
         let supervisor = DaemonSupervisor::new(socket_path.clone(), daemon_bin);
         let transport = LocalSocketClientTransport::new(socket_path);
@@ -1236,7 +1181,7 @@ mod tests {
         let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
         let launch_lock_path = runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE);
         let socket_path =
-            DaemonSocketPath::new(tempdir.path().join("missing.sock")).expect("socket");
+            DaemonLocalIpcEndpoint::new(tempdir.path().join("missing.sock")).expect("socket");
         let daemon_path = tempdir.path().join("atm-daemon");
         std::fs::write(&daemon_path, "#!/bin/false\n").expect("stub daemon");
         let daemon_bin = DaemonBinaryPath::new(daemon_path).expect("daemon");
@@ -1265,8 +1210,8 @@ mod tests {
 
         let invalid = std::ffi::OsString::from_vec(vec![0x66, 0x6f, 0x80]);
 
-        let socket_error =
-            DaemonSocketPath::new(std::path::PathBuf::from(invalid.clone())).expect_err("utf8");
+        let socket_error = DaemonLocalIpcEndpoint::new(std::path::PathBuf::from(invalid.clone()))
+            .expect_err("utf8");
         assert!(socket_error.to_string().contains("valid UTF-8"));
 
         let daemon_error =

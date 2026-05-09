@@ -1,12 +1,12 @@
-#![cfg(unix)]
 use std::io::{BufRead, BufReader, Write};
-use std::os::unix::net::UnixStream;
 use std::process::{Command, Stdio};
 
 use atm_core::boundary::AtmProtocol;
 use atm_core::doctor::DoctorQuery;
 use atm_core::protocol::{JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope};
 use atm_core::test_support::EnvGuard;
+use interprocess::local_socket::Stream as LocalSocketStream;
+use interprocess::local_socket::traits::Stream as _;
 use serial_test::serial;
 use tempfile::TempDir;
 
@@ -48,7 +48,16 @@ fn run_daemon_uses_production_socket_path_and_serves_requests() {
         "daemon child did not emit ready signal: {ready_line:?}"
     );
 
-    let mut stream = UnixStream::connect(&socket_path).expect("connect socket");
+    let mut stream = LocalSocketStream::connect(
+        atm_core::protocol::daemon_local_ipc_name_from_path(&socket_path).expect("endpoint name"),
+    )
+    .expect("connect local IPC");
+    stream
+        .set_send_timeout(Some(std::time::Duration::from_secs(3)))
+        .expect("write timeout");
+    stream
+        .set_recv_timeout(Some(std::time::Duration::from_secs(3)))
+        .expect("read timeout");
     let codec = JsonAtmProtocolCodec;
     let request = RequestEnvelope::Doctor(DoctorQuery {
         home_dir: atm_home.clone(),

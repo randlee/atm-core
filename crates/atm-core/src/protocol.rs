@@ -3,9 +3,11 @@
 use std::env;
 use std::io::Read;
 use std::io::Write;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use interprocess::local_socket::{GenericFilePath, Name, ToFsName};
 use serde::{Deserialize, Serialize};
 
 use crate::ack::{AckOutcome, AckRequest};
@@ -515,9 +517,77 @@ pub fn read_bounded_stream(
 /// Returns [`AtmError`] when `ATM_HOME` cannot be resolved.
 pub fn daemon_socket_path() -> Result<PathBuf, AtmError> {
     if let Some(path) = env::var_os("ATM_DAEMON_SOCKET").filter(|value| !value.is_empty()) {
-        return Ok(PathBuf::from(path));
+        return Ok(platform_local_ipc_endpoint_path(PathBuf::from(path)));
     }
-    Ok(home::atm_home()?.join("atm-daemon.sock"))
+    Ok(platform_local_ipc_endpoint_path(
+        home::atm_home()?.join("atm-daemon.sock"),
+    ))
+}
+
+/// Resolve the active local IPC name for the ATM request transport.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the active endpoint cannot be mapped to a valid
+/// platform-local IPC name.
+pub fn daemon_local_ipc_name() -> Result<Name<'static>, AtmError> {
+    daemon_local_ipc_name_from_path(&daemon_socket_path()?)
+}
+
+/// Convert one daemon endpoint path into the concrete platform-local IPC name
+/// used by the same-host transport.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the endpoint cannot be represented by the current
+/// platform-local IPC implementation.
+pub fn daemon_local_ipc_name_from_path(endpoint_path: &Path) -> Result<Name<'static>, AtmError> {
+    let normalized = platform_local_ipc_endpoint_path(endpoint_path.to_path_buf());
+    normalized
+        .into_os_string()
+        .to_fs_name::<GenericFilePath>()
+        .map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to map daemon local IPC endpoint {} to a supported platform-local IPC name",
+                endpoint_path.display()
+            ))
+            .with_source(source)
+            .with_recovery(
+                "Set ATM_DAEMON_SOCKET to a valid daemon local IPC endpoint and retry the ATM command.",
+            )
+        })
+}
+
+#[cfg(windows)]
+fn platform_local_ipc_endpoint_path(path: PathBuf) -> PathBuf {
+    const WINDOWS_PIPE_PREFIX: &str = r"\\.\pipe\";
+
+    let raw = path.to_string_lossy();
+    if raw.starts_with(WINDOWS_PIPE_PREFIX) {
+        return path;
+    }
+
+    let mut hash = 0xcbf29ce484222325u64;
+    for byte in raw.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+
+    let mut leaf = path
+        .file_stem()
+        .map(|value| value.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "atm-daemon".to_string());
+    leaf.retain(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_');
+    if leaf.is_empty() {
+        leaf = "atm-daemon".to_string();
+    }
+
+    PathBuf::from(format!(r"\\.\pipe\atm-{}-{hash:016x}", leaf))
+}
+
+#[cfg(not(windows))]
+fn platform_local_ipc_endpoint_path(path: PathBuf) -> PathBuf {
+    path
 }
 
 /// Shared notification event payload.

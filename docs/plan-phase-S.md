@@ -297,25 +297,28 @@ Required outcomes:
 - same-host functional tests pass on Windows through the real transport
 
 Required code targets:
-- `crates/atm-daemon/src/lib.rs`
-  - imports and concrete fields that currently depend on `UnixListener` and
-    `UnixStream`
-  - `PreparedRuntimeServer`
-  - `RuntimeServerTransport::prepare_runtime`
-  - `RuntimeServerTransport::prepare_runtime_at_socket_path`
-  - `remove_stale_socket`
+- `crates/atm-core/src/protocol.rs`
+  - `daemon_socket_path`
+  - `daemon_local_ipc_name`
+  - `daemon_local_ipc_name_from_path`
+- `crates/atm-daemon/src/local_ipc_transport.rs`
+  - `PreparedRuntimeServer::bind`
+  - `PreparedRuntimeServer::serve_with_deadlines_and_accept_probe`
+  - `LocalIpcServerTransportAdapter::{prepare_runtime, prepare_runtime_at_socket_path}`
+  - `prepare_local_ipc_endpoint`
   - `handle_connection`
 - `crates/atm-daemon/src/tests.rs`
-  - replace Unix-only same-host transport tests with shared harness coverage
+  - keep daemon-private tests transport-neutral above the local-IPC adapter
 - `crates/atm/src/composition.rs`
   - `LocalSocketClientTransport`
-  - `DaemonSocketPath`
+  - `DaemonLocalIpcEndpoint`
+  - `LaunchGateGuard`
 - `crates/atm-daemon/tests/run_daemon_production_path.rs`
-  - replace Unix-only production path assumptions with shared same-host harness
+  - shared same-host production-path coverage through the real local IPC path
 
 Required refactor direction:
-- move Unix socket path validation and connection interruption mechanics behind
-  the local-IPC adapter
+- move Unix socket path handling and Windows named-pipe name mapping behind the
+  local-IPC adapter plus shared endpoint helper
 - replace Unix-only same-host runtime stubs with a real Windows transport
   implementation
 - keep one shared handler/dispatcher test harness across Unix and Windows
