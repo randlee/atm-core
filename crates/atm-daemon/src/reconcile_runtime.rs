@@ -443,12 +443,22 @@ mod tests {
         ReconcileRequest, WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
     };
     use atm_core::protocol::ReconcileResult;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::{Arc, Condvar, Mutex, mpsc};
     use std::time::Duration;
 
+    fn unique_home_dir() -> std::path::PathBuf {
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        std::env::temp_dir().join(format!(
+            "atm-reconcile-test-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ))
+    }
+
     fn request() -> ReconcileRequest {
         ReconcileRequest {
-            home_dir: std::env::temp_dir().join("atm-reconcile-test"),
+            home_dir: unique_home_dir(),
             team: "test-team".parse().expect("team"),
             agent: "test-agent".parse().expect("agent"),
         }
@@ -456,7 +466,7 @@ mod tests {
 
     fn request_for(agent: &str) -> ReconcileRequest {
         ReconcileRequest {
-            home_dir: std::env::temp_dir().join("atm-reconcile-test"),
+            home_dir: unique_home_dir(),
             team: "test-team".parse().expect("team"),
             agent: agent.parse().expect("agent"),
         }
@@ -483,7 +493,7 @@ mod tests {
         let runtime_a = runtime.clone();
         let runtime_b = runtime.clone();
         let request_a = request();
-        let request_b = request();
+        let request_b = request_a.clone();
         let first = std::thread::spawn(move || runtime_a.reconcile(request_a).expect("first"));
         assert!(
             runtime.wait_for_pending_count_for_test(1, Duration::from_secs(1)),

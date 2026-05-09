@@ -47,6 +47,17 @@ impl PeerTransportConfig {
     }
 }
 
+fn daemon_peer_endpoint_from_env() -> Option<SocketAddr> {
+    match std::env::var("ATM_DAEMON_PEER_ADDR") {
+        Ok(raw) => parse_peer_endpoint(&raw),
+        Err(std::env::VarError::NotPresent) => None,
+        Err(std::env::VarError::NotUnicode(_)) => {
+            tracing::warn!("ignoring non-unicode ATM_DAEMON_PEER_ADDR value");
+            None
+        }
+    }
+}
+
 pub(crate) trait RemoteReplayStore: Send + Sync + std::fmt::Debug {
     fn enqueue(&self, record: RemoteReplayStateRecord) -> Result<(), AtmError>;
 
@@ -92,9 +103,7 @@ struct PeerClientTransport {
 
 impl PeerClientTransport {
     fn new(replay_store: Option<Arc<dyn RemoteReplayStore>>) -> Self {
-        let endpoint = std::env::var("ATM_DAEMON_PEER_ADDR")
-            .ok()
-            .and_then(|raw| parse_peer_endpoint(&raw));
+        let endpoint = daemon_peer_endpoint_from_env();
         let config = std::env::current_dir()
             .ok()
             .and_then(|current_dir| {
