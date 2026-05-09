@@ -287,9 +287,13 @@ pub(crate) fn finding_is_failure(finding: &Finding) -> bool {
             | RuleId::ScbBoundary001
             | RuleId::ScbBoundary002
             | RuleId::ScbBoundary003
+            | RuleId::ScbRuntime001
+            | RuleId::ScbRuntime002
             | RuleId::Port001
             | RuleId::Port002
             | RuleId::Port003
+            | RuleId::Port004
+            | RuleId::Port005
     )
 }
 

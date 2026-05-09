@@ -96,6 +96,24 @@ Product-level boundary rules:
   ATM-owned command/runtime writes must not bypass the documented daemon/store
   boundaries
 
+Lint and tooling boundary rules:
+- `atm-core` owns repository-local lint orchestration through `just`,
+  `.just/`, and `scripts/`
+- reusable static-analysis engines are incubated on `atm-core` through the
+  embedded `crates/sc-lint-*` workspace members, then migrated to the
+  standalone `sc-lint` repository only after the rule semantics stabilize
+- ATM-specific repository policy checks stay local to `atm-core` when they
+  depend on ATM role names, ATM-only document schemas, or ATM team-process
+  records
+- postmortem-linter partition for the current follow-up line is:
+  - reusable/static rules:
+    - Unix platform-gating checks
+    - bare production `Condvar::wait(...)` checks
+  - ATM-local rules:
+    - duplicate semantic string-literal checks in non-test Rust code
+    - fixed-sleep test-hygiene checks
+    - triage Turtle consistency checks
+
 Crate-local boundary detail is owned by:
 
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
@@ -121,6 +139,33 @@ Current Phase R boundary direction:
   - `atm` is the CLI client composition root
   - `atm-daemon` is the runtime composition root
   - a separate composition crate remains out of scope unless an ADR opens it
+
+Current Phase R lint partition direction:
+- extend the existing `sc-portability` analyzer for reusable platform-gating
+  rules
+- extend the existing `sc-boundary` analyzer for reusable production-liveness
+  rules that need Rust-aware analysis
+- keep ATM duplicate semantic literal policy in the existing repository-local
+  identity lint
+- add any fixed-sleep and triage-record validation as repository-local lint/CI
+  steps first, then reevaluate extraction only after the false-positive and
+  allow-list shape is proven on `atm-core`
+
+Active postmortem rule families:
+- reusable analyzer rules:
+  - test-scope portability helpers:
+    - `PORT-001` hardcoded Unix-only absolute paths in test code
+    - `PORT-002` direct `dirs::home_dir()` without configured override checks
+    - `PORT-003` `std::env::set_var()` in test code
+  - production portability rules:
+  - `PORT-004` ungated `std::os::unix` imports in production code
+  - `PORT-005` `cfg_attr(not(unix), allow(dead_code))` portability suppressors
+  - `SCB-RUNTIME-001` bare production `Condvar::wait(...)`
+  - `SCB-RUNTIME-002` discarded `wait_timeout*` results in production code
+- ATM-local repository rules:
+  - duplicate semantic role-name literals in non-test Rust code
+  - fixed-sleep test-hygiene checks
+  - triage Turtle aggregate/branch consistency checks
 
 ### 2.3 Release Publication Boundary
 

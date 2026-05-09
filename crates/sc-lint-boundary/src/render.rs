@@ -1,5 +1,4 @@
 use super::*;
-use serde_json::Error as JsonError;
 
 pub fn render_findings_report(report: &FindingsReport) -> String {
     format!(
@@ -14,21 +13,20 @@ pub fn render_findings_report(report: &FindingsReport) -> String {
 
 /// Render a graph export to the requested wire format.
 ///
-/// JSON rendering is fallible because it relies on `serde_json` serialization.
-/// Turtle rendering is currently infallible because it formats the already-built
-/// graph export into a string without additional fallible I/O or encoding work.
-pub fn render_graph_export(
-    graph: &GraphExport,
-    format: GraphOutputFormat,
-) -> Result<String, JsonError> {
+/// JSON and Turtle rendering are both treated as infallible for this graph
+/// model. JSON uses `serde_json` over an already-built in-memory structure that
+/// contains only stringly metadata and enums, while Turtle is assembled
+/// directly into a string.
+pub fn render_graph_export(graph: &GraphExport, format: GraphOutputFormat) -> String {
     match format {
         GraphOutputFormat::Json => render_graph_export_json(graph),
-        GraphOutputFormat::Turtle => Ok(render_graph_export_turtle(graph)),
+        GraphOutputFormat::Turtle => render_graph_export_turtle(graph),
     }
 }
 
-pub fn render_graph_export_json(graph: &GraphExport) -> Result<String, JsonError> {
+pub fn render_graph_export_json(graph: &GraphExport) -> String {
     serde_json::to_string_pretty(graph)
+        .expect("GraphExport serialization is structurally infallible")
 }
 
 pub fn render_graph_export_turtle(graph: &GraphExport) -> String {

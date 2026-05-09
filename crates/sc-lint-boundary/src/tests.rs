@@ -38,6 +38,18 @@ fn graph_export_serializes_tool_metadata() {
 }
 
 #[test]
+#[should_panic(expected = "NodeId::new requires a non-empty identifier")]
+fn node_id_rejects_empty_identifier() {
+    let _ = NodeId::new("");
+}
+
+#[test]
+#[should_panic(expected = "OwnerId::new requires a non-empty identifier")]
+fn owner_id_rejects_empty_identifier() {
+    let _ = OwnerId::new("");
+}
+
+#[test]
 fn exports_graph_for_inline_and_file_modules_and_attributes() {
     let fixture = WorkspaceFixture::new();
     fixture.write_workspace_root();
@@ -574,6 +586,223 @@ fn flags_set_var_in_test_scope() {
             .iter()
             .any(|finding| finding.rule_id == RuleId::Port003)
     );
+}
+
+#[test]
+fn flags_ungated_std_os_unix_import_in_production_code() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_lint_config(
+        r#"
+        [portability]
+        config_home_env = "ATM_CONFIG_HOME"
+        "#,
+    );
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+            pub fn os_string(bytes: Vec<u8>) -> std::ffi::OsString {
+                use std::os::unix::ffi::OsStringExt;
+                std::ffi::OsString::from_vec(bytes)
+            }
+        "#,
+    );
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Portability),
+    })
+    .unwrap();
+
+    assert_eq!(report.status, ReportStatus::Fail);
+    assert!(
+        report
+            .findings
+            .iter()
+            .any(|finding| finding.rule_id == RuleId::Port004)
+    );
+}
+
+#[test]
+fn passes_cfg_unix_gated_std_os_unix_import_in_production_code() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_lint_config(
+        r#"
+        [portability]
+        config_home_env = "ATM_CONFIG_HOME"
+        "#,
+    );
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+            #[cfg(unix)]
+            pub fn os_string(bytes: Vec<u8>) -> std::ffi::OsString {
+                use std::os::unix::ffi::OsStringExt;
+                std::ffi::OsString::from_vec(bytes)
+            }
+        "#,
+    );
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Portability),
+    })
+    .unwrap();
+
+    assert_eq!(report.status, ReportStatus::Pass);
+    assert!(report.findings.is_empty());
+}
+
+#[test]
+fn flags_cfg_attr_not_unix_allow_dead_code_in_production_code() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_lint_config(
+        r#"
+        [portability]
+        config_home_env = "ATM_CONFIG_HOME"
+        "#,
+    );
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+            #[cfg_attr(not(unix), allow(dead_code))]
+            pub fn unix_socket_path() -> &'static str {
+                "/tmp/runtime.sock"
+            }
+        "#,
+    );
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Portability),
+    })
+    .unwrap();
+
+    assert_eq!(report.status, ReportStatus::Fail);
+    assert!(
+        report
+            .findings
+            .iter()
+            .any(|finding| finding.rule_id == RuleId::Port005)
+    );
+}
+
+#[test]
+fn flags_bare_wait_in_production_code() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+            use std::sync::{Condvar, Mutex};
+
+            pub fn block_until_ready(condvar: &Condvar, state: &Mutex<bool>) {
+                let state = state.lock().expect("lock");
+                let _guard = condvar.wait(state).expect("wait");
+            }
+        "#,
+    );
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: None,
+    })
+    .unwrap();
+
+    assert_eq!(report.status, ReportStatus::Fail);
+    assert!(
+        report
+            .findings
+            .iter()
+            .any(|finding| finding.rule_id == RuleId::ScbRuntime001)
+    );
+}
+
+#[test]
+fn flags_discarded_wait_timeout_result_in_production_code() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+            use std::sync::{Condvar, Mutex};
+            use std::time::Duration;
+
+            pub fn block_until_ready(condvar: &Condvar, state: &Mutex<bool>) {
+                let state = state.lock().expect("lock");
+                condvar.wait_timeout(state, Duration::from_secs(1)).expect("wait");
+            }
+        "#,
+    );
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: None,
+    })
+    .unwrap();
+
+    assert_eq!(report.status, ReportStatus::Fail);
+    assert!(
+        report
+            .findings
+            .iter()
+            .any(|finding| finding.rule_id == RuleId::ScbRuntime002)
+    );
+}
+
+#[test]
+fn passes_inspected_wait_timeout_result_in_production_code() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+            use std::sync::{Condvar, Mutex};
+            use std::time::Duration;
+
+            pub fn block_until_ready(condvar: &Condvar, state: &Mutex<bool>) {
+                let state = state.lock().expect("lock");
+                let (_guard, wait) = condvar
+                    .wait_timeout(state, Duration::from_secs(1))
+                    .expect("wait");
+                if wait.timed_out() {
+                    return;
+                }
+            }
+        "#,
+    );
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: None,
+    })
+    .unwrap();
+
+    assert_eq!(report.status, ReportStatus::Pass);
+    assert!(!report.findings.iter().any(|finding| matches!(
+        finding.rule_id,
+        RuleId::ScbRuntime001 | RuleId::ScbRuntime002
+    )));
 }
 
 #[test]

@@ -19,6 +19,9 @@ DIRECTIVE_RE = re.compile(
     r"(?P<action>allow-next-line|allow-start|allow-end)\b",
     re.IGNORECASE,
 )
+STRING_LITERAL_RE = re.compile(
+    r'r(?P<hashes>#+)?\"(?P<raw>.*?)\"(?P=hashes)|\"(?P<quoted>(?:[^\"\\\\]|\\\\.)*)\"'
+)
 
 
 @dataclass(frozen=True)
@@ -101,6 +104,17 @@ def workspace_manifest_paths(repo_root: Path) -> list[Path]:
             manifests[manifest_path.resolve()] = manifest_path
 
     return sorted(manifests.values())
+
+
+def iter_workspace_rust_files(repo_root: Path) -> list[Path]:
+    paths: list[Path] = []
+    for manifest_path in workspace_manifest_paths(repo_root):
+        crate_root = manifest_path.parent
+        for directory_name in ("src", "tests"):
+            directory = crate_root / directory_name
+            if directory.exists():
+                paths.extend(sorted(directory.rglob("*.rs")))
+    return sorted(set(paths))
 
 
 def workspace_crates(repo_root: Path) -> list[WorkspaceCrate]:
@@ -444,3 +458,25 @@ def classify_rust_test_scope(
             cfg_test_attribute_active = False
 
     return scope
+
+
+def rust_file_test_scope(path: Path, lines: list[str]) -> list[bool]:
+    rel_posix = path.as_posix()
+    if "/tests/" in rel_posix:
+        return [True] * len(lines)
+    if "/src/" in rel_posix:
+        return classify_rust_test_scope(lines)
+    return [False] * len(lines)
+
+
+def iter_string_literal_contents(line: str) -> list[str]:
+    literals: list[str] = []
+    for match in STRING_LITERAL_RE.finditer(line):
+        raw_value = match.group("raw")
+        if raw_value is not None:
+            literals.append(raw_value)
+            continue
+        quoted_value = match.group("quoted")
+        if quoted_value is not None:
+            literals.append(bytes(quoted_value, "utf-8").decode("unicode_escape"))
+    return literals

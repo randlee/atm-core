@@ -72,6 +72,11 @@ Status:
 - The current merged Wave 1 baseline still contains `crates/atm-core` and
   `crates/atm` only; additional crate introduction remains active Phase R
   skeleton work and is now tracked explicitly by `R.3.1`.
+- `R.13` through `R.18` are the runtime/product continuation sprints.
+- `R.19` is the completed post-closeout lint-backfill sprint that converts the
+  recurring mechanically-detectable Phase R defect families into normal lint
+  or CI gates on `atm-core` before any reusable subset is migrated to
+  standalone `sc-lint`.
 
 ## 2. Deliverables
 
@@ -2829,9 +2834,89 @@ Acceptance:
 - requirements, architecture, ADRs, and testing guidelines agree on the
   singleton rule and approved test tiers
 - continuation sprint execution after `R.10` must follow the tracked sequence
-  in `docs/phase-R/sprint-R13.md` through `docs/phase-R/sprint-R18.md`
+  in `docs/phase-R/sprint-R13.md` through `docs/phase-R/sprint-R18.md` for the
+  runtime/product closeout line, with `docs/phase-R/sprint-R19.md` reserved for
+  postmortem lint backfill after the closeout implementation settles
 - `sc-lint` inventory-parity / planning-metadata gates are treated as an
   external prerequisite that must be ready before `R.13` implementation starts
 - there is no approved ordinary test-daemon launch path
 - the implementation plan explicitly prevents new daemon-spawn helpers from
   proliferating
+
+## 24. Phase R Postmortem Linter Backfill
+
+Goal:
+- convert the recurring mechanically-detectable Phase R defect families into
+  normal repository lint or CI gates
+- prove the rules on `atm-core` first, then migrate only the reusable subset
+  into the standalone `sc-lint` repository
+
+Execution rule:
+- implementation happens on `atm-core` first even when the eventual home is
+  `sc-lint`
+- migration to standalone `sc-lint` is a follow-up extraction step after
+  local rule shape, allow-list policy, and false-positive behavior are proven
+
+Partition:
+- reusable/static-analysis rules that should graduate to `sc-lint` after
+  proving out:
+  - Unix platform-gating enforcement
+  - production `Condvar::wait(...)` liveness enforcement
+- ATM-local rules that should remain `atm-core`-owned unless later generalized:
+  - duplicate semantic string-literal enforcement in non-test Rust code
+  - fixed-sleep test-hygiene enforcement
+  - triage Turtle consistency enforcement
+
+Planned sequence:
+1. extend `sc-portability` on `atm-core` for:
+   - ungated `std::os::unix` imports
+   - `cfg_attr(not(unix), allow(dead_code))` portability suppressors
+2. extend the repository-local identity-literal gate into a duplicate semantic
+   string-literal gate for non-test Rust code, with raw `"team-lead"` as the
+   first mandatory case
+3. add a repository-local fixed-sleep test-hygiene lint and wire it into
+   `just lint`
+4. extend `sc-boundary` on `atm-core` for bare production
+   `Condvar::wait(...)`
+5. add a repository-local triage-record consistency validator and wire it into
+   `just lint` or the equivalent default CI lint surface
+6. after all five families are stable on `atm-core`, migrate the reusable
+   analyzers and any generic helper framework into standalone `sc-lint`
+
+Scope note:
+- the broader design guidance against duplicated raw strings and magic numbers
+  already exists; this sprint is about selecting the first hard-gated subset,
+  not restating that policy
+- this sprint raises that policy into a hard gate for duplicated semantic
+  string literals in non-test Rust code
+- raw `"team-lead"` is the first mandatory case because it is already
+  duplicated widely enough in the repo to justify enforcement now
+- the canonical Rust definition source for this literal is
+  `crates/atm-core/src/roles.rs` via `ROLE_TEAM_LEAD`
+- `TeamName` / `AgentName` structural newtype hardening remains the longer-term
+  direction, but the immediate lint still uses a grep-backed gate because the
+  postmortem problem is duplicated handwritten literals already spread through
+  non-test production code and the full newtype migration is broader than this
+  follow-up sprint
+- the lint contract still needs explicit exclusions only for narrow benign
+  repeated classes if they are discovered during implementation
+- those exclusions must stay narrow; the rule must not exempt ordinary
+  production code wholesale
+
+Required deliverables for this planning/implementation line:
+- one Phase R sprint plan covering the five families and their partitioning
+- updates to requirements and architecture that explain why some rules stay
+  repo-local while others graduate to `sc-lint`
+- update `docs/project-plan.md` itself to record:
+  - the ATM-first/prove-then-migrate rule
+  - the reusable-vs-ATM-local partition
+  - the implementation sequence for Families A/B/C/D/I
+  - the migration criteria for moving reusable rules into standalone `sc-lint`
+- a clear `just lint` integration decision for every family before coding
+
+Acceptance:
+- every postmortem family is assigned to one concrete implementation home
+- the sequencing explains what lands in Rust analyzer code versus repository
+  Python/CI glue
+- the migration boundary between `atm-core` and `sc-lint` is explicit rather
+  than implied

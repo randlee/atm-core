@@ -1,11 +1,10 @@
-use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
 use anyhow::Context;
 use anyhow::Result;
-use proc_macro2::Span;
+use quote::ToTokens;
 use serde::Deserialize;
 use syn::Attribute;
 use syn::Block;
@@ -21,6 +20,7 @@ use syn::ItemImpl;
 use syn::ItemMod;
 use syn::Lit;
 use syn::Stmt;
+use syn::UseTree;
 use syn::spanned::Spanned;
 use syn::visit::Visit;
 
@@ -28,6 +28,13 @@ use crate::Finding;
 use crate::NodeId;
 use crate::OwnerId;
 use crate::RuleId;
+use crate::source_scan::FileContext;
+use crate::source_scan::ScopeKind;
+use crate::source_scan::classify_scope;
+use crate::source_scan::discover_source_files;
+use crate::source_scan::item_attrs;
+use crate::source_scan::item_name_hint_is_tests;
+use crate::source_scan::span_start_line;
 
 #[derive(Debug, Clone, Deserialize, Default, PartialEq, Eq)]
 struct RepoLintConfig {
@@ -46,14 +53,6 @@ struct PortabilityConfig {
 }
 
 #[derive(Debug, Clone)]
-struct FileContext {
-    source_path: PathBuf,
-    package: String,
-    target: String,
-    is_test_file: bool,
-}
-
-#[derive(Debug, Clone)]
 struct PortabilityFinding {
     rule_id: RuleId,
     kind: &'static str,
@@ -63,12 +62,6 @@ struct PortabilityFinding {
     package: String,
     target: String,
     node_label: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ScopeKind {
-    Test,
-    NonTest,
 }
 
 pub(crate) fn analyze_portability(root: &Path) -> Result<Vec<Finding>> {
@@ -95,6 +88,7 @@ pub(crate) fn analyze_portability(root: &Path) -> Result<Vec<Finding>> {
         let mut collector = PortabilityCollector::new(&file_context, &config);
         collector.visit_file_items(&parsed);
         findings.extend(collector.findings);
+        findings.extend(collect_unix_portability_findings(&parsed, &file_context));
     }
 
     findings.sort_by(|left, right| {
@@ -142,6 +136,235 @@ struct PortabilityCollector<'a> {
     findings: Vec<PortabilityFinding>,
 }
 
+fn collect_unix_portability_findings(
+    file: &File,
+    file_context: &FileContext,
+) -> Vec<PortabilityFinding> {
+    let mut findings = Vec::new();
+    let initial_scope = if file_context.is_test_file {
+        ScopeKind::Test
+    } else {
+        ScopeKind::NonTest
+    };
+    visit_items_for_unix_portability(
+        &file.items,
+        initial_scope,
+        false,
+        file_context,
+        &mut findings,
+    );
+    findings
+}
+
+fn visit_items_for_unix_portability(
+    items: &[Item],
+    inherited_scope: ScopeKind,
+    inherited_unix_gated: bool,
+    file_context: &FileContext,
+    findings: &mut Vec<PortabilityFinding>,
+) {
+    for item in items {
+        visit_item_for_unix_portability(
+            item,
+            inherited_scope,
+            inherited_unix_gated,
+            file_context,
+            findings,
+        );
+    }
+}
+
+fn visit_item_for_unix_portability(
+    item: &Item,
+    inherited_scope: ScopeKind,
+    inherited_unix_gated: bool,
+    file_context: &FileContext,
+    findings: &mut Vec<PortabilityFinding>,
+) {
+    let attrs = item_attrs(item);
+    let scope = classify_scope(attrs, inherited_scope, item_name_hint_is_tests(item));
+    let unix_gated = inherited_unix_gated || attrs.iter().any(attr_is_cfg_unix);
+
+    if scope == ScopeKind::NonTest {
+        for attr in attrs {
+            if attr_is_cfg_attr_not_unix_allow_dead_code(attr) {
+                findings.push(PortabilityFinding {
+                    rule_id: RuleId::Port005,
+                    kind: "cfg_attr_not_unix_allow_dead_code",
+                    message: "PORT-005 #[cfg_attr(not(unix), allow(dead_code))] is not an approved portability suppressor in production code; gate the item with #[cfg(unix)] or provide a real cross-platform implementation".to_string(),
+                    source_path: file_context.source_path.clone(),
+                    line: span_start_line(attr.span()),
+                    package: file_context.package.clone(),
+                    target: file_context.target.clone(),
+                    node_label: format!(
+                        "crate::{}::{}::portability",
+                        file_context.package, file_context.target
+                    ),
+                });
+            }
+        }
+
+        if let Item::Use(item_use) = item
+            && use_tree_contains_std_os_unix(&item_use.tree)
+            && !unix_gated
+        {
+            findings.push(PortabilityFinding {
+                rule_id: RuleId::Port004,
+                kind: "ungated_std_os_unix_import",
+                message: "PORT-004 ungated std::os::unix import in production code; wrap the item with #[cfg(unix)] or move the import behind a Unix-only boundary".to_string(),
+                source_path: file_context.source_path.clone(),
+                line: span_start_line(item_use.span()),
+                package: file_context.package.clone(),
+                target: file_context.target.clone(),
+                node_label: format!(
+                    "crate::{}::{}::portability",
+                    file_context.package, file_context.target
+                ),
+            });
+        }
+    }
+
+    match item {
+        Item::Fn(item_fn) => {
+            if scope == ScopeKind::NonTest {
+                visit_block_for_unix_portability(
+                    &item_fn.block,
+                    scope,
+                    unix_gated,
+                    file_context,
+                    findings,
+                );
+            }
+        }
+        Item::Mod(item_mod) => {
+            if let Some((_, items)) = &item_mod.content {
+                visit_items_for_unix_portability(items, scope, unix_gated, file_context, findings);
+            }
+        }
+        Item::Impl(item_impl) => {
+            if scope != ScopeKind::NonTest {
+                return;
+            }
+            for impl_item in &item_impl.items {
+                if let ImplItem::Fn(item_fn) = impl_item {
+                    let fn_scope = classify_scope(&item_fn.attrs, scope, None);
+                    if fn_scope == ScopeKind::NonTest {
+                        visit_block_for_unix_portability(
+                            &item_fn.block,
+                            fn_scope,
+                            unix_gated,
+                            file_context,
+                            findings,
+                        );
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn visit_block_for_unix_portability(
+    block: &Block,
+    inherited_scope: ScopeKind,
+    inherited_unix_gated: bool,
+    file_context: &FileContext,
+    findings: &mut Vec<PortabilityFinding>,
+) {
+    for stmt in &block.stmts {
+        match stmt {
+            Stmt::Item(item) => visit_item_for_unix_portability(
+                item,
+                inherited_scope,
+                inherited_unix_gated,
+                file_context,
+                findings,
+            ),
+            Stmt::Local(local) => {
+                if let Some(init) = &local.init {
+                    visit_expr_for_unix_portability(
+                        &init.expr,
+                        inherited_scope,
+                        inherited_unix_gated,
+                        file_context,
+                        findings,
+                    );
+                }
+            }
+            Stmt::Expr(expr, _) => visit_expr_for_unix_portability(
+                expr,
+                inherited_scope,
+                inherited_unix_gated,
+                file_context,
+                findings,
+            ),
+            Stmt::Macro(_) => {}
+        }
+    }
+}
+
+fn visit_expr_for_unix_portability(
+    expr: &Expr,
+    inherited_scope: ScopeKind,
+    inherited_unix_gated: bool,
+    file_context: &FileContext,
+    findings: &mut Vec<PortabilityFinding>,
+) {
+    match expr {
+        Expr::Block(expr_block) => visit_block_for_unix_portability(
+            &expr_block.block,
+            inherited_scope,
+            inherited_unix_gated,
+            file_context,
+            findings,
+        ),
+        Expr::If(expr_if) => {
+            visit_expr_for_unix_portability(
+                &expr_if.cond,
+                inherited_scope,
+                inherited_unix_gated,
+                file_context,
+                findings,
+            );
+            visit_block_for_unix_portability(
+                &expr_if.then_branch,
+                inherited_scope,
+                inherited_unix_gated,
+                file_context,
+                findings,
+            );
+            if let Some((_, else_expr)) = &expr_if.else_branch {
+                visit_expr_for_unix_portability(
+                    else_expr,
+                    inherited_scope,
+                    inherited_unix_gated,
+                    file_context,
+                    findings,
+                );
+            }
+        }
+        Expr::Match(expr_match) => {
+            visit_expr_for_unix_portability(
+                &expr_match.expr,
+                inherited_scope,
+                inherited_unix_gated,
+                file_context,
+                findings,
+            );
+            for arm in &expr_match.arms {
+                visit_expr_for_unix_portability(
+                    &arm.body,
+                    inherited_scope,
+                    inherited_unix_gated,
+                    file_context,
+                    findings,
+                );
+            }
+        }
+        _ => {}
+    }
+}
+
 impl<'a> PortabilityCollector<'a> {
     fn new(file_context: &'a FileContext, config: &'a PortabilityConfig) -> Self {
         Self {
@@ -172,16 +395,18 @@ impl<'a> PortabilityCollector<'a> {
             Item::Mod(item_mod) => self.visit_item_mod(item_mod, inherited_scope),
             Item::Impl(item_impl) => self.visit_item_impl(item_impl, inherited_scope),
             Item::Const(item_const) => {
-                if self.item_is_test_scope(&item_const.attrs, inherited_scope, None)
-                    == ScopeKind::Test
-                {
+                if classify_scope(&item_const.attrs, inherited_scope, None) == ScopeKind::Test {
+                    // PORT-001/002/003 intentionally target test-scope code
+                    // only. Production portability uses the separate
+                    // `collect_unix_portability_findings` path.
                     self.visit_expr_for_portability(&item_const.expr, "const");
                 }
             }
             Item::Static(item_static) => {
-                if self.item_is_test_scope(&item_static.attrs, inherited_scope, None)
-                    == ScopeKind::Test
-                {
+                if classify_scope(&item_static.attrs, inherited_scope, None) == ScopeKind::Test {
+                    // PORT-001/002/003 intentionally target test-scope code
+                    // only. Production portability uses the separate
+                    // `collect_unix_portability_findings` path.
                     self.visit_expr_for_portability(&item_static.expr, "static");
                 }
             }
@@ -190,7 +415,7 @@ impl<'a> PortabilityCollector<'a> {
     }
 
     fn visit_item_fn(&mut self, item_fn: &ItemFn, inherited_scope: ScopeKind) {
-        let scope = self.item_is_test_scope(
+        let scope = classify_scope(
             &item_fn.attrs,
             inherited_scope,
             Some(item_fn.sig.ident == "tests"),
@@ -202,7 +427,7 @@ impl<'a> PortabilityCollector<'a> {
     }
 
     fn visit_item_mod(&mut self, item_mod: &ItemMod, inherited_scope: ScopeKind) {
-        let scope = self.item_is_test_scope(
+        let scope = classify_scope(
             &item_mod.attrs,
             inherited_scope,
             Some(item_mod.ident == "tests"),
@@ -213,13 +438,13 @@ impl<'a> PortabilityCollector<'a> {
     }
 
     fn visit_item_impl(&mut self, item_impl: &ItemImpl, inherited_scope: ScopeKind) {
-        let scope = self.item_is_test_scope(&item_impl.attrs, inherited_scope, None);
+        let scope = classify_scope(&item_impl.attrs, inherited_scope, None);
         if scope != ScopeKind::Test {
             return;
         }
         for item in &item_impl.items {
             if let ImplItem::Fn(item_fn) = item {
-                let fn_scope = self.item_is_test_scope(&item_fn.attrs, scope, None);
+                let fn_scope = classify_scope(&item_fn.attrs, scope, None);
                 if fn_scope == ScopeKind::Test {
                     self.check_home_dir_rule_in_function(
                         &item_fn.block,
@@ -232,24 +457,6 @@ impl<'a> PortabilityCollector<'a> {
                 }
             }
         }
-    }
-
-    fn item_is_test_scope(
-        &self,
-        attrs: &[Attribute],
-        inherited_scope: ScopeKind,
-        name_hint_is_tests: Option<bool>,
-    ) -> ScopeKind {
-        if inherited_scope == ScopeKind::Test {
-            return ScopeKind::Test;
-        }
-        if attrs.iter().any(attr_is_cfg_test) || attrs.iter().any(attr_is_test) {
-            return ScopeKind::Test;
-        }
-        if name_hint_is_tests.unwrap_or(false) {
-            return ScopeKind::Test;
-        }
-        ScopeKind::NonTest
     }
 
     fn check_home_dir_rule_in_function(&mut self, block: &Block, fn_name: String) {
@@ -491,98 +698,51 @@ fn load_portability_config(root: &Path) -> Result<PortabilityConfig> {
     })
 }
 
-fn discover_source_files(root: &Path) -> Result<Vec<FileContext>> {
-    let metadata = crate::graph::load_metadata(root)?;
-    let workspace_members = metadata.workspace_members.clone();
-    let mut files = Vec::new();
-    let mut seen_paths = BTreeSet::new();
-
-    for package in &metadata.packages {
-        if !workspace_members.iter().any(|id| id == &package.id) {
-            continue;
-        }
-        for target in &package.targets {
-            if !crate::graph::is_supported_target(target) {
-                continue;
-            }
-            let manifest_dir = package
-                .manifest_path
-                .as_std_path()
-                .parent()
-                .context("package manifest missing parent")?;
-            let src_dir = manifest_dir.join("src");
-            let tests_dir = manifest_dir.join("tests");
-            collect_rust_files(
-                &src_dir,
-                false,
-                &package.name,
-                &target.name,
-                &mut seen_paths,
-                &mut files,
-            )?;
-            collect_rust_files(
-                &tests_dir,
-                true,
-                &package.name,
-                &target.name,
-                &mut seen_paths,
-                &mut files,
-            )?;
-        }
-    }
-
-    Ok(files)
-}
-
-fn collect_rust_files(
-    dir: &Path,
-    is_test_file: bool,
-    package: &str,
-    target: &str,
-    seen_paths: &mut BTreeSet<PathBuf>,
-    files: &mut Vec<FileContext>,
-) -> Result<()> {
-    if !dir.exists() {
-        return Ok(());
-    }
-    for entry in
-        fs::read_dir(dir).with_context(|| format!("failed to read directory {}", dir.display()))?
-    {
-        let entry = entry?;
-        let path = entry.path();
-        let file_type = entry.file_type()?;
-        if file_type.is_dir() {
-            collect_rust_files(&path, is_test_file, package, target, seen_paths, files)?;
-            continue;
-        }
-        if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
-            continue;
-        }
-        if !seen_paths.insert(path.clone()) {
-            continue;
-        }
-        files.push(FileContext {
-            source_path: path,
-            package: package.to_string(),
-            target: target.to_string(),
-            is_test_file,
-        });
-    }
-    Ok(())
-}
-
-fn attr_is_cfg_test(attr: &Attribute) -> bool {
-    let path = attr.path();
-    if !path.is_ident("cfg") {
+fn attr_is_cfg_unix(attr: &Attribute) -> bool {
+    if !attr.path().is_ident("cfg") {
         return false;
     }
-    attr.parse_args::<syn::Ident>()
-        .map(|ident| ident == "test")
-        .unwrap_or(false)
+    let rendered = attr.meta.to_token_stream().to_string().replace(' ', "");
+    rendered.contains("unix") && !rendered.contains("not(unix)")
 }
 
-fn attr_is_test(attr: &Attribute) -> bool {
-    attr.path().is_ident("test")
+fn attr_is_cfg_attr_not_unix_allow_dead_code(attr: &Attribute) -> bool {
+    if !attr.path().is_ident("cfg_attr") {
+        return false;
+    }
+    let rendered = attr.meta.to_token_stream().to_string().replace(' ', "");
+    rendered.contains("not(unix)") && rendered.contains("allow(dead_code)")
+}
+
+fn use_tree_contains_std_os_unix(tree: &UseTree) -> bool {
+    fn walk(tree: &UseTree, prefix: &mut Vec<String>) -> bool {
+        match tree {
+            UseTree::Path(use_path) => {
+                prefix.push(use_path.ident.to_string());
+                let matched = walk(&use_path.tree, prefix);
+                prefix.pop();
+                matched
+            }
+            UseTree::Name(use_name) => {
+                prefix.push(use_name.ident.to_string());
+                let matched = matches!(prefix.as_slice(), [std, os, unix, ..] if std == "std" && os == "os" && unix == "unix");
+                prefix.pop();
+                matched
+            }
+            UseTree::Rename(use_rename) => {
+                prefix.push(use_rename.ident.to_string());
+                let matched = matches!(prefix.as_slice(), [std, os, unix, ..] if std == "std" && os == "os" && unix == "unix");
+                prefix.pop();
+                matched
+            }
+            UseTree::Glob(_) => {
+                matches!(prefix.as_slice(), [std, os, unix, ..] if std == "std" && os == "os" && unix == "unix")
+            }
+            UseTree::Group(group) => group.items.iter().any(|item| walk(item, prefix)),
+        }
+    }
+
+    walk(tree, &mut Vec::new())
 }
 
 fn is_path_like_constructor(expr: &Expr) -> bool {
@@ -664,8 +824,4 @@ fn extract_env_var_check(expr_call: &ExprCall) -> Option<String> {
         return None;
     };
     Some(lit.value())
-}
-
-fn span_start_line(span: Span) -> usize {
-    span.start().line
 }

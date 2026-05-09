@@ -30,7 +30,9 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 #[cfg(unix)]
 use std::thread;
 #[cfg(unix)]
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(unix)]
+use std::time::Instant;
 
 use atm_rusqlite::SqliteBoundaryAssembly;
 #[cfg(unix)]
@@ -55,11 +57,11 @@ const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 #[cfg(unix)]
 const SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_millis(25);
 #[cfg(unix)]
-const STALE_OWNER_RECOVERY_RETRY_ATTEMPTS: usize = 3;
-#[cfg(unix)]
 const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
 #[cfg(unix)]
 const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(10);
+#[cfg(unix)]
+const STALE_OWNER_RECOVERY_RETRY_ATTEMPTS: usize = 3;
 #[cfg(unix)]
 const HOST_RUNTIME_OWNER_LOCK_FILE: &str = "owner.lock";
 
@@ -177,6 +179,9 @@ struct ActiveConnectionRegistry {
     // Keep interruptible stream clones so graceful-drain escalation can break
     // blocked reads instead of waiting forever for peer cooperation.
     streams: Mutex<HashMap<usize, UnixStream>>,
+    // Shared state for shutdown-drain waiters. Connection teardown and
+    // detached request-dispatch completion both notify this condvar so daemon
+    // shutdown can observe in-flight work shrinking without spin loops.
     drain_state: Mutex<()>,
     drain_wake: Condvar,
 }
@@ -200,15 +205,15 @@ impl ActiveConnectionRegistry {
         })
     }
 
-    fn active_connections(&self) -> usize {
-        self.active_connections.load(Ordering::SeqCst)
-    }
-
     fn register_dispatch_work(self: &Arc<Self>) -> ActiveDispatchGuard {
         self.active_dispatches.fetch_add(1, Ordering::SeqCst);
         ActiveDispatchGuard {
             registry: Arc::clone(self),
         }
+    }
+
+    fn active_connections(&self) -> usize {
+        self.active_connections.load(Ordering::SeqCst)
     }
 
     fn active_work_items(&self) -> usize {
@@ -231,10 +236,13 @@ impl ActiveConnectionRegistry {
             .drain_state
             .lock()
             .map_err(|_| AtmError::daemon_unavailable("active connection drain lock poisoned"))?;
-        let _ = self
+        let (_state, wait_result) = self
             .drain_wake
             .wait_timeout(state, timeout)
             .map_err(|_| AtmError::daemon_unavailable("active connection drain lock poisoned"))?;
+        if wait_result.timed_out() {
+            return Ok(());
+        }
         Ok(())
     }
 
@@ -245,10 +253,7 @@ impl ActiveConnectionRegistry {
         // Poisoned lock during remove: connection count still decremented to
         // prevent stale accounting.
         self.active_connections.fetch_sub(1, Ordering::SeqCst);
-        if let Ok(state) = self.drain_state.lock() {
-            self.drain_wake.notify_all();
-            drop(state);
-        }
+        self.drain_wake.notify_all();
     }
 }
 #[cfg(unix)]
@@ -390,10 +395,7 @@ impl Drop for ActiveDispatchGuard {
         self.registry
             .active_dispatches
             .fetch_sub(1, Ordering::SeqCst);
-        if let Ok(state) = self.registry.drain_state.lock() {
-            self.registry.drain_wake.notify_all();
-            drop(state);
-        }
+        self.registry.drain_wake.notify_all();
     }
 }
 
@@ -431,6 +433,12 @@ impl PreparedRuntimeServer {
             AtmError::daemon_unavailable("failed to configure daemon socket listener")
                 .with_source(source)
         })?;
+        tracing::info!(
+            max_concurrent_connections = MAX_CONCURRENT_CONNECTIONS,
+            max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
+            request_deadline_ms = REQUEST_DEADLINE.as_millis() as u64,
+            "daemon runtime transport limits configured"
+        );
         emit_ready_signal_if_requested()?;
         Ok(Self {
             _singleton: singleton,
@@ -716,6 +724,10 @@ fn handle_connection(
     if bytes.is_empty() {
         return Ok(());
     }
+    tracing::debug!(
+        max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
+        "daemon request frame accepted under configured size cap"
+    );
     let request: ProtocolRequestEnvelope =
         serde_json::from_slice(&bytes).map_err(AtmError::from)?;
     // The current daemon transport reads exactly one request frame and returns
@@ -723,9 +735,14 @@ fn handle_connection(
     // count is structurally one in Phase R. That remains inside the
     // documented max-32 cap until framed multiplexing is introduced.
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
-    let dispatch_work = registry.register_dispatch_work();
+    // One detached request-dispatch thread is allowed per active connection.
+    // Because accepted connections are capped at `MAX_CONCURRENT_CONNECTIONS`,
+    // dispatcher fan-out is bounded by the same ceiling. If a request outlives
+    // the client-facing `REQUEST_DEADLINE`, the registry still tracks that
+    // worker so daemon shutdown waits for completion or fails at the forced
+    // cancel deadline instead of silently losing in-flight runtime work.
     std::thread::spawn(move || {
-        let _dispatch_work = dispatch_work;
+        let _dispatch_work = registry.register_dispatch_work();
         let _ = result_tx.send(dispatcher.dispatch(request));
     });
     let response = match result_rx.recv_timeout(REQUEST_DEADLINE) {
