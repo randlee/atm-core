@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S2-012>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S2-012" ;
+  triage:title "7 LaunchGateGuard/DaemonSupervisor/LocalIpcClientTransportAdapter tests gated #[cfg(unix)] — ADR-007 violation" ;
+  triage:description "crates/atm/src/composition.rs:1051,1067,1093,1112,1136,1166,1195 — seven tests for LaunchGateGuard, DaemonSupervisor, and LocalIpcClientTransportAdapter are gated #[cfg(unix)]. Sprint-S2 acceptance criteria and ADR-007 require same-host functional tests to work on Windows. These tests must be transport-neutral or have Windows-path alternatives; they cannot be unconditionally excluded from Windows compilation." ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable true ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T08:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S2-012/s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S2-012/s2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S2-012/s2/3> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> .
+
+<urn:atm:triage:occurrence/ATM-QA-S2-012/s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1051 ;
+  triage:snippet "#[cfg(unix)] test — LaunchGateGuard" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "2adc339" ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> .
+
+<urn:atm:triage:occurrence/ATM-QA-S2-012/s2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1067 ;
+  triage:snippet "#[cfg(unix)] test — DaemonSupervisor" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "2adc339" ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> .
+
+<urn:atm:triage:occurrence/ATM-QA-S2-012/s2/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1093 ;
+  triage:snippet "#[cfg(unix)] tests — LocalIpcClientTransportAdapter (and lines 1112,1136,1166,1195)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "2adc339" ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> .
+
+<urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "2adc339" ;
+  triage:orderIndex 2 .

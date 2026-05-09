@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-014>
+  a triage:Finding ;
+  triage:findingId "RSH-014" ;
+  triage:title "Unix lifecycle thread exits on Ok(0) pipe-close without calling state_change.notify() — graceful-shutdown livelock on Unix (lifecycle_control.rs:217)" ;
+  triage:description "crates/atm-daemon/src/lifecycle_control.rs:217 — The Unix lifecycle thread's wake-pipe read loop exits silently on `Ok(0) => return` when the write end of the wake pipe is closed (e.g., during abnormal teardown or if install_platform_hooks panics after the thread is spawned). This return exits the thread without calling `state_change.notify()`. Any caller blocked in `wait_for_state_change` (e.g., the daemon main loop) is never woken, producing the same graceful-shutdown livelock on Unix that RSH-013 fixed for Windows. This is a pre-existing structural gap, not introduced by the RSH-013 fix, but exposed by the full-file scan of lifecycle_control.rs at 9e97934. Fix: replace `Ok(0) => return,` with `Ok(0) => { let _ = state_change.notify(); return; }`. Pair with a post-wakeup check of `terminate_requested()` in the main loop to distinguish a real signal from an EOF wake." ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T20:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-014/s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s4-hardening/9e97934> .
+
+<urn:atm:triage:occurrence/RSH-014/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 217 ;
+  triage:snippet "Ok(0) => return, — Unix wake-pipe returns EOF; thread exits without state_change.notify(); daemon main loop blocked in wait_for_state_change never woken; same livelock as RSH-013 on Unix path; pre-existing, exposed by full-file scan" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9e97934" ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s4-hardening/9e97934> .
+
+<urn:atm:triage:worktree/feature-pS-s4-hardening/9e97934>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "9e97934" ;
+  triage:orderIndex 7 .

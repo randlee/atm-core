@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-006>
+  a triage:Finding ;
+  triage:findingId "RSH-006" ;
+  triage:title "Unbounded fs::read_to_string without size guard in runtime_health.rs:822" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs:822 — fs::read_to_string used without first checking file size. On a malicious or corrupt filesystem this can allocate arbitrarily large buffers. Should check metadata size before reading, or use a capped read. (quality-mgr reported as RSH-005 in S.1 QA-2 report; remapped RSH-006 to avoid ID collision with existing phase-S RSH-005 which covers SIGTERM dead code on feature/pS-s3-runtime-control.)" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-08T23:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-006/s1/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb> .
+
+<urn:atm:triage:occurrence/RSH-006/s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 822 ;
+  triage:snippet "fs::read_to_string — no size guard before read" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "661f0fb" ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb> .
+
+<urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "661f0fb" ;
+  triage:orderIndex 1 .

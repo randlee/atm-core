@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S2-016>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S2-016" ;
+  triage:title "#![forbid(unsafe_code)] in lib.rs conflicts with unsafe extern \"system\" fn + unsafe SetConsoleCtrlHandler block in lifecycle_control.rs:202,215 — Windows CI compile failure" ;
+  triage:description "crates/atm-daemon/src/lib.rs:1 has #![forbid(unsafe_code)] which cannot be overridden in any inner scope. The ATM-QA-001/RSH-007 fix introduced unsafe extern \"system\" fn handle_console_ctrl (lifecycle_control.rs:202) and unsafe { SetConsoleCtrlHandler(...) } (lifecycle_control.rs:215) in a #[cfg(windows)] block. macOS/Ubuntu clippy passes because the block is not compiled. Windows CI will fail with \"usage of an unsafe feature\". Fix option A: replace SetConsoleCtrlHandler approach with signal_hook::flag::register (cross-platform, no unsafe required) — mirrors S.3 approach at d6b9119 and simultaneously resolves ATM-QA-S2-017 spec conflict. Fix option B: extract FFI to lifecycle_control_windows.rs with inner #![allow(unsafe_code)], or change lib.rs from forbid to deny plus targeted #[allow(unsafe_code)] on the block. Option A is preferred as it resolves both ATM-QA-S2-016 and ATM-QA-S2-017 together. (quality-mgr reported as ATM-QA-S2-016 in S.2 QA-3 report.)" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T10:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S2-016/s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S2-016/s2/2> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/bcb5aab> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/bcb5aab> .
+
+<urn:atm:triage:occurrence/ATM-QA-S2-016/s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 202 ;
+  triage:snippet "unsafe extern \"system\" fn handle_console_ctrl — violates #![forbid(unsafe_code)] in lib.rs:1" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "bcb5aab" ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/bcb5aab> .
+
+<urn:atm:triage:occurrence/ATM-QA-S2-016/s2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 215 ;
+  triage:snippet "unsafe { SetConsoleCtrlHandler(...) } — violates #![forbid(unsafe_code)] in lib.rs:1" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "bcb5aab" ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/bcb5aab> .
+
+<urn:atm:triage:worktree/feature-pS-s2-windows-ipc/bcb5aab>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "bcb5aab" ;
+  triage:orderIndex 2 .
