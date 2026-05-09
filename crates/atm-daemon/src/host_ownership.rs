@@ -257,7 +257,7 @@ fn owner_record_matches(
 ) -> Result<bool, AtmError> {
     Ok(match recorded_owner_identity(lock_file)? {
         Some((pid, token)) => pid == expected_pid && token == expected_token,
-        None => true,
+        None => false,
     })
 }
 
