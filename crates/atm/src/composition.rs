@@ -1173,10 +1173,10 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn launch_gate_treats_windows_lock_and_sharing_violations_as_contention() {
-        assert!(is_launch_gate_contention_error(
+        assert!(super::is_launch_gate_contention_error(
             &std::io::Error::from_raw_os_error(32)
         ));
-        assert!(is_launch_gate_contention_error(
+        assert!(super::is_launch_gate_contention_error(
             &std::io::Error::from_raw_os_error(33)
         ));
     }
