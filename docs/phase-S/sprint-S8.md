@@ -20,7 +20,6 @@ flooding Claude-facing inbox surfaces or causing watcher churn.
 - `REQ-CORE-MAILBOX-001`
 - `REQ-P-RELIABILITY-001`
 - `REQ-CORE-CONFIG-001`
-- `REQ-CORE-CONFIG-002`
 
 ## Governing ADRs
 

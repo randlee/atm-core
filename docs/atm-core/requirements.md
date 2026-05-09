@@ -56,6 +56,7 @@ Initial allocation:
 - `REQ-CORE-TEAM-*`
 - `REQ-CORE-RUNTIME-*`
 - `REQ-CORE-STORE-*`
+- `REQ-CORE-COMPAT-*`
 - `REQ-CORE-INGEST-*`
 - `REQ-CORE-BOUNDARY-*`
 - `REQ-CORE-TRANSPORT-*`
@@ -98,6 +99,12 @@ Initial crate requirement IDs:
   `REQ-P-CONTRACT-001`, `REQ-P-SEND-001`, `REQ-P-LIST-001`, `REQ-P-READ-001`,
   `REQ-P-ACK-001`, `REQ-P-CLEAR-001`, `REQ-P-RELIABILITY-001`,
   `REQ-P-IDLE-001`.
+- `REQ-CORE-COMPAT-001` `atm-core` owns the Claude JSONL compatibility
+  projection contract for ATM-authored exports and inbound compatibility
+  ingestion, including the bounded export cap, retrieval-stub rule, and
+  idempotent watcher/reconcile projection handling for the same logical
+  message. Satisfies:
+  `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-WORKFLOW-001` `atm-core` owns the two-axis workflow model and legal
   transitions. Satisfies the state-classification and legal-transition aspects
   of:
