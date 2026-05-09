@@ -4,6 +4,7 @@ CLI ownership for `atm list`:
 
 - bounded metadata-search flag parsing
 - shared queue-filter parsing aligned with `atm read`
+- match-filter parsing for task/thread lookups without full-body rendering
 - conversion into `atm-core` list/query requests
 - human-readable metadata row rendering
 - JSON metadata output

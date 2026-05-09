@@ -82,7 +82,28 @@ Queue inspection is split into two commands:
 
 `--contains` must search full message body text as well as summary text.
 
-### 3.3 Display Buckets
+Legacy `atm read` flag migration:
+- `--unread-only` -> deprecated alias for `--unread`
+- `--pending-ack-only` -> deprecated alias for `--pending-ack`
+- `--history` -> deprecated alias for `--all`
+- `--since-last-seen` remains an explicit spelling of the default watermark
+  behavior
+
+### 3.3 Logical Current Message Selection
+
+Selector-driven queue inspection operates on logical current messages rather
+than raw predecessor rows.
+
+Rules:
+- successor/update chains are one logical message for UX
+- a logical message is represented by the terminal node in its successor chain
+- `atm list` rows represent those terminal-node logical messages
+- `atm read --task <task-id>` finds task-linked messages, collapses each chain
+  to its terminal node, and returns the most recent terminal-node logical
+  match
+- superseded predecessors must not appear as separate current matches
+
+### 3.4 Display Buckets
 
 The shared queue model exposes three display buckets:
 - unread
@@ -94,7 +115,7 @@ Current default output:
 - `atm read` renders one selected actionable message by default
 - history remains opt-in rather than implicit
 
-### 3.4 Watermark Behavior
+### 3.5 Watermark Behavior
 
 Retained tests and requirements establish these rules:
 - seen-state filtering is on by default
@@ -104,7 +125,7 @@ Retained tests and requirements establish these rules:
 - `--all` bypasses the seen-state filter
 - first run still shows only pending-action messages by default
 
-### 3.5 Mutation Behavior
+### 3.6 Mutation Behavior
 
 Mutation belongs to `atm read`, not to `atm list`.
 
@@ -394,7 +415,7 @@ Each list row:
 - `timestamp`
 - `read`
 - `pending_ack`
-- `task_id`
+- `task_id` (`null` in JSON output when the logical message is not task-linked)
 
 `atm read` human output:
 - one full message body
@@ -409,7 +430,10 @@ Each list row:
 - `match_count`
 - `additional_match_count`
 - `bucket_counts`
-- `history_collapsed`
+
+`match_count` is the total number of logical current-message matches after all
+filters and successor-chain collapse are applied. `additional_match_count` is
+`match_count - 1` for a successful read.
 
 Cross-document invariants:
 - displayed/read messages always persist `read = true`
@@ -425,7 +449,25 @@ Cross-document invariants:
 - `pending_ack`
 - `history`
 
-## 12. Review Standard
+## 12. Claude JSONL Compatibility Projection
+
+Claude inbox JSONL remains a compatibility surface, not the durable source of
+truth.
+
+Rules:
+- ATM keeps the full ATM-authored body in SQLite
+- the default ATM-authored JSONL body export cap is `128 KiB`
+- config `[atm].claude_jsonl_body_export_max_bytes` may lower that cap, including
+  `0`
+- when ATM skips a full ATM-authored body during JSONL export, the JSONL
+  `text` field becomes exactly:
+  - `atm read --message-id <id>`
+- summary remains populated
+- Claude-native inbound messages are not rewritten into ATM retrieval stubs
+- watcher/reconcile logic must treat re-observed ATM-authored compatibility
+  projections as idempotent and must not create self-induced churn loops
+
+## 13. Review Standard
 
 An implementation of the queue-inspection surface is acceptable only if:
 - it uses the canonical two-axis workflow model

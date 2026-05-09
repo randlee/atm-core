@@ -208,6 +208,8 @@ Phase R redesign notes:
   cross-host daemon transport
 - `atm-core` owns the queue-query semantics shared by `atm list` and
   single-message `atm read`
+- selector-driven queue inspection operates on logical terminal-node messages,
+  not raw superseded predecessors
 - the canonical ICD owns the exact frame constants, packet-kind assignments,
   and payload DTO mapping that `atm-core` must encode and decode
 - `atm-core` owns the current daemon packet family for:
@@ -435,6 +437,8 @@ Architectural rules:
   - team roster
 - daemon memory is the live source of truth for agent status
 - Claude inbox JSONL is ingress/egress compatibility only
+- ATM-authored JSONL export is a bounded compatibility projection over the full
+  durable message body
 
 Migration implication:
 - current mailbox/workflow-sidecar logic is transitional and must converge onto

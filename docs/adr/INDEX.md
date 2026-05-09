@@ -13,6 +13,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-007 — Supported Platform Feature Parity](./ADR-007-supported-platform-parity.md)
 - [ADR-008 — No-Flaky-Test Policy And Mechanical Enforcement](./ADR-008-no-flaky-test-policy-and-mechanical-enforcement.md)
 - [ADR-009 — Bounded Queue Query Surface](./ADR-009-bounded-queue-query-surface.md)
+- [ADR-010 — Claude JSONL Compatibility Envelope](./ADR-010-claude-jsonl-compatibility-envelope.md)
 
 ## Embedded Crate-Local ADR Records
 

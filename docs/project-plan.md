@@ -54,7 +54,8 @@ Phase-S planning note:
 - S.5 is the follow-on planning slice that tightens the no-flaky-test policy,
   defines which anti-flake guardrails belong in the default lint path, and
   documents the bounded queue-query split between `atm list` and
-  single-message `atm read`
+  single-message `atm read`, including the ATM-authored Claude JSONL
+  compatibility envelope for oversized message bodies
 
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton
@@ -2538,6 +2539,8 @@ Core design decisions:
 - `atm doctor` remains a CLI command but must query daemon/runtime state in the
   Phase Q target architecture
 - Claude inbox JSONL remains compatibility ingress/egress only
+- ATM-authored JSONL export is a bounded compatibility projection over the full
+  durable SQLite message body
 - native agent/plugin traffic does not use JSONL
 - one daemon API, two production transport implementations:
   - cross-platform local IPC for same-host

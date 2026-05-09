@@ -43,7 +43,9 @@ Phase R redesign notes:
   request/response packet surface in the current Phase S line
 - S.5 planning adds `atm list` as a distinct CLI verb; implementation must
   keep its search semantics aligned with `atm read` while avoiding
-  multi-message body rendering
+  multi-message body rendering and must preserve the exact
+  `atm read --message-id <id>` retrieval path used by ATM-authored JSONL body
+  stubs
 
 ## 1.1 ADRs
 

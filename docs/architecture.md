@@ -966,6 +966,13 @@ Queue-inspection architectural rules:
   pending-ack messages prioritized ahead of non-ack unread messages
 - selector-driven `atm read` must return the most recent match and report
   additional matches in metadata rather than returning multiple full bodies
+- selector-driven `atm list` and `atm read` operate on logical current
+  messages; successor/update chains are collapsed to their terminal node before
+  result selection or row shaping
+- `--task <task-id>` selection happens after that terminal-node collapse so one
+  logical task thread does not surface as several superseded matches
+- `--contains` applies to both summary text and full durable message body text
+- summary/count queries must remain separable from full-body detail fetch
 
 Deduplication rule:
 - collapse multiple entries with the same non-null `message_id` to the most
@@ -2283,6 +2290,11 @@ Claude-owned inbox JSONL files remain required for:
 Architectural rule:
 - JSONL is ingress/egress compatibility only
 - JSONL is not ATM's authoritative durable mail state
+- ATM-authored JSONL exports are a bounded compatibility projection over the
+  durable SQLite message body
+- the default ATM-authored JSONL body export cap is `128 KiB`
+- config `[atm].claude_jsonl_body_export_max_bytes` may lower that cap,
+  including `0` for stub-only ATM-authored export
 
 `config.json` remains a team-ingress surface, but roster truth moves to
 SQLite.
@@ -2296,6 +2308,8 @@ There are three distinct paths:
    - ATM imports through one owned inbox-ingress boundary
    - imported records become durable in SQLite
    - replay is idempotent and parseable rows are not silently dropped
+   - ATM-authored oversized-body exports replace JSONL `text` with exactly
+     `atm read --message-id <id>` while keeping the full body durable in SQLite
 
 2. Native agent path
    - native agent/plugin traffic does not use JSONL
@@ -2307,6 +2321,13 @@ There are three distinct paths:
    - routing expands from `agent@team` to `agent@team.host`
    - sender-side daemons do not write remote host JSONL directly
    - successful remote delivery requires remote daemon acceptance
+
+Projection-awareness rule:
+- watcher/reconcile logic must treat re-observed ATM-authored compatibility
+  projections for the same logical message as idempotent state rather than new
+  mail
+- re-observing the same ATM retrieval stub for the same `message_id` must not
+  trigger a new logical message import or notification loop
 
 ### 21.4 One Interface, Two Transport Implementations
 

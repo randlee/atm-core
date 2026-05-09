@@ -428,6 +428,9 @@ Required outcomes:
   as SQLite-backed mailbox history grows without a practical fixed upper bound
 - the active docs define the accepted `atm list` / `atm read` split and the
   shared filter contract between them
+- the active docs define the legacy `atm read` flag migration, logical
+  task/thread selection rule, and the ATM-authored Claude JSONL compatibility
+  envelope
 
 Required closeout work:
 - add the S.5 sprint plan under `docs/phase-S/sprint-S5.md`
@@ -435,6 +438,8 @@ Required closeout work:
   partition if the existing ADRs are not sufficient
 - add an ADR for the bounded queue-query surface (`atm list` / single-message
   `atm read`)
+- add an ADR for the ATM-authored Claude JSONL compatibility envelope and
+  oversized-body projection rule
 - update Phase S issue inventory with the remaining policy and lint gaps
 - reconcile testing and cross-platform guidelines with the stronger no-hang
   contract

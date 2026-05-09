@@ -162,6 +162,9 @@ Required Phase R rules:
 - `atm` must not contain business logic that duplicates `atm-core`
 - `atm` test coverage must be able to use in-process harnesses rather than
   depending on daemon process spawning
+- `atm` owns legacy queue-flag deprecation warnings and the exact
+  `atm read --message-id <id>` retrieval guidance shown for ATM-authored JSONL
+  body stubs
 - daemon auto-start is a supervised runtime entry concern, not a side effect of
   transport object construction
 - the CLI-side auto-start path must acquire the documented pre-spawn launch

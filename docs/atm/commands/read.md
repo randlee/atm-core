@@ -4,10 +4,12 @@ CLI ownership for `atm read`:
 
 - single-message selection flag parsing
 - shared queue-filter parsing aligned with `atm list`
+- deprecated legacy read-flag alias handling and warning presentation
 - timeout flag parsing
 - conversion into `atm-core` read requests
 - human-readable full-message rendering
 - JSON output for one selected message plus match metadata
+- exact-message retrieval help text for ATM-authored JSONL retrieval stubs
 
 Workflow/state behavior remains owned by `atm-core`.
 

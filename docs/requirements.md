@@ -514,6 +514,7 @@ Required config fields:
 Supported optional config fields:
 - `[atm].team_members`
 - `[atm].aliases`
+- `[atm].claude_jsonl_body_export_max_bytes`
 - `[[atm.post_send_hooks]]`
 
 Runtime identity rules:
@@ -530,6 +531,9 @@ Runtime identity rules:
   should always be present in `config.json`
 - `.atm.toml` may define `[atm].aliases` for ATM-owned shorthand addressing of
   canonical member identities
+- `.atm.toml` may define `[atm].claude_jsonl_body_export_max_bytes` as the
+  ATM-authored Claude JSONL body export cap; `0` means stub-only ATM-authored
+  export
 - `.atm.toml` may define one or more `[[atm.post_send_hooks]]` rules for
   best-effort recipient-scoped post-send automation
 - retired `[atm].post_send_hook`, `[atm].post_send_hook_senders`,
@@ -979,6 +983,8 @@ Shared queue filters:
 - `--unread`
 - `--pending-ack`
 - `--all`
+
+Shared command options:
 - `--json`
 - `--as <name>`
 
@@ -987,6 +993,8 @@ Shared rules:
   provided
 - both commands must resolve identity and target address using the defined
   precedence
+- `--as <name>` changes caller identity resolution, not message matching
+- `--json` changes output format only and is not a message-selection filter
 - both commands must verify target team exists
 - both commands must verify explicit target agent exists in team config
 - both commands must support the same semantic message filters even when their
@@ -995,6 +1003,14 @@ Shared rules:
 - both commands must preserve origin-inbox visibility when bridge remotes are
   configured
 
+Legacy `atm read` flag migration:
+- `--unread-only` is a deprecated alias for `--unread`
+- `--pending-ack-only` is a deprecated alias for `--pending-ack`
+- `--history` is a deprecated alias for `--all`
+- `--since-last-seen` remains accepted as an explicit restatement of the
+  default seen-state filter
+- deprecation warnings must direct operators to the new flag names
+
 ### 7.3 `atm list`
 
 Additional supported flags:
@@ -1002,6 +1018,7 @@ Additional supported flags:
 
 Required behavior:
 - load the mailbox/query surface through a bounded metadata-first query path
+- query logical current messages rather than superseded predecessors
 - return compact rows only, not full message bodies
 - support the canonical row fields:
   - `message_id`
@@ -1010,8 +1027,11 @@ Required behavior:
   - `timestamp`
   - `read`
   - `pending_ack`
-  - `task_id` when present
+  - `task_id`, with `null` in JSON output when the logical message is not
+    task-linked
 - sort newest-first before limiting
+- compute bucket/count summaries through bounded summary queries rather than by
+  materializing every full message body for operator-facing response shaping
 - perform no read-state or ack-state mutation
 - keep default output bounded to actionable/head results rather than
   materializing full history by default
@@ -1029,6 +1049,12 @@ Additional supported flags:
 Required behavior:
 - return exactly one full message
 - when `--message-id <id>` is present, resolve that exact message when present
+- collapse successor/update chains to their terminal node before selector-based
+  matching so superseded predecessors do not appear as separate current
+  messages
+- when `--task <task-id>` is present, find task-linked messages, collapse each
+  successor chain to its terminal node, then select the most recent logical
+  current message
 - when selectors such as `--task`, `--from`, `--since`, `--contains`,
   `--unread`, or `--pending-ack` match multiple messages, return the most
   recent match
@@ -1036,6 +1062,9 @@ Required behavior:
   - `selected_message_id`
   - `match_count`
   - `additional_match_count`
+- `match_count` is the total number of logical current-message matches after
+  all filters and successor-chain collapse are applied
+- `additional_match_count` is `match_count - 1` for a successful read
 - when no selector is provided, return the most recent unread actionable
   message
 - when no selector is provided, prioritize pending-ack messages ahead of
@@ -1191,7 +1220,7 @@ Every list row must include:
 - `timestamp`
 - `read`
 - `pending_ack`
-- `task_id`
+- `task_id` (`null` when the logical message is not task-linked)
 
 `atm read` JSON output must include:
 - `action = "read"`
@@ -1202,7 +1231,6 @@ Every list row must include:
 - `match_count`
 - `additional_match_count`
 - `bucket_counts`
-- `history_collapsed` when applicable
 
 Human-readable `atm read` output must render one message body only. When
 additional matches exist, it must state that more matches were found and direct
@@ -3045,9 +3073,24 @@ mail correctness.
   - once team roster and pane mapping truth move to SQLite, ATM-owned
     post-send-hook payloads must carry the authoritative `recipient_pane_id`
     from roster truth when known
-  - post-send hooks must be able to rely on that payload field instead of
-    rediscovering pane mappings from local files once the Phase Q migration is
-    complete
+- post-send hooks must be able to rely on that payload field instead of
+  rediscovering pane mappings from local files once the Phase Q migration is
+  complete
+  - ATM-authored JSONL exports must remain valid JSONL records with ATM machine
+    fields under `metadata.atm`
+  - the default ATM-authored JSONL body export cap is `128 KiB`
+  - ATM must expose config `[atm].claude_jsonl_body_export_max_bytes`; `0`
+    means stub-only ATM-authored export
+  - when an ATM-authored body exceeds the configured export cap, the exported
+    JSONL `text` field must be exactly `atm read --message-id <id>`
+  - summary text must remain populated when ATM exports that retrieval stub
+  - the full ATM-authored body must remain durable in SQLite even when JSONL
+    export is stubbed
+  - Claude-native inbound messages must not be rewritten into ATM retrieval
+    stubs
+  - watcher/reconcile logic must treat re-observed ATM-authored compatibility
+    projections for the same logical message as idempotent state, not as new
+    logical mail
 
 - `REQ-CORE-COMPAT-002` Native agent/plugin traffic must not use JSONL.
 

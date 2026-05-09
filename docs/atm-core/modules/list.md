@@ -1,8 +1,9 @@
 # `atm-core::list`
 
 Owns bounded metadata query behavior for queue inspection, including shared
-filter semantics with `atm read`, deduplication by `message_id`, and compact
-row shaping for the CLI layer to render.
+filter semantics with `atm read`, successor-chain terminal-node collapse,
+deduplication by `message_id`, compact row shaping, and metadata/count query
+paths that do not require full-body response materialization.
 
 References:
 

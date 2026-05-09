@@ -1,6 +1,7 @@
 # `atm-core::read`
 
-Owns single-message selection, bucket classification, seen-state updates,
+Owns single-message selection, successor-chain terminal-node collapse for
+logical current-message matching, bucket classification, seen-state updates,
 timeout behavior, and detailed message-result shaping for the CLI layer to
 render.
 

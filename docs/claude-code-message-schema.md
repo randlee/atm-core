@@ -86,6 +86,11 @@ This file does not define ATM-added persisted envelope fields such as:
 message field. ATM may interpret `taskId` when present, but that ownership is
 documented in [`atm-message-schema.md`](./atm-message-schema.md), not here.
 
+This file also does not define ATM-authored JSONL export size policy, retrieval
+stub behavior, or durable-store limits. Those ATM-owned compatibility-envelope
+rules are documented in
+[`ADR-010`](./adr/ADR-010-claude-jsonl-compatibility-envelope.md).
+
 Historical provenance note:
 
 - `quality-mgr` analysis over 7,297 persisted messages across 24 teams found

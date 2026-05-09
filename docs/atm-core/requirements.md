@@ -70,6 +70,8 @@ Initial crate requirement IDs:
   resolution policy across the CLI and daemon-backed runtime. Satisfies the
   path/config/identity aspects of:
   `REQ-P-CONTRACT-001`, `REQ-P-IDENTITY-001`, `REQ-P-DOCTOR-001`.
+  It also owns parsing and validation of `[atm].claude_jsonl_body_export_max_bytes`
+  for the ATM-authored JSONL compatibility envelope.
 - `REQ-CORE-CONFIG-002` `atm-core` owns shared address parsing, alias rewrite,
   and team/member validation policy. Satisfies the address resolution and
   target-validation aspects of:
@@ -103,7 +105,8 @@ Initial crate requirement IDs:
   `REQ-P-WORKFLOW-001`.
 - `REQ-CORE-LIST-001` `atm-core` owns the metadata-first queue query contract
   shared by `atm list` and selector-driven `atm read`, including bounded
-  query behavior, shared match filters, and list-row shaping. Satisfies:
+  query behavior, shared match filters, successor-chain terminal-node
+  selection, and list-row shaping. Satisfies:
   `REQ-P-LIST-001`, `REQ-P-READ-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-SEND-003` `atm-core` owns send-path message construction,
   classification, and compatibility-export behavior above the owned
