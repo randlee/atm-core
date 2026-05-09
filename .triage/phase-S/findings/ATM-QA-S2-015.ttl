@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S2-015>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S2-015" ;
+  triage:title "Zero Windows test coverage for notification/boundary/health paths — #[cfg(all(test,unix))] gates" ;
+  triage:description "crates/atm-daemon/src/boundary_adapters.rs:225, notification_runtime.rs:221, runtime_health.rs:337,356,376,554 — test modules or test functions gated under #[cfg(all(test,unix))], leaving zero Windows coverage for notification, boundary, and health paths. ADR-007 requires cross-platform test coverage; these paths need Windows-compatible test alternatives. (Residual from ATM-QA-002 pattern; initial ATM-QA-002 was fixed in lib.rs scope but pattern persists in these files.)" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T08:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S2-015/s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S2-015/s2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S2-015/s2/3> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> .
+
+<urn:atm:triage:occurrence/ATM-QA-S2-015/s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/boundary_adapters.rs" ;
+  triage:line 225 ;
+  triage:snippet "#[cfg(all(test,unix))] — zero Windows test coverage" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "2adc339" ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> .
+
+<urn:atm:triage:occurrence/ATM-QA-S2-015/s2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/notification_runtime.rs" ;
+  triage:line 221 ;
+  triage:snippet "#[cfg(all(test,unix))] — zero Windows test coverage" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "2adc339" ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> .
+
+<urn:atm:triage:occurrence/ATM-QA-S2-015/s2/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 337 ;
+  triage:snippet "#[cfg(all(test,unix))] — zero Windows test coverage (also lines 356,376,554)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "2adc339" ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> .
+
+<urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "2adc339" ;
+  triage:orderIndex 2 .

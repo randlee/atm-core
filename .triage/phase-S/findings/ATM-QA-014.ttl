@@ -1,0 +1,132 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-014>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-014" ;
+  triage:title "Production-path test spawns real atm-daemon child process (ARCH-SINGLETON violation)" ;
+  triage:description "crates/atm-daemon/tests/run_daemon_production_path.rs spawns a real atm-daemon child process via Command::new(CARGO_BIN_EXE_atm-daemon). ARCH-SINGLETON violation: tests must use in-process transport doubles, not real daemon spawns. pS-s2 and pS-s3 additionally lack the #![cfg(unix)] gate. pS-s1 and pS-s4 have read_line with no timeout (FTQ-004 co-occurrence)." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T06:38:48Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-014/pS-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-014/pS-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-014/pS-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-014/pS-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-014/integrate-phase-S/1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s1/ab12ea1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s2/a7f8039> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s3/98c151c> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s4/689a48f> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+
+# ── Occurrences ──────────────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/ATM-QA-014/pS-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/tests/run_daemon_production_path.rs" ;
+  triage:line 33 ;
+  triage:snippet "let mut child = Command::new(daemon_bin)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:notes "Has #![cfg(unix)] gate (line 1). read_line at line 45 has no timeout (FTQ-004 co-occurrence)." ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+
+<urn:atm:triage:occurrence/ATM-QA-014/pS-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/tests/run_daemon_production_path.rs" ;
+  triage:line 33 ;
+  triage:snippet "let mut child = Command::new(daemon_bin)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "a7f8039" ;
+  triage:notes "Missing #![cfg(unix)] gate. Uses interprocess::local_socket. ARCH-SINGLETON violation and cfg-gate violation both present." ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s2/a7f8039> .
+
+<urn:atm:triage:occurrence/ATM-QA-014/pS-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/tests/run_daemon_production_path.rs" ;
+  triage:line 33 ;
+  triage:snippet "let mut child = Command::new(daemon_bin)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:headSha "98c151c" ;
+  triage:notes "Missing #![cfg(unix)] gate. Uses interprocess::local_socket. ARCH-SINGLETON violation and cfg-gate violation both present." ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s3/98c151c> .
+
+<urn:atm:triage:occurrence/ATM-QA-014/pS-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/tests/run_daemon_production_path.rs" ;
+  triage:line 32 ;
+  triage:snippet "let mut child = Command::new(daemon_bin)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:notes "Has #![cfg(unix)] gate (line 1). read_line at line 44 has no timeout (FTQ-004 co-occurrence)." ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s4/689a48f> .
+
+<urn:atm:triage:occurrence/ATM-QA-014/integrate-phase-S/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/tests/run_daemon_production_path.rs" ;
+  triage:line 32 ;
+  triage:snippet "let mut child = Command::new(daemon_bin)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:notes "Has #![cfg(unix)] gate (line 1). Uses read_bounded_stream (not read_line). ARCH-SINGLETON violation remains." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+
+# ── WorktreeSnapshots ─────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pS-s1/ab12ea1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:orderIndex 1 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pS-s2/a7f8039>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "a7f8039" ;
+  triage:orderIndex 2 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pS-s3/98c151c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "98c151c" ;
+  triage:orderIndex 3 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pS-s4/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 4 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:orderIndex 5 ;
+  triage:branchState "open" .

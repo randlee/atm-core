@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-007>
+  a triage:Finding ;
+  triage:findingId "RSH-007" ;
+  triage:title "Windows daemon has no Ctrl+C or console-break handler — graceful drain impossible" ;
+  triage:description "crates/atm-daemon/src/lifecycle_control.rs:101 — the Windows daemon registers no Ctrl+C (CTRL_C_EVENT) or console-break handler. terminate_requested() AtomicBool is never set from OS-level signals on Windows. Graceful drain is impossible from task kill, service stop, or Ctrl+C. Escalates ATM-QA-001 from 'missing warn log' to 'Windows shutdown broken'. Fix: register SetConsoleCtrlHandler via windows-sys or use ctrlc crate to set the same terminate AtomicBool. Should be fixed together with ATM-QA-001 (add tracing::warn!) at the same location. (quality-mgr reported as RSH-005 in S.2 QA-2 report; remapped RSH-007 to avoid conflict with existing RSH-005 = SIGTERM dead code on feature/pS-s3-runtime-control.)" ;
+  triage:category "RSH" ;
+  triage:severity "critical" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T08:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-007/s2/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> .
+
+<urn:atm:triage:occurrence/RSH-007/s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 101 ;
+  triage:snippet "#[cfg(not(unix))] — no SetConsoleCtrlHandler registered; terminate_requested() never set from OS signals on Windows" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "2adc339" ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> .
+
+<urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "2adc339" ;
+  triage:orderIndex 2 .

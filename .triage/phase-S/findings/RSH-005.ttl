@@ -1,0 +1,73 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-005>
+  a triage:Finding ;
+  triage:findingId "RSH-005" ;
+  triage:title "SIGTERM registered on Windows but never delivered by SCM or taskkill — dead code" ;
+  triage:description "lifecycle_control.rs:94 — SIGTERM is registered via signal_hook on Windows. Windows does not deliver SIGTERM via the Service Control Manager or taskkill. Only CTRL_C_EVENT and CTRL_BREAK_EVENT are delivered to console processes. The SIGTERM handler on Windows is dead code and may create false confidence in graceful shutdown coverage." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-S" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-08T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-005/pS-s3-runtime-control/1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s3-runtime-control/98c151c> ;
+  triage:fixedOn <urn:atm:triage:worktree/pS-s4-hardening/689a48f> ;
+  triage:fixedOn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s3-runtime-control/98c151c> .
+
+<urn:atm:triage:occurrence/RSH-005/pS-s3-runtime-control/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 94 ;
+  triage:snippet "for signal in [SIGINT, SIGTERM] { // inside #[cfg(windows)] install_platform_hooks" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:headSha "98c151c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s3-runtime-control/98c151c> .
+
+<urn:atm:triage:worktree/pS-s1-boundary-extraction/ab12ea1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:orderIndex 1 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pS-s2-windows-ipc/a7f8039>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "a7f8039" ;
+  triage:orderIndex 2 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pS-s3-runtime-control/98c151c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "98c151c" ;
+  triage:orderIndex 3 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pS-s4-hardening/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 4 ;
+  triage:branchState "fixed" .
+
+<urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:orderIndex 5 ;
+  triage:branchState "fixed" .

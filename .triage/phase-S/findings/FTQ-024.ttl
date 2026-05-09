@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-024>
+  a triage:Finding ;
+  triage:findingId "FTQ-024" ;
+  triage:title "finalize_shutdown_drains_test_tracked_finalizer_threads lacks #[serial] — SHUTDOWN_FINALIZER_THREADS global static causes inter-test interference (tests.rs:579)" ;
+  triage:description "crates/atm-daemon/src/tests.rs:579 — finalize_shutdown_drains_test_tracked_finalizer_threads exercises SHUTDOWN_FINALIZER_THREADS (runtime_health.rs:42), a process-wide Mutex<Vec<JoinHandle<()>>> static. The test is NOT annotated #[serial]. All other tests that call register_shutdown_finalizer_thread() or finalize_shutdown_threads() in the same test binary run share this global. If tests run in parallel and another test's handles are in the vec when this test fires, the drain silently swallows handles that belong to other tests, or the other test's assertion races on an empty vec. Fix: (a) add #[serial] to this test to serialize execution with any other test touching the static, OR (b) scope the global per test-instance using a thread_local or test-scoped reset guard. Option (a) is minimal; option (b) is preferred if the test suite grows." ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T19:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-024/s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s4-hardening/060d77b> .
+
+<urn:atm:triage:occurrence/FTQ-024/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 579 ;
+  triage:snippet "finalize_shutdown_drains_test_tracked_finalizer_threads — no #[serial]; SHUTDOWN_FINALIZER_THREADS at runtime_health.rs:42 is process-wide static; parallel test runs share the vec; inter-test interference risk" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "060d77b" ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s4-hardening/060d77b> .
+
+<urn:atm:triage:worktree/feature-pS-s4-hardening/060d77b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "060d77b" ;
+  triage:orderIndex 5 .

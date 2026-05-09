@@ -1,0 +1,118 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-004>
+  a triage:Finding ;
+  triage:findingId "FTQ-004" ;
+  triage:title "Bare read_line with no timeout in production-path test; hangs runner if daemon fails to emit ready signal" ;
+  triage:description "crates/atm-daemon/tests/run_daemon_production_path.rs uses bare BufReader::read_line with no timeout. If the daemon fails to emit its ready signal the test runner hangs indefinitely." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:phaseId "phase-S" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-08T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/pS-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/pS-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/pS-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/pS-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/integrate-phase-S/1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s1/ab12ea1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s2/a7f8039> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s3/98c151c> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s4/689a48f> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+
+<urn:atm:triage:occurrence/FTQ-004/pS-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/tests/run_daemon_production_path.rs" ;
+  triage:line 45 ;
+  triage:snippet "stdout.read_line(&mut ready_line).expect(\"read ready line\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+
+<urn:atm:triage:occurrence/FTQ-004/pS-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/tests/run_daemon_production_path.rs" ;
+  triage:line 45 ;
+  triage:snippet "stdout.read_line(&mut ready_line).expect(\"read ready line\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "a7f8039" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s2/a7f8039> .
+
+<urn:atm:triage:occurrence/FTQ-004/pS-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/tests/run_daemon_production_path.rs" ;
+  triage:line 45 ;
+  triage:snippet "stdout.read_line(&mut ready_line).expect(\"read ready line\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:headSha "98c151c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s3/98c151c> .
+
+<urn:atm:triage:occurrence/FTQ-004/pS-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/tests/run_daemon_production_path.rs" ;
+  triage:line 44 ;
+  triage:snippet "stdout.read_line(&mut ready_line).expect(\"read ready line\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s4/689a48f> .
+
+<urn:atm:triage:occurrence/FTQ-004/integrate-phase-S/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/tests/run_daemon_production_path.rs" ;
+  triage:line 44 ;
+  triage:snippet "stdout.read_line(&mut ready_line).expect(\"read ready line\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+
+<urn:atm:triage:worktree/pS-s1/ab12ea1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s2/a7f8039>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "a7f8039" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pS-s3/98c151c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "98c151c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pS-s4/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:orderIndex 5 .

@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-015>
+  a triage:Finding ;
+  triage:findingId "FTQ-015" ;
+  triage:title "run_bounded_shutdown_step untracked finalizer threads in test contexts (runtime_health.rs)" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs — run_bounded_shutdown_step spawns finalizer threads that are not tracked in test contexts. Threads can outlive the test fixture. File unchanged from bcb5aab through 4176880 — not in round-limit scope (file not changed), fix deferred, still open. (quality-mgr reported as FTQ-009; remapped FTQ-015 to avoid conflict; confirmed STILL_OPEN in S.2 QA-4 at 4176880.)" ;
+  triage:category "FTQ" ;
+  triage:severity "minor" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-09T12:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-05-09T13:45:00Z"^^xsd:dateTime ;
+  triage:fixedAt "8421917" ;  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-015/s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-015/s2/2> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/4176880> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/4176880> .
+
+<urn:atm:triage:occurrence/FTQ-015/s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 505 ;
+  triage:snippet "run_bounded_shutdown_step — finalizer threads untracked in test contexts" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:headSha "2adc339" ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> .
+
+<urn:atm:triage:occurrence/FTQ-015/s2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 505 ;
+  triage:snippet "QA-4 confirmation: finalizer threads still untracked — still open at 4176880 (file unchanged)" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:headSha "4176880" ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/4176880> .
+
+<urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "2adc339" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/feature-pS-s2-windows-ipc/4176880>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "4176880" ;
+  triage:orderIndex 2 .

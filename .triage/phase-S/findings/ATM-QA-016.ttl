@@ -1,0 +1,195 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Finding: ATM-QA-016
+# recorded_owner_pid() discards token — stale-owner recovery checks PID only
+# Triaged: 2026-05-08T00:00:00Z
+# Mode: initial_pass | Scope: file | Phase: phase-S
+
+<urn:atm:triage:finding/ATM-QA-016>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-016" ;
+  triage:title "recorded_owner_pid() discards token — stale-owner recovery checks PID only" ;
+  triage:description "host_ownership.rs recorded_owner_pid() returns Option<u32>, silently discarding the token half of the pid:token ownership record. Stale-owner recovery in acquire_at() checks PID liveness only; token continuity is never validated. ADR-002 requires both PID and token to be validated during stale-owner recovery. Additionally, on pS-s2, pS-s4, and integrate/phase-S write_owner_record() was regressed to write only PID (no token), making both the write and read sides non-compliant." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-S" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-08T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-016/pS-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-016/pS-s1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-016/pS-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-016/pS-s2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-016/pS-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-016/pS-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-016/pS-s4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-016/integrate-phase-S/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-016/integrate-phase-S/2> ;
+
+  triage:openOn <urn:atm:triage:worktree/pS-s1/ab12ea1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s2/a7f8039> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s3/98c151c> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s4/689a48f> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> ;
+
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+
+# ── Occurrences on feature/pS-s1-boundary-extraction ─────────────────────────
+
+<urn:atm:triage:occurrence/ATM-QA-016/pS-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/host_ownership.rs" ;
+  triage:line 129 ;
+  triage:snippet "fn recorded_owner_pid(lock_file: &File) -> Result<Option<u32>, AtmError>" ;
+  triage:note "Returns Option<u32>; discards token half of pid:token record. split_once(':').map(|(pid, _)| pid) silently drops token." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+
+<urn:atm:triage:occurrence/ATM-QA-016/pS-s1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/host_ownership.rs" ;
+  triage:line 41 ;
+  triage:snippet "if let Some(pid) = recorded_owner_pid(&lock_file)? && !atm_core::process::process_is_alive(pid)" ;
+  triage:note "acquire_at() stale-owner recovery uses PID only; write_owner_record writes pid:token (correct on s1) but token is never checked on read." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+
+# ── Occurrences on feature/pS-s2-windows-ipc ─────────────────────────────────
+
+<urn:atm:triage:occurrence/ATM-QA-016/pS-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/host_ownership.rs" ;
+  triage:line 136 ;
+  triage:snippet "fn recorded_owner_pid(lock_file: &File) -> Result<Option<u32>, AtmError>" ;
+  triage:note "Returns Option<u32>; discards token. Additionally write_owner_record on s2 writes only PID (no token) — both read and write sides are non-compliant." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "a7f8039" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s2/a7f8039> .
+
+<urn:atm:triage:occurrence/ATM-QA-016/pS-s2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/host_ownership.rs" ;
+  triage:line 37 ;
+  triage:snippet "if let Some(pid) = recorded_owner_pid(&lock_file)? && !atm_core::process::process_is_alive(pid)" ;
+  triage:note "acquire_at() stale-owner recovery uses PID only; write_owner_record also regressed (no token write)." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "a7f8039" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s2/a7f8039> .
+
+# ── Occurrences on feature/pS-s3-runtime-control ─────────────────────────────
+
+<urn:atm:triage:occurrence/ATM-QA-016/pS-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/host_ownership.rs" ;
+  triage:line 136 ;
+  triage:snippet "fn recorded_owner_pid(lock_file: &File) -> Result<Option<u32>, AtmError>" ;
+  triage:note "Returns Option<u32>; discards token. write_owner_record writes pid:token correctly (token present), but token is never validated in recovery." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:headSha "98c151c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s3/98c151c> .
+
+# ── Occurrences on feature/pS-s4-hardening ───────────────────────────────────
+
+<urn:atm:triage:occurrence/ATM-QA-016/pS-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 146 ;
+  triage:snippet "fn recorded_owner_pid(lock_file: &File) -> Result<Option<u32>, AtmError>" ;
+  triage:note "File moved from host_ownership.rs to lib.rs in pS-s4 refactor. Returns Option<u32>; discards token. write_owner_record also regressed — writes only PID." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s4/689a48f> .
+
+<urn:atm:triage:occurrence/ATM-QA-016/pS-s4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 280 ;
+  triage:snippet "if let Some(pid) = recorded_owner_pid(&lock_file)? && !atm_core::process::process_is_alive(pid)" ;
+  triage:note "SingletonGuard::acquire_at() stale-owner recovery checks PID only. Token write also absent in write_owner_record." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s4/689a48f> .
+
+# ── Occurrences on integrate/phase-S ─────────────────────────────────────────
+
+<urn:atm:triage:occurrence/ATM-QA-016/integrate-phase-S/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 146 ;
+  triage:snippet "fn recorded_owner_pid(lock_file: &File) -> Result<Option<u32>, AtmError>" ;
+  triage:note "Integration branch reflects pS-s4 state. Returns Option<u32>; discards token. write_owner_record writes only PID — both sides non-compliant." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+
+<urn:atm:triage:occurrence/ATM-QA-016/integrate-phase-S/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 280 ;
+  triage:snippet "if let Some(pid) = recorded_owner_pid(&lock_file)? && !atm_core::process::process_is_alive(pid)" ;
+  triage:note "SingletonGuard::acquire_at() stale-owner recovery checks PID only. write_owner_record writes only PID." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+
+# ── WorktreeSnapshot nodes ────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pS-s1/ab12ea1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s2/a7f8039>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "a7f8039" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pS-s3/98c151c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "98c151c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pS-s4/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:orderIndex 5 .

@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-011>
+  a triage:Finding ;
+  triage:findingId "RSH-011" ;
+  triage:title "IPC smoke test both serve_with_runtime_hooks deadlines identical at 1s — force-cancel path structurally untested (tests.rs:147)" ;
+  triage:description "crates/atm-daemon/src/tests.rs:147 — serve_with_runtime_hooks is called with graceful_deadline=Duration::from_secs(1) and force_cancel_deadline=Duration::from_secs(1). The force-cancel window is effectively zero (force fires immediately when graceful expires), leaving the force-cancel execution path structurally untested. Fix: use distinct values — graceful=Duration::from_millis(500), force_cancel=Duration::from_secs(2) — so the graceful deadline expires before force-cancel and the paths are meaningfully separated. Or add a dedicated test that explicitly exercises the force-cancel path by holding a lane past the graceful deadline." ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T18:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-011/s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874> .
+
+<urn:atm:triage:occurrence/RSH-011/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 147 ;
+  triage:snippet "serve_with_runtime_hooks(dispatcher, Duration::from_secs(1), Duration::from_secs(1), ...) — both deadlines identical; force-cancel window zero; force-cancel path structurally untested" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "dd36874" ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874> .
+
+<urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "dd36874" ;
+  triage:orderIndex 4 .

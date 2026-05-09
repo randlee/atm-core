@@ -1,0 +1,40 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-WIN-001>
+  a triage:Finding ;
+  triage:findingId "ARCH-WIN-001" ;
+  triage:title "ci.yml --exclude atm-daemon on Windows drops all atm-daemon Windows tests including safe non-IPC ones (ci.yml:144)" ;
+  triage:description "crates/atm-daemon/src/ contains tests that do not use IPC (e.g., singleton lock, lifecycle flag, stale-recovery logic). The CI step at .github/workflows/ci.yml:144 skips all of atm-daemon on Windows via `--exclude atm-daemon`, not just the IPC-dependent tests. Safe tests that could run on Windows are silently dropped. This means any Windows-specific regression in non-IPC atm-daemon code will not be caught by CI. Structural fix: use #[cfg(all(test, unix))] to gate individual IPC-dependent test modules, then restore `cargo test -p atm-daemon` on Windows unconditionally. Ruled ACCEPTED as intentional policy: `--exclude atm-daemon` is defense-in-depth alongside the structural cfg fix; safe non-IPC re-enablement deferred to S.5." ;
+  triage:category "ARCH" ;
+  triage:severity "important" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "accepted" ;
+  triage:dispatchReady false ;
+  triage:resolution "policy-accepted" ;
+  triage:resolutionNote "team-lead ruling 2026-05-09: --exclude atm-daemon on Windows accepted as intentional defense-in-depth policy alongside structural cfg fix. Safe non-IPC test re-enablement deferred to S.5." ;
+  triage:triagedAt "2026-05-09T21:00:00Z"^^xsd:dateTime ;
+  triage:resolvedAt "2026-05-09T21:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-WIN-001/s1/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/7b6df2d> .
+
+<urn:atm:triage:occurrence/ARCH-WIN-001/s1/1>
+  a triage:Occurrence ;
+  triage:file ".github/workflows/ci.yml" ;
+  triage:line 144 ;
+  triage:snippet "cargo test --workspace --exclude atm-daemon (Windows step) — excludes entire atm-daemon crate; drops safe non-IPC tests alongside IPC-dependent ones; accepted as policy alongside structural cfg gates" ;
+  triage:status "accepted" ;
+  triage:closed true ;
+  triage:headSha "7b6df2d" ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/7b6df2d> .
+
+<urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/7b6df2d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "7b6df2d" ;
+  triage:orderIndex 1 .

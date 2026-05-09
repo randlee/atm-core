@@ -1,0 +1,79 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-005>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-005" ;
+  triage:title "ActiveConnectionRegistry and associated tests need per-function #[cfg(unix)] guard" ;
+  triage:description "local_ipc_transport.rs:44 ActiveConnectionRegistry is pub(crate) Unix-only type. tests.rs:167-191 test coverage references it without per-test cfg guard. When ATM-QA-002 test module split is applied, these specific tests need explicit #[cfg(unix)]." ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-08T23:15:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005/pSs1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005/pSs2/1> ;
+  triage:openOn <urn:atm:triage:worktree/pSs1/ab12ea1> ;
+  triage:openOn <urn:atm:triage:worktree/pSs2/ab12ea1> ;
+  triage:promoteTo <urn:atm:triage:worktree/pSs2/ab12ea1> .
+
+<urn:atm:triage:occurrence/ATM-QA-005/pSs1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 167 ;
+  triage:snippet "#[test] fn blocked_connection_is_interrupted_on_force_cancel() { let registry = Arc::new(ActiveConnectionRegistry::default()); ..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/pSs1/ab12ea1> .
+
+<urn:atm:triage:occurrence/ATM-QA-005/pSs2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 167 ;
+  triage:snippet "#[test] fn blocked_connection_is_interrupted_on_force_cancel() { let registry = Arc::new(ActiveConnectionRegistry::default()); ..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/pSs2/ab12ea1> .
+
+<urn:atm:triage:worktree/pSs1/ab12ea1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pSs2/ab12ea1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "ab12ea1" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pSs3/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pSs4/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pSinteg/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 5 .
