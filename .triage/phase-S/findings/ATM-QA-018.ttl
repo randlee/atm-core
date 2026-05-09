@@ -1,0 +1,94 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ATM-QA-018: SIGBREAK handler may not fire in non-console Windows processes
+# Phase: phase-S | Mode: initial_pass | Triaged: 2026-05-08
+
+<urn:atm:triage:finding/ATM-QA-018>
+    a triage:Finding ;
+    triage:findingId "ATM-QA-018" ;
+    triage:title "SIGBREAK handler may not fire in non-console Windows processes" ;
+    triage:description "lifecycle_control.rs:91 — SIGBREAK (CTRL_BREAK_EVENT) is registered via signal_hook on Windows. However SIGBREAK is only delivered to console-attached processes. When the daemon runs as a Windows service or detached process, SetConsoleCtrlHandler does not receive CTRL_BREAK_EVENT. The graceful shutdown path may be silently absent in service deployments." ;
+    triage:triageMode "initial_pass" ;
+    triage:category "ATM-QA" ;
+    triage:phaseId "phase-S" ;
+    triage:severity "important" ;
+    triage:repeatable false ;
+    triage:sweepScope "file" ;
+    triage:status "fixed_partial" ;
+    triage:dispatchReady true ;
+    triage:triagedAt "2026-05-08T00:00:00Z"^^xsd:dateTime ;
+
+    triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-018/pS-s3-runtime-control/1> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-018/pS-s3-runtime-control/2> ;
+
+    triage:openOn <urn:atm:triage:worktree/pS-s1-boundary-extraction/ab12ea1> ;
+    triage:openOn <urn:atm:triage:worktree/pS-s2-windows-ipc/a7f8039> ;
+    triage:openOn <urn:atm:triage:worktree/pS-s3-runtime-control/98c151c> ;
+    triage:fixedOn <urn:atm:triage:worktree/pS-s4-hardening/689a48f> ;
+    triage:fixedOn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> ;
+    triage:promoteTo <urn:atm:triage:worktree/pS-s3-runtime-control/98c151c> .
+
+# Occurrences — only on S3 (SIGBREAK not present in S1/S2; absent on S4/integrate)
+<urn:atm:triage:occurrence/ATM-QA-018/pS-s3-runtime-control/1>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+    triage:line 91 ;
+    triage:snippet "use signal_hook::consts::signal::{SIGBREAK, SIGINT, SIGTERM};" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pS-s3-runtime-control" ;
+    triage:headSha "98c151c" ;
+    triage:occursIn <urn:atm:triage:worktree/pS-s3-runtime-control/98c151c> .
+
+<urn:atm:triage:occurrence/ATM-QA-018/pS-s3-runtime-control/2>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+    triage:line 100 ;
+    triage:snippet "flag::register(SIGBREAK, Arc::clone(reload)).map_err(|source| {" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pS-s3-runtime-control" ;
+    triage:headSha "98c151c" ;
+    triage:occursIn <urn:atm:triage:worktree/pS-s3-runtime-control/98c151c> .
+
+# WorktreeSnapshots
+<urn:atm:triage:worktree/pS-s1-boundary-extraction/ab12ea1>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pS-s1-boundary-extraction" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+    triage:headSha "ab12ea1" ;
+    triage:orderIndex 1 ;
+    triage:branchStatus "open" .
+
+<urn:atm:triage:worktree/pS-s2-windows-ipc/a7f8039>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pS-s2-windows-ipc" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+    triage:headSha "a7f8039" ;
+    triage:orderIndex 2 ;
+    triage:branchStatus "open" .
+
+<urn:atm:triage:worktree/pS-s3-runtime-control/98c151c>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pS-s3-runtime-control" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+    triage:headSha "98c151c" ;
+    triage:orderIndex 3 ;
+    triage:branchStatus "open" .
+
+<urn:atm:triage:worktree/pS-s4-hardening/689a48f>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pS-s4-hardening" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+    triage:headSha "689a48f" ;
+    triage:orderIndex 4 ;
+    triage:branchStatus "fixed" .
+
+<urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c>
+    a triage:WorktreeSnapshot ;
+    triage:branch "integrate/phase-S" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+    triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+    triage:orderIndex 5 ;
+    triage:branchStatus "fixed" .

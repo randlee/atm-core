@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S2-010>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S2-010" ;
+  triage:title "UnixListener/UnixStream imports in tests.rs not gated under #[cfg(unix)]" ;
+  triage:description "crates/atm-daemon/src/tests.rs:23 imports std::os::unix::net::{UnixListener, UnixStream} at module level with no #[cfg(unix)] gate. Lines 184-185 use these types directly. ADR-007 requires per-function unix gates; module-level ungated unix imports fail Windows compilation." ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-08T23:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S2-010/s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S2-010/s1/2> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb> .
+
+<urn:atm:triage:occurrence/ATM-QA-S2-010/s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 23 ;
+  triage:snippet "use std::os::unix::net::{UnixListener, UnixStream};" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "661f0fb" ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb> .
+
+<urn:atm:triage:occurrence/ATM-QA-S2-010/s1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 184 ;
+  triage:snippet "UnixListener::bind / UnixStream::connect outside #[cfg(unix)] gate" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "661f0fb" ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb> .
+
+<urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "661f0fb" ;
+  triage:orderIndex 1 .

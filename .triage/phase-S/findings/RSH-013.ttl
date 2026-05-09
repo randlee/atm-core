@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-013>
+  a triage:Finding ;
+  triage:findingId "RSH-013" ;
+  triage:title "Windows polling thread early-exit returns without notifying condvar — graceful-shutdown livelock (lifecycle_control.rs:266)" ;
+  triage:description "crates/atm-daemon/src/lifecycle_control.rs:266 — The RSH-012 fix added `if terminate.load(Ordering::SeqCst) { return; }` as an early-exit guard at the top of the Windows polling loop body. However this `return` exits the thread without calling `state_change.notify()`. When SIGINT/SIGTERM arrives while the thread is sleeping (line 279), signal_hook sets `terminate=true`. On the next iteration line 266 fires `return` immediately, bypassing the `state_change.notify()` call at line 274. Any caller blocked in `wait_for_state_change` (e.g., the daemon main loop) is never woken, leaving the daemon hung indefinitely on shutdown even though the OS-level signal was delivered. Fix: call `state_change.notify()` before returning in the early-exit guard: `if terminate.load(Ordering::SeqCst) { let _ = state_change.notify(); return; }`. Alternatively restructure the loop so the change-detection block at lines 271-275 is evaluated before the early-exit, eliminating the redundant third read and ensuring notification on all terminate transitions." ;
+  triage:category "RSH" ;
+  triage:severity "critical" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T20:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-013/s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s4-hardening/e3f4b88> .
+
+<urn:atm:triage:occurrence/RSH-013/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 266 ;
+  triage:snippet "if terminate.load(Ordering::SeqCst) { return; } — exits without state_change.notify(); daemon main loop blocked in wait_for_state_change never woken on signal delivery; graceful-shutdown livelock; introduced by RSH-012 fix in S.4-FIX-R2" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "e3f4b88" ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s4-hardening/e3f4b88> .
+
+<urn:atm:triage:worktree/feature-pS-s4-hardening/e3f4b88>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "e3f4b88" ;
+  triage:orderIndex 6 .

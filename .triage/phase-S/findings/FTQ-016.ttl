@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-016>
+  a triage:Finding ;
+  triage:findingId "FTQ-016" ;
+  triage:title "runtime_composition_failed_startup_returns_to_stopped missing #[serial] — races with daemon_shutdown_signal_install_reuses_shared_flags via static SHARED + INSTALL_LOCK (composition.rs:517)" ;
+  triage:description "crates/atm/src/composition.rs:517 — runtime_composition_failed_startup_returns_to_stopped calls start_with_socket_path_for_test() → PreparedRuntimeServer::bind() → LifecycleControlSourceAdapter::install(), touching static SHARED (lifecycle_control.rs:68) and static INSTALL_LOCK (lifecycle_control.rs:69). Test lacks #[serial] attribute. daemon_shutdown_signal_install_reuses_shared_flags (tests.rs:35) IS #[serial] and touches the same statics; parallel execution races. Fix: add #[serial] to runtime_composition_failed_startup_returns_to_stopped. (quality-mgr reported as FTQ-001 in S.3 QA-2 report.)" ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T09:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-016/s3/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s3-runtime-control/9698a17> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s3-runtime-control/9698a17> .
+
+<urn:atm:triage:occurrence/FTQ-016/s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 517 ;
+  triage:snippet "runtime_composition_failed_startup_returns_to_stopped — touches static SHARED + INSTALL_LOCK, no #[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9698a17" ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s3-runtime-control/9698a17> .
+
+<urn:atm:triage:worktree/feature-pS-s3-runtime-control/9698a17>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "9698a17" ;
+  triage:orderIndex 3 .

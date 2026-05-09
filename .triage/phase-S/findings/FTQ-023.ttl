@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-023>
+  a triage:Finding ;
+  triage:findingId "FTQ-023" ;
+  triage:title "LifecycleControlSourceAdapter::install() and LifecycleFlagResetGuard::install() are two separate statements — not panic-safe (tests.rs:143)" ;
+  triage:description "crates/atm-daemon/src/tests.rs:143 — LifecycleControlSourceAdapter::install() and LifecycleFlagResetGuard::install(&lifecycle) are two separate statements. If a panic occurs between them, the guard is not established and lifecycle state is left unreset between serial tests. This can cause test interference in the #[serial] test suite. Fix: combine into a single expression: let (lifecycle, _reset) = { let lc = LifecycleControlSourceAdapter::install().expect(...); let g = LifecycleFlagResetGuard::install(&lc); (lc, g) }; — or use scopeguard::defer! to ensure reset regardless of panic." ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T18:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-023/s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874> .
+
+<urn:atm:triage:occurrence/FTQ-023/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 143 ;
+  triage:snippet "let lifecycle = LifecycleControlSourceAdapter::install().expect(...); let _reset = LifecycleFlagResetGuard::install(&lifecycle); — two separate statements; panic between them leaves lifecycle state unreset" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "dd36874" ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874> .
+
+<urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "dd36874" ;
+  triage:orderIndex 4 .

@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S2-017>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S2-017" ;
+  triage:title "lifecycle-control-source.toml:74 documents CTRL_BREAK_EVENT → reload but lifecycle_control.rs maps ALL events to terminate — spec-vs-implementation conflict" ;
+  triage:description "boundaries/atm-daemon/lifecycle-control-source.toml:74 documents CTRL_BREAK_EVENT → reload/rescan. lifecycle_control.rs:203-208 (SetConsoleCtrlHandler callback) maps CTRL_C_EVENT | CTRL_BREAK_EVENT | CTRL_CLOSE_EVENT all to terminate. _reload and _state_change params are unused. This is a spec-vs-implementation conflict; either the code must be fixed to discriminate CTRL_BREAK → reload, or the TOML must be updated to document terminate-for-all. Preferred fix: replace SetConsoleCtrlHandler with signal_hook::flag::register mapping SIGINT/CTRL_C → terminate and SIGBREAK/CTRL_BREAK → reload (same approach as S.3 d6b9119), which simultaneously resolves ATM-QA-S2-016 (no unsafe required). ADR-daemon/architecture.md §3.1.3 and REQ-DAEMON-SIGNAL-001 (requirements.md:176-181) require SIGBREAK/CTRL_BREAK_EVENT → bounded reload/rescan. (quality-mgr reported as ATM-QA-S2-017 in S.2 QA-3 report.)" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T10:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S2-017/s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S2-017/s2/2> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/bcb5aab> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/bcb5aab> .
+
+<urn:atm:triage:occurrence/ATM-QA-S2-017/s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 203 ;
+  triage:snippet "SetConsoleCtrlHandler callback maps ALL events (CTRL_C | CTRL_BREAK | CTRL_CLOSE) to terminate; _reload unused" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "bcb5aab" ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/bcb5aab> .
+
+<urn:atm:triage:occurrence/ATM-QA-S2-017/s2/2>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/lifecycle-control-source.toml" ;
+  triage:line 74 ;
+  triage:snippet "CTRL_BREAK_EVENT → reload — documented in TOML but not implemented in code" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "bcb5aab" ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/bcb5aab> .
+
+<urn:atm:triage:worktree/feature-pS-s2-windows-ipc/bcb5aab>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "bcb5aab" ;
+  triage:orderIndex 2 .

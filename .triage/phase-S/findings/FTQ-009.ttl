@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-009>
+  a triage:Finding ;
+  triage:findingId "FTQ-009" ;
+  triage:title "Fragile drop ordering for test teardown guard at tests.rs:82" ;
+  triage:description "crates/atm-daemon/src/tests.rs:82 — test teardown depends on implicit drop ordering of local variables. Rust drops in reverse declaration order, but this is fragile when guard-like objects are interleaved with non-guard values. Should use an explicit Drop guard struct or named variable to make ordering deterministic. (quality-mgr reported as FTQ-006; remapped FTQ-009 to avoid ID collision with existing phase-S FTQ-006.)" ;
+  triage:category "FTQ" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-08T23:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-009/s1/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb> .
+
+<urn:atm:triage:occurrence/FTQ-009/s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 82 ;
+  triage:snippet "implicit drop ordering for teardown guard" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "661f0fb" ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb> .
+
+<urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "661f0fb" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-019>
+  a triage:Finding ;
+  triage:findingId "FTQ-019" ;
+  triage:title "console_break_requests_reload_without_terminate and console_close_requests_terminate missing #[serial] — OnceLock statics shared across parallel Windows CI tests (lifecycle_control.rs:298,309)" ;
+  triage:description "crates/atm-daemon/src/lifecycle_control.rs:298,309 — two #[cfg(all(test, windows))] tests (console_break_requests_reload_without_terminate at line 298, console_close_requests_terminate at line 309) call install() which populates OnceLock<Arc<AtomicBool>> statics (TERMINATE, RELOAD, STATE_CHANGE at lines 247-249) on first call; all subsequent calls share the same Arcs. Both tests reset flags with set_terminate_for_test(false) / set_reload_for_test(false) then assert immediately. Without #[serial], parallel Windows CI execution allows one test's flag reset to clobber the other's assertion window — intermittent false-negatives on terminate_requested() or take_reload_requested(). Fix: add #[serial] to both Windows test functions; import serial_test::serial inside the windows_tests module. Note: quality-mgr reported this as FTQ-018 in S.3 QA-3 report; remapped to FTQ-019 to avoid collision with canonical FTQ-018 (tests.rs:183 35ms sleep race on feature/pS-s2-windows-ipc)." ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T11:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-019/s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-019/s3/2> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s3-runtime-control/d6b9119> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s3-runtime-control/d6b9119> .
+
+<urn:atm:triage:occurrence/FTQ-019/s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 298 ;
+  triage:snippet "console_break_requests_reload_without_terminate — shares OnceLock statics, no #[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "d6b9119" ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s3-runtime-control/d6b9119> .
+
+<urn:atm:triage:occurrence/FTQ-019/s3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 309 ;
+  triage:snippet "console_close_requests_terminate — shares OnceLock statics, no #[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "d6b9119" ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s3-runtime-control/d6b9119> .
+
+<urn:atm:triage:worktree/feature-pS-s3-runtime-control/d6b9119>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "d6b9119" ;
+  triage:orderIndex 3 .

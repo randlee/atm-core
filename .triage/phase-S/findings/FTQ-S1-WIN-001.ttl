@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-S1-WIN-001>
+  a triage:Finding ;
+  triage:findingId "FTQ-S1-WIN-001" ;
+  triage:title "ready_rx.recv() in stale-owner test has no timeout — spawned thread panic before hook fires causes permanent serial hang (tests.rs:215)" ;
+  triage:description "crates/atm-daemon/src/tests.rs:215 — singleton_guard_rejects_stale_recovery_when_owner_token_changes replaced the 35ms fixed sleep (FTQ-DIAG-004) with a correct hook-based handshake using mpsc::sync_channel(1). The hook fires via notify_stale_recovery_hook_for_test() at the top of recover_stale_owner_lock before the retry loop. However, the test thread at line 215 calls ready_rx.recv().expect() with no timeout. If the spawned thread panics before reaching notify_stale_recovery_hook_for_test() — for example because open_lock_file returns an error on a resource-constrained CI runner, or because any future refactor moves the hook call — recv() blocks indefinitely. Because this test is #[serial], the permanent hang serializes and stalls every subsequent #[serial] test in the binary, causing CI to appear hung with no diagnostic output. Fix: replace ready_rx.recv().expect(...) with ready_rx.recv_timeout(Duration::from_secs(5)).expect(\"stale recovery hook did not fire within 5s\")." ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T21:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-S1-WIN-001/s1/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/7b6df2d> .
+
+<urn:atm:triage:occurrence/FTQ-S1-WIN-001/s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 215 ;
+  triage:snippet "ready_rx.recv().expect(\"stale recovery ready\") — no timeout; hook fires before retry loop; if spawned thread panics before hook, recv() blocks forever; #[serial] cascade stalls all subsequent serial tests" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "7b6df2d" ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/7b6df2d> .
+
+<urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/7b6df2d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "7b6df2d" ;
+  triage:orderIndex 1 .

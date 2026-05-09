@@ -1,0 +1,178 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-011>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-011" ;
+  triage:title "Sprint plan docs not updated for validate_runtime_socket_path migration" ;
+  triage:description "Sprint plan docs (sprint-S1.md and plan-phase-S.md) still list validate_runtime_socket_path as a code target in crates/atm-daemon/src/composition.rs, but the function was migrated out of that location on the boundary-extraction branch. All five worktrees contain stale doc references. Overlaps ATM-QA-003 (blocking, covers both code and docs); ATM-QA-011 narrows scope to the docs-only traceability gap." ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-08T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/ATM-QA-011/pS-s1-boundary-extraction/ab12ea1> ;
+  triage:openOn <urn:atm:triage:worktree/ATM-QA-011/pS-s2-windows-ipc/689a48f> ;
+  triage:openOn <urn:atm:triage:worktree/ATM-QA-011/pS-s3-runtime-control/689a48f> ;
+  triage:openOn <urn:atm:triage:worktree/ATM-QA-011/pS-s4-hardening/689a48f> ;
+  triage:openOn <urn:atm:triage:worktree/ATM-QA-011/integrate-phase-S/689a48f> ;
+  triage:promoteTo <urn:atm:triage:worktree/ATM-QA-011/integrate-phase-S/689a48f> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-011/pS-s1-boundary-extraction/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-011/pS-s1-boundary-extraction/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-011/pS-s2-windows-ipc/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-011/pS-s2-windows-ipc/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-011/pS-s3-runtime-control/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-011/pS-s3-runtime-control/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-011/pS-s4-hardening/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-011/pS-s4-hardening/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-011/integrate-phase-S/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-011/integrate-phase-S/2> .
+
+<urn:atm:triage:occurrence/ATM-QA-011/pS-s1-boundary-extraction/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-S/sprint-S1.md" ;
+  triage:line 59 ;
+  triage:snippet "  - `validate_runtime_socket_path`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/ATM-QA-011/pS-s1-boundary-extraction/ab12ea1> .
+
+<urn:atm:triage:occurrence/ATM-QA-011/pS-s1-boundary-extraction/2>
+  a triage:Occurrence ;
+  triage:file "docs/plan-phase-S.md" ;
+  triage:line 257 ;
+  triage:snippet "  - `validate_runtime_socket_path`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/ATM-QA-011/pS-s1-boundary-extraction/ab12ea1> .
+
+<urn:atm:triage:occurrence/ATM-QA-011/pS-s2-windows-ipc/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-S/sprint-S1.md" ;
+  triage:line 59 ;
+  triage:snippet "  - `validate_runtime_socket_path`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/ATM-QA-011/pS-s2-windows-ipc/689a48f> .
+
+<urn:atm:triage:occurrence/ATM-QA-011/pS-s2-windows-ipc/2>
+  a triage:Occurrence ;
+  triage:file "docs/plan-phase-S.md" ;
+  triage:line 257 ;
+  triage:snippet "  - `validate_runtime_socket_path`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/ATM-QA-011/pS-s2-windows-ipc/689a48f> .
+
+<urn:atm:triage:occurrence/ATM-QA-011/pS-s3-runtime-control/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-S/sprint-S1.md" ;
+  triage:line 59 ;
+  triage:snippet "  - `validate_runtime_socket_path`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/ATM-QA-011/pS-s3-runtime-control/689a48f> .
+
+<urn:atm:triage:occurrence/ATM-QA-011/pS-s3-runtime-control/2>
+  a triage:Occurrence ;
+  triage:file "docs/plan-phase-S.md" ;
+  triage:line 256 ;
+  triage:snippet "  - `validate_runtime_socket_path`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/ATM-QA-011/pS-s3-runtime-control/689a48f> .
+
+<urn:atm:triage:occurrence/ATM-QA-011/pS-s4-hardening/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-S/sprint-S1.md" ;
+  triage:line 59 ;
+  triage:snippet "  - `validate_runtime_socket_path`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/ATM-QA-011/pS-s4-hardening/689a48f> .
+
+<urn:atm:triage:occurrence/ATM-QA-011/pS-s4-hardening/2>
+  a triage:Occurrence ;
+  triage:file "docs/plan-phase-S.md" ;
+  triage:line 256 ;
+  triage:snippet "  - `validate_runtime_socket_path`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/ATM-QA-011/pS-s4-hardening/689a48f> .
+
+<urn:atm:triage:occurrence/ATM-QA-011/integrate-phase-S/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-S/sprint-S1.md" ;
+  triage:line 59 ;
+  triage:snippet "  - `validate_runtime_socket_path`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:occursIn <urn:atm:triage:worktree/ATM-QA-011/integrate-phase-S/689a48f> .
+
+<urn:atm:triage:occurrence/ATM-QA-011/integrate-phase-S/2>
+  a triage:Occurrence ;
+  triage:file "docs/plan-phase-S.md" ;
+  triage:line 256 ;
+  triage:snippet "  - `validate_runtime_socket_path`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:occursIn <urn:atm:triage:worktree/ATM-QA-011/integrate-phase-S/689a48f> .
+
+<urn:atm:triage:worktree/ATM-QA-011/pS-s1-boundary-extraction/ab12ea1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/ATM-QA-011/pS-s2-windows-ipc/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/ATM-QA-011/pS-s3-runtime-control/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/ATM-QA-011/pS-s4-hardening/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/ATM-QA-011/integrate-phase-S/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:orderIndex 5 .
