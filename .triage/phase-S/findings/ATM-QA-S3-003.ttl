@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S3-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S3-003" ;
+  triage:title "#[cfg(not(unix))] prepare_local_ipc_endpoint stub is silent no-op without explanatory comment (local_ipc_transport.rs:454)" ;
+  triage:description "crates/atm-daemon/src/local_ipc_transport.rs:454 — the #[cfg(not(unix))] arm of prepare_local_ipc_endpoint is a silent no-op. cross-platform-guidelines.md requires explicit documentation of every OS-specific seam. A comment is required explaining that Windows named-pipe endpoints are OS-managed and require no pre-creation or stale-socket removal. Fix is comment-only. Note: ATM-QA-S2-013 covers the same pattern at local_ipc_transport.rs:395 on feature/pS-s2-windows-ipc — TASK-1148 fixed that occurrence on S.2. Verify whether the S.2 merge-forward at 9698a17 brought this fix to S.3 (may already be closed). (quality-mgr reported as ATM-QA-NEW-001 in S.3 QA-2 report.)" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T09:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S3-003/s3/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s3-runtime-control/9698a17> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s3-runtime-control/9698a17> .
+
+<urn:atm:triage:occurrence/ATM-QA-S3-003/s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 454 ;
+  triage:snippet "#[cfg(not(unix))] prepare_local_ipc_endpoint — silent no-op, no comment" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9698a17" ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s3-runtime-control/9698a17> .
+
+<urn:atm:triage:worktree/feature-pS-s3-runtime-control/9698a17>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "9698a17" ;
+  triage:orderIndex 3 .

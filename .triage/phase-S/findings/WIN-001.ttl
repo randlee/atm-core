@@ -1,0 +1,151 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ── Finding ──────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/WIN-001>
+    a triage:Finding ;
+    triage:findingId "WIN-001" ;
+    triage:title "Windows daemon has no graceful shutdown path" ;
+    triage:description "install_platform_hooks at crates/atm-daemon/src/lifecycle_control.rs:86-92 is a silent no-op on Windows. The terminate_requested() AtomicBool is never set via OS signals or Ctrl+C on Windows. The accept loop at crates/atm-daemon/src/local_ipc_transport.rs:222 polls this flag as its only exit trigger. Windows daemon runs until forcibly killed. SetConsoleCtrlHandler (or equivalent) must be implemented to set the flag on CTRL_C/CTRL_BREAK/CTRL_CLOSE events." ;
+    triage:category "WIN" ;
+    triage:phaseId "phase-S" ;
+    triage:triageMode "initial_pass" ;
+    triage:severity "critical" ;
+    triage:repeatable true ;
+    triage:sweepScope "file" ;
+    triage:status "regressed" ;
+    triage:dispatchReady true ;
+    triage:triagedAt "2026-05-08T00:00:00Z"^^xsd:dateTime ;
+
+    # Occurrences on open branches
+    triage:hasOccurrence <urn:atm:triage:occurrence/WIN-001/pS-s1/1> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/WIN-001/pS-s1/2> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/WIN-001/pS-s2/1> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/WIN-001/pS-s2/2> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/WIN-001/pS-s4/1> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/WIN-001/integrate-phase-S/1> ;
+
+    # Branch-level topology
+    triage:openOn <urn:atm:triage:worktree/pS-s1/ab12ea1> ;
+    triage:openOn <urn:atm:triage:worktree/pS-s2/a7f8039> ;
+    triage:fixedOn <urn:atm:triage:worktree/pS-s3/98c151c> ;
+    triage:openOn <urn:atm:triage:worktree/pS-s4/689a48f> ;
+    triage:openOn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> ;
+    triage:promoteTo <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+
+# ── WorktreeSnapshots ─────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pS-s1/ab12ea1>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pS-s1-boundary-extraction" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+    triage:headSha "ab12ea1" ;
+    triage:orderIndex 1 ;
+    triage:branchStatus "open" .
+
+<urn:atm:triage:worktree/pS-s2/a7f8039>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pS-s2-windows-ipc" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+    triage:headSha "a7f8039" ;
+    triage:orderIndex 2 ;
+    triage:branchStatus "open" .
+
+<urn:atm:triage:worktree/pS-s3/98c151c>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pS-s3-runtime-control" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+    triage:headSha "98c151c" ;
+    triage:orderIndex 3 ;
+    triage:branchStatus "fixed" .
+
+<urn:atm:triage:worktree/pS-s4/689a48f>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pS-s4-hardening" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+    triage:headSha "689a48f" ;
+    triage:orderIndex 4 ;
+    triage:branchStatus "regressed" .
+
+<urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c>
+    a triage:WorktreeSnapshot ;
+    triage:branch "integrate/phase-S" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+    triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+    triage:orderIndex 5 ;
+    triage:branchStatus "regressed" .
+
+# ── Occurrences: pS-s1 (open) ────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/WIN-001/pS-s1/1>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+    triage:line 86 ;
+    triage:snippet "#[cfg(not(unix))] fn install_platform_hooks(_terminate: &Arc<AtomicBool>, _reload: &Arc<AtomicBool>) -> Result<(), AtmError> { Ok(()) }" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pS-s1-boundary-extraction" ;
+    triage:headSha "ab12ea1" ;
+    triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+
+<urn:atm:triage:occurrence/WIN-001/pS-s1/2>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+    triage:line 282 ;
+    triage:snippet "if lifecycle_control.terminate_requested()" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pS-s1-boundary-extraction" ;
+    triage:headSha "ab12ea1" ;
+    triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+
+# ── Occurrences: pS-s2 (open) ────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/WIN-001/pS-s2/1>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+    triage:line 86 ;
+    triage:snippet "#[cfg(not(unix))] fn install_platform_hooks(_terminate: &Arc<AtomicBool>, _reload: &Arc<AtomicBool>) -> Result<(), AtmError> { Ok(()) }" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pS-s2-windows-ipc" ;
+    triage:headSha "a7f8039" ;
+    triage:occursIn <urn:atm:triage:worktree/pS-s2/a7f8039> .
+
+<urn:atm:triage:occurrence/WIN-001/pS-s2/2>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+    triage:line 222 ;
+    triage:snippet "if lifecycle_control.terminate_requested()" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pS-s2-windows-ipc" ;
+    triage:headSha "a7f8039" ;
+    triage:occursIn <urn:atm:triage:worktree/pS-s2/a7f8039> .
+
+# ── Occurrences: pS-s4 (regressed — shutdown_signals.rs unix-only, no Windows impl) ──
+
+<urn:atm:triage:occurrence/WIN-001/pS-s4/1>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/shutdown_signals.rs" ;
+    triage:line 1 ;
+    triage:snippet "#[cfg(unix)] — entire DaemonShutdownSignals struct and install() impl are unix-gated; no Windows variant exists; daemon cannot install signal hooks on Windows" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pS-s4-hardening" ;
+    triage:headSha "689a48f" ;
+    triage:occursIn <urn:atm:triage:worktree/pS-s4/689a48f> .
+
+# ── Occurrences: integrate/phase-S (regressed — same as pS-s4) ───────────────
+
+<urn:atm:triage:occurrence/WIN-001/integrate-phase-S/1>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/shutdown_signals.rs" ;
+    triage:line 1 ;
+    triage:snippet "#[cfg(unix)] — entire DaemonShutdownSignals struct and install() impl are unix-gated; no Windows variant exists; daemon cannot install signal hooks on Windows" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "integrate/phase-S" ;
+    triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+    triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .

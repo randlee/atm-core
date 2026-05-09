@@ -1,0 +1,101 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-010>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-010" ;
+  triage:title "lifecycle-before-ownership startup ordering undocumented in local_ipc_transport" ;
+  triage:description "local_ipc_transport.rs:177-178 — lifecycle-before-ownership startup ordering undocumented; failure-safety of install() before acquire() needs comment." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-08T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-010/pS-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-010/pS-s2/1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s1/ab12ea1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s2/ab12ea1> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s2/ab12ea1> .
+
+<urn:atm:triage:occurrence/ATM-QA-010/pS-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 177 ;
+  triage:snippet "let lifecycle_control = LifecycleControlSourceAdapter::install()?;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+
+<urn:atm:triage:occurrence/ATM-QA-010/pS-s1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 178 ;
+  triage:snippet "let ownership = HostOwnershipAdapter::new().acquire()?;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+
+<urn:atm:triage:occurrence/ATM-QA-010/pS-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 130 ;
+  triage:snippet "let lifecycle_control = LifecycleControlSourceAdapter::install()?;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s2/ab12ea1> .
+
+<urn:atm:triage:occurrence/ATM-QA-010/pS-s2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 131 ;
+  triage:snippet "let ownership = HostOwnershipAdapter::new().acquire()?;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s2/ab12ea1> .
+
+<urn:atm:triage:worktree/pS-s1/ab12ea1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s2/ab12ea1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "ab12ea1" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pS-s3/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pS-s4/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/integrate-phase-S/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:orderIndex 5 .

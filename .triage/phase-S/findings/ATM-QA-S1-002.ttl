@@ -1,0 +1,71 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S1-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S1-002" ;
+  triage:title "AtmProtocol import and codec field unused on Windows — Windows CI lint failure (atm/src/composition.rs:15,116)" ;
+  triage:description "atm/src/composition.rs:15 — `use atm_core::boundary::{AtmProtocol, ClientTransport}` imports AtmProtocol which is unused on Windows because the unix code path that consumes it is gated. atm/src/composition.rs:116 — `codec: JsonAtmProtocolCodec` struct field never read on Windows path. Both produce Windows CI lint errors. Confirmed still open at c0a0149 by S.1 QA-4 CI run 25594655768. Fix: gate the AtmProtocol import under #[cfg(unix)] and gate the codec field declaration and initialization under #[cfg(unix)]. Same pattern already applied in atm-daemon. (quality-mgr reported as CI-BLOCK-002-S1 in S.1 QA-3 report; confirmed STILL_OPEN in S.1 QA-4 report.)" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-09T12:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-05-09T13:30:00Z"^^xsd:dateTime ;
+  triage:fixedAt "16fe2f8" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S1-002/s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S1-002/s1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S1-002/s1/3> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/c0a0149> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/c0a0149> .
+
+<urn:atm:triage:occurrence/ATM-QA-S1-002/s1/1>
+  a triage:Occurrence ;
+  triage:file "atm/src/composition.rs" ;
+  triage:line 15 ;
+  triage:snippet "use atm_core::boundary::{AtmProtocol, ClientTransport} — AtmProtocol unused on Windows" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9f570b3" ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/9f570b3> .
+
+<urn:atm:triage:occurrence/ATM-QA-S1-002/s1/2>
+  a triage:Occurrence ;
+  triage:file "atm/src/composition.rs" ;
+  triage:line 116 ;
+  triage:snippet "codec: JsonAtmProtocolCodec — field never read on Windows path" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9f570b3" ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/9f570b3> .
+
+<urn:atm:triage:occurrence/ATM-QA-S1-002/s1/3>
+  a triage:Occurrence ;
+  triage:file "atm/src/composition.rs" ;
+  triage:line 15 ;
+  triage:snippet "QA-4 CI run 25594655768: unused import AtmProtocol + field codec never read — still open at c0a0149" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "c0a0149" ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/c0a0149> .
+
+<urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/9f570b3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "9f570b3" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/c0a0149>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "c0a0149" ;
+  triage:orderIndex 1 .

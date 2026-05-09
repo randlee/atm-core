@@ -1,0 +1,118 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-001>
+  a triage:Finding ;
+  triage:findingId "RSH-001" ;
+  triage:title "shutdown_background_lanes partial shutdown on coordinator timeout" ;
+  triage:description "composition.rs — shutdown_background_lanes uses ? chaining three lane shutdowns. If reconcile coordinator times out, watch and notification lanes never get shutdown() called." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-08T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/pS-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/pS-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/pS-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/pS-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/integrate-phase-S/1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s1/ab12ea1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s2/689a48f> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s3/689a48f> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s4/689a48f> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+
+<urn:atm:triage:occurrence/RSH-001/pS-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 333 ;
+  triage:snippet "fn shutdown_background_lanes(&self) -> Result<(), AtmError> { ... shutdown_lane_with_deadline(\"reconcile coordinator\", ..., |lane| lane.shutdown())?; ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+
+<urn:atm:triage:occurrence/RSH-001/pS-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 333 ;
+  triage:snippet "fn shutdown_background_lanes(&self) -> Result<(), AtmError> { ... shutdown_lane_with_deadline(\"reconcile coordinator\", ..., |lane| lane.shutdown())?; ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s2/689a48f> .
+
+<urn:atm:triage:occurrence/RSH-001/pS-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 396 ;
+  triage:snippet "fn shutdown_background_lanes(&self) -> Result<(), AtmError> { ... shutdown_lane_with_deadline(\"reconcile coordinator\", ..., |lane| lane.shutdown())?; ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s3/689a48f> .
+
+<urn:atm:triage:occurrence/RSH-001/pS-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 396 ;
+  triage:snippet "fn shutdown_background_lanes(&self) -> Result<(), AtmError> { ... shutdown_lane_with_deadline(\"reconcile coordinator\", ..., |lane| lane.shutdown())?; ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s4/689a48f> .
+
+<urn:atm:triage:occurrence/RSH-001/integrate-phase-S/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 396 ;
+  triage:snippet "fn shutdown_background_lanes(&self) -> Result<(), AtmError> { ... shutdown_lane_with_deadline(\"reconcile coordinator\", ..., |lane| lane.shutdown())?; ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+
+<urn:atm:triage:worktree/pS-s1/ab12ea1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s2/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pS-s3/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pS-s4/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:orderIndex 5 .

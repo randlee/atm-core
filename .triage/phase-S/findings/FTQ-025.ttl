@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-025>
+  a triage:Finding ;
+  triage:findingId "FTQ-025" ;
+  triage:title "drain_shutdown_finalizer_threads_for_test() joins SHUTDOWN_FINALIZER_THREADS with no timeout — can hang entire test binary (tests.rs:591)" ;
+  triage:description "crates/atm-daemon/src/tests.rs:591 — DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test() joins all handles registered in the process-wide SHUTDOWN_FINALIZER_THREADS static without any deadline or timeout. If any finalizer thread is blocked on a mutex, socket, or I/O operation, the entire test binary stalls indefinitely. Cargo's default test runner has a process-level timeout but no per-test deadline, so a single blocked finalizer causes all subsequent tests in the binary to appear to time out. Additionally the #[serial] attribute serializes against other #[serial] tests but non-serial tests still run in parallel; if a parallel test holds a resource the finalizer thread needs, deadlock results with no bounded recovery. NOTE: This defect is pre-existing; it was not introduced by the FTQ-024 fix in S.4-FIX-R2, but was exposed in scope during round-limit QA-3 review of tests.rs. Fix: add a bounded timeout to drain_shutdown_finalizer_threads_for_test — join each handle with a deadline (e.g., channel or condvar with recv_timeout) and panic with a descriptive message if any handle does not complete within the bound (e.g., 5 seconds). Converts a potential silent hang into a deterministic test failure." ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T20:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-025/s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s4-hardening/e3f4b88> .
+
+<urn:atm:triage:occurrence/FTQ-025/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 591 ;
+  triage:snippet "drain_shutdown_finalizer_threads_for_test() — joins SHUTDOWN_FINALIZER_THREADS without deadline; single blocked finalizer stalls entire test binary; pre-existing defect surfaced in round-limit QA-3 scope review" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "e3f4b88" ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s4-hardening/e3f4b88> .
+
+<urn:atm:triage:worktree/feature-pS-s4-hardening/e3f4b88>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "e3f4b88" ;
+  triage:orderIndex 6 .

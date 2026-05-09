@@ -1,0 +1,147 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ── Finding ──────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/RBP-F005>
+  a triage:Finding ;
+  triage:findingId "RBP-F005" ;
+  triage:title "terminate_flag() returns infallible Option<Arc<AtomicBool>> — misleads callers" ;
+  triage:description "lifecycle_control.rs:60 — terminate_flag() always returns Some(Arc<AtomicBool>). The Option wrapper is never None. Callers must unwrap() or pattern-match needlessly. This misleads readers into thinking None is a reachable state. The function should return Arc<AtomicBool> directly. Note: existing RBP-F001 (reconcile_runtime.rs) and RBP-F002 (watch_runtime.rs) cover AtmErrorCode discard — this is a distinct pattern about infallible Option return types." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-08T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F005/pS-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F005/pS-s1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F005/pS-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F005/pS-s2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F005/pS-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F005/pS-s3/2> ;
+
+  triage:openOn <urn:atm:triage:worktree/pS-s1/ab12ea1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s2/a7f8039> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s3/98c151c> ;
+  triage:fixedOn <urn:atm:triage:worktree/pS-s4/689a48f> ;
+  triage:fixedOn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s3/98c151c> .
+
+# ── Occurrences: feature/pS-s1-boundary-extraction ──────────────────────────
+
+<urn:atm:triage:occurrence/RBP-F005/pS-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 60 ;
+  triage:snippet "pub(crate) fn terminate_flag(&self) -> Option<Arc<AtomicBool>> { Some(Arc::clone(&self.terminate)) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+
+<urn:atm:triage:occurrence/RBP-F005/pS-s1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 444 ;
+  triage:snippet "fn daemon_terminate_flag() -> Result<Option<Arc<AtomicBool>>, AtmError> { Ok(crate::lifecycle_control::LifecycleControlSourceAdapter::install()?.terminate_flag()) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+
+# ── Occurrences: feature/pS-s2-windows-ipc ───────────────────────────────────
+
+<urn:atm:triage:occurrence/RBP-F005/pS-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 60 ;
+  triage:snippet "pub(crate) fn terminate_flag(&self) -> Option<Arc<AtomicBool>> { Some(Arc::clone(&self.terminate)) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "a7f8039" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s2/a7f8039> .
+
+<urn:atm:triage:occurrence/RBP-F005/pS-s2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 444 ;
+  triage:snippet "fn daemon_terminate_flag() -> Result<Option<Arc<AtomicBool>>, AtmError> { Ok(crate::lifecycle_control::LifecycleControlSourceAdapter::install()?.terminate_flag()) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "a7f8039" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s2/a7f8039> .
+
+# ── Occurrences: feature/pS-s3-runtime-control ───────────────────────────────
+
+<urn:atm:triage:occurrence/RBP-F005/pS-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 60 ;
+  triage:snippet "pub(crate) fn terminate_flag(&self) -> Option<Arc<AtomicBool>> { Some(Arc::clone(&self.terminate)) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:headSha "98c151c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s3/98c151c> .
+
+<urn:atm:triage:occurrence/RBP-F005/pS-s3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 444 ;
+  triage:snippet "fn daemon_terminate_flag() -> Result<Option<Arc<AtomicBool>>, AtmError> { Ok(crate::lifecycle_control::LifecycleControlSourceAdapter::install()?.terminate_flag()) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:headSha "98c151c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s3/98c151c> .
+
+# ── WorktreeSnapshots ─────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pS-s1/ab12ea1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:orderIndex 1 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pS-s2/a7f8039>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "a7f8039" ;
+  triage:orderIndex 2 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pS-s3/98c151c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "98c151c" ;
+  triage:orderIndex 3 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pS-s4/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 4 ;
+  triage:branchState "fixed" .
+
+<urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:orderIndex 5 ;
+  triage:branchState "fixed" .

@@ -1,0 +1,103 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-003>
+  a triage:Finding ;
+  triage:findingId "RSH-003" ;
+  triage:title "pub(crate) AtomicBool fields in lifecycle_control expose internal state" ;
+  triage:description "lifecycle_control.rs — pub(crate) AtomicBool fields expose internal shutdown state directly (overlaps ATM-QA-006)." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-08T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-003/pS-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-003/pS-s1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-003/pS-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-003/pS-s2/2> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s1/ab12ea1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s2/ab12ea1> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+
+<urn:atm:triage:occurrence/RSH-003/pS-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 8 ;
+  triage:snippet "    pub(crate) terminate: Arc<AtomicBool>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea13f6deb2214d4b719320fd9b08f76c7fa3" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+
+<urn:atm:triage:occurrence/RSH-003/pS-s1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 9 ;
+  triage:snippet "    pub(crate) reload: Arc<AtomicBool>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea13f6deb2214d4b719320fd9b08f76c7fa3" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+
+<urn:atm:triage:occurrence/RSH-003/pS-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 8 ;
+  triage:snippet "    pub(crate) terminate: Arc<AtomicBool>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "ab12ea13f6deb2214d4b719320fd9b08f76c7fa3" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s2/ab12ea1> .
+
+<urn:atm:triage:occurrence/RSH-003/pS-s2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 9 ;
+  triage:snippet "    pub(crate) reload: Arc<AtomicBool>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "ab12ea13f6deb2214d4b719320fd9b08f76c7fa3" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s2/ab12ea1> .
+
+<urn:atm:triage:worktree/pS-s1/ab12ea1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea13f6deb2214d4b719320fd9b08f76c7fa3" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s2/ab12ea1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "ab12ea13f6deb2214d4b719320fd9b08f76c7fa3" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pS-s3/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pS-s4/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pS-integrate/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:orderIndex 5 .

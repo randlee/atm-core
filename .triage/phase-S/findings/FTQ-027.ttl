@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-027>
+  a triage:Finding ;
+  triage:findingId "FTQ-027" ;
+  triage:title "std::sync::Barrier::wait() with no timeout in singleton recovery test — spawned thread panic causes permanent test hang (tests.rs:342)" ;
+  triage:description "crates/atm-daemon/src/tests.rs:342 — singleton_guard_rejects_stale_recovery_when_owner_token_changes uses std::sync::Barrier::new(2) for rendezvous coordination. The spawned thread (line 341) calls HostOwnershipAdapter::acquire_at which performs file I/O and lock acquisition. If that thread panics before reaching its own barrier.wait() call, the Barrier internal count is never satisfied and the test thread blocks at line 342 indefinitely. std::sync::Barrier has no timeout API and does not propagate thread panics, so a panic in the spawned thread produces a permanent hang rather than a test failure. The FTQ-026 fix added StaleRecoveryBarrierGuard for the install/clear race, but the Barrier::wait() at line 342 remains exposed to this panic-propagation gap. Fix: replace Arc<Barrier> with a channel-based rendezvous using recv_timeout(Duration::from_secs(5)), or use std::thread::scope so panics propagate from the spawned thread, or add a watchdog channel that the spawned thread signals before blocking at the barrier." ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T20:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-027/s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s4-hardening/9e97934> .
+
+<urn:atm:triage:occurrence/FTQ-027/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 342 ;
+  triage:snippet "barrier.wait() — std::sync::Barrier with no timeout; spawned thread panics before reaching barrier.wait() → test hangs permanently; no panic propagation; FTQ-026 RAII fix did not address this Barrier gap" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9e97934" ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s4-hardening/9e97934> .
+
+<urn:atm:triage:worktree/feature-pS-s4-hardening/9e97934>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "9e97934" ;
+  triage:orderIndex 7 .

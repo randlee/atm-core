@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-010>
+  a triage:Finding ;
+  triage:findingId "RSH-010" ;
+  triage:title "shutdown_lane_with_deadline spawns thread with no stored JoinHandle — timeout branch unobserved (composition.rs)" ;
+  triage:description "crates/atm/src/composition.rs — shutdown_lane_with_deadline spawns a thread but discards the JoinHandle. On RecvTimeoutError::Timeout the spawned thread continues unobserved with no log or join. Fix: store and unconditionally join the JoinHandle after recv_timeout. Identical pattern to FTQ-014 (same function in S.2 composition.rs) fixed in TASK-1161 on S.2 at 8421917. The S.2 merge-forward at 8b17139 did NOT propagate this fix — S.3's copy of shutdown_lane_with_deadline at :379 still discards the handle. Must be fixed directly on S.3. (quality-mgr reported as RSH-006 in S.3 QA-2 report; remapped to RSH-010; confirmed STILL_OPEN in S.3 QA-4 at 8b17139 line 379.)" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-09T13:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-05-09T14:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "TASK-1164" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-010/s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-010/s3/2> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s3-runtime-control/8b17139> ;
+  triage:fixedOn <urn:atm:triage:worktree/feature-pS-s3-runtime-control/f22b3cc> .
+
+<urn:atm:triage:occurrence/RSH-010/s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 368 ;
+  triage:snippet "shutdown_lane_with_deadline — JoinHandle discarded, timeout branch unobserved" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9698a17" ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s3-runtime-control/9698a17> .
+
+<urn:atm:triage:occurrence/RSH-010/s3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 379 ;
+  triage:snippet "QA-4 confirmation: JoinHandle still discarded at :379; S.2 merge-forward did not propagate FTQ-014 fix — STILL_OPEN at 8b17139" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "8b17139" ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s3-runtime-control/8b17139> .
+
+<urn:atm:triage:worktree/feature-pS-s3-runtime-control/9698a17>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "9698a17" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/feature-pS-s3-runtime-control/8b17139>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "8b17139" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/feature-pS-s3-runtime-control/f22b3cc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "f22b3cc" ;
+  triage:orderIndex 4 .
