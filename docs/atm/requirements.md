@@ -132,10 +132,11 @@ The `atm` crate docs must remain aligned with:
 - [`../requirements.md`](../requirements.md)
 - [`../architecture.md`](../architecture.md)
 - [`../atm-error-codes.md`](../atm-error-codes.md)
+- [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
 - [`../project-plan.md`](../project-plan.md)
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
-- [`../plan-phase-Q.md`](../plan-phase-Q.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)
+- [`../plan-phase-S.md`](../plan-phase-S.md)
 - [`../testing-guidelines.md`](../testing-guidelines.md)
 - [`./boundaries.md`](./boundaries.md)
 

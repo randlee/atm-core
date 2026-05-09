@@ -1,6 +1,7 @@
 # ATM-Daemon Boundary Inventory
 
-This document captures runtime-owned concrete adapters for Phase R.
+This document captures runtime-owned concrete adapters established in Phase R
+and tightened for the Phase S cross-platform daemon host line.
 
 Current design assumption:
 - `atm-daemon` is the production runtime composition root

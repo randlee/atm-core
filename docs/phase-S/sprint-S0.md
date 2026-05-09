@@ -28,7 +28,7 @@ implementation sprints will follow.
 - `REQ-P-PLATFORM-002`
 - `REQ-P-PRODUCT-001`
 - `REQ-P-RUNTIME-002`
-- `REQ-CORE-DAEMON-004`
+- `REQ-CORE-DAEMON-003`
 - `REQ-CORE-TRANSPORT-001`
 - `REQ-CORE-BOUNDARY-001`
 - `REQ-DAEMON-PLATFORM-001`
@@ -184,6 +184,9 @@ daemon docs, and Phase S sequence are all updated together.
   permanent `launch.lock` / `owner.lock` paths plus held-lock owner metadata
 - the Phase S sprint sequence is concrete enough to execute without reopening
   the architectural direction
+- the S.1-S.4 sprint documents exist and each names the exact code targets,
+  governing references, and acceptance criteria required for implementation
+  review
 - Phase S docs explicitly require feature parity on all supported operating
   systems rather than compile-only support
 - Phase S docs enumerate the exact current daemon methods/files that S.1-S.4

@@ -203,9 +203,10 @@ Required receiver behavior:
 2. validate `magic`
 3. validate required `version`
 4. validate `flags` for the selected version
-5. validate `payload_length <= MAX_DAEMON_FRAME_BYTES`
-6. read exactly `payload_length` bytes
-7. decode payload according to `message_kind`
+5. validate `message_kind` against the registry in Section 6
+6. validate `payload_length <= MAX_DAEMON_FRAME_BYTES`
+7. read exactly `payload_length` bytes
+8. decode payload according to `message_kind`
 
 Required sender behavior:
 1. construct a valid typed payload
@@ -295,6 +296,13 @@ Phase S payload encoding direction:
 Current request/response payload ownership maps to the shared envelope family
 and the concrete Rust DTO types in `crates/atm-core/src/protocol.rs`.
 
+Field-authority rule:
+- the Rust DTO definitions in `crates/atm-core/src/protocol.rs` are the field-
+  level source of truth for packet payload contents in protocol version
+  `0x0001`
+- adding, removing, or renaming a public packet field requires an ICD update,
+  matching requirements/architecture updates, and a compatibility review
+
 ### 7.1 Current Packet Payload Types
 
 | Packet kind | Payload Rust type | Current envelope path |
@@ -312,6 +320,24 @@ and the concrete Rust DTO types in `crates/atm-core/src/protocol.rs`.
 | `clear_response` | `ClearOutcome` | `ResponseEnvelope::Clear(...)` |
 | `doctor_response` | `DoctorReport` | `ResponseEnvelope::Doctor(...)` |
 | `error_response` | `ProtocolErrorEnvelope` | `ResponseEnvelope::Error(...)` |
+
+### 7.1.1 DTO Definition References
+
+The current packet payload DTO definitions live in:
+- `crates/atm-core/src/protocol.rs`
+  - `SendRequest`
+  - `AckRequest`
+  - `TeamMemberHeartbeatRequest`
+  - `ReadQuery`
+  - `ClearQuery`
+  - `DoctorQuery`
+  - `SendOutcome`
+  - `AckOutcome`
+  - `TeamMemberHeartbeatResponse`
+  - `ReadOutcome`
+  - `ClearOutcome`
+  - `DoctorReport`
+  - `ProtocolErrorEnvelope`
 
 ### 7.2 Current Shared Envelope Mapping
 
@@ -392,6 +418,19 @@ Success-family pairing rules:
 - `clear_request -> clear_response | error_response`
 - `doctor_request -> doctor_response | error_response`
 
+### 8.1.1 One-Request-Per-Connection Rule
+
+Phase S.0 keeps one logical request and one logical response per connection.
+
+Required behavior:
+- after a transport has accepted one valid request frame, it must not accept a
+  second request frame on that same connection in protocol version `0x0001`
+- if the peer sends additional bytes after the first completed request/response
+  exchange, the transport must close the connection and surface a typed
+  protocol failure
+- implementations must not silently treat a second request as pipelining or
+  multiplexing
+
 ### 8.2 Same-Host Local IPC
 
 Same-host local IPC must:
@@ -427,6 +466,9 @@ Shared frame-size rule:
 - `payload_length` must remain bounded by
   `MAX_DAEMON_FRAME_BYTES`
 
+Fixed Phase S.0 assignment:
+- `MAX_DAEMON_FRAME_BYTES = 1_048_576` bytes
+
 Phase S baseline cap direction:
 - max encoded request or response frame size remains 1 MiB unless a later
   requirement changes the cap
@@ -461,7 +503,24 @@ Required runtime behavior on protocol failure:
 - do not continue parsing later bytes from the same stream
 - do not scan for the next possible `magic` marker on the same connection
 
-### 10.1 No Mid-Stream Resynchronization
+### 10.1 Frame I/O Deadline Budget
+
+Phase S.0 deadline assignments are:
+- same-host local IPC fixed-header read timeout: `1s`
+- same-host local IPC payload read timeout: `2s`
+- same-host local IPC response write timeout: `3s`
+- cross-host fixed-header read timeout: `5s`
+- cross-host payload read timeout: `5s`
+- cross-host response write timeout: `5s`
+
+Budget rules:
+- the same-host header and payload sub-budgets together must fit within the
+  same-host daemon request deadline documented in `docs/atm-daemon/architecture.md`
+- remote adapters may retry connect attempts within their separate bounded
+  retry budget, but one accepted frame read or write operation must still obey
+  the per-leg `5s` deadline above
+
+### 10.2 No Mid-Stream Resynchronization
 
 Mid-stream resynchronization is explicitly forbidden.
 
@@ -509,6 +568,13 @@ Rule:
   represented as ATM error response packets whenever a response can still be
   sent reliably
 
+Reliably sendable means:
+- the transport has not already observed a read or write failure on the
+  connection
+- the request frame decoded successfully
+- the adapter still owns a live writable response stream for that request
+- the response can be emitted within the write deadline from Section 10.1
+
 ## 12. Delivery And Outcome Semantics
 
 The protocol does not claim business-operation completion until a valid ATM
@@ -542,6 +608,10 @@ Rules:
   when the active payload encoding supports them
 - a receiver that does not support the required version must fail the
   connection rather than guessing compatibility
+- protocol version `0x0001` does not define downgrade negotiation, mixed-
+  version fallback, or best-effort compatibility probing
+- a peer advertising any version other than `0x0001` must be rejected for the
+  current Phase S.0 line
 
 Version `0x0001` and the numeric packet-kind assignments in Section 6 are the
 current source of truth. Any incompatible change requires an ICD update before

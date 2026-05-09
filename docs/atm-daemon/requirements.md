@@ -150,8 +150,9 @@ Initial crate requirement IDs:
   daemon-owned status truth. Satisfies:
   `REQ-CORE-DOCTOR-002`.
 - `REQ-DAEMON-CONFIG-001` `atm-daemon` owns daemon config validation at startup
-  and on `SIGHUP` rescan. Invalid config must produce a typed failure or
-  bounded reload rejection rather than a silent degraded state. Satisfies:
+  and on lifecycle-control-triggered reload or rescan. Invalid config must
+  produce a typed failure or bounded reload rejection rather than a silent
+  degraded state. Satisfies:
   `REQ-CORE-CONFIG-001`, `REQ-CORE-CONFIG-003`, `REQ-DAEMON-SIGNAL-001`.
 - `REQ-DAEMON-TEST-001` `atm-daemon` must not define the core test strategy.
   Core correctness must remain testable without daemon process spawning.
@@ -199,7 +200,6 @@ The `atm-daemon` crate docs must remain aligned with:
 - [`../requirements.md`](../requirements.md)
 - [`../architecture.md`](../architecture.md)
 - [`../project-plan.md`](../project-plan.md)
-- [`../plan-phase-Q.md`](../plan-phase-Q.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)
 - [`../plan-phase-S.md`](../plan-phase-S.md)
 - [`../testing-guidelines.md`](../testing-guidelines.md)
@@ -310,9 +310,9 @@ Required runtime rules:
 - signal handlers must be installed before listeners are opened
 - the host runtime-control source must be installed before listeners are opened
 - daemon config must validate once at startup before listeners are opened
-- `SIGHUP`-driven config or roster rescan must either apply a fully valid
-  configuration or fail with a typed reload error while retaining the prior
-  serving configuration
+- lifecycle-control-triggered config or roster rescan must either apply a
+  fully valid configuration or fail with a typed reload error while retaining
+  the prior serving configuration
 - same-host daemon functionality must remain feature-complete on every
   supported operating system; compile-only support or typed unsupported-path
   stubs are not a releasable end state

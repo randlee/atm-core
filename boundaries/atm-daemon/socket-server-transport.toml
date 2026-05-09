@@ -13,15 +13,15 @@ visibility = "pub(crate)"
 constructor = "pub(crate)"
 
 [composition]
-roots = ["atm_daemon::composition::compose_runtime"]
+roots = ["atm_daemon::composition::RuntimeComposition::start"]
 
 [ownership]
-io_owns = ["listener_accept_loop", "framed_request_receive", "framed_response_send"]
+io_owns = ["listener_accept_loop", "framed_request_receive", "framed_response_send", "stale_endpoint_artifact_cleanup"]
 io_forbidden = ["sqlite", "process_spawn"]
 
 [dependencies]
 allowed_dependents = []
-allowed_dependencies = ["atm-core", "atm-rusqlite", "tokio"]
+allowed_dependencies = ["atm-core", "tokio"]
 forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon"]
 
 [references]

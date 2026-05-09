@@ -414,10 +414,16 @@ finds a blocking issue:
 - local IPC: `interprocess::local_socket`
 - cross-platform file locking / host ownership foundation: `fs4`
 - console termination control: `ctrlc`
-- Windows service-control path: `windows-services`
 
 These are preferred implementation candidates, not accepted architecture by
 themselves.
+
+Deferred crate note:
+- `windows-services` remains out of scope for the S.0 accepted plan because
+  the Phase S hosting model is the user-scoped same-host daemon, not an
+  SCM-only Windows service product variant
+- if a later sprint needs SCM-specific integration, it must introduce a new
+  explicit ADR and update the lifecycle-control boundary documents first
 
 Explicit deferral:
 - final crate adoption is deferred until S.1 boundary extraction confirms the
