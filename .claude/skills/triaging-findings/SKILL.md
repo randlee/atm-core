@@ -1,6 +1,6 @@
 ---
 name: triaging-findings
-version: 1.0.0
+version: 1.1.0
 description: Orchestrate pre-dispatch QA finding triage as team-lead. Launch one qa-triage agent per finding, collect phase-scoped Turtle records, aggregate by promoted branch, and only then dispatch branch-scoped fix assignments to arch-ctm.
 depends_on:
   codex-orchestration: 0.x
@@ -39,6 +39,8 @@ Do not send raw QA findings directly to `arch-ctm`.
 
 For each triage batch, assemble:
 - `phase_id`
+- `integration_branch`
+- `integration_worktree_path`
 - `triage_root`
 - ordered `worktrees` with branch, absolute path, head SHA, and order index
 - finding records with:
@@ -55,6 +57,11 @@ For each triage batch, assemble:
 
 Canonical triage artifacts live at:
 - `<triage_root>/<phase_id>/findings/<finding_id>.ttl`
+
+Required ownership rule:
+- `triage_root` must live under `integration_worktree_path`
+- the phase integration worktree is the canonical source of truth for triage
+  artifacts
 
 ## Triage Modes
 
@@ -90,6 +97,8 @@ expected.
 Each agent input must include:
 - `triage_mode`
 - `phase_id`
+- `integration_branch`
+- `integration_worktree_path`
 - finding metadata
 - ordered `worktrees`
 - `triage_root`
@@ -102,7 +111,11 @@ branch names.
 Do not assign any fix work until:
 - every finding in the batch has a completed `qa-triage` result
 - every canonical `.ttl` record exists
+- every `qa-triage` result has been checked for
+  `dispatch_blocked_pending_triage_commit`
 - each finding reports `dispatch_ready = true` or a valid non-dispatch result
+- dispatch remains blocked when any `qa-triage` result reports
+  `dispatch_blocked_pending_triage_commit = true`
 
 ### 3. Aggregate triage results
 
@@ -120,6 +133,31 @@ Separate them into:
 - non-dispatchable findings
 
 The per-finding `.ttl` record is canonical. Aggregation is derived.
+
+### 3.1 Commit triage artifacts before dispatch
+
+After all `qa-triage` agents in the batch have finished and after aggregation
+confirms the `.ttl` set is complete, stage, commit, and push the triage
+artifacts to git before sending any dev assignment to `arch-ctm`.
+
+Required commit scope:
+- the phase findings under `<triage_root>/<phase_id>/findings/`
+- any phase-local triage metadata needed for later follow-up, such as
+  worktree inventories under `<triage_root>/<phase_id>/`
+
+Required timing:
+- after triage batch aggregation
+- before branch-scoped fix dispatch
+- on the phase integration-branch worktree identified by
+  `integration_branch` / `integration_worktree_path`
+
+Reason:
+- parallel `qa-triage` agents write into one shared triage root
+- committing inside each agent would create batch races and partial evidence
+- leaving `.ttl` records untracked until phase end risks silent loss of the
+  canonical QA evidence
+
+Do not dispatch dev work from uncommitted `.ttl` state.
 
 ### 4. Dispatch branch-scoped fix work to `arch-ctm`
 
@@ -150,6 +188,12 @@ python3 scripts/triage_carry_forward.py \
 ```
 
 Use the script output as the `carry_forward_findings_json` template input.
+
+Prompt/handoff contract:
+- `qa-triage` itself is a JSON-in / fenced-JSON-out agent prompt
+- ATM task assignment templates remain XML ATM messages
+- when dispatching work, pass triage record paths or rendered carry-forward JSON
+  rather than copying raw `.ttl` contents into the task body
 
 ## Dispatch Rules
 
@@ -184,8 +228,9 @@ Until a dedicated closeout writer exists, use:
 
 ## Phase-End Post-Mortem
 
-At the end of a phase, after QA findings are closed, run the post-mortem review
-described in `references/post-mortem.md`.
+At the end of a phase, after all sprint branches are integrated into
+`integrate/phase-X` and before the final merge to `develop`, run the
+post-mortem review described in `references/post-mortem.md`.
 
 Participants:
 - `team-lead`
@@ -194,6 +239,7 @@ Participants:
 
 Purpose:
 - review the phase finding set as a whole
+- run one final `integrate/phase-X` quality gate
 - classify recurring patterns
 - produce systemic follow-up recommendations such as:
   - new ADRs
@@ -201,6 +247,16 @@ Purpose:
   - boundary updates
   - planning-process improvements
   - QA-process improvements
+
+Required gate:
+- `quality-mgr` must run a full review on `integrate/phase-X`
+- `quality-mgr` should deploy a background review team by role for that final
+  pass, using the appropriate reviewer mix for the phase artifacts
+- that review must verify 100% of phase findings are fixed or intentionally
+  deferred on the integration branch
+- that review team must verify no integrated fix was missed outside the original
+  changed-file scopes
+- do not merge `integrate/phase-X` to `develop` until that review passes
 
 ## Reporting to Dev
 
