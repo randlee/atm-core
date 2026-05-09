@@ -7,6 +7,8 @@ use super::{
     },
     lifecycle_control::LifecycleControlSourceAdapter,
 };
+#[cfg(unix)]
+use super::LocalIpcServerTransportAdapter;
 use atm_core::boundary::RequestDispatcher;
 use atm_core::doctor::{
     DoctorEnvironmentVisibility, DoctorQuery, DoctorReport, DoctorStatus, DoctorSummary,
