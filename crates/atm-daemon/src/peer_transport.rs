@@ -430,15 +430,12 @@ impl PeerClientTransport {
     }
 }
 
-fn wait_for_retry_backoff(terminate: &Option<Arc<AtomicBool>>, sleep_for: Duration) -> bool {
+fn wait_for_retry_backoff(terminate: &Arc<AtomicBool>, sleep_for: Duration) -> bool {
     const RETRY_POLL_INTERVAL: Duration = Duration::from_millis(25);
 
     let started = Instant::now();
     loop {
-        if terminate
-            .as_ref()
-            .is_some_and(|flag| flag.load(Ordering::SeqCst))
-        {
+        if terminate.load(Ordering::SeqCst) {
             return true;
         }
         let elapsed = started.elapsed();
@@ -450,7 +447,7 @@ fn wait_for_retry_backoff(terminate: &Option<Arc<AtomicBool>>, sleep_for: Durati
     }
 }
 
-fn daemon_terminate_flag() -> Result<Option<Arc<AtomicBool>>, AtmError> {
+fn daemon_terminate_flag() -> Result<Arc<AtomicBool>, AtmError> {
     Ok(crate::lifecycle_control::LifecycleControlSourceAdapter::install()?.terminate_flag())
 }
 

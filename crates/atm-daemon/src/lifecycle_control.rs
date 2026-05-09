@@ -124,8 +124,8 @@ impl LifecycleControlSourceAdapter {
         self.state_change.wait_for_change(observed_generation)
     }
 
-    pub(crate) fn terminate_flag(&self) -> Option<Arc<AtomicBool>> {
-        Some(Arc::clone(&self.terminate))
+    pub(crate) fn terminate_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.terminate)
     }
 
     #[cfg(test)]
