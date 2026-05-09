@@ -927,7 +927,7 @@ Execution sequence:
    - ungated `std::os::unix` imports
    - `cfg_attr(not(unix), allow(dead_code))` portability suppressors
 2. extend the existing identity-literal lint into a duplicate semantic
-   string-literal gate for non-test Rust code, with raw `"team-lead"` as the
+   string-literal gate for non-test Rust code, with raw `”team-lead”` as the
    first mandatory case
 3. add a new repository-local fixed-sleep test-hygiene lint and wire it into
    `just lint`
@@ -948,6 +948,28 @@ Acceptance:
   - ATM-local and retained in repository-local lint glue
 - no family is left as “QA-only tribal knowledge”
 - sprint plan: `docs/phase-R/sprint-R19.md`
+
+### R.20 Daemon Partitioning And Enforcement Hardening
+
+Status:
+- in review on `feature/pR-s20-daemon-partitioning`
+
+- review the post-`PR #200` integrated daemon state on `integrate/phase-R`
+- define the daemon-private partition plan for exactly these eight partitions:
+  - `ownership`
+  - `server_runtime`
+  - `request_runtime`
+  - `runtime_status`
+  - `peer_transport`
+  - `watch_runtime`
+  - `reconcile_runtime`
+  - `notification_runtime`
+- tighten daemon architecture, requirements, and boundaries so the partitioned
+  design is explicit and enforceable
+- run a repeated plan-hardening loop over code and docs until the daemon
+  planning set is internally consistent and specific enough for a production
+  cleanup sprint
+- sprint plan: `docs/phase-R/sprint-R20.md`
 
 ## 6. Working Rule
 

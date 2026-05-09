@@ -1,6 +1,11 @@
 # Phase R Continuation — Issues Tracker
 
-**Branch base**: `integrate/phase-R` @ `40b9842`
+**Branch base**: `integrate/phase-R` @ `d5e49df`
+**Follow-on note**: daemon partitioning planning in `R.20` reviews the
+post-`PR #200` integrated daemon state separately from this original phase-end
+snapshot.
+**Baseline note**: `d5e49df` is the post-`PR #200` `origin/integrate/phase-R`
+head used for the R.20 planning review baseline.
 **Review sources**: TASK-995 (arch-ctm gap analysis) + TASK-996 (quality-mgr Phase R final QA-1)
 **Created**: 2026-05-06
 **Status**: OPEN — Phase R not merge-ready
@@ -8,6 +13,46 @@
 ---
 
 ## BLOCKING FINDINGS
+
+### I-R20-001 — Singleton teardown safe order is unspecified and race-prone
+**Source**: arch-ctm post-`PR #200` integrated daemon review + R.20-PLAN-QA-1
+**Status**: OPEN — motivating R.20 partitioning issue
+**Files**: `crates/atm-daemon/src/lib.rs` | `docs/atm-daemon/architecture.md`
+
+`SingletonGuard::drop()` currently releases the live advisory lock before
+unlinking the owner-visible lock path. That ordering can race a succeeding
+daemon process and must be turned into an explicit unlink-then-unlock contract
+before the daemon partition cleanup is considered complete.
+
+### I-R20-002 — Request execution still relies on detached worker threads
+**Source**: arch-ctm post-`PR #200` integrated daemon review + R.20-PLAN-QA-1
+**Status**: OPEN — motivating R.20 partitioning issue
+**Files**: `crates/atm-daemon/src/lib.rs` | `docs/atm-daemon/architecture.md`
+
+Per-request execution is still launched through detached spawned worker
+threads. Runtime drain accounting must own accepted request work until it
+finishes or is cancelled; the follow-on daemon cleanup sprint exists to make
+that ownership explicit and enforceable.
+
+### I-R20-003 — Background-lane lifecycle is not yet rollback-safe by design
+**Source**: arch-ctm post-`PR #200` integrated daemon review + R.20-PLAN-QA-1
+**Status**: OPEN — motivating R.20 partitioning issue
+**Files**: `crates/atm-daemon/src/composition.rs` | `docs/atm-daemon/requirements.md`
+
+Background runtime lanes still need one explicit rollback-safe lifecycle
+contract: partial start failure must stop every lane already started and final
+shutdown must attempt every lane cleanup path before singleton ownership is
+released.
+
+### I-R20-004 — Status-cache cap semantics do not yet guarantee bounded retention
+**Source**: arch-ctm post-`PR #200` integrated daemon review + R.20-PLAN-QA-1
+**Status**: OPEN — motivating R.20 partitioning issue
+**Files**: `crates/atm-daemon/src/runtime_health.rs` | `docs/atm-daemon/requirements.md`
+
+The runtime status cache still has a motivating defect where overflow can
+demote a member snapshot to `unknown` without guaranteeing retained-cardinality
+eviction. The R.20 planning sprint hardens the bounded-retention contract so
+the follow-on cleanup sprint has one explicit target.
 
 ### ~~B-001 — Singleton lock paths are socket-scoped, not host-wide~~ CLOSED IN R.13
 **Source**: arch-ctm TASK-995 Finding #1 + quality-mgr REQ-R-001

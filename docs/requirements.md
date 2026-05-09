@@ -137,6 +137,29 @@ Satisfied by:
   - every daemon launch path is subordinate to `REQ-P-RUNTIME-002` and
     `REQ-P-RUNTIME-003`
 
+- `REQ-P-DAEMON-PARTITION-001` Phase R daemon cleanup work must use one
+  explicit daemon-private partition map so ownership, review scope, and later
+  lint enforcement do not depend on ad hoc file boundaries.
+
+- `REQ-P-DAEMON-LIFECYCLE-001` Daemon lifecycle and singleton teardown rules
+  must define a positive safe-order contract:
+  - remove the owner-visible lock path before releasing the live advisory lock
+  - if cleanup cannot complete safely, fail closed rather than publishing an
+    ambiguous ownership state
+
+- `REQ-P-DAEMON-DISPATCHER-001` Request work accepted by the daemon must remain
+  tracked by runtime-owned drain accounting until it finishes or is cancelled.
+  Detached untracked request execution is forbidden even when the transport
+  remains single-request-per-connection.
+
+- `REQ-P-DAEMON-LANES-001` Background daemon lanes must use rollback-safe
+  startup and shutdown sequencing:
+  - partial start failure must stop every lane already started
+  - shutdown must attempt every lane cleanup path before final ownership
+    release
+  - partial lane failure must not leave the runtime in ambiguous ownership
+    state
+
 ### 2.1 In Scope
 
 - one binary: `atm`

@@ -247,11 +247,75 @@ Dispatcher/handler rule:
 - the dispatcher itself stays thin and must not absorb request-family business
   logic
 
-## 3.1.1 Graceful Shutdown
+## 3.1.1 Internal Partitioning
+
+The daemon runtime is one crate but it is not one architectural blob.
+
+Required daemon-private partitions:
+- `ownership`
+  - owns host-wide lock paths, owner-record reads/writes, stale-owner recovery,
+    and singleton cleanup rules
+- `server_runtime`
+  - owns listener bootstrap, accept loop, connection registry, drain
+    sequencing, and forced-cancel escalation
+- `request_runtime`
+  - owns per-connection request execution, request-work tracking, request
+    deadlines, and response emission
+- `runtime_status`
+  - owns the live status cache, cache-cap semantics, roster hydration,
+    reload-time runtime-view assembly, and doctor-health projection into
+    `atm doctor`
+- `peer_transport`
+  - owns remote delivery, replay, retry, and remote transport-specific failure
+    handling
+- `watch_runtime`
+  - owns bounded watch subscription state and watch worker polling
+- `reconcile_runtime`
+  - owns reconcile debounce, coalescing, and bounded pending-work wakeups
+- `notification_runtime`
+  - owns bounded notification delivery worker state and notifier wakeups
+
+Observability rule:
+- daemon-owned `sc-observability` sinks are a cross-cutting runtime facility
+  used by all partitions as needed
+- observability is not a ninth partition and must not become a backdoor for
+  bypassing the partition ownership lines above
+
+Required ownership rules:
+- `lib.rs` is the crate entrypoint and daemon-private integration seam only; it
+  must not remain the long-term home for singleton ownership, server runtime,
+  request execution, and shutdown policy simultaneously
+- singleton cleanup must remain ownership-safe:
+  - the runtime must remove the owner-visible lock path before releasing the
+    live advisory lock
+  - the runtime must not release the ownership lock and then unlink a shared
+    lock path in a way that can race a succeeding daemon process
+- request work launched from the server runtime must remain owned by runtime
+  drain accounting until it finishes or is cancelled
+  - `request_runtime` owns one runtime-private tracked-work registry keyed by
+    accepted request execution units
+  - the registry must stay bounded by the current transport contract:
+    - Phase R remains single-request-per-connection, so one accepted
+      connection contributes at most one active request-work entry
+    - the documented `32` per-connection in-flight cap remains the resource-cap
+      contract for a later framed-multiplexing extension, not the current
+      thread shape
+  - shutdown/drain clears tracked request work only after the request finishes
+    or a forced-cancel path has run
+- background-lane startup and shutdown must remain rollback-safe and must not
+  stop after the first lane error if more cleanup is still possible
+  - if lane startup fails after earlier lanes have already started, cleanup
+    runs in reverse start order until every started lane has been asked to stop
+  - after partial-start cleanup, the runtime must hold no lane-specific worker
+    ownership before it returns the startup failure
+- bounded caches must be bounded in actual retained cardinality, not only by
+  state demotion labels
+
+## 3.1.2 Graceful Shutdown
 
 Shutdown is part of the daemon contract, not an implementation detail.
-`R.18` closes the remaining runtime-ops work by implementing this shutdown,
-reload, and resource-cap contract as written.
+`R.18` landed the runtime-ops behavior set, and `R.20` hardens the internal
+partitioning and enforcement rules needed to keep that behavior maintainable.
 
 Required shutdown sequence:
 1. stop accepting new local and remote connections
@@ -260,7 +324,8 @@ Required shutdown sequence:
 4. cancel remaining inflight work at the force-cancel deadline
 5. checkpoint SQLite WAL
 6. flush observability sinks on a best-effort basis
-7. release singleton socket/ownership artifacts
+7. remove the owner-visible singleton lock path and related socket artifact
+8. release the live advisory ownership lock
 
 Force-cancel rule:
 - the forced-shutdown path must interrupt blocked socket reads and writes via
@@ -275,8 +340,10 @@ Required deadlines:
 Ordering rule:
 - singleton ownership is released only after listener shutdown and checkpoint
   sequencing completes or the runtime has failed closed
+- unlinking the owner-visible lock path must happen before advisory-lock
+  release; unlock-then-unlink is a contract violation
 
-## 3.1.2 Signal Handling
+## 3.1.3 Signal Handling
 
 Required signals:
 - `SIGINT`: begin graceful shutdown
@@ -308,6 +375,8 @@ Required caps:
 - bounded remote retry queue depth: `256`
 - SQLite handle/pool budget: min `1`, max `4`
 - live status-cache cap: `4096` entries
+- watch subscription cap: `256` active subscriptions
+- notification work queue depth: `256`
 
 Required saturation behavior:
 - connection cap exceeded: reject new accepts with a typed over-capacity error
@@ -317,9 +386,13 @@ Required saturation behavior:
 - ingest queue full: fail the enqueue with structured degradation/health
   reporting; no silent drop
 - retry queue full: fail remote send attempt rather than enqueueing unbounded
+- watch subscription cap exceeded: reject the new subscription with typed
+  over-capacity failure rather than retaining unbounded watcher state
+- notification queue full: fail the enqueue with typed degraded delivery status
+  rather than silently buffering beyond the cap
 - status-cache cap exceeded: evict least-recently-updated noncritical entries
-  from the live-member map and demote them to explicit `unknown` with
-  structured warning emission
+  from the live-member map so the retained map cardinality remains bounded, and
+  reflect the eviction as explicit `unknown` plus structured warning emission
 
 ## 3.3 Status Ownership
 
@@ -430,4 +503,4 @@ Initial use cases:
 - remote daemon-to-daemon protocol structure
 - runtime watch/reconcile orchestration
 - queued notifier/runtime delivery structure
-  - bounded at `64` in-memory events with typed backpressure on overflow
+  - bounded at `256` in-memory events with typed backpressure on overflow
