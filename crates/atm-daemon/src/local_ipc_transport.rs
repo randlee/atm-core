@@ -11,8 +11,7 @@ use atm_core::error::AtmError;
 use atm_core::protocol::{JsonAtmProtocolCodec, ProtocolErrorEnvelope, ResponseEnvelope};
 use interprocess::local_socket::prelude::*;
 use interprocess::local_socket::{
-    Listener as LocalSocketListener, ListenerNonblockingMode, ListenerOptions,
-    Stream as LocalSocketStream,
+    Listener as LocalSocketListener, ListenerOptions, Stream as LocalSocketStream,
 };
 
 use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
@@ -24,7 +23,13 @@ use std::thread;
 
 const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
-const SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_millis(25);
+
+enum ServeEvent {
+    Connection(LocalSocketStream),
+    Reload,
+    Terminate,
+    AcceptError(AtmError),
+}
 
 #[derive(Debug, Default)]
 pub(crate) struct ActiveConnectionRegistry {
@@ -133,6 +138,7 @@ impl Drop for ActiveDispatchGuard {
 
 pub(crate) struct PreparedRuntimeServer {
     _ownership: HostOwnershipGuard,
+    endpoint_path: PathBuf,
     listener: LocalSocketListener,
     lifecycle_control: LifecycleControlSourceAdapter,
     registry: Arc<ActiveConnectionRegistry>,
@@ -161,7 +167,6 @@ impl PreparedRuntimeServer {
             .name(atm_core::protocol::daemon_local_ipc_name_from_path(
                 &endpoint_path,
             )?)
-            .nonblocking(ListenerNonblockingMode::Accept)
             .create_sync()
             .map_err(|source| {
                 AtmError::daemon_unavailable(format!(
@@ -179,6 +184,7 @@ impl PreparedRuntimeServer {
         emit_ready_signal_if_requested()?;
         Ok(Self {
             _ownership: ownership,
+            endpoint_path,
             listener,
             lifecycle_control,
             registry: Arc::new(ActiveConnectionRegistry::default()),
@@ -227,6 +233,7 @@ impl PreparedRuntimeServer {
     {
         let Self {
             _ownership,
+            endpoint_path,
             listener,
             lifecycle_control,
             registry,
@@ -235,24 +242,71 @@ impl PreparedRuntimeServer {
         } = self;
         thread::scope(|scope| -> Result<(), AtmError> {
             let mut serve_error = None;
-            loop {
-                if lifecycle_control.take_reload_requested() {
-                    match reload_runtime_view() {
-                        Ok(()) => tracing::info!(
-                            "bounded lifecycle-control-triggered config/roster reload applied"
-                        ),
-                        Err(error) => tracing::warn!(
-                            error_code = %error.code,
-                            error_message = %error.message,
-                            "bounded lifecycle-control-triggered config/roster reload rejected; last-known-good serving config retained"
-                        ),
+            let (event_tx, event_rx) = std::sync::mpsc::channel();
+            {
+                let event_tx = event_tx.clone();
+                let lifecycle_control = lifecycle_control.clone();
+                let endpoint_path = endpoint_path.clone();
+                scope.spawn(move || {
+                    let mut observed_generation = match lifecycle_control.event_generation() {
+                        Ok(generation) => generation,
+                        Err(error) => {
+                            let _ = event_tx.send(ServeEvent::AcceptError(error));
+                            return;
+                        }
+                    };
+                    loop {
+                        if let Err(error) =
+                            lifecycle_control.wait_for_state_change(&mut observed_generation)
+                        {
+                            let _ = event_tx.send(ServeEvent::AcceptError(error));
+                            return;
+                        }
+                        if lifecycle_control.terminate_requested() {
+                            let _ = wake_listener(&endpoint_path);
+                            let _ = event_tx.send(ServeEvent::Terminate);
+                            return;
+                        }
+                        if lifecycle_control.take_reload_requested() {
+                            let _ = event_tx.send(ServeEvent::Reload);
+                        }
                     }
-                }
-                if lifecycle_control.terminate_requested() {
-                    break;
-                }
-                match listener.accept() {
-                    Ok(mut stream) => {
+                });
+            }
+            {
+                let event_tx = event_tx.clone();
+                let lifecycle_control = lifecycle_control.clone();
+                scope.spawn(move || {
+                    loop {
+                        match listener.accept() {
+                            Ok(stream) => {
+                                if lifecycle_control.terminate_requested() {
+                                    return;
+                                }
+                                if event_tx.send(ServeEvent::Connection(stream)).is_err() {
+                                    return;
+                                }
+                            }
+                            Err(source) => {
+                                let error = AtmError::daemon_unavailable(
+                                    "failed while accepting daemon local IPC connection",
+                                )
+                                .with_source(source);
+                                let _ = event_tx.send(ServeEvent::AcceptError(error));
+                                return;
+                            }
+                        }
+                    }
+                });
+            }
+            loop {
+                match event_rx.recv().map_err(|source| {
+                    AtmError::daemon_unavailable(
+                        "daemon local IPC accept loop event channel disconnected",
+                    )
+                    .with_source(source)
+                })? {
+                    ServeEvent::Connection(mut stream) => {
                         if registry.active_connections() >= MAX_CONCURRENT_CONNECTIONS {
                             let response = ResponseEnvelope::Error(
                                 ProtocolErrorEnvelope::from_error(
@@ -294,16 +348,21 @@ impl PreparedRuntimeServer {
                             }
                         });
                     }
-                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                        thread::sleep(SHUTDOWN_POLL_INTERVAL);
+                    ServeEvent::Reload => match reload_runtime_view() {
+                        Ok(()) => tracing::info!(
+                            "bounded lifecycle-control-triggered config/roster reload applied"
+                        ),
+                        Err(error) => tracing::warn!(
+                            error_code = %error.code,
+                            error_message = %error.message,
+                            "bounded lifecycle-control-triggered config/roster reload rejected; last-known-good serving config retained"
+                        ),
+                    },
+                    ServeEvent::Terminate => {
+                        break;
                     }
-                    Err(source) => {
-                        serve_error = Some(
-                            AtmError::daemon_unavailable(
-                                "failed while accepting daemon local IPC connection",
-                            )
-                            .with_source(source),
-                        );
+                    ServeEvent::AcceptError(error) => {
+                        serve_error = Some(error);
                         break;
                     }
                 }
@@ -409,6 +468,28 @@ fn remove_stale_endpoint(endpoint_path: &Path) -> Result<(), AtmError> {
         ))
         .with_source(source)
     })
+}
+
+fn wake_listener(endpoint_path: &Path) -> Result<(), AtmError> {
+    let name = atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path)?;
+    let mut stream = LocalSocketStream::connect(name).map_err(|source| {
+        AtmError::daemon_unavailable(format!(
+            "failed to wake daemon local IPC listener at {}",
+            endpoint_path.display()
+        ))
+        .with_source(source)
+    })?;
+    stream
+        .set_send_timeout(Some(REQUEST_DEADLINE))
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to apply daemon listener wake timeout")
+                .with_source(source)
+        })?;
+    stream.flush().map_err(|source| {
+        AtmError::daemon_unavailable("failed to flush daemon listener wake signal")
+            .with_source(source)
+    })?;
+    Ok(())
 }
 
 fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
