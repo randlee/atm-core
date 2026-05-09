@@ -507,8 +507,9 @@ fn handle_connection(
     let (request_id, request) = codec.request_from_frame(frame)?;
 
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
+    let dispatch_registry = Arc::clone(&registry);
     let dispatch_handle = std::thread::spawn(move || {
-        let _dispatch_work = registry.register_dispatch_work();
+        let _dispatch_work = dispatch_registry.register_dispatch_work();
         let _ = result_tx.send(dispatcher.dispatch(request));
     });
     registry.track_dispatch_handle(dispatch_handle)?;
