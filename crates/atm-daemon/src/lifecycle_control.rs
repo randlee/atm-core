@@ -238,88 +238,78 @@ fn install_platform_hooks(
     reload: &Arc<AtomicBool>,
     state_change: &Arc<LifecycleStateChange>,
 ) -> Result<(), AtmError> {
-    use std::sync::OnceLock;
-    use windows_sys::Win32::Foundation::{BOOL, FALSE, TRUE};
-    use windows_sys::Win32::System::Console::{
-        CTRL_BREAK_EVENT, CTRL_C_EVENT, CTRL_CLOSE_EVENT, SetConsoleCtrlHandler,
-    };
+    use signal_hook::consts::{SIGBREAK, SIGINT, SIGTERM};
+    use signal_hook::flag as signal_flag;
 
-    static TERMINATE: OnceLock<Arc<AtomicBool>> = OnceLock::new();
-    static RELOAD: OnceLock<Arc<AtomicBool>> = OnceLock::new();
-    static STATE_CHANGE: OnceLock<Arc<LifecycleStateChange>> = OnceLock::new();
+    signal_flag::register(SIGINT, Arc::clone(terminate)).map_err(|source| {
+        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_source(source)
+    })?;
+    signal_flag::register(SIGTERM, Arc::clone(terminate)).map_err(|source| {
+        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_source(source)
+    })?;
+    signal_flag::register(SIGBREAK, Arc::clone(reload)).map_err(|source| {
+        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_source(source)
+    })?;
 
-    fn apply_console_ctrl_event(ctrl_type: u32) -> BOOL {
-        match ctrl_type {
-            CTRL_C_EVENT | CTRL_CLOSE_EVENT => {
-                if let Some(flag) = TERMINATE.get() {
-                    flag.store(true, Ordering::SeqCst);
-                }
-                if let Some(state_change) = STATE_CHANGE.get() {
+    let terminate = Arc::clone(terminate);
+    let reload = Arc::clone(reload);
+    let state_change = Arc::clone(state_change);
+    std::thread::Builder::new()
+        .name("atm-daemon-lifecycle-windows".to_string())
+        .spawn(move || {
+            let mut observed_terminate = terminate.load(Ordering::SeqCst);
+            let mut observed_reload = reload.load(Ordering::SeqCst);
+            loop {
+                let terminate_now = terminate.load(Ordering::SeqCst);
+                let reload_now = reload.load(Ordering::SeqCst);
+                if terminate_now != observed_terminate || reload_now != observed_reload {
+                    observed_terminate = terminate_now;
+                    observed_reload = reload_now;
                     let _ = state_change.notify();
                 }
-                TRUE
+                std::thread::sleep(std::time::Duration::from_millis(25));
             }
-            CTRL_BREAK_EVENT => {
-                if let Some(flag) = RELOAD.get() {
-                    flag.store(true, Ordering::SeqCst);
-                }
-                if let Some(state_change) = STATE_CHANGE.get() {
-                    let _ = state_change.notify();
-                }
-                TRUE
-            }
-            _ => FALSE,
-        }
-    }
-
-    unsafe extern "system" fn handle_console_ctrl(ctrl_type: u32) -> BOOL {
-        apply_console_ctrl_event(ctrl_type)
-    }
-
-    let _ = TERMINATE.set(Arc::clone(terminate));
-    let _ = RELOAD.set(Arc::clone(reload));
-    let _ = STATE_CHANGE.set(Arc::clone(state_change));
-    let installed = unsafe { SetConsoleCtrlHandler(Some(handle_console_ctrl), TRUE) };
-    if installed == 0 {
-        return Err(AtmError::daemon_unavailable(
-            "failed to install daemon lifecycle signal handlers",
-        )
-        .with_source(std::io::Error::last_os_error()));
-    }
+        })
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to spawn daemon lifecycle signal worker")
+                .with_source(source)
+        })?;
     Ok(())
 }
 
 #[cfg(all(test, windows))]
 mod windows_tests {
-    use super::{LifecycleControlSourceAdapter, apply_console_ctrl_event};
-    use windows_sys::Win32::Foundation::{FALSE, TRUE};
-    use windows_sys::Win32::System::Console::{CTRL_BREAK_EVENT, CTRL_C_EVENT, CTRL_CLOSE_EVENT};
+    use super::LifecycleControlSourceAdapter;
+    use serial_test::serial;
 
     #[test]
-    fn console_break_requests_reload_without_terminate() {
-        let lifecycle = LifecycleControlSourceAdapter::install().expect("install");
-        lifecycle.set_terminate_for_test(false);
-        lifecycle.set_reload_for_test(false);
+    #[serial]
+    fn windows_reload_flag_is_shared_across_install_calls() {
+        let first = LifecycleControlSourceAdapter::install().expect("install first");
+        first.set_terminate_for_test(false);
+        first.set_reload_for_test(false);
 
-        assert_eq!(apply_console_ctrl_event(CTRL_BREAK_EVENT), TRUE);
-        assert!(lifecycle.take_reload_requested());
-        assert!(!lifecycle.terminate_requested());
+        let second = LifecycleControlSourceAdapter::install().expect("install second");
+        first.set_reload_for_test(true);
+
+        assert!(second.take_reload_requested());
+        assert!(!second.terminate_requested());
     }
 
     #[test]
-    fn console_close_requests_terminate() {
-        let lifecycle = LifecycleControlSourceAdapter::install().expect("install");
-        lifecycle.set_terminate_for_test(false);
-        lifecycle.set_reload_for_test(false);
+    #[serial]
+    fn windows_terminate_flag_is_shared_across_install_calls() {
+        let first = LifecycleControlSourceAdapter::install().expect("install first");
+        first.set_terminate_for_test(false);
+        first.set_reload_for_test(false);
 
-        assert_eq!(apply_console_ctrl_event(CTRL_C_EVENT), TRUE);
-        assert!(lifecycle.terminate_requested());
+        let second = LifecycleControlSourceAdapter::install().expect("install second");
+        first.set_terminate_for_test(true);
 
-        lifecycle.set_terminate_for_test(false);
-        assert_eq!(apply_console_ctrl_event(CTRL_CLOSE_EVENT), TRUE);
-        assert!(lifecycle.terminate_requested());
-
-        assert_eq!(apply_console_ctrl_event(u32::MAX), FALSE);
+        assert!(second.terminate_requested());
     }
 }
 

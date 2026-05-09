@@ -186,12 +186,16 @@ impl WatchRuntime {
                 AtmError::daemon_unavailable("failed to spawn watch runtime worker")
                     .with_source(source)
             })?;
-        *self
-            .inner
-            .worker
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("watch runtime worker lock poisoned"))? =
-            Some(handle);
+        let mut worker = match self.inner.worker.lock() {
+            Ok(worker) => worker,
+            Err(_) => {
+                let _ = handle.join();
+                return Err(AtmError::daemon_unavailable(
+                    "watch runtime worker lock poisoned",
+                ));
+            }
+        };
+        *worker = Some(handle);
         Ok(())
     }
 

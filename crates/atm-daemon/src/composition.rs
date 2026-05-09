@@ -447,6 +447,7 @@ pub(crate) fn compose_runtime() -> Result<RuntimeComposition, AtmError> {
 #[cfg(test)]
 mod tests {
     use atm_core::boundary::ServerTransport;
+    use serial_test::serial;
     use tempfile::TempDir;
 
     use super::RuntimeComposition;
@@ -536,6 +537,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn runtime_composition_failed_startup_returns_to_stopped() {
         let tempdir = TempDir::new().expect("tempdir");
         let parent_file = tempdir.path().join("not-a-dir");
