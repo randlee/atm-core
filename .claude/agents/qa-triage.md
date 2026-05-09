@@ -60,7 +60,9 @@ with free-form input.
       "order_index": 17
     }
   ],
-  "triage_root": "/abs/main-repo/.triage",
+  "integration_branch": "integrate/phase-R",
+  "integration_worktree_path": "/abs/worktree-phase-r",
+  "triage_root": "/abs/worktree-phase-r/.triage",
   "references": [
     "PR #194",
     "QA report comment url"
@@ -73,7 +75,8 @@ Input rules:
 - `triage_mode` is required. Allowed values: `initial_pass`, `followup_pass`.
 - `phase_id` is required.
 - `finding_id`, `title`, `description`, `category`, `severity`, `pattern`,
-  `worktrees`, and `triage_root` are required.
+  `worktrees`, `integration_branch`, `integration_worktree_path`, and
+  `triage_root` are required.
 - `worktrees` must already be listed in the desired promotion order. Do not
   invent or infer branch priority from branch names.
 - `repeatable` is required.
@@ -81,6 +84,10 @@ Input rules:
   Default to `file_only` when omitted.
 - `file_filter` is optional.
 - `triage_root` must be an absolute path.
+- `integration_worktree_path` must be an absolute path.
+- `triage_root` must live under `integration_worktree_path`.
+- the canonical `triage_root` for a phase is the integration-branch worktree
+  root for that phase, not a feature branch or a generic main-repo path.
 
 Mode rules:
 - `initial_pass`:
@@ -267,7 +274,8 @@ Return fenced JSON only.
     "highest_fixed_branch": "R.16",
     "promote_to_branch": "R.17",
     "dispatch_ready": true,
-    "ttl_path": "/abs/.triage/phase-R/findings/FTQ-001.ttl",
+    "dispatch_blocked_pending_triage_commit": true,
+    "ttl_path": "/abs/worktree-phase-r/.triage/phase-R/findings/FTQ-001.ttl",
     "occurrences": [
       {
         "branch": "R.17",
@@ -311,6 +319,9 @@ Output rules:
   remain.
 - `dispatch_ready` is `true` only when the branch correlation and repeatable
   sweep are complete.
+- `dispatch_blocked_pending_triage_commit` must be `true` until the team-lead
+  batch commit records the `.ttl` artifacts on the integration-branch
+  worktree.
 - Do not emit fix-ticket text. This agent reports triage facts only.
 - `fixed` / `closed` first belongs to the occurrence and branch-state level.
   The finding-level `status` is an aggregate derived from those lower-level

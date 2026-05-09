@@ -56,6 +56,10 @@ Phase-S planning note:
   documents the bounded queue-query split between `atm list` and
   single-message `atm read`, including the ATM-authored Claude JSONL
   compatibility envelope for oversized message bodies
+- the remaining Phase S implementation work continues in:
+  - `S.6` daemon post-mortem runtime remediation
+  - `S.7` bounded queue-query implementation
+  - `S.8` Claude JSONL compatibility-envelope implementation
 
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton

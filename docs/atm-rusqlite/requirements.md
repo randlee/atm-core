@@ -68,6 +68,7 @@ The `atm-rusqlite` crate docs must remain aligned with:
 - [`../project-plan.md`](../project-plan.md)
 - [`../plan-phase-Q.md`](../plan-phase-Q.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)
+- [`../plan-phase-S.md`](../plan-phase-S.md)
 - [`../atm-core/requirements.md`](../atm-core/requirements.md)
 - [`../atm-core/architecture.md`](../atm-core/architecture.md)
 - [`../atm-error-codes.md`](../atm-error-codes.md)
@@ -116,6 +117,9 @@ Required rules:
   ATM errors rather than validation
 - conformance tests should validate behavior through the `atm-core` store
   traits rather than by depending on internal SQLite details
+- follow-on Phase S queue work may add bounded metadata-query helpers and
+  supporting indexes for `atm list` / selector-driven `atm read`, but
+  selector semantics remain owned by `atm-core`
 - most SQLite tests should use dedicated in-memory fixtures with explicit
   setup/cleanup
 - only a small deliberate suite may use on-disk temporary databases for

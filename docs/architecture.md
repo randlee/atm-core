@@ -74,9 +74,10 @@ Phase-S portability note:
   CLI surface:
   - daemon packets: `send`, `ack`, `read`, `clear`, `doctor`, heartbeat
   - non-packet retained surfaces: `log`, `teams`, `members`
-- S.5 planning adds `atm list` as a distinct CLI query surface; implementation
-  must refine the queue-query packet mapping instead of preserving the old
-  multi-message `read` response shape as the final contract
+- S.5 planning adds `atm list` as a distinct CLI query surface; S.7 owns the
+  implementation line that refines the queue-query packet mapping instead of
+  preserving the old multi-message `read` response shape as the final
+  contract
 - Phase S planning is tracked in [`docs/plan-phase-S.md`](./plan-phase-S.md)
 
 ## 2. Crate Boundaries

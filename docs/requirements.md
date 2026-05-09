@@ -107,9 +107,10 @@ Phase-S portability note:
   - `clear`
   - `doctor`
   - daemon heartbeat/runtime liveness exchange
-- S.5 planning adds `atm list` as a distinct CLI surface; implementation must
-  refine the current queue-query packet mapping rather than assuming the old
-  multi-message `read` response shape is still the final product contract
+- S.5 planning adds `atm list` as a distinct CLI surface; S.7 owns the
+  implementation line that refines the current queue-query packet mapping
+  instead of assuming the old multi-message `read` response shape is still the
+  final product contract
 - retained `log`, `teams`, and `members` remain outside the daemon
   request/response packet family in the current Phase S line
 - Phase S planning is tracked in [`plan-phase-S.md`](./plan-phase-S.md)

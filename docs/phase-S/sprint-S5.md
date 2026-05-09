@@ -17,6 +17,8 @@ Close the remaining Phase S process and product-surface gaps by:
   regression patterns from re-entering the same-host daemon line
 - documenting the bounded mailbox-query split where `atm list` owns metadata
   search and `atm read` owns single-message detail fetch
+- assigning every remaining post-S.4 implementation item to an execution-ready
+  follow-on sprint
 
 ## Governing Requirements
 
@@ -161,6 +163,31 @@ Close the remaining Phase S process and product-surface gaps by:
    - watcher/reconcile logic must treat ATM-authored compatibility projection
      updates as idempotent and must not create self-induced churn loops
 
+8. Create the follow-on execution sprint line for all remaining Phase S work.
+8.1 `S.6` must own the daemon/runtime post-mortem remediation items:
+   - `RSH-001` `crates/atm-daemon/src/composition.rs::shutdown_background_lanes`
+   - `RSH-014` `crates/atm-daemon/src/lifecycle_control.rs` Unix EOF wake
+     propagation gap
+   - `WIN-001` Windows graceful shutdown regression in the daemon shutdown
+     signal path and its test coverage
+   - `ATM-QA-S4-001`
+     `crates/atm-daemon/src/local_ipc_transport.rs::prepare_local_ipc_endpoint`
+8.2 `S.7` must own the bounded queue-query implementation:
+   - add `atm list`
+   - convert `atm read` to single-message logical-current selection
+   - implement shared list/read filters and legacy read-flag migration
+   - implement bounded metadata-query paths instead of full-surface read
+     materialization
+8.3 `S.8` must own the ATM-authored Claude JSONL compatibility-envelope
+    implementation:
+   - `[atm].claude_jsonl_body_export_max_bytes`
+   - oversized ATM-authored body stub export
+   - watcher/reconcile no-churn handling for ATM-authored compatibility
+     projections
+8.4 `FTQ-001` remains explicitly deferred from the execution line here. Keep it
+    recorded as a lint/analyzer follow-up item rather than an S.6-S.8 code
+    implementation item unless a later audit reclassifies it.
+
 ## Required Document Updates
 
 - `docs/plan-phase-S.md`
@@ -170,6 +197,9 @@ Close the remaining Phase S process and product-surface gaps by:
 - `docs/phase-S/sprint-S2.md`
 - `docs/phase-S/sprint-S3.md`
 - `docs/phase-S/sprint-S4.md`
+- `docs/phase-S/sprint-S6.md`
+- `docs/phase-S/sprint-S7.md`
+- `docs/phase-S/sprint-S8.md`
 - `docs/testing-guidelines.md`
 - `docs/cross-platform-guidelines.md`
 - `docs/requirements.md`
@@ -190,8 +220,15 @@ Close the remaining Phase S process and product-surface gaps by:
 - `docs/atm-core/modules/config.md`
 - `docs/atm-core/modules/list.md`
 - `docs/atm-core/modules/read.md`
+- `docs/atm-rusqlite/requirements.md`
+- `docs/atm-rusqlite/architecture.md`
+- `docs/atm-daemon/requirements.md`
+- `docs/atm-daemon/architecture.md`
 - `.claude/agents/qa-triage.md`
 - `.claude/skills/triaging-findings/SKILL.md`
+- `boundaries/atm-core/config-ingress.toml`
+- `boundaries/atm-core/inbox-export.toml`
+- `boundaries/atm-daemon/daemon-inbox-export.toml`
 
 ## Acceptance Criteria
 
@@ -226,6 +263,12 @@ Close the remaining Phase S process and product-surface gaps by:
   behavior, and watcher no-churn rule
 - the docs state that stubbed ATM-authored JSONL exports retain summary text
   and never rewrite Claude-native inbound messages
+- S.6, S.7, and S.8 sprint docs exist and assign every remaining post-S.4
+  implementation item to an execution-ready sprint
+- `RSH-001`, `RSH-014`, `WIN-001`, and `ATM-QA-S4-001` have explicit sprint
+  ownership with concrete code targets
+- `FTQ-001` is explicitly recorded as a deferred lint/analyzer item rather
+  than being left ambiguous between planning and implementation
 
 ## Required Validation
 

@@ -9,8 +9,8 @@ Product behavior remains defined in [`../requirements.md`](../requirements.md).
 `atm-daemon` must satisfy those product requirements without re-owning
 `atm-core` business logic.
 
-This crate is introduced by the Phase Q implementation line. It is not present
-in the pre-Phase-Q workspace yet.
+This crate was introduced on the Phase Q implementation line and remains part
+of the current workspace.
 
 The crate-local machine-readable boundary inventory lives in:
 - [`./boundaries.md`](./boundaries.md)
@@ -30,6 +30,8 @@ The canonical daemon transport wire contract lives in:
 - live agent status cache
 - runtime watch/reconcile loop if enabled
 - daemon-side `sc-observability` emission
+- daemon-side compatibility projection behavior that must keep ATM-authored
+  JSONL re-export idempotent under watcher/reconcile observation
 
 `atm-daemon` does not own:
 
@@ -200,6 +202,10 @@ Initial crate requirement IDs:
   readiness, shutdown, retry, and helper-thread drain behavior must be proven
   through explicit synchronization or bounded runtime contracts. Satisfies:
   `REQ-P-TEST-001`, `REQ-P-PLATFORM-002`.
+- `REQ-DAEMON-RUNTIME-008` watcher/reconcile handling of ATM-authored
+  compatibility projection updates must remain idempotent for the same
+  logical message and must not create self-induced churn loops. Satisfies:
+  `REQ-CORE-COMPAT-001`, `REQ-P-RELIABILITY-001`.
 
 ## 4. Required References
 

@@ -42,4 +42,4 @@ review_gates = ["no_direct_config_parser_calls"]
 
 [status]
 state = "stub_landed"
-notes = ["typed workspace and team config request/response contracts landed in atm_core::boundary", "retained command/service cutover to this boundary is formally deferred to R.7 in docs/plan-phase-R.md"]
+notes = ["typed workspace and team config request/response contracts landed in atm_core::boundary", "retained command/service cutover to this boundary is formally deferred to R.7 in docs/plan-phase-R.md", "parsing and validation of [atm].claude_jsonl_body_export_max_bytes remains owned here for the ADR-010 compatibility-envelope contract"]

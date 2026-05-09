@@ -458,6 +458,67 @@ Required closeout work:
   contract
 - reconcile the product and crate-local CLI docs with the new queue-inspection
   command split
+- create the follow-on implementation sprint docs required to finish the phase
+
+### S.6 Daemon Post-Mortem Runtime Remediation
+
+Goal:
+- close the remaining daemon/runtime remediation items left open after the
+  S.4 parity line
+
+Required outcomes:
+- `RSH-001`, `RSH-014`, `WIN-001`, and `ATM-QA-S4-001` are assigned to one
+  explicit execution sprint with concrete code targets
+- shutdown ordering, lifecycle wake propagation, Windows graceful shutdown,
+  and local-IPC endpoint-preparation behavior are all covered by one bounded
+  remediation line
+
+Required closeout work:
+- fix `crates/atm-daemon/src/composition.rs::shutdown_background_lanes`
+- fix the Unix lifecycle-control EOF wake propagation gap
+- restore the Windows graceful-shutdown path and its coverage
+- remove the silent non-Unix success path from
+  `prepare_local_ipc_endpoint`
+
+### S.7 Bounded Queue Query Implementation
+
+Goal:
+- implement the queue-query split defined by ADR-009
+
+Required outcomes:
+- `atm list` exists as a bounded metadata-query CLI surface
+- `atm read` is a single-message logical-current selection path
+- shared list/read filters stay aligned
+- the durable query path is bounded by query behavior rather than full
+  history materialization
+
+Required closeout work:
+- add `crates/atm/src/commands/list.rs`
+- update `crates/atm/src/commands/read.rs` and output handling for
+  single-message selection and match metadata
+- add the bounded metadata-query service path in `atm-core`
+- add the SQLite-backed bounded query implementation support in
+  `atm-rusqlite`
+
+### S.8 Claude JSONL Compatibility Envelope
+
+Goal:
+- implement the ADR-010 compatibility-envelope contract for ATM-authored
+  Claude JSONL export and watcher/reconcile no-churn behavior
+
+Required outcomes:
+- `[atm].claude_jsonl_body_export_max_bytes` is implemented
+- oversized ATM-authored messages export retrieval stubs instead of full
+  bodies
+- watcher/reconcile logic treats ATM-authored projection updates as
+  idempotent
+
+Required closeout work:
+- add the config-backed ATM-authored export cap
+- export `atm read --message-id <id>` stubs for oversized ATM-authored bodies
+- preserve summary text while keeping full ATM-authored bodies durable in
+  SQLite
+- prevent self-induced churn loops in watcher/reconcile paths
 
 ## 6. Removed Windows CI Guardrail
 
@@ -514,3 +575,5 @@ Explicit deferral:
   they need separate review and enforcement surfaces
 - do not treat the temporary Windows clippy scope narrowing as a durable fix;
   S.4 must remove it
+- do not let S.5 end the documented sprint line while remaining post-mortem or
+  queue-query implementation work is still unassigned

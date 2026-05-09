@@ -39,6 +39,8 @@ Do not send raw QA findings directly to `arch-ctm`.
 
 For each triage batch, assemble:
 - `phase_id`
+- `integration_branch`
+- `integration_worktree_path`
 - `triage_root`
 - ordered `worktrees` with branch, absolute path, head SHA, and order index
 - finding records with:
@@ -55,6 +57,11 @@ For each triage batch, assemble:
 
 Canonical triage artifacts live at:
 - `<triage_root>/<phase_id>/findings/<finding_id>.ttl`
+
+Required path rule:
+- `triage_root` must live under `integration_worktree_path`
+- `integration_worktree_path` must be the integration-branch worktree for the
+  active phase
 
 ## Triage Modes
 
@@ -133,7 +140,7 @@ Required commit scope:
 Required timing:
 - after triage batch aggregation
 - before branch-scoped fix dispatch
-- on the integration branch or other branch designated as the triage source of
+- on the integration-branch worktree that is the canonical triage source of
   truth for the phase
 
 `triage_root` must point to the integration-branch worktree for the active
