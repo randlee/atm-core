@@ -119,6 +119,31 @@ Separate them into:
 - regressed findings
 - non-dispatchable findings
 
+### 3.1 Commit triage artifacts before dispatch
+
+After all `qa-triage` agents in the batch have finished and after aggregation
+confirms the `.ttl` set is complete, stage and commit the triage artifacts to
+git before sending any dev assignment to `arch-ctm`.
+
+Required commit scope:
+- the phase findings under `<triage_root>/<phase_id>/findings/`
+- any phase-local triage metadata needed for later follow-up, such as
+  worktree inventories under `<triage_root>/<phase_id>/`
+
+Required timing:
+- after triage batch aggregation
+- before branch-scoped fix dispatch
+- on the integration branch or other branch designated as the triage source of
+  truth for the phase
+
+Reason:
+- parallel `qa-triage` agents write into one shared triage root
+- committing inside each agent would create batch races and partial evidence
+- leaving `.ttl` records untracked until phase end risks silent loss of the
+  canonical QA evidence
+
+Do not dispatch dev work from uncommitted `.ttl` state.
+
 The per-finding `.ttl` record is canonical. Aggregation is derived.
 
 ### 4. Dispatch branch-scoped fix work to `arch-ctm`

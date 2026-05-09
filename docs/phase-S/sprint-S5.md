@@ -74,6 +74,17 @@ hang-prone regression patterns from re-entering the same-host daemon line.
 5. Record any ADR needed for the repository-wide no-flaky-test decision and
    enforcement partition.
 
+6. Harden the Phase S triage process so canonical `.triage/<phase>/findings/*.ttl`
+   records are committed to git at the correct workflow point.
+6.1 Set the commit point at the team-lead triage batch stage:
+   - after all parallel `qa-triage` agents finish writing `.ttl` files
+   - after aggregation confirms the batch is complete
+   - before any branch-scoped fix dispatch to `arch-ctm`
+6.2 Update the relevant triage prompt/skill so the process explicitly forbids
+    leaving phase findings untracked in the working tree until phase end.
+6.3 Keep this track separate from the mailbox-read planning follow-up; the
+    triage git-commit gap is an independent process-hardening item.
+
 ## Required Document Updates
 
 - `docs/plan-phase-S.md`
@@ -90,6 +101,8 @@ hang-prone regression patterns from re-entering the same-host daemon line.
 - `docs/project-plan.md`
 - `docs/adr/ADR-008-no-flaky-test-policy-and-mechanical-enforcement.md`
 - `docs/adr/INDEX.md`
+- `.claude/agents/qa-triage.md`
+- `.claude/skills/triaging-findings/SKILL.md`
 
 ## Acceptance Criteria
 
@@ -103,6 +116,10 @@ hang-prone regression patterns from re-entering the same-host daemon line.
   which new anti-flake families belong there
 - the mechanical guardrail plan names the intended implementation home for
   each rule family (`sc-lint-*` vs `.just/` / `scripts/`)
+- the triage workflow names an explicit git-commit step for phase `.ttl`
+  records before dev dispatch begins
+- the chosen triage commit point prevents a repeat of the Phase S gap where
+  findings remained untracked until manual intervention
 
 ## Required Validation
 

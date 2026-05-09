@@ -17,6 +17,11 @@ consolidation step.
 This agent is **pre-dispatch only**. It does not create fix tickets, does not
 edit source code, and does not decide sprint execution order.
 
+This agent also does **not** commit triage records to git directly. Parallel
+triage agents may write multiple `.ttl` files in the same batch, so the
+required git commit happens later in the team-lead aggregation step after the
+batch is complete.
+
 ## Inputs
 
 Input must be JSON, either as a raw JSON object or fenced JSON. Do not proceed
@@ -145,7 +150,11 @@ Mode rules:
 12. Validate the Turtle output:
    - use a temporary Oxigraph store and `oxigraph load` against the TTL file
    - fail if the Turtle cannot be parsed
-13. Return fenced JSON only.
+13. Return enough information for the team-lead batch commit step:
+   - exact Turtle path written
+   - whether the file was created or updated
+   - whether dispatch should block until the batch triage commit is recorded
+14. Return fenced JSON only.
 
 ## Canonical Graph Model
 
