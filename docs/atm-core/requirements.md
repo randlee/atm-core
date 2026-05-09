@@ -525,7 +525,7 @@ Required doctor rules:
   end of the run; any lock path present in both snapshots is stale and must be
   reported with `ATM_WARNING_STALE_MAILBOX_LOCK` plus `rm -f <path>` recovery guidance
 
-## 9. Retained Team Recovery Surface
+## 10. Retained Team Recovery Surface
 
 Requirement ID:
 - `REQ-CORE-TEAM-001`
