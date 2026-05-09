@@ -16,7 +16,7 @@ use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_rusqlite::assemble_boundary;
 use serial_test::serial;
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io::{Seek, SeekFrom, Write};
 use tempfile::TempDir;
 
 struct LifecycleFlagResetGuard<'a> {
@@ -154,6 +154,41 @@ fn singleton_guard_recovers_stale_owner_once_lock_is_released() {
     let guard =
         HostOwnershipAdapter::acquire_at(lock_path).expect("stale owner recovery should succeed");
     drop(guard);
+}
+
+#[test]
+#[serial]
+fn singleton_guard_rejects_stale_recovery_when_owner_token_changes() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let lock_path = atm_core::home::host_runtime_lock_path_from_home(
+        tempdir.path(),
+        HOST_RUNTIME_OWNER_LOCK_FILE,
+    );
+    if let Some(parent) = lock_path.parent() {
+        std::fs::create_dir_all(parent).expect("create parent");
+    }
+    let mut file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .truncate(false)
+        .open(&lock_path)
+        .expect("open lock file");
+    fs2::FileExt::try_lock_exclusive(&file).expect("lock file");
+    writeln!(&mut file, "{}:token-a", u32::MAX).expect("write owner");
+    file.sync_all().expect("sync owner");
+
+    let lock_path_for_thread = lock_path.clone();
+    let join = std::thread::spawn(move || HostOwnershipAdapter::acquire_at(lock_path_for_thread));
+    std::thread::sleep(std::time::Duration::from_millis(35));
+    file.set_len(0).expect("clear record");
+    file.seek(SeekFrom::Start(0)).expect("rewind");
+    writeln!(&mut file, "{}:token-b", u32::MAX).expect("rewrite owner");
+    file.sync_all().expect("resync owner");
+    drop(file);
+
+    let error = join.join().expect("join").expect_err("token mismatch");
+    assert_eq!(error.code, AtmErrorCode::DaemonStaleOwnerRecoveryFailed);
 }
 
 #[test]
