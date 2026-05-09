@@ -5,7 +5,9 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};
-use std::thread::{self, JoinHandle};
+#[cfg(unix)]
+use std::thread;
+use std::thread::JoinHandle;
 #[cfg(unix)]
 use std::time::Duration;
 
@@ -222,7 +224,7 @@ fn persist_notification(
     Ok(())
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::NotificationRuntime;
     use atm_core::protocol::NotificationEvent;
