@@ -69,12 +69,12 @@ impl ActiveConnectionRegistry {
         Ok(())
     }
 
-    fn track_dispatch_handle(&self, handle: JoinHandle<()>) -> Result<(), AtmError> {
+    fn lock_dispatch_handles(
+        &self,
+    ) -> Result<std::sync::MutexGuard<'_, Vec<JoinHandle<()>>>, AtmError> {
         self.dispatch_handles
             .lock()
-            .map_err(|_| AtmError::daemon_unavailable("active dispatch handle lock poisoned"))?
-            .push(handle);
-        Ok(())
+            .map_err(|_| AtmError::daemon_unavailable("active dispatch handle lock poisoned"))
     }
 
     fn join_tracked_dispatches(&self) -> Result<(), AtmError> {
@@ -453,6 +453,8 @@ fn prepare_local_ipc_endpoint(endpoint_path: &Path) -> Result<(), AtmError> {
 
 #[cfg(not(unix))]
 fn prepare_local_ipc_endpoint(_endpoint_path: &Path) -> Result<(), AtmError> {
+    // TODO(S.2/ADR-007): Windows local IPC endpoint preparation belongs here once
+    // the adapter owns the named-pipe endpoint lifecycle on non-Unix hosts.
     Ok(())
 }
 
@@ -593,11 +595,18 @@ fn handle_connection(
         let _dispatch_work = dispatch_registry.register_dispatch_work();
         let _ = result_tx.send(dispatcher.dispatch(request));
     });
-    registry.track_dispatch_handle(dispatch_handle)?;
+    match registry.lock_dispatch_handles() {
+        Ok(mut handles) => handles.push(dispatch_handle),
+        Err(error) => {
+            let _ = dispatch_handle.join();
+            return Err(error);
+        }
+    }
     let response = match result_rx.recv_timeout(REQUEST_DEADLINE) {
         Ok(Ok(response)) => response,
         Ok(Err(error)) => ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(&error)),
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            tracing::warn!("daemon request dispatcher exceeded the runtime deadline");
             ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
                 &AtmError::daemon_unavailable(
                     "daemon request exceeded the 3s runtime deadline; the operation may still complete in the background",

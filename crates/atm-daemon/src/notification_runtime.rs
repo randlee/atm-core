@@ -225,7 +225,6 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    #[cfg(unix)]
     fn notification_runtime_persists_events_to_runtime_output() {
         let tempdir = TempDir::new().expect("tempdir");
         let output_path = tempdir.path().join("notifications.jsonl");
@@ -247,7 +246,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(unix)]
     fn notification_runtime_reports_degraded_output_failures() {
         let tempdir = TempDir::new().expect("tempdir");
         let blocking_path = tempdir.path().join("blocking-file");
