@@ -12,14 +12,13 @@ use std::{
 
 use atm_core::ack::{AckOutcome, AckRequest};
 use atm_core::boundary;
-use atm_core::boundary::{AtmProtocol, ClientTransport};
+use atm_core::boundary::ClientTransport;
 use atm_core::clear::{ClearOutcome, ClearQuery};
 use atm_core::doctor::{DoctorQuery, DoctorReport};
 use atm_core::error::AtmError;
 use atm_core::observability::{CommandEvent, ObservabilityPort};
 use atm_core::protocol::{
-    JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
-    SendResponseEnvelope,
+    RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
 };
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
@@ -113,15 +112,11 @@ fn validate_daemon_path(label: &str, path: &Path) -> Result<(), AtmError> {
 #[derive(Debug)]
 struct LocalIpcClientTransportAdapter {
     endpoint: DaemonLocalIpcEndpoint,
-    codec: JsonAtmProtocolCodec,
 }
 
 impl LocalIpcClientTransportAdapter {
     fn new(endpoint: DaemonLocalIpcEndpoint) -> Self {
-        Self {
-            endpoint,
-            codec: JsonAtmProtocolCodec,
-        }
+        Self { endpoint }
     }
 
     fn try_connect(&self) -> Result<LocalSocketStream, AtmError> {
@@ -152,7 +147,7 @@ impl LocalIpcClientTransportAdapter {
                     .with_source(source)
             })?;
         let request_id = atm_core::protocol::next_request_id();
-        let frame = self.codec.request_to_frame(request_id, request)?;
+        let frame = atm_core::protocol::request_to_frame_payload(request_id, request)?;
         atm_core::protocol::write_frame(
             &mut stream,
             &frame,
@@ -174,7 +169,8 @@ impl LocalIpcClientTransportAdapter {
                 "Retry the ATM command after the daemon reaches serving state and verify the daemon logs if the problem persists.",
             )
         })?;
-        let (response_id, response) = self.codec.response_from_frame(response_frame)?;
+        let (response_id, response) =
+            atm_core::protocol::response_from_frame_payload(response_frame)?;
         if response_id != request_id {
             return Err(AtmError::daemon_unavailable(format!(
                 "daemon response request_id {} did not match request_id {}",
