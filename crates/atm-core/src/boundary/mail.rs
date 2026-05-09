@@ -2,9 +2,50 @@ use crate::error::AtmError;
 use crate::schema::{MessageEnvelope, TeamConfig};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::path::PathBuf;
 
 use super::{MessageKey, sealed};
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(try_from = "String", into = "String")]
+pub struct ReplaySource(String);
+
+impl ReplaySource {
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            return Err(AtmError::validation(
+                "replay source must not be empty or whitespace-only",
+            ));
+        }
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ReplaySource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl TryFrom<String> for ReplaySource {
+    type Error = AtmError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+impl From<ReplaySource> for String {
+    fn from(value: ReplaySource) -> Self {
+        value.0
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MailStoreMessageRecord {
@@ -40,7 +81,7 @@ pub struct MailStoreIngestReplayState {
     /// Invariant: source must name one concrete ingest origin chosen by the
     /// caller (for example a file path or inbox export id) and must never be
     /// synthesized from an empty or whitespace-only string.
-    pub source: String,
+    pub source: ReplaySource,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_fingerprint: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -160,7 +201,7 @@ pub struct MailStoreRecordIngestReplayStateRequest {
     pub agent: AgentName,
     /// Invariant: source identifies one concrete ingest origin and must never
     /// be synthesized from an empty or whitespace-only string.
-    pub source: String,
+    pub source: ReplaySource,
     pub state: MailStoreIngestReplayState,
 }
 
@@ -177,7 +218,7 @@ pub struct MailStoreLoadIngestReplayStateRequest {
     pub agent: AgentName,
     /// Invariant: source identifies one concrete ingest origin and must never
     /// be synthesized from an empty or whitespace-only string.
-    pub source: String,
+    pub source: ReplaySource,
 }
 
 /// Stub mail-store load-ingest-replay response for the Phase R skeleton.

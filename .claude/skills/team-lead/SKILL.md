@@ -48,6 +48,8 @@ After initialization, use these repo-local skills to coordinate work:
 |-------|---------|
 | `/phase-orchestration` | Orchestrate a multi-sprint phase with fresh scrum-masters |
 | `/codex-orchestration` | Run phases where arch-ctm is sole dev, with pipelined QA via quality-mgr |
+| `/plan-hardening` | Harden a phase plan and create any missing sprint docs before implementation starts or resumes |
+| `/todo-triage` | Run the repo TODO scan during sprint-end or integration review and route TODOs into QA findings/Turtle triage instead of silent deferral |
 | `/triaging-findings` | Correlate QA findings across branches before dispatching fixes to arch-ctm |
 | `/quality-management-gh` | Multi-pass QA on GitHub PRs; CI monitoring; findings/final quality reports |
 | `/restore-team-communications` | Repair same-session Claude teammate routing after compaction or resume without invoking full startup/clear restore |

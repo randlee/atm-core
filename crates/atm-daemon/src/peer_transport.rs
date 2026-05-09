@@ -610,7 +610,7 @@ fn parse_peer_endpoint(raw: &str) -> Option<SocketAddr> {
             tracing::warn!(
                 %raw,
                 %error,
-                "ignoring malformed ATM_DAEMON_PEER_ADDR value"
+                "parse_peer_endpoint: invalid address format"
             );
             None
         }

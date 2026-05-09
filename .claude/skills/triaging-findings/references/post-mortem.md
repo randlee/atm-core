@@ -2,8 +2,11 @@
 
 Use this reference at the end of a phase after:
 - all sprint work is complete
+- all sprint branches have been integrated into `integrate/phase-X`
 - all queued QA findings are resolved or intentionally deferred
 - follow-up QA has closed the phase findings set
+- a final phase-ending review is run on `integrate/phase-X` before the merge to
+  `develop`
 
 Audience:
 - `team-lead`
@@ -21,6 +24,27 @@ Review:
 - final QA reports for the phase
 - fix-dispatch batches sent to `arch-ctm`
 - follow-up QA closeout messages from `quality-mgr`
+- the final `integrate/phase-X` verification report from `quality-mgr`
+
+## Required Integration Review
+
+Before the final merge to `develop`, `quality-mgr` must run one full review on
+`integrate/phase-X` after all sprint integrations are complete.
+
+`quality-mgr` should deploy a background review team based on role, not rely on
+one subagent. The exact mix depends on the phase scope, but it should cover the
+same reviewer roles used during QA for the affected artifact types.
+
+That review must verify:
+- 100% of triaged findings for the phase are fixed or intentionally deferred
+- no finding marked fixed on a sprint branch is still reproducible on
+  `integrate/phase-X`
+- merge-forward gaps did not re-open previously closed findings during
+  integration
+- no phase-scope fix was missed because it landed outside the original changed
+  files or outside one reviewer role's scope
+
+This is a required phase-ending quality gate, not an optional spot check.
 
 ## Required Review Questions
 
@@ -53,6 +77,10 @@ Every reviewed finding family should end in one or more of these outcomes:
 - `test_hardening`
 - `merge_forward_process_improvement`
 - `no_systemic_followup`
+
+Also record one phase-level outcome:
+- `integration_review_passed`
+- `integration_review_failed`
 
 ## Expected Recommendations
 
