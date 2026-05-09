@@ -37,6 +37,10 @@ pub struct MailStoreVisibilityState {
 pub struct MailStoreIngestReplayState {
     pub team: TeamName,
     pub agent: AgentName,
+    // TODO(P6): Introduce a validated ReplaySource newtype once the replay
+    // boundary callers are consolidated. Keeping the raw String here avoids a
+    // broad boundary fan-out in this integration fix while preserving the
+    // documented non-empty source invariant at construction sites.
     /// Invariant: source must name one concrete ingest origin chosen by the
     /// caller (for example a file path or inbox export id) and must never be
     /// synthesized from an empty or whitespace-only string.
@@ -158,6 +162,10 @@ pub struct MailStoreLoadVisibilityStateResponse {
 pub struct MailStoreRecordIngestReplayStateRequest {
     pub team: TeamName,
     pub agent: AgentName,
+    // TODO(P6): Introduce a validated ReplaySource newtype once the replay
+    // boundary callers are consolidated. Keeping the raw String here avoids a
+    // broad boundary fan-out in this integration fix while preserving the
+    // documented non-empty source invariant at construction sites.
     /// Invariant: source identifies one concrete ingest origin and must never
     /// be synthesized from an empty or whitespace-only string.
     pub source: String,
@@ -175,6 +183,10 @@ pub struct MailStoreRecordIngestReplayStateResponse {
 pub struct MailStoreLoadIngestReplayStateRequest {
     pub team: TeamName,
     pub agent: AgentName,
+    // TODO(P6): Introduce a validated ReplaySource newtype once the replay
+    // boundary callers are consolidated. Keeping the raw String here avoids a
+    // broad boundary fan-out in this integration fix while preserving the
+    // documented non-empty source invariant at construction sites.
     /// Invariant: source identifies one concrete ingest origin and must never
     /// be synthesized from an empty or whitespace-only string.
     pub source: String,

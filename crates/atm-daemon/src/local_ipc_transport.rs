@@ -64,9 +64,8 @@ impl ActiveConnectionRegistry {
             + self.active_dispatches.load(Ordering::SeqCst)
     }
 
-    pub(crate) fn interrupt_all(&self) -> Result<(), AtmError> {
+    pub(crate) fn interrupt_all(&self) {
         self.drain_wake.notify_all();
-        Ok(())
     }
 
     fn lock_dispatch_handles(
@@ -540,7 +539,7 @@ fn drain_active_connections_for_shutdown(
             "daemon graceful drain hit deadline; continuing toward forced cancel"
         );
         force_shutdown.store(true, Ordering::SeqCst);
-        registry.interrupt_all()?;
+        registry.interrupt_all();
     } else {
         tracing::info!("daemon graceful drain completed cleanly");
     }
