@@ -1,11 +1,11 @@
 use super::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
 use super::{
+    LocalIpcServerTransportAdapter,
     host_ownership::{
         HOST_RUNTIME_OWNER_LOCK_FILE, HostOwnershipAdapter, clear_stale_recovery_signal_for_test,
         install_stale_recovery_signal_for_test,
     },
     lifecycle_control::LifecycleControlSourceAdapter,
-    local_ipc_transport::LocalIpcServerTransportAdapter,
 };
 use atm_core::boundary::RequestDispatcher;
 use atm_core::doctor::{
