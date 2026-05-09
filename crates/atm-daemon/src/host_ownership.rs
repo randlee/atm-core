@@ -70,7 +70,7 @@ impl HostOwnershipAdapter {
         Ok(HostOwnershipGuard { lock_file })
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, windows))]
     pub(crate) fn classify_contention_error_for_test(error: &std::io::Error) -> bool {
         is_owner_lock_contention_error(error)
     }
