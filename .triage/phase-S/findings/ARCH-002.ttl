@@ -1,0 +1,90 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-002>
+  a triage:Finding ;
+  triage:findingId "ARCH-002" ;
+  triage:title "UnixStream directly imported in atm CLI composition.rs — no LocalIpcClientTransportAdapter" ;
+  triage:description "crates/atm/src/composition.rs:8 still directly imports and uses std::os::unix::net::UnixStream via LocalSocketClientTransport::try_connect. Sprint AC required extraction. No LocalIpcClientTransportAdapter was created." ;
+  triage:category "ARCH" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-08T22:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002/s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002/s1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002/s1/3> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/ab12ea1> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/ab12ea1> .
+
+<urn:atm:triage:occurrence/ARCH-002/s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 12 ;
+  triage:snippet "os::unix::net::UnixStream," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "ab12ea1" ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/ab12ea1> .
+
+<urn:atm:triage:occurrence/ARCH-002/s1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 161 ;
+  triage:snippet "fn try_connect(&self) -> Result<UnixStream, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "ab12ea1" ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/ab12ea1> .
+
+<urn:atm:triage:occurrence/ARCH-002/s1/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 162 ;
+  triage:snippet "UnixStream::connect(self.socket_path.as_ref())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "ab12ea1" ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/ab12ea1> .
+
+<urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/ab12ea1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/feature-pS-s2-windows-ipc/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/feature-pS-s3-runtime-control/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/feature-pS-s4-hardening/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/integrate-phase-S/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 5 .

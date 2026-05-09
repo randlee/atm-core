@@ -1,0 +1,310 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-009>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-009" ;
+  triage:title "Two-lock handoff protocol (launch.lock + owner.lock) not documented as split across components" ;
+  triage:description "Two-lock handoff protocol (launch.lock + owner.lock) not documented as split across components; client-side launch.lock deferral not noted." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-08T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/pS-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/pS-s1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/pS-s1/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/pS-s1/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/pS-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/pS-s2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/pS-s2/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/pS-s2/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/pS-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/pS-s3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/pS-s3/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/pS-s3/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/pS-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/pS-s4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/pS-s4/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/pS-s4/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/integrate-phase-S/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/integrate-phase-S/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/integrate-phase-S/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/integrate-phase-S/4> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s1/ab12ea1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s2/689a48f> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s3/689a48f> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s4/689a48f> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+
+# ── pS-s1-boundary-extraction occurrences ──
+
+<urn:atm:triage:occurrence/ATM-QA-009/pS-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 40 ;
+  triage:snippet "const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = \"launch.lock\";" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+
+<urn:atm:triage:occurrence/ATM-QA-009/pS-s1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1175 ;
+  triage:snippet ".join(\"launch.lock\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+
+<urn:atm:triage:occurrence/ATM-QA-009/pS-s1/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/host_ownership.rs" ;
+  triage:line 11 ;
+  triage:snippet "pub(crate) const HOST_RUNTIME_OWNER_LOCK_FILE: &str = \"owner.lock\";" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+
+<urn:atm:triage:occurrence/ATM-QA-009/pS-s1/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 86 ;
+  triage:snippet "user_home.join(\".atm\").join(\"daemon\").join(\"owner.lock\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+
+# ── pS-s2-windows-ipc occurrences ──
+
+<urn:atm:triage:occurrence/ATM-QA-009/pS-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 34 ;
+  triage:snippet "const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = \"launch.lock\";" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s2/689a48f> .
+
+<urn:atm:triage:occurrence/ATM-QA-009/pS-s2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1112 ;
+  triage:snippet ".join(\"launch.lock\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s2/689a48f> .
+
+<urn:atm:triage:occurrence/ATM-QA-009/pS-s2/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/host_ownership.rs" ;
+  triage:line 11 ;
+  triage:snippet "pub(crate) const HOST_RUNTIME_OWNER_LOCK_FILE: &str = \"owner.lock\";" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s2/689a48f> .
+
+<urn:atm:triage:occurrence/ATM-QA-009/pS-s2/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 80 ;
+  triage:snippet "user_home.join(\".atm\").join(\"daemon\").join(\"owner.lock\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s2/689a48f> .
+
+# ── pS-s3-runtime-control occurrences ──
+
+<urn:atm:triage:occurrence/ATM-QA-009/pS-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 39 ;
+  triage:snippet "const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = \"launch.lock\";" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s3/689a48f> .
+
+<urn:atm:triage:occurrence/ATM-QA-009/pS-s3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1158 ;
+  triage:snippet ".join(\"launch.lock\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s3/689a48f> .
+
+<urn:atm:triage:occurrence/ATM-QA-009/pS-s3/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 66 ;
+  triage:snippet "const HOST_RUNTIME_OWNER_LOCK_FILE: &str = \"owner.lock\";" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s3/689a48f> .
+
+<urn:atm:triage:occurrence/ATM-QA-009/pS-s3/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 83 ;
+  triage:snippet "user_home.join(\".atm\").join(\"daemon\").join(\"owner.lock\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s3/689a48f> .
+
+# ── pS-s4-hardening occurrences ──
+
+<urn:atm:triage:occurrence/ATM-QA-009/pS-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 39 ;
+  triage:snippet "const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = \"launch.lock\";" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s4/689a48f> .
+
+<urn:atm:triage:occurrence/ATM-QA-009/pS-s4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1158 ;
+  triage:snippet ".join(\"launch.lock\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s4/689a48f> .
+
+<urn:atm:triage:occurrence/ATM-QA-009/pS-s4/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 66 ;
+  triage:snippet "const HOST_RUNTIME_OWNER_LOCK_FILE: &str = \"owner.lock\";" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s4/689a48f> .
+
+<urn:atm:triage:occurrence/ATM-QA-009/pS-s4/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 83 ;
+  triage:snippet "user_home.join(\".atm\").join(\"daemon\").join(\"owner.lock\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s4/689a48f> .
+
+# ── integrate/phase-S occurrences ──
+
+<urn:atm:triage:occurrence/ATM-QA-009/integrate-phase-S/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 39 ;
+  triage:snippet "const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = \"launch.lock\";" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+
+<urn:atm:triage:occurrence/ATM-QA-009/integrate-phase-S/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1158 ;
+  triage:snippet ".join(\"launch.lock\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+
+<urn:atm:triage:occurrence/ATM-QA-009/integrate-phase-S/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 66 ;
+  triage:snippet "const HOST_RUNTIME_OWNER_LOCK_FILE: &str = \"owner.lock\";" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+
+<urn:atm:triage:occurrence/ATM-QA-009/integrate-phase-S/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 83 ;
+  triage:snippet "user_home.join(\".atm\").join(\"daemon\").join(\"owner.lock\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+
+# ── WorktreeSnapshot nodes ──
+
+<urn:atm:triage:worktree/pS-s1/ab12ea1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s2/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pS-s3/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pS-s4/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:orderIndex 5 .

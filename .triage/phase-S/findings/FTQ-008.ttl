@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-008>
+  a triage:Finding ;
+  triage:findingId "FTQ-008" ;
+  triage:title "Nondeterministic min_by_key eviction in test at tests.rs:537" ;
+  triage:description "crates/atm-daemon/src/tests.rs:537 — test relies on min_by_key returning a deterministic eviction candidate when multiple entries share the minimum key value. If the underlying collection does not preserve insertion order, the selected entry varies between runs, making the test nondeterministic. (quality-mgr reported as FTQ-005; remapped FTQ-008 to avoid ID collision with existing phase-S FTQ-005.)" ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-08T23:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-008/s1/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb> .
+
+<urn:atm:triage:occurrence/FTQ-008/s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 537 ;
+  triage:snippet "min_by_key eviction — nondeterministic when multiple entries share minimum" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "661f0fb" ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb> .
+
+<urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "661f0fb" ;
+  triage:orderIndex 1 .

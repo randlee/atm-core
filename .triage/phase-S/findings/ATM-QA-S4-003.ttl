@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S4-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S4-003" ;
+  triage:title "same-host-portability lint only detects daemon_unavailable() stubs — silent Ok(()) stubs escape (lint_same_host_portability.py:71)" ;
+  triage:description ".just/lint_same_host_portability.py:71-97 — collect_non_unix_same_host_stubs detects only #[cfg(not(unix))] blocks that call daemon_unavailable() within 8 lines. Silent Ok(()) pass-through stubs (like prepare_local_ipc_endpoint at local_ipc_transport.rs:454) are not detected. Sprint S.4 acceptance criterion requires the lint to reject all non-Unix same-host unimplemented adapter paths. ATM-QA-S4-001 is evidence of this coverage gap. Fix: extend collect_non_unix_same_host_stubs to detect #[cfg(not(unix))] blocks in adapter files with trivially empty bodies (Ok(()) bare return with no real implementation), or add a separate grep gate that rejects the TODO(S.2/ADR-007) marker pattern as a short-term fix." ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T18:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S4-003/s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874> .
+
+<urn:atm:triage:occurrence/ATM-QA-S4-003/s4/1>
+  a triage:Occurrence ;
+  triage:file ".just/lint_same_host_portability.py" ;
+  triage:line 71 ;
+  triage:snippet "collect_non_unix_same_host_stubs — only detects daemon_unavailable() stubs in 8-line window; silent Ok(()) pass-throughs escape; coverage gap allowed ATM-QA-S4-001 to survive lint" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "dd36874" ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874> .
+
+<urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "dd36874" ;
+  triage:orderIndex 4 .

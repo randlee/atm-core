@@ -1,5 +1,3 @@
-#![cfg_attr(windows, allow(dead_code))]
-
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
@@ -13,20 +11,26 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use atm_core::error::AtmError;
 use fs2::FileExt;
 
+#[cfg_attr(windows, allow(dead_code))]
 const STALE_OWNER_RECOVERY_RETRY_ATTEMPTS: usize = 3;
+#[cfg_attr(windows, allow(dead_code))]
 pub(crate) const HOST_RUNTIME_OWNER_LOCK_FILE: &str = "owner.lock";
+#[cfg_attr(windows, allow(dead_code))]
 const OWNER_RECOVERY_RETRY_INTERVAL: Duration = Duration::from_millis(25);
 #[cfg(test)]
 static STALE_RECOVERY_HOOK: OnceLock<Mutex<Option<SyncSender<()>>>> = OnceLock::new();
 
+#[cfg_attr(windows, allow(dead_code))]
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct HostOwnershipAdapter;
 
+#[cfg_attr(windows, allow(dead_code))]
 #[derive(Debug)]
 pub(crate) struct HostOwnershipGuard {
     lock_file: File,
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 impl HostOwnershipAdapter {
     pub(crate) const fn new() -> Self {
         Self
@@ -97,6 +101,7 @@ impl HostOwnershipAdapter {
     }
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 fn is_owner_lock_contention_error(error: &std::io::Error) -> bool {
     if error.kind() == std::io::ErrorKind::WouldBlock {
         return true;
@@ -115,6 +120,7 @@ fn is_owner_lock_contention_error(error: &std::io::Error) -> bool {
     }
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 impl Drop for HostOwnershipGuard {
     fn drop(&mut self) {
         let _ = clear_owner_record(&mut self.lock_file);
@@ -122,6 +128,7 @@ impl Drop for HostOwnershipGuard {
     }
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 fn open_lock_file(lock_path: &Path) -> Result<File, AtmError> {
     if let Some(parent) = lock_path.parent() {
         fs::create_dir_all(parent).map_err(|source| {
@@ -148,6 +155,7 @@ fn open_lock_file(lock_path: &Path) -> Result<File, AtmError> {
         })
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 fn recover_stale_owner_lock(
     lock_path: &Path,
     stale_pid: u32,
@@ -205,6 +213,7 @@ fn notify_stale_recovery_hook_for_test() {
     }
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 fn recorded_owner_identity(lock_file: &File) -> Result<Option<(u32, String)>, AtmError> {
     let mut clone = lock_file.try_clone().map_err(|source| {
         AtmError::daemon_unavailable("failed to clone daemon ownership record handle")
@@ -228,6 +237,7 @@ fn recorded_owner_identity(lock_file: &File) -> Result<Option<(u32, String)>, At
     Ok(Some((pid, token.to_string())))
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 fn write_owner_record(lock_file: &mut File) -> Result<(), AtmError> {
     let token = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -250,6 +260,7 @@ fn write_owner_record(lock_file: &mut File) -> Result<(), AtmError> {
     Ok(())
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 fn owner_record_matches(
     lock_file: &File,
     expected_pid: u32,
@@ -261,6 +272,7 @@ fn owner_record_matches(
     })
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 fn owner_token_mismatch_error(lock_path: &Path, stale_pid: u32) -> AtmError {
     AtmError::daemon_stale_owner_recovery_failed(format!(
         "daemon owner record at {} changed while recovering stale pid {}",
@@ -269,6 +281,7 @@ fn owner_token_mismatch_error(lock_path: &Path, stale_pid: u32) -> AtmError {
     ))
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 fn clear_owner_record(lock_file: &mut File) -> Result<(), AtmError> {
     lock_file.set_len(0).map_err(|source| {
         AtmError::daemon_unavailable("failed to clear daemon ownership metadata")

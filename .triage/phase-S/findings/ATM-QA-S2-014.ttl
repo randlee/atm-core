@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S2-014>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S2-014" ;
+  triage:title "docs/phase-S/sprint-S2.md status field stale — reads 'planned' after implementation" ;
+  triage:description "docs/phase-S/sprint-S2.md:3 — status field reads 'planned' after implementation and two QA rounds have occurred. Should reflect actual execution state (in-progress or complete)." ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T08:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S2-014/s2/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> .
+
+<urn:atm:triage:occurrence/ATM-QA-S2-014/s2/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-S/sprint-S2.md" ;
+  triage:line 3 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "2adc339" ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> .
+
+<urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "2adc339" ;
+  triage:orderIndex 2 .

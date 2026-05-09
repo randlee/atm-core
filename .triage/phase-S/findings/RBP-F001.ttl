@@ -1,0 +1,152 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-F001>
+  a triage:Finding ;
+  triage:findingId "RBP-F001" ;
+  triage:title "Infallible Result in AtmError-returning methods — two occurrences" ;
+  triage:description "Two occurrences of the same pattern: (1) reconcile_runtime.rs:103 — ReconcileFailureSnapshot::to_error() discards original AtmErrorCode; the struct captures only message and recovery, discarding the error code variant from AtmError::from(); to_error() hardcodes AtmError::daemon_unavailable regardless of original code. (2) local_ipc_transport.rs:60-63 — ActiveConnectionRegistry::interrupt_all returns Result<(), AtmError> but only calls notify_all() and returns Ok(()); the error variant is never reachable, making any caller error-handling dead code." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-08T12:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence
+    <urn:atm:triage:occurrence/RBP-F001/pS-s1-boundary-extraction/1> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s2-windows-ipc/1> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s2-windows-ipc/2> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s3-runtime-control/1> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s3-runtime-control/2> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s4-hardening/1> ,
+    <urn:atm:triage:occurrence/RBP-F001/integrate-phase-S/1> ;
+  triage:openOn
+    <urn:atm:triage:worktree/pS-s1-boundary-extraction/ab12ea1> ,
+    <urn:atm:triage:worktree/pS-s2-windows-ipc/a7f8039> ,
+    <urn:atm:triage:worktree/pS-s3-runtime-control/98c151c> ,
+    <urn:atm:triage:worktree/pS-s4-hardening/689a48f> ,
+    <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+
+# --- Occurrence 1: reconcile_runtime.rs:103 on pS-s1-boundary-extraction ---
+<urn:atm:triage:occurrence/RBP-F001/pS-s1-boundary-extraction/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:line 103 ;
+  triage:snippet "fn to_error(&self) -> AtmError { let error = AtmError::daemon_unavailable(self.message.clone());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s1-boundary-extraction/ab12ea1> .
+
+# --- Occurrence 1: reconcile_runtime.rs:103 on pS-s2-windows-ipc ---
+<urn:atm:triage:occurrence/RBP-F001/pS-s2-windows-ipc/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:line 103 ;
+  triage:snippet "fn to_error(&self) -> AtmError { let error = AtmError::daemon_unavailable(self.message.clone());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "a7f8039" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s2-windows-ipc/a7f8039> .
+
+# --- Occurrence 2 (NEW): local_ipc_transport.rs:60-63 on pS-s2-windows-ipc ---
+<urn:atm:triage:occurrence/RBP-F001/pS-s2-windows-ipc/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 60 ;
+  triage:snippet "pub(crate) fn interrupt_all(&self) -> Result<(), AtmError> { self.drain_wake.notify_all(); Ok(()) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "a7f8039" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s2-windows-ipc/a7f8039> .
+
+# --- Occurrence 1: reconcile_runtime.rs:103 on pS-s3-runtime-control ---
+<urn:atm:triage:occurrence/RBP-F001/pS-s3-runtime-control/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:line 103 ;
+  triage:snippet "fn to_error(&self) -> AtmError { let error = AtmError::daemon_unavailable(self.message.clone());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:headSha "98c151c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s3-runtime-control/98c151c> .
+
+# --- Occurrence 2 (NEW): local_ipc_transport.rs:60-63 on pS-s3-runtime-control ---
+<urn:atm:triage:occurrence/RBP-F001/pS-s3-runtime-control/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 60 ;
+  triage:snippet "pub(crate) fn interrupt_all(&self) -> Result<(), AtmError> { self.drain_wake.notify_all(); Ok(()) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:headSha "98c151c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s3-runtime-control/98c151c> .
+
+# --- Occurrence 1: reconcile_runtime.rs:103 on pS-s4-hardening ---
+<urn:atm:triage:occurrence/RBP-F001/pS-s4-hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:line 103 ;
+  triage:snippet "fn to_error(&self) -> AtmError { let error = AtmError::daemon_unavailable(self.message.clone());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s4-hardening/689a48f> .
+
+# --- Occurrence 1: reconcile_runtime.rs:103 on integrate/phase-S ---
+<urn:atm:triage:occurrence/RBP-F001/integrate-phase-S/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:line 103 ;
+  triage:snippet "fn to_error(&self) -> AtmError { let error = AtmError::daemon_unavailable(self.message.clone());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+
+# --- WorktreeSnapshots ---
+<urn:atm:triage:worktree/pS-s1-boundary-extraction/ab12ea1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s2-windows-ipc/a7f8039>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "a7f8039" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pS-s3-runtime-control/98c151c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "98c151c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pS-s4-hardening/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:orderIndex 5 .

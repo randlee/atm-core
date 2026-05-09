@@ -1,0 +1,160 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ATM-QA-017: Two-lock handoff (launch.lock → owner.lock) undocumented on daemon side
+#
+# Relation to ATM-QA-009:
+#   ATM-QA-009 tracks the broader cross-component split: that the two-lock
+#   protocol is not explained at either the client (composition.rs) or daemon
+#   (host_ownership.rs) constant-declaration sites.
+#
+#   ATM-QA-017 is a distinct, more targeted concern: the ADR-002 acquisition
+#   sequence comment is absent at the *actual acquire_at call site* in the daemon
+#   (HostOwnershipAdapter::acquire_at / SingletonGuard::acquire_at), where the
+#   ordering guarantee (launch.lock held by caller before owner.lock is requested
+#   here) must be stated to prevent future ordering violations.
+#
+#   ATM-QA-009 occurrence /pS-s1/3 and /pS-s2/3 record the constant-declaration
+#   line (host_ownership.rs:11). This record tracks the acquire_at function body,
+#   a different location with a different documentation requirement.
+#
+# Structural note on pS-s4 / integrate/phase-S:
+#   host_ownership.rs was refactored away in pS-s4; ownership logic now lives in
+#   lib.rs as SingletonGuard::acquire_at (line ~274). The ADR-002 protocol comment
+#   is absent there too, so pS-s4 and integrate/phase-S carry the same gap at a
+#   different file/line.
+
+<urn:atm:triage:finding/ATM-QA-017>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-017" ;
+  triage:title "Two-lock handoff (launch.lock → owner.lock) undocumented on daemon side" ;
+  triage:description "The two-lock acquisition sequence required by ADR-002 (launch.lock held by caller before owner.lock is acquired by the daemon) has no explanatory comment at the daemon-side acquire_at call site. On pS-s1/pS-s2/pS-s3 this is HostOwnershipAdapter::acquire_at in host_ownership.rs; on pS-s4/integrate-phase-S the same gap exists at SingletonGuard::acquire_at in lib.rs (following the host_ownership.rs → lib.rs refactor). Distinct from ATM-QA-009, which tracks the constant-declaration and cross-component split documentation gap." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-08T00:00:00Z"^^xsd:dateTime ;
+  triage:relatedFinding "ATM-QA-009" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-017/pS-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-017/pS-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-017/pS-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-017/pS-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-017/integrate-phase-S/1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s1/ab12ea1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s2/a7f8039> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s3/98c151c> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s4/689a48f> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+
+# ── pS-s1-boundary-extraction ──
+# host_ownership.rs exists; acquire_at at line 33 has no ADR-002 protocol comment
+
+<urn:atm:triage:occurrence/ATM-QA-017/pS-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/host_ownership.rs" ;
+  triage:line 33 ;
+  triage:snippet "pub(crate) fn acquire_at(\n        lock_path: std::path::PathBuf,\n    ) -> Result<HostOwnershipGuard, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+
+# ── pS-s2-windows-ipc ──
+# host_ownership.rs exists; acquire_at at line 31; no ADR-002 protocol comment
+
+<urn:atm:triage:occurrence/ATM-QA-017/pS-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/host_ownership.rs" ;
+  triage:line 31 ;
+  triage:snippet "pub(crate) fn acquire_at(lock_path: PathBuf) -> Result<HostOwnershipGuard, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "a7f8039" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s2/a7f8039> .
+
+# ── pS-s3-runtime-control ──
+# host_ownership.rs exists; acquire_at at line 31; no ADR-002 protocol comment
+
+<urn:atm:triage:occurrence/ATM-QA-017/pS-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/host_ownership.rs" ;
+  triage:line 31 ;
+  triage:snippet "pub(crate) fn acquire_at(lock_path: PathBuf) -> Result<HostOwnershipGuard, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:headSha "98c151c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s3/98c151c> .
+
+# ── pS-s4-hardening ──
+# host_ownership.rs refactored away; ownership now in lib.rs as SingletonGuard::acquire_at (~line 274)
+# ADR-002 protocol comment absent at new location
+
+<urn:atm:triage:occurrence/ATM-QA-017/pS-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 274 ;
+  triage:snippet "fn acquire_at(socket_path: &std::path::Path, lock_path: PathBuf) -> Result<Self, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s4/689a48f> .
+
+# ── integrate/phase-S ──
+# Same as pS-s4 (pS-s4 merged in); lib.rs SingletonGuard::acquire_at, no protocol comment
+
+<urn:atm:triage:occurrence/ATM-QA-017/integrate-phase-S/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 274 ;
+  triage:snippet "fn acquire_at(socket_path: &std::path::Path, lock_path: PathBuf) -> Result<Self, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+
+# ── WorktreeSnapshot nodes ──
+
+<urn:atm:triage:worktree/pS-s1/ab12ea1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s2/a7f8039>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "a7f8039" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pS-s3/98c151c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "98c151c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pS-s4/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:orderIndex 5 .
