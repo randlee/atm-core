@@ -68,9 +68,9 @@ review_gates = [
 ]
 
 [status]
-state = "planned"
+state = "concrete_landed"
 notes = [
   "the extracted boundary now lives under atm_daemon::lifecycle_control with Unix hook installation hidden inside the adapter",
-  "Phase S requires a platform-neutral lifecycle control source with Unix and Windows implementations behind one daemon-private contract",
-  "same-host daemon hosting is incomplete until Windows lifecycle control exists behind this boundary",
+  "the accepted Phase S mapping is Unix SIGINT/SIGTERM -> terminate, Unix SIGHUP -> reload, Windows terminate events -> terminate, and Windows SIGBREAK/CTRL_BREAK_EVENT -> reload",
+  "same-host daemon hosting now keeps lifecycle control behind one daemon-private contract on Unix and Windows",
 ]

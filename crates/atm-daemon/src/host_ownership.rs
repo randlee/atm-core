@@ -2,7 +2,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use atm_core::error::AtmError;
 use fs2::FileExt;
@@ -158,11 +158,18 @@ fn recorded_owner_pid(lock_file: &File) -> Result<Option<u32>, AtmError> {
 }
 
 fn write_owner_record(lock_file: &mut File) -> Result<(), AtmError> {
+    let token = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to derive daemon ownership token")
+                .with_source(source)
+        })?
+        .as_nanos();
     lock_file.set_len(0).map_err(|source| {
         AtmError::daemon_unavailable("failed to reset daemon ownership metadata")
             .with_source(source)
     })?;
-    writeln!(lock_file, "{}", std::process::id()).map_err(|source| {
+    writeln!(lock_file, "{}:{token:x}", std::process::id()).map_err(|source| {
         AtmError::daemon_unavailable("failed to write daemon ownership metadata")
             .with_source(source)
     })?;

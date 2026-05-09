@@ -36,7 +36,6 @@ fn daemon_shutdown_signals_for_test_are_isolated() {
     assert!(!second.reload.load(std::sync::atomic::Ordering::SeqCst));
 }
 
-#[cfg(unix)]
 #[test]
 #[serial]
 fn daemon_shutdown_signal_install_reuses_shared_flags() {
@@ -65,6 +64,28 @@ fn daemon_shutdown_signal_install_reuses_shared_flags() {
     first
         .reload
         .store(false, std::sync::atomic::Ordering::SeqCst);
+}
+
+#[test]
+fn host_ownership_record_uses_pid_and_token_while_held_and_clears_on_release() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
+    let lock_path = host_runtime_lock_path_from_home(&runtime_dir, HOST_RUNTIME_OWNER_LOCK_FILE);
+
+    let guard = HostOwnershipAdapter::acquire_at(lock_path.clone()).expect("ownership guard");
+    let record = std::fs::read_to_string(&lock_path).expect("owner record");
+    let trimmed = record.trim();
+    let (pid, token) = trimmed.split_once(':').expect("pid:token");
+    assert_eq!(pid.parse::<u32>().expect("pid"), std::process::id());
+    assert!(!token.is_empty(), "owner token must not be empty");
+
+    drop(guard);
+
+    let cleared = std::fs::read_to_string(&lock_path).expect("cleared owner record");
+    assert!(
+        cleared.trim().is_empty(),
+        "owner record must clear before unlock"
+    );
 }
 
 #[test]

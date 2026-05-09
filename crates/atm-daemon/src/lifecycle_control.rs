@@ -83,7 +83,28 @@ fn install_platform_hooks(
     Ok(())
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+fn install_platform_hooks(
+    terminate: &Arc<AtomicBool>,
+    reload: &Arc<AtomicBool>,
+) -> Result<(), AtmError> {
+    use signal_hook::consts::signal::{SIGBREAK, SIGINT, SIGTERM};
+    use signal_hook::flag;
+
+    for signal in [SIGINT, SIGTERM] {
+        flag::register(signal, Arc::clone(terminate)).map_err(|source| {
+            AtmError::daemon_unavailable("failed to install daemon shutdown signal handler")
+                .with_source(source)
+        })?;
+    }
+    flag::register(SIGBREAK, Arc::clone(reload)).map_err(|source| {
+        AtmError::daemon_unavailable("failed to install daemon reload signal handler")
+            .with_source(source)
+    })?;
+    Ok(())
+}
+
+#[cfg(not(any(unix, windows)))]
 fn install_platform_hooks(
     _terminate: &Arc<AtomicBool>,
     _reload: &Arc<AtomicBool>,

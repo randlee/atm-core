@@ -175,6 +175,8 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-SIGNAL-001` `atm-daemon` owns runtime-control installation and
   handling for daemon lifecycle transitions. Unix may satisfy this through
   signals; Windows may satisfy it through console or service-control events.
+  The accepted Phase S Windows console mapping is terminate events -> graceful
+  shutdown and `SIGBREAK` / `CTRL_BREAK_EVENT` -> bounded reload / rescan.
   Satisfies:
   `REQ-CORE-DAEMON-001`, `REQ-CORE-DOCTOR-002`.
 - `REQ-DAEMON-PLATFORM-001` `atm-daemon` must deliver full same-host daemon
