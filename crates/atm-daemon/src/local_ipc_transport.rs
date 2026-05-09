@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Condvar, Mutex};
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use atm_core::boundary::{self, AtmProtocol, RequestDispatcher};
@@ -29,6 +30,7 @@ const SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_millis(25);
 pub(crate) struct ActiveConnectionRegistry {
     active_connections: AtomicUsize,
     active_dispatches: AtomicUsize,
+    dispatch_handles: Mutex<Vec<JoinHandle<()>>>,
     drain_state: Mutex<()>,
     drain_wake: Condvar,
 }
@@ -59,6 +61,29 @@ impl ActiveConnectionRegistry {
 
     pub(crate) fn interrupt_all(&self) -> Result<(), AtmError> {
         self.drain_wake.notify_all();
+        Ok(())
+    }
+
+    fn track_dispatch_handle(&self, handle: JoinHandle<()>) -> Result<(), AtmError> {
+        self.dispatch_handles
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("active dispatch handle lock poisoned"))?
+            .push(handle);
+        Ok(())
+    }
+
+    fn join_tracked_dispatches(&self) -> Result<(), AtmError> {
+        let handles = {
+            let mut handles = self.dispatch_handles.lock().map_err(|_| {
+                AtmError::daemon_unavailable("active dispatch handle lock poisoned")
+            })?;
+            std::mem::take(&mut *handles)
+        };
+        for handle in handles {
+            handle
+                .join()
+                .map_err(|_| AtmError::daemon_unavailable("daemon dispatch thread panicked"))?;
+        }
         Ok(())
     }
 
@@ -125,6 +150,10 @@ impl std::fmt::Debug for PreparedRuntimeServer {
 
 impl PreparedRuntimeServer {
     fn bind(endpoint_path: PathBuf) -> Result<Self, AtmError> {
+        // Install lifecycle control before singleton ownership so daemon startup never
+        // claims the host-wide owner lock unless shutdown/reload hooks are ready too.
+        // Reversing this order can transiently block a healthy daemon restart behind an
+        // instance that failed before it could service lifecycle-control requests.
         let lifecycle_control = LifecycleControlSourceAdapter::install()?;
         let ownership = HostOwnershipAdapter::new().acquire()?;
         prepare_local_ipc_endpoint(&endpoint_path)?;
@@ -436,6 +465,7 @@ fn drain_active_connections_for_shutdown(
             "forced cancel deadline elapsed with {remaining_work_items} active daemon work item(s)"
         )));
     }
+    registry.join_tracked_dispatches()?;
     Ok(())
 }
 
@@ -477,10 +507,12 @@ fn handle_connection(
     let (request_id, request) = codec.request_from_frame(frame)?;
 
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
-    std::thread::spawn(move || {
-        let _dispatch_work = registry.register_dispatch_work();
+    let dispatch_registry = Arc::clone(&registry);
+    let dispatch_handle = std::thread::spawn(move || {
+        let _dispatch_work = dispatch_registry.register_dispatch_work();
         let _ = result_tx.send(dispatcher.dispatch(request));
     });
+    registry.track_dispatch_handle(dispatch_handle)?;
     let response = match result_rx.recv_timeout(REQUEST_DEADLINE) {
         Ok(Ok(response)) => response,
         Ok(Err(error)) => ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(&error)),

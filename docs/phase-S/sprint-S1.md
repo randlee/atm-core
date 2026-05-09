@@ -56,9 +56,11 @@ depends directly on Unix APIs.
 - `crates/atm-daemon/src/composition.rs`
   - `RuntimeComposition::start`
   - `RuntimeComposition::start_with_socket_path_for_test`
-  - `validate_runtime_socket_path`
   - `validate_runtime_home_dir`
   - `compose_runtime`
+- same-host endpoint validation is currently split between:
+  - `crates/atm/src/composition.rs::DaemonLocalIpcEndpoint::new`
+  - `crates/atm-core/src/protocol.rs::daemon_local_ipc_name_from_path`
 - `crates/atm-daemon/src/lib.rs`
   - runtime crate-root ownership and adapter re-exports only
 - `crates/atm-daemon/src/local_ipc_transport.rs`

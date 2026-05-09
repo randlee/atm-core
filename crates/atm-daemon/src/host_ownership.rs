@@ -1,6 +1,6 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -25,10 +25,14 @@ impl HostOwnershipAdapter {
     }
 
     pub(crate) fn acquire(&self) -> Result<HostOwnershipGuard, AtmError> {
-        Self::acquire_at(host_runtime_lock_path(HOST_RUNTIME_OWNER_LOCK_FILE)?)
+        Self::acquire_at(atm_core::home::host_runtime_lock_path(
+            HOST_RUNTIME_OWNER_LOCK_FILE,
+        )?)
     }
 
-    pub(crate) fn acquire_at(lock_path: PathBuf) -> Result<HostOwnershipGuard, AtmError> {
+    pub(crate) fn acquire_at(
+        lock_path: std::path::PathBuf,
+    ) -> Result<HostOwnershipGuard, AtmError> {
         let mut lock_file = open_lock_file(&lock_path)?;
         match lock_file.try_lock_exclusive() {
             Ok(()) => {}
@@ -70,17 +74,6 @@ impl Drop for HostOwnershipGuard {
         let _ = clear_owner_record(&mut self.lock_file);
         let _ = self.lock_file.unlock();
     }
-}
-
-pub(crate) fn host_runtime_lock_path(file_name: &str) -> Result<PathBuf, AtmError> {
-    Ok(host_runtime_lock_path_from_home(
-        &atm_core::home::host_runtime_dir()?,
-        file_name,
-    ))
-}
-
-pub(crate) fn host_runtime_lock_path_from_home(home_dir: &Path, file_name: &str) -> PathBuf {
-    home_dir.join(file_name)
 }
 
 fn open_lock_file(lock_path: &Path) -> Result<File, AtmError> {

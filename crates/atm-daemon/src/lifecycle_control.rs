@@ -5,8 +5,8 @@ use atm_core::error::AtmError;
 
 #[derive(Debug, Clone)]
 pub(crate) struct LifecycleControlSourceAdapter {
-    pub(crate) terminate: Arc<AtomicBool>,
-    pub(crate) reload: Arc<AtomicBool>,
+    terminate: Arc<AtomicBool>,
+    reload: Arc<AtomicBool>,
 }
 
 #[derive(Debug)]
@@ -60,6 +60,21 @@ impl LifecycleControlSourceAdapter {
     pub(crate) fn terminate_flag(&self) -> Option<Arc<AtomicBool>> {
         Some(Arc::clone(&self.terminate))
     }
+
+    #[cfg(test)]
+    pub(crate) fn set_terminate_for_test(&self, value: bool) {
+        self.terminate.store(value, Ordering::SeqCst);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_reload_for_test(&self, value: bool) {
+        self.reload.store(value, Ordering::SeqCst);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn reload_requested_for_test(&self) -> bool {
+        self.reload.load(Ordering::SeqCst)
+    }
 }
 
 #[cfg(unix)]
@@ -109,5 +124,8 @@ fn install_platform_hooks(
     _terminate: &Arc<AtomicBool>,
     _reload: &Arc<AtomicBool>,
 ) -> Result<(), AtmError> {
+    // Supported lifecycle-control implementations currently exist only for Unix and
+    // Windows; other targets keep the daemon-private contract buildable without
+    // claiming unsupported OS signal semantics.
     Ok(())
 }

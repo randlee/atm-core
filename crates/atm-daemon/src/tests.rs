@@ -1,8 +1,6 @@
 use super::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
 use super::{
-    host_ownership::{
-        HOST_RUNTIME_OWNER_LOCK_FILE, HostOwnershipAdapter, host_runtime_lock_path_from_home,
-    },
+    host_ownership::{HOST_RUNTIME_OWNER_LOCK_FILE, HostOwnershipAdapter},
     lifecycle_control::LifecycleControlSourceAdapter,
 };
 use atm_core::boundary::RequestDispatcher;
@@ -24,68 +22,30 @@ use tempfile::TempDir;
 #[test]
 fn daemon_shutdown_signals_for_test_are_isolated() {
     let first = LifecycleControlSourceAdapter::new_for_test();
-    first
-        .terminate
-        .store(true, std::sync::atomic::Ordering::SeqCst);
-    first
-        .reload
-        .store(true, std::sync::atomic::Ordering::SeqCst);
+    first.set_terminate_for_test(true);
+    first.set_reload_for_test(true);
     let second = LifecycleControlSourceAdapter::new_for_test();
 
-    assert!(!second.terminate.load(std::sync::atomic::Ordering::SeqCst));
-    assert!(!second.reload.load(std::sync::atomic::Ordering::SeqCst));
+    assert!(!second.terminate_requested());
+    assert!(!second.reload_requested_for_test());
 }
 
 #[test]
 #[serial]
 fn daemon_shutdown_signal_install_reuses_shared_flags() {
     let first = LifecycleControlSourceAdapter::install().expect("install first");
-    first
-        .terminate
-        .store(false, std::sync::atomic::Ordering::SeqCst);
-    first
-        .reload
-        .store(false, std::sync::atomic::Ordering::SeqCst);
+    first.set_terminate_for_test(false);
+    first.set_reload_for_test(false);
 
     let second = LifecycleControlSourceAdapter::install().expect("install second");
-    first
-        .reload
-        .store(true, std::sync::atomic::Ordering::SeqCst);
-    second
-        .terminate
-        .store(true, std::sync::atomic::Ordering::SeqCst);
+    first.set_reload_for_test(true);
+    second.set_terminate_for_test(true);
 
-    assert!(second.reload.load(std::sync::atomic::Ordering::SeqCst));
-    assert!(first.terminate.load(std::sync::atomic::Ordering::SeqCst));
+    assert!(second.reload_requested_for_test());
+    assert!(first.terminate_requested());
 
-    first
-        .terminate
-        .store(false, std::sync::atomic::Ordering::SeqCst);
-    first
-        .reload
-        .store(false, std::sync::atomic::Ordering::SeqCst);
-}
-
-#[test]
-fn host_ownership_record_uses_pid_and_token_while_held_and_clears_on_release() {
-    let tempdir = TempDir::new().expect("tempdir");
-    let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
-    let lock_path = host_runtime_lock_path_from_home(&runtime_dir, HOST_RUNTIME_OWNER_LOCK_FILE);
-
-    let guard = HostOwnershipAdapter::acquire_at(lock_path.clone()).expect("ownership guard");
-    let record = std::fs::read_to_string(&lock_path).expect("owner record");
-    let trimmed = record.trim();
-    let (pid, token) = trimmed.split_once(':').expect("pid:token");
-    assert_eq!(pid.parse::<u32>().expect("pid"), std::process::id());
-    assert!(!token.is_empty(), "owner token must not be empty");
-
-    drop(guard);
-
-    let cleared = std::fs::read_to_string(&lock_path).expect("cleared owner record");
-    assert!(
-        cleared.trim().is_empty(),
-        "owner record must clear before unlock"
-    );
+    first.set_terminate_for_test(false);
+    first.set_reload_for_test(false);
 }
 
 #[test]
@@ -93,8 +53,8 @@ fn daemon_host_runtime_lock_path_ignores_atm_home() {
     let tempdir = TempDir::new().expect("tempdir");
     let user_home = tempdir.path().join("user-home");
     let atm_home = tempdir.path().join("workspace").join(".atm-home");
-    let runtime_dir = atm_core::home::host_runtime_dir_from_home(&user_home);
-    let path = host_runtime_lock_path_from_home(&runtime_dir, HOST_RUNTIME_OWNER_LOCK_FILE);
+    let path =
+        atm_core::home::host_runtime_lock_path_from_home(&user_home, HOST_RUNTIME_OWNER_LOCK_FILE);
 
     assert_eq!(
         path,
@@ -109,19 +69,17 @@ fn daemon_host_runtime_lock_path_ignores_atm_home() {
 #[test]
 fn singleton_guard_is_host_wide_across_different_socket_paths() {
     let tempdir = TempDir::new().expect("tempdir");
-    let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
-
     let first_socket = tempdir.path().join("one.sock");
     let second_socket = tempdir.path().join("other").join("two.sock");
-    let first = HostOwnershipAdapter::acquire_at(host_runtime_lock_path_from_home(
-        &runtime_dir,
+    let first = HostOwnershipAdapter::acquire_at(atm_core::home::host_runtime_lock_path_from_home(
+        tempdir.path(),
         HOST_RUNTIME_OWNER_LOCK_FILE,
     ))
     .expect("first singleton");
     let _ = first_socket;
     let _ = second_socket;
-    let error = HostOwnershipAdapter::acquire_at(host_runtime_lock_path_from_home(
-        &runtime_dir,
+    let error = HostOwnershipAdapter::acquire_at(atm_core::home::host_runtime_lock_path_from_home(
+        tempdir.path(),
         HOST_RUNTIME_OWNER_LOCK_FILE,
     ))
     .expect_err("second singleton");
@@ -133,8 +91,10 @@ fn singleton_guard_is_host_wide_across_different_socket_paths() {
 #[test]
 fn singleton_guard_reports_stale_owner_record_failure() {
     let tempdir = TempDir::new().expect("tempdir");
-    let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
-    let lock_path = host_runtime_lock_path_from_home(&runtime_dir, HOST_RUNTIME_OWNER_LOCK_FILE);
+    let lock_path = atm_core::home::host_runtime_lock_path_from_home(
+        tempdir.path(),
+        HOST_RUNTIME_OWNER_LOCK_FILE,
+    );
     if let Some(parent) = lock_path.parent() {
         std::fs::create_dir_all(parent).expect("create parent");
     }
@@ -146,7 +106,7 @@ fn singleton_guard_reports_stale_owner_record_failure() {
         .open(&lock_path)
         .expect("open lock file");
     fs2::FileExt::try_lock_exclusive(&file).expect("lock file");
-    writeln!(&mut file, "{}", u32::MAX).expect("write owner");
+    writeln!(&mut file, "{}:deadbeef", u32::MAX).expect("write owner");
     file.sync_all().expect("sync owner");
 
     let error = HostOwnershipAdapter::acquire_at(lock_path).expect_err("stale");
@@ -157,8 +117,10 @@ fn singleton_guard_reports_stale_owner_record_failure() {
 #[serial]
 fn singleton_guard_recovers_stale_owner_once_lock_is_released() {
     let tempdir = TempDir::new().expect("tempdir");
-    let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
-    let lock_path = host_runtime_lock_path_from_home(&runtime_dir, HOST_RUNTIME_OWNER_LOCK_FILE);
+    let lock_path = atm_core::home::host_runtime_lock_path_from_home(
+        tempdir.path(),
+        HOST_RUNTIME_OWNER_LOCK_FILE,
+    );
     if let Some(parent) = lock_path.parent() {
         std::fs::create_dir_all(parent).expect("create parent");
     }
@@ -170,13 +132,37 @@ fn singleton_guard_recovers_stale_owner_once_lock_is_released() {
         .open(&lock_path)
         .expect("open lock file");
     fs2::FileExt::try_lock_exclusive(&file).expect("lock file");
-    writeln!(&mut file, "{}", u32::MAX).expect("write owner");
+    writeln!(&mut file, "{}:deadbeef", u32::MAX).expect("write owner");
     file.sync_all().expect("sync owner");
     drop(file);
 
     let guard =
         HostOwnershipAdapter::acquire_at(lock_path).expect("stale owner recovery should succeed");
     drop(guard);
+}
+
+#[test]
+fn host_ownership_record_uses_pid_and_token_while_held_and_clears_on_release() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let lock_path = atm_core::home::host_runtime_lock_path_from_home(
+        tempdir.path(),
+        HOST_RUNTIME_OWNER_LOCK_FILE,
+    );
+    let guard = HostOwnershipAdapter::acquire_at(lock_path.clone()).expect("acquire");
+
+    let record = std::fs::read_to_string(&lock_path).expect("read record");
+    let trimmed = record.trim();
+    let (pid, token) = trimmed.split_once(':').expect("pid:token");
+    assert_eq!(pid, std::process::id().to_string());
+    assert!(!token.is_empty(), "token should not be empty");
+
+    drop(guard);
+
+    let cleared = std::fs::read_to_string(&lock_path).expect("read cleared record");
+    assert!(
+        cleared.trim().is_empty(),
+        "record should be cleared on drop"
+    );
 }
 
 fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
