@@ -1,0 +1,36 @@
+[trait_self_loop]
+ignored_trait_paths = [
+  "core::cmp::PartialEq",
+  "core::cmp::Eq",
+  "core::cmp::PartialOrd",
+  "core::cmp::Ord",
+  "core::hash::Hash",
+  "core::str::FromStr",
+  "core::default::Default",
+  "core::convert::From",
+  "core::convert::TryFrom",
+  "serde::Serialize",
+  "serde::Deserialize",
+]
+ignored_trait_names = [
+  "PartialEq",
+  "Eq",
+  "PartialOrd",
+  "Ord",
+  "Hash",
+  "FromStr",
+  "Default",
+  "From",
+  "TryFrom",
+  "Serialize",
+  "Deserialize",
+  "Parse",
+]
+
+[portability]
+unix_path_prefixes = [
+  "/tmp/",
+  "/home/",
+  "/usr/",
+  "/etc/",
+]

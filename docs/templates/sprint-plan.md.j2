@@ -1,0 +1,102 @@
+---
+name: sprint-plan
+version: 1.1.0
+description: Machine-parsable sprint planning template for one Phase R sprint with concrete sub-tasks, development work, required tests, dependencies, and acceptance gates.
+format: markdown
+required_variables:
+  - sprint_title
+  - phase
+  - sprint_id
+  - worktree
+  - branch
+  - status
+  - estimated_scope
+  - goal
+  - scope_summary
+  - governing_requirements
+  - governing_adrs
+  - governing_boundaries
+  - prerequisites
+  - hard_dependencies
+  - non_goals
+  - subtasks
+  - split_recommendation
+  - acceptance_criteria
+  - validation_commands
+  - docs_to_update
+  - risks_and_watchouts
+---
+# {{ sprint_title }}
+
+```yaml
+plan_type: sprint_plan
+phase: {{ phase }}
+sprint: {{ sprint_id }}
+worktree: {{ worktree }}
+branch: {{ branch }}
+status: {{ status }}
+estimated_scope: {{ estimated_scope }}
+```
+
+## Goal
+
+{{ goal }}
+
+## Scope Summary
+
+{{ scope_summary }}
+
+## Governing Requirements
+
+{{ governing_requirements }}
+
+## Governing ADRs
+
+{{ governing_adrs }}
+
+## Governing Boundaries
+
+{{ governing_boundaries }}
+
+## Prerequisites
+
+{{ prerequisites }}
+
+## Hard Dependencies
+
+{{ hard_dependencies }}
+
+## Non-Goals
+
+{{ non_goals }}
+
+## Sub-Tasks
+
+Each sub-task must be concrete and reviewable.
+
+Required shape for every sub-task:
+- development work
+- required tests
+- required doc or boundary updates when the code changes architecture or ownership
+
+{{ subtasks }}
+
+## Split Recommendation
+
+{{ split_recommendation }}
+
+## Acceptance Criteria
+
+{{ acceptance_criteria }}
+
+## Required Validation
+
+{{ validation_commands }}
+
+## Required Document Updates
+
+{{ docs_to_update }}
+
+## Risks And Watchouts
+
+{{ risks_and_watchouts }}

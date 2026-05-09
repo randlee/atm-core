@@ -8,6 +8,9 @@ The `atm-core` crate owns the reusable ATM business logic, persistent-store
 contracts, and strict I/O subsystem boundaries. Product behavior remains
 defined in [`../requirements.md`](../requirements.md).
 
+The crate-local machine-readable boundary inventory lives in:
+- [`./boundaries.md`](./boundaries.md)
+
 ## 2. Ownership
 
 `atm-core` owns:
@@ -136,8 +139,8 @@ Initial crate requirement IDs:
   Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-BOUNDARY-001` `atm-core` owns the strict trait boundaries for
-  store, inbox ingress/export, config ingress, watcher/reconcile, and
-  notifier-facing service calls. Satisfies the subsystem-boundary aspects of:
+  store, protocol, transport, inbox ingress/export, config ingress,
+  watcher/reconcile, notification sink, and status-source calls. Satisfies the subsystem-boundary aspects of:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
 - `REQ-CORE-BOUNDARY-002` `atm-core` owns the typed error-model contracts used
   by service boundaries. Satisfies the structured-error aspects of:
@@ -152,11 +155,12 @@ Initial crate requirement IDs:
 - `REQ-CORE-DAEMON-002` `atm-core` owns the contract that daemon runtime
   orchestration stays outside mail business semantics. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
-- `REQ-CORE-TRANSPORT-001` `atm-core` owns the typed daemon API contract shared
-  by Unix domain socket, TCP/TLS, and in-process test transport. Satisfies:
+- `REQ-CORE-TRANSPORT-001` `atm-core` owns the shared `AtmProtocol` contract
+  used by client transport, server transport, and in-process test transport. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
-- `REQ-CORE-TRANSPORT-002` `atm-core` owns route-selection semantics between
-  local and cross-host daemon paths. Satisfies:
+- `REQ-CORE-TRANSPORT-002` `atm-core` owns the public `ClientTransport` and
+  `ServerTransport` contracts plus route-selection semantics between local and
+  cross-host daemon paths. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-TRANSPORT-003` `atm-core` owns the typed transport timeout and
   retry semantics exposed at service boundaries. Satisfies:
@@ -164,6 +168,11 @@ Initial crate requirement IDs:
 - `REQ-CORE-TRANSPORT-004` `atm-core` owns the remote-acceptance and
   no-durable-remote-outbox semantics above transport implementations. Satisfies:
   `REQ-P-RELIABILITY-001`.
+- `REQ-CORE-TRANSPORT-005` `atm-core` owns the thread-safe client transport
+  contract used by production, fake, and loopback transports. The shared
+  `ClientTransport` boundary must remain object-safe and include `Send + Sync`
+  semantics so callers do not have to restate them ad hoc. Satisfies:
+  `REQ-P-TEST-001`, `REQ-P-CONTRACT-001`.
 - `REQ-CORE-LOCK-RETIRE-001` `atm-core` owns the service-layer rule that normal
   ATM mail correctness must not depend on mailbox locks in the Phase Q target
   architecture. Satisfies:
@@ -171,11 +180,6 @@ Initial crate requirement IDs:
 - `REQ-CORE-DOCTOR-002` `atm-core` owns the daemon-health query contract
   consumed by `atm doctor`. Satisfies:
   `REQ-P-DOCTOR-001`, `REQ-P-OBS-001`.
-- `REQ-CORE-TEST-001` `atm-core` owns the workspace subprocess-isolation rule
-  for ATM tests, including test-only fixture identifiers and narrow
-  production-compatibility carve-outs for env-read and role-significant cases.
-  Satisfies:
-  `REQ-P-TEST-001`.
 - `REQ-CORE-TEST-RUNTIME-001` `atm-core` owns the rule that core correctness is
   testable in process without daemon spawning. Satisfies:
   `REQ-P-TEST-001`.
@@ -217,11 +221,14 @@ The `atm-core` crate docs must remain aligned with:
 - [`../legacy-atm-message-schema.md`](../legacy-atm-message-schema.md)
 - [`../atm-error-codes.md`](../atm-error-codes.md)
 - [`../plan-phase-Q.md`](../plan-phase-Q.md)
+- [`../plan-phase-R.md`](../plan-phase-R.md)
+- [`../testing-guidelines.md`](../testing-guidelines.md)
+- [`./boundaries.md`](./boundaries.md)
 - [`./design/dedup-metadata-schema.md`](./design/dedup-metadata-schema.md)
 - [`./design/sc-observability-integration.md`](./design/sc-observability-integration.md)
 - [`./design/sc-obs-1.0-integration.md`](./design/sc-obs-1.0-integration.md)
 
-## 6. Phase Q Store And Boundary Requirements
+## 6. Phase R Store And Boundary Requirements
 
 Requirement IDs:
 - `REQ-CORE-RUNTIME-001`
@@ -257,6 +264,12 @@ Required `atm-core` crate rules:
 - `atm-core` must model `message_key` as a semantic newtype at the service and
   store boundaries; durable identities must not remain raw `String` values
 - `atm-core` must model resource-cap and timeout settings with typed wrappers
+- `ClientTransport` remains the shared request/response seam for:
+  - production local socket transport
+  - fake in-process transport doubles
+  - loopback in-process transport
+- `ClientTransport` must be strong enough for shared ownership and concurrent
+  request execution without downstream callers restating `Send + Sync`
   rather than passing raw integer literals through the service boundary
 - `atm-core` owns the ingest replay/degradation contract and must not silently
   drop parseable external rows
@@ -504,32 +517,3 @@ Required service rules:
   before partial restore is committed
 - `members` must remain useful as a local roster inspection command even when
   daemon or hook state is unavailable
-
-## 10. Test Subprocess Isolation
-
-Requirement ID:
-- `REQ-CORE-TEST-001`
-
-See also:
-- [`../requirements.md`](../requirements.md) §18.1
-- [`../cross-platform-guidelines.md`](../cross-platform-guidelines.md) §Test Subprocess Isolation
-
-Required service rules:
-- tests use test-only fixture constants for all team, agent, and
-  role-significant names
-- ATM subprocess tests provision temp-owned `ATM_HOME` and
-  `ATM_CONFIG_HOME`
-- tests that exercise team-directory discovery also provision `ATM_TEAMS_DIR`
-- subprocess tests pass `ATM_*` vars per-command rather than through ambient
-  process state
-- direct-call tests use explicit `team_override` / `actor_override` inputs or
-  TempDir-scoped config; `team_override: None` with an empty or unrelated
-  current directory is a violation
-- test fixtures write all required config to TempDir-owned state and do not
-  read repo `.atm.toml` or live mailbox directories
-- the raw literal `team-lead` may appear only behind a named role constant
-  when the production role itself is semantically required
-- tests that validate `ATM_TEAM` or `ATM_IDENTITY` reads may set those
-  variables explicitly, but only inside the isolated subprocess harness
-- ambient reuse of developer workstation ATM home, team, or identity state is
-  forbidden

@@ -10,6 +10,7 @@ use crate::mailbox::source::{
     SourceFile, discover_source_paths, load_source_files, rediscover_and_validate_source_paths,
 };
 use crate::schema::MessageEnvelope;
+use crate::types::{AgentName, TeamName};
 
 /// Commit one mailbox file through the mailbox-layer write boundary.
 ///
@@ -34,8 +35,8 @@ pub(crate) fn commit_source_files(source_files: &[SourceFile]) -> Result<(), Atm
 /// Load the current mailbox source set without taking any mailbox locks.
 pub(crate) fn observe_source_files(
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
 ) -> Result<Vec<SourceFile>, AtmError> {
     let source_paths = discover_source_paths(home_dir, team, agent)?;
     load_source_files(&source_paths)
@@ -45,8 +46,8 @@ pub(crate) fn observe_source_files(
 /// without forcing the caller into an inbox rewrite.
 pub(crate) fn with_locked_source_files<T, I, F>(
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
     extra_write_paths: I,
     timeout: Duration,
     body: F,
@@ -68,8 +69,8 @@ where
 
 fn with_locked_source_files_hook<T, I, H, F>(
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
     extra_write_paths: I,
     timeout: Duration,
     before_load: H,
@@ -97,17 +98,19 @@ mod tests {
     use super::{commit_mailbox_state, commit_source_files, with_locked_source_files_hook};
     use crate::mailbox::read_messages;
     use crate::mailbox::source::SourceFile;
+    use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
+    use crate::test_support::{TEST_QA, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
     #[test]
     fn commit_mailbox_state_rewrites_mailbox_array_with_only_new_messages() {
         let tempdir = tempdir().expect("tempdir");
-        let path = tempdir.path().join("arch-ctm.json");
+        let path = tempdir.path().join(format!("{TEST_SENDER}.json"));
         std::fs::write(&path, "{\"stale\":true}\n").expect("seed mailbox");
         let messages = vec![
-            sample_message("team-lead", "first replacement"),
-            sample_message("qa", "second replacement"),
+            sample_message(ROLE_TEAM_LEAD, "first replacement"),
+            sample_message(TEST_QA, "second replacement"),
         ];
 
         commit_mailbox_state(&path, &messages).expect("commit mailbox");
@@ -123,12 +126,12 @@ mod tests {
     #[test]
     fn commit_source_files_commits_each_source_path() {
         let tempdir = tempdir().expect("tempdir");
-        let left_path = tempdir.path().join("arch-ctm.json");
-        let right_path = tempdir.path().join("qa.json");
-        let left_messages = vec![sample_message("team-lead", "left message")];
+        let left_path = tempdir.path().join(format!("{TEST_SENDER}.json"));
+        let right_path = tempdir.path().join(format!("{TEST_QA}.json"));
+        let left_messages = vec![sample_message(ROLE_TEAM_LEAD, "left message")];
         let right_messages = vec![
-            sample_message("arch-ctm", "right first"),
-            sample_message("team-lead", "right second"),
+            sample_message(TEST_SENDER, "right first"),
+            sample_message(ROLE_TEAM_LEAD, "right second"),
         ];
 
         commit_source_files(&[
@@ -163,15 +166,15 @@ mod tests {
         let error = commit_source_files(&[
             SourceFile {
                 path: first_path.clone(),
-                messages: vec![sample_message("team-lead", "first")],
+                messages: vec![sample_message(ROLE_TEAM_LEAD, "first")],
             },
             SourceFile {
                 path: invalid_path,
-                messages: vec![sample_message("qa", "broken")],
+                messages: vec![sample_message(TEST_QA, "broken")],
             },
             SourceFile {
                 path: later_path.clone(),
-                messages: vec![sample_message("arch-ctm", "later")],
+                messages: vec![sample_message(TEST_SENDER, "later")],
             },
         ])
         .expect_err("write failure");
@@ -184,24 +187,25 @@ mod tests {
     #[test]
     fn injected_before_load_hook_can_fail_closed_without_production_env_seam() {
         let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join("atm-dev");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
         let inbox_dir = team_dir.join("inboxes");
         std::fs::create_dir_all(&inbox_dir).expect("inbox dir");
         std::fs::write(
             team_dir.join("config.json"),
             serde_json::json!({
-                "members": [{"name": "arch-ctm"}, {"name": "team-lead"}]
+                "members": [{"name": TEST_SENDER}, {"name": ROLE_TEAM_LEAD}]
             })
             .to_string(),
         )
         .expect("config");
-        let inbox_path = inbox_dir.join("arch-ctm.json");
-        commit_mailbox_state(&inbox_path, &[sample_message("team-lead", "hello")]).expect("seed");
+        let inbox_path = inbox_dir.join(format!("{TEST_SENDER}.json"));
+        commit_mailbox_state(&inbox_path, &[sample_message(ROLE_TEAM_LEAD, "hello")])
+            .expect("seed");
 
         let error = with_locked_source_files_hook(
             tempdir.path(),
-            "atm-dev",
-            "arch-ctm",
+            &TEST_TEAM.parse().expect("team"),
+            &TEST_SENDER.parse().expect("sender"),
             std::iter::empty::<std::path::PathBuf>(),
             std::time::Duration::from_secs(1),
             |paths| {
@@ -234,7 +238,7 @@ mod tests {
         );
         atm.insert(
             "sourceTeam".to_string(),
-            serde_json::Value::String("atm-dev".to_string()),
+            serde_json::Value::String(TEST_TEAM.to_string()),
         );
         metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
         extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
@@ -244,12 +248,15 @@ mod tests {
             text: text.to_string(),
             timestamp: IsoTimestamp::now(),
             read: false,
-            source_team: Some("atm-dev".parse::<TeamName>().expect("team name")),
+            source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team name")),
             summary: None,
             message_id: Some(message_id),
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            stale_at: None,
             task_id: None,
             extra,
         }

@@ -2,6 +2,23 @@
 
 Rules and patterns for ensuring atm works correctly on Ubuntu, macOS, and Windows CI.
 
+## Phase S Daemon Portability Guard
+
+For same-host daemon functionality, operating-system-specific implementation
+differences are allowed only in these daemon-owned areas:
+- local IPC transport adapter
+- lifecycle-control source adapter
+- host-ownership adapter
+
+Do not solve Windows support by scattering `#[cfg(unix)]` / `#[cfg(windows)]`
+branches through runtime composition, dispatcher, replay, status-cache,
+watch/reconcile, or notifier code.
+
+Review rule:
+- if a new same-host daemon feature cannot be implemented on every supported
+  operating system through the documented portability boundaries, the docs and
+  architecture must be updated before implementation continues
+
 ## Home Directory Resolution
 
 **Problem**: `dirs::home_dir()` on Windows uses the Windows API (`SHGetKnownFolderPath`), which ignores both `HOME` and `USERPROFILE` environment variables. Tests that only redirect `HOME` do not relocate the canonical `~/.claude` config root on Windows.
@@ -41,9 +58,7 @@ fn set_home_env(cmd: &mut assert_cmd::Command, temp_dir: &TempDir) {
 
 Before declaring dev work complete, grep all integration test files:
 ```bash
-grep -rn 'ATM_HOME' crates/atm/tests/ || echo "FAIL: Missing ATM_HOME in test helpers"
 grep -rn 'ATM_CONFIG_HOME' crates/atm/tests/ || echo "FAIL: Missing ATM_CONFIG_HOME in test helpers"
-grep -rn 'ATM_TEAMS_DIR' crates/atm/tests/ || echo "FAIL: Missing ATM_TEAMS_DIR where team discovery is exercised"
 grep -rn 'env(\"HOME\"' crates/atm/tests/
 ```
 
@@ -146,7 +161,7 @@ Use explicit test-only names for team and agent fixtures:
 - `TEST_RECIPIENT = "test-recipient"`
 - `TEST_LEAD = "test-lead"`
 
-Reserved production names may still matter in a few tests:
+Production role semantics may still matter in a few tests:
 - `ATM_TEAM` and `ATM_IDENTITY` may be set explicitly when the test is proving
   production env-read behavior
 - `team-lead` may be used when the role itself is semantically significant,

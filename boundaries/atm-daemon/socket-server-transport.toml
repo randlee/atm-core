@@ -1,0 +1,65 @@
+boundary_id = "BOUNDARY-ServerTransport-Socket"
+owner_package = "atm-daemon"
+owner_crate_path = "atm_daemon"
+name = "LocalIpcServerTransportAdapter"
+
+[public]
+trait = "ServerTransport"
+
+[implementation]
+type = "LocalSocketServerTransport"
+module = "atm_daemon"
+visibility = "pub(crate)"
+constructor = "pub(crate)"
+
+[composition]
+roots = ["atm_daemon::composition::compose_runtime"]
+
+[ownership]
+io_owns = ["listener_accept_loop", "framed_request_receive", "framed_response_send"]
+io_forbidden = ["sqlite", "process_spawn"]
+
+[dependencies]
+allowed_dependents = []
+allowed_dependencies = ["atm-core", "atm-rusqlite", "tokio"]
+forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = [
+  "LocalSocketServerTransport",
+  "tokio::net::UnixListener",
+  "std::os::unix::net::UnixListener",
+  "interprocess::local_socket::Listener",
+]
+
+[contracts]
+request_types = ["AtmProtocol requests"]
+response_types = ["AtmProtocol responses"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = [
+  "tokio::net::UnixListener",
+  "std::os::unix::net::UnixListener",
+]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-SERVER-TRANSPORT-SOCKET-EDGES", "LINT-BOUNDARY-SERVER-TRANSPORT-SOCKET-REFERENCES"]
+review_gates = [
+  "no_public_impl",
+  "no_public_constructor",
+  "no_cli_to_daemon_edge",
+  "platform_parity_required",
+  "no_nonunix_stub_release",
+]
+
+[status]
+state = "stub_landed"
+notes = [
+  "thin clients must stop at ClientTransport and AtmProtocol",
+  "the stable boundary id retains its historical socket name, but the target same-host surface is one cross-platform local IPC contract",
+  "stub implementation currently lives at crate root and is assembled through atm_daemon::composition",
+  "Phase S is not complete until both Unix and Windows implementations ship behind this boundary",
+]

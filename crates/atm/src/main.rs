@@ -1,4 +1,5 @@
 mod commands;
+mod composition;
 mod observability;
 mod output;
 
@@ -70,14 +71,14 @@ fn run() -> anyhow::Result<()> {
             }
             let validation_error = atm_core::error::AtmError::validation(error.to_string());
             observability::CliObservability::fallback()
-                .emit_fatal_error("parse", &validation_error);
+                .report_fatal_error("parse", &validation_error);
             return Err(error.into());
         }
     };
 
     if let Err(error) = init_tracing(cli.stderr_logs()) {
         let fallback = observability::CliObservability::fallback();
-        fallback.emit_fatal_error("bootstrap", &error);
+        fallback.report_fatal_error("bootstrap", &error);
         return Err(error.into());
     }
 
@@ -85,7 +86,7 @@ fn run() -> anyhow::Result<()> {
         Ok(observability) => observability,
         Err(error) => {
             let fallback = observability::CliObservability::fallback();
-            fallback.emit_fatal_error("bootstrap", &error);
+            fallback.report_fatal_error("bootstrap", &error);
             return Err(error.into());
         }
     };
@@ -93,7 +94,7 @@ fn run() -> anyhow::Result<()> {
     match cli.run(&observability) {
         Ok(()) => Ok(()),
         Err(error) => {
-            observability.emit_fatal_error("service", error.as_ref());
+            observability.report_fatal_error("service", error.as_ref());
             Err(error)
         }
     }
@@ -294,7 +295,7 @@ impl ScObservabilityAdapter {
     }
 }
 
-impl atm_core::observability::sealed::Sealed for ScObservabilityAdapter {}
+impl atm_core::boundary::sealed::Sealed for ScObservabilityAdapter {}
 
 impl ObservabilityPort for ScObservabilityAdapter {
     fn emit(&self, event: CommandEvent) -> Result<(), AtmError> {
@@ -400,7 +401,7 @@ fn map_command_event(
     );
     fields.insert(
         "sender".to_string(),
-        serde_json::Value::String(event.sender.clone()),
+        serde_json::Value::String(event.sender.to_string()),
     );
     fields.insert(
         "requires_ack".to_string(),
@@ -634,8 +635,8 @@ fn render_diagnostic_summary(summary: sc_observability_types::DiagnosticSummary)
     }
 }
 
-#[cfg(test)]
-pub(crate) fn new_adapter_port_for_tests(
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn new_adapter_port(
     home_dir: &std::path::Path,
     stderr_logs: bool,
 ) -> Result<Box<dyn ObservabilityPort + Send + Sync>, AtmError> {
@@ -661,8 +662,7 @@ pub(crate) fn new_adapter_port_for_tests(
 
 #[cfg(test)]
 mod adapter_tests {
-    use std::sync::{Mutex, OnceLock};
-
+    use atm_core::test_support::EnvGuard;
     use sc_observability_types::LevelFilter as SharedLevelFilter;
     use serial_test::serial;
     use tracing_subscriber::filter::LevelFilter as TracingLevelFilter;
@@ -671,36 +671,17 @@ mod adapter_tests {
         ATM_LOG_LEVEL_ENV, level_for_outcome, logger_level_override, tracing_level_filter,
     };
 
-    fn env_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-    }
-
-    fn with_env_var<R>(key: &str, value: Option<&str>, f: impl FnOnce() -> R) -> R {
-        let _guard = env_lock().lock().expect("env lock");
-        let previous = std::env::var_os(key);
+    fn with_env_var<R>(key: &'static str, value: Option<&str>, f: impl FnOnce() -> R) -> R {
         match value {
             Some(value) => {
-                // SAFETY: this test helper serializes process environment access.
-                unsafe { std::env::set_var(key, value) }
+                let _guard = EnvGuard::set_raw(key, value);
+                f()
             }
             None => {
-                // SAFETY: this test helper serializes process environment access.
-                unsafe { std::env::remove_var(key) }
+                let _guard = EnvGuard::unset_raw(key);
+                f()
             }
         }
-        let result = f();
-        match previous {
-            Some(value) => {
-                // SAFETY: this test helper serializes process environment access.
-                unsafe { std::env::set_var(key, value) }
-            }
-            None => {
-                // SAFETY: this test helper serializes process environment access.
-                unsafe { std::env::remove_var(key) }
-            }
-        }
-        result
     }
 
     #[test]

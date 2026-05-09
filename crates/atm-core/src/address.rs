@@ -1,9 +1,11 @@
 use std::fmt;
 use std::str::FromStr;
 
+use serde::{Deserialize, Serialize};
+
 use crate::error::AtmError;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentAddress {
     pub agent: String,
     pub team: Option<String>,
@@ -90,31 +92,32 @@ mod tests {
     use std::str::FromStr;
 
     use super::AgentAddress;
+    use crate::test_support::{TEST_SENDER, TEST_SENDER_ADDRESS, TEST_TEAM};
 
     #[test]
     fn parses_bare_agent_address() {
-        let parsed = AgentAddress::from_str("arch-ctm").expect("address");
-        assert_eq!(parsed.agent, "arch-ctm");
+        let parsed = AgentAddress::from_str(TEST_SENDER).expect("address");
+        assert_eq!(parsed.agent, TEST_SENDER);
         assert_eq!(parsed.team, None);
     }
 
     #[test]
     fn parses_agent_with_team() {
-        let parsed = AgentAddress::from_str("arch-ctm@atm-dev").expect("address");
-        assert_eq!(parsed.agent, "arch-ctm");
-        assert_eq!(parsed.team.as_deref(), Some("atm-dev"));
+        let parsed = AgentAddress::from_str(TEST_SENDER_ADDRESS).expect("address");
+        assert_eq!(parsed.agent, TEST_SENDER);
+        assert_eq!(parsed.team.as_deref(), Some(TEST_TEAM));
     }
 
     #[test]
     fn rejects_empty_agent_name() {
         assert!(AgentAddress::from_str("").is_err());
-        assert!(AgentAddress::from_str("@atm-dev").is_err());
+        assert!(AgentAddress::from_str(&format!("@{TEST_TEAM}")).is_err());
     }
 
     #[test]
     fn rejects_invalid_team_segment() {
-        assert!(AgentAddress::from_str("arch-ctm@").is_err());
-        assert!(AgentAddress::from_str("arch-ctm@atm@dev").is_err());
+        assert!(AgentAddress::from_str(&format!("{TEST_SENDER}@")).is_err());
+        assert!(AgentAddress::from_str(&format!("{TEST_SENDER}@atm@dev")).is_err());
     }
 
     #[test]
@@ -134,24 +137,24 @@ mod tests {
         assert_eq!(parsed.agent, "valid-team_name.1");
         assert_eq!(parsed.team, None);
 
-        let parsed = AgentAddress::from_str("arch-ctm@atm-dev").expect("address");
-        assert_eq!(parsed.agent, "arch-ctm");
-        assert_eq!(parsed.team.as_deref(), Some("atm-dev"));
+        let parsed = AgentAddress::from_str(TEST_SENDER_ADDRESS).expect("address");
+        assert_eq!(parsed.agent, TEST_SENDER);
+        assert_eq!(parsed.team.as_deref(), Some(TEST_TEAM));
     }
 
     #[test]
     fn display_round_trips_bare_and_qualified_addresses() {
         assert_eq!(
-            AgentAddress::from_str("arch-ctm")
+            AgentAddress::from_str(TEST_SENDER)
                 .expect("address")
                 .to_string(),
-            "arch-ctm"
+            TEST_SENDER
         );
         assert_eq!(
-            AgentAddress::from_str("arch-ctm@atm-dev")
+            AgentAddress::from_str(TEST_SENDER_ADDRESS)
                 .expect("address")
                 .to_string(),
-            "arch-ctm@atm-dev"
+            TEST_SENDER_ADDRESS
         );
     }
 }

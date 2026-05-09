@@ -1,0 +1,75 @@
+boundary_id = "BOUNDARY-LifecycleControlSource-Daemon"
+owner_package = "atm-daemon"
+owner_crate_path = "atm_daemon"
+name = "LifecycleControlSourceAdapter"
+
+[public]
+facade = "LifecycleControlSource"
+
+[implementation]
+type = "DaemonShutdownSignals"
+module = "atm_daemon::shutdown_signals"
+visibility = "pub(crate)"
+constructor = "pub(crate)"
+
+[composition]
+roots = [
+  "atm_daemon::composition::RuntimeComposition::start",
+]
+
+[ownership]
+io_owns = [
+  "shutdown_request_source",
+  "reload_request_source",
+]
+io_forbidden = [
+  "sqlite",
+  "transport_dispatch",
+  "business_logic_dispatch",
+]
+
+[dependencies]
+allowed_dependents = []
+allowed_dependencies = ["atm-core"]
+forbidden_edges = [
+  "atm -> atm-daemon",
+  "atm-graft -> atm-daemon",
+]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = [
+  "DaemonShutdownSignals",
+  "signal_hook::consts::signal::SIGINT",
+  "signal_hook::consts::signal::SIGTERM",
+  "signal_hook::consts::signal::SIGHUP",
+  "windows_services::Service",
+]
+
+[contracts]
+request_types = ["shutdown request", "reload request"]
+response_types = ["typed lifecycle control state"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["signal_hook::flag::register"]
+
+[enforcement]
+lint_rules = [
+  "LINT-BOUNDARY-LIFECYCLE-CONTROL-SOURCE-DAEMON-EDGES",
+  "LINT-BOUNDARY-LIFECYCLE-CONTROL-SOURCE-DAEMON-REFERENCES",
+]
+review_gates = [
+  "no_transport_to_os_control_leak",
+  "no_dispatcher_signal_branching",
+  "platform_parity_required",
+]
+
+[status]
+state = "planned"
+notes = [
+  "Phase R currently implements this boundary only through Unix signals",
+  "Phase S requires a platform-neutral lifecycle control source with Unix and Windows implementations behind one daemon-private contract",
+  "same-host daemon hosting is incomplete until Windows lifecycle control exists behind this boundary",
+]
