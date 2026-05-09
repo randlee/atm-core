@@ -11,6 +11,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-005 — Host-Scoped SQLite State Root](./ADR-005-host-scoped-sqlite-state-root.md)
 - [ADR-006 — Bounded SIGHUP Reload Delivery In R.18](./ADR-006-sighup-reload-deferral.md)
 - [ADR-007 — Supported Platform Feature Parity](./ADR-007-supported-platform-parity.md)
+- [ADR-008 — No-Flaky-Test Policy And Mechanical Enforcement](./ADR-008-no-flaky-test-policy-and-mechanical-enforcement.md)
 
 ## Embedded Crate-Local ADR Records
 

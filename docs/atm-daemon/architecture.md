@@ -141,7 +141,8 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - bounded transient retry uses exponential backoff with jitter, an initial
   delay of 250ms, a per-attempt maximum of 5s, jitter of +/-20%, and a hard
   total retry ceiling within the documented timeout budget; it must not
-  collapse into fixed sleeps or unbounded churn
+  collapse into fixed sleeps, unbounded churn, or tests that can wait
+  indefinitely for eventual success
 - retryable peer failures are limited to transient pre-acceptance socket
   failures:
   - timeout

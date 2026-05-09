@@ -1979,8 +1979,16 @@ Required testing architecture:
   - retry sleeps
   - environment mutation races
   - auto-start side effects
+  - unbounded waits
+  - panic-unsafe shared/global test hooks
 - these patterns are treated as sources of flake and false confidence rather
   than as acceptable test infrastructure
+- a test that might hang is invalid even if it does not use
+  `thread::sleep(...)`
+- tests must use bounded waits tied to observable predicates or handshakes
+- bare `join()`, `recv()`, `wait()`, or equivalent waits are prohibited in
+  risky runtime/daemon test paths unless completion has already been proven by
+  a bounded synchronization step
 - test code must not use or reintroduce the current daemon-spawn pattern by
   name:
   - `spawn_test_daemon`
@@ -3111,6 +3119,9 @@ mail correctness.
   - fixed `thread::sleep(...)` in ordinary Rust test code must fail a
     test-hygiene gate unless the file or callsite is explicitly part of the
     narrow daemon-runtime suite
+  - mechanically-detectable unbounded wait patterns in the narrow same-host
+    daemon/runtime suites must move into repository lint or analyzer gates once
+    the rule shape is proven deterministic enough for default local use
   - `PORT-004` must reject production `std::os::unix` imports that are not
     protected by an approved Unix-only boundary
   - `PORT-005` must reject

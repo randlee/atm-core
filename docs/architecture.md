@@ -127,9 +127,12 @@ Lint and tooling boundary rules:
   - reusable/static rules:
     - Unix platform-gating checks
     - bare production `Condvar::wait(...)` checks
+    - fixed-sleep test-hygiene checks after the current repository-local rule
+      shape is proven and extracted to `sc-lint`
   - ATM-local rules:
     - duplicate semantic string-literal checks in non-test Rust code
-    - fixed-sleep test-hygiene checks
+    - targeted same-host daemon test unbounded-wait checks until or unless the
+      rule family proves reusable enough for `sc-lint`
     - triage Turtle consistency checks
 
 Crate-local boundary detail is owned by:
@@ -163,11 +166,16 @@ Current Phase R lint partition direction:
   rules
 - extend the existing `sc-boundary` analyzer for reusable production-liveness
   rules that need Rust-aware analysis
+- treat fixed-sleep test hygiene as a reusable lint family whose current
+  repository-local rule is the proving implementation before `sc-lint`
+  extraction
 - keep ATM duplicate semantic literal policy in the existing repository-local
   identity lint
-- add any fixed-sleep and triage-record validation as repository-local lint/CI
-  steps first, then reevaluate extraction only after the false-positive and
+- keep targeted same-host daemon unbounded-wait checks as repository-local
+  lint/CI first, then reevaluate extraction only after the false-positive and
   allow-list shape is proven on `atm-core`
+- keep triage-record validation as repository-local lint/CI unless its rule
+  semantics become clearly reusable
 
 Active postmortem rule families:
 - reusable analyzer rules:
@@ -182,7 +190,7 @@ Active postmortem rule families:
   - `SCB-RUNTIME-002` discarded `wait_timeout*` results in production code
 - ATM-local repository rules:
   - duplicate semantic role-name literals in non-test Rust code
-  - fixed-sleep test-hygiene checks
+  - targeted same-host daemon test unbounded-wait checks
   - triage Turtle aggregate/branch consistency checks
 
 ### 2.3 Release Publication Boundary

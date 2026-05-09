@@ -181,20 +181,28 @@ Acceptance:
   daemon host design instead of a Unix-only host shell plus Windows compile
   stubs
 
-## 4.1 Anti-Flake Synchronization Contract
+## 4.1 No-Flaky-Test And Bounded-Wait Contract
 
-The same-host daemon plan must forbid timing-only stabilization and must name
-the positive replacements that implementation sprints use instead:
+The same-host daemon plan must forbid timing-only stabilization and any test
+shape that can block indefinitely, and must name the positive replacements
+that implementation sprints use instead:
 - explicit ready handshakes over channels
 - `Barrier`, `Condvar`, or latch-style predicate synchronization
 - listener-ready or worker-ready state probes on documented bounded deadlines
 - bounded retry only when tied to an explicit observable state transition
+- panic-safe cleanup of shared/global test hooks
+- bounded finalizer and helper-thread drain paths
 
 The following are not acceptable for same-host daemon parity coverage:
 - fixed sleeps
 - warm-up delays
 - retry loops with no explicit state predicate
 - platform-specific timing fudge intended only to “make Windows pass”
+- unbounded `recv()`, `wait()`, or equivalent blocking operations in flaky-risk
+  test paths
+- bare `join()` when the test has no prior bounded proof that the worker
+  already completed
+- shared/global test hooks that can remain installed after panic or timeout
 
 ## 5. Planned Sprint Sequence
 
@@ -397,6 +405,30 @@ Required closeout work:
   - Unix-only same-host functionality in production paths
 - reconcile docs, ADRs, and machine-readable boundaries so the production
   design names every allowed OS-specific implementation difference
+
+### S.5 No-Flaky-Test Policy And Mechanical Guardrails
+
+Goal:
+- tighten Phase S and top-level ATM language so the anti-flake contract is
+  phase-wide rather than fixed-sleep-only
+- define which anti-flake guardrails are feasible now in `just lint` versus
+  deferred analyzer work
+
+Required outcomes:
+- top-level requirements, architecture, and test guidelines explicitly state
+  that a test which might hang is invalid
+- Phase S sprint docs state that same-host daemon coverage must avoid both
+  timing-only stabilization and unbounded wait paths
+- the repo has one review-visible inventory of feasible-now versus deferred
+  mechanical anti-flake lint families
+
+Required closeout work:
+- add the S.5 sprint plan under `docs/phase-S/sprint-S5.md`
+- add an ADR for the repository-wide no-flaky-test policy and enforcement
+  partition if the existing ADRs are not sufficient
+- update Phase S issue inventory with the remaining policy and lint gaps
+- reconcile testing and cross-platform guidelines with the stronger no-hang
+  contract
 
 ## 6. Temporary Windows CI Guardrail
 

@@ -17,6 +17,7 @@ boundary while preserving one shared protocol, dispatcher, and test harness.
 
 - `REQ-P-PLATFORM-001`
 - `REQ-P-PLATFORM-002`
+- `REQ-P-TEST-001`
 - `REQ-DAEMON-TRANSPORT-001`
 - `REQ-DAEMON-TRANSPORT-008`
 - `REQ-DAEMON-PLATFORM-001`
@@ -28,6 +29,7 @@ boundary while preserving one shared protocol, dispatcher, and test harness.
 
 - `docs/adr/ADR-003-test-fidelity-and-daemon-isolation.md`
 - `docs/adr/ADR-007-supported-platform-parity.md`
+- `docs/adr/ADR-008-no-flaky-test-policy-and-mechanical-enforcement.md`
 
 ## Governing ICD Sections
 
@@ -93,10 +95,10 @@ boundary while preserving one shared protocol, dispatcher, and test harness.
   Windows
 - same-host functional tests prove the real transport on Windows through the
   shared harness
-- no fixed sleeps are used to stabilize the transport tests; readiness and
-  shutdown are proven through explicit synchronization such as channel
-  handshakes, `Barrier`, or `Condvar` predicates, following the contract in
-  `docs/testing-guidelines.md §5`
+- no fixed sleeps or unbounded waits are used to stabilize the transport
+  tests; readiness and shutdown are proven through explicit synchronization
+  such as channel handshakes, `Barrier`, or `Condvar` predicates, following
+  the contract in `docs/testing-guidelines.md §5`
 
 ## Required Validation
 

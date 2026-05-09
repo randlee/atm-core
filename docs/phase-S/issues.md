@@ -57,3 +57,15 @@ Planning baseline:
     cross-platform-compatible lock-file shape; they left room for Unix-shaped
     deletion signaling instead of one stable `launch.lock` / `owner.lock`
     model with held-lock owner metadata.
+
+14. The original Phase S anti-flake wording was too narrow: it prohibited
+    fixed sleeps, but it did not define the broader no-flaky-test and
+    no-unbounded-wait policy needed for cross-platform daemon work.
+
+15. Phase S did not explicitly classify which anti-flake guardrails are
+    feasible in the default `just lint` path versus which require deferred
+    Rust-aware analyzer work.
+
+16. Phase S did not explicitly require panic-safe cleanup of shared/global test
+    hooks or ban unbounded wait shapes such as bare `recv()` / `wait()` /
+    `join()` in the risky same-host daemon test surfaces.
