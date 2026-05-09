@@ -450,7 +450,7 @@ pub(crate) fn compose_runtime() -> Result<RuntimeComposition, AtmError> {
     RuntimeComposition::new_with_replay_store_path(home_dir, atm_core::home::host_mail_db_path()?)
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use atm_core::boundary::ServerTransport;
     use tempfile::TempDir;
