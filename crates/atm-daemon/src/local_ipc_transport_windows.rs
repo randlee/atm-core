@@ -50,10 +50,7 @@ impl LocalIpcServerTransportAdapter {
 impl boundary::sealed::Sealed for LocalIpcServerTransportAdapter {}
 
 impl boundary::ServerTransport for LocalIpcServerTransportAdapter {
-    fn serve(
-        &self,
-        _dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-    ) -> Result<(), AtmError> {
+    fn serve(&self, _dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
         Err(unsupported_local_ipc_error())
     }
 }
