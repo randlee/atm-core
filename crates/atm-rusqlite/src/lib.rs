@@ -499,7 +499,7 @@ impl boundary::MailStore for SqliteMailStore {
                     params![
                         request.team.as_str(),
                         request.agent.as_str(),
-                        request.source,
+                        request.source.as_str(),
                         state_json,
                     ],
                 )
@@ -526,7 +526,7 @@ impl boundary::MailStore for SqliteMailStore {
                     params![
                         request.team.as_str(),
                         request.agent.as_str(),
-                        request.source
+                        request.source.as_str()
                     ],
                     |row| row.get::<_, String>(0),
                 )
