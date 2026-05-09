@@ -78,6 +78,14 @@ detail surface.
     history for operator-facing responses.
 5.2 Keep selection semantics owned by `atm-core`, not by `atm-rusqlite`.
 
+6. Close the retained `atm-core` follow-up items surfaced by TODO triage.
+6.1 Replace `SendOutcome::warnings` in
+    `crates/atm-core/src/send/mod.rs` with a structured `WarningEntry` type
+    so warning text and recovery guidance are modeled separately.
+6.2 Move `crates/atm-core/src/service_runtime.rs::default_lock_timeout`
+    behind a boundary-owned timeout policy instead of the current module-level
+    default helper.
+
 ## Required Code Targets
 
 - `crates/atm/src/commands/list.rs`
