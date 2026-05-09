@@ -111,7 +111,11 @@ branch names.
 Do not assign any fix work until:
 - every finding in the batch has a completed `qa-triage` result
 - every canonical `.ttl` record exists
+- every `qa-triage` result has been checked for
+  `dispatch_blocked_pending_triage_commit`
 - each finding reports `dispatch_ready = true` or a valid non-dispatch result
+- dispatch remains blocked when any `qa-triage` result reports
+  `dispatch_blocked_pending_triage_commit = true`
 
 ### 3. Aggregate triage results
 
@@ -133,8 +137,8 @@ The per-finding `.ttl` record is canonical. Aggregation is derived.
 ### 3.1 Commit triage artifacts before dispatch
 
 After all `qa-triage` agents in the batch have finished and after aggregation
-confirms the `.ttl` set is complete, stage and commit the triage artifacts to
-git before sending any dev assignment to `arch-ctm`.
+confirms the `.ttl` set is complete, stage, commit, and push the triage
+artifacts to git before sending any dev assignment to `arch-ctm`.
 
 Required commit scope:
 - the phase findings under `<triage_root>/<phase_id>/findings/`
