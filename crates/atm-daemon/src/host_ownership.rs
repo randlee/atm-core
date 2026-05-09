@@ -12,8 +12,8 @@ pub(crate) const HOST_RUNTIME_OWNER_LOCK_FILE: &str = "owner.lock";
 const OWNER_RECOVERY_RETRY_INTERVAL: Duration = Duration::from_millis(25);
 
 #[cfg(test)]
-static STALE_RECOVERY_OBSERVED_BARRIER: std::sync::Mutex<
-    Option<std::sync::Arc<std::sync::Barrier>>,
+static STALE_RECOVERY_OBSERVED_SIGNAL: std::sync::Mutex<
+    Option<std::sync::mpsc::SyncSender<()>>,
 > = std::sync::Mutex::new(None);
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -49,7 +49,7 @@ impl HostOwnershipAdapter {
                     && !atm_core::process::process_is_alive(pid)
                 {
                     #[cfg(test)]
-                    wait_at_stale_recovery_barrier_for_test();
+                    notify_stale_recovery_signal_for_test();
                     drop(lock_file);
                     lock_file = recover_stale_owner_lock(&lock_path, pid, &token)?;
                     recovered = true;
@@ -229,26 +229,26 @@ fn clear_owner_record(lock_file: &mut File) -> Result<(), AtmError> {
 }
 
 #[cfg(test)]
-pub(crate) fn install_stale_recovery_barrier_for_test(barrier: std::sync::Arc<std::sync::Barrier>) {
-    *STALE_RECOVERY_OBSERVED_BARRIER
+pub(crate) fn install_stale_recovery_signal_for_test(signal: std::sync::mpsc::SyncSender<()>) {
+    *STALE_RECOVERY_OBSERVED_SIGNAL
         .lock()
-        .expect("stale recovery barrier lock") = Some(barrier);
+        .expect("stale recovery signal lock") = Some(signal);
 }
 
 #[cfg(test)]
-pub(crate) fn clear_stale_recovery_barrier_for_test() {
-    *STALE_RECOVERY_OBSERVED_BARRIER
+pub(crate) fn clear_stale_recovery_signal_for_test() {
+    *STALE_RECOVERY_OBSERVED_SIGNAL
         .lock()
-        .expect("stale recovery barrier lock") = None;
+        .expect("stale recovery signal lock") = None;
 }
 
 #[cfg(test)]
-fn wait_at_stale_recovery_barrier_for_test() {
-    let barrier = STALE_RECOVERY_OBSERVED_BARRIER
+fn notify_stale_recovery_signal_for_test() {
+    let signal = STALE_RECOVERY_OBSERVED_SIGNAL
         .lock()
-        .expect("stale recovery barrier lock")
+        .expect("stale recovery signal lock")
         .clone();
-    if let Some(barrier) = barrier {
-        barrier.wait();
+    if let Some(signal) = signal {
+        let _ = signal.send(());
     }
 }

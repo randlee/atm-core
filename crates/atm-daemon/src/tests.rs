@@ -1,8 +1,8 @@
 use super::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
 use super::{
     host_ownership::{
-        HOST_RUNTIME_OWNER_LOCK_FILE, HostOwnershipAdapter, clear_stale_recovery_barrier_for_test,
-        install_stale_recovery_barrier_for_test,
+        HOST_RUNTIME_OWNER_LOCK_FILE, HostOwnershipAdapter, clear_stale_recovery_signal_for_test,
+        install_stale_recovery_signal_for_test,
     },
     lifecycle_control::LifecycleControlSourceAdapter,
     local_ipc_transport::LocalIpcServerTransportAdapter,
@@ -27,7 +27,7 @@ use serial_test::serial;
 use std::fs::OpenOptions;
 use std::io::{Seek, SeekFrom, Write};
 use std::sync::mpsc;
-use std::sync::{Arc, Barrier};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
@@ -52,18 +52,18 @@ impl Drop for LifecycleFlagResetGuard {
     }
 }
 
-struct StaleRecoveryBarrierGuard;
+struct StaleRecoverySignalGuard;
 
-impl StaleRecoveryBarrierGuard {
-    fn install(barrier: Arc<Barrier>) -> Self {
-        install_stale_recovery_barrier_for_test(barrier);
+impl StaleRecoverySignalGuard {
+    fn install(signal: mpsc::SyncSender<()>) -> Self {
+        install_stale_recovery_signal_for_test(signal);
         Self
     }
 }
 
-impl Drop for StaleRecoveryBarrierGuard {
+impl Drop for StaleRecoverySignalGuard {
     fn drop(&mut self) {
-        clear_stale_recovery_barrier_for_test();
+        clear_stale_recovery_signal_for_test();
     }
 }
 
@@ -335,11 +335,13 @@ fn singleton_guard_rejects_stale_recovery_when_owner_token_changes() {
     writeln!(&mut file, "{}:token-a", u32::MAX).expect("write owner");
     file.sync_all().expect("sync owner");
 
-    let barrier = Arc::new(Barrier::new(2));
-    let _barrier_guard = StaleRecoveryBarrierGuard::install(Arc::clone(&barrier));
+    let (ready_tx, ready_rx) = mpsc::sync_channel(1);
+    let _signal_guard = StaleRecoverySignalGuard::install(ready_tx);
     let lock_path_for_thread = lock_path.clone();
     let join = std::thread::spawn(move || HostOwnershipAdapter::acquire_at(lock_path_for_thread));
-    barrier.wait();
+    ready_rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("stale recovery hook did not fire within 5s");
     file.set_len(0).expect("clear record");
     file.seek(SeekFrom::Start(0)).expect("rewind");
     writeln!(&mut file, "{}:token-b", u32::MAX).expect("rewrite owner");

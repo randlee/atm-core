@@ -214,7 +214,10 @@ fn install_platform_hooks(
             let mut wake_buffer = [0_u8; 32];
             loop {
                 match wake_read.read(&mut wake_buffer) {
-                    Ok(0) => return,
+                    Ok(0) => {
+                        let _ = state_change.notify();
+                        return;
+                    }
                     Ok(_) => {
                         if terminate.load(Ordering::SeqCst) || reload.load(Ordering::SeqCst) {
                             let _ = state_change.notify();
