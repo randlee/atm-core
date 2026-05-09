@@ -55,13 +55,13 @@ Initial crate requirement IDs:
 - `REQ-ATM-CMD-001` `atm` owns clap parsing, flag validation, and command
   dispatch for the retained command surface. Satisfies the CLI
   entry/parse/dispatch aspects of:
-  `REQ-P-SEND-001`, `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-CLEAR-001`,
-  `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-TEAMS-001`,
+  `REQ-P-SEND-001`, `REQ-P-LIST-001`, `REQ-P-READ-001`, `REQ-P-ACK-001`,
+  `REQ-P-CLEAR-001`, `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-TEAMS-001`,
   `REQ-P-MEMBERS-001`.
 - `REQ-ATM-OUT-001` `atm` owns human-readable and JSON rendering for retained
   commands. Satisfies the output-shaping and rendering aspects of:
-  `REQ-P-SEND-001`, `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-CLEAR-001`,
-  `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-TEAMS-001`,
+  `REQ-P-SEND-001`, `REQ-P-LIST-001`, `REQ-P-READ-001`, `REQ-P-ACK-001`,
+  `REQ-P-CLEAR-001`, `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-TEAMS-001`,
   `REQ-P-MEMBERS-001`.
 - `REQ-ATM-OBS-001` `atm` owns concrete observability bootstrap and injection
   into `atm-core`. Satisfies the CLI bootstrap/injection aspects of:
@@ -110,6 +110,7 @@ Initial crate requirement IDs:
 Per-command documentation lives under:
 
 - [`commands/send.md`](./commands/send.md)
+- [`commands/list.md`](./commands/list.md)
 - [`commands/read.md`](./commands/read.md)
 - [`commands/ack.md`](./commands/ack.md)
 - [`commands/clear.md`](./commands/clear.md)

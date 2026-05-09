@@ -19,6 +19,7 @@ The CLI stays thin. Product logic moves into `atm-core`.
 
 The retained command surface is:
 - `send`
+- `list`
 - `read`
 - `ack`
 - `clear`
@@ -73,6 +74,9 @@ Phase-S portability note:
   CLI surface:
   - daemon packets: `send`, `ack`, `read`, `clear`, `doctor`, heartbeat
   - non-packet retained surfaces: `log`, `teams`, `members`
+- S.5 planning adds `atm list` as a distinct CLI query surface; implementation
+  must refine the queue-query packet mapping instead of preserving the old
+  multi-message `read` response shape as the final contract
 - Phase S planning is tracked in [`docs/plan-phase-S.md`](./plan-phase-S.md)
 
 ## 2. Crate Boundaries
@@ -893,51 +897,77 @@ Missing-team-config fallback is limited to `send`:
 - repair notices must be deduplicated by unresolved condition so repeated sends
   do not flood inboxes
 
-### 6.2 Read Service
+### 6.2 Queue Inspection Services
 
-Public entrypoint:
+Phase S.5 splits queue inspection into two command surfaces:
 
-`read::read_mail(query: ReadQuery, observability: &dyn ObservabilityPort) -> Result<ReadOutcome, AtmError>`
+- `atm list` finds messages through a bounded metadata query
+- `atm read` opens one full message
 
-`ReadQuery` contains:
+Target service shape:
+
+- `list::list_mail(query: ListQuery, observability: &dyn ObservabilityPort)
+  -> Result<ListOutcome, AtmError>`
+- `read::read_mail(query: ReadQuery, observability: &dyn ObservabilityPort)
+  -> Result<ReadOutcome, AtmError>`
+
+Shared query model:
 - home directory
 - current directory
 - actor override
 - optional target address
 - team override
-- selection_mode
-- seen_state_filter
-- seen_state_update
-- ack_activation_mode
-- limit
-- sender_filter
-- timestamp_filter
+- sender filter
+- timestamp filter
+- task filter
+- contains filter
+- queue-state filters (`unread`, `pending_ack`, `all`)
+
+`ListQuery` adds:
+- optional limit
+
+`ReadQuery` adds:
+- optional exact `message_id`
 - optional timeout
+- read-mutation controls such as seen-state update and ack activation
 
-`seen_state_filter` is false when `--no-since-last-seen` is set. `--all` bypasses this filter regardless of the stored value.
+`ListOutcome` contains:
+- action
+- resolved team
+- resolved agent
+- messages
+- count
+- bucket_counts
 
-`seen_state_update` is false when `--no-update-seen` is set.
-
-Timeout rule:
-- if the requested selection is already non-empty after filtering and selection-mode application, return immediately
-- otherwise wait for a newly eligible message until the timeout expires
+Each list row contains:
+- `message_id`
+- `summary`
+- `from`
+- `timestamp`
+- `read`
+- `pending_ack`
+- `task_id`
 
 `ReadOutcome` contains:
 - action
 - resolved team
 - resolved agent
-- selection_mode
-- history_collapsed
-- mutation_applied
-- messages
+- selected message
+- `selected_message_id`
+- `match_count`
+- `additional_match_count`
+- `mutation_applied`
 - bucket_counts
 
-`ReadOutcome.bucket_counts` exposes:
-- unread
-- pending_ack
-- history
+Queue-inspection architectural rules:
+- default `atm list` must stay bounded by query behavior rather than
+  materializing full mailbox history and truncating it at render time
+- bare `atm read` must return one most-recent unread actionable message, with
+  pending-ack messages prioritized ahead of non-ack unread messages
+- selector-driven `atm read` must return the most recent match and report
+  additional matches in metadata rather than returning multiple full bodies
 
-Read deduplication rule:
+Deduplication rule:
 - collapse multiple entries with the same non-null `message_id` to the most
   recent entry before bucket selection and output rendering
 - when timestamps tie, keep the later encountered inbox record
@@ -950,18 +980,13 @@ Read/enrichment rule:
   `from`, which also requires canonical sender identity in
   `metadata.atm.fromIdentity`
 
-The read service derives `MessageClass` from `(ReadState, AckState)` and applies display-bucket selection to the derived class, not to raw persisted fields.
+The queue-query services derive `MessageClass` from `(ReadState, AckState)` and
+apply display-bucket selection to the derived class, not to raw persisted
+fields.
 
-For merged inbox surfaces, any displayed-message mutation must be written back to the physical inbox file that contributed the displayed record. The merged view is a read projection, not a synthetic write target.
-
-The CLI JSON output mirrors the current contract:
-- `action`
-- `team`
-- `agent`
-- `messages`
-- `count`
-- `bucket_counts`
-- `history_collapsed`
+For merged inbox surfaces, any displayed-message mutation must be written back
+to the physical inbox file that contributed the displayed record. The merged
+view is a read projection, not a synthetic write target.
 
 ### 6.3 Ack Service
 

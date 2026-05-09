@@ -25,6 +25,8 @@ The `atm` crate is responsible for:
 - constructing the production daemon client / runtime request adapter
 - maintaining the retained CLI subcommand surface, including `teams` and
   `members`
+- maintaining the queue-inspection command split where `atm list` is the
+  metadata-search surface and `atm read` is the single-message detail surface
 
 The `atm` crate must remain thin.
 
@@ -39,6 +41,9 @@ Phase R redesign notes:
 - the current daemon packet family serves `send`, `ack`, `read`, `clear`, and
   `doctor`; retained `log`, `teams`, and `members` stay outside the daemon
   request/response packet surface in the current Phase S line
+- S.5 planning adds `atm list` as a distinct CLI verb; implementation must
+  keep its search semantics aligned with `atm read` while avoiding
+  multi-message body rendering
 
 ## 1.1 ADRs
 

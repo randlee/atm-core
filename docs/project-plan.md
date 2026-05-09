@@ -51,8 +51,10 @@ Phase-S planning note:
   or from the governing requirements, architecture, ADR, and ICD documents it
   names; the project plan does not override those lower-level sources of truth
 - the planning baseline is `integrate/phase-R` at `6a072c1`
-- S.5 is the follow-on planning slice that tightens the no-flaky-test policy
-  and defines which anti-flake guardrails belong in the default lint path
+- S.5 is the follow-on planning slice that tightens the no-flaky-test policy,
+  defines which anti-flake guardrails belong in the default lint path, and
+  documents the bounded queue-query split between `atm list` and
+  single-message `atm read`
 
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton

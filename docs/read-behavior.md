@@ -1,69 +1,102 @@
-# ATM Read Behavior Review
+# ATM Queue List / Read Behavior Review
 
 **Lifecycle**: Permanent cross-cutting document
 
-This document remains part of the durable documentation set because read
+This document remains part of the durable documentation set because queue
 selection, bucket behavior, seen-state rules, and wait semantics are
 cross-cutting product behavior rather than crate-local implementation detail.
 
-This document defines the canonical read behavior for the rewrite and records which parts of current ATM behavior are preserved.
+This document defines the canonical queue-inspection behavior for the rewrite
+and records which parts of current ATM behavior are preserved.
 
 ## 1. Why This Document Exists
 
-The current read path mixes several concerns:
-- mail visibility
+The current `atm read` path mixes several concerns:
+- queue discovery
+- full message retrieval
 - workflow axes
 - display buckets
 - watermark tracking
 - wait-mode behavior
 
-That makes the command hard to reason about and easy to regress.
+That makes the command hard to reason about, easy to regress, and too eager to
+materialize long message bodies during ordinary queue inspection.
 
-The rewrite keeps the useful read behavior but makes the model explicit:
-- canonical message axes
-- display bucket mapping
-- selection policy
-- legal state transitions
+The rewrite keeps the useful queue behavior but makes the model explicit:
+- `atm list` owns metadata search
+- `atm read` owns one-message detail fetch
+- canonical message axes remain shared
+- display bucket mapping remains shared
+- selection policy and legal state transitions remain explicit in code
 
 ## 2. Best Current ATM Behavior To Preserve
 
-The current command already has useful queue behavior that should survive the rewrite:
+The current queue behavior already has useful properties that should survive
+the rewrite:
 - default view shows actionable work only
 - pending-ack messages stay visible until they are acknowledged
 - task-linked ack-required messages arrive already actionable
 - duplicate deliveries should collapse by `message_id` instead of showing the
   same message repeatedly
-- history can be expanded without hiding actionable work
+- history can still be expanded explicitly without hiding actionable work
 - `--all` shows everything
-- older unread messages remain visible even when the seen-state watermark is newer
-- last-seen updates from the latest displayed message, not the latest message in the inbox
+- older unread messages remain visible even when the seen-state watermark is
+  newer
+- last-seen updates from the latest displayed message, not the latest message
+  in the inbox
 
-The rewrite should preserve those behaviors while removing daemon coupling and making the workflow explicit in code.
+The rewrite should preserve those behaviors while removing the current
+multi-message `atm read` coupling and making the workflow explicit in code.
 
-## 3. Current Read Contract
+## 3. Queue Inspection Contract
 
-### 3.1 Display Buckets
+### 3.1 Command Split
 
-The current command exposes three display buckets:
+Queue inspection is split into two commands:
+
+- `atm list` returns compact metadata rows only
+- `atm read` returns one full message only
+
+`atm list` is the normal operator-facing queue search surface.
+
+`atm read` is the detail surface:
+- bare `atm read` returns the most recent unread actionable message
+- pending-ack messages are prioritized ahead of non-ack unread messages
+- selector-driven reads return the most recent match
+- additional matches are reported in metadata, not as more full message bodies
+
+### 3.2 Shared Filters
+
+`atm list` and `atm read` share one semantic filter model:
+- target inbox
+- `--team`
+- `--from`
+- `--since`
+- `--task`
+- `--contains`
+- `--unread`
+- `--pending-ack`
+- `--all`
+
+`atm list` may add pagination controls such as `--limit`.
+
+`--contains` must search full message body text as well as summary text.
+
+### 3.3 Display Buckets
+
+The shared queue model exposes three display buckets:
 - unread
 - pending ack
 - history
 
 Current default output:
-- show unread bucket
-- show pending-ack bucket
-- collapse history to a count line
+- `atm list` shows bounded actionable results by default
+- `atm read` renders one selected actionable message by default
+- history remains opt-in rather than implicit
 
-Current flag behavior:
-- default => actionable queue only
-- `--unread-only` => unread bucket only
-- `--pending-ack-only` => pending-ack bucket only
-- `--history` => actionable queue plus history bucket
-- `--all` => everything
+### 3.4 Watermark Behavior
 
-### 3.2 Watermark Behavior
-
-Current tests establish these rules:
+Retained tests and requirements establish these rules:
 - seen-state filtering is on by default
 - unread messages remain visible even when older than the watermark
 - pending-ack messages remain visible even when older than the watermark
@@ -71,12 +104,16 @@ Current tests establish these rules:
 - `--all` bypasses the seen-state filter
 - first run still shows only pending-action messages by default
 
-### 3.3 Current Mutation Behavior
+### 3.5 Mutation Behavior
 
-Current behavior when reading a message should become:
-- displayed messages are always written back with `read = true`
-- displayed unread messages in your own inbox also receive `pendingAckAt` when marking is enabled and the message did not already require acknowledgement
-- displayed unread messages that already require acknowledgement remain pending-ack after display
+Mutation belongs to `atm read`, not to `atm list`.
+
+Required `atm read` behavior:
+- the selected displayed message is always written back with `read = true`
+- selected unread messages in your own inbox also receive `pendingAckAt` when
+  marking is enabled and the message did not already require acknowledgement
+- selected unread messages that already require acknowledgement remain
+  pending-ack after display
 
 Current ack behavior:
 - an acknowledged message receives `acknowledgedAt`
@@ -87,7 +124,8 @@ Current clear behavior that must survive:
 - clear removes acknowledged messages
 - pending-ack messages are not clearable by default
 
-This behavior is messy in the current code because the state machine is implicit. The rewrite keeps the behavior but makes the state model explicit.
+This behavior is messy in the current code because the state machine is
+implicit. The rewrite keeps the behavior but makes the state model explicit.
 
 ## 4. Canonical Two-Axis Model
 
@@ -290,56 +328,97 @@ Classification boundary:
 Rendering boundary:
 - stateful core model -> CLI display buckets and rows
 
-## 10. Recommended Read Algorithm
+## 10. Recommended Queue Query Algorithm
+
+Shared query phases:
 
 1. Resolve actor identity and target inbox.
 2. Build the hostname registry for configured origin inboxes.
 3. Load the merged inbox surface.
-4. Convert wire records into canonical axis-typed messages and derive the display class.
-5. Apply sender and timestamp filters (`--from`, `--since`).
+4. Convert wire records into canonical axis-typed messages and derive the
+   display class.
+5. Apply sender, timestamp, task, and body-text filters.
 6. Apply seen-state filtering unless selection is `All`.
-7. Map derived message classes to display buckets and apply selection mode.
-8. If `--timeout` is set and the current selection is empty, wait for a newly eligible message.
+7. Map derived message classes to display buckets and apply queue selection.
+8. Deduplicate by `message_id`.
+
+`atm list` then:
+
 9. Sort newest-first and apply limit.
-10. Apply legal read-axis and ack-axis transitions for displayed messages if allowed.
-11. Persist state changes atomically.
-12. Update seen-state from the displayed set when enabled.
-13. Return `ReadOutcome`.
+10. Shape compact metadata rows only.
+11. Return `ListOutcome`.
+
+`atm read` then:
+
+9. Choose the most recent selected message.
+10. If `--timeout` is set and no selected message exists, wait for a newly
+    eligible message.
+11. Re-run selection and choose one selected message.
+12. Apply legal read-axis and ack-axis transitions for that one message if
+    allowed.
+13. Persist state changes atomically.
+14. Update seen-state from the selected message when enabled.
+15. Return `ReadOutcome` with match metadata.
 
 This order matters.
 
 In particular:
 - selection must happen before mutation
-- mutation must happen before final output is returned
-- seen-state updates must use the displayed set, not the full inbox
-- when the merged inbox surface includes origin inbox files, each displayed-message mutation must be written back to the physical source file for that record
+- `atm list` must not materialize or render multiple full message bodies
+- `atm read` must choose one message before mutation
+- mutation must happen before final `atm read` output is returned
+- seen-state updates must use the selected/displayed message, not the full
+  inbox
+- when the merged inbox surface includes origin inbox files, each
+  selected-message mutation must be written back to the physical source file
+  for that record
 
 ## 11. Output Contract
 
-Human output:
-- queue heading
-- bucket counts line
-- unread bucket
-- pending-ack bucket
-- optional history bucket
-- hidden-history line when history is collapsed
+`atm list` human output:
+- compact metadata rows only
+- no message body rendering
 
-JSON output:
+`atm list` JSON output:
+- `action = "list"`
+- `team`
+- `agent`
+- `messages`
+- `count`
+- `bucket_counts`
+
+Each list row:
+- `message_id`
+- `summary`
+- `from`
+- `timestamp`
+- `read`
+- `pending_ack`
+- `task_id`
+
+`atm read` human output:
+- one full message body
+- optional note when additional matches exist
+
+`atm read` JSON output:
 - `action = "read"`
 - `team`
 - `agent`
-- `messages` (selected messages only)
-- `count`
+- `message`
+- `selected_message_id`
+- `match_count`
+- `additional_match_count`
 - `bucket_counts`
 - `history_collapsed`
 
 Cross-document invariants:
-- displayed messages always persist `read = true`
+- displayed/read messages always persist `read = true`
 - task-linked messages are ack-required from send time
 - pending-ack messages remain actionable until acknowledged
 - `atm clear` never removes unread messages
 - `atm clear` never removes pending-ack messages
-- `--timeout` returns immediately when the requested selection is already non-empty
+- `--timeout` returns immediately when the requested selection is already
+  non-empty
 
 `bucket_counts` fields:
 - `unread`
@@ -348,11 +427,14 @@ Cross-document invariants:
 
 ## 12. Review Standard
 
-An implementation of `atm read` is acceptable only if:
+An implementation of the queue-inspection surface is acceptable only if:
 - it uses the canonical two-axis workflow model
 - it keeps display buckets separate from the canonical axes
 - it preserves default actionable-queue behavior
 - it preserves the current pending-ack lifecycle
 - it preserves task-linked pending-ack visibility until acknowledgement
-- no daemon-only logic survives in core read behavior
-- read-axis and ack-axis transitions are enforced by API shape, not only by tests
+- `atm list` stays metadata-only and bounded by query behavior
+- `atm read` returns one message and reports additional matches in metadata
+- no daemon-only logic survives in core queue behavior
+- read-axis and ack-axis transitions are enforced by API shape, not only by
+  tests

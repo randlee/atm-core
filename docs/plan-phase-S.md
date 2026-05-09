@@ -406,13 +406,16 @@ Required closeout work:
 - reconcile docs, ADRs, and machine-readable boundaries so the production
   design names every allowed OS-specific implementation difference
 
-### S.5 No-Flaky-Test Policy And Mechanical Guardrails
+### S.5 Guardrails And Bounded Queue Queries
 
 Goal:
 - tighten Phase S and top-level ATM language so the anti-flake contract is
   phase-wide rather than fixed-sleep-only
 - define which anti-flake guardrails are feasible now in `just lint` versus
   deferred analyzer work
+- document the mailbox-query redesign where `atm list` becomes the bounded
+  metadata-search surface and `atm read` becomes the single-message detail
+  surface
 
 Required outcomes:
 - top-level requirements, architecture, and test guidelines explicitly state
@@ -421,14 +424,22 @@ Required outcomes:
   timing-only stabilization and unbounded wait paths
 - the repo has one review-visible inventory of feasible-now versus deferred
   mechanical anti-flake lint families
+- the active docs state that default queue inspection must remain bounded even
+  as SQLite-backed mailbox history grows without a practical fixed upper bound
+- the active docs define the accepted `atm list` / `atm read` split and the
+  shared filter contract between them
 
 Required closeout work:
 - add the S.5 sprint plan under `docs/phase-S/sprint-S5.md`
 - add an ADR for the repository-wide no-flaky-test policy and enforcement
   partition if the existing ADRs are not sufficient
+- add an ADR for the bounded queue-query surface (`atm list` / single-message
+  `atm read`)
 - update Phase S issue inventory with the remaining policy and lint gaps
 - reconcile testing and cross-platform guidelines with the stronger no-hang
   contract
+- reconcile the product and crate-local CLI docs with the new queue-inspection
+  command split
 
 ## 6. Temporary Windows CI Guardrail
 

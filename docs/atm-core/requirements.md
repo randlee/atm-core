@@ -21,7 +21,7 @@ The crate-local machine-readable boundary inventory lives in:
 - inbox ingress/export contracts
 - config ingress contracts
 - workflow and typestate rules
-- send/read/ack/clear service behavior
+- list/send/read/ack/clear service behavior
 - log query/follow service behavior over the observability boundary
 - doctor service behavior
 - structured core errors
@@ -45,6 +45,7 @@ Initial allocation:
 - `REQ-CORE-CONFIG-*`
 - `REQ-CORE-MAILBOX-*`
 - `REQ-CORE-WORKFLOW-*`
+- `REQ-CORE-LIST-*`
 - `REQ-CORE-SEND-*`
 - `REQ-CORE-READ-*`
 - `REQ-CORE-ACK-*`
@@ -72,7 +73,7 @@ Initial crate requirement IDs:
 - `REQ-CORE-CONFIG-002` `atm-core` owns shared address parsing, alias rewrite,
   and team/member validation policy. Satisfies the address resolution and
   target-validation aspects of:
-  `REQ-P-ADDRESS-001`, `REQ-P-SEND-001`, `REQ-P-READ-001`,
+  `REQ-P-ADDRESS-001`, `REQ-P-SEND-001`, `REQ-P-LIST-001`, `REQ-P-READ-001`,
   `REQ-P-CLEAR-001`.
 - `REQ-CORE-CONFIG-003` `atm-core` owns persisted config/team schema recovery
   and diagnostic policy. Satisfies the compatibility-recovery and
@@ -92,14 +93,18 @@ Initial crate requirement IDs:
 - `REQ-CORE-MAILBOX-001` `atm-core` owns transitional mailbox compatibility
   behavior and the file-backed import/export boundary during the migration
   line. Satisfies the persisted mailbox compatibility aspects of:
-  `REQ-P-CONTRACT-001`, `REQ-P-SEND-001`, `REQ-P-READ-001`,
+  `REQ-P-CONTRACT-001`, `REQ-P-SEND-001`, `REQ-P-LIST-001`, `REQ-P-READ-001`,
   `REQ-P-ACK-001`, `REQ-P-CLEAR-001`, `REQ-P-RELIABILITY-001`,
   `REQ-P-IDLE-001`.
 - `REQ-CORE-WORKFLOW-001` `atm-core` owns the two-axis workflow model and legal
   transitions. Satisfies the state-classification and legal-transition aspects
   of:
-  `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-CLEAR-001`,
+  `REQ-P-LIST-001`, `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-CLEAR-001`,
   `REQ-P-WORKFLOW-001`.
+- `REQ-CORE-LIST-001` `atm-core` owns the metadata-first queue query contract
+  shared by `atm list` and selector-driven `atm read`, including bounded
+  query behavior, shared match filters, and list-row shaping. Satisfies:
+  `REQ-P-LIST-001`, `REQ-P-READ-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-SEND-003` `atm-core` owns send-path message construction,
   classification, and compatibility-export behavior above the owned
   ingress/export boundaries. Satisfies the send-path service aspects of:
@@ -202,6 +207,7 @@ Initial crate requirement IDs:
 
 Per-module documentation lives under:
 
+- [`modules/list.md`](./modules/list.md)
 - [`modules/send.md`](./modules/send.md)
 - [`modules/read.md`](./modules/read.md)
 - [`modules/ack.md`](./modules/ack.md)

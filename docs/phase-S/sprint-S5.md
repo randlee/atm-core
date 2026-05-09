@@ -1,4 +1,4 @@
-# Phase S.5 — No-Flaky-Test Policy And Mechanical Guardrails
+# Phase S.5 — Guardrails And Bounded Queue Queries
 
 ```yaml
 plan_type: sprint_plan
@@ -10,9 +10,13 @@ estimated_scope: M
 
 ## Goal
 
-Close the remaining Phase S process gap by making the no-flaky-test contract
-phase-wide and by defining the mechanical lint families that must prevent
-hang-prone regression patterns from re-entering the same-host daemon line.
+Close the remaining Phase S process and product-surface gaps by:
+
+- making the no-flaky-test contract phase-wide
+- defining the mechanical lint families that must prevent hang-prone
+  regression patterns from re-entering the same-host daemon line
+- documenting the bounded mailbox-query split where `atm list` owns metadata
+  search and `atm read` owns single-message detail fetch
 
 ## Governing Requirements
 
@@ -27,6 +31,7 @@ hang-prone regression patterns from re-entering the same-host daemon line.
 - `docs/adr/ADR-003-test-fidelity-and-daemon-isolation.md`
 - `docs/adr/ADR-007-supported-platform-parity.md`
 - `docs/adr/ADR-008-no-flaky-test-policy-and-mechanical-enforcement.md`
+- `docs/adr/ADR-009-bounded-queue-query-surface.md`
 
 ## Hard Dependencies
 
@@ -91,6 +96,44 @@ hang-prone regression patterns from re-entering the same-host daemon line.
 6.4 Land any `qa-triage` prompt edits from a develop-based worktree if that
     prompt is shared outside the active Phase S planning branch.
 
+7. Add the mailbox-query reliability and CLI-surface track.
+7.1 Record that GitHub issues `#213` and `#214` are not isolated read-path
+    bugs; they expose a broader queue-inspection design problem where default
+    reads still materialize too much mailbox history.
+7.2 Document the accepted command split:
+   - `atm list` is the bounded metadata-search surface
+   - `atm read` returns one selected full message
+7.3 Define the accepted list-row field contract:
+   - `message_id`
+   - `summary`
+   - `from`
+   - `timestamp`
+   - `read`
+   - `pending_ack`
+   - `task_id` when present
+7.4 Define the shared list/read filter contract:
+   - optional target inbox
+   - `--team`
+   - `--from`
+   - `--since`
+   - `--task`
+   - `--contains`
+   - `--unread`
+   - `--pending-ack`
+   - `--all`
+7.5 Define `atm read` selection behavior:
+   - bare `atm read` returns the most recent unread actionable message
+   - pending-ack messages are prioritized ahead of non-ack unread messages
+   - selector-driven reads return the most recent match when multiple messages
+     match
+   - the read result must expose `match_count` and
+     `additional_match_count`
+7.6 Record the bounded-query rule:
+   - default queue inspection must be bounded by query behavior, not merely by
+     render truncation
+   - durable SQLite rows must not tolerate malformed JSON as a normal degraded
+     read mode
+
 ## Required Document Updates
 
 - `docs/plan-phase-S.md`
@@ -106,7 +149,13 @@ hang-prone regression patterns from re-entering the same-host daemon line.
 - `docs/architecture.md`
 - `docs/project-plan.md`
 - `docs/adr/ADR-008-no-flaky-test-policy-and-mechanical-enforcement.md`
+- `docs/adr/ADR-009-bounded-queue-query-surface.md`
 - `docs/adr/INDEX.md`
+- `docs/read-behavior.md`
+- `docs/atm/commands/list.md`
+- `docs/atm/commands/read.md`
+- `docs/atm-core/modules/list.md`
+- `docs/atm-core/modules/read.md`
 - `.claude/agents/qa-triage.md`
 - `.claude/skills/triaging-findings/SKILL.md`
 
@@ -128,6 +177,13 @@ hang-prone regression patterns from re-entering the same-host daemon line.
   lives on that phase's integration-branch worktree
 - the chosen triage commit point prevents a repeat of the Phase S gap where
   findings remained untracked until manual intervention
+- the active product and crate-local docs describe one clean queue-inspection
+  split where `atm list` is the search/index surface and `atm read` is the
+  single-message detail surface
+- the docs state that default queue inspection must stay bounded even as
+  SQLite-backed mailbox history grows without a fixed upper bound
+- the docs define how `atm read` reports multiple matches without returning
+  multiple full message bodies
 
 ## Required Validation
 

@@ -2,11 +2,12 @@
 
 CLI ownership for `atm read`:
 
-- selection flag parsing
+- single-message selection flag parsing
+- shared queue-filter parsing aligned with `atm list`
 - timeout flag parsing
 - conversion into `atm-core` read requests
-- human-readable queue rendering
-- JSON output
+- human-readable full-message rendering
+- JSON output for one selected message plus match metadata
 
 Workflow/state behavior remains owned by `atm-core`.
 

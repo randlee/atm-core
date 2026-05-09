@@ -1,12 +1,14 @@
 # `atm-core::read`
 
-Owns read selection, bucket classification, seen-state updates, timeout
-behavior, and readable result shaping for the CLI layer to render.
+Owns single-message selection, bucket classification, seen-state updates,
+timeout behavior, and detailed message-result shaping for the CLI layer to
+render.
 
 References:
 
 - Product requirements: `docs/requirements.md` §7 and §14
 - `REQ-P-READ-001`
+- `REQ-CORE-LIST-001`
 - `REQ-P-WORKFLOW-001`
 - `REQ-CORE-WORKFLOW-001`
 - Cross-cutting behavior: `docs/read-behavior.md`
