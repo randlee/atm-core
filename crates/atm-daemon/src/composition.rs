@@ -38,6 +38,7 @@ impl RuntimeLifecycle {
     }
 
     #[cfg(test)]
+    #[cfg_attr(windows, allow(dead_code))]
     pub(crate) fn state(&self) -> RuntimeLifecycleState {
         *self.state.lock().expect("runtime lifecycle state lock")
     }
@@ -123,6 +124,7 @@ pub(crate) struct RuntimeComposition {
 
 impl RuntimeComposition {
     #[cfg(test)]
+    #[cfg_attr(windows, allow(dead_code))]
     fn new(home_dir: PathBuf) -> Result<Self, AtmError> {
         Self::new_with_replay_store_path(
             home_dir.clone(),
@@ -240,6 +242,7 @@ impl RuntimeComposition {
     }
 
     #[cfg(test)]
+    #[cfg_attr(windows, allow(dead_code))]
     pub(crate) fn start_with_socket_path_for_test(
         &self,
         socket_path: PathBuf,
@@ -297,6 +300,7 @@ impl RuntimeComposition {
     }
 
     #[cfg(test)]
+    #[cfg_attr(windows, allow(dead_code))]
     pub(crate) fn lifecycle_state(&self) -> RuntimeLifecycleState {
         self.lifecycle.state()
     }
@@ -387,10 +391,10 @@ where
     F: FnOnce(T) -> Result<(), AtmError> + Send + 'static,
 {
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
-    std::thread::spawn(move || {
+    let shutdown_handle = std::thread::spawn(move || {
         let _ = result_tx.send(shutdown(lane));
     });
-    match result_rx.recv_timeout(deadline) {
+    let result = match result_rx.recv_timeout(deadline) {
         Ok(result) => result,
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(AtmError::daemon_unavailable(
             format!("daemon {lane_name} shutdown exceeded the {deadline:?} per-lane deadline"),
@@ -398,6 +402,12 @@ where
         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(AtmError::daemon_unavailable(
             format!("daemon {lane_name} shutdown worker disconnected unexpectedly"),
         )),
+    };
+    match shutdown_handle.join() {
+        Ok(()) => result,
+        Err(_) => Err(AtmError::daemon_unavailable(format!(
+            "daemon {lane_name} shutdown worker panicked unexpectedly"
+        ))),
     }
 }
 

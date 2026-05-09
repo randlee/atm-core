@@ -579,7 +579,6 @@ fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError {
 mod tests {
     use std::fs;
     use std::sync::Arc;
-    #[cfg(unix)]
     use std::time::Duration;
 
     use atm_core::ack::AckRequest;
@@ -607,11 +606,10 @@ mod tests {
     use serde_json::Value;
     use tempfile::TempDir;
 
-    use super::{CliComposition, DaemonBinaryPath, DaemonLocalIpcEndpoint};
-    #[cfg(unix)]
-    use super::{DaemonSupervisor, LocalIpcClientTransportAdapter};
-    #[cfg(unix)]
-    use super::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard};
+    use super::{
+        CliComposition, DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor,
+        HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, LocalIpcClientTransportAdapter,
+    };
     use crate::observability::CliObservability;
 
     struct LoopbackFixture {
@@ -1062,7 +1060,6 @@ mod tests {
         assert!(daemon_error.to_string().contains("daemon binary path"));
     }
 
-    #[cfg(unix)]
     #[test]
     fn launch_gate_is_host_wide_across_different_socket_paths() {
         let tempdir = TempDir::new().expect("tempdir");
@@ -1078,7 +1075,6 @@ mod tests {
         drop(first);
     }
 
-    #[cfg(unix)]
     #[test]
     fn launch_gate_is_host_wide_across_different_atm_home_roots() {
         let tempdir = TempDir::new().expect("tempdir");
@@ -1104,7 +1100,6 @@ mod tests {
         drop(first);
     }
 
-    #[cfg(unix)]
     #[test]
     fn host_runtime_lock_path_ignores_atm_home() {
         let tempdir = TempDir::new().expect("tempdir");
@@ -1123,7 +1118,6 @@ mod tests {
         );
     }
 
-    #[cfg(unix)]
     #[test]
     fn launch_gate_busy_maps_to_typed_rejection() {
         let tempdir = TempDir::new().expect("tempdir");
@@ -1147,7 +1141,6 @@ mod tests {
         );
     }
 
-    #[cfg(unix)]
     #[test]
     fn gate_timeout_maps_to_launch_gate_rejected() {
         let tempdir = TempDir::new().expect("tempdir");
@@ -1191,13 +1184,19 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn spawn_failure_maps_to_auto_start_failed() {
+        use std::fs;
+
         let tempdir = TempDir::new().expect("tempdir");
         let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
         let launch_lock_path = runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE);
         let socket_path =
             DaemonLocalIpcEndpoint::new(tempdir.path().join("missing.sock")).expect("socket");
-        let daemon_path = tempdir.path().join("atm-daemon");
-        std::fs::write(&daemon_path, "#!/bin/false\n").expect("stub daemon");
+        let daemon_path = tempdir.path().join(if cfg!(windows) {
+            "invalid-atm-daemon.exe"
+        } else {
+            "invalid-atm-daemon"
+        });
+        fs::write(&daemon_path, b"not an executable daemon binary").expect("write daemon");
         let daemon_bin = DaemonBinaryPath::new(daemon_path).expect("daemon");
         let supervisor = DaemonSupervisor::new(socket_path.clone(), daemon_bin);
         let transport = LocalIpcClientTransportAdapter::new(socket_path);
@@ -1219,6 +1218,8 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    // ADR-003 Tier 2: Unix-only non-UTF-8 path construction uses OsStringExt, which does
+    // not have a portable cross-platform equivalent for this exact boundary case.
     fn daemon_path_newtypes_reject_non_utf8_paths_at_boundary() {
         use std::os::unix::ffi::OsStringExt;
 

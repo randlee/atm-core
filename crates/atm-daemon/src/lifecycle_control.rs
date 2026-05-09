@@ -6,7 +6,9 @@ use atm_core::error::AtmError;
 #[derive(Debug, Clone)]
 pub(crate) struct LifecycleControlSourceAdapter {
     terminate: Arc<AtomicBool>,
+    #[cfg_attr(windows, allow(dead_code))]
     reload: Arc<AtomicBool>,
+    #[cfg_attr(windows, allow(dead_code))]
     state_change: Arc<LifecycleStateChange>,
 }
 
@@ -23,6 +25,7 @@ struct LifecycleStateChange {
     wake: Condvar,
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 impl LifecycleStateChange {
     fn new() -> Self {
         Self {
@@ -40,6 +43,7 @@ impl LifecycleStateChange {
         Ok(())
     }
 
+    #[cfg_attr(windows, allow(dead_code))]
     fn snapshot(&self) -> Result<u64, AtmError> {
         self.generation
             .lock()
@@ -49,6 +53,7 @@ impl LifecycleStateChange {
             })
     }
 
+    #[cfg_attr(windows, allow(dead_code))]
     fn wait_for_change(&self, observed_generation: &mut u64) -> Result<(), AtmError> {
         let mut generation = self.generation.lock().map_err(|_| {
             AtmError::daemon_unavailable("daemon lifecycle state-change lock poisoned")
@@ -105,18 +110,22 @@ impl LifecycleControlSourceAdapter {
         }
     }
 
+    #[cfg_attr(windows, allow(dead_code))]
     pub(crate) fn terminate_requested(&self) -> bool {
         self.terminate.load(Ordering::SeqCst)
     }
 
+    #[cfg_attr(windows, allow(dead_code))]
     pub(crate) fn take_reload_requested(&self) -> bool {
         self.reload.swap(false, Ordering::SeqCst)
     }
 
+    #[cfg_attr(windows, allow(dead_code))]
     pub(crate) fn event_generation(&self) -> Result<u64, AtmError> {
         self.state_change.snapshot()
     }
 
+    #[cfg_attr(windows, allow(dead_code))]
     pub(crate) fn wait_for_state_change(
         &self,
         observed_generation: &mut u64,

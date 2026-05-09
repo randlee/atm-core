@@ -466,6 +466,21 @@ fn reload_runtime_view_rejects_invalid_config_and_preserves_last_known_good_stat
 }
 
 #[test]
+fn finalize_shutdown_drains_test_tracked_finalizer_threads() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    let db_path = tempdir.path().join("mail.db");
+
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home, RuntimeStatusCache::new(), db_path);
+
+    dispatcher.finalize_shutdown();
+    DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
+}
+
+#[test]
 fn heartbeat_rejects_live_pid_conflict() {
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -569,6 +584,8 @@ fn heartbeat_accepts_pid_takeover_when_previous_pid_is_dead() {
 
 #[test]
 fn heartbeat_demotes_evicted_member_to_explicit_unknown() {
+    use chrono::{Duration as ChronoDuration, Utc};
+
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
@@ -581,6 +598,7 @@ fn heartbeat_demotes_evicted_member_to_explicit_unknown() {
     let team: TeamName = "test-team".parse().expect("team");
     let dispatcher = DaemonRequestDispatcher::new_for_test(atm_home, status_cache.clone(), db_path);
     let member: AgentName = "evicted".parse().expect("member");
+    let base = Utc::now();
     status_cache
         .hydrate_member_for_test(team.clone(), member.clone(), Some(u32::MAX))
         .expect("hydrate member");
@@ -593,7 +611,9 @@ fn heartbeat_demotes_evicted_member_to_explicit_unknown() {
                 member_name,
                 Some(index as u32 + 2),
                 RuntimeMemberState::Idle,
-                Some(IsoTimestamp::now()),
+                Some(IsoTimestamp::from_datetime(
+                    base + ChronoDuration::seconds(index as i64 + 1),
+                )),
             )
             .expect("insert member");
     }
@@ -603,7 +623,7 @@ fn heartbeat_demotes_evicted_member_to_explicit_unknown() {
             team: team.clone(),
             member: ROLE_TEAM_LEAD.parse().expect("member"),
             pid: std::process::id(),
-            observed_at: IsoTimestamp::now(),
+            observed_at: IsoTimestamp::from_datetime(base + ChronoDuration::hours(2)),
             activity: HeartbeatActivity::ActiveToolUse,
         }))
         .expect("heartbeat");

@@ -39,6 +39,7 @@ impl LocalIpcServerTransportAdapter {
         Err(unsupported_local_ipc_error())
     }
 
+    #[cfg_attr(windows, allow(dead_code))]
     pub(crate) fn prepare_runtime_at_socket_path(
         &self,
         _endpoint_path: PathBuf,
