@@ -1,3 +1,5 @@
+#![cfg_attr(windows, allow(dead_code))]
+
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
