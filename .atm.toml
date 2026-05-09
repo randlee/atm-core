@@ -16,6 +16,9 @@ identity = "arch-ctm"
 sandbox = "workspace-write"
 approval_policy = "on-failure"
 
+[startup.team-lead]
+all = ["Read /codex-orchestration SKILL.md and /triaging-findings SKILL.md"]
+
 # ── rmux: tmux session launcher ──────────────────────────────────────
 [rmux]
 session = "atm-dev"
