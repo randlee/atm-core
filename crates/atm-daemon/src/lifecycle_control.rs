@@ -156,10 +156,52 @@ fn install_platform_hooks(
     reload: &Arc<AtomicBool>,
     state_change: &Arc<LifecycleStateChange>,
 ) -> Result<(), AtmError> {
-    use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGTERM};
-    use signal_hook::iterator::Signals;
+    use std::io::Read;
+    use std::os::unix::net::UnixStream;
 
-    let mut signals = Signals::new([SIGINT, SIGTERM, SIGHUP]).map_err(|source| {
+    use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGTERM};
+    use signal_hook::flag as signal_flag;
+    use signal_hook::low_level::pipe as signal_pipe;
+
+    let (mut wake_read, wake_write) = UnixStream::pair().map_err(|source| {
+        AtmError::daemon_unavailable("failed to create daemon lifecycle wake pipe")
+            .with_source(source)
+    })?;
+    signal_flag::register(SIGINT, Arc::clone(terminate)).map_err(|source| {
+        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_source(source)
+    })?;
+    signal_flag::register(SIGTERM, Arc::clone(terminate)).map_err(|source| {
+        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_source(source)
+    })?;
+    signal_flag::register(SIGHUP, Arc::clone(reload)).map_err(|source| {
+        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_source(source)
+    })?;
+    signal_pipe::register(
+        SIGINT,
+        wake_write.try_clone().map_err(|source| {
+            AtmError::daemon_unavailable("failed to clone daemon lifecycle wake pipe")
+                .with_source(source)
+        })?,
+    )
+    .map_err(|source| {
+        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_source(source)
+    })?;
+    signal_pipe::register(
+        SIGTERM,
+        wake_write.try_clone().map_err(|source| {
+            AtmError::daemon_unavailable("failed to clone daemon lifecycle wake pipe")
+                .with_source(source)
+        })?,
+    )
+    .map_err(|source| {
+        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_source(source)
+    })?;
+    signal_pipe::register(SIGHUP, wake_write).map_err(|source| {
         AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
             .with_source(source)
     })?;
@@ -169,13 +211,18 @@ fn install_platform_hooks(
     std::thread::Builder::new()
         .name("atm-daemon-lifecycle-unix".to_string())
         .spawn(move || {
-            for signal in signals.forever() {
-                match signal {
-                    SIGINT | SIGTERM => terminate.store(true, Ordering::SeqCst),
-                    SIGHUP => reload.store(true, Ordering::SeqCst),
-                    _ => continue,
+            let mut wake_buffer = [0_u8; 32];
+            loop {
+                match wake_read.read(&mut wake_buffer) {
+                    Ok(0) => return,
+                    Ok(_) => {
+                        if terminate.load(Ordering::SeqCst) || reload.load(Ordering::SeqCst) {
+                            let _ = state_change.notify();
+                        }
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                    Err(_) => return,
                 }
-                let _ = state_change.notify();
             }
         })
         .map_err(|source| {
@@ -188,8 +235,8 @@ fn install_platform_hooks(
 #[cfg(windows)]
 fn install_platform_hooks(
     terminate: &Arc<AtomicBool>,
-    _reload: &Arc<AtomicBool>,
-    _state_change: &Arc<LifecycleStateChange>,
+    reload: &Arc<AtomicBool>,
+    state_change: &Arc<LifecycleStateChange>,
 ) -> Result<(), AtmError> {
     use std::sync::OnceLock;
     use windows_sys::Win32::Foundation::{BOOL, FALSE, TRUE};
@@ -198,12 +245,26 @@ fn install_platform_hooks(
     };
 
     static TERMINATE: OnceLock<Arc<AtomicBool>> = OnceLock::new();
+    static RELOAD: OnceLock<Arc<AtomicBool>> = OnceLock::new();
+    static STATE_CHANGE: OnceLock<Arc<LifecycleStateChange>> = OnceLock::new();
 
-    unsafe extern "system" fn handle_console_ctrl(ctrl_type: u32) -> BOOL {
+    fn apply_console_ctrl_event(ctrl_type: u32) -> BOOL {
         match ctrl_type {
-            CTRL_C_EVENT | CTRL_BREAK_EVENT | CTRL_CLOSE_EVENT => {
+            CTRL_C_EVENT | CTRL_CLOSE_EVENT => {
                 if let Some(flag) = TERMINATE.get() {
                     flag.store(true, Ordering::SeqCst);
+                }
+                if let Some(state_change) = STATE_CHANGE.get() {
+                    let _ = state_change.notify();
+                }
+                TRUE
+            }
+            CTRL_BREAK_EVENT => {
+                if let Some(flag) = RELOAD.get() {
+                    flag.store(true, Ordering::SeqCst);
+                }
+                if let Some(state_change) = STATE_CHANGE.get() {
+                    let _ = state_change.notify();
                 }
                 TRUE
             }
@@ -211,7 +272,13 @@ fn install_platform_hooks(
         }
     }
 
+    unsafe extern "system" fn handle_console_ctrl(ctrl_type: u32) -> BOOL {
+        apply_console_ctrl_event(ctrl_type)
+    }
+
     let _ = TERMINATE.set(Arc::clone(terminate));
+    let _ = RELOAD.set(Arc::clone(reload));
+    let _ = STATE_CHANGE.set(Arc::clone(state_change));
     let installed = unsafe { SetConsoleCtrlHandler(Some(handle_console_ctrl), TRUE) };
     if installed == 0 {
         return Err(AtmError::daemon_unavailable(
@@ -220,6 +287,40 @@ fn install_platform_hooks(
         .with_source(std::io::Error::last_os_error()));
     }
     Ok(())
+}
+
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use super::{LifecycleControlSourceAdapter, apply_console_ctrl_event};
+    use windows_sys::Win32::Foundation::{FALSE, TRUE};
+    use windows_sys::Win32::System::Console::{CTRL_BREAK_EVENT, CTRL_C_EVENT, CTRL_CLOSE_EVENT};
+
+    #[test]
+    fn console_break_requests_reload_without_terminate() {
+        let lifecycle = LifecycleControlSourceAdapter::install().expect("install");
+        lifecycle.set_terminate_for_test(false);
+        lifecycle.set_reload_for_test(false);
+
+        assert_eq!(apply_console_ctrl_event(CTRL_BREAK_EVENT), TRUE);
+        assert!(lifecycle.take_reload_requested());
+        assert!(!lifecycle.terminate_requested());
+    }
+
+    #[test]
+    fn console_close_requests_terminate() {
+        let lifecycle = LifecycleControlSourceAdapter::install().expect("install");
+        lifecycle.set_terminate_for_test(false);
+        lifecycle.set_reload_for_test(false);
+
+        assert_eq!(apply_console_ctrl_event(CTRL_C_EVENT), TRUE);
+        assert!(lifecycle.terminate_requested());
+
+        lifecycle.set_terminate_for_test(false);
+        assert_eq!(apply_console_ctrl_event(CTRL_CLOSE_EVENT), TRUE);
+        assert!(lifecycle.terminate_requested());
+
+        assert_eq!(apply_console_ctrl_event(u32::MAX), FALSE);
+    }
 }
 
 #[cfg(not(any(unix, windows)))]
