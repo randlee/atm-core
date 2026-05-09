@@ -476,6 +476,11 @@ Required runtime-control mappings:
     singleton ownership
 - Windows may map the same logical control events through console or service
   control equivalents
+- the accepted Phase S console mapping is:
+  - `SIGINT` / console terminate event: begin graceful shutdown
+  - `SIGTERM` equivalent terminate event: begin graceful shutdown
+  - `SIGBREAK` / `CTRL_BREAK_EVENT`: trigger bounded configuration / roster
+    rescan while retaining singleton ownership
 
 Architectural rules:
 - the lifecycle-control source installs before any listener begins accepting

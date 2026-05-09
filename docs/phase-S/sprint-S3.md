@@ -87,6 +87,9 @@ shutdown semantics on every supported operating system.
    operating systems.
 4.1 Preserve the same externally visible protocol behavior while lifecycle
    control and host ownership internals differ by OS.
+4.2 Map Windows `SIGBREAK` / `CTRL_BREAK_EVENT` to the same bounded reload
+    trigger that Unix receives through `SIGHUP`, while terminate events remain
+    the shared graceful-shutdown path.
 5. Keep lifecycle-control and host-ownership tests aligned with the shared
    parity contract from ADR-007; platform-specific tests may cover adapter
    internals only.

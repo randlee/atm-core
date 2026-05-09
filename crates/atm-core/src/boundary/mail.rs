@@ -37,6 +37,9 @@ pub struct MailStoreVisibilityState {
 pub struct MailStoreIngestReplayState {
     pub team: TeamName,
     pub agent: AgentName,
+    /// Invariant: source must name one concrete ingest origin chosen by the
+    /// caller (for example a file path or inbox export id) and must never be
+    /// synthesized from an empty or whitespace-only string.
     pub source: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_fingerprint: Option<String>,
@@ -155,6 +158,8 @@ pub struct MailStoreLoadVisibilityStateResponse {
 pub struct MailStoreRecordIngestReplayStateRequest {
     pub team: TeamName,
     pub agent: AgentName,
+    /// Invariant: source identifies one concrete ingest origin and must never
+    /// be synthesized from an empty or whitespace-only string.
     pub source: String,
     pub state: MailStoreIngestReplayState,
 }
@@ -170,6 +175,8 @@ pub struct MailStoreRecordIngestReplayStateResponse {
 pub struct MailStoreLoadIngestReplayStateRequest {
     pub team: TeamName,
     pub agent: AgentName,
+    /// Invariant: source identifies one concrete ingest origin and must never
+    /// be synthesized from an empty or whitespace-only string.
     pub source: String,
 }
 

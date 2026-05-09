@@ -16,8 +16,27 @@ use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_rusqlite::assemble_boundary;
 use serial_test::serial;
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io::{Seek, SeekFrom, Write};
 use tempfile::TempDir;
+
+struct LifecycleFlagResetGuard<'a> {
+    lifecycle: &'a LifecycleControlSourceAdapter,
+}
+
+impl<'a> LifecycleFlagResetGuard<'a> {
+    fn install(lifecycle: &'a LifecycleControlSourceAdapter) -> Self {
+        lifecycle.set_terminate_for_test(false);
+        lifecycle.set_reload_for_test(false);
+        Self { lifecycle }
+    }
+}
+
+impl Drop for LifecycleFlagResetGuard<'_> {
+    fn drop(&mut self) {
+        self.lifecycle.set_terminate_for_test(false);
+        self.lifecycle.set_reload_for_test(false);
+    }
+}
 
 #[test]
 fn daemon_shutdown_signals_for_test_are_isolated() {
@@ -30,13 +49,11 @@ fn daemon_shutdown_signals_for_test_are_isolated() {
     assert!(!second.reload_requested_for_test());
 }
 
-#[cfg(unix)]
 #[test]
 #[serial]
 fn daemon_shutdown_signal_install_reuses_shared_flags() {
     let first = LifecycleControlSourceAdapter::install().expect("install first");
-    first.set_terminate_for_test(false);
-    first.set_reload_for_test(false);
+    let _reset = LifecycleFlagResetGuard::install(&first);
 
     let second = LifecycleControlSourceAdapter::install().expect("install second");
     first.set_reload_for_test(true);
@@ -44,9 +61,6 @@ fn daemon_shutdown_signal_install_reuses_shared_flags() {
 
     assert!(second.reload_requested_for_test());
     assert!(first.terminate_requested());
-
-    first.set_terminate_for_test(false);
-    first.set_reload_for_test(false);
 }
 
 #[test]
@@ -143,6 +157,41 @@ fn singleton_guard_recovers_stale_owner_once_lock_is_released() {
 }
 
 #[test]
+#[serial]
+fn singleton_guard_rejects_stale_recovery_when_owner_token_changes() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let lock_path = atm_core::home::host_runtime_lock_path_from_home(
+        tempdir.path(),
+        HOST_RUNTIME_OWNER_LOCK_FILE,
+    );
+    if let Some(parent) = lock_path.parent() {
+        std::fs::create_dir_all(parent).expect("create parent");
+    }
+    let mut file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .truncate(false)
+        .open(&lock_path)
+        .expect("open lock file");
+    fs2::FileExt::try_lock_exclusive(&file).expect("lock file");
+    writeln!(&mut file, "{}:token-a", u32::MAX).expect("write owner");
+    file.sync_all().expect("sync owner");
+
+    let lock_path_for_thread = lock_path.clone();
+    let join = std::thread::spawn(move || HostOwnershipAdapter::acquire_at(lock_path_for_thread));
+    std::thread::sleep(std::time::Duration::from_millis(35));
+    file.set_len(0).expect("clear record");
+    file.seek(SeekFrom::Start(0)).expect("rewind");
+    writeln!(&mut file, "{}:token-b", u32::MAX).expect("rewrite owner");
+    file.sync_all().expect("resync owner");
+    drop(file);
+
+    let error = join.join().expect("join").expect_err("token mismatch");
+    assert_eq!(error.code, AtmErrorCode::DaemonStaleOwnerRecoveryFailed);
+}
+
+#[test]
 fn host_ownership_record_uses_pid_and_token_while_held_and_clears_on_release() {
     let tempdir = TempDir::new().expect("tempdir");
     let lock_path = atm_core::home::host_runtime_lock_path_from_home(
@@ -153,6 +202,8 @@ fn host_ownership_record_uses_pid_and_token_while_held_and_clears_on_release() {
 
     let record = std::fs::read_to_string(&lock_path).expect("read record");
     let trimmed = record.trim();
+    // The singleton tests intentionally read the same owner.lock metadata that
+    // ADR-002 documents for the launch.lock -> owner.lock handoff.
     let (pid, token) = trimmed.split_once(':').expect("pid:token");
     assert_eq!(pid, std::process::id().to_string());
     assert!(!token.is_empty(), "token should not be empty");

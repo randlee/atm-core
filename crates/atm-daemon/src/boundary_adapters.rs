@@ -222,7 +222,7 @@ impl InboxExport for DaemonInboxExport {
     }
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests {
     use super::DaemonNotificationSink;
     use atm_core::boundary::NotificationSink;
@@ -231,6 +231,7 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
+    #[cfg(unix)]
     fn notifier_delivery_stays_behind_boundary_trait() {
         let tempdir = TempDir::new().expect("tempdir");
         let output_path = tempdir.path().join("notifications.jsonl");

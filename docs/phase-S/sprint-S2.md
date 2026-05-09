@@ -59,7 +59,7 @@ boundary while preserving one shared protocol, dispatcher, and test harness.
 - `crates/atm-daemon/src/tests.rs`
   - keep daemon-private tests transport-neutral above the local-IPC adapter
 - `crates/atm/src/composition.rs`
-  - `LocalSocketClientTransport`
+  - `LocalIpcClientTransportAdapter`
   - `DaemonLocalIpcEndpoint`
   - `LaunchGateGuard`
 - `crates/atm-daemon/tests/run_daemon_production_path.rs`

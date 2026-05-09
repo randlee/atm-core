@@ -47,6 +47,17 @@ impl PeerTransportConfig {
     }
 }
 
+fn daemon_peer_endpoint_from_env() -> Option<SocketAddr> {
+    match std::env::var("ATM_DAEMON_PEER_ADDR") {
+        Ok(raw) => parse_peer_endpoint(&raw),
+        Err(std::env::VarError::NotPresent) => None,
+        Err(std::env::VarError::NotUnicode(_)) => {
+            tracing::warn!("ignoring non-unicode ATM_DAEMON_PEER_ADDR value");
+            None
+        }
+    }
+}
+
 pub(crate) trait RemoteReplayStore: Send + Sync + std::fmt::Debug {
     fn enqueue(&self, record: RemoteReplayStateRecord) -> Result<(), AtmError>;
 
@@ -92,9 +103,7 @@ struct PeerClientTransport {
 
 impl PeerClientTransport {
     fn new(replay_store: Option<Arc<dyn RemoteReplayStore>>) -> Self {
-        let endpoint = std::env::var("ATM_DAEMON_PEER_ADDR")
-            .ok()
-            .and_then(|raw| parse_peer_endpoint(&raw));
+        let endpoint = daemon_peer_endpoint_from_env();
         let config = std::env::current_dir()
             .ok()
             .and_then(|current_dir| {
@@ -421,15 +430,12 @@ impl PeerClientTransport {
     }
 }
 
-fn wait_for_retry_backoff(terminate: &Option<Arc<AtomicBool>>, sleep_for: Duration) -> bool {
+fn wait_for_retry_backoff(terminate: &Arc<AtomicBool>, sleep_for: Duration) -> bool {
     const RETRY_POLL_INTERVAL: Duration = Duration::from_millis(25);
 
     let started = Instant::now();
     loop {
-        if terminate
-            .as_ref()
-            .is_some_and(|flag| flag.load(Ordering::SeqCst))
-        {
+        if terminate.load(Ordering::SeqCst) {
             return true;
         }
         let elapsed = started.elapsed();
@@ -441,7 +447,7 @@ fn wait_for_retry_backoff(terminate: &Option<Arc<AtomicBool>>, sleep_for: Durati
     }
 }
 
-fn daemon_terminate_flag() -> Result<Option<Arc<AtomicBool>>, AtmError> {
+fn daemon_terminate_flag() -> Result<Arc<AtomicBool>, AtmError> {
     Ok(crate::lifecycle_control::LifecycleControlSourceAdapter::install()?.terminate_flag())
 }
 

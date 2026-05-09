@@ -38,11 +38,13 @@ impl HostOwnershipAdapter {
             Ok(()) => {}
             Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
                 let mut recovered = false;
-                if let Some(pid) = recorded_owner_pid(&lock_file)?
+                // ADR-002 uses launch.lock for single-launch admission and owner.lock for the
+                // actual serving owner so only one daemon can transition into serving state.
+                if let Some((pid, token)) = recorded_owner_identity(&lock_file)?
                     && !atm_core::process::process_is_alive(pid)
                 {
                     drop(lock_file);
-                    lock_file = recover_stale_owner_lock(&lock_path, pid)?;
+                    lock_file = recover_stale_owner_lock(&lock_path, pid, &token)?;
                     recovered = true;
                 }
                 if !recovered {
@@ -102,13 +104,27 @@ fn open_lock_file(lock_path: &Path) -> Result<File, AtmError> {
         })
 }
 
-fn recover_stale_owner_lock(lock_path: &Path, stale_pid: u32) -> Result<File, AtmError> {
+fn recover_stale_owner_lock(
+    lock_path: &Path,
+    stale_pid: u32,
+    stale_token: &str,
+) -> Result<File, AtmError> {
     for _ in 0..STALE_OWNER_RECOVERY_RETRY_ATTEMPTS {
         thread::sleep(OWNER_RECOVERY_RETRY_INTERVAL);
         let retry_file = open_lock_file(lock_path)?;
         match retry_file.try_lock_exclusive() {
-            Ok(()) => return Ok(retry_file),
-            Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => continue,
+            Ok(()) => {
+                if owner_record_matches(&retry_file, stale_pid, stale_token)? {
+                    return Ok(retry_file);
+                }
+                return Err(owner_token_mismatch_error(lock_path, stale_pid));
+            }
+            Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
+                if !owner_record_matches(&retry_file, stale_pid, stale_token)? {
+                    return Err(owner_token_mismatch_error(lock_path, stale_pid));
+                }
+                continue;
+            }
             Err(source) => {
                 return Err(AtmError::daemon_unavailable(format!(
                     "failed to retry daemon ownership recovery at {}",
@@ -126,7 +142,7 @@ fn recover_stale_owner_lock(lock_path: &Path, stale_pid: u32) -> Result<File, At
     )))
 }
 
-fn recorded_owner_pid(lock_file: &File) -> Result<Option<u32>, AtmError> {
+fn recorded_owner_identity(lock_file: &File) -> Result<Option<(u32, String)>, AtmError> {
     let mut clone = lock_file.try_clone().map_err(|source| {
         AtmError::daemon_unavailable("failed to clone daemon ownership record handle")
             .with_source(source)
@@ -142,19 +158,18 @@ fn recorded_owner_pid(lock_file: &File) -> Result<Option<u32>, AtmError> {
     if trimmed.is_empty() {
         return Ok(None);
     }
-    Ok(trimmed
-        .split_once(':')
-        .map(|(pid, _)| pid)
-        .unwrap_or(trimmed)
-        .parse::<u32>()
-        .ok())
+    let (pid, token) = trimmed.split_once(':').unwrap_or((trimmed, ""));
+    let Some(pid) = pid.parse::<u32>().ok() else {
+        return Ok(None);
+    };
+    Ok(Some((pid, token.to_string())))
 }
 
 fn write_owner_record(lock_file: &mut File) -> Result<(), AtmError> {
     let token = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|source| {
-            AtmError::daemon_unavailable("failed to timestamp daemon ownership metadata")
+            AtmError::daemon_unavailable("failed to derive daemon ownership token")
                 .with_source(source)
         })?
         .as_nanos();
@@ -170,6 +185,25 @@ fn write_owner_record(lock_file: &mut File) -> Result<(), AtmError> {
         AtmError::daemon_unavailable("failed to sync daemon ownership metadata").with_source(source)
     })?;
     Ok(())
+}
+
+fn owner_record_matches(
+    lock_file: &File,
+    expected_pid: u32,
+    expected_token: &str,
+) -> Result<bool, AtmError> {
+    Ok(match recorded_owner_identity(lock_file)? {
+        Some((pid, token)) => pid == expected_pid && token == expected_token,
+        None => true,
+    })
+}
+
+fn owner_token_mismatch_error(lock_path: &Path, stale_pid: u32) -> AtmError {
+    AtmError::daemon_stale_owner_recovery_failed(format!(
+        "daemon owner record at {} changed while recovering stale pid {}",
+        lock_path.display(),
+        stale_pid
+    ))
 }
 
 fn clear_owner_record(lock_file: &mut File) -> Result<(), AtmError> {

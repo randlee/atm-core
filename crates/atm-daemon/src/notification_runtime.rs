@@ -218,13 +218,14 @@ fn persist_notification(
     Ok(())
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests {
     use super::NotificationRuntime;
     use atm_core::protocol::NotificationEvent;
     use tempfile::TempDir;
 
     #[test]
+    #[cfg(unix)]
     fn notification_runtime_persists_events_to_runtime_output() {
         let tempdir = TempDir::new().expect("tempdir");
         let output_path = tempdir.path().join("notifications.jsonl");
@@ -246,6 +247,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn notification_runtime_reports_degraded_output_failures() {
         let tempdir = TempDir::new().expect("tempdir");
         let blocking_path = tempdir.path().join("blocking-file");

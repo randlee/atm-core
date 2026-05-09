@@ -1,5 +1,6 @@
 use atm_core::boundary::{WatchEventBatch, WatchSubscriptionRequest};
 use atm_core::error::AtmError;
+use atm_core::protocol::ProtocolErrorEnvelope;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
@@ -59,6 +60,7 @@ struct WatchRefreshTarget {
 
 #[derive(Clone)]
 struct WatchFailureSnapshot {
+    code: atm_core::error_codes::AtmErrorCode,
     message: String,
     recovery: Option<String>,
 }
@@ -66,6 +68,7 @@ struct WatchFailureSnapshot {
 impl From<AtmError> for WatchFailureSnapshot {
     fn from(error: AtmError) -> Self {
         Self {
+            code: error.code,
             message: error.message,
             recovery: error.recovery,
         }
@@ -74,11 +77,12 @@ impl From<AtmError> for WatchFailureSnapshot {
 
 impl WatchFailureSnapshot {
     fn to_error(&self) -> AtmError {
-        let error = AtmError::daemon_unavailable(self.message.clone());
-        match &self.recovery {
-            Some(recovery) => error.with_recovery(recovery.clone()),
-            None => error,
+        ProtocolErrorEnvelope {
+            code: self.code,
+            message: self.message.clone(),
+            recovery: self.recovery.clone(),
         }
+        .into_atm_error()
     }
 }
 
@@ -493,11 +497,13 @@ mod tests {
         );
         runtime.start().expect("start");
 
-        let error = runtime.poll(request()).expect_err("health timeout");
-        assert!(error.message.contains("worker health timeout"));
+        let runtime_for_thread = runtime.clone();
+        let join = std::thread::spawn(move || runtime_for_thread.poll(request()));
         started_rx
             .recv_timeout(Duration::from_secs(1))
             .expect("worker started");
+        let error = join.join().expect("join").expect_err("health timeout");
+        assert!(error.message.contains("worker health timeout"));
         let (released, wake) = &*release;
         *released.lock().expect("released") = true;
         wake.notify_all();

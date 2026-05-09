@@ -332,25 +332,47 @@ impl RuntimeComposition {
 
     fn shutdown_background_lanes(&self) -> Result<(), AtmError> {
         const BACKGROUND_LANE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(3);
-        shutdown_lane_with_deadline(
-            "reconcile coordinator",
-            BACKGROUND_LANE_SHUTDOWN_DEADLINE,
-            self._reconcile_coordinator.clone(),
-            |lane| lane.shutdown(),
-        )?;
-        shutdown_lane_with_deadline(
-            "watch event source",
-            BACKGROUND_LANE_SHUTDOWN_DEADLINE,
-            self._watch_event_source.clone(),
-            |lane| lane.shutdown(),
-        )?;
-        shutdown_lane_with_deadline(
-            "notification sink",
-            BACKGROUND_LANE_SHUTDOWN_DEADLINE,
-            self._notification_sink.clone(),
-            |lane| lane.shutdown(),
-        )?;
-        Ok(())
+        let mut first_error = None;
+        for (lane_name, shutdown) in [
+            (
+                "reconcile coordinator",
+                shutdown_lane_with_deadline(
+                    "reconcile coordinator",
+                    BACKGROUND_LANE_SHUTDOWN_DEADLINE,
+                    self._reconcile_coordinator.clone(),
+                    |lane| lane.shutdown(),
+                ),
+            ),
+            (
+                "watch event source",
+                shutdown_lane_with_deadline(
+                    "watch event source",
+                    BACKGROUND_LANE_SHUTDOWN_DEADLINE,
+                    self._watch_event_source.clone(),
+                    |lane| lane.shutdown(),
+                ),
+            ),
+            (
+                "notification sink",
+                shutdown_lane_with_deadline(
+                    "notification sink",
+                    BACKGROUND_LANE_SHUTDOWN_DEADLINE,
+                    self._notification_sink.clone(),
+                    |lane| lane.shutdown(),
+                ),
+            ),
+        ] {
+            if let Err(error) = shutdown {
+                tracing::warn!(%error, lane = lane_name, "daemon background lane shutdown was incomplete");
+                if first_error.is_none() {
+                    first_error = Some(error);
+                }
+            }
+        }
+        match first_error {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
     }
 }
 

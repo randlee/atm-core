@@ -56,9 +56,11 @@ depends directly on Unix APIs.
 - `crates/atm-daemon/src/composition.rs`
   - `RuntimeComposition::start`
   - `RuntimeComposition::start_with_socket_path_for_test`
-  - `validate_runtime_socket_path`
   - `validate_runtime_home_dir`
   - `compose_runtime`
+- same-host endpoint validation is currently split between:
+  - `crates/atm/src/composition.rs::DaemonLocalIpcEndpoint::new`
+  - `crates/atm-core/src/protocol.rs::daemon_local_ipc_name_from_path`
 - `crates/atm-daemon/src/lib.rs`
   - runtime crate-root ownership and adapter re-exports only
 - `crates/atm-daemon/src/local_ipc_transport.rs`
@@ -74,8 +76,8 @@ depends directly on Unix APIs.
   - `HostOwnershipAdapter::{acquire, acquire_at}`
   - `host_runtime_lock_path`
 - `crates/atm/src/composition.rs`
-  - `LocalSocketClientTransport::{try_connect, exchange}`
-  - `resolve_daemon_socket_path`
+  - `LocalIpcClientTransportAdapter::{try_connect, exchange}`
+  - `resolve_daemon_local_ipc_endpoint`
 
 ## Required Work
 

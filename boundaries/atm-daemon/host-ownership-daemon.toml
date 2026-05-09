@@ -73,6 +73,6 @@ notes = [
   "the boundary uses stable permanent lock-file paths under ~/.atm/daemon/ rather than lock-path deletion as the ownership signal",
   "the preferred implementation foundation is one whole-file exclusive-lock contract on launch.lock and owner.lock",
   "owner-visible metadata is the documented pid[:token] record stored in the held lock-file contents",
-  "the current extraction clears owner metadata before unlock and keeps stable lock files in place across releases",
+  "the current extraction clears owner metadata before unlock and keeps stable lock files in place across releases on Unix and Windows",
   "singleton, stale-owner recovery, and release ordering semantics must match across supported operating systems",
 ]
