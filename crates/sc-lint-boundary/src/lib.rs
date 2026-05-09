@@ -29,6 +29,8 @@ mod analysis;
 mod graph;
 mod portability;
 mod render;
+mod runtime;
+mod source_scan;
 #[cfg(test)]
 mod tests;
 
@@ -85,7 +87,12 @@ pub struct NodeId(String);
 
 impl NodeId {
     pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
+        let value = value.into();
+        assert!(
+            !value.is_empty(),
+            "NodeId::new requires a non-empty identifier"
+        );
+        Self(value)
     }
 
     pub fn as_str(&self) -> &str {
@@ -143,7 +150,12 @@ pub struct OwnerId(String);
 
 impl OwnerId {
     pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
+        let value = value.into();
+        assert!(
+            !value.is_empty(),
+            "OwnerId::new requires a non-empty identifier"
+        );
+        Self(value)
     }
 
     pub fn as_str(&self) -> &str {
@@ -244,9 +256,13 @@ pub enum RuleId {
     ScbBoundary001,
     ScbBoundary002,
     ScbBoundary003,
+    ScbRuntime001,
+    ScbRuntime002,
     Port001,
     Port002,
     Port003,
+    Port004,
+    Port005,
 }
 
 impl RuleId {
@@ -258,9 +274,13 @@ impl RuleId {
             Self::ScbBoundary001 => "SCB-BOUNDARY-001",
             Self::ScbBoundary002 => "SCB-BOUNDARY-002",
             Self::ScbBoundary003 => "SCB-BOUNDARY-003",
+            Self::ScbRuntime001 => "SCB-RUNTIME-001",
+            Self::ScbRuntime002 => "SCB-RUNTIME-002",
             Self::Port001 => "PORT-001",
             Self::Port002 => "PORT-002",
             Self::Port003 => "PORT-003",
+            Self::Port004 => "PORT-004",
+            Self::Port005 => "PORT-005",
         }
     }
 }
@@ -564,6 +584,16 @@ pub fn analyze_workspace(options: &AnalyzeOptions) -> Result<FindingsReport> {
     {
         findings.extend(analysis::analyze_forbid_external_impls(&graph));
     }
+    if filter.is_none() || filter == Some(RuleFilter::Boundaries) {
+        findings.extend(
+            runtime::analyze_runtime_liveness(&options.root).with_context(|| {
+                format!(
+                    "failed to analyze runtime liveness for root: {}",
+                    options.root.display()
+                )
+            })?,
+        );
+    }
     findings.sort_by(|left, right| {
         analysis::finding_sort_key(left)
             .cmp(&analysis::finding_sort_key(right))
@@ -603,16 +633,11 @@ pub fn render_findings_report(report: &FindingsReport) -> String {
     render::render_findings_report(report)
 }
 
-pub fn render_graph_export(
-    graph: &GraphExport,
-    format: GraphOutputFormat,
-) -> std::result::Result<String, serde_json::Error> {
+pub fn render_graph_export(graph: &GraphExport, format: GraphOutputFormat) -> String {
     render::render_graph_export(graph, format)
 }
 
-pub fn render_graph_export_json(
-    graph: &GraphExport,
-) -> std::result::Result<String, serde_json::Error> {
+pub fn render_graph_export_json(graph: &GraphExport) -> String {
     render::render_graph_export_json(graph)
 }
 

@@ -3003,3 +3003,54 @@ mail correctness.
     daemon layers
   - Claude compatibility export remains Claude-native top-level plus
     `metadata.atm`
+
+### 21.10 Postmortem Lint Backfill
+
+- `REQ-P-LINT-POSTMORTEM-001` Mechanically-detectable postmortem finding
+  families must become repository lint or CI gates rather than recurring QA
+  rediscoveries.
+
+  Required behavior:
+  - `atm-core` is the proving ground for new postmortem lint rules; a rule
+    lands here first, is tuned against the live codebase, and is migrated to
+    standalone `sc-lint` only after the rule shape is stable and demonstrably
+    reusable
+  - reusable Rust/static-analysis rules must be implemented against the
+    embedded `crates/sc-lint-*` surface on the `atm-core` branch before any
+    upstream migration
+  - ATM-specific repository policy rules may stay as `.just/` or `scripts/`
+    lints when the semantics are tied to ATM-only names, documents, or review
+    process state
+  - the default `just lint` path remains the required development gate for
+    any new postmortem rule that is cheap and deterministic enough for normal
+    local use
+
+  Family-specific obligations:
+  - ungated `std::os::unix` imports in production paths must fail the
+    portability lint unless they are already protected by an approved Unix-only
+    boundary
+  - `#[cfg_attr(not(unix), allow(dead_code))]` must not be used as a
+    portability suppressor in production code
+  - duplicated raw semantic literals in non-test Rust code must fail the ATM
+    identity-literal gate unless they come from a canonical constant or an
+    explicit allow-list
+  - raw `"team-lead"` role-name literals are the first mandatory case and must
+    fail everywhere except the canonical role-definition source
+  - fixed `thread::sleep(...)` in ordinary Rust test code must fail a
+    test-hygiene gate unless the file or callsite is explicitly part of the
+    narrow daemon-runtime suite
+  - `PORT-004` must reject production `std::os::unix` imports that are not
+    protected by an approved Unix-only boundary
+  - `PORT-005` must reject
+    `#[cfg_attr(not(unix), allow(dead_code))]` when used as a portability
+    suppressor in production code
+  - `SCB-RUNTIME-001` must reject bare production `Condvar::wait(...)`
+  - `SCB-RUNTIME-002` must reject production `wait_timeout*` calls whose
+    `WaitTimeoutResult` is discarded or stored only in underscore bindings
+  - bare `Condvar::wait(...)` in non-test production code must fail a runtime
+    liveness gate; `wait_timeout(...)` and `wait_timeout_while(...)` remain the
+    required production shapes
+  - triage Turtle records must not report contradictory aggregate and terminal
+    state fields in the same record
+  - any scoped exclusions for the semantic-literal gate must stay narrow and
+    explicit; they must not exempt ordinary production code wholesale
