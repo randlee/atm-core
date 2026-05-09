@@ -387,10 +387,10 @@ where
     F: FnOnce(T) -> Result<(), AtmError> + Send + 'static,
 {
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
-    std::thread::spawn(move || {
+    let shutdown_handle = std::thread::spawn(move || {
         let _ = result_tx.send(shutdown(lane));
     });
-    match result_rx.recv_timeout(deadline) {
+    let result = match result_rx.recv_timeout(deadline) {
         Ok(result) => result,
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(AtmError::daemon_unavailable(
             format!("daemon {lane_name} shutdown exceeded the {deadline:?} per-lane deadline"),
@@ -398,6 +398,12 @@ where
         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(AtmError::daemon_unavailable(
             format!("daemon {lane_name} shutdown worker disconnected unexpectedly"),
         )),
+    };
+    match shutdown_handle.join() {
+        Ok(()) => result,
+        Err(_) => Err(AtmError::daemon_unavailable(format!(
+            "daemon {lane_name} shutdown worker panicked unexpectedly"
+        ))),
     }
 }
 

@@ -542,13 +542,13 @@ fn drain_active_connections_for_shutdown(
             force_cancel_deadline.saturating_duration_since(Instant::now()),
         )?;
     }
+    registry.join_tracked_dispatches()?;
     let remaining_work_items = registry.active_work_items();
     if remaining_work_items > 0 {
         return Err(AtmError::daemon_unavailable(format!(
             "forced cancel deadline elapsed with {remaining_work_items} active daemon work item(s)"
         )));
     }
-    registry.join_tracked_dispatches()?;
     Ok(())
 }
 
