@@ -31,6 +31,13 @@ Unix-only behavior.
 - `docs/adr/ADR-003-test-fidelity-and-daemon-isolation.md`
 - `docs/adr/ADR-007-supported-platform-parity.md`
 
+## Governing ICD Sections
+
+- `docs/atm-daemon/protocol-icd.md §6` packet kind registry
+- `docs/atm-daemon/protocol-icd.md §8` exchange rules
+- `docs/atm-daemon/protocol-icd.md §10` timeout and failure semantics
+- `docs/atm-daemon/protocol-icd.md §14` test and reuse rules
+
 ## Hard Dependencies
 
 - S.2 Windows local IPC implementation is complete
@@ -50,6 +57,8 @@ Unix-only behavior.
    `ATM_WINDOWS_CLIPPY_SCOPE=cross-platform-only` guardrail.
 4. Reconcile all docs, ADRs, and machine-readable boundary records with the
    landed cross-platform daemon design.
+4.1 Verify the shipped implementation still matches the packet inventory and
+   failure contract documented in the protocol ICD.
 5. Run a final coverage audit proving the same shared same-host infrastructure
    is used on Unix and Windows.
 

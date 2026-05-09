@@ -65,6 +65,14 @@ Phase-S portability note:
 - feature parity across supported operating systems is mandatory; platform-
   specific implementation differences are allowed only behind documented ATM-
   owned portability boundaries
+- the canonical daemon wire contract is documented in
+  [`docs/atm-daemon/protocol-icd.md`](./atm-daemon/protocol-icd.md)
+- exact wire-header constants, packet-kind assignments, payload DTO mapping,
+  and the current daemon packet-surface inventory are owned by that ICD
+- the current daemon packet family is intentionally smaller than the retained
+  CLI surface:
+  - daemon packets: `send`, `ack`, `read`, `clear`, `doctor`, heartbeat
+  - non-packet retained surfaces: `log`, `teams`, `members`
 - Phase S planning is tracked in [`docs/plan-phase-S.md`](./plan-phase-S.md)
 
 ## 2. Crate Boundaries

@@ -173,6 +173,12 @@ Initial crate requirement IDs:
   `ClientTransport` boundary must remain object-safe and include `Send + Sync`
   semantics so callers do not have to restate them ad hoc. Satisfies:
   `REQ-P-TEST-001`, `REQ-P-CONTRACT-001`.
+- `REQ-CORE-TRANSPORT-006` `atm-core` owns the shared ATM wire-frame schema
+  and framed encode/decode helpers used by same-host local IPC, cross-host
+  daemon transport, and in-process protocol tests. The canonical wire contract
+  is documented in `docs/atm-daemon/protocol-icd.md`, including exact header
+  constants, `message_kind` assignments, and payload DTO mapping. Satisfies:
+  `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-LOCK-RETIRE-001` `atm-core` owns the service-layer rule that normal
   ATM mail correctness must not depend on mailbox locks in the Phase Q target
   architecture. Satisfies:
@@ -223,6 +229,7 @@ The `atm-core` crate docs must remain aligned with:
 - [`../plan-phase-Q.md`](../plan-phase-Q.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)
 - [`../testing-guidelines.md`](../testing-guidelines.md)
+- [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
 - [`./boundaries.md`](./boundaries.md)
 - [`./design/dedup-metadata-schema.md`](./design/dedup-metadata-schema.md)
 - [`./design/sc-observability-integration.md`](./design/sc-observability-integration.md)
@@ -265,11 +272,24 @@ Required `atm-core` crate rules:
   store boundaries; durable identities must not remain raw `String` values
 - `atm-core` must model resource-cap and timeout settings with typed wrappers
 - `ClientTransport` remains the shared request/response seam for:
-  - production local socket transport
+  - production same-host local IPC transport
+  - production remote daemon peer transport
   - fake in-process transport doubles
   - loopback in-process transport
 - `ClientTransport` must be strong enough for shared ownership and concurrent
   request execution without downstream callers restating `Send + Sync`
+- `atm-core` owns one ATM frame contract for local IPC and remote daemon
+  request/response transport, as defined by
+  `docs/atm-daemon/protocol-icd.md`
+- the current shared daemon packet family covers:
+  - send compose
+  - send acknowledge
+  - receive
+  - clear
+  - doctor
+  - heartbeat
+- `atm-core` framed transport helpers must delimit packets explicitly rather
+  than relying on EOF/connection shutdown to mark request boundaries
   rather than passing raw integer literals through the service boundary
 - `atm-core` owns the ingest replay/degradation contract and must not silently
   drop parseable external rows

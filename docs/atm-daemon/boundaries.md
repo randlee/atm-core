@@ -94,6 +94,15 @@ Notes:
 - release closeout requires both Unix and Windows implementations to exist
   behind this boundary; non-Unix unsupported-path stubs are an intermediate
   implementation state only
+- the local IPC adapter must use the same ATM frame header and request/response
+  packet family as the remote peer transport
+- the adapter must not treat EOF or half-close as the stable request boundary;
+  framed read/write helpers own packet delimiting
+- the adapter owns logical endpoint naming and same-user access-control
+  semantics; callers above the adapter must not construct Unix socket paths,
+  Windows pipe names, or platform-specific ACL details directly
+- local-IPC adapter code should live under a dedicated transport module tree
+  rather than remaining mixed into crate-root runtime code
 
 ## LifecycleControlSourceAdapter
 
@@ -127,6 +136,14 @@ Notes:
   rules can be reviewed and linted separately from the transport boundary.
 - The target implementation is cross-platform even when individual OS locking
   calls differ.
+- Phase S ownership uses stable permanent lock files under `~/.atm/daemon/`
+  rather than lock-file path deletion as the ownership signal.
+- The preferred implementation foundation is one whole-file exclusive-lock
+  contract on:
+  - `launch.lock`
+  - `owner.lock`
+- owner-visible metadata is the documented `pid[:token]` record stored in the
+  held lock file contents.
 - singleton, stale-owner recovery, and release ordering semantics must be the
   same on every supported operating system even when the adapter internals
   differ
@@ -158,6 +175,9 @@ Notes:
   `atm_daemon::peer_transport`.
 - Runtime composition owns replay resume and exposes the transport only through
   the shared `ClientTransport` contract.
+- The peer transport must reuse the shared ATM frame header and packet DTOs
+  used by the same-host local IPC boundary; host-host traffic is not a second
+  daemon message system.
 
 ## FileWatchEventSourceAdapter
 

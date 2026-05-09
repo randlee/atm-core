@@ -204,10 +204,31 @@ Phase R redesign notes:
 - `atm-core` owns the shared `AtmProtocol` contract
 - `atm-core` owns the public boundary contracts for transport, dispatch,
   store, ingress/export, watch/reconcile, and notification/status surfaces
+- `atm-core` owns the ATM frame schema used by both same-host local IPC and
+  cross-host daemon transport
+- the canonical ICD owns the exact frame constants, packet-kind assignments,
+  and payload DTO mapping that `atm-core` must encode and decode
+- `atm-core` owns the current daemon packet family for:
+  - send compose
+  - send acknowledge
+  - receive
+  - clear
+  - doctor
+  - heartbeat
 - thin-client workflow surfaces should center on `send` and `receive`
 - `ack` remains a workflow/state concern, but thin-client protocol shape
   should carry it inside send-shaped requests rather than a separate top-level
   method family
+
+Required frame direction:
+- transport framing must not depend on EOF or socket half-close semantics
+- receivers must validate the ATM frame header before payload decode
+- transport implementations may vary, but they must share one ATM packet
+  family and one framed helper layer
+- the canonical ATM daemon wire contract is documented in
+  [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
+- the same protocol ICD governs same-host local IPC and cross-host
+  daemon-to-daemon transport
 
 ## 2.2 Phase R Semantic Wrapper Policy
 

@@ -94,6 +94,20 @@ Phase-S portability note:
   first-class on Windows as well as Unix-like hosts
 - the current authoritative target for same-host daemon access is one
   cross-platform local IPC contract rather than a Unix-only local transport
+- the canonical daemon wire contract is documented in
+  [`./atm-daemon/protocol-icd.md`](./atm-daemon/protocol-icd.md)
+- exact frame constants, packet-kind numeric assignments, payload DTO mapping,
+  and the current daemon packet-surface inventory are owned by that ICD rather
+  than restated piecemeal across product docs
+- the current daemon request/response packet family covers:
+  - `send`
+  - `ack` through the send-shaped acknowledge request
+  - `read`
+  - `clear`
+  - `doctor`
+  - daemon heartbeat/runtime liveness exchange
+- retained `log`, `teams`, and `members` remain outside the daemon
+  request/response packet family in the current Phase S line
 - Phase S planning is tracked in [`plan-phase-S.md`](./plan-phase-S.md)
 - durable ATM state is one host-scoped SQLite database at
   `~/.atm/db/mail.db`; the daemon is the only writer, while direct read-only
@@ -150,7 +164,12 @@ Satisfied by:
 
 - `REQ-P-DAEMON-LIFECYCLE-001` Daemon lifecycle and singleton teardown rules
   must define a positive safe-order contract:
-  - remove the owner-visible lock path before releasing the live advisory lock
+  - keep stable host-wide lock file paths for `launch.lock` and `owner.lock`
+    on every supported operating system
+  - clear or invalidate owner-visible ownership metadata while the live
+    advisory lock is still held
+  - release the live advisory lock only after the owner metadata is no longer
+    published as current
   - if cleanup cannot complete safely, fail closed rather than publishing an
     ambiguous ownership state
 

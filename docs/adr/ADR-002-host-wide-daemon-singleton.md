@@ -98,6 +98,18 @@ Required recovery rule:
 - stale-owner recovery must preserve the same singleton guarantee as normal
   startup; recovery is not an alternate spawn path
 
+Required lock-shape rule:
+- singleton ownership uses stable permanent lock-file paths under
+  `~/.atm/daemon/`
+- `launch.lock` and `owner.lock` are canonical lock files, not ephemeral
+  sentinel paths deleted to signal handoff
+- the cross-platform lock foundation is one whole-file exclusive-lock contract
+  on those stable file paths
+- owner-visible metadata is the documented `pid[:token]` record stored in the
+  held lock-file contents
+- release clears or invalidates the owner metadata before the exclusive lock is
+  released
+
 Required failure rule:
 - if a daemon already exists, callers must connect to it or fail with a typed
   runtime error
