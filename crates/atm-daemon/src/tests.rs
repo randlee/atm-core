@@ -1,8 +1,6 @@
 use super::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
 use super::{
-    host_ownership::{
-        HOST_RUNTIME_OWNER_LOCK_FILE, HostOwnershipAdapter, clear_stale_recovery_hook_for_test,
-    },
+    host_ownership::{HOST_RUNTIME_OWNER_LOCK_FILE, HostOwnershipAdapter},
     lifecycle_control::LifecycleControlSourceAdapter,
 };
 use atm_core::boundary::RequestDispatcher;
@@ -52,7 +50,7 @@ impl StaleRecoveryHookGuard {
 
 impl Drop for StaleRecoveryHookGuard {
     fn drop(&mut self) {
-        clear_stale_recovery_hook_for_test();
+        HostOwnershipAdapter::clear_stale_recovery_hook_for_test();
     }
 }
 
