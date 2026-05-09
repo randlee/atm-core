@@ -343,13 +343,31 @@ impl LaunchGateGuard {
             })?;
         match file.try_lock_exclusive() {
             Ok(()) => Ok(Some(Self { file })),
-            Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
+            Err(source) if is_launch_gate_contention_error(&source) => Ok(None),
             Err(source) => Err(AtmError::daemon_launch_gate_rejected(format!(
                 "failed to acquire daemon launch gate at {}",
                 lock_path.display()
             ))
             .with_source(source)),
         }
+    }
+}
+
+fn is_launch_gate_contention_error(error: &std::io::Error) -> bool {
+    if error.kind() == std::io::ErrorKind::WouldBlock {
+        return true;
+    }
+
+    #[cfg(windows)]
+    {
+        // Windows file locking reports contention through raw Win32 lock/sharing
+        // violations instead of mapping them to WouldBlock consistently.
+        matches!(error.raw_os_error(), Some(32 | 33))
+    }
+
+    #[cfg(not(windows))]
+    {
+        false
     }
 }
 
@@ -1157,6 +1175,17 @@ mod tests {
             error.code,
             atm_core::error_codes::AtmErrorCode::DaemonLaunchGateRejected
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn launch_gate_treats_windows_lock_and_sharing_violations_as_contention() {
+        assert!(is_launch_gate_contention_error(
+            &std::io::Error::from_raw_os_error(32)
+        ));
+        assert!(is_launch_gate_contention_error(
+            &std::io::Error::from_raw_os_error(33)
+        ));
     }
 
     #[cfg(unix)]
