@@ -576,6 +576,7 @@ fn reload_runtime_view_rejects_invalid_config_and_preserves_last_known_good_stat
 }
 
 #[test]
+#[serial]
 fn finalize_shutdown_drains_test_tracked_finalizer_threads() {
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
