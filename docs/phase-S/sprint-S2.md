@@ -4,7 +4,7 @@
 plan_type: sprint_plan
 phase: S
 sprint: "S.2"
-status: planned
+status: complete
 estimated_scope: L
 ```
 
@@ -64,8 +64,10 @@ boundary while preserving one shared protocol, dispatcher, and test harness.
   - `LocalIpcClientTransportAdapter`
   - `DaemonLocalIpcEndpoint`
   - `LaunchGateGuard`
-- `crates/atm-daemon/tests/run_daemon_production_path.rs`
-  - shared same-host production-path coverage through the real local IPC path
+- `crates/atm/src/composition.rs`
+  - shared same-host production-path coverage through transport-neutral launch
+    and local-IPC composition tests after ADR-003 removed the real daemon-spawn
+    integration test
 
 ## Required Work
 

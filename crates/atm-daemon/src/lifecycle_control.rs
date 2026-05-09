@@ -6,7 +6,9 @@ use atm_core::error::AtmError;
 #[derive(Debug, Clone)]
 pub(crate) struct LifecycleControlSourceAdapter {
     terminate: Arc<AtomicBool>,
+    #[cfg_attr(windows, allow(dead_code))]
     reload: Arc<AtomicBool>,
+    #[cfg_attr(windows, allow(dead_code))]
     state_change: Arc<LifecycleStateChange>,
 }
 
@@ -23,6 +25,7 @@ struct LifecycleStateChange {
     wake: Condvar,
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 impl LifecycleStateChange {
     fn new() -> Self {
         Self {
@@ -40,6 +43,7 @@ impl LifecycleStateChange {
         Ok(())
     }
 
+    #[cfg_attr(windows, allow(dead_code))]
     fn snapshot(&self) -> Result<u64, AtmError> {
         self.generation
             .lock()
@@ -49,6 +53,7 @@ impl LifecycleStateChange {
             })
     }
 
+    #[cfg_attr(windows, allow(dead_code))]
     fn wait_for_change(&self, observed_generation: &mut u64) -> Result<(), AtmError> {
         let mut generation = self.generation.lock().map_err(|_| {
             AtmError::daemon_unavailable("daemon lifecycle state-change lock poisoned")
@@ -105,18 +110,22 @@ impl LifecycleControlSourceAdapter {
         }
     }
 
+    #[cfg_attr(windows, allow(dead_code))]
     pub(crate) fn terminate_requested(&self) -> bool {
         self.terminate.load(Ordering::SeqCst)
     }
 
+    #[cfg_attr(windows, allow(dead_code))]
     pub(crate) fn take_reload_requested(&self) -> bool {
         self.reload.swap(false, Ordering::SeqCst)
     }
 
+    #[cfg_attr(windows, allow(dead_code))]
     pub(crate) fn event_generation(&self) -> Result<u64, AtmError> {
         self.state_change.snapshot()
     }
 
+    #[cfg_attr(windows, allow(dead_code))]
     pub(crate) fn wait_for_state_change(
         &self,
         observed_generation: &mut u64,
@@ -214,7 +223,10 @@ fn install_platform_hooks(
             let mut wake_buffer = [0_u8; 32];
             loop {
                 match wake_read.read(&mut wake_buffer) {
-                    Ok(0) => return,
+                    Ok(0) => {
+                        let _ = state_change.notify();
+                        return;
+                    }
                     Ok(_) => {
                         if terminate.load(Ordering::SeqCst) || reload.load(Ordering::SeqCst) {
                             let _ = state_change.notify();
@@ -263,6 +275,10 @@ fn install_platform_hooks(
             let mut observed_terminate = terminate.load(Ordering::SeqCst);
             let mut observed_reload = reload.load(Ordering::SeqCst);
             loop {
+                if terminate.load(Ordering::SeqCst) {
+                    let _ = state_change.notify();
+                    return;
+                }
                 let terminate_now = terminate.load(Ordering::SeqCst);
                 let reload_now = reload.load(Ordering::SeqCst);
                 if terminate_now != observed_terminate || reload_now != observed_reload {
@@ -270,6 +286,9 @@ fn install_platform_hooks(
                     observed_reload = reload_now;
                     let _ = state_change.notify();
                 }
+                // `signal_hook::flag` does not expose a blocking cross-platform wake primitive on
+                // Windows, so the lifecycle worker uses one bounded polling exception that Phase S
+                // documents explicitly in plan-phase-S.md §4.1.
                 std::thread::sleep(std::time::Duration::from_millis(25));
             }
         })
@@ -278,6 +297,39 @@ fn install_platform_hooks(
                 .with_source(source)
         })?;
     Ok(())
+}
+
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use super::LifecycleControlSourceAdapter;
+    use serial_test::serial;
+
+    #[test]
+    #[serial]
+    fn windows_reload_flag_is_shared_across_install_calls() {
+        let first = LifecycleControlSourceAdapter::install().expect("install first");
+        first.set_terminate_for_test(false);
+        first.set_reload_for_test(false);
+
+        let second = LifecycleControlSourceAdapter::install().expect("install second");
+        first.set_reload_for_test(true);
+
+        assert!(second.take_reload_requested());
+        assert!(!second.terminate_requested());
+    }
+
+    #[test]
+    #[serial]
+    fn windows_terminate_flag_is_shared_across_install_calls() {
+        let first = LifecycleControlSourceAdapter::install().expect("install first");
+        first.set_terminate_for_test(false);
+        first.set_reload_for_test(false);
+
+        let second = LifecycleControlSourceAdapter::install().expect("install second");
+        first.set_terminate_for_test(true);
+
+        assert!(second.terminate_requested());
+    }
 }
 
 #[cfg(not(any(unix, windows)))]

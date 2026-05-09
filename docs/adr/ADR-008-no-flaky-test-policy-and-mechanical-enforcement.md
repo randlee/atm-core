@@ -6,7 +6,7 @@
 | Status | **Accepted** |
 | Date | 2026-05-09 |
 | Deciders | Rand Lee |
-| Relates to | REQ-P-TEST-001, REQ-P-LINT-POSTMORTEM-001, REQ-CORE-TEST-RUNTIME-001, REQ-DAEMON-TEST-004 |
+| Relates to | REQ-P-TEST-001, REQ-P-LINT-POSTMORTEM-001, REQ-CORE-TEST-RUNTIME-001, REQ-DAEMON-TEST-004, ADR-003 |
 | Supersedes | — |
 
 ---
@@ -96,6 +96,7 @@ not sufficient for mechanically detectable cases.
 - fixed-sleep test hygiene checks, with the current repository-local rule
   treated as the proving implementation before `sc-lint` extraction
 - repository-local daemon-spawn and warmup helper checks
+  (see ADR-003 for daemon-isolation rationale)
 - reusable production runtime liveness checks for:
   - bare `Condvar::wait(...)`
   - discarded `wait_timeout*` results
@@ -129,7 +130,8 @@ default lint.
 
 ## Follow-Up Work
 
-- add S.5 planning for phase-wide policy hardening and lint-family expansion
+- Phase-wide policy hardening and lint-family expansion planning is recorded in
+  `docs/phase-S/sprint-S5.md`.
 - tighten top-level and Phase S sprint language so “no fixed sleeps” becomes
   the broader “no flaky or unbounded waits” contract
 - add a feasible-now vs deferred lint inventory to the Phase S planning docs

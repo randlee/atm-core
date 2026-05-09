@@ -167,6 +167,9 @@ Phase S adds these review rules for the three daemon portability boundaries:
   request-family code must stay platform-neutral
 - shared same-host functional tests must prove the same handler/dispatcher
   contract on Unix and Windows
+- `just lint` now includes `same-host-portability`, which rejects broad
+  Unix-only same-host gating above the adapter line and non-Unix
+  `daemon_unavailable(...)` stubs in production adapter code
 - a boundary with only one supported-operating-system implementation is
   incomplete and must not be documented as production-ready
 - module-level platform test gates such as `#[cfg(all(test, unix))]` are not

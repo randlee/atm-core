@@ -38,6 +38,7 @@ impl RuntimeLifecycle {
     }
 
     #[cfg(test)]
+    #[cfg_attr(windows, allow(dead_code))]
     pub(crate) fn state(&self) -> RuntimeLifecycleState {
         *self.state.lock().expect("runtime lifecycle state lock")
     }
@@ -123,6 +124,7 @@ pub(crate) struct RuntimeComposition {
 
 impl RuntimeComposition {
     #[cfg(test)]
+    #[cfg_attr(windows, allow(dead_code))]
     fn new(home_dir: PathBuf) -> Result<Self, AtmError> {
         Self::new_with_replay_store_path(
             home_dir.clone(),
@@ -240,6 +242,7 @@ impl RuntimeComposition {
     }
 
     #[cfg(test)]
+    #[cfg_attr(windows, allow(dead_code))]
     pub(crate) fn start_with_socket_path_for_test(
         &self,
         socket_path: PathBuf,
@@ -297,6 +300,7 @@ impl RuntimeComposition {
     }
 
     #[cfg(test)]
+    #[cfg_attr(windows, allow(dead_code))]
     pub(crate) fn lifecycle_state(&self) -> RuntimeLifecycleState {
         self.lifecycle.state()
     }
@@ -387,10 +391,10 @@ where
     F: FnOnce(T) -> Result<(), AtmError> + Send + 'static,
 {
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
-    std::thread::spawn(move || {
+    let shutdown_handle = std::thread::spawn(move || {
         let _ = result_tx.send(shutdown(lane));
     });
-    match result_rx.recv_timeout(deadline) {
+    let result = match result_rx.recv_timeout(deadline) {
         Ok(result) => result,
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(AtmError::daemon_unavailable(
             format!("daemon {lane_name} shutdown exceeded the {deadline:?} per-lane deadline"),
@@ -398,7 +402,13 @@ where
         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(AtmError::daemon_unavailable(
             format!("daemon {lane_name} shutdown worker disconnected unexpectedly"),
         )),
-    }
+    };
+    shutdown_handle.join().map_err(|_| {
+        AtmError::daemon_unavailable(format!(
+            "daemon {lane_name} shutdown worker panicked unexpectedly"
+        ))
+    })?;
+    result
 }
 
 fn validate_runtime_home_dir(home_dir: &std::path::Path) -> Result<(), AtmError> {
@@ -447,6 +457,7 @@ pub(crate) fn compose_runtime() -> Result<RuntimeComposition, AtmError> {
 #[cfg(all(test, unix))]
 mod tests {
     use atm_core::boundary::ServerTransport;
+    use serial_test::serial;
     use tempfile::TempDir;
 
     use super::RuntimeComposition;
@@ -536,6 +547,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn runtime_composition_failed_startup_returns_to_stopped() {
         let tempdir = TempDir::new().expect("tempdir");
         let parent_file = tempdir.path().join("not-a-dir");

@@ -356,6 +356,11 @@ Transport dispatcher rule:
 - same-host functional coverage must also exercise the real local-IPC adapter
   on Unix and Windows through one shared harness shape; a Unix-only host test
   suite is not sufficient for Phase S closeout
+- the landed S.4 coverage audit is anchored by:
+  - `crates/atm-daemon/src/tests.rs::local_ipc_runtime_round_trips_doctor_requests_on_shared_transport`
+  - `crates/atm-daemon/src/tests.rs` host-ownership coverage
+  - `crates/atm-daemon/src/lifecycle_control.rs` Windows lifecycle tests
+  - `crates/atm/src/composition.rs` same-host client and launch-gate tests
 
 Dispatcher/handler rule:
 - request-kind routing belongs to the dispatcher boundary, not to the socket

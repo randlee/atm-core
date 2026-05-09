@@ -60,11 +60,13 @@ forbidden_test_bypasses = ["signal_hook::flag::register"]
 lint_rules = [
   "LINT-BOUNDARY-LIFECYCLE-CONTROL-SOURCE-DAEMON-EDGES",
   "LINT-BOUNDARY-LIFECYCLE-CONTROL-SOURCE-DAEMON-REFERENCES",
+  "LINT-SAME-HOST-PORTABILITY",
 ]
 review_gates = [
   "no_transport_to_os_control_leak",
   "no_dispatcher_signal_branching",
   "platform_parity_required",
+  "full_windows_workspace_clippy_required",
 ]
 
 [status]
@@ -73,6 +75,7 @@ notes = [
   "the extracted boundary now lives under atm_daemon::lifecycle_control with Unix hook installation hidden inside the adapter",
   "the accepted Phase S mapping is Unix SIGINT/SIGTERM -> terminate, Unix SIGHUP -> reload, Windows terminate events -> terminate, and Windows SIGBREAK/CTRL_BREAK_EVENT -> reload",
   "same-host daemon hosting now keeps lifecycle control behind one daemon-private contract on Unix and Windows",
+  "S.4 restored full Windows workspace clippy and added a dedicated same-host-portability lint guard for the shared host shell",
 ]
 
 [status.platform_support]

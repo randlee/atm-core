@@ -190,6 +190,9 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-TEST-003` `atm-daemon` same-host functional tests must use one
   shared transport/dispatcher test harness on Unix and Windows, with
   platform-specific test code limited to the owned portability adapters.
+  The S.4 release audit verifies this through the real local-IPC round-trip
+  smoke test in `crates/atm-daemon/src/tests.rs`, the daemon host-ownership
+  tests, the Windows lifecycle tests, and the CLI same-host client tests.
   Satisfies:
   `REQ-P-PLATFORM-002`, `REQ-CORE-TEST-RUNTIME-001`.
 - `REQ-DAEMON-TEST-004` `atm-daemon` must not use fixed sleeps, timing-only

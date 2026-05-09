@@ -69,12 +69,12 @@ impl ActiveConnectionRegistry {
         Ok(())
     }
 
-    fn track_dispatch_handle(&self, handle: JoinHandle<()>) -> Result<(), AtmError> {
+    fn lock_dispatch_handles(
+        &self,
+    ) -> Result<std::sync::MutexGuard<'_, Vec<JoinHandle<()>>>, AtmError> {
         self.dispatch_handles
             .lock()
-            .map_err(|_| AtmError::daemon_unavailable("active dispatch handle lock poisoned"))?
-            .push(handle);
-        Ok(())
+            .map_err(|_| AtmError::daemon_unavailable("active dispatch handle lock poisoned"))
     }
 
     fn join_tracked_dispatches(&self) -> Result<(), AtmError> {
@@ -348,6 +348,8 @@ impl PreparedRuntimeServer {
                             }
                         });
                     }
+                    // Reload work stays serialized inside the serve loop so the accept path
+                    // never races a partially-applied runtime view update.
                     ServeEvent::Reload => match reload_runtime_view() {
                         Ok(()) => tracing::info!(
                             "bounded lifecycle-control-triggered config/roster reload applied"
@@ -394,6 +396,11 @@ impl PreparedRuntimeServer {
                         %shutdown_error,
                         %serve_error,
                         "daemon shutdown encountered an additional error after a serve error"
+                    );
+                } else {
+                    tracing::warn!(
+                        %serve_error,
+                        "daemon serve loop exited with an error after shutdown finalization"
                     );
                 }
                 return Err(serve_error);
@@ -453,6 +460,8 @@ fn prepare_local_ipc_endpoint(endpoint_path: &Path) -> Result<(), AtmError> {
 
 #[cfg(not(unix))]
 fn prepare_local_ipc_endpoint(_endpoint_path: &Path) -> Result<(), AtmError> {
+    // Windows named-pipe-backed local IPC does not allocate a filesystem socket path, so
+    // there is no parent directory to create or stale endpoint file to unlink here.
     Ok(())
 }
 
@@ -540,13 +549,13 @@ fn drain_active_connections_for_shutdown(
             force_cancel_deadline.saturating_duration_since(Instant::now()),
         )?;
     }
+    registry.join_tracked_dispatches()?;
     let remaining_work_items = registry.active_work_items();
     if remaining_work_items > 0 {
         return Err(AtmError::daemon_unavailable(format!(
             "forced cancel deadline elapsed with {remaining_work_items} active daemon work item(s)"
         )));
     }
-    registry.join_tracked_dispatches()?;
     Ok(())
 }
 
@@ -593,11 +602,18 @@ fn handle_connection(
         let _dispatch_work = dispatch_registry.register_dispatch_work();
         let _ = result_tx.send(dispatcher.dispatch(request));
     });
-    registry.track_dispatch_handle(dispatch_handle)?;
+    match registry.lock_dispatch_handles() {
+        Ok(mut handles) => handles.push(dispatch_handle),
+        Err(error) => {
+            let _ = dispatch_handle.join();
+            return Err(error);
+        }
+    }
     let response = match result_rx.recv_timeout(REQUEST_DEADLINE) {
         Ok(Ok(response)) => response,
         Ok(Err(error)) => ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(&error)),
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            tracing::warn!("daemon request dispatcher exceeded the runtime deadline");
             ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
                 &AtmError::daemon_unavailable(
                     "daemon request exceeded the 3s runtime deadline; the operation may still complete in the background",

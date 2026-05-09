@@ -136,6 +136,9 @@ Required timing:
 - on the integration branch or other branch designated as the triage source of
   truth for the phase
 
+`triage_root` must point to the integration-branch worktree for the active
+phase, not a feature branch or main-repo path.
+
 Reason:
 - parallel `qa-triage` agents write into one shared triage root
 - committing inside each agent would create batch races and partial evidence

@@ -154,6 +154,7 @@ Required Phase R rules:
 - the daemon request/response packet surface currently covers:
   - `send`
   - `ack` through the send-shaped acknowledge request
+  - `list` (packet mapping pending refinement per ADR-009 Follow-Up Work)
   - `read`
   - `clear`
   - `doctor`

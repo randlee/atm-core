@@ -34,7 +34,13 @@ use atm_rusqlite::{SqliteBoundaryAssembly, assemble_default_boundary};
 const MAX_STATUS_CACHE_ENTRIES: usize = 4096;
 const MAX_RELOAD_TEAMS: usize = 256;
 const SHUTDOWN_WAL_CHECKPOINT_DEADLINE: Duration = Duration::from_secs(2);
+// The retained observability flush is best-effort during shutdown; Phase S records this bounded
+// 2-second deadline as an accepted production exception in the anti-flake contract docs.
 const SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE: Duration = Duration::from_secs(2);
+
+#[cfg(test)]
+static SHUTDOWN_FINALIZER_THREADS: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>> =
+    std::sync::Mutex::new(Vec::new());
 
 #[derive(Debug, Clone)]
 struct DaemonObservability {
@@ -433,21 +439,58 @@ pub(crate) struct DaemonRequestDispatcher {
 }
 
 impl DaemonRequestDispatcher {
+    #[cfg(test)]
+    pub(crate) fn drain_shutdown_finalizer_threads_for_test() {
+        let handles = {
+            let mut handles = SHUTDOWN_FINALIZER_THREADS
+                .lock()
+                .expect("shutdown finalizer thread registry lock");
+            std::mem::take(&mut *handles)
+        };
+        for handle in handles {
+            let (result_tx, result_rx) = mpsc::sync_channel(1);
+            std::thread::spawn(move || {
+                let _ = result_tx.send(handle.join());
+            });
+            match result_rx.recv_timeout(Duration::from_secs(5)) {
+                Ok(_) => {}
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    panic!("shutdown finalizer thread failed to join within 5s")
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    panic!("shutdown finalizer join helper exited before reporting completion")
+                }
+            }
+        }
+    }
+
     fn run_bounded_shutdown_step(
         label: &'static str,
         deadline: Duration,
         step: impl FnOnce() -> Result<(), AtmError> + Send + 'static,
     ) {
         let (result_tx, result_rx) = mpsc::sync_channel(1);
-        std::thread::spawn(move || {
+        let shutdown_handle = std::thread::spawn(move || {
             let _ = result_tx.send(step());
         });
         match result_rx.recv_timeout(deadline) {
-            Ok(Ok(())) => {}
+            Ok(Ok(())) => {
+                let _ = shutdown_handle.join();
+            }
             Ok(Err(error)) => {
+                let _ = shutdown_handle.join();
                 tracing::warn!(%error, step = label, "daemon shutdown finalizer step failed");
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {
+                #[cfg(test)]
+                {
+                    SHUTDOWN_FINALIZER_THREADS
+                        .lock()
+                        .expect("shutdown finalizer thread registry lock")
+                        .push(shutdown_handle);
+                }
+                #[cfg(not(test))]
+                drop(shutdown_handle);
                 tracing::warn!(
                     step = label,
                     timeout_ms = deadline.as_millis(),
@@ -455,6 +498,7 @@ impl DaemonRequestDispatcher {
                 );
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => {
+                let _ = shutdown_handle.join();
                 tracing::warn!(
                     step = label,
                     "daemon shutdown finalizer step exited before reporting a result"

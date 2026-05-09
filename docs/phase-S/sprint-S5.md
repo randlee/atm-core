@@ -4,7 +4,7 @@
 plan_type: sprint_plan
 phase: S
 sprint: "S.5"
-status: planned
+status: in-review
 estimated_scope: M
 ```
 

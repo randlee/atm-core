@@ -23,6 +23,7 @@ PYTHON_LINT_ORDER = (
     "version",
     "boundaries",
     "unix-gating",
+    "same-host-portability",
     "runtime-waits",
     "manifests",
     "identities",
@@ -79,6 +80,10 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         "boundaries": LintTask("boundaries", [python_executable, str(repo_root / ".just/lint_boundaries.py")]),
         "unix-gating": LintTask(
             "unix-gating", [python_executable, str(repo_root / ".just/lint_unix_gating.py")]
+        ),
+        "same-host-portability": LintTask(
+            "same-host-portability",
+            [python_executable, str(repo_root / ".just/lint_same_host_portability.py")],
         ),
         "runtime-waits": LintTask(
             "runtime-waits", [python_executable, str(repo_root / ".just/lint_runtime_waits.py")]
