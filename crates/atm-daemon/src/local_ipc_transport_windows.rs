@@ -1,3 +1,5 @@
+#![cfg_attr(windows, allow(dead_code))]
+
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;

@@ -38,6 +38,7 @@ impl RuntimeLifecycle {
     }
 
     #[cfg(test)]
+    #[cfg_attr(windows, allow(dead_code))]
     pub(crate) fn state(&self) -> RuntimeLifecycleState {
         *self.state.lock().expect("runtime lifecycle state lock")
     }
@@ -123,6 +124,7 @@ pub(crate) struct RuntimeComposition {
 
 impl RuntimeComposition {
     #[cfg(test)]
+    #[cfg_attr(windows, allow(dead_code))]
     fn new(home_dir: PathBuf) -> Result<Self, AtmError> {
         Self::new_with_replay_store_path(
             home_dir.clone(),
@@ -240,6 +242,7 @@ impl RuntimeComposition {
     }
 
     #[cfg(test)]
+    #[cfg_attr(windows, allow(dead_code))]
     pub(crate) fn start_with_socket_path_for_test(
         &self,
         socket_path: PathBuf,
@@ -297,6 +300,7 @@ impl RuntimeComposition {
     }
 
     #[cfg(test)]
+    #[cfg_attr(windows, allow(dead_code))]
     pub(crate) fn lifecycle_state(&self) -> RuntimeLifecycleState {
         self.lifecycle.state()
     }

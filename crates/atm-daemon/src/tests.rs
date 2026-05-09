@@ -3,6 +3,8 @@ use super::{
     host_ownership::{HOST_RUNTIME_OWNER_LOCK_FILE, HostOwnershipAdapter},
     lifecycle_control::LifecycleControlSourceAdapter,
 };
+#[cfg(unix)]
+use super::LocalIpcServerTransportAdapter;
 use atm_core::boundary::RequestDispatcher;
 use atm_core::doctor::DoctorStatus;
 use atm_core::error_codes::AtmErrorCode;
