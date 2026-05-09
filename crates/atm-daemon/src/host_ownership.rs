@@ -12,9 +12,8 @@ pub(crate) const HOST_RUNTIME_OWNER_LOCK_FILE: &str = "owner.lock";
 const OWNER_RECOVERY_RETRY_INTERVAL: Duration = Duration::from_millis(25);
 
 #[cfg(test)]
-static STALE_RECOVERY_OBSERVED_SIGNAL: std::sync::Mutex<
-    Option<std::sync::mpsc::SyncSender<()>>,
-> = std::sync::Mutex::new(None);
+static STALE_RECOVERY_OBSERVED_SIGNAL: std::sync::Mutex<Option<std::sync::mpsc::SyncSender<()>>> =
+    std::sync::Mutex::new(None);
 
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct HostOwnershipAdapter;
