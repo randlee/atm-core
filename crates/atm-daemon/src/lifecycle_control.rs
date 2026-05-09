@@ -160,19 +160,45 @@ impl LifecycleControlSourceAdapter {
 }
 
 #[cfg(unix)]
+fn run_unix_lifecycle_wake_worker(
+    mut wake_read: std::os::unix::net::UnixStream,
+    terminate: Arc<AtomicBool>,
+    reload: Arc<AtomicBool>,
+    state_change: Arc<LifecycleStateChange>,
+) {
+    use std::io::Read;
+
+    let mut wake_buffer = [0_u8; 32];
+    loop {
+        match wake_read.read(&mut wake_buffer) {
+            Ok(0) => {
+                let _ = state_change.notify();
+                return;
+            }
+            Ok(_) => {
+                if terminate.load(Ordering::SeqCst) || reload.load(Ordering::SeqCst) {
+                    let _ = state_change.notify();
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => return,
+        }
+    }
+}
+
+#[cfg(unix)]
 fn install_platform_hooks(
     terminate: &Arc<AtomicBool>,
     reload: &Arc<AtomicBool>,
     state_change: &Arc<LifecycleStateChange>,
 ) -> Result<(), AtmError> {
-    use std::io::Read;
     use std::os::unix::net::UnixStream;
 
     use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGTERM};
     use signal_hook::flag as signal_flag;
     use signal_hook::low_level::pipe as signal_pipe;
 
-    let (mut wake_read, wake_write) = UnixStream::pair().map_err(|source| {
+    let (wake_read, wake_write) = UnixStream::pair().map_err(|source| {
         AtmError::daemon_unavailable("failed to create daemon lifecycle wake pipe")
             .with_source(source)
     })?;
@@ -220,22 +246,7 @@ fn install_platform_hooks(
     std::thread::Builder::new()
         .name("atm-daemon-lifecycle-unix".to_string())
         .spawn(move || {
-            let mut wake_buffer = [0_u8; 32];
-            loop {
-                match wake_read.read(&mut wake_buffer) {
-                    Ok(0) => {
-                        let _ = state_change.notify();
-                        return;
-                    }
-                    Ok(_) => {
-                        if terminate.load(Ordering::SeqCst) || reload.load(Ordering::SeqCst) {
-                            let _ = state_change.notify();
-                        }
-                    }
-                    Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
-                    Err(_) => return,
-                }
-            }
+            run_unix_lifecycle_wake_worker(wake_read, terminate, reload, state_change);
         })
         .map_err(|source| {
             AtmError::daemon_unavailable("failed to spawn daemon lifecycle signal worker")
@@ -303,6 +314,8 @@ fn install_platform_hooks(
 mod windows_tests {
     use super::LifecycleControlSourceAdapter;
     use serial_test::serial;
+    use std::sync::mpsc;
+    use std::time::Duration;
 
     #[test]
     #[serial]
@@ -329,6 +342,77 @@ mod windows_tests {
         first.set_terminate_for_test(true);
 
         assert!(second.terminate_requested());
+    }
+
+    #[test]
+    #[serial]
+    fn windows_terminate_request_wakes_waiters() {
+        let first = LifecycleControlSourceAdapter::install().expect("install first");
+        first.set_terminate_for_test(false);
+        first.set_reload_for_test(false);
+        let second = LifecycleControlSourceAdapter::install().expect("install second");
+        let mut observed_generation = second.event_generation().expect("generation");
+        let waiter = second.clone();
+        let (tx, rx) = mpsc::sync_channel(1);
+        let join = std::thread::spawn(move || {
+            waiter
+                .wait_for_state_change(&mut observed_generation)
+                .expect("wait for state change");
+            tx.send(waiter.terminate_requested())
+                .expect("send waiter result");
+        });
+
+        first.set_terminate_for_test(true);
+
+        assert!(
+            rx.recv_timeout(Duration::from_secs(1))
+                .expect("waiter wake result"),
+            "terminate wake should set the terminate flag"
+        );
+        join.join().expect("join waiter");
+    }
+}
+
+#[cfg(all(test, unix))]
+mod unix_tests {
+    use super::{LifecycleControlSourceAdapter, run_unix_lifecycle_wake_worker};
+    use std::os::unix::net::UnixStream;
+    use std::sync::Arc;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    #[test]
+    fn unix_eof_wake_notifies_waiters() {
+        let adapter = LifecycleControlSourceAdapter::new_for_test();
+        let (wake_read, wake_write) = UnixStream::pair().expect("unix pair");
+        let worker_terminate = adapter.terminate_flag();
+        let worker_reload = Arc::clone(&adapter.reload);
+        let worker_state = Arc::clone(&adapter.state_change);
+        let worker = std::thread::spawn(move || {
+            run_unix_lifecycle_wake_worker(
+                wake_read,
+                worker_terminate,
+                worker_reload,
+                worker_state,
+            );
+        });
+
+        let waiter = adapter.clone();
+        let mut observed_generation = waiter.event_generation().expect("generation");
+        let (tx, rx) = mpsc::sync_channel(1);
+        let wait_join = std::thread::spawn(move || {
+            waiter
+                .wait_for_state_change(&mut observed_generation)
+                .expect("wait for state change");
+            tx.send(()).expect("notify waiter wake");
+        });
+
+        drop(wake_write);
+
+        rx.recv_timeout(Duration::from_secs(1))
+            .expect("EOF should wake lifecycle waiters");
+        worker.join().expect("join unix lifecycle worker");
+        wait_join.join().expect("join waiter");
     }
 }
 
