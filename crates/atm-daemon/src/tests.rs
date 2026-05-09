@@ -19,6 +19,25 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use tempfile::TempDir;
 
+struct LifecycleFlagResetGuard<'a> {
+    lifecycle: &'a LifecycleControlSourceAdapter,
+}
+
+impl<'a> LifecycleFlagResetGuard<'a> {
+    fn install(lifecycle: &'a LifecycleControlSourceAdapter) -> Self {
+        lifecycle.set_terminate_for_test(false);
+        lifecycle.set_reload_for_test(false);
+        Self { lifecycle }
+    }
+}
+
+impl Drop for LifecycleFlagResetGuard<'_> {
+    fn drop(&mut self) {
+        self.lifecycle.set_terminate_for_test(false);
+        self.lifecycle.set_reload_for_test(false);
+    }
+}
+
 #[test]
 fn daemon_shutdown_signals_for_test_are_isolated() {
     let first = LifecycleControlSourceAdapter::new_for_test();
@@ -34,8 +53,7 @@ fn daemon_shutdown_signals_for_test_are_isolated() {
 #[serial]
 fn daemon_shutdown_signal_install_reuses_shared_flags() {
     let first = LifecycleControlSourceAdapter::install().expect("install first");
-    first.set_terminate_for_test(false);
-    first.set_reload_for_test(false);
+    let _reset = LifecycleFlagResetGuard::install(&first);
 
     let second = LifecycleControlSourceAdapter::install().expect("install second");
     first.set_reload_for_test(true);
@@ -43,9 +61,6 @@ fn daemon_shutdown_signal_install_reuses_shared_flags() {
 
     assert!(second.reload_requested_for_test());
     assert!(first.terminate_requested());
-
-    first.set_terminate_for_test(false);
-    first.set_reload_for_test(false);
 }
 
 #[test]
@@ -152,6 +167,8 @@ fn host_ownership_record_uses_pid_and_token_while_held_and_clears_on_release() {
 
     let record = std::fs::read_to_string(&lock_path).expect("read record");
     let trimmed = record.trim();
+    // The singleton tests intentionally read the same owner.lock metadata that
+    // ADR-002 documents for the launch.lock -> owner.lock handoff.
     let (pid, token) = trimmed.split_once(':').expect("pid:token");
     assert_eq!(pid, std::process::id().to_string());
     assert!(!token.is_empty(), "token should not be empty");

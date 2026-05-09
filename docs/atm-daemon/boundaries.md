@@ -104,6 +104,10 @@ Notes:
   Windows pipe names, or platform-specific ACL details directly
 - local-IPC adapter code should live under a dedicated transport module tree
   rather than remaining mixed into crate-root runtime code
+- the current integrate/phase-S branch still keeps `handle_connection(...)`
+  co-located with the listener runtime inside `atm_daemon::local_ipc_transport`
+  so request accounting and shutdown remain in one place during Phase S
+  closeout; the follow-on partitioning sprint owns the final split
 
 ## LifecycleControlSourceAdapter
 
@@ -165,6 +169,9 @@ Phase S adds these review rules for the three daemon portability boundaries:
   contract on Unix and Windows
 - a boundary with only one supported-operating-system implementation is
   incomplete and must not be documented as production-ready
+- module-level platform test gates such as `#[cfg(all(test, unix))]` are not
+  allowed in daemon-owned test modules; use `#[cfg(unix)]` on individual test
+  functions when one assertion is OS-specific
 
 ## PeerClientTransportAdapter
 

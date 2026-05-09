@@ -74,3 +74,7 @@ notes = [
   "the accepted Phase S mapping is Unix SIGINT/SIGTERM -> terminate, Unix SIGHUP -> reload, Windows terminate events -> terminate, and Windows SIGBREAK/CTRL_BREAK_EVENT -> reload",
   "same-host daemon hosting now keeps lifecycle control behind one daemon-private contract on Unix and Windows",
 ]
+
+[status.platform_support]
+unix = "concrete_landed"
+windows = "concrete_landed"

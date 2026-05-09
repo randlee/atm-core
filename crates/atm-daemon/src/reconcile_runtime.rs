@@ -3,7 +3,7 @@ use atm_core::boundary::{
     WatchSubscriptionRequest,
 };
 use atm_core::error::AtmError;
-use atm_core::protocol::NotificationEvent;
+use atm_core::protocol::{NotificationEvent, ProtocolErrorEnvelope};
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};
@@ -86,6 +86,7 @@ struct PendingReconcile {
 
 #[derive(Clone)]
 struct ReconcileFailureSnapshot {
+    code: atm_core::error_codes::AtmErrorCode,
     message: String,
     recovery: Option<String>,
 }
@@ -93,6 +94,7 @@ struct ReconcileFailureSnapshot {
 impl From<AtmError> for ReconcileFailureSnapshot {
     fn from(error: AtmError) -> Self {
         Self {
+            code: error.code,
             message: error.message,
             recovery: error.recovery,
         }
@@ -101,11 +103,12 @@ impl From<AtmError> for ReconcileFailureSnapshot {
 
 impl ReconcileFailureSnapshot {
     fn to_error(&self) -> AtmError {
-        let error = AtmError::daemon_unavailable(self.message.clone());
-        match &self.recovery {
-            Some(recovery) => error.with_recovery(recovery.clone()),
-            None => error,
+        ProtocolErrorEnvelope {
+            code: self.code,
+            message: self.message.clone(),
+            recovery: self.recovery.clone(),
         }
+        .into_atm_error()
     }
 }
 
@@ -440,7 +443,7 @@ mod tests {
         ReconcileRequest, WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
     };
     use atm_core::protocol::ReconcileResult;
-    use std::sync::{Arc, Barrier, Condvar, Mutex, mpsc};
+    use std::sync::{Arc, Condvar, Mutex, mpsc};
     use std::time::Duration;
 
     fn request() -> ReconcileRequest {
@@ -462,7 +465,6 @@ mod tests {
     #[test]
     fn reconcile_runtime_coalesces_duplicate_requests() {
         let calls = Arc::new(Mutex::new(0usize));
-        let barrier = Arc::new(Barrier::new(2));
         let runtime = ReconcileRuntime::new_for_test(
             Arc::new({
                 let calls = Arc::clone(&calls);
@@ -474,7 +476,7 @@ mod tests {
                     })
                 }
             }),
-            Duration::from_millis(20),
+            Duration::from_millis(250),
         );
         runtime.start().expect("start");
 
@@ -482,20 +484,12 @@ mod tests {
         let runtime_b = runtime.clone();
         let request_a = request();
         let request_b = request();
-        let first = std::thread::spawn({
-            let barrier = Arc::clone(&barrier);
-            move || {
-                barrier.wait();
-                runtime_a.reconcile(request_a).expect("first")
-            }
-        });
-        let second = std::thread::spawn({
-            let barrier = Arc::clone(&barrier);
-            move || {
-                barrier.wait();
-                runtime_b.reconcile(request_b).expect("second")
-            }
-        });
+        let first = std::thread::spawn(move || runtime_a.reconcile(request_a).expect("first"));
+        assert!(
+            runtime.wait_for_pending_count_for_test(1, Duration::from_secs(1)),
+            "first reconcile request never entered the pending queue"
+        );
+        let second = std::thread::spawn(move || runtime_b.reconcile(request_b).expect("second"));
         assert_eq!(first.join().expect("join").observed_paths, 2);
         assert_eq!(second.join().expect("join").imported_sources, 1);
         assert_eq!(*calls.lock().expect("calls"), 1);

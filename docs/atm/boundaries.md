@@ -9,7 +9,7 @@ Interpretation note:
 Canonical machine-readable boundary source:
 - [`boundaries/atm/local-socket-client-transport.toml`](../../boundaries/atm/local-socket-client-transport.toml)
 
-## LocalSocketClientTransportAdapter
+## LocalIpcClientTransportAdapter
 
 Purpose:
 - Owns the CLI-local implementation of the ClientTransport contract.

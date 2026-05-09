@@ -76,8 +76,8 @@ depends directly on Unix APIs.
   - `HostOwnershipAdapter::{acquire, acquire_at}`
   - `host_runtime_lock_path`
 - `crates/atm/src/composition.rs`
-  - `LocalSocketClientTransport::{try_connect, exchange}`
-  - `resolve_daemon_socket_path`
+  - `LocalIpcClientTransportAdapter::{try_connect, exchange}`
+  - `resolve_daemon_local_ipc_endpoint`
 
 ## Required Work
 
