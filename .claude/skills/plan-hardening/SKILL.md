@@ -68,6 +68,10 @@ sprints are needed, hardening must create them.
 
 If `questions_or_concerns` is present, `arch-ctm` should answer it in the ACK.
 
+The ACK should also include a brief outline of the plan/work that `arch-ctm`
+understands to be in scope. `team-lead` should wait for that ACK and outline
+before raising scope concerns or discussing adjustments with the user.
+
 Render:
 - `.claude/skills/plan-hardening/plan-hardening.xml.j2`
 
