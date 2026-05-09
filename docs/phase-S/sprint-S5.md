@@ -80,10 +80,16 @@ hang-prone regression patterns from re-entering the same-host daemon line.
    - after all parallel `qa-triage` agents finish writing `.ttl` files
    - after aggregation confirms the batch is complete
    - before any branch-scoped fix dispatch to `arch-ctm`
+   - on the phase integration-branch worktree, which is the canonical triage
+     source of truth for that phase
 6.2 Update the relevant triage prompt/skill so the process explicitly forbids
-    leaving phase findings untracked in the working tree until phase end.
+    leaving phase findings untracked in the working tree until phase end and
+    explicitly requires `triage_root` to live under the integration-branch
+    worktree rather than an arbitrary feature branch.
 6.3 Keep this track separate from the mailbox-read planning follow-up; the
     triage git-commit gap is an independent process-hardening item.
+6.4 Land any `qa-triage` prompt edits from a develop-based worktree if that
+    prompt is shared outside the active Phase S planning branch.
 
 ## Required Document Updates
 
@@ -118,6 +124,8 @@ hang-prone regression patterns from re-entering the same-host daemon line.
   each rule family (`sc-lint-*` vs `.just/` / `scripts/`)
 - the triage workflow names an explicit git-commit step for phase `.ttl`
   records before dev dispatch begins
+- the active planning docs state that the canonical `triage_root` for a phase
+  lives on that phase's integration-branch worktree
 - the chosen triage commit point prevents a repeat of the Phase S gap where
   findings remained untracked until manual intervention
 
