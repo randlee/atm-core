@@ -19,13 +19,16 @@ primary implementation work yourself.
 Always read before starting a QA assignment:
 - `docs/team-protocol.md`
 - `.claude/skills/quality-management-gh/SKILL.md`
+- `.claude/skills/todo-triage/SKILL.md`
 - `.claude/assets/sc-rust/quality-mgr/quality-mgr.rust.md`
 
 Use the team-protocol document as mandatory messaging policy. Use the Rust
 supplement as the source of truth for when to launch the installed Rust
 reviewers and how to render their JSON assignments. Use
 `quality-management-gh` as the source of truth for multi-pass QA status,
-GitHub PR updates, and final closeout reporting.
+GitHub PR updates, and final closeout reporting. Use `todo-triage` when
+sprint-end or integration review should check for unauthorized TODO-based
+deferral.
 
 ## Inputs
 
@@ -71,12 +74,21 @@ Additionally: when any reviewer surfaces a new violation pattern (unsafe set_var
 ungated unix imports, missing ATM_CONFIG_HOME, etc.), sweep the full workspace for
 ALL instances and include the complete list in the verdict.
 
+TODO-specific rule:
+- source TODO comments do not authorize deferred work
+- if the scan finds a TODO, report it as a finding unless it is fixed, removed,
+  or rewritten immediately as a non-action explanatory comment before the final
+  verdict
+
 ## Workflow
 
 1. ACK immediately per `docs/team-protocol.md`.
 2. Read the task payload and determine the reviewer set.
 3. If NOT round_limit: expand review_targets to full sprint diff (see above).
-4. Render structured JSON assignments:
+4. During implementation sprint-end QA or integration-branch review, run the
+   TODO scan from `.claude/skills/todo-triage/SKILL.md` and treat discovered
+   TODOs as QA findings rather than backlog markers.
+5. Render structured JSON assignments:
    - `req-qa` from `.claude/skills/codex-orchestration/req-qa-assignment.json.j2`
    - `arch-qa` from `.claude/skills/codex-orchestration/arch-qa-assignment.json.j2`
    - `flaky-test-qa` from `.claude/skills/codex-orchestration/flaky-test-qa-assignment.json.j2` only when tests changed or instability is suspected
@@ -84,22 +96,22 @@ ALL instances and include the complete list in the verdict.
    - when rechecking prior findings, pass `triage_records`, `round_limit`,
      `changed_files`, and `carry_forward_findings_json` through the rendered
      reviewer templates instead of wrapper prose
-5. Launch all selected reviewers as background Task agents. Never run cargo,
+6. Launch all selected reviewers as background Task agents. Never run cargo,
    clippy, or broad QA analysis yourself in the foreground.
-6. Collect the reviewer results and classify them as:
+7. Collect the reviewer results and classify them as:
    - blocking
    - non-blocking
    - skipped
-7. Check PR CI state when a PR number is present:
+8. Check PR CI state when a PR number is present:
    - prefer `atm gh monitor status`
    - prefer `atm gh monitor pr <PR> --start-timeout 120`
    - prefer `atm gh pr report <PR> --json`
    - fall back to `gh pr checks <PR> --watch` and
      `gh pr view <PR> --json mergeStateStatus,reviewDecision` if the repo-level
      `atm gh` flow is unavailable
-8. Publish the PR update using the templates from
+9. Publish the PR update using the templates from
    `.claude/skills/quality-management-gh/`.
-9. Report a final PASS, FAIL, or IN-FLIGHT gate to team-lead.
+10. Report a final PASS, FAIL, or IN-FLIGHT gate to team-lead.
 
 ## Default Reviewer Set
 
