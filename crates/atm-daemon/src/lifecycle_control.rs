@@ -289,6 +289,39 @@ fn install_platform_hooks(
     Ok(())
 }
 
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use super::LifecycleControlSourceAdapter;
+    use serial_test::serial;
+
+    #[test]
+    #[serial]
+    fn windows_reload_flag_is_shared_across_install_calls() {
+        let first = LifecycleControlSourceAdapter::install().expect("install first");
+        first.set_terminate_for_test(false);
+        first.set_reload_for_test(false);
+
+        let second = LifecycleControlSourceAdapter::install().expect("install second");
+        first.set_reload_for_test(true);
+
+        assert!(second.take_reload_requested());
+        assert!(!second.terminate_requested());
+    }
+
+    #[test]
+    #[serial]
+    fn windows_terminate_flag_is_shared_across_install_calls() {
+        let first = LifecycleControlSourceAdapter::install().expect("install first");
+        first.set_terminate_for_test(false);
+        first.set_reload_for_test(false);
+
+        let second = LifecycleControlSourceAdapter::install().expect("install second");
+        first.set_terminate_for_test(true);
+
+        assert!(second.terminate_requested());
+    }
+}
+
 #[cfg(not(any(unix, windows)))]
 fn install_platform_hooks(
     _terminate: &Arc<AtomicBool>,

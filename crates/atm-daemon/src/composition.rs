@@ -403,12 +403,12 @@ where
             format!("daemon {lane_name} shutdown worker disconnected unexpectedly"),
         )),
     };
-    match shutdown_handle.join() {
-        Ok(()) => result,
-        Err(_) => Err(AtmError::daemon_unavailable(format!(
+    shutdown_handle.join().map_err(|_| {
+        AtmError::daemon_unavailable(format!(
             "daemon {lane_name} shutdown worker panicked unexpectedly"
-        ))),
-    }
+        ))
+    })?;
+    result
 }
 
 fn validate_runtime_home_dir(home_dir: &std::path::Path) -> Result<(), AtmError> {
@@ -457,6 +457,7 @@ pub(crate) fn compose_runtime() -> Result<RuntimeComposition, AtmError> {
 #[cfg(all(test, unix))]
 mod tests {
     use atm_core::boundary::ServerTransport;
+    use serial_test::serial;
     use tempfile::TempDir;
 
     use super::RuntimeComposition;
@@ -546,6 +547,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn runtime_composition_failed_startup_returns_to_stopped() {
         let tempdir = TempDir::new().expect("tempdir");
         let parent_file = tempdir.path().join("not-a-dir");

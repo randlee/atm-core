@@ -165,6 +165,9 @@ fn recover_stale_owner_lock(
     notify_stale_recovery_hook_for_test();
 
     for _ in 0..STALE_OWNER_RECOVERY_RETRY_ATTEMPTS {
+        // This retry is only used on stale-owner recovery, not the hot path.
+        // OS file-lock APIs do not expose a release notification, so bounded
+        // polling is required here and is capped at 3 x 25ms = 75ms total.
         thread::sleep(OWNER_RECOVERY_RETRY_INTERVAL);
         let retry_file = open_lock_file(lock_path)?;
         match retry_file.try_lock_exclusive() {

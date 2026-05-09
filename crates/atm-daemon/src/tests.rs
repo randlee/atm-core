@@ -121,6 +121,7 @@ fn singleton_guard_is_host_wide_across_different_socket_paths() {
 }
 
 #[test]
+#[serial]
 fn singleton_guard_reports_stale_owner_record_failure() {
     let tempdir = TempDir::new().expect("tempdir");
     let lock_path = atm_core::home::host_runtime_lock_path_from_home(
