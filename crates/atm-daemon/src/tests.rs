@@ -438,6 +438,21 @@ fn reload_runtime_view_rejects_invalid_config_and_preserves_last_known_good_stat
 }
 
 #[test]
+fn finalize_shutdown_drains_test_tracked_finalizer_threads() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    let db_path = tempdir.path().join("mail.db");
+
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home, RuntimeStatusCache::new(), db_path);
+
+    dispatcher.finalize_shutdown();
+    DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
+}
+
+#[test]
 fn heartbeat_rejects_live_pid_conflict() {
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
