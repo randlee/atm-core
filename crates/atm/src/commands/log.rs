@@ -1,5 +1,4 @@
 use std::thread;
-use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use atm_core::observability::{
@@ -150,7 +149,7 @@ impl TailArgs {
         loop {
             let snapshot = session.poll()?;
             output::print_log_records(snapshot.records, self.query.json)?;
-            thread::sleep(Duration::from_millis(self.poll_interval_ms));
+            thread::sleep(std::time::Duration::from_millis(self.poll_interval_ms));
         }
     }
 
@@ -168,7 +167,9 @@ impl TailArgs {
                 return Ok(());
             }
 
-            thread::sleep(Duration::from_millis(self.poll_interval_ms));
+            if self.max_polls.is_none() {
+                thread::yield_now();
+            }
         }
     }
 }
@@ -243,7 +244,66 @@ fn parse_relative_duration(raw: &str) -> Result<IsoTimestamp> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_relative_duration;
+    use std::sync::Mutex;
+
+    use atm_core::error::AtmError;
+    use atm_core::observability::{
+        AtmLogRecord, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
+        CommandEvent, LogTailSession, ObservabilityPort,
+    };
+    use atm_core::observability::{LogFieldValue, LogLevelFilter, LogMode};
+    use atm_core::test_support::{EnvGuard, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
+    use serial_test::serial;
+    use tempfile::TempDir;
+
+    use super::{
+        CliLogLevel, LogCommand, LogModeCommand, QueryArgs, parse_match_expression,
+        parse_relative_duration,
+    };
+    use crate::observability::{CliObservability, CliObservabilityOptions};
+
+    #[derive(Debug)]
+    struct StubObservability {
+        // &self query/follow methods require interior mutability once tests store this behind Arc<dyn ObservabilityPort + Send + Sync>.
+        snapshot: Mutex<Option<Result<AtmLogSnapshot, AtmError>>>,
+    }
+
+    impl atm_core::boundary::sealed::Sealed for StubObservability {}
+
+    impl ObservabilityPort for StubObservability {
+        fn emit(&self, _event: atm_core::observability::CommandEvent) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn query(
+            &self,
+            _req: atm_core::observability::AtmLogQuery,
+        ) -> Result<AtmLogSnapshot, AtmError> {
+            self.snapshot
+                .lock()
+                .expect("snapshot")
+                .take()
+                .expect("single query result")
+        }
+
+        fn follow(
+            &self,
+            _req: atm_core::observability::AtmLogQuery,
+        ) -> Result<LogTailSession, AtmError> {
+            Ok(LogTailSession::from_poller(
+                || Ok(AtmLogSnapshot::default()),
+            ))
+        }
+
+        fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
+            Ok(AtmObservabilityHealth {
+                active_log_path: None,
+                logging_state: AtmObservabilityHealthState::Healthy,
+                query_state: Some(AtmObservabilityHealthState::Healthy),
+                detail: None,
+            })
+        }
+    }
 
     #[test]
     fn parse_relative_duration_rejects_multibyte_suffix_without_panicking() {
@@ -252,5 +312,167 @@ mod tests {
             error.to_string().contains("supported units are s, m, h, d"),
             "error: {error}"
         );
+    }
+
+    #[test]
+    fn snapshot_query_defaults_limit_and_orders_newest_first() {
+        let args = QueryArgs {
+            levels: vec![CliLogLevel::Info],
+            matches: vec!["command=send".to_string()],
+            since: None,
+            limit: None,
+            json: true,
+        };
+
+        let query = args.build_query(LogMode::Snapshot).expect("query");
+
+        assert_eq!(query.mode, LogMode::Snapshot);
+        assert_eq!(query.levels, vec![LogLevelFilter::Info]);
+        assert_eq!(query.limit, Some(super::DEFAULT_SNAPSHOT_LIMIT));
+        assert_eq!(query.field_matches.len(), 1);
+        assert_eq!(query.order, atm_core::observability::LogOrder::NewestFirst);
+    }
+
+    #[test]
+    fn tail_query_preserves_explicit_limit_without_defaulting() {
+        let args = QueryArgs {
+            levels: vec![],
+            matches: vec!["success=true".to_string()],
+            since: Some("15m".to_string()),
+            limit: Some(3),
+            json: false,
+        };
+
+        let query = args.build_query(LogMode::Tail).expect("query");
+
+        assert_eq!(query.mode, LogMode::Tail);
+        assert_eq!(query.limit, Some(3));
+        assert!(query.since.is_some());
+        assert_eq!(query.field_matches[0].value, LogFieldValue::bool(true));
+    }
+
+    #[test]
+    fn filter_mode_requires_at_least_one_predicate() {
+        let args = QueryArgs {
+            levels: vec![],
+            matches: vec![],
+            since: None,
+            limit: None,
+            json: false,
+        };
+
+        let error = args.ensure_filter_present().expect_err("missing filter");
+
+        assert!(error.to_string().contains("requires at least one"));
+    }
+
+    #[test]
+    fn parse_match_expression_coerces_supported_json_scalars() {
+        let boolean = parse_match_expression("success=false").expect("bool");
+        let null = parse_match_expression("task_id=null").expect("null");
+        let number = parse_match_expression("attempts=7").expect("number");
+        let string = parse_match_expression("command=send").expect("string");
+
+        assert_eq!(boolean.value, LogFieldValue::bool(false));
+        assert_eq!(null.value, LogFieldValue::null());
+        assert_eq!(
+            number.value,
+            LogFieldValue::number(
+                atm_core::observability::AtmJsonNumber::new("7".to_string()).expect("number")
+            )
+        );
+        assert_eq!(string.value, LogFieldValue::string("send".to_string()));
+    }
+
+    #[test]
+    fn run_snapshot_succeeds_with_fake_observability_snapshot() {
+        let command = LogCommand {
+            mode: LogModeCommand::Snapshot(QueryArgs {
+                levels: vec![],
+                matches: vec![],
+                since: None,
+                limit: Some(1),
+                json: true,
+            }),
+        };
+        let observability = CliObservability::from_test_port(StubObservability {
+            snapshot: Mutex::new(Some(Ok(AtmLogSnapshot {
+                records: vec![AtmLogRecord {
+                    timestamp: chrono::Utc::now().into(),
+                    severity: LogLevelFilter::Info,
+                    service: "atm".to_string(),
+                    target: None,
+                    action: Some("send".to_string()),
+                    message: Some("synthetic".to_string()),
+                    fields: atm_core::observability::LogFieldMap::default(),
+                }],
+                truncated: false,
+            }))),
+        });
+
+        command.run(&observability).expect("snapshot run");
+    }
+
+    #[test]
+    fn run_snapshot_surfaces_observability_query_error() {
+        let command = LogCommand {
+            mode: LogModeCommand::Snapshot(QueryArgs {
+                levels: vec![],
+                matches: vec![],
+                since: None,
+                limit: None,
+                json: false,
+            }),
+        };
+        let observability = CliObservability::from_test_port(StubObservability {
+            snapshot: Mutex::new(Some(Err(AtmError::observability_query(
+                "synthetic snapshot failure",
+            )))),
+        });
+
+        let error = command.run(&observability).expect_err("query error");
+
+        assert_eq!(
+            error.downcast_ref::<AtmError>().map(|atm| atm.code),
+            Some(atm_core::error_codes::AtmErrorCode::ObservabilityQueryFailed)
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn run_snapshot_reads_real_retained_log_without_daemon() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let _atm_log = EnvGuard::set_raw("ATM_LOG", "info");
+        let observability =
+            CliObservability::new(tempdir.path(), CliObservabilityOptions::default())
+                .expect("observability");
+        observability
+            .emit(CommandEvent {
+                command: "send",
+                action: "send",
+                outcome: "sent",
+                team: TEST_TEAM.parse().expect("team"),
+                agent: TEST_RECIPIENT.parse().expect("agent"),
+                sender: TEST_SENDER.parse().expect("sender"),
+                message_id: None,
+                requires_ack: false,
+                dry_run: false,
+                task_id: None,
+                error_code: None,
+                error_message: None,
+            })
+            .expect("emit");
+
+        let command = LogCommand {
+            mode: LogModeCommand::Snapshot(QueryArgs {
+                levels: vec![CliLogLevel::Info],
+                matches: vec!["command=send".to_string()],
+                since: None,
+                limit: Some(5),
+                json: true,
+            }),
+        };
+
+        command.run(&observability).expect("snapshot run");
     }
 }

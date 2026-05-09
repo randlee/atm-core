@@ -1,0 +1,34 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:R17-RSH-002 a triage:Finding ;
+  triage:findingId "R17-RSH-002" ;
+  triage:title "JoinHandle drop safety gap in watch_runtime.rs" ;
+  triage:description "WatchRuntimeInner stores worker: Mutex<Option<JoinHandle<()>>>. JoinHandle is dropped when the option is taken but not explicitly joined on shutdown. If the thread is still running at drop time, the handle is detached silently. Shutdown should explicitly join the worker thread." ;
+  triage:triageMode "initial_pass" ;
+  triage:category triage:RSH ;
+  triage:phaseId "phase-R" ;
+  triage:severity triage:minor ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-07T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "R.17" ;
+  triage:branchClassification triage:R15-RSH-002, triage:R16-RSH-002, triage:R17-RSH-002 .
+
+triage:R15-RSH-002 a triage:BranchClassification ;
+  triage:branch "R.15" ;
+  triage:status "absent" ;
+  triage:matchCount 0 .
+
+triage:R16-RSH-002 a triage:BranchClassification ;
+  triage:branch "R.16" ;
+  triage:status "absent" ;
+  triage:matchCount 0 .
+
+triage:R17-RSH-002-branch a triage:BranchClassification ;
+  triage:branch "R.17" ;
+  triage:status "fixed" ;
+  triage:matchCount 3 ;
+  triage:matches "Line 7: use std::thread::{self, JoinHandle};" , "Line 25: worker: Mutex<Option<JoinHandle<()>>>," , "Line 210: handle.join().map_err(|_| {" .

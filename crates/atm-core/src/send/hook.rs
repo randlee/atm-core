@@ -102,7 +102,7 @@ fn execute_post_send_hook(
     };
     let command_path = resolve_command_path(config, command_path);
     let mut payload = json!({
-        "from": qualified_sender_identity(context.sender, context.sender_team.map(|team| team.as_str())),
+        "from": qualified_sender_identity(context.sender, context.sender_team),
         "to": format!("{}@{}", context.recipient.agent, context.recipient.team),
         "sender": context.sender.as_str(),
         "recipient": context.recipient.agent,
@@ -113,6 +113,9 @@ fn execute_post_send_hook(
     });
     if let Some(task_id) = context.task_id {
         payload["task_id"] = Value::String(task_id.to_string());
+    }
+    if let Some(recipient_pane_id) = context.recipient_pane_id {
+        payload["recipient_pane_id"] = Value::String(recipient_pane_id.to_string());
     }
 
     debug!(
@@ -497,20 +500,22 @@ mod tests {
         hook_result_log_level, parse_post_send_hook_result,
     };
     use crate::config::types::HookRecipient;
+    use crate::roles::ROLE_TEAM_LEAD;
+    use crate::test_support::TEST_SENDER;
 
     #[test]
     fn hook_matches_recipient_exact_and_wildcard_values() {
         assert!(hook_matches_recipient(
-            &HookRecipient::Named("arch-ctm".parse().expect("recipient")),
-            &"arch-ctm".parse().expect("candidate")
+            &HookRecipient::Named(TEST_SENDER.parse().expect("recipient")),
+            &TEST_SENDER.parse().expect("candidate")
         ));
         assert!(hook_matches_recipient(
             &HookRecipient::Wildcard,
-            &"arch-ctm".parse().expect("candidate")
+            &TEST_SENDER.parse().expect("candidate")
         ));
         assert!(!hook_matches_recipient(
-            &HookRecipient::Named("team-lead".parse().expect("recipient")),
-            &"arch-ctm".parse().expect("candidate")
+            &HookRecipient::Named(ROLE_TEAM_LEAD.parse().expect("recipient")),
+            &TEST_SENDER.parse().expect("candidate")
         ));
     }
 

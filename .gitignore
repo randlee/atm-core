@@ -20,6 +20,10 @@ Cargo.toml.ci
 # Local session artifacts and compose logs from sc tooling
 .sc/sessions/
 .sc-compose/logs/
+.just/logs/
+.just/tests/__pycache__/
+.just/__pycache__/
+artifacts/view/
 
 # RustRover
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can

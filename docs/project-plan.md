@@ -19,10 +19,35 @@ restructured, product docs remain in `docs/` and crate-local detail moves into
 `docs/atm/`, `docs/atm-core/`, `docs/atm-daemon/`, and
 `docs/atm-rusqlite/`.
 
-Phase-Q supersession note:
+Phase-Q disposition note:
 - earlier daemon-free phases in this plan remain historical execution records
-- the current target line is Section 21 and the detailed design in
-  `docs/plan-phase-Q.md`
+- Phase Q is abandoned as an implementation line
+- `docs/plan-phase-Q.md` and Section 21 are retained as historical design and
+  execution records only
+- no new implementation work should target `integrate/phase-Q`
+- no Phase Q code should be merged into the active Phase R line
+- reuse from Phase Q is allowed only by selective cherry-pick or manual
+  reimplementation after review
+
+Phase-R redesign note:
+- the next execution line is the Phase R redesign and enforcement pass tracked
+  in [`docs/plan-phase-R.md`](./plan-phase-R.md)
+- Phase R starts with boundary documents, ADR alignment, and lint/parser gates
+  before new implementation work
+- the active integration branch for this redesign line is `integrate/phase-R`
+
+Phase R execution entry:
+- Wave 1 deliverable: the new Phase R skeleton
+  - new crates
+  - public boundary traits/facades
+  - major data structures
+- Wave 1 supporting sequence:
+  1. `R.0` lint foundation
+  2. `R.1` lint debt burn-down
+  3. `R.2` skeleton crates, boundary traits/facades, and major data structures
+  4. `R.2A` parallel lint hardening
+- `R.3` is a dedicated review/re-planning stage after the Wave 1 skeleton lands
+- Wave 2 executes implementations only against the enforced boundary skeleton
 
 Status:
 - Phases 0 through P have executed on the retained rewrite line.
@@ -41,11 +66,17 @@ Status:
 - Message schema ownership and metadata normalization are now implemented well
   enough for live shared-inbox adoption, while a separate ATM-native inbox
   remains deferred to a later version.
-- Phase Q planning is active on the SQLite source-of-truth and daemon-boundary
-  line; this phase supersedes mailbox-lock architecture as the target design.
-- The current workspace still contains `crates/atm-core` and `crates/atm`
-  only; `crates/atm-daemon` and `crates/atm-rusqlite` are introduced by the
-  Phase Q implementation line.
+- Phase Q is retained only as an abandoned historical attempt at the SQLite
+  source-of-truth and daemon-boundary redesign.
+- Phase R is the only active redesign and implementation line.
+- The current merged Wave 1 baseline still contains `crates/atm-core` and
+  `crates/atm` only; additional crate introduction remains active Phase R
+  skeleton work and is now tracked explicitly by `R.3.1`.
+- `R.13` through `R.18` are the runtime/product continuation sprints.
+- `R.19` is the completed post-closeout lint-backfill sprint that converts the
+  recurring mechanically-detectable Phase R defect families into normal lint
+  or CI gates on `atm-core` before any reusable subset is migrated to
+  standalone `sc-lint`.
 
 ## 2. Deliverables
 
@@ -67,7 +98,7 @@ Status:
 
 ## 3. Crates
 
-The Phase Q target implementation is split across:
+The abandoned Phase Q target implementation was split across:
 
 - `crates/atm-core`
 - `crates/atm`
@@ -78,12 +109,28 @@ Crate-local scope detail is owned by:
 
 - [`docs/atm-core/requirements.md`](./atm-core/requirements.md)
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
+- [`docs/atm-core/boundaries.md`](./atm-core/boundaries.md)
 - [`docs/atm/requirements.md`](./atm/requirements.md)
 - [`docs/atm/architecture.md`](./atm/architecture.md)
+- [`docs/atm/boundaries.md`](./atm/boundaries.md)
 - [`docs/atm-daemon/requirements.md`](./atm-daemon/requirements.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
+- [`docs/atm-daemon/boundaries.md`](./atm-daemon/boundaries.md)
 - [`docs/atm-rusqlite/requirements.md`](./atm-rusqlite/requirements.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
+- [`docs/atm-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
+
+Phase R sequencing rule:
+- no new implementation sprint begins until:
+  - the relevant boundary records exist
+  - architecture/requirements/ADR docs agree with those records
+  - the parser/lint pass for those records is in place
+- Phase R implementation proceeds in this order:
+  - boundary design
+  - document alignment
+  - lint/parser gates
+  - skeleton implementation
+  - feature behavior
 
 ## 4. Work Sequence
 
@@ -2433,10 +2480,18 @@ Phase P completion gate:
 - the remaining external-writer limitations, if any, are documented as accepted
   compatibility boundaries rather than hidden assumptions
 
-## 21. Phase Q — SQLite Mail SSOT And Runtime Boundary [PLANNED]
+## 21. Phase Q — SQLite Mail SSOT And Runtime Boundary [ABANDONED]
 
 Detailed design source:
 - [`docs/plan-phase-Q.md`](./plan-phase-Q.md)
+
+Disposition:
+- abandoned
+- retained for historical traceability only
+- not an active execution line
+- Phase Q code is reference-only and must not be merged into Phase R
+- any retained value from Phase Q must be brought forward only by selective
+  cherry-pick or manual port after review
 
 Goal:
 - replace filesystem JSON as ATM's mail source of truth with SQLite
@@ -2482,6 +2537,9 @@ Integration branch:
 
 ### Q.0 — Boundary Cleanup And Debt Retirement
 
+Status:
+- complete on `feature/pQ-s0-debt-retirement` at `01a252a`
+
 Scope:
 - align the existing codebase with the Phase Q target shape before store and
   daemon work begin
@@ -2492,6 +2550,7 @@ Scope:
 
 Implementation focus:
 - one shared inbox write boundary
+
 - one shared inbox hydration boundary
 - one owned message-id compatibility bridge
 - explicit roster/member construction instead of hidden defaults
@@ -2520,31 +2579,6 @@ Acceptance:
   validation expectations where both remain supported
 - the codebase is simpler to migrate after Q.0 than before Q.0
 
-### Q.RULES-DOC-1 — Test Isolation Rules Formalization [COMPLETE]
-
-Objective:
-- formalize the architectural and requirements contracts for test subprocess
-  isolation before the broader Phase Q enforcement sweep turns those findings
-  into active merge blockers
-
-Delivered in:
-- commit `7649712fc5ffc3576f4c410a01b7ed2866d2f112`
-
-Deliverables:
-- `RULE-008` through `RULE-011` defined in `.claude/agents/arch-qa.md`
-- `REQ-CORE-TEST-001` added to product and crate requirements
-- `docs/cross-platform-guidelines.md` updated with test subprocess isolation
-  guidance
-- `crates/atm/tests/support/mod.rs` added with test-only constants and a
-  `TestEnvBuilder` scaffold
-
-Acceptance:
-- test subprocess isolation rules are explicit and auditable in the rule,
-  requirement, and architecture docs
-- blocking enforcement leaves room for explicit production-compatibility tests
-  that must exercise `ATM_TEAM`, `ATM_IDENTITY`, or role-significant names
-  such as `team-lead`
-
 ### Q.1 — Store And Boundary Foundation
 
 Scope:
@@ -2568,11 +2602,23 @@ Parallelization rule:
   against the shared boundary set
 
 Acceptance:
-- SQLite opens under `.claude/teams/<team>/.atm-state/mail.db`
+- SQLite opens under one host-scoped ATM durable root at
+  `~/.atm/db/mail.db`, with team and agent partitioned as logical keys inside
+  the shared database
+- this host-scoped root supersedes the earlier per-team
+  `.claude/teams/<team>/.atm-state/mail.db` planning assumption
 - `atm-rusqlite` is the only crate that owns direct SQLite calls in the first
   implementation line
+- message update/correction threads are strict one-successor chains whose
+  terminal node is the effective current message
+- thread acknowledgement is chain-level: one ack clears the current terminal
+  chain, and a later successor on an ack-required chain reopens that pending
+  state
+- ephemeral retention is time-based only through `staleAt`; read state affects
+  visibility but not deletion timing
 - core logic is reachable without daemon process spawning
-- no direct SQLite or filesystem bypasses outside the owning boundaries
+- no ATM-owned writes or hidden CLI/runtime fallbacks may bypass the owning
+  daemon/store boundaries; direct read-only SQLite consumers remain allowed
 - watcher/reconcile logic exists behind its own boundary and does not bypass
   ingress/store/notifier ownership rules
 - transport-boundary tests can replace Unix/TCP with the in-process
@@ -2704,3 +2750,173 @@ QA invariants for every Phase Q pass:
 - SQLite remains the source of truth for mail and roster
 - live status remains daemon-memory truth
 - Claude compatibility remains Claude-native top-level plus `metadata.atm`
+
+## 22. Phase R — Boundary Establishment And Enforcement
+
+Detailed execution source:
+- [`docs/plan-phase-R.md`](./plan-phase-R.md)
+
+Summary:
+- Phase R is the active redesign line that replaces the abandoned Phase Q
+  implementation path.
+- Wave 1 establishes enforceable crate boundaries before substantive feature
+  work resumes:
+  - lint/parser foundation and debt burn-down
+  - the new crate skeleton
+  - public boundary traits/facades
+  - major shared data structures
+- Wave 2 implements behavior only against those enforced boundaries.
+- The next planning increment after the current boundary-lint implementation
+  branch merges adds:
+  - planning-aware inventory-parity warn/error enforcement
+  - TOML as the canonical machine-readable boundary source
+
+Cross-reference:
+- The authoritative sprint-by-sprint Phase R plan lives in
+  [`docs/plan-phase-R.md`](./plan-phase-R.md).
+
+## 23. Phase R.9 / R.10 — Daemon Singleton And Test Fidelity Hardening
+
+Goal:
+- finish the design and execution plan needed to make daemon singleton the
+  first-class runtime invariant
+- remove daemon-spawn-driven test strategy from the ordinary correctness path
+- replace it with production-faithful in-process transport seams and narrow
+  daemon-runtime coverage
+
+Authoritative design references:
+- [`docs/adr/ADR-002-host-wide-daemon-singleton.md`](./adr/ADR-002-host-wide-daemon-singleton.md)
+- [`docs/adr/ADR-003-test-fidelity-and-daemon-isolation.md`](./adr/ADR-003-test-fidelity-and-daemon-isolation.md)
+- [`docs/testing-guidelines.md`](./testing-guidelines.md)
+- [`docs/plan-phase-R.md`](./plan-phase-R.md)
+
+Execution shape:
+- `R.9` is the planning, requirements, ADR, and lint-design sprint
+- `R.10` is the implementation and test-migration sprint
+- `R.13` through `R.18` are the remaining continuation sprints required to
+  turn the thin daemon line into the full production runtime still described by
+  the accepted Phase R requirements and architecture
+- `R.18` is the accepted closeout sprint for bounded `SIGHUP` reload,
+  singleton-held shutdown finalization, portability cleanup, and final
+  phase-doc reconciliation on the daemon line
+
+R.9 deliverables:
+- explicit requirement language that bans the current daemon-spawn test pattern
+- ADR for host-wide daemon singleton
+- ADR for test fidelity and daemon isolation
+- singleton lint gate design integrated into `just lint`
+- transport test-seam design:
+  - `FakeClientTransport`
+  - loopback/in-process transport
+  - narrow daemon-runtime harness
+- mapped resolution plan for:
+  - ARCH-SINGLETON
+  - CI-WIN-001
+  - singleton review findings `RBP-F001` through `RBP-F012`
+  - QA carry-forward items affecting singleton and test fidelity
+
+R.10 deliverables:
+- client-side pre-spawn launch gate
+- daemon-side serving gate and stale-owner recovery hardening
+- typed boundary/runtime fixes required by the singleton/test redesign
+- deletion of daemon-spawn helpers from ordinary tests
+- migration of CLI tests to fake or loopback transport seams
+
+Lint gate decision:
+- existing generic tools such as `clippy` are not sufficient to enforce the
+  singleton/test-fidelity architecture rule
+- Phase R therefore adds a dedicated repository lint gate, integrated into
+  `just lint`, with an initial planned entrypoint of
+  `scripts/lint_daemon_singleton.py`, that rejects banned daemon-spawn
+  patterns and related timing workarounds in ordinary tests
+
+Acceptance:
+- requirements, architecture, ADRs, and testing guidelines agree on the
+  singleton rule and approved test tiers
+- continuation sprint execution after `R.10` must follow the tracked sequence
+  in `docs/phase-R/sprint-R13.md` through `docs/phase-R/sprint-R18.md` for the
+  runtime/product closeout line, with `docs/phase-R/sprint-R19.md` reserved for
+  postmortem lint backfill after the closeout implementation settles
+- `sc-lint` inventory-parity / planning-metadata gates are treated as an
+  external prerequisite that must be ready before `R.13` implementation starts
+- there is no approved ordinary test-daemon launch path
+- the implementation plan explicitly prevents new daemon-spawn helpers from
+  proliferating
+
+## 24. Phase R Postmortem Linter Backfill
+
+Goal:
+- convert the recurring mechanically-detectable Phase R defect families into
+  normal repository lint or CI gates
+- prove the rules on `atm-core` first, then migrate only the reusable subset
+  into the standalone `sc-lint` repository
+
+Execution rule:
+- implementation happens on `atm-core` first even when the eventual home is
+  `sc-lint`
+- migration to standalone `sc-lint` is a follow-up extraction step after
+  local rule shape, allow-list policy, and false-positive behavior are proven
+
+Partition:
+- reusable/static-analysis rules that should graduate to `sc-lint` after
+  proving out:
+  - Unix platform-gating enforcement
+  - production `Condvar::wait(...)` liveness enforcement
+- ATM-local rules that should remain `atm-core`-owned unless later generalized:
+  - duplicate semantic string-literal enforcement in non-test Rust code
+  - fixed-sleep test-hygiene enforcement
+  - triage Turtle consistency enforcement
+
+Planned sequence:
+1. extend `sc-portability` on `atm-core` for:
+   - ungated `std::os::unix` imports
+   - `cfg_attr(not(unix), allow(dead_code))` portability suppressors
+2. extend the repository-local identity-literal gate into a duplicate semantic
+   string-literal gate for non-test Rust code, with raw `"team-lead"` as the
+   first mandatory case
+3. add a repository-local fixed-sleep test-hygiene lint and wire it into
+   `just lint`
+4. extend `sc-boundary` on `atm-core` for bare production
+   `Condvar::wait(...)`
+5. add a repository-local triage-record consistency validator and wire it into
+   `just lint` or the equivalent default CI lint surface
+6. after all five families are stable on `atm-core`, migrate the reusable
+   analyzers and any generic helper framework into standalone `sc-lint`
+
+Scope note:
+- the broader design guidance against duplicated raw strings and magic numbers
+  already exists; this sprint is about selecting the first hard-gated subset,
+  not restating that policy
+- this sprint raises that policy into a hard gate for duplicated semantic
+  string literals in non-test Rust code
+- raw `"team-lead"` is the first mandatory case because it is already
+  duplicated widely enough in the repo to justify enforcement now
+- the canonical Rust definition source for this literal is
+  `crates/atm-core/src/roles.rs` via `ROLE_TEAM_LEAD`
+- `TeamName` / `AgentName` structural newtype hardening remains the longer-term
+  direction, but the immediate lint still uses a grep-backed gate because the
+  postmortem problem is duplicated handwritten literals already spread through
+  non-test production code and the full newtype migration is broader than this
+  follow-up sprint
+- the lint contract still needs explicit exclusions only for narrow benign
+  repeated classes if they are discovered during implementation
+- those exclusions must stay narrow; the rule must not exempt ordinary
+  production code wholesale
+
+Required deliverables for this planning/implementation line:
+- one Phase R sprint plan covering the five families and their partitioning
+- updates to requirements and architecture that explain why some rules stay
+  repo-local while others graduate to `sc-lint`
+- update `docs/project-plan.md` itself to record:
+  - the ATM-first/prove-then-migrate rule
+  - the reusable-vs-ATM-local partition
+  - the implementation sequence for Families A/B/C/D/I
+  - the migration criteria for moving reusable rules into standalone `sc-lint`
+- a clear `just lint` integration decision for every family before coding
+
+Acceptance:
+- every postmortem family is assigned to one concrete implementation home
+- the sequencing explains what lands in Rust analyzer code versus repository
+  Python/CI glue
+- the migration boundary between `atm-core` and `sc-lint` is explicit rather
+  than implied

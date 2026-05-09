@@ -68,6 +68,10 @@ Crate-local ownership docs live under:
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
 - [`docs/atm-rusqlite/requirements.md`](./atm-rusqlite/requirements.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
+- [`docs/atm-core/boundaries.md`](./atm-core/boundaries.md)
+- [`docs/atm-daemon/boundaries.md`](./atm-daemon/boundaries.md)
+- [`docs/atm-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
+- [`docs/atm/boundaries.md`](./atm/boundaries.md)
 
 During the cleanup/restructure phase, product requirements stay here while
 crate-local ownership is moved out of this file into the crate directories.
@@ -77,6 +81,19 @@ Phase-Q supersession note:
   the prior rewrite line
 - for mail/runtime architecture, the current authoritative direction is Section
   21
+
+Phase-R redesign note:
+- Phase R hardens the architecture by making crate-local boundary records part
+  of the enforceable contract before new implementation work proceeds
+- Phase R planning and CI may depend on `sc-lint` as an external tool
+  dependency; `sc-lint` is not part of the ATM product surface even when its
+  verification model constrains Phase R gates
+- durable ATM state is one host-scoped SQLite database at
+  `~/.atm/db/mail.db`; the daemon is the only writer, while direct read-only
+  SQLite consumers remain an allowed system integration path
+- the thin-client extension surface should center on `send` and `receive`
+  over the shared ATM protocol, while the retained CLI may continue to expose
+  `ack` as a user-facing workflow
 
 ## 2. Scope
 
@@ -93,7 +110,22 @@ Satisfied by:
 - `REQ-P-RUNTIME-001` Production ATM commands must connect to the daemon and
   auto-start it when absent.
 
-  Required behavior:
+- `REQ-P-RUNTIME-002` Daemon singleton is ATM daemon requirement `#1`:
+  exactly one `atm-daemon` process may exist anywhere on the host for the
+  supported runtime model, and no code path may intentionally or accidentally
+  allow a second daemon to reach serving state.
+
+- `REQ-P-RUNTIME-003` Daemon singleton enforcement must use multiple guard
+  layers:
+  - a pre-spawn launch gate that serializes daemon creation attempts
+  - a daemon-side startup gate that refuses serving state when ownership is
+    already held
+  - a static lint/CI gate that rejects test-only or ad hoc daemon launch
+    patterns
+  No test, tool, or alternate CLI path is exempt from these guards.
+
+  Required behavior across `REQ-P-RUNTIME-001` through
+  `REQ-P-RUNTIME-003`:
   - the production CLI/runtime path first attempts to connect to an
     already-running daemon
   - if the daemon is not running, the production CLI/runtime path auto-starts
@@ -102,6 +134,31 @@ Satisfied by:
     guidance
   - no production path may silently bypass the daemon by talking directly to
     SQLite or inbox files
+  - every daemon launch path is subordinate to `REQ-P-RUNTIME-002` and
+    `REQ-P-RUNTIME-003`
+
+- `REQ-P-DAEMON-PARTITION-001` Phase R daemon cleanup work must use one
+  explicit daemon-private partition map so ownership, review scope, and later
+  lint enforcement do not depend on ad hoc file boundaries.
+
+- `REQ-P-DAEMON-LIFECYCLE-001` Daemon lifecycle and singleton teardown rules
+  must define a positive safe-order contract:
+  - remove the owner-visible lock path before releasing the live advisory lock
+  - if cleanup cannot complete safely, fail closed rather than publishing an
+    ambiguous ownership state
+
+- `REQ-P-DAEMON-DISPATCHER-001` Request work accepted by the daemon must remain
+  tracked by runtime-owned drain accounting until it finishes or is cancelled.
+  Detached untracked request execution is forbidden even when the transport
+  remains single-request-per-connection.
+
+- `REQ-P-DAEMON-LANES-001` Background daemon lanes must use rollback-safe
+  startup and shutdown sequencing:
+  - partial start failure must stop every lane already started
+  - shutdown must attempt every lane cleanup path before final ownership
+    release
+  - partial lane failure must not leave the runtime in ambiguous ownership
+    state
 
 ### 2.1 In Scope
 
@@ -141,10 +198,8 @@ Satisfied by:
   interface
 - CI monitoring
 - TUI and MCP features
-- daemon spawning as the core correctness test strategy
-  - bounded daemon smoke tests for the auto-start path are permitted when
-    isolated from default test runs per
-    [Testing Constraints](docs/plan-phase-Q.md#testing-constraints)
+- routine daemon process spawning as a correctness test strategy
+- a test-only daemon launch path
 - manual daemon-start discipline as a product requirement
   - production CLI auto-start when the daemon is absent is in scope under
     `REQ-P-RUNTIME-001`
@@ -1082,10 +1137,76 @@ Acknowledge a pending-ack message in the caller's own inbox and send a visible r
   - set `acknowledgedAt`
   - append a reply message to the original sender's inbox
 - preserve `acknowledgesMessageId` on the emitted reply
+- hardcode `requires_ack = false` on the emitted reply
+- do not allow an acknowledgement reply to request acknowledgement itself
 - reject duplicate acknowledgement of an already acknowledged message
 - run matching `[[atm.post_send_hooks]]` rules after a successful ack, using the reply message as the hook subject
 
-### 8.4 Output Contract
+Phase R continuation semantics:
+- one successful acknowledgement clears the chain-level acknowledgement
+  obligation for the current terminal message and all of its ancestors
+- if a later update arrives on an already acknowledged ack-required chain, the
+  chain becomes pending again until the new terminal message is acknowledged
+
+### 8.4 Successor Chains And Ephemeral Retention
+
+- `REQ-P-THREAD-001` ATM message update chains must be strictly linear.
+
+  Required behavior:
+  - each message may have at most one direct successor
+  - each successor references exactly one predecessor
+  - no branching successor graph is permitted
+  - the terminal node in the chain is the effective current instruction or
+    state for normal reads
+
+- `REQ-P-THREAD-002` Only the original sender may update a message chain.
+
+  Required behavior:
+  - only the root/original sender may append successors
+  - recipients and third parties must not add `add-details` or `supersede`
+    updates to another sender's chain
+
+- `REQ-P-THREAD-003` ATM supports exactly two successor modes for non-ephemeral
+  chains:
+  - `add-details`
+  - `supersede`
+
+  Required behavior:
+  - compatibility/export payloads carry successor metadata with
+    `parentMessageId` and `threadMode`
+  - `add-details` appends missing context while preserving the prior message as
+    valid historical context
+  - `supersede` replaces the prior message as the effective current
+    instruction
+  - if a successor arrives after the predecessor was already read, the
+    successor still produces a new nudge so the current effective instruction
+    is visible
+
+- `REQ-P-THREAD-004` Ack is a chain-level importance property.
+
+  Required behavior:
+  - a chain is either ack-required or not ack-required
+  - the root/original message establishes that ack class
+  - successors inherit the existing chain ack class and must not flip it
+  - one acknowledgement clears the chain up to the then-current terminal node
+  - if a later successor arrives on an ack-required chain after that
+    acknowledgement, the chain becomes pending again
+  - parent messages must not remain separately actionable for acknowledgement
+    once a successor exists
+
+- `REQ-P-THREAD-005` Ephemeral messages are standalone, time-bounded records.
+
+  Required behavior:
+  - compatibility/export payloads carry ephemeral expiry with `staleAt`
+  - ephemeral messages expire by time only, using `stale_at`
+  - no product behavior may depend on first-read deletion semantics
+  - periodic daemon cleanup deletes expired ephemeral rows
+  - ephemeral messages are not updatable
+  - ephemeral messages may not be parents or children in successor chains
+  - once read, an ephemeral message becomes hidden from normal reads but
+    remains visible through `--view-all` until `stale_at`
+
+### 8.5 Output Contract
 
 JSON output must include:
 - `action = "ack"`
@@ -1364,6 +1485,10 @@ Bare `atm teams` must:
 `atm teams backup` must:
 - create a timestamped snapshot under the ATM team backup area
 - capture the current `config.json`
+- capture the ATM-owned `.atm-state` tree for workflow compatibility state when
+  present
+- capture the selected team's durable state from the host-scoped SQLite
+  database at `~/.atm/db/mail.db`
 - capture team inbox files, excluding transient `*.lock` sentinels, dotfiles,
   and restore markers
 - capture the ATM team task bucket
@@ -1378,9 +1503,13 @@ Bare `atm teams` must:
 - add only missing non-lead members from the snapshot
 - clear runtime-only restored-member fields such as session, activity, and
   pane state before persisting them
+- restore the ATM-owned `.atm-state` workflow compatibility state from the
+  chosen snapshot when present
+- restore the selected team's durable state back into the host-scoped SQLite
+  database from the chosen snapshot
 - restore non-lead inbox files from the chosen snapshot deterministically
-- sweep stale inbox `*.lock` sentinels before copying restored inbox files as a
-  self-heal step
+- treat stale inbox `*.lock` sentinels as transitional compatibility
+  diagnostics rather than a restore correctness gate
 - restore the ATM team task bucket and recompute `.highwatermark` from the
   maximum restored task id
 - fail with a structured error when backup material is missing or malformed
@@ -1489,6 +1618,9 @@ Optional fields:
 - `pendingAckAt`
 - `acknowledgedAt`
 - `acknowledgesMessageId`
+- `parentMessageId`
+- `threadMode`
+- `staleAt`
 - `metadata`
 
 Unknown fields must be preserved.
@@ -1497,6 +1629,8 @@ For ATM-authored messages:
 - ATM machine-readable identity is mandatory
 - current legacy top-level `message_id` values may be UUID
 - forward metadata `messageId` values must be ULID
+- thread/update metadata uses `parentMessageId` plus `threadMode`
+- time-bounded ephemeral retention uses `staleAt`
 - ATM-authored machine identifiers must not be null or blank
 
 Legacy or externally imported records may still omit `message_id`; the rewrite
@@ -1764,8 +1898,6 @@ Product requirement ID:
 Satisfied by:
 - intentionally undecomposed product requirement; this governs workspace-level
   test coverage expectations rather than a single crate-local requirement ID
-- `REQ-CORE-TEST-001` for subprocess-isolation, fixture-naming, and explicit
-  production-compatibility carve-out rules
 
 Because `sc-observability` is newly introduced into ATM, the rewrite must add explicit test coverage for:
 - ATM event emission through the observability port boundary
@@ -1796,32 +1928,34 @@ The implementation must include:
 - CLI integration tests for `atm teams`
 - CLI integration tests for `atm members`
 
-### 18.1 Subprocess Isolation
-
-- `REQ-CORE-TEST-001` ATM test subprocesses must isolate filesystem and
-  environment state and must not hardcode production-like team or agent
-  identities except in explicit production-compatibility tests.
-
-  See also:
-  - [`cross-platform-guidelines.md`](./cross-platform-guidelines.md) §Test Subprocess Isolation
-
-  Required behavior:
-  - (a) tests use test-only fixture constants for all team, agent, and
-    role-significant names rather than raw repo-significant production names
-  - (b) subprocess tests provision isolated `ATM_HOME`, `ATM_CONFIG_HOME`, and
-    `ATM_TEAMS_DIR` as needed and pass `ATM_*` vars per-command rather than
-    through ambient process state
-  - (c) direct-call tests use explicit `team_override` / `actor_override`
-    inputs or TempDir-scoped config; `team_override: None` with an empty or
-    unrelated current directory is a violation
-  - (d) test fixtures write all required config to TempDir-owned state and do
-    not read repo `.atm.toml` or live mailbox directories
-  - tests that need the semantic role represented by `team-lead` centralize
-    that raw literal behind one named constant
-  - tests may set `ATM_TEAM` or `ATM_IDENTITY` when validating production
-    env-read behavior, but only inside the isolated subprocess harness
-  - ambient reuse of a developer workstation ATM home, team, or identity is
-    forbidden
+Required testing architecture:
+- default test suites and all core correctness tests must not depend on:
+  - daemon spawn
+  - socket publication timing
+  - retry sleeps
+  - environment mutation races
+  - auto-start side effects
+- these patterns are treated as sources of flake and false confidence rather
+  than as acceptable test infrastructure
+- test code must not use or reintroduce the current daemon-spawn pattern by
+  name:
+  - `spawn_test_daemon`
+  - `warm_daemon`
+  - `DaemonGuard`
+  - `ATM_DAEMON_BIN`
+  - direct `Command::new(...atm-daemon...)`
+- there is no approved "test daemon launch" path for ordinary ATM correctness
+  tests
+- the primary test tiers are:
+  - CLI/composition tests using injected transport doubles such as
+    `FakeClientTransport`
+  - in-process integration tests using `LoopbackClientTransport` over the
+    shared request/response contracts
+  - a narrow daemon-runtime suite for singleton/startup/shutdown/recovery
+    requirements only
+- real daemon process tests, if any, must be isolated to the daemon-runtime
+  suite and must never become the default validation path for CLI or core
+  business correctness
 
 ## 19. Acceptance Criteria
 
@@ -1852,6 +1986,12 @@ The rewrite is ready when:
   explicitly acknowledges them through `atm ack`
 - observability integration is exercised by automated tests
 - the file-by-file migration plan is complete enough to implement directly
+- daemon singleton is enforced as requirement `#1` with the documented
+  multi-layer guards
+- the default test and CI paths contain no banned daemon-spawn helpers or
+  timing-based daemon orchestration patterns
+- the lint gate that enforces singleton/test-fidelity rules passes in `just
+  lint`
 
 Cross-document invariants that must remain true:
 - `taskId` implies ack-required behavior at send time
@@ -2497,6 +2637,8 @@ mail correctness.
     and daemon memory caches it as the primary liveness field
   - daemon runtime state must include `last_active_at` for each known active
     agent/member entry
+  - the shared protocol must expose typed heartbeat request/response DTOs for
+    runtime state updates and PID continuity handling
   - SQLite must not own live `last_active_at`; it remains daemon-memory-only
     runtime state
   - roster truth and live-status truth must remain distinct
@@ -2557,6 +2699,9 @@ mail correctness.
   - signal handlers install before listeners begin accepting
   - graceful shutdown must stop accepts, drain inflight work, checkpoint WAL,
     and release singleton ownership in order
+  - Phase R transport remains one request per accepted connection, so the
+    documented `32` per-connection inflight ceiling is satisfied by structure
+    until framed multiplexing is introduced
 
 ### 21.3 Strict I/O Ownership Boundaries
 
@@ -2613,7 +2758,8 @@ mail correctness.
   - same-host transport: Unix domain socket
   - cross-host transport: TCP/TLS
   - test transport: in-process `test-socket` implementation of the same
-    protocol/interface for subsystem and daemon-boundary tests
+    protocol/interface for subsystem and daemon-boundary tests; this is the
+    Tier 2 `LoopbackClientTransport` shape in the testing guidelines
   - these are implementations of one protocol/interface, not separate systems
   - socket receive logic must remain a small framed-message loop that:
     - reads one request frame
@@ -2656,6 +2802,17 @@ mail correctness.
   - the transport boundary must not absorb watcher responsibilities
   - any violation of this watcher isolation rule is a direct QA failure for
     the Phase Q implementation line
+  - the daemon implementation may use a bounded polling watch registry instead
+    of OS-native filesystem subscriptions, but the watch lifecycle must remain
+    daemon-owned and long-lived rather than one-shot helper calls
+  - reconcile triggering must support debounce/coalesce so repeated identical
+    requests do not fan out into duplicate import work
+  - `R.17` completes this lane as a daemon-owned polling watch registry, an
+    ordered debounce/coalesce reconcile worker, and a queued notifier runtime;
+    those lanes must start and stop only through the daemon composition root
+  - the notifier lane uses a bounded queue of `64` events and must fail closed
+    with typed backpressure instead of silently buffering unbounded plugin
+    traffic
 
 - `REQ-CORE-TRANSPORT-002` Cross-host traffic must be daemon-to-daemon only.
 
@@ -2670,6 +2827,12 @@ mail correctness.
 
   Required behavior:
   - bounded transient retry is allowed for short intermittent failures
+  - retryable failures are limited to transient connect/read/write/socket-path
+    failures before remote acceptance, including timeout, connection refused,
+    connection reset, broken pipe, network unreachable, and host unreachable
+  - non-retryable failures include protocol decode/encode violations,
+    certificate validation failure, TLS/authentication mismatch, and explicit
+    remote daemon rejection
   - after the bounded retry window expires, the send fails
   - ATM must not keep a durable remote outbox that can leave stale messages
     queued for days
@@ -2682,8 +2845,17 @@ mail correctness.
     while attempting remote delivery
   - a remote send must not be reported as successfully delivered until the
     remote daemon accepts it
+  - if the connection drops after the sender finishes writing the request but
+    before remote acceptance is confirmed, the daemon must return one typed
+    `RemoteDeliveryOutcomeUnknown` failure (`ATM_REMOTE_OUTCOME_UNKNOWN`) and
+    must not report success
+  - `RemoteDeliveryOutcomeUnknown` must be recoverable through the bounded
+    replay/re-export path rather than by silently assuming success
   - if the bounded retry window expires without remote acceptance, the send
     fails and must not leave durable delivered-message state behind
+  - pending replay/re-export state must be persisted in the host-scoped SQLite
+    root keyed by mailbox identity plus `message_key`, with bounded expiry and
+    operator-visible retained-failure state
 
 - `REQ-CORE-TRANSPORT-005` The daemon runtime must use concrete timeout and
   capacity limits for transport/store/health operations.
@@ -2692,7 +2864,10 @@ mail correctness.
   - same-host daemon request deadline: `3s`
   - per-leg TCP/TLS connect deadline: `5s`
   - per-leg TCP/TLS read/write deadline: `5s`
-  - total remote retry budget: `30s`
+  - total remote retry budget default: `30s`
+  - the remote retry budget must be configurable through one daemon transport
+    setting (`daemon.remote_retry_budget`) so operators can lengthen it on
+    unstable networks without changing code
   - SQLite `busy_timeout`: `5000ms`
   - ingest batch processing slice: `2s`
   - doctor health query deadline: `3s`
@@ -2704,6 +2879,13 @@ mail correctness.
   - live status-cache cap: `4096`
   - saturation behavior must fail with typed errors or structured degradation,
     never silent drop
+  - outbound peer connections must resolve/bind per attempt so ordinary local
+    interface up/down changes do not require daemon restart
+  - inbound TCP/TLS listeners bound to wildcard/unspecified local addresses
+    must survive ordinary interface rebinding without daemon restart
+  - if the configured listener bind address itself changes or disappears, the
+    daemon must require bounded reload/rebind through the documented reload
+    path and must surface degraded status until rebind succeeds
 
 ### 21.5 Claude Compatibility And Native Agent Path
 
@@ -2745,8 +2927,8 @@ mail correctness.
 
 ### 21.7 Test Strategy Constraints
 
-- `REQ-CORE-TEST-RUNTIME-001` Core Phase Q behavior must be testable without
-  daemon process spawning.
+- `REQ-CORE-TEST-RUNTIME-001` Core target daemon-runtime behavior must be
+  testable without daemon process spawning.
 
   Required behavior:
   - daemon spawning is not part of the core test strategy
@@ -2755,11 +2937,15 @@ mail correctness.
     harnesses
   - no default test path may depend on daemon process lifecycle to validate ATM
     mail correctness
+  - there is no approved test-only daemon launch path for ordinary ATM
+    correctness tests
+  - ordinary tests must not depend on socket publication timing, retry sleeps,
+    parent-process environment mutation, or auto-start side effects
 
 ### 21.8 Observability Requirements
 
-- `REQ-CORE-OBS-002` Phase Q must keep structured observability first-class at
-  both CLI and daemon boundaries.
+- `REQ-CORE-OBS-002` The target daemon-runtime architecture must keep
+  structured observability first-class at both CLI and daemon boundaries.
 
   Required behavior:
   - CLI entry, daemon runtime, transport, ingest/export, and service
@@ -2777,8 +2963,8 @@ mail correctness.
 
 ### 21.8.1 Doctor Health Interface
 
-- `REQ-CORE-DOCTOR-002` The Phase Q runtime must expose a daemon health query
-  interface consumable by `atm doctor`.
+- `REQ-CORE-DOCTOR-002` The target daemon runtime must expose a daemon health
+  query interface consumable by `atm doctor`.
 
   Required behavior:
   - `atm doctor` remains a CLI command
@@ -2787,6 +2973,7 @@ mail correctness.
     state
   - the health interface must be able to report at least:
     - daemon reachability
+    - daemon liveness and readiness as separate dimensions
     - singleton ownership status
     - live status-cache summary
     - ingest backlog / degraded-ingest state when present
@@ -2799,6 +2986,7 @@ mail correctness.
 
   Required behavior:
   - impossible to run two active ATM daemons on one host
+  - daemon singleton remains host-wide rather than socket-path-local
   - daemon unavailability after one auto-start attempt fails clearly with no
     hidden direct I/O fallback
   - every subsystem performs external I/O only through its owning trait
@@ -2807,9 +2995,62 @@ mail correctness.
     of panic/unwrap for fallible runtime paths
   - daemon/runtime code remains thin and does not accumulate business logic
   - daemon spawning is not the test strategy
+  - banned daemon-spawn helpers and launch shortcuts are absent from the
+    default test path
   - SQLite remains the source of truth for mail and roster
   - live agent status remains runtime-owned state
   - structured `sc-observability` coverage remains present at both CLI and
     daemon layers
   - Claude compatibility export remains Claude-native top-level plus
     `metadata.atm`
+
+### 21.10 Postmortem Lint Backfill
+
+- `REQ-P-LINT-POSTMORTEM-001` Mechanically-detectable postmortem finding
+  families must become repository lint or CI gates rather than recurring QA
+  rediscoveries.
+
+  Required behavior:
+  - `atm-core` is the proving ground for new postmortem lint rules; a rule
+    lands here first, is tuned against the live codebase, and is migrated to
+    standalone `sc-lint` only after the rule shape is stable and demonstrably
+    reusable
+  - reusable Rust/static-analysis rules must be implemented against the
+    embedded `crates/sc-lint-*` surface on the `atm-core` branch before any
+    upstream migration
+  - ATM-specific repository policy rules may stay as `.just/` or `scripts/`
+    lints when the semantics are tied to ATM-only names, documents, or review
+    process state
+  - the default `just lint` path remains the required development gate for
+    any new postmortem rule that is cheap and deterministic enough for normal
+    local use
+
+  Family-specific obligations:
+  - ungated `std::os::unix` imports in production paths must fail the
+    portability lint unless they are already protected by an approved Unix-only
+    boundary
+  - `#[cfg_attr(not(unix), allow(dead_code))]` must not be used as a
+    portability suppressor in production code
+  - duplicated raw semantic literals in non-test Rust code must fail the ATM
+    identity-literal gate unless they come from a canonical constant or an
+    explicit allow-list
+  - raw `"team-lead"` role-name literals are the first mandatory case and must
+    fail everywhere except the canonical role-definition source
+  - fixed `thread::sleep(...)` in ordinary Rust test code must fail a
+    test-hygiene gate unless the file or callsite is explicitly part of the
+    narrow daemon-runtime suite
+  - `PORT-004` must reject production `std::os::unix` imports that are not
+    protected by an approved Unix-only boundary
+  - `PORT-005` must reject
+    `#[cfg_attr(not(unix), allow(dead_code))]` when used as a portability
+    suppressor in production code
+  - `SCB-RUNTIME-001` must reject bare production `Condvar::wait(...)`
+  - `SCB-RUNTIME-002` must reject production `wait_timeout*` calls whose
+    `WaitTimeoutResult` is discarded or stored only in underscore bindings
+  - bare `Condvar::wait(...)` in non-test production code must fail a runtime
+    liveness gate; `wait_timeout(...)` and `wait_timeout_while(...)` remain the
+    required production shapes
+  - triage Turtle records must not report contradictory aggregate and terminal
+    state fields in the same record
+  - any scoped exclusions for the semantic-literal gate must stay narrow and
+    explicit; they must not exempt ordinary production code wholesale

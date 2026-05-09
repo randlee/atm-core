@@ -1,0 +1,45 @@
+boundary_id = "BOUNDARY-RosterStore"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "RosterStore"
+
+[public]
+trait = "RosterStore"
+notes = "trait landed in atm_core::boundary; concrete implementation now lives in crates/atm-rusqlite/src/roster_store.rs as SqliteRosterStore"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["durable_roster_state", "member_routing_metadata"]
+io_forbidden = ["socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-rusqlite", "atm-daemon"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["RosterStore method inputs"]
+response_types = ["atm-core roster DTOs"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-ROSTERSTORE-REFERENCES"]
+review_gates = ["no_concrete_store_leakage"]
+
+[status]
+state = "concrete_landed"
+notes = ["trait plus request/response structs landed in atm_core::boundary", "concrete store implementation landed in crates/atm-rusqlite/src/roster_store.rs as SqliteRosterStore", "live status belongs elsewhere; this boundary owns durable roster truth only", "documented heartbeat handling may persist durable pid continuity through record_heartbeat(...)"]

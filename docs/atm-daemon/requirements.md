@@ -4,13 +4,16 @@
 
 This document defines the `atm-daemon` crate requirements.
 
-The `atm-daemon` crate owns the runtime wrapper around the Phase Q ATM system.
+The `atm-daemon` crate owns the runtime wrapper around the current ATM system.
 Product behavior remains defined in [`../requirements.md`](../requirements.md).
 `atm-daemon` must satisfy those product requirements without re-owning
 `atm-core` business logic.
 
 This crate is introduced by the Phase Q implementation line. It is not present
 in the pre-Phase-Q workspace yet.
+
+The crate-local machine-readable boundary inventory lives in:
+- [`./boundaries.md`](./boundaries.md)
 
 ## 2. Ownership
 
@@ -20,6 +23,7 @@ in the pre-Phase-Q workspace yet.
 - same-host daemon API transport
 - cross-host daemon-to-daemon transport
 - runtime composition of `atm-core` service boundaries
+- runtime composition of the current concrete adapter set used in production
 - live agent status cache
 - runtime watch/reconcile loop if enabled
 - daemon-side `sc-observability` emission
@@ -41,6 +45,7 @@ Initial allocation:
 - `REQ-DAEMON-RUNTIME-*`
 - `REQ-DAEMON-TRANSPORT-*`
 - `REQ-DAEMON-STATUS-*`
+- `REQ-DAEMON-CONFIG-*`
 - `REQ-DAEMON-TEST-*`
 - `REQ-DAEMON-OBS-*`
 - `REQ-DAEMON-HEALTH-*`
@@ -49,8 +54,10 @@ Initial allocation:
 Initial crate requirement IDs:
 
 - `REQ-DAEMON-RUNTIME-001` `atm-daemon` owns singleton runtime enforcement and
-  must make it impossible for two active daemons to run on one host. Satisfies
-  the runtime ownership aspects of:
+  must make it impossible for more than one `atm-daemon` process to exist
+  anywhere on the host for the supported runtime model. Singleton is daemon
+  requirement `#1` and is not subordinate to convenience test or tooling
+  flows. Satisfies the runtime ownership aspects of:
   `REQ-CORE-DAEMON-001`, `REQ-CORE-QA-RUNTIME-001`.
 - `REQ-DAEMON-RUNTIME-002` `atm-daemon` owns runtime composition only and must
   remain a thin wrapper over `atm-core` service boundaries. Satisfies:
@@ -64,11 +71,20 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-RUNTIME-005` `atm-daemon` owns crash-recovery and replay policy
   around daemon-managed delivery/export work. Satisfies:
   `REQ-CORE-TRANSPORT-004`, `REQ-CORE-LOCK-RETIRE-001`.
+- `REQ-DAEMON-RUNTIME-006` `atm-daemon` daemon-private control-plane code must
+  be partitioned into explicit ownership modules rather than one mixed
+  crate-root implementation surface. Satisfies:
+  `REQ-CORE-BOUNDARY-002`, `REQ-P-DAEMON-PARTITION-001`.
+- `REQ-DAEMON-RUNTIME-007` singleton cleanup must remain ownership-safe and
+  must not create a relock/unlink race for the host-wide ownership path.
+  Satisfies:
+  `REQ-P-RUNTIME-002`, `REQ-P-DAEMON-LIFECYCLE-001`, `REQ-CORE-DAEMON-001`.
 - `REQ-DAEMON-TRANSPORT-001` `atm-daemon` owns one protocol with two
   production transport implementations plus one test transport:
   - Unix domain socket for same-host
   - TCP/TLS for cross-host daemon-to-daemon traffic
-  - `test-socket` for in-process transport-boundary tests
+  - `test-socket` — implemented as `LoopbackClientTransport`; see ADR-003
+    §Tier 2 — for in-process transport-boundary tests
   Satisfies:
   `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`.
 - `REQ-DAEMON-TRANSPORT-002` `atm-daemon` owns bounded transient retry for
@@ -79,13 +95,34 @@ Initial crate requirement IDs:
   policy for transport, store busy timeout, ingest batch, retry, and doctor
   query operations. Satisfies:
   `REQ-CORE-TRANSPORT-003`, `REQ-CORE-DOCTOR-002`.
+- `REQ-DAEMON-TRANSPORT-004` request work launched from the daemon server path
+  must remain tracked by runtime drain ownership until it finishes or is
+  cancelled; detached untracked request execution is forbidden. Satisfies:
+  `REQ-DAEMON-RUNTIME-003`, `REQ-P-DAEMON-DISPATCHER-001`,
+  `REQ-CORE-DAEMON-001`.
 - `REQ-DAEMON-STATUS-001` `atm-daemon` owns the live agent-status cache and
   must keep it separate from SQLite roster/mail truth. Satisfies:
   `REQ-CORE-RUNTIME-002`.
+- `REQ-DAEMON-STATUS-002` bounded daemon status-cache policy must bound actual
+  retained entries rather than only downgrading entry state labels. Satisfies:
+  `REQ-DAEMON-RUNTIME-004`.
+- `REQ-DAEMON-STATUS-003` `atm-daemon` runtime-health and `atm doctor`
+  projection remain owned by the runtime-status partition and must not bypass
+  daemon-owned status truth. Satisfies:
+  `REQ-CORE-DOCTOR-002`.
+- `REQ-DAEMON-CONFIG-001` `atm-daemon` owns daemon config validation at startup
+  and on `SIGHUP` rescan. Invalid config must produce a typed failure or
+  bounded reload rejection rather than a silent degraded state. Satisfies:
+  `REQ-CORE-CONFIG-001`, `REQ-CORE-CONFIG-003`, `REQ-DAEMON-SIGNAL-001`.
 - `REQ-DAEMON-TEST-001` `atm-daemon` must not define the core test strategy.
   Core correctness must remain testable without daemon process spawning.
   Satisfies:
   `REQ-CORE-TEST-RUNTIME-001`.
+- `REQ-DAEMON-TEST-002` `atm-daemon` must not introduce or bless a test-only
+  daemon launch path for ordinary ATM correctness tests. Any real daemon
+  process coverage is limited to a narrow daemon-runtime suite for singleton,
+  startup, shutdown, and recovery requirements. Satisfies:
+  `REQ-CORE-TEST-RUNTIME-001`, `REQ-P-TEST-001`.
 - `REQ-DAEMON-OBS-001` `atm-daemon` owns daemon/runtime/transport structured
   event emission through `sc-observability`. Satisfies:
   `REQ-CORE-OBS-002`.
@@ -104,12 +141,15 @@ The `atm-daemon` crate docs must remain aligned with:
 - [`../architecture.md`](../architecture.md)
 - [`../project-plan.md`](../project-plan.md)
 - [`../plan-phase-Q.md`](../plan-phase-Q.md)
+- [`../plan-phase-R.md`](../plan-phase-R.md)
+- [`../testing-guidelines.md`](../testing-guidelines.md)
 - [`../team-member-state.md`](../team-member-state.md)
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
 - [`../atm-core/requirements.md`](../atm-core/requirements.md)
 - [`../atm-core/architecture.md`](../atm-core/architecture.md)
+- [`./boundaries.md`](./boundaries.md)
 
-## 5. Phase Q Runtime Requirements
+## 5. Phase R Runtime Requirements
 
 Requirement IDs:
 - `REQ-DAEMON-RUNTIME-001`
@@ -117,23 +157,60 @@ Requirement IDs:
 - `REQ-DAEMON-RUNTIME-003`
 - `REQ-DAEMON-RUNTIME-004`
 - `REQ-DAEMON-RUNTIME-005`
+- `REQ-DAEMON-RUNTIME-006`
+- `REQ-DAEMON-RUNTIME-007`
 - `REQ-DAEMON-TRANSPORT-001`
 - `REQ-DAEMON-TRANSPORT-002`
 - `REQ-DAEMON-TRANSPORT-003`
+- `REQ-DAEMON-TRANSPORT-004`
 - `REQ-DAEMON-STATUS-001`
+- `REQ-DAEMON-STATUS-002`
+- `REQ-DAEMON-STATUS-003`
+- `REQ-DAEMON-CONFIG-001`
 - `REQ-DAEMON-TEST-001`
+- `REQ-DAEMON-TEST-002`
 - `REQ-DAEMON-OBS-001`
 - `REQ-DAEMON-HEALTH-001`
 - `REQ-DAEMON-SIGNAL-001`
 
 Required runtime rules:
-- exactly one daemon may be active on a host at a time
+- exactly one daemon process may be active on a host at a time
+- singleton enforcement is host-wide rather than socket-path-local; changing
+  `ATM_HOME`, socket path, or test working directory must not create a legal
+  second daemon
+- daemon startup is blocked by at least two runtime guard layers:
+  - a pre-spawn launch gate that serializes daemon creation attempts
+  - a daemon-side startup gate that refuses serving state when ownership is
+    already held
 - daemon startup must fail deterministically if a live daemon already owns the
   runtime
+- daemon startup must not publish a serving socket or accept requests before
+  singleton ownership is confirmed
 - stale ownership cleanup must never allow two live daemons
+- stale ownership cleanup must preserve the same singleton guarantee as normal
+  startup; cleanup is recovery, not an alternate launch path
+- singleton cleanup must not unlink a shared ownership path after releasing the
+  live lock in a way that can race a succeeding daemon process
 - graceful shutdown must stop accepts, drain or cancel inflight work within one
   bounded deadline, checkpoint WAL, and release singleton ownership
+- daemon-private runtime control must be partitioned into explicit ownership
+  modules for exactly these eight partitions:
+  - singleton ownership
+  - server runtime / connection registry / drain
+  - request execution ownership
+  - runtime status / reload / doctor projection
+  - peer transport
+  - watch runtime
+  - reconcile runtime
+  - notification runtime
+- background-lane startup rollback and shutdown must attempt every lane needed
+  for cleanup and must not leave partial runtime ownership after the first lane
+  failure
 - signal handlers must be installed before listeners are opened
+- daemon config must validate once at startup before listeners are opened
+- `SIGHUP`-driven config or roster rescan must either apply a fully valid
+  configuration or fail with a typed reload error while retaining the prior
+  serving configuration
 - remote delivery must be daemon-to-daemon only
 - the same transport protocol must be exercisable through an in-process
   `test-socket` without changing handler/business logic
@@ -142,16 +219,40 @@ Required runtime rules:
     [`../architecture.md §21.6.4`](../architecture.md) and
     [`architecture.md §3.4`](./architecture.md)
 - runtime queues and handles must obey one documented concrete cap policy
+- resource-cap matrix:
+  - max concurrent accepted connections: `64`
+  - max per-connection inflight requests: `32`
+  - ingest queue depth: `1024`
+  - bounded remote retry queue depth: `256`
+  - SQLite handle/pool budget: min `1`, max `4`
+  - live status-cache cap: `4096`
+  - watch subscription cap: `256`
+  - notification work queue depth: `256`
+- request work launched from the server path must remain tracked by runtime
+  shutdown accounting until it completes or is cancelled
+- the current Phase R transport remains single-request-per-connection, so the
+  per-connection in-flight count is structurally `1` today; the documented
+  `32` cap is the retained protocol resource ceiling for any later framed
+  multiplexing extension and must not be contradicted by daemon partition docs
 - daemon memory is the live truth for agent status
 - daemon memory must also retain `last_active_at` for each known active agent
 - daemon memory must retain the current agent `pid` as a first-class liveness
   field, cached from SQLite; `pid` is durable roster truth rather than
   advisory metadata
+- `pid` is a semantic newtype candidate and must not remain an unvalidated raw
+  integer at the daemon boundary once the runtime API hardening slice lands
 - SQLite must not own live `last_active_at`; it owns durable roster state and
   the current per-member `pid`
 - the daemon-managed member fields (`pid`, `last_active_at`, `state`) must
   update only through one documented heartbeat socket handler shared by ATM CLI
   and hook/runtime producers; see `docs/team-member-state.md`
+- status-cache saturation behavior must keep the retained live-member map
+  actually bounded in cardinality; demotion to `unknown` alone is not
+  sufficient
+- watch runtime must reject subscriptions beyond the bounded cap rather than
+  retaining unbounded watcher state
+- notification runtime must reject or degrade delivery beyond the bounded queue
+  cap rather than silently buffering unbounded work
 - until `schooks 1.0` is released, pid/activity updates may arrive through the
   interim Python hooks installed from `../agent-team-mail`
 - after `schooks 1.0` is released, `schooks` becomes the controlled hook
@@ -164,6 +265,12 @@ Required runtime rules:
   and any retry/re-export state needed after daemon crash must be durable rather
   than RAM-only
 - daemon code must not bypass `atm-core` subsystem boundaries
+- the current Phase R baseline keeps `atm-daemon` as the runtime composition
+  root for production runtime wiring unless a later ADR extracts a separate
+  composition crate
+- remote daemon-to-daemon client behavior uses the same shared `AtmProtocol`
+  and `ClientTransport` / `ServerTransport` contract family as local runtime
+  transport
 - daemon transport/runtime adapter implementations must remain private to the
   crate or tightly-scoped internal surfaces; public callers must not depend on
   concrete socket/runtime adapter types
@@ -174,6 +281,8 @@ Required runtime rules:
 - daemon unavailability after one documented auto-start attempt must surface as
   explicit runtime failure rather than hidden fallback to direct SQLite or
   inbox-file access
+- tests and tools are not exempt from the singleton rule; any attempt to start
+  a second daemon process must fail through the same runtime ownership checks
 - the socket receive loop must remain a thin dispatcher only:
   - read framed request
   - parse qualified request type
@@ -194,3 +303,5 @@ Required runtime rules:
   rather than collapsing into panic/unwrap control flow
 - daemon runtime and transport paths must emit structured observability events
 - daemon must expose one explicit health/status query interface for `atm doctor`
+- no `atm-daemon` crate API, helper, or test support path may bless daemon
+  spawning as a routine correctness strategy

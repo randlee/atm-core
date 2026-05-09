@@ -41,9 +41,7 @@ fn set_home_env(cmd: &mut assert_cmd::Command, temp_dir: &TempDir) {
 
 Before declaring dev work complete, grep all integration test files:
 ```bash
-grep -rn 'ATM_HOME' crates/atm/tests/ || echo "FAIL: Missing ATM_HOME in test helpers"
 grep -rn 'ATM_CONFIG_HOME' crates/atm/tests/ || echo "FAIL: Missing ATM_CONFIG_HOME in test helpers"
-grep -rn 'ATM_TEAMS_DIR' crates/atm/tests/ || echo "FAIL: Missing ATM_TEAMS_DIR where team discovery is exercised"
 grep -rn 'env(\"HOME\"' crates/atm/tests/
 ```
 

@@ -171,32 +171,39 @@ fn sync_parent_directory(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
     use std::cell::Cell;
+    #[cfg(unix)]
     use std::sync::{Mutex, OnceLock};
 
-    use serial_test::serial;
     use tempfile::tempdir;
 
     use super::{atomic_write_bytes, temp_path_for_atomic_write};
     use crate::error::AtmErrorKind;
 
-    // Serializes process-environment mutation inside this test module. This is
-    // process-local only; it does not coordinate with other test processes.
+    // Serializes the deterministic parent-sync fault-injection seam inside this
+    // test module. This is process-local only; it does not coordinate with
+    // other test processes.
+    #[cfg(unix)]
     fn env_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         LOCK.get_or_init(|| Mutex::new(()))
     }
 
+    #[cfg(unix)]
     thread_local! {
         static FORCE_PARENT_SYNC_FAILURE: Cell<bool> = const { Cell::new(false) };
     }
 
+    #[cfg(unix)]
     pub(super) fn forced_parent_sync_failure() -> bool {
         FORCE_PARENT_SYNC_FAILURE.with(Cell::get)
     }
 
+    #[cfg(unix)]
     struct ParentSyncFailureGuard;
 
+    #[cfg(unix)]
     impl ParentSyncFailureGuard {
         fn enable() -> Self {
             FORCE_PARENT_SYNC_FAILURE.with(|value| value.set(true));
@@ -204,6 +211,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     impl Drop for ParentSyncFailureGuard {
         fn drop(&mut self) {
             FORCE_PARENT_SYNC_FAILURE.with(|value| value.set(false));
@@ -265,7 +273,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial]
+    #[serial_test::serial]
     fn atomic_write_bytes_reports_parent_sync_failure_via_deterministic_hook() {
         let _env_lock = env_lock().lock().expect("env lock");
         let _fault = ParentSyncFailureGuard::enable();

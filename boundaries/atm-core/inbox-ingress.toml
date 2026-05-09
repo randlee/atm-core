@@ -1,0 +1,45 @@
+boundary_id = "BOUNDARY-InboxIngress"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "InboxIngress"
+
+[public]
+trait = "InboxIngress"
+notes = "trait and typed inbox import/diagnostic DTOs landed in atm_core::boundary"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["inbound_mailbox_import", "compatibility_surface_translation"]
+io_forbidden = ["sqlite", "socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-rusqlite", "atm-daemon"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["ingress scan requests"]
+response_types = ["typed ingress result models"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["mailbox::store::observe_source_files"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-INBOX-INGRESS-REFERENCES"]
+review_gates = ["no_direct_mailbox_helper_calls"]
+
+[status]
+state = "stub_landed"
+notes = ["typed import, fingerprint, and diagnostics request/response contracts landed in atm_core::boundary", "watcher-driven reconcile should call this boundary rather than store helpers directly", "retained send/read/ack/clear cutover to this boundary is formally deferred to R.7 in docs/plan-phase-R.md"]

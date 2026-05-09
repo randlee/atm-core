@@ -1,0 +1,26 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding:R17-FTQ-002> a triage:Finding ;
+  triage:findingId "R17-FTQ-002" ;
+  triage:title "Fixed thread::sleep in watch_runtime.rs test code" ;
+  triage:description "In crates/atm-daemon/src/watch_runtime.rs test section, lines 466 and 476 use std::thread::sleep(Duration::from_millis(200)) and sleep(Duration::from_millis(220)). Fixed sleeps in tests cause timing-dependent failures on slow CI. Should use event-driven synchronization instead." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:severity "minor" ;
+  triage:phaseId "phase-R" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:findingAggregate "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-07T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "R.17" ;
+  triage:promoteToBranch "R.17" ;
+  triage:branchR15Status "absent" ;
+  triage:branchR16Status "absent" ;
+  triage:branchR17Status "open" ;
+  triage:branchR17Matches "2" ;
+  triage:branchR17MatchLines "466, 476" ;
+  triage:pattern "thread::sleep" ;
+  triage:fileFilter "watch_runtime\\.rs" .

@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Finding: R15-RBP-F004
+# AtmError::identity_conflict missing .with_recovery()
+
+triage:R15-RBP-F004
+  a triage:Finding ;
+  triage:findingId "R15-RBP-F004" ;
+  triage:title "AtmError::identity_conflict missing .with_recovery()" ;
+  triage:description "In crates/atm-daemon/src/runtime_health.rs, AtmError::identity_conflict returns an error without chaining .with_recovery(). The error constructor pattern in this codebase requires a recovery hint. All occurrences across R.15, R.16, and R.17 branches lack the .with_recovery() call." ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:phaseId "phase-R" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-07T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch triage:R17-occurrence ;
+  triage:promoteToBranch "R.17" ;
+  triage:occurrences triage:R15-occurrence, triage:R16-occurrence, triage:R17-occurrence .
+
+# Occurrence in R.15 branch
+triage:R15-occurrence
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 573 ;
+  triage:snippet "return Err(AtmError::identity_conflict(\"ATM_IDENTITY_CONFLICT: stop and report to user immediately\"));" ;
+  triage:status "fixed" ;
+  triage:branch "R.15" ;
+  triage:headSha "d2d76a0" ;
+  triage:closed true .
+
+# Occurrence in R.16 branch
+triage:R16-occurrence
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 570 ;
+  triage:snippet "return Err(AtmError::identity_conflict(\"ATM_IDENTITY_CONFLICT: stop and report to user immediately\"));" ;
+  triage:status "fixed" ;
+  triage:branch "R.16" ;
+  triage:headSha "c7b4455" ;
+  triage:closed true .
+
+# Occurrence in R.17 branch
+triage:R17-occurrence
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 570 ;
+  triage:snippet "return Err(AtmError::identity_conflict(\"ATM_IDENTITY_CONFLICT: stop and report to user immediately\"));" ;
+  triage:status "fixed" ;
+  triage:branch "R.17" ;
+  triage:headSha "5de80ad" ;
+  triage:closed true .
+
+# Worktree snapshots
+triage:R15-snapshot
+  a triage:WorktreeSnapshot ;
+  triage:branch "R.15" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s15-status-heartbeat" ;
+  triage:headSha "d2d76a0" ;
+  triage:orderIndex 15 .
+
+triage:R16-snapshot
+  a triage:WorktreeSnapshot ;
+  triage:branch "R.16" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s16-peer-replay" ;
+  triage:headSha "c7b4455" ;
+  triage:orderIndex 16 .
+
+triage:R17-snapshot
+  a triage:WorktreeSnapshot ;
+  triage:branch "R.17" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s17-watch-reconcile" ;
+  triage:headSha "5de80ad" ;
+  triage:orderIndex 17 .

@@ -1,0 +1,53 @@
+---
+name: architecture-adr
+version: 1.0.0
+description: Machine-parsable ADR template for crate architecture decisions with code references.
+format: markdown
+required_variables:
+  - adr_title
+  - adr_id
+  - crate
+  - status
+  - date
+  - deciders
+  - tags
+  - related_boundaries
+  - code_references
+  - context
+  - decision
+  - consequences
+  - alternatives_considered
+  - follow_up_work
+---
+## {{ adr_title }}
+
+```yaml
+adr_id: {{ adr_id }}
+crate: {{ crate }}
+title: {{ adr_title }}
+status: {{ status }}
+date: {{ date }}
+deciders:
+{{ deciders }}
+tags:
+{{ tags }}
+related_boundaries:
+{{ related_boundaries }}
+code_references:
+{{ code_references }}
+```
+
+Context:
+{{ context }}
+
+Decision:
+{{ decision }}
+
+Consequences:
+{{ consequences }}
+
+Alternatives considered:
+{{ alternatives_considered }}
+
+Follow-up work:
+{{ follow_up_work }}

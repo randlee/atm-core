@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:R16-RBP-F002
+  a triage:Finding ;
+  triage:findingId "R16-RBP-F002" ;
+  triage:title "peer_addr stored as raw String instead of typed SocketAddr" ;
+  triage:description "In crates/atm-daemon/src/peer_transport.rs line 253, peer_addr is set as endpoint.to_string() storing a raw String field. Downstream code at line 174 must parse back with record.peer_addr.parse::<SocketAddr>() on each use. Should validate at construction time and store as SocketAddr or newtype." ;
+  triage:triageMode "initial_pass" ;
+  triage:category triage:RBP ;
+  triage:severity triage:minor ;
+  triage:phaseId "phase-R" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:pattern "peer_addr.*to_string|peer_addr.*parse.*SocketAddr" ;
+  triage:fileFilter "peer_transport\\.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:highestOpenBranch triage:R16-peer-replay ;
+  triage:promoteToVersion "R.16" ;
+  triage:triagedAt "2026-05-07T00:00:00Z"^^xsd:dateTime ;
+  triage:branchClassifications (
+    [
+      a triage:BranchClassification ;
+      triage:branch "R.15" ;
+      triage:branchPath "/Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s15-status-heartbeat" ;
+      triage:headSha "d2d76a0" ;
+      triage:orderIndex 15 ;
+      triage:status "absent" ;
+      triage:matchCount 0 ;
+      triage:reason "peer_transport.rs not yet introduced in R.15"
+    ]
+    [
+      a triage:BranchClassification ;
+      triage:branch "R.16" ;
+      triage:branchPath "/Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s16-peer-replay" ;
+      triage:headSha "c7b4455" ;
+      triage:orderIndex 16 ;
+      triage:status "fixed" ;
+      triage:matchCount 2 ;
+      triage:matches (
+        [
+          a triage:Match ;
+          triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+          triage:lineNumber 253 ;
+          triage:pattern "endpoint.to_string()" ;
+          triage:context "peer_addr: endpoint.to_string()"
+        ]
+        [
+          a triage:Match ;
+          triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+          triage:lineNumber 174 ;
+          triage:pattern "record.peer_addr.parse::<SocketAddr>()" ;
+          triage:context "let peer_addr = match record.peer_addr.parse::<SocketAddr>() {"
+        ]
+      ) ;
+      triage:reason "Issue introduced in R.16 (peer-replay feature sprint)"
+    ]
+    [
+      a triage:BranchClassification ;
+      triage:branch "R.17" ;
+      triage:branchPath "/Users/randlee/Documents/github/atm-core-worktrees/feature/pR-s17-watch-reconcile" ;
+      triage:headSha "5de80ad" ;
+      triage:orderIndex 17 ;
+      triage:status "fixed" ;
+      triage:matchCount 1 ;
+      triage:matches (
+        [
+          a triage:Match ;
+          triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+          triage:lineNumber 174 ;
+          triage:pattern "record.peer_addr.parse::<SocketAddr>()" ;
+          triage:context "let peer_addr = match record.peer_addr.parse::<SocketAddr>() {"
+        ]
+      ) ;
+      triage:reason "Issue persists in R.17; line 253 (to_string) may have been addressed but parse site still exists"
+    ]
+  ) .
