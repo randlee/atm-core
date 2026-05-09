@@ -128,6 +128,20 @@ fn singleton_guard_reports_stale_owner_record_failure() {
     assert_eq!(error.code, AtmErrorCode::DaemonStaleOwnerRecoveryFailed);
 }
 
+#[cfg(windows)]
+#[test]
+fn owner_lock_treats_windows_lock_and_sharing_violations_as_contention() {
+    let lock_violation = std::io::Error::from_raw_os_error(33);
+    let sharing_violation = std::io::Error::from_raw_os_error(32);
+
+    assert!(HostOwnershipAdapter::classify_contention_error_for_test(
+        &lock_violation
+    ));
+    assert!(HostOwnershipAdapter::classify_contention_error_for_test(
+        &sharing_violation
+    ));
+}
+
 #[test]
 #[serial]
 fn singleton_guard_recovers_stale_owner_once_lock_is_released() {

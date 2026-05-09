@@ -36,7 +36,7 @@ impl HostOwnershipAdapter {
         let mut lock_file = open_lock_file(&lock_path)?;
         match lock_file.try_lock_exclusive() {
             Ok(()) => {}
-            Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
+            Err(source) if is_owner_lock_contention_error(&source) => {
                 let mut recovered = false;
                 // ADR-002 uses launch.lock for single-launch admission and owner.lock for the
                 // actual serving owner so only one daemon can transition into serving state.
@@ -68,6 +68,29 @@ impl HostOwnershipAdapter {
         }
         write_owner_record(&mut lock_file)?;
         Ok(HostOwnershipGuard { lock_file })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn classify_contention_error_for_test(error: &std::io::Error) -> bool {
+        is_owner_lock_contention_error(error)
+    }
+}
+
+fn is_owner_lock_contention_error(error: &std::io::Error) -> bool {
+    if error.kind() == std::io::ErrorKind::WouldBlock {
+        return true;
+    }
+
+    #[cfg(windows)]
+    {
+        // Windows file locking reports contention through raw Win32 lock/sharing
+        // violations instead of mapping them to WouldBlock consistently.
+        matches!(error.raw_os_error(), Some(32 | 33))
+    }
+
+    #[cfg(not(windows))]
+    {
+        false
     }
 }
 
@@ -119,7 +142,7 @@ fn recover_stale_owner_lock(
                 }
                 return Err(owner_token_mismatch_error(lock_path, stale_pid));
             }
-            Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
+            Err(source) if is_owner_lock_contention_error(&source) => {
                 if !owner_record_matches(&retry_file, stale_pid, stale_token)? {
                     return Err(owner_token_mismatch_error(lock_path, stale_pid));
                 }
