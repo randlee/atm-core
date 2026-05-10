@@ -625,8 +625,7 @@ mod tests {
         use std::os::unix::ffi::OsStringExt;
 
         let home_dir = TempDir::new().expect("home");
-        let _home =
-            LocalEnvGuard::set_raw("HOME", home_dir.path().to_str().expect("utf8 path"));
+        let _home = LocalEnvGuard::set_raw("HOME", home_dir.path().to_str().expect("utf8 path"));
         let _atm_log_dir = Utf8EnvGuard {
             key: "ATM_LOG_DIR",
             original: std::env::var_os("ATM_LOG_DIR"),
