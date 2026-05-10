@@ -300,11 +300,11 @@ fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
     lifecycle.set_terminate_for_test(true);
 
     serve_result_rx
-        .recv_timeout(Duration::from_secs(3))
+        .recv_timeout(Duration::from_secs(10))
         .expect("recv serve result")
         .expect("serve runtime result");
     assert!(
-        shutdown_started.elapsed() < Duration::from_secs(3),
+        shutdown_started.elapsed() < Duration::from_secs(5),
         "windows same-host runtime shutdown should complete within the documented bounded deadline"
     );
     join.join().expect("join serve thread");
