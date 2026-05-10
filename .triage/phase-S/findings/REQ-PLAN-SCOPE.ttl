@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/REQ-PLAN-SCOPE>
+  a triage:Finding ;
+  triage:findingId "REQ-PLAN-SCOPE" ;
+  triage:title "ATM-QA-S4-001 acceptance criterion unreachable on Windows — prepare_local_ipc_endpoint has no Windows equivalent" ;
+  triage:description "Sprint S.6 acceptance criteria require ATM-QA-S4-001 to be closed. On the integration branch (integrate/phase-S, 3f67133) crates/atm-daemon/src/lib.rs gates the IPC transport with #[cfg(unix)] / #[cfg(windows)]: on Windows, local_ipc_transport_windows.rs is the active module and it contains no prepare_local_ipc_endpoint at all — only unsupported_local_ipc_error() stubs. The #[cfg(not(unix))] NonFilesystemEndpointPrepared fix in local_ipc_transport.rs is therefore dead code on Windows builds on that branch. On the feature branch (feature/pS-s6-runtime-remediation, b80f16a) the fix is applied: local_ipc_transport_windows.rs does not exist, lib.rs uses local_ipc_transport unconditionally, and the #[cfg(not(unix))] prepare_local_ipc_endpoint arm returns NonFilesystemEndpointPrepared with an explicit comment and a #[cfg(windows)] test. ATM-QA-S4-001 is closed on the feature branch. The integration branch has not yet received this merge." ;
+  triage:category "REQ" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s6-runtime-remediation" ;
+  triage:promoteToBranch "feature/pS-s6-runtime-remediation" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/REQ-PLAN-SCOPE/integrate-phase-S/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/3f67133> ;
+  triage:closedOn <urn:atm:triage:worktree/feature-pS-s6-runtime-remediation/b80f16a> .
+
+<urn:atm:triage:occurrence/REQ-PLAN-SCOPE/integrate-phase-S/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport_windows.rs" ;
+  triage:line 1 ;
+  triage:snippet "local_ipc_transport_windows.rs exists on integrate/phase-S gated by #[cfg(windows)] in lib.rs; it preempts local_ipc_transport.rs on Windows builds entirely; prepare_local_ipc_endpoint is absent from the Windows stub; ATM-QA-S4-001 fix in local_ipc_transport.rs #[cfg(not(unix))] arm is dead code on Windows while this file is active" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "3f67133" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/3f67133> .
+
+<urn:atm:triage:worktree/integrate-phase-S/3f67133>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "3f67133" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/feature-pS-s6-runtime-remediation/b80f16a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s6-runtime-remediation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s6-runtime-remediation" ;
+  triage:headSha "b80f16a" ;
+  triage:orderIndex 1 .

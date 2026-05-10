@@ -1,0 +1,35 @@
+@prefix triage: <https://atm-core.dev/triage/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:RBP-F-005 a triage:Finding ;
+    triage:finding_id "RBP-F-005" ;
+    triage:title "Missing .with_recovery() on error paths in lifecycle_control.rs" ;
+    triage:description "Error paths in crates/atm-daemon/src/lifecycle_control.rs do not use .with_recovery() chaining. Required by rust-best-practices-agent findings." ;
+    triage:severity "minor" ;
+    triage:category "RBP" ;
+    triage:phase_id "phase-S" ;
+    triage:triage_mode "initial_pass" ;
+    triage:file_filter "lifecycle_control" ;
+    triage:sweep_scope "file_only" ;
+    triage:pattern "AtmError|return Err" ;
+
+    triage:worktree_result [
+        triage:branch "feature/pS-s6-runtime-remediation" ;
+        triage:head_sha "b80f16a" ;
+        triage:order_index "1"^^xsd:integer ;
+        triage:occurrence "absent" ;
+        triage:note ".with_recovery() present at 6 callsites (lines 42, 56, 67, 77, 100, 106). All lock-poison and initialization error paths chain .with_recovery(). Finding is resolved in this worktree."
+    ] ;
+    triage:worktree_result [
+        triage:branch "integrate/phase-S" ;
+        triage:head_sha "3f67133" ;
+        triage:order_index "2"^^xsd:integer ;
+        triage:occurrence "present" ;
+        triage:note "Zero .with_recovery() calls found in lifecycle_control.rs. Lock-poison errors in notify(), snapshot(), wait_for_change(), and install() lack .with_recovery() chaining. The feature/pS-s6 version has all six callsites; the integrate/phase-S baseline has none."
+    ] ;
+
+    triage:highest_open_branch "integrate/phase-S" ;
+    triage:promote_to_branch "integrate/phase-S" ;
+    triage:dispatch_ready "true"^^xsd:boolean ;
+    triage:resolution "open" ;
+    triage:triage_date "2026-05-09"^^xsd:date .

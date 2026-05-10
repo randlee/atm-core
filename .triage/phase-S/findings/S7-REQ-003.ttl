@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S7-REQ-003>
+  a triage:Finding ;
+  triage:findingId "S7-REQ-003" ;
+  triage:title "--since-last-seen deprecation warning contradicts ADR-009" ;
+  triage:description "crates/atm/src/commands/read.rs:153-158 — the deprecation_warnings() method emits \"warning: `atm read --since-last-seen` is redundant because it is the default behavior.\" ADR-009 §Legacy Flag Migration explicitly states that `--since-last-seen` remains accepted as an explicit restatement of the default seen-state behavior, and that deprecation warnings must direct operators toward the new flag names. A \"redundant\" framing does not direct the operator toward any replacement flag; it implies the flag will be removed rather than retained as documented. The warning must either be removed (since ADR-009 classifies --since-last-seen as retained, not deprecated) or reworded to match the ADR-009 retention decision — \"explicit restatement of default behavior; not deprecated.\"" ;
+  triage:category "REQ" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S7-REQ-003/s7/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:occurrence/S7-REQ-003/s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/read.rs" ;
+  triage:line 153 ;
+  triage:snippet "if self.since_last_seen { warnings.push(\"warning: `atm read --since-last-seen` is redundant because it is the default behavior.\".to_string()); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9c01bca" ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s7-queue-query" ;
+  triage:headSha "9c01bca" ;
+  triage:orderIndex 1 .

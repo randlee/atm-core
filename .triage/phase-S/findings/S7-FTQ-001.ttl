@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S7-FTQ-001>
+  a triage:Finding ;
+  triage:findingId "S7-FTQ-001" ;
+  triage:title "Timestamp collision in actionable_selection_prefers_terminal_thread_message" ;
+  triage:description "crates/atm-core/src/read/mod.rs:1017-1059 — root and terminal messages are both constructed via the message() helper which calls IsoTimestamp::now() on each invocation. In rapid succession the two calls can resolve to equal timestamps. When timestamps tie, sort_and_limit_selected() falls through to a UUID tiebreak on message_id (line 678: right.envelope.message_id.cmp(&left.envelope.message_id)). LegacyMessageId::new() produces a UUIDv4; the relative ordering of root_id vs terminal_id is random at runtime, making the sort outcome non-deterministic. The test asserts selected[0].envelope.message_id == Some(terminal_id), which passes only when terminal_id sorts higher — intermittent failure rate is ~50% under timestamp collision. Fix: construct messages with explicit, strictly-ordered timestamps (e.g. IsoTimestamp::from_datetime(Utc::now() - Duration::seconds(1)) for root and IsoTimestamp::now() for terminal) so the terminal message always wins the sort without relying on UUID ordering." ;
+  triage:category "FTQ" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S7-FTQ-001/s7/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:occurrence/S7-FTQ-001/s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 1017 ;
+  triage:snippet "message(\"root\", root_id, None, None, false) and message(\"detail\", terminal_id, ...) both call IsoTimestamp::now(); equal timestamps fall through to message_id UUID tiebreak → non-deterministic sort → intermittent assert_eq!(selected[0].message_id, Some(terminal_id)) failure" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9c01bca" ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s7-queue-query" ;
+  triage:headSha "9c01bca" ;
+  triage:orderIndex 1 .
