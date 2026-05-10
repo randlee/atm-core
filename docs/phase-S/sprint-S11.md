@@ -21,6 +21,10 @@ Fix `host_log_dir()` in `crates/atm-core/src/home.rs` to check `ATM_LOG_DIR` bef
 
 This matches the contract implied by ADR-011 and required by headless daemon deployments where `HOME` is not set.
 
+ADR-011 now states this ordering explicitly: `ATM_LOG_DIR` is evaluated before
+any OS home-directory resolution, and a valid override bypasses `home_dir()`
+entirely.
+
 ### 2. Update/add tests
 
 Verify the new order with tests:
@@ -33,6 +37,13 @@ Verify the new order with tests:
 
 Any new test helpers that use `LocalEnvGuard` or env manipulation must follow the established pattern from home.rs: unix-only constructs gated with `#[cfg(unix)]`, cross-platform constructs ungated.
 
+### 4. ADR-011 overlap-check scope
+
+Overlap checks against `~/.atm/daemon/` and `~/.claude/` are out of scope for
+S.11 when `ATM_LOG_DIR` is set. Enforcing those exclusions requires resolving
+the OS home directory, which defeats the headless override-first contract this
+sprint restores. ADR-011 records that accepted scope boundary explicitly.
+
 ## Acceptance Criteria
 
 - `ATM_LOG_DIR` override checked before `home_dir()` resolution
@@ -42,9 +53,13 @@ Any new test helpers that use `LocalEnvGuard` or env manipulation must follow th
 - `cargo test -p atm-core` PASS
 - `cargo xwin check --workspace --target x86_64-pc-windows-msvc` PASS
 
+CI note:
+- PR `#224` was green at `34bf2eb`, satisfying the sprint's Windows `cargo xwin check` acceptance evidence for the pre-fix branch head.
+
 ## References
 
 - `crates/atm-core/src/home.rs` — `host_log_dir()` implementation
 - `docs/adr/ADR-011-host-scoped-retained-log-root.md` — override contract
+- `docs/adr/ADR-011-host-scoped-retained-log-root.md` — override-first order and overlap-check scope amendment
 - `docs/atm-daemon/requirements.md` — daemon observability requirements
 - `docs/cross-platform-guidelines.md` — Windows cfg-gate patterns

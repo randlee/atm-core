@@ -233,15 +233,20 @@ mod tests {
     #[cfg(unix)]
     use super::MAX_HOST_LOG_DIR_UTF8_BYTES;
     use super::{
-        atm_home, host_db_dir_from_home, host_log_dir_from_home, host_mail_db_path_from_home,
-        host_runtime_dir_from_home, host_runtime_lock_path_from_home, inbox_path,
-        inbox_path_from_home, team_dir, team_dir_from_home, workflow_state_path_from_home,
+        atm_home, host_db_dir_from_home, host_log_dir, host_log_dir_from_home,
+        host_mail_db_path_from_home, host_runtime_dir_from_home, host_runtime_lock_path_from_home,
+        inbox_path, inbox_path_from_home, team_dir, team_dir_from_home,
+        workflow_state_path_from_home,
     };
     #[cfg(unix)]
-    use super::{host_db_dir, host_log_dir, host_mail_db_path, host_runtime_dir};
+    use super::{host_db_dir, host_mail_db_path, host_runtime_dir};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, TeamName};
 
+    /// Process-wide mutex that serializes `std::env::set_var` / `remove_var`
+    /// calls in tests. Required because these functions are unsafe in
+    /// multi-threaded processes; concurrent env mutation produces undefined
+    /// behavior.
     fn env_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         LOCK.get_or_init(|| Mutex::new(()))
@@ -497,7 +502,6 @@ mod tests {
         );
     }
 
-    #[cfg(unix)]
     #[test]
     #[serial_test::serial]
     fn host_log_dir_prefers_atm_log_dir_override() {
