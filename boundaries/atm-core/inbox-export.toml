@@ -31,6 +31,7 @@ forbidden = []
 request_types = ["export write requests"]
 response_types = ["typed export result models"]
 error_types = ["AtmError"]
+notes = ["ATM-authored compatibility projection may replace oversized JSONL bodies with the exact retrieval stub `atm read --message-id <id>` while preserving summary text and metadata", "Claude-native inbound messages must not be rewritten into ATM retrieval stubs"]
 
 [testing]
 allowed_test_double_paths = []
@@ -42,4 +43,4 @@ review_gates = ["no_direct_mailbox_helper_calls"]
 
 [status]
 state = "stub_landed"
-notes = ["typed record/export request and response contracts landed in atm_core::boundary", "send and receive state transitions should reach compatibility files through this boundary only"]
+notes = ["typed record/export request and response contracts landed in atm_core::boundary", "send and receive state transitions should reach compatibility files through this boundary only", "the ADR-010 compatibility envelope keeps full ATM-authored bodies durable in SQLite while this boundary owns the bounded Claude JSONL projection"]

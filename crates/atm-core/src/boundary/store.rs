@@ -172,6 +172,8 @@ pub struct TaskStoreResponse {
 pub struct RosterStoreReplaceRosterRequest {
     pub team: TeamName,
     pub roster: TeamConfig,
+    /// Invariant: when present, source names one concrete roster-ingest origin
+    /// and must not be synthesized from an empty or whitespace-only string.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
 }
@@ -255,6 +257,8 @@ pub struct RosterStoreHealthSnapshotResponse {
 pub struct RosterStoreRequest {
     pub team: TeamName,
     pub roster: TeamConfig,
+    /// Invariant: when present, source names one concrete roster-ingest origin
+    /// and must not be synthesized from an empty or whitespace-only string.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
 }

@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S12-QA1-006>
+  a triage:Finding ;
+  triage:findingId "S12-QA1-006" ;
+  triage:title "Unconditional condvar wait inside bounded_shutdown_step_returns_after_deadline test closure (RSH-006)" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs:880: The bounded_shutdown_step_returns_after_deadline test uses wake.wait(released) (unconditional Condvar::wait) inside the step closure rather than a timed wait. If notify_all fires before the thread is scheduled, the wait blocks indefinitely — the only safety net is the drain_shutdown_finalizer_threads_for_test() finalizer, which itself has a fixed timeout. This is a test design gap consistent with INTG-FTQ-002/003 class (wall-clock/timing sensitivity). Fix: replace wake.wait(released) with wake.wait_timeout(released, Duration::from_secs(5)) and assert !timed_out, consistent with the pattern used in reconcile_runtime tests exercising the same scenario." ;
+  triage:category "FTQ" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s12-intg-gate-findings" ;
+  triage:promoteToBranch "feature/pS-s12-intg-gate-findings" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S12-QA1-006/s12/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8> .
+
+<urn:atm:triage:occurrence/S12-QA1-006/s12/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 880 ;
+  triage:snippet "released = wake.wait(released).expect(\"released wait\") — unconditional condvar wait inside bounded-shutdown test closure; no timeout guard" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "bd9e0e8" ;
+  triage:branch "feature/pS-s12-intg-gate-findings" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8> .
+
+<urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s12-intg-gate-findings" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s12-intg-gate-findings" ;
+  triage:headSha "bd9e0e8" ;
+  triage:orderIndex 1 .

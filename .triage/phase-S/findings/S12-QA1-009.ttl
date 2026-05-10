@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S12-QA1-009>
+  a triage:Finding ;
+  triage:findingId "S12-QA1-009" ;
+  triage:title "INTG-RBP-001 fix recovery text vague — not operator-actionable at installed string quality (RBP-001)" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs:697: .with_recovery(\"ensure team name is valid UTF-8\") tells the operator what condition must be fixed but not how. The canonical triage record specifies a more actionable string: 'Remove or rename the malformed team directory under the ATM teams root before retrying.' The sprint-S12.md fix description chose a shorter string consistent with an adjacent recovery site but below the operator-actionability bar set by other callsites in the same function body (e.g., runtime_health.rs:677 gives a concrete operator action). Note: this overlaps with S12-QA1-001 which raises the cross-doc conflict angle; this finding captures the RBP-001 quality dimension independently. Fix: either strengthen the recovery text to 'Remove or rename the malformed team directory under ~/.claude/teams/ before restarting atm-daemon.' or close as resolved-by-S12-QA1-001 when that fix upgrades the string." ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s12-intg-gate-findings" ;
+  triage:promoteToBranch "feature/pS-s12-intg-gate-findings" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S12-QA1-009/s12/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8> .
+
+<urn:atm:triage:occurrence/S12-QA1-009/s12/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 697 ;
+  triage:snippet ".with_recovery(\"ensure team name is valid UTF-8\") — vague, no operator action; see also S12-QA1-001 (canonical conflict)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "bd9e0e8" ;
+  triage:branch "feature/pS-s12-intg-gate-findings" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8> .
+
+<urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s12-intg-gate-findings" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s12-intg-gate-findings" ;
+  triage:headSha "bd9e0e8" ;
+  triage:orderIndex 1 .

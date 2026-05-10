@@ -719,7 +719,10 @@ fn read_possible_write_only_locks_when_display_mutation_is_required() {
     let started = Instant::now();
     let outcome = read_mail(no_mutation_query, &observability).expect("read without mutation");
     assert_eq!(outcome.count, 1);
-    assert_eq!(outcome.messages[0].envelope.text, "already read");
+    assert_eq!(
+        outcome.message.expect("selected message").envelope.text,
+        "already read"
+    );
     assert!(
         started.elapsed() < TEST_LOCK_BUDGET_CEILING,
         "retain only a coarse non-blocking budget here; recv_timeout-based tests above already cover deadlock detection"
@@ -755,9 +758,9 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
     let outcome = read_mail(read_query, &observability).expect("read mail");
     assert!(
         outcome
-            .messages
-            .iter()
-            .any(|message| message.envelope.text == "hello sidecar"),
+            .message
+            .as_ref()
+            .is_some_and(|message| message.envelope.text == "hello sidecar"),
         "read outcome should include the ULID-authored message"
     );
 
@@ -926,20 +929,22 @@ impl Fixture {
         };
         fixture.write_primary_inbox(
             PRIMARY_AGENT,
-            &[pending_ack_message(
+            &[pending_ack_message_at(
                 SECONDARY_AGENT,
                 "arch pending",
                 arch_message_id,
                 PRIMARY_TEAM,
+                Utc::now() - chrono::Duration::seconds(1),
             )],
         );
         fixture.write_primary_inbox(
             SECONDARY_AGENT,
-            &[pending_ack_message(
+            &[pending_ack_message_at(
                 PRIMARY_AGENT,
                 &format!("{SECONDARY_AGENT} pending"),
                 qa_message_id,
                 PRIMARY_TEAM,
+                Utc::now() - chrono::Duration::seconds(1),
             )],
         );
 
@@ -986,6 +991,8 @@ impl Fixture {
             false,
             false,
             AckActivationMode::ReadOnly,
+            None,
+            None,
             None,
             None,
             None,
@@ -1178,6 +1185,16 @@ fn pending_ack_message(
     message_id: LegacyMessageId,
     source_team: &str,
 ) -> MessageEnvelope {
+    pending_ack_message_at(from, text, message_id, source_team, Utc::now())
+}
+
+fn pending_ack_message_at(
+    from: &str,
+    text: &str,
+    message_id: LegacyMessageId,
+    source_team: &str,
+    timestamp: chrono::DateTime<Utc>,
+) -> MessageEnvelope {
     let mut extra = serde_json::Map::new();
     let mut metadata = serde_json::Map::new();
     let mut atm = serde_json::Map::new();
@@ -1201,12 +1218,12 @@ fn pending_ack_message(
     MessageEnvelope {
         from: from.parse::<AgentName>().expect("agent"),
         text: text.to_string(),
-        timestamp: IsoTimestamp::from_datetime(Utc::now()),
+        timestamp: IsoTimestamp::from_datetime(timestamp),
         read: true,
         source_team: Some(source_team.parse::<TeamName>().expect("team")),
         summary: None,
         message_id: Some(message_id),
-        pending_ack_at: Some(IsoTimestamp::from_datetime(Utc::now())),
+        pending_ack_at: Some(IsoTimestamp::from_datetime(timestamp)),
         acknowledged_at: None,
         acknowledges_message_id: None,
         parent_message_id: None,
@@ -1218,6 +1235,15 @@ fn pending_ack_message(
 }
 
 fn read_message(from: &str, text: &str, message_id: LegacyMessageId) -> MessageEnvelope {
+    read_message_at(from, text, message_id, Utc::now())
+}
+
+fn read_message_at(
+    from: &str,
+    text: &str,
+    message_id: LegacyMessageId,
+    timestamp: chrono::DateTime<Utc>,
+) -> MessageEnvelope {
     let mut extra = serde_json::Map::new();
     let mut metadata = serde_json::Map::new();
     let mut atm = serde_json::Map::new();
@@ -1241,7 +1267,7 @@ fn read_message(from: &str, text: &str, message_id: LegacyMessageId) -> MessageE
     MessageEnvelope {
         from: from.parse::<AgentName>().expect("agent"),
         text: text.to_string(),
-        timestamp: IsoTimestamp::from_datetime(Utc::now()),
+        timestamp: IsoTimestamp::from_datetime(timestamp),
         read: true,
         source_team: Some(PRIMARY_TEAM.parse::<TeamName>().expect("team")),
         summary: None,

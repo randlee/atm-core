@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-012>
+  a triage:Finding ;
+  triage:findingId "RSH-012" ;
+  triage:title "Windows lifecycle polling thread is an infinite loop with no exit condition — terminate flag never observed (lifecycle_control.rs:262)" ;
+  triage:description "crates/atm-daemon/src/lifecycle_control.rs:262-278 — The Windows cfg(windows) install_platform_hooks spawns a polling thread that loops forever reading the terminate flag. However the thread body never checks the terminate AtomicBool to break out of the loop; it only reads signal_hook::flag state to set terminate=true, but the loop itself has no exit condition once terminate is set. On Unix, the thread exits on Ok(0) pipe-read (SIGTERM delivery) or error. On Windows, the thread runs until process exit. This is a minor resource leak in graceful-shutdown scenarios where the daemon exits cleanly: the polling thread cannot be joined and lingers as a detached thread consuming a file handle slot until the process exits. Fix: add a check `if terminate.load(Ordering::SeqCst) { return; }` at the top of the polling loop body so the thread self-terminates once the flag is set." ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T19:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-012/s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s4-hardening/060d77b> .
+
+<urn:atm:triage:occurrence/RSH-012/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 262 ;
+  triage:snippet "cfg(windows) install_platform_hooks polling thread — infinite loop; terminate AtomicBool is written but never read to break; thread runs until process exit; resource leak on graceful shutdown" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "060d77b" ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s4-hardening/060d77b> .
+
+<urn:atm:triage:worktree/feature-pS-s4-hardening/060d77b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "060d77b" ;
+  triage:orderIndex 5 .

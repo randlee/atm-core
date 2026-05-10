@@ -2,6 +2,7 @@
 
 //! SQLite-backed adapter implementations for the Phase R store boundaries.
 
+mod mailbox_metadata;
 mod roster_store;
 mod shared_db;
 
@@ -9,6 +10,10 @@ use atm_core::boundary;
 use atm_core::error::AtmError;
 use atm_core::protocol::RequestEnvelope;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+use mailbox_metadata::{
+    MailboxMetadataCounts, MailboxMetadataRow, query_mailbox_metadata_counts,
+    query_mailbox_metadata_rows,
+};
 #[cfg(test)]
 use rusqlite::Error as RusqliteError;
 use rusqlite::{Connection, OptionalExtension, params};
@@ -95,6 +100,23 @@ impl SqliteBoundaryAssembly {
 
     pub fn checkpoint_wal(&self) -> Result<(), AtmError> {
         self.mail_store.db.checkpoint_wal()
+    }
+
+    pub fn query_mailbox_metadata_rows(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        limit: usize,
+    ) -> Result<Vec<MailboxMetadataRow>, AtmError> {
+        query_mailbox_metadata_rows(&self.mail_store.db, team, agent, limit)
+    }
+
+    pub fn query_mailbox_metadata_counts(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<MailboxMetadataCounts, AtmError> {
+        query_mailbox_metadata_counts(&self.mail_store.db, team, agent)
     }
 
     pub fn record_remote_replay_state(
@@ -499,7 +521,7 @@ impl boundary::MailStore for SqliteMailStore {
                     params![
                         request.team.as_str(),
                         request.agent.as_str(),
-                        request.source,
+                        request.source.as_str(),
                         state_json,
                     ],
                 )
@@ -526,7 +548,7 @@ impl boundary::MailStore for SqliteMailStore {
                     params![
                         request.team.as_str(),
                         request.agent.as_str(),
-                        request.source
+                        request.source.as_str()
                     ],
                     |row| row.get::<_, String>(0),
                 )
@@ -1030,6 +1052,32 @@ mod tests {
         }
     }
 
+    fn envelope_at(
+        text: &str,
+        timestamp: chrono::DateTime<chrono::Utc>,
+        read: bool,
+        pending_ack: bool,
+        task_id_value: Option<TaskId>,
+    ) -> MessageEnvelope {
+        MessageEnvelope {
+            from: actor(),
+            text: text.to_string(),
+            timestamp: IsoTimestamp::from_datetime(timestamp),
+            read,
+            source_team: Some(team()),
+            summary: Some(format!("summary: {text}")),
+            message_id: Some(atm_core::schema::LegacyMessageId::new()),
+            pending_ack_at: pending_ack.then_some(IsoTimestamp::from_datetime(timestamp)),
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            stale_at: None,
+            task_id: task_id_value,
+            extra: serde_json::Map::new(),
+        }
+    }
+
     #[test]
     fn default_production_path_is_host_scoped_mail_db() {
         let tempdir = TempDir::new().expect("tempdir");
@@ -1239,6 +1287,69 @@ mod tests {
         assert_eq!(health.snapshot.total_messages, 1);
         assert_eq!(health.snapshot.pending_ack_messages, 1);
         assert_eq!(health.snapshot.read_messages, 1);
+    }
+
+    #[test]
+    fn bounded_mailbox_metadata_queries_return_limited_rows_and_counts() {
+        let assembly = in_memory_assembly();
+        let team = team();
+        let agent = agent();
+        let now = chrono::Utc::now();
+
+        for (index, (text, read, pending_ack, task_id_value)) in [
+            ("older", false, false, None),
+            ("middle", true, true, Some(task_id())),
+            ("newest", false, true, None),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let record = boundary::MailStoreMessageRecord {
+                team: team.clone(),
+                agent: agent.clone(),
+                message_key: message_key(&format!("atm:test-{index}")),
+                envelope: envelope_at(
+                    text,
+                    now + chrono::Duration::seconds(index as i64),
+                    read,
+                    pending_ack,
+                    task_id_value,
+                ),
+                imported_from: None,
+                recorded_at: Some(IsoTimestamp::from_datetime(
+                    now + chrono::Duration::seconds(index as i64),
+                )),
+            };
+            assembly
+                .mail_store()
+                .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
+                .expect("upsert metadata row");
+        }
+
+        let rows = assembly
+            .query_mailbox_metadata_rows(&team, &agent, 2)
+            .expect("bounded metadata rows");
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].summary.as_deref(), Some("summary: newest"));
+        assert_eq!(rows[1].summary.as_deref(), Some("summary: middle"));
+        assert!(rows[0].pending_ack);
+        assert!(rows[1].read);
+        assert_eq!(
+            rows[1].task_id.as_ref().map(TaskId::as_str),
+            Some("task-123")
+        );
+
+        let counts = assembly
+            .query_mailbox_metadata_counts(&team, &agent)
+            .expect("bounded metadata counts");
+        assert_eq!(
+            counts,
+            MailboxMetadataCounts {
+                total_messages: 3,
+                unread_messages: 2,
+                pending_ack_messages: 2,
+            }
+        );
     }
 
     #[test]

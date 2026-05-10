@@ -216,9 +216,44 @@ mod tests {
 
     #[test]
     #[serial]
+    fn concrete_adapter_uses_host_scoped_default_log_path() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let _env = EnvGuard::set_many([
+            ("ATM_LOG", Some("info")),
+            ("ATM_LOG_DIR", None),
+            ("HOME", Some(tempdir.path().to_str().expect("utf8 path"))),
+        ]);
+        let observability =
+            CliObservability::new(tempdir.path(), CliObservabilityOptions::default())
+                .expect("concrete adapter");
+
+        observability
+            .emit(event(Some("550e8400-e29b-41d4-a716-446655440000")))
+            .expect("emit backlog");
+
+        let health = observability.health().expect("health");
+        assert_eq!(
+            health.active_log_path,
+            Some(
+                tempdir
+                    .path()
+                    .join(".atm")
+                    .join("logs")
+                    .join("atm.log.jsonl")
+            )
+        );
+    }
+
+    #[test]
+    #[serial]
     fn concrete_adapter_emits_queries_follows_and_reports_health() {
         let tempdir = TempDir::new().expect("tempdir");
-        let _atm_log = EnvGuard::set_raw("ATM_LOG", "info");
+        let log_dir = tempdir.path().join(".atm").join("logs");
+        let _env = EnvGuard::set_many([
+            ("ATM_LOG", Some("info")),
+            ("ATM_LOG_DIR", Some(log_dir.to_str().expect("utf8 path"))),
+            ("HOME", Some(tempdir.path().to_str().expect("utf8 path"))),
+        ]);
         let observability =
             CliObservability::new(tempdir.path(), CliObservabilityOptions::default())
                 .expect("concrete adapter");
@@ -247,17 +282,7 @@ mod tests {
             health.query_state,
             Some(AtmObservabilityHealthState::Healthy)
         );
-        assert_eq!(
-            health.active_log_path,
-            Some(
-                tempdir
-                    .path()
-                    .join(".local")
-                    .join("share")
-                    .join("logs")
-                    .join("atm.log.jsonl")
-            )
-        );
+        assert_eq!(health.active_log_path, Some(log_dir.join("atm.log.jsonl")));
         assert!(health.detail.is_none());
 
         let mut follow = observability
@@ -281,6 +306,22 @@ mod tests {
             }),
             "follow poll should include the newly emitted record even if the shared tail surface also returns the prior backlog entry"
         );
+    }
+
+    #[test]
+    #[serial]
+    fn concrete_adapter_fails_closed_when_atm_log_dir_is_invalid() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let _env = EnvGuard::set_many([
+            ("ATM_LOG", Some("info")),
+            ("ATM_LOG_DIR", Some("relative/logs")),
+            ("HOME", Some(tempdir.path().to_str().expect("utf8 path"))),
+        ]);
+
+        let error = CliObservability::new(tempdir.path(), CliObservabilityOptions::default())
+            .expect_err("invalid ATM_LOG_DIR should fail closed");
+        assert!(error.is_config());
+        assert!(error.message.contains("absolute path"));
     }
 
     #[test]

@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S8-QA2-004>
+  a triage:Finding ;
+  triage:findingId "S8-QA2-004" ;
+  triage:title "No test for ATM-authored within-cap message → full body exported (not stub)" ;
+  triage:description "sprint-S8.md task 2.2 requires 'full body durable in SQLite'. inbox_message.rs tests cover: oversized ATM-authored → stub, and Claude-native → full body. The within-cap ATM-authored → full-body path has no direct unit test. Add shared_inbox_write_exports_full_body_for_atm_authored_message_within_cap: construct ATM-authored message (metadata.atm.messageId present), set cap larger than body, assert exported text equals original (not retrieval stub)." ;
+  triage:category "REQ" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s8-jsonl-compat" ;
+  triage:promoteToBranch "feature/pS-s8-jsonl-compat" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-QA2-004/s8/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/237c0ce> .
+
+<urn:atm:triage:occurrence/S8-QA2-004/s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/schema/inbox_message.rs" ;
+  triage:line 907 ;
+  triage:snippet "shared_inbox_write_stubs_oversized_atm_authored_messages covers oversized path; within-cap ATM-authored full-body path has no test" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "237c0ce" ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/237c0ce> .
+
+<urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/237c0ce>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s8-jsonl-compat" ;
+  triage:headSha "237c0ce" ;
+  triage:orderIndex 1 .

@@ -1,13 +1,13 @@
 # Phase S Issues
 
 Planning baseline:
-- branch: `phase-S-planning`
+- branch: `feature/pS-s0-planning`
 - base: `integrate/phase-R`
 - post-`PR #200` review baseline SHA: `d5e49df`
 - follow-on CI-only compatibility fixes do not change the architectural issue
   set tracked here
 
-## Open Issues
+## Closed Historical Planning Issues
 
 1. Product requirement miss: full daemon functionality is expected on Windows,
    but the integrated daemon host shell only supports Unix-hosted same-host
@@ -52,3 +52,85 @@ Planning baseline:
 12. PID liveness semantics remain a carried-forward seam from Phase R; Phase S
     preserves the current PID continuity model and does not redesign it unless
     a later ADR reopens that work explicitly.
+
+13. The original Phase S host-ownership notes did not freeze a
+    cross-platform-compatible lock-file shape; they left room for Unix-shaped
+    deletion signaling instead of one stable `launch.lock` / `owner.lock`
+    model with held-lock owner metadata.
+
+14. The original Phase S anti-flake wording was too narrow: it prohibited
+    fixed sleeps, but it did not define the broader no-flaky-test and
+    no-unbounded-wait policy needed for cross-platform daemon work.
+
+15. Phase S did not explicitly classify which anti-flake guardrails are
+    feasible in the default `just lint` path versus which require deferred
+    Rust-aware analyzer work.
+
+16. Phase S did not explicitly require panic-safe cleanup of shared/global test
+    hooks or ban unbounded wait shapes such as bare `recv()` / `wait()` /
+    `join()` in the risky same-host daemon test surfaces.
+
+Disposition:
+- these planning issues are closed by the merged S.0-S.5 documentation and
+  implementation line
+- they remain listed here as the historical problem inventory that justified
+  the Phase S sprint sequence
+
+## Open Remaining Implementation / Process Issues
+
+17. Phase S still carries four concrete post-S.4 daemon/runtime remediation
+    items that must remain in the active sprint line until closed:
+    - `RSH-001`
+    - `RSH-014`
+    - `WIN-001`
+    - `ATM-QA-S4-001`
+
+18. The mailbox-query redesign exposed by GitHub issues `#213` and `#214`
+    remains unimplemented after S.4. `atm list`, single-message `atm read`,
+    shared selector semantics, and bounded durable query behavior must stay
+    assigned to follow-on Phase S execution work.
+
+19. ATM-authored Claude JSONL compatibility projection is resolved on the
+    S.8 implementation branch through the export-cap config, retrieval-stub
+    projection, and daemon no-churn identity proof accepted in ADR-010.
+
+20. The triage process hardening line is incomplete until `qa-triage`,
+    `triaging-findings`, and the phase integration-worktree ownership rule all
+    agree on the canonical `triage_root`.
+
+21. Retained ATM logging still uses an operationally weak default contract:
+    the current log-root behavior is split from the `~/.atm/` host state tree,
+    the `ATM_LOG_DIR` redirect is not yet part of the owned contract, and the
+    minimum daemon-lifecycle / warning / error event baseline is not yet
+    explicitly planned and reviewed.
+
+## Assigned Follow-On Sprint Ownership
+
+- `S.6`
+  - `RSH-001`
+  - `RSH-014`
+  - `WIN-001`
+  - `ATM-QA-S4-001`
+- `S.7`
+  - `atm list`
+  - single-message `atm read`
+  - shared list/read filter surface
+  - legacy `atm read` flag migration
+  - bounded durable query behavior
+- `S.8`
+  - `[atm].claude_jsonl_body_export_max_bytes`
+  - oversized ATM-authored retrieval-stub export
+  - watcher/reconcile no-churn handling for ATM-authored projections
+- `S.9`
+  - host-scoped retained log directory contract
+  - `ATM_LOG_DIR` redirect behavior
+  - minimum default retained daemon-lifecycle / warning / error event set
+  - watcher/reconcile exclusion for `~/.atm/logs/` so retained-log appends do
+    not create false reconcile work
+
+## Deferred Follow-Up
+
+- `FTQ-001`
+  - remains deferred to later lint/analyzer work
+  - it is not treated as an S.6-S.8 code-implementation item in the current
+    Phase S line

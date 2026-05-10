@@ -1,0 +1,67 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S7-RBP-F005>
+  a triage:Finding ;
+  triage:findingId "S7-RBP-F005" ;
+  triage:title "canonical_sender_identity in ack/mod.rs returns Option<AgentName> but always Some" ;
+  triage:description "crates/atm-core/src/ack/mod.rs:397 — private canonical_sender_identity wraps crate::threading::canonical_sender_identity (which returns AgentName) in Some(…), making the Option return type misleading. Fix: change the return type to AgentName and update the call site at line 368 accordingly, or remove the wrapper and call threading::canonical_sender_identity directly." ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "sprint" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/S7-RBP-F005/s7/1> ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/S7-RBP-F005/intS/1> ;
+
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/76a646c> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+# --- Occurrences on feature/pS-s7-queue-query (9c01bca) ---
+
+<urn:atm:triage:occurrence/S7-RBP-F005/s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 397 ;
+  triage:snippet "fn canonical_sender_identity(message: &MessageEnvelope) -> Option<AgentName> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9c01bca" ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+# --- Occurrences on integrate/phase-S (76a646c) ---
+
+<urn:atm:triage:occurrence/S7-RBP-F005/intS/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 392 ;
+  triage:snippet "fn canonical_sender_identity(message: &MessageEnvelope) -> Option<AgentName> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "76a646c" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/76a646c> .
+
+# --- WorktreeSnapshot nodes ---
+
+<urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s7-queue-query" ;
+  triage:headSha "9c01bca" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-S/76a646c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "76a646c" ;
+  triage:orderIndex 2 .

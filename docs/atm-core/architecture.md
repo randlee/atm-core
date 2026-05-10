@@ -204,10 +204,37 @@ Phase R redesign notes:
 - `atm-core` owns the shared `AtmProtocol` contract
 - `atm-core` owns the public boundary contracts for transport, dispatch,
   store, ingress/export, watch/reconcile, and notification/status surfaces
+- `atm-core` owns the ATM frame schema used by both same-host local IPC and
+  cross-host daemon transport
+- `atm-core` owns the queue-query semantics shared by `atm list` and
+  single-message `atm read`
+- selector-driven queue inspection operates on logical terminal-node messages,
+  not raw superseded predecessors
+- the canonical ICD owns the exact frame constants, packet-kind assignments,
+  and payload DTO mapping that `atm-core` must encode and decode
+- `atm-core` owns the current daemon packet family for:
+  - send compose
+  - send acknowledge
+  - receive
+  - clear
+  - doctor
+  - heartbeat
 - thin-client workflow surfaces should center on `send` and `receive`
 - `ack` remains a workflow/state concern, but thin-client protocol shape
   should carry it inside send-shaped requests rather than a separate top-level
   method family
+- queue inspection must not remain one "read many full messages" surface once
+  SQLite-backed mailbox history becomes the ordinary durable source of truth
+
+Required frame direction:
+- transport framing must not depend on EOF or socket half-close semantics
+- receivers must validate the ATM frame header before payload decode
+- transport implementations may vary, but they must share one ATM packet
+  family and one framed helper layer
+- the canonical ATM daemon wire contract is documented in
+  [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
+- the same protocol ICD governs same-host local IPC and cross-host
+  daemon-to-daemon transport
 
 ## 2.2 Phase R Semantic Wrapper Policy
 
@@ -410,6 +437,8 @@ Architectural rules:
   - team roster
 - daemon memory is the live source of truth for agent status
 - Claude inbox JSONL is ingress/egress compatibility only
+- ATM-authored JSONL export is a bounded compatibility projection over the full
+  durable message body
 
 Migration implication:
 - current mailbox/workflow-sidecar logic is transitional and must converge onto

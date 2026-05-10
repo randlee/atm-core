@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S10-QA1-007>
+  a triage:Finding ;
+  triage:findingId "S10-QA1-007" ;
+  triage:title "Missing tests for OS-level fail-closed failure modes (non-writable dir, file not appendable)" ;
+  triage:description "ADR-011 requires fail-closed behavior 'reported to stderr with the full path and the underlying OS error'. The existing test bootstrap_fails_closed_when_atm_log_dir_is_invalid only covers the invalid ATM_LOG_DIR (relative path) case. No tests cover: (1) directory exists but is not writable, (2) log file not openable for append. Add tests for these OS-error paths verifying both fail-closed return and error message containing the full path." ;
+  triage:category "REQ" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s10-daemon-retained-logger" ;
+  triage:promoteToBranch "feature/pS-s10-daemon-retained-logger" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S10-QA1-007/s10/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658> .
+
+<urn:atm:triage:occurrence/S10-QA1-007/s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/daemon_observability.rs" ;
+  triage:line 58 ;
+  triage:snippet "bootstrap_at_log_dir() fail-closed path tested for invalid path only; non-writable dir and non-appendable file OS-error paths have no test" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "320b658" ;
+  triage:branch "feature/pS-s10-daemon-retained-logger" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658> .
+
+<urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s10-daemon-retained-logger" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s10-daemon-retained-logger" ;
+  triage:headSha "320b658" ;
+  triage:orderIndex 1 .

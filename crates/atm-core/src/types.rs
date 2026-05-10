@@ -354,9 +354,8 @@ pub enum DisplayBucket {
 #[serde(rename_all = "snake_case")]
 pub enum ReadSelection {
     Actionable,
-    UnreadOnly,
-    PendingAckOnly,
-    ActionableWithHistory,
+    Unread,
+    PendingAck,
     All,
 }
 
@@ -365,4 +364,14 @@ pub enum ReadSelection {
 pub enum AckActivationMode {
     PromoteDisplayedUnread,
     ReadOnly,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CommandAction {
+    Ack,
+    Clear,
+    List,
+    Read,
+    Send,
 }

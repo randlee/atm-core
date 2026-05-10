@@ -21,7 +21,7 @@ The crate-local machine-readable boundary inventory lives in:
 - inbox ingress/export contracts
 - config ingress contracts
 - workflow and typestate rules
-- send/read/ack/clear service behavior
+- list/send/read/ack/clear service behavior
 - log query/follow service behavior over the observability boundary
 - doctor service behavior
 - structured core errors
@@ -45,6 +45,7 @@ Initial allocation:
 - `REQ-CORE-CONFIG-*`
 - `REQ-CORE-MAILBOX-*`
 - `REQ-CORE-WORKFLOW-*`
+- `REQ-CORE-LIST-*`
 - `REQ-CORE-SEND-*`
 - `REQ-CORE-READ-*`
 - `REQ-CORE-ACK-*`
@@ -55,6 +56,7 @@ Initial allocation:
 - `REQ-CORE-TEAM-*`
 - `REQ-CORE-RUNTIME-*`
 - `REQ-CORE-STORE-*`
+- `REQ-CORE-COMPAT-*`
 - `REQ-CORE-INGEST-*`
 - `REQ-CORE-BOUNDARY-*`
 - `REQ-CORE-TRANSPORT-*`
@@ -69,10 +71,12 @@ Initial crate requirement IDs:
   resolution policy across the CLI and daemon-backed runtime. Satisfies the
   path/config/identity aspects of:
   `REQ-P-CONTRACT-001`, `REQ-P-IDENTITY-001`, `REQ-P-DOCTOR-001`.
+  It also owns parsing and validation of `[atm].claude_jsonl_body_export_max_bytes`
+  for the ATM-authored JSONL compatibility envelope.
 - `REQ-CORE-CONFIG-002` `atm-core` owns shared address parsing, alias rewrite,
   and team/member validation policy. Satisfies the address resolution and
   target-validation aspects of:
-  `REQ-P-ADDRESS-001`, `REQ-P-SEND-001`, `REQ-P-READ-001`,
+  `REQ-P-ADDRESS-001`, `REQ-P-SEND-001`, `REQ-P-LIST-001`, `REQ-P-READ-001`,
   `REQ-P-CLEAR-001`.
 - `REQ-CORE-CONFIG-003` `atm-core` owns persisted config/team schema recovery
   and diagnostic policy. Satisfies the compatibility-recovery and
@@ -92,14 +96,25 @@ Initial crate requirement IDs:
 - `REQ-CORE-MAILBOX-001` `atm-core` owns transitional mailbox compatibility
   behavior and the file-backed import/export boundary during the migration
   line. Satisfies the persisted mailbox compatibility aspects of:
-  `REQ-P-CONTRACT-001`, `REQ-P-SEND-001`, `REQ-P-READ-001`,
+  `REQ-P-CONTRACT-001`, `REQ-P-SEND-001`, `REQ-P-LIST-001`, `REQ-P-READ-001`,
   `REQ-P-ACK-001`, `REQ-P-CLEAR-001`, `REQ-P-RELIABILITY-001`,
   `REQ-P-IDLE-001`.
+- `REQ-CORE-COMPAT-001` `atm-core` owns the Claude JSONL compatibility
+  projection contract for ATM-authored exports and inbound compatibility
+  ingestion, including the bounded export cap, retrieval-stub rule, and
+  idempotent watcher/reconcile projection handling for the same logical
+  message. Satisfies:
+  `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-WORKFLOW-001` `atm-core` owns the two-axis workflow model and legal
   transitions. Satisfies the state-classification and legal-transition aspects
   of:
-  `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-CLEAR-001`,
+  `REQ-P-LIST-001`, `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-CLEAR-001`,
   `REQ-P-WORKFLOW-001`.
+- `REQ-CORE-LIST-001` `atm-core` owns the metadata-first queue query contract
+  shared by `atm list` and selector-driven `atm read`, including bounded
+  query behavior, shared match filters, successor-chain terminal-node
+  selection, and list-row shaping. Satisfies:
+  `REQ-P-LIST-001`, `REQ-P-READ-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-SEND-003` `atm-core` owns send-path message construction,
   classification, and compatibility-export behavior above the owned
   ingress/export boundaries. Satisfies the send-path service aspects of:
@@ -155,6 +170,11 @@ Initial crate requirement IDs:
 - `REQ-CORE-DAEMON-002` `atm-core` owns the contract that daemon runtime
   orchestration stays outside mail business semantics. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
+- `REQ-CORE-DAEMON-003` `atm-core` owns the production runtime-entry contract
+  that callers connect to an already-running daemon first, auto-start it once
+  when absent, and fail with a typed daemon-unavailable error rather than
+  silently falling back to direct SQLite or inbox-file access. Satisfies:
+  `REQ-P-RUNTIME-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-TRANSPORT-001` `atm-core` owns the shared `AtmProtocol` contract
   used by client transport, server transport, and in-process test transport. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
@@ -173,6 +193,12 @@ Initial crate requirement IDs:
   `ClientTransport` boundary must remain object-safe and include `Send + Sync`
   semantics so callers do not have to restate them ad hoc. Satisfies:
   `REQ-P-TEST-001`, `REQ-P-CONTRACT-001`.
+- `REQ-CORE-TRANSPORT-006` `atm-core` owns the shared ATM wire-frame schema
+  and framed encode/decode helpers used by same-host local IPC, cross-host
+  daemon transport, and in-process protocol tests. The canonical wire contract
+  is documented in `docs/atm-daemon/protocol-icd.md`, including exact header
+  constants, `message_kind` assignments, and payload DTO mapping. Satisfies:
+  `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-LOCK-RETIRE-001` `atm-core` owns the service-layer rule that normal
   ATM mail correctness must not depend on mailbox locks in the Phase Q target
   architecture. Satisfies:
@@ -191,6 +217,7 @@ Initial crate requirement IDs:
 
 Per-module documentation lives under:
 
+- [`modules/list.md`](./modules/list.md)
 - [`modules/send.md`](./modules/send.md)
 - [`modules/read.md`](./modules/read.md)
 - [`modules/ack.md`](./modules/ack.md)
@@ -220,9 +247,10 @@ The `atm-core` crate docs must remain aligned with:
 - [`../atm-message-schema.md`](../atm-message-schema.md)
 - [`../legacy-atm-message-schema.md`](../legacy-atm-message-schema.md)
 - [`../atm-error-codes.md`](../atm-error-codes.md)
-- [`../plan-phase-Q.md`](../plan-phase-Q.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)
+- [`../plan-phase-S.md`](../plan-phase-S.md)
 - [`../testing-guidelines.md`](../testing-guidelines.md)
+- [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
 - [`./boundaries.md`](./boundaries.md)
 - [`./design/dedup-metadata-schema.md`](./design/dedup-metadata-schema.md)
 - [`./design/sc-observability-integration.md`](./design/sc-observability-integration.md)
@@ -265,11 +293,24 @@ Required `atm-core` crate rules:
   store boundaries; durable identities must not remain raw `String` values
 - `atm-core` must model resource-cap and timeout settings with typed wrappers
 - `ClientTransport` remains the shared request/response seam for:
-  - production local socket transport
+  - production same-host local IPC transport
+  - production remote daemon peer transport
   - fake in-process transport doubles
   - loopback in-process transport
 - `ClientTransport` must be strong enough for shared ownership and concurrent
   request execution without downstream callers restating `Send + Sync`
+- `atm-core` owns one ATM frame contract for local IPC and remote daemon
+  request/response transport, as defined by
+  `docs/atm-daemon/protocol-icd.md`
+- the current shared daemon packet family covers:
+  - send compose
+  - send acknowledge
+  - receive
+  - clear
+  - doctor
+  - heartbeat
+- `atm-core` framed transport helpers must delimit packets explicitly rather
+  than relying on EOF/connection shutdown to mark request boundaries
   rather than passing raw integer literals through the service boundary
 - `atm-core` owns the ingest replay/degradation contract and must not silently
   drop parseable external rows
@@ -484,7 +525,7 @@ Required doctor rules:
   end of the run; any lock path present in both snapshots is stale and must be
   reported with `ATM_WARNING_STALE_MAILBOX_LOCK` plus `rm -f <path>` recovery guidance
 
-## 9. Retained Team Recovery Surface
+## 10. Retained Team Recovery Surface
 
 Requirement ID:
 - `REQ-CORE-TEAM-001`

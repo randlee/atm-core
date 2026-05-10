@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S9-CI-WIN-002>
+  a triage:Finding ;
+  triage:findingId "S9-CI-WIN-002" ;
+  triage:title "Windows compile failure — LocalEnvSet and LocalEnvGuard::set_many ungated, dead code on Windows" ;
+  triage:description "crates/atm-core/src/home.rs test module — LocalEnvGuard::set_many() method (line 285) and LocalEnvSet struct (line 311) plus its Drop impl (line 331) are defined unconditionally but only called from #[cfg(unix)]-gated tests. On Windows: '-D warnings' compile failure with 'associated function set_many is never used' and 'struct LocalEnvSet is never constructed'. CI-WIN-001 fix resolved the OsString E0425 error; CI-WIN-002 is a new dead-code lint failure caught by 'just lint' clippy on Windows. Fix: add #[cfg(unix)] gate to LocalEnvSet struct definition, its Drop impl, and LocalEnvGuard::set_many method. All callers are already #[cfg(unix)]-gated." ;
+  triage:category "CI" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T03:55:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s9-logging-defaults" ;
+  triage:promoteToBranch "feature/pS-s9-logging-defaults" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S9-CI-WIN-002/s9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S9-CI-WIN-002/s9/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S9-CI-WIN-002/s9/3> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/b977345> .
+
+<urn:atm:triage:occurrence/S9-CI-WIN-002/s9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 285 ;
+  triage:snippet "fn set_many<const N: usize>(...) — ungated, dead on Windows; add #[cfg(unix)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "b977345" ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/b977345> .
+
+<urn:atm:triage:occurrence/S9-CI-WIN-002/s9/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 311 ;
+  triage:snippet "struct LocalEnvSet { ... } — ungated, never constructed on Windows; add #[cfg(unix)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "b977345" ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/b977345> .
+
+<urn:atm:triage:occurrence/S9-CI-WIN-002/s9/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 331 ;
+  triage:snippet "impl Drop for LocalEnvSet — ungated, dead on Windows; add #[cfg(unix)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "b977345" ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/b977345> .
+
+<urn:atm:triage:worktree/feature-pS-s9-logging-defaults/b977345>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s9-logging-defaults" ;
+  triage:headSha "b977345" ;
+  triage:orderIndex 1 .

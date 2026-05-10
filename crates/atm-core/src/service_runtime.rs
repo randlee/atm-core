@@ -10,6 +10,13 @@ use crate::send::{PostSendHookContext, maybe_run_post_send_hook};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use crate::workflow::{self, WorkflowStateFile};
 
+const WORKFLOW_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct RetainedMailboxTimeoutPolicy {
+    pub(crate) workflow_lock_timeout: Duration,
+}
+
 pub(crate) trait RetainedServiceRuntime {
     fn load_config(&self, current_dir: &Path) -> Result<Option<AtmConfig>, AtmError>;
     fn load_team_config(&self, team_dir: &Path) -> Result<TeamConfig, AtmError>;
@@ -52,10 +59,10 @@ pub(crate) trait RetainedServiceRuntime {
         agent: &AgentName,
         timestamp: IsoTimestamp,
     ) -> Result<(), AtmError>;
-    fn default_lock_timeout(&self) -> Duration;
+    fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy;
     fn maybe_run_post_send_hook(
         &self,
-        warnings: &mut Vec<String>,
+        warnings: &mut Vec<crate::send::WarningEntry>,
         config: Option<&AtmConfig>,
         context: PostSendHookContext<'_>,
     );
@@ -160,14 +167,15 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         seen_state::save_seen_watermark(home_dir, team, agent, timestamp)
     }
 
-    fn default_lock_timeout(&self) -> Duration {
-        // TODO(phase-R): move this retained mailbox-lock default behind a boundary-owned timeout policy.
-        crate::mailbox::lock::default_lock_timeout()
+    fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
+        RetainedMailboxTimeoutPolicy {
+            workflow_lock_timeout: WORKFLOW_LOCK_TIMEOUT,
+        }
     }
 
     fn maybe_run_post_send_hook(
         &self,
-        warnings: &mut Vec<String>,
+        warnings: &mut Vec<crate::send::WarningEntry>,
         config: Option<&AtmConfig>,
         context: PostSendHookContext<'_>,
     ) {

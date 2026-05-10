@@ -4,8 +4,8 @@
 plan_type: sprint_plan
 phase: S
 sprint: "S.0"
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/phase-S-planning
-branch: phase-S-planning
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s0-planning
+branch: feature/pS-s0-planning
 status: accepted
 estimated_scope: M
 ```
@@ -28,11 +28,12 @@ implementation sprints will follow.
 - `REQ-P-PLATFORM-002`
 - `REQ-P-PRODUCT-001`
 - `REQ-P-RUNTIME-002`
-- `REQ-CORE-DAEMON-004`
+- `REQ-CORE-DAEMON-003`
 - `REQ-CORE-TRANSPORT-001`
 - `REQ-CORE-BOUNDARY-001`
 - `REQ-DAEMON-PLATFORM-001`
 - `REQ-DAEMON-PLATFORM-002`
+- `REQ-DAEMON-TRANSPORT-008`
 - `REQ-DAEMON-TEST-003`
 - `REQ-DAEMON-TEST-004`
 
@@ -42,6 +43,15 @@ implementation sprints will follow.
 - `docs/adr/ADR-003-test-fidelity-and-daemon-isolation.md`
 - `docs/adr/ADR-005-host-scoped-sqlite-state-root.md`
 - `docs/adr/ADR-007-supported-platform-parity.md`
+- `docs/adr/ADR-008-no-flaky-test-policy-and-mechanical-enforcement.md`
+
+## Governing ICD Sections
+
+- `docs/atm-daemon/protocol-icd.md §3.1` Phase S supported packet surface
+- `docs/atm-daemon/protocol-icd.md §5` shared ATM frame
+- `docs/atm-daemon/protocol-icd.md §6.5` packet-kind to workflow mapping
+- `docs/atm-daemon/protocol-icd.md §8` exchange rules
+- `docs/atm-daemon/protocol-icd.md §10` timeout and failure semantics
 
 ## Governing Boundaries
 
@@ -84,6 +94,9 @@ implementation sprints will follow.
    - define the cross-platform local IPC, lifecycle control, and host ownership
      boundaries
    - decide what remains in runtime orchestration versus platform adapters
+   - define the logical same-host endpoint contract and same-user local-IPC
+     access-control policy so callers do not depend on Unix socket paths,
+     Windows pipe names, or platform-specific ACL details
    Required tests:
    - none
    Required doc or boundary updates:
@@ -109,6 +122,20 @@ implementation sprints will follow.
    - define the implementation sprint sequence for Phase S
    - name the exact current daemon files and methods each implementation sprint
      must change
+   - define the same framed packet contract used by same-host local IPC and
+     cross-host daemon transport
+   - assign the exact Phase S.0 ATM frame constants in the ICD:
+     - `magic`
+     - `version`
+     - `message_kind` numeric registry
+     - `flags`
+     - `request_id`
+     - `payload_length`
+   - map the current packet kinds to the exact owned payload DTO types and
+     identify current protocol-layer DTOs that are not public packet kinds
+   - define the transport module split so same-host IPC code can be isolated
+     and reused outside ATM with only packet enums/serializers swapped
+   - reject UDP for CLI-daemon request/response traffic
    - document the preferred crate candidates for local IPC, file locking, and
      lifecycle control
    - record that final crate adoption is deferred until S.1 validates the
@@ -142,9 +169,25 @@ daemon docs, and Phase S sequence are all updated together.
 - active docs no longer describe Unix-only same-host daemon hosting as the
   target product architecture
 - Phase S defines one cross-platform local IPC target for same-host transport
+- Phase S defines one shared ATM frame format for same-host local IPC and
+  cross-host daemon transport
+- the shared ATM frame contract has one canonical ICD under
+  `docs/atm-daemon/protocol-icd.md`
+- the canonical ICD includes the exact current `magic`, `version`,
+  `message_kind`, `flags`, `request_id`, and `payload_length` contract
+- the canonical ICD includes the exact current packet-kind registry, payload
+  DTO mapping, and non-packet retained-surface inventory
+- Phase S defines the frame failure contract: invalid, partial, oversized, or
+  timed-out frames terminate the connection instead of attempting mid-stream
+  resynchronization
 - host ownership and lifecycle control are explicit daemon review surfaces
+- Phase S defines one stable cross-platform singleton lock-file model using
+  permanent `launch.lock` / `owner.lock` paths plus held-lock owner metadata
 - the Phase S sprint sequence is concrete enough to execute without reopening
   the architectural direction
+- the S.1-S.5 sprint documents exist and each names the exact code targets,
+  governing references, and acceptance criteria required for implementation
+  review
 - Phase S docs explicitly require feature parity on all supported operating
   systems rather than compile-only support
 - Phase S docs enumerate the exact current daemon methods/files that S.1-S.4
@@ -156,18 +199,23 @@ daemon docs, and Phase S sequence are all updated together.
 - Phase S docs define the temporary Windows CI lint narrowing and the S.4
   requirement to remove it
 
-## Anti-Flake Synchronization Contract
+## No-Flaky-Test And Bounded-Wait Contract
 
 Phase S same-host daemon tests must use positive synchronization primitives:
 - channel-based ready handshakes
 - `Barrier`, `Condvar`, or latch/predicate synchronization
 - documented listener-ready or worker-ready probes with bounded deadlines
+- panic-safe cleanup of shared/global test hooks
+- bounded drain/join of helper threads and finalizer threads
 
 They must not use:
 - fixed sleeps
 - warm-up delays
 - retry loops with no observable readiness predicate
 - OS-specific timing fudge added only to appease Windows CI
+- unbounded `recv()`, `wait()`, or equivalent blocking operations in risky
+  same-host daemon test paths
+- bare `join()` when no prior bounded handshake proves completion
 
 ## Required Validation
 
@@ -177,14 +225,20 @@ They must not use:
 
 - `docs/plan-phase-S.md`
 - `docs/phase-S/sprint-S0.md`
+- `docs/atm-daemon/protocol-icd.md`
 - `docs/phase-S/sprint-S1.md`
 - `docs/phase-S/sprint-S2.md`
 - `docs/phase-S/sprint-S3.md`
 - `docs/phase-S/sprint-S4.md`
+- `docs/phase-S/sprint-S5.md`
 - `docs/phase-S/issues.md`
 - `docs/project-plan.md`
 - `docs/requirements.md`
 - `docs/architecture.md`
+- `docs/atm-core/requirements.md`
+- `docs/atm-core/architecture.md`
+- `docs/atm/requirements.md`
+- `docs/atm/architecture.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
@@ -195,6 +249,7 @@ They must not use:
 - `docs/testing-guidelines.md`
 - `docs/cross-platform-guidelines.md`
 - `docs/adr/ADR-007-supported-platform-parity.md`
+- `docs/adr/ADR-008-no-flaky-test-policy-and-mechanical-enforcement.md`
 
 ## Risks And Watchouts
 

@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S1-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S1-001" ;
+  triage:title "NotificationRuntime::start/shutdown and serve_with_runtime_hooks gated #[cfg(unix)] but called from ungated composition code — Windows CI E0599 (notification_runtime.rs:58,83; local_ipc_transport.rs:196)" ;
+  triage:description "crates/atm-daemon/src/notification_runtime.rs:58,83 — NotificationRuntime::start() and shutdown() are implemented only under #[cfg(unix)]. crates/atm-daemon/src/local_ipc_transport.rs:196 — PreparedRuntimeServer::serve_with_runtime_hooks() is implemented only under #[cfg(unix)]. Both are called from composition.rs paths that are not gated, producing Windows CI errors: 'no method named start found for struct NotificationRuntime' and 'no method named serve_with_runtime_hooks found for struct PreparedRuntimeServer'. Fix: add #[cfg(not(unix))] no-op stubs for start/shutdown/serve_with_runtime_hooks, OR gate the call sites in composition.rs under #[cfg(unix)]. (quality-mgr reported as CI-BLOCK-001-S1 in S.1 QA-3 report.)" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T09:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S1-001/s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S1-001/s1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S1-001/s1/3> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/9f570b3> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/9f570b3> .
+
+<urn:atm:triage:occurrence/ATM-QA-S1-001/s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/notification_runtime.rs" ;
+  triage:line 58 ;
+  triage:snippet "NotificationRuntime::start() — #[cfg(unix)] only, called from ungated composition" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9f570b3" ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/9f570b3> .
+
+<urn:atm:triage:occurrence/ATM-QA-S1-001/s1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/notification_runtime.rs" ;
+  triage:line 83 ;
+  triage:snippet "NotificationRuntime::shutdown() — #[cfg(unix)] only, called from ungated composition" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9f570b3" ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/9f570b3> .
+
+<urn:atm:triage:occurrence/ATM-QA-S1-001/s1/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 196 ;
+  triage:snippet "PreparedRuntimeServer::serve_with_runtime_hooks() — #[cfg(unix)] only, called from ungated composition" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9f570b3" ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/9f570b3> .
+
+<urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/9f570b3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "9f570b3" ;
+  triage:orderIndex 1 .

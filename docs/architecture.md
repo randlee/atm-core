@@ -19,6 +19,7 @@ The CLI stays thin. Product logic moves into `atm-core`.
 
 The retained command surface is:
 - `send`
+- `list`
 - `read`
 - `ack`
 - `clear`
@@ -65,6 +66,18 @@ Phase-S portability note:
 - feature parity across supported operating systems is mandatory; platform-
   specific implementation differences are allowed only behind documented ATM-
   owned portability boundaries
+- the canonical daemon wire contract is documented in
+  [`docs/atm-daemon/protocol-icd.md`](./atm-daemon/protocol-icd.md)
+- exact wire-header constants, packet-kind assignments, payload DTO mapping,
+  and the current daemon packet-surface inventory are owned by that ICD
+- the current daemon packet family is intentionally smaller than the retained
+  CLI surface:
+  - daemon packets: `send`, `ack`, `read`, `clear`, `doctor`, heartbeat
+  - non-packet retained surfaces: `log`, `teams`, `members`
+- S.5 planning adds `atm list` as a distinct CLI query surface; S.7 owns the
+  implementation line that refines the queue-query packet mapping instead of
+  preserving the old multi-message `read` response shape as the final
+  contract
 - Phase S planning is tracked in [`docs/plan-phase-S.md`](./plan-phase-S.md)
 
 ## 2. Crate Boundaries
@@ -119,9 +132,12 @@ Lint and tooling boundary rules:
   - reusable/static rules:
     - Unix platform-gating checks
     - bare production `Condvar::wait(...)` checks
+    - fixed-sleep test-hygiene checks after the current repository-local rule
+      shape is proven and extracted to `sc-lint`
   - ATM-local rules:
     - duplicate semantic string-literal checks in non-test Rust code
-    - fixed-sleep test-hygiene checks
+    - targeted same-host daemon test unbounded-wait checks until or unless the
+      rule family proves reusable enough for `sc-lint`
     - triage Turtle consistency checks
 
 Crate-local boundary detail is owned by:
@@ -155,11 +171,16 @@ Current Phase R lint partition direction:
   rules
 - extend the existing `sc-boundary` analyzer for reusable production-liveness
   rules that need Rust-aware analysis
+- treat fixed-sleep test hygiene as a reusable lint family whose current
+  repository-local rule is the proving implementation before `sc-lint`
+  extraction
 - keep ATM duplicate semantic literal policy in the existing repository-local
   identity lint
-- add any fixed-sleep and triage-record validation as repository-local lint/CI
-  steps first, then reevaluate extraction only after the false-positive and
+- keep targeted same-host daemon unbounded-wait checks as repository-local
+  lint/CI first, then reevaluate extraction only after the false-positive and
   allow-list shape is proven on `atm-core`
+- keep triage-record validation as repository-local lint/CI unless its rule
+  semantics become clearly reusable
 
 Active postmortem rule families:
 - reusable analyzer rules:
@@ -174,7 +195,7 @@ Active postmortem rule families:
   - `SCB-RUNTIME-002` discarded `wait_timeout*` results in production code
 - ATM-local repository rules:
   - duplicate semantic role-name literals in non-test Rust code
-  - fixed-sleep test-hygiene checks
+  - targeted same-host daemon test unbounded-wait checks
   - triage Turtle aggregate/branch consistency checks
 
 ### 2.3 Release Publication Boundary
@@ -261,6 +282,8 @@ ATM still owns:
 - ATM-specific structured fields
 - mapping CLI filters to shared query/follow APIs
 - ATM doctor projections over shared health models
+- the host-scoped retained-log root contract, including `ATM_LOG_DIR` as the
+  exact retained-log-directory override
 - ATM-owned config semantics for baseline roster, alias resolution, and
   runtime-identity precedence
 
@@ -877,51 +900,84 @@ Missing-team-config fallback is limited to `send`:
 - repair notices must be deduplicated by unresolved condition so repeated sends
   do not flood inboxes
 
-### 6.2 Read Service
+### 6.2 Queue Inspection Services
 
-Public entrypoint:
+Phase S.5 splits queue inspection into two command surfaces:
 
-`read::read_mail(query: ReadQuery, observability: &dyn ObservabilityPort) -> Result<ReadOutcome, AtmError>`
+- `atm list` finds messages through a bounded metadata query
+- `atm read` opens one full message
 
-`ReadQuery` contains:
+Target service shape:
+
+- `list::list_mail(query: ListQuery, observability: &dyn ObservabilityPort)
+  -> Result<ListOutcome, AtmError>`
+- `read::read_mail(query: ReadQuery, observability: &dyn ObservabilityPort)
+  -> Result<ReadOutcome, AtmError>`
+
+Shared query model:
 - home directory
 - current directory
 - actor override
 - optional target address
 - team override
-- selection_mode
-- seen_state_filter
-- seen_state_update
-- ack_activation_mode
-- limit
-- sender_filter
-- timestamp_filter
+- sender filter
+- timestamp filter
+- task filter
+- contains filter
+- queue-state filters (`unread`, `pending_ack`, `all`)
+
+`ListQuery` adds:
+- optional limit
+
+`ReadQuery` adds:
+- optional exact `message_id`
 - optional timeout
+- read-mutation controls such as seen-state update and ack activation
 
-`seen_state_filter` is false when `--no-since-last-seen` is set. `--all` bypasses this filter regardless of the stored value.
+`ListOutcome` contains:
+- action
+- resolved team
+- resolved agent
+- messages
+- count
+- bucket_counts
 
-`seen_state_update` is false when `--no-update-seen` is set.
-
-Timeout rule:
-- if the requested selection is already non-empty after filtering and selection-mode application, return immediately
-- otherwise wait for a newly eligible message until the timeout expires
+Each list row contains:
+- `message_id`
+- `summary`
+- `from`
+- `timestamp`
+- `read`
+- `pending_ack`
+- `task_id`
 
 `ReadOutcome` contains:
 - action
 - resolved team
 - resolved agent
-- selection_mode
-- history_collapsed
-- mutation_applied
-- messages
+- selected message
+- `selected_message_id`
+- `match_count`
+- `additional_match_count`
+- `mutation_applied`
 - bucket_counts
 
-`ReadOutcome.bucket_counts` exposes:
-- unread
-- pending_ack
-- history
+Queue-inspection architectural rules:
+- default `atm list` must stay bounded by query behavior rather than
+  materializing full mailbox history and truncating it at render time
+- bare `atm read` must return one most-recent unread actionable message, with
+  pending-ack messages prioritized ahead of non-ack unread messages
+- selector-driven `atm read` must return the most recent match and report
+  additional matches in metadata rather than returning multiple full bodies
+- selector-driven `atm list` and `atm read` operate on logical current
+  messages; successor/update chains are collapsed to their terminal node before
+  result selection or row shaping
+- `--task <task-id>` selection happens after that terminal-node collapse so one
+  logical task thread does not surface as several superseded matches
+- `--contains` applies to both summary text and full durable message body text
+- summary/count queries must remain separable from full-body detail fetch
 
-Read deduplication rule:
+Deduplication rule:
 - collapse multiple entries with the same non-null `message_id` to the most
   recent entry before bucket selection and output rendering
 - when timestamps tie, keep the later encountered inbox record
@@ -934,18 +990,13 @@ Read/enrichment rule:
   `from`, which also requires canonical sender identity in
   `metadata.atm.fromIdentity`
 
-The read service derives `MessageClass` from `(ReadState, AckState)` and applies display-bucket selection to the derived class, not to raw persisted fields.
+The queue-query services derive `MessageClass` from `(ReadState, AckState)` and
+apply display-bucket selection to the derived class, not to raw persisted
+fields.
 
-For merged inbox surfaces, any displayed-message mutation must be written back to the physical inbox file that contributed the displayed record. The merged view is a read projection, not a synthetic write target.
-
-The CLI JSON output mirrors the current contract:
-- `action`
-- `team`
-- `agent`
-- `messages`
-- `count`
-- `bucket_counts`
-- `history_collapsed`
+For merged inbox surfaces, any displayed-message mutation must be written back
+to the physical inbox file that contributed the displayed record. The merged
+view is a read projection, not a synthetic write target.
 
 ### 6.3 Ack Service
 
@@ -1415,10 +1466,17 @@ Implementation rules:
   boundary
 - `atm` initializes the shared logger exactly once per process
 - the shared file sink is the authoritative retained log store for `atm log`
+- the default ATM-owned retained log file is `~/.atm/logs/atm.log.jsonl`
+- `ATM_LOG_DIR` overrides the exact retained log directory
+- retained log path ownership is host-scoped and independent of `ATM_HOME`
 - the shared console sink remains opt-in so it does not contaminate normal
   command output
 - the initial-release dependency is the published crates.io version
   `sc-observability = "1.0.0"`
+- the default retained logger baseline must include:
+  - daemon lifecycle `info!` events
+  - every subsystem `warn!` event
+  - every subsystem `error!` event
 
 ### 14.3 Failure Diagnostic Rules
 
@@ -2242,6 +2300,11 @@ Claude-owned inbox JSONL files remain required for:
 Architectural rule:
 - JSONL is ingress/egress compatibility only
 - JSONL is not ATM's authoritative durable mail state
+- ATM-authored JSONL exports are a bounded compatibility projection over the
+  durable SQLite message body
+- the default ATM-authored JSONL body export cap is `128 KiB`
+- config `[atm].claude_jsonl_body_export_max_bytes` may lower that cap,
+  including `0` for stub-only ATM-authored export
 
 `config.json` remains a team-ingress surface, but roster truth moves to
 SQLite.
@@ -2255,6 +2318,8 @@ There are three distinct paths:
    - ATM imports through one owned inbox-ingress boundary
    - imported records become durable in SQLite
    - replay is idempotent and parseable rows are not silently dropped
+   - ATM-authored oversized-body exports replace JSONL `text` with exactly
+     `atm read --message-id <id>` while keeping the full body durable in SQLite
 
 2. Native agent path
    - native agent/plugin traffic does not use JSONL
@@ -2266,6 +2331,13 @@ There are three distinct paths:
    - routing expands from `agent@team` to `agent@team.host`
    - sender-side daemons do not write remote host JSONL directly
    - successful remote delivery requires remote daemon acceptance
+
+Projection-awareness rule:
+- watcher/reconcile logic must treat re-observed ATM-authored compatibility
+  projections for the same logical message as idempotent state rather than new
+  mail
+- re-observing the same ATM retrieval stub for the same `message_id` must not
+  trigger a new logical message import or notification loop
 
 ### 21.4 One Interface, Two Transport Implementations
 

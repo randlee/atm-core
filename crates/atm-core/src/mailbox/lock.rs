@@ -14,6 +14,7 @@ use tracing::warn;
 use crate::error::{AtmError, AtmErrorCode};
 use crate::process::process_is_alive;
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) const DEFAULT_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
 /// Polling interval between advisory lock acquisition retries.
 ///
@@ -64,6 +65,7 @@ impl std::fmt::Display for LockOperation {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct CanonicalLockKey(String);
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn default_lock_timeout() -> Duration {
     if let Some(timeout) = debug_timeout_override() {
         return timeout;
@@ -618,6 +620,7 @@ fn is_lock_contention_error(error: &io::Error) -> bool {
     }
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn debug_timeout_override() -> Option<Duration> {
     std::env::var("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS")
         .ok()

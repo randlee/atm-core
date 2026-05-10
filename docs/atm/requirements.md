@@ -12,6 +12,9 @@ business logic or `atm-daemon` runtime behavior.
 The crate-local machine-readable boundary inventory lives in:
 - [`./boundaries.md`](./boundaries.md)
 
+The canonical daemon packet contract lives in:
+- [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
+
 ## 2. Ownership
 
 `atm` owns:
@@ -52,17 +55,18 @@ Initial crate requirement IDs:
 - `REQ-ATM-CMD-001` `atm` owns clap parsing, flag validation, and command
   dispatch for the retained command surface. Satisfies the CLI
   entry/parse/dispatch aspects of:
-  `REQ-P-SEND-001`, `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-CLEAR-001`,
-  `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-TEAMS-001`,
+  `REQ-P-SEND-001`, `REQ-P-LIST-001`, `REQ-P-READ-001`, `REQ-P-ACK-001`,
+  `REQ-P-CLEAR-001`, `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-TEAMS-001`,
   `REQ-P-MEMBERS-001`.
 - `REQ-ATM-OUT-001` `atm` owns human-readable and JSON rendering for retained
   commands. Satisfies the output-shaping and rendering aspects of:
-  `REQ-P-SEND-001`, `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-CLEAR-001`,
-  `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-TEAMS-001`,
+  `REQ-P-SEND-001`, `REQ-P-LIST-001`, `REQ-P-READ-001`, `REQ-P-ACK-001`,
+  `REQ-P-CLEAR-001`, `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-TEAMS-001`,
   `REQ-P-MEMBERS-001`.
 - `REQ-ATM-OBS-001` `atm` owns concrete observability bootstrap and injection
   into `atm-core`. Satisfies the CLI bootstrap/injection aspects of:
-  `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-OBS-001`.
+  `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-OBS-001`, `REQ-P-OBS-002`,
+  `REQ-P-OBS-003`.
 - `REQ-ATM-RUNTIME-001` `atm` owns CLI-to-runtime request mapping and daemon
   client use in production over `AtmProtocol` and `ClientTransport` while
   preserving in-process testability. Satisfies the CLI/runtime-entry aspects of:
@@ -86,6 +90,9 @@ Initial crate requirement IDs:
 
 - initializing the concrete shared logger once per CLI process
 - mapping ATM env/config decisions into shared logger configuration
+- resolving the retained log directory through the host-scoped ATM log-path
+  contract rather than through `ATM_HOME`
+- honoring `ATM_LOG_DIR` as the exact retained log-directory override
 - consuming the published `sc-observability = "1.0.0"` crate baseline rather
   than a local pre-publish checkout
 - exposing one structured construction contract for the concrete adapter:
@@ -95,6 +102,9 @@ Initial crate requirement IDs:
   implementation surfaces a concrete defect
 - logging CLI bootstrap, parse, and terminal command failures with stable
   ATM-owned error codes before exit
+- keeping the default retained logger baseline high enough to preserve daemon
+  lifecycle `info!` events plus all `warn!` / `error!` events when `ATM_LOG`
+  is unset
 - using the single ATM-owned code registry defined by
   [`../atm-error-codes.md`](../atm-error-codes.md) rather than local ad hoc
   code strings
@@ -107,6 +117,7 @@ Initial crate requirement IDs:
 Per-command documentation lives under:
 
 - [`commands/send.md`](./commands/send.md)
+- [`commands/list.md`](./commands/list.md)
 - [`commands/read.md`](./commands/read.md)
 - [`commands/ack.md`](./commands/ack.md)
 - [`commands/clear.md`](./commands/clear.md)
@@ -129,10 +140,11 @@ The `atm` crate docs must remain aligned with:
 - [`../requirements.md`](../requirements.md)
 - [`../architecture.md`](../architecture.md)
 - [`../atm-error-codes.md`](../atm-error-codes.md)
+- [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
 - [`../project-plan.md`](../project-plan.md)
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
-- [`../plan-phase-Q.md`](../plan-phase-Q.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)
+- [`../plan-phase-S.md`](../plan-phase-S.md)
 - [`../testing-guidelines.md`](../testing-guidelines.md)
 - [`./boundaries.md`](./boundaries.md)
 
@@ -146,9 +158,25 @@ Required Phase R rules:
   talking to SQLite or inbox JSONL directly
 - in production, `atm` depends on the shared `AtmProtocol` and the
   `ClientTransport` contract rather than daemon internals
+- the daemon request/response packet surface currently covers:
+  - `send`
+  - `ack` through the send-shaped acknowledge request
+  - `list`
+  - `read`
+  - `clear`
+  - `doctor`
+- the retained CLI surfaces `log`, `teams`, and `members` are not daemon
+  request/response packets in the current Phase S line
 - `atm` must not contain business logic that duplicates `atm-core`
 - `atm` test coverage must be able to use in-process harnesses rather than
   depending on daemon process spawning
+- `atm` owns legacy queue-flag deprecation warnings and the exact
+  `atm read --message-id <id>` retrieval guidance shown for ATM-authored JSONL
+  body stubs
+- `atm` owns the queue-inspection CLI split where:
+  - `atm list` parses shared filters and renders bounded metadata rows
+  - `atm read` parses the same shared filters, resolves one selected message,
+    and renders match metadata when additional matches remain
 - daemon auto-start is a supervised runtime entry concern, not a side effect of
   transport object construction
 - the CLI-side auto-start path must acquire the documented pre-spawn launch

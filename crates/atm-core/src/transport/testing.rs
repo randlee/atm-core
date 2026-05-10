@@ -5,6 +5,7 @@ use crate::boundary::{self, ClientTransport};
 use crate::clear;
 use crate::doctor;
 use crate::error::AtmError;
+use crate::list;
 use crate::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
     LogTailSession, ObservabilityPort,
@@ -80,6 +81,9 @@ impl ClientTransport for LoopbackClientTransport {
             RequestEnvelope::Heartbeat(_) => Err(AtmError::daemon_unavailable(
                 "loopback heartbeat transport is not wired outside the daemon runtime",
             )),
+            RequestEnvelope::List(query) => {
+                list::list_mail(query, self.observability.as_ref()).map(ResponseEnvelope::List)
+            }
             RequestEnvelope::Receive(query) => {
                 read::read_mail(query, self.observability.as_ref()).map(ResponseEnvelope::Receive)
             }

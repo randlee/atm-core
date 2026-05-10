@@ -1,5 +1,5 @@
 use std::io::{self, Write};
-use std::net::{Shutdown, SocketAddr, TcpStream};
+use std::net::{SocketAddr, TcpStream};
 #[cfg(test)]
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -12,8 +12,7 @@ use atm_core::AtmConfig;
 use atm_core::boundary::{self, AtmProtocol, ClientTransport, ConfigLoadRequest, MessageKey};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::protocol::{
-    FramePayload, MAX_DAEMON_FRAME_BYTES, RequestEnvelope, ResponseEnvelope,
-    TeamMemberHeartbeatRequest,
+    JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, TeamMemberHeartbeatRequest,
 };
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 
@@ -48,30 +47,14 @@ impl PeerTransportConfig {
     }
 }
 
-#[derive(Debug, Clone, Default)]
-struct JsonAtmProtocolCodec;
-
-impl boundary::sealed::Sealed for JsonAtmProtocolCodec {}
-
-impl AtmProtocol for JsonAtmProtocolCodec {
-    fn request_to_frame(&self, request: RequestEnvelope) -> Result<FramePayload, AtmError> {
-        Ok(FramePayload {
-            bytes: serde_json::to_vec(&request).map_err(AtmError::from)?,
-        })
-    }
-
-    fn request_from_frame(&self, frame: FramePayload) -> Result<RequestEnvelope, AtmError> {
-        serde_json::from_slice(&frame.bytes).map_err(AtmError::from)
-    }
-
-    fn response_to_frame(&self, response: ResponseEnvelope) -> Result<FramePayload, AtmError> {
-        Ok(FramePayload {
-            bytes: serde_json::to_vec(&response).map_err(AtmError::from)?,
-        })
-    }
-
-    fn response_from_frame(&self, frame: FramePayload) -> Result<ResponseEnvelope, AtmError> {
-        serde_json::from_slice(&frame.bytes).map_err(AtmError::from)
+fn daemon_peer_endpoint_from_env() -> Option<SocketAddr> {
+    match std::env::var("ATM_DAEMON_PEER_ADDR") {
+        Ok(raw) => parse_peer_endpoint(&raw),
+        Err(std::env::VarError::NotPresent) => None,
+        Err(std::env::VarError::NotUnicode(_)) => {
+            tracing::warn!("ignoring non-unicode ATM_DAEMON_PEER_ADDR value");
+            None
+        }
     }
 }
 
@@ -120,9 +103,7 @@ struct PeerClientTransport {
 
 impl PeerClientTransport {
     fn new(replay_store: Option<Arc<dyn RemoteReplayStore>>) -> Self {
-        let endpoint = std::env::var("ATM_DAEMON_PEER_ADDR")
-            .ok()
-            .and_then(|raw| parse_peer_endpoint(&raw));
+        let endpoint = daemon_peer_endpoint_from_env();
         let config = std::env::current_dir()
             .ok()
             .and_then(|current_dir| {
@@ -262,7 +243,8 @@ impl PeerClientTransport {
         endpoint: SocketAddr,
         request: RequestEnvelope,
     ) -> Result<ResponseEnvelope, AtmError> {
-        let frame = self.codec.request_to_frame(request)?;
+        let request_id = atm_core::protocol::next_request_id();
+        let frame = self.codec.request_to_frame(request_id, request)?;
         let started = Instant::now();
         let deadline = started + self.config.remote_retry_budget;
         let terminate = daemon_terminate_flag()?;
@@ -270,7 +252,7 @@ impl PeerClientTransport {
         let mut attempt = 0u32;
 
         loop {
-            match self.send_once(endpoint, &frame.bytes) {
+            match self.send_once(endpoint, &frame) {
                 Ok(response) => {
                     tracing::info!(
                         peer_addr = %endpoint,
@@ -338,7 +320,7 @@ impl PeerClientTransport {
     fn send_once(
         &self,
         endpoint: SocketAddr,
-        request_bytes: &[u8],
+        request_frame: &atm_core::protocol::FramePayload,
     ) -> Result<ResponseEnvelope, Box<AttemptFailure>> {
         let mut stream =
             TcpStream::connect_timeout(&endpoint, PEER_CONNECT_DEADLINE).map_err(|source| {
@@ -372,11 +354,15 @@ impl PeerClientTransport {
                     .with_source(source),
                 })
             })?;
-        stream.write_all(request_bytes).map_err(|source| {
+        atm_core::protocol::write_frame(
+            &mut stream,
+            request_frame,
+            "failed to write remote peer request frame",
+        )
+        .map_err(|error| {
             Box::new(AttemptFailure {
-                kind: classify_io_error(&source),
-                error: AtmError::daemon_unavailable("failed to write remote peer request frame")
-                    .with_source(source),
+                kind: AttemptFailureKind::Retryable,
+                error,
             })
         })?;
         stream.flush().map_err(|source| {
@@ -388,30 +374,52 @@ impl PeerClientTransport {
                 .with_source(source),
             })
         })?;
-        stream
-            .shutdown(Shutdown::Write)
-            .map_err(|source| Box::new(classify_shutdown_failure(source)))?;
-
-        let response_bytes = read_peer_response(&mut stream).map_err(|error| {
+        let Some(response_frame) = atm_core::protocol::read_frame(
+            &mut stream,
+            "failed to read remote peer response frame",
+            "remote peer response frame exceeded the maximum supported size",
+        )
+        .map_err(|error| {
             Box::new(AttemptFailure {
                 kind: AttemptFailureKind::OutcomeUnknown,
                 error,
             })
-        })?;
-        let response = self
-            .codec
-            .response_from_frame(FramePayload {
-                bytes: response_bytes,
-            })
-            .map_err(|error| {
-                Box::new(AttemptFailure {
-                    kind: AttemptFailureKind::NonRetryable,
-                    error: AtmError::daemon_unavailable(
-                        "failed to decode remote peer response frame",
-                    )
-                    .with_source(error),
-                })
-            })?;
+        })?
+        else {
+            return Err(Box::new(AttemptFailure {
+                kind: AttemptFailureKind::OutcomeUnknown,
+                error: AtmError::remote_delivery_outcome_unknown(
+                    "remote peer closed the connection before returning a response frame",
+                )
+                .with_recovery(
+                    "Check the destination daemon or mailbox before retrying. If local durable replay is enabled, let the daemon resume the pending handoff rather than guessing success.",
+                ),
+            }));
+        };
+        let (response_id, response) =
+            self.codec
+                .response_from_frame(response_frame)
+                .map_err(|error| {
+                    Box::new(AttemptFailure {
+                        kind: AttemptFailureKind::NonRetryable,
+                        error: AtmError::daemon_unavailable(
+                            "failed to decode remote peer response frame",
+                        )
+                        .with_source(error),
+                    })
+                })?;
+        if response_id != request_frame.request_id {
+            return Err(Box::new(AttemptFailure {
+                kind: AttemptFailureKind::NonRetryable,
+                error: AtmError::daemon_unavailable(format!(
+                    "remote peer response request_id {} did not match request_id {}",
+                    response_id, request_frame.request_id
+                ))
+                .with_recovery(
+                    "Align the peer daemon builds so both sides use the same ATM daemon protocol contract before retrying.",
+                ),
+            }));
+        }
         match response {
             ResponseEnvelope::Error(error) => Err(Box::new(AttemptFailure {
                 kind: AttemptFailureKind::NonRetryable,
@@ -422,15 +430,12 @@ impl PeerClientTransport {
     }
 }
 
-fn wait_for_retry_backoff(terminate: &Option<Arc<AtomicBool>>, sleep_for: Duration) -> bool {
+fn wait_for_retry_backoff(terminate: &Arc<AtomicBool>, sleep_for: Duration) -> bool {
     const RETRY_POLL_INTERVAL: Duration = Duration::from_millis(25);
 
     let started = Instant::now();
     loop {
-        if terminate
-            .as_ref()
-            .is_some_and(|flag| flag.load(Ordering::SeqCst))
-        {
+        if terminate.load(Ordering::SeqCst) {
             return true;
         }
         let elapsed = started.elapsed();
@@ -442,16 +447,8 @@ fn wait_for_retry_backoff(terminate: &Option<Arc<AtomicBool>>, sleep_for: Durati
     }
 }
 
-#[cfg(unix)]
-fn daemon_terminate_flag() -> Result<Option<Arc<AtomicBool>>, AtmError> {
-    Ok(Some(
-        crate::shutdown_signals::DaemonShutdownSignals::install()?.terminate,
-    ))
-}
-
-#[cfg(not(unix))]
-fn daemon_terminate_flag() -> Result<Option<Arc<AtomicBool>>, AtmError> {
-    Ok(None)
+fn daemon_terminate_flag() -> Result<Arc<AtomicBool>, AtmError> {
+    Ok(crate::lifecycle_control::LifecycleControlSourceAdapter::install()?.terminate_flag())
 }
 
 impl boundary::sealed::Sealed for PeerClientTransport {}
@@ -557,16 +554,6 @@ fn classify_io_error(error: &io::Error) -> AttemptFailureKind {
     }
 }
 
-fn classify_shutdown_failure(source: io::Error) -> AttemptFailure {
-    AttemptFailure {
-        kind: classify_io_error(&source),
-        error: AtmError::daemon_unavailable(
-            "failed to half-close the remote peer connection after writing the request frame",
-        )
-        .with_source(source),
-    }
-}
-
 fn replay_metadata_for_request(
     request: &RequestEnvelope,
 ) -> Result<Option<(TeamName, AgentName, MessageKey)>, AtmError> {
@@ -623,7 +610,7 @@ fn parse_peer_endpoint(raw: &str) -> Option<SocketAddr> {
             tracing::warn!(
                 %raw,
                 %error,
-                "ignoring malformed ATM_DAEMON_PEER_ADDR value"
+                "parse_peer_endpoint: invalid address format"
             );
             None
         }
@@ -634,32 +621,13 @@ fn persisted_peer_addr(endpoint: SocketAddr) -> SocketAddr {
     endpoint
 }
 
-fn read_peer_response(stream: &mut TcpStream) -> Result<Vec<u8>, AtmError> {
-    let bytes = atm_core::protocol::read_bounded_stream(
-        stream,
-        "failed to read remote peer response frame",
-        "remote peer response frame exceeded the maximum supported size",
-    )?;
-    if bytes.is_empty() {
-        return Err(AtmError::remote_delivery_outcome_unknown(
-            "remote peer connection closed after the request was sent and before one response frame was received",
-        ));
-    }
-    if bytes.len() > MAX_DAEMON_FRAME_BYTES {
-        return Err(AtmError::daemon_unavailable(
-            "remote peer response frame exceeded the maximum supported size",
-        ));
-    }
-    Ok(bytes)
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
         AttemptFailureKind, PeerTransportConfig, PeerTransportRuntime, classify_io_error,
-        classify_shutdown_failure, jittered_backoff,
+        jittered_backoff,
     };
-    use atm_core::boundary::{ClientTransport, MessageKey};
+    use atm_core::boundary::{AtmProtocol, ClientTransport, MessageKey};
     use atm_core::error::AtmErrorCode;
     use atm_core::protocol::{
         HeartbeatActivity, ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope,
@@ -672,6 +640,34 @@ mod tests {
     use std::thread;
     use std::time::Duration;
     use tempfile::TempDir;
+
+    fn read_request_frame(
+        stream: &mut TcpStream,
+    ) -> (u64, RequestEnvelope, super::JsonAtmProtocolCodec) {
+        let codec = super::JsonAtmProtocolCodec;
+        let frame = atm_core::protocol::read_frame(
+            stream,
+            "read request",
+            "request frame exceeded frame limit",
+        )
+        .expect("read frame")
+        .expect("request frame");
+        let (request_id, request) = codec.request_from_frame(frame).expect("decode request");
+        (request_id, request, codec)
+    }
+
+    fn write_response_frame(
+        stream: &mut TcpStream,
+        codec: &super::JsonAtmProtocolCodec,
+        request_id: u64,
+        response: ResponseEnvelope,
+    ) {
+        let frame = codec
+            .response_to_frame(request_id, response)
+            .expect("response frame");
+        atm_core::protocol::write_frame(stream, &frame, "write response").expect("write response");
+        stream.flush().expect("flush response");
+    }
 
     #[test]
     fn jittered_backoff_stays_within_twenty_percent_window() {
@@ -702,14 +698,6 @@ mod tests {
             classify_io_error(&io::Error::other("non-retryable")),
             AttemptFailureKind::NonRetryable
         );
-    }
-
-    #[test]
-    fn shutdown_failures_do_not_report_outcome_unknown() {
-        let failure =
-            classify_shutdown_failure(io::Error::new(io::ErrorKind::BrokenPipe, "shutdown failed"));
-        assert_eq!(failure.kind, AttemptFailureKind::Retryable);
-        assert_eq!(failure.error.code, AtmErrorCode::DaemonUnavailable);
     }
 
     #[test]
@@ -769,13 +757,8 @@ mod tests {
 
         thread::spawn(move || {
             let (mut stream, _) = listener.accept().expect("accept");
-            let mut request_bytes = Vec::new();
-            stream.read_to_end(&mut request_bytes).expect("request");
-            let _: RequestEnvelope =
-                serde_json::from_slice(&request_bytes).expect("decode request");
-            let response_bytes = serde_json::to_vec(&expected).expect("encode response");
-            stream.write_all(&response_bytes).expect("write response");
-            stream.flush().expect("flush response");
+            let (request_id, _request, codec) = read_request_frame(&mut stream);
+            write_response_frame(&mut stream, &codec, request_id, expected);
         });
 
         let response = transport
@@ -805,10 +788,7 @@ mod tests {
                 .send(listener.local_addr().expect("addr"))
                 .expect("endpoint");
             let (mut stream, _) = listener.accept().expect("accept");
-            let mut request_bytes = Vec::new();
-            stream.read_to_end(&mut request_bytes).expect("request");
-            let _: RequestEnvelope =
-                serde_json::from_slice(&request_bytes).expect("decode request");
+            let (request_id, _request, codec) = read_request_frame(&mut stream);
             let response = ResponseEnvelope::Heartbeat(TeamMemberHeartbeatResponse {
                 team: server_team,
                 member: server_member,
@@ -817,9 +797,7 @@ mod tests {
                 state: RuntimeMemberState::Active,
                 last_active_at: Some(IsoTimestamp::now()),
             });
-            let bytes = serde_json::to_vec(&response).expect("response");
-            stream.write_all(&bytes).expect("write response");
-            stream.flush().expect("flush response");
+            write_response_frame(&mut stream, &codec, request_id, response);
         });
 
         let endpoint = endpoint_rx.recv().expect("endpoint");
@@ -879,8 +857,7 @@ mod tests {
 
         thread::spawn(move || {
             let (mut stream, _) = listener.accept().expect("accept");
-            let mut request_bytes = Vec::new();
-            stream.read_to_end(&mut request_bytes).expect("request");
+            let _ = read_request_frame(&mut stream);
         });
 
         let error = transport
@@ -912,16 +889,13 @@ mod tests {
 
         thread::spawn(move || {
             let (mut stream, _) = listener.accept().expect("accept");
-            let mut request_bytes = Vec::new();
-            stream.read_to_end(&mut request_bytes).expect("request");
+            let (request_id, _request, codec) = read_request_frame(&mut stream);
             let response = ResponseEnvelope::Error(ProtocolErrorEnvelope {
                 code: AtmErrorCode::DaemonUnavailable,
                 message: "remote rejected request".to_string(),
                 recovery: None,
             });
-            let bytes = serde_json::to_vec(&response).expect("response");
-            stream.write_all(&bytes).expect("write response");
-            stream.flush().expect("flush response");
+            write_response_frame(&mut stream, &codec, request_id, response);
         });
 
         let error = transport
@@ -963,8 +937,7 @@ mod tests {
 
         thread::spawn(move || {
             let (mut stream, _) = listener.accept().expect("accept");
-            let mut request_bytes = Vec::new();
-            stream.read_to_end(&mut request_bytes).expect("request");
+            let (request_id, _request, codec) = read_request_frame(&mut stream);
             let response = ResponseEnvelope::Heartbeat(TeamMemberHeartbeatResponse {
                 team,
                 member,
@@ -973,9 +946,7 @@ mod tests {
                 state: RuntimeMemberState::Idle,
                 last_active_at: Some(IsoTimestamp::now()),
             });
-            let bytes = serde_json::to_vec(&response).expect("response");
-            stream.write_all(&bytes).expect("write response");
-            stream.flush().expect("flush response");
+            write_response_frame(&mut stream, &codec, request_id, response);
         });
 
         let summary = transport.resume_pending_replay().expect("resume");
@@ -1010,8 +981,7 @@ mod tests {
 
         thread::spawn(move || {
             let (mut stream, _) = listener.accept().expect("accept");
-            let mut request_bytes = Vec::new();
-            stream.read_to_end(&mut request_bytes).expect("request");
+            let _ = read_request_frame(&mut stream);
         });
 
         let error = transport
@@ -1065,8 +1035,7 @@ mod tests {
         let (deliveries_tx, deliveries_rx) = mpsc::channel();
         thread::spawn(move || {
             let (mut stream, _) = listener.accept().expect("accept");
-            let mut request_bytes = Vec::new();
-            stream.read_to_end(&mut request_bytes).expect("request");
+            let (request_id, _request, codec) = read_request_frame(&mut stream);
             deliveries_tx.send(()).expect("delivery sent");
             let response = ResponseEnvelope::Heartbeat(TeamMemberHeartbeatResponse {
                 team,
@@ -1076,9 +1045,7 @@ mod tests {
                 state: RuntimeMemberState::Idle,
                 last_active_at: Some(IsoTimestamp::now()),
             });
-            let bytes = serde_json::to_vec(&response).expect("response");
-            stream.write_all(&bytes).expect("write response");
-            stream.flush().expect("flush response");
+            write_response_frame(&mut stream, &codec, request_id, response);
         });
 
         let summary = second.resume_pending_replay().expect("resume");

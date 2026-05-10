@@ -1,0 +1,40 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/INTG-RSH-001>
+  a triage:Finding ;
+  triage:findingId "INTG-RSH-001" ;
+  triage:title "ReconcileRuntime::shutdown() unconditional join — same class as fixed S9-RSH-001/007" ;
+  triage:description "reconcile_runtime.rs:235 — ReconcileRuntime::shutdown() calls handle.join() unconditionally with no deadline. Same class as S9-RSH-001 (run_bounded_shutdown_step) and S9-RSH-007 (WatchRuntime). Outer composition.rs deadline masks the symptom but leaves inner join thread leaked on timeout. Fix: apply bounded-shutdown pattern — mpsc::sync_channel join-helper + recv_timeout(RECONCILE_SHUTDOWN_DEADLINE) + drop(join_helper) on timeout." ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:triageMode "integration_gate" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T07:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-05-10T15:50:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "integrate/phase-S" ;
+  triage:promoteToBranch "integrate/phase-S" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/INTG-RSH-001/intg/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/ade96f2> .
+
+<urn:atm:triage:occurrence/INTG-RSH-001/intg/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:line 235 ;
+  triage:snippet "handle.join().map_err(|_| AtmError::daemon_unavailable(...))? — unconditional join, no deadline" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:headSha "bd9e0e8" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/ade96f2> .
+
+<urn:atm:triage:worktree/integrate-phase-S/ade96f2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "bd9e0e8" ;
+  triage:orderIndex 1 .

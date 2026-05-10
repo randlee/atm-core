@@ -9,11 +9,14 @@ Product behavior remains defined in [`../requirements.md`](../requirements.md).
 `atm-daemon` must satisfy those product requirements without re-owning
 `atm-core` business logic.
 
-This crate is introduced by the Phase Q implementation line. It is not present
-in the pre-Phase-Q workspace yet.
+This crate was introduced on the Phase Q implementation line and remains part
+of the current workspace.
 
 The crate-local machine-readable boundary inventory lives in:
 - [`./boundaries.md`](./boundaries.md)
+
+The canonical daemon transport wire contract lives in:
+- [`./protocol-icd.md`](./protocol-icd.md)
 
 ## 2. Ownership
 
@@ -27,6 +30,8 @@ The crate-local machine-readable boundary inventory lives in:
 - live agent status cache
 - runtime watch/reconcile loop if enabled
 - daemon-side `sc-observability` emission
+- daemon-side compatibility projection behavior that must keep ATM-authored
+  JSONL re-export idempotent under watcher/reconcile observation
 
 `atm-daemon` does not own:
 
@@ -35,6 +40,19 @@ The crate-local machine-readable boundary inventory lives in:
 - direct CLI parsing or rendering
 - direct ownership of SQLite semantics beyond using the `atm-core` store
   boundary
+
+Current request/response packet families owned by the daemon transport line:
+- send compose
+- send acknowledge
+- receive
+- clear
+- doctor
+- heartbeat
+
+Current retained ATM surfaces not modeled as daemon request/response packets:
+- `atm log`
+- `atm teams`
+- `atm members`
 
 ## 3. Requirement Namespace
 
@@ -103,6 +121,29 @@ Initial crate requirement IDs:
   cancelled; detached untracked request execution is forbidden. Satisfies:
   `REQ-DAEMON-RUNTIME-003`, `REQ-P-DAEMON-DISPATCHER-001`,
   `REQ-CORE-DAEMON-001`.
+- `REQ-DAEMON-TRANSPORT-005` same-host local IPC and cross-host daemon
+  transport must use one shared ATM frame header and one typed
+  request/response packet family rather than separate local and remote daemon
+  message systems, as defined by `docs/atm-daemon/protocol-icd.md`. Satisfies:
+  `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`,
+  `REQ-P-CONTRACT-001`.
+- `REQ-DAEMON-TRANSPORT-006` the daemon request/response transport must use
+  explicit frame-length delimiting; EOF-delimited request framing and
+  mid-stream resynchronization after partial-frame failure are forbidden, as
+  defined by `docs/atm-daemon/protocol-icd.md`. Satisfies:
+  `REQ-CORE-TRANSPORT-001`, `REQ-P-RELIABILITY-001`.
+- `REQ-DAEMON-TRANSPORT-007` UDP is not an accepted same-host CLI-daemon
+  request/response transport for the retained product surface. Satisfies:
+  `REQ-P-RELIABILITY-001`, `REQ-P-CONTRACT-001`.
+- `REQ-DAEMON-TRANSPORT-008` same-host local IPC must expose one logical ATM
+  endpoint contract and one same-user access-control policy across Unix and
+  Windows. Callers above the local-IPC adapter must not construct Unix socket
+  paths, Windows pipe names, or platform-specific ACL semantics directly.
+  Adapter-internal mapping from the logical endpoint contract to the concrete
+  Windows named-pipe name is allowed, but the mapping must be deterministic
+  and shared by the daemon and CLI.
+  Satisfies:
+  `REQ-P-CONTRACT-001`, `REQ-P-PLATFORM-002`.
 - `REQ-DAEMON-STATUS-001` `atm-daemon` owns the live agent-status cache and
   must keep it separate from SQLite roster/mail truth. Satisfies:
   `REQ-CORE-RUNTIME-002`.
@@ -114,8 +155,9 @@ Initial crate requirement IDs:
   daemon-owned status truth. Satisfies:
   `REQ-CORE-DOCTOR-002`.
 - `REQ-DAEMON-CONFIG-001` `atm-daemon` owns daemon config validation at startup
-  and on `SIGHUP` rescan. Invalid config must produce a typed failure or
-  bounded reload rejection rather than a silent degraded state. Satisfies:
+  and on lifecycle-control-triggered reload or rescan. Invalid config must
+  produce a typed failure or bounded reload rejection rather than a silent
+  degraded state. Satisfies:
   `REQ-CORE-CONFIG-001`, `REQ-CORE-CONFIG-003`, `REQ-DAEMON-SIGNAL-001`.
 - `REQ-DAEMON-TEST-001` `atm-daemon` must not define the core test strategy.
   Core correctness must remain testable without daemon process spawning.
@@ -129,12 +171,25 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-OBS-001` `atm-daemon` owns daemon/runtime/transport structured
   event emission through `sc-observability`. Satisfies:
   `REQ-CORE-OBS-002`.
+- `REQ-DAEMON-OBS-002` `atm-daemon` owns the daemon-side retained logging
+  baseline and must preserve daemon lifecycle `info!` events plus every
+  daemon/runtime/transport `warn!` / `error!` event at the default retained
+  logger level and host-scoped retained path. Satisfies:
+  `REQ-P-OBS-002`, `REQ-P-OBS-003`, `REQ-CORE-OBS-002`.
+  In S.10, daemon-side historical log `query()` / `follow()` remain deferred;
+  operators use the CLI-owned retained-log surface until a later sprint
+  extracts daemon-side query/follow support explicitly.
+  If S.9 introduces any public retained-logging trait or sink boundary, that
+  trait must be sealed by default per the product architecture trait-extension
+  policy.
 - `REQ-DAEMON-HEALTH-001` `atm-daemon` owns the daemon health interface
   consumed by `atm doctor`. Satisfies:
   `REQ-CORE-DOCTOR-002`.
 - `REQ-DAEMON-SIGNAL-001` `atm-daemon` owns runtime-control installation and
   handling for daemon lifecycle transitions. Unix may satisfy this through
   signals; Windows may satisfy it through console or service-control events.
+  The accepted Phase S Windows console mapping is terminate events -> graceful
+  shutdown and `SIGBREAK` / `CTRL_BREAK_EVENT` -> bounded reload / rescan.
   Satisfies:
   `REQ-CORE-DAEMON-001`, `REQ-CORE-DOCTOR-002`.
 - `REQ-DAEMON-PLATFORM-001` `atm-daemon` must deliver full same-host daemon
@@ -148,13 +203,23 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-TEST-003` `atm-daemon` same-host functional tests must use one
   shared transport/dispatcher test harness on Unix and Windows, with
   platform-specific test code limited to the owned portability adapters.
+  The S.4 release audit verifies this through the real local-IPC round-trip
+  smoke test in `crates/atm-daemon/src/tests.rs`, the daemon host-ownership
+  tests, the Windows lifecycle tests, and the CLI same-host client tests.
   Satisfies:
   `REQ-P-PLATFORM-002`, `REQ-CORE-TEST-RUNTIME-001`.
-- `REQ-DAEMON-TEST-004` `atm-daemon` must not use fixed sleeps or timing-only
-  stabilization in same-host functional tests; readiness, shutdown, and retry
-  behavior must be proven through explicit synchronization or bounded runtime
-  contracts. Satisfies:
+- `REQ-DAEMON-TEST-004` `atm-daemon` must not use fixed sleeps, timing-only
+  stabilization, or unbounded wait paths in same-host functional tests;
+  readiness, shutdown, retry, and helper-thread drain behavior must be proven
+  through explicit synchronization or bounded runtime contracts. Satisfies:
   `REQ-P-TEST-001`, `REQ-P-PLATFORM-002`.
+- `REQ-DAEMON-RUNTIME-008` watcher/reconcile handling of ATM-authored
+  compatibility projection updates must remain idempotent for the same
+  logical message and must not create self-induced churn loops. Satisfies:
+  `REQ-CORE-COMPAT-001`, `REQ-P-RELIABILITY-001`, `ADR-010`.
+  The daemon boundary contract proves this through import/re-export coverage
+  that preserves the same identity fingerprint when an ATM-authored message is
+  re-observed through a retrieval-stub projection.
 
 ## 4. Required References
 
@@ -163,7 +228,6 @@ The `atm-daemon` crate docs must remain aligned with:
 - [`../requirements.md`](../requirements.md)
 - [`../architecture.md`](../architecture.md)
 - [`../project-plan.md`](../project-plan.md)
-- [`../plan-phase-Q.md`](../plan-phase-Q.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)
 - [`../plan-phase-S.md`](../plan-phase-S.md)
 - [`../testing-guidelines.md`](../testing-guidelines.md)
@@ -172,6 +236,8 @@ The `atm-daemon` crate docs must remain aligned with:
 - [`../atm-core/requirements.md`](../atm-core/requirements.md)
 - [`../atm-core/architecture.md`](../atm-core/architecture.md)
 - [`./boundaries.md`](./boundaries.md)
+- [`./protocol-icd.md`](./protocol-icd.md)
+- [`./logging.md`](./logging.md)
 
 ## 5. Phase R Runtime Requirements
 
@@ -187,6 +253,10 @@ Requirement IDs:
 - `REQ-DAEMON-TRANSPORT-002`
 - `REQ-DAEMON-TRANSPORT-003`
 - `REQ-DAEMON-TRANSPORT-004`
+- `REQ-DAEMON-TRANSPORT-005`
+- `REQ-DAEMON-TRANSPORT-006`
+- `REQ-DAEMON-TRANSPORT-007`
+- `REQ-DAEMON-TRANSPORT-008`
 - `REQ-DAEMON-STATUS-001`
 - `REQ-DAEMON-STATUS-002`
 - `REQ-DAEMON-STATUS-003`
@@ -206,10 +276,34 @@ Required runtime rules:
 - singleton enforcement is host-wide rather than socket-path-local; changing
   `ATM_HOME`, socket path, or test working directory must not create a legal
   second daemon
+- the host-wide ownership mechanism uses stable permanent lock-file paths under
+  `~/.atm/daemon/` rather than lock-file creation/deletion as the ownership
+  signal:
+  - `launch.lock`
+  - `owner.lock`
+- the cross-platform locking foundation is one whole-file exclusive-lock
+  contract on those paths; the current S.1 extraction preserves that contract
+  through the existing `fs2` crate
+- lock acquisition for `launch.lock` and `owner.lock` must use
+  `FileExt::try_lock_exclusive`; blocking `lock_exclusive` is not the
+  serving-admission contract
+- failed acquisition must surface one typed `already_owned` admission outcome
+  rather than a blocking wait loop
+- owner-visible metadata is the lock-file contents while the exclusive lock is
+  held, not the mere existence of the lock file path
+- owner-record contents use the documented `pid[:token]` format
+- supported singleton deployment assumes `~/.atm/daemon/` is on a local
+  filesystem with working host-local advisory lock semantics; NFS or other
+  network-mounted roots are not supported singleton configurations
 - daemon startup is blocked by at least two runtime guard layers:
   - a pre-spawn launch gate that serializes daemon creation attempts
   - a daemon-side startup gate that refuses serving state when ownership is
     already held
+- launch-to-owner handoff must be:
+  1. launcher holds `launch.lock` through fork/exec
+  2. daemon acquires `owner.lock` before publishing a local endpoint or
+     entering serving state
+  3. launcher releases `launch.lock` only after daemon serving confirmation
 - daemon startup must fail deterministically if a live daemon already owns the
   runtime
 - daemon startup must not publish a serving socket or accept requests before
@@ -217,10 +311,31 @@ Required runtime rules:
 - stale ownership cleanup must never allow two live daemons
 - stale ownership cleanup must preserve the same singleton guarantee as normal
   startup; cleanup is recovery, not an alternate launch path
-- singleton cleanup must not unlink a shared ownership path after releasing the
-  live lock in a way that can race a succeeding daemon process
+- if `try_lock_exclusive` succeeds on `owner.lock`, the acquiring process owns
+  the authority to inspect and replace stale owner-record contents under that
+  held lock
+- if `try_lock_exclusive` does not succeed on `owner.lock`, the caller must
+  treat ownership as live and must not attempt sidecar deletion or path-based
+  recovery
+- singleton cleanup must not depend on deleting a lock-file path to express
+  ownership transfer
 - graceful shutdown must stop accepts, drain or cancel inflight work within one
   bounded deadline, checkpoint WAL, and release singleton ownership
+- the same-host and remote daemon transport families must share one ATM frame
+  contract defined by `docs/atm-daemon/protocol-icd.md`
+- the governing ICD owns the exact `magic`, `version`, `flags`,
+  `request_id`, `payload_length`, `message_kind`, and public packet-payload
+  mapping contract
+- same-host local IPC must expose one logical endpoint contract and same-user
+  access-control policy across Unix and Windows instead of leaking socket-path
+  or named-pipe details above the adapter line
+- `message_kind` must be available before payload decode so transport handlers
+  can switch on packet type before touching payload JSON
+- explicit frame-length delimiting is required; connection shutdown/EOF is not
+  the request boundary contract
+- invalid header, partial frame, timeout, oversize payload, or decode failure
+  must fail the connection rather than triggering best-effort mid-stream
+  resynchronization
 - daemon-private runtime control must be partitioned into explicit ownership
   modules for exactly these eight partitions:
   - singleton ownership
@@ -237,9 +352,9 @@ Required runtime rules:
 - signal handlers must be installed before listeners are opened
 - the host runtime-control source must be installed before listeners are opened
 - daemon config must validate once at startup before listeners are opened
-- `SIGHUP`-driven config or roster rescan must either apply a fully valid
-  configuration or fail with a typed reload error while retaining the prior
-  serving configuration
+- lifecycle-control-triggered config or roster rescan must either apply a
+  fully valid configuration or fail with a typed reload error while retaining
+  the prior serving configuration
 - same-host daemon functionality must remain feature-complete on every
   supported operating system; compile-only support or typed unsupported-path
   stubs are not a releasable end state
@@ -266,9 +381,9 @@ Required runtime rules:
 - same-host functional tests must use shared infrastructure on Unix and Windows
   so one handler/dispatcher contract is proven through both platform
   implementations
-- fixed sleeps, warmup polling, and timing-only daemon stabilization are
-  prohibited in same-host functional tests; tests must use explicit
-  synchronization or bounded runtime contracts
+- fixed sleeps, warmup polling, timing-only daemon stabilization, and
+  unbounded wait paths are prohibited in same-host functional tests; tests
+  must use explicit synchronization or bounded runtime contracts
 - transport/store/health operations must obey one documented timeout budget
   - authoritative timeout budget references:
     [`../architecture.md §21.6.4`](../architecture.md) and

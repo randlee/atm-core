@@ -1,0 +1,40 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/INTG-FTQ-004>
+  a triage:Finding ;
+  triage:findingId "INTG-FTQ-004" ;
+  triage:title "TOCTOU race in reconcile_runtime_coalesces_duplicate_requests" ;
+  triage:description "reconcile_runtime.rs:532 — test spawns first thread, waits for pending_count=1, spawns second. If debounce (250ms) fires before second arrives, executor runs twice and assert_eq!(*calls, 1) fails. Fix: use blocking executor gate; hold worker inside first execution until both first and second are pending (wait_for_pending_count=2) before releasing." ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:triageMode "integration_gate" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T07:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-05-10T15:50:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "integrate/phase-S" ;
+  triage:promoteToBranch "integrate/phase-S" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/INTG-FTQ-004/intg/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/ade96f2> .
+
+<urn:atm:triage:occurrence/INTG-FTQ-004/intg/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:line 532 ;
+  triage:snippet "second thread spawned after pending_count=1 wait; debounce window race makes coalescing probabilistic" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:headSha "bd9e0e8" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/ade96f2> .
+
+<urn:atm:triage:worktree/integrate-phase-S/ade96f2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "bd9e0e8" ;
+  triage:orderIndex 1 .

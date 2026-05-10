@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S7-REQ-002>
+  a triage:Finding ;
+  triage:findingId "S7-REQ-002" ;
+  triage:title "Sprint S.7 §6.2 incomplete — mailbox_timeout_policy still delegates to module-level helper" ;
+  triage:description "crates/atm-core/src/service_runtime.rs:168-171 — mailbox_timeout_policy() returns RetainedMailboxTimeoutPolicy { workflow_lock_timeout: crate::mailbox::lock::default_lock_timeout() }. The struct exists and the trait method is correctly named, but the canonical timeout value is still sourced from the module-level free function crate::mailbox::lock::default_lock_timeout(). Sprint S.7 §6.2 requires the boundary-owned policy to define the canonical timeout internally without delegating to that helper. Fix: inline the Duration value (or a named const) directly in mailbox_timeout_policy() and retire the delegation to crate::mailbox::lock::default_lock_timeout() from this call site." ;
+  triage:category "REQ" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S7-REQ-002/s7/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:occurrence/S7-REQ-002/s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime.rs" ;
+  triage:line 168 ;
+  triage:snippet "fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy { RetainedMailboxTimeoutPolicy { workflow_lock_timeout: crate::mailbox::lock::default_lock_timeout() } }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9c01bca" ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s7-queue-query" ;
+  triage:headSha "9c01bca" ;
+  triage:orderIndex 1 .

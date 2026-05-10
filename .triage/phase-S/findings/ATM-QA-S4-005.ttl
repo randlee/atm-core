@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S4-005>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S4-005" ;
+  triage:title "Production daemon auto-start thread::sleep(poll_interval) not documented as accepted Anti-Flake exception (composition.rs:254)" ;
+  triage:description "crates/atm/src/composition.rs:254-268 — DaemonSupervisor::ensure_daemon_available_with_lock_path uses thread::sleep(poll_interval) in a production polling loop while waiting for daemon to start after auto-start. Sprint S.4 coverage audit did not document this as an accepted exception to the anti-flake contract. plan-phase-S.md §4.1 does not record it as an accepted production polling exception. This is almost certainly a legitimate accepted pattern (waiting for external process launch has no push-based notification surface; bounded polling is required), but the exception is undocumented. Fix: document explicitly in plan-phase-S.md §4.1 as an accepted production exception with rationale. If emit_ready_signal_if_requested provides a readiness-signal mechanism that can be read by the CLI, wire it up as the preferred alternative." ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T18:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S4-005/s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874> .
+
+<urn:atm:triage:occurrence/ATM-QA-S4-005/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 254 ;
+  triage:snippet "ensure_daemon_available_with_lock_path — thread::sleep(poll_interval) polling loop for daemon auto-start; undocumented as accepted Anti-Flake §4.1 exception in plan-phase-S.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "dd36874" ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874> .
+
+<urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "dd36874" ;
+  triage:orderIndex 4 .

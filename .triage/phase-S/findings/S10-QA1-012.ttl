@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S10-QA1-012>
+  a triage:Finding ;
+  triage:findingId "S10-QA1-012" ;
+  triage:title "JsonlFileSink uses default rotation/retention — log file can grow without bound" ;
+  triage:description "daemon_observability.rs:200 constructs JsonlFileSink::new(active_log_path, RotationPolicy::default(), RetentionPolicy::default()) with no explicit rotation size, rotation interval, or retention file count. With default policies, the retained log file can grow without bound on a long-lived daemon process. Specify explicit rotation and retention parameters (e.g., size-based rotation at 10 MiB, retain last 5 files) and document the rationale in ADR-011 §Implementation Constraints." ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s10-daemon-retained-logger" ;
+  triage:promoteToBranch "feature/pS-s10-daemon-retained-logger" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S10-QA1-012/s10/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658> .
+
+<urn:atm:triage:occurrence/S10-QA1-012/s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/daemon_observability.rs" ;
+  triage:line 200 ;
+  triage:snippet "JsonlFileSink::new(active_log_path, RotationPolicy::default(), RetentionPolicy::default()) — no explicit rotation or retention limits" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "320b658" ;
+  triage:branch "feature/pS-s10-daemon-retained-logger" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658> .
+
+<urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s10-daemon-retained-logger" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s10-daemon-retained-logger" ;
+  triage:headSha "320b658" ;
+  triage:orderIndex 1 .

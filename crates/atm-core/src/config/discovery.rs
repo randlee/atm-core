@@ -1,13 +1,15 @@
 //! Post-send hook config normalization helpers.
 
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
 use crate::address::validate_path_segment;
 use crate::error::{AtmError, AtmErrorKind};
+use crate::home;
 use crate::types::AgentName;
 
 use super::RawPostSendHookRule;
-use super::types::{HookRecipient, PostSendHookRule};
+use super::types::{HookRecipient, MAX_POST_SEND_HOOK_COMMAND_PATH_BYTES, PostSendHookRule};
 
 /// Normalize recipient hook rules relative to the declaring config directory.
 ///
@@ -59,24 +61,34 @@ pub(super) fn normalize_post_send_hooks(
                     "Set [[atm.post_send_hooks]].command[0] to a relative path, absolute path, or bare executable name.",
                 ));
             }
-            if command_looks_like_path(program) {
-                let resolved = if Path::new(program).is_absolute() {
-                    PathBuf::from(&*program)
+            let has_home_tilde_prefix =
+                matches!(program.as_str(), "~") || program.starts_with("~/") || program.starts_with("~\\");
+            let expanded_program = expand_home_tilde(program)?;
+            if command_looks_like_path(expanded_program.as_ref()) || has_home_tilde_prefix {
+                let resolved = if Path::new(expanded_program.as_ref()).is_absolute() {
+                    PathBuf::from(expanded_program.as_ref())
+                } else if let Some(expanded_home) = expand_tilde_to_home_path(&expanded_program)? {
+                    expanded_home
                 } else {
-                    config_root.join(&*program)
+                    config_root.join(expanded_program.as_ref())
                 };
-                *program = resolved
-                    .to_str()
-                    .ok_or_else(|| {
+                let resolved = resolved.to_str().ok_or_else(|| {
                         AtmError::new(
                             AtmErrorKind::Config,
-                            format!("hook command path is not valid UTF-8: {}", resolved.display()),
+                            format!(
+                                "hook command path is not valid UTF-8: {}",
+                                resolved.display()
+                            ),
                         )
                         .with_recovery(
                             "Use a UTF-8 hook path or invoke the hook through a bare executable name so ATM can resolve it via PATH.",
                         )
-                    })?
-                    .to_string();
+                    })?;
+                validate_hook_command_path_length(resolved)?;
+                *program = resolved.to_string();
+            } else {
+                validate_hook_command_path_length(expanded_program.as_ref())?;
+                *program = expanded_program.into_owned();
             }
             Ok(PostSendHookRule {
                 recipient,
@@ -86,8 +98,73 @@ pub(super) fn normalize_post_send_hooks(
         .collect()
 }
 
-pub fn command_looks_like_path(program: &str) -> bool {
+pub(crate) fn command_looks_like_path(program: &str) -> bool {
     program.contains('/') || program.contains('\\')
+}
+
+fn expand_home_tilde(program: &str) -> Result<Cow<'_, str>, AtmError> {
+    if !program.starts_with('~') {
+        return Ok(Cow::Borrowed(program));
+    }
+    // Issue #219: tilde-expansion for post-send hook command[0] paths.
+    if matches!(program, "~") || program.starts_with("~/") || program.starts_with("~\\") {
+        let expanded = expand_tilde_to_home_path(program)?;
+        let Some(expanded) = expanded else {
+            return Ok(Cow::Borrowed(program));
+        };
+        return Ok(Cow::Owned(
+            expanded
+                .to_str()
+                .ok_or_else(|| {
+                    AtmError::new(
+                        AtmErrorKind::Config,
+                        format!("hook command path is not valid UTF-8: {}", expanded.display()),
+                    )
+                    .with_recovery(
+                        "Use a UTF-8 hook path or invoke the hook through a bare executable name so ATM can resolve it via PATH.",
+                    )
+                })?
+                .to_string(),
+        ));
+    }
+    Ok(Cow::Borrowed(program))
+}
+
+fn expand_tilde_to_home_path(program: &str) -> Result<Option<PathBuf>, AtmError> {
+    let rest = match program {
+        "~" => Some(""),
+        _ => program
+            .strip_prefix("~/")
+            .or_else(|| program.strip_prefix("~\\")),
+    };
+    let Some(rest) = rest else {
+        return Ok(None);
+    };
+
+    let mut expanded = home::user_home()?;
+    for segment in rest
+        .split(['/', '\\'])
+        .filter(|segment| !segment.is_empty())
+    {
+        expanded.push(segment);
+    }
+    Ok(Some(expanded))
+}
+
+fn validate_hook_command_path_length(path: &str) -> Result<(), AtmError> {
+    if path.len() > MAX_POST_SEND_HOOK_COMMAND_PATH_BYTES {
+        return Err(AtmError::new(
+            AtmErrorKind::Config,
+            format!(
+                "post-send hook command path exceeds the maximum supported length of {} bytes",
+                MAX_POST_SEND_HOOK_COMMAND_PATH_BYTES
+            ),
+        )
+        .with_recovery(
+            "Shorten [[atm.post_send_hooks]].command[0] to 4096 bytes or fewer before retrying.",
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -168,6 +245,54 @@ mod tests {
     }
 
     #[test]
+    fn normalize_post_send_hooks_expands_home_tilde_path() {
+        let (_tempdir, config_root) = config_root_fixture();
+        let home = crate::home::user_home().expect("user home");
+        let hooks = vec![RawPostSendHookRule {
+            recipient: "*".into(),
+            command: vec!["~/hooks/notify.sh".into()],
+        }];
+
+        let hooks = normalize_post_send_hooks(hooks, &config_root).expect("hooks");
+
+        assert_eq!(
+            hooks[0].command[0],
+            home.join("hooks").join("notify.sh").display().to_string()
+        );
+    }
+
+    #[test]
+    fn normalize_post_send_hooks_expands_windows_style_home_tilde_path() {
+        let (_tempdir, config_root) = config_root_fixture();
+        let home = crate::home::user_home().expect("user home");
+        let hooks = vec![RawPostSendHookRule {
+            recipient: "*".into(),
+            command: vec![r"~\hooks\notify.cmd".into()],
+        }];
+
+        let hooks = normalize_post_send_hooks(hooks, &config_root).expect("hooks");
+
+        assert_eq!(
+            hooks[0].command[0],
+            home.join("hooks").join("notify.cmd").display().to_string()
+        );
+    }
+
+    #[test]
+    fn normalize_post_send_hooks_expands_bare_home_tilde() {
+        let (_tempdir, config_root) = config_root_fixture();
+        let home = crate::home::user_home().expect("user home");
+        let hooks = vec![RawPostSendHookRule {
+            recipient: "*".into(),
+            command: vec!["~".into()],
+        }];
+
+        let hooks = normalize_post_send_hooks(hooks, &config_root).expect("hooks");
+
+        assert_eq!(hooks[0].command[0], home.display().to_string());
+    }
+
+    #[test]
     fn normalize_post_send_hooks_rejects_empty_recipient() {
         let (_tempdir, config_root) = config_root_fixture();
         let error = normalize_post_send_hooks(
@@ -229,5 +354,25 @@ mod tests {
         .expect_err("blank program should fail");
 
         assert!(error.message.contains("command program must not be empty"));
+    }
+
+    #[test]
+    fn normalize_post_send_hooks_rejects_overlong_expanded_path() {
+        let (_tempdir, config_root) = config_root_fixture();
+        let oversized_tail = "x".repeat(5000);
+        let error = normalize_post_send_hooks(
+            vec![RawPostSendHookRule {
+                recipient: "*".into(),
+                command: vec![format!("~/{}", oversized_tail)],
+            }],
+            &config_root,
+        )
+        .expect_err("overlong hook path should fail");
+
+        assert!(
+            error
+                .message
+                .contains("exceeds the maximum supported length")
+        );
     }
 }

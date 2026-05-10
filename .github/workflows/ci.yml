@@ -2,9 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [develop, main, "integrate/*", "feature/pR-s3-*"]
+    branches: [develop, main, "integrate/*"]
   push:
-    branches: [develop, main, "feature/pR-s3-*"]
+    branches: [develop, main]
 
 jobs:
   just-lint:
@@ -47,8 +47,6 @@ jobs:
         run: python -m pip install codespell
 
       - name: Run just lint
-        env:
-          ATM_WINDOWS_CLIPPY_SCOPE: cross-platform-only
         run: just lint
 
   fmt:
@@ -138,7 +136,13 @@ jobs:
       - name: Build workspace
         run: cargo build --verbose
 
-      - name: Run tests
+      - name: Run workspace tests excluding atm-daemon on Windows
         env:
           ATM_TEST_RECV_TIMEOUT_SECS: "60"
-        run: cargo test --verbose
+        run: cargo test --workspace --exclude atm-daemon --verbose
+
+      - name: Run atm-daemon tests
+        if: runner.os != 'Windows'
+        env:
+          ATM_TEST_RECV_TIMEOUT_SECS: "60"
+        run: cargo test -p atm-daemon --verbose

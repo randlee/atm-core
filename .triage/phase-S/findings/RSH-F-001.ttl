@@ -1,0 +1,71 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-F-001>
+  a triage:Finding ;
+  triage:findingId "RSH-F-001" ;
+  triage:title "Bare Condvar::wait() at lifecycle_control.rs:62 — unbounded block violates SCB-RUNTIME-001" ;
+  triage:description "crates/atm-daemon/src/lifecycle_control.rs:62 uses bare Condvar::wait() with no timeout. This blocks the thread indefinitely if the notify never fires. Must be replaced with wait_timeout_while(30s) per SCB-RUNTIME-001. The fix is already present on feature/pS-s6-runtime-remediation (wait_timeout_while with LIFECYCLE_WAIT_TIMEOUT = 30s); the violation persists on integrate/phase-S pending merge. The occurrence in crates/sc-lint-boundary/src/tests.rs:714 is an intentional test-fixture string literal verifying lint detection — not a real production violation." ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "integrate/phase-S" ;
+  triage:promoteToBranch "feature/pS-s6-runtime-remediation" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-F-001/integrate-phase-S/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-F-001/integrate-phase-S/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-F-001/s6/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/3f67133> .
+
+<urn:atm:triage:occurrence/RSH-F-001/integrate-phase-S/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 62 ;
+  triage:snippet "generation = self.wake.wait(generation) — bare Condvar::wait() with no timeout; thread blocks indefinitely if notify never fires; violates SCB-RUNTIME-001" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "3f67133" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/3f67133> .
+
+<urn:atm:triage:occurrence/RSH-F-001/integrate-phase-S/2>
+  a triage:Occurrence ;
+  triage:file "crates/sc-lint-boundary/src/tests.rs" ;
+  triage:line 714 ;
+  triage:snippet "condvar.wait(state).expect(\"wait\") — test-fixture string literal inside flags_bare_wait_in_production_code(); intentional bad-code sample for lint verification; not a real production violation" ;
+  triage:status "dismissed" ;
+  triage:closed true ;
+  triage:dismissalReason "test-fixture string literal; intentional bad-code sample to verify lint rule detection" ;
+  triage:headSha "3f67133" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/3f67133> .
+
+<urn:atm:triage:occurrence/RSH-F-001/s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 72 ;
+  triage:snippet "self.wake.wait_timeout_while(generation, LIFECYCLE_WAIT_TIMEOUT, ...) — fix applied; replaced bare wait() with wait_timeout_while(30s)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:headSha "b80f16a" ;
+  triage:branch "feature/pS-s6-runtime-remediation" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s6-runtime-remediation/b80f16a> .
+
+<urn:atm:triage:worktree/integrate-phase-S/3f67133>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "3f67133" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/feature-pS-s6-runtime-remediation/b80f16a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s6-runtime-remediation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s6-runtime-remediation" ;
+  triage:headSha "b80f16a" ;
+  triage:orderIndex 1 .

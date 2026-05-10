@@ -7,11 +7,14 @@ This document defines the `atm-daemon` crate architectural boundary.
 It complements the product architecture in
 [`../architecture.md`](../architecture.md) and owns runtime composition only.
 
+The canonical daemon wire contract lives in:
+- [`./protocol-icd.md`](./protocol-icd.md)
+
 The crate-local machine-readable boundary inventory lives in:
 - [`./boundaries.md`](./boundaries.md)
 
-This crate is introduced by the Phase Q implementation line and is not part of
-the current pre-Phase-Q workspace yet.
+This crate was introduced on the Phase Q implementation line and remains part
+of the current workspace.
 
 ## 1.1 ADRs
 
@@ -83,6 +86,19 @@ Phase R redesign notes:
 - remote daemon-to-daemon client behavior uses the same shared protocol and
   client/server transport contract family rather than a separate daemon-only API
 
+Current packet-supported daemon surface:
+- send compose
+- send acknowledge
+- receive
+- clear
+- doctor
+- heartbeat
+
+Current retained ATM surfaces outside the daemon request/response packet family:
+- `atm log`
+- `atm teams`
+- `atm members`
+
 ## 3. Architectural Rules
 
 - `atm-daemon` must not reimplement `atm-core` business logic.
@@ -95,6 +111,15 @@ Phase R redesign notes:
   - cross-platform local IPC for same-host daemon access
   - TCP/TLS
   - in-process `LoopbackClientTransport` (`test-socket`)
+- same-host local IPC and cross-host daemon transport must use one shared ATM
+  frame header and request/response packet family rather than separate local
+  and remote message systems, as defined by `protocol-icd.md`
+- same-host local IPC endpoint naming and same-user access-control semantics
+  must be owned by the local-IPC adapter rather than by callers constructing
+  platform-specific socket paths, pipe names, or ACL details
+- the shared endpoint helper may derive a Windows named-pipe path from the
+  logical ATM endpoint contract, but that mapping must stay inside the
+  same-host transport boundary and remain identical for the daemon and CLI
 - same-host daemon functionality must ship with feature parity on every
   supported operating system; Windows is not a compile-only or degraded-host
   target
@@ -116,7 +141,8 @@ Phase R redesign notes:
 - bounded transient retry uses exponential backoff with jitter, an initial
   delay of 250ms, a per-attempt maximum of 5s, jitter of +/-20%, and a hard
   total retry ceiling within the documented timeout budget; it must not
-  collapse into fixed sleeps or unbounded churn
+  collapse into fixed sleeps, unbounded churn, or tests that can wait
+  indefinitely for eventual success
 - retryable peer failures are limited to transient pre-acceptance socket
   failures:
   - timeout
@@ -151,14 +177,34 @@ Phase R redesign notes:
   debug-only runtime path replaces it in production.
 - plugin-local observability does not replace daemon-owned runtime/transport
   sinks; daemon-owned events stay daemon-owned.
+- daemon retained-log reporting must use the host-scoped ATM log contract:
+  `~/.atm/logs/atm.log.jsonl` by default and `ATM_LOG_DIR` when overridden.
+- daemon health/reporting must not point retained-log status at `.local/share`,
+  `~/logs`, `~/.claude/logs`, or other non-ATM-owned defaults.
+- the default retained daemon logging baseline must keep:
+  - daemon lifecycle `info!` events
+  - every daemon/runtime/transport `warn!` event
+  - every daemon/runtime/transport `error!` event
 - runtime subsystems stay fully isolated:
   - SQL/store calls belong only to the store boundary
   - file-watch/reconcile logic belongs only to the watcher/reconcile boundary
   - notification delivery belongs only to the notifier/plugin boundary
   - local-IPC and network I/O belong only to the transport boundary
+- UDP is not an approved daemon control-plane transport for same-host CLI
+  request/response traffic; same-host and remote request families require the
+  shared framed stream contract
 - watcher/reconcile adapters remain crate-private and dispatch through owned
   ingress/service handlers rather than touching store/transport/notifier
   internals directly
+- watcher/reconcile observation of ATM-authored compatibility projection
+  updates must be idempotent for the same logical message; re-observing the
+  same retrieval-stub projection must not create a new-mail churn loop
+- ADR reference:
+  - `ADR-010`
+- daemon-owned ingress/export boundary tests must therefore preserve the same
+  logical identity fingerprint across full-body and retrieval-stub projections
+  for one ATM-authored message id rather than treating the projection as new
+  mail
 - the watcher/reconcile boundary minimum method set is defined in product
   [architecture.md §21.6.1](../architecture.md)
 
@@ -189,6 +235,20 @@ If a code path needs additional platform branching outside the three areas
 above, the architecture docs and boundary inventory must be updated before the
 implementation is accepted.
 
+## 3.0.2 Shared Frame Contract
+
+The daemon host shell must use the shared ATM frame contract defined in
+[`protocol-icd.md`](./protocol-icd.md).
+
+That includes:
+- one fixed ATM frame header
+- one packet-kind registry
+- one request/response DTO family
+- one typed protocol-failure model
+- exact `magic`, `version`, `flags`, and `request_id` rules
+- exact `message_kind` numeric assignments for the current daemon packet
+  surface
+
 Phase S carries forward the current PID continuity model unchanged. Windows
 parity work may reimplement how liveness is enforced inside the host-ownership
 or lifecycle adapters, but it must not silently redesign PID semantics without
@@ -212,12 +272,39 @@ Architectural rule:
   exception to the singleton rule
 - the host-wide ownership root is `~/.atm/daemon/` derived from the OS user
   home, not from `ATM_HOME` or the serving socket path
-- client-side launch admission uses `~/.atm/daemon/launch.lock`
-- daemon-side serving admission uses `~/.atm/daemon/owner.lock`
-- if the serving owner record points to a non-live pid, startup may perform a
-  bounded retry to recover the same singleton lock; if recovery cannot safely
-  claim the existing ownership path, startup must fail with
+- client-side launch admission uses the stable lock file
+  `~/.atm/daemon/launch.lock`
+- daemon-side serving admission uses the stable lock file
+  `~/.atm/daemon/owner.lock`
+- Phase S host ownership uses one cross-platform whole-file exclusive-lock
+  contract on those stable file paths rather than lock-file creation/deletion
+  as the ownership signal
+- lock acquisition must use non-blocking `FileExt::try_lock_exclusive` for
+  both `launch.lock` and `owner.lock`; blocking `lock_exclusive` is not the
+  accepted serving-admission contract
+- failed non-blocking acquisition of either lock file must surface one typed
+  `already_owned` admission outcome rather than silently spinning or blocking
+- the current S.1 extraction uses the existing `fs2` file-locking crate while
+  preserving the required non-blocking whole-file lock semantics
+- owner-visible metadata is the lock-file contents in documented
+  `pid[:token]` form while the exclusive lock is held
+- lock files must live on a local filesystem with working host-local advisory
+  lock semantics; network-mounted or NFS-backed `~/.atm/daemon/` roots are not
+  a supported singleton deployment configuration
+- if an exclusive lock on `owner.lock` can be acquired, startup may inspect
+  and replace stale owner metadata under that held lock; if recovery cannot
+  safely claim the same lock path, startup must fail with
   `ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED`
+- launch-to-owner handoff sequence is:
+  1. the client acquires and holds `launch.lock` before fork/exec
+  2. the daemon process acquires `owner.lock` with `try_lock_exclusive`
+     before publishing any same-host endpoint or entering serving state
+  3. once the daemon confirms serving state, the launcher releases
+     `launch.lock`
+  4. if the daemon cannot acquire `owner.lock`, startup fails closed and the
+     launcher must release `launch.lock` without retrying a second daemon
+- Windows uses the same logical handoff and typed `already_owned` admission
+  outcome even though the underlying file-locking calls and error codes differ
 
 Lifecycle state model:
 - the daemon runtime must explicitly model:
@@ -286,6 +373,11 @@ Transport dispatcher rule:
 - same-host functional coverage must also exercise the real local-IPC adapter
   on Unix and Windows through one shared harness shape; a Unix-only host test
   suite is not sufficient for Phase S closeout
+- the landed S.4 coverage audit is anchored by:
+  - `crates/atm-daemon/src/tests.rs::local_ipc_runtime_round_trips_doctor_requests_on_shared_transport`
+  - `crates/atm-daemon/src/tests.rs` host-ownership coverage
+  - `crates/atm-daemon/src/lifecycle_control.rs` Windows lifecycle tests
+  - `crates/atm/src/composition.rs` same-host client and launch-gate tests
 
 Dispatcher/handler rule:
 - request-kind routing belongs to the dispatcher boundary, not to the socket
@@ -336,10 +428,12 @@ Required ownership rules:
   must not remain the long-term home for singleton ownership, server runtime,
   request execution, and shutdown policy simultaneously
 - singleton cleanup must remain ownership-safe:
-  - the runtime must remove the owner-visible lock path before releasing the
-    live advisory lock
-  - the runtime must not release the ownership lock and then unlink a shared
-    lock path in a way that can race a succeeding daemon process
+  - the runtime must clear or invalidate current owner metadata while the live
+    exclusive lock is still held
+  - the stable `launch.lock` and `owner.lock` paths must not be relied on as
+    ephemeral ownership sentinels that are deleted during normal handoff
+  - the runtime must not release the ownership lock while current owner
+    metadata still presents that daemon as authoritative
 - request work launched from the server runtime must remain owned by runtime
   drain accounting until it finishes or is cancelled
   - `request_runtime` owns one runtime-private tracked-work registry keyed by
@@ -374,8 +468,10 @@ Required shutdown sequence:
 4. cancel remaining inflight work at the force-cancel deadline
 5. checkpoint SQLite WAL
 6. flush observability sinks on a best-effort basis
-7. remove the owner-visible singleton lock path and related socket artifact
-8. release the live advisory ownership lock
+7. clear or invalidate current owner metadata while `owner.lock` is still held
+8. release the live exclusive ownership lock
+9. remove the same-host listener artifact if the local-IPC adapter requires a
+   removable endpoint artifact on that operating system
 
 Force-cancel rule:
 - the forced-shutdown path must interrupt blocked socket reads and writes via
@@ -390,8 +486,8 @@ Required deadlines:
 Ordering rule:
 - singleton ownership is released only after listener shutdown and checkpoint
   sequencing completes or the runtime has failed closed
-- unlinking the owner-visible lock path must happen before advisory-lock
-  release; unlock-then-unlink is a contract violation
+- owner metadata must be cleared or invalidated before exclusive-lock release;
+  publishing a current owner record after unlock is a contract violation
 
 ## 3.1.3 Signal Handling
 
@@ -403,6 +499,11 @@ Required runtime-control mappings:
     singleton ownership
 - Windows may map the same logical control events through console or service
   control equivalents
+- the accepted Phase S console mapping is:
+  - `SIGINT` / console terminate event: begin graceful shutdown
+  - `SIGTERM` equivalent terminate event: begin graceful shutdown
+  - `SIGBREAK` / `CTRL_BREAK_EVENT`: trigger bounded configuration / roster
+    rescan while retaining singleton ownership
 
 Architectural rules:
 - the lifecycle-control source installs before any listener begins accepting

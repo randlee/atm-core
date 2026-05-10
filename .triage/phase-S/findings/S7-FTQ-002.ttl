@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S7-FTQ-002>
+  a triage:Finding ;
+  triage:findingId "S7-FTQ-002" ;
+  triage:title "Timestamp collision in task_filter_matches_logical_current_terminal_message_only" ;
+  triage:description "crates/atm-core/src/read/mod.rs:1146-1196 — identical timestamp collision pattern as S7-FTQ-001 in a separate test. root_id and terminal_id messages are both constructed with IsoTimestamp::now(); under timestamp equality sort_and_limit_selected() resolves order via message_id UUID comparison, which is random. The test asserts selected.len() == 1 && selected[0].envelope.message_id == Some(terminal_id): if root_id sorts first the assertion fails. The selection_state_for_source_files call uses ReadSelection::All with a task_filter, so logical-current collapse reduces the thread to one message — but that reduction depends on the sort, not on a deterministic tie-breaking property. Fix: same as S7-FTQ-001 — assign explicitly separated timestamps to root and terminal message constructors within this test so the terminal message reliably wins the descending-timestamp sort." ;
+  triage:category "FTQ" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S7-FTQ-002/s7/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:occurrence/S7-FTQ-002/s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 1146 ;
+  triage:snippet "message(\"root\", root_id, None, None, false) and message(\"terminal\", terminal_id, ...) both call IsoTimestamp::now(); UUID tiebreak on equal timestamps makes sort non-deterministic → intermittent assert_eq!(selected[0].message_id, Some(terminal_id)) failure under ReadSelection::All with task_filter" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9c01bca" ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s7-queue-query" ;
+  triage:headSha "9c01bca" ;
+  triage:orderIndex 1 .

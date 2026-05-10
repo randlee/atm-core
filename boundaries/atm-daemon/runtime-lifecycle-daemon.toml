@@ -43,8 +43,8 @@ forbidden_edges = [
 scope = "outside_owner_crate"
 forbidden = [
   "RuntimeComposition",
-  "DaemonShutdownSignals",
-  "SingletonGuard",
+  "LifecycleControlSourceAdapter",
+  "HostOwnershipAdapter",
 ]
 
 [contracts]

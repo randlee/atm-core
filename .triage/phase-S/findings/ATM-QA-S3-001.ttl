@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S3-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S3-001" ;
+  triage:title "signal_hook::iterator::Signals used inside #[cfg(windows)] block — E0432 Windows CI compile error (lifecycle_control.rs:195)" ;
+  triage:description "crates/atm-daemon/src/lifecycle_control.rs:195 — signal_hook::iterator::Signals is used inside a #[cfg(windows)] code block, but signal_hook::iterator is cfg(all(not(windows), feature=\"iterator\")) and is unavailable on Windows. This produces E0432: unresolved import signal_hook::iterator on Windows CI. Fix: replace with signal_hook::flag::register(SIGINT, terminate.clone()) which is available on all platforms. Fix together with ATM-QA-S3-002 (WIN-RELOAD-001) — same commit, same function. (quality-mgr reported as CI-BLOCK-001-S3 in S.3 QA-2 report.)" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T09:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S3-001/s3/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s3-runtime-control/9698a17> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s3-runtime-control/9698a17> .
+
+<urn:atm:triage:occurrence/ATM-QA-S3-001/s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 195 ;
+  triage:snippet "signal_hook::iterator::Signals inside #[cfg(windows)] block — unavailable on Windows" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9698a17" ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s3-runtime-control/9698a17> .
+
+<urn:atm:triage:worktree/feature-pS-s3-runtime-control/9698a17>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "9698a17" ;
+  triage:orderIndex 3 .

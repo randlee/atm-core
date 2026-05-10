@@ -1,0 +1,134 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Finding: ARCH-003
+# runtime_health.rs approaching RULE-003 size ceiling with embedded test helpers
+# Phase: phase-S | Mode: initial_pass | Triaged: 2026-05-08T00:00:00Z
+
+<urn:atm:triage:finding/ARCH-003>
+  a triage:Finding ;
+  triage:findingId "ARCH-003" ;
+  triage:title "runtime_health.rs approaching RULE-003 size ceiling with embedded test helpers" ;
+  triage:description "runtime_health.rs:1 — 929 lines, ~882 non-blank; test helpers embedded in production impl blocks under #[cfg(all(test, unix))]; 5 distinct responsibilities; approaching RULE-003 ceiling." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-08T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-003/pS-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-003/pS-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-003/pS-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-003/pS-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-003/phase-S-int/1> ;
+
+  triage:openOn <urn:atm:triage:worktree/pS-s1/ab12ea1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s2/ab12ea1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s3/689a48f> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s4/689a48f> ;
+  triage:openOn <urn:atm:triage:worktree/phase-S-int/689a48f> ;
+
+  triage:promoteTo <urn:atm:triage:worktree/phase-S-int/689a48f> .
+
+# ── Occurrences ────────────────────────────────────────────────────────────────
+
+# Occurrence 1: feature/pS-s1-boundary-extraction
+<urn:atm:triage:occurrence/ARCH-003/pS-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1 ;
+  triage:snippet "929 lines total; ~882 non-blank; 5 distinct responsibilities; test helpers at lines 338, 357, 377, 555 under #[cfg(all(test,unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+
+# Occurrence 2: feature/pS-s2-windows-ipc
+<urn:atm:triage:occurrence/ARCH-003/pS-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1 ;
+  triage:snippet "929 lines total; ~882 non-blank; 5 distinct responsibilities; test helpers at lines 338, 357, 377, 555 under #[cfg(all(test,unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s2/ab12ea1> .
+
+# Occurrence 3: feature/pS-s3-runtime-control
+<urn:atm:triage:occurrence/ARCH-003/pS-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1 ;
+  triage:snippet "929 lines total; ~882 non-blank; 5 distinct responsibilities; test helpers at lines 338, 357, 377, 555 under #[cfg(all(test,unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s3/689a48f> .
+
+# Occurrence 4: feature/pS-s4-hardening
+<urn:atm:triage:occurrence/ARCH-003/pS-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1 ;
+  triage:snippet "929 lines total; ~882 non-blank; 5 distinct responsibilities; test helpers at lines 338, 357, 377, 555 under #[cfg(all(test,unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s4/689a48f> .
+
+# Occurrence 5: integrate/phase-S (highest open branch)
+<urn:atm:triage:occurrence/ARCH-003/phase-S-int/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1 ;
+  triage:snippet "929 lines total; ~882 non-blank; 5 distinct responsibilities; test helpers at lines 338, 357, 377, 555 under #[cfg(all(test,unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-S-int/689a48f> .
+
+# ── WorktreeSnapshots ──────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pS-s1/ab12ea1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s2/ab12ea1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "ab12ea1" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pS-s3/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pS-s4/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/phase-S-int/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:orderIndex 5 .

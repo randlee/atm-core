@@ -41,10 +41,27 @@ Phase-S planning note:
   full daemon feature set must work on Windows as well as Unix-like hosts
 - the active planning line for that correction is Phase S, tracked in
   [`docs/plan-phase-S.md`](./plan-phase-S.md)
+- the canonical daemon wire contract, current daemon packet surface, and shared
+  local-IPC/host-host frame rules are tracked in
+  [`docs/atm-daemon/protocol-icd.md`](./atm-daemon/protocol-icd.md)
 - Phase S is not satisfied by Windows compilation or temporary unsupported-path
   stubs; it closes only when daemon functionality is production-ready on every
   supported operating system behind the documented portability boundaries
+- Phase S implementation details must come either from `docs/plan-phase-S.md`
+  or from the governing requirements, architecture, ADR, and ICD documents it
+  names; the project plan does not override those lower-level sources of truth
 - the planning baseline is `integrate/phase-R` at `6a072c1`
+- S.5 is the follow-on planning slice that tightens the no-flaky-test policy,
+  defines which anti-flake guardrails belong in the default lint path, and
+  documents the bounded queue-query split between `atm list` and
+  single-message `atm read`, including the ATM-authored Claude JSONL
+  compatibility envelope for oversized message bodies
+- the remaining Phase S implementation work continues in:
+  - `S.6` daemon post-mortem runtime remediation
+  - `S.7` bounded queue-query implementation
+  - `S.8` Claude JSONL compatibility-envelope implementation
+  - `S.9` host-scoped retained logging defaults, including watcher/reconcile
+    exclusion for `~/.atm/logs/`
 
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton
@@ -2528,6 +2545,8 @@ Core design decisions:
 - `atm doctor` remains a CLI command but must query daemon/runtime state in the
   Phase Q target architecture
 - Claude inbox JSONL remains compatibility ingress/egress only
+- ATM-authored JSONL export is a bounded compatibility projection over the full
+  durable SQLite message body
 - native agent/plugin traffic does not use JSONL
 - one daemon API, two production transport implementations:
   - cross-platform local IPC for same-host

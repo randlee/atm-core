@@ -1,0 +1,195 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Finding: ARCH-004
+# Phase: phase-S
+# Triage mode: initial_pass
+# Triaged at: 2026-05-08T00:00:00Z
+
+<urn:atm:triage:finding/ARCH-004>
+  a triage:Finding ;
+  triage:findingId "ARCH-004" ;
+  triage:title "Windows lifecycle-control gap has no machine-trackable state in TOML" ;
+  triage:description "Windows lifecycle-control gap has no machine-trackable state in TOML; related to ATM-QA-008." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:phaseId "phase-S" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-08T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-004/pS-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-004/pS-s1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-004/pS-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-004/pS-s2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-004/pS-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-004/pS-s3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-004/pS-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-004/pS-s4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-004/integrate-phase-S/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-004/integrate-phase-S/2> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s1-boundary-extraction/ab12ea1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s2-windows-ipc/689a48f> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s3-runtime-control/689a48f> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s4-hardening/689a48f> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+
+# ── Worktree snapshots ──────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pS-s1-boundary-extraction/ab12ea1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s2-windows-ipc/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pS-s3-runtime-control/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pS-s4-hardening/689a48f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:orderIndex 5 .
+
+# ── Occurrences: feature/pS-s1-boundary-extraction ─────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-004/pS-s1/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/lifecycle-control-source.toml" ;
+  triage:line 11 ;
+  triage:snippet "module = \"atm_daemon::lifecycle_control\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s1-boundary-extraction/ab12ea1> .
+
+<urn:atm:triage:occurrence/ARCH-004/pS-s1/2>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/lifecycle-control-source.toml" ;
+  triage:line 75 ;
+  triage:snippet "\"same-host daemon hosting is incomplete until Windows lifecycle control exists behind this boundary\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:headSha "ab12ea1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s1-boundary-extraction/ab12ea1> .
+
+# ── Occurrences: feature/pS-s2-windows-ipc ─────────────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-004/pS-s2/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/lifecycle-control-source.toml" ;
+  triage:line 73 ;
+  triage:snippet "\"Phase S requires a platform-neutral lifecycle control source with Unix and Windows implementations behind one daemon-private contract\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s2-windows-ipc/689a48f> .
+
+<urn:atm:triage:occurrence/ARCH-004/pS-s2/2>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/lifecycle-control-source.toml" ;
+  triage:line 75 ;
+  triage:snippet "\"same-host daemon hosting is incomplete until Windows lifecycle control exists behind this boundary\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s2-windows-ipc/689a48f> .
+
+# ── Occurrences: feature/pS-s3-runtime-control ─────────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-004/pS-s3/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/lifecycle-control-source.toml" ;
+  triage:line 73 ;
+  triage:snippet "\"Phase S requires a platform-neutral lifecycle control source with Unix and Windows implementations behind one daemon-private contract\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s3-runtime-control/689a48f> .
+
+<urn:atm:triage:occurrence/ARCH-004/pS-s3/2>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/lifecycle-control-source.toml" ;
+  triage:line 74 ;
+  triage:snippet "\"same-host daemon hosting is incomplete until Windows lifecycle control exists behind this boundary\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s3-runtime-control/689a48f> .
+
+# ── Occurrences: feature/pS-s4-hardening ───────────────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-004/pS-s4/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/lifecycle-control-source.toml" ;
+  triage:line 73 ;
+  triage:snippet "\"Phase S requires a platform-neutral lifecycle control source with Unix and Windows implementations behind one daemon-private contract\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s4-hardening/689a48f> .
+
+<urn:atm:triage:occurrence/ARCH-004/pS-s4/2>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/lifecycle-control-source.toml" ;
+  triage:line 74 ;
+  triage:snippet "\"same-host daemon hosting is incomplete until Windows lifecycle control exists behind this boundary\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:headSha "689a48f" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s4-hardening/689a48f> .
+
+# ── Occurrences: integrate/phase-S ─────────────────────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-004/integrate-phase-S/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/lifecycle-control-source.toml" ;
+  triage:line 73 ;
+  triage:snippet "\"Phase S requires a platform-neutral lifecycle control source with Unix and Windows implementations behind one daemon-private contract\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+
+<urn:atm:triage:occurrence/ARCH-004/integrate-phase-S/2>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/lifecycle-control-source.toml" ;
+  triage:line 74 ;
+  triage:snippet "\"same-host daemon hosting is incomplete until Windows lifecycle control exists behind this boundary\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-S" ;
+  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .

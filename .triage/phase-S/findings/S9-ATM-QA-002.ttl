@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S9-ATM-QA-002>
+  a triage:Finding ;
+  triage:findingId "S9-ATM-QA-002" ;
+  triage:title "DaemonObservability composition path resolves log root from atm_home()" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs:82 and crates/atm-daemon/src/composition.rs:500 — DaemonObservability gets home_dir from atm_home() via compose_runtime(). Same ATM_HOME-independence violation as ATM-QA-001: when ATM_HOME is set the daemon log root becomes {ATM_HOME}/.atm/logs/ instead of the OS user home. Violates sprint-S9 §1.3, ADR-011, REQ-P-OBS-002. Fix: resolve daemon log root from home::host_log_dir() or home::resolve_user_home() directly, not from atm_home()." ;
+  triage:category "REQ" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T02:30:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s9-logging-defaults" ;
+  triage:promoteToBranch "feature/pS-s9-logging-defaults" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S9-ATM-QA-002/s9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S9-ATM-QA-002/s9/2> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/d6f3b74> .
+
+<urn:atm:triage:occurrence/S9-ATM-QA-002/s9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 82 ;
+  triage:snippet "DaemonObservability log path derived from home_dir sourced from atm_home() — ATM_HOME-scoped, not host-scoped" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "d6f3b74" ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/d6f3b74> .
+
+<urn:atm:triage:occurrence/S9-ATM-QA-002/s9/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 500 ;
+  triage:snippet "compose_runtime() passes atm_home() result as home_dir to DaemonObservability constructor" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "d6f3b74" ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/d6f3b74> .
+
+<urn:atm:triage:worktree/feature-pS-s9-logging-defaults/d6f3b74>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s9-logging-defaults" ;
+  triage:headSha "d6f3b74" ;
+  triage:orderIndex 1 .

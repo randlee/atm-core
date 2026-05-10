@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S8-RSH-001>
+  a triage:Finding ;
+  triage:findingId "S8-RSH-001" ;
+  triage:title "claude_jsonl_body_export_max_bytes has no upper-bound validation" ;
+  triage:description "crates/atm-core/src/config/mod.rs:101-104 — the assignment claude_jsonl_body_export_max_bytes: parsed.atm.claude_jsonl_body_export_max_bytes.unwrap_or(DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES) performs no upper-bound check. Any u64 value is accepted silently, including u64::MAX, which would effectively disable the export cap and could cause the mailbox store (store.rs:42) to allocate an arbitrarily large body buffer. config/types.rs:10 defines DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES = 128 * 1024 but no MAX constant exists. The existing test at line 621-627 explicitly asserts that 0 is accepted without error, confirming there is no validation at all. The fix is to introduce MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES (e.g. 64 MiB) in config/types.rs and add a bounds check in the normalize path returning AtmError { kind: AtmErrorKind::Config } when the configured value exceeds the maximum. The finding exists only on the feature branch; integrate/phase-S does not contain this field." ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s8-jsonl-compat" ;
+  triage:promoteToBranch "feature/pS-s8-jsonl-compat" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-RSH-001/s8/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+<urn:atm:triage:occurrence/S8-RSH-001/s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 101 ;
+  triage:snippet "claude_jsonl_body_export_max_bytes: parsed.atm.claude_jsonl_body_export_max_bytes.unwrap_or(DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES) — no upper-bound check; any u64 silently accepted; no MAX constant in config/types.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "48109b8" ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+<urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s8-jsonl-compat" ;
+  triage:headSha "48109b8" ;
+  triage:orderIndex 1 .

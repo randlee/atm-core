@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S2-013>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S2-013" ;
+  triage:title "prepare_local_ipc_endpoint Windows no-op has no comment explaining platform deferral" ;
+  triage:description "crates/atm-daemon/src/local_ipc_transport.rs:395 — prepare_local_ipc_endpoint has a Windows no-op path with no comment explaining why it is empty, unlike install_platform_hooks which now has a TODO comment. Per ADR-007, permanent platform stubs must carry a TODO referencing the responsible sprint." ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T08:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S2-013/s2/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> .
+
+<urn:atm:triage:occurrence/ATM-QA-S2-013/s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 395 ;
+  triage:snippet "prepare_local_ipc_endpoint Windows no-op — no TODO comment" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "2adc339" ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> .
+
+<urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "2adc339" ;
+  triage:orderIndex 2 .

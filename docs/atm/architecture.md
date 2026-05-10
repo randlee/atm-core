@@ -10,6 +10,9 @@ It complements the product architecture in
 The crate-local machine-readable boundary inventory lives in:
 - [`./boundaries.md`](./boundaries.md)
 
+The canonical daemon packet contract lives in:
+- [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
+
 ## 2. Responsibilities
 
 The `atm` crate is responsible for:
@@ -22,6 +25,8 @@ The `atm` crate is responsible for:
 - constructing the production daemon client / runtime request adapter
 - maintaining the retained CLI subcommand surface, including `teams` and
   `members`
+- maintaining the queue-inspection command split where `atm list` is the
+  metadata-search surface and `atm read` is the single-message detail surface
 
 The `atm` crate must remain thin.
 
@@ -30,6 +35,18 @@ Phase R redesign notes:
   internals or SQLite adapters
 - retained user-facing workflows may still include `ack`, but thin-client
   transport shape should stay centered on `send` and `receive`
+- the CLI same-host client transport should use the same ATM frame helper layer
+  as daemon local IPC and remote peer transport rather than a CLI-only framing
+  path
+- the current daemon packet family serves `send`, `ack`, `read`, `clear`, and
+  `doctor`; retained `log`, `teams`, and `members` stay outside the daemon
+  request/response packet surface in the current Phase S line
+- the current daemon packet family also serves `list` as the bounded metadata
+  queue query surface
+- S.7 lands the aligned `atm list` / single-message `atm read`
+  implementation while S.8 owns the JSONL retrieval-stub
+  compatibility path that preserves the exact
+  `atm read --message-id <id>` retrieval command
 
 ## 1.1 ADRs
 
@@ -91,11 +108,17 @@ Follow-up work:
   `atm-core`.
 - `atm` owns the concrete published-crate bootstrap against
   `sc-observability = "1.0.0"`.
+- `atm` owns retained-log bootstrap against the host-scoped ATM log directory
+  contract (`~/.atm/logs/` by default, `ATM_LOG_DIR` when overridden) rather
+  than `.local/share/logs` or any `ATM_HOME`-derived path.
 - `atm` owns the structured construction contract for the concrete adapter:
   `CliObservability::new(home_dir, CliObservabilityOptions)`.
 - `atm` may retain `init(...)` only as a delegating helper.
 - `atm` owns CLI-layer observability for command entry, daemon connectivity,
   and render/exit outcomes.
+- `atm` owns the default retained logger baseline needed to keep daemon
+  lifecycle `info!` events and all `warn!` / `error!` events visible when
+  `ATM_LOG` is unset.
 - `atm` owns the retained local recovery CLI shape for `teams` and `members`,
   but not the underlying team/backup/restore business rules
 - `atm` must not access SQLite or inbox JSONL directly

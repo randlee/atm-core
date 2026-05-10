@@ -1,0 +1,75 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S8-RBP-F003>
+  a triage:Finding ;
+  triage:findingId "S8-RBP-F003" ;
+  triage:title "Raw u64 byte count without newtype; silent as usize cast" ;
+  triage:description "The byte-count cap for JSONL body export is a bare u64 in two places: (1) crates/atm-core/src/config/types.rs:44 — AtmConfig.claude_jsonl_body_export_max_bytes: u64; (2) crates/atm-core/src/schema/inbox_message.rs:325 — SharedInboxExportPolicy.atm_authored_body_export_max_bytes: u64. A raw u64 can be silently mixed with other u64 values (counts, IDs, timestamps). Additionally, line 447 of inbox_message.rs casts this value with 'as usize', which truncates silently on 32-bit targets. Fix: introduce a ByteCount(u64) newtype, implement From<ByteCount> for usize with an explicit bounds check or cfg-gated conversion, and use it in both structs." ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "sprint" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-RBP-F003/s8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-RBP-F003/s8/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-RBP-F003/s8/3> ;
+
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+# --- Occurrences on feature/pS-s8-jsonl-compat (48109b8) ---
+
+<urn:atm:triage:occurrence/S8-RBP-F003/s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/types.rs" ;
+  triage:line 44 ;
+  triage:snippet "pub claude_jsonl_body_export_max_bytes: u64," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "48109b8" ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+<urn:atm:triage:occurrence/S8-RBP-F003/s8/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/schema/inbox_message.rs" ;
+  triage:line 325 ;
+  triage:snippet "pub(crate) atm_authored_body_export_max_bytes: u64," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "48109b8" ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+<urn:atm:triage:occurrence/S8-RBP-F003/s8/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/schema/inbox_message.rs" ;
+  triage:line 447 ;
+  triage:snippet "|| message.text.len() > policy.atm_authored_body_export_max_bytes as usize)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "48109b8" ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+# --- WorktreeSnapshot nodes ---
+
+<urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s8-jsonl-compat" ;
+  triage:headSha "48109b8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-S/3450be4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "3450be4" ;
+  triage:orderIndex 2 .

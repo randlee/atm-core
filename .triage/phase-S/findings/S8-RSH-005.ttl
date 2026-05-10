@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S8-RSH-005>
+  a triage:Finding ;
+  triage:findingId "S8-RSH-005" ;
+  triage:title "serde_json::to_vec_pretty synchronous on sole reconcile worker thread" ;
+  triage:description "crates/atm-core/src/mailbox/atomic.rs:37 — serde_json::to_vec_pretty(&encoded) runs synchronously on the reconcile worker thread. For large mailboxes with many messages the pretty-print serialization can be CPU-intensive and blocks the single reconcile thread from processing other work during serialization. The integration branch (integrate/phase-S) also contains this pattern (atomic.rs:33). The fix is either to offload serialization to a rayon thread-pool call (spawn_blocking equivalent for sync contexts) or to accept compact JSON output via serde_json::to_vec for the atomic path, reserving pretty-printing for the export-only path." ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s8-jsonl-compat" ;
+  triage:promoteToBranch "feature/pS-s8-jsonl-compat" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-RSH-005/s8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-RSH-005/integrate/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/3450be4> .
+
+<urn:atm:triage:occurrence/S8-RSH-005/s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/atomic.rs" ;
+  triage:line 37 ;
+  triage:snippet "let mut bytes = serde_json::to_vec_pretty(&encoded)?; — synchronous pretty-print serialization blocks the sole reconcile worker thread" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "48109b8" ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+<urn:atm:triage:occurrence/S8-RSH-005/integrate/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/atomic.rs" ;
+  triage:line 33 ;
+  triage:snippet "let mut bytes = serde_json::to_vec_pretty(&encoded)?; — same synchronous pretty-print serialization present on integrate/phase-S baseline" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "3450be4" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/3450be4> .
+
+<urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s8-jsonl-compat" ;
+  triage:headSha "48109b8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-S/3450be4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "3450be4" ;
+  triage:orderIndex 2 .

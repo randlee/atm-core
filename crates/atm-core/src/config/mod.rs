@@ -29,6 +29,7 @@ use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::schema::{AgentMember, TeamConfig};
 use crate::types::{AgentName, TeamName};
 use discovery::normalize_post_send_hooks;
+use types::{ByteCount, MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES, MAX_POST_SEND_HOOKS};
 
 /// Load `.atm.toml` by walking upward from `start_dir`.
 ///
@@ -77,6 +78,8 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
         .map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from("."));
 
+    validate_post_send_hook_count(&parsed.atm.post_send_hooks, &path)?;
+
     Ok(Some(AtmConfig {
         identity: parsed.atm.identity.or(parsed.identity),
         default_team: parsed
@@ -98,6 +101,10 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
         team_members: normalize_team_members(parsed.atm.team_members, &path)?,
         aliases: normalize_aliases(parsed.atm.aliases),
         post_send_hooks: normalize_post_send_hooks(parsed.atm.post_send_hooks, &config_root)?,
+        claude_jsonl_body_export_max_bytes: normalize_claude_jsonl_body_export_max_bytes(
+            parsed.atm.claude_jsonl_body_export_max_bytes,
+            &path,
+        )?,
         daemon: parsed
             .daemon
             .remote_retry_budget
@@ -214,6 +221,8 @@ struct RawAtmSection {
     aliases: std::collections::BTreeMap<String, String>,
     #[serde(default)]
     post_send_hooks: Vec<RawPostSendHookRule>,
+    #[serde(default)]
+    claude_jsonl_body_export_max_bytes: Option<u64>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -264,6 +273,48 @@ fn reject_legacy_post_send_hook_keys(path: &Path, raw_toml: &TomlValue) -> Resul
         .with_recovery(
             "Replace [atm].post_send_hook, [atm].post_send_hook_senders, and [atm].post_send_hook_recipients with one or more [[atm.post_send_hooks]] rules, each containing recipient = \"name-or-*\" and command = [\"argv\", ...].",
         ));
+    }
+    Ok(())
+}
+
+fn normalize_claude_jsonl_body_export_max_bytes(
+    raw: Option<u64>,
+    path: &Path,
+) -> Result<ByteCount, AtmError> {
+    let value = raw.unwrap_or(types::DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES);
+    if value > MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES {
+        return Err(AtmError::new_with_code(
+            AtmErrorCode::ConfigParseFailed,
+            AtmErrorKind::Config,
+            format!(
+                "invalid [atm].claude_jsonl_body_export_max_bytes in {}: {value} exceeds the maximum of {} bytes",
+                path.display(),
+                MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES
+            ),
+        )
+        .with_recovery(
+            "Set [atm].claude_jsonl_body_export_max_bytes to a value between 0 and 1048576 bytes before retrying.",
+        ));
+    }
+    Ok(ByteCount::new(value))
+}
+
+fn validate_post_send_hook_count(
+    post_send_hooks: &[RawPostSendHookRule],
+    path: &Path,
+) -> Result<(), AtmError> {
+    if post_send_hooks.len() > MAX_POST_SEND_HOOKS {
+        return Err(AtmError::new_with_code(
+            AtmErrorCode::ConfigParseFailed,
+            AtmErrorKind::Config,
+            format!(
+                "invalid [[atm.post_send_hooks]] count in {}: {} exceeds the maximum of {}",
+                path.display(),
+                post_send_hooks.len(),
+                MAX_POST_SEND_HOOKS
+            ),
+        )
+        .with_recovery("Reduce [[atm.post_send_hooks]] entries to 64 or fewer before retrying."));
     }
     Ok(())
 }
@@ -473,7 +524,9 @@ fn parse_team_member(config_path: &Path, index: usize, entry: &Value) -> Option<
 
 #[cfg(test)]
 mod tests {
-    use crate::config::types::HookRecipient;
+    use crate::config::types::{
+        ByteCount, HookRecipient, MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES, MAX_POST_SEND_HOOKS,
+    };
     use crate::error_codes::AtmErrorCode;
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::test_support::{TEST_QA, TEST_SENDER, TEST_TEAM};
@@ -580,6 +633,10 @@ blank = ""
             vec!["bash".to_string(), "-lc".to_string(), "echo hi".to_string()]
         );
         assert_eq!(
+            config.claude_jsonl_body_export_max_bytes,
+            ByteCount::new(128 * 1024)
+        );
+        assert_eq!(
             config.aliases.get("tl").map(String::as_str),
             Some(ROLE_TEAM_LEAD)
         );
@@ -604,6 +661,57 @@ blank = ""
 
         assert_eq!(error.code, AtmErrorCode::ConfigParseFailed);
         assert!(error.message.contains("daemon.remote_retry_budget"));
+    }
+
+    #[test]
+    fn load_config_reads_jsonl_body_export_cap_and_allows_zero() {
+        let root = unique_temp_dir("atm-config-jsonl-cap");
+        fs::write(
+            root.path().join(".atm.toml"),
+            "[atm]\nclaude_jsonl_body_export_max_bytes = 0\n",
+        )
+        .expect("config");
+
+        let config = load_config(root.path()).expect("config").expect("present");
+
+        assert_eq!(config.claude_jsonl_body_export_max_bytes, ByteCount::new(0));
+    }
+
+    #[test]
+    fn load_config_rejects_jsonl_body_export_cap_above_maximum() {
+        let root = unique_temp_dir("atm-config-jsonl-cap-too-large");
+        fs::write(
+            root.path().join(".atm.toml"),
+            format!(
+                "[atm]\nclaude_jsonl_body_export_max_bytes = {}\n",
+                MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES + 1
+            ),
+        )
+        .expect("config");
+
+        let error = load_config(root.path()).expect_err("oversized export cap should fail");
+
+        assert_eq!(error.code, AtmErrorCode::ConfigParseFailed);
+        assert!(error.message.contains("claude_jsonl_body_export_max_bytes"));
+        assert!(error.message.contains("exceeds the maximum"));
+    }
+
+    #[test]
+    fn load_config_rejects_too_many_post_send_hooks() {
+        let root = unique_temp_dir("atm-config-too-many-post-send-hooks");
+        let mut config = String::from("[atm]\n");
+        for index in 0..=MAX_POST_SEND_HOOKS {
+            config.push_str("[[atm.post_send_hooks]]\n");
+            config.push_str("recipient = \"*\"\n");
+            config.push_str(&format!("command = [\"hook-{index}\"]\n\n"));
+        }
+        fs::write(root.path().join(".atm.toml"), config).expect("config");
+
+        let error = load_config(root.path()).expect_err("too many hooks should fail");
+
+        assert_eq!(error.code, AtmErrorCode::ConfigParseFailed);
+        assert!(error.message.contains("[[atm.post_send_hooks]]"));
+        assert!(error.message.contains("exceeds the maximum"));
     }
 
     #[test]

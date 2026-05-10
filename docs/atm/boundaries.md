@@ -9,10 +9,12 @@ Interpretation note:
 Canonical machine-readable boundary source:
 - [`boundaries/atm/local-socket-client-transport.toml`](../../boundaries/atm/local-socket-client-transport.toml)
 
-## LocalSocketClientTransportAdapter
+## LocalIpcClientTransportAdapter
 
 Purpose:
 - Owns the CLI-local implementation of the ClientTransport contract.
 
 Notes:
 - The CLI stays thin: parse, map request, call transport, render response.
+- The CLI-local transport must use the same framed ATM packet helpers as the
+  daemon local IPC and remote peer transport adapters.

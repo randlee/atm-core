@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S3-005>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S3-005" ;
+  triage:title "#![forbid(unsafe_code)] in lib.rs:1 conflicts with unsafe extern \"system\" fn + unsafe SetConsoleCtrlHandler in lifecycle_control.rs:275,282 — Windows CI E0453 (same root as ATM-QA-S2-016)" ;
+  triage:description "crates/atm-daemon/src/lib.rs:1 has #![forbid(unsafe_code)] which cannot be overridden in any inner scope. The TASK-1152 fix replaced signal_hook::iterator with windows_sys::Win32::System::Console::SetConsoleCtrlHandler, introducing unsafe extern \"system\" fn handle_console_ctrl (lifecycle_control.rs:275) and unsafe { SetConsoleCtrlHandler(...) } (lifecycle_control.rs:282) in a #[cfg(windows)] block. Windows CI will fail with E0453. Note: S.1 (c0a0149 TASK-1153) and S.2 (4176880 TASK-1155) already fixed the equivalent issue by using signal_hook::flag::register instead, which requires no unsafe code. Preferred fix: replace windows_sys SetConsoleCtrlHandler with signal_hook::flag::register (SIGINT→terminate, SIGBREAK→reload) matching the S.1/S.2 approach — eliminates unsafe entirely and aligns all three sprint branches on the same implementation. Alternative: change lib.rs from forbid to deny + add #[allow(unsafe_code)] to the two unsafe sites. (quality-mgr reported as CI-WIN-S3-001 in S.3 QA-3 report.)" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T11:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S3-005/s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S3-005/s3/2> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s3-runtime-control/d6b9119> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s3-runtime-control/d6b9119> .
+
+<urn:atm:triage:occurrence/ATM-QA-S3-005/s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 275 ;
+  triage:snippet "unsafe extern \"system\" fn handle_console_ctrl — violates #![forbid(unsafe_code)] in lib.rs:1" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "d6b9119" ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s3-runtime-control/d6b9119> .
+
+<urn:atm:triage:occurrence/ATM-QA-S3-005/s3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 282 ;
+  triage:snippet "unsafe { SetConsoleCtrlHandler(...) } — violates #![forbid(unsafe_code)] in lib.rs:1" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "d6b9119" ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s3-runtime-control/d6b9119> .
+
+<urn:atm:triage:worktree/feature-pS-s3-runtime-control/d6b9119>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "d6b9119" ;
+  triage:orderIndex 3 .

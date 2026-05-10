@@ -70,6 +70,22 @@ Validation rule:
   models only the Claude-owned fields and allows unknown additive fields, so
   ATM extensions do not become retroactively "native" by accident
 
+## 3.1 ATM Compatibility Projection Note
+
+When ATM re-exports one of its own oversized messages into Claude Code JSONL,
+ATM may replace the Claude-visible `text` field with exactly:
+
+- `atm read --message-id <id>`
+
+In that stub:
+
+- `<id>` is the ULID-form ATM message id from `metadata.atm.messageId`
+
+That replacement is an ATM-owned compatibility projection rule, not a
+Claude-owned schema change. The durable full body remains ATM-owned state and
+the governing policy lives in
+[`ADR-010`](./adr/ADR-010-claude-jsonl-compatibility-envelope.md).
+
 ## 4. What This File Does Not Define
 
 This file does not define ATM-added persisted envelope fields such as:
@@ -85,6 +101,11 @@ This file does not define ATM-added persisted envelope fields such as:
 `taskId` is intentionally not treated here as a Claude Code-native inbox
 message field. ATM may interpret `taskId` when present, but that ownership is
 documented in [`atm-message-schema.md`](./atm-message-schema.md), not here.
+
+This file also does not define ATM-authored JSONL export size policy, retrieval
+stub behavior, or durable-store limits. Those ATM-owned compatibility-envelope
+rules are documented in
+[`ADR-010`](./adr/ADR-010-claude-jsonl-compatibility-envelope.md).
 
 Historical provenance note:
 

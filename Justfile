@@ -1,8 +1,7 @@
 set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 
 python_cmd := if os_family() == "windows" { "python" } else { "python3" }
-windows_clippy_scope := env_var_or_default("ATM_WINDOWS_CLIPPY_SCOPE", "cross-platform-only")
-clippy_cmd := if os_family() == "windows" { if windows_clippy_scope == "cross-platform-only" { "cargo clippy --workspace --all-targets --exclude atm-daemon --target x86_64-pc-windows-msvc -- -D warnings" } else { "cargo clippy --workspace --all-targets -- -D warnings" } } else { "cargo clippy --workspace --all-targets -- -D warnings" }
+clippy_cmd := if os_family() == "windows" { "cargo clippy --workspace --all-targets --target x86_64-pc-windows-msvc -- -D warnings" } else { "cargo clippy --workspace --all-targets -- -D warnings" }
 
 # Show the curated repo task help.
 default: help
@@ -105,6 +104,10 @@ _lint-pytests:
 [private]
 _lint-daemon-singleton:
     {{python_cmd}} scripts/lint_daemon_singleton.py
+
+[private]
+_lint-same-host-portability:
+    {{python_cmd}} .just/lint_same_host_portability.py
 
 # Build the full workspace.
 build:

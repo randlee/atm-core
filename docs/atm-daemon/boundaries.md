@@ -1,6 +1,7 @@
 # ATM-Daemon Boundary Inventory
 
-This document captures runtime-owned concrete adapters for Phase R.
+This document captures runtime-owned concrete adapters established in Phase R
+and tightened for the Phase S cross-platform daemon host line.
 
 Current design assumption:
 - `atm-daemon` is the production runtime composition root
@@ -16,11 +17,11 @@ even though they are not public cross-crate traits:
   - owns startup/shutdown sequencing and lifecycle state transitions
   - must not be skipped in boundary or production-readiness review just because
     it is not itself a public trait boundary
-- `DaemonShutdownSignals` / `SingletonGuard` in `atm_daemon`
+- `LifecycleControlSourceAdapter` / `HostOwnershipAdapter` in `atm_daemon`
   - own process-lifecycle admission and shutdown mechanics
-  - `DaemonShutdownSignals` is the current Unix control-source implementation,
-    but the Phase S target boundary is a platform-neutral lifecycle-control
-    source rather than a Unix-only signal assumption
+  - the Unix signal-hook implementation is now hidden inside the extracted
+    lifecycle-control adapter rather than referenced directly from runtime
+    orchestration
   - must remain runtime-private and must not be bypassed by transport or
     business-logic code
 - `PreparedRuntimeServer` / `ActiveConnectionRegistry` in `atm_daemon`
@@ -36,7 +37,7 @@ even though they are not public cross-crate traits:
 The current daemon implementation remains one crate, but the review-visible
 daemon-private ownership map is:
 - `ownership`
-  - `SingletonGuard`, lock-path helpers, stale-owner recovery
+  - `HostOwnershipAdapter`, lock-path helpers, stale-owner recovery
 - `server_runtime`
   - `PreparedRuntimeServer`, `ActiveConnectionRegistry`, drain/cancel logic
 - `request_runtime`
@@ -69,8 +70,8 @@ Notes:
 - This record exists so the control-plane struct is treated as an architectural
   boundary surface even though it is not a public shared trait today.
 - The active implementation is `RuntimeComposition` plus the crate-private
-  `RuntimeLifecycle` state machine and the runtime-owned
-  `DaemonShutdownSignals` / `SingletonGuard` helpers.
+  `RuntimeLifecycle` state machine plus the runtime-owned
+  `LifecycleControlSourceAdapter` and `HostOwnershipAdapter`.
 - `run_daemon()` must enter the daemon only through this lifecycle boundary;
   direct listener bootstrap is a boundary violation.
 
@@ -94,6 +95,19 @@ Notes:
 - release closeout requires both Unix and Windows implementations to exist
   behind this boundary; non-Unix unsupported-path stubs are an intermediate
   implementation state only
+- the local IPC adapter must use the same ATM frame header and request/response
+  packet family as the remote peer transport
+- the adapter must not treat EOF or half-close as the stable request boundary;
+  framed read/write helpers own packet delimiting
+- the adapter owns logical endpoint naming and same-user access-control
+  semantics; callers above the adapter must not construct Unix socket paths,
+  Windows pipe names, or platform-specific ACL details directly
+- local-IPC adapter code should live under a dedicated transport module tree
+  rather than remaining mixed into crate-root runtime code
+- the current integrate/phase-S branch still keeps `handle_connection(...)`
+  co-located with the listener runtime inside `atm_daemon::local_ipc_transport`
+  so request accounting and shutdown remain in one place during Phase S
+  closeout; the follow-on partitioning sprint owns the final split
 
 ## LifecycleControlSourceAdapter
 
@@ -127,6 +141,18 @@ Notes:
   rules can be reviewed and linted separately from the transport boundary.
 - The target implementation is cross-platform even when individual OS locking
   calls differ.
+- Phase S ownership uses stable permanent lock files under `~/.atm/daemon/`
+  rather than lock-file path deletion as the ownership signal.
+- The preferred implementation foundation is one whole-file exclusive-lock
+  contract on:
+  - `launch.lock`
+  - `owner.lock`
+- owner-visible metadata is the documented `pid[:token]` record stored in the
+  held lock file contents.
+- supported deployment assumes `~/.atm/daemon/` is on a local filesystem with
+  working host-local advisory lock semantics; NFS or other network-mounted
+  roots are an accepted limitation and are not a supported singleton
+  deployment configuration
 - singleton, stale-owner recovery, and release ordering semantics must be the
   same on every supported operating system even when the adapter internals
   differ
@@ -141,8 +167,14 @@ Phase S adds these review rules for the three daemon portability boundaries:
   request-family code must stay platform-neutral
 - shared same-host functional tests must prove the same handler/dispatcher
   contract on Unix and Windows
+- `just lint` now includes `same-host-portability`, which rejects broad
+  Unix-only same-host gating above the adapter line and non-Unix
+  `daemon_unavailable(...)` stubs in production adapter code
 - a boundary with only one supported-operating-system implementation is
   incomplete and must not be documented as production-ready
+- module-level platform test gates such as `#[cfg(all(test, unix))]` are not
+  allowed in daemon-owned test modules; use `#[cfg(unix)]` on individual test
+  functions when one assertion is OS-specific
 
 ## PeerClientTransportAdapter
 
@@ -158,6 +190,9 @@ Notes:
   `atm_daemon::peer_transport`.
 - Runtime composition owns replay resume and exposes the transport only through
   the shared `ClientTransport` contract.
+- The peer transport must reuse the shared ATM frame header and packet DTOs
+  used by the same-host local IPC boundary; host-host traffic is not a second
+  daemon message system.
 
 ## FileWatchEventSourceAdapter
 

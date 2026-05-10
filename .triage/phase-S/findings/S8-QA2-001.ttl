@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S8-QA2-001>
+  a triage:Finding ;
+  triage:findingId "S8-QA2-001" ;
+  triage:title "Missing issue reference #219 in tilde-expansion config source files" ;
+  triage:description "sprint-S8.md:71 requires recording issue reference '#219' alongside the tilde-expansion normalization work. No comment or reference to '#219' appears in any of the three config files that received the tilde-expansion implementation (discovery.rs, mod.rs, types.rs). The sprint plan states explicitly: 'Record issue reference: #219'." ;
+  triage:category "REQ" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s8-jsonl-compat" ;
+  triage:promoteToBranch "feature/pS-s8-jsonl-compat" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-QA2-001/s8/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/237c0ce> .
+
+<urn:atm:triage:occurrence/S8-QA2-001/s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/discovery.rs" ;
+  triage:line 1 ;
+  triage:snippet "No '// Issue #219' or '#219' reference present anywhere in discovery.rs, mod.rs, or types.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "237c0ce" ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/237c0ce> .
+
+<urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/237c0ce>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s8-jsonl-compat" ;
+  triage:headSha "237c0ce" ;
+  triage:orderIndex 1 .

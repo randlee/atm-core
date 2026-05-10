@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S10-QA1-006>
+  a triage:Finding ;
+  triage:findingId "S10-QA1-006" ;
+  triage:title "Dual-path event routing — tracing macros to stderr, emit_runtime_event to retained log" ;
+  triage:description "DaemonObservability does not bridge tracing::info!/warn!/error! to the sc-observability Logger. Lifecycle events emitted via tracing macros route to the legacy stderr subscriber (from init_tracing()); only events emitted explicitly via emit_runtime_event() reach ~/.atm/logs/atm.log.jsonl. Sprint S.10 requires lifecycle events to 'reach ~/.atm/logs/atm.log.jsonl'. Fixing S10-QA1-003 (remove init_tracing()) is necessary but not sufficient unless sc-observability provides a tracing subscriber bridge layer. Root-cause shared with S10-QA1-003." ;
+  triage:category "REQ" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s10-daemon-retained-logger" ;
+  triage:promoteToBranch "feature/pS-s10-daemon-retained-logger" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S10-QA1-006/s10/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658> .
+
+<urn:atm:triage:occurrence/S10-QA1-006/s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/daemon_observability.rs" ;
+  triage:line 192 ;
+  triage:snippet "build_logger() sets level override but no tracing bridge; tracing macros route to stderr only, not to retained JSONL log" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "320b658" ;
+  triage:branch "feature/pS-s10-daemon-retained-logger" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658> .
+
+<urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s10-daemon-retained-logger" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s10-daemon-retained-logger" ;
+  triage:headSha "320b658" ;
+  triage:orderIndex 1 .

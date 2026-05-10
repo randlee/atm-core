@@ -5,7 +5,7 @@ use serde_json::Value;
 use crate::error::{AtmError, AtmErrorKind};
 use crate::persistence;
 use crate::schema::MessageEnvelope;
-use crate::schema::inbox_message::to_shared_inbox_value;
+use crate::schema::inbox_message::{SharedInboxExportPolicy, to_shared_inbox_value_with_policy};
 
 /// Atomically replace one shared inbox file from fully serialized records.
 ///
@@ -25,12 +25,16 @@ use crate::schema::inbox_message::to_shared_inbox_value;
 /// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`] when message
 /// serialization fails or the mailbox temp-file write, fsync, rename, or
 /// parent-directory durability step cannot be completed.
-pub fn write_messages(path: &Path, messages: &[MessageEnvelope]) -> Result<(), AtmError> {
+pub fn write_messages(
+    path: &Path,
+    messages: &[MessageEnvelope],
+    export_policy: SharedInboxExportPolicy,
+) -> Result<(), AtmError> {
     let mut encoded = Vec::<Value>::with_capacity(messages.len());
     for message in messages {
-        encoded.push(to_shared_inbox_value(message)?);
+        encoded.push(to_shared_inbox_value_with_policy(message, export_policy)?);
     }
-    let mut bytes = serde_json::to_vec_pretty(&encoded)?;
+    let mut bytes = serde_json::to_vec(&encoded)?;
     bytes.push(b'\n');
 
     persistence::atomic_write_bytes(

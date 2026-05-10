@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-010>
+  a triage:Finding ;
+  triage:findingId "FTQ-010" ;
+  triage:title "Static SHARED panic-path leak in S.2 lifecycle_control.rs:20" ;
+  triage:description "crates/atm-daemon/src/lifecycle_control.rs:20 — static SHARED state leaks on panic path in S.2 branch tests. #[serial] mitigates concurrency but not panic; if a test panics, SHARED is not reset for subsequent tests. Use RAII Drop guard. (quality-mgr reported as FTQ-001-S2; remapped FTQ-010 to avoid conflict with existing phase-S FTQ-001 = wall-clock debounce timing.)" ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T08:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-010/s2/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> .
+
+<urn:atm:triage:occurrence/FTQ-010/s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 20 ;
+  triage:snippet "static SHARED — not reset on panic path; serial mitigates concurrency only" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "2adc339" ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> .
+
+<urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "2adc339" ;
+  triage:orderIndex 2 .

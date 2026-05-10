@@ -1,0 +1,35 @@
+@prefix triage: <https://atm-core.dev/triage/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:RBP-F-004 a triage:Finding ;
+    triage:finding_id "RBP-F-004" ;
+    triage:title "Missing .with_recovery() on error paths in composition.rs" ;
+    triage:description "Error paths in crates/atm-daemon/src/composition.rs do not use .with_recovery() chaining. Required by rust-best-practices-agent findings." ;
+    triage:severity "minor" ;
+    triage:category "RBP" ;
+    triage:phase_id "phase-S" ;
+    triage:triage_mode "initial_pass" ;
+    triage:file_filter "composition" ;
+    triage:sweep_scope "file_only" ;
+    triage:pattern "AtmError|return Err" ;
+
+    triage:worktree_result [
+        triage:branch "feature/pS-s6-runtime-remediation" ;
+        triage:head_sha "b80f16a" ;
+        triage:order_index "1"^^xsd:integer ;
+        triage:occurrence "absent" ;
+        triage:note ".with_recovery() present at lines 86, 468-470, 484-485. All non-trivial error paths in composition.rs chain .with_recovery(). Finding is resolved in this worktree."
+    ] ;
+    triage:worktree_result [
+        triage:branch "integrate/phase-S" ;
+        triage:head_sha "3f67133" ;
+        triage:order_index "2"^^xsd:integer ;
+        triage:occurrence "absent" ;
+        triage:note ".with_recovery() present at lines 86, 420-422, 436-438. All non-trivial error paths in composition.rs also chain .with_recovery() in the integrate/phase-S version. Finding is resolved in this worktree as well."
+    ] ;
+
+    triage:highest_open_branch "none" ;
+    triage:promote_to_branch "none" ;
+    triage:dispatch_ready "false"^^xsd:boolean ;
+    triage:resolution "resolved_in_all_branches" ;
+    triage:triage_date "2026-05-09"^^xsd:date .

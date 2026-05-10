@@ -17,12 +17,13 @@ Cargo.toml.ci
 # Contains mutation testing data
 **/mutants.out*/
 
+# Python bytecode caches
+**/__pycache__/
+
 # Local session artifacts and compose logs from sc tooling
 .sc/sessions/
 .sc-compose/logs/
 .just/logs/
-.just/tests/__pycache__/
-.just/__pycache__/
 artifacts/view/
 
 # RustRover

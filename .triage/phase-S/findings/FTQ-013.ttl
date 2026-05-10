@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-013>
+  a triage:Finding ;
+  triage:findingId "FTQ-013" ;
+  triage:title "Dispatch handle orphaned when track_dispatch_handle errors on lock poison (local_ipc_transport.rs:511)" ;
+  triage:description "crates/atm-daemon/src/local_ipc_transport.rs:511 — if track_dispatch_handle returns Err (lock poison), the JoinHandle for the newly spawned dispatch thread is dropped and the thread runs untracked. Thread cannot be joined on shutdown. (quality-mgr reported as FTQ-007; remapped FTQ-013 to avoid conflict with existing phase-S FTQ-007 = recv_timeout scheduling on S.1.)" ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T08:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-013/s2/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> .
+
+<urn:atm:triage:occurrence/FTQ-013/s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 511 ;
+  triage:snippet "track_dispatch_handle error path — JoinHandle dropped, thread untracked" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "2adc339" ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> .
+
+<urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "2adc339" ;
+  triage:orderIndex 2 .

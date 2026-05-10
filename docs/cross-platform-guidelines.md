@@ -19,6 +19,28 @@ Review rule:
   operating system through the documented portability boundaries, the docs and
   architecture must be updated before implementation continues
 
+## No-Flaky-Test Policy
+
+Cross-platform daemon and runtime tests must not rely on timing luck and must
+not contain a path that can block indefinitely.
+
+Required shapes:
+- bounded channel handshakes
+- `Barrier`, `Condvar`, or predicate synchronization with a bounded wait
+- bounded readiness and shutdown probes tied to observable state
+- panic-safe cleanup for shared/global test hooks
+
+Forbidden shapes:
+- fixed sleeps as the primary correctness mechanism
+- retry-until-success loops with no predicate or deadline
+- unbounded `recv()`, `wait()`, or equivalent blocking calls in risky
+  same-host daemon/runtime tests
+- bare `join()` when the test has no bounded proof of completion first
+
+Mechanical-enforcement rule:
+- if a prohibited pattern is cheap and deterministic to detect, it belongs in
+  `just lint` rather than review-only guidance
+
 ## Home Directory Resolution
 
 **Problem**: `dirs::home_dir()` on Windows uses the Windows API (`SHGetKnownFolderPath`), which ignores both `HOME` and `USERPROFILE` environment variables. Tests that only redirect `HOME` do not relocate the canonical `~/.claude` config root on Windows.
@@ -61,6 +83,23 @@ Before declaring dev work complete, grep all integration test files:
 grep -rn 'ATM_CONFIG_HOME' crates/atm/tests/ || echo "FAIL: Missing ATM_CONFIG_HOME in test helpers"
 grep -rn 'env(\"HOME\"' crates/atm/tests/
 ```
+
+### Planned Phase S.5 Guardrails
+
+Immediate/default-lint families:
+- fixed-sleep test hygiene, with the current repository-local rule treated as
+  the proving implementation for later `sc-lint` extraction
+- daemon-spawn and warmup-helper rejection
+- production bare `Condvar::wait(...)`
+- production discarded `wait_timeout*` results
+- targeted same-host daemon test checks for cheap unbounded-wait syntax once
+  the repository-local rule is landed
+
+Deferred analyzer families:
+- path-sensitive `JoinHandle::join()` safety
+- polling-loop terminate-state placement
+- panic-safe cleanup proof for shared/global hook registries
+- bounded-wait result handling in test code
 
 ## Clippy Compliance
 

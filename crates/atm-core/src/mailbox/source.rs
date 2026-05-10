@@ -18,6 +18,20 @@ pub(crate) struct SourceFile {
 }
 
 #[derive(Debug, Clone)]
+pub(crate) struct SummarySourceFile {
+    pub path: PathBuf,
+    pub messages: Vec<SummaryMessage>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct SummaryMessage {
+    pub envelope: MessageEnvelope,
+    pub summary_preview: String,
+    pub body_contains_match: bool,
+    pub idle_notification_sender: Option<AgentName>,
+}
+
+#[derive(Debug, Clone)]
 pub(crate) struct SourcedMessage {
     pub envelope: MessageEnvelope,
     pub source_path: PathBuf,
@@ -125,7 +139,7 @@ pub(crate) fn discover_source_paths(
     team: &TeamName,
     agent: &AgentName,
 ) -> Result<Vec<PathBuf>, AtmError> {
-    let inbox_path = home::inbox_path_from_home(home_dir, team.as_str(), agent.as_str())?;
+    let inbox_path = home::inbox_path_from_home(home_dir, team, agent)?;
     let inboxes_dir = inbox_path
         .parent()
         .ok_or_else(|| AtmError::mailbox_read("inbox path has no parent directory"))?;
@@ -193,6 +207,32 @@ pub(crate) fn load_source_files(paths: &[PathBuf]) -> Result<Vec<SourceFile>, At
 
         let messages = super::read_messages(path)?;
         sources.push(SourceFile {
+            path: path.clone(),
+            messages,
+        });
+    }
+
+    Ok(sources)
+}
+
+pub(crate) fn load_summary_source_files(
+    paths: &[PathBuf],
+    contains_filter: Option<&str>,
+) -> Result<Vec<SummarySourceFile>, AtmError> {
+    let mut sources = Vec::with_capacity(paths.len());
+    for path in paths {
+        if !path.exists() {
+            return Err(AtmError::mailbox_read(format!(
+                "mailbox file disappeared before list projection completed: {}",
+                path.display()
+            ))
+            .with_recovery(
+                "Retry after the competing ATM operation completes, or verify the team inbox files still exist.",
+            ));
+        }
+
+        let messages = super::read_message_summaries(path, contains_filter)?;
+        sources.push(SummarySourceFile {
             path: path.clone(),
             messages,
         });

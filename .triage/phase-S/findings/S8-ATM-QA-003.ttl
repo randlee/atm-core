@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S8-ATM-QA-003>
+  a triage:Finding ;
+  triage:findingId "S8-ATM-QA-003" ;
+  triage:title "Stub export test uses summary:None, does not demonstrate summary preservation" ;
+  triage:description "The test commit_mailbox_state_exports_retrieval_stub_when_config_cap_is_zero (store.rs:151-170) constructs its message via sample_message(), which hard-codes summary: None (store.rs:299). The test therefore asserts encoded[0][\"summary\"] == Null, which is trivially true whether the stub-export path actively clears the summary or simply passes through the None from the helper. A summary-bearing message is never exercised, so the test does not prove that the stub export path correctly preserves (or intentionally redacts) the summary field from a message that originally carries one. Sprint S.8 adds the retrieval-stub projection path, and REQ-CORE-COMPAT-001 requires the envelope shape to be well-specified; summary-field behaviour in stub exports is unverified at the store commit layer." ;
+  triage:category "REQ" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:promoteTo "feature/pS-s8-jsonl-compat" ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-ATM-QA-003/s8/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+<urn:atm:triage:occurrence/S8-ATM-QA-003/s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/store.rs" ;
+  triage:line 151 ;
+  triage:snippet "fn commit_mailbox_state_exports_retrieval_stub_when_config_cap_is_zero — sample_message hard-codes summary: None; encoded[0][\"summary\"] == Null proves nothing about summary preservation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "48109b8" ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+<urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s8-jsonl-compat" ;
+  triage:headSha "48109b8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-S/3450be4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "3450be4" ;
+  triage:orderIndex 2 ;
+  triage:status "present" ;
+  triage:note "store.rs exists on integrate/phase-S but does not contain the stub export test; the test was added on the S.8 feature branch." .

@@ -23,6 +23,7 @@ atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "
 anyhow.workspace = true
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
+interprocess = "2.4.2"
 sc-observability = "1.0.0"
 sc-observability-types = "1.0.0"
 serde_json.workspace = true
