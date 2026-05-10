@@ -99,6 +99,7 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         }
         AtmErrorCode::IdentityConflict => AtmErrorKind::Identity,
         AtmErrorCode::DaemonUnavailable
+        | AtmErrorCode::DaemonLifecycleWedge
         | AtmErrorCode::DaemonLaunchGateRejected
         | AtmErrorCode::DaemonServingStateRejected
         | AtmErrorCode::DaemonStaleOwnerRecoveryFailed

@@ -50,6 +50,9 @@ impl DaemonExitCode {
 }
 
 pub fn daemon_exit_code_for_error(error: &AtmError) -> DaemonExitCode {
+    if error.code == AtmErrorCode::DaemonLifecycleWedge {
+        return DaemonExitCode::LifecycleWedge;
+    }
     if matches!(
         error.code,
         AtmErrorCode::DaemonServingStateRejected
@@ -60,9 +63,6 @@ pub fn daemon_exit_code_for_error(error: &AtmError) -> DaemonExitCode {
     ) || error.is_config()
     {
         return DaemonExitCode::DoNotRestart;
-    }
-    if error.message.contains("lifecycle waiter") || error.message.contains("lifecycle wedge") {
-        return DaemonExitCode::LifecycleWedge;
     }
     if error.is_daemon_unavailable() {
         return DaemonExitCode::TransportFatal;

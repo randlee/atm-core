@@ -118,9 +118,7 @@ fn connect_daemon_local_ipc_until_ready(endpoint_path: &std::path::Path) -> Loca
             Ok(stream) => return stream,
             Err(error) if Instant::now() < deadline => {
                 let _ = error;
-                // The listener becomes connectable only after the serve thread enters accept;
-                // use a tiny bounded sleep instead of a CPU-spin retry loop while waiting.
-                std::thread::sleep(Duration::from_millis(5));
+                std::thread::yield_now();
             }
             Err(error) => panic!("connect daemon local ipc: {error}"),
         }
@@ -288,9 +286,7 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
     loop {
         match std::fs::read_to_string(&retained_log_path) {
             Ok(contents) if contents.contains("daemon start requested") => break,
-            Ok(_) | Err(_) if Instant::now() < deadline => {
-                std::thread::sleep(Duration::from_millis(5))
-            }
+            Ok(_) | Err(_) if Instant::now() < deadline => std::thread::yield_now(),
             Err(error) => panic!("read retained log: {error}"),
             Ok(contents) => panic!("retained log missing startup event: {contents}"),
         }
