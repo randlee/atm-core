@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/INTG-FTQ-006>
+  a triage:Finding ;
+  triage:findingId "INTG-FTQ-006" ;
+  triage:title "Drop-order issue in host_log_dir_rejects_non_utf8_override — env lock released before ATM_LOG_DIR restored" ;
+  triage:description "home.rs:656 — _home (LocalEnvGuard, holds env_lock()) declared before _atm_log_dir (Utf8EnvGuard, no lock). Rust drops in reverse-declaration order so _home drops first, releasing the mutex while ATM_LOG_DIR still contains invalid UTF-8. Fix: declare _atm_log_dir before _home so ATM_LOG_DIR is restored before the mutex is released." ;
+  triage:category "FTQ" ;
+  triage:severity "minor" ;
+  triage:triageMode "integration_gate" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T07:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "integrate/phase-S" ;
+  triage:promoteToBranch "integrate/phase-S" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/INTG-FTQ-006/intg/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/ade96f2> .
+
+<urn:atm:triage:occurrence/INTG-FTQ-006/intg/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 656 ;
+  triage:snippet "_home drops before _atm_log_dir — env_lock released while ATM_LOG_DIR still contains non-UTF8 value" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "ade96f2" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/ade96f2> .
+
+<urn:atm:triage:worktree/integrate-phase-S/ade96f2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "ade96f2" ;
+  triage:orderIndex 1 .

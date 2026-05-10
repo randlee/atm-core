@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/INTG-RBP-002>
+  a triage:Finding ;
+  triage:findingId "INTG-RBP-002" ;
+  triage:title "build_runtime_status_cache_state: missing .with_recovery() on serde_json team-config parse failure" ;
+  triage:description "runtime_health.rs:784 — AtmError::config() for serde_json team config parse failure chains .with_source(error) but not .with_recovery(). Operator recovery exists (fix or remove malformed config.json). Fix: add .with_recovery(\"Repair or remove the malformed team config file and restart atm-daemon or send SIGHUP.\")." ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:triageMode "integration_gate" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T07:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "integrate/phase-S" ;
+  triage:promoteToBranch "integrate/phase-S" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/INTG-RBP-002/intg/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/ade96f2> .
+
+<urn:atm:triage:occurrence/INTG-RBP-002/intg/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 784 ;
+  triage:snippet "AtmError::config(format!(...)).with_source(error) — missing .with_recovery() at serde_json parse site" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "ade96f2" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/ade96f2> .
+
+<urn:atm:triage:worktree/integrate-phase-S/ade96f2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "ade96f2" ;
+  triage:orderIndex 1 .

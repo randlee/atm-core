@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/INTG-RSH-004>
+  a triage:Finding ;
+  triage:findingId "INTG-RSH-004" ;
+  triage:title "Silent executor failures in reconcile worker — no tracing event at worker level" ;
+  triage:description "reconcile_runtime.rs:471 — when executor returns Err, ReconcileOutcome::Failure is stored without any tracing::warn! at the worker. Background degradation with no active waiter is invisible to operators. Fix: emit tracing::warn! at the failure storage site with team, agent, and error fields." ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:triageMode "integration_gate" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T07:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "integrate/phase-S" ;
+  triage:promoteToBranch "integrate/phase-S" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/INTG-RSH-004/intg/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/ade96f2> .
+
+<urn:atm:triage:occurrence/INTG-RSH-004/intg/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:line 471 ;
+  triage:snippet "ReconcileOutcome::Failure(error.into()) stored with no tracing instrumentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "ade96f2" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/ade96f2> .
+
+<urn:atm:triage:worktree/integrate-phase-S/ade96f2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "ade96f2" ;
+  triage:orderIndex 1 .

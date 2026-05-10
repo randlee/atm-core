@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/INTG-FTQ-002>
+  a triage:Finding ;
+  triage:findingId "INTG-FTQ-002" ;
+  triage:title "Wall-clock timing assertion in watch_runtime_shutdown_returns_within_bounded_deadline" ;
+  triage:description "watch_runtime.rs:582 — asserts shutdown_started.elapsed() < WATCH_SHUTDOWN_DEADLINE + 1s. On loaded CI runners the 100ms + 1s window can be exceeded. Fix: remove wall-clock assertion; functional proof is that shutdown() returns Ok(()) without hanging, not a sub-second budget." ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:triageMode "integration_gate" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T07:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "integrate/phase-S" ;
+  triage:promoteToBranch "integrate/phase-S" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/INTG-FTQ-002/intg/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/ade96f2> .
+
+<urn:atm:triage:occurrence/INTG-FTQ-002/intg/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 582 ;
+  triage:snippet "assert!(shutdown_started.elapsed() < WATCH_SHUTDOWN_DEADLINE + Duration::from_secs(1))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "ade96f2" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/ade96f2> .
+
+<urn:atm:triage:worktree/integrate-phase-S/ade96f2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "ade96f2" ;
+  triage:orderIndex 1 .

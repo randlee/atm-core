@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/INTG-RBP-001>
+  a triage:Finding ;
+  triage:findingId "INTG-RBP-001" ;
+  triage:title "build_runtime_status_cache_state: missing .with_recovery() on team-name parse error" ;
+  triage:description "runtime_health.rs:763 — AtmError::config() for invalid team name parse in build_runtime_status_cache_state() chains .with_source(error) but not .with_recovery(). All peer error sites in the same function body chain .with_recovery(). Fix: add .with_recovery(\"Remove or rename the malformed team directory under the ATM teams root before retrying.\")." ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:triageMode "integration_gate" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T07:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "integrate/phase-S" ;
+  triage:promoteToBranch "integrate/phase-S" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/INTG-RBP-001/intg/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/ade96f2> .
+
+<urn:atm:triage:occurrence/INTG-RBP-001/intg/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 763 ;
+  triage:snippet "AtmError::config(format!(...)).with_source(error) — missing .with_recovery() at team-name parse site" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "ade96f2" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/ade96f2> .
+
+<urn:atm:triage:worktree/integrate-phase-S/ade96f2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "ade96f2" ;
+  triage:orderIndex 1 .

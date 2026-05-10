@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/INTG-FTQ-001>
+  a triage:Finding ;
+  triage:findingId "INTG-FTQ-001" ;
+  triage:title "Fixed shared test path temp_dir/atm-watch-test — parallel test collision risk" ;
+  triage:description "watch_runtime.rs:447 — request_for() hard-codes temp_dir().join(\"atm-watch-test\") as home_dir for every test. When Cargo runs tests in parallel, all tests calling request() share the same on-disk path. watch_runtime_ignores_host_scoped_log_directory creates real files there; concurrent tests see contaminated filesystem state. Fix: use TempDir::new() per invocation, mirroring unique_home_dir() pattern in reconcile_runtime.rs tests." ;
+  triage:category "FTQ" ;
+  triage:severity "blocking" ;
+  triage:triageMode "integration_gate" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T07:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "integrate/phase-S" ;
+  triage:promoteToBranch "integrate/phase-S" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/INTG-FTQ-001/intg/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/ade96f2> .
+
+<urn:atm:triage:occurrence/INTG-FTQ-001/intg/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 447 ;
+  triage:snippet "request_for() returns home_dir: std::env::temp_dir().join(\"atm-watch-test\") — fixed shared path" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "ade96f2" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/ade96f2> .
+
+<urn:atm:triage:worktree/integrate-phase-S/ade96f2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "ade96f2" ;
+  triage:orderIndex 1 .
