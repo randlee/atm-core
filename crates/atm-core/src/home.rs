@@ -97,7 +97,6 @@ pub fn host_mail_db_path_from_home(home_dir: &Path) -> PathBuf {
 ///
 /// Returns [`AtmError`] when the OS user-home directory cannot be resolved.
 pub fn host_log_dir() -> Result<PathBuf, AtmError> {
-    let user_home = resolve_user_home()?;
     if let Some(raw_path) = env::var_os("ATM_LOG_DIR").filter(|value| !value.is_empty()) {
         let raw_path = raw_path.to_str().ok_or_else(|| {
             AtmError::config("ATM_LOG_DIR must be valid UTF-8").with_recovery(
@@ -126,34 +125,10 @@ pub fn host_log_dir() -> Result<PathBuf, AtmError> {
                 ),
             );
         }
-        let daemon_dir = host_runtime_dir_from_home(&user_home);
-        if path.starts_with(&daemon_dir) || daemon_dir.starts_with(&path) {
-            return Err(
-                AtmError::config(format!(
-                    "ATM_LOG_DIR must not overlap the host-scoped daemon runtime directory {}",
-                    daemon_dir.display()
-                ))
-                .with_recovery(
-                    "Point ATM_LOG_DIR at a separate absolute log directory outside ~/.atm/daemon/ before retrying.",
-                ),
-            );
-        }
-        let claude_dir = user_home.join(".claude");
-        if path.starts_with(&claude_dir) {
-            return Err(
-                AtmError::config(format!(
-                    "ATM_LOG_DIR must not resolve under the Claude home directory {}",
-                    claude_dir.display()
-                ))
-                .with_recovery(
-                    "Point ATM_LOG_DIR at an ATM-owned absolute log directory outside ~/.claude/ before retrying.",
-                ),
-            );
-        }
         return Ok(path);
     }
 
-    Ok(host_log_dir_from_home(&user_home))
+    Ok(host_log_dir_from_home(&resolve_user_home()?))
 }
 
 /// Resolve the host-scoped ATM retained log directory from an explicit user-home root.
@@ -529,6 +504,24 @@ mod tests {
         let tempdir = TempDir::new().expect("tempdir");
         let _atm_log_dir =
             LocalEnvGuard::set_raw("ATM_LOG_DIR", tempdir.path().to_str().expect("utf8 path"));
+
+        let resolved = host_log_dir().expect("host log dir");
+        assert_eq!(resolved, tempdir.path());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial_test::serial]
+    fn host_log_dir_override_succeeds_without_home_env() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let _env = LocalEnvGuard::set_many([
+            (
+                "ATM_LOG_DIR",
+                Some(tempdir.path().to_str().expect("utf8 path")),
+            ),
+            ("HOME", None),
+            ("USERPROFILE", None),
+        ]);
 
         let resolved = host_log_dir().expect("host log dir");
         assert_eq!(resolved, tempdir.path());
