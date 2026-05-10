@@ -1,7 +1,7 @@
 //! Phase R boundary skeleton contracts.
 
 use crate::error::AtmError;
-use crate::protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};
+use crate::protocol::{FramePayload, RequestEnvelope, RequestId, ResponseEnvelope};
 pub use crate::protocol::{
     NotificationEvent, ReconcileRequest, ReconcileResult, RuntimeStatusSnapshot, WatchEventBatch,
     WatchSubscriptionRequest,
@@ -162,7 +162,7 @@ pub trait AtmProtocol: sealed::Sealed {
     /// into a frame payload.
     fn request_to_frame(
         &self,
-        request_id: u64,
+        request_id: RequestId,
         request: RequestEnvelope,
     ) -> Result<FramePayload, AtmError>;
 
@@ -170,7 +170,10 @@ pub trait AtmProtocol: sealed::Sealed {
     ///
     /// Returns `AtmError` when a frame payload cannot be decoded into a
     /// protocol request envelope.
-    fn request_from_frame(&self, frame: FramePayload) -> Result<(u64, RequestEnvelope), AtmError>;
+    fn request_from_frame(
+        &self,
+        frame: FramePayload,
+    ) -> Result<(RequestId, RequestEnvelope), AtmError>;
 
     /// # Errors
     ///
@@ -178,7 +181,7 @@ pub trait AtmProtocol: sealed::Sealed {
     /// converted into a frame payload.
     fn response_to_frame(
         &self,
-        request_id: u64,
+        request_id: RequestId,
         response: ResponseEnvelope,
     ) -> Result<FramePayload, AtmError>;
 
@@ -186,8 +189,10 @@ pub trait AtmProtocol: sealed::Sealed {
     ///
     /// Returns `AtmError` when a frame payload cannot be decoded into a
     /// protocol response envelope.
-    fn response_from_frame(&self, frame: FramePayload)
-    -> Result<(u64, ResponseEnvelope), AtmError>;
+    fn response_from_frame(
+        &self,
+        frame: FramePayload,
+    ) -> Result<(RequestId, ResponseEnvelope), AtmError>;
 }
 
 /// BOUNDARY-ClientTransport — see docs/atm-core/boundaries.md.

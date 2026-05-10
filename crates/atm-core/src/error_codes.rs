@@ -29,6 +29,8 @@ pub enum AtmErrorCode {
     IdentityConflict,
     /// The daemon transport could not be reached or started.
     DaemonUnavailable,
+    /// The daemon lifecycle-control or shutdown handshake wedged.
+    DaemonLifecycleWedge,
     /// The client-side daemon launch gate rejected a duplicate spawn.
     DaemonLaunchGateRejected,
     /// The daemon-side serving gate rejected duplicate ownership.
@@ -125,6 +127,7 @@ impl AtmErrorCode {
             Self::IdentityUnavailable => "ATM_IDENTITY_UNAVAILABLE",
             Self::IdentityConflict => "ATM_IDENTITY_CONFLICT",
             Self::DaemonUnavailable => "ATM_DAEMON_UNAVAILABLE",
+            Self::DaemonLifecycleWedge => "ATM_DAEMON_LIFECYCLE_WEDGE",
             Self::DaemonLaunchGateRejected => "ATM_DAEMON_LAUNCH_GATE_REJECTED",
             Self::DaemonServingStateRejected => "ATM_DAEMON_SERVING_STATE_REJECTED",
             Self::DaemonStaleOwnerRecoveryFailed => "ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED",
@@ -184,6 +187,7 @@ impl FromStr for AtmErrorCode {
             "ATM_IDENTITY_UNAVAILABLE" => Ok(Self::IdentityUnavailable),
             "ATM_IDENTITY_CONFLICT" => Ok(Self::IdentityConflict),
             "ATM_DAEMON_UNAVAILABLE" => Ok(Self::DaemonUnavailable),
+            "ATM_DAEMON_LIFECYCLE_WEDGE" => Ok(Self::DaemonLifecycleWedge),
             "ATM_DAEMON_LAUNCH_GATE_REJECTED" => Ok(Self::DaemonLaunchGateRejected),
             "ATM_DAEMON_SERVING_STATE_REJECTED" => Ok(Self::DaemonServingStateRejected),
             "ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED" => Ok(Self::DaemonStaleOwnerRecoveryFailed),

@@ -1,8 +1,10 @@
 //! Shared protocol DTOs for the core transport boundary family.
 
 use std::env;
+use std::fmt;
 use std::io::Read;
 use std::io::Write;
+use std::num::NonZeroU64;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -99,6 +101,7 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         }
         AtmErrorCode::IdentityConflict => AtmErrorKind::Identity,
         AtmErrorCode::DaemonUnavailable
+        | AtmErrorCode::DaemonLifecycleWedge
         | AtmErrorCode::DaemonLaunchGateRejected
         | AtmErrorCode::DaemonServingStateRejected
         | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
@@ -146,7 +149,7 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
 /// Raw protocol frame payload plus the shared ATM frame header fields.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FramePayload {
-    pub request_id: u64,
+    pub request_id: RequestId,
     pub message_kind: MessageKind,
     pub flags: u16,
     pub bytes: Vec<u8>,
@@ -160,6 +163,34 @@ pub const ATM_FRAME_FLAGS_V1: u16 = 0;
 pub const ATM_FRAME_HEADER_BYTES: usize = 22;
 
 static NEXT_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct RequestId(NonZeroU64);
+
+impl RequestId {
+    pub fn new(request_id: u64) -> Result<Self, AtmError> {
+        let request_id = NonZeroU64::new(request_id).ok_or_else(|| {
+            AtmError::validation(
+                "ATM daemon protocol request_id must be non-zero",
+            )
+            .with_recovery(
+                "Retry with a client and daemon build that populate non-zero ATM daemon request ids.",
+            )
+        })?;
+        Ok(Self(request_id))
+    }
+
+    pub const fn into_inner(self) -> u64 {
+        self.0.get()
+    }
+}
+
+impl fmt::Display for RequestId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u16)]
@@ -245,19 +276,22 @@ impl crate::boundary::sealed::Sealed for JsonAtmProtocolCodec {}
 impl crate::boundary::AtmProtocol for JsonAtmProtocolCodec {
     fn request_to_frame(
         &self,
-        request_id: u64,
+        request_id: RequestId,
         request: RequestEnvelope,
     ) -> Result<FramePayload, AtmError> {
         request_to_frame_payload(request_id, request)
     }
 
-    fn request_from_frame(&self, frame: FramePayload) -> Result<(u64, RequestEnvelope), AtmError> {
+    fn request_from_frame(
+        &self,
+        frame: FramePayload,
+    ) -> Result<(RequestId, RequestEnvelope), AtmError> {
         request_from_frame_payload(frame)
     }
 
     fn response_to_frame(
         &self,
-        request_id: u64,
+        request_id: RequestId,
         response: ResponseEnvelope,
     ) -> Result<FramePayload, AtmError> {
         response_to_frame_payload(request_id, response)
@@ -266,33 +300,35 @@ impl crate::boundary::AtmProtocol for JsonAtmProtocolCodec {
     fn response_from_frame(
         &self,
         frame: FramePayload,
-    ) -> Result<(u64, ResponseEnvelope), AtmError> {
+    ) -> Result<(RequestId, ResponseEnvelope), AtmError> {
         response_from_frame_payload(frame)
     }
 }
 
-pub fn next_request_id() -> u64 {
+pub fn next_request_id() -> RequestId {
     loop {
         let request_id = NEXT_REQUEST_ID.fetch_add(1, Ordering::Relaxed);
-        if request_id != 0 {
-            return request_id;
+        if let Some(request_id) = NonZeroU64::new(request_id) {
+            return RequestId(request_id);
         }
     }
 }
 
 pub fn request_to_frame_payload(
-    request_id: u64,
+    request_id: RequestId,
     request: RequestEnvelope,
 ) -> Result<FramePayload, AtmError> {
     Ok(FramePayload {
-        request_id: nonzero_request_id(request_id)?,
+        request_id,
         message_kind: request_message_kind(&request),
         flags: ATM_FRAME_FLAGS_V1,
         bytes: serde_json::to_vec(&request).map_err(AtmError::from)?,
     })
 }
 
-pub fn request_from_frame_payload(frame: FramePayload) -> Result<(u64, RequestEnvelope), AtmError> {
+pub fn request_from_frame_payload(
+    frame: FramePayload,
+) -> Result<(RequestId, RequestEnvelope), AtmError> {
     if !frame.message_kind.is_request() {
         return Err(AtmError::validation(format!(
             "ATM daemon request decoder received non-request message kind 0x{:04x}",
@@ -302,17 +338,16 @@ pub fn request_from_frame_payload(frame: FramePayload) -> Result<(u64, RequestEn
             "Align the CLI and daemon builds so both sides agree on request and response packet roles before retrying.",
         ));
     }
-    let request_id = nonzero_request_id(frame.request_id)?;
     let request = serde_json::from_slice(&frame.bytes).map_err(AtmError::from)?;
-    Ok((request_id, request))
+    Ok((frame.request_id, request))
 }
 
 pub fn response_to_frame_payload(
-    request_id: u64,
+    request_id: RequestId,
     response: ResponseEnvelope,
 ) -> Result<FramePayload, AtmError> {
     Ok(FramePayload {
-        request_id: nonzero_request_id(request_id)?,
+        request_id,
         message_kind: response_message_kind(&response),
         flags: ATM_FRAME_FLAGS_V1,
         bytes: serde_json::to_vec(&response).map_err(AtmError::from)?,
@@ -321,7 +356,7 @@ pub fn response_to_frame_payload(
 
 pub fn response_from_frame_payload(
     frame: FramePayload,
-) -> Result<(u64, ResponseEnvelope), AtmError> {
+) -> Result<(RequestId, ResponseEnvelope), AtmError> {
     if !frame.message_kind.is_response() {
         return Err(AtmError::validation(format!(
             "ATM daemon response decoder received non-response message kind 0x{:04x}",
@@ -331,9 +366,8 @@ pub fn response_from_frame_payload(
             "Align the CLI and daemon builds so both sides agree on request and response packet roles before retrying.",
         ));
     }
-    let request_id = nonzero_request_id(frame.request_id)?;
     let response = serde_json::from_slice(&frame.bytes).map_err(AtmError::from)?;
-    Ok((request_id, response))
+    Ok((frame.request_id, response))
 }
 
 pub fn write_frame(
@@ -363,7 +397,7 @@ pub fn write_frame(
     header[4..6].copy_from_slice(&ATM_FRAME_VERSION_V1.to_be_bytes());
     header[6..8].copy_from_slice(&frame.message_kind.code().to_be_bytes());
     header[8..10].copy_from_slice(&frame.flags.to_be_bytes());
-    header[10..18].copy_from_slice(&frame.request_id.to_be_bytes());
+    header[10..18].copy_from_slice(&frame.request_id.into_inner().to_be_bytes());
     header[18..22].copy_from_slice(&(frame.bytes.len() as u32).to_be_bytes());
     writer
         .write_all(&header)
@@ -411,7 +445,7 @@ pub fn read_frame(
             "Retry with a supported ATM daemon client/server build that uses the version-1 flag contract.",
         ));
     }
-    let request_id = nonzero_request_id(u64::from_be_bytes(
+    let request_id = RequestId::new(u64::from_be_bytes(
         header[10..18].try_into().expect("request id"),
     ))?;
     let payload_length = u32::from_be_bytes(header[18..22].try_into().expect("payload")) as usize;
@@ -448,18 +482,6 @@ fn read_frame_header(
         .read_exact(&mut header[1..])
         .map_err(|source| AtmError::daemon_unavailable(read_error).with_source(source))?;
     Ok(Some(header))
-}
-
-fn nonzero_request_id(request_id: u64) -> Result<u64, AtmError> {
-    if request_id == 0 {
-        return Err(AtmError::validation(
-            "ATM daemon protocol request_id must be non-zero",
-        )
-        .with_recovery(
-            "Retry with a client and daemon build that populate non-zero ATM daemon request ids.",
-        ));
-    }
-    Ok(request_id)
 }
 
 fn request_message_kind(request: &RequestEnvelope) -> MessageKind {

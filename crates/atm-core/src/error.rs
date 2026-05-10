@@ -205,6 +205,17 @@ impl AtmError {
         )
     }
 
+    pub fn daemon_lifecycle_wedge(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::DaemonLifecycleWedge,
+            AtmErrorKind::DaemonUnavailable,
+            message,
+        )
+        .with_recovery(
+            "Restart the daemon after the local IPC listener and lifecycle-control state fully stop, then inspect daemon logs for the wedged shutdown path.",
+        )
+    }
+
     pub fn daemon_launch_gate_rejected(message: impl Into<String>) -> Self {
         Self::new_with_code(
             AtmErrorCode::DaemonLaunchGateRejected,

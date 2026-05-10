@@ -3,6 +3,8 @@ use crate::boundary_adapters::{
     DaemonReconcileCoordinator, FileWatchEventSource,
 };
 use crate::daemon_runtime_observability::DaemonRuntimeObservability;
+use crate::host_ownership::HostOwnershipAdapter;
+use crate::local_ipc_transport::{RuntimeServeHooks, SocketEndpointGuard};
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
 use crate::{
@@ -112,6 +114,11 @@ impl RuntimeLifecycle {
 #[derive(Debug)]
 pub(crate) struct RuntimeComposition {
     lifecycle: Arc<RuntimeLifecycle>,
+    #[allow(dead_code)]
+    // Holding the ownership adapter in the composition keeps host-runtime ownership tied to the
+    // full daemon runtime lifetime even though the field is not read after construction.
+    host_ownership_adapter: HostOwnershipAdapter,
+    endpoint_guard: Mutex<Option<SocketEndpointGuard>>,
     server_transport: LocalIpcServerTransportAdapter,
     request_dispatcher: Arc<DaemonRequestDispatcher>,
     _notification_sink: DaemonNotificationSink,
@@ -158,6 +165,8 @@ impl RuntimeComposition {
         };
         Ok(Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
+            host_ownership_adapter: HostOwnershipAdapter::new(),
+            endpoint_guard: Mutex::new(None),
             server_transport: LocalIpcServerTransportAdapter::new(),
             request_dispatcher: Arc::new(DaemonRequestDispatcher::new(
                 home_dir,
@@ -181,6 +190,30 @@ impl RuntimeComposition {
 
     fn request_dispatcher(&self) -> Arc<dyn RequestDispatcher + Send + Sync> {
         self.request_dispatcher.clone()
+    }
+
+    fn replace_endpoint_guard(&self, guard: Option<SocketEndpointGuard>) -> Result<(), AtmError> {
+        let mut slot = self.endpoint_guard.lock().map_err(|_| {
+            AtmError::daemon_unavailable("runtime endpoint guard slot lock poisoned").with_recovery(
+                "Restart the daemon; same-host endpoint cleanup ownership can no longer be tracked safely.",
+            )
+        })?;
+        *slot = guard;
+        Ok(())
+    }
+
+    fn take_endpoint_guard(&self) -> Result<SocketEndpointGuard, AtmError> {
+        let mut slot = self.endpoint_guard.lock().map_err(|_| {
+            AtmError::daemon_unavailable("runtime endpoint guard slot lock poisoned").with_recovery(
+                "Restart the daemon; same-host endpoint cleanup ownership can no longer be tracked safely.",
+            )
+        })?;
+        slot.take().ok_or_else(|| {
+            AtmError::daemon_unavailable("runtime endpoint guard was missing during daemon serve startup")
+                .with_recovery(
+                    "Restart the daemon; same-host endpoint cleanup ownership was lost before the listener entered serving state.",
+                )
+        })
     }
 
     fn begin_shutdown(&self) -> Result<(), AtmError> {
@@ -242,7 +275,7 @@ impl RuntimeComposition {
             self.lifecycle.force_stopped()?;
             return Err(error);
         }
-        let runtime = match self.server_transport.prepare_runtime() {
+        let mut runtime = match self.server_transport.prepare_runtime() {
             Ok(runtime) => runtime,
             Err(error) => {
                 if let Err(shutdown_error) = self.shutdown_background_lanes() {
@@ -260,6 +293,7 @@ impl RuntimeComposition {
                 return Err(error);
             }
         };
+        self.replace_endpoint_guard(Some(runtime.take_endpoint_guard()?))?;
         self.lifecycle.transition(RuntimeLifecycleState::Running)?;
         self.request_dispatcher.emit_runtime_event(
             "startup_completed",
@@ -267,13 +301,17 @@ impl RuntimeComposition {
             "daemon startup completed",
         );
         let request_dispatcher = Arc::clone(&self.request_dispatcher);
+        let endpoint_guard = self.take_endpoint_guard()?;
         let result = runtime.serve_with_runtime_hooks(
             self.request_dispatcher(),
-            super::GRACEFUL_DRAIN_DEADLINE,
-            super::FORCE_CANCEL_DEADLINE,
-            || self.begin_shutdown(),
-            move || request_dispatcher.reload_runtime_view(),
-            || self.finalize_shutdown(),
+            RuntimeServeHooks {
+                endpoint_guard,
+                graceful_drain_deadline: super::GRACEFUL_DRAIN_DEADLINE,
+                force_cancel_deadline: super::FORCE_CANCEL_DEADLINE,
+                begin_shutdown: || self.begin_shutdown(),
+                reload_runtime_view: move || request_dispatcher.reload_runtime_view(),
+                finalize_shutdown: || self.finalize_shutdown(),
+            },
         );
         self.finish_runtime(result)
     }
@@ -322,7 +360,7 @@ impl RuntimeComposition {
             self.lifecycle.force_stopped()?;
             return Err(error);
         }
-        let runtime = match self
+        let mut runtime = match self
             .server_transport
             .prepare_runtime_at_socket_path(socket_path)
         {
@@ -343,6 +381,7 @@ impl RuntimeComposition {
                 return Err(error);
             }
         };
+        self.replace_endpoint_guard(Some(runtime.take_endpoint_guard()?))?;
         self.lifecycle.transition(RuntimeLifecycleState::Running)?;
         self.request_dispatcher.emit_runtime_event(
             "startup_completed",
@@ -350,13 +389,17 @@ impl RuntimeComposition {
             "daemon startup completed",
         );
         let request_dispatcher = Arc::clone(&self.request_dispatcher);
+        let endpoint_guard = self.take_endpoint_guard()?;
         let result = runtime.serve_with_runtime_hooks(
             self.request_dispatcher(),
-            super::GRACEFUL_DRAIN_DEADLINE,
-            super::FORCE_CANCEL_DEADLINE,
-            || self.begin_shutdown(),
-            move || request_dispatcher.reload_runtime_view(),
-            || self.finalize_shutdown(),
+            RuntimeServeHooks {
+                endpoint_guard,
+                graceful_drain_deadline: super::GRACEFUL_DRAIN_DEADLINE,
+                force_cancel_deadline: super::FORCE_CANCEL_DEADLINE,
+                begin_shutdown: || self.begin_shutdown(),
+                reload_runtime_view: move || request_dispatcher.reload_runtime_view(),
+                finalize_shutdown: || self.finalize_shutdown(),
+            },
         );
         self.finish_runtime(result)
     }
@@ -404,19 +447,25 @@ impl RuntimeComposition {
     fn start_background_lanes(&self) -> Result<(), AtmError> {
         self._notification_sink.start()?;
         if let Err(error) = self._watch_event_source.start() {
-            self.rollback_partially_started_lanes(false, true);
+            self.rollback_partially_started_lanes(StartedLanes {
+                watch_started: false,
+                notification_started: true,
+            });
             return Err(error);
         }
         if let Err(error) = self._reconcile_coordinator.start() {
-            self.rollback_partially_started_lanes(true, true);
+            self.rollback_partially_started_lanes(StartedLanes {
+                watch_started: true,
+                notification_started: true,
+            });
             return Err(error);
         }
         Ok(())
     }
 
-    fn rollback_partially_started_lanes(&self, watch_started: bool, notification_started: bool) {
+    fn rollback_partially_started_lanes(&self, started_lanes: StartedLanes) {
         const BACKGROUND_LANE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(3);
-        if watch_started
+        if started_lanes.watch_started
             && let Err(error) = shutdown_lane_with_deadline(
                 "watch event source",
                 BACKGROUND_LANE_SHUTDOWN_DEADLINE,
@@ -430,7 +479,7 @@ impl RuntimeComposition {
                 "daemon background lane rollback shutdown was incomplete"
             );
         }
-        if notification_started
+        if started_lanes.notification_started
             && let Err(error) = shutdown_lane_with_deadline(
                 "notification sink",
                 BACKGROUND_LANE_SHUTDOWN_DEADLINE,
@@ -490,6 +539,12 @@ impl RuntimeComposition {
             None => Ok(()),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct StartedLanes {
+    watch_started: bool,
+    notification_started: bool,
 }
 
 fn shutdown_lane_with_deadline<T, F>(
