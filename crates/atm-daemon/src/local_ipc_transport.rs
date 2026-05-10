@@ -2,9 +2,7 @@ use std::io::Write;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Condvar, Mutex};
-use std::thread::JoinHandle;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use atm_core::boundary::{self, AtmProtocol, RequestDispatcher};
@@ -15,8 +13,10 @@ use interprocess::local_socket::{
     Listener as LocalSocketListener, ListenerOptions, Stream as LocalSocketStream,
 };
 
+use crate::active_connection_registry::{ActiveConnectionRegistry, TrackedDispatchHandle};
 use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
+use crate::shutdown_beacon::ShutdownBeacon;
 
 #[cfg(unix)]
 use std::fs;
@@ -35,230 +35,8 @@ enum ServeEvent {
     AcceptError(AtmError),
 }
 
-struct TrackedDispatchHandle {
-    completion_rx: std::sync::mpsc::Receiver<()>,
-    join_handle: JoinHandle<()>,
-}
-
-impl std::fmt::Debug for TrackedDispatchHandle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("TrackedDispatchHandle")
-            .finish_non_exhaustive()
-    }
-}
-
-#[derive(Debug, Default)]
-pub(crate) struct ActiveConnectionRegistry {
-    // These counters are updated from independent accept, connection, and dispatch threads, so
-    // atomics keep the shutdown/drain accounting wait-free on the hot path.
-    active_connections: AtomicUsize,
-    active_dispatches: AtomicUsize,
-    // JoinHandles stay behind this mutex so shutdown and post-request reap paths can
-    // deterministically join finished dispatch workers without racing the accept loop.
-    dispatch_handles: Mutex<Vec<TrackedDispatchHandle>>,
-    // The drain-state mutex has no payload of its own; it exists only to pair the condition
-    // variable with a stable lock while shutdown waits for active work to change.
-    drain_state: Mutex<()>,
-    drain_wake: Condvar,
-}
-
-impl ActiveConnectionRegistry {
-    pub(crate) fn register(self: &Arc<Self>) -> ActiveConnectionGuard {
-        self.active_connections.fetch_add(1, Ordering::SeqCst);
-        ActiveConnectionGuard {
-            registry: Arc::clone(self),
-        }
-    }
-
-    fn register_dispatch_work(self: &Arc<Self>) -> ActiveDispatchGuard {
-        self.active_dispatches.fetch_add(1, Ordering::SeqCst);
-        ActiveDispatchGuard {
-            registry: Arc::clone(self),
-        }
-    }
-
-    pub(crate) fn active_connections(&self) -> usize {
-        self.active_connections.load(Ordering::SeqCst)
-    }
-
-    pub(crate) fn active_work_items(&self) -> usize {
-        self.active_connections.load(Ordering::SeqCst)
-            + self.active_dispatches.load(Ordering::SeqCst)
-    }
-
-    pub(crate) fn interrupt_all(&self) {
-        self.drain_wake.notify_all();
-    }
-
-    fn lock_dispatch_handles(
-        &self,
-    ) -> Result<std::sync::MutexGuard<'_, Vec<TrackedDispatchHandle>>, AtmError> {
-        self.dispatch_handles
-            .lock()
-            .map_err(|_| {
-                AtmError::daemon_unavailable("active dispatch handle lock poisoned").with_recovery(
-                    "Restart the daemon; tracked dispatch worker state may be inconsistent after the poisoned lock.",
-                )
-            })
-    }
-
-    fn reap_finished_dispatches(&self) -> Result<(), AtmError> {
-        let finished = {
-            let mut handles = self.lock_dispatch_handles()?;
-            let mut pending = Vec::with_capacity(handles.len());
-            let mut finished = Vec::new();
-            for handle in handles.drain(..) {
-                match handle.completion_rx.try_recv() {
-                    Ok(()) | Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                        finished.push(handle);
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Empty) => {
-                        pending.push(handle);
-                    }
-                }
-            }
-            *handles = pending;
-            finished
-        };
-        for handle in finished {
-            join_dispatch_handle(handle)?;
-        }
-        Ok(())
-    }
-
-    fn join_tracked_dispatches(&self) -> Result<(), AtmError> {
-        self.reap_finished_dispatches()?;
-        let handles = {
-            let mut handles = self.lock_dispatch_handles()?;
-            std::mem::take(&mut *handles)
-        };
-        for handle in handles {
-            join_dispatch_handle_with_timeout(handle, TRACKED_DISPATCH_JOIN_DEADLINE)?;
-        }
-        Ok(())
-    }
-
-    pub(crate) fn wait_for_connection_change(&self, timeout: Duration) -> Result<(), AtmError> {
-        let state = self
-            .drain_state
-            .lock()
-            .map_err(|_| {
-                AtmError::daemon_unavailable("active connection drain lock poisoned").with_recovery(
-                    "Restart the daemon; shutdown drain coordination can no longer observe connection progress safely.",
-                )
-            })?;
-        let (_state, wait_result) = self
-            .drain_wake
-            .wait_timeout(state, timeout)
-            .map_err(|_| {
-                AtmError::daemon_unavailable("active connection drain lock poisoned").with_recovery(
-                    "Restart the daemon; shutdown drain coordination can no longer observe connection progress safely.",
-                )
-            })?;
-        if wait_result.timed_out() {
-            return Ok(());
-        }
-        Ok(())
-    }
-
-    fn release_connection(&self) {
-        self.active_connections.fetch_sub(1, Ordering::SeqCst);
-        self.drain_wake.notify_all();
-    }
-}
-
-pub(crate) struct ActiveConnectionGuard {
-    registry: Arc<ActiveConnectionRegistry>,
-}
-
-struct ActiveDispatchGuard {
-    registry: Arc<ActiveConnectionRegistry>,
-}
-
-impl Drop for ActiveConnectionGuard {
-    fn drop(&mut self) {
-        self.registry.release_connection();
-    }
-}
-
-impl Drop for ActiveDispatchGuard {
-    fn drop(&mut self) {
-        self.registry
-            .active_dispatches
-            .fetch_sub(1, Ordering::SeqCst);
-        self.registry.drain_wake.notify_all();
-    }
-}
-
-fn join_dispatch_handle(handle: TrackedDispatchHandle) -> Result<(), AtmError> {
-    handle.join_handle.join().map_err(|_| {
-        AtmError::daemon_unavailable("daemon dispatch thread panicked").with_recovery(
-            "Restart the daemon; one completed dispatch worker panicked before it could be reaped cleanly.",
-        )
-    })
-}
-
-fn join_dispatch_handle_with_timeout(
-    handle: TrackedDispatchHandle,
-    timeout: Duration,
-) -> Result<(), AtmError> {
-    match handle.completion_rx.recv_timeout(timeout) {
-        Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-            join_dispatch_handle(handle)
-        }
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-            tracing::warn!(
-                timeout_ms = timeout.as_millis() as u64,
-                "tracked daemon dispatch worker exceeded the shutdown join deadline; detaching"
-            );
-            Ok(())
-        }
-    }
-}
-
-#[derive(Debug, Default)]
-struct ShutdownBeacon {
-    // This bit is read by accept, lifecycle, and serve-loop threads, so it stays atomic while the
-    // companion condvar provides immediate wakeups for blocking waiters.
-    tripped: AtomicBool,
-    state: Mutex<()>,
-    wake: Condvar,
-}
-
-impl ShutdownBeacon {
-    fn trip(&self) {
-        self.tripped.store(true, Ordering::SeqCst);
-        self.wake.notify_all();
-    }
-
-    fn is_tripped(&self) -> bool {
-        self.tripped.load(Ordering::SeqCst)
-    }
-
-    #[allow(dead_code)]
-    fn wait_for_trip_timeout(&self, timeout: Duration) -> Result<bool, AtmError> {
-        if self.is_tripped() {
-            return Ok(true);
-        }
-        let state = self.state.lock().map_err(|_| {
-            AtmError::daemon_lifecycle_wedge("daemon shutdown beacon lock poisoned").with_recovery(
-                "Restart the daemon; transport shutdown coordination can no longer wake blocked lifecycle waiters safely.",
-            )
-        })?;
-        if self.is_tripped() {
-            return Ok(true);
-        }
-        let (_state, wait_result) = self.wake.wait_timeout(state, timeout).map_err(|_| {
-            AtmError::daemon_lifecycle_wedge("daemon shutdown beacon lock poisoned").with_recovery(
-                "Restart the daemon; transport shutdown coordination can no longer wake blocked lifecycle waiters safely.",
-            )
-        })?;
-        Ok(!wait_result.timed_out() && self.is_tripped())
-    }
-}
-
 #[derive(Debug)]
-struct SocketEndpointGuard {
+pub(crate) struct SocketEndpointGuard {
     endpoint_path: PathBuf,
     preparation: LocalIpcEndpointPreparation,
     // Endpoint cleanup may be requested explicitly during shutdown and again from Drop, so an
@@ -310,12 +88,22 @@ impl Drop for SocketEndpointGuard {
 
 pub(crate) struct PreparedRuntimeServer {
     _ownership: HostOwnershipGuard,
-    endpoint_guard: SocketEndpointGuard,
+    endpoint_path: PathBuf,
+    endpoint_guard: Option<SocketEndpointGuard>,
     listener: LocalSocketListener,
     lifecycle_control: LifecycleControlSourceAdapter,
     registry: Arc<ActiveConnectionRegistry>,
     force_shutdown: Arc<AtomicBool>,
     codec: JsonAtmProtocolCodec,
+}
+
+pub(crate) struct RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, FinalizeShutdown> {
+    pub(crate) endpoint_guard: SocketEndpointGuard,
+    pub(crate) graceful_drain_deadline: Duration,
+    pub(crate) force_cancel_deadline: Duration,
+    pub(crate) begin_shutdown: BeginShutdown,
+    pub(crate) reload_runtime_view: ReloadRuntimeView,
+    pub(crate) finalize_shutdown: FinalizeShutdown,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -367,8 +155,12 @@ impl PreparedRuntimeServer {
         );
         emit_ready_signal_if_requested()?;
         Ok(Self {
-            endpoint_guard: SocketEndpointGuard::new(endpoint_path, endpoint_preparation),
             _ownership: ownership,
+            endpoint_path: endpoint_path.clone(),
+            endpoint_guard: Some(SocketEndpointGuard::new(
+                endpoint_path,
+                endpoint_preparation,
+            )),
             listener,
             lifecycle_control,
             registry: Arc::new(ActiveConnectionRegistry::default()),
@@ -380,44 +172,38 @@ impl PreparedRuntimeServer {
     pub(crate) fn serve_with_runtime_hooks<BeginShutdown, ReloadRuntimeView, FinalizeShutdown>(
         self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-        graceful_drain_deadline: Duration,
-        force_cancel_deadline: Duration,
-        begin_shutdown: BeginShutdown,
-        reload_runtime_view: ReloadRuntimeView,
-        finalize_shutdown: FinalizeShutdown,
+        hooks: RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, FinalizeShutdown>,
     ) -> Result<(), AtmError>
     where
         BeginShutdown: Fn() -> Result<(), AtmError>,
         ReloadRuntimeView: Fn() -> Result<(), AtmError>,
         FinalizeShutdown: Fn(),
     {
-        self.serve_with_deadlines_and_accept_probe(
-            dispatcher,
-            graceful_drain_deadline,
-            force_cancel_deadline,
-            begin_shutdown,
-            reload_runtime_view,
-            finalize_shutdown,
-        )
+        self.serve_with_deadlines_and_accept_probe(dispatcher, hooks)
     }
 
     fn serve_with_deadlines_and_accept_probe<BeginShutdown, ReloadRuntimeView, FinalizeShutdown>(
         self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-        graceful_drain_deadline: Duration,
-        force_cancel_deadline: Duration,
-        begin_shutdown: BeginShutdown,
-        reload_runtime_view: ReloadRuntimeView,
-        finalize_shutdown: FinalizeShutdown,
+        hooks: RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, FinalizeShutdown>,
     ) -> Result<(), AtmError>
     where
         BeginShutdown: Fn() -> Result<(), AtmError>,
         ReloadRuntimeView: Fn() -> Result<(), AtmError>,
         FinalizeShutdown: Fn(),
     {
+        let RuntimeServeHooks {
+            endpoint_guard,
+            graceful_drain_deadline,
+            force_cancel_deadline,
+            begin_shutdown,
+            reload_runtime_view,
+            finalize_shutdown,
+        } = hooks;
         let Self {
             _ownership,
-            endpoint_guard,
+            endpoint_path,
+            endpoint_guard: _endpoint_guard,
             listener,
             lifecycle_control,
             registry,
@@ -435,7 +221,7 @@ impl PreparedRuntimeServer {
                 let event_tx = event_tx.clone();
                 let shutdown_beacon = Arc::clone(&shutdown_beacon);
                 let lifecycle_control = lifecycle_control.clone();
-                let endpoint_path = endpoint_guard.endpoint_path().to_path_buf();
+                let endpoint_path = endpoint_path.clone();
                 scope.spawn(move || {
                     let mut observed_generation = match lifecycle_control.event_generation() {
                         Ok(generation) => generation,
@@ -675,6 +461,9 @@ impl PreparedRuntimeServer {
             if lifecycle_waiter.join().is_err() {
                 let error = AtmError::daemon_lifecycle_wedge(
                     "daemon lifecycle waiter panicked during transport shutdown",
+                )
+                .with_recovery(
+                    "Restart the daemon; the same-host lifecycle waiter crashed while the runtime was transitioning out of serving state.",
                 );
                 if let Some(existing) = shutdown_error.as_ref() {
                     tracing::warn!(
@@ -730,6 +519,15 @@ impl PreparedRuntimeServer {
                 return Err(serve_error);
             }
             shutdown_error.map_or(Ok(()), Err)
+        })
+    }
+
+    pub(crate) fn take_endpoint_guard(&mut self) -> Result<SocketEndpointGuard, AtmError> {
+        self.endpoint_guard.take().ok_or_else(|| {
+            AtmError::daemon_unavailable("daemon local IPC endpoint guard was missing during runtime handoff")
+                .with_recovery(
+                    "Restart the daemon; same-host endpoint cleanup ownership was lost before the runtime began serving.",
+                )
         })
     }
 }
@@ -845,6 +643,9 @@ fn write_shutdown_response(
     )?;
     stream.flush().map_err(|source| {
         AtmError::daemon_unavailable("failed to flush daemon shutdown rejection response frame")
+            .with_recovery(
+                "Retry the ATM command after the daemon restarts; the shutdown rejection response could not be delivered cleanly.",
+            )
             .with_source(source)
     })?;
     Ok(())
@@ -951,10 +752,18 @@ fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
     }
     let mut stdout = std::io::stdout().lock();
     writeln!(stdout, "ATM_DAEMON_READY").map_err(|source| {
-        AtmError::daemon_unavailable("failed to emit daemon ready signal").with_source(source)
+        AtmError::daemon_unavailable("failed to emit daemon ready signal")
+            .with_recovery(
+                "Restart the daemon after confirming the parent process still accepts the ready signal on stdout.",
+            )
+            .with_source(source)
     })?;
     stdout.flush().map_err(|source| {
-        AtmError::daemon_unavailable("failed to flush daemon ready signal").with_source(source)
+        AtmError::daemon_unavailable("failed to flush daemon ready signal")
+            .with_recovery(
+                "Restart the daemon after confirming the parent process still accepts the ready signal on stdout.",
+            )
+            .with_source(source)
     })?;
     Ok(())
 }
@@ -993,7 +802,7 @@ fn drain_active_connections_for_shutdown(
             force_cancel_deadline.saturating_duration_since(Instant::now()),
         )?;
     }
-    registry.join_tracked_dispatches()?;
+    registry.join_tracked_dispatches(TRACKED_DISPATCH_JOIN_DEADLINE)?;
     let remaining_work_items = registry.active_work_items();
     if remaining_work_items > 0 {
         return Err(AtmError::daemon_unavailable(format!(
@@ -1021,12 +830,18 @@ fn handle_connection(
         .set_recv_timeout(Some(REQUEST_DEADLINE))
         .map_err(|source| {
             AtmError::daemon_unavailable("failed to apply daemon request read deadline")
+                .with_recovery(
+                    "Restart the daemon; the same-host request socket could not apply its bounded read deadline.",
+                )
                 .with_source(source)
         })?;
     stream
         .set_send_timeout(Some(REQUEST_DEADLINE))
         .map_err(|source| {
             AtmError::daemon_unavailable("failed to apply daemon response write deadline")
+                .with_recovery(
+                    "Restart the daemon; the same-host request socket could not apply its bounded write deadline.",
+                )
                 .with_source(source)
         })?;
 
@@ -1094,7 +909,11 @@ fn handle_connection(
     let frame = codec.response_to_frame(request_id, response)?;
     atm_core::protocol::write_frame(&mut stream, &frame, "failed to write daemon response frame")?;
     stream.flush().map_err(|source| {
-        AtmError::daemon_unavailable("failed to flush daemon response frame").with_source(source)
+        AtmError::daemon_unavailable("failed to flush daemon response frame")
+            .with_recovery(
+                "Retry the ATM command after the daemon finishes recovering the same-host request runtime.",
+            )
+            .with_source(source)
     })?;
     registry.reap_finished_dispatches()?;
     Ok(())
@@ -1245,7 +1064,8 @@ mod tests {
     fn accept_error_without_lifecycle_signal_exits_within_one_second() {
         let tempdir = TempDir::new().expect("tempdir");
         let socket_path = tempdir.path().join("daemon.sock");
-        let runtime = PreparedRuntimeServer::bind(socket_path).expect("prepare runtime");
+        let mut runtime = PreparedRuntimeServer::bind(socket_path).expect("prepare runtime");
+        let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
         let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
         let _reset = LifecycleFlagResetGuard::install(lifecycle);
         let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
@@ -1258,11 +1078,14 @@ mod tests {
             // the production SLO values documented for the real daemon runtime.
             let result = runtime.serve_with_runtime_hooks(
                 dispatcher,
-                Duration::from_millis(500),
-                Duration::from_secs(2),
-                || Ok(()),
-                || Ok(()),
-                || {},
+                RuntimeServeHooks {
+                    endpoint_guard,
+                    graceful_drain_deadline: Duration::from_millis(500),
+                    force_cancel_deadline: Duration::from_secs(2),
+                    begin_shutdown: || Ok(()),
+                    reload_runtime_view: || Ok(()),
+                    finalize_shutdown: || {},
+                },
             );
             serve_result_tx.send(result).expect("send serve result");
         });
@@ -1289,7 +1112,9 @@ mod tests {
     fn accept_after_terminate_returns_typed_shutdown_error() {
         let tempdir = TempDir::new().expect("tempdir");
         let socket_path = tempdir.path().join("daemon.sock");
-        let runtime = PreparedRuntimeServer::bind(socket_path.clone()).expect("prepare runtime");
+        let mut runtime =
+            PreparedRuntimeServer::bind(socket_path.clone()).expect("prepare runtime");
+        let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
         let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
         let _reset = LifecycleFlagResetGuard::install(lifecycle.clone());
         let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
@@ -1300,11 +1125,14 @@ mod tests {
             // the production SLO values documented for the real daemon runtime.
             let result = runtime.serve_with_runtime_hooks(
                 dispatcher,
-                Duration::from_millis(500),
-                Duration::from_secs(2),
-                || Ok(()),
-                || Ok(()),
-                || {},
+                RuntimeServeHooks {
+                    endpoint_guard,
+                    graceful_drain_deadline: Duration::from_millis(500),
+                    force_cancel_deadline: Duration::from_secs(2),
+                    begin_shutdown: || Ok(()),
+                    reload_runtime_view: || Ok(()),
+                    finalize_shutdown: || {},
+                },
             );
             serve_result_tx.send(result).expect("send serve result");
         });
@@ -1359,7 +1187,9 @@ mod tests {
     fn panic_in_dispatch_still_cleans_up_socket_path_on_shutdown() {
         let tempdir = TempDir::new().expect("tempdir");
         let socket_path = tempdir.path().join("daemon.sock");
-        let runtime = PreparedRuntimeServer::bind(socket_path.clone()).expect("prepare runtime");
+        let mut runtime =
+            PreparedRuntimeServer::bind(socket_path.clone()).expect("prepare runtime");
+        let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
         let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
         let _reset = LifecycleFlagResetGuard::install(lifecycle.clone());
         let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> = Arc::new(PanicDispatcher);
@@ -1368,11 +1198,14 @@ mod tests {
         let join = std::thread::spawn(move || {
             let result = runtime.serve_with_runtime_hooks(
                 dispatcher,
-                Duration::from_millis(500),
-                Duration::from_secs(2),
-                || Ok(()),
-                || Ok(()),
-                || {},
+                RuntimeServeHooks {
+                    endpoint_guard,
+                    graceful_drain_deadline: Duration::from_millis(500),
+                    force_cancel_deadline: Duration::from_secs(2),
+                    begin_shutdown: || Ok(()),
+                    reload_runtime_view: || Ok(()),
+                    finalize_shutdown: || {},
+                },
             );
             serve_result_tx.send(result).expect("send serve result");
         });

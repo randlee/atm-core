@@ -6,6 +6,7 @@ use super::{
         install_stale_recovery_signal_for_test,
     },
     lifecycle_control::LifecycleControlSourceAdapter,
+    local_ipc_transport::RuntimeServeHooks,
 };
 use atm_core::boundary::RequestDispatcher;
 use atm_core::doctor::{
@@ -161,6 +162,8 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     let runtime = server_transport
         .prepare_runtime_at_socket_path(socket_path.clone())
         .expect("prepare runtime");
+    let mut runtime = runtime;
+    let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
     let (lifecycle, _reset) = {
         let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
         let reset = LifecycleFlagResetGuard::install(lifecycle.clone());
@@ -172,11 +175,14 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     let join = std::thread::spawn(move || {
         let result = runtime.serve_with_runtime_hooks(
             dispatcher,
-            Duration::from_millis(500),
-            Duration::from_secs(2),
-            || Ok(()),
-            || Ok(()),
-            || {},
+            RuntimeServeHooks {
+                endpoint_guard,
+                graceful_drain_deadline: Duration::from_millis(500),
+                force_cancel_deadline: Duration::from_secs(2),
+                begin_shutdown: || Ok(()),
+                reload_runtime_view: || Ok(()),
+                finalize_shutdown: || {},
+            },
         );
         serve_result_tx.send(result).expect("send serve result");
     });
@@ -310,6 +316,8 @@ fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
     let runtime = server_transport
         .prepare_runtime_at_socket_path(socket_path)
         .expect("prepare runtime");
+    let mut runtime = runtime;
+    let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
     let (lifecycle, _reset) = {
         let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
         let reset = LifecycleFlagResetGuard::install(lifecycle.clone());
@@ -321,11 +329,14 @@ fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
     let join = std::thread::spawn(move || {
         let result = runtime.serve_with_runtime_hooks(
             dispatcher,
-            Duration::from_millis(500),
-            Duration::from_secs(2),
-            || Ok(()),
-            || Ok(()),
-            || {},
+            RuntimeServeHooks {
+                endpoint_guard,
+                graceful_drain_deadline: Duration::from_millis(500),
+                force_cancel_deadline: Duration::from_secs(2),
+                begin_shutdown: || Ok(()),
+                reload_runtime_view: || Ok(()),
+                finalize_shutdown: || {},
+            },
         );
         serve_result_tx.send(result).expect("send serve result");
     });

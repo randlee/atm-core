@@ -327,6 +327,8 @@ fn install_platform_hooks(
     let terminate = Arc::clone(terminate);
     let reload = Arc::clone(reload);
     let state_change = Arc::clone(state_change);
+    // This worker is intentionally fire-and-forget: lifecycle-control state is process-global,
+    // and process exit is the only shutdown point for the signal hooks it services.
     std::thread::Builder::new()
         .name("atm-daemon-lifecycle-unix".to_string())
         .spawn(move || {
@@ -376,6 +378,8 @@ fn install_platform_hooks(
     let terminate = Arc::clone(terminate);
     let reload = Arc::clone(reload);
     let state_change = Arc::clone(state_change);
+    // This worker is intentionally fire-and-forget: lifecycle-control state is process-global,
+    // and process exit is the only shutdown point for the signal hooks it services.
     std::thread::Builder::new()
         .name("atm-daemon-lifecycle-windows".to_string())
         .spawn(move || {

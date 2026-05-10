@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 //! Daemon runtime composition and portability adapters.
 
+mod active_connection_registry;
 mod boundary_adapters;
 pub(crate) mod composition;
 mod daemon_runtime_observability;
@@ -15,6 +16,7 @@ mod notification_runtime;
 mod peer_transport;
 mod reconcile_runtime;
 mod runtime_health;
+mod shutdown_beacon;
 #[cfg(test)]
 mod test_observability;
 mod watch_runtime;
