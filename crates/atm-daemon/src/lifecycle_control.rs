@@ -21,6 +21,8 @@ struct SharedLifecycleControlState {
 
 #[derive(Debug)]
 struct LifecycleStateChange {
+    // The generation counter is guarded so waiters and signal hooks can observe an ordered
+    // wake sequence without relying on lossy edge-triggered polling alone.
     generation: Mutex<u64>,
     wake: Condvar,
 }
@@ -37,6 +39,7 @@ impl LifecycleStateChange {
     fn notify(&self) -> Result<(), AtmError> {
         let mut generation = self.generation.lock().map_err(|_| {
             AtmError::daemon_unavailable("daemon lifecycle state-change lock poisoned")
+                .with_recovery("Restart the daemon; lifecycle wake state is no longer trustworthy.")
         })?;
         *generation += 1;
         self.wake.notify_all();
@@ -50,18 +53,35 @@ impl LifecycleStateChange {
             .map(|generation| *generation)
             .map_err(|_| {
                 AtmError::daemon_unavailable("daemon lifecycle state-change lock poisoned")
+                    .with_recovery(
+                        "Restart the daemon; lifecycle wake state is no longer trustworthy.",
+                    )
             })
     }
 
     #[cfg_attr(windows, allow(dead_code))]
     fn wait_for_change(&self, observed_generation: &mut u64) -> Result<(), AtmError> {
+        const LIFECYCLE_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
         let mut generation = self.generation.lock().map_err(|_| {
             AtmError::daemon_unavailable("daemon lifecycle state-change lock poisoned")
+                .with_recovery("Restart the daemon; lifecycle wake state is no longer trustworthy.")
         })?;
         while *generation == *observed_generation {
-            generation = self.wake.wait(generation).map_err(|_| {
-                AtmError::daemon_unavailable("daemon lifecycle state-change lock poisoned")
-            })?;
+            let (updated_generation, wait_result) = self
+                .wake
+                .wait_timeout_while(generation, LIFECYCLE_WAIT_TIMEOUT, |current_generation| {
+                    *current_generation == *observed_generation
+                })
+                .map_err(|_| {
+                    AtmError::daemon_unavailable("daemon lifecycle state-change lock poisoned")
+                        .with_recovery(
+                            "Restart the daemon; lifecycle wake state is no longer trustworthy.",
+                        )
+                })?;
+            generation = updated_generation;
+            if wait_result.timed_out() && *generation == *observed_generation {
+                continue;
+            }
         }
         *observed_generation = *generation;
         Ok(())
@@ -75,9 +95,17 @@ impl LifecycleControlSourceAdapter {
 
         let _guard = INSTALL_LOCK
             .lock()
-            .map_err(|_| AtmError::daemon_unavailable("daemon lifecycle install lock poisoned"))?;
+            .map_err(|_| {
+                AtmError::daemon_unavailable("daemon lifecycle install lock poisoned")
+                    .with_recovery(
+                        "Restart the daemon; lifecycle hook installation cannot complete after the poisoned lock.",
+                    )
+            })?;
         let mut shared = SHARED.lock().map_err(|_| {
             AtmError::daemon_unavailable("daemon lifecycle control state lock poisoned")
+                .with_recovery(
+                    "Restart the daemon; shared lifecycle control state may be inconsistent.",
+                )
         })?;
         if shared.is_none() {
             let terminate = Arc::new(AtomicBool::new(false));

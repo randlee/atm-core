@@ -35,7 +35,11 @@ enum ServeEvent {
 pub(crate) struct ActiveConnectionRegistry {
     active_connections: AtomicUsize,
     active_dispatches: AtomicUsize,
+    // JoinHandles stay behind this mutex so shutdown and post-request reap paths can
+    // deterministically join finished dispatch workers without racing the accept loop.
     dispatch_handles: Mutex<Vec<JoinHandle<()>>>,
+    // The drain-state mutex has no payload of its own; it exists only to pair the condition
+    // variable with a stable lock while shutdown waits for active work to change.
     drain_state: Mutex<()>,
     drain_wake: Condvar,
 }
@@ -73,20 +77,50 @@ impl ActiveConnectionRegistry {
     ) -> Result<std::sync::MutexGuard<'_, Vec<JoinHandle<()>>>, AtmError> {
         self.dispatch_handles
             .lock()
-            .map_err(|_| AtmError::daemon_unavailable("active dispatch handle lock poisoned"))
+            .map_err(|_| {
+                AtmError::daemon_unavailable("active dispatch handle lock poisoned").with_recovery(
+                    "Restart the daemon; tracked dispatch worker state may be inconsistent after the poisoned lock.",
+                )
+            })
+    }
+
+    fn reap_finished_dispatches(&self) -> Result<(), AtmError> {
+        let finished = {
+            let mut handles = self.lock_dispatch_handles()?;
+            let mut pending = Vec::with_capacity(handles.len());
+            let mut finished = Vec::new();
+            for handle in handles.drain(..) {
+                if handle.is_finished() {
+                    finished.push(handle);
+                } else {
+                    pending.push(handle);
+                }
+            }
+            *handles = pending;
+            finished
+        };
+        for handle in finished {
+            handle.join().map_err(|_| {
+                AtmError::daemon_unavailable("daemon dispatch thread panicked").with_recovery(
+                    "Restart the daemon; one completed dispatch worker panicked before it could be reaped cleanly.",
+                )
+            })?;
+        }
+        Ok(())
     }
 
     fn join_tracked_dispatches(&self) -> Result<(), AtmError> {
+        self.reap_finished_dispatches()?;
         let handles = {
-            let mut handles = self.dispatch_handles.lock().map_err(|_| {
-                AtmError::daemon_unavailable("active dispatch handle lock poisoned")
-            })?;
+            let mut handles = self.lock_dispatch_handles()?;
             std::mem::take(&mut *handles)
         };
         for handle in handles {
-            handle
-                .join()
-                .map_err(|_| AtmError::daemon_unavailable("daemon dispatch thread panicked"))?;
+            handle.join().map_err(|_| {
+                AtmError::daemon_unavailable("daemon dispatch thread panicked").with_recovery(
+                    "Restart the daemon; one tracked dispatch worker panicked during shutdown.",
+                )
+            })?;
         }
         Ok(())
     }
@@ -95,11 +129,19 @@ impl ActiveConnectionRegistry {
         let state = self
             .drain_state
             .lock()
-            .map_err(|_| AtmError::daemon_unavailable("active connection drain lock poisoned"))?;
+            .map_err(|_| {
+                AtmError::daemon_unavailable("active connection drain lock poisoned").with_recovery(
+                    "Restart the daemon; shutdown drain coordination can no longer observe connection progress safely.",
+                )
+            })?;
         let (_state, wait_result) = self
             .drain_wake
             .wait_timeout(state, timeout)
-            .map_err(|_| AtmError::daemon_unavailable("active connection drain lock poisoned"))?;
+            .map_err(|_| {
+                AtmError::daemon_unavailable("active connection drain lock poisoned").with_recovery(
+                    "Restart the daemon; shutdown drain coordination can no longer observe connection progress safely.",
+                )
+            })?;
         if wait_result.timed_out() {
             return Ok(());
         }
@@ -147,6 +189,7 @@ pub(crate) struct PreparedRuntimeServer {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LocalIpcEndpointPreparation {
+    #[cfg_attr(windows, allow(dead_code))]
     FilesystemEndpointPrepared,
     #[cfg_attr(unix, allow(dead_code))]
     NonFilesystemEndpointPrepared,
@@ -651,12 +694,14 @@ fn handle_connection(
     stream.flush().map_err(|source| {
         AtmError::daemon_unavailable("failed to flush daemon response frame").with_source(source)
     })?;
+    registry.reap_finished_dispatches()?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use tempfile::TempDir;
 
     #[cfg(unix)]
@@ -672,5 +717,18 @@ mod tests {
             LocalIpcEndpointPreparation::FilesystemEndpointPrepared
         );
         assert!(endpoint.parent().expect("parent").exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn prepare_local_ipc_endpoint_reports_non_filesystem_preparation() {
+        let endpoint = PathBuf::from(r"\\.\pipe\atm-test-daemon");
+
+        let result = prepare_local_ipc_endpoint(&endpoint).expect("prepare endpoint");
+
+        assert_eq!(
+            result,
+            LocalIpcEndpointPreparation::NonFilesystemEndpointPrepared
+        );
     }
 }
