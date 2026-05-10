@@ -60,7 +60,8 @@ Introduce one crate-private in-process SQLite write worker that:
 
 ## Follow-Up
 
-- finalize the implementation shape in Sprint S.15
+- use `docs/phase-S/sprint-S15-rusqlite-plan.md` as the canonical design for
+  the S.15 implementation shape and any follow-on QA reconciliation
 - benchmark the resulting hot-path throughput and latency
 - review WAL autocheckpoint tuning separately if sustained write load requires
   it

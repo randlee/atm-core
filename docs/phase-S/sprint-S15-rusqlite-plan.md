@@ -94,6 +94,11 @@ Under that invariant:
 - `ack_state` still uses `INSERT ... ON CONFLICT DO UPDATE`
 - the `inserted` bit comes from `rows_changed()`, not a pre-write `SELECT`
 
+The `SqliteWriter` provides write serialization within one process only.
+Correctness depends on the daemon singleton invariant
+(`REQ-P-RUNTIME-002`, `ADR-002`) ensuring no second daemon process runs
+concurrently against the same database file.
+
 If any future caller needs mutable message-row semantics, that must be a new
 design change, not an accidental consequence of preserving the current hot-path
 SQL shape.
@@ -131,7 +136,22 @@ Dropped reply receivers are not a store failure. The worker should log and
 continue rather than surfacing a synthetic error path to a caller that is
 already gone.
 
-#### 4. Batch draining is opportunistic, not a CPU spin loop
+#### 4. Blocking submission is accepted backpressure, not an async-safe shortcut
+
+`SyncSender::send()` blocks the calling thread when the queue is full. That is
+the accepted full-queue caller contract for S.15 because it applies bounded
+backpressure instead of silently dropping writes or inventing a second
+best-effort lane.
+
+Rules:
+- blocking channel send is forbidden directly inside Tokio async tasks
+- any async `atm-daemon` caller that submits a write must do so through
+  `tokio::task::spawn_blocking(...)` or a dedicated blocking thread
+- this keeps the write-worker design aligned with the daemon architecture rule
+  that blocking host/runtime work must stay off async executor threads; see
+  `docs/atm-daemon/architecture.md` REQ §6
+
+#### 5. Batch draining is opportunistic, not a CPU spin loop
 
 The accepted drain loop is:
 1. block on `recv()` for the first write
@@ -142,9 +162,19 @@ The accepted drain loop is:
    - `BATCH_SIZE_MAX` is reached
    - `BATCH_TIME_BUDGET` expires
 
+Concrete S.15 planning constants:
+- `BATCH_SIZE_MAX = 64`
+- `BATCH_TIME_BUDGET = 2ms`
+
+Rationale:
+- `64` ops captures the admitted 32-64 operation sweet spot from the Opus
+  analysis while staying below the diminishing-return range above `128`
+- `2ms` keeps batching opportunistic enough to amortize commit cost without
+  turning single-row callers into visibly latent queue residents
+
 The worker must not busy-spin for the full time budget.
 
-#### 5. Per-op isolation is accepted, but SAVEPOINT cost is a real tradeoff
+#### 6. Per-op isolation is accepted, but SAVEPOINT cost is a real tradeoff
 
 The Opus proposal uses one transaction per batch plus one SAVEPOINT per op so a
 single malformed write does not abort the entire batch.
@@ -155,7 +185,7 @@ SAVEPOINT cost as explicit overhead, not free performance. If later
 measurement shows meaningful cost on homogeneous mailbox batches, a narrower
 batch specialization can be a follow-up.
 
-#### 6. Known logical/schema violations should be rejected before SQL
+#### 7. Known logical/schema violations should be rejected before SQL
 
 The worker must not treat avoidable schema faults as normal hot-path control
 flow.
@@ -209,6 +239,24 @@ That remains a Phase S+1 tuning task unless real testing proves it is blocking.
 
 It is not a public extension surface and must not be re-exported outside
 `atm-rusqlite`.
+
+Concrete worker constants for the authoritative S.15 plan:
+- `CHANNEL_CAPACITY = 256`
+- `BATCH_SIZE_MAX = 64`
+- `BATCH_TIME_BUDGET = 2ms`
+
+Rationale:
+- `256` queue slots are large enough to absorb short mailbox bursts without
+  immediately stalling every concurrent caller, but still small enough to keep
+  memory usage and queue latency bounded
+- `64` and `2ms` keep batching in the throughput-helpful range without
+  stretching single-request latency into a second scheduler-scale delay
+
+Full-queue caller contract:
+- callers block on `SyncSender::send()` when `CHANNEL_CAPACITY` is exhausted
+- that blocking send is the intentional backpressure mechanism for S.15
+- async callers must submit from `spawn_blocking(...)` or another dedicated
+  blocking thread; they must not block a Tokio executor worker directly
 
 ### Message protocol
 
@@ -374,10 +422,13 @@ The writer must preserve the current crate error posture:
 - worker availability failures must become typed store-write failures, not
   silent drops
 
-The plan does not adopt “closed oneshot -> `AtmError::daemon_unavailable`” as
-the primary contract. That is too daemon-specific for a crate that is supposed
-to translate store failures. A dead writer thread or closed submission queue is
-better modeled as a typed durable-store unavailability/write failure.
+The concrete worker-dead / channel-closed signal starts as
+`AtmError::daemon_unavailable(...)` (`AtmErrorCode::DaemonUnavailable`) inside
+the writer layer, then gets translated into the existing store-write failure
+surface before it crosses the crate boundary. The plan does not adopt “closed
+reply channel -> `AtmError::daemon_unavailable`” as the primary contract,
+because a dropped caller receiver is not the same class of fault as a dead
+writer thread or closed submission queue.
 
 ## Tests And Validation
 
@@ -391,6 +442,10 @@ Required regression coverage for the implementation sprint:
 - closed submission channel drains pending work before shutdown
 - in-memory shared-cache tests still preserve reopen semantics
 - on-disk temp-db tests still cover migration/bootstrap and reopen behavior
+
+The implementation sprint must also cross-reference
+`REQ-RUSQLITE-TEST-001` so the in-memory vs on-disk partition policy stays
+explicit when the writer tests are split across shared-cache and temp-db cases.
 
 Required validation:
 - `cargo fmt --all --check`
@@ -416,7 +471,7 @@ Required validation:
 
 ## ADR Impact
 
-S.15 should add `docs/adr/ADR-ATM-RUSQLITE-002.md`:
+S.15 already carries `docs/adr/ADR-ATM-RUSQLITE-002.md`:
 - title: Single In-Process SQLite Write Worker
 - rationale: SQLite WAL allows concurrent readers but still serializes writers;
   making that serialization explicit at the app layer reduces self-contention

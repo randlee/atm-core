@@ -36,6 +36,9 @@ Add `docs/phase-S/sprint-S15-rusqlite-plan.md` covering:
 
 This sprint brief must remain aligned with the design document and the current
 crate architecture:
+- `docs/phase-S/sprint-S15-rusqlite-plan.md` is the authoritative design
+  authority for this sprint
+- if this sprint brief and the design plan disagree, the plan doc governs
 - no public writer exposure across crate boundaries
 - no widening of `MailStore`, `TaskStore`, or `RosterStore`
 - no Tokio runtime dependency added to `atm-rusqlite`
