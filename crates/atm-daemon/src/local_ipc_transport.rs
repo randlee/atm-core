@@ -939,11 +939,14 @@ mod tests {
     #[cfg(unix)]
     use tempfile::TempDir;
 
+    #[cfg(unix)]
     #[derive(Debug, Default)]
     struct DoctorOnlyDispatcher;
 
+    #[cfg(unix)]
     impl atm_core::boundary::sealed::Sealed for DoctorOnlyDispatcher {}
 
+    #[cfg(unix)]
     impl RequestDispatcher for DoctorOnlyDispatcher {
         fn dispatch(
             &self,
@@ -980,11 +983,14 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     #[derive(Debug, Default)]
     struct PanicDispatcher;
 
+    #[cfg(unix)]
     impl atm_core::boundary::sealed::Sealed for PanicDispatcher {}
 
+    #[cfg(unix)]
     impl RequestDispatcher for PanicDispatcher {
         fn dispatch(
             &self,
@@ -994,10 +1000,12 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     struct LifecycleFlagResetGuard {
         lifecycle: LifecycleControlSourceAdapter,
     }
 
+    #[cfg(unix)]
     impl LifecycleFlagResetGuard {
         fn install(lifecycle: LifecycleControlSourceAdapter) -> Self {
             lifecycle.set_terminate_for_test(false);
@@ -1006,6 +1014,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     impl Drop for LifecycleFlagResetGuard {
         fn drop(&mut self) {
             self.lifecycle.set_terminate_for_test(false);
@@ -1013,6 +1022,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     fn connect_daemon_local_ipc_until_ready(endpoint_path: &Path) -> LocalSocketStream {
         let deadline = Instant::now() + Duration::from_secs(3);
         loop {
