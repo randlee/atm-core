@@ -688,7 +688,6 @@ Required closeout work:
 - keep S.15 sequenced after the S.13/S.14 runtime hardening line so the writer
   plan can depend on the already-accepted daemon singleton/runtime contracts
 
-
 ## 6. Removed Windows CI Guardrail
 
 The temporary Windows clippy narrowing used during S.0-S.3 is retired.
