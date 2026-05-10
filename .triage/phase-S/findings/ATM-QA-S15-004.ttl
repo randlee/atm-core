@@ -1,11 +1,11 @@
 @prefix triage: <urn:atm:triage:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-<urn:atm:triage:finding/ATM-QA-S15-003>
+<urn:atm:triage:finding/ATM-QA-S15-004>
   a triage:Finding ;
-  triage:findingId "ATM-QA-S15-003" ;
-  triage:title "sprint-S15-rusqlite-hardening.md Base field inconsistent with PR target" ;
-  triage:description "docs/phase-S/sprint-S15-rusqlite-hardening.md declares Base: feature/pS-s14-impl; docs/phase-S/sprint-S15.md (planning doc) declares Base: integrate/phase-S @ 77badd5. PR target correctly says integrate/phase-S. Only the Base field in the hardening doc needs reconciliation to match the planning doc and PR target." ;
+  triage:findingId "ATM-QA-S15-004" ;
+  triage:title "sprint-S15-rusqlite-hardening.md Closeout Requirements missing REQ-P-RUNTIME-002 gate" ;
+  triage:description "The Closeout Requirements section of docs/phase-S/sprint-S15-rusqlite-hardening.md does not explicitly gate on the daemon-singleton-writer invariant (REQ-P-RUNTIME-002). sprint-S15-rusqlite-plan.md line 99 names REQ-P-RUNTIME-002 and ADR-002 as the correctness dependency for SqliteWriter's single-process write serialization. Add one line to Closeout Requirements referencing REQ-P-RUNTIME-002 to make the constraint visible at the sprint authority level." ;
   triage:phaseId "phase-S" ;
   triage:triageMode "initial_pass" ;
   triage:category "ATM-QA" ;
@@ -16,16 +16,15 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S15-003/pS-s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S15-004/pS-s15/1> ;
   triage:openOn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/7274598> ;
   triage:promoteTo <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/7274598> .
 
-<urn:atm:triage:occurrence/ATM-QA-S15-003/pS-s15/1>
+<urn:atm:triage:occurrence/ATM-QA-S15-004/pS-s15/1>
   a triage:Occurrence ;
   triage:file "docs/phase-S/sprint-S15-rusqlite-hardening.md" ;
-  triage:line 4 ;
-  triage:snippet "**Base**: `feature/pS-s14-impl`" ;
-  triage:expected "**Base**: integrate/phase-S @ 77badd5" ;
+  triage:line 32 ;
+  triage:snippet "## Closeout Requirements (REQ-P-RUNTIME-002 not listed)" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pS-s15-rusqlite-hardening" ;
