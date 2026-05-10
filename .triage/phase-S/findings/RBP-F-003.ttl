@@ -1,0 +1,35 @@
+@prefix triage: <https://atm-core.dev/triage/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:RBP-F-003 a triage:Finding ;
+    triage:finding_id "RBP-F-003" ;
+    triage:title "Missing Mutex lock-rationale comment in local_ipc_transport.rs" ;
+    triage:description "Mutex usage in crates/atm-daemon/src/local_ipc_transport.rs lacks rationale comments explaining the invariants protected. Required by Rust best practices for non-trivial lock usage." ;
+    triage:severity "minor" ;
+    triage:category "RBP" ;
+    triage:phase_id "phase-S" ;
+    triage:triage_mode "initial_pass" ;
+    triage:file_filter "local_ipc_transport" ;
+    triage:sweep_scope "file_only" ;
+    triage:pattern "Mutex::new|Arc<Mutex" ;
+
+    triage:worktree_result [
+        triage:branch "feature/pS-s6-runtime-remediation" ;
+        triage:head_sha "b80f16a" ;
+        triage:order_index "1"^^xsd:integer ;
+        triage:occurrence "absent" ;
+        triage:note "ActiveConnectionRegistry.dispatch_handles at lines 38-40 has rationale comment explaining JoinHandle ownership. ActiveConnectionRegistry.drain_state at lines 42-44 has rationale comment explaining the drain Condvar pairing. Finding is resolved in this worktree."
+    ] ;
+    triage:worktree_result [
+        triage:branch "integrate/phase-S" ;
+        triage:head_sha "3f67133" ;
+        triage:order_index "2"^^xsd:integer ;
+        triage:occurrence "present" ;
+        triage:note "ActiveConnectionRegistry.dispatch_handles and drain_state Mutex fields at lines 38-39 have no rationale comments in the integrate/phase-S version. The explanatory comments present in feature/pS-s6 are absent here."
+    ] ;
+
+    triage:highest_open_branch "integrate/phase-S" ;
+    triage:promote_to_branch "integrate/phase-S" ;
+    triage:dispatch_ready "true"^^xsd:boolean ;
+    triage:resolution "open" ;
+    triage:triage_date "2026-05-09"^^xsd:date .

@@ -1,0 +1,99 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ── Finding ──────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/REQ-WIN-001>
+    a triage:Finding ;
+    triage:findingId "REQ-WIN-001" ;
+    triage:title "Windows IPC transport is a stub — WIN-001 not closed" ;
+    triage:description "Every entry point in crates/atm-daemon/src/local_ipc_transport_windows.rs returns unsupported_local_ipc_error() unconditionally. Error string says 'not available on Windows in Phase S.1'. Windows graceful-shutdown never executes. Violates REQ-P-PLATFORM-002, ADR-007, sprint-S6 acceptance criteria §3. The file is absent from feature/pS-s6-runtime-remediation (fixed — replaced by full local_ipc_transport.rs implementation) but present on integrate/phase-S with 4 stub occurrences." ;
+    triage:category "REQ" ;
+    triage:phaseId "phase-S" ;
+    triage:triageMode "initial_pass" ;
+    triage:severity "blocking" ;
+    triage:repeatable true ;
+    triage:sweepScope "crate" ;
+    triage:status "open" ;
+    triage:highestOpenBranch "integrate/phase-S" ;
+    triage:dispatchReady true ;
+    triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+
+    # Occurrences on open branches
+    triage:hasOccurrence <urn:atm:triage:occurrence/REQ-WIN-001/integrate-phase-S/1> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/REQ-WIN-001/integrate-phase-S/2> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/REQ-WIN-001/integrate-phase-S/3> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/REQ-WIN-001/integrate-phase-S/4> ;
+
+    # Branch-level topology
+    triage:fixedOn <urn:atm:triage:worktree/pS-s6-runtime-remediation/b80f16a> ;
+    triage:openOn <urn:atm:triage:worktree/integrate-phase-S/3f67133> ;
+    triage:promoteTo <urn:atm:triage:worktree/integrate-phase-S/3f67133> .
+
+# ── WorktreeSnapshots ─────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pS-s6-runtime-remediation/b80f16a>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pS-s6-runtime-remediation" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s6-runtime-remediation" ;
+    triage:headSha "b80f16af9c621ffd487bd2dcd996a97e4109fc8b" ;
+    triage:orderIndex 1 ;
+    triage:branchStatus "fixed" .
+
+<urn:atm:triage:worktree/integrate-phase-S/3f67133>
+    a triage:WorktreeSnapshot ;
+    triage:branch "integrate/phase-S" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+    triage:headSha "3f67133cdcbd1fd6a9b0e77bdd8639408f38cc24" ;
+    triage:orderIndex 2 ;
+    triage:branchStatus "open" .
+
+# ── Occurrences: integrate/phase-S (open — stub file present, 4 hit lines) ───
+
+<urn:atm:triage:occurrence/REQ-WIN-001/integrate-phase-S/1>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/local_ipc_transport_windows.rs" ;
+    triage:line 26 ;
+    triage:snippet "Err(unsupported_local_ipc_error())" ;
+    triage:context "PreparedRuntimeServer::serve_with_runtime_hooks — unconditional stub return" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "integrate/phase-S" ;
+    triage:headSha "3f67133cdcbd1fd6a9b0e77bdd8639408f38cc24" ;
+    triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/3f67133> .
+
+<urn:atm:triage:occurrence/REQ-WIN-001/integrate-phase-S/2>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/local_ipc_transport_windows.rs" ;
+    triage:line 39 ;
+    triage:snippet "Err(unsupported_local_ipc_error())" ;
+    triage:context "LocalIpcServerTransportAdapter::prepare_runtime — unconditional stub return" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "integrate/phase-S" ;
+    triage:headSha "3f67133cdcbd1fd6a9b0e77bdd8639408f38cc24" ;
+    triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/3f67133> .
+
+<urn:atm:triage:occurrence/REQ-WIN-001/integrate-phase-S/3>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/local_ipc_transport_windows.rs" ;
+    triage:line 47 ;
+    triage:snippet "Err(unsupported_local_ipc_error())" ;
+    triage:context "LocalIpcServerTransportAdapter::prepare_runtime_at_socket_path — unconditional stub return" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "integrate/phase-S" ;
+    triage:headSha "3f67133cdcbd1fd6a9b0e77bdd8639408f38cc24" ;
+    triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/3f67133> .
+
+<urn:atm:triage:occurrence/REQ-WIN-001/integrate-phase-S/4>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/local_ipc_transport_windows.rs" ;
+    triage:line 55 ;
+    triage:snippet "Err(unsupported_local_ipc_error())" ;
+    triage:context "LocalIpcServerTransportAdapter::serve (boundary::ServerTransport impl) — unconditional stub return" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "integrate/phase-S" ;
+    triage:headSha "3f67133cdcbd1fd6a9b0e77bdd8639408f38cc24" ;
+    triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/3f67133> .
