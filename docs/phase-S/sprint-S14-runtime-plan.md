@@ -90,6 +90,7 @@ Out of scope:
     blocking join
   - wire that shutdown into daemon runtime teardown so the lifecycle helper is
     part of the same bounded shutdown contract as other runtime workers
+  - satisfies: `REQ-P-DAEMON-LANES-001`
 - Test / proof:
   - add Unix and Windows lifecycle-control tests that prove:
     - the stored worker is reused across repeated install calls
@@ -222,7 +223,7 @@ Out of scope:
   - keep `report.runtime_status = Some(runtime_status)` as the machine-readable
     payload, but align the human-facing doctor finding with the
     `docs/atm-daemon/architecture.md` doctor health contract distinction under
-    `§3.3 Status Ownership` and `REQ-DAEMON-HEALTH-001`
+    `§3.5 Test Strategy` (lines 618-636) and `REQ-DAEMON-HEALTH-001`
 - Test / proof:
   - add doctor projection coverage that verifies degraded SQLite / degraded
     ingest / singleton-owner details are present in the finding output
@@ -321,10 +322,10 @@ Out of scope:
 
 | Component | Authority | Bound | Timeout / saturation outcome |
 |---|---|---:|---|
-| Lifecycle wake worker join | `docs/atm-daemon/architecture.md §3.4`, `docs/plan-phase-S.md §4.1` | bounded shutdown deadline (implementation-defined in S.14) | typed `daemon_unavailable` failure if the wake worker cannot join cleanly |
-| Reconcile runtime drain | `docs/atm-daemon/architecture.md §3.4` | `2s` | typed shutdown error; caller must not treat timeout as clean drain |
-| Watch runtime drain | `docs/atm-daemon/architecture.md §3.4` | `2s` | typed shutdown error; caller must not treat timeout as clean drain |
-| Retained-log flush | `docs/atm-daemon/architecture.md §3.4`, `docs/plan-phase-S.md §4.1` | `2s` best-effort | typed observability-health failure if flush/sync cannot complete on the active sink |
+| Lifecycle wake worker join | `docs/atm-daemon/architecture.md §3.4 Timeouts` (shutdown sub-deadlines), `docs/plan-phase-S.md §4.1` | `1s` | typed `daemon_unavailable` failure if the wake worker cannot join cleanly |
+| Reconcile runtime drain | `docs/atm-daemon/architecture.md §3.4 Timeouts` (shutdown sub-deadlines) | `2s` | typed shutdown error; caller must not treat timeout as clean drain |
+| Watch runtime drain | `docs/atm-daemon/architecture.md §3.4 Timeouts` (shutdown sub-deadlines) | `2s` | typed shutdown error; caller must not treat timeout as clean drain |
+| Retained-log flush | `docs/atm-daemon/architecture.md §3.4 Timeouts` (shutdown sub-deadlines), `docs/plan-phase-S.md §4.1` | `2s` best-effort | typed observability-health failure if flush/sync cannot complete on the active sink |
 | Status-cache insert / evict | `docs/atm-daemon/architecture.md §3.2`, `REQ-DAEMON-RUNTIME-004` | `4096` live entries | new-key insert must evict-before-insert so retained cardinality never exceeds the cap |
 | Reconcile fingerprint registry | `docs/atm-daemon/architecture.md §3.2`, `REQ-DAEMON-RUNTIME-004` | `1024` keys | evict oldest tracked key, log the eviction, and continue with the newest target |
 

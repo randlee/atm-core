@@ -594,6 +594,16 @@ Required timeout defaults:
 - SQLite `busy_timeout`: `5000ms`
 - ingest batch processing slice: `2s` max before yielding
 - daemon health query used by `atm doctor`: `3s`
+- lifecycle wake-worker join during runtime teardown: `1s` max
+- reconcile runtime drain during runtime teardown: `2s` max
+- watch runtime drain during runtime teardown: `2s` max
+- retained-log flush and sync during runtime teardown: `2s` best-effort max
+
+Shutdown sub-deadline rationale:
+- these per-component bounds sit under the existing daemon shutdown ceilings so
+  no single helper lane can consume the full runtime teardown budget alone
+- timeout expiry must return typed degraded shutdown state rather than silently
+  detaching helper ownership
 
 ## 3.5 Test Strategy
 
