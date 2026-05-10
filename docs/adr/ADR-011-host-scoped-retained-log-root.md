@@ -39,12 +39,19 @@ The retained log directory is resolved independently of `ATM_HOME`:
 `ATM_LOG_DIR` is the exact retained log directory, not a parent root that
 requires another implicit `logs/` segment.
 
+`ATM_LOG_DIR` is evaluated before any OS home-directory resolution; a valid
+`ATM_LOG_DIR` value bypasses `home_dir()` entirely.
+
 `ATM_LOG_DIR` validation rules:
 
 - it must resolve to an absolute path
 - empty string is treated as unset
 - it must not overlap with `~/.atm/daemon/`
 - it must not resolve under `~/.claude/`
+
+When `ATM_LOG_DIR` is set, overlap-exclusion checks against `~/.atm/daemon/`
+and `~/.claude/` are not enforced because `HOME` is not resolved; callers are
+responsible for ensuring `ATM_LOG_DIR` does not collide with those paths.
 
 The retained log directory contract supports only local filesystems.
 Network-mounted paths are out of scope for V1; behavior on NFS/CIFS is

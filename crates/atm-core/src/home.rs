@@ -97,7 +97,6 @@ pub fn host_mail_db_path_from_home(home_dir: &Path) -> PathBuf {
 ///
 /// Returns [`AtmError`] when the OS user-home directory cannot be resolved.
 pub fn host_log_dir() -> Result<PathBuf, AtmError> {
-    let user_home = resolve_user_home()?;
     if let Some(raw_path) = env::var_os("ATM_LOG_DIR").filter(|value| !value.is_empty()) {
         let raw_path = raw_path.to_str().ok_or_else(|| {
             AtmError::config("ATM_LOG_DIR must be valid UTF-8").with_recovery(
@@ -126,34 +125,10 @@ pub fn host_log_dir() -> Result<PathBuf, AtmError> {
                 ),
             );
         }
-        let daemon_dir = host_runtime_dir_from_home(&user_home);
-        if path.starts_with(&daemon_dir) || daemon_dir.starts_with(&path) {
-            return Err(
-                AtmError::config(format!(
-                    "ATM_LOG_DIR must not overlap the host-scoped daemon runtime directory {}",
-                    daemon_dir.display()
-                ))
-                .with_recovery(
-                    "Point ATM_LOG_DIR at a separate absolute log directory outside ~/.atm/daemon/ before retrying.",
-                ),
-            );
-        }
-        let claude_dir = user_home.join(".claude");
-        if path.starts_with(&claude_dir) {
-            return Err(
-                AtmError::config(format!(
-                    "ATM_LOG_DIR must not resolve under the Claude home directory {}",
-                    claude_dir.display()
-                ))
-                .with_recovery(
-                    "Point ATM_LOG_DIR at an ATM-owned absolute log directory outside ~/.claude/ before retrying.",
-                ),
-            );
-        }
         return Ok(path);
     }
 
-    Ok(host_log_dir_from_home(&user_home))
+    Ok(host_log_dir_from_home(&resolve_user_home()?))
 }
 
 /// Resolve the host-scoped ATM retained log directory from an explicit user-home root.
@@ -258,15 +233,20 @@ mod tests {
     #[cfg(unix)]
     use super::MAX_HOST_LOG_DIR_UTF8_BYTES;
     use super::{
-        atm_home, host_db_dir_from_home, host_log_dir_from_home, host_mail_db_path_from_home,
-        host_runtime_dir_from_home, host_runtime_lock_path_from_home, inbox_path,
-        inbox_path_from_home, team_dir, team_dir_from_home, workflow_state_path_from_home,
+        atm_home, host_db_dir_from_home, host_log_dir, host_log_dir_from_home,
+        host_mail_db_path_from_home, host_runtime_dir_from_home, host_runtime_lock_path_from_home,
+        inbox_path, inbox_path_from_home, team_dir, team_dir_from_home,
+        workflow_state_path_from_home,
     };
     #[cfg(unix)]
-    use super::{host_db_dir, host_log_dir, host_mail_db_path, host_runtime_dir};
+    use super::{host_db_dir, host_mail_db_path, host_runtime_dir};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, TeamName};
 
+    /// Process-wide mutex that serializes `std::env::set_var` / `remove_var`
+    /// calls in tests. Required because these functions are unsafe in
+    /// multi-threaded processes; concurrent env mutation produces undefined
+    /// behavior.
     fn env_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         LOCK.get_or_init(|| Mutex::new(()))
@@ -522,13 +502,30 @@ mod tests {
         );
     }
 
-    #[cfg(unix)]
     #[test]
     #[serial_test::serial]
     fn host_log_dir_prefers_atm_log_dir_override() {
         let tempdir = TempDir::new().expect("tempdir");
         let _atm_log_dir =
             LocalEnvGuard::set_raw("ATM_LOG_DIR", tempdir.path().to_str().expect("utf8 path"));
+
+        let resolved = host_log_dir().expect("host log dir");
+        assert_eq!(resolved, tempdir.path());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial_test::serial]
+    fn host_log_dir_override_succeeds_without_home_env() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let _env = LocalEnvGuard::set_many([
+            (
+                "ATM_LOG_DIR",
+                Some(tempdir.path().to_str().expect("utf8 path")),
+            ),
+            ("HOME", None),
+            ("USERPROFILE", None),
+        ]);
 
         let resolved = host_log_dir().expect("host log dir");
         assert_eq!(resolved, tempdir.path());
@@ -621,33 +618,37 @@ mod tests {
     #[cfg(unix)]
     #[test]
     #[serial_test::serial]
-    fn host_log_dir_rejects_claude_subtree_override() {
+    fn host_log_dir_override_does_not_require_home_relative_claude_validation() {
         let home_dir = TempDir::new().expect("home");
-        let forbidden = home_dir.path().join(".claude").join("logs");
+        let override_dir = home_dir.path().join(".claude").join("logs");
         let _env = LocalEnvGuard::set_many([
-            ("ATM_LOG_DIR", Some(forbidden.to_str().expect("utf8 path"))),
+            (
+                "ATM_LOG_DIR",
+                Some(override_dir.to_str().expect("utf8 path")),
+            ),
             ("HOME", Some(home_dir.path().to_str().expect("utf8 path"))),
         ]);
 
-        let error = host_log_dir().expect_err("claude subtree should fail");
-        assert!(error.is_config());
-        assert!(error.message.contains(".claude"));
+        let resolved = host_log_dir().expect("claude-relative override should short-circuit");
+        assert_eq!(resolved, override_dir);
     }
 
     #[cfg(unix)]
     #[test]
     #[serial_test::serial]
-    fn host_log_dir_rejects_daemon_overlap_override() {
+    fn host_log_dir_override_does_not_require_home_relative_daemon_overlap_validation() {
         let home_dir = TempDir::new().expect("home");
-        let forbidden = home_dir.path().join(".atm").join("daemon").join("logs");
+        let override_dir = home_dir.path().join(".atm").join("daemon").join("logs");
         let _env = LocalEnvGuard::set_many([
-            ("ATM_LOG_DIR", Some(forbidden.to_str().expect("utf8 path"))),
+            (
+                "ATM_LOG_DIR",
+                Some(override_dir.to_str().expect("utf8 path")),
+            ),
             ("HOME", Some(home_dir.path().to_str().expect("utf8 path"))),
         ]);
 
-        let error = host_log_dir().expect_err("daemon overlap should fail");
-        assert!(error.is_config());
-        assert!(error.message.contains(".atm/daemon"));
+        let resolved = host_log_dir().expect("daemon-overlap override should short-circuit");
+        assert_eq!(resolved, override_dir);
     }
 
     #[cfg(unix)]

@@ -565,6 +565,31 @@ Required closeout work:
 - document that daemon-side query/follow remain deferred to the CLI-owned
   retained-log surface
 
+### S.11 host_log_dir Override-First Order Fix
+
+Goal:
+- restore the documented override-first `host_log_dir()` contract for
+  headless and service-style environments where `ATM_LOG_DIR` must work
+  without resolving the OS home directory
+
+Required outcomes:
+- `ATM_LOG_DIR` is checked before any OS home-directory resolution
+- valid absolute `ATM_LOG_DIR` overrides succeed even when `HOME` is absent
+- cross-platform tests prove the override happy-path without Unix-only env
+  assumptions
+- ADR-011 explicitly records the override-first order and the accepted
+  overlap-check scope boundary when `HOME` is not resolved
+
+Required closeout work:
+- update `crates/atm-core/src/home.rs` so `host_log_dir()` short-circuits on a
+  valid `ATM_LOG_DIR` before any `home_dir()` call
+- keep the Unix-only headless unset-`HOME` test, but add non-gated override
+  coverage that works on Windows CI
+- amend `docs/adr/ADR-011-host-scoped-retained-log-root.md` and
+  `docs/phase-S/sprint-S11.md` so the override-first contract and overlap
+  scope are explicit
+- record the detailed sprint authority in `docs/phase-S/sprint-S11.md`
+
 ## 6. Removed Windows CI Guardrail
 
 The temporary Windows clippy narrowing used during S.0-S.3 is retired.
