@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use crate::config;
 use crate::error::AtmError;
 use crate::mailbox::atomic;
 use crate::mailbox::lock;
@@ -10,6 +11,7 @@ use crate::mailbox::source::{
     SourceFile, discover_source_paths, load_source_files, rediscover_and_validate_source_paths,
 };
 use crate::schema::MessageEnvelope;
+use crate::schema::inbox_message::SharedInboxExportPolicy;
 use crate::types::{AgentName, TeamName};
 
 /// Commit one mailbox file through the mailbox-layer write boundary.
@@ -21,7 +23,8 @@ pub(crate) fn commit_mailbox_state(
     path: &Path,
     messages: &[MessageEnvelope],
 ) -> Result<(), AtmError> {
-    atomic::write_messages(path, messages)
+    let export_policy = load_export_policy(path)?;
+    atomic::write_messages(path, messages, export_policy)
 }
 
 /// Commit one already-loaded multi-source mailbox set through the mailbox layer.
@@ -30,6 +33,16 @@ pub(crate) fn commit_source_files(source_files: &[SourceFile]) -> Result<(), Atm
         commit_mailbox_state(&source.path, &source.messages)?;
     }
     Ok(())
+}
+
+fn load_export_policy(path: &Path) -> Result<SharedInboxExportPolicy, AtmError> {
+    let config_dir = path.parent().unwrap_or_else(|| Path::new("."));
+    let atm_authored_body_export_max_bytes = config::load_config(config_dir)?
+        .map(|config| config.claude_jsonl_body_export_max_bytes)
+        .unwrap_or_else(|| SharedInboxExportPolicy::default().atm_authored_body_export_max_bytes);
+    Ok(SharedInboxExportPolicy {
+        atm_authored_body_export_max_bytes,
+    })
 }
 
 /// Load the current mailbox source set without taking any mailbox locks.
@@ -121,6 +134,29 @@ mod tests {
         assert_eq!(encoded.len(), 2);
         assert!(raw.ends_with('\n'));
         assert_eq!(read_messages(&path).expect("read mailbox"), messages);
+    }
+
+    #[test]
+    fn commit_mailbox_state_exports_retrieval_stub_when_config_cap_is_zero() {
+        let tempdir = tempdir().expect("tempdir");
+        std::fs::write(
+            tempdir.path().join(".atm.toml"),
+            "[atm]\nclaude_jsonl_body_export_max_bytes = 0\n",
+        )
+        .expect("config");
+        let path = tempdir.path().join(format!("{TEST_SENDER}.json"));
+        let message = sample_message(ROLE_TEAM_LEAD, "full body retained elsewhere");
+        let message_id = message.message_id.expect("message id");
+
+        commit_mailbox_state(&path, std::slice::from_ref(&message)).expect("commit mailbox");
+
+        let raw = std::fs::read_to_string(&path).expect("mailbox contents");
+        let encoded: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
+        assert_eq!(
+            encoded[0]["text"],
+            serde_json::Value::String(format!("atm read --message-id {message_id}"))
+        );
+        assert_eq!(encoded[0]["summary"], serde_json::Value::Null);
     }
 
     #[test]

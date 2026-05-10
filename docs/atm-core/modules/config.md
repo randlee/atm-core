@@ -10,6 +10,11 @@ Also owns persisted config/team loading policy:
 - refusal to guess identity or routing data during recovery
 - parsing and validation of `[atm].claude_jsonl_body_export_max_bytes` for the
   ATM-authored Claude JSONL compatibility-envelope rule
+- defaulting that export cap to `128 KiB`, while allowing `0` to force
+  retrieval-stub-only ATM-authored JSONL projection
+- normalization of `[[atm.post_send_hooks]].command[0]` so leading `~`, `~/`,
+  and `~\\` expand to the current user home while relative hook paths still
+  resolve from the declaring `.atm.toml`
 
 References:
 

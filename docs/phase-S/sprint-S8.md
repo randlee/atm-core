@@ -4,7 +4,7 @@
 plan_type: sprint_plan
 phase: S
 sprint: "S.8"
-status: planned
+status: in-review
 estimated_scope: M
 ```
 
@@ -75,11 +75,12 @@ flooding Claude-facing inbox surfaces or causing watcher churn.
 
 - `crates/atm-core/src/config/mod.rs`
 - `crates/atm-core/src/config/types.rs`
+- `crates/atm-core/src/config/discovery.rs`
+- `crates/atm-core/src/home.rs`
 - `crates/atm-core/src/schema/inbox_message.rs`
-- `crates/atm-core/src/boundary_support.rs`
+- `crates/atm-core/src/mailbox/atomic.rs`
+- `crates/atm-core/src/mailbox/store.rs`
 - `crates/atm-daemon/src/boundary_adapters.rs`
-- `crates/atm-daemon/src/watch_runtime.rs`
-- `crates/atm-daemon/src/reconcile_runtime.rs`
 
 ## Required Document Updates
 
@@ -87,6 +88,14 @@ flooding Claude-facing inbox surfaces or causing watcher churn.
 - `docs/atm-core/modules/config.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
+
+## Implementation Notes
+
+- The compatibility-envelope rule is enforced at the `atm-core` config and
+  mailbox-export seam, not by rewriting watcher or reconcile runtime logic.
+- The daemon-side no-churn proof is covered by boundary-adapter tests that
+  re-export and re-import the same ATM-authored logical message and verify
+  identity stability across retrieval-stub projection.
 
 ## Acceptance Criteria
 

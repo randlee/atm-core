@@ -206,6 +206,9 @@ Initial crate requirement IDs:
   compatibility projection updates must remain idempotent for the same
   logical message and must not create self-induced churn loops. Satisfies:
   `REQ-CORE-COMPAT-001`, `REQ-P-RELIABILITY-001`.
+  The daemon boundary contract proves this through import/re-export coverage
+  that preserves the same identity fingerprint when an ATM-authored message is
+  re-observed through a retrieval-stub projection.
 
 ## 4. Required References
 

@@ -224,9 +224,16 @@ impl InboxExport for DaemonInboxExport {
 
 #[cfg(test)]
 mod tests {
-    use super::DaemonNotificationSink;
-    use atm_core::boundary::NotificationSink;
+    use super::{DaemonInboxExport, DaemonInboxIngress, DaemonNotificationSink};
+    use atm_core::boundary::{
+        InboxExport, InboxExportReexportMessageRequest, InboxIngress,
+        InboxIngressIdentityFingerprintRequest, InboxIngressImportRequest, NotificationSink,
+    };
     use atm_core::protocol::NotificationEvent;
+    use atm_core::roles::ROLE_TEAM_LEAD;
+    use atm_core::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
+    use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
+    use atm_core::types::{AgentName, IsoTimestamp};
     use std::sync::Arc;
     use tempfile::TempDir;
 
@@ -251,5 +258,109 @@ mod tests {
         let output = std::fs::read_to_string(output_path).expect("output");
         assert!(output.contains("\"kind\":\"delivery\""));
         assert!(output.contains("\"detail\":\"boundary-only\""));
+    }
+
+    #[test]
+    fn inbox_projection_stub_reexport_preserves_logical_identity() {
+        let tempdir = TempDir::new().expect("tempdir");
+        std::fs::write(
+            tempdir.path().join(".atm.toml"),
+            "[atm]\nclaude_jsonl_body_export_max_bytes = 0\n",
+        )
+        .expect("config");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        let inbox_dir = team_dir.join("inboxes");
+        std::fs::create_dir_all(&inbox_dir).expect("inboxes");
+        std::fs::write(
+            team_dir.join("config.json"),
+            serde_json::json!({
+                "members": [{"name": TEST_SENDER}, {"name": ROLE_TEAM_LEAD}]
+            })
+            .to_string(),
+        )
+        .expect("team config");
+        let inbox_path = inbox_dir.join(format!("{TEST_SENDER}.json"));
+
+        let export = DaemonInboxExport::new();
+        let ingress = DaemonInboxIngress::new();
+        let message = sample_message(ROLE_TEAM_LEAD, "full body that should project to a stub");
+        let original_fingerprint = ingress
+            .compute_identity_fingerprint(InboxIngressIdentityFingerprintRequest {
+                message: message.clone(),
+            })
+            .expect("original fingerprint")
+            .fingerprint;
+
+        export
+            .reexport_message(InboxExportReexportMessageRequest {
+                path: inbox_path.clone(),
+                messages: vec![message.clone()],
+            })
+            .expect("first reexport");
+        export
+            .reexport_message(InboxExportReexportMessageRequest {
+                path: inbox_path.clone(),
+                messages: vec![message.clone()],
+            })
+            .expect("second reexport");
+
+        let import = ingress
+            .import_inbox_source(InboxIngressImportRequest {
+                home_dir: tempdir.path().to_path_buf(),
+                team: TEST_TEAM.parse().expect("team"),
+                agent: TEST_SENDER.parse().expect("agent"),
+            })
+            .expect("import source");
+        assert_eq!(import.source_files.len(), 1);
+        assert_eq!(import.source_files[0].messages.len(), 1);
+
+        let imported = import.source_files[0].messages[0].clone();
+        assert_eq!(
+            imported.text,
+            format!(
+                "atm read --message-id {}",
+                message.message_id.expect("message id")
+            )
+        );
+
+        let imported_fingerprint = ingress
+            .compute_identity_fingerprint(InboxIngressIdentityFingerprintRequest {
+                message: imported,
+            })
+            .expect("imported fingerprint")
+            .fingerprint;
+        assert_eq!(imported_fingerprint, original_fingerprint);
+    }
+
+    fn sample_message(from: &str, text: &str) -> MessageEnvelope {
+        let atm_message_id = AtmMessageId::new();
+        let message_id = LegacyMessageId::from_atm_message_id(atm_message_id);
+        let mut atm = serde_json::Map::new();
+        atm.insert(
+            "messageId".to_string(),
+            serde_json::Value::String(atm_message_id.to_string()),
+        );
+        let mut metadata = serde_json::Map::new();
+        metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
+        let mut extra = serde_json::Map::new();
+        extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
+
+        MessageEnvelope {
+            from: from.parse::<AgentName>().expect("agent"),
+            text: text.to_string(),
+            timestamp: IsoTimestamp::now(),
+            read: false,
+            source_team: Some(TEST_TEAM.parse().expect("team")),
+            summary: Some("summary".to_string()),
+            message_id: Some(message_id),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            stale_at: None,
+            task_id: None,
+            extra,
+        }
     }
 }

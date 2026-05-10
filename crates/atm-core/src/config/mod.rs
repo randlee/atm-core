@@ -98,6 +98,10 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
         team_members: normalize_team_members(parsed.atm.team_members, &path)?,
         aliases: normalize_aliases(parsed.atm.aliases),
         post_send_hooks: normalize_post_send_hooks(parsed.atm.post_send_hooks, &config_root)?,
+        claude_jsonl_body_export_max_bytes: parsed
+            .atm
+            .claude_jsonl_body_export_max_bytes
+            .unwrap_or(types::DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES),
         daemon: parsed
             .daemon
             .remote_retry_budget
@@ -214,6 +218,8 @@ struct RawAtmSection {
     aliases: std::collections::BTreeMap<String, String>,
     #[serde(default)]
     post_send_hooks: Vec<RawPostSendHookRule>,
+    #[serde(default)]
+    claude_jsonl_body_export_max_bytes: Option<u64>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -579,6 +585,7 @@ blank = ""
             config.post_send_hooks[1].command,
             vec!["bash".to_string(), "-lc".to_string(), "echo hi".to_string()]
         );
+        assert_eq!(config.claude_jsonl_body_export_max_bytes, 128 * 1024);
         assert_eq!(
             config.aliases.get("tl").map(String::as_str),
             Some(ROLE_TEAM_LEAD)
@@ -604,6 +611,20 @@ blank = ""
 
         assert_eq!(error.code, AtmErrorCode::ConfigParseFailed);
         assert!(error.message.contains("daemon.remote_retry_budget"));
+    }
+
+    #[test]
+    fn load_config_reads_jsonl_body_export_cap_and_allows_zero() {
+        let root = unique_temp_dir("atm-config-jsonl-cap");
+        fs::write(
+            root.path().join(".atm.toml"),
+            "[atm]\nclaude_jsonl_body_export_max_bytes = 0\n",
+        )
+        .expect("config");
+
+        let config = load_config(root.path()).expect("config").expect("present");
+
+        assert_eq!(config.claude_jsonl_body_export_max_bytes, 0);
     }
 
     #[test]

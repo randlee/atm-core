@@ -19,6 +19,16 @@ pub fn atm_home() -> Result<PathBuf, AtmError> {
     resolve_user_home()
 }
 
+/// Resolve the current OS user home directory without consulting `ATM_HOME`.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the OS user-home environment variables cannot be
+/// resolved.
+pub fn user_home() -> Result<PathBuf, AtmError> {
+    resolve_user_home()
+}
+
 /// Resolve the host-scoped ATM runtime directory independent of `ATM_HOME`.
 ///
 /// # Errors
