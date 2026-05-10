@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S14-FTQ-002>
+  a triage:Finding ;
+  triage:findingId "S14-FTQ-002" ;
+  triage:title "yield_now busy-spin log polling in compose_runtime_start test (tests.rs:248-256)" ;
+  triage:description "tests.rs:252 uses yield_now busy-spin to poll for a log file in the compose_runtime_start_writes_retained_log_and_reports_healthy_observability test. Replace with explicit handshake signal. Sprint-scoped ID for QA report FTQ-003 (avoids collision with prior FTQ-003.ttl)." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:phaseId "phase-S" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S14-FTQ-002/pS-s14-impl/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S14-FTQ-002/pS-s15-rusqlite-hardening/1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s14-impl/571fa1c> .
+
+<urn:atm:triage:occurrence/S14-FTQ-002/pS-s14-impl/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 252 ;
+  triage:snippet "Ok(_) | Err(_) if Instant::now() < deadline => std::thread::yield_now()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> .
+
+<urn:atm:triage:occurrence/S14-FTQ-002/pS-s15-rusqlite-hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 252 ;
+  triage:snippet "Ok(_) | Err(_) if Instant::now() < deadline => std::thread::yield_now()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> .
+
+<urn:atm:triage:worktree/pS-s14-impl/571fa1c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:orderIndex 2 .

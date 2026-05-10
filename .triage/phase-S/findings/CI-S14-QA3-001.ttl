@@ -1,0 +1,83 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/CI-S14-QA3-001>
+  a triage:Finding ;
+  triage:findingId "CI-S14-QA3-001" ;
+  triage:title "local_ipc_transport.rs:321-329 moved value E0382 on Windows — dead code after TASK-1244 fix" ;
+  triage:description "TASK-1244 fixed record_accept_error to return Result, but introduced a dead code block at lines 321-329: error is moved into .with_source(error) at line 319, then used again at line 321 in a second block that is unreachable after the return at line 320. Causes E0382 (use of moved value) on cargo xwin check --tests. Fix: delete lines 321-329 (the unreachable dead code block)." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "CI" ;
+  triage:phaseId "phase-S" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-10T23:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-S14-QA3-001/pS-s14-impl/dcb5df9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-S14-QA3-001/pS-s15-rusqlite-hardening/0282982/1> ;
+
+  triage:fixedOn <urn:atm:triage:worktree/pS-s14-impl/a17efcc> ;
+  triage:fixedOn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/1c8e288> .
+
+# --- Occurrences (at the SHAs when the finding was open) ---
+
+<urn:atm:triage:occurrence/CI-S14-QA3-001/pS-s14-impl/dcb5df9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 319 ;
+  triage:snippet "let _ = signals.record_accept_error(...\\.with_source(error)); return; // dead block follows" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "dcb5df9" ;
+  triage:fixedAtSha "a17efcc" ;
+  triage:fixedByCommit "Fix S.15 QA-1 daemon follow-ups" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/dcb5df9> .
+
+<urn:atm:triage:occurrence/CI-S14-QA3-001/pS-s15-rusqlite-hardening/0282982/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 319 ;
+  triage:snippet "let _ = signals.record_accept_error(...\\.with_source(error)); return; // dead block follows" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "0282982" ;
+  triage:fixedAtSha "1c8e288" ;
+  triage:fixedByCommit "Merge remote-tracking branch 'origin/feature/pS-s14-impl' into feature/pS-s15-rusqlite-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/0282982> .
+
+# --- WorktreeSnapshots (at finding SHAs) ---
+
+<urn:atm:triage:worktree/pS-s14-impl/dcb5df9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "dcb5df9" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/0282982>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "0282982" ;
+  triage:orderIndex 2 .
+
+# --- WorktreeSnapshots (at current fixed HEADs) ---
+
+<urn:atm:triage:worktree/pS-s14-impl/a17efcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "a17efcc" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/1c8e288>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "1c8e288" ;
+  triage:orderIndex 2 .

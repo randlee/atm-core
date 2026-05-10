@@ -1,7 +1,7 @@
 # Sprint S.15 Rusqlite Hardening
 
 **Branch**: `feature/pS-s15-rusqlite-hardening`  
-**Base**: `feature/pS-s14-impl`  
+**Base**: `integrate/phase-S @ 77badd5`  
 **PR target**: `integrate/phase-S`  
 **Status**: Implementation
 
@@ -37,6 +37,7 @@ This sprint hardens:
 - remove the mailbox append pre-write `SELECT` probe and derive insertion from row-count semantics
 - ensure one invalid queued write row does not fail unrelated rows in the same batch
 - reject known ATM-owned logical/schema invariant violations before SQL rather than on the hot path
+- preserve `REQ-P-RUNTIME-002` by keeping the daemon singleton as the only writer-process invariant
 - drain pending queued writes on writer shutdown before returning
 
 ## Validation

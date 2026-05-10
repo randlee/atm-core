@@ -1,0 +1,86 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-F-S15-001>
+  a triage:Finding ;
+  triage:findingId "RBP-F-S15-001" ;
+  triage:title "ServeLoopSignals mutex methods use .expect() instead of with_recovery pattern" ;
+  triage:description "local_ipc_transport.rs:50,59 — ServeLoopSignals::record_accept_error and take_accept_error use .expect() on mutex lock. Every other daemon Mutex::lock() converts poison to AtmError+with_recovery(). Fix: return Result<> using .map_err(|_| AtmError::daemon_unavailable(...).with_recovery(...))." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:phaseId "phase-S" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F-S15-001/pS-s14-impl/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F-S15-001/pS-s14-impl/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F-S15-001/pS-s15-rusqlite-hardening/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F-S15-001/pS-s15-rusqlite-hardening/2> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s14-impl/571fa1c> .
+
+<urn:atm:triage:occurrence/RBP-F-S15-001/pS-s14-impl/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 50 ;
+  triage:snippet ".expect(\"serve-loop accept-error lock\");" ;
+  triage:context "record_accept_error: self.accept_error.lock().expect(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> .
+
+<urn:atm:triage:occurrence/RBP-F-S15-001/pS-s14-impl/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 59 ;
+  triage:snippet ".expect(\"serve-loop accept-error lock\")" ;
+  triage:context "take_accept_error: self.accept_error.lock().expect(...).take()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> .
+
+<urn:atm:triage:occurrence/RBP-F-S15-001/pS-s15-rusqlite-hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 50 ;
+  triage:snippet ".expect(\"serve-loop accept-error lock\");" ;
+  triage:context "record_accept_error: self.accept_error.lock().expect(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> .
+
+<urn:atm:triage:occurrence/RBP-F-S15-001/pS-s15-rusqlite-hardening/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 59 ;
+  triage:snippet ".expect(\"serve-loop accept-error lock\")" ;
+  triage:context "take_accept_error: self.accept_error.lock().expect(...).take()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> .
+
+<urn:atm:triage:worktree/pS-s14-impl/571fa1c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:orderIndex 2 .

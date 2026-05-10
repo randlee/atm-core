@@ -1,0 +1,57 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S14-005>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S14-005" ;
+  triage:title "push_dispatch_handle capacity-exceeded path not tested" ;
+  triage:description "active_connection_registry.rs contains push_dispatch_handle with a capacity-exceeded guard (handles.len() >= max_handles) that returns an AtmError::daemon_lifecycle_wedge. No test exercises the cap-exceeded branch." ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-S" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S14-005/pS-s14-impl/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S14-005/pS-s15-rusqlite-hardening/1> ;
+  triage:fixedOn <urn:atm:triage:worktree/pS-s14-impl/a17efcc> ;
+  triage:fixedOn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/60c0a42> .
+
+<urn:atm:triage:occurrence/ATM-QA-S14-005/pS-s14-impl/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1314 ;
+  triage:snippet "fn tracked_dispatch_handle_capacity_overflow_returns_lifecycle_wedge()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "a17efcc" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/a17efcc> .
+
+<urn:atm:triage:occurrence/ATM-QA-S14-005/pS-s15-rusqlite-hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1315 ;
+  triage:snippet "fn tracked_dispatch_handle_capacity_overflow_returns_lifecycle_wedge()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "60c0a42" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/60c0a42> .
+
+<urn:atm:triage:worktree/pS-s14-impl/a17efcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "a17efcc" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/60c0a42>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "60c0a42" ;
+  triage:orderIndex 2 .
