@@ -919,15 +919,19 @@ fn handle_connection(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use crate::lifecycle_control::LifecycleControlSourceAdapter;
+    #[cfg(unix)]
     use atm_core::boundary::RequestDispatcher;
     #[cfg(unix)]
     use atm_core::doctor::DoctorQuery;
+    #[cfg(unix)]
     use atm_core::doctor::{
         DoctorEnvironmentVisibility, DoctorReport, DoctorStatus, DoctorSummary,
     };
     #[cfg(unix)]
     use atm_core::error_codes::AtmErrorCode;
+    #[cfg(unix)]
     use atm_core::observability::{AtmObservabilityHealth, AtmObservabilityHealthState};
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
     #[cfg(unix)]
