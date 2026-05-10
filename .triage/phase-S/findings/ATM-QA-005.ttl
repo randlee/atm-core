@@ -4,76 +4,75 @@
 <urn:atm:triage:finding/ATM-QA-005>
   a triage:Finding ;
   triage:findingId "ATM-QA-005" ;
-  triage:title "ActiveConnectionRegistry and associated tests need per-function #[cfg(unix)] guard" ;
-  triage:description "local_ipc_transport.rs:44 ActiveConnectionRegistry is pub(crate) Unix-only type. tests.rs:167-191 test coverage references it without per-test cfg guard. When ATM-QA-002 test module split is applied, these specific tests need explicit #[cfg(unix)]." ;
+  triage:title "SocketEndpointGuard drop ordering not enforced by Rust field rules" ;
+  triage:description "crates/atm-daemon/src/local_ipc_transport.rs:195-215 — SocketEndpointGuard drop ordering is assumed but not enforced by Rust field declaration order. Panic safety not guaranteed. Fix: document the required drop order with a comment, or restructure fields so Rust's guaranteed FIFO field-drop order enforces the invariant." ;
   triage:category "ATM-QA" ;
   triage:phaseId "phase-S" ;
   triage:triageMode "initial_pass" ;
-  triage:severity "blocking" ;
-  triage:repeatable true ;
+  triage:severity "important" ;
+  triage:repeatable false ;
   triage:sweepScope "crate" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-05-08T23:15:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005/pSs1/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005/pSs2/1> ;
-  triage:openOn <urn:atm:triage:worktree/pSs1/ab12ea1> ;
-  triage:openOn <urn:atm:triage:worktree/pSs2/ab12ea1> ;
-  triage:promoteTo <urn:atm:triage:worktree/pSs2/ab12ea1> .
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005/pSs13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005/pSs14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005/pSs15/1> ;
+  triage:openOn <urn:atm:triage:worktree/pSs13/4c03c2c> ;
+  triage:openOn <urn:atm:triage:worktree/pSs14/cf57c48> ;
+  triage:openOn <urn:atm:triage:worktree/pSs15/93c63a9> ;
+  triage:promoteTo <urn:atm:triage:worktree/pSs15/93c63a9> .
 
-<urn:atm:triage:occurrence/ATM-QA-005/pSs1/1>
+<urn:atm:triage:occurrence/ATM-QA-005/pSs13/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 167 ;
-  triage:snippet "#[test] fn blocked_connection_is_interrupted_on_force_cancel() { let registry = Arc::new(ActiveConnectionRegistry::default()); ..." ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 101 ;
+  triage:snippet "pub(crate) endpoint_guard: SocketEndpointGuard," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pS-s1-boundary-extraction" ;
-  triage:headSha "ab12ea1" ;
-  triage:occursIn <urn:atm:triage:worktree/pSs1/ab12ea1> .
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pSs13/4c03c2c> .
 
-<urn:atm:triage:occurrence/ATM-QA-005/pSs2/1>
+<urn:atm:triage:occurrence/ATM-QA-005/pSs14/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 167 ;
-  triage:snippet "#[test] fn blocked_connection_is_interrupted_on_force_cancel() { let registry = Arc::new(ActiveConnectionRegistry::default()); ..." ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 101 ;
+  triage:snippet "pub(crate) endpoint_guard: SocketEndpointGuard," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pS-s2-windows-ipc" ;
-  triage:headSha "ab12ea1" ;
-  triage:occursIn <urn:atm:triage:worktree/pSs2/ab12ea1> .
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pSs14/cf57c48> .
 
-<urn:atm:triage:worktree/pSs1/ab12ea1>
+<urn:atm:triage:occurrence/ATM-QA-005/pSs15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 101 ;
+  triage:snippet "pub(crate) endpoint_guard: SocketEndpointGuard," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pSs15/93c63a9> .
+
+<urn:atm:triage:worktree/pSs13/4c03c2c>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s1-boundary-extraction" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
-  triage:headSha "ab12ea1" ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
   triage:orderIndex 1 .
 
-<urn:atm:triage:worktree/pSs2/ab12ea1>
+<urn:atm:triage:worktree/pSs14/cf57c48>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s2-windows-ipc" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
-  triage:headSha "ab12ea1" ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
   triage:orderIndex 2 .
 
-<urn:atm:triage:worktree/pSs3/689a48f>
+<urn:atm:triage:worktree/pSs15/93c63a9>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s3-runtime-control" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
-  triage:headSha "689a48f" ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
   triage:orderIndex 3 .
-
-<urn:atm:triage:worktree/pSs4/689a48f>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s4-hardening" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
-  triage:headSha "689a48f" ;
-  triage:orderIndex 4 .
-
-<urn:atm:triage:worktree/pSinteg/689a48f>
-  a triage:WorktreeSnapshot ;
-  triage:branch "integrate/phase-S" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
-  triage:headSha "689a48f" ;
-  triage:orderIndex 5 .
