@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S14-008>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S14-008" ;
+  triage:title "Minor req coverage gap S.14 QA-2 finding #3 (detail pending)" ;
+  triage:description "req-qa minor finding from S.14 QA-2. Specific file/line detail not provided in quality-mgr summary report. Arch-ctm must request specifics from quality-mgr req-qa sub-report when fixing." ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:rule "REQ" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T23:45:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s14-impl" ;
+  triage:promoteToBranch "feature/pS-s14-impl" ;
+  triage:mergeForwardNeeded false ;
+  triage:propagated false ;
+  triage:regressed false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S14-008/s14/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s14-impl/571fa1c> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s14-impl/571fa1c> .
+
+<urn:atm:triage:occurrence/ATM-QA-S14-008/s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/" ;
+  triage:line 1 ;
+  triage:snippet "req-qa minor finding — specific file:line not in quality-mgr summary; arch-ctm must request details from req-qa sub-report" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "571fa1c" ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s14-impl/571fa1c> .
+
+<urn:atm:triage:worktree/feature-pS-s14-impl/571fa1c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:orderIndex 1 ;
+  triage:branchState "open" .

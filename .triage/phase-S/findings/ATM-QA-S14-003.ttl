@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S14-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S14-003" ;
+  triage:title "ATM-QA-006-exemption.ttl records wrong branch/sha (S.15 instead of S.14)" ;
+  triage:description "The file .triage/phase-S/findings/ATM-QA-006-exemption.ttl on feature/pS-s14-impl contains branch 'feature/pS-s15-rusqlite-hardening' and headSha '93c63a9'. It should record the S.14 branch (feature/pS-s14-impl) and the correct S.14 headSha (571fa1c). arch-ctm wrote S.15 metadata by mistake during S.14 work." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S14-003/pS-s14/1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s14-impl/571fa1c> .
+
+<urn:atm:triage:occurrence/ATM-QA-S14-003/pS-s14/1>
+  a triage:Occurrence ;
+  triage:file ".triage/phase-S/findings/ATM-QA-006-exemption.ttl" ;
+  triage:line 23 ;
+  triage:snippet "triage:branch \"feature/pS-s15-rusqlite-hardening\" ; triage:headSha \"93c63a9\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> .
+
+<urn:atm:triage:worktree/pS-s14-impl/571fa1c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:orderIndex 2 .
