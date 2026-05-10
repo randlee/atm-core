@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S8-RSH-003>
+  a triage:Finding ;
+  triage:findingId "S8-RSH-003" ;
+  triage:title "Shutdown-concurrent waiter loop checks timed_out before shutdown flag" ;
+  triage:description "crates/atm-daemon/src/reconcile_runtime.rs:276 — The waiter loop at line 275 checks state.completed (line 276) before state.shutdown (line 282); the timeout guard (wait.1.timed_out()) is evaluated after wait_timeout returns (line 296). A concurrent shutdown that races with the condvar wake-up is not detected until the next loop iteration, creating a window where the caller may block for up to DEFAULT_RECONCILE_COMPLETION_TIMEOUT before the shutdown flag is seen. Pre-existing code: this file has zero changes in the S.8 sprint diff (feature/pS-s8-jsonl-compat vs integrate/phase-S). Team-lead disposition: Phase S backlog — address in a hardening sprint after phase-S integration." ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:deferralReason "Pre-existing issue — reconcile_runtime.rs not in S.8 sprint diff; team-lead ruled Phase S backlog" ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-RSH-003/s8/1> ;
+
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+# --- Occurrence on feature/pS-s8-jsonl-compat (48109b8) ---
+
+<urn:atm:triage:occurrence/S8-RSH-003/s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:line 276 ;
+  triage:snippet "if let Some(outcome) = state.completed.remove(&waiter_id) {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "48109b8" ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+# --- WorktreeSnapshot nodes ---
+
+<urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s8-jsonl-compat" ;
+  triage:headSha "48109b8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-S/3450be4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "3450be4" ;
+  triage:orderIndex 2 .

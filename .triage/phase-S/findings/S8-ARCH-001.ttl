@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S8-ARCH-001>
+  a triage:Finding ;
+  triage:findingId "S8-ARCH-001" ;
+  triage:title "command_looks_like_path is pub fn, should be pub(super) or pub(crate)" ;
+  triage:description "crates/atm-core/src/config/discovery.rs:98 — command_looks_like_path is declared pub (fully public) but is an internal helper that never needs to be part of the crate's public API. Fix: change visibility to pub(super) (module-local) or pub(crate) (crate-local) to enforce the correct encapsulation boundary." ;
+  triage:category "ARCH" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "sprint" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-ARCH-001/s8/1> ;
+
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+# --- Occurrences on feature/pS-s8-jsonl-compat (48109b8) ---
+
+<urn:atm:triage:occurrence/S8-ARCH-001/s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/discovery.rs" ;
+  triage:line 98 ;
+  triage:snippet "pub fn command_looks_like_path(program: &str) -> bool {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "48109b8" ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+# --- WorktreeSnapshot nodes ---
+
+<urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s8-jsonl-compat" ;
+  triage:headSha "48109b8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-S/3450be4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "3450be4" ;
+  triage:orderIndex 2 .

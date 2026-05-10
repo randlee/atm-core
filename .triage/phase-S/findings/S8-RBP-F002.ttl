@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S8-RBP-F002>
+  a triage:Finding ;
+  triage:findingId "S8-RBP-F002" ;
+  triage:title "AtmError::mailbox_write missing .with_recovery() on missing-id retrieval stub path" ;
+  triage:description "inbox_message.rs line 457 — retrieval_stub_text() constructs AtmError::mailbox_write() on the missing message_id early-return path (lines 456-461) without chaining .with_recovery(). This is a new S.8 function not yet present on integrate/phase-S. Required by project RBP policy: every AtmError constructor call must chain .with_recovery()." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:fileFilter "inbox_message.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence
+    <urn:atm:triage:occurrence/S8-RBP-F002/pS-s8-jsonl-compat/1> ;
+  triage:openOn
+    <urn:atm:triage:worktree/pS-s8-jsonl-compat/48109b8> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s8-jsonl-compat/48109b8> .
+
+# --- Occurrence 1: inbox_message.rs:457 — missing-id retrieval stub ---
+<urn:atm:triage:occurrence/S8-RBP-F002/pS-s8-jsonl-compat/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/schema/inbox_message.rs" ;
+  triage:line 457 ;
+  triage:snippet "return Err(AtmError::mailbox_write(format!(\"failed to project shared inbox retrieval stub for {} at {:?}: ATM-authored message is missing a compatible message id\", message.from, message.timestamp)))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:headSha "48109b8" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s8-jsonl-compat/48109b8> .
+
+# --- WorktreeSnapshot ---
+<urn:atm:triage:worktree/pS-s8-jsonl-compat/48109b8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s8-jsonl-compat" ;
+  triage:headSha "48109b8" ;
+  triage:orderIndex 1 .
