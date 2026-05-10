@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S9-ATM-QA-010>
+  a triage:Finding ;
+  triage:findingId "S9-ATM-QA-010" ;
+  triage:title "new_adapter_port() duplicates ATM_LOG_DIR env-var check inline — partial bypass of host_log_dir() validation path" ;
+  triage:description "crates/atm/src/main.rs:680 — new_adapter_port() re-checks std::env::var_os(\"ATM_LOG_DIR\") inline to decide whether to call host_log_dir() or host_log_dir_from_home(home_dir) directly. When ATM_LOG_DIR is unset this bypasses resolve_user_home() and uses a caller-supplied home_dir instead. In production this is called correctly, but the inline branch duplicates the env-check already inside host_log_dir() and diverges from the canonical path. Test helpers that call new_adapter_port() with a temp home_dir while ATM_LOG_DIR is unset use the raw fallback path, not the fully-validated host_log_dir() path. Minor architectural inconsistency; no current security impact. Fix: consider delegating entirely to host_log_dir() or host_log_dir_from_home() without the inline env-var branch, or document the intentional deviation." ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T03:30:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s9-logging-defaults" ;
+  triage:promoteToBranch "feature/pS-s9-logging-defaults" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S9-ATM-QA-010/s9/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/c00b765> .
+
+<urn:atm:triage:occurrence/S9-ATM-QA-010/s9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/main.rs" ;
+  triage:line 680 ;
+  triage:snippet "inline if std::env::var_os(\"ATM_LOG_DIR\").filter(...).is_some() branch duplicates host_log_dir() env check — callers bypass resolve_user_home() on the else path" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "c00b765" ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/c00b765> .
+
+<urn:atm:triage:worktree/feature-pS-s9-logging-defaults/c00b765>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s9-logging-defaults" ;
+  triage:headSha "c00b765" ;
+  triage:orderIndex 1 .

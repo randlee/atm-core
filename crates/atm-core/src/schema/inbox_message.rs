@@ -955,6 +955,97 @@ mod tests {
     }
 
     #[test]
+    fn shared_inbox_write_exports_full_body_at_exact_cap() {
+        let atm_message_id = AtmMessageId::new();
+        let legacy_message_id = LegacyMessageId::from_atm_message_id(atm_message_id);
+        let text = "x".repeat(32);
+        let mut metadata = Map::new();
+        let mut atm = Map::new();
+        atm.insert("messageId".to_string(), json!(atm_message_id.to_string()));
+        metadata.insert("atm".to_string(), Value::Object(atm));
+        let mut extra = Map::new();
+        extra.insert("metadata".to_string(), Value::Object(metadata));
+        let envelope = MessageEnvelope {
+            from: TEST_SENDER.parse().expect("agent"),
+            text: text.clone(),
+            timestamp: IsoTimestamp::from_datetime(
+                Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
+                    .single()
+                    .expect("timestamp"),
+            ),
+            read: false,
+            source_team: Some(TEST_TEAM.parse().expect("team")),
+            summary: Some("exact-cap".into()),
+            message_id: Some(legacy_message_id),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            stale_at: None,
+            task_id: None,
+            extra,
+        };
+
+        let encoded = to_shared_inbox_value_with_policy(
+            &envelope,
+            SharedInboxExportPolicy {
+                atm_authored_body_export_max_bytes: ByteCount::new(text.len() as u64),
+            },
+        )
+        .expect("encode");
+
+        assert_eq!(encoded["text"], json!(text));
+    }
+
+    #[test]
+    fn shared_inbox_write_exports_stub_above_cap() {
+        let atm_message_id = AtmMessageId::new();
+        let legacy_message_id = LegacyMessageId::from_atm_message_id(atm_message_id);
+        let text = "x".repeat(32);
+        let mut metadata = Map::new();
+        let mut atm = Map::new();
+        atm.insert("messageId".to_string(), json!(atm_message_id.to_string()));
+        metadata.insert("atm".to_string(), Value::Object(atm));
+        let mut extra = Map::new();
+        extra.insert("metadata".to_string(), Value::Object(metadata));
+        let envelope = MessageEnvelope {
+            from: TEST_SENDER.parse().expect("agent"),
+            text,
+            timestamp: IsoTimestamp::from_datetime(
+                Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
+                    .single()
+                    .expect("timestamp"),
+            ),
+            read: false,
+            source_team: Some(TEST_TEAM.parse().expect("team")),
+            summary: Some("above-cap".into()),
+            message_id: Some(legacy_message_id),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            stale_at: None,
+            task_id: None,
+            extra,
+        };
+
+        let encoded = to_shared_inbox_value_with_policy(
+            &envelope,
+            SharedInboxExportPolicy {
+                atm_authored_body_export_max_bytes: ByteCount::new(31),
+            },
+        )
+        .expect("encode");
+
+        assert_eq!(
+            encoded["text"],
+            json!(format!("atm read --message-id {atm_message_id}"))
+        );
+    }
+
+    #[test]
     fn shared_inbox_write_keeps_full_body_for_claude_native_messages() {
         let envelope = MessageEnvelope {
             from: TEST_SENDER.parse().expect("agent"),

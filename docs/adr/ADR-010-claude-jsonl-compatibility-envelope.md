@@ -24,7 +24,7 @@ durable store:
 - large ATM-authored message bodies can flood operator context or exceed
   practical Claude tooling envelopes even when they are valid durable ATM mail
 
-Phase S.5 therefore needs an explicit compatibility-envelope rule for ATM
+Phase S.8 therefore needs an explicit compatibility-envelope rule for ATM
 authored JSONL export.
 
 ## Decision Drivers
@@ -84,6 +84,20 @@ new-mail churn loops.
 ATM-authored JSONL exports must always remain valid JSONL records. Malformed
 JSONL is tolerated only as an external ingress compatibility problem. Malformed
 durable SQLite message rows remain corruption or store-failure conditions.
+
+### Validation
+
+The configured `[atm].claude_jsonl_body_export_max_bytes` value is capped at
+`1,048,576` bytes (`1 MiB`).
+
+Rationale:
+
+- it keeps the compatibility-envelope override bounded even when operators
+  raise it above the default `128 KiB`
+- it preserves JSONL as a compatibility surface rather than a second durable
+  large-body transport
+- it prevents configuration drift from turning Claude-facing export into an
+  effectively unbounded mirror of durable ATM message bodies
 
 ## Consequences
 

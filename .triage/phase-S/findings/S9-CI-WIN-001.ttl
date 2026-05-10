@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S9-CI-WIN-001>
+  a triage:Finding ;
+  triage:findingId "S9-CI-WIN-001" ;
+  triage:title "Windows compile failure in home.rs test module — OsString import gated #[cfg(unix)] but used unconditionally in LocalEnvGuard" ;
+  triage:description "crates/atm-core/src/home.rs test module — three import-gate errors cause Windows compile failure (E0425 + unused import warnings-as-errors). (1) 'use std::ffi::OsString' is #[cfg(unix)]-gated at line 242 but LocalEnvGuard.original: Option<OsString> at line 264 is not cfg-gated — OsString is undefined on Windows. (2) MAX_HOST_LOG_DIR_UTF8_BYTES is imported unconditionally in use super::{ ... } but is only used in #[cfg(unix)]-gated tests — unused import on Windows. (3) host_db_dir, host_log_dir, host_mail_db_path, host_runtime_dir are gated #[cfg(any(unix, windows))] but all consuming tests are #[cfg(unix)] — unused imports on Windows. Fix: (1) remove #[cfg(unix)] from OsString import (OsString is cross-platform); (2) add #[cfg(unix)] gate to MAX_HOST_LOG_DIR_UTF8_BYTES import; (3) change #[cfg(any(unix, windows))] to #[cfg(unix)] on the host_*_dir import block." ;
+  triage:category "CI" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T03:45:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s9-logging-defaults" ;
+  triage:promoteToBranch "feature/pS-s9-logging-defaults" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S9-CI-WIN-001/s9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S9-CI-WIN-001/s9/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S9-CI-WIN-001/s9/3> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/6b8ac32> .
+
+<urn:atm:triage:occurrence/S9-CI-WIN-001/s9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 242 ;
+  triage:snippet "#[cfg(unix)] use std::ffi::OsString — OsString used in LocalEnvGuard (no cfg gate) → E0425 on Windows; fix: remove #[cfg(unix)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "6b8ac32" ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/6b8ac32> .
+
+<urn:atm:triage:occurrence/S9-CI-WIN-001/s9/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 249 ;
+  triage:snippet "MAX_HOST_LOG_DIR_UTF8_BYTES imported unconditionally but only used in #[cfg(unix)] tests → unused import on Windows; fix: add #[cfg(unix)] gate" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "6b8ac32" ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/6b8ac32> .
+
+<urn:atm:triage:occurrence/S9-CI-WIN-001/s9/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 255 ;
+  triage:snippet "#[cfg(any(unix, windows))] on host_db_dir/host_log_dir/host_mail_db_path/host_runtime_dir imports — all consuming tests are #[cfg(unix)] → unused imports on Windows; fix: change to #[cfg(unix)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "6b8ac32" ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/6b8ac32> .
+
+<urn:atm:triage:worktree/feature-pS-s9-logging-defaults/6b8ac32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s9-logging-defaults" ;
+  triage:headSha "6b8ac32" ;
+  triage:orderIndex 1 .

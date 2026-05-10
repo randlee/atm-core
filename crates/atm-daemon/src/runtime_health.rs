@@ -14,10 +14,11 @@ use atm_core::{
         self, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
     },
     error::AtmError,
+    home,
     list::list_mail,
     observability::{
         AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
-        CommandEvent, LogTailSession, ObservabilityPort,
+        CommandEvent, LogTailSession, ObservabilityPort, RetainedSinkFaultMode,
     },
     process::process_is_alive,
     protocol::{
@@ -45,48 +46,42 @@ static SHUTDOWN_FINALIZER_THREADS: std::sync::Mutex<Vec<std::thread::JoinHandle<
 
 #[derive(Debug, Clone)]
 struct DaemonObservability {
-    home_dir: PathBuf,
-    retained_sink_fault: RetainedSinkFault,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RetainedSinkFault {
-    Healthy,
-    Degraded,
-    Unavailable,
+    retained_sink_fault: Option<RetainedSinkFaultMode>,
 }
 
 impl DaemonObservability {
-    fn new(home_dir: PathBuf) -> Self {
+    fn new() -> Result<Self, AtmError> {
         let retained_sink_fault = match std::env::var("ATM_OBSERVABILITY_RETAINED_SINK_FAULT")
             .ok()
             .map(|value| value.trim().to_ascii_lowercase())
-            .as_deref()
+            .filter(|value| !value.is_empty())
         {
-            Some("degraded") => RetainedSinkFault::Degraded,
-            Some("unavailable") => RetainedSinkFault::Unavailable,
-            _ => RetainedSinkFault::Healthy,
+            None => None,
+            Some(value) => match value.as_str() {
+                "degraded" => Some(RetainedSinkFaultMode::Degraded),
+                "unavailable" => Some(RetainedSinkFaultMode::Unavailable),
+                _ => {
+                    return Err(AtmError::observability_bootstrap(format!(
+                        "invalid ATM_OBSERVABILITY_RETAINED_SINK_FAULT value `{value}`; use `degraded` or `unavailable`"
+                    )));
+                }
+            },
         };
-        Self::new_with_sink_fault(home_dir, retained_sink_fault)
+        Ok(Self::new_with_sink_fault(retained_sink_fault))
     }
 
-    fn new_with_sink_fault(home_dir: PathBuf, retained_sink_fault: RetainedSinkFault) -> Self {
+    fn new_with_sink_fault(retained_sink_fault: Option<RetainedSinkFaultMode>) -> Self {
         Self {
-            home_dir,
             retained_sink_fault,
         }
     }
 
-    fn best_effort_flush(&self) -> Result<(), AtmError> {
-        #[cfg(unix)]
-        let active_log_path = self
-            .home_dir
-            .join(".local")
-            .join("share")
-            .join("logs")
-            .join("atm.log.jsonl");
-        #[cfg(not(unix))]
-        let active_log_path = self.home_dir.join("logs").join("atm.log.jsonl");
+    fn active_log_path(&self) -> Result<PathBuf, AtmError> {
+        Ok(home::host_log_dir()?.join("atm.log.jsonl"))
+    }
+
+    fn best_effort_flush_blocking(&self) -> Result<(), AtmError> {
+        let active_log_path = self.active_log_path()?;
         if !active_log_path.exists() {
             return Ok(());
         }
@@ -132,19 +127,11 @@ impl ObservabilityPort for DaemonObservability {
     }
 
     fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
-        #[cfg(unix)]
-        let active_log_path = self
-            .home_dir
-            .join(".local")
-            .join("share")
-            .join("logs")
-            .join("atm.log.jsonl");
-        #[cfg(not(unix))]
-        let active_log_path = self.home_dir.join("logs").join("atm.log.jsonl");
+        let active_log_path = self.active_log_path()?;
         let logging_state = match self.retained_sink_fault {
-            RetainedSinkFault::Healthy => AtmObservabilityHealthState::Healthy,
-            RetainedSinkFault::Degraded => AtmObservabilityHealthState::Degraded,
-            RetainedSinkFault::Unavailable => AtmObservabilityHealthState::Unavailable,
+            None => AtmObservabilityHealthState::Healthy,
+            Some(RetainedSinkFaultMode::Degraded) => AtmObservabilityHealthState::Degraded,
+            Some(RetainedSinkFaultMode::Unavailable) => AtmObservabilityHealthState::Unavailable,
         };
         Ok(AtmObservabilityHealth {
             active_log_path: Some(active_log_path),
@@ -434,6 +421,7 @@ fn finish_runtime_snapshot(
 
 #[derive(Debug)]
 pub(crate) struct DaemonRequestDispatcher {
+    home_dir: PathBuf,
     observability: DaemonObservability,
     status_cache: RuntimeStatusCache,
     sqlite_boundary: Option<SqliteBoundaryAssembly>,
@@ -492,7 +480,7 @@ impl DaemonRequestDispatcher {
                 }
                 #[cfg(not(test))]
                 {
-                    let _ = shutdown_handle.join();
+                    drop(shutdown_handle);
                 }
                 tracing::warn!(
                     step = label,
@@ -528,8 +516,18 @@ impl DaemonRequestDispatcher {
                 None
             }
         };
+        let observability = match DaemonObservability::new() {
+            Ok(observability) => observability,
+            Err(error) => {
+                // Daemon health treats invalid retained-sink fault injection as a local
+                // non-fatal test knob and falls back to Healthy after warning, unlike CLI bootstrap.
+                tracing::warn!(%error, "failed to initialize daemon observability state");
+                DaemonObservability::new_with_sink_fault(None)
+            }
+        };
         Self {
-            observability: DaemonObservability::new(home_dir),
+            home_dir: home_dir.clone(),
+            observability,
             status_cache,
             sqlite_boundary,
         }
@@ -589,11 +587,8 @@ impl DaemonRequestDispatcher {
                 )
             })?;
         let current_state = self.status_cache.clone_state()?;
-        let next_state = build_runtime_status_cache_state(
-            Some(&current_state),
-            &self.observability.home_dir,
-            roster_store,
-        )?;
+        let next_state =
+            build_runtime_status_cache_state(Some(&current_state), &self.home_dir, roster_store)?;
         let reloaded_members = next_state.members.len();
         self.status_cache.replace_state(next_state)?;
         tracing::info!(
@@ -615,7 +610,9 @@ impl DaemonRequestDispatcher {
         Self::run_bounded_shutdown_step(
             "observability_flush",
             SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE,
-            move || observability.best_effort_flush(),
+            // The finalizer step already runs on a dedicated shutdown thread,
+            // so the retained-log flush remains in a sync context.
+            move || observability.best_effort_flush_blocking(),
         );
     }
 
@@ -880,6 +877,41 @@ impl boundary::sealed::Sealed for DaemonStatusSource {}
 impl boundary::StatusSource for DaemonStatusSource {
     fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError> {
         self.status_cache.snapshot()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DaemonRequestDispatcher;
+    use std::sync::{Arc, Condvar, Mutex};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn bounded_shutdown_step_returns_after_deadline() {
+        let release = Arc::new((Mutex::new(false), Condvar::new()));
+        let blocker = Arc::clone(&release);
+        let started = Instant::now();
+        DaemonRequestDispatcher::run_bounded_shutdown_step(
+            "blocking_test_step",
+            Duration::from_millis(10),
+            move || {
+                let (released, wake) = &*blocker;
+                let mut released = released.lock().expect("released");
+                while !*released {
+                    released = wake.wait(released).expect("released wait");
+                }
+                Ok(())
+            },
+        );
+        assert!(
+            started.elapsed() < Duration::from_secs(1),
+            "bounded shutdown step should return promptly after its deadline"
+        );
+
+        let (released, wake) = &*release;
+        *released.lock().expect("released") = true;
+        wake.notify_all();
+        DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
     }
 }
 

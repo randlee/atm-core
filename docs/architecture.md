@@ -282,6 +282,8 @@ ATM still owns:
 - ATM-specific structured fields
 - mapping CLI filters to shared query/follow APIs
 - ATM doctor projections over shared health models
+- the host-scoped retained-log root contract, including `ATM_LOG_DIR` as the
+  exact retained-log-directory override
 - ATM-owned config semantics for baseline roster, alias resolution, and
   runtime-identity precedence
 
@@ -1464,10 +1466,17 @@ Implementation rules:
   boundary
 - `atm` initializes the shared logger exactly once per process
 - the shared file sink is the authoritative retained log store for `atm log`
+- the default ATM-owned retained log file is `~/.atm/logs/atm.log.jsonl`
+- `ATM_LOG_DIR` overrides the exact retained log directory
+- retained log path ownership is host-scoped and independent of `ATM_HOME`
 - the shared console sink remains opt-in so it does not contaminate normal
   command output
 - the initial-release dependency is the published crates.io version
   `sc-observability = "1.0.0"`
+- the default retained logger baseline must include:
+  - daemon lifecycle `info!` events
+  - every subsystem `warn!` event
+  - every subsystem `error!` event
 
 ### 14.3 Failure Diagnostic Rules
 

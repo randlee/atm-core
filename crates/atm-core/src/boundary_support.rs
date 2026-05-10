@@ -44,7 +44,7 @@ pub fn load_workspace_config(request: ConfigLoadRequest) -> Result<ConfigLoadRes
 pub fn load_team_config(
     request: ConfigTeamLoadRequest,
 ) -> Result<ConfigTeamLoadResponse, AtmError> {
-    let team_dir = home::team_dir_from_home(&request.home_dir, request.team.as_str())?;
+    let team_dir = home::team_dir_from_home(&request.home_dir, &request.team)?;
     let team_config = config::load_team_config(&team_dir)?;
     Ok(ConfigTeamLoadResponse {
         team_dir,

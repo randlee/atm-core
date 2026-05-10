@@ -171,6 +171,14 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-OBS-001` `atm-daemon` owns daemon/runtime/transport structured
   event emission through `sc-observability`. Satisfies:
   `REQ-CORE-OBS-002`.
+- `REQ-DAEMON-OBS-002` `atm-daemon` owns the daemon-side retained logging
+  baseline and must preserve daemon lifecycle `info!` events plus every
+  daemon/runtime/transport `warn!` / `error!` event at the default retained
+  logger level and host-scoped retained path. Satisfies:
+  `REQ-P-OBS-002`, `REQ-P-OBS-003`, `REQ-CORE-OBS-002`.
+  If S.9 introduces any public retained-logging trait or sink boundary, that
+  trait must be sealed by default per the product architecture trait-extension
+  policy.
 - `REQ-DAEMON-HEALTH-001` `atm-daemon` owns the daemon health interface
   consumed by `atm doctor`. Satisfies:
   `REQ-CORE-DOCTOR-002`.
@@ -226,6 +234,7 @@ The `atm-daemon` crate docs must remain aligned with:
 - [`../atm-core/architecture.md`](../atm-core/architecture.md)
 - [`./boundaries.md`](./boundaries.md)
 - [`./protocol-icd.md`](./protocol-icd.md)
+- [`./logging.md`](./logging.md)
 
 ## 5. Phase R Runtime Requirements
 

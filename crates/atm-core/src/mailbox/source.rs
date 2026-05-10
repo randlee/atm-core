@@ -139,7 +139,7 @@ pub(crate) fn discover_source_paths(
     team: &TeamName,
     agent: &AgentName,
 ) -> Result<Vec<PathBuf>, AtmError> {
-    let inbox_path = home::inbox_path_from_home(home_dir, team.as_str(), agent.as_str())?;
+    let inbox_path = home::inbox_path_from_home(home_dir, team, agent)?;
     let inboxes_dir = inbox_path
         .parent()
         .ok_or_else(|| AtmError::mailbox_read("inbox path has no parent directory"))?;

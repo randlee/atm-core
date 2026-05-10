@@ -332,6 +332,67 @@ mod tests {
         assert_eq!(imported_fingerprint, original_fingerprint);
     }
 
+    #[test]
+    fn inbox_projection_full_body_reexport_preserves_logical_identity() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        let inbox_dir = team_dir.join("inboxes");
+        std::fs::create_dir_all(&inbox_dir).expect("inboxes");
+        std::fs::write(
+            team_dir.join("config.json"),
+            serde_json::json!({
+                "members": [{"name": TEST_SENDER}, {"name": ROLE_TEAM_LEAD}]
+            })
+            .to_string(),
+        )
+        .expect("team config");
+        let inbox_path = inbox_dir.join(format!("{TEST_SENDER}.json"));
+
+        let export = DaemonInboxExport::new();
+        let ingress = DaemonInboxIngress::new();
+        let message = sample_message(ROLE_TEAM_LEAD, "small body stays fully exported");
+        let original_fingerprint = ingress
+            .compute_identity_fingerprint(InboxIngressIdentityFingerprintRequest {
+                message: message.clone(),
+            })
+            .expect("original fingerprint")
+            .fingerprint;
+
+        export
+            .reexport_message(InboxExportReexportMessageRequest {
+                path: inbox_path.clone(),
+                messages: vec![message.clone()],
+            })
+            .expect("first reexport");
+        export
+            .reexport_message(InboxExportReexportMessageRequest {
+                path: inbox_path.clone(),
+                messages: vec![message.clone()],
+            })
+            .expect("second reexport");
+
+        let import = ingress
+            .import_inbox_source(InboxIngressImportRequest {
+                home_dir: tempdir.path().to_path_buf(),
+                team: TEST_TEAM.parse().expect("team"),
+                agent: TEST_SENDER.parse().expect("agent"),
+            })
+            .expect("import source");
+        assert_eq!(import.source_files.len(), 1);
+        assert_eq!(import.source_files[0].messages.len(), 1);
+
+        let imported = import.source_files[0].messages[0].clone();
+        assert_eq!(imported.text, message.text);
+
+        let imported_fingerprint = ingress
+            .compute_identity_fingerprint(InboxIngressIdentityFingerprintRequest {
+                message: imported,
+            })
+            .expect("imported fingerprint")
+            .fingerprint;
+        assert_eq!(imported_fingerprint, original_fingerprint);
+    }
+
     fn sample_message(from: &str, text: &str) -> MessageEnvelope {
         let atm_message_id = AtmMessageId::new();
         let message_id = LegacyMessageId::from_atm_message_id(atm_message_id);

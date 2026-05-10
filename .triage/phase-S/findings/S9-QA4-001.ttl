@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S9-QA4-001>
+  a triage:Finding ;
+  triage:findingId "S9-QA4-001" ;
+  triage:title "Hardcoded /tmp as HOME in host_log_dir_rejects_non_absolute_override test — inconsistent with TempDir pattern" ;
+  triage:description "crates/atm-core/src/home.rs:596 — test host_log_dir_rejects_non_absolute_override sets HOME to the literal string '/tmp' via LocalEnvGuard::set_many. Every other test in this module uses tempdir.path() for home directory injection. A literal '/tmp' can cause test interference if /tmp itself is an unusual path or if tests run in parallel (though serial_test::serial mitigates the latter). Fix: replace ('HOME', Some('/tmp')) with the path of a TempDir allocated in the test body." ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T03:55:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s9-logging-defaults" ;
+  triage:promoteToBranch "feature/pS-s9-logging-defaults" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S9-QA4-001/s9/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/b977345> .
+
+<urn:atm:triage:occurrence/S9-QA4-001/s9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 596 ;
+  triage:snippet "('HOME', Some('/tmp')) — hardcoded literal; replace with tempdir.path().to_str().expect('utf8')" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "b977345" ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/b977345> .
+
+<urn:atm:triage:worktree/feature-pS-s9-logging-defaults/b977345>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s9-logging-defaults" ;
+  triage:headSha "b977345" ;
+  triage:orderIndex 1 .

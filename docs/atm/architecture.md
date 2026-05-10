@@ -108,11 +108,17 @@ Follow-up work:
   `atm-core`.
 - `atm` owns the concrete published-crate bootstrap against
   `sc-observability = "1.0.0"`.
+- `atm` owns retained-log bootstrap against the host-scoped ATM log directory
+  contract (`~/.atm/logs/` by default, `ATM_LOG_DIR` when overridden) rather
+  than `.local/share/logs` or any `ATM_HOME`-derived path.
 - `atm` owns the structured construction contract for the concrete adapter:
   `CliObservability::new(home_dir, CliObservabilityOptions)`.
 - `atm` may retain `init(...)` only as a delegating helper.
 - `atm` owns CLI-layer observability for command entry, daemon connectivity,
   and render/exit outcomes.
+- `atm` owns the default retained logger baseline needed to keep daemon
+  lifecycle `info!` events and all `warn!` / `error!` events visible when
+  `ATM_LOG` is unset.
 - `atm` owns the retained local recovery CLI shape for `teams` and `members`,
   but not the underlying team/backup/restore business rules
 - `atm` must not access SQLite or inbox JSONL directly

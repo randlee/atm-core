@@ -81,6 +81,7 @@ flooding Claude-facing inbox surfaces or causing watcher churn.
 - `crates/atm-core/src/mailbox/atomic.rs`
 - `crates/atm-core/src/mailbox/store.rs`
 - `crates/atm-daemon/src/boundary_adapters.rs`
+- `crates/atm-daemon/src/reconcile_runtime.rs`
 
 ## Required Document Updates
 

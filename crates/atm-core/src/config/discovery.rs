@@ -106,6 +106,7 @@ fn expand_home_tilde(program: &str) -> Result<Cow<'_, str>, AtmError> {
     if !program.starts_with('~') {
         return Ok(Cow::Borrowed(program));
     }
+    // Issue #219: tilde-expansion for post-send hook command[0] paths.
     if matches!(program, "~") || program.starts_with("~/") || program.starts_with("~\\") {
         let expanded = expand_tilde_to_home_path(program)?;
         let Some(expanded) = expanded else {
@@ -275,6 +276,20 @@ mod tests {
             hooks[0].command[0],
             home.join("hooks").join("notify.cmd").display().to_string()
         );
+    }
+
+    #[test]
+    fn normalize_post_send_hooks_expands_bare_home_tilde() {
+        let (_tempdir, config_root) = config_root_fixture();
+        let home = crate::home::user_home().expect("user home");
+        let hooks = vec![RawPostSendHookRule {
+            recipient: "*".into(),
+            command: vec!["~".into()],
+        }];
+
+        let hooks = normalize_post_send_hooks(hooks, &config_root).expect("hooks");
+
+        assert_eq!(hooks[0].command[0], home.display().to_string());
     }
 
     #[test]

@@ -1,0 +1,60 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S9-RSH-001>
+  a triage:Finding ;
+  triage:findingId "S9-RSH-001" ;
+  triage:title "run_bounded_shutdown_step() defeats its deadline on timeout — daemon can hang indefinitely" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs:483 (feature branch) / line 468 (integrate/phase-S) — run_bounded_shutdown_step() on Timeout in cfg(not(test)) branch calls shutdown_handle.join() unconditionally with no timeout. Both WAL-checkpoint and observability-flush paths share this bug. The declared shutdown deadline is meaningless in production builds: if the thread hangs, daemon shutdown hangs indefinitely. Pre-existing on integrate/phase-S (line 468) but ruled fix-in-S9 because S.9 already modifies runtime_health.rs and the severity (P0 hang) warrants immediate fix. Fix: on timeout, detach/background the thread (handle.thread().unpark(); drop(handle)) instead of joining. Never block past the declared deadline." ;
+  triage:category "RSH" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:deferralReason "Pre-existing on integrate/phase-S but ruled fix-in-S9: S.9 already modifies runtime_health.rs and severity is P0 (indefinite hang)" ;
+  triage:triagedAt "2026-05-10T02:30:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s9-logging-defaults" ;
+  triage:promoteToBranch "feature/pS-s9-logging-defaults" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S9-RSH-001/s9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S9-RSH-001/integrate/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/d6f3b74> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/d4a6c12> .
+
+<urn:atm:triage:occurrence/S9-RSH-001/s9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 483 ;
+  triage:snippet "run_bounded_shutdown_step() on Timeout calls shutdown_handle.join() unconditionally (no timeout) in cfg(not(test)) — deadline meaningless in production" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "d6f3b74" ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/d6f3b74> .
+
+<urn:atm:triage:occurrence/S9-RSH-001/integrate/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 468 ;
+  triage:snippet "Same shutdown-deadline defeat on integrate/phase-S baseline (pre-existing)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "d4a6c12" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/d4a6c12> .
+
+<urn:atm:triage:worktree/feature-pS-s9-logging-defaults/d6f3b74>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s9-logging-defaults" ;
+  triage:headSha "d6f3b74" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-S/d4a6c12>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "d4a6c12" ;
+  triage:orderIndex 0 .
