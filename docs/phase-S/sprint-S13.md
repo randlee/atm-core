@@ -33,6 +33,10 @@ Add `docs/phase-S/sprint-S13-ipc-plan.md` covering:
 - peer transport follow-up concerns
 - explicit reconciliation of the Opus failure inventory, including
   accept-after-terminate behavior and removal of the event-channel wedge class
+- the existing `request_runtime` tracked-work registry as the ownership anchor
+  for async request dispatch
+- why `LoopbackClientTransport` keeps the same dispatcher seam without needing
+  direct `ShutdownBeacon` wiring
 
 ### 2. Record the sprint authority
 

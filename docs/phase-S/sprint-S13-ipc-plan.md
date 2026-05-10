@@ -116,6 +116,19 @@ Out of scope:
   - owns business logic only and never owns socket lifetime or process-liveness
     decisions
 
+### Async Dispatch Ownership
+
+- Tracked dispatch registration extends the existing daemon-private
+  `request_runtime` tracked-work registry described in
+  `docs/atm-daemon/architecture.md`.
+- The redesigned local IPC path keeps the current single-request-per-connection
+  cap. The receive loop does not introduce request multiplexing on one
+  connection.
+- The bounded tracked-work registry remains the authoritative ownership record
+  for request workers under `REQ-DAEMON-TRANSPORT-004`.
+- The receive loop may hand a validated request across an async boundary, but
+  it must not create detached work outside that bounded registry contract.
+
 ### Cancellation contract
 
 - `ShutdownBeacon` is the only accepted process-wide transport shutdown signal.
@@ -194,11 +207,18 @@ listener is ready until the daemon has fully stopped serving.
 
 - remember the logical endpoint identity and concrete OS binding
 - own endpoint cleanup on drop
-- remove Unix socket-path artifacts when required
+- on Unix: unlink the socket-path artifact when required
+- on Windows: close the server-side pipe handle and ensure no stale endpoint
+  continues to advertise daemon availability; there is no filesystem path
+  artifact to delete
+- expose one platform-neutral `unpublish()` contract above the adapter layer
 - guarantee endpoint unpublication before daemon ownership release
 - provide one cleanup path that runs on ordinary shutdown, fatal return, and
   panic unwind so stale socket artifacts are not left behind until the next
   bind attempt
+- keep the platform-specific cleanup steps isolated inside the guard's OS
+  implementation rather than leaking Unix socket or Windows pipe details into
+  runtime orchestration
 
 ### Drop contract
 
@@ -214,6 +234,11 @@ reachable or stale.
 The implementation target is Drop-based cleanup rather than bind-time cleanup
 alone. Bind-time stale-socket removal remains a defensive recovery step, but it
 is no longer the primary cleanup mechanism.
+
+`SocketEndpointGuard` is an RAII field owned in `RuntimeComposition` scope and
+declared after the host-ownership guard so Rust field-drop order enforces the
+required shutdown sequence. Last declared drops first, which means endpoint
+unpublication happens before `HostOwnershipAdapter` release.
 
 ### Launch/owner ordering
 
@@ -243,9 +268,13 @@ become machine-actionable instead of collapsing into one generic error exit.
 
 - local request-level failures do not exit the process; they stay connection
   scoped
+- a fatal accept path requested through `ShutdownBeacon` transitions
+  `Running -> Draining -> Stopped`; it does not jump directly from `Running` to
+  `Stopped`
 - fatal listener/runtime failures map to `70` or `71`
 - configuration and startup contract violations fail closed with `64`
 - unexpected invariant breaks remain `1`
+- the typed process exit is emitted only after the runtime reaches `Stopped`
 
 ### Supervisor expectations
 
@@ -320,6 +349,17 @@ S.13 does not reopen the accepted no-daemon-spawn testing direction.
   ordinary correctness
 - real daemon-process coverage remains limited to the narrow runtime suite
 - no new test-only daemon launch path is introduced
+
+### LoopbackClientTransport impact
+
+`LoopbackClientTransport` does not require direct `ShutdownBeacon` wiring for
+ordinary in-process seam coverage because it does not own the local IPC accept
+loop, listener wake path, or endpoint publication contract. It must continue to
+exercise the same dispatcher/request-runtime boundary as the real transport, but
+the beacon-owned shutdown mechanics stay specific to the local IPC server path.
+That preserves the `REQ-DAEMON-TRANSPORT-001` contract that the in-process seam
+backs the same dispatcher behavior without pretending to be the real endpoint
+ownership implementation.
 
 ### 8. Implementation Slices For The Follow-On Worktree
 

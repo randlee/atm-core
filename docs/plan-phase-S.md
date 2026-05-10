@@ -642,6 +642,7 @@ Required closeout work:
   implementation begins
 - define the daemon runtime SLOs for wedge recovery, accept-error teardown,
   clean shutdown, and endpoint cleanup
+- keep `just lint` passing on the planning branch
 - keep unrelated storage-layer review/hardening separate rather than mixing
   store concurrency work into the transport hardening line
 
