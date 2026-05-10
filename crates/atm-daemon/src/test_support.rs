@@ -1,3 +1,8 @@
+use atm_core::boundary::RequestDispatcher;
+use atm_core::doctor::{DoctorEnvironmentVisibility, DoctorReport, DoctorStatus, DoctorSummary};
+use atm_core::observability::{AtmObservabilityHealth, AtmObservabilityHealthState};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+
 #[cfg(unix)]
 use interprocess::local_socket::Stream as LocalSocketStream;
 #[cfg(unix)]
@@ -21,6 +26,47 @@ impl Drop for LifecycleFlagResetGuard {
     fn drop(&mut self) {
         self.lifecycle.set_terminate_for_test(false);
         self.lifecycle.set_reload_for_test(false);
+    }
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct DoctorOnlyDispatcher;
+
+impl atm_core::boundary::sealed::Sealed for DoctorOnlyDispatcher {}
+
+impl RequestDispatcher for DoctorOnlyDispatcher {
+    fn dispatch(
+        &self,
+        request: RequestEnvelope,
+    ) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
+        match request {
+            RequestEnvelope::Doctor(_) => Ok(ResponseEnvelope::Doctor(DoctorReport {
+                summary: DoctorSummary {
+                    status: DoctorStatus::Healthy,
+                    message: "ok".to_string(),
+                    info_count: 0,
+                    warning_count: 0,
+                    error_count: 0,
+                },
+                findings: Vec::new(),
+                recommendations: Vec::new(),
+                environment: DoctorEnvironmentVisibility {
+                    atm_home: None,
+                    atm_team: None,
+                    atm_identity: None,
+                    team_override: None,
+                },
+                member_roster: None,
+                observability: AtmObservabilityHealth {
+                    active_log_path: None,
+                    logging_state: AtmObservabilityHealthState::Healthy,
+                    query_state: Some(AtmObservabilityHealthState::Healthy),
+                    detail: None,
+                },
+                runtime_status: None,
+            })),
+            other => panic!("unexpected request in DoctorOnlyDispatcher: {other:?}"),
+        }
     }
 }
 

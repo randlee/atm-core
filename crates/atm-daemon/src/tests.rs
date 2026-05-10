@@ -7,15 +7,15 @@ use super::{
     },
     lifecycle_control::LifecycleControlSourceAdapter,
     local_ipc_transport::RuntimeServeHooks,
-    test_support::{LifecycleFlagResetGuard, connect_daemon_local_ipc_until_ready},
+    test_support::{DoctorOnlyDispatcher, LifecycleFlagResetGuard},
 };
 use atm_core::boundary::RequestDispatcher;
 #[cfg(unix)]
 use atm_core::doctor::DoctorQuery;
-use atm_core::doctor::{DoctorEnvironmentVisibility, DoctorReport, DoctorStatus, DoctorSummary};
+use atm_core::doctor::DoctorStatus;
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
-use atm_core::observability::{AtmObservabilityHealth, AtmObservabilityHealthState};
+use atm_core::observability::AtmObservabilityHealthState;
 use atm_core::protocol::{
     HeartbeatActivity, RequestEnvelope, ResponseEnvelope, RuntimeLivenessState, RuntimeMemberState,
     RuntimeReadinessState, TeamMemberHeartbeatRequest,
@@ -36,6 +36,9 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
+#[cfg(unix)]
+use crate::test_support::connect_daemon_local_ipc_until_ready;
+
 const TEST_TEAM: &str = "test-team";
 
 struct StaleRecoverySignalGuard;
@@ -50,47 +53,6 @@ impl StaleRecoverySignalGuard {
 impl Drop for StaleRecoverySignalGuard {
     fn drop(&mut self) {
         clear_stale_recovery_signal_for_test();
-    }
-}
-
-#[derive(Debug, Default)]
-struct DoctorOnlyDispatcher;
-
-impl atm_core::boundary::sealed::Sealed for DoctorOnlyDispatcher {}
-
-impl RequestDispatcher for DoctorOnlyDispatcher {
-    fn dispatch(
-        &self,
-        request: RequestEnvelope,
-    ) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
-        match request {
-            RequestEnvelope::Doctor(_) => Ok(ResponseEnvelope::Doctor(DoctorReport {
-                summary: DoctorSummary {
-                    status: DoctorStatus::Healthy,
-                    message: "ok".to_string(),
-                    info_count: 0,
-                    warning_count: 0,
-                    error_count: 0,
-                },
-                findings: Vec::new(),
-                recommendations: Vec::new(),
-                environment: DoctorEnvironmentVisibility {
-                    atm_home: None,
-                    atm_team: None,
-                    atm_identity: None,
-                    team_override: None,
-                },
-                member_roster: None,
-                observability: AtmObservabilityHealth {
-                    active_log_path: None,
-                    logging_state: AtmObservabilityHealthState::Healthy,
-                    query_state: Some(AtmObservabilityHealthState::Healthy),
-                    detail: None,
-                },
-                runtime_status: None,
-            })),
-            other => panic!("unexpected request in DoctorOnlyDispatcher: {other:?}"),
-        }
     }
 }
 

@@ -36,6 +36,7 @@ const SHUTDOWN_WAL_CHECKPOINT_DEADLINE: Duration = Duration::from_secs(2);
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
 const SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE: Duration = Duration::from_secs(2);
+const MAX_SHUTDOWN_FINALIZER_THREADS: usize = 16;
 
 // Timed-out shutdown workers are retained in one process-wide registry instead of being dropped
 // orphaned; tests drain the registry explicitly and production keeps the handles reachable until
@@ -387,10 +388,18 @@ impl DaemonRequestDispatcher {
                 // outlive the bounded shutdown window, but retaining the JoinHandle is still safer
                 // than dropping it orphaned because tests and orderly process teardown can join it
                 // later once the blocking storage step finishes.
-                SHUTDOWN_FINALIZER_THREADS
+                let mut handles = SHUTDOWN_FINALIZER_THREADS
                     .lock()
-                    .expect("shutdown finalizer thread registry lock")
-                    .push(shutdown_handle);
+                    .expect("shutdown finalizer thread registry lock");
+                if handles.len() < MAX_SHUTDOWN_FINALIZER_THREADS {
+                    handles.push(shutdown_handle);
+                } else {
+                    tracing::warn!(
+                        step = label,
+                        cap = MAX_SHUTDOWN_FINALIZER_THREADS,
+                        "shutdown finalizer thread cap reached; dropping retained worker handle"
+                    );
+                }
                 tracing::warn!(
                     step = label,
                     timeout_ms = deadline.as_millis(),
