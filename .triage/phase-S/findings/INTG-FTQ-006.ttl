@@ -12,9 +12,10 @@
   triage:phaseId "phase-S" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-05-10T07:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-05-10T15:50:00Z"^^xsd:dateTime ;
   triage:highestOpenBranch "integrate/phase-S" ;
   triage:promoteToBranch "integrate/phase-S" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/INTG-FTQ-006/intg/1> ;
@@ -25,9 +26,9 @@
   triage:file "crates/atm-core/src/home.rs" ;
   triage:line 656 ;
   triage:snippet "_home drops before _atm_log_dir — env_lock released while ATM_LOG_DIR still contains non-UTF8 value" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:headSha "ade96f2" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:headSha "bd9e0e8" ;
   triage:branch "integrate/phase-S" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/ade96f2> .
 
@@ -35,5 +36,5 @@
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-S" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
-  triage:headSha "ade96f2" ;
+  triage:headSha "bd9e0e8" ;
   triage:orderIndex 1 .

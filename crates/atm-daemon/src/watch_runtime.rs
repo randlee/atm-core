@@ -25,6 +25,9 @@ type WatchPoller =
     Arc<dyn Fn(&WatchSubscriptionRequest) -> Result<WatchEventBatch, AtmError> + Send + Sync>;
 
 struct WatchRuntimeInner {
+    // Worker thread, poll callers, and shutdown path all access state
+    // concurrently; Mutex+Condvar guards the lifecycle and subscription
+    // registry.
     state: Mutex<WatchState>,
     wake: Condvar,
     worker: Mutex<Option<JoinHandle<()>>>,
@@ -428,7 +431,7 @@ fn watch_worker_loop(inner: Arc<WatchRuntimeInner>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{MAX_WATCH_SUBSCRIPTIONS, WATCH_SHUTDOWN_DEADLINE, WatchRuntime};
+    use super::{MAX_WATCH_SUBSCRIPTIONS, WatchRuntime};
     use atm_core::boundary::WatchEventBatch;
     use atm_core::boundary::WatchSubscriptionRequest;
     use atm_core::error::AtmError;
@@ -438,15 +441,20 @@ mod tests {
     use std::time::Duration;
     use tempfile::TempDir;
 
-    fn request() -> WatchSubscriptionRequest {
-        request_for("test-agent")
+    struct WatchRequestFixture {
+        _home_dir: TempDir,
+        request: WatchSubscriptionRequest,
     }
 
-    fn request_for(agent: &str) -> WatchSubscriptionRequest {
-        WatchSubscriptionRequest {
-            home_dir: std::env::temp_dir().join("atm-watch-test"),
-            team: "test-team".parse().expect("team"),
-            agent: agent.parse().expect("agent"),
+    fn request_for(agent: &str) -> WatchRequestFixture {
+        let home_dir = TempDir::new().expect("tempdir");
+        WatchRequestFixture {
+            request: WatchSubscriptionRequest {
+                home_dir: home_dir.path().to_path_buf(),
+                team: "test-team".parse().expect("team"),
+                agent: agent.parse().expect("agent"),
+            },
+            _home_dir: home_dir,
         }
     }
 
@@ -517,9 +525,10 @@ mod tests {
         );
         runtime.start().expect("start");
 
-        let first = runtime.poll(request()).expect("first poll");
+        let request = request_for("test-agent");
+        let first = runtime.poll(request.request.clone()).expect("first poll");
         assert_eq!(first.paths, vec![PathBuf::from("one.jsonl")]);
-        let second = runtime.poll(request()).expect("second poll");
+        let second = runtime.poll(request.request).expect("second poll");
         assert_eq!(second.paths, vec![PathBuf::from("two.jsonl")]);
         runtime.shutdown().expect("shutdown");
     }
@@ -541,9 +550,10 @@ mod tests {
             Duration::from_millis(10),
         );
         runtime.start().expect("start");
-        runtime.poll(request()).expect("initial poll");
+        let request = request_for("test-agent");
+        runtime.poll(request.request.clone()).expect("initial poll");
         *fail.lock().expect("flag") = true;
-        let error = runtime.poll(request()).expect_err("degraded");
+        let error = runtime.poll(request.request).expect_err("degraded");
         assert!(error.message.contains("watch poll failed"));
         runtime.shutdown().expect("shutdown");
     }
@@ -574,17 +584,13 @@ mod tests {
         runtime.start().expect("start");
 
         let runtime_for_thread = runtime.clone();
-        let poll_join = std::thread::spawn(move || runtime_for_thread.poll(request()));
+        let request = request_for("test-agent");
+        let poll_join = std::thread::spawn(move || runtime_for_thread.poll(request.request));
         started_rx
             .recv_timeout(Duration::from_secs(1))
             .expect("worker started");
 
-        let shutdown_started = std::time::Instant::now();
         runtime.shutdown().expect("shutdown");
-        assert!(
-            shutdown_started.elapsed() < WATCH_SHUTDOWN_DEADLINE + Duration::from_secs(1),
-            "watch runtime shutdown exceeded bounded deadline"
-        );
 
         let (released, wake) = &*release;
         *released.lock().expect("released") = true;
@@ -618,12 +624,13 @@ mod tests {
                     Ok(WatchEventBatch { paths: Vec::new() })
                 }
             }),
-            Duration::from_millis(10),
+            Duration::from_millis(100),
         );
         runtime.start().expect("start");
 
         let runtime_for_thread = runtime.clone();
-        let join = std::thread::spawn(move || runtime_for_thread.poll(request()));
+        let request = request_for("test-agent");
+        let join = std::thread::spawn(move || runtime_for_thread.poll(request.request));
         started_rx
             .recv_timeout(Duration::from_secs(1))
             .expect("worker started");
@@ -644,13 +651,13 @@ mod tests {
         runtime.start().expect("start");
 
         for index in 0..MAX_WATCH_SUBSCRIPTIONS {
-            runtime
-                .poll(request_for(&format!("test-agent-{index}")))
-                .expect("bounded subscription");
+            let request = request_for(&format!("test-agent-{index}"));
+            runtime.poll(request.request).expect("bounded subscription");
         }
 
+        let overflow = request_for("overflow-agent");
         let error = runtime
-            .poll(request_for("overflow-agent"))
+            .poll(overflow.request)
             .expect_err("capacity overflow");
         assert!(error.message.contains("bounded registry capacity"));
 

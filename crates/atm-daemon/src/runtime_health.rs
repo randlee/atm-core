@@ -694,6 +694,9 @@ fn build_runtime_status_cache_state(
                 "runtime_health: invalid team name from storage under {}: {team_name}",
                 teams_root.display()
             ))
+            .with_recovery(
+                "Remove or rename the malformed team directory under the ATM teams root before retrying.",
+            )
             .with_source(error)
         })?;
         let config_path = entry.path().join("config.json");
@@ -715,6 +718,9 @@ fn build_runtime_status_cache_state(
                 "failed to parse daemon team config {}: {error}",
                 config_path.display()
             ))
+            .with_recovery(
+                "Repair or remove the malformed team config file and restart atm-daemon or send SIGHUP.",
+            )
             .with_source(error)
         })?;
         for member in config.members {
@@ -859,10 +865,12 @@ impl boundary::StatusSource for DaemonStatusSource {
 #[cfg(test)]
 mod tests {
     use super::DaemonRequestDispatcher;
+    use serial_test::serial;
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::{Duration, Instant};
 
     #[test]
+    #[serial]
     fn bounded_shutdown_step_returns_after_deadline() {
         let release = Arc::new((Mutex::new(false), Condvar::new()));
         let blocker = Arc::clone(&release);
@@ -874,7 +882,11 @@ mod tests {
                 let (released, wake) = &*blocker;
                 let mut released = released.lock().expect("released");
                 while !*released {
-                    released = wake.wait(released).expect("released wait");
+                    let wait = wake
+                        .wait_timeout(released, Duration::from_secs(5))
+                        .expect("released wait");
+                    released = wait.0;
+                    assert!(!wait.1.timed_out(), "released wait timed out");
                 }
                 Ok(())
             },
