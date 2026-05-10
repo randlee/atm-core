@@ -615,36 +615,44 @@ Required closeout work:
 - update `docs/phase-S/sprint-S12.md` plus the 12 resolved INTG TTL records so
   documentation and machine-readable triage state agree on closure
 
-### S.13 IPC/Socket Runtime Hardening Plan
+### S.13 IPC/Socket Runtime Hardening
 
 Goal:
-- define the next daemon transport hardening step after the S.12 integration
-  fixes so local IPC fatal-path cleanup, endpoint ownership ordering, and
-  supervisor-facing runtime exits are explicit before more runtime changes land
+- harden the same-host daemon transport runtime so fatal local-IPC errors
+  cannot wedge shutdown and endpoint cleanup remains supervisor-safe
 
 Required outcomes:
-- one accepted design for same-host local IPC:
-  - one accept loop
-  - one receive loop per accepted connection
-  - one async dispatch boundary
-  - one shared shutdown beacon
-- endpoint publication and unpublication ordering are explicit relative to
-  ADR-002 `launch.lock` / `owner.lock` semantics
-- fatal local IPC/runtime exits map to one typed supervisor-facing exit-code
-  taxonomy instead of one generic process failure
-- peer socket transport follow-up concerns are recorded separately without
-  forcing a premature persistent-session redesign
+- one shared shutdown primitive coordinates accept, lifecycle, and connection
+  teardown
+- endpoint cleanup occurs before singleton ownership release
+- typed daemon runtime failures replace silent transport wedges
+- the transport correctness story remains separate from peer-socket follow-on
+  work
 
 Required closeout work:
-- add `docs/phase-S/sprint-S13-ipc-plan.md`
-- add `docs/phase-S/sprint-S13.md`
-- lock the `ShutdownBeacon` and `SocketEndpointGuard` design direction before
-  implementation begins
-- define the daemon runtime SLOs for wedge recovery, accept-error teardown,
-  clean shutdown, and endpoint cleanup
-- keep `just lint` passing on the planning branch
-- keep unrelated storage-layer review/hardening separate rather than mixing
-  store concurrency work into the transport hardening line
+- add the S.13 sprint authority docs under `docs/phase-S/`
+- implement the local IPC hardening pass on
+  `feature/pS-s13-ipc-hardening`
+- clear the S.13 QA rounds on the same branch head before merge
+
+### S.14 Daemon Runtime Hardening
+
+Goal:
+- close the remaining daemon-runtime hardening gaps left after S.13 across
+  lifecycle control, reconcile/watch shutdown, runtime status bounds, doctor
+  projection detail, and retained-observability flush behavior
+
+Required outcomes:
+- lifecycle wake workers are explicitly owned and joined with timeout
+- reconcile/watch shutdown timeout is observable as typed failure
+- bounded runtime state stays bounded in actual retained cardinality
+- `atm doctor` projects daemon runtime health with the full required detail
+
+Required closeout work:
+- add the S.14 sprint authority docs under `docs/phase-S/`
+- land the S.14 runtime hardening fixes on the follow-on implementation branch
+- keep daemon architecture and phase-plan docs aligned on the accepted
+  resource-cap and eviction contracts
 
 ## 6. Removed Windows CI Guardrail
 
