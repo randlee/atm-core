@@ -615,6 +615,37 @@ Required closeout work:
 - update `docs/phase-S/sprint-S12.md` plus the 12 resolved INTG TTL records so
   documentation and machine-readable triage state agree on closure
 
+### S.13 IPC/Socket Runtime Hardening Plan
+
+Goal:
+- define the next daemon transport hardening step after the S.12 integration
+  fixes so local IPC fatal-path cleanup, endpoint ownership ordering, and
+  supervisor-facing runtime exits are explicit before more runtime changes land
+
+Required outcomes:
+- one accepted design for same-host local IPC:
+  - one accept loop
+  - one receive loop per accepted connection
+  - one async dispatch boundary
+  - one shared shutdown beacon
+- endpoint publication and unpublication ordering are explicit relative to
+  ADR-002 `launch.lock` / `owner.lock` semantics
+- fatal local IPC/runtime exits map to one typed supervisor-facing exit-code
+  taxonomy instead of one generic process failure
+- peer socket transport follow-up concerns are recorded separately without
+  forcing a premature persistent-session redesign
+
+Required closeout work:
+- add `docs/phase-S/sprint-S13-ipc-plan.md`
+- add `docs/phase-S/sprint-S13.md`
+- lock the `ShutdownBeacon` and `SocketEndpointGuard` design direction before
+  implementation begins
+- define the daemon runtime SLOs for wedge recovery, accept-error teardown,
+  clean shutdown, and endpoint cleanup
+- keep `just lint` passing on the planning branch
+- keep unrelated storage-layer review/hardening separate rather than mixing
+  store concurrency work into the transport hardening line
+
 ## 6. Removed Windows CI Guardrail
 
 The temporary Windows clippy narrowing used during S.0-S.3 is retired.
