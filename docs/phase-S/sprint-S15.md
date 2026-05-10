@@ -1,4 +1,4 @@
-# Sprint S.14 — SQLite Write-Worker Plan
+# Sprint S.15 — SQLite Write-Worker Plan
 
 **Branch**: feature/pS-s15-rusqlite-hardening  
 **Base**: integrate/phase-S @ 77badd5  
@@ -21,7 +21,7 @@ contracts, requirements, and durability model.
 
 ### 1. Write the design document
 
-Add `docs/phase-S/sprint-S14-rusqlite-plan.md` covering:
+Add `docs/phase-S/sprint-S15-rusqlite-plan.md` covering:
 - current `atm-rusqlite` write-path shape and hot spots
 - explicit review of the Opus recommendations: what is adopted as-is, what is
   modified, and what is deferred or rejected
@@ -30,7 +30,7 @@ Add `docs/phase-S/sprint-S14-rusqlite-plan.md` covering:
 - migration order with no flag-day cutover
 - hot-path `INSERT OR IGNORE` conditions and invariants
 - test and validation requirements
-- follow-up risks that are out of scope for S.14 implementation
+- follow-up risks that are out of scope for S.15 implementation
 
 ### 2. Record the sprint authority
 
@@ -61,9 +61,9 @@ The follow-on implementation should not:
 
 ## Acceptance Criteria
 
-- `docs/phase-S/sprint-S14.md` exists and names the implementation scope and
+- `docs/phase-S/sprint-S15.md` exists and names the implementation scope and
   acceptance criteria
-- `docs/phase-S/sprint-S14-rusqlite-plan.md` exists and covers all required
+- `docs/phase-S/sprint-S15-rusqlite-plan.md` exists and covers all required
   design areas
 - `docs/adr/ADR-ATM-RUSQLITE-002.md` exists as an ADR stub or full ADR
 - no implementation code changes are made on this planning branch
@@ -95,7 +95,7 @@ Implementation-sprint acceptance:
 
 ## References
 
-- `docs/phase-S/sprint-S14-rusqlite-plan.md`
+- `docs/phase-S/sprint-S15-rusqlite-plan.md`
 - `docs/atm-rusqlite/requirements.md`
 - `docs/atm-rusqlite/architecture.md`
 - `docs/adr/ADR-ATM-RUSQLITE-002.md`

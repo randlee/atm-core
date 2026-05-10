@@ -1,4 +1,4 @@
-# Sprint S.14 Rusqlite Write-Worker Plan
+# Sprint S.15 Rusqlite Write-Worker Plan
 
 **Branch**: feature/pS-s15-rusqlite-hardening  
 **Base**: integrate/phase-S @ 77badd5  
@@ -82,7 +82,7 @@ maintenance.
 The Opus proposal is directionally correct, but only if the mailbox message
 row is treated as append-only after first insert.
 
-S.14 adopts the following invariant:
+S.15 adopts the following invariant:
 - `mail_messages` is conceptually immutable after the initial insert
 - live ack/read state is owned by `ack_state` and
   `mail_visibility_states`, not by later edits to `mail_messages`
@@ -98,18 +98,18 @@ If any future caller needs mutable message-row semantics, that must be a new
 design change, not an accidental consequence of preserving the current hot-path
 SQL shape.
 
-#### 2. The generic `with_transaction(...)` contract is not fully actorized in S.14
+#### 2. The generic `with_transaction(...)` contract is not fully actorized in S.15
 
 The Opus recommendation says “signature unchanged” while also moving writes
 through a single dedicated thread. Those two goals are only partially
 compatible.
 
-The accepted S.14 position is:
+The accepted S.15 position is:
 - `SharedDb::with_transaction(...)` keeps its current callable shape for
   remaining cold-path internal callers
 - migrated hot-path writes stop depending on arbitrary closure submission and
   instead use typed writer shortcuts
-- S.14 does not attempt to transparently ship arbitrary borrowed-transaction
+- S.15 does not attempt to transparently ship arbitrary borrowed-transaction
   closures across thread boundaries
 
 That keeps the current internal API stable enough for incremental migration
@@ -149,7 +149,7 @@ The worker must not busy-spin for the full time budget.
 The Opus proposal uses one transaction per batch plus one SAVEPOINT per op so a
 single malformed write does not abort the entire batch.
 
-That is acceptable for S.14 because correctness matters more than squeezing the
+That is acceptable for S.15 because correctness matters more than squeezing the
 last bit of write throughput from the first implementation. But the plan treats
 SAVEPOINT cost as explicit overhead, not free performance. If later
 measurement shows meaningful cost on homogeneous mailbox batches, a narrower
@@ -160,7 +160,7 @@ batch specialization can be a follow-up.
 The worker must not treat avoidable schema faults as normal hot-path control
 flow.
 
-Accepted S.14 rule:
+Accepted S.15 rule:
 - validate known ATM-owned invariants before executing SQL for an op
 - use SQL constraint handling as a backstop, not as the primary branch
 
@@ -182,7 +182,7 @@ row cases from poisoning unrelated writes in the same batch.
 
 The current `atm-rusqlite` crate has no heartbeat write API. Adding a
 `submit_record_heartbeat` shortcut would invent new scope rather than migrate
-real existing writes. S.14 rejects that item.
+real existing writes. S.15 rejects that item.
 
 #### 2. hard throughput claims as planning facts
 
@@ -191,7 +191,7 @@ should be treated as hypotheses, not acceptance criteria. The implementation
 sprint may cite those expectations as rationale, but only measured results
 should be reported as outcomes.
 
-#### 3. WAL checkpoint tuning in S.14
+#### 3. WAL checkpoint tuning in S.15
 
 `wal_autocheckpoint=0` plus periodic passive checkpointing is a plausible
 follow-up, but it is not required to land the single-writer design itself.
@@ -279,7 +279,7 @@ writer’s cost explicit instead of hiding it inside transient connection opens.
 
 ### Submission shortcuts
 
-S.14 implementation should add typed submission helpers on `SharedDb` rather
+S.15 implementation should add typed submission helpers on `SharedDb` rather
 than making every caller construct `WriteOp` directly. The adopted shortcut
 set is:
 - `submit_upsert_message`
@@ -400,14 +400,14 @@ Required validation:
 
 ## Risks And Follow-Ups
 
-### Accepted S.14 risks
+### Accepted S.15 risks
 
 - per-op SAVEPOINT overhead may reduce the theoretical top-end write gain
 - batching introduces bounded write queueing latency
 - permanent writer ownership makes worker health a more visible runtime
   dependency
 
-### Follow-up, not blocking S.14
+### Follow-up, not blocking S.15
 
 - WAL autocheckpoint tuning and periodic passive checkpoint policy
 - measured throughput and tail-latency benchmarking
@@ -416,7 +416,7 @@ Required validation:
 
 ## ADR Impact
 
-S.14 should add `docs/adr/ADR-ATM-RUSQLITE-002.md`:
+S.15 should add `docs/adr/ADR-ATM-RUSQLITE-002.md`:
 - title: Single In-Process SQLite Write Worker
 - rationale: SQLite WAL allows concurrent readers but still serializes writers;
   making that serialization explicit at the app layer reduces self-contention
