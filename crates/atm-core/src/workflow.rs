@@ -18,7 +18,7 @@ use crate::home;
 use crate::mailbox::lock;
 use crate::persistence;
 use crate::schema::{AtmMessageId, MessageEnvelope};
-use crate::types::IsoTimestamp;
+use crate::types::{AgentName, IsoTimestamp, TeamName};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub(crate) struct WorkflowStateFile {
@@ -47,7 +47,9 @@ pub(crate) fn load_workflow_state(
     team: &str,
     agent: &str,
 ) -> Result<WorkflowStateFile, AtmError> {
-    let path = home::workflow_state_path_from_home(home_dir, team, agent)?;
+    let team: TeamName = team.parse()?;
+    let agent: AgentName = agent.parse()?;
+    let path = home::workflow_state_path_from_home(home_dir, &team, &agent)?;
     if !path.exists() {
         return Ok(WorkflowStateFile::default());
     }
@@ -81,7 +83,9 @@ pub(crate) fn save_workflow_state(
     agent: &str,
     state: &WorkflowStateFile,
 ) -> Result<(), AtmError> {
-    let path = home::workflow_state_path_from_home(home_dir, team, agent)?;
+    let team: TeamName = team.parse()?;
+    let agent: AgentName = agent.parse()?;
+    let path = home::workflow_state_path_from_home(home_dir, &team, &agent)?;
     let encoded = serde_json::to_string_pretty(state).map_err(|error| {
         AtmError::new(
             AtmErrorKind::Serialization,
@@ -113,7 +117,9 @@ where
     I: IntoIterator<Item = PathBuf>,
     F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
 {
-    let workflow_path = home::workflow_state_path_from_home(home_dir, team, agent)?;
+    let team_name: TeamName = team.parse()?;
+    let agent_name: AgentName = agent.parse()?;
+    let workflow_path = home::workflow_state_path_from_home(home_dir, &team_name, &agent_name)?;
     let mut write_paths = vec![workflow_path];
     write_paths.extend(extra_write_paths);
     let _locks = lock::acquire_many_sorted(write_paths, timeout)?;

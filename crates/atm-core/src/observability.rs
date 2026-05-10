@@ -392,6 +392,12 @@ pub enum AtmObservabilityHealthState {
     Unavailable,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RetainedSinkFaultMode {
+    Degraded,
+    Unavailable,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AtmObservabilityHealth {
     pub active_log_path: Option<PathBuf>,
