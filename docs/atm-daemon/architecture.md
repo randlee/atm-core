@@ -191,6 +191,8 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - watcher/reconcile observation of ATM-authored compatibility projection
   updates must be idempotent for the same logical message; re-observing the
   same retrieval-stub projection must not create a new-mail churn loop
+- ADR reference:
+  - `ADR-010`
 - daemon-owned ingress/export boundary tests must therefore preserve the same
   logical identity fingerprint across full-body and retrieval-stub projections
   for one ATM-authored message id rather than treating the projection as new

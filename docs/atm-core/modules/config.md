@@ -27,5 +27,6 @@ References:
 - `REQ-CORE-CONFIG-002` for `[atm].aliases` resolution and canonical address
   rewrite
 - `REQ-CORE-CONFIG-003`
+- `REQ-CORE-COMPAT-001`
 - `REQ-CORE-MAILBOX-001`
 - Migration artifact: `docs/archive/file-migration-plan.md`

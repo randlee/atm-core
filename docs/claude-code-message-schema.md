@@ -77,6 +77,10 @@ ATM may replace the Claude-visible `text` field with exactly:
 
 - `atm read --message-id <id>`
 
+In that stub:
+
+- `<id>` is the ULID-form ATM message id from `metadata.atm.messageId`
+
 That replacement is an ATM-owned compatibility projection rule, not a
 Claude-owned schema change. The durable full body remains ATM-owned state and
 the governing policy lives in

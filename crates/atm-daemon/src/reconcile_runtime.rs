@@ -4,7 +4,7 @@ use atm_core::boundary::{
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::{NotificationEvent, ProtocolErrorEnvelope};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
@@ -128,6 +128,8 @@ impl ReconcileRuntime {
         inbox_ingress: Arc<dyn InboxIngress + Send + Sync>,
         notification_sink: Arc<dyn NotificationSink + Send + Sync>,
     ) -> Self {
+        let notification_fingerprints =
+            Arc::new(Mutex::new(HashMap::<ReconcileKey, HashSet<String>>::new()));
         Self::new_with_executor(
             Arc::new(move |request| {
                 let batch = watch_source.poll(WatchSubscriptionRequest {
@@ -142,16 +144,23 @@ impl ReconcileRuntime {
                         agent: request.agent.clone(),
                     },
                 )?;
-                notification_sink.deliver(NotificationEvent {
-                    kind: "reconcile_complete".to_string(),
-                    detail: format!(
-                        "observed_paths={} imported_sources={}",
-                        batch.paths.len(),
-                        import.source_files.len()
-                    ),
-                    team: Some(request.team.clone()),
-                    agent: Some(request.agent.clone()),
-                })?;
+                if should_emit_reconcile_notification(
+                    request,
+                    &import,
+                    inbox_ingress.as_ref(),
+                    notification_fingerprints.as_ref(),
+                )? {
+                    notification_sink.deliver(NotificationEvent {
+                        kind: "reconcile_complete".to_string(),
+                        detail: format!(
+                            "observed_paths={} imported_sources={}",
+                            batch.paths.len(),
+                            import.source_files.len()
+                        ),
+                        team: Some(request.team.clone()),
+                        agent: Some(request.agent.clone()),
+                    })?;
+                }
                 Ok(ReconcileResult {
                     observed_paths: batch.paths.len(),
                     imported_sources: import.source_files.len(),
@@ -368,6 +377,41 @@ impl ReconcileRuntime {
     }
 }
 
+fn should_emit_reconcile_notification(
+    request: &ReconcileRequest,
+    import: &atm_core::boundary::InboxIngressImportResponse,
+    inbox_ingress: &dyn InboxIngress,
+    notification_fingerprints: &Mutex<HashMap<ReconcileKey, HashSet<String>>>,
+) -> Result<bool, AtmError> {
+    let mut current_fingerprints = HashSet::new();
+    for source in &import.source_files {
+        for message in &source.messages {
+            let fingerprint = inbox_ingress
+                .compute_identity_fingerprint(
+                    atm_core::boundary::InboxIngressIdentityFingerprintRequest {
+                        message: message.clone(),
+                    },
+                )?
+                .fingerprint;
+            let Some(fingerprint) = fingerprint else {
+                return Ok(true);
+            };
+            current_fingerprints.insert(fingerprint);
+        }
+    }
+
+    let key = ReconcileKey::from_request(request);
+    let mut fingerprints = notification_fingerprints.lock().map_err(|_| {
+        AtmError::daemon_unavailable("reconcile notification fingerprint state lock poisoned")
+    })?;
+    let changed = fingerprints
+        .get(&key)
+        .map(|previous| previous != &current_fingerprints)
+        .unwrap_or(true);
+    fingerprints.insert(key, current_fingerprints);
+    Ok(changed)
+}
+
 fn reconcile_worker_loop(inner: Arc<ReconcileRuntimeInner>) {
     loop {
         let pending = {
@@ -450,6 +494,11 @@ mod tests {
         ReconcileRequest, WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
     };
     use atm_core::protocol::ReconcileResult;
+    use atm_core::roles::ROLE_TEAM_LEAD;
+    use atm_core::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
+    use atm_core::types::IsoTimestamp;
+    use chrono::Utc;
+    use serde_json::{Map, Value};
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::{Arc, Condvar, Mutex, mpsc};
     use std::time::Duration;
@@ -638,7 +687,17 @@ mod tests {
     }
 
     #[derive(Clone)]
-    struct FakeInboxIngress;
+    struct FakeInboxIngress {
+        imports: Arc<Mutex<Vec<InboxIngressImportResponse>>>,
+    }
+
+    impl FakeInboxIngress {
+        fn new(imports: Vec<InboxIngressImportResponse>) -> Self {
+            Self {
+                imports: Arc::new(Mutex::new(imports)),
+            }
+        }
+    }
 
     impl boundary::sealed::Sealed for FakeInboxIngress {}
 
@@ -647,16 +706,25 @@ mod tests {
             &self,
             _request: InboxIngressImportRequest,
         ) -> Result<InboxIngressImportResponse, atm_core::error::AtmError> {
-            Ok(InboxIngressImportResponse {
-                source_files: Vec::new(),
-            })
+            let mut imports = self.imports.lock().expect("imports");
+            if imports.is_empty() {
+                return Ok(InboxIngressImportResponse {
+                    source_files: Vec::new(),
+                });
+            }
+            Ok(imports.remove(0))
         }
 
         fn compute_identity_fingerprint(
             &self,
-            _request: InboxIngressIdentityFingerprintRequest,
+            request: InboxIngressIdentityFingerprintRequest,
         ) -> Result<InboxIngressIdentityFingerprintResponse, atm_core::error::AtmError> {
-            Ok(InboxIngressIdentityFingerprintResponse { fingerprint: None })
+            Ok(InboxIngressIdentityFingerprintResponse {
+                fingerprint: request
+                    .message
+                    .message_id
+                    .map(|message_id| message_id.to_string()),
+            })
         }
 
         fn report_diagnostics(
@@ -687,9 +755,14 @@ mod tests {
     #[test]
     fn reconcile_runtime_routes_notifications_through_notification_sink_boundary() {
         let delivered = Arc::new(Mutex::new(Vec::new()));
+        let ingress = FakeInboxIngress::new(vec![InboxIngressImportResponse {
+            source_files: vec![inbox_source_with_message(sample_message(
+                "projected message",
+            ))],
+        }]);
         let runtime = ReconcileRuntime::new(
             Arc::new(FakeWatchSource),
-            Arc::new(FakeInboxIngress),
+            Arc::new(ingress),
             Arc::new(FakeNotificationSink {
                 delivered: Arc::clone(&delivered),
             }),
@@ -698,12 +771,87 @@ mod tests {
 
         let result = runtime.reconcile(request()).expect("reconcile result");
         assert_eq!(result.observed_paths, 1);
-        assert_eq!(result.imported_sources, 0);
+        assert_eq!(result.imported_sources, 1);
 
         let delivered = delivered.lock().expect("delivered");
         assert_eq!(delivered.len(), 1);
         assert_eq!(delivered[0].kind, "reconcile_complete");
 
         runtime.shutdown().expect("shutdown");
+    }
+
+    #[test]
+    fn reconcile_runtime_suppresses_duplicate_notifications_for_same_message_snapshot() {
+        let delivered = Arc::new(Mutex::new(Vec::new()));
+        let repeated_message = sample_message("same logical message");
+        let repeated_source = inbox_source_with_message(repeated_message);
+        let runtime = ReconcileRuntime::new(
+            Arc::new(FakeWatchSource),
+            Arc::new(FakeInboxIngress::new(vec![
+                InboxIngressImportResponse {
+                    source_files: vec![repeated_source.clone()],
+                },
+                InboxIngressImportResponse {
+                    source_files: vec![repeated_source],
+                },
+            ])),
+            Arc::new(FakeNotificationSink {
+                delivered: Arc::clone(&delivered),
+            }),
+        );
+        runtime.start().expect("start");
+
+        let request = request();
+        let first = runtime.reconcile(request.clone()).expect("first reconcile");
+        let second = runtime.reconcile(request).expect("second reconcile");
+        assert_eq!(first.imported_sources, 1);
+        assert_eq!(second.imported_sources, 1);
+
+        let delivered = delivered.lock().expect("delivered");
+        assert_eq!(delivered.len(), 1);
+        assert_eq!(delivered[0].kind, "reconcile_complete");
+
+        runtime.shutdown().expect("shutdown");
+    }
+
+    fn inbox_source_with_message(
+        message: MessageEnvelope,
+    ) -> atm_core::boundary::InboxSourceFileRecord {
+        atm_core::boundary::InboxSourceFileRecord {
+            path: std::env::temp_dir().join("watch.json"),
+            messages: vec![message],
+        }
+    }
+
+    fn sample_message(text: &str) -> MessageEnvelope {
+        let atm_message_id = AtmMessageId::new();
+        let message_id = LegacyMessageId::from_atm_message_id(atm_message_id);
+        let mut atm = Map::new();
+        atm.insert(
+            "messageId".to_string(),
+            Value::String(atm_message_id.to_string()),
+        );
+        let mut metadata = Map::new();
+        metadata.insert("atm".to_string(), Value::Object(atm));
+        let mut extra = Map::new();
+        extra.insert("metadata".to_string(), Value::Object(metadata));
+
+        MessageEnvelope {
+            from: ROLE_TEAM_LEAD.parse().expect("agent"),
+            text: text.to_string(),
+            timestamp: IsoTimestamp::from_datetime(Utc::now()),
+            read: false,
+            source_team: Some("test-team".parse().expect("team")),
+            summary: Some("summary".to_string()),
+            message_id: Some(message_id),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            stale_at: None,
+            task_id: None,
+            extra,
+        }
     }
 }

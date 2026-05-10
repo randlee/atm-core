@@ -34,7 +34,7 @@ pub fn write_messages(
     for message in messages {
         encoded.push(to_shared_inbox_value_with_policy(message, export_policy)?);
     }
-    let mut bytes = serde_json::to_vec_pretty(&encoded)?;
+    let mut bytes = serde_json::to_vec(&encoded)?;
     bytes.push(b'\n');
 
     persistence::atomic_write_bytes(

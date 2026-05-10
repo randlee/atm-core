@@ -1,5 +1,6 @@
 //! Mailbox owner-layer write boundaries for the Claude-owned inbox surface.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -25,13 +26,34 @@ pub(crate) fn commit_mailbox_state(
     messages: &[MessageEnvelope],
 ) -> Result<(), AtmError> {
     let export_policy = load_export_policy(path)?;
+    commit_mailbox_state_with_policy(path, messages, export_policy)
+}
+
+fn commit_mailbox_state_with_policy(
+    path: &Path,
+    messages: &[MessageEnvelope],
+    export_policy: SharedInboxExportPolicy,
+) -> Result<(), AtmError> {
     atomic::write_messages(path, messages, export_policy)
 }
 
 /// Commit one already-loaded multi-source mailbox set through the mailbox layer.
 pub(crate) fn commit_source_files(source_files: &[SourceFile]) -> Result<(), AtmError> {
+    let mut export_policy_by_dir = BTreeMap::<PathBuf, SharedInboxExportPolicy>::new();
     for source in source_files {
-        commit_mailbox_state(&source.path, &source.messages)?;
+        let config_dir = source
+            .path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .to_path_buf();
+        let export_policy = if let Some(policy) = export_policy_by_dir.get(&config_dir).copied() {
+            policy
+        } else {
+            let policy = load_export_policy(&source.path)?;
+            export_policy_by_dir.insert(config_dir, policy);
+            policy
+        };
+        commit_mailbox_state_with_policy(&source.path, &source.messages, export_policy)?;
     }
     Ok(())
 }
@@ -156,8 +178,9 @@ mod tests {
         )
         .expect("config");
         let path = tempdir.path().join(format!("{TEST_SENDER}.json"));
-        let message = sample_message(ROLE_TEAM_LEAD, "full body retained elsewhere");
-        let message_id = message.message_id.expect("message id");
+        let mut message = sample_message(ROLE_TEAM_LEAD, "full body retained elsewhere");
+        let atm_message_id = message.atm_message_id().expect("atm message id");
+        message.summary = Some("stub summary".to_string());
 
         commit_mailbox_state(&path, std::slice::from_ref(&message)).expect("commit mailbox");
 
@@ -165,9 +188,12 @@ mod tests {
         let encoded: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
         assert_eq!(
             encoded[0]["text"],
-            serde_json::Value::String(format!("atm read --message-id {message_id}"))
+            serde_json::Value::String(format!("atm read --message-id {atm_message_id}"))
         );
-        assert_eq!(encoded[0]["summary"], serde_json::Value::Null);
+        assert_eq!(
+            encoded[0]["summary"],
+            serde_json::Value::String("stub summary".into())
+        );
     }
 
     #[test]

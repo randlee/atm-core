@@ -319,7 +319,7 @@ mod tests {
             imported.text,
             format!(
                 "atm read --message-id {}",
-                message.message_id.expect("message id")
+                message.atm_message_id().expect("atm message id")
             )
         );
 

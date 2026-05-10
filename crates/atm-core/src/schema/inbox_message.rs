@@ -8,7 +8,7 @@ use tracing::warn;
 use ulid::Ulid;
 use uuid::Uuid;
 
-use crate::config::types::DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES;
+use crate::config::types::{ByteCount, DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES};
 use crate::error::AtmError;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
@@ -322,13 +322,15 @@ pub struct PendingAck {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct SharedInboxExportPolicy {
-    pub(crate) atm_authored_body_export_max_bytes: u64,
+    pub(crate) atm_authored_body_export_max_bytes: ByteCount,
 }
 
 impl Default for SharedInboxExportPolicy {
     fn default() -> Self {
         Self {
-            atm_authored_body_export_max_bytes: DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES,
+            atm_authored_body_export_max_bytes: ByteCount::new(
+                DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES,
+            ),
         }
     }
 }
@@ -369,6 +371,9 @@ pub(crate) fn to_shared_inbox_value_with_policy(
                 "failed to serialize shared inbox envelope for {} at {:?}: envelope did not encode as a JSON object",
                 message.from, message.timestamp
             ))
+            .with_recovery(
+                "Preserve the ATM shared-inbox envelope shape so serialization produces one JSON object per message before retrying mailbox export.",
+            )
         })?;
     // The legacy UUID `message_id` is stripped here but deliberately not
     // forwarded. Forwarded ATM message ids must remain ULID-authored per
@@ -431,7 +436,7 @@ pub(crate) fn to_shared_inbox_value_with_policy(
     if let Some(value) = task_id {
         atm.entry("taskId".to_string()).or_insert(value);
     }
-    if should_export_retrieval_stub(message, policy) {
+    if should_export_retrieval_stub(message, policy)? {
         let retrieval_stub = retrieval_stub_text(message)?;
         object.insert("text".to_string(), Value::String(retrieval_stub));
     }
@@ -441,23 +446,33 @@ pub(crate) fn to_shared_inbox_value_with_policy(
 fn should_export_retrieval_stub(
     message: &MessageEnvelope,
     policy: SharedInboxExportPolicy,
-) -> bool {
-    message.atm_message_id().is_some()
-        && (policy.atm_authored_body_export_max_bytes == 0
-            || message.text.len() > policy.atm_authored_body_export_max_bytes as usize)
+) -> Result<bool, AtmError> {
+    let export_cap = policy
+        .atm_authored_body_export_max_bytes
+        .as_usize()
+        .ok_or_else(|| {
+            AtmError::mailbox_write(format!(
+                "failed to compare ATM-authored export cap for {} at {:?}: configured byte cap does not fit into usize",
+                message.from, message.timestamp
+            ))
+            .with_recovery(
+                "Lower [atm].claude_jsonl_body_export_max_bytes to a bounded value before retrying mailbox export.",
+            )
+        })?;
+
+    Ok(message.atm_message_id().is_some()
+        && (policy.atm_authored_body_export_max_bytes.is_zero() || message.text.len() > export_cap))
 }
 
 fn retrieval_stub_text(message: &MessageEnvelope) -> Result<String, AtmError> {
-    let message_id = message.message_id.or_else(|| {
-        message
-            .atm_message_id()
-            .map(LegacyMessageId::from_atm_message_id)
-    });
-    let Some(message_id) = message_id else {
+    let Some(message_id) = message.atm_message_id() else {
         return Err(AtmError::mailbox_write(format!(
-            "failed to project shared inbox retrieval stub for {} at {:?}: ATM-authored message is missing a compatible message id",
+            "failed to project shared inbox retrieval stub for {} at {:?}: ATM-authored message is missing metadata.atm.messageId",
             message.from, message.timestamp
-        )));
+        ))
+        .with_recovery(
+            "Ensure ATM-authored messages retain metadata.atm.messageId so the retrieval stub can reference the durable ATM message id.",
+        ));
     };
     Ok(format!("atm read --message-id {message_id}"))
 }
@@ -599,6 +614,7 @@ mod tests {
         hydrate_legacy_fields_from_metadata, to_shared_inbox_value,
         to_shared_inbox_value_with_policy,
     };
+    use crate::config::types::ByteCount;
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
 
@@ -922,14 +938,14 @@ mod tests {
         let encoded = to_shared_inbox_value_with_policy(
             &envelope,
             SharedInboxExportPolicy {
-                atm_authored_body_export_max_bytes: 8,
+                atm_authored_body_export_max_bytes: ByteCount::new(8),
             },
         )
         .expect("encode");
 
         assert_eq!(
             encoded["text"],
-            json!(format!("atm read --message-id {legacy_message_id}"))
+            json!(format!("atm read --message-id {atm_message_id}"))
         );
         assert_eq!(encoded["summary"], json!("oversized"));
         assert_eq!(
@@ -965,7 +981,7 @@ mod tests {
         let encoded = to_shared_inbox_value_with_policy(
             &envelope,
             SharedInboxExportPolicy {
-                atm_authored_body_export_max_bytes: 8,
+                atm_authored_body_export_max_bytes: ByteCount::new(8),
             },
         )
         .expect("encode");
