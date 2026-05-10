@@ -1,0 +1,67 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Finding: S14-FTQ-001
+# Title: yield_now spin-loop in connect_daemon_local_ipc_until_ready (test_support.rs:77-89)
+# Triage mode: initial_pass
+# Triaged at: 2026-05-10T00:00:00Z
+
+<urn:atm:triage:finding/S14-FTQ-001>
+  a triage:Finding ;
+  triage:findingId "S14-FTQ-001" ;
+  triage:title "yield_now spin-loop in connect_daemon_local_ipc_until_ready (test_support.rs:77-89)" ;
+  triage:description "connect_daemon_local_ipc_until_ready in test_support.rs:77-89 uses thread::yield_now() in a busy spin-loop waiting for daemon readiness. This violates the anti-flake contract (plan-phase-S.md §4.1). Replace with sleep(5ms) backoff or an explicit readiness signal." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:phaseId "phase-S" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:pattern "yield_now" ;
+  triage:fileFilter "test_support\\.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:references "PR #230 QA-2 comment; QA report ID: FTQ-002" ;
+  triage:notes "S14-FTQ-001 is the sprint-scoped ID for QA report FTQ-002. The existing FTQ-002.ttl record covers a different finding. Crate-scope sweep found additional yield_now occurrences outside file_filter scope (tests.rs:252, daemon_observability.rs:957, shutdown_beacon.rs:27,47, atm/log.rs:171) — these are out-of-scope for this finding but noted for awareness." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S14-FTQ-001/pS-s14-impl/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S14-FTQ-001/pS-s15-rusqlite-hardening/1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s14-impl/571fa1c> .
+
+<urn:atm:triage:occurrence/S14-FTQ-001/pS-s14-impl/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/test_support.rs" ;
+  triage:line 85 ;
+  triage:snippet "std::thread::yield_now();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> .
+
+<urn:atm:triage:occurrence/S14-FTQ-001/pS-s15-rusqlite-hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/test_support.rs" ;
+  triage:line 85 ;
+  triage:snippet "std::thread::yield_now();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> .
+
+<urn:atm:triage:worktree/pS-s14-impl/571fa1c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:orderIndex 2 .

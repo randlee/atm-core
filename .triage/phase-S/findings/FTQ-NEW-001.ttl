@@ -1,0 +1,64 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-NEW-001>
+  a triage:Finding ;
+  triage:findingId "FTQ-NEW-001" ;
+  triage:title "Windows IPC shutdown test uses same bound for recv_timeout and elapsed assertion" ;
+  triage:description "crates/atm-daemon/src/tests.rs:302-309: windows_local_ipc_runtime_terminate_finishes_within_deadline uses recv_timeout(Duration::from_secs(3)) and asserts elapsed < Duration::from_secs(3) — same bound. On a loaded CI host, recv_timeout can consume close to 3s leaving zero margin for the assertion, causing spurious test failures. Both flaky-test-qa and rust-qa-agent flagged independently. Fix: widen recv_timeout to 10s and the elapsed assertion bound to 5s to provide adequate margin between the wait ceiling and the deadline check." ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:rule "FTQ" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T23:55:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s14-impl" ;
+  triage:promoteToBranch "feature/pS-s14-impl" ;
+  triage:mergeForwardNeeded true ;
+  triage:propagated true ;
+  triage:regressed false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-NEW-001/s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-NEW-001/s15/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s14-impl/5274ae6> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/a7ecacc> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s14-impl/5274ae6> .
+
+<urn:atm:triage:occurrence/FTQ-NEW-001/s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 302 ;
+  triage:snippet "recv_timeout(Duration::from_secs(3)) at line 303 and assert!(shutdown_started.elapsed() < Duration::from_secs(3)) at line 307 — identical 3s bound leaves zero margin on loaded CI; widen recv_timeout to 10s and assertion bound to 5s" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "5274ae6" ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s14-impl/5274ae6> .
+
+<urn:atm:triage:occurrence/FTQ-NEW-001/s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 302 ;
+  triage:snippet "recv_timeout(Duration::from_secs(3)) at line 303 and assert!(shutdown_started.elapsed() < Duration::from_secs(3)) at line 307 — identical 3s bound leaves zero margin on loaded CI; propagated from s14 unchanged" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "a7ecacc" ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/a7ecacc> .
+
+<urn:atm:triage:worktree/feature-pS-s14-impl/5274ae6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "5274ae6" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/a7ecacc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "a7ecacc" ;
+  triage:orderIndex 2 .

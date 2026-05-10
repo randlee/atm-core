@@ -661,6 +661,7 @@ Required closeout work:
 - keep daemon architecture and phase-plan docs aligned on the accepted
   resource-cap and eviction contracts
 
+
 ## 6. Removed Windows CI Guardrail
 
 The temporary Windows clippy narrowing used during S.0-S.3 is retired.
