@@ -9,9 +9,9 @@ use super::{
     local_ipc_transport::RuntimeServeHooks,
 };
 use atm_core::boundary::RequestDispatcher;
-use atm_core::doctor::{
-    DoctorEnvironmentVisibility, DoctorQuery, DoctorReport, DoctorStatus, DoctorSummary,
-};
+#[cfg(unix)]
+use atm_core::doctor::DoctorQuery;
+use atm_core::doctor::{DoctorEnvironmentVisibility, DoctorReport, DoctorStatus, DoctorSummary};
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::observability::{AtmObservabilityHealth, AtmObservabilityHealthState};
 use atm_core::protocol::{
@@ -19,6 +19,7 @@ use atm_core::protocol::{
     RuntimeReadinessState, TeamMemberHeartbeatRequest,
 };
 use atm_core::schema::{AgentMember, TeamConfig};
+#[cfg(unix)]
 use atm_core::test_support::EnvGuard;
 use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};

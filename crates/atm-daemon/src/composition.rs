@@ -114,7 +114,10 @@ impl RuntimeLifecycle {
 #[derive(Debug)]
 pub(crate) struct RuntimeComposition {
     lifecycle: Arc<RuntimeLifecycle>,
-    _host_ownership: HostOwnershipAdapter,
+    #[allow(dead_code)]
+    // Holding the ownership adapter in the composition keeps host-runtime ownership tied to the
+    // full daemon runtime lifetime even though the field is not read after construction.
+    host_ownership_adapter: HostOwnershipAdapter,
     endpoint_guard: Mutex<Option<SocketEndpointGuard>>,
     server_transport: LocalIpcServerTransportAdapter,
     request_dispatcher: Arc<DaemonRequestDispatcher>,
@@ -162,7 +165,7 @@ impl RuntimeComposition {
         };
         Ok(Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
-            _host_ownership: HostOwnershipAdapter::new(),
+            host_ownership_adapter: HostOwnershipAdapter::new(),
             endpoint_guard: Mutex::new(None),
             server_transport: LocalIpcServerTransportAdapter::new(),
             request_dispatcher: Arc::new(DaemonRequestDispatcher::new(
@@ -444,19 +447,25 @@ impl RuntimeComposition {
     fn start_background_lanes(&self) -> Result<(), AtmError> {
         self._notification_sink.start()?;
         if let Err(error) = self._watch_event_source.start() {
-            self.rollback_partially_started_lanes(false, true);
+            self.rollback_partially_started_lanes(StartedLanes {
+                watch_started: false,
+                notification_started: true,
+            });
             return Err(error);
         }
         if let Err(error) = self._reconcile_coordinator.start() {
-            self.rollback_partially_started_lanes(true, true);
+            self.rollback_partially_started_lanes(StartedLanes {
+                watch_started: true,
+                notification_started: true,
+            });
             return Err(error);
         }
         Ok(())
     }
 
-    fn rollback_partially_started_lanes(&self, watch_started: bool, notification_started: bool) {
+    fn rollback_partially_started_lanes(&self, started_lanes: StartedLanes) {
         const BACKGROUND_LANE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(3);
-        if watch_started
+        if started_lanes.watch_started
             && let Err(error) = shutdown_lane_with_deadline(
                 "watch event source",
                 BACKGROUND_LANE_SHUTDOWN_DEADLINE,
@@ -470,7 +479,7 @@ impl RuntimeComposition {
                 "daemon background lane rollback shutdown was incomplete"
             );
         }
-        if notification_started
+        if started_lanes.notification_started
             && let Err(error) = shutdown_lane_with_deadline(
                 "notification sink",
                 BACKGROUND_LANE_SHUTDOWN_DEADLINE,
@@ -530,6 +539,12 @@ impl RuntimeComposition {
             None => Ok(()),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct StartedLanes {
+    watch_started: bool,
+    notification_started: bool,
 }
 
 fn shutdown_lane_with_deadline<T, F>(
