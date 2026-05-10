@@ -5,6 +5,9 @@ use atm_core::error::AtmError;
 
 #[derive(Debug, Clone)]
 pub(crate) struct LifecycleControlSourceAdapter {
+    // The lifecycle flags are flipped from signal-hook handlers and read from normal daemon
+    // threads, so atomics provide the minimum cross-thread synchronization without widening the
+    // signal-facing surface to a heavier lock.
     terminate: Arc<AtomicBool>,
     #[cfg_attr(windows, allow(dead_code))]
     reload: Arc<AtomicBool>,
@@ -129,6 +132,9 @@ impl LifecycleControlSourceAdapter {
         }
         let shared = shared.as_ref().ok_or_else(|| {
             AtmError::daemon_unavailable("daemon lifecycle control source was not initialized")
+                .with_recovery(
+                    "Restart the daemon; lifecycle hooks were not installed before the runtime tried to serve requests.",
+                )
         })?;
         Ok(Self {
             terminate: Arc::clone(&shared.terminate),
@@ -162,6 +168,10 @@ impl LifecycleControlSourceAdapter {
         self.state_change.snapshot()
     }
 
+    pub(crate) fn notify_state_change(&self) -> Result<(), AtmError> {
+        self.state_change.notify()
+    }
+
     #[cfg_attr(any(windows, not(test)), allow(dead_code))]
     pub(crate) fn wait_for_state_change(
         &self,
@@ -170,7 +180,7 @@ impl LifecycleControlSourceAdapter {
         self.state_change.wait_for_change(observed_generation)
     }
 
-    #[cfg_attr(windows, allow(dead_code))]
+    #[allow(dead_code)]
     pub(crate) fn wait_for_state_change_timeout(
         &self,
         observed_generation: &mut u64,
@@ -247,49 +257,78 @@ fn install_platform_hooks(
 
     let (wake_read, wake_write) = UnixStream::pair().map_err(|source| {
         AtmError::daemon_unavailable("failed to create daemon lifecycle wake pipe")
+            .with_recovery(
+                "Restart the daemon after confirming the host can allocate a local lifecycle wake channel for atm-daemon.",
+            )
             .with_source(source)
     })?;
     signal_flag::register(SIGINT, Arc::clone(terminate)).map_err(|source| {
         AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_recovery(
+                "Restart the daemon after confirming the host allows local signal-hook registration for atm-daemon.",
+            )
             .with_source(source)
     })?;
     signal_flag::register(SIGTERM, Arc::clone(terminate)).map_err(|source| {
         AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_recovery(
+                "Restart the daemon after confirming the host allows local signal-hook registration for atm-daemon.",
+            )
             .with_source(source)
     })?;
     signal_flag::register(SIGHUP, Arc::clone(reload)).map_err(|source| {
         AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_recovery(
+                "Restart the daemon after confirming the host allows local signal-hook registration for atm-daemon.",
+            )
             .with_source(source)
     })?;
     signal_pipe::register(
         SIGINT,
         wake_write.try_clone().map_err(|source| {
             AtmError::daemon_unavailable("failed to clone daemon lifecycle wake pipe")
+                .with_recovery(
+                    "Restart the daemon after confirming the host can duplicate the lifecycle wake channel for signal delivery.",
+                )
                 .with_source(source)
         })?,
     )
     .map_err(|source| {
         AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_recovery(
+                "Restart the daemon after confirming the host allows local signal-hook registration for atm-daemon.",
+            )
             .with_source(source)
     })?;
     signal_pipe::register(
         SIGTERM,
         wake_write.try_clone().map_err(|source| {
             AtmError::daemon_unavailable("failed to clone daemon lifecycle wake pipe")
+                .with_recovery(
+                    "Restart the daemon after confirming the host can duplicate the lifecycle wake channel for signal delivery.",
+                )
                 .with_source(source)
         })?,
     )
     .map_err(|source| {
         AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_recovery(
+                "Restart the daemon after confirming the host allows local signal-hook registration for atm-daemon.",
+            )
             .with_source(source)
     })?;
     signal_pipe::register(SIGHUP, wake_write).map_err(|source| {
         AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_recovery(
+                "Restart the daemon after confirming the host allows local signal-hook registration for atm-daemon.",
+            )
             .with_source(source)
     })?;
     let terminate = Arc::clone(terminate);
     let reload = Arc::clone(reload);
     let state_change = Arc::clone(state_change);
+    // This worker is intentionally fire-and-forget: lifecycle-control state is process-global,
+    // and process exit is the only shutdown point for the signal hooks it services.
     std::thread::Builder::new()
         .name("atm-daemon-lifecycle-unix".to_string())
         .spawn(move || {
@@ -297,6 +336,9 @@ fn install_platform_hooks(
         })
         .map_err(|source| {
             AtmError::daemon_unavailable("failed to spawn daemon lifecycle signal worker")
+                .with_recovery(
+                    "Restart the daemon after confirming the host can spawn the lifecycle wake worker thread.",
+                )
                 .with_source(source)
         })?;
     Ok(())
@@ -313,45 +355,56 @@ fn install_platform_hooks(
 
     signal_flag::register(SIGINT, Arc::clone(terminate)).map_err(|source| {
         AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_recovery(
+                "Restart the daemon after confirming the host allows local signal-hook registration for atm-daemon.",
+            )
             .with_source(source)
     })?;
     signal_flag::register(SIGTERM, Arc::clone(terminate)).map_err(|source| {
         AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_recovery(
+                "Restart the daemon after confirming the host allows local signal-hook registration for atm-daemon.",
+            )
             .with_source(source)
     })?;
     signal_flag::register(SIGBREAK, Arc::clone(reload)).map_err(|source| {
         AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_recovery(
+                "Restart the daemon after confirming the host allows local signal-hook registration for atm-daemon.",
+            )
             .with_source(source)
     })?;
 
     let terminate = Arc::clone(terminate);
     let reload = Arc::clone(reload);
     let state_change = Arc::clone(state_change);
+    // This worker is intentionally fire-and-forget: lifecycle-control state is process-global,
+    // and process exit is the only shutdown point for the signal hooks it services.
     std::thread::Builder::new()
         .name("atm-daemon-lifecycle-windows".to_string())
         .spawn(move || {
-            let mut observed_terminate = terminate.load(Ordering::SeqCst);
             let mut observed_reload = reload.load(Ordering::SeqCst);
             loop {
                 if terminate.load(Ordering::SeqCst) {
                     let _ = state_change.notify();
                     return;
                 }
-                let terminate_now = terminate.load(Ordering::SeqCst);
                 let reload_now = reload.load(Ordering::SeqCst);
-                if terminate_now != observed_terminate || reload_now != observed_reload {
-                    observed_terminate = terminate_now;
+                if reload_now != observed_reload {
                     observed_reload = reload_now;
                     let _ = state_change.notify();
                 }
                 // `signal_hook::flag` does not expose a blocking cross-platform wake primitive on
                 // Windows, so the lifecycle worker uses one bounded polling exception that Phase S
-                // documents explicitly in plan-phase-S.md §4.1.
+                // documents explicitly in docs/plan-phase-S.md §4.1, Accepted production exceptions.
                 std::thread::sleep(std::time::Duration::from_millis(25));
             }
         })
         .map_err(|source| {
             AtmError::daemon_unavailable("failed to spawn daemon lifecycle signal worker")
+                .with_recovery(
+                    "Restart the daemon after confirming the host can spawn the lifecycle wake worker thread.",
+                )
                 .with_source(source)
         })?;
     Ok(())

@@ -328,6 +328,10 @@ Lifecycle state model:
 - any post-`Running` exit path, including listener/accept failures, must pass
   through `Running -> Draining -> Stopped` rather than silently forcing
   `Running -> Stopped`
+- Phase S currently models fatal accept failure as a conventional
+  `ServeEvent::AcceptError` control-plane event rather than as a dedicated typed
+  lifecycle-transition enum; that shape is accepted so long as the runtime
+  still transitions through `Running -> Draining -> Stopped` afterward
 - repeated lifecycle-control installs for one platform implementation must
   reuse the same process-wide control flags without clearing a pending
   terminate/reload bit between installs

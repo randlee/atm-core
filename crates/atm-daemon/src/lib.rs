@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 //! Daemon runtime composition and portability adapters.
 
+mod active_connection_registry;
 mod boundary_adapters;
 pub(crate) mod composition;
 mod daemon_runtime_observability;
@@ -15,6 +16,7 @@ mod notification_runtime;
 mod peer_transport;
 mod reconcile_runtime;
 mod runtime_health;
+mod shutdown_beacon;
 #[cfg(test)]
 mod test_observability;
 mod watch_runtime;
@@ -50,6 +52,9 @@ impl DaemonExitCode {
 }
 
 pub fn daemon_exit_code_for_error(error: &AtmError) -> DaemonExitCode {
+    if error.code == AtmErrorCode::DaemonLifecycleWedge {
+        return DaemonExitCode::LifecycleWedge;
+    }
     if matches!(
         error.code,
         AtmErrorCode::DaemonServingStateRejected
@@ -60,9 +65,6 @@ pub fn daemon_exit_code_for_error(error: &AtmError) -> DaemonExitCode {
     ) || error.is_config()
     {
         return DaemonExitCode::DoNotRestart;
-    }
-    if error.message.contains("lifecycle waiter") || error.message.contains("lifecycle wedge") {
-        return DaemonExitCode::LifecycleWedge;
     }
     if error.is_daemon_unavailable() {
         return DaemonExitCode::TransportFatal;
