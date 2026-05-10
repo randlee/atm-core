@@ -1,6 +1,8 @@
 use std::io::ErrorKind;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime};
 use std::{fs, fs::OpenOptions};
 
 use atm_core::error::AtmError;
@@ -11,13 +13,13 @@ use atm_core::observability::{
     LogTailSession, ObservabilityPort, RetainedSinkFaultMode,
 };
 use sc_observability::{
-    JsonlFileSink, LogSink, Logger, LoggerConfig, RetentionPolicy, RotationPolicy, SinkRegistration,
+    LogSink, Logger, LoggerConfig, RetentionPolicy, RotationPolicy, SinkRegistration,
 };
-#[cfg(test)]
-use sc_observability_types::LogSinkError;
 use sc_observability_types::{
-    ActionName, CorrelationId, DiagnosticInfo, Level, LevelFilter as SharedLevelFilter, LogEvent,
-    OutcomeLabel, ProcessIdentity, SchemaVersion, ServiceName, TargetCategory, Timestamp,
+    ActionName, CorrelationId, DiagnosticInfo, DiagnosticSummary, ErrorCode, ErrorContext, Level,
+    LevelFilter as SharedLevelFilter, LogEvent, LogSinkError, OutcomeLabel, ProcessIdentity,
+    Remediation, SchemaVersion, ServiceName, SinkHealth, SinkHealthState, SinkName, TargetCategory,
+    Timestamp,
 };
 use serde_json::Map;
 
@@ -33,6 +35,7 @@ const ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAI
 pub struct DaemonObservability {
     logger: Arc<Logger>,
     active_log_path: PathBuf,
+    retained_sink: Arc<RetainedJsonlFileSink>,
     service_name: ServiceName,
     target_category: TargetCategory,
 }
@@ -52,6 +55,7 @@ impl Clone for DaemonObservability {
         Self {
             logger: Arc::clone(&self.logger),
             active_log_path: self.active_log_path.clone(),
+            retained_sink: Arc::clone(&self.retained_sink),
             service_name: self.service_name.clone(),
             target_category: self.target_category.clone(),
         }
@@ -64,6 +68,13 @@ impl DaemonObservability {
     }
 
     fn bootstrap_at_log_dir(log_dir: PathBuf) -> Result<Self, AtmError> {
+        Self::bootstrap_at_log_dir_with_rotation(log_dir, RETAINED_LOG_ROTATION_MAX_BYTES)
+    }
+
+    fn bootstrap_at_log_dir_with_rotation(
+        log_dir: PathBuf,
+        rotation_max_bytes: u64,
+    ) -> Result<Self, AtmError> {
         let service_name = ServiceName::new(ATM_SERVICE_NAME).map_err(|source| {
             AtmError::observability_bootstrap("failed to validate ATM daemon service name")
                 .with_source(source)
@@ -73,13 +84,27 @@ impl DaemonObservability {
                 .with_source(source)
         })?;
         let retained_sink_fault = retained_sink_fault_mode()?;
-        let (logger, active_log_path) = build_logger(&log_dir, retained_sink_fault, &service_name)?;
+        let (logger, active_log_path, retained_sink) = build_logger(
+            &log_dir,
+            retained_sink_fault,
+            &service_name,
+            rotation_max_bytes,
+        )?;
         Ok(Self {
             logger: Arc::new(logger),
             active_log_path,
+            retained_sink,
             service_name,
             target_category,
         })
+    }
+
+    #[cfg(test)]
+    fn bootstrap_at_log_dir_with_rotation_for_test(
+        log_dir: PathBuf,
+        rotation_max_bytes: u64,
+    ) -> Result<Self, AtmError> {
+        Self::bootstrap_at_log_dir_with_rotation(log_dir, rotation_max_bytes)
     }
 
     pub(crate) fn emit_runtime_event(
@@ -111,24 +136,15 @@ impl DaemonObservability {
             )
             .with_source(source)
         })?;
-        let file = match OpenOptions::new().append(true).open(&self.active_log_path) {
-            Ok(file) => file,
-            Err(source) if source.kind() == ErrorKind::NotFound => return Ok(()),
-            Err(source) => {
-                return Err(AtmError::observability_health(format!(
-                    "failed to open retained observability sink at {} for best-effort flush",
+        self.retained_sink
+            .sync_last_written_file()
+            .map_err(|source| {
+                AtmError::observability_health(format!(
+                    "failed to sync retained observability sink at {}",
                     self.active_log_path.display()
                 ))
-                .with_source(source));
-            }
-        };
-        file.sync_all().map_err(|source| {
-            AtmError::observability_health(format!(
-                "failed to sync retained observability sink at {}",
-                self.active_log_path.display()
-            ))
-            .with_source(source)
-        })
+                .with_source(source)
+            })
     }
 }
 
@@ -198,7 +214,8 @@ fn build_logger(
     log_dir: &Path,
     retained_sink_fault: Option<RetainedSinkFaultMode>,
     service_name: &ServiceName,
-) -> Result<(Logger, PathBuf), AtmError> {
+    rotation_max_bytes: u64,
+) -> Result<(Logger, PathBuf, Arc<RetainedJsonlFileSink>), AtmError> {
     let active_log_path = log_dir.join("atm.log.jsonl");
     ensure_retained_log_ready(log_dir, &active_log_path)?;
     let mut config = LoggerConfig::default_for(service_name.clone(), PathBuf::new());
@@ -213,10 +230,10 @@ fn build_logger(
     // atm-daemon satisfies ADR-011's non-blocking-executor rule by never calling
     // this sink from an async executor thread; retained writes stay on ordinary
     // daemon OS threads, and shutdown flush runs on a dedicated finalizer thread.
-    let sink = Arc::new(JsonlFileSink::new(
+    let retained_sink = Arc::new(RetainedJsonlFileSink::new(
         active_log_path.clone(),
         RotationPolicy {
-            max_bytes: RETAINED_LOG_ROTATION_MAX_BYTES,
+            max_bytes: rotation_max_bytes,
             max_files: RETAINED_LOG_ROTATION_MAX_FILES,
         },
         RetentionPolicy {
@@ -225,16 +242,16 @@ fn build_logger(
     ));
     #[cfg(test)]
     let sink: Arc<dyn LogSink> = match retained_sink_fault {
-        Some(mode) => Arc::new(RetainedSinkHealthOverride::new(sink, mode)),
-        None => sink,
+        Some(mode) => Arc::new(RetainedSinkHealthOverride::new(retained_sink.clone(), mode)),
+        None => retained_sink.clone(),
     };
     #[cfg(not(test))]
     let sink: Arc<dyn LogSink> = {
         let _ = retained_sink_fault;
-        sink
+        retained_sink.clone()
     };
     builder.register_sink(SinkRegistration::new(sink));
-    Ok((builder.build(), active_log_path))
+    Ok((builder.build(), active_log_path, retained_sink))
 }
 
 fn ensure_retained_log_ready(log_dir: &Path, active_log_path: &Path) -> Result<(), AtmError> {
@@ -257,6 +274,170 @@ fn ensure_retained_log_ready(log_dir: &Path, active_log_path: &Path) -> Result<(
             ))
             .with_source(source)
         })
+}
+
+#[derive(Debug)]
+struct RetainedJsonlFileSink {
+    path: PathBuf,
+    rotation: RotationPolicy,
+    retention: RetentionPolicy,
+    health: Mutex<SinkHealth>,
+    last_written_file: Mutex<Option<std::fs::File>>,
+}
+
+impl RetainedJsonlFileSink {
+    fn new(path: PathBuf, rotation: RotationPolicy, retention: RetentionPolicy) -> Self {
+        Self {
+            path,
+            rotation,
+            retention,
+            health: Mutex::new(SinkHealth {
+                name: SinkName::new("jsonl_file_sink").expect("jsonl sink constant is valid"),
+                state: SinkHealthState::Healthy,
+                last_error: None,
+            }),
+            last_written_file: Mutex::new(None),
+        }
+    }
+
+    fn sync_last_written_file(&self) -> std::io::Result<()> {
+        let last_written = self
+            .last_written_file
+            .lock()
+            .map_err(|_| std::io::Error::other("retained sink sync handle lock poisoned"))?;
+        if let Some(file) = last_written.as_ref() {
+            file.sync_all()?;
+        }
+        Ok(())
+    }
+
+    fn rotate_if_needed(&self, incoming_len: u64) {
+        if let Ok(metadata) = fs::metadata(&self.path)
+            && metadata.len().saturating_add(incoming_len) > self.rotation.max_bytes
+        {
+            for idx in (1..self.rotation.max_files).rev() {
+                let src = self.rotated_path(idx);
+                let dest = self.rotated_path(idx + 1);
+                let _ = rename_if_present(&src, &dest);
+            }
+            let rotated = self.rotated_path(1);
+            let _ = rename_if_present(&self.path, &rotated);
+        }
+        self.prune_old_files();
+    }
+
+    fn rotated_path(&self, index: u32) -> PathBuf {
+        let parent = self.path.parent().unwrap_or_else(|| Path::new("."));
+        let file_name = self
+            .path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("atm.log.jsonl");
+        parent.join(format!("{file_name}.{index}"))
+    }
+
+    fn prune_old_files(&self) {
+        let Some(parent) = self.path.parent() else {
+            return;
+        };
+        let Ok(entries) = fs::read_dir(parent) else {
+            return;
+        };
+        let retention_cutoff = SystemTime::now()
+            - Duration::from_secs(u64::from(self.retention.max_age_days) * 86_400);
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Some(file_name) = path.file_name().and_then(|value| value.to_str()) else {
+                continue;
+            };
+            let active_name = self
+                .path
+                .file_name()
+                .and_then(|value| value.to_str())
+                .unwrap_or_default();
+            if !file_name.starts_with(active_name) || file_name == active_name {
+                continue;
+            }
+            if let Ok(metadata) = entry.metadata()
+                && let Ok(modified) = metadata.modified()
+                && modified < retention_cutoff
+            {
+                let _ = fs::remove_file(path);
+            }
+        }
+    }
+
+    fn mark_failure<E>(&self, error: E) -> LogSinkError
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        let message = error.to_string();
+        let diagnostic = ErrorContext::new(
+            ErrorCode::new_static("SC_LOGGER_SINK_WRITE_FAILED"),
+            "jsonl file sink write failed",
+            Remediation::not_recoverable(
+                "file sink write failure handling is owned by the logger runtime",
+            ),
+        )
+        .cause(message)
+        .source(Box::new(error));
+        let mut health = self.health.lock().expect("file sink health poisoned");
+        health.state = SinkHealthState::DegradedDropping;
+        health.last_error = Some(DiagnosticSummary::from(diagnostic.diagnostic()));
+        LogSinkError(Box::new(diagnostic))
+    }
+}
+
+impl LogSink for RetainedJsonlFileSink {
+    fn write(&self, event: &LogEvent) -> Result<(), LogSinkError> {
+        if let Some(parent) = self.path.parent() {
+            fs::create_dir_all(parent).map_err(|error| self.mark_failure(error))?;
+        }
+        let mut line = serde_json::to_vec(event).map_err(|error| self.mark_failure(error))?;
+        line.push(b'\n');
+        self.rotate_if_needed(line.len() as u64);
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)
+            .map_err(|error| self.mark_failure(error))?;
+        file.write_all(&line)
+            .and_then(|()| file.flush())
+            .map_err(|error| self.mark_failure(error))?;
+        *self
+            .last_written_file
+            .lock()
+            .expect("retained sink file handle poisoned") = Some(file);
+        let mut health = self.health.lock().expect("file sink health poisoned");
+        health.state = SinkHealthState::Healthy;
+        Ok(())
+    }
+
+    fn flush(&self) -> Result<(), LogSinkError> {
+        let mut last_written = self
+            .last_written_file
+            .lock()
+            .expect("retained sink file handle poisoned");
+        if let Some(file) = last_written.as_mut() {
+            file.flush().map_err(|error| self.mark_failure(error))?;
+        }
+        Ok(())
+    }
+
+    fn health(&self) -> SinkHealth {
+        self.health
+            .lock()
+            .expect("file sink health poisoned")
+            .clone()
+    }
+}
+
+fn rename_if_present(src: &Path, dest: &Path) -> std::io::Result<()> {
+    match fs::rename(src, dest) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
 }
 
 fn logger_level_override() -> Result<Option<SharedLevelFilter>, AtmError> {
@@ -677,5 +858,30 @@ mod tests {
                 .message
                 .contains(&blocked_log_dir.join("atm.log.jsonl").display().to_string())
         );
+    }
+
+    #[test]
+    fn best_effort_flush_syncs_the_last_written_handle_without_reopening_the_active_path() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let log_dir = tempdir.path().join("logs");
+        std::fs::create_dir_all(&log_dir).expect("log dir");
+        let observability =
+            super::DaemonObservability::bootstrap_at_log_dir_with_rotation_for_test(
+                log_dir.clone(),
+                512,
+            )
+            .expect("bootstrap");
+        observability
+            .emit_runtime_event("start_requested", "ok", "daemon start requested")
+            .expect("emit");
+
+        let active_log_path = log_dir.join("atm.log.jsonl");
+        let rotated_log_path = log_dir.join("atm.log.jsonl.1");
+        std::fs::rename(&active_log_path, &rotated_log_path).expect("rotate active log path");
+        std::fs::create_dir(&active_log_path).expect("replace active path with directory");
+
+        observability
+            .best_effort_flush_blocking()
+            .expect("best effort flush");
     }
 }

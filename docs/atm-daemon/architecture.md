@@ -335,6 +335,19 @@ Lifecycle state model:
 - repeated lifecycle-control installs for one platform implementation must
   reuse the same process-wide control flags without clearing a pending
   terminate/reload bit between installs
+- the process-global lifecycle wake worker is still explicit runtime-owned
+  state:
+  - one worker instance may be reused across repeated installs while the daemon
+    keeps the same process-global lifecycle adapter alive
+  - runtime teardown must request worker stop, unregister the active signal
+    hooks, and join the worker within the documented `1s` bound
+- Windows keeps one accepted lifecycle polling exception:
+  - `signal_hook::flag` exposes no matching blocking wake primitive for the
+    console/service-control adapter
+  - the lifecycle wake worker may therefore poll at `25ms` intervals on Windows
+    only
+  - that polling loop must stay isolated to `lifecycle_control.rs` and remain
+    under the same explicit shutdown/join contract as the Unix wake worker
 
 Privacy boundary:
 - the lifecycle state type and transport/runtime adapter internals remain

@@ -491,6 +491,17 @@ impl PreparedRuntimeServer {
                     shutdown_error = Some(error);
                 }
             }
+            if let Err(error) = lifecycle_control.shutdown_worker_with_timeout() {
+                if let Some(existing) = shutdown_error.as_ref() {
+                    tracing::warn!(
+                        begin_shutdown_error = %existing,
+                        lifecycle_worker_error = %error,
+                        "daemon lifecycle worker shutdown failed after an earlier shutdown-start error"
+                    );
+                } else {
+                    shutdown_error = Some(error);
+                }
+            }
             if let Err(error) = endpoint_guard.unpublish() {
                 if let Some(existing) = shutdown_error.as_ref() {
                     tracing::warn!(

@@ -14,6 +14,7 @@ const DEFAULT_RECONCILE_DEBOUNCE: Duration = Duration::from_millis(25);
 const DEFAULT_RECONCILE_COMPLETION_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_RECONCILE_IDLE_INTERVAL: Duration = Duration::from_millis(50);
 const MAX_RECONCILE_DEBOUNCE_EXTENSIONS: u32 = 8;
+const MAX_RECONCILE_FINGERPRINT_KEYS: usize = 1024;
 #[cfg(not(test))]
 const RECONCILE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(2);
 #[cfg(test)]
@@ -38,6 +39,8 @@ struct ReconcileRuntimeInner {
     worker: Mutex<Option<JoinHandle<()>>>,
     debounce: Duration,
     executor: ReconcileExecutor,
+    #[cfg_attr(not(test), allow(dead_code))]
+    notification_fingerprints: Arc<Mutex<NotificationFingerprintRegistry>>,
 }
 
 #[derive(Default)]
@@ -48,11 +51,13 @@ struct ReconcileState {
     pending_epoch: u64,
     pending: HashMap<ReconcileKey, PendingReconcile>,
     pending_order: VecDeque<ReconcileKey>,
+    active_waiters: HashSet<u64>,
     completed: HashMap<u64, ReconcileOutcome>,
 }
 
 impl ReconcileState {
     fn release_waiter(&mut self, waiter_id: u64) {
+        self.active_waiters.remove(&waiter_id);
         self.completed.remove(&waiter_id);
         for pending in self.pending.values_mut() {
             pending.waiters.retain(|candidate| *candidate != waiter_id);
@@ -97,6 +102,12 @@ struct ReconcileKey {
 struct PendingReconcile {
     request: ReconcileRequest,
     waiters: Vec<u64>,
+}
+
+#[derive(Default)]
+struct NotificationFingerprintRegistry {
+    entries: HashMap<ReconcileKey, HashSet<String>>,
+    order: VecDeque<ReconcileKey>,
 }
 
 #[derive(Clone)]
@@ -147,7 +158,8 @@ impl ReconcileRuntime {
         // reconcile cycles can compare the newest inbox projection with the
         // previous one before deciding whether to emit a notification.
         let notification_fingerprints =
-            Arc::new(Mutex::new(HashMap::<ReconcileKey, HashSet<String>>::new()));
+            Arc::new(Mutex::new(NotificationFingerprintRegistry::default()));
+        let notification_fingerprints_for_executor = Arc::clone(&notification_fingerprints);
         Self::new_with_executor(
             Arc::new(move |request| {
                 let batch = watch_source.poll(WatchSubscriptionRequest {
@@ -166,7 +178,7 @@ impl ReconcileRuntime {
                     request,
                     &import,
                     inbox_ingress.as_ref(),
-                    notification_fingerprints.as_ref(),
+                    notification_fingerprints_for_executor.as_ref(),
                 )? {
                     notification_sink.deliver(NotificationEvent {
                         kind: "reconcile_complete".to_string(),
@@ -185,10 +197,15 @@ impl ReconcileRuntime {
                 })
             }),
             DEFAULT_RECONCILE_DEBOUNCE,
+            notification_fingerprints,
         )
     }
 
-    fn new_with_executor(executor: ReconcileExecutor, debounce: Duration) -> Self {
+    fn new_with_executor(
+        executor: ReconcileExecutor,
+        debounce: Duration,
+        notification_fingerprints: Arc<Mutex<NotificationFingerprintRegistry>>,
+    ) -> Self {
         Self {
             inner: Arc::new(ReconcileRuntimeInner {
                 state: Mutex::new(ReconcileState::default()),
@@ -198,6 +215,7 @@ impl ReconcileRuntime {
                 worker: Mutex::new(None),
                 debounce,
                 executor,
+                notification_fingerprints,
             }),
         }
     }
@@ -270,6 +288,12 @@ impl ReconcileRuntime {
                         timeout_ms = RECONCILE_SHUTDOWN_DEADLINE.as_millis(),
                         "reconcile runtime worker exceeded shutdown deadline; detaching join helper"
                     );
+                    return Err(AtmError::daemon_unavailable(
+                        "reconcile runtime worker exceeded the bounded shutdown deadline",
+                    )
+                    .with_recovery(
+                        "Restart atm-daemon after the reconcile background lane becomes responsive again.",
+                    ));
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
                     let _ = join_helper.join();
@@ -299,6 +323,7 @@ impl ReconcileRuntime {
             }
             let waiter_id = state.next_waiter_id;
             state.next_waiter_id += 1;
+            state.active_waiters.insert(waiter_id);
             state.pending_epoch = state.pending_epoch.saturating_add(1);
             let key = ReconcileKey::from_request(&request);
             if let Some(pending) = state.pending.get_mut(&key) {
@@ -332,6 +357,7 @@ impl ReconcileRuntime {
                 ));
             }
             if let Some(outcome) = state.completed.remove(&waiter_id) {
+                state.active_waiters.remove(&waiter_id);
                 return match outcome {
                     ReconcileOutcome::Success(result) => Ok(result),
                     ReconcileOutcome::Failure(failure) => Err(failure.to_error()),
@@ -356,7 +382,11 @@ impl ReconcileRuntime {
 
     #[cfg(test)]
     pub(crate) fn new_for_test(executor: ReconcileExecutor, debounce: Duration) -> Self {
-        Self::new_with_executor(executor, debounce)
+        Self::new_with_executor(
+            executor,
+            debounce,
+            Arc::new(Mutex::new(NotificationFingerprintRegistry::default())),
+        )
     }
 
     #[cfg(test)]
@@ -450,7 +480,7 @@ fn should_emit_reconcile_notification(
     request: &ReconcileRequest,
     import: &atm_core::boundary::InboxIngressImportResponse,
     inbox_ingress: &dyn InboxIngress,
-    notification_fingerprints: &Mutex<HashMap<ReconcileKey, HashSet<String>>>,
+    notification_fingerprints: &Mutex<NotificationFingerprintRegistry>,
 ) -> Result<bool, AtmError> {
     let mut current_fingerprints = HashSet::new();
     for source in &import.source_files {
@@ -474,10 +504,28 @@ fn should_emit_reconcile_notification(
         AtmError::daemon_unavailable("reconcile notification fingerprint state lock poisoned")
     })?;
     let changed = fingerprints
+        .entries
         .get(&key)
         .map(|previous| previous != &current_fingerprints)
         .unwrap_or(true);
-    fingerprints.insert(key, current_fingerprints);
+    let is_new_key = !fingerprints.entries.contains_key(&key);
+    if is_new_key && fingerprints.entries.len() >= MAX_RECONCILE_FINGERPRINT_KEYS {
+        while let Some(evicted_key) = fingerprints.order.pop_front() {
+            if fingerprints.entries.remove(&evicted_key).is_some() {
+                tracing::warn!(
+                    team = %evicted_key.team,
+                    agent = %evicted_key.agent,
+                    cap = MAX_RECONCILE_FINGERPRINT_KEYS,
+                    "evicted oldest reconcile notification fingerprint entry after reaching the bounded cap"
+                );
+                break;
+            }
+        }
+    }
+    if is_new_key {
+        fingerprints.order.push_back(key.clone());
+    }
+    fingerprints.entries.insert(key, current_fingerprints);
     Ok(changed)
 }
 
@@ -551,7 +599,9 @@ fn reconcile_worker_loop(inner: Arc<ReconcileRuntimeInner>) {
             };
             if let Ok(mut state) = inner.state.lock() {
                 for waiter in pending_request.waiters {
-                    state.completed.insert(waiter, outcome.clone());
+                    if state.active_waiters.contains(&waiter) {
+                        state.completed.insert(waiter, outcome.clone());
+                    }
                 }
                 inner.wake.notify_all();
             } else {
@@ -563,7 +613,7 @@ fn reconcile_worker_loop(inner: Arc<ReconcileRuntimeInner>) {
 
 #[cfg(test)]
 mod tests {
-    use super::ReconcileRuntime;
+    use super::{MAX_RECONCILE_FINGERPRINT_KEYS, ReconcileRuntime};
     use atm_core::boundary::{
         self, InboxIngress, InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
         InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
@@ -899,6 +949,100 @@ mod tests {
         let delivered = delivered.lock().expect("delivered");
         assert_eq!(delivered.len(), 1);
         assert_eq!(delivered[0].kind, "reconcile_complete");
+
+        runtime.shutdown().expect("shutdown");
+    }
+
+    #[test]
+    fn reconcile_runtime_bounds_notification_fingerprint_registry_and_re_emits_after_eviction() {
+        let delivered = Arc::new(Mutex::new(Vec::new()));
+        let imports = (0..=MAX_RECONCILE_FINGERPRINT_KEYS)
+            .map(|index| InboxIngressImportResponse {
+                source_files: vec![inbox_source_with_message(sample_message(&format!(
+                    "message-{index}"
+                )))],
+            })
+            .collect::<Vec<_>>();
+        let runtime = ReconcileRuntime::new(
+            Arc::new(FakeWatchSource),
+            Arc::new(FakeInboxIngress::new(imports)),
+            Arc::new(FakeNotificationSink {
+                delivered: Arc::clone(&delivered),
+            }),
+        );
+        runtime.start().expect("start");
+
+        let first_request = request_for("agent-0");
+        runtime
+            .reconcile(first_request.clone())
+            .expect("first reconcile");
+        for index in 1..=MAX_RECONCILE_FINGERPRINT_KEYS {
+            runtime
+                .reconcile(request_for(&format!("agent-{index}")))
+                .expect("bounded reconcile");
+        }
+        runtime
+            .reconcile(first_request)
+            .expect("reconcile after eviction");
+
+        let fingerprints = runtime
+            .inner
+            .notification_fingerprints
+            .lock()
+            .expect("fingerprints");
+        assert_eq!(fingerprints.entries.len(), MAX_RECONCILE_FINGERPRINT_KEYS);
+        assert_eq!(fingerprints.order.len(), MAX_RECONCILE_FINGERPRINT_KEYS);
+        drop(fingerprints);
+
+        let delivered = delivered.lock().expect("delivered");
+        assert_eq!(delivered.len(), MAX_RECONCILE_FINGERPRINT_KEYS + 2);
+
+        runtime.shutdown().expect("shutdown");
+    }
+
+    #[test]
+    fn reconcile_runtime_discards_completed_entries_for_timed_out_waiters() {
+        let (started_tx, started_rx) = mpsc::channel();
+        let release: Arc<(Mutex<bool>, Condvar)> = Arc::new((Mutex::new(false), Condvar::new()));
+        let runtime = ReconcileRuntime::new_for_test(
+            Arc::new({
+                let release = Arc::clone(&release);
+                move |_| {
+                    started_tx.send(()).expect("started");
+                    let (released, wake) = &*release;
+                    let mut released = released.lock().expect("released");
+                    while !*released {
+                        let wait = wake
+                            .wait_timeout(released, Duration::from_secs(1))
+                            .expect("wait release");
+                        released = wait.0;
+                    }
+                    Ok(ReconcileResult {
+                        observed_paths: 1,
+                        imported_sources: 1,
+                    })
+                }
+            }),
+            Duration::from_millis(10),
+        );
+        runtime.start().expect("start");
+
+        let runtime_for_thread = runtime.clone();
+        let join = std::thread::spawn(move || runtime_for_thread.reconcile(request()));
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("started");
+        let error = join.join().expect("join").expect_err("timeout should fail");
+        assert!(error.message.contains("timed out"));
+
+        let (released, wake) = &*release;
+        *released.lock().expect("released") = true;
+        wake.notify_all();
+        assert!(
+            runtime.wait_for_pending_count_for_test(0, Duration::from_secs(1)),
+            "pending reconcile work did not drain after release"
+        );
+        assert_eq!(runtime.state_counts_for_test(), (0, 0, 0));
 
         runtime.shutdown().expect("shutdown");
     }
