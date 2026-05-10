@@ -5,6 +5,7 @@ mod output;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::{fs, fs::OpenOptions};
 
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
@@ -12,7 +13,7 @@ use atm_core::home;
 use atm_core::observability::{
     AtmLogQuery, AtmLogRecord, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
     CommandEvent, LogFieldMap, LogFieldMatch, LogLevelFilter, LogOrder, LogTailSession,
-    ObservabilityPort,
+    ObservabilityPort, RetainedSinkFaultMode,
 };
 use chrono::{DateTime, Utc};
 use clap::Parser;
@@ -39,12 +40,6 @@ const ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAI
 pub(crate) enum ConsoleLogRoute {
     Disabled,
     Stderr,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RetainedSinkFaultMode {
-    Degraded,
-    Unavailable,
 }
 
 fn main() {
@@ -101,7 +96,7 @@ fn run() -> anyhow::Result<()> {
 }
 
 fn init_observability(stderr_logs: bool) -> Result<observability::CliObservability, AtmError> {
-    let home_dir = home::atm_home()?;
+    let log_dir = home::host_log_dir()?;
     let console_log_route = if stderr_logs {
         ConsoleLogRoute::Stderr
     } else {
@@ -114,7 +109,7 @@ fn init_observability(stderr_logs: bool) -> Result<observability::CliObservabili
         AtmError::observability_bootstrap("failed to validate ATM observability target")
             .with_source(source)
     })?;
-    let (logger, active_log_path) = build_logger(&home_dir, console_log_route, &service_name)?;
+    let (logger, active_log_path) = build_logger(&log_dir, console_log_route, &service_name)?;
 
     Ok(observability::CliObservability::from_boxed_port(Box::new(
         ScObservabilityAdapter::new(logger, active_log_path, service_name, target_category),
@@ -122,18 +117,16 @@ fn init_observability(stderr_logs: bool) -> Result<observability::CliObservabili
 }
 
 pub(crate) fn build_logger(
-    home_dir: &Path,
+    log_dir: &Path,
     console_log_route: ConsoleLogRoute,
     service_name: &ServiceName,
 ) -> Result<(Logger, PathBuf), AtmError> {
-    let log_dir = retained_log_dir(home_dir)?;
     let active_log_path = log_dir.join("atm.log.jsonl");
-    let mut config = LoggerConfig::default_for(service_name.clone(), log_dir);
-    if let Some(level) = logger_level_override()? {
-        config.level = level;
-    }
-    // Keep the default Info threshold so retained logging captures the S.9
-    // daemon lifecycle baseline unless ATM_LOG explicitly overrides it.
+    ensure_retained_log_ready(log_dir, &active_log_path)?;
+    let mut config = LoggerConfig::default_for(service_name.clone(), log_dir.to_path_buf());
+    config.level = logger_level_override()?.unwrap_or(SharedLevelFilter::Info);
+    // Make the retained file threshold explicit so lifecycle info! events stay
+    // in the default retained log unless ATM_LOG overrides the level.
     // ATM CLI owns stdout/stderr UX by default; only opt into a shared
     // console sink when the CLI routing rule explicitly selects one.
     config.enable_console_sink = false;
@@ -145,21 +138,35 @@ pub(crate) fn build_logger(
         builder.register_sink(SinkRegistration::new(Arc::new(ConsoleSink::stderr())));
     }
     if let Some(mode) = retained_sink_fault_mode()? {
-        register_retained_sink_fault(&mut builder, home_dir, mode)?;
+        register_retained_sink_fault(&mut builder, log_dir, mode)?;
     }
     Ok((builder.build(), active_log_path))
 }
 
-fn retained_log_dir(home_dir: &Path) -> Result<PathBuf, AtmError> {
-    if let Some(path) = std::env::var_os("ATM_LOG_DIR").filter(|value| !value.is_empty()) {
-        return Ok(PathBuf::from(path));
-    }
-
-    Ok(home::host_log_dir_from_home(home_dir))
+fn ensure_retained_log_ready(log_dir: &Path, active_log_path: &Path) -> Result<(), AtmError> {
+    fs::create_dir_all(log_dir).map_err(|source| {
+        AtmError::observability_bootstrap(format!(
+            "failed to create retained log directory {}",
+            log_dir.display()
+        ))
+        .with_source(source)
+    })?;
+    OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(active_log_path)
+        .map(|_| ())
+        .map_err(|source| {
+            AtmError::observability_bootstrap(format!(
+                "failed to open retained log file {} during startup",
+                active_log_path.display()
+            ))
+            .with_source(source)
+        })
 }
 
-fn fault_injection_log_path(home_dir: &Path) -> Result<PathBuf, AtmError> {
-    Ok(retained_log_dir(home_dir)?.join("atm-fault-injection.log.jsonl"))
+fn fault_injection_log_path(log_dir: &Path) -> PathBuf {
+    log_dir.join("atm-fault-injection.log.jsonl")
 }
 
 fn init_tracing(stderr_logs: bool) -> Result<(), AtmError> {
@@ -235,11 +242,11 @@ fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError>
 
 fn register_retained_sink_fault(
     builder: &mut LoggerBuilder,
-    home_dir: &Path,
+    log_dir: &Path,
     mode: RetainedSinkFaultMode,
 ) -> Result<(), AtmError> {
     let sink = Arc::new(JsonlFileSink::new(
-        fault_injection_log_path(home_dir)?,
+        fault_injection_log_path(log_dir),
         RotationPolicy::default(),
         RetentionPolicy::default(),
     ));
@@ -666,7 +673,15 @@ pub(crate) fn new_adapter_port(
     } else {
         ConsoleLogRoute::Disabled
     };
-    let (logger, active_log_path) = build_logger(home_dir, console_log_route, &service_name)?;
+    let test_log_dir = if std::env::var_os("ATM_LOG_DIR")
+        .filter(|value| !value.is_empty())
+        .is_some()
+    {
+        home::host_log_dir()?
+    } else {
+        home::host_log_dir_from_home(home_dir)
+    };
+    let (logger, active_log_path) = build_logger(&test_log_dir, console_log_route, &service_name)?;
     Ok(Box::new(ScObservabilityAdapter::new(
         logger,
         active_log_path,

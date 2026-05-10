@@ -102,8 +102,8 @@ impl WatchRuntime {
             Arc::new(|request| {
                 let inbox_path = atm_core::home::inbox_path_from_home(
                     &request.home_dir,
-                    request.team.as_str(),
-                    request.agent.as_str(),
+                    &request.team,
+                    &request.agent,
                 )?;
                 let mut paths = Vec::new();
                 if inbox_path.exists() {
@@ -403,9 +403,11 @@ mod tests {
     use atm_core::boundary::WatchEventBatch;
     use atm_core::boundary::WatchSubscriptionRequest;
     use atm_core::error::AtmError;
+    use std::fs;
     use std::path::PathBuf;
     use std::sync::{Arc, Condvar, Mutex, mpsc};
     use std::time::Duration;
+    use tempfile::TempDir;
 
     fn request() -> WatchSubscriptionRequest {
         request_for("test-agent")
@@ -417,6 +419,47 @@ mod tests {
             team: "test-team".parse().expect("team"),
             agent: agent.parse().expect("agent"),
         }
+    }
+
+    #[test]
+    fn watch_runtime_ignores_host_scoped_log_directory() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let inboxes_dir = tempdir
+            .path()
+            .join(".claude")
+            .join("teams")
+            .join("test-team")
+            .join("inboxes");
+        fs::create_dir_all(&inboxes_dir).expect("create inboxes");
+        let primary = inboxes_dir.join("test-agent.json");
+        let origin = inboxes_dir.join("test-agent.host-a.json");
+        fs::write(&primary, "[]").expect("write primary inbox");
+        fs::write(&origin, "[]").expect("write origin inbox");
+
+        let logs_dir = tempdir.path().join(".atm").join("logs");
+        fs::create_dir_all(&logs_dir).expect("create logs dir");
+        fs::write(
+            logs_dir.join("atm.log.jsonl"),
+            "{\"message\":\"retained\"}\n",
+        )
+        .expect("write retained log");
+
+        let runtime = WatchRuntime::new();
+        runtime.start().expect("start");
+        let batch = runtime
+            .poll(WatchSubscriptionRequest {
+                home_dir: tempdir.path().to_path_buf(),
+                team: "test-team".parse().expect("team"),
+                agent: "test-agent".parse().expect("agent"),
+            })
+            .expect("poll");
+        runtime.shutdown().expect("shutdown");
+
+        assert_eq!(batch.paths, vec![origin, primary]);
+        assert!(
+            batch.paths.iter().all(|path| !path.starts_with(&logs_dir)),
+            "watch runtime must not subscribe to the host-scoped retained log directory"
+        );
     }
 
     #[test]

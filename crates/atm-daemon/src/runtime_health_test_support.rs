@@ -94,10 +94,7 @@ impl DaemonRequestDispatcher {
         };
         Self {
             home_dir: home_dir.clone(),
-            observability: DaemonObservability::new_with_sink_fault(
-                home_dir,
-                RetainedSinkFault::Healthy,
-            ),
+            observability: DaemonObservability::new_with_sink_fault(None),
             status_cache,
             sqlite_boundary,
         }
