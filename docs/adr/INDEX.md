@@ -17,6 +17,10 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-010 — Claude JSONL Compatibility Envelope](./ADR-010-claude-jsonl-compatibility-envelope.md)
 - [ADR-011 — Host-Scoped Retained Log Root](./ADR-011-host-scoped-retained-log-root.md)
 
+## Extracted Crate-Local ADRs
+
+- [ADR-ATM-RUSQLITE-002 — Single In-Process SQLite Write Worker](./ADR-ATM-RUSQLITE-002.md)
+
 ## Embedded Crate-Local ADR Records
 
 These accepted ADR records are intentionally embedded in the crate architecture
@@ -28,6 +32,8 @@ documents for now and must be reviewed as part of those crate docs:
   - shared ATM protocol lives in `atm-core`
 - `ADR-ATM-001` — `docs/atm/architecture.md`
   - CLI uses shared protocol and client transport only
+- `ADR-ATM-RUSQLITE-001` — `docs/atm-rusqlite/architecture.md`
+  - concrete SQLite adapters remain private
 
 Until they are extracted into standalone files, this index is the canonical
 place that names and locates the crate-local ADR records.
