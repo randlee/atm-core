@@ -1,28 +1,33 @@
 use super::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
 use super::{
-    LocalIpcServerTransportAdapter,
+    DaemonExitCode, LocalIpcServerTransportAdapter, daemon_exit_code_for_error,
     host_ownership::{
         HOST_RUNTIME_OWNER_LOCK_FILE, HostOwnershipAdapter, clear_stale_recovery_signal_for_test,
         install_stale_recovery_signal_for_test,
     },
     lifecycle_control::LifecycleControlSourceAdapter,
+    local_ipc_transport::RuntimeServeHooks,
+    test_support::{DoctorOnlyDispatcher, LifecycleFlagResetGuard},
 };
 use atm_core::boundary::RequestDispatcher;
-use atm_core::doctor::{
-    DoctorEnvironmentVisibility, DoctorQuery, DoctorReport, DoctorStatus, DoctorSummary,
-};
+#[cfg(unix)]
+use atm_core::doctor::DoctorQuery;
+use atm_core::doctor::DoctorStatus;
+use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
-use atm_core::observability::{AtmObservabilityHealth, AtmObservabilityHealthState};
+#[cfg(unix)]
+use atm_core::observability::AtmObservabilityHealthState;
 use atm_core::protocol::{
     HeartbeatActivity, RequestEnvelope, ResponseEnvelope, RuntimeLivenessState, RuntimeMemberState,
     RuntimeReadinessState, TeamMemberHeartbeatRequest,
 };
 use atm_core::schema::{AgentMember, TeamConfig};
+#[cfg(unix)]
 use atm_core::test_support::EnvGuard;
 use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_rusqlite::assemble_boundary;
-use interprocess::local_socket::Stream as LocalSocketStream;
+#[cfg(unix)]
 use interprocess::local_socket::traits::Stream as _;
 use serial_test::serial;
 use std::fs::OpenOptions;
@@ -32,26 +37,10 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
+#[cfg(unix)]
+use crate::test_support::connect_daemon_local_ipc_until_ready;
+
 const TEST_TEAM: &str = "test-team";
-
-struct LifecycleFlagResetGuard {
-    lifecycle: LifecycleControlSourceAdapter,
-}
-
-impl LifecycleFlagResetGuard {
-    fn install(lifecycle: LifecycleControlSourceAdapter) -> Self {
-        lifecycle.set_terminate_for_test(false);
-        lifecycle.set_reload_for_test(false);
-        Self { lifecycle }
-    }
-}
-
-impl Drop for LifecycleFlagResetGuard {
-    fn drop(&mut self) {
-        self.lifecycle.set_terminate_for_test(false);
-        self.lifecycle.set_reload_for_test(false);
-    }
-}
 
 struct StaleRecoverySignalGuard;
 
@@ -65,65 +54,6 @@ impl StaleRecoverySignalGuard {
 impl Drop for StaleRecoverySignalGuard {
     fn drop(&mut self) {
         clear_stale_recovery_signal_for_test();
-    }
-}
-
-#[derive(Debug, Default)]
-struct DoctorOnlyDispatcher;
-
-impl atm_core::boundary::sealed::Sealed for DoctorOnlyDispatcher {}
-
-impl RequestDispatcher for DoctorOnlyDispatcher {
-    fn dispatch(
-        &self,
-        request: RequestEnvelope,
-    ) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
-        match request {
-            RequestEnvelope::Doctor(_) => Ok(ResponseEnvelope::Doctor(DoctorReport {
-                summary: DoctorSummary {
-                    status: DoctorStatus::Healthy,
-                    message: "ok".to_string(),
-                    info_count: 0,
-                    warning_count: 0,
-                    error_count: 0,
-                },
-                findings: Vec::new(),
-                recommendations: Vec::new(),
-                environment: DoctorEnvironmentVisibility {
-                    atm_home: None,
-                    atm_team: None,
-                    atm_identity: None,
-                    team_override: None,
-                },
-                member_roster: None,
-                observability: AtmObservabilityHealth {
-                    active_log_path: None,
-                    logging_state: AtmObservabilityHealthState::Healthy,
-                    query_state: Some(AtmObservabilityHealthState::Healthy),
-                    detail: None,
-                },
-                runtime_status: None,
-            })),
-            other => panic!("unexpected request in DoctorOnlyDispatcher: {other:?}"),
-        }
-    }
-}
-
-fn connect_daemon_local_ipc_until_ready(endpoint_path: &std::path::Path) -> LocalSocketStream {
-    let deadline = Instant::now() + Duration::from_secs(3);
-    loop {
-        match LocalSocketStream::connect(
-            atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path).expect("ipc name"),
-        ) {
-            Ok(stream) => return stream,
-            Err(error) if Instant::now() < deadline => {
-                let _ = error;
-                // The listener becomes connectable only after the serve thread enters accept;
-                // use a tiny bounded sleep instead of a CPU-spin retry loop while waiting.
-                std::thread::sleep(Duration::from_millis(5));
-            }
-            Err(error) => panic!("connect daemon local ipc: {error}"),
-        }
     }
 }
 
@@ -153,7 +83,32 @@ fn daemon_shutdown_signal_install_reuses_shared_flags() {
 }
 
 #[test]
+fn daemon_exit_code_mapping_matches_supervisor_contract() {
+    assert_eq!(
+        daemon_exit_code_for_error(&AtmError::daemon_lifecycle_wedge("wedged")),
+        DaemonExitCode::LifecycleWedge
+    );
+    assert_eq!(
+        daemon_exit_code_for_error(&AtmError::daemon_launch_gate_rejected("launch gate")),
+        DaemonExitCode::DoNotRestart
+    );
+    assert_eq!(
+        daemon_exit_code_for_error(&AtmError::daemon_unavailable("listener died")),
+        DaemonExitCode::TransportFatal
+    );
+    assert_eq!(
+        daemon_exit_code_for_error(&AtmError::config("bad config")),
+        DaemonExitCode::DoNotRestart
+    );
+    assert_eq!(
+        daemon_exit_code_for_error(&AtmError::validation("buggy invariant")),
+        DaemonExitCode::InternalBug
+    );
+}
+
+#[test]
 #[serial]
+#[cfg(unix)]
 fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     // TempDir uniqueness is process-local; #[serial] keeps this same-host transport smoke test
     // from racing other lifecycle-control and singleton-sensitive daemon tests.
@@ -163,6 +118,8 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     let runtime = server_transport
         .prepare_runtime_at_socket_path(socket_path.clone())
         .expect("prepare runtime");
+    let mut runtime = runtime;
+    let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
     let (lifecycle, _reset) = {
         let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
         let reset = LifecycleFlagResetGuard::install(lifecycle.clone());
@@ -174,11 +131,14 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     let join = std::thread::spawn(move || {
         let result = runtime.serve_with_runtime_hooks(
             dispatcher,
-            Duration::from_millis(500),
-            Duration::from_secs(2),
-            || Ok(()),
-            || Ok(()),
-            || {},
+            RuntimeServeHooks {
+                endpoint_guard,
+                graceful_drain_deadline: Duration::from_millis(500),
+                force_cancel_deadline: Duration::from_secs(2),
+                begin_shutdown: || Ok(()),
+                reload_runtime_view: || Ok(()),
+                finalize_shutdown: || {},
+            },
         );
         serve_result_tx.send(result).expect("send serve result");
     });
@@ -223,6 +183,7 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
 
 #[test]
 #[serial]
+#[cfg(unix)]
 fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability() {
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -288,9 +249,7 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
     loop {
         match std::fs::read_to_string(&retained_log_path) {
             Ok(contents) if contents.contains("daemon start requested") => break,
-            Ok(_) | Err(_) if Instant::now() < deadline => {
-                std::thread::sleep(Duration::from_millis(5))
-            }
+            Ok(_) | Err(_) if Instant::now() < deadline => std::thread::yield_now(),
             Err(error) => panic!("read retained log: {error}"),
             Ok(contents) => panic!("retained log missing startup event: {contents}"),
         }
@@ -314,6 +273,8 @@ fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
     let runtime = server_transport
         .prepare_runtime_at_socket_path(socket_path)
         .expect("prepare runtime");
+    let mut runtime = runtime;
+    let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
     let (lifecycle, _reset) = {
         let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
         let reset = LifecycleFlagResetGuard::install(lifecycle.clone());
@@ -325,11 +286,14 @@ fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
     let join = std::thread::spawn(move || {
         let result = runtime.serve_with_runtime_hooks(
             dispatcher,
-            Duration::from_millis(500),
-            Duration::from_secs(2),
-            || Ok(()),
-            || Ok(()),
-            || {},
+            RuntimeServeHooks {
+                endpoint_guard,
+                graceful_drain_deadline: Duration::from_millis(500),
+                force_cancel_deadline: Duration::from_secs(2),
+                begin_shutdown: || Ok(()),
+                reload_runtime_view: || Ok(()),
+                finalize_shutdown: || {},
+            },
         );
         serve_result_tx.send(result).expect("send serve result");
     });

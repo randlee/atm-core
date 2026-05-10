@@ -643,7 +643,11 @@ mod tests {
 
     fn read_request_frame(
         stream: &mut TcpStream,
-    ) -> (u64, RequestEnvelope, super::JsonAtmProtocolCodec) {
+    ) -> (
+        atm_core::protocol::RequestId,
+        RequestEnvelope,
+        super::JsonAtmProtocolCodec,
+    ) {
         let codec = super::JsonAtmProtocolCodec;
         let frame = atm_core::protocol::read_frame(
             stream,
@@ -659,7 +663,7 @@ mod tests {
     fn write_response_frame(
         stream: &mut TcpStream,
         codec: &super::JsonAtmProtocolCodec,
-        request_id: u64,
+        request_id: atm_core::protocol::RequestId,
         response: ResponseEnvelope,
     ) {
         let frame = codec

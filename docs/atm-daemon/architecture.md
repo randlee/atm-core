@@ -328,6 +328,10 @@ Lifecycle state model:
 - any post-`Running` exit path, including listener/accept failures, must pass
   through `Running -> Draining -> Stopped` rather than silently forcing
   `Running -> Stopped`
+- Phase S currently models fatal accept failure as a conventional
+  `ServeEvent::AcceptError` control-plane event rather than as a dedicated typed
+  lifecycle-transition enum; that shape is accepted so long as the runtime
+  still transitions through `Running -> Draining -> Stopped` afterward
 - repeated lifecycle-control installs for one platform implementation must
   reuse the same process-wide control flags without clearing a pending
   terminate/reload bit between installs
@@ -478,6 +482,22 @@ Force-cancel rule:
   connection shutdown rather than falling through to `process::exit(1)`
 - failure to drain within the force deadline is reported as a typed runtime
   failure after interrupting active connections
+
+### Runtime SLOs
+
+| SLO | Target | Contract |
+|---|---|---|
+| Wedge recovery | `<= 1s` | fatal transport events or shutdown beacons must unblock the lifecycle waiter and serving path promptly |
+| Accept-error teardown | `<= 2s` | a fatal local-IPC accept failure must reach typed runtime exit after drain start and endpoint unpublication |
+| Clean shutdown | `<= 5s` | orderly daemon shutdown, including tracked request drain and background-lane stop, stays bounded |
+| Socket cleanup | `<= 100ms` | same-host endpoint unpublication completes promptly once serving stops |
+
+Exit-code expectations tied to these SLOs:
+- bind failure exits `70` and relies on supervisor restart/backoff rather than
+  in-process rebind
+- singleton or stale-owner admission failures exit `64` and must not hot-loop
+  restart
+- lifecycle-wedge detection exits `71`
 
 Required deadlines:
 - normal drain deadline: `5s`
