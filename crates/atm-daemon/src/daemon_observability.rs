@@ -1,7 +1,9 @@
 use std::io::ErrorKind;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::thread;
 use std::time::{Duration, SystemTime};
 use std::{fs, fs::OpenOptions};
 
@@ -29,6 +31,7 @@ const ATM_LOG_LEVEL_ENV: &str = "ATM_LOG";
 const RETAINED_LOG_ROTATION_MAX_BYTES: u64 = 10 * 1024 * 1024;
 const RETAINED_LOG_ROTATION_MAX_FILES: u32 = 5;
 const RETAINED_LOG_RETENTION_MAX_AGE_DAYS: u32 = 7;
+const RETAINED_LOG_PRUNE_INTERVAL: Duration = Duration::from_secs(60);
 #[cfg(test)]
 const ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
 
@@ -283,6 +286,8 @@ struct RetainedJsonlFileSink {
     retention: RetentionPolicy,
     health: Mutex<SinkHealth>,
     last_written_file: Mutex<Option<std::fs::File>>,
+    prune_in_progress: Arc<AtomicBool>,
+    last_prune_request_at: Mutex<Option<SystemTime>>,
 }
 
 impl RetainedJsonlFileSink {
@@ -297,6 +302,8 @@ impl RetainedJsonlFileSink {
                 last_error: None,
             }),
             last_written_file: Mutex::new(None),
+            prune_in_progress: Arc::new(AtomicBool::new(false)),
+            last_prune_request_at: Mutex::new(None),
         }
     }
 
@@ -323,7 +330,7 @@ impl RetainedJsonlFileSink {
             let rotated = self.rotated_path(1);
             let _ = rename_if_present(&self.path, &rotated);
         }
-        self.prune_old_files();
+        self.schedule_prune_old_files();
     }
 
     fn rotated_path(&self, index: u32) -> PathBuf {
@@ -336,34 +343,43 @@ impl RetainedJsonlFileSink {
         parent.join(format!("{file_name}.{index}"))
     }
 
-    fn prune_old_files(&self) {
-        let Some(parent) = self.path.parent() else {
-            return;
-        };
-        let Ok(entries) = fs::read_dir(parent) else {
-            return;
-        };
-        let retention_cutoff = SystemTime::now()
-            - Duration::from_secs(u64::from(self.retention.max_age_days) * 86_400);
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let Some(file_name) = path.file_name().and_then(|value| value.to_str()) else {
-                continue;
-            };
-            let active_name = self
-                .path
-                .file_name()
-                .and_then(|value| value.to_str())
-                .unwrap_or_default();
-            if !file_name.starts_with(active_name) || file_name == active_name {
-                continue;
-            }
-            if let Ok(metadata) = entry.metadata()
-                && let Ok(modified) = metadata.modified()
-                && modified < retention_cutoff
+    fn schedule_prune_old_files(&self) {
+        let now = SystemTime::now();
+        {
+            let mut last_request_at = self
+                .last_prune_request_at
+                .lock()
+                .expect("retained sink prune request lock poisoned");
+            if let Some(last_request_at) = *last_request_at
+                && now
+                    .duration_since(last_request_at)
+                    .is_ok_and(|elapsed| elapsed < RETAINED_LOG_PRUNE_INTERVAL)
             {
-                let _ = fs::remove_file(path);
+                return;
             }
+            *last_request_at = Some(now);
+        }
+
+        if self
+            .prune_in_progress
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            return;
+        }
+
+        let path = self.path.clone();
+        let retention = self.retention;
+        let prune_in_progress = Arc::clone(&self.prune_in_progress);
+        if thread::Builder::new()
+            .name("atm-log-prune".to_string())
+            .spawn(move || {
+                prune_old_files_at_path(&path, retention);
+                prune_in_progress.store(false, Ordering::Release);
+            })
+            .is_err()
+        {
+            self.prune_in_progress.store(false, Ordering::Release);
         }
     }
 
@@ -385,6 +401,36 @@ impl RetainedJsonlFileSink {
         health.state = SinkHealthState::DegradedDropping;
         health.last_error = Some(DiagnosticSummary::from(diagnostic.diagnostic()));
         LogSinkError(Box::new(diagnostic))
+    }
+}
+
+fn prune_old_files_at_path(path: &Path, retention: RetentionPolicy) {
+    let Some(parent) = path.parent() else {
+        return;
+    };
+    let Ok(entries) = fs::read_dir(parent) else {
+        return;
+    };
+    let retention_cutoff =
+        SystemTime::now() - Duration::from_secs(u64::from(retention.max_age_days) * 86_400);
+    let active_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default();
+    for entry in entries.flatten() {
+        let candidate = entry.path();
+        let Some(file_name) = candidate.file_name().and_then(|value| value.to_str()) else {
+            continue;
+        };
+        if !file_name.starts_with(active_name) || file_name == active_name {
+            continue;
+        }
+        if let Ok(metadata) = entry.metadata()
+            && let Ok(modified) = metadata.modified()
+            && modified < retention_cutoff
+        {
+            let _ = fs::remove_file(candidate);
+        }
     }
 }
 
@@ -744,8 +790,11 @@ impl LogSink for RetainedSinkHealthOverride {
 
 #[cfg(test)]
 mod tests {
+    use std::time::{Duration, Instant};
+
     use atm_core::observability::{AtmObservabilityHealthState, ObservabilityPort};
     use atm_core::test_support::EnvGuard;
+    use sc_observability::{RetentionPolicy, RotationPolicy};
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -883,5 +932,34 @@ mod tests {
         observability
             .best_effort_flush_blocking()
             .expect("best effort flush");
+    }
+
+    #[test]
+    fn retained_log_prune_runs_on_a_background_worker() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let log_path = tempdir.path().join("atm.log.jsonl");
+        std::fs::write(&log_path, "active\n").expect("active log");
+        let rotated_log_path = tempdir.path().join("atm.log.jsonl.1");
+        std::fs::write(&rotated_log_path, "stale\n").expect("rotated log");
+
+        let sink = super::RetainedJsonlFileSink::new(
+            log_path,
+            RotationPolicy {
+                max_bytes: 1024,
+                max_files: 5,
+            },
+            RetentionPolicy { max_age_days: 0 },
+        );
+        sink.schedule_prune_old_files();
+
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while rotated_log_path.exists() && Instant::now() < deadline {
+            std::thread::yield_now();
+        }
+
+        assert!(
+            !rotated_log_path.exists(),
+            "background prune worker should remove expired rotated files"
+        );
     }
 }
