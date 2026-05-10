@@ -155,6 +155,27 @@ SAVEPOINT cost as explicit overhead, not free performance. If later
 measurement shows meaningful cost on homogeneous mailbox batches, a narrower
 batch specialization can be a follow-up.
 
+#### 6. Known logical/schema violations should be rejected before SQL
+
+The worker must not treat avoidable schema faults as normal hot-path control
+flow.
+
+Accepted S.14 rule:
+- validate known ATM-owned invariants before executing SQL for an op
+- use SQL constraint handling as a backstop, not as the primary branch
+
+Examples:
+- message-key validity remains enforced before writer submission
+- if the schema allows only one successor per parent, that logical check should
+  be made in writer-owned preflight before attempting the `mail_messages`
+  insert
+- task existence and similar crate-owned invariants should continue to return
+  typed validation failures instead of generic SQLite write faults
+
+This does not remove the need for SAVEPOINT isolation. Preflight reduces
+avoidable constraint faults, while per-op isolation prevents the remaining bad
+row cases from poisoning unrelated writes in the same batch.
+
 ### Rejected Or Deferred
 
 #### 1. `submit_record_heartbeat`
@@ -300,6 +321,8 @@ Current shape:
 
 Planned shape:
 - writer receives `UpsertMessage`
+- writer runs preflight validation for known logical invariants that can be
+  checked before SQL
 - `INSERT OR IGNORE` into `mail_messages`
 - detect insertion by affected row count
 - `INSERT ... ON CONFLICT DO UPDATE` into `ack_state`
@@ -361,6 +384,9 @@ better modeled as a typed durable-store unavailability/write failure.
 Required regression coverage for the implementation sprint:
 - single-writer correctness under concurrent callers
 - hot-path inserted/not-inserted behavior without a `SELECT` probe
+- a single row failure inside one drained batch does not cause unrelated queued
+  rows to fail
+- known invariant violations are rejected in preflight before SQL is attempted
 - batch drain executes multiple queued writes under one worker transaction
 - closed submission channel drains pending work before shutdown
 - in-memory shared-cache tests still preserve reopen semantics

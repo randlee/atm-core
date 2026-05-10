@@ -78,6 +78,11 @@ Implementation-sprint acceptance:
   writer submissions
 - the mailbox append hot path removes the pre-write `SELECT` probe and uses
   row-count-based insertion detection instead
+- one invalid write row must not cause unrelated queued rows in the same batch
+  to fail
+- writer-side preflight validation must reject known logical/schema invariant
+  violations before attempting SQL, rather than treating ordinary constraint
+  faults as part of the hot path
 - the write worker drains pending queued writes on shutdown before returning
 - regression tests cover:
   - single-writer correctness
