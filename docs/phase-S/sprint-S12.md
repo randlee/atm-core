@@ -25,10 +25,10 @@ Resolve all 13 findings from the Phase-S integration gate review. Findings span 
 Waiter loop checks `completed` before `shutdown` flag — incorrect condition order. Fix: check `shutdown` first.
 
 **INTG-RBP-001** `crates/atm-daemon/src/runtime_health.rs:763`  
-Missing `.with_recovery()` on team-name parse error. Fix: add `.with_recovery("ensure team name is valid UTF-8")`.
+Missing `.with_recovery()` on team-name parse error. Fix: add `.with_recovery("Remove or rename the malformed team directory under the ATM teams root before retrying.")`.
 
 **INTG-RBP-002** `crates/atm-daemon/src/runtime_health.rs:784`  
-Missing `.with_recovery()` on serde_json parse error. Fix: add `.with_recovery("check atm message format")`.
+Missing `.with_recovery()` on serde_json parse error. Fix: add `.with_recovery("Repair or remove the malformed team config file and restart atm-daemon or send SIGHUP.")`.
 
 **INTG-FTQ-005** `crates/atm-daemon/src/runtime_health.rs:44`  
 Shared static `SHUTDOWN_FINALIZER_THREADS` accumulates across parallel tests. Fix: drain in test teardown or use per-test isolation.
@@ -45,13 +45,13 @@ Wall-clock assertion `elapsed < WATCH_SHUTDOWN_DEADLINE + 1s` → flaky on CI. F
 TOCTOU race in coalescing test. Fix: remove the racy assertion or use explicit synchronization.
 
 **INTG-FTQ-006** `crates/atm-core/src/home.rs`  
-Drop-order issue in `host_log_dir_rejects_non_utf8_override` — env_lock released before `ATM_LOG_DIR` restored. Fix: reorder drops or use a single guard.
+Drop-order issue in `host_log_dir_rejects_non_utf8_override` — env_lock released before `ATM_LOG_DIR` restored. Fix: declare `_home` before `_atm_log_dir` so the env-lock guard drops last after `ATM_LOG_DIR` is restored.
 
 **INTG-FTQ-007** `crates/atm-daemon/src/reconcile_runtime.rs:784`  
 Nondeterministic coalescing in duplicate notification test. Fix: use deterministic ordering or assert count only.
 
-**INTG-RSH-003** `crates/atm-daemon/src/reconcile_runtime.rs`  
-Pre-existing reconcile_runtime shutdown race — document intentional deferral if out of scope, otherwise apply same bounded-shutdown pattern.
+**INTG-RSH-003** `crates/atm-core/src/config/discovery.rs:66`  
+No PATH_MAX ceiling on tilde-expanded hook paths. Confirmed satisfied on the `integrate/phase-S` base; verify the guard remains intact on this branch head.
 
 **INTG-RSH-004** `crates/atm-daemon/src/reconcile_runtime.rs:471`  
 Silent executor failures — no `tracing::warn!`. Fix: add warn! on executor task failure.
@@ -63,6 +63,7 @@ Silent executor failures — no `tracing::warn!`. Fix: add warn! on executor tas
 - `cargo test -p atm-daemon` PASS
 - `cargo test -p atm-core` PASS (FTQ-006 is in atm-core)
 - `cargo xwin check --workspace --target x86_64-pc-windows-msvc` PASS
+- Resolved INTG-* triage records are updated to machine-readable closed status at `bd9e0e8`
 - No new flaky tests introduced
 
 ## References

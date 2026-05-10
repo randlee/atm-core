@@ -565,6 +565,31 @@ Required closeout work:
 - document that daemon-side query/follow remain deferred to the CLI-owned
   retained-log surface
 
+### S.12 Integration Gate Findings
+
+Goal:
+- close the post-S.10 integration-gate findings batch across `atm-daemon` and
+  `atm-core` so `integrate/phase-S` is no longer carrying open flake,
+  recovery-text, and bounded-shutdown regressions
+
+Required outcomes:
+- all 13 INTG findings from the Phase S integration gate are addressed or
+  explicitly confirmed satisfied on the sprint base
+- bounded shutdown, worker-warning, and recovery-text behavior align with the
+  canonical INTG triage records
+- the machine-readable INTG triage records are updated to closed status for
+  the fixes landed at `bd9e0e8`
+- `docs/phase-S/sprint-S12.md` stays aligned with the canonical triage
+  inventory
+
+Required closeout work:
+- harden `watch_runtime`, `reconcile_runtime`, and `runtime_health` to match
+  the accepted INTG shutdown and recovery contracts
+- remove the last known flake vectors from the targeted runtime tests
+- keep the `config/discovery.rs` PATH_MAX guard carried forward on the branch
+- update `docs/phase-S/sprint-S12.md` plus the 12 resolved INTG TTL records so
+  documentation and machine-readable triage state agree on closure
+
 ## 6. Removed Windows CI Guardrail
 
 The temporary Windows clippy narrowing used during S.0-S.3 is retired.

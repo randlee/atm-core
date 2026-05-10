@@ -28,6 +28,9 @@ type ReconcileExecutor =
     Arc<dyn Fn(&ReconcileRequest) -> Result<ReconcileResult, AtmError> + Send + Sync>;
 
 struct ReconcileRuntimeInner {
+    // Worker thread, reconcile callers, and shutdown path all access state
+    // concurrently; Mutex+Condvar guards the lifecycle and pending/completed
+    // reconcile registries.
     state: Mutex<ReconcileState>,
     wake: Condvar,
     #[cfg(test)]
@@ -140,6 +143,9 @@ impl ReconcileRuntime {
         inbox_ingress: Arc<dyn InboxIngress + Send + Sync>,
         notification_sink: Arc<dyn NotificationSink + Send + Sync>,
     ) -> Self {
+        // Fingerprints must survive across executor invocations so duplicate
+        // reconcile cycles can compare the newest inbox projection with the
+        // previous one before deciding whether to emit a notification.
         let notification_fingerprints =
             Arc::new(Mutex::new(HashMap::<ReconcileKey, HashSet<String>>::new()));
         Self::new_with_executor(

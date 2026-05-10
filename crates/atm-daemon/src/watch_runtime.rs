@@ -25,6 +25,9 @@ type WatchPoller =
     Arc<dyn Fn(&WatchSubscriptionRequest) -> Result<WatchEventBatch, AtmError> + Send + Sync>;
 
 struct WatchRuntimeInner {
+    // Worker thread, poll callers, and shutdown path all access state
+    // concurrently; Mutex+Condvar guards the lifecycle and subscription
+    // registry.
     state: Mutex<WatchState>,
     wake: Condvar,
     worker: Mutex<Option<JoinHandle<()>>>,
