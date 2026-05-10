@@ -118,6 +118,8 @@ pub(crate) struct RuntimeComposition {
     // Holding the ownership adapter in the composition keeps host-runtime ownership tied to the
     // full daemon runtime lifetime even though the field is not read after construction.
     host_ownership_adapter: HostOwnershipAdapter,
+    // Endpoint cleanup ownership moves between startup, serve, and teardown transitions, so this
+    // mutex protects exclusive handoff/drop of the guard rather than a simple ready flag.
     endpoint_guard: Mutex<Option<SocketEndpointGuard>>,
     server_transport: LocalIpcServerTransportAdapter,
     request_dispatcher: Arc<DaemonRequestDispatcher>,
