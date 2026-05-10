@@ -5,6 +5,8 @@ use crate::address::validate_path_segment;
 use crate::error::AtmError;
 use crate::types::{AgentName, TeamName};
 
+const MAX_HOST_LOG_DIR_UTF8_BYTES: usize = 4096;
+
 /// Resolve the ATM home directory for the current process.
 ///
 /// # Errors
@@ -92,6 +94,16 @@ pub fn host_log_dir() -> Result<PathBuf, AtmError> {
                 "Set ATM_LOG_DIR to an absolute UTF-8 local filesystem path outside ~/.claude/ and ~/.atm/daemon/ before retrying.",
             )
         })?;
+        if raw_path.len() > MAX_HOST_LOG_DIR_UTF8_BYTES {
+            return Err(
+                AtmError::config(format!(
+                    "ATM_LOG_DIR must not exceed {MAX_HOST_LOG_DIR_UTF8_BYTES} UTF-8 bytes"
+                ))
+                .with_recovery(
+                    "Shorten ATM_LOG_DIR to a local filesystem path no longer than 4096 UTF-8 bytes before retrying.",
+                ),
+            );
+        }
         let path = PathBuf::from(raw_path);
         if !path.is_absolute() {
             return Err(
@@ -223,6 +235,8 @@ pub fn resolve_user_home() -> Result<PathBuf, AtmError> {
         .ok_or_else(AtmError::home_directory_unavailable)
 }
 
+/// Unix-only ATM_LOG_DIR validation tests cover non-UTF-8 and path-shape cases.
+/// Windows keeps these invariants compile-checked here and exercises them in cross-target validation.
 #[cfg(test)]
 mod tests {
     #[cfg(unix)]
@@ -232,9 +246,10 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{
-        atm_home, host_db_dir_from_home, host_log_dir_from_home, host_mail_db_path_from_home,
-        host_runtime_dir_from_home, host_runtime_lock_path_from_home, inbox_path,
-        inbox_path_from_home, team_dir, team_dir_from_home, workflow_state_path_from_home,
+        MAX_HOST_LOG_DIR_UTF8_BYTES, atm_home, host_db_dir_from_home, host_log_dir_from_home,
+        host_mail_db_path_from_home, host_runtime_dir_from_home, host_runtime_lock_path_from_home,
+        inbox_path, inbox_path_from_home, team_dir, team_dir_from_home,
+        workflow_state_path_from_home,
     };
     #[cfg(any(unix, windows))]
     use super::{host_db_dir, host_log_dir, host_mail_db_path, host_runtime_dir};
@@ -636,6 +651,22 @@ mod tests {
         let error = host_log_dir().expect_err("non-utf8 override should fail");
         assert!(error.is_config());
         assert!(error.message.contains("UTF-8"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial_test::serial]
+    fn host_log_dir_rejects_overlong_override() {
+        let home_dir = TempDir::new().expect("home");
+        let too_long = format!("/{}", "a".repeat(MAX_HOST_LOG_DIR_UTF8_BYTES));
+        let _env = LocalEnvGuard::set_many([
+            ("ATM_LOG_DIR", Some(too_long.as_str())),
+            ("HOME", Some(home_dir.path().to_str().expect("utf8 path"))),
+        ]);
+
+        let error = host_log_dir().expect_err("overlong ATM_LOG_DIR should fail");
+        assert!(error.is_config());
+        assert!(error.message.contains("4096"));
     }
 
     #[cfg(unix)]

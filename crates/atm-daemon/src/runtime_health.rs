@@ -519,6 +519,8 @@ impl DaemonRequestDispatcher {
         let observability = match DaemonObservability::new() {
             Ok(observability) => observability,
             Err(error) => {
+                // Daemon health treats invalid retained-sink fault injection as a local
+                // non-fatal test knob and falls back to Healthy after warning, unlike CLI bootstrap.
                 tracing::warn!(%error, "failed to initialize daemon observability state");
                 DaemonObservability::new_with_sink_fault(None)
             }

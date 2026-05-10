@@ -218,7 +218,11 @@ mod tests {
     #[serial]
     fn concrete_adapter_uses_host_scoped_default_log_path() {
         let tempdir = TempDir::new().expect("tempdir");
-        let _env = EnvGuard::set_many([("ATM_LOG", Some("info")), ("ATM_LOG_DIR", None)]);
+        let _env = EnvGuard::set_many([
+            ("ATM_LOG", Some("info")),
+            ("ATM_LOG_DIR", None),
+            ("HOME", Some(tempdir.path().to_str().expect("utf8 path"))),
+        ]);
         let observability =
             CliObservability::new(tempdir.path(), CliObservabilityOptions::default())
                 .expect("concrete adapter");
@@ -248,6 +252,7 @@ mod tests {
         let _env = EnvGuard::set_many([
             ("ATM_LOG", Some("info")),
             ("ATM_LOG_DIR", Some(log_dir.to_str().expect("utf8 path"))),
+            ("HOME", Some(tempdir.path().to_str().expect("utf8 path"))),
         ]);
         let observability =
             CliObservability::new(tempdir.path(), CliObservabilityOptions::default())

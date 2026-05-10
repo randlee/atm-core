@@ -4,13 +4,17 @@ use atm_core::protocol::ProtocolErrorEnvelope;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, mpsc};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 const DEFAULT_WATCH_POLL_INTERVAL: Duration = Duration::from_millis(50);
 const MAX_WATCH_SUBSCRIPTIONS: usize = 256;
 const WATCH_POLL_HEALTH_TIMEOUT_MULTIPLIER: u32 = 5;
+#[cfg(not(test))]
+const WATCH_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(2);
+#[cfg(test)]
+const WATCH_SHUTDOWN_DEADLINE: Duration = Duration::from_millis(100);
 
 #[derive(Clone)]
 pub(crate) struct WatchRuntime {
@@ -215,9 +219,34 @@ impl WatchRuntime {
             .map_err(|_| AtmError::daemon_unavailable("watch runtime worker lock poisoned"))?
             .take()
         {
-            handle.join().map_err(|_| {
-                AtmError::daemon_unavailable("watch runtime worker panicked during shutdown")
-            })?;
+            let (result_tx, result_rx) = mpsc::sync_channel(1);
+            let join_helper = thread::spawn(move || {
+                let _ = result_tx.send(handle.join());
+            });
+            match result_rx.recv_timeout(WATCH_SHUTDOWN_DEADLINE) {
+                Ok(Ok(())) => {
+                    let _ = join_helper.join();
+                }
+                Ok(Err(_)) => {
+                    let _ = join_helper.join();
+                    return Err(AtmError::daemon_unavailable(
+                        "watch runtime worker panicked during shutdown",
+                    ));
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    drop(join_helper);
+                    tracing::warn!(
+                        timeout_ms = WATCH_SHUTDOWN_DEADLINE.as_millis(),
+                        "watch runtime worker exceeded shutdown deadline; detaching join helper"
+                    );
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    let _ = join_helper.join();
+                    tracing::warn!(
+                        "watch runtime worker join helper exited before reporting shutdown status"
+                    );
+                }
+            }
         }
         Ok(())
     }
@@ -399,7 +428,7 @@ fn watch_worker_loop(inner: Arc<WatchRuntimeInner>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{MAX_WATCH_SUBSCRIPTIONS, WatchRuntime};
+    use super::{MAX_WATCH_SUBSCRIPTIONS, WATCH_SHUTDOWN_DEADLINE, WatchRuntime};
     use atm_core::boundary::WatchEventBatch;
     use atm_core::boundary::WatchSubscriptionRequest;
     use atm_core::error::AtmError;
@@ -517,6 +546,55 @@ mod tests {
         let error = runtime.poll(request()).expect_err("degraded");
         assert!(error.message.contains("watch poll failed"));
         runtime.shutdown().expect("shutdown");
+    }
+
+    #[test]
+    fn watch_runtime_shutdown_returns_within_bounded_deadline() {
+        let (started_tx, started_rx) = mpsc::channel();
+        let release: Arc<(Mutex<bool>, Condvar)> = Arc::new((Mutex::new(false), Condvar::new()));
+        let runtime = WatchRuntime::new_for_test(
+            Arc::new({
+                let release = Arc::clone(&release);
+                move |_| {
+                    let (released, wake) = &*release;
+                    let mut released = released.lock().expect("released");
+                    started_tx.send(()).expect("started");
+                    while !*released {
+                        let wait = wake
+                            .wait_timeout(released, Duration::from_secs(1))
+                            .expect("released wait");
+                        released = wait.0;
+                        assert!(!wait.1.timed_out(), "watch test release timed out");
+                    }
+                    Ok(WatchEventBatch { paths: Vec::new() })
+                }
+            }),
+            Duration::from_millis(10),
+        );
+        runtime.start().expect("start");
+
+        let runtime_for_thread = runtime.clone();
+        let poll_join = std::thread::spawn(move || runtime_for_thread.poll(request()));
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("worker started");
+
+        let shutdown_started = std::time::Instant::now();
+        runtime.shutdown().expect("shutdown");
+        assert!(
+            shutdown_started.elapsed() < WATCH_SHUTDOWN_DEADLINE + Duration::from_secs(1),
+            "watch runtime shutdown exceeded bounded deadline"
+        );
+
+        let (released, wake) = &*release;
+        *released.lock().expect("released") = true;
+        wake.notify_all();
+
+        let error = poll_join
+            .join()
+            .expect("poll join")
+            .expect_err("shutdown should interrupt the blocked poll");
+        assert!(error.message.contains("shut down before delivering"));
     }
 
     #[test]

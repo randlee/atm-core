@@ -673,14 +673,7 @@ pub(crate) fn new_adapter_port(
     } else {
         ConsoleLogRoute::Disabled
     };
-    let test_log_dir = if std::env::var_os("ATM_LOG_DIR")
-        .filter(|value| !value.is_empty())
-        .is_some()
-    {
-        home::host_log_dir()?
-    } else {
-        home::host_log_dir_from_home(home_dir)
-    };
+    let test_log_dir = resolve_adapter_log_dir(home_dir)?;
     let (logger, active_log_path) = build_logger(&test_log_dir, console_log_route, &service_name)?;
     Ok(Box::new(ScObservabilityAdapter::new(
         logger,
@@ -688,6 +681,17 @@ pub(crate) fn new_adapter_port(
         service_name,
         target_category,
     )))
+}
+
+fn resolve_adapter_log_dir(_home_dir: &Path) -> Result<PathBuf, AtmError> {
+    match home::host_log_dir() {
+        Ok(log_dir) => Ok(log_dir),
+        #[cfg(test)]
+        Err(error) if error.code == AtmErrorCode::ConfigHomeUnavailable => {
+            Ok(home::host_log_dir_from_home(_home_dir))
+        }
+        Err(error) => Err(error),
+    }
 }
 
 #[cfg(test)]
