@@ -215,6 +215,10 @@ Accepted production exceptions:
 - `crates/atm-daemon/src/runtime_health.rs`
   - retained-observability flush during shutdown remains best-effort and bounded to `2s` so daemon
     teardown cannot stall indefinitely behind sink I/O
+- `crates/atm-daemon/src/test_support.rs`
+  - `connect_daemon_local_ipc_until_ready` uses `sleep(5ms)` because the polling helper needs a
+    fixed backoff while waiting for the listener-ready state transition; `yield_now()` does not
+    provide a delay guarantee.
 
 ## 5. Planned Sprint Sequence
 

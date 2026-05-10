@@ -35,6 +35,8 @@ use std::io::{Seek, SeekFrom, Write};
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
+#[cfg(windows)]
+use std::time::Instant;
 use tempfile::TempDir;
 
 #[cfg(unix)]
