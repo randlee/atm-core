@@ -3,6 +3,7 @@
 
 mod boundary_adapters;
 pub(crate) mod composition;
+mod daemon_observability;
 mod direct_boundaries;
 // ADR-002 intentionally splits launch.lock admission from owner.lock serving
 // ownership so only one launcher can fork while only one daemon can publish the
@@ -22,6 +23,8 @@ use std::time::Duration;
 
 use atm_core::error::AtmError;
 use atm_rusqlite::SqliteBoundaryAssembly;
+pub(crate) use daemon_observability::DaemonObservability;
+pub use daemon_observability::tracing_level_override;
 
 pub(crate) use atm_rusqlite::RemoteReplayStateRecord;
 pub(crate) use local_ipc_transport::LocalIpcServerTransportAdapter;
@@ -79,7 +82,16 @@ pub(crate) fn sqlite_remote_replay_store_from_path(
 ///
 /// Returns [`AtmError`] when the daemon transport cannot start or serve.
 pub fn run_daemon() -> Result<(), AtmError> {
-    composition::compose_runtime()?.start()
+    let observability = bootstrap_observability()?;
+    run_daemon_with_observability(observability)
+}
+
+pub fn bootstrap_observability() -> Result<DaemonObservability, AtmError> {
+    DaemonObservability::bootstrap()
+}
+
+pub fn run_daemon_with_observability(observability: DaemonObservability) -> Result<(), AtmError> {
+    composition::compose_runtime(observability)?.start()
 }
 
 #[cfg(test)]
