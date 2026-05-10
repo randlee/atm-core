@@ -76,6 +76,7 @@ impl TestDaemonObservability {
         Ok(())
     }
 
+    #[cfg(unix)]
     pub(crate) fn wait_for_message_contains(
         &self,
         needle: &str,
