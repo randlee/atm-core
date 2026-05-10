@@ -60,6 +60,17 @@ flooding Claude-facing inbox surfaces or causing watcher churn.
 4.2 Keep compatibility projection wiring behind the inbox-export boundaries.
 4.3 Keep daemon watcher/reconcile behavior aligned with the no-churn rule.
 
+5. Track issue #219: tilde expansion in post-send hook paths.
+5.1 During ATM config normalization, expand leading `~`, `~/`, and `~\` in
+    `[[atm.post_send_hooks]].command[0]` to the current user home directory.
+5.2 Relative paths remain relative to the declaring `.atm.toml`.
+5.3 Bare executables without a path separator continue to resolve via `PATH`.
+5.4 Add the normalization work alongside the existing S.8 config changes in:
+   - `crates/atm-core/src/config/mod.rs`
+   - `crates/atm-core/src/config/types.rs`
+5.5 Record issue reference:
+   - `#219`
+
 ## Required Code Targets
 
 - `crates/atm-core/src/config/mod.rs`
@@ -87,6 +98,8 @@ flooding Claude-facing inbox surfaces or causing watcher churn.
 - full ATM-authored bodies remain durable in SQLite
 - watcher/reconcile logic treats ATM-authored compatibility projection updates
   as idempotent and does not generate self-induced churn loops
+- post-send hook command normalization expands leading home-directory tildes
+  per issue `#219` while preserving relative-path and bare-executable rules
 
 ## Required Validation
 
