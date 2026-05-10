@@ -282,6 +282,7 @@ mod tests {
             }
         }
 
+        #[cfg(unix)]
         fn set_many<const N: usize>(changes: [(&'static str, Option<&str>); N]) -> LocalEnvSet {
             let guard = env_lock().lock().expect("env lock");
             let restorations = changes
@@ -308,6 +309,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     struct LocalEnvSet {
         restorations: Vec<(&'static str, Option<OsString>)>,
         _guard: MutexGuard<'static, ()>,
@@ -328,6 +330,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     impl Drop for LocalEnvSet {
         fn drop(&mut self) {
             for (key, original) in self.restorations.iter_mut().rev() {
@@ -592,9 +595,10 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn host_log_dir_rejects_non_absolute_override() {
+        let tempdir = TempDir::new().expect("tempdir");
         let _env = LocalEnvGuard::set_many([
             ("ATM_LOG_DIR", Some("relative/logs")),
-            ("HOME", Some("/tmp")),
+            ("HOME", Some(tempdir.path().to_str().expect("utf8 path"))),
         ]);
 
         let error = host_log_dir().expect_err("non-absolute ATM_LOG_DIR should fail");
@@ -602,6 +606,8 @@ mod tests {
         assert!(error.message.contains("absolute path"));
     }
 
+    /// Windows ATM_LOG_DIR path-shape validation is covered by cross-compile CI
+    /// (`cargo xwin check`) rather than native test execution.
     #[cfg(unix)]
     #[test]
     #[serial_test::serial]

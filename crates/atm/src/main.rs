@@ -719,10 +719,12 @@ mod adapter_tests {
     use atm_core::test_support::EnvGuard;
     use sc_observability_types::LevelFilter as SharedLevelFilter;
     use serial_test::serial;
+    use tempfile::TempDir;
     use tracing_subscriber::filter::LevelFilter as TracingLevelFilter;
 
     use super::{
-        ATM_LOG_LEVEL_ENV, level_for_outcome, logger_level_override, tracing_level_filter,
+        ATM_LOG_LEVEL_ENV, init_observability, level_for_outcome, logger_level_override,
+        tracing_level_filter,
     };
 
     fn with_env_var<R>(key: &'static str, value: Option<&str>, f: impl FnOnce() -> R) -> R {
@@ -793,5 +795,20 @@ mod adapter_tests {
             tracing_level_filter(SharedLevelFilter::Off),
             TracingLevelFilter::OFF
         );
+    }
+
+    #[test]
+    #[serial]
+    fn init_observability_fails_closed_when_atm_log_dir_is_invalid() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let _env = EnvGuard::set_many([
+            ("ATM_LOG", Some("info")),
+            ("ATM_LOG_DIR", Some("relative/logs")),
+            ("HOME", Some(tempdir.path().to_str().expect("utf8 path"))),
+        ]);
+
+        let error = init_observability(false).expect_err("invalid ATM_LOG_DIR should fail closed");
+        assert!(error.is_config());
+        assert!(error.message.contains("absolute path"));
     }
 }
