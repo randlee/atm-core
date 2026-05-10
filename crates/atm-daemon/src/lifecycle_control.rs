@@ -59,9 +59,11 @@ impl LifecycleStateChange {
             })
     }
 
-    #[cfg_attr(windows, allow(dead_code))]
-    fn wait_for_change(&self, observed_generation: &mut u64) -> Result<(), AtmError> {
-        const LIFECYCLE_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+    fn wait_for_change_timeout(
+        &self,
+        observed_generation: &mut u64,
+        timeout: std::time::Duration,
+    ) -> Result<bool, AtmError> {
         let mut generation = self.generation.lock().map_err(|_| {
             AtmError::daemon_unavailable("daemon lifecycle state-change lock poisoned")
                 .with_recovery("Restart the daemon; lifecycle wake state is no longer trustworthy.")
@@ -69,7 +71,7 @@ impl LifecycleStateChange {
         while *generation == *observed_generation {
             let (updated_generation, wait_result) = self
                 .wake
-                .wait_timeout_while(generation, LIFECYCLE_WAIT_TIMEOUT, |current_generation| {
+                .wait_timeout_while(generation, timeout, |current_generation| {
                     *current_generation == *observed_generation
                 })
                 .map_err(|_| {
@@ -80,10 +82,17 @@ impl LifecycleStateChange {
                 })?;
             generation = updated_generation;
             if wait_result.timed_out() && *generation == *observed_generation {
-                continue;
+                return Ok(false);
             }
         }
         *observed_generation = *generation;
+        Ok(true)
+    }
+
+    #[cfg_attr(any(windows, not(test)), allow(dead_code))]
+    fn wait_for_change(&self, observed_generation: &mut u64) -> Result<(), AtmError> {
+        const LIFECYCLE_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+        while !self.wait_for_change_timeout(observed_generation, LIFECYCLE_WAIT_TIMEOUT)? {}
         Ok(())
     }
 }
@@ -153,12 +162,22 @@ impl LifecycleControlSourceAdapter {
         self.state_change.snapshot()
     }
 
-    #[cfg_attr(windows, allow(dead_code))]
+    #[cfg_attr(any(windows, not(test)), allow(dead_code))]
     pub(crate) fn wait_for_state_change(
         &self,
         observed_generation: &mut u64,
     ) -> Result<(), AtmError> {
         self.state_change.wait_for_change(observed_generation)
+    }
+
+    #[cfg_attr(windows, allow(dead_code))]
+    pub(crate) fn wait_for_state_change_timeout(
+        &self,
+        observed_generation: &mut u64,
+        timeout: std::time::Duration,
+    ) -> Result<bool, AtmError> {
+        self.state_change
+            .wait_for_change_timeout(observed_generation, timeout)
     }
 
     pub(crate) fn terminate_flag(&self) -> Arc<AtomicBool> {

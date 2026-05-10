@@ -479,6 +479,22 @@ Force-cancel rule:
 - failure to drain within the force deadline is reported as a typed runtime
   failure after interrupting active connections
 
+### Runtime SLOs
+
+| SLO | Target | Contract |
+|---|---|---|
+| Wedge recovery | `<= 1s` | fatal transport events or shutdown beacons must unblock the lifecycle waiter and serving path promptly |
+| Accept-error teardown | `<= 2s` | a fatal local-IPC accept failure must reach typed runtime exit after drain start and endpoint unpublication |
+| Clean shutdown | `<= 5s` | orderly daemon shutdown, including tracked request drain and background-lane stop, stays bounded |
+| Socket cleanup | `<= 100ms` | same-host endpoint unpublication completes promptly once serving stops |
+
+Exit-code expectations tied to these SLOs:
+- bind failure exits `70` and relies on supervisor restart/backoff rather than
+  in-process rebind
+- singleton or stale-owner admission failures exit `64` and must not hot-loop
+  restart
+- lifecycle-wedge detection exits `71`
+
 Required deadlines:
 - normal drain deadline: `5s`
 - force-cancel deadline after drain starts: `10s` total

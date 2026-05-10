@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use atm_core::error::AtmError;
+use atm_core::error::{AtmError, AtmErrorCode};
 use atm_rusqlite::SqliteBoundaryAssembly;
 pub use daemon_runtime_observability::DaemonRuntimeObservability;
 
@@ -33,6 +33,42 @@ pub(crate) use peer_transport::{PeerTransportRuntime, RemoteReplayStore};
 
 pub(crate) const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
 pub(crate) const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(10);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DaemonExitCode {
+    CleanStop = 0,
+    InternalBug = 1,
+    DoNotRestart = 64,
+    TransportFatal = 70,
+    LifecycleWedge = 71,
+}
+
+impl DaemonExitCode {
+    pub const fn as_i32(self) -> i32 {
+        self as i32
+    }
+}
+
+pub fn daemon_exit_code_for_error(error: &AtmError) -> DaemonExitCode {
+    if matches!(
+        error.code,
+        AtmErrorCode::DaemonServingStateRejected
+            | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
+            | AtmErrorCode::DaemonLaunchGateRejected
+            | AtmErrorCode::ConfigHomeUnavailable
+            | AtmErrorCode::ObservabilityBootstrapFailed
+    ) || error.is_config()
+    {
+        return DaemonExitCode::DoNotRestart;
+    }
+    if error.message.contains("lifecycle waiter") || error.message.contains("lifecycle wedge") {
+        return DaemonExitCode::LifecycleWedge;
+    }
+    if error.is_daemon_unavailable() {
+        return DaemonExitCode::TransportFatal;
+    }
+    DaemonExitCode::InternalBug
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct AtmHomeDir(PathBuf);
