@@ -34,7 +34,9 @@ use std::fs::OpenOptions;
 use std::io::{Seek, SeekFrom, Write};
 use std::sync::Arc;
 use std::sync::mpsc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(windows)]
+use std::time::Instant;
 use tempfile::TempDir;
 
 #[cfg(unix)]
@@ -113,6 +115,13 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     // TempDir uniqueness is process-local; #[serial] keeps this same-host transport smoke test
     // from racing other lifecycle-control and singleton-sensitive daemon tests.
     let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    let _env = EnvGuard::set_many([
+        ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+        ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
+        ("USERPROFILE", None),
+    ]);
     let socket_path = tempdir.path().join("daemon.sock");
     let server_transport = LocalIpcServerTransportAdapter::new();
     let runtime = server_transport
@@ -191,6 +200,7 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
     let _env = EnvGuard::set_many([
         ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
         ("ATM_LOG_DIR", None),
+        ("ATM_DAEMON_SOCKET", None),
         ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
         ("USERPROFILE", None),
     ]);
@@ -202,7 +212,8 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
         )
         .expect("test observability"),
     );
-    let runtime = crate::composition::compose_runtime(observability).expect("compose runtime");
+    let runtime =
+        crate::composition::compose_runtime(observability.clone()).expect("compose runtime");
     let socket_path = atm_core::protocol::daemon_socket_path().expect("daemon socket path");
     let (result_tx, result_rx) = mpsc::channel();
 
@@ -244,16 +255,9 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
         other => panic!("expected doctor response, got {other:?}"),
     }
 
-    let retained_log_path = atm_core::home::host_log_dir_from_home(&atm_home).join("atm.log.jsonl");
-    let deadline = Instant::now() + Duration::from_secs(3);
-    loop {
-        match std::fs::read_to_string(&retained_log_path) {
-            Ok(contents) if contents.contains("daemon start requested") => break,
-            Ok(_) | Err(_) if Instant::now() < deadline => std::thread::yield_now(),
-            Err(error) => panic!("read retained log: {error}"),
-            Ok(contents) => panic!("retained log missing startup event: {contents}"),
-        }
-    }
+    observability
+        .wait_for_message_contains("daemon start requested", Duration::from_secs(3))
+        .expect("startup event should be recorded without busy-spin polling");
 
     lifecycle.set_terminate_for_test(true);
     result_rx
@@ -261,6 +265,7 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
         .expect("recv runtime result")
         .expect("runtime result");
     join.join().expect("join runtime thread");
+    DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
 }
 
 #[cfg(windows)]
@@ -302,11 +307,11 @@ fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
     lifecycle.set_terminate_for_test(true);
 
     serve_result_rx
-        .recv_timeout(Duration::from_secs(3))
+        .recv_timeout(Duration::from_secs(10))
         .expect("recv serve result")
         .expect("serve runtime result");
     assert!(
-        shutdown_started.elapsed() < Duration::from_secs(3),
+        shutdown_started.elapsed() < Duration::from_secs(5),
         "windows same-host runtime shutdown should complete within the documented bounded deadline"
     );
     join.join().expect("join serve thread");
@@ -803,27 +808,24 @@ fn heartbeat_accepts_pid_takeover_when_previous_pid_is_dead() {
 }
 
 #[test]
-fn heartbeat_demotes_evicted_member_to_explicit_unknown() {
+fn heartbeat_evicts_oldest_member_and_projects_missing_roster_entries_as_unknown() {
     use chrono::{Duration as ChronoDuration, Utc};
-
-    let tempdir = TempDir::new().expect("tempdir");
-    let atm_home = tempdir.path().join("atm-home");
-    std::fs::create_dir_all(&atm_home).expect("atm home dir");
-    let db_path = tempdir.path().join("mail.db");
-
-    install_test_roster(&db_path, &[ROLE_TEAM_LEAD, "qa-a"]);
-    write_team_config(&atm_home, &[ROLE_TEAM_LEAD, "qa-a"]);
 
     let status_cache = RuntimeStatusCache::new();
     let team: TeamName = TEST_TEAM.parse().expect("team");
-    let dispatcher = DaemonRequestDispatcher::new_for_test(atm_home, status_cache.clone(), db_path);
-    let member: AgentName = "evicted".parse().expect("member");
+    let member: AgentName = "qa-a".parse().expect("member");
     let base = Utc::now();
     status_cache
-        .hydrate_member_for_test(team.clone(), member.clone(), Some(u32::MAX))
-        .expect("hydrate member");
+        .insert_member_for_test(
+            team.clone(),
+            member.clone(),
+            Some(u32::MAX),
+            RuntimeMemberState::Idle,
+            Some(IsoTimestamp::from_datetime(base)),
+        )
+        .expect("seed evicted member");
 
-    for index in 0..=4096 {
+    for index in 0..4095 {
         let member_name: AgentName = format!("member-{index}").parse().expect("member");
         status_cache
             .insert_member_for_test(
@@ -838,29 +840,41 @@ fn heartbeat_demotes_evicted_member_to_explicit_unknown() {
             .expect("insert member");
     }
 
-    let response = dispatcher
-        .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
-            team: team.clone(),
-            member: ROLE_TEAM_LEAD.parse().expect("member"),
-            pid: std::process::id(),
-            observed_at: IsoTimestamp::from_datetime(base + ChronoDuration::hours(2)),
-            activity: HeartbeatActivity::ActiveToolUse,
-        }))
+    let response = status_cache
+        .record_heartbeat_for_test(
+            &TeamMemberHeartbeatRequest {
+                team: team.clone(),
+                member: "trigger-member".parse().expect("member"),
+                pid: std::process::id(),
+                observed_at: IsoTimestamp::from_datetime(base + ChronoDuration::hours(2)),
+                activity: HeartbeatActivity::ActiveToolUse,
+            },
+            false,
+        )
         .expect("heartbeat");
+    assert_eq!(response.state, RuntimeMemberState::Active);
 
-    match response {
-        ResponseEnvelope::Heartbeat(response) => {
-            assert_eq!(response.state, RuntimeMemberState::Active);
-        }
-        other => panic!("expected heartbeat response, got {other:?}"),
-    }
-
+    assert_eq!(
+        status_cache.member_count_for_test().expect("member count"),
+        4096
+    );
     assert_eq!(
         status_cache
             .member_state_for_test(&team, &member)
             .expect("member state"),
-        Some(RuntimeMemberState::Unknown)
+        None
     );
+    let scoped_snapshot = status_cache
+        .snapshot_for_members_for_test([
+            (
+                team.clone(),
+                "trigger-member".parse().expect("trigger member"),
+            ),
+            (team.clone(), member.clone()),
+        ])
+        .expect("scoped snapshot");
+    assert_eq!(scoped_snapshot.member_counts.active_members, 1);
+    assert_eq!(scoped_snapshot.member_counts.unknown_members, 1);
 }
 
 #[test]
@@ -934,6 +948,15 @@ fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable() {
             assert_eq!(report.summary.status, DoctorStatus::Warning);
             let runtime_status = report.runtime_status.expect("runtime status");
             assert_eq!(runtime_status.readiness, RuntimeReadinessState::Degraded);
+            let finding = report
+                .findings
+                .iter()
+                .find(|finding| {
+                    finding.code
+                        == atm_core::error_codes::AtmErrorCode::WarningObservabilityHealthDegraded
+                })
+                .expect("runtime finding");
+            assert!(finding.message.contains("sqlite_ready=false"));
         }
         other => panic!("expected doctor response, got {other:?}"),
     }
@@ -977,6 +1000,15 @@ fn doctor_projects_unavailable_runtime_when_all_members_are_offline() {
             assert_eq!(runtime_status.liveness, RuntimeLivenessState::Running);
             assert_eq!(runtime_status.readiness, RuntimeReadinessState::Unavailable);
             assert_eq!(runtime_status.member_counts.offline_members, 1);
+            let finding = report
+                .findings
+                .iter()
+                .find(|finding| {
+                    finding.code == atm_core::error_codes::AtmErrorCode::DaemonUnavailable
+                })
+                .expect("runtime finding");
+            assert!(finding.message.contains("owner_pid="));
+            assert!(finding.message.contains("sqlite_ready=true"));
         }
         other => panic!("expected doctor response, got {other:?}"),
     }

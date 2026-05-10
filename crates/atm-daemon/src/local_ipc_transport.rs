@@ -31,6 +31,9 @@ const TERMINATE_REJECTION_GRACE_DEADLINE: Duration = Duration::from_millis(100);
 #[derive(Debug, Default)]
 struct ServeLoopSignals {
     reload_requested: AtomicBool,
+    // The serve loop needs to retain the full typed accept failure for later propagation, so a
+    // mutex-backed slot is required here; an atomic flag alone could not carry the original
+    // `AtmError` across the lifecycle/accept thread boundary.
     accept_error: Mutex<Option<AtmError>>,
 }
 
@@ -43,21 +46,29 @@ impl ServeLoopSignals {
         self.reload_requested.swap(false, Ordering::SeqCst)
     }
 
-    fn record_accept_error(&self, error: AtmError) {
-        let mut slot = self
-            .accept_error
-            .lock()
-            .expect("serve-loop accept-error lock");
+    fn record_accept_error(&self, error: AtmError) -> Result<(), AtmError> {
+        let mut slot = self.accept_error.lock().map_err(|_| {
+            AtmError::daemon_unavailable("serve-loop accept-error state lock poisoned")
+                .with_recovery(
+                    "Restart the daemon; the same-host serve loop can no longer preserve accept failures safely.",
+                )
+        })?;
         if slot.is_none() {
             *slot = Some(error);
         }
+        Ok(())
     }
 
-    fn take_accept_error(&self) -> Option<AtmError> {
+    fn take_accept_error(&self) -> Result<Option<AtmError>, AtmError> {
         self.accept_error
             .lock()
-            .expect("serve-loop accept-error lock")
-            .take()
+            .map_err(|_| {
+                AtmError::daemon_unavailable("serve-loop accept-error state lock poisoned")
+                    .with_recovery(
+                        "Restart the daemon; the same-host serve loop can no longer preserve accept failures safely.",
+                    )
+            })
+            .map(|mut slot| slot.take())
     }
 }
 
@@ -266,7 +277,7 @@ impl PreparedRuntimeServer {
                         Err(error) => {
                             shutdown_beacon.trip();
                             let _ = lifecycle_control.notify_state_change();
-                            signals.record_accept_error(error);
+                            let _ = signals.record_accept_error(error);
                             let _ = wake_listener(&endpoint_path);
                             return;
                         }
@@ -280,7 +291,7 @@ impl PreparedRuntimeServer {
                         {
                             shutdown_beacon.trip();
                             let _ = lifecycle_control.notify_state_change();
-                            signals.record_accept_error(error);
+                            let _ = signals.record_accept_error(error);
                             let _ = wake_listener(&endpoint_path);
                             return;
                         }
@@ -298,7 +309,7 @@ impl PreparedRuntimeServer {
                             if let Err(error) = wake_listener(&endpoint_path) {
                                 shutdown_beacon.trip();
                                 let _ = lifecycle_control.notify_state_change();
-                                signals.record_accept_error(
+                                let _ = signals.record_accept_error(
                                     AtmError::daemon_lifecycle_wedge(
                                         "daemon lifecycle waiter could not wake the direct local IPC accept loop for reload handling",
                                     )
@@ -324,11 +335,20 @@ impl PreparedRuntimeServer {
                     serve_error = Some(error);
                     break;
                 }
-                if let Some(error) = signals.take_accept_error() {
-                    shutdown_beacon.trip();
-                    let _ = lifecycle_control.notify_state_change();
-                    serve_error = Some(error);
-                    break;
+                match signals.take_accept_error() {
+                    Ok(Some(error)) => {
+                        shutdown_beacon.trip();
+                        let _ = lifecycle_control.notify_state_change();
+                        serve_error = Some(error);
+                        break;
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        shutdown_beacon.trip();
+                        let _ = lifecycle_control.notify_state_change();
+                        serve_error = Some(error);
+                        break;
+                    }
                 }
                 // Reload work stays serialized inside the direct accept loop so the listener never
                 // races a partially-applied runtime view update.
@@ -371,11 +391,20 @@ impl PreparedRuntimeServer {
                     }
                 };
 
-                if let Some(error) = signals.take_accept_error() {
-                    shutdown_beacon.trip();
-                    let _ = lifecycle_control.notify_state_change();
-                    serve_error = Some(error);
-                    break;
+                match signals.take_accept_error() {
+                    Ok(Some(error)) => {
+                        shutdown_beacon.trip();
+                        let _ = lifecycle_control.notify_state_change();
+                        serve_error = Some(error);
+                        break;
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        shutdown_beacon.trip();
+                        let _ = lifecycle_control.notify_state_change();
+                        serve_error = Some(error);
+                        break;
+                    }
                 }
                 if signals.take_reload() {
                     drop(stream);
@@ -500,6 +529,17 @@ impl PreparedRuntimeServer {
                         begin_shutdown_error = %existing,
                         lifecycle_waiter_error = %error,
                         "daemon lifecycle waiter failed after an earlier shutdown error"
+                    );
+                } else {
+                    shutdown_error = Some(error);
+                }
+            }
+            if let Err(error) = lifecycle_control.shutdown_worker_with_timeout() {
+                if let Some(existing) = shutdown_error.as_ref() {
+                    tracing::warn!(
+                        begin_shutdown_error = %existing,
+                        lifecycle_worker_error = %error,
+                        "daemon lifecycle worker shutdown failed after an earlier shutdown-start error"
                     );
                 } else {
                     shutdown_error = Some(error);
@@ -668,6 +708,7 @@ fn write_shutdown_response(
 fn schedule_delayed_listener_wake(endpoint_path: PathBuf, delay: Duration) {
     // Fire-and-forget: this helper only opens one local connection to unblock accept(), so
     // shutdown does not need to retain or join the wake thread after it has been scheduled.
+    // The `_wake_handle` binding makes that intentional detach explicit at the call site.
     let _wake_handle = thread::Builder::new()
         .name("delayed-listener-wake".to_owned())
         .spawn(move || {
@@ -1268,5 +1309,51 @@ mod tests {
         );
         let _ = release_tx.send(());
         drop(active_connection);
+    }
+
+    #[test]
+    fn tracked_dispatch_handle_capacity_overflow_returns_lifecycle_wedge() {
+        let registry = ActiveConnectionRegistry::default();
+
+        let (release_first_tx, release_first_rx) = mpsc::sync_channel(1);
+        let (completion_first_tx, completion_first_rx) = mpsc::sync_channel(1);
+        let first_join = std::thread::spawn(move || {
+            let _ = release_first_rx.recv();
+            let _ = completion_first_tx.send(());
+        });
+        registry
+            .push_dispatch_handle(
+                TrackedDispatchHandle {
+                    completion_rx: completion_first_rx,
+                    join_handle: first_join,
+                },
+                1,
+            )
+            .expect("first handle should fit within capacity");
+
+        let (completion_second_tx, completion_second_rx) = mpsc::sync_channel(1);
+        let second_join = std::thread::spawn(move || {
+            let _ = completion_second_tx.send(());
+        });
+        let error = registry
+            .push_dispatch_handle(
+                TrackedDispatchHandle {
+                    completion_rx: completion_second_rx,
+                    join_handle: second_join,
+                },
+                1,
+            )
+            .expect_err("second handle should be rejected once the bounded registry is full");
+        assert!(
+            error
+                .message
+                .contains("tracked daemon dispatch registry exceeded its bounded capacity"),
+            "unexpected error: {error:?}"
+        );
+
+        let _ = release_first_tx.send(());
+        registry
+            .join_tracked_dispatches(Duration::from_secs(1))
+            .expect("drain first tracked dispatch");
     }
 }

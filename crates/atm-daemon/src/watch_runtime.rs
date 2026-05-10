@@ -234,14 +234,25 @@ impl WatchRuntime {
                     let _ = join_helper.join();
                     return Err(AtmError::daemon_unavailable(
                         "watch runtime worker panicked during shutdown",
+                    )
+                    .with_recovery(
+                        "Restart atm-daemon; the watch background lane crashed while shutting down.",
                     ));
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {
+                    // Intentional detach: the timeout path must fail fast instead of blocking
+                    // indefinitely on a stalled join helper during daemon shutdown.
                     drop(join_helper);
                     tracing::warn!(
                         timeout_ms = WATCH_SHUTDOWN_DEADLINE.as_millis(),
                         "watch runtime worker exceeded shutdown deadline; detaching join helper"
                     );
+                    return Err(AtmError::daemon_unavailable(
+                        "watch runtime worker exceeded the bounded shutdown deadline",
+                    )
+                    .with_recovery(
+                        "Restart atm-daemon after the watch background lane becomes responsive again.",
+                    ));
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
                     let _ = join_helper.join();
@@ -350,6 +361,12 @@ impl WatchRuntime {
 
 impl Drop for WatchRuntime {
     fn drop(&mut self) {
+        // RuntimeComposition::shutdown_background_lanes() is the authoritative stop path; Drop is
+        // only a last-resort cleanup when this is the final shared owner.
+        debug_assert!(
+            Arc::strong_count(&self.inner) >= 1,
+            "watch runtime drop should only observe positive Arc ownership"
+        );
         if Arc::strong_count(&self.inner) == 1 {
             let _ = self.shutdown();
         }
@@ -590,7 +607,12 @@ mod tests {
             .recv_timeout(Duration::from_secs(1))
             .expect("worker started");
 
-        runtime.shutdown().expect("shutdown");
+        let shutdown_error = runtime.shutdown().expect_err("shutdown timeout");
+        assert!(
+            shutdown_error
+                .message
+                .contains("exceeded the bounded shutdown deadline")
+        );
 
         let (released, wake) = &*release;
         *released.lock().expect("released") = true;

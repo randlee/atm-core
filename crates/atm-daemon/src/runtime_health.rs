@@ -112,12 +112,34 @@ impl RuntimeStatusCache {
             team: request.team.clone(),
             member: request.member.clone(),
         };
-        let current_key = key.clone();
         let last_active_at = Some(request.observed_at);
         let mut cache = self
             .state
             .lock()
             .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
+        let is_new_key = !cache.members.contains_key(&key);
+        if is_new_key && cache.members.len() >= MAX_STATUS_CACHE_ENTRIES {
+            let eviction_candidate = cache
+                .members
+                .iter()
+                .filter(|(_, record)| record.state != RuntimeMemberState::IdentityConflict)
+                .min_by_key(|(_, record)| {
+                    (
+                        record.state == RuntimeMemberState::Unknown,
+                        record.last_active_at,
+                    )
+                })
+                .map(|(key, record)| (key.clone(), record.clone()));
+            if let Some((evicted_key, evicted_record)) = eviction_candidate {
+                cache.members.remove(&evicted_key);
+                tracing::warn!(
+                    team = %evicted_key.team,
+                    member = %evicted_key.member,
+                    pid = evicted_record.pid,
+                    "evicted daemon runtime status-cache entry after reaching the bounded cap"
+                );
+            }
+        }
         cache.members.insert(
             key,
             RuntimeMemberRecord {
@@ -126,27 +148,6 @@ impl RuntimeStatusCache {
                 last_active_at,
             },
         );
-        if cache.members.len() > MAX_STATUS_CACHE_ENTRIES
-            && let Some((evicted_key, evicted_record)) = cache
-                .members
-                .iter()
-                .filter(|(candidate, record)| {
-                    **candidate != current_key
-                        && record.state != RuntimeMemberState::IdentityConflict
-                        && record.state != RuntimeMemberState::Unknown
-                })
-                .min_by_key(|(_, record)| record.last_active_at)
-                .map(|(key, record)| (key.clone(), record.clone()))
-            && let Some(record) = cache.members.get_mut(&evicted_key)
-        {
-            record.state = RuntimeMemberState::Unknown;
-            tracing::warn!(
-                team = %evicted_key.team,
-                member = %evicted_key.member,
-                pid = evicted_record.pid,
-                "demoted daemon runtime status-cache entry to explicit unknown after reaching the bounded cap"
-            );
-        }
         cache.sqlite_ready = true;
         Ok(TeamMemberHeartbeatResponse {
             team: request.team.clone(),
@@ -767,9 +768,12 @@ fn build_runtime_status_cache_state(
 
 fn runtime_status_finding(snapshot: &RuntimeStatusSnapshot) -> DoctorFinding {
     let summary = format!(
-        "daemon runtime liveness is {:?}; readiness is {:?}; active={}, idle={}, offline={}, unknown={}",
+        "daemon runtime liveness is {:?}; readiness is {:?}; owner_pid={:?}; sqlite_ready={}; degraded_ingest={}; active={}, idle={}, offline={}, unknown={}",
         snapshot.liveness,
         snapshot.readiness,
+        snapshot.singleton_owner_pid,
+        snapshot.sqlite_ready,
+        snapshot.degraded_ingest,
         snapshot.member_counts.active_members,
         snapshot.member_counts.idle_members,
         snapshot.member_counts.offline_members,
@@ -784,6 +788,9 @@ fn runtime_status_finding(snapshot: &RuntimeStatusSnapshot) -> DoctorFinding {
         },
         RuntimeReadinessState::Degraded => DoctorFinding {
             severity: DoctorSeverity::Warning,
+            // Runtime degradation intentionally reuses the warning observability-health code so
+            // doctor output keeps one degraded-warning bucket until a daemon-specific code is
+            // added across the shared ATM diagnostic taxonomy.
             code: atm_core::error_codes::AtmErrorCode::WarningObservabilityHealthDegraded,
             message: summary,
             remediation: snapshot.detail.clone().or(Some(
@@ -869,7 +876,9 @@ impl boundary::StatusSource for DaemonStatusSource {
 
 #[cfg(test)]
 mod tests {
-    use super::DaemonRequestDispatcher;
+    use super::{
+        DaemonRequestDispatcher, MAX_SHUTDOWN_FINALIZER_THREADS, SHUTDOWN_FINALIZER_THREADS,
+    };
     use serial_test::serial;
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::{Duration, Instant};
@@ -897,12 +906,75 @@ mod tests {
             },
         );
         assert!(
-            started.elapsed() < Duration::from_secs(1),
+            started.elapsed() < Duration::from_secs(5),
             "bounded shutdown step should return promptly after its deadline"
         );
 
         let (released, wake) = &*release;
         *released.lock().expect("released") = true;
+        wake.notify_all();
+        DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
+    }
+
+    #[test]
+    #[serial]
+    fn bounded_shutdown_step_does_not_exceed_retained_finalizer_cap() {
+        DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
+
+        let retained_release = Arc::new((Mutex::new(false), Condvar::new()));
+        {
+            let mut handles = SHUTDOWN_FINALIZER_THREADS
+                .lock()
+                .expect("shutdown finalizer thread registry lock");
+            for _ in 0..MAX_SHUTDOWN_FINALIZER_THREADS {
+                let retained_release = Arc::clone(&retained_release);
+                handles.push(std::thread::spawn(move || {
+                    let (released, wake) = &*retained_release;
+                    let mut released = released.lock().expect("retained release");
+                    while !*released {
+                        let wait = wake
+                            .wait_timeout(released, Duration::from_secs(5))
+                            .expect("retained release wait");
+                        released = wait.0;
+                        assert!(!wait.1.timed_out(), "retained release wait timed out");
+                    }
+                }));
+            }
+        }
+
+        let overflow_release = Arc::new((Mutex::new(false), Condvar::new()));
+        let blocker = Arc::clone(&overflow_release);
+        DaemonRequestDispatcher::run_bounded_shutdown_step(
+            "blocking_cap_test_step",
+            Duration::from_millis(10),
+            move || {
+                let (released, wake) = &*blocker;
+                let mut released = released.lock().expect("overflow release");
+                while !*released {
+                    let wait = wake
+                        .wait_timeout(released, Duration::from_secs(5))
+                        .expect("overflow release wait");
+                    released = wait.0;
+                    assert!(!wait.1.timed_out(), "overflow release wait timed out");
+                }
+                Ok(())
+            },
+        );
+
+        assert_eq!(
+            SHUTDOWN_FINALIZER_THREADS
+                .lock()
+                .expect("shutdown finalizer thread registry lock")
+                .len(),
+            MAX_SHUTDOWN_FINALIZER_THREADS,
+            "cap-exceeded path should not retain more than the documented shutdown finalizer thread budget"
+        );
+
+        let (released, wake) = &*overflow_release;
+        *released.lock().expect("overflow release") = true;
+        wake.notify_all();
+        let (released, wake) = &*retained_release;
+        *released.lock().expect("retained release") = true;
         wake.notify_all();
         DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
     }

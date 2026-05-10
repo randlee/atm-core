@@ -20,6 +20,7 @@ impl RuntimeStatusCache {
             .map(|record| record.state))
     }
 
+    #[allow(dead_code)]
     pub(crate) fn hydrate_member_for_test(
         &self,
         team: TeamName,
@@ -60,6 +61,29 @@ impl RuntimeStatusCache {
             },
         );
         Ok(())
+    }
+
+    pub(crate) fn member_count_for_test(&self) -> Result<usize, AtmError> {
+        let cache = self
+            .state
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
+        Ok(cache.members.len())
+    }
+
+    pub(crate) fn snapshot_for_members_for_test(
+        &self,
+        members: impl IntoIterator<Item = (TeamName, AgentName)>,
+    ) -> Result<RuntimeStatusSnapshot, AtmError> {
+        self.snapshot_for_members(members)
+    }
+
+    pub(crate) fn record_heartbeat_for_test(
+        &self,
+        request: &TeamMemberHeartbeatRequest,
+        pid_changed: bool,
+    ) -> Result<TeamMemberHeartbeatResponse, AtmError> {
+        self.record_heartbeat(request, pid_changed)
     }
 }
 

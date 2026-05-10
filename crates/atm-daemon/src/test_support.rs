@@ -26,6 +26,12 @@ impl Drop for LifecycleFlagResetGuard {
     fn drop(&mut self) {
         self.lifecycle.set_terminate_for_test(false);
         self.lifecycle.set_reload_for_test(false);
+        if let Err(error) = self.lifecycle.shutdown_worker_with_timeout() {
+            tracing::warn!(
+                %error,
+                "failed to drain shared lifecycle worker during test reset"
+            );
+        }
     }
 }
 
@@ -82,7 +88,7 @@ pub(crate) fn connect_daemon_local_ipc_until_ready(
             Ok(stream) => return stream,
             Err(error) if std::time::Instant::now() < deadline => {
                 let _ = error;
-                std::thread::yield_now();
+                std::thread::sleep(std::time::Duration::from_millis(5));
             }
             Err(error) => panic!("connect daemon local ipc: {error}"),
         }
